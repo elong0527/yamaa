@@ -1148,6 +1148,35 @@ class PublicConformance(unittest.TestCase):
         _, output = judge.declarations(self.case / "entry.yaml")
         self.assertEqual(judge.declared_paths("entry.yaml", output), ["result.csv"])
 
+    def test_a_copy_entry_declares_the_types_its_producer_declares(self):
+        """A 1.x copy entry declares each column it lists with its producer's
+        type, read through the input's `schema` link from the layer that
+        declares it, and from a producer that copies in turn (SPEC-9)."""
+        (self.case / "producers").mkdir()
+        (self.case / "producers/dm.yaml").write_text(
+            'yamaa: "1.0"\ntype: spec\ndomain: DM\nkeys: [ID]\n'
+            "output: {path: dm.csv, columns: [ID, AGE]}\n"
+            "columns:\n  - {name: ID, type: int}\n  - {name: AGE, type: float}\n"
+        )
+        (self.case / "producers/adsl.yaml").write_text(
+            'yamaa: "1.0"\ntype: spec\ndomain: ADSL\nkeys: [ID]\n'
+            "input: {DM: {path: dm.csv, schema: dm.yaml}}\n"
+            "output: {path: adsl.csv, columns: [ID, AGE]}\n"
+            "columns:\n  - copy: {dataset: DM, columns: [ID, AGE]}\n"
+        )
+        (self.case / "base.yaml").write_text(
+            'yamaa: "1.0"\ntype: spec\ndomain: ADAE\nkeys: [ID]\n'
+            "input: {ADSL: {path: adsl.csv, schema: producers/adsl.yaml}}\n"
+            "output: {path: adae.csv, columns: [ID, AGE, SEQ]}\n"
+            "columns:\n  - copy: {dataset: ADSL, columns: [ID, AGE]}\n"
+        )
+        (self.case / "entry.yaml").write_text(
+            'yamaa: "1.0"\ntype: spec\nparent: base.yaml\n'
+            "columns:\n  - {name: SEQ, type: int}\n"
+        )
+        types, _ = judge.declarations(self.case / "entry.yaml")
+        self.assertEqual(types, {"ID": "int", "AGE": "float", "SEQ": "int"})
+
     def test_metamorphic_key_order_permutation_compares_against_control(self):
         fixtures = self.root / "fixtures2"
         case = fixtures / "ordered"

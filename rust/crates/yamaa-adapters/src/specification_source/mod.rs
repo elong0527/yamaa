@@ -592,6 +592,17 @@ pub(crate) fn prepare_versioned<P: InheritancePort>(
     display_path: String,
     port: &mut P,
 ) -> Result<PreparedDocument, InheritanceError<P::Error>> {
+    prepare_versioned_within(source, display_path, port, &[])
+}
+
+/// [`prepare_versioned`] for the producer a copy entry of each specification
+/// `resolving` names, entry first, copies from (SPEC-9).
+pub(crate) fn prepare_versioned_within<P: InheritancePort>(
+    source: Source,
+    display_path: String,
+    port: &mut P,
+    resolving: &[String],
+) -> Result<PreparedDocument, InheritanceError<P::Error>> {
     use crate::document::{self, Closures, Decoded};
     use yamaa_core::language::{FileType, LANGUAGE_VERSION};
     let closures = Closures::shipped().map_err(InheritanceError::Entry)?;
@@ -612,7 +623,7 @@ pub(crate) fn prepare_versioned<P: InheritancePort>(
         error: Box::new(error),
     };
     let prepared = versioned
-        .prepare_sources(display_path, port)
+        .prepare_sources_within(display_path, port, resolving)
         .map_err(refuse)?;
     // A 1.0 feature the engine does not build yet is refused before binding
     // or rendering reads the specification (D76).

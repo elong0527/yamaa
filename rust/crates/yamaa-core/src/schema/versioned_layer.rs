@@ -95,7 +95,9 @@ impl SchemaStructure {
 }
 
 /// Members of one keyed list in one layer that share an identifier, at the
-/// repeated member's identity.
+/// repeated member's identity. A copy entry declares each column it lists,
+/// so a name it lists that the layer declares again, or that an earlier
+/// column declares, is repeated too, at the later of the two (SPEC-9).
 fn repeated_identifiers(input: &Document) -> Vec<SchemaDiagnostic> {
     let mut findings = Vec::new();
     for (collection, identity) in IDENTITIES {
@@ -105,20 +107,44 @@ fn repeated_identifiers(input: &Document) -> Vec<SchemaDiagnostic> {
         else {
             continue;
         };
-        let mut seen: Vec<&str> = Vec::new();
-        for &member in members {
+        // Each name seen, and whether a copy entry declared it.
+        let mut seen: Vec<(&str, bool)> = Vec::new();
+        for (index, &member) in members.iter().enumerate() {
+            if let Some(copy) = (collection == "columns")
+                .then(|| input.field(member, "copy"))
+                .flatten()
+            {
+                for (listed, (name, _)) in crate::copy_expansion::listed(input, copy)
+                    .into_iter()
+                    .enumerate()
+                {
+                    if seen.iter().any(|(prior, _)| *prior == name) {
+                        findings.push(SchemaDiagnostic {
+                            path: format!("columns[{index}].copy.columns[{listed}]"),
+                            code: ConditionCode::CopyDuplicateIdentifier,
+                            context: vec![("identifier", C::Text(name.into()))],
+                        });
+                    } else {
+                        seen.push((name, true));
+                    }
+                }
+                continue;
+            }
             let Some(N::Text(name)) = input.field(member, identity).map(|id| &input.nodes()[id])
             else {
                 continue;
             };
-            if seen.contains(&name.as_str()) {
-                findings.push(SchemaDiagnostic {
+            match seen.iter().find(|(prior, _)| *prior == name) {
+                Some(&(_, copied)) => findings.push(SchemaDiagnostic {
                     path: spec_path::join(&spec_path::join(collection, name), identity),
-                    code: ConditionCode::SchemaLayerIdentifierRepeated,
+                    code: if copied {
+                        ConditionCode::CopyDuplicateIdentifier
+                    } else {
+                        ConditionCode::SchemaLayerIdentifierRepeated
+                    },
                     context: vec![("identifier", C::Text(name.clone()))],
-                });
-            } else {
-                seen.push(name);
+                }),
+                None => seen.push((name, false)),
             }
         }
     }

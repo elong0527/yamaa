@@ -41,15 +41,36 @@ pub struct Field {
     pub name: String,
     pub kind: ColumnType,
     pub label: String,
+    /// The submission content metadata the producer declares for the column,
+    /// which a copy entry takes (SPEC-9).
+    pub content: Content,
+}
+/// A producer column's submission content metadata, each field where the
+/// producer declares it: in its `submission`, or for a `str` column's length
+/// the `max` of a `max_length` verification, from which the length derives
+/// (SUB-8). Counts keep their canonical decimal spelling.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Content {
+    pub data_type: Option<String>,
+    pub length: Option<String>,
+    pub significant_digits: Option<String>,
+    pub display_format: Option<String>,
+    pub codelist: Option<String>,
 }
 /// Only admission can construct this ordered contract from an admitted specification.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Contract {
     fields: Vec<Field>,
+    domain: String,
 }
 impl Contract {
     pub fn fields(&self) -> &[Field] {
         &self.fields
+    }
+    /// The producer's `domain`, which a copied column's Predecessor origin
+    /// names (SPEC-9).
+    pub fn domain(&self) -> &str {
+        &self.domain
     }
     /// INPUT-11 compares actual stored headers in their original order. It never
     /// sorts, infers a type, or reads a value to establish this contract.
@@ -90,6 +111,37 @@ fn kind(d: &Document, node: usize) -> Result<ColumnType, Error> {
         _ => Err(Error::Boundary),
     }
 }
+/// A declared column's submission content metadata ([`Content`]).
+fn content(d: &Document, column: usize, kind: ColumnType) -> Content {
+    let submission = d.field(column, "submission");
+    let scalar = |name: &str| {
+        let node = submission.and_then(|submission| d.field(submission, name))?;
+        match &d.nodes()[node] {
+            N::Text(value) | N::Integer(value) => Some(value.clone()),
+            _ => None,
+        }
+    };
+    let verified = || {
+        let verifications = d.field(column, "verifications")?;
+        let N::Sequence(items) = &d.nodes()[verifications] else {
+            return None;
+        };
+        items.iter().find_map(|&item| {
+            let bound = d.field(item, "max_length")?;
+            match &d.nodes()[d.field(bound, "max")?] {
+                N::Integer(max) => Some(max.clone()),
+                _ => None,
+            }
+        })
+    };
+    Content {
+        data_type: scalar("data_type"),
+        length: scalar("length").or_else(|| (kind == ColumnType::Str).then(verified).flatten()),
+        significant_digits: scalar("significant_digits"),
+        display_format: scalar("display_format"),
+        codelist: scalar("codelist"),
+    }
+}
 /// Read the producing specification's selected output fields with their declared
 /// types and labels. Each output schema has the fixed column boundary.
 pub fn prepare(spec: &SpecificationDocument) -> Result<Contract, Error> {
@@ -98,8 +150,10 @@ pub fn prepare(spec: &SpecificationDocument) -> Result<Contract, Error> {
 
 /// [`prepare`] for a resolved specification of either language: a 0.5
 /// model's document or a resolved 1.x specification, which write the output
-/// contract's fields under the same names.
+/// contract's fields, their content metadata and the `domain` under the same
+/// names.
 pub fn prepare_document(d: &Document) -> Result<Contract, Error> {
+    let domain = node_text(d, field(d, d.root(), "domain")?)?.to_owned();
     let declarations = sequence(d, field(d, d.root(), "columns")?)?;
     let output = field(d, d.root(), "output")?;
     let selected = sequence(d, field(d, output, "columns")?)?;
@@ -146,16 +200,18 @@ pub fn prepare_document(d: &Document) -> Result<Contract, Error> {
             findings.push(Cause::Label { field: name.into() });
             continue;
         };
+        let kind = kind(d, field(d, column, "type")?)?;
         fields.push(Field {
             name: name.into(),
-            kind: kind(d, field(d, column, "type")?)?,
+            kind,
             label: label.into(),
+            content: content(d, column, kind),
         });
     }
     if !findings.is_empty() {
         return Err(Error::Invalid(findings));
     }
-    Ok(Contract { fields })
+    Ok(Contract { fields, domain })
 }
 
 /// One `schema` link whose producing specification the surrounding boundary
@@ -210,6 +266,12 @@ fn invalid(dataset: &str, reason: &str) -> Diagnostic {
         source_span: None,
         operand_route: None,
     }
+}
+
+/// The refusal of input `dataset`'s link to the consuming specification
+/// itself (INPUT-10), which a copy entry reaches before compilation.
+pub fn self_reference(dataset: &str) -> Diagnostic {
+    invalid(dataset, "self_reference")
 }
 
 /// Admit every linked input of `consumer`, its resolved document of either

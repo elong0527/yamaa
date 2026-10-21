@@ -363,30 +363,67 @@ def declarations(path, active=()):
 
     A 1.x child layer removes an inherited output field by listing its path
     in `clear` (LAYER-9), where a 0.5 child writes the field as YAML null.
+    A 1.x copy entry declares each column it lists with the type its
+    producer, the specification its input's `schema` names, declares
+    (SPEC-9).
     """
+    types, output, _ = layered_declarations(path, active, path)
+    return types, output
+
+
+def layered_declarations(path, active, entry):
+    """`declarations` of the layer at `path` and the layers it inherits, with
+    each input's `schema` link: its declaring directory and spelling, and its
+    `relative_to`. `entry` is the chain's entry file."""
     if path.resolve() in active:
         raise ValueError("cyclic declarations")
     data = load_yaml(path)
     if not isinstance(data, dict):
         raise TypeError("specification declarations are not a mapping")
-    types, output = {}, {}
+    types, output, inputs = {}, {}, {}
     parent = data.get("parent")
     if parent is not None:
-        inherited_types, inherited_output = declarations(
-            path.parent / parent, (*active, path.resolve())
+        inherited = layered_declarations(
+            path.parent / parent, (*active, path.resolve()), entry
         )
-        types.update(inherited_types)
-        output.update(inherited_output)
+        types.update(inherited[0])
+        output.update(inherited[1])
+        inputs.update(inherited[2])
     if declares_header(data):
         for cleared in data.get("clear") or []:
             head, _, field = str(cleared).partition(".")
             if head == "output":
                 output.pop(field, None)
+            elif head == "input":
+                name, _, rest = field.partition(".")
+                inputs.get(name, {}).pop(rest, None)
+    for name, declaration in (data.get("input") or {}).items():
+        if isinstance(declaration, dict):
+            link = inputs.setdefault(name, {})
+            if "schema" in declaration:
+                link["schema"] = (path.parent, declaration["schema"])
+            if "relative_to" in declaration:
+                link["relative_to"] = declaration["relative_to"]
     for column in data.get("columns", []):
         if "type" in column:
             types[column["name"]] = column["type"]
+        copy = column.get("copy")
+        if isinstance(copy, dict):
+            link = inputs.get(copy.get("dataset")) or {}
+            if "schema" not in link:
+                continue
+            base, written = link["schema"]
+            if link.get("relative_to") == "entry":
+                base = entry.parent
+            producer = base / written
+            copied, _, _ = layered_declarations(
+                producer, (*active, path.resolve()), producer
+            )
+            for name in copy.get("columns") or []:
+                if name in copied:
+                    types[name] = copied[name]
     output.update(data.get("output", {}))
-    return types, output
+    return types, output, inputs
 
 
 def scalar(value, kind):
