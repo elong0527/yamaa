@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADLB
 keys: [STUDYID, USUBJID, PARAMCD]
 input:
@@ -40,6 +42,4 @@ columns:
   - name: HIFL
     type: int
     label: High Result Flag
-    derivation:
-      compute:
-        expr: "AVAL > ANRHI"
+    derivation: "AVAL > ANRHI"

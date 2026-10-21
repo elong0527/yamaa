@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADVS
 keys: [STUDYID, USUBJID, PARAMCD, AVISITN]
 input:
@@ -61,10 +63,10 @@ rows:
   # One systolic and one diastolic row per collected visit.
   - id: systolic
     derivations:
-      PARAMCD: {literal: SYSBP}
+      PARAMCD: "'SYSBP'"
       AVAL: VS_RAW.SYSBP
 
   - id: diastolic
     derivations:
-      PARAMCD: {literal: DIABP}
+      PARAMCD: "'DIABP'"
       AVAL: VS_RAW.DIABP
