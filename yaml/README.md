@@ -182,9 +182,9 @@ rule, grammar, or fixture:
   `python -m tools.validation.check_cdisc_vocabulary` keeps each list that
   names a Define-XML enumeration equal to that enumeration in the Define-XML
   schema bundled with the engine, and each schema type or field equal to its
-  list; a Rust test compares the engine's lists of dataset classes and
-  subclasses, standard names, origin types and sources, and roles with the
-  file. A vocabulary only grows: no value is removed in 1.x.
+  list; Rust tests compare the engine's own lists with the file for every
+  vocabulary but the where comparators, for which the engine keeps no list.
+  A vocabulary only grows: no value is removed in 1.x.
 - Keep repository-authored source ASCII-only. Spell non-ASCII characters by
   code point in rules, documentation, schemas, specifications, and tests;
   literal Unicode belongs only in input and expected-output data fixtures.
