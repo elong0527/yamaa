@@ -42,8 +42,8 @@ the yamaa spec must be built as a robust and succinct yamaa spec.
   `columns[].derivation`, never inside `rows:` derivations. Row templates
   should be minimized for section level details. An `aggregate`, a window
   derivation, a read through a named intermediate, or a driver read when
-  templates build from different datasets is row-phase dependent
-  and stays in its row template.
+  templates build from different datasets depends on its template's row
+  construction and stays in its row template.
 - **Read the input dataset directly.** A named intermediate whose `key`
   restates its input's `key`, with no `filter`, selection or handler that
   changes behavior, reads what the implicit join already reads; qualify the

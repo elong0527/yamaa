@@ -544,15 +544,15 @@ fails as `no_applicable_keys` ([LOOKUP-5](#lookup-5)).
 
 <a id="lookup-2"></a>
 
-### LOOKUP-2. Row construction reads another dataset through the same join, using only row-phase values
+### LOOKUP-2. Row construction reads another dataset through the same join, using only values available before column derivation
 
 During ungrouped row construction, a scalar source qualified with another
 input dataset joins that dataset on the input's declared key, each column
 matching the same-named field of the row template's input record. During
 grouped row construction each key column instead matches the candidate's
 group-key value, and every key column must be a group key of the row
-template. A match value must be available in the row phase; one available
-only in a later phase fails.
+template. A match value must be available during row construction; one
+available only during column derivation fails.
 
 Fails: `ungrouped_driver_field`, `unknown_field`, `phase_boundary`.
 Evidence: `negative-grouped-lookup-ungrouped-key`, `negative-grouped-range-ungrouped-value`, `negative-lookup-key-column-phase`, `negative-lookup-match-column-phase`, `rust/crates/yamaa-core/tests/relations_reference_scope.rs`, `adam-adlb-supplb-padded-key`, `schema-lookup-source-range-driver`, `schema-lookup-source-range-default`, `rust/crates/yamaa-adapters/tests/execution_lookup_model.rs`, `rust/crates/yamaa-adapters/tests/execution_lookup_read_contexts.rs`, `rust/crates/yamaa-adapters/tests/execution_row_phase_reads.rs`, `rust/crates/yamaa-core/src/specification/declared_keys.rs::a_row_template_s_join_matches_the_driver_on_the_declared_key`.
@@ -564,8 +564,8 @@ derivation are not available then. A named intermediate states the same match
 with declared `key` pairs, and its match values have the same availability:
 input-record fields or columns of the same row template. The join binds one
 value per row, and later derivations in the same row template read that value
-through the bound column. A row-phase `compute` still names no qualified
-cross-dataset identifier ([FORMULA-9](formulas.md#formula-9)).
+through the bound column. A `compute` during row construction still names no
+qualified cross-dataset identifier ([FORMULA-9](formulas.md#formula-9)).
 
 In grouped row construction every declared key column must be a group key of
 the row template ([ROW-4](rows.md#row-4)). A key the group does not
@@ -594,7 +594,7 @@ template's group keys and, for an ungrouped template, the driver record's own
 fields.
 
 In either mode, [Column derivation](columns.md) orders row derivations before
-column derivation, and a match value available only in a later phase fails as
+column derivation, and a match value available only then fails as
 `phase_boundary`. A named intermediate declares its match once for every read,
 so the finding is at the row template's read of the intermediate, in a
 derivation or the row `filter`, once for that site. It names the value, the
@@ -603,8 +603,8 @@ the intermediate's `between` value, or a match value of another intermediate
 that a `between` value reads; in that last case the finding also names each
 value followed, from the first `between` value to the value that reads the
 column. A structured source's own `between` value is written in the row
-derivation, and a later-phase one fails as that derivation's read does
-([COLUMN-4](columns.md#column-4)), at `between.value`.
+derivation, and one available only during column derivation fails as that
+derivation's read does ([COLUMN-4](columns.md#column-4)), at `between.value`.
 
 ## Named intermediates
 
@@ -730,8 +730,8 @@ order followed. The first template's row `filter` reads for that template's
 candidates, so a read there fails the same way, at `rows[0].filter`; a
 grouped template's `filter` reads no qualified name at all
 ([ROW-6](rows.md#row-6)). The donor fields are output columns derived in every
-row template; a column derived only in the later column phase is unavailable
-to `SELF`. The order of donors follows row construction order.
+row template; a column derived only later, in column derivation, is
+unavailable to `SELF`. The order of donors follows row construction order.
 
 For `SELF`, `filter` and `order_by` may name its donor fields either bare or as
 `SELF.field`. Bare donor fields in `filter` are not correlated current-row

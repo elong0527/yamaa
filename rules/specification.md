@@ -113,15 +113,16 @@ window operation, reads a `SELF` intermediate, or reads a column whose
 column-level derivation is not row-local; a read through the implicit join or
 an input-backed named intermediate is row-local. A structured `source` reads
 its `between` value. A row-local column-level derivation is its column's
-default for every `rows` entry that names the column or whose row-phase
-context reads it, and an entry's own derivation overrides it. Any other keeps
-its column-phase meaning; a `rows` entry naming its column fails.
+default for every `rows` entry that names the column or whose
+row-construction context reads it, and an entry's own derivation overrides it.
+Any other keeps its column-derivation meaning; a `rows` entry naming its column
+fails.
 
 Fails: `duplicate_derivation`.
 Evidence: `schema-rows-override`, `schema-lookup-source-range-default`, `rust/crates/yamaa-core/tests/project_specification.rs`, `rust/crates/yamaa-adapters/tests/fixtures/row_intermediate_reference.json`, `rust/crates/yamaa-adapters/tests/execution_row_phase_reads.rs`, `rust/crates/yamaa-core/src/specification/phases.rs::a_template_cannot_replace_a_default_that_is_not_row_local`, `rust/crates/yamaa-core/src/specification/phases.rs::an_aggregate_in_a_case_result_is_not_row_local`, `rust/crates/yamaa-core/src/specification/phases.rs::a_row_phase_leaves_an_aggregate_in_a_case_result_to_the_column_phase`, `rust/crates/yamaa-adapters/tests/check_row_phase_boundaries.rs::an_aggregate_in_a_case_result_is_not_row_local_in_either_spelling`, `rust/crates/yamaa-core/src/specification/phases.rs::a_structured_source_s_range_value_brings_its_default_into_the_row_phase`, `rust/crates/yamaa-core/src/specification/phases.rs::a_structured_source_whose_range_value_reads_a_window_is_not_row_local`.
 
-The rule applies to output and internal columns alike. A row-phase context is
-one of these:
+The rule applies to output and internal columns alike. A row-construction
+context is one of these:
 
 - a `rows` derivation, windows included;
 - a grouped `rows` filter;
@@ -135,20 +136,20 @@ whole expression or as a `case` result, whichever branch a row selects. A
 structured `source`'s `between` value is a read of the derivation that holds
 the source, whether the source is that whole derivation or a `case` result in
 it. A row-local default that the value names therefore completes in the row
-phase of each `rows` entry whose row-phase context holds the source, and a
-column-level derivation whose `between` value reads a column that is not
-row-local is not row-local either.
+construction of each `rows` entry whose row-construction context holds the
+source, and a column-level derivation whose `between` value reads a column that
+is not row-local is not row-local either.
 
-An entry's own derivation replaces the default for that entry's rows only,
-and the other entries inherit it. A read of a named intermediate backed by an
-input dataset, including a read through another row-local column, may be such
-a default. A column-level read of a `SELF` intermediate keeps its column-phase
-meaning under [LOOKUP-7](lookup.md#lookup-7). A default's own reads of
-column-level columns make those derivations defaults too. A qualified field
-or a literal that only spells a column's name does not read that column. An
-inherited default is evaluated in the inheriting `rows` entry's scope, exactly
-as if the derivation were written in that entry. A `rows` entry that names a
-column whose column-level derivation is not row-local fails as
+An entry's own derivation replaces the default for that entry's rows only, and
+the other entries inherit it. A read of a named intermediate backed by an input
+dataset, including a read through another row-local column, may be such a
+default. A column-level read of a `SELF` intermediate keeps its
+column-derivation meaning under [LOOKUP-7](lookup.md#lookup-7). A default's own
+reads of column-level columns make those derivations defaults too. A qualified
+field or a literal that only spells a column's name does not read that column.
+An inherited default is evaluated in the inheriting `rows` entry's scope,
+exactly as if the derivation were written in that entry. A `rows` entry that
+names a column whose column-level derivation is not row-local fails as
 `duplicate_derivation`.
 
 <a id="spec-7"></a>
