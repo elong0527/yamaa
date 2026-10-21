@@ -1,8 +1,8 @@
 //! The departures the style guide names.
 //!
 //! Each check reads one parsed file and returns departures with zero-based
-//! positions. None reads data, resolves inheritance or validates the
-//! specification: a finding describes the text, never its meaning.
+//! positions. None reads data, resolves inheritance or validates the file: a
+//! finding describes the text, never its meaning.
 
 use std::collections::{HashMap, HashSet};
 
@@ -13,38 +13,87 @@ use super::{authoring, fields, FINDINGS};
 
 pub(super) const LINE_WIDTH: usize = 79;
 
-/// `entry_spacing` separates the entries of these root lists.
-const SPACED_LISTS: [&str; 3] = ["intermediates", "columns", "rows"];
-
-/// The schema field orders of one language version, one per class that
-/// `field_order` orders; `fields.rs` holds them, generated from the schemas.
-pub(super) struct Orders {
-    pub(super) root: &'static [&'static str],
-    pub(super) dataset: &'static [&'static str],
-    pub(super) output: &'static [&'static str],
-    pub(super) intermediate: &'static [&'static str],
-    pub(super) column: &'static [&'static str],
-    pub(super) row: &'static [&'static str],
+/// One schema class `field_order` orders: its fields in schema order and,
+/// for each field whose value is or holds a mapping of an ordered class, how
+/// it holds that class. `fields.rs` holds one tree per file type, generated
+/// from the schemas.
+pub(super) struct Class {
+    pub(super) fields: &'static [&'static str],
+    pub(super) members: &'static [(&'static str, Holds, &'static Class)],
 }
 
-/// The orders `document` is written in. A root that declares the 1.x header,
+/// How a field holds the mappings of its class.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Holds {
+    /// The field's value is the mapping.
+    Value,
+    /// Each entry of the field's list.
+    Items,
+    /// Each value of the field's mapping.
+    Values,
+}
+
+/// How one file type is written: its field orders, the root field that opens
+/// its sections and the root lists whose entries are spaced.
+pub(super) struct Layout {
+    pub(super) orders: &'static Class,
+    /// Every root field the order places before this one belongs to the
+    /// header and may stand together; one blank line precedes each other.
+    pub(super) sections: &'static str,
+    /// Root lists whose entries `entry_spacing` separates.
+    pub(super) spaced: &'static [&'static str],
+    /// The authoring findings read a specification.
+    pub(super) specification: bool,
+}
+
+const LEGACY: Layout = Layout {
+    orders: fields::LEGACY_SPEC,
+    sections: "output",
+    spaced: &["intermediates", "columns", "rows"],
+    specification: true,
+};
+const SPEC: Layout = Layout {
+    orders: fields::SPEC,
+    sections: "output",
+    spaced: &["intermediates", "columns", "rows"],
+    specification: true,
+};
+const PROJECT: Layout = Layout {
+    orders: fields::PROJECT,
+    sections: "sdtm",
+    spaced: &[],
+    specification: false,
+};
+const CODELISTS: Layout = Layout {
+    orders: fields::CODELISTS,
+    sections: "codelists",
+    spaced: &["codelists"],
+    specification: false,
+};
+const FUNCTION: Layout = Layout {
+    orders: fields::FUNCTION,
+    sections: "tests",
+    spaced: &["tests"],
+    specification: false,
+};
+
+/// The layout `document` is written in. A root that declares the 1.x header,
 /// `yamaa` and no `schema_version` as the engine reads it (SCHEMA-2), follows
-/// the 1.0 schema, and any other root the 0.5 schema. The 1.0 orders are a
-/// specification's: a 1.x file that declares another type (`project`,
-/// `codelists` or `function`) has none, so neither `field_order` nor
-/// `root_spacing` reads it.
-pub(super) fn orders(document: &Document) -> Option<&'static Orders> {
-    let declares = |name| document.key(document.root, name).is_some();
-    if !declares("yamaa") || declares("schema_version") {
-        return Some(&fields::LEGACY);
+/// the 1.0 schema of the type it declares, a missing or unknown type that of
+/// a specification. Any other root is a 0.5 specification.
+pub(super) fn layout(document: &Document) -> &'static Layout {
+    if !document.versioned {
+        return &LEGACY;
     }
     let declared = document
         .member(document.root, "type")
         .and_then(|value| document.scalar(value))
         .and_then(FileType::parse);
     match declared {
-        None | Some(FileType::Spec) => Some(&fields::VERSIONED),
-        Some(_) => None,
+        None | Some(FileType::Spec) => &SPEC,
+        Some(FileType::Project) => &PROJECT,
+        Some(FileType::Codelists) => &CODELISTS,
+        Some(FileType::Function) => &FUNCTION,
     }
 }
 
@@ -81,50 +130,41 @@ pub(super) fn sort(found: &mut [Departure]) {
     found.sort_by(|a, b| (a.line, a.column, a.name).cmp(&(b.line, b.column, b.name)));
 }
 
-/// Every mapping `field_order` orders: its spec path, its schema field order
-/// and its node.
-pub(super) fn ordered_mappings(
-    document: &Document,
-) -> Vec<(String, &'static [&'static str], usize)> {
+/// Every mapping `field_order` orders: its schema field order and its node,
+/// the root first, then each mapping its layout's classes hold, depth first.
+pub(super) fn ordered_mappings(document: &Document) -> Vec<(&'static [&'static str], usize)> {
     let mut mappings = Vec::new();
-    let Some(root) = document.root.filter(|&root| document.pairs(root).is_some()) else {
-        return mappings;
-    };
-    let Some(orders) = orders(document) else {
-        return mappings;
-    };
-    mappings.push(("$".to_owned(), orders.root, root));
-    if let Some(datasets) = document
-        .member(Some(root), "input")
-        .and_then(|id| document.pairs(id))
-    {
-        for &(key, value) in datasets {
-            if document.pairs(value).is_some() {
-                let name = document.scalar(key).unwrap_or("");
-                mappings.push((format!("input.{name}"), orders.dataset, value));
-            }
-        }
-    }
-    for (field, order) in [
-        ("output", orders.output),
-        ("intermediates", orders.intermediate),
-        ("columns", orders.column),
-        ("rows", orders.row),
-    ] {
-        let Some(value) = document.member(Some(root), field) else {
-            continue;
-        };
-        if document.pairs(value).is_some() {
-            mappings.push((field.to_owned(), order, value));
-        } else if let Some(items) = document.items(value) {
-            for (index, &item) in items.iter().enumerate() {
-                if document.pairs(item).is_some() {
-                    mappings.push((format!("{field}[{index}]"), order, item));
-                }
-            }
-        }
+    if let Some(root) = document.root.filter(|&root| document.pairs(root).is_some()) {
+        collect_mappings(document, root, layout(document).orders, &mut mappings);
     }
     mappings
+}
+
+fn collect_mappings(
+    document: &Document,
+    mapping: usize,
+    class: &'static Class,
+    mappings: &mut Vec<(&'static [&'static str], usize)>,
+) {
+    mappings.push((class.fields, mapping));
+    for &(field, holds, held) in class.members {
+        let Some(value) = document.member(Some(mapping), field) else {
+            continue;
+        };
+        let values = match holds {
+            Holds::Value => vec![value],
+            Holds::Items => document.items(value).map(<[_]>::to_vec).unwrap_or_default(),
+            Holds::Values => document
+                .pairs(value)
+                .map(|pairs| pairs.iter().map(|&(_, item)| item).collect())
+                .unwrap_or_default(),
+        };
+        for value in values {
+            if document.pairs(value).is_some() {
+                collect_mappings(document, value, held, mappings);
+            }
+        }
+    }
 }
 
 /// A field's place in a schema order.
@@ -157,13 +197,16 @@ pub(super) fn order_violation(
     None
 }
 
-/// Root fields written before `output`, which `root_spacing` lets stay together.
-pub(super) fn header_fields(order: &[&'static str]) -> HashSet<&'static str> {
-    let output = order
+/// The root fields of `document`'s header, written before its first section,
+/// which `root_spacing` lets stay together.
+pub(super) fn header_fields(document: &Document) -> HashSet<&'static str> {
+    let layout = layout(document);
+    let order = layout.orders.fields;
+    let sections = order
         .iter()
-        .position(|field| *field == "output")
+        .position(|field| *field == layout.sections)
         .unwrap_or(order.len());
-    order[..output].iter().copied().collect()
+    order[..sections].iter().copied().collect()
 }
 
 /// Every departure in `document`, before suppression.
@@ -177,8 +220,11 @@ pub(super) fn check(document: &Document) -> Vec<Departure> {
     found.extend(entry_spacing(document));
     found.extend(blank_lines(document));
     found.extend(line_width(document, &paths));
-    // The authoring lints read the specification's value; they never change it.
-    found.extend(authoring::check(document));
+    if layout(document).specification {
+        // The authoring lints read the specification's value; they never
+        // change it.
+        found.extend(authoring::check(document));
+    }
     sort(&mut found);
     found
 }
@@ -193,21 +239,16 @@ fn line_paths(document: &Document) -> HashMap<usize, String> {
 
 fn field_order(document: &Document) -> Vec<Departure> {
     let mut found = Vec::new();
-    for (path, order, mapping) in ordered_mappings(document) {
+    for (order, mapping) in ordered_mappings(document) {
         let Some((key, name, later)) = order_violation(document, mapping, order) else {
             continue;
         };
         let start = document.node(key).start;
-        let spec_path = if path == "$" {
-            name.clone()
-        } else {
-            format!("{path}.{name}")
-        };
         found.push(Departure::new(
             "field_order",
             start.line,
             start.column,
-            spec_path,
+            document.path(key),
             format!("write `{name}` before `{later}`"),
         ));
     }
@@ -226,10 +267,7 @@ fn root_spacing(document: &Document) -> Vec<Departure> {
     let Value::Mapping { flow: false, pairs } = &document.node(root).value else {
         return found;
     };
-    let Some(orders) = orders(document) else {
-        return found;
-    };
-    let header = header_fields(orders.root);
+    let header = header_fields(document);
     for window in pairs.windows(2) {
         let (previous, key) = (window[0].1, window[1].0);
         let name = document.scalar(key).unwrap_or("");
@@ -242,7 +280,7 @@ fn root_spacing(document: &Document) -> Vec<Departure> {
                 "root_spacing",
                 start.line,
                 start.column,
-                name,
+                document.path(key),
                 format!("leave one blank line before `{name}`"),
             ));
         }
@@ -252,7 +290,7 @@ fn root_spacing(document: &Document) -> Vec<Departure> {
 
 fn entry_spacing(document: &Document) -> Vec<Departure> {
     let mut found = Vec::new();
-    for field in SPACED_LISTS {
+    for &field in layout(document).spaced {
         let Some(entries) = document.member(document.root, field) else {
             continue;
         };
@@ -269,7 +307,7 @@ fn entry_spacing(document: &Document) -> Vec<Departure> {
                     "entry_spacing",
                     start.line,
                     start.column,
-                    format!("{field}[{index}]"),
+                    document.path(entry),
                     format!("leave one blank line between `{field}` entries"),
                 ));
             }

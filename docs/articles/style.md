@@ -40,8 +40,8 @@ for the root) and a message.
 | --- | --- | --- | --- | --- | --- |
 | `/study/adsl.yaml` | 17 | 1 | `blank_lines` | `$` | remove the second blank line |
 
-A directory expands to the specification files beneath it, in sorted path
-order; rows follow the files, then line, column and finding. A file that
+A directory expands to the yamaa files beneath it, of every file type, in
+sorted path order; rows follow the files, then line, column and finding. A file that
 cannot be read or parsed, or a directory that cannot be listed, refuses the
 call with the issue that says why, and nothing is written. Repository
 validation reports every finding in a benchmark specification as a failure;
@@ -93,8 +93,11 @@ columns:
 A specification that declares `yamaa` is written in the order of the 1.0
 schema: its root opens with the header, `yamaa`, `type` and `model`, and writes
 `clear` between `parent` and `domain`. A file that declares `schema_version`
-keeps the order of the 0.5 schema. This guide fixes no field order or root
-spacing yet for a 1.0 project, codelists or function file.
+keeps the order of the 0.5 schema. A 1.0 project, codelists or function file
+writes every mapping its schema's classes describe in field order: its root,
+a project's environments, study, codelist sources and submission sections
+with their standards and documents, every codelist and item, and a function
+file's `params` and `tests` entries.
 
 ## Blank lines
 
@@ -102,11 +105,15 @@ One blank line precedes every root field from `output` on. The fields before
 `output` (`schema_version`, `parent`, `domain`, `keys`, `input`, `base` and
 `filter`) may stand together; in a specification that declares `yamaa` they
 are `yamaa`, `type`, `model`, `parent`, `clear`, `domain`, `keys`, `input`,
-`base` and `filter`. A comment written directly above a field belongs to that
-field, and the blank line precedes the comment. A missing blank line is
-reported as `root_spacing`.
+`base` and `filter`. In a 1.0 project file the fields before the first
+submission section (`sdtm`, `adam`, `send`) stand together, in a function file
+those before `tests`, and in a codelists file those before `codelists`; one
+blank line precedes each later root field. A comment written directly above a
+field belongs to that field, and the blank line precedes the comment. A
+missing blank line is reported as `root_spacing`.
 
-Within `intermediates`, `columns` and `rows`, one blank line separates two
+Within `intermediates`, `columns` and `rows`, and within a function file's
+`tests` and a codelists file's `codelists`, one blank line separates two
 adjacent entries when either entry spans more than one line. Entries of one
 line each may stand together. A comment written directly above an entry belongs
 to that entry, and the blank line precedes the comment. A missing blank line is
@@ -160,18 +167,23 @@ all of these hold:
 - the derivation is row-local.
 
 It suggests moving the derivation to `columns[].derivation`, where it becomes
-the row-phase default each template inherits. For this check a derivation is
-row-local unless it uses a dataset-level operation (an `aggregate` or a window
-operation), reads a named intermediate, or reads a column whose column-level
-derivation is not row-local. Such derivations stay in their row template, where
-the row phase evaluates them, and are never reported. A derivation reading a
-driver dataset also stays when the row templates build from different
-datasets, since the driver read and the column-phase implicit join bind
-different records; only a `literal` is driver-independent and reported across
-drivers. A column read by any row `filter` stays as well, since a filter
-resolves only columns its own template derives. A single row template, a column
-derived in only some templates, differing derivations per template, and a
-column that already has a column-level default are never reported.
+the row-phase default each template inherits. A derivation is row-local as
+SPEC-6 defines it: unless it holds an aggregate or a window operation anywhere,
+a `case` result included, reads a `SELF` intermediate, or reads a column whose
+column-level derivation is not row-local, a structured `source`'s `between`
+value among its reads. A read through the implicit join or of an intermediate
+an input backs is row-local. Other derivations stay in their row template,
+where the row phase evaluates them, and are never reported. A file that
+declares `schema_version` keeps the 0.5 reading, in which a read of any named
+intermediate also stays. A derivation reading a driver dataset also stays when
+the row templates build from different datasets, since the driver read and the
+column-phase implicit join bind different records; only a literal is
+driver-independent and reported across drivers: quoted text, a YAML number or
+null in a 1.0 file, and `{literal: X}` in a 0.5 file. A column read by any row
+`filter` stays as well, since a filter resolves only columns its own template
+derives. A single row template, a column derived in only some templates,
+differing derivations per template, and a column that already has a
+column-level default are never reported.
 
 ```yaml
 columns:
@@ -207,6 +219,14 @@ intermediate answers, so neither is reported. Any other `no_match` literal, a
 custom key and a `SELF` intermediate all change behavior and are never
 reported. An unread intermediate is unused, not redundant, and is never
 reported.
+
+A 1.0 intermediate is judged by its 1.0 meaning, against the implicit join on
+its input's declared `key` (LOOKUP-1): `absent` omitted or null stands for the
+join's missing value, and the intermediate is reported when its `key` pairs
+exactly the columns of its input's `key`, each with the same-named value. Its
+`key` written as that list fails validation as `rename_only_intermediate`
+(LOOKUP-4), so only the mapping that spells the same pairs is a lint finding.
+An input without `key` has no implicit join to read instead.
 
 ```yaml
 keys: [STUDYID, USUBJID]

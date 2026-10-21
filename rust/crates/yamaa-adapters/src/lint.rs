@@ -209,11 +209,11 @@ fn write_code(error: &crate::file_publication::Error) -> Fault {
 }
 
 /// Lint every file `paths` names, in argument order; a directory names the
-/// specification files beneath it in sorted path order, leaving out hidden
+/// yamaa files beneath it in sorted path order, leaving out hidden
 /// directories and any `.yaml` file whose root neither declares the 1.x header
-/// with `type: spec` nor holds `schema_version` and only 0.5 root fields, and
-/// refuses when it cannot be listed or such a file cannot be read. With `fix`,
-/// apply the proved layout fixes first.
+/// with a `type` naming a file type nor holds `schema_version` and only 0.5
+/// root fields, and refuses when it cannot be listed or such a file cannot be
+/// read. With `fix`, apply the proved fixes first.
 pub fn lint(paths: &[String], fix: bool) -> Result<Vec<Linted>, Error> {
     #[cfg(feature = "yaml")]
     {

@@ -1,15 +1,16 @@
-//! The specification lint (D40, P-LINT-1, P-LINT-2): how a file departs from
+//! The yamaa file lint (D40, P-LINT-1, P-LINT-2): how a file departs from
 //! the written form the style guide fixes, as one table.
 //!
 //! [`lint`] reads each file it names once, through the local file resolver,
 //! and returns the findings that remain as a [`Lint`], whose table has the
 //! [`LINT_COLUMNS`]: the file's absolute path with forward slashes, the
 //! one-based line and column where the departure starts, the finding (one of
-//! [`LINT_FINDINGS`]), its spec path (`$` for the root) and a message. Rows
-//! come in argument order of the files, a directory's specification files in
-//! sorted path order, then by line, column and finding. The result also
-//! counts the files linted and names the files a fix rewrote, for the command
-//! line's summary line, `N lint findings in M of K files`.
+//! [`LINT_FINDINGS`]), its spec path (`$` for the root, in a 1.x file in the
+//! notation of the issues table) and a message. Rows come in argument order
+//! of the files, a directory's yamaa files of every file type in sorted path
+//! order, then by line, column and finding. The result also counts the files
+//! linted and names the files a fix rewrote, for the command line's summary
+//! line, `N lint findings in M of K files`.
 //!
 //! A comment `# yamaa-lint: allow <finding>, ... -- <reason>` directly above a
 //! field or an entry suppresses the named findings within it (P-LINT-1); a
@@ -230,8 +231,7 @@ impl Lint {
     }
 }
 
-/// Lint the specification files `paths` names, fixing them first when `fix`
-/// is true.
+/// Lint the yamaa files `paths` names, fixing them first when `fix` is true.
 ///
 /// # Example
 ///

@@ -111,19 +111,14 @@ fn edits(document: &Document, found: &[Departure]) -> Vec<(Key, Edit)> {
         .map(|item| item.spec_path.as_str())
         .collect::<HashSet<_>>();
     if !wanted.is_empty() {
-        for (path, order, mapping) in ordered_mappings(document) {
-            let Some((_, name, _)) = order_violation(document, mapping, order) else {
+        for (order, mapping) in ordered_mappings(document) {
+            let Some((key, _, _)) = order_violation(document, mapping, order) else {
                 continue;
             };
-            let field = if path == "$" {
-                name
-            } else {
-                format!("{path}.{name}")
-            };
-            if wanted.contains(field.as_str()) {
-                let root = path == "$";
+            if wanted.contains(document.path(key)) {
+                let root = Some(mapping) == document.root;
                 edits.push((
-                    Key::FieldOrder(path),
+                    Key::FieldOrder(document.path(mapping).to_owned()),
                     Edit::FieldOrder {
                         mapping,
                         order,
@@ -261,7 +256,7 @@ fn reorder(
         .collect::<Vec<_>>();
     if root {
         return Some(reorder_root(
-            document, pairs, &sequence, &starts, &ends, &segments, &gaps, order,
+            document, pairs, &sequence, &starts, &ends, &segments, &gaps,
         ));
     }
     if gaps.iter().any(|gap| !gap.is_empty()) {
@@ -306,7 +301,6 @@ fn detached(gap: &[String]) -> Vec<String> {
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 fn reorder_root(
     document: &Document,
     pairs: &[(usize, usize)],
@@ -315,10 +309,9 @@ fn reorder_root(
     ends: &[usize],
     segments: &[Vec<String>],
     gaps: &[Vec<String>],
-    order: &[&'static str],
 ) -> String {
     let lines = &document.lines;
-    let header = header_fields(order);
+    let header = header_fields(document);
     let names = pairs
         .iter()
         .map(|&(key, _)| document.scalar(key).unwrap_or(""))
