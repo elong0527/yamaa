@@ -4,6 +4,7 @@ mod api_entry;
 mod context_values;
 mod function_callback;
 mod handle;
+mod interrupt;
 mod project_activation;
 mod public_table;
 mod thread_bound;

@@ -12,7 +12,6 @@ extendr_module! {
     fn run_report;
     fn run_save;
     fn run_observations;
-    fn run_interrupt;
     fn project_spec;
     fn project_check;
     fn project_run;
@@ -23,7 +22,6 @@ extendr_module! {
     fn project_run_issues;
     fn project_run_report;
     fn project_run_save;
-    fn project_run_interrupt;
     fn project_submission;
     fn submission_issues;
     fn submission_save;

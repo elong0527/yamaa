@@ -334,7 +334,6 @@ public:
       python: yamaa.Run
       r: yamaa_run
       holds: {native: handle}
-      interrupt: run_interrupt
       doc: One specification run; nothing is written until `save()`.
       members:
         - name: output
@@ -390,7 +389,6 @@ public:
       python: yamaa.ProjectRun
       r: yamaa_project_run
       holds: {native: handle}
-      interrupt: project_run_interrupt
       doc: Every specification a project run built, by `domain` name.
       members:
         - name: names
@@ -686,7 +684,6 @@ r:
         - {name: run_report, args: {handle: robj}, returns: r_reply}
         - {name: run_save, args: {handle: robj}, returns: r_reply}
         - {name: run_observations, args: {handle: robj, include_measurements: bool}, returns: r_reply}
-        - {name: run_interrupt, args: {handle: robj}, returns: r_reply}
         - {name: project_spec, args: {project: raw, name: raw, version: raw}, returns: r_reply}
         - {name: project_check, args: {project: raw, version: raw}, returns: r_reply}
         - name: project_run
@@ -699,7 +696,6 @@ r:
         - {name: project_run_issues, args: {handle: robj}, returns: r_reply}
         - {name: project_run_report, args: {handle: robj}, returns: r_reply}
         - {name: project_run_save, args: {handle: robj}, returns: r_reply}
-        - {name: project_run_interrupt, args: {handle: robj}, returns: r_reply}
         - name: project_submission
           args: {project: raw, section: robj, created: robj, version: raw}
           returns: r_reply
@@ -747,8 +743,8 @@ operations:
   selftest_cases: {python: [_SelfTest.cases], r: [selftest_cases]}
   selftest_info: {python: [_SelfTest.info], r: [selftest_info]}
   selftest_summary: {python: [_SelfTest.summary], r: [selftest_summary]}
-# Host transport: Python checks interrupts inside the native calls, R through
-# these two helpers; the Arrow capsule is Python-only.
+# Host transport: the Arrow capsule is Python-only. Each host asks its own
+# interpreter for interrupts inside every native call (#3030 D46).
 host_only:
   python: [_ArrowTable.__arrow_c_stream__]
-  r: [run_interrupt, project_run_interrupt]
+  r: []

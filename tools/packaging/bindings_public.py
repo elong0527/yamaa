@@ -15,8 +15,8 @@ with their members, the refusal error and the type tokens. From it
 Generated code only delegates. The handwritten rest stays where it was:
 Python's Polars table conversion, path conversion, lazy-object pickling and
 version lookup in ``python/src/yamaa/_support.py``; R's reply and argument
-conversions, host-function capabilities, interrupt rethrow and locked-object
-helpers in ``R/yamaa/R/api.R``; and every native body in the binding crates.
+conversions, host-function capabilities, interrupt signaling and
+locked-object helpers in ``R/yamaa/R/api.R``; and every native body in the binding crates.
 
 Delegation is declared, never written as code. A class ``holds`` an ordered
 set of values, each named by what it fills: ``handle``, the native handle the
@@ -375,7 +375,7 @@ class Public:
 
     def _validate_class(self, name, cls, defined):
         what = f"public.classes.{name}"
-        _keys(cls, what, {"python", "r", "holds", "members"}, {"doc", "interrupt"})
+        _keys(cls, what, {"python", "r", "holds", "members"}, {"doc"})
         if not _CLASS.fullmatch(name) or cls["python"] != f"yamaa.{name}":
             raise ValueError(f"{what}.python must be yamaa.{name}")
         if not isinstance(cls["r"], str) or not re.fullmatch(
@@ -418,11 +418,6 @@ class Public:
             self._validate_member(
                 name, cls, member, f"{what}.{member['name']}", defined
             )
-        if "interrupt" in cls:
-            if "handle" not in roles:
-                raise ValueError(f"{what}.interrupt needs a handle")
-            if cls["interrupt"] not in self.definition["host_only"]["r"]:
-                raise ValueError(f"{what}.interrupt must be an R host-only export")
         if self.kind(name) == "handle":
             native = {
                 self._python_target(m["calls"], name, what)[1]
@@ -1009,8 +1004,6 @@ class Public:
         handle = self._handle(name)
         lines = [f".{_snake(name)} <- function({', '.join(holds)}) {{"]
         lines += [f"  force({hold})" for hold in holds]
-        if "interrupt" in cls:
-            lines.append(f"  .rethrow_interrupt(.native_{cls['interrupt']}({handle}))")
         if self.plans(name):
             lines.append("  plans <- NULL")
         lines.append("  object <- new.env(parent = emptyenv())")

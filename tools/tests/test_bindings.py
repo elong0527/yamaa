@@ -72,7 +72,7 @@ class BindingsTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "without an R counterpart"):
             generator._validate_operations(candidate)
         candidate = copy.deepcopy(definition)
-        candidate["host_only"]["r"].remove("run_interrupt")
+        candidate["operations"]["run_observations"]["r"] = ["run_save"]
         with self.assertRaisesRegex(ValueError, "without a Python counterpart"):
             generator._validate_operations(candidate)
         candidate = copy.deepcopy(definition)
@@ -261,8 +261,8 @@ class BindingsTests(unittest.TestCase):
                 lambda d: d["operations"]["run_observations"].update(r=[]),
             ),
             (
-                "R exports without a Python counterpart: run_interrupt",
-                lambda d: d["host_only"]["r"].remove("run_interrupt"),
+                "R exports without a Python counterpart: run_observations",
+                lambda d: d["operations"]["run_observations"].update(r=["run_save"]),
             ),
             (
                 "Python exports without an R counterpart: "

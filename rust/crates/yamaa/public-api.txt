@@ -267,7 +267,6 @@ yamaa::engine::AttemptFailure::error: pub error: FunctionError
 yamaa::engine::AttemptFailure::stage: pub stage: &'static str
 yamaa::engine::Build: impl Build
 yamaa::engine::Build: pub struct Build
-yamaa::engine::Build::interrupt: pub fn interrupt(&self) -> Option<&FunctionError>
 yamaa::engine::Build::observations: pub fn observations(&self, include_measurements: bool) -> Option<String>
 yamaa::engine::Build::output: pub fn output(&self) -> Option<&Table>
 yamaa::engine::Build::output_bytes: pub fn output_bytes(&self) -> Option<&[u8]>

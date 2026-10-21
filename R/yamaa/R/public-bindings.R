@@ -10,7 +10,6 @@
 
 .run <- function(native) {
   force(native)
-  .rethrow_interrupt(.native_run_interrupt(native))
   object <- new.env(parent = emptyenv())
   object$.handle <- native
   .read_only(object, "output", function() .reply(.native_run_output(native)))
@@ -37,7 +36,6 @@
 
 .project_run <- function(native) {
   force(native)
-  .rethrow_interrupt(.native_project_run_interrupt(native))
   object <- new.env(parent = emptyenv())
   object$.handle <- native
   .read_only(object, "names", function() .reply(.native_project_run_names(native)))

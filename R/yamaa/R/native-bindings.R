@@ -45,10 +45,6 @@
   .Call(wrap__run_observations, handle, include_measurements)
 }
 
-.native_run_interrupt <- function(handle) {
-  .Call(wrap__run_interrupt, handle)
-}
-
 .native_project_spec <- function(project, name, version) {
   .Call(wrap__project_spec, project, name, version)
 }
@@ -87,10 +83,6 @@
 
 .native_project_run_save <- function(handle) {
   .Call(wrap__project_run_save, handle)
-}
-
-.native_project_run_interrupt <- function(handle) {
-  .Call(wrap__project_run_interrupt, handle)
 }
 
 .native_project_submission <- function(project, section, created, version) {

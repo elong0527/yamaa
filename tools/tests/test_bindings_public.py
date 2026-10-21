@@ -88,7 +88,6 @@ class RenderingTests(unittest.TestCase):
         for expected in (
             'yamaa_spec <- function(path) .spec(.text(path, "path"), NULL)',
             "`[[.yamaa_project_run` <- function(x, i, ...) {",
-            "  .rethrow_interrupt(.native_run_interrupt(native))",
             "    plans <<- .reply(.native_plans(plans))",
             "  object$save <- function() invisible(.reply(.native_run_save(native)))",
             ".run_observations <- function(run, include_measurements = FALSE) {",
@@ -323,7 +322,11 @@ class ValidationTests(unittest.TestCase):
                 "exactly the refusal",
                 lambda d: d["public"]["errors"].update(argument={}),
             ),
-            ("host-only", lambda d: classes(d)["Run"].update(interrupt="run_output")),
+            # A class asks for no interrupt: each host asks inside every call.
+            (
+                r"has unknown keys \['interrupt'\]",
+                lambda d: classes(d)["Run"].update(interrupt="run_output"),
+            ),
             (
                 "must hold its handle first",
                 lambda d: classes(d)["MemberRun"].update(
