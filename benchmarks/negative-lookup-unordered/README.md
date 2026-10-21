@@ -27,6 +27,7 @@ itself. For the earliest treatment:
 intermediates:
   - id: DOSING
     dataset: EX
+    key: [STUDYID, USUBJID]
     order_by: [EX.EXSTDTC, EX.EXSEQ]
     keep: first
 ```

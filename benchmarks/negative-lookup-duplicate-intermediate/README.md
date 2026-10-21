@@ -27,10 +27,10 @@ latest start date:
 intermediates:
   - id: DS_EOS
     dataset: DS
+    key: [STUDYID, USUBJID]
     filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.DSDECOD <> 'SCREEN FAILURE'"
     order_by: [DS.DSSTDTC]
     keep: last
-    no_match: {literal: null}
 ```
 
 The `no_match` line leaves `EOSDT` blank for a subject with no

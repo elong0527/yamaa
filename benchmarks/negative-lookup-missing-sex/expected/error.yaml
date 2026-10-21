@@ -1,7 +1,7 @@
 phase: join
 condition: unmatched_key
 spec_paths:
-  - intermediates[0]
+  - intermediates.REFRANGE
 rule: LOOKUP-24
 context:
   intermediate: REFRANGE

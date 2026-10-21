@@ -38,7 +38,7 @@ the home measurements, which carry no device number:
 - id: home
   dataset: HOME
   derivations:
-    VSMETHOD: {literal: null}
+    VSMETHOD: null
 ```
 
 Then remove the column-level `derivation` of `VSMETHOD`.
