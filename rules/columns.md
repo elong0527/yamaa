@@ -256,20 +256,21 @@ inherited handler only by listing its path in `clear`
 and of an inline `mapping` dictionary entry, and a `function` argument passes
 the missing value as YAML null.
 
-The table states, for each handler, the stage that answers its condition, the
-condition, and what the condition gives when the handler is omitted.
+The table states, for each handler, the phase in which its condition arises
+([COLUMN-16](#column-16)), the condition, and what the condition gives when
+the handler is omitted.
 
-| Stage | Handler | Condition | Omitted |
+| Phase | Handler | Condition | Omitted |
 |---|---|---|---|
 | join | `source.absent` | A read through the implicit join finds no record ([LOOKUP-24](lookup.md#lookup-24)) | Missing |
 | join | `source.order_by` and `source.keep` | Several `source.filter` results | Fails |
 | join | `intermediates[].absent` | The intermediate selects no record ([LOOKUP-24](lookup.md#lookup-24)) | Missing |
 | mapping | `mapping.missing` | Missing input | Missing |
 | mapping | `mapping.unmapped` | Non-missing value with no mapping | Fails |
-| cut | `cut.missing` | Missing numeric input | Missing |
-| extract | `missing` of `str_extract`, `str_replace` and `str_case` | Missing string input | Missing |
-| extract | `str_extract.no_match` | Non-missing string does not match | Fails |
-| template | `str_template.missing` | Any placeholder value is missing | Fails |
+| mapping | `cut.missing` | Missing numeric input | Missing |
+| mapping | `missing` of `str_extract`, `str_replace` and `str_case` | Missing string input | Missing |
+| mapping | `str_extract.no_match` | Non-missing string does not match | Fails |
+| mapping | `str_template.missing` | Any placeholder value is missing | Fails |
 | derivation | `flag.missing` | The condition is `UNKNOWN` ([EXPR-8](expressions.md#expr-8)) | Missing |
 | derivation | `first_available.missing` | Every source is missing ([EXPR-9](expressions.md#expr-9)) | Missing |
 | impute | `impute.invalid`, `precision.invalid` | Text that is not collected date text, an ISO 8601 interval or duration included ([TIME-13](temporal.md#time-13)) | Fails |
@@ -472,7 +473,7 @@ another intermediate whose derivation reads it
 another intermediate's derivation reads also counts the evaluations made for
 those donor records.
 
-## Diagnostic citations
+## Diagnostics
 
 <a id="column-15"></a>
 
@@ -491,3 +492,37 @@ Evidence: `tools/tests/test_diagnostics.py::test_null_policy_is_explicit_registe
 - `unsupported_operation` (`planning`)
 - `engine_rejected` (`engine`)
 <!-- normative-null-conditions:end -->
+
+<a id="column-16"></a>
+
+### COLUMN-16. Every condition reports one phase from a closed list, which names the part of the run that decides it
+
+A condition reports one phase: `validation`, `planning`, `ingest`,
+`row_construction`, `join`, `mapping`, `impute`, `derivation`, `convert`,
+`verification`, `output` or `engine`, as the table below defines.
+`yaml/conditions.yaml` registers the phases each condition may report, and
+reporting any other is a defect. The numbered stages of a value
+([COLUMN-8](#column-8)) are not phases: stage 1 reports the phase of what it
+evaluates, stages 2 and 3 report `convert`, and stage 4 reports
+`verification`.
+
+Evidence: `negative-adlb-duplicate-wbc`, `negative-multiple-baselines`, `tools/tests/test_diagnostics.py::test_missing_condition_and_wrong_phase_fail`, `tools/tests/test_validate_repository.py::test_wrong_phase_condition_is_rejected`.
+
+| Phase | Decided while |
+| --- | --- |
+| `validation` | checking files before any input byte is read (P9) |
+| `planning` | lowering a valid specification to a plan (`unsupported_operation`) |
+| `ingest` | reading an input snapshot into typed records |
+| `row_construction` | building output rows ([Row construction](rows.md)) |
+| `join` | a lookup's match, narrow and select steps ([LOOKUP-25](lookup.md#lookup-25)) |
+| `mapping` | the value-mapping verbs `mapping`, `cut`, `str_extract` and `str_template` |
+| `impute` | completing collected dates and times ([Dates and times](temporal.md)) |
+| `derivation` | evaluating any other expression of a value |
+| `convert` | converting a completed result to its column type, and handling a failed conversion ([COLUMN-8](#column-8), stages 2 and 3) |
+| `verification` | column and dataset verifications ([Verification](verification.md)), an intermediate's `unique` ([LOOKUP-17](lookup.md#lookup-17)), and the checks that submission metadata and codelists imply |
+| `output` | validating keys, rendering and publishing ([Output](output.md)) |
+| `engine` | an application refusal outside the language (`engine_rejected`) |
+
+A condition registered for several phases reports the one in which the run
+decides it: `aggregate_multiple_records` reports `row_construction` for a row
+template's derivation and `derivation` for a column derivation.

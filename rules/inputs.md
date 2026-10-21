@@ -224,20 +224,21 @@ converts it at the consuming column, where a handler exists.
 
 <a id="input-8"></a>
 
-### INPUT-8. A missing value is recognized before typing, and no text spells it
+### INPUT-8. A null or an empty field is missing, and no other text spells missing
 
-A missing value is the absence of a value. It is recognized before typing,
-every type admits it, and [Column derivation](columns.md) answer for
-it. In a delimited source, a field with no characters, bare or quoted, is
-missing whatever its declared type, never a parse failure, and no type admits
-an empty string from a delimited source. No text is a missing-value sentinel:
-`NA`, `NULL`, `.`, `unknown` and every other spelling are ordinary string
-values.
+In a delimited source, a field with no characters, bare or quoted, is missing
+whatever its declared type, never a parse failure, and no type admits an
+empty string from a delimited source ([INPUT-9](#input-9)). No text is a
+missing-value sentinel: `NA`, `NULL`, `.`, `unknown` and every other spelling
+are ordinary string values. What missing is, and how each operation treats
+it, is [VALUE-25](values.md#value-25).
 
 Evidence: `negative-source-na-age`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::collected_text_and_missing_remain_lossless`.
 
 An empty field holds no text to parse. In a delimited source, no collected
-empty value is distinct from a missing one.
+empty value is distinct from a missing one. A typed container supplies missing
+as its own null: a Parquet null ([PARQUET-8](reference/parquet.md#parquet-8))
+and a SAS missing value ([SAS-5](reference/sas.md#sas-5)).
 
 <a id="input-9"></a>
 

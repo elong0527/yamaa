@@ -78,6 +78,11 @@ reference the name), and nesting is permitted in exactly two places
 (`case` branches and lookup `key` match values, which may be expressions
 under LOOKUP-6).
 
+Columns are listed in dependency order. A single file keeps the order it is
+written in, which must be a dependency order (COLUMN-5), while a layered
+specification is re-sorted (LAYER-13), because a child layer cannot insert a
+column between its parent's.
+
 ## What the schema does not do
 
 The schema never defines behavior. It says that `cut` takes `breaks`,

@@ -84,7 +84,7 @@ Evidence: `rust/crates/yamaa-adapters/tests/fixtures/static_verification_checks.
 
 <a id="check-5"></a>
 
-### CHECK-5. `not_missing` passes only when every value is present and is not declared on a key; every other value check passes missing values
+### CHECK-5. Only `not_missing` rejects a missing value, and declaring it on a key column is redundant
 
 `not_missing` passes only when every value is non-missing. Every other value
 check passes missing values; combine it with `not_missing` when absence is
@@ -273,10 +273,10 @@ disappearing. A failure reports the offending groups and their counts.
 A subject, visit, or parameter absent from the artifact entirely forms no
 group, so no `min` here can discover it. The absent-group assertion belongs to
 the derivation, where the relation defining the expected groups is readable: a
-record lookup declaring `unmatched: fail` under
-[Lookup and joins](lookup.md) rejects an expected group the data
-cannot supply. A planning relation at the required keys gives every expected
-group an input record under [ROW-7](rows.md#row-7).
+lookup declaring `require_match: true` ([LOOKUP-24](lookup.md#lookup-24))
+fails as `unmatched_key` when the data cannot supply an expected group. A
+planning relation at the required keys gives every expected group an input
+record under [ROW-7](rows.md#row-7).
 
 `when` is a [Formulas](formulas.md) predicate over one
 constructed output row. `FALSE` and `UNKNOWN` do not bind, as `filter` admits
