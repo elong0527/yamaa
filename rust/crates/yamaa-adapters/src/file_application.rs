@@ -688,7 +688,7 @@ pub fn file_type_located(
     };
     crate::document::file_type(source, yamaa_core::language::LANGUAGE_VERSION).map_err(|error| {
         let mut locator = crate::issue_location::Locator::none();
-        locator.sources(&resources.retain_sources());
+        locator.sources(&resources.retain_metadata_sources());
         (
             collect(crate::specification_diagnostics::capture_failure(&error).into_issues()),
             locator,

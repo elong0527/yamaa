@@ -751,7 +751,7 @@ pub fn selection(error: &crate::file_workflow::SelectionError) -> Locator {
             let mut locator = Locator::default();
             locator.specification(&run.document);
             locator.environment((&run.captured).into());
-            locator.sources(&rejected.retained_sources());
+            locator.sources(&rejected.retained_metadata_sources());
             locator
         }
         SelectionError::Preparation(error) => workflow(error),
@@ -770,9 +770,9 @@ pub fn workflow(error: &crate::file_workflow::Error) -> Locator {
                 locator.specification(document);
             }
             locator.environment(rejected.environment().into());
-            locator.sources(&rejected.retained_sources());
+            locator.sources(&rejected.retained_metadata_sources());
         }
-        Error::Environment(rejected) => locator.sources(&rejected.retained_sources()),
+        Error::Environment(rejected) => locator.sources(&rejected.retained_metadata_sources()),
         Error::Configuration(_) | Error::Schema(_) => {}
     }
     locator
@@ -1034,6 +1034,47 @@ mod tests {
                 column: 1
             })
         );
+    }
+
+    #[test]
+    fn retained_inputs_are_not_decoded_or_kept_as_yaml_refusals() {
+        let directory = std::env::temp_dir().join(format!(
+            "yamaa-location-source-kinds-{}",
+            std::process::id()
+        ));
+        std::fs::create_dir(&directory).unwrap();
+        let directory = crate::canonical_path::canonicalize(directory).unwrap();
+        for (name, bytes) in [
+            ("input.xpt", &b"\xff"[..]),
+            ("input.csv", &b"domain: DATA\n"[..]),
+            ("invalid.yaml", &b"\xff"[..]),
+            ("spec.yaml", &b"domain: DM\n"[..]),
+        ] {
+            std::fs::write(directory.join(name), bytes).unwrap();
+        }
+        let root = directory.to_str().unwrap();
+        let mut resources = crate::file_resources::Resources::new(root, root, &[]).unwrap();
+        resources.capture("input.xpt").unwrap();
+        resources.capture("input.csv").unwrap();
+        resources.capture_metadata("invalid.yaml").unwrap();
+        resources.capture_metadata("spec.yaml").unwrap();
+        // Complete evidence still owns both inputs, including the binary.
+        assert_eq!(resources.retain_sources().len(), 4);
+        let mut locator = Locator::none();
+        locator.sources(&resources.retain_metadata_sources());
+        assert_eq!(locator.files.len(), 2);
+        assert_eq!(locator.roots.len(), 1);
+        assert_eq!(locator.refused.len(), 1);
+        assert!(locator.files.iter().all(|file| file.ends_with(".yaml")));
+        let path = directory
+            .join("spec.yaml")
+            .to_str()
+            .unwrap()
+            .replace('\\', "/");
+        assert_eq!(at(&locator, "domain"), Some((path, 1, 1)));
+        assert_eq!(locator.refused[0].line, 1);
+        assert_eq!(locator.refused[0].column, 1);
+        std::fs::remove_dir_all(directory).unwrap();
     }
 
     #[test]

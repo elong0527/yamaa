@@ -220,7 +220,7 @@ impl Project {
             listings
                 .iter()
                 .map(|(listing, document)| (listing.as_str(), *document)),
-            &resources.retain_sources(),
+            &resources.retain_metadata_sources(),
         );
         Ok(Self {
             identity,

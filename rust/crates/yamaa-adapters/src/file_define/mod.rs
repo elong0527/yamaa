@@ -117,7 +117,7 @@ impl Define {
                 .ports
                 .resources
                 .as_ref()
-                .map(Resources::retain_sources)
+                .map(Resources::retain_metadata_sources)
                 .unwrap_or_default(),
         )
     }
