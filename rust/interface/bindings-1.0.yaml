@@ -593,7 +593,7 @@ cli:
       args: [{name: TYPE, values: file_type}]
       operations: [schema]
       text: the JSON Schema document (both formats)
-      json_keys: the JSON Schema document itself
+      json_keys: "the JSON Schema document itself; on refusal [command, type, status, issues]"
     - name: selftest
       synopsis: yamaa selftest
       operations: [selftest]
