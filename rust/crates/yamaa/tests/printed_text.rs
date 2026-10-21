@@ -452,3 +452,139 @@ fn lazy_objects_print_without_reading() {
         "yamaa project project.yaml"
     );
 }
+
+// A table's printed preview (D43, P-PRINT-1, #3030 D167). Each preview below
+// was written from `api.md`'s `yamaa.Table` form and D167's layout before the
+// renderer ran.
+
+/// The output of the specification at `name` in `study`, which builds.
+fn output(study: &Study, name: &str) -> yamaa::Table {
+    let run = engine()
+        .spec_run(&study.path(name), None, &CancellationToken::new())
+        .unwrap();
+    assert_eq!(run.status(), Status::Succeeded, "{:?}", run.diagnostics());
+    run.output()
+        .expect("a run that succeeded has an output")
+        .clone()
+}
+
+/// `api.md`'s example: three subjects of six columns, the last one's `AGE`
+/// and `AGEU` missing.
+const DM: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: DM\nkeys: [USUBJID]\ninput:\n  RAW: {path: ../raw/dm.csv, types: {AGE: int}}\noutput: {path: ../out/dm.csv, columns: [STUDYID, DOMAIN, USUBJID, SUBJID, AGE, AGEU]}\ncolumns:\n  - {name: STUDYID, type: str, label: Study Identifier, derivation: RAW.STUDYID}\n  - {name: DOMAIN, type: str, label: Domain Abbreviation, derivation: RAW.DOMAIN}\n  - {name: USUBJID, type: str, label: Unique Subject Identifier, derivation: RAW.USUBJID}\n  - {name: SUBJID, type: str, label: Subject Identifier for the Study, derivation: RAW.SUBJID}\n  - {name: AGE, type: int, label: Age, derivation: RAW.AGE}\n  - {name: AGEU, type: str, label: Age Units, derivation: RAW.AGEU}\n";
+
+#[test]
+fn a_table_prints_the_preview_of_api_md() {
+    let study = Study::new();
+    study.write(
+        "raw/dm.csv",
+        "STUDYID,DOMAIN,USUBJID,SUBJID,AGE,AGEU\n\
+         STUDY01,DM,STUDY01-01,01,34,YEARS\n\
+         STUDY01,DM,STUDY01-02,02,51,YEARS\n\
+         STUDY01,DM,STUDY01-03,03,,\n",
+    );
+    study.write("sdtm/dm.yaml", DM);
+    assert_eq!(
+        output(&study, "sdtm/dm.yaml").preview(),
+        "\
+yamaa.Table: 3 rows x 6 columns
+STUDYID  DOMAIN  USUBJID     SUBJID  AGE   AGEU
+str      str     str         str     int   str
+STUDY01  DM      STUDY01-01  01      34    YEARS
+STUDY01  DM      STUDY01-02  02      51    YEARS
+STUDY01  DM      STUDY01-03  03      null  null"
+    );
+}
+
+/// Twelve subjects of ten columns, every column type among them.
+const ADSL_WIDE: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: ADSL\nkeys: [USUBJID]\ninput:\n  DM: {path: ../raw/adsl.csv, types: {AGE: int, HEIGHTCM: float, BRTHDT: date, RFSTDTM: datetime}}\noutput: {path: ../out/adsl.csv, columns: [USUBJID, AGE, HEIGHTCM, BRTHDT, RFSTDTM, DCSREAS, SEX, SAFFL, COUNTRY, SITEID]}\ncolumns:\n  - {name: USUBJID, type: str, label: Unique Subject Identifier, derivation: DM.USUBJID}\n  - {name: AGE, type: int, label: Age, derivation: DM.AGE}\n  - {name: HEIGHTCM, type: float, label: Height in cm, derivation: DM.HEIGHTCM}\n  - {name: BRTHDT, type: date, label: Date of Birth, derivation: DM.BRTHDT}\n  - {name: RFSTDTM, type: datetime, label: Reference Start Datetime, derivation: DM.RFSTDTM}\n  - {name: DCSREAS, type: str, label: Reason for Discontinuation, derivation: DM.DCSREAS}\n  - {name: SEX, type: str, label: Sex, derivation: DM.SEX}\n  - {name: SAFFL, type: str, label: Safety Population Flag, derivation: DM.SAFFL}\n  - {name: COUNTRY, type: str, label: Country, derivation: DM.COUNTRY}\n  - {name: SITEID, type: str, label: Study Site Identifier, derivation: DM.SITEID}\n";
+
+/// More than 10 rows print the first 5, `...` and the last 5; more than 8
+/// columns print the first 8, then a `...` column. A float prints VALUE-8's
+/// text (`180.0` as `180`), a datetime VALUE-17's (`2013-07-19T10:00` with its
+/// seconds), and a cell longer than 20 characters its first 17 and `...`.
+#[test]
+fn a_long_wide_table_prints_its_first_and_last_rows_of_its_first_columns() {
+    let study = Study::new();
+    study.write(
+        "raw/adsl.csv",
+        "USUBJID,AGE,HEIGHTCM,BRTHDT,RFSTDTM,DCSREAS,SEX,SAFFL,COUNTRY,SITEID\n\
+         01-701-1015,63,147.3,1950-12-26,2014-01-02T08:30:00,Completed,F,Y,USA,701\n\
+         01-701-1023,64,162.6,1949-07-23,2012-08-05T09:15:00,Adverse Event,M,Y,USA,701\n\
+         01-701-1028,71,177.8,1942-02-19,2013-07-19T10:00,Completed,M,Y,USA,701\n\
+         01-701-1033,74,175.3,1939-04-12,2014-03-18T07:45:00,Withdrawal by Subject,M,Y,USA,701\n\
+         01-701-1034,77,154.9,1936-08-04,2014-07-01T08:00:00,Completed,F,Y,USA,701\n\
+         01-701-1047,85,148.6,1928-09-02,2013-02-12T13:20:00,Adverse Event,F,Y,USA,701\n\
+         01-701-1057,59,166.4,1954-05-07,2013-12-20T09:40:00,Completed,F,Y,USA,701\n\
+         01-701-1097,68,168.9,1945-08-21,2014-01-01T08:10:00,Completed,M,Y,USA,701\n\
+         01-701-1111,81,158.8,1931-11-23,2012-09-07T11:30:00,Adverse Event,F,Y,USA,701\n\
+         01-701-1115,84,180.0,1929-02-05,2012-11-30T09:00:00,Adverse Event,M,Y,USA,701\n\
+         01-701-1118,52,,1961-09-29,2014-03-12T08:30:00,,M,N,USA,701\n\
+         01-701-1130,84,157.5,1929-12-28,2014-02-13T10:05:00,Completed,F,Y,USA,701\n",
+    );
+    study.write("adam/adsl.yaml", ADSL_WIDE);
+    assert_eq!(
+        output(&study, "adam/adsl.yaml").preview(),
+        "\
+yamaa.Table: 12 rows x 10 columns
+USUBJID      AGE  HEIGHTCM  BRTHDT      RFSTDTM              DCSREAS               SEX  SAFFL  ...
+str          int  float     date        datetime             str                   str  str    ...
+01-701-1015  63   147.3     1950-12-26  2014-01-02T08:30:00  Completed             F    Y      ...
+01-701-1023  64   162.6     1949-07-23  2012-08-05T09:15:00  Adverse Event         M    Y      ...
+01-701-1028  71   177.8     1942-02-19  2013-07-19T10:00:00  Completed             M    Y      ...
+01-701-1033  74   175.3     1939-04-12  2014-03-18T07:45:00  Withdrawal by Sub...  M    Y      ...
+01-701-1034  77   154.9     1936-08-04  2014-07-01T08:00:00  Completed             F    Y      ...
+...
+01-701-1097  68   168.9     1945-08-21  2014-01-01T08:10:00  Completed             M    Y      ...
+01-701-1111  81   158.8     1931-11-23  2012-09-07T11:30:00  Adverse Event         F    Y      ...
+01-701-1115  84   180       1929-02-05  2012-11-30T09:00:00  Adverse Event         M    Y      ...
+01-701-1118  52   null      1961-09-29  2014-03-12T08:30:00  null                  M    N      ...
+01-701-1130  84   157.5     1929-12-28  2014-02-13T10:05:00  Completed             F    Y      ..."
+    );
+}
+
+/// The issues table types its list columns `list<str>` and `list<int>`, and a
+/// list prints its items in brackets. Issue locations are not recorded yet
+/// (#3262), so `file`, `line` and `column` print `null`.
+#[test]
+fn an_issues_table_prints_its_list_columns() {
+    let study = study();
+    let token = CancellationToken::new();
+    let run = engine()
+        .spec_run(&study.path("adam/adae.yaml"), None, &token)
+        .unwrap();
+    assert_eq!(
+        run.issues().preview(),
+        "\
+yamaa.Table: 1 row x 12 columns
+severity  phase       condition          rule      spec_paths            file  line  column  ...
+str       str         str                str       list<str>             str   int   int     ...
+error     validation  forward_reference  COLUMN-5  [columns.ASTDY.de...  null  null  null    ..."
+    );
+    // A table without rows prints its names and types.
+    let run = engine()
+        .spec_run(&study.path("adam/adsl.yaml"), None, &token)
+        .unwrap();
+    assert_eq!(
+        run.issues().preview(),
+        "\
+yamaa.Table: 0 rows x 12 columns
+severity  phase  condition  rule  spec_paths  file  line  column  ...
+str       str    str        str   list<str>   str   int   int     ..."
+    );
+}
+
+/// One row of one column takes the singular nouns, and a character outside
+/// printable ASCII prints as D103's escape.
+#[test]
+fn a_table_of_one_row_and_column_takes_the_singular() {
+    let study = Study::new();
+    study.write("raw/sites.csv", "SITENM\nH\u{f4}pital Cochin\n");
+    study.write(
+        "sdtm/sites.yaml",
+        "yamaa: \"1.0\"\ntype: spec\ndomain: SITES\nkeys: [SITENM]\ninput:\n  RAW: ../raw/sites.csv\noutput: {path: ../out/sites.csv, columns: [SITENM]}\ncolumns:\n  - {name: SITENM, type: str, label: Site Name, derivation: RAW.SITENM}\n",
+    );
+    assert_eq!(
+        output(&study, "sdtm/sites.yaml").preview(),
+        "yamaa.Table: 1 row x 1 column\nSITENM\nstr\nH\\xf4pital Cochin"
+    );
+}

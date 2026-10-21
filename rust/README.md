@@ -427,9 +427,12 @@ that constraint, exactly as the current host crates do.
 ### Results
 
 `Table` is the facade form of `public_table::PublicTable`: owned Arrow
-`RecordBatch`es with their schema, plus `columns()`, `rows()`, `ipc()` and
-`stream()`. Stream export follows the ownership rules in "Arrow host handoff"
-above unchanged. The Arrow type of each public column type is part of the
+`RecordBatch`es with their schema, plus `columns()`, `rows()`, `ipc()`,
+`stream()` and `preview()`. Stream export follows the ownership rules in
+"Arrow host handoff" above unchanged. `preview()` renders the printed preview
+(D43, #3030 D167): the header `yamaa.Table: <r> rows x <c> columns`, then
+names, types and at most 10 rows of the first 8 columns, so every host prints
+a table in the same words. The Arrow type of each public column type is part of the
 committed API inventory: strings are `Utf8`, integers `Int64`, floats
 `Float64`, dates `Date32` (days) and zone-free datetimes `TimestampSecond`.
 There is no boolean column type in the public schema vocabulary, so no
