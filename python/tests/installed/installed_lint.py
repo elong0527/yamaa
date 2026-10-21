@@ -37,8 +37,9 @@ class Lint(unittest.TestCase):
         self.path.write_bytes(TRUTH["specification_yaml"].encode("utf-8"))
 
     def check_table(self, table, rows):
-        self.assertIsInstance(table, pl.DataFrame)
-        self.assertEqual(table.columns, TRUTH["columns"])
+        self.assertIsInstance(table, yamaa.Table)
+        self.assertEqual(table.column_names, TRUTH["columns"])
+        table = table.to_polars()
         self.assertEqual(
             table.dtypes,
             [pl.String, pl.Int64, pl.Int64, pl.String, pl.String, pl.String],
@@ -62,8 +63,8 @@ class Lint(unittest.TestCase):
     def test_a_clean_table_keeps_its_columns(self):
         self.path.write_bytes(b"")
         table = yamaa.lint(self.path)
-        self.assertEqual(table.columns, TRUTH["columns"])
-        self.assertTrue(table.is_empty())
+        self.assertEqual(table.column_names, TRUTH["columns"])
+        self.assertEqual(table.num_rows, 0)
 
     def test_refusals_raise_yamaa_error_naming_the_condition(self):
         for refusal in TRUTH["refusals"]:
@@ -74,7 +75,9 @@ class Lint(unittest.TestCase):
                 with self.assertRaises(yamaa.Error) as raised:
                     yamaa.lint([self.path, path], fix=True)
                 issues = raised.exception.issues
-                self.assertEqual(issues["condition"].to_list(), [refusal["condition"]])
+                self.assertEqual(
+                    issues.to_polars()["condition"].to_list(), [refusal["condition"]]
+                )
                 # A refused call writes nothing.
                 self.assertEqual(
                     self.path.read_bytes().decode("utf-8"),

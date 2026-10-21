@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
@@ -34,9 +36,7 @@ columns:
   - name: BMI
     type: float
     label: Body Mass Index (kg/m2)
-    derivation:
-      compute:
-        expr: "WEIGHTKG / POWER(NULLIF(HEIGHTCM, 0) / 100, 2)"
+    derivation: "WEIGHTKG / POWER(NULLIF(HEIGHTCM, 0) / 100, 2)"
 
   # The same index from the project's own bmi routine; the runner picks the
   # project root that implements it. A missing height or weight skips the

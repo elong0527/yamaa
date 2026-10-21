@@ -165,14 +165,16 @@ impl<'a> DonorReads<'a> {
 
     /// The read at `path` of the lookup at `index`, which a lookup's
     /// derivation reads as binding does there (`row_intermediates::bind`):
-    /// a lookup over `SELF` completes after the lookups (LOOKUP-16); then
-    /// each key value that reads another record than the donor's is no
-    /// value there (LOOKUP-16); then a 1.0 row driver, which declares no key,
-    /// is no keyed lookup (LOOKUP-3). A lookup whose key types fail binds
-    /// nothing. True when the read binds: each key value reads the donor's
-    /// record, or is a key column of a lookup over the donor's own input,
-    /// which that input stores. Any other bare name, which the donor record
-    /// may store, and an expression leave it undecided.
+    /// a lookup whose key types fail binds nothing, so the read is unknown,
+    /// as binding names a lookup's read there (LOOKUP-16,
+    /// `intermediate_derivations::donor_scope_findings`); a lookup over
+    /// `SELF` completes after the lookups (LOOKUP-16); then each key value
+    /// that reads another record than the donor's is no value there
+    /// (LOOKUP-16); then a 1.0 row driver, which declares no key, is no keyed
+    /// lookup (LOOKUP-3). True when the read binds: each key value reads the
+    /// donor's record, or is a key column of a lookup over the donor's own
+    /// input, which that input stores. Any other bare name, which the donor
+    /// record may store, and an expression leave it undecided.
     fn lookup_read(
         &self,
         index: usize,
@@ -183,6 +185,7 @@ impl<'a> DonorReads<'a> {
         let spec = self.spec;
         let item = &spec.intermediates[index];
         if self.refused.contains(&index) {
+            findings.push(self.refusal(C::IntermediateDerivationWindowReference, path, name));
             return false;
         }
         if item.dataset.name == "SELF" {
@@ -246,8 +249,9 @@ impl<'a> DonorReads<'a> {
     /// lookup's derivation a bare derivation not yet derived fails as a read
     /// does (LOOKUP-15), and a qualified name the predicate cannot read, one
     /// nothing names or a field not yet derived, is unknown to it
-    /// (FORMULA-9), as is a flag's read of a lookup; a `case` predicate reads
-    /// a lookup as any read does. True when it binds.
+    /// (FORMULA-9), as is a flag's read of a lookup and any read of a lookup
+    /// whose key types fail; a `case` predicate reads another lookup as any
+    /// read does. True when it binds.
     pub(super) fn predicate(
         &self,
         path: &str,
@@ -261,21 +265,15 @@ impl<'a> DonorReads<'a> {
         let Some((owner, field)) = name.split_once('.') else {
             return self.read(path, name, findings);
         };
-        let lookup = self.named(owner).is_some();
+        let lookup = self.named(owner);
         if (owner == self.relation && self.later(field))
             || self.undeclared(owner)
-            || (flag && lookup)
+            || lookup.is_some_and(|index| flag || self.refused.contains(&index))
         {
-            findings.push(BindFinding::Predicate(crate::diagnostic::Diagnostic {
-                code: C::PredicateUnknownField,
-                spec_paths: vec![path.into()],
-                context: [("identifier".into(), crate::json::Value::String(name.into()))].into(),
-                source_span: None,
-                operand_route: None,
-            }));
+            findings.push(super::predicate_unknown(path, name));
             return false;
         }
-        !lookup || self.read(path, name, findings)
+        lookup.is_none() || self.read(path, name, findings)
     }
 
     /// A window's read in a lookup's derivation, which reads the donor record

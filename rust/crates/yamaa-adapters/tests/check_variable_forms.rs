@@ -6,14 +6,15 @@
 //! lookup-qualified name reads that lookup's column for the row (LOOKUP-9). A
 //! key match value never reads a lookup (LOOKUP-5, LOOKUP-11), and a written
 //! aggregate key reports its refusals at its `key` (LOOKUP-5). `check` reports
-//! each refusal as `run` does, in `run`'s order and in both hosts; it leaves
-//! out only binding's later read of a lookup its own key refused, as it always
-//! has. A 0.5 file keeps the rules at the `yamaa-v0.5.0` tag (D75).
-use std::{
-    fs,
-    path::PathBuf,
-    sync::atomic::{AtomicUsize, Ordering},
-};
+//! each refusal as `run` does, in `run`'s order and in both hosts, the later
+//! read of a lookup its own key refused included; it leaves out only what the
+//! declarations cannot decide, such as a field a relation does not store. A
+//! 0.5 file keeps the rules at the `yamaa-v0.5.0` tag (D75).
+#[allow(dead_code)]
+mod support;
+
+use std::fs;
+use support::scratch::Scratch;
 use yamaa_adapters::{file_application, specification_report::Identity};
 use yamaa_core::{
     diagnostic::Diagnostic, domain_entry::Request, json::Value, project_function::Language,
@@ -31,24 +32,19 @@ fn identity() -> Identity<'static> {
     }
 }
 
-struct Fixture(PathBuf);
+/// A specification and the inputs it reads, in a scratch directory.
+struct Fixture(Scratch);
 impl Fixture {
     fn new(specification: &str) -> Self {
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        let root = std::env::temp_dir().join(format!(
-            "yamaa-variable-forms-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
-        fs::create_dir(&root).unwrap();
-        fs::write(root.join("spec.yaml"), specification).unwrap();
+        let scratch = Scratch::new("variable-forms");
+        scratch.write("spec.yaml", specification);
         for (name, content) in INPUTS {
-            fs::write(root.join(name), content).unwrap();
+            scratch.write(name, content);
         }
-        Self(root)
+        Self(scratch)
     }
     fn specification(&self) -> String {
-        self.0.join("spec.yaml").to_str().unwrap().to_owned()
+        self.0.path().join("spec.yaml").to_str().unwrap().to_owned()
     }
     /// The issues of `check` and of `domain` in `host`, as the run report
     /// renders them.
@@ -79,6 +75,7 @@ impl Fixture {
         (checked, built)
     }
     /// The saved artifact of a run without issues.
+    #[track_caller]
     fn saved(&self) -> String {
         let specification = self.specification();
         let mut domain = file_application::domain(
@@ -92,12 +89,7 @@ impl Fixture {
         .unwrap();
         assert!(domain.issues().is_empty(), "{:?}", domain.issues());
         assert!(domain.save().unwrap());
-        fs::read_to_string(self.0.join("out.csv")).unwrap()
-    }
-}
-impl Drop for Fixture {
-    fn drop(&mut self) {
-        fs::remove_dir_all(&self.0).unwrap();
+        fs::read_to_string(self.0.path().join("out.csv")).unwrap()
     }
 }
 
@@ -230,7 +222,7 @@ fn issue(condition: &str, rule: &str, path: &str, context: Value) -> Value {
 }
 
 /// The read of a lookup whose own key refused it, which binding then names
-/// unknown and `check` leaves out.
+/// unknown.
 fn unknown_read(path: &str, identifier: &str) -> Value {
     issue(
         "unknown_field",
@@ -241,7 +233,8 @@ fn unknown_read(path: &str, identifier: &str) -> Value {
 }
 
 /// Run `specification` in both routes and hosts: `domain` reports `built`,
-/// and `check` the same issues but the `left_out` ones.
+/// and `check` the same issues but the `left_out` ones, which only the
+/// stored fields decide.
 #[track_caller]
 fn assert_issues(specification: &str, built: &[Value], left_out: &[Value]) {
     let fixture = Fixture::new(specification);
@@ -404,7 +397,8 @@ fn a_0_5_bare_range_value_still_reads_the_driver_s_field() {
 /// column, a `SELF` field, a name nothing declares or a bare name that no
 /// column takes (LOOKUP-5, LOOKUP-11). The pair refuses it, at `key` for a
 /// name written alone and at `key.<column>` for any other value, and binding
-/// binds nothing of the lookup. A lookup another lookup's derivations read
+/// binds nothing of the lookup, so its read fails too. A lookup another
+/// lookup's derivations read
 /// binds its key values for each reading context, so a row refuses it at its
 /// read.
 #[test]
@@ -456,11 +450,7 @@ fn a_key_match_value_never_reads_a_lookup() {
             );
         }
         built.push(read.clone());
-        assert_issues(
-            &rows(&keyed(value), "", "WI.NAME", "\"'x'\""),
-            &built,
-            std::slice::from_ref(&read),
-        );
+        assert_issues(&rows(&keyed(value), "", "WI.NAME", "\"'x'\""), &built, &[]);
     }
     // Read by a lookup's derivations too, the row's read refuses it once the
     // rows are bound.
@@ -506,29 +496,35 @@ fn a_written_aggregate_key_reports_its_refusals_at_key() {
             yamaa_adapters::json!({"source": source, "expected": expected, "actual": "str"}),
         )
     };
-    for (key, built) in [
-        ("{SID: ADAY}", vec![typed("ADAY", "int")]),
-        ("{SID: DAY}", vec![unknown(&at("key.SID"), "DAY")]),
-        ("{SID: RK.F}", vec![unknown(&at("key.SID"), "RK.F")]),
-        ("{SID: SELF.SID}", vec![unknown(&at("key.SID"), "SELF.SID")]),
+    // Each key in the column of both row templates, then in a spec built
+    // from the clinic records alone, where the clinic record is the row's.
+    for (key, built, alone) in [
+        ("{SID: ADAY}", vec![typed("ADAY", "int")], true),
+        ("{SID: DAY}", vec![unknown(&at("key.SID"), "DAY")], true),
+        ("{SID: RK.F}", vec![unknown(&at("key.SID"), "RK.F")], true),
+        (
+            "{SID: SELF.SID}",
+            vec![unknown(&at("key.SID"), "SELF.SID")],
+            true,
+        ),
         (
             "{SID: 'DAY + 0'}",
             vec![
                 typed("key[SID]", "int or float"),
                 unknown(&at("key.SID"), "DAY"),
             ],
+            true,
         ),
-        // A row context without the clinic record refuses it as before.
+        // A home row has no clinic record, as before.
         (
             "{SID: CLINIC.SID}",
             vec![unknown(&at("key.SID"), "CLINIC.SID")],
+            false,
         ),
     ] {
-        for specification in [rows("", &aggregate(key), "", ""), base("", &aggregate(key))] {
-            if key == "{SID: CLINIC.SID}" && specification.contains("base: CLINIC") {
-                continue;
-            }
-            assert_issues(&specification, &built, &[]);
+        assert_issues(&rows("", &aggregate(key), "", ""), &built, &[]);
+        if alone {
+            assert_issues(&base("", &aggregate(key)), &built, &[]);
         }
     }
     // A key column the relation does not store is decided once it is read,

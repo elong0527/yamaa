@@ -164,32 +164,53 @@ pub enum UvFailure<E> {
     Host(E),
 }
 
-/// The interpreter's integer limit, which the host is asked for once, when a
-/// number of more than `version::THRESHOLD` digits first needs it: below
-/// that, CPython converts whatever its limit.
-fn read_limit<H: PythonInstallation>(
-    limit: &mut version::Limit,
-    host: &mut H,
-) -> Result<version::Limit, UvFailure<H::Error>> {
-    if *limit == version::Limit::Unread {
-        *limit = version::Limit::Read(host.integer_digits().map_err(UvFailure::Host)?);
-    }
-    Ok(*limit)
+/// The interpreter's integer limit as it is now. `packaging` converted each
+/// number under the limit of that moment, which a host observation made
+/// before it may have changed, so the limit is read for each conversion that
+/// needs it: one of a number of more than `version::THRESHOLD` digits, below
+/// which CPython converts whatever its limit.
+fn read_limit<H: PythonInstallation>(host: &mut H) -> Result<version::Limit, UvFailure<H::Error>> {
+    Ok(version::Limit::Read(
+        host.integer_digits().map_err(UvFailure::Host)?,
+    ))
 }
 
 /// Read a version under the interpreter's integer limit, asking the host for
-/// the limit when a number of the version first needs it, so the refusal is
-/// never `Refusal::Unread`. A version that is no version, or whose number the
-/// limit refuses, is the caller's to judge.
+/// the limit when a number of the version needs it, so the refusal is never
+/// `Refusal::Unread`. A version that is no version, or whose number the limit
+/// refuses, is the caller's to judge.
 fn read_version<H: PythonInstallation>(
     text: &str,
-    limit: &mut version::Limit,
     host: &mut H,
 ) -> Result<Result<version::Version, version::Refusal>, UvFailure<H::Error>> {
-    match version::version(text, *limit) {
-        Err(version::Refusal::Unread) => Ok(version::version(text, read_limit(limit, host)?)),
+    match version::version(text, version::Limit::Unread) {
+        Err(version::Refusal::Unread) => Ok(version::version(text, read_limit(host)?)),
         read => Ok(read),
     }
+}
+
+/// Print a locked version as a finding names it, as `packaging` did: it
+/// converted each number back to text under the interpreter's limit of that
+/// moment, which a host observation since the version was read may have
+/// lowered. The limit is asked for only when a number needs it.
+fn print_version<H: PythonInstallation>(
+    locked: &version::Version,
+    host: &mut H,
+) -> Result<String, UvFailure<H::Error>> {
+    let printed = match version::printed(locked, version::Limit::Unread) {
+        Err(version::Refusal::Unread) => version::printed(locked, read_limit(host)?),
+        printed => printed,
+    };
+    printed.map_err(|refusal| match refusal {
+        version::Refusal::Digits { digits, limit } => UvFailure::Digits {
+            origin: "uv package version",
+            digits,
+            limit,
+        },
+        version::Refusal::Invalid | version::Refusal::Unread => {
+            UvFailure::Lock("uv package version")
+        }
+    })
 }
 
 fn read_uv(bytes: &[u8]) -> Result<toml::Table, &'static str> {
@@ -207,13 +228,12 @@ fn read_uv(bytes: &[u8]) -> Result<toml::Table, &'static str> {
 
 /// Whether a package record applies to this interpreter: it has no
 /// `resolution-markers`, or one of them holds. Every marker is evaluated, and
-/// the host's marker environment is read once, when the first is. A version
-/// comparison that needs the interpreter's integer limit has the marker
-/// evaluated again once the limit is read.
+/// the host's marker environment is read once, when the first is. A marker
+/// whose version comparison needs the interpreter's integer limit is
+/// evaluated again under the limit as it is then.
 fn selected<H: PythonInstallation>(
     record: &toml::Table,
     environment: &mut Option<marker::Environment>,
-    limit: &mut version::Limit,
     host: &mut H,
 ) -> Result<bool, UvFailure<H::Error>> {
     const MARKERS: &str = "uv resolution-markers";
@@ -234,9 +254,9 @@ fn selected<H: PythonInstallation>(
             ));
         }
         let environment = environment.as_ref().expect("read above");
-        let mut evaluated = parsed.evaluate(environment, *limit);
+        let mut evaluated = parsed.evaluate(environment, version::Limit::Unread);
         if evaluated == Err(marker::Failure::Unread) {
-            evaluated = parsed.evaluate(environment, read_limit(limit, host)?);
+            evaluated = parsed.evaluate(environment, read_limit(host)?);
         }
         any |= evaluated.map_err(|failure| match failure {
             marker::Failure::Digits { digits, limit } => UvFailure::Digits {
@@ -259,10 +279,10 @@ fn selected<H: PythonInstallation>(
 /// then for each needed distribution in the order of its normalized name. The
 /// host is asked in that order too: for the providers once, after the lock's
 /// syntax is read; for the marker environment at most once, when the first
-/// marker is evaluated; for the interpreter's integer limit at most once,
-/// when a version first has a number of more than 640 digits; and for a
-/// distribution's version only when the lock selects exactly one version of
-/// it. A refusal about one distribution comes
+/// marker is evaluated; for the interpreter's integer limit each time a
+/// version it converts has a number of more than 640 digits, as `packaging`
+/// converted each under the limit of that moment; and for a distribution's
+/// version only when the lock selects exactly one version of it. A refusal about one distribution comes
 /// after the earlier ones were asked about. No calls means neither a lock
 /// read nor an observation.
 pub fn verify_uv<H: PythonInstallation>(
@@ -323,36 +343,35 @@ pub fn verify_uv<H: PythonInstallation>(
         }
     }
     let mut environment = None;
-    let mut limit = version::Limit::Unread;
     for name in needed {
         // Versions that denote the same version count once, as the first
         // record spells it.
         let mut expected: Vec<version::Version> = Vec::new();
         for record in records.get(&name).into_iter().flatten() {
-            if !selected(record, &mut environment, &mut limit, host)? {
+            if !selected(record, &mut environment, host)? {
                 continue;
             }
             let text = record
                 .get("version")
                 .and_then(toml::Value::as_str)
                 .ok_or(UvFailure::Lock(VERSION))?;
-            let locked =
-                read_version(text, &mut limit, host)?.map_err(|refusal| match refusal {
-                    version::Refusal::Digits { digits, limit } => UvFailure::Digits {
-                        origin: VERSION,
-                        digits,
-                        limit,
-                    },
-                    version::Refusal::Invalid | version::Refusal::Unread => {
-                        UvFailure::Lock(VERSION)
-                    }
-                })?;
+            let locked = read_version(text, host)?.map_err(|refusal| match refusal {
+                version::Refusal::Digits { digits, limit } => UvFailure::Digits {
+                    origin: VERSION,
+                    digits,
+                    limit,
+                },
+                version::Refusal::Invalid | version::Refusal::Unread => UvFailure::Lock(VERSION),
+            })?;
             if !expected.contains(&locked) {
                 expected.push(locked);
             }
         }
         expected.sort();
-        let choices = expected.iter().map(ToString::to_string).collect();
+        let choices = expected
+            .iter()
+            .map(|locked| print_version(locked, host))
+            .collect::<Result<Vec<_>, _>>()?;
         if expected.len() != 1 {
             findings.push(Finding {
                 package: name,
@@ -371,7 +390,7 @@ pub fn verify_uv<H: PythonInstallation>(
             Installed::Unreadable => (Reason::InvalidInstalledVersion, None),
             // A version that is no version is a finding, but one with a
             // number too long to convert refuses, as it did in `packaging`.
-            Installed::Version(text) => match read_version(&text, &mut limit, host)? {
+            Installed::Version(text) => match read_version(&text, host)? {
                 Err(version::Refusal::Invalid | version::Refusal::Unread) => {
                     (Reason::InvalidInstalledVersion, Some(text))
                 }

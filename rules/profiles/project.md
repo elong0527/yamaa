@@ -358,3 +358,57 @@ document under [JSON-14](dataset-json.md#json-14).
 The selected section must be one the project declares
 ([PROJECT-14](#project-14)), so a section that the project does not declare is
 refused before any Define-XML document is composed.
+
+<a id="project-15"></a>
+
+### PROJECT-15. A project submission composes a specification that declares a run report only with the artifact and inputs that report records
+
+When a project submission composes a section that lists a specification
+declaring `output.report`, it reads that report before any transport file.
+The report's `run` row must record a successful run that wrote the
+specification's `output.path` and as many rows as the artifact holds; the
+artifact must hold rows exactly when `submission.has_no_data` is not declared;
+and each declared input's `input` row must record the byte length and record
+count the input has now. Any mismatch fails with `stale_artifact`.
+
+Fails: `stale_artifact`.
+Evidence: `negative-stale-artifact`, `rust/crates/yamaa-core/src/submission_staleness.rs::each_mismatch_names_its_reason_and_the_facts_it_compared`, `rust/crates/yamaa-core/tests/relations_reference_scope.rs::a_saved_report_reads_back_its_run_and_its_inputs`, `rust/crates/yamaa-adapters/tests/submission_staleness.rs::a_matching_report_composes`, `rust/crates/yamaa-adapters/tests/submission_staleness.rs::a_specification_without_a_report_is_not_compared`, `rust/crates/yamaa/tests/project_operations.rs::a_submission_composes_the_artifacts_their_run_reports_record_and_refuses_stale_ones`, `rust/crates/yamaa-core/tests/support/diagnostic/project_scope.rs`.
+
+The comparison uses declared identities only, the facts the report records
+under [CHECK-24](../verification.md#check-24), and no timestamp or digest: the
+report's `ARTIFACT` against `output.path` as the run records it, with inherited
+paths respelled relative to the entry under [LAYER-10](../inheritance.md#layer-10),
+the `run` row's `COUNT` against the rows the artifact holds, and each input
+row's `COUNT` and `DETAILS.bytes` against the records the input's profile
+decodes from its bytes now and their length. Declaring a report adds nothing
+to it, and a specification that declares no `output.report` composes without
+a comparison.
+
+The comparison follows every fault of the document itself and precedes the
+transport files. Specifications compare in entry order, each its `run` row,
+then its artifact, then its inputs in declaration order, and the first
+mismatch is reported. The report is read under the profile its extension
+selects ([CHECK-22](../verification.md#check-22)). A declared report or input
+that cannot be read fails as any declared file does
+([FILE-7](../reference/files.md#file-7)), and an artifact as a published one
+does ([JSON-5](dataset-json.md#json-5)). A file that is not a run report
+records no run, so it fails with `stale_artifact`.
+
+The finding is reported at the listing's `output.report`, such as
+`sdtm.specs[0].output.report`. Its context names the dataset (`dataset`), the
+report as declared (`report`) and the mismatch (`reason`). `recorded` holds a
+value as the report records it and `actual` the value composition reads now:
+
+| `reason` | Mismatch | Further context |
+| --- | --- | --- |
+| `report_invalid` | the file is not a run report | none |
+| `artifact_path` | the `run` row names another `output.path` | `recorded`, `actual` |
+| `run_failed` | the `run` row records a failed run, which saved no artifact | `recorded`: the run's condition |
+| `row_count` | the artifact holds another number of rows | `recorded`, `actual` |
+| `has_no_data` | the artifact holds rows and `has_no_data` is declared, or holds none and it is not | `has_no_data`, `actual`: the rows |
+| `input_missing` | a declared input has no `input` row | `input` |
+| `input_bytes` | the input's byte length differs | `input`, `recorded`, `actual` |
+| `input_records` | its record count differs, `actual` `null` when its bytes no longer decode | `input`, `recorded`, `actual` |
+
+Running the specification again saves a report and an artifact that agree
+([PROJECT-12](#project-12)).

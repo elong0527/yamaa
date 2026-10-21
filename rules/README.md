@@ -148,7 +148,15 @@ are generated from these files and `yaml/` on every docs build. The
 is informative. Closed grammars are defined in
 [yaml/grammar/](../yaml/grammar/README.md) and rendered into their rules, and
 `yaml/conditions.yaml` registers every condition an implementation may raise
-with the phases that may raise it and the message its issues carry.
+with the phases that may raise it and the message its issues carry. The
+tables of [SUB-3](profiles/submission.md#sub-3),
+[SUB-9](profiles/submission.md#sub-9),
+[SUB-10](profiles/submission.md#sub-10),
+[SUB-15](profiles/submission.md#sub-15),
+[SUB-26](profiles/submission.md#sub-26) and
+[JSON-10](profiles/dataset-json.md#json-10) list values of the closed CDISC
+vocabularies, which `yaml/vocabulary/cdisc.yaml` holds, and a repository
+check keeps them to that file.
 
 ## Rule cards
 

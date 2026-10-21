@@ -198,7 +198,7 @@ class ParquetOriginalOutput(unittest.TestCase):
                     "output": {"path": "output.csv", "columns": ["I", "S"]},
                 }
                 result = self.build(source, {"input.PARQUET": ROOT / "pq/text.parquet"})
-                self.assertTrue(result.issues.is_empty(), result.issues)
+                self.assertEqual(result.issues.num_rows, 0, result.issues)
                 self.entry.unlink()
                 (self.root / "input.PARQUET").unlink()
                 gc.collect()
@@ -289,10 +289,12 @@ class ParquetOriginalOutput(unittest.TestCase):
                     "output": {"path": "output.csv", "columns": ["ID", *fields]},
                 }
                 result = self.build(source, {})
-                self.assertTrue(result.issues.is_empty(), result.issues)
-                self.assertEqual(result.output["ID"].to_list(), ids)
+                self.assertEqual(result.issues.num_rows, 0, result.issues)
+                self.assertEqual(result.output.to_polars()["ID"].to_list(), ids)
                 for name in fields:
-                    self.assertEqual(result.output[name].to_list(), text, name)
+                    self.assertEqual(
+                        result.output.to_polars()[name].to_list(), text, name
+                    )
 
     def test_parquet_more_row_groups_than_one_footer_numbers_read_every_record(self):
         # pyarrow and Polars with row_group_size=1 write one row group per
@@ -333,9 +335,9 @@ class ParquetOriginalOutput(unittest.TestCase):
                     "output": {"path": "output.csv", "columns": ["ID", "V"]},
                 }
                 result = self.build(source, {})
-                self.assertTrue(result.issues.is_empty(), result.issues)
-                self.assertEqual(result.output["ID"].to_list(), ids)
-                self.assertEqual(result.output["V"].to_list(), values)
+                self.assertEqual(result.issues.num_rows, 0, result.issues)
+                self.assertEqual(result.output.to_polars()["ID"].to_list(), ids)
+                self.assertEqual(result.output.to_polars()["V"].to_list(), values)
 
     def test_parquet_signed_integer_fields_read_as_int(self):
         # pyarrow and Polars store int8 and int16 columns as INT32 annotated
@@ -385,9 +387,11 @@ class ParquetOriginalOutput(unittest.TestCase):
                     "output": {"path": "output.csv", "columns": names},
                 }
                 result = self.build(source, {})
-                self.assertTrue(result.issues.is_empty(), result.issues)
+                self.assertEqual(result.issues.num_rows, 0, result.issues)
                 for name, (values, _, _) in columns.items():
-                    self.assertEqual(result.output[name].to_list(), values, name)
+                    self.assertEqual(
+                        result.output.to_polars()[name].to_list(), values, name
+                    )
         # The staged pyarrow int32 fixture, which 0.4.0 refused, holds 1.
         source = {
             "schema_version": "1.0",
@@ -400,8 +404,8 @@ class ParquetOriginalOutput(unittest.TestCase):
         result = self.build(
             source, {"input.parquet": ROOT / "pq" / "unsupported-int32.parquet"}
         )
-        self.assertTrue(result.issues.is_empty(), result.issues)
-        self.assertEqual(result.output["FIELD"].to_list(), [1])
+        self.assertEqual(result.issues.num_rows, 0, result.issues)
+        self.assertEqual(result.output.to_polars()["FIELD"].to_list(), [1])
 
     def test_parquet_semantic_failures_collect_in_source_order(self):
         aliases = tuple(TRUTH["input_aliases"])
@@ -519,7 +523,7 @@ class ParquetOriginalOutput(unittest.TestCase):
         ]
         specification = yamaa.spec(self.entry)
         for result in (specification.check(), specification.run()):
-            rows = result.issues.select(FIELDS).to_dicts()
+            rows = result.issues.to_polars().select(FIELDS).to_dicts()
             for row in rows:
                 row["context"] = json.loads(row["context"])
             self.assertEqual(rows, expected)
@@ -821,7 +825,7 @@ class PublicDomains(unittest.TestCase):
         ]
 
         def findings(result):
-            rows = result.issues.select(FIELDS).to_dicts()
+            rows = result.issues.to_polars().select(FIELDS).to_dicts()
             for row in rows:
                 row["context"] = json.loads(row["context"])
             return rows
@@ -910,7 +914,7 @@ class PublicDomains(unittest.TestCase):
                 for name, content in case["parents"].items():
                     (root / name).write_text(content, encoding="utf-8")
                 checked = yamaa.spec(entry).check()
-                conditions = checked.issues["condition"].to_list()
+                conditions = checked.issues.to_polars()["condition"].to_list()
                 if case["check_condition"] is None:
                     self.assertEqual(conditions, [])
                 else:
@@ -918,7 +922,7 @@ class PublicDomains(unittest.TestCase):
                 for name, content in case["inputs"].items():
                     (root / name).write_text(content, encoding="utf-8")
                 result = yamaa.spec(entry).run()
-                conditions = result.issues["condition"].to_list()
+                conditions = result.issues.to_polars()["condition"].to_list()
                 if case["run_condition"] is None:
                     self.assertEqual(conditions, [])
                     result.save()
@@ -945,7 +949,7 @@ class PublicDomains(unittest.TestCase):
 
         def assert_issues(frame, expected):
             if expected is None:
-                self.assertEqual(frame.height, 0)
+                self.assertEqual(frame.num_rows, 0)
             else:
                 self.assertTrue(
                     any(
@@ -953,7 +957,7 @@ class PublicDomains(unittest.TestCase):
                         and row["condition"] == expected["condition"]
                         and row["rule"] == expected["rule"]
                         and row["spec_paths"] == [expected["spec_path"]]
-                        for row in frame.select(FIELDS).to_dicts()
+                        for row in frame.to_polars().select(FIELDS).to_dicts()
                     ),
                     frame,
                 )
@@ -1006,7 +1010,7 @@ class PublicDomains(unittest.TestCase):
                 entry.write_text(case["spec"], encoding="utf-8")
                 # Static findings must precede access to absent study data.
                 checked = yamaa.spec(entry).check()
-                conditions = checked.issues["condition"].to_list()
+                conditions = checked.issues.to_polars()["condition"].to_list()
                 if case["check_condition"] is None:
                     self.assertEqual(conditions, [])
                 else:
@@ -1014,7 +1018,7 @@ class PublicDomains(unittest.TestCase):
                 for name, content in case["inputs"].items():
                     (root / name).write_text(content, encoding="utf-8")
                 result = yamaa.spec(entry).run()
-                conditions = result.issues["condition"].to_list()
+                conditions = result.issues.to_polars()["condition"].to_list()
                 if case["run_condition"] is None:
                     self.assertEqual(conditions, [])
                     result.save()
@@ -1097,16 +1101,16 @@ class PublicDomains(unittest.TestCase):
             source = case / "input" / "adsl.csv"
             captured = source.read_bytes()
             source.unlink()
-            self.assertTrue(yamaa.spec(entry).check().issues.is_empty())
+            self.assertEqual(yamaa.spec(entry).check().issues.num_rows, 0)
             source.write_bytes(captured)
             result = yamaa.spec(entry).run()
-            self.assertTrue(result.issues.is_empty())
+            self.assertEqual(result.issues.num_rows, 0)
             types = {name: pl.Float64 for name in ("VAL1", "VAL0", "RND1", "RND0")}
             expected = pl.read_csv(
                 case / "expected" / "adsl.csv", schema_overrides=types
             )
             self.assertEqual(expected.height, 16)
-            assert_frame_equal(result.output, expected)
+            assert_frame_equal(result.output.to_polars(), expected)
             self.assertEqual(entry.read_bytes(), written)
             self.assertFalse((case / "adsl.csv").exists())
             result.save()
@@ -1138,7 +1142,7 @@ class PublicDomains(unittest.TestCase):
             }
 
             def issue(result):
-                rows = result.issues.select(FIELDS).to_dicts()
+                rows = result.issues.to_polars().select(FIELDS).to_dicts()
                 self.assertEqual(len(rows), 1)
                 rows[0]["context"] = json.loads(rows[0]["context"])
                 return rows[0]
@@ -1176,15 +1180,15 @@ class PublicDomains(unittest.TestCase):
                 input_dir = case / "input"
                 held = case / "held"
                 input_dir.rename(held)
-                self.assertTrue(yamaa.spec(entry).check().issues.is_empty())
+                self.assertEqual(yamaa.spec(entry).check().issues.num_rows, 0)
                 held.rename(input_dir)
                 result = yamaa.spec(entry).run()
-                self.assertTrue(result.issues.is_empty())
+                self.assertEqual(result.issues.num_rows, 0)
                 expected = pl.read_csv(
                     case / "expected/adsl.csv",
                     schema_overrides={name: pl.Date for name in dates},
                 )
-                assert_frame_equal(result.output, expected)
+                assert_frame_equal(result.output.to_polars(), expected)
                 self.assertEqual(entry.read_bytes(), written)
                 self.assertFalse((case / "adsl.csv").exists())
                 result.save()
@@ -1209,7 +1213,7 @@ class PublicDomains(unittest.TestCase):
                     yamaa.spec(case / "spec.yaml").check(),
                     yamaa.spec(case / "spec.yaml").run(),
                 ]:
-                    issues = result.issues.select(FIELDS).to_dicts()
+                    issues = result.issues.to_polars().select(FIELDS).to_dicts()
                     self.assertEqual(len(issues), 1)
                     issues[0]["context"] = json.loads(issues[0]["context"])
                     self.assertEqual(
@@ -1231,7 +1235,7 @@ class PublicDomains(unittest.TestCase):
         import yamaa
 
         def issues(result):
-            records = result.issues.select(FIELDS).to_dicts()
+            records = result.issues.to_polars().select(FIELDS).to_dicts()
             for record in records:
                 record["context"] = without_layer(json.loads(record["context"]))
             return records
@@ -1267,7 +1271,7 @@ class PublicDomains(unittest.TestCase):
                     )
                 for column in integers:
                     expected = expected.with_columns(pl.col(column).cast(pl.Int64))
-                assert_frame_equal(result.output, expected)
+                assert_frame_equal(result.output.to_polars(), expected)
                 self.assertEqual(entry.read_bytes(), written)
                 self.assertFalse((case / output).exists())
                 result.save()
@@ -1306,7 +1310,7 @@ class PublicDomains(unittest.TestCase):
         import yamaa
 
         def issues(result):
-            records = result.issues.select(FIELDS).to_dicts()
+            records = result.issues.to_polars().select(FIELDS).to_dicts()
             for record in records:
                 record["context"] = without_layer(json.loads(record["context"]))
             return records
@@ -1325,7 +1329,7 @@ class PublicDomains(unittest.TestCase):
             result = yamaa.spec(entry).run()
             self.assertEqual(issues(result), [])
             self.assertEqual(
-                result.output.rows(),
+                result.output.to_polars().rows(),
                 [
                     ("1", "FOLLOW-UP", "follow-up", "Follow-up", "Follow-Up"),
                     (
@@ -1352,7 +1356,9 @@ class PublicDomains(unittest.TestCase):
                 "missing"
             ]
             self.assertEqual(issues(answered), expected)
-            self.assertEqual(answered.output.rows(), [("row1", None, None, None, None)])
+            self.assertEqual(
+                answered.output.to_polars().rows(), [("row1", None, None, None, None)]
+            )
             with (ROOT / "text-case-diagnostics.tsv").open() as stream:
                 failures = list(csv.DictReader(stream, delimiter="\t"))
             self.assertEqual(len(failures), 2)
@@ -1391,7 +1397,7 @@ class PublicDomains(unittest.TestCase):
         import yamaa
 
         def issues(result):
-            records = result.issues.select(FIELDS).to_dicts()
+            records = result.issues.to_polars().select(FIELDS).to_dicts()
             for record in records:
                 record["context"] = json.loads(record["context"])
             return records
@@ -1427,7 +1433,7 @@ columns:
                 self.assertEqual(issues(yamaa.spec(entry).check()), [])
                 result = yamaa.spec(entry).run()
                 self.assertEqual(issues(result), [])
-                self.assertEqual(result.output.rows(), rows)
+                self.assertEqual(result.output.to_polars().rows(), rows)
                 self.assertFalse(output.exists())
                 data.unlink()
                 for _ in range(2):
@@ -1465,7 +1471,7 @@ columns:
         )
 
         def issues(result):
-            records = result.issues.select(FIELDS).to_dicts()
+            records = result.issues.to_polars().select(FIELDS).to_dicts()
             for record in records:
                 record["context"] = without_layer(json.loads(record["context"]))
             return records
@@ -1482,7 +1488,9 @@ columns:
                 if "csv" in case:
                     self.assertEqual(issues(result), [], name)
                     self.assertEqual(
-                        result.output.write_csv().encode(), case["csv"].encode(), name
+                        result.output.to_polars().write_csv().encode(),
+                        case["csv"].encode(),
+                        name,
                     )
                     self.assertFalse((current / "output.csv").exists())
                     self.assertEqual(
@@ -1583,7 +1591,7 @@ columns:
         self.assertEqual(len(cases), 33)
 
         def issues(result):
-            rows = result.issues.select(FIELDS).to_dicts()
+            rows = result.issues.to_polars().select(FIELDS).to_dicts()
             for row in rows:
                 row["context"] = json.loads(row["context"])
             return rows
@@ -1648,7 +1656,7 @@ columns:
                                         case["csv"].encode(),
                                     )
                                     self.assertEqual(
-                                        result.output.write_csv().encode(),
+                                        result.output.to_polars().write_csv().encode(),
                                         expected_path.read_bytes(),
                                     )
                                 result.save()
@@ -1690,7 +1698,9 @@ columns:
                         with self.subTest(attempt=attempt):
                             self.assertFalse(output.exists())
                             result = yamaa.spec(entry).run()
-                            findings = result.issues.select(FIELDS).to_dicts()
+                            findings = (
+                                result.issues.to_polars().select(FIELDS).to_dicts()
+                            )
                             for finding in findings:
                                 finding["context"] = json.loads(finding["context"])
                             self.assertEqual(findings, case.get("findings", []))
@@ -1707,7 +1717,8 @@ columns:
                                     (work / "expected.csv").read_bytes(), expected
                                 )
                                 self.assertEqual(
-                                    result.output.write_csv().encode(), expected
+                                    result.output.to_polars().write_csv().encode(),
+                                    expected,
                                 )
                                 result.save()
                                 self.assertEqual(output.read_bytes(), expected)
@@ -1733,7 +1744,7 @@ columns:
         cases = dict(reference["cases"], **reference["originals"])
 
         def issues(result):
-            records = result.issues.select(FIELDS).to_dicts()
+            records = result.issues.to_polars().select(FIELDS).to_dicts()
             for record in records:
                 record["context"] = json.loads(record["context"])
             return records
@@ -1780,9 +1791,11 @@ columns:
                             expected_columns = (
                                 case["expected_csv"].splitlines()[0].split(",")
                             )
-                            self.assertEqual(result.output.columns, expected_columns)
                             self.assertEqual(
-                                result.output.rows(),
+                                result.output.column_names, expected_columns
+                            )
+                            self.assertEqual(
+                                result.output.to_polars().rows(),
                                 [
                                     tuple(row[column] for column in expected_columns)
                                     for row in case["rows"]
@@ -1790,7 +1803,8 @@ columns:
                             )
                         else:
                             self.assertEqual(
-                                result.output.write_csv().encode(), expected_csv
+                                result.output.to_polars().write_csv().encode(),
+                                expected_csv,
                             )
                         result.save()
                         self.assertEqual(output.read_bytes(), expected_csv)
@@ -1827,7 +1841,7 @@ columns:
             }
 
         def issues(result):
-            records = result.issues.select(FIELDS).to_dicts()
+            records = result.issues.to_polars().select(FIELDS).to_dicts()
             for record in records:
                 record["context"] = json.loads(record["context"])
             return records
@@ -1845,7 +1859,7 @@ columns:
             result = yamaa.spec(entry).run()
             self.assertEqual(issues(result), [])
             expected = pl.read_csv(case / "expected/adsl.csv", infer_schema=False)
-            assert_frame_equal(result.output, expected)
+            assert_frame_equal(result.output.to_polars(), expected)
             self.assertEqual(
                 json.loads(result._native.observations())["handler_counts"],
                 truth[case.name]["handler_counts"],
@@ -1912,7 +1926,7 @@ columns:
         truth = json.loads((ROOT / "text-extract-reference.json").read_text())
 
         def issues(result):
-            records = result.issues.select(FIELDS).to_dicts()
+            records = result.issues.to_polars().select(FIELDS).to_dicts()
             for record in records:
                 record["context"] = json.loads(record["context"])
             return records
@@ -1933,7 +1947,7 @@ columns:
                 case / "expected/adae.csv",
                 schema_overrides={"AESEQ": pl.Int64, "AEREFNUM": pl.Int64},
             )
-            assert_frame_equal(result.output, expected)
+            assert_frame_equal(result.output.to_polars(), expected)
             self.assertEqual(
                 json.loads(result._native.observations())["handler_counts"],
                 truth[case.name]["handler_counts"],
@@ -2001,9 +2015,13 @@ columns:
                         name,
                     )
                     if name == "optional-unentered":
-                        self.assertEqual(result.output["RESULT"].to_list(), [None])
+                        self.assertEqual(
+                            result.output.to_polars()["RESULT"].to_list(), [None]
+                        )
                     if name in ("entered-empty", "whole-empty"):
-                        self.assertEqual(result.output["RESULT"].to_list(), [""])
+                        self.assertEqual(
+                            result.output.to_polars()["RESULT"].to_list(), [""]
+                        )
                 else:
                     self.assertIsNone(result.output)
                     with self.assertRaises(yamaa.Error):
@@ -2061,13 +2079,14 @@ columns:
                     for r in expected["diagnostics"]
                 ]
                 self.assertEqual(
-                    result.issues.select([*FIELDS, *GEOMETRY]).rows(), expected_rows
+                    result.issues.to_polars().select([*FIELDS, *GEOMETRY]).rows(),
+                    expected_rows,
                 )
-                self.assertEqual(result.issues.schema, issue_schema())
+                self.assertEqual(result.issues.to_polars().schema, issue_schema())
                 # Every issue is an error with a message, located in a file the
                 # case read or, when no file holds its first spec path, not at
                 # all (P-ISSUE-1).
-                for row in result.issues.to_dicts():
+                for row in result.issues.to_pylist():
                     self.assertEqual(row["severity"], "error")
                     located = row["file"] is not None
                     self.assertEqual(
@@ -2077,7 +2096,7 @@ columns:
                     self.assertTrue(row["message"])
                 # The run report records the same outcome as the complete truth.
                 self.assertEqual(
-                    result.report.row(0, named=True)["OUTCOME"],
+                    result.report.to_polars().row(0, named=True)["OUTCOME"],
                     "succeeded" if expected["outcome"] == "success" else "failed",
                 )
                 if not expected["artifacts"]:
@@ -2109,8 +2128,8 @@ columns:
                     tuple(scalar(row[column]) for column in projection)
                     for row in derived["rows"]
                 ]
-                self.assertEqual(result.output.columns, artifact["columns"])
-                self.assertEqual(result.output.rows(), rows)
+                self.assertEqual(result.output.column_names, artifact["columns"])
+                self.assertEqual(result.output.to_polars().rows(), rows)
                 expected_types = {
                     "str": pl.String,
                     "int": pl.Int64,
@@ -2118,7 +2137,9 @@ columns:
                     "date": pl.Date,
                 }
                 for column, kind in zip(artifact["columns"], artifact["types"]):
-                    self.assertEqual(result.output.schema[column], expected_types[kind])
+                    self.assertEqual(
+                        result.output.to_polars().schema[column], expected_types[kind]
+                    )
                 output_name = {
                     "schema-lookup": "adsl.csv",
                     "schema-window-functions": "advs.csv",
@@ -2133,7 +2154,7 @@ columns:
                     self.assertEqual(
                         json.loads(result._native.observations()), observed_expected
                     )
-                self.assertEqual(result.output.rows(), rows)
+                self.assertEqual(result.output.to_polars().rows(), rows)
                 self.record_public_report(result, name, entry)
 
     def test_public_check_without_study_and_save_retry(self):
@@ -2144,11 +2165,12 @@ columns:
             root = Path(directory)
             entry = root / "spec.yaml"
             entry.write_text(source)
-            self.assertTrue(yamaa.spec(entry).check().issues.is_empty())
+            self.assertEqual(yamaa.spec(entry).check().issues.num_rows, 0)
             failed = yamaa.spec(entry).run()
             self.assertIsNone(failed.output)
             self.assertEqual(
-                failed.issues["condition"].to_list(), ["resource_path_missing"]
+                failed.issues.to_polars()["condition"].to_list(),
+                ["resource_path_missing"],
             )
             with self.assertRaises(yamaa.Error):
                 failed.save()
@@ -2156,15 +2178,19 @@ columns:
                 TRUTH["integer_boundary_csv"].encode("utf-8")
             )
             built = yamaa.spec(entry).run()
-            self.assertEqual(built.output["ID"].to_list(), [-(2**63), 2**63 - 1])
+            self.assertEqual(
+                built.output.to_polars()["ID"].to_list(), [-(2**63), 2**63 - 1]
+            )
             (root / "input.csv").write_bytes(b"changed")
             entry.write_bytes(b"[changed")
             with self.assertRaises(yamaa.Error):
                 built.save()
-            self.assertEqual(built.issues["condition"].to_list(), ["engine_rejected"])
+            self.assertEqual(
+                built.issues.to_polars()["condition"].to_list(), ["engine_rejected"]
+            )
             (root / "absent").mkdir()
             built.save()
-            self.assertTrue(built.issues.is_empty())
+            self.assertEqual(built.issues.num_rows, 0)
             self.assertEqual(
                 (root / "absent/output.csv").read_bytes(),
                 TRUTH["integer_boundary_csv"].encode("utf-8"),
@@ -2190,14 +2216,14 @@ columns:
                     else:
                         link.symlink_to(outside, target_is_directory=True)
                     built = yamaa.spec(entry).run()
-                    self.assertEqual(built.output["ID"].to_list(), [1])
+                    self.assertEqual(built.output.to_polars()["ID"].to_list(), [1])
                     if late:
                         link.rmdir()
                         link.symlink_to(outside, target_is_directory=True)
                     with self.assertRaises(yamaa.Error):
                         built.save()
                     self.assertEqual(
-                        json.loads(built.issues["context"][0]),
+                        json.loads(built.issues.to_polars()["context"][0]),
                         {"code": "invalid_target", "stage": "output"},
                     )
                     self.assertEqual(
@@ -2209,7 +2235,7 @@ columns:
                     link.unlink()
                     link.mkdir()
                     built.save()
-                    self.assertTrue(built.issues.is_empty())
+                    self.assertEqual(built.issues.num_rows, 0)
                     self.assertEqual((link / "output.csv").read_bytes(), b"ID\n1\n")
 
     def test_public_project_refusal_and_argument_types(self):
@@ -2235,12 +2261,16 @@ columns:
         result = project.run()
         # Nothing ran: no specification and no report rows.
         self.assertEqual(result.names, [])
-        self.assertEqual(result.report.height, 0)
-        self.assertEqual(result.issues.select(FIELDS).to_dicts(), expected)
-        self.assertEqual(project.check().issues.rows(), result.issues.rows())
+        self.assertEqual(result.report.num_rows, 0)
+        self.assertEqual(result.issues.to_polars().select(FIELDS).to_dicts(), expected)
+        self.assertEqual(
+            project.check().issues.to_polars().rows(), result.issues.to_polars().rows()
+        )
         with self.assertRaises(yamaa.Error) as raised:
             project.spec("TEST")
-        self.assertEqual(raised.exception.issues.select(FIELDS).to_dicts(), expected)
+        self.assertEqual(
+            raised.exception.issues.to_polars().select(FIELDS).to_dicts(), expected
+        )
         with self.assertRaises(yamaa.Error):
             result.save()
         for function in (yamaa.spec, yamaa.project):
@@ -2260,7 +2290,7 @@ columns:
             (root / "src.csv").write_text("ID,K,SEQ,V\na,x,2,5\nb,x,1,9\n")
             (root / "other.csv").write_text("ID,K\nc,x\nd,x\n")
             result = yamaa.spec(entry).run()
-            self.assertEqual(result.issues.rows(), [])
+            self.assertEqual(result.issues.to_polars().rows(), [])
             self.assertEqual(
                 json.loads(result._native.observations())["handler_counts"],
                 [
@@ -2315,7 +2345,7 @@ columns:
                 (root / name).unlink()
             entry.write_text(body.replace("SECTION: {literal: first}", "SECTION: P.K"))
             for checked in (yamaa.spec(entry).check(), yamaa.spec(entry).run()):
-                records = checked.issues.select(FIELDS).to_dicts()
+                records = checked.issues.to_polars().select(FIELDS).to_dicts()
                 for record in records:
                     record["context"] = json.loads(record["context"])
                 self.assertEqual(
@@ -2358,9 +2388,9 @@ columns:
                     spec_paths=paths,
                     context=json.loads(context),
                 )
-                for phase, condition, rule, paths, context in result.issues.select(
-                    FIELDS
-                ).rows()
+                for phase, condition, rule, paths, context in result.issues.to_polars()
+                .select(FIELDS)
+                .rows()
             ]
 
         with tempfile.TemporaryDirectory() as directory:
@@ -2455,9 +2485,9 @@ columns:
             entry = root / "spec.yaml"
             entry.write_text(body)
             (root / "src.csv").write_text(TRUTH["filtered_donor_csv"])
-            self.assertTrue(yamaa.spec(entry).check().issues.is_empty())
+            self.assertEqual(yamaa.spec(entry).check().issues.num_rows, 0)
             result = yamaa.spec(entry).run()
-            self.assertEqual(result.issues.rows(), [])
+            self.assertEqual(result.issues.to_polars().rows(), [])
             self.assertEqual(
                 json.loads(result._native.observations())["handler_counts"],
                 [
@@ -2561,7 +2591,7 @@ columns:
                 for name, content in inputs.items():
                     (root / name).write_text(content)
                 result = yamaa.spec(entry).run()
-                self.assertEqual(result.issues.rows(), [])
+                self.assertEqual(result.issues.to_polars().rows(), [])
                 self.assertEqual(
                     json.loads(result._native.observations())["handler_counts"], ledger
                 )
@@ -2584,9 +2614,9 @@ columns:
                     spec_paths=paths,
                     context=json.loads(context),
                 )
-                for phase, condition, rule, paths, context in result.issues.select(
-                    FIELDS
-                ).rows()
+                for phase, condition, rule, paths, context in result.issues.to_polars()
+                .select(FIELDS)
+                .rows()
             ]
             self.assertEqual(
                 findings,
@@ -2618,7 +2648,7 @@ columns:
             (root / "src.csv").write_text("ID,SELECT\n1,Y\n2,N\n3,Y\n")
             (root / "donor.csv").write_text(TRUTH["fallback_donor_csv"])
             result = yamaa.spec(entry).run()
-            self.assertEqual(result.issues.rows(), [])
+            self.assertEqual(result.issues.to_polars().rows(), [])
             self.assertEqual(
                 json.loads(result._native.observations())["handler_counts"],
                 [
@@ -2660,7 +2690,7 @@ columns:
                     )
                 )
                 admitted = yamaa.spec(entry).run()
-                self.assertEqual(admitted.issues.rows(), [])
+                self.assertEqual(admitted.issues.to_polars().rows(), [])
                 admitted.save()
                 self.assertEqual((root / "result.csv").read_bytes(), expected)
                 handlers = json.loads(admitted._native.observations())["handler_counts"]
@@ -2708,7 +2738,7 @@ columns:
                 entry = destination / "spec.yaml"
                 result = yamaa.spec(entry).run()
                 findings = []
-                for row in result.issues.select(FIELDS).to_dicts():
+                for row in result.issues.to_polars().select(FIELDS).to_dicts():
                     row["context"] = json.loads(row["context"])
                     findings.append(row)
                 self.assertEqual(findings, case.get("findings", []))
@@ -2734,7 +2764,7 @@ columns:
                 destination = Path(directory) / name
                 shutil.copytree(ROOT / "cases" / name, destination)
                 result = yamaa.spec(destination / "spec.yaml").run()
-                self.assertEqual(result.issues.to_dicts(), [])
+                self.assertEqual(result.issues.to_pylist(), [])
                 result.save()
                 for expected in (destination / "expected").glob("*.csv"):
                     self.assertEqual(
@@ -2764,7 +2794,7 @@ columns:
         ]
 
         def issues(frame):
-            rows = frame.select(FIELDS).to_dicts()
+            rows = frame.to_polars().select(FIELDS).to_dicts()
             for row in rows:
                 self.assertIsInstance(row["context"], str)
                 row["context"] = json.loads(row["context"])
@@ -2803,11 +2833,11 @@ columns:
                     if "table" in case:
                         expected = case["table"]
                         self.assertEqual(
-                            result.output.columns,
+                            result.output.column_names,
                             [column for column, _ in expected["columns"]],
                         )
                         self.assertEqual(
-                            result.output.dtypes,
+                            result.output.to_polars().dtypes,
                             [
                                 pl.String if kind == "str" else pl.Int64
                                 for _, kind in expected["columns"]
@@ -2816,7 +2846,7 @@ columns:
                         self.assertEqual(
                             [
                                 [None if value is None else str(value) for value in row]
-                                for row in result.output.rows()
+                                for row in result.output.to_polars().rows()
                             ],
                             expected["rows"],
                         )
@@ -2850,7 +2880,7 @@ columns:
         self.assertEqual(len(cases), 21)
 
         def issues(frame):
-            rows = frame.select(FIELDS).to_dicts()
+            rows = frame.to_polars().select(FIELDS).to_dicts()
             for row in rows:
                 self.assertIsInstance(row["context"], str)
                 row["context"] = json.loads(row["context"])
@@ -2896,11 +2926,11 @@ columns:
                     if "table" in case:
                         expected_table = case["table"]
                         self.assertEqual(
-                            result.output.columns,
+                            result.output.column_names,
                             [column for column, _ in expected_table["columns"]],
                         )
                         self.assertEqual(
-                            result.output.dtypes,
+                            result.output.to_polars().dtypes,
                             [
                                 pl.String if kind == "str" else pl.Int64
                                 for _, kind in expected_table["columns"]
@@ -2909,7 +2939,7 @@ columns:
                         self.assertEqual(
                             [
                                 [None if value is None else str(value) for value in row]
-                                for row in result.output.rows()
+                                for row in result.output.to_polars().rows()
                             ],
                             expected_table["rows"],
                         )
@@ -2949,7 +2979,7 @@ class NamespaceAdmission(unittest.TestCase):
                     checked = yamaa.spec(entry).check()
                     result = yamaa.spec(entry).run()
                     for frame in (checked.issues, result.issues):
-                        rows = frame.select(FIELDS).to_dicts()
+                        rows = frame.to_polars().select(FIELDS).to_dicts()
                         for row in rows:
                             row["context"] = json.loads(row["context"])
                         self.assertEqual(rows, case["issues"])
@@ -2983,7 +3013,7 @@ class PredicateSuggestions(unittest.TestCase):
                         (checked.issues, case["check_issues"]),
                         (result.issues, case["issues"]),
                     ):
-                        rows = frame.select(FIELDS).to_dicts()
+                        rows = frame.to_polars().select(FIELDS).to_dicts()
                         for row in rows:
                             row["context"] = json.loads(row["context"])
                         self.assertEqual(rows, expected)
@@ -3013,7 +3043,7 @@ class IntermediateDependencies(unittest.TestCase):
                 entry.write_text(case["specification"], encoding="ascii")
 
                 def rows(frame):
-                    records = frame.select(FIELDS).to_dicts()
+                    records = frame.to_polars().select(FIELDS).to_dicts()
                     for record in records:
                         record["context"] = json.loads(record["context"])
                     return records
@@ -3044,7 +3074,10 @@ class IntermediateDependencies(unittest.TestCase):
                             else:
                                 if "output_rows" in case:
                                     self.assertEqual(
-                                        [list(row) for row in result.output.rows()],
+                                        [
+                                            list(row)
+                                            for row in result.output.to_polars().rows()
+                                        ],
                                         case["output_rows"],
                                     )
                                 result.save()
@@ -3081,7 +3114,7 @@ class IntermediateRowDrivers(unittest.TestCase):
                         (checked.issues, case["check_issues"]),
                         (result.issues, case["issues"]),
                     ):
-                        rows = frame.select(FIELDS).to_dicts()
+                        rows = frame.to_polars().select(FIELDS).to_dicts()
                         for row in rows:
                             row["context"] = json.loads(row["context"])
                         self.assertEqual(rows, expected)
@@ -3102,8 +3135,8 @@ class DiagnosticSites(unittest.TestCase):
         import yamaa
 
         def issues(frame):
-            rows = frame.select(FIELDS).to_dicts()
-            self.assertEqual(frame.columns, ISSUE_COLUMNS)
+            rows = frame.to_polars().select(FIELDS).to_dicts()
+            self.assertEqual(frame.column_names, ISSUE_COLUMNS)
             for row in rows:
                 self.assertIsInstance(row["context"], str)
                 row["context"] = json.loads(row["context"])
@@ -3159,7 +3192,7 @@ class RowCountLookups(unittest.TestCase):
                         (checked.issues, case["check_issues"]),
                         (result.issues, case["issues"]),
                     ):
-                        rows = frame.select(FIELDS).to_dicts()
+                        rows = frame.to_polars().select(FIELDS).to_dicts()
                         for row in rows:
                             row["context"] = json.loads(row["context"])
                         self.assertEqual(rows, expected)
@@ -3205,7 +3238,7 @@ class BaselineWindowTypes(unittest.TestCase):
                         (checked.issues, case["check_issues"]),
                         (result.issues, case["issues"]),
                     ):
-                        rows = frame.select(FIELDS).to_dicts()
+                        rows = frame.to_polars().select(FIELDS).to_dicts()
                         for row in rows:
                             row["context"] = json.loads(row["context"])
                         self.assertEqual(rows, expected)
@@ -3226,8 +3259,8 @@ class RowJoinKeys(unittest.TestCase):
         import yamaa
 
         def issues(frame):
-            self.assertEqual(frame.columns, ISSUE_COLUMNS)
-            rows = frame.select(FIELDS).to_dicts()
+            self.assertEqual(frame.column_names, ISSUE_COLUMNS)
+            rows = frame.to_polars().select(FIELDS).to_dicts()
             for row in rows:
                 self.assertIsInstance(row["context"], str)
                 row["context"] = json.loads(row["context"])
@@ -3276,7 +3309,7 @@ class KeyExpressions(unittest.TestCase):
         import yamaa
 
         def issues(frame):
-            records = frame.select(FIELDS).to_dicts()
+            records = frame.to_polars().select(FIELDS).to_dicts()
             for record in records:
                 self.assertIsInstance(record["context"], str)
                 record["context"] = json.loads(record["context"])

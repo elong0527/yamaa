@@ -860,9 +860,10 @@ fn the_contract_tests_check_the_port() {
         "{issue:?}"
     );
     assert_eq!(issue["rule"], "FUNC-12", "{issue:?}");
+    // The first test of the function file, whose root is the definition (D8).
     assert_eq!(
         issue["spec_paths"],
-        Json::Array(vec![Json::from("functions.bmi.tests[0]")])
+        Json::Array(vec![Json::from("tests[0]")])
     );
 }
 

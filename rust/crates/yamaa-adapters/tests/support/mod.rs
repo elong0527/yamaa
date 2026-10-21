@@ -21,6 +21,7 @@ pub mod project_schemas;
 pub mod roots;
 pub mod sas7bdat;
 pub mod schema_declaration;
+pub mod scratch;
 pub mod string_template_syntax;
 pub mod syntax_spans;
 pub mod xport;

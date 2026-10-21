@@ -49,6 +49,13 @@ values.file_type.spec
 values.file_type.project
 values.file_type.codelists
 values.file_type.function
+values.feature.odm
+values.feature.parquet
+values.feature.readstat
+values.feature.yaml
+values.host.python
+values.host.r
+values.host.cli
 tables.issues.columns[0]: severity: str, values severity
 tables.issues.columns[1]: phase: str, values phase
 tables.issues.columns[2]: condition: str, values yaml/conditions.yaml
@@ -116,8 +123,8 @@ tables.selftest_cases.columns[1]: status: str, values status
 tables.selftest_cases.columns[2]: message: optional<str>
 records.info.fields[0]: version: str
 records.info.fields[1]: language_versions: list<str>
-records.info.fields[2]: features: list<str>
-records.info.fields[3]: host: str
+records.info.fields[2]: features: list<str>, values feature
+records.info.fields[3]: host: str, values host
 records.info.fields[4]: host_version: optional<str>
 records.info.fields[5]: platform: str
 public.types.path: python str or os.PathLike, unannotated; r character(1)
@@ -130,12 +137,24 @@ public.types.names: python list[str]; r character()
 public.types.paths_written: python list[str], absolute with forward slashes, in publication order; r character(), the same paths; save() returns them invisibly
 public.types.tree: python dict; r named list
 public.types.json_text: python str, canonical JSON (RFC 8785); r character(1), canonical JSON (RFC 8785)
-public.types.table: python polars.DataFrame; r data.frame
-public.types.optional_table: python polars.DataFrame | None; r data.frame or NULL
+public.types.table: python yamaa.Table; r data.frame
+public.types.optional_table: python yamaa.Table | None; r data.frame or NULL
 public.types.status: python str, one of values.status; r character(1), one of values.status
 public.types.file_type: python str, one of values.file_type; r character(1), one of values.file_type
 public.types.info: python dict, keys in records.info order; r named list, names in records.info order
 public.types.nothing: python None; r NULL, invisibly
+public.types.rows: python list[dict[str, object]], one dict per row, keyed by the column names in order
+public.types.arrow_capsule: python PyCapsule named arrow_array_stream, a fresh Arrow C stream
+public.types.schema_request: python object or None; anything but None is refused
+public.types.arrow_table: python pyarrow.Table
+public.types.polars_frame: python polars.DataFrame
+public.types.pandas_frame: python pandas.DataFrame, each column a pandas.ArrowDtype of its Arrow type
+public.value_types.str: python Arrow Utf8, Python str; r character
+public.value_types.int: python Arrow Int64, Python int; r double; an error beyond 2^53
+public.value_types.float: python Arrow Float64, Python float; r double
+public.value_types.date: python Arrow Date32, datetime.date; r Date
+public.value_types.datetime: python Arrow Timestamp(second), naive datetime.datetime; r POSIXct in UTC
+public.value_types.list: python Arrow List, Python list; r list column; NULL for a missing list
 public.functions.spec: python yamaa.spec; r yamaa_spec; returns Spec
 public.functions.spec.args[0]: path: path
 public.functions.project: python yamaa.project; r yamaa_project; returns Project
@@ -151,51 +170,80 @@ public.functions.lint.args[0]: paths: path_list
 public.functions.lint.args[1]: fix: flag = false
 public.functions.schema: python yamaa.schema; r yamaa_schema; returns json_text; raises refusal
 public.functions.schema.args[0]: file_type: file_type
+public.functions.info: python yamaa.info; r yamaa_info; returns info; record info
 public.functions.selftest: python yamaa.selftest; r yamaa_selftest; returns SelfTest
 public.classes.Check: python yamaa.Check; r yamaa_check
-public.classes.Check.issues: field; returns table; table issues
+public.classes.Check.status: property; returns status
+public.classes.Check.issues: property; returns table; table issues
+public.classes.Check.summary: printing; python __repr__; r print, format
 public.classes.Run: python yamaa.Run; r yamaa_run
+public.classes.Run.status: property; returns status
 public.classes.Run.output: property; returns optional_table
 public.classes.Run.issues: property; returns table; table issues
 public.classes.Run.report: property; returns optional_table; table report
 public.classes.Run.save: method; returns paths_written; raises refusal
+public.classes.Run.summary: printing; python __repr__; r print, format
 public.classes.MemberRun: python yamaa.MemberRun; r yamaa_member_run
+public.classes.MemberRun.status: property; returns status; raises refusal
 public.classes.MemberRun.output: property; returns optional_table; raises refusal
 public.classes.MemberRun.issues: property; returns table; table issues; raises refusal
 public.classes.MemberRun.report: property; returns optional_table; table report; raises refusal
+public.classes.MemberRun.summary: printing; python __repr__; r print, format
 public.classes.ProjectRun: python yamaa.ProjectRun; r yamaa_project_run
+public.classes.ProjectRun.status: property; returns status
 public.classes.ProjectRun.names: property; returns names
 public.classes.ProjectRun.member: index; python __getitem__; r [[; returns MemberRun; raises refusal
 public.classes.ProjectRun.member.args[0]: name: text
 public.classes.ProjectRun.contains: protocol; python __contains__
 public.classes.ProjectRun.iterate: protocol; python __iter__
+public.classes.ProjectRun.length: protocol; python __len__
 public.classes.ProjectRun.issues: property; returns table; table issues
 public.classes.ProjectRun.report: property; returns table; table report
 public.classes.ProjectRun.save: method; returns paths_written; raises refusal
+public.classes.ProjectRun.summary: printing; python __repr__; r print, format
 public.classes.Submission: python yamaa.Submission; r yamaa_submission
+public.classes.Submission.status: property; returns status
+public.classes.Submission.created: property; returns text
 public.classes.Submission.issues: property; returns table; table issues
 public.classes.Submission.save: method; returns paths_written; raises refusal
+public.classes.Submission.summary: printing; python __repr__; r print, format
 public.classes.Spec: python yamaa.Spec; r yamaa_spec
 public.classes.Spec.check: method; returns Check; raises refusal
 public.classes.Spec.resolve: method; returns tree; raises refusal
 public.classes.Spec.run: method; returns Run; raises refusal
+public.classes.Spec.summary: printing; python __repr__; r print, format
 public.classes.Project: python yamaa.Project; r yamaa_project
 public.classes.Project.spec: method; returns Spec; raises refusal
 public.classes.Project.spec.args[0]: name: text
+public.classes.Project.names: property; returns names; raises refusal
 public.classes.Project.check: method; returns Check; raises refusal
 public.classes.Project.run: method; returns ProjectRun; raises refusal
 public.classes.Project.run.args[0]: section: optional_text = None
 public.classes.Project.submission: method; returns Submission; raises refusal
 public.classes.Project.submission.args[0]: section: optional_text = None
 public.classes.Project.submission.args[1]: created: optional_text = None; keyword-only
+public.classes.Project.summary: printing; python __repr__; r print, format
 public.classes.SelfTest: python yamaa.SelfTest; r yamaa_selftest
 public.classes.SelfTest.status: property; returns status
 public.classes.SelfTest.cases: property; returns table; table selftest_cases
 public.classes.SelfTest.info: property; returns info; record info
 public.classes.SelfTest.summary: printing; python __repr__; r print, format
+public.classes.Table: python yamaa.Table
+public.classes.Table.num_rows: property; returns count
+public.classes.Table.column_names: property; returns names
+public.classes.Table.length: protocol; python __len__; returns count
+public.classes.Table.preview: printing; python __repr__
+public.classes.Table.arrow_stream: protocol; python __arrow_c_stream__; returns arrow_capsule
+public.classes.Table.arrow_stream.args[0]: requested_schema: schema_request = None
+public.classes.Table.to_pylist: method; returns rows
+public.classes.Table.to_arrow: method; returns arrow_table; imports pyarrow
+public.classes.Table.to_polars: method; returns polars_frame; imports polars
+public.classes.Table.to_pandas: method; returns pandas_frame; imports pandas, pyarrow
 public.errors.refusal: python yamaa.Error(Exception) with issues: table, paths: paths_written; r yamaa_error, error, condition with message: text, call: NULL, issues: table, paths: paths_written
 public.python.exports.Error
+public.python.exports.Table
 public.python.exports.__version__
+public.python.exports.info
 public.python.exports.lint
 public.python.exports.project
 public.python.exports.read_odm
@@ -207,7 +255,34 @@ public.r.exports.yamaa_project
 public.r.exports.yamaa_read_odm
 public.r.exports.yamaa_lint
 public.r.exports.yamaa_schema
+public.r.exports.yamaa_info
 public.r.exports.yamaa_selftest
+public.r.s3methods.yamaa_check.names: status, issues
+public.r.s3methods.yamaa_check.length
+public.r.s3methods.yamaa_check.print
+public.r.s3methods.yamaa_check.format
+public.r.s3methods.yamaa_run.names: status, output, issues, report, save
+public.r.s3methods.yamaa_run.length
+public.r.s3methods.yamaa_run.print
+public.r.s3methods.yamaa_run.format
+public.r.s3methods.yamaa_member_run.names: status, output, issues, report
+public.r.s3methods.yamaa_member_run.length
+public.r.s3methods.yamaa_member_run.print
+public.r.s3methods.yamaa_member_run.format
+public.r.s3methods.yamaa_project_run.names: keys of names
+public.r.s3methods.yamaa_project_run.length
 public.r.s3methods.yamaa_project_run.[[
+public.r.s3methods.yamaa_project_run.print
+public.r.s3methods.yamaa_project_run.format
+public.r.s3methods.yamaa_submission.names: status, created, issues, save
+public.r.s3methods.yamaa_submission.length
+public.r.s3methods.yamaa_submission.print
+public.r.s3methods.yamaa_submission.format
+public.r.s3methods.yamaa_spec.print
+public.r.s3methods.yamaa_spec.format
+public.r.s3methods.yamaa_project.print
+public.r.s3methods.yamaa_project.format
+public.r.s3methods.yamaa_selftest.names: status, cases, info
+public.r.s3methods.yamaa_selftest.length
 public.r.s3methods.yamaa_selftest.print
 public.r.s3methods.yamaa_selftest.format

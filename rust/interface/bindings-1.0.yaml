@@ -293,13 +293,6 @@ public:
       python: "repr() and str() return it"
       r: "format() returns its lines; print() writes them and returns the object invisibly"
       cli: the summary line of text output
-    value_types:
-      str: {python: "Arrow Utf8, Python str", r: character}
-      int: {python: "Arrow Int64, Python int", r: "double; an error beyond 2^53"}
-      float: {python: "Arrow Float64, Python float", r: double}
-      date: {python: "Arrow Date32, datetime.date", r: Date}
-      datetime: {python: "Arrow Timestamp(second), naive datetime.datetime", r: "POSIXct in UTC"}
-      list: {python: "Arrow List, Python list", r: "list column; NULL for a missing list"}
 
   functions:
     - name: spec
@@ -349,14 +342,6 @@ public:
       python: yamaa.schema(file_type)
       r: yamaa_schema(file_type)
       cli: schema TYPE
-    - name: info
-      since: 1.0.0
-      args: {}
-      returns: info
-      record: info
-      python: yamaa.info()
-      r: yamaa_info()
-      cli: --version
     - name: selftest
       since: 1.0.0
       args: {}
@@ -376,14 +361,12 @@ public:
         - {name: check, kind: method, args: {}, returns: Check, cli: check PATH}
         - {name: resolve, kind: method, args: {}, returns: tree, raises: refusal, cli: resolve PATH}
         - {name: run, kind: method, args: {}, returns: Run, cli: run PATH}
-        - {name: summary, kind: printing, python: __repr__, r: [print, format]}
     Project:
       python: yamaa.Project
       r: yamaa_project
       reads: nothing until a member runs
       members:
         - {name: spec, kind: method, args: {name: text}, returns: Spec, raises: refusal, cli: --spec NAME}
-        - {name: names, kind: property, since: 1.0.0, returns: names, raises: refusal, meaning: "listed spec names in run order, read without data (D45)"}
         - {name: check, kind: method, args: {}, returns: Check, cli: check PATH}
         - {name: run, kind: method, args: {section: optional_text = None}, returns: ProjectRun, cli: "run PATH [--section S]"}
         - name: submission
@@ -392,65 +375,43 @@ public:
           keyword_only: [created]
           returns: Submission
           cli: "submission PATH [--section S] [--created T]"
-        - {name: summary, kind: printing, python: __repr__, r: [print, format]}
     Check:
       python: yamaa.Check
       r: yamaa_check
       members:
-        - {name: status, kind: property, since: 1.0.0, returns: status}
         - {name: issues, kind: property, returns: table, table: issues}
-        - {name: names, kind: r_method, since: 1.0.0, r: names, returns: "c(\"status\", \"issues\")"}
-        - {name: length, kind: r_method, since: 1.0.0, r: length, returns: "2"}
-        - {name: summary, kind: printing, since: 1.0.0, python: __repr__, r: [print, format]}
     Run:
       python: yamaa.Run
       r: yamaa_run
       members:
-        - {name: status, kind: property, since: 1.0.0, returns: status}
         - {name: output, kind: property, returns: optional_table, meaning: missing when the run failed}
         - {name: issues, kind: property, returns: table, table: issues}
         - {name: report, kind: property, returns: optional_table, table: report}
         - {name: save, kind: method, args: {}, returns: paths_written, raises: refusal, since_returns: 1.0.0}
-        - {name: names, kind: r_method, since: 1.0.0, r: names, returns: "c(\"status\", \"output\", \"issues\", \"report\", \"save\")"}
-        - {name: length, kind: r_method, since: 1.0.0, r: length, returns: "5"}
-        - {name: summary, kind: printing, since: 1.0.0, python: __repr__, r: [print, format]}
     MemberRun:
       python: yamaa.MemberRun
       r: yamaa_member_run
       members:
-        - {name: status, kind: property, since: 1.0.0, returns: status}
         - {name: output, kind: property, returns: optional_table}
         - {name: issues, kind: property, returns: table, table: issues}
         - {name: report, kind: property, returns: optional_table, table: report}
-        - {name: names, kind: r_method, since: 1.0.0, r: names, returns: "c(\"status\", \"output\", \"issues\", \"report\")"}
-        - {name: length, kind: r_method, since: 1.0.0, r: length, returns: "4"}
-        - {name: summary, kind: printing, since: 1.0.0, python: __repr__, r: [print, format]}
     ProjectRun:
       python: yamaa.ProjectRun
       r: yamaa_project_run
       members:
-        - {name: status, kind: property, since: 1.0.0, returns: status}
         - {name: names, kind: property, returns: names, meaning: run-scope spec names in run order}
         - {name: member, kind: index, args: {name: text}, returns: MemberRun, raises: refusal, python: "__getitem__", r: "[["}
         - {name: contains, kind: protocol, args: {name: text}, returns: flag, python: __contains__, r: "name %in% names(x)"}
         - {name: iterate, kind: protocol, returns: names, python: __iter__}
-        - {name: length, kind: protocol, since: 1.0.0, returns: count, python: __len__, r: length}
-        - {name: names_method, kind: r_method, since: 1.0.0, r: names, returns: names}
         - {name: issues, kind: property, returns: table, table: issues}
         - {name: report, kind: property, returns: table, table: report}
         - {name: save, kind: method, args: {}, returns: paths_written, raises: refusal, since_returns: 1.0.0}
-        - {name: summary, kind: printing, since: 1.0.0, python: __repr__, r: [print, format]}
     Submission:
       python: yamaa.Submission
       r: yamaa_submission
       members:
-        - {name: status, kind: property, since: 1.0.0, returns: status}
-        - {name: created, kind: property, since: 1.0.0, returns: text, meaning: "the ISO 8601 creation time the documents carry: the argument, or the time used when it was omitted (2.8)"}
         - {name: issues, kind: property, returns: table, table: issues}
         - {name: save, kind: method, args: {}, returns: paths_written, raises: refusal, since_returns: 1.0.0}
-        - {name: names, kind: r_method, since: 1.0.0, r: names, returns: "c(\"status\", \"created\", \"issues\", \"save\")"}
-        - {name: length, kind: r_method, since: 1.0.0, r: length, returns: "4"}
-        - {name: summary, kind: printing, since: 1.0.0, python: __repr__, r: [print, format]}
     SelfTest:
       since: 1.0.0
       owner: "#3062"
@@ -460,24 +421,7 @@ public:
         - {name: status, kind: property, returns: status}
         - {name: cases, kind: property, returns: table, table: selftest_cases}
         - {name: info, kind: property, returns: info, record: info}
-        - {name: names, kind: r_method, r: names, returns: "c(\"status\", \"cases\", \"info\")"}
-        - {name: length, kind: r_method, r: length, returns: "3"}
         - {name: summary, kind: printing, python: __repr__, r: [print, format]}
-    Table:
-      since: 1.0.0
-      hosts: [python]
-      python: yamaa.Table
-      meaning: "every Python table (D11, D43); implements the Arrow PyCapsule stream interface; no runtime dependency"
-      members:
-        - {name: num_rows, kind: property, returns: count}
-        - {name: column_names, kind: property, returns: names}
-        - {name: length, kind: protocol, python: __len__, returns: count}
-        - {name: arrow_stream, kind: protocol, python: __arrow_c_stream__, args: {requested_schema: "object | None = None"}, returns: PyCapsule}
-        - {name: to_polars, kind: method, args: {}, returns: polars.DataFrame, imports: polars, on: call}
-        - {name: to_pandas, kind: method, args: {}, returns: pandas.DataFrame, imports: "pandas and pyarrow", on: call}
-        - {name: to_arrow, kind: method, args: {}, returns: pyarrow.Table, imports: pyarrow, on: call}
-        - {name: to_pylist, kind: method, args: {}, returns: "list[dict[str, object]]", imports: nothing}
-        - {name: preview, kind: printing, python: __repr__}
 
   errors:
     refusal:
@@ -508,8 +452,6 @@ public:
       r: [yamaa_info, yamaa_lint, yamaa_project, yamaa_read_odm, yamaa_schema, yamaa_selftest, yamaa_spec]
       r_s3_methods:
         - "[[.yamaa_project_run"
-        - format and print for yamaa_spec, yamaa_project, yamaa_check, yamaa_run, yamaa_member_run, yamaa_project_run, yamaa_submission, yamaa_selftest
-        - names and length for yamaa_check, yamaa_run, yamaa_member_run, yamaa_project_run, yamaa_submission, yamaa_selftest
 
 cli:
   binary: yamaa
@@ -616,72 +558,39 @@ python:
       name: _CORE_VERSION
       rust: yamaa_core::VERSION
       type: text
-    - kind: class
-      name: Table
-      rust: arrow_bridge::Table
-      constructible: false
-      methods:
-        - name: __arrow_c_stream__
-          args: {requested_schema: "optional<host_object> = None"}
-          returns: arrow_stream_capsule
-        - {name: num_rows, kind: getter, args: {}, returns: index}
-        - {name: column_names, kind: getter, args: {}, returns: "list<text>"}
-        - {name: __len__, args: {}, returns: index}
-        - {name: __repr__, args: {}, returns: text}
-        - {name: to_pylist, args: {}, returns: "list<host_object>"}
-        - {name: to_polars, args: {}, returns: host_object}
-        - {name: to_pandas, args: {}, returns: host_object}
-        - {name: to_arrow, args: {}, returns: host_object}
     - kind: exception
       name: _Error
       rust: api_entry::_Error
       base: Exception
     - kind: class
-      name: _Check
-      rust: api_entry::Check
-      constructible: false
-      methods:
-        - {name: status, args: {}, returns: text}
-        - {name: issues, args: {}, returns: Table}
-        - {name: summary, args: {}, returns: text}
-    - kind: class
       name: _Run
       rust: api_entry::Run
       constructible: false
       methods:
-        - {name: status, args: {}, returns: text}
         - {name: output, args: {}, returns: "optional<Table>"}
         - {name: issues, args: {}, returns: Table}
         - {name: report, args: {}, returns: "optional<Table>"}
         - {name: save, args: {}, returns: "list<text>"}
-        - {name: summary, args: {}, returns: text}
         - {name: observations, args: {include_measurements: "bool = false"}, returns: "optional<text>"}
     - kind: class
       name: _ProjectRun
       rust: api_entry::ProjectRun
       constructible: false
       methods:
-        - {name: status, args: {}, returns: text}
         - {name: names, args: {}, returns: "list<text>"}
-        - {name: member_status, args: {name: text}, returns: text}
         - {name: output, args: {name: text}, returns: "optional<Table>"}
         - {name: member_issues, args: {name: text}, returns: Table}
         - {name: member_report, args: {name: text}, returns: "optional<Table>"}
-        - {name: member_summary, args: {name: text}, returns: text}
         - {name: issues, args: {}, returns: Table}
         - {name: report, args: {}, returns: Table}
         - {name: save, args: {}, returns: "list<text>"}
-        - {name: summary, args: {}, returns: text}
     - kind: class
       name: _Submission
       rust: api_entry::Submission
       constructible: false
       methods:
-        - {name: status, args: {}, returns: text}
-        - {name: created, args: {}, returns: text}
         - {name: issues, args: {}, returns: Table}
         - {name: save, args: {}, returns: "list<text>"}
-        - {name: summary, args: {}, returns: text}
     - kind: class
       name: _SelfTest
       rust: api_entry::SelfTest
@@ -718,11 +627,6 @@ python:
       args: {project: text, name: text}
       returns: text
     - kind: function
-      name: _project_names
-      rust: api_entry::_project_names
-      args: {project: text}
-      returns: "list<text>"
-    - kind: function
       name: _project_check
       rust: api_entry::_project_check
       args: {project: text}
@@ -758,22 +662,12 @@ python:
       args: {file_type: text}
       returns: text
     - kind: function
-      name: _info
-      rust: api_entry::_info
-      args: {}
-      returns: context_object
-    - kind: function
       name: _selftest
       rust: api_entry::_selftest
       args: {}
       returns: _SelfTest
-    - kind: function
-      name: _lazy_summary
-      rust: api_entry::_lazy_summary
-      args: {kind: text, path: text}
-      returns: text
-  # Removed with 1.0: _ArrowTable (now Table) and _style_same_value (lint is
-  # in Rust, so the Python style package and its private command go).
+  # Removed with 1.0: _style_same_value (lint is in Rust, so the Python style
+  # package and its private command go).
 
 # Native registrations (private). R: extendr functions behind .native_* wrappers.
 r:
@@ -788,9 +682,6 @@ r:
       source: rust/crates/yamaa-r/src/api_entry.rs
       functions:
         - {name: spec_check, args: {specification: raw, project: robj, version: raw}, returns: r_reply}
-        - {name: check_status, args: {handle: robj}, returns: r_reply}
-        - {name: check_issues, args: {handle: robj}, returns: r_reply}
-        - {name: check_summary, args: {handle: robj}, returns: r_reply}
         - {name: plans, args: {handle: robj}, returns: r_reply}
         - name: spec_run
           args: {specification: raw, project: robj, version: raw, capabilities: r_list, plans: robj}
@@ -799,49 +690,37 @@ r:
         - name: read_odm
           args: {source: raw, archive_member: robj, max_archive_members: index, max_expanded_bytes: index, max_xml_depth: index}
           returns: r_reply
-        - {name: run_status, args: {handle: robj}, returns: r_reply}
         - {name: run_output, args: {handle: robj}, returns: r_reply}
         - {name: run_issues, args: {handle: robj}, returns: r_reply}
         - {name: run_report, args: {handle: robj}, returns: r_reply}
         - {name: run_save, args: {handle: robj}, returns: r_reply}
-        - {name: run_summary, args: {handle: robj}, returns: r_reply}
         - {name: run_observations, args: {handle: robj, include_measurements: bool}, returns: r_reply}
         - {name: run_interrupt, args: {handle: robj}, returns: r_reply}
         - {name: project_spec, args: {project: raw, name: raw, version: raw}, returns: r_reply}
-        - {name: project_names, args: {project: raw, version: raw}, returns: r_reply}
         - {name: project_check, args: {project: raw, version: raw}, returns: r_reply}
         - name: project_run
           args: {project: raw, section: robj, version: raw, capabilities: r_list, plans: robj}
           returns: r_reply
-        - {name: project_run_status, args: {handle: robj}, returns: r_reply}
         - {name: project_run_names, args: {handle: robj}, returns: r_reply}
-        - {name: project_run_member_status, args: {handle: robj, name: raw}, returns: r_reply}
         - {name: project_run_output, args: {handle: robj, name: raw}, returns: r_reply}
         - {name: project_run_member_issues, args: {handle: robj, name: raw}, returns: r_reply}
         - {name: project_run_member_report, args: {handle: robj, name: raw}, returns: r_reply}
-        - {name: project_run_member_summary, args: {handle: robj, name: raw}, returns: r_reply}
         - {name: project_run_issues, args: {handle: robj}, returns: r_reply}
         - {name: project_run_report, args: {handle: robj}, returns: r_reply}
         - {name: project_run_save, args: {handle: robj}, returns: r_reply}
-        - {name: project_run_summary, args: {handle: robj}, returns: r_reply}
         - {name: project_run_interrupt, args: {handle: robj}, returns: r_reply}
         - name: project_submission
           args: {project: raw, section: robj, created: robj, version: raw}
           returns: r_reply
-        - {name: submission_status, args: {handle: robj}, returns: r_reply}
-        - {name: submission_created, args: {handle: robj}, returns: r_reply}
         - {name: submission_issues, args: {handle: robj}, returns: r_reply}
         - {name: submission_save, args: {handle: robj}, returns: r_reply}
-        - {name: submission_summary, args: {handle: robj}, returns: r_reply}
         - {name: lint, args: {paths: robj, fix: bool}, returns: r_reply}
         - {name: schema, args: {file_type: raw}, returns: r_reply}
-        - {name: info, args: {version: raw}, returns: r_reply}
         - {name: selftest, args: {version: raw}, returns: r_reply}
         - {name: selftest_status, args: {handle: robj}, returns: r_reply}
         - {name: selftest_cases, args: {handle: robj}, returns: r_reply}
         - {name: selftest_info, args: {handle: robj}, returns: r_reply}
         - {name: selftest_summary, args: {handle: robj}, returns: r_reply}
-        - {name: lazy_summary, args: {kind: raw, path: raw}, returns: r_reply}
 
 # Every operation names its native export in Python and R and, where a
 # command reaches it, the command-line command. The command line calls the
@@ -850,63 +729,38 @@ operations:
   core_version: {python: [_CORE_VERSION], r: [core_version], cli: [--version]}
   plans: {python: [_plans], r: [plans]}
   spec_check: {python: [_spec_check], r: [spec_check], cli: [check]}
-  check_status: {python: [_Check.status], r: [check_status], cli: [check]}
-  check_issues: {python: [_Check.issues], r: [check_issues], cli: [check]}
-  check_summary: {python: [_Check.summary], r: [check_summary], cli: [check]}
   spec_run: {python: [_spec_run], r: [spec_run], cli: [run]}
   spec_resolve: {python: [_spec_resolve], r: [spec_resolve], cli: [resolve]}
   read_odm: {python: [_read_odm], r: [read_odm], cli: [read-odm]}
-  run_status: {python: [_Run.status], r: [run_status], cli: [run]}
   run_output: {python: [_Run.output], r: [run_output]}
   run_issues: {python: [_Run.issues], r: [run_issues], cli: [run]}
   run_report: {python: [_Run.report], r: [run_report]}
   run_save: {python: [_Run.save], r: [run_save], cli: [run]}
-  run_summary: {python: [_Run.summary], r: [run_summary], cli: [run]}
   run_observations: {python: [_Run.observations], r: [run_observations]}
   project_spec: {python: [_project_spec], r: [project_spec], cli: [check, run, resolve]}
-  project_names: {python: [_project_names], r: [project_names]}
   project_check: {python: [_project_check], r: [project_check], cli: [check]}
   project_run: {python: [_project_run], r: [project_run], cli: [run]}
-  project_run_status: {python: [_ProjectRun.status], r: [project_run_status], cli: [run]}
   project_run_names: {python: [_ProjectRun.names], r: [project_run_names], cli: [run]}
-  project_run_member_status: {python: [_ProjectRun.member_status], r: [project_run_member_status], cli: [run]}
   project_run_output: {python: [_ProjectRun.output], r: [project_run_output]}
   project_run_member_issues: {python: [_ProjectRun.member_issues], r: [project_run_member_issues]}
   project_run_member_report: {python: [_ProjectRun.member_report], r: [project_run_member_report]}
-  project_run_member_summary: {python: [_ProjectRun.member_summary], r: [project_run_member_summary]}
   project_run_issues: {python: [_ProjectRun.issues], r: [project_run_issues], cli: [run]}
   project_run_report: {python: [_ProjectRun.report], r: [project_run_report]}
   project_run_save: {python: [_ProjectRun.save], r: [project_run_save], cli: [run]}
-  project_run_summary: {python: [_ProjectRun.summary], r: [project_run_summary], cli: [run]}
   project_submission: {python: [_project_submission], r: [project_submission], cli: [submission]}
-  submission_status: {python: [_Submission.status], r: [submission_status], cli: [submission]}
-  submission_created: {python: [_Submission.created], r: [submission_created], cli: [submission]}
   submission_issues: {python: [_Submission.issues], r: [submission_issues], cli: [submission]}
   submission_save: {python: [_Submission.save], r: [submission_save], cli: [submission]}
-  submission_summary: {python: [_Submission.summary], r: [submission_summary], cli: [submission]}
   lint: {python: [_lint], r: [lint], cli: [lint]}
   schema: {python: [_schema], r: [schema], cli: [schema]}
-  info: {python: [_info], r: [info], cli: [--version]}
   selftest: {python: [_selftest], r: [selftest], cli: [selftest]}
   selftest_status: {python: [_SelfTest.status], r: [selftest_status], cli: [selftest]}
   selftest_cases: {python: [_SelfTest.cases], r: [selftest_cases], cli: [selftest]}
   selftest_info: {python: [_SelfTest.info], r: [selftest_info], cli: [selftest]}
   selftest_summary: {python: [_SelfTest.summary], r: [selftest_summary], cli: [selftest]}
-  lazy_summary: {python: [_lazy_summary], r: [lazy_summary]}
 
-# Host transport and host-only presentation: Python checks interrupts inside
-# each native call, R through the two helpers; yamaa.Table is Python's table
-# type, and R converts every table to a data.frame instead.
+# Host transport: Python checks interrupts inside each native call, R through
+# the two helpers. yamaa.Table's methods are Python-only (bindings.yaml).
 host_only:
-  python:
-    - Table.__arrow_c_stream__
-    - Table.num_rows
-    - Table.column_names
-    - Table.__len__
-    - Table.__repr__
-    - Table.to_pylist
-    - Table.to_polars
-    - Table.to_pandas
-    - Table.to_arrow
+  python: []
   r: [run_interrupt, project_run_interrupt]
   cli: []

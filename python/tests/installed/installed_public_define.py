@@ -81,8 +81,8 @@ class PublicDefine(unittest.TestCase):
             result = yamaa.project(directory / "project.yaml").submission(
                 section, created=created
             )
-        self.assertEqual(result.issues.columns, TRUTH["issue_columns"])
-        for row in result.issues.to_dicts():
+        self.assertEqual(result.issues.column_names, TRUTH["issue_columns"])
+        for row in result.issues.to_pylist():
             self.assertIsNone(row["source_span"])
             self.assertIsNone(row["operand_route"])
         return result
@@ -108,7 +108,9 @@ class PublicDefine(unittest.TestCase):
     def refused(self, result):
         with self.assertRaises(yamaa.Error) as caught:
             result.save()
-        self.assertTrue(caught.exception.issues.equals(result.issues))
+        self.assertTrue(
+            caught.exception.issues.to_polars().equals(result.issues.to_polars())
+        )
         self.assertEqual(caught.exception.paths, [])
 
     def validate_xml(self, content):
@@ -130,7 +132,7 @@ class PublicDefine(unittest.TestCase):
     def test_lb_independent_completion_value_links_schema_json_and_held_save(self):
         directory = self.fixture("sdtm-lb-metadata", published=True)
         result = self.call(directory)
-        self.assertEqual(result.issues.height, 0, result.issues)
+        self.assertEqual(result.issues.num_rows, 0, result.issues)
         # The composition is held: sources may change or go before save.
         for name in TRUTH["retained_source_files"]:
             (directory / name).unlink()
@@ -268,7 +270,7 @@ class PublicDefine(unittest.TestCase):
                         .replace("95,mg/dL,95", "95,mmol/L,95")
                     )
                 result = self.call(directory)
-                issues = result.issues.to_dicts()
+                issues = result.issues.to_pylist()
                 if mode == "original source":
                     self.assertTrue(
                         any(
@@ -375,7 +377,7 @@ class PublicDefine(unittest.TestCase):
                     )
                 result = self.call(directory)
                 if rule is None:
-                    self.assertEqual(result.issues.height, 0, result.issues)
+                    self.assertEqual(result.issues.num_rows, 0, result.issues)
                     written = self.save(result, directory, ["define.xml"])
                     xml = self.validate_xml(written["define.xml"])
                     if case == "membership":
@@ -394,7 +396,7 @@ class PublicDefine(unittest.TestCase):
                             row["rule"] == rule
                             and row["condition"] == condition
                             and suffix in row["spec_paths"]
-                            for row in result.issues.to_dicts()
+                            for row in result.issues.to_pylist()
                         ),
                         result.issues,
                     )
@@ -408,7 +410,7 @@ class PublicDefine(unittest.TestCase):
     def test_dm_goldens_public_issues_and_held_save(self):
         directory = self.fixture("sdtm-dm-metadata", published=True)
         result = self.call(directory)
-        self.assertEqual(result.issues.height, 0, result.issues)
+        self.assertEqual(result.issues.num_rows, 0, result.issues)
         for name in ("dm.json", "define.xml"):
             self.assertFalse((directory / name).exists())
         (directory / "project.yaml").unlink()
@@ -429,7 +431,7 @@ class PublicDefine(unittest.TestCase):
     def test_every_declared_define_section_is_composed_without_a_section(self):
         directory = self.fixture("sdtm-dm-metadata", published=True)
         result = self.call(directory, section=None)
-        self.assertEqual(result.issues.height, 0, result.issues)
+        self.assertEqual(result.issues.num_rows, 0, result.issues)
         written = self.save(result, directory, ["dm.json", "define.xml"])
         for name, content in written.items():
             self.assertEqual(content, (directory / "expected" / name).read_bytes())
@@ -445,7 +447,7 @@ class PublicDefine(unittest.TestCase):
                     row["spec_paths"],
                     json.loads(row["context"]),
                 )
-                for row in caught.exception.issues.to_dicts()
+                for row in caught.exception.issues.to_pylist()
             ],
             [
                 (
@@ -472,7 +474,7 @@ class PublicDefine(unittest.TestCase):
             with self.subTest(name=name):
                 directory = self.fixture(name)
                 result = self.call(directory, "2026-09-30T00:00:00")
-                self.assertEqual(result.issues.height, 0, result.issues)
+                self.assertEqual(result.issues.num_rows, 0, result.issues)
                 self.assertFalse((directory / (id_.lower() + ".csv")).exists())
                 written = self.save(result, directory, ["define.xml"])
                 xml = self.validate_xml(written["define.xml"])
@@ -571,17 +573,20 @@ class PublicDefine(unittest.TestCase):
         directory = self.fixture("sdtm-dm-metadata")
         result = self.call(directory)
         self.assertIn(
-            "producer_contract_mismatch", result.issues["condition"].to_list()
+            "producer_contract_mismatch",
+            result.issues.to_polars()["condition"].to_list(),
         )
-        self.assertIn("INPUT-11", result.issues["rule"].to_list())
+        self.assertIn("INPUT-11", result.issues.to_polars()["rule"].to_list())
         self.refused(result)
         self.metadata_only(directory)
         result = self.call(directory)
-        self.assertEqual(result.issues.height, 0, result.issues)
+        self.assertEqual(result.issues.num_rows, 0, result.issues)
         project = directory / "project.yaml"
         project.write_text(project.read_text().replace("name: SDTMIG", "name: ADaMIG"))
         result = self.call(directory)
-        self.assertIn("unknown_standard_family", result.issues["condition"].to_list())
+        self.assertIn(
+            "unknown_standard_family", result.issues.to_polars()["condition"].to_list()
+        )
         self.refused(result)
         self.assertFalse((directory / "define.xml").exists())
         self.assertFalse((directory / "dm.json").exists())
@@ -589,7 +594,7 @@ class PublicDefine(unittest.TestCase):
     def test_output_preflight_failure_stops_all_outputs_and_preserves_cause(self):
         directory = self.fixture("sdtm-dm-metadata", published=True)
         result = self.call(directory)
-        self.assertEqual(result.issues.height, 0, result.issues)
+        self.assertEqual(result.issues.num_rows, 0, result.issues)
         (directory / "define.xml").mkdir()
         with self.assertRaises(yamaa.Error) as caught:
             result.save()
@@ -597,11 +602,15 @@ class PublicDefine(unittest.TestCase):
         self.assertFalse((directory / "dm.json").exists())
         self.assertTrue((directory / "define.xml").is_dir())
         # The refused save explains itself, and the submission keeps that cause.
-        self.assertTrue(caught.exception.issues.equals(result.issues))
-        self.assertEqual(result.issues["phase"].to_list(), ["engine"])
-        self.assertEqual(result.issues["condition"].to_list(), ["engine_rejected"])
-        self.assertEqual(result.issues["rule"].to_list(), [None])
-        context = json.loads(result.issues["context"][0])
+        self.assertTrue(
+            caught.exception.issues.to_polars().equals(result.issues.to_polars())
+        )
+        self.assertEqual(result.issues.to_polars()["phase"].to_list(), ["engine"])
+        self.assertEqual(
+            result.issues.to_polars()["condition"].to_list(), ["engine_rejected"]
+        )
+        self.assertEqual(result.issues.to_polars()["rule"].to_list(), [None])
+        context = json.loads(result.issues.to_polars()["context"][0])
         self.assertEqual(context["stage"], "publication_target_admission")
         self.assertEqual(context["code"], "invalid_target")
         self.assertIn("cause", context)
@@ -613,7 +622,7 @@ class PublicDefine(unittest.TestCase):
             project.read_text().replace("  source_system_version: '1.0'\n", "")
         )
         result = self.call(directory)
-        self.assertEqual(result.issues.height, 0, result.issues)
+        self.assertEqual(result.issues.num_rows, 0, result.issues)
         written = self.save(result, directory, ["dm.json", "define.xml"])
         self.assertEqual(
             json.loads(written["dm.json"])["sourceSystem"]["version"], yamaa.__version__
@@ -630,10 +639,13 @@ class PublicDefine(unittest.TestCase):
             project.read_text().replace("name: CDISC/NCI", "name: InvalidStandard")
         )
         result = self.call(directory)
-        self.assertEqual(result.issues["condition"].to_list(), ["value_not_permitted"])
-        self.assertEqual(result.issues["rule"].to_list(), ["SCHEMA-12"])
         self.assertEqual(
-            result.issues["spec_paths"].to_list(), [["codelists[0].standard.name"]]
+            result.issues.to_polars()["condition"].to_list(), ["value_not_permitted"]
+        )
+        self.assertEqual(result.issues.to_polars()["rule"].to_list(), ["SCHEMA-12"])
+        self.assertEqual(
+            result.issues.to_polars()["spec_paths"].to_list(),
+            [["codelists[0].standard.name"]],
         )
         self.refused(result)
         self.assertFalse((directory / "define.xml").exists())
@@ -645,7 +657,7 @@ class PublicDefine(unittest.TestCase):
             .replace("format_name: $SEX\n", "format_name: $SEXCODELIST\n")
         )
         result = self.call(directory)
-        self.assertIn("DEFINE-25", result.issues["rule"].to_list())
+        self.assertIn("DEFINE-25", result.issues.to_polars()["rule"].to_list())
         self.refused(result)
         self.assertFalse((directory / "define.xml").exists())
 
@@ -675,7 +687,7 @@ class PublicDefine(unittest.TestCase):
 
         document = self.edit_project(directory, edit)
         result = self.call(directory)
-        self.assertEqual(result.issues.height, 0, result.issues)
+        self.assertEqual(result.issues.num_rows, 0, result.issues)
         content = self.save(result, directory, ["dm.json", "define.xml"])["define.xml"]
         xml = self.validate_xml(content)
         self.assertEqual(xml.get("FileOID"), "STUDY01.sdtm.Define-XML_2.1")
@@ -707,7 +719,9 @@ class PublicDefine(unittest.TestCase):
             yaml.safe_dump(document, sort_keys=False)
         )
         result = self.call(directory)
-        self.assertIn("origin_document_missing", result.issues["condition"].to_list())
+        self.assertIn(
+            "origin_document_missing", result.issues.to_polars()["condition"].to_list()
+        )
         self.refused(result)
         self.assertFalse((directory / "dm.json").exists())
         section["documents"] = yaml.safe_load(
@@ -718,7 +732,7 @@ class PublicDefine(unittest.TestCase):
             yaml.safe_dump(document, sort_keys=False)
         )
         result = self.call(directory)
-        self.assertIn("DEFINE-4", result.issues["rule"].to_list())
+        self.assertIn("DEFINE-4", result.issues.to_polars()["rule"].to_list())
         self.refused(result)
         self.assertFalse((directory / "define.xml").exists())
 
@@ -743,7 +757,7 @@ class PublicDefine(unittest.TestCase):
         )
         shutil.copy2(directory / "expected/dm.csv", directory / "artifacts/dm.csv")
         result = self.call(directory)
-        self.assertEqual(result.issues.height, 0, result.issues)
+        self.assertEqual(result.issues.num_rows, 0, result.issues)
         written = self.save(result, directory / "artifacts", ["dm.json", "define.xml"])
         self.assertIn(b'xlink:href="dm.json"', written["define.xml"])
         self.assertEqual(json.loads(written["dm.json"])["metaDataRef"], "define.xml")
@@ -758,8 +772,10 @@ class PublicDefine(unittest.TestCase):
         self.assertNotEqual(redundant, spec)
         (directory / "parents/base.yaml").write_text(redundant)
         result = self.call(directory)
-        self.assertIn("redundant_declaration", result.issues["condition"].to_list())
-        self.assertIn("CT-9", result.issues["rule"].to_list())
+        self.assertIn(
+            "redundant_declaration", result.issues.to_polars()["condition"].to_list()
+        )
+        self.assertIn("CT-9", result.issues.to_polars()["rule"].to_list())
         self.refused(result)
         self.assertEqual(
             (directory / "artifacts/define.xml").read_bytes(), written["define.xml"]
@@ -774,7 +790,7 @@ class PublicDefine(unittest.TestCase):
         shutil.copy2(directory / "expected/dm.csv", directory / "artifacts/dm.csv")
         # The transport file sits beside the document wherever the artifact is.
         result = self.call(directory)
-        self.assertEqual(result.issues.height, 0, result.issues)
+        self.assertEqual(result.issues.num_rows, 0, result.issues)
         written = self.save(result, directory, ["dm.json", "define.xml"])
         self.assertIn(b'xlink:href="dm.json"', written["define.xml"])
         self.assertFalse((directory / "artifacts/dm.json").exists())
@@ -786,15 +802,19 @@ class PublicDefine(unittest.TestCase):
             csv.replace("STUDYID,USUBJID", "USUBJID,STUDYID")
         )
         result = self.call(directory)
-        self.assertIn("INPUT-11", result.issues["rule"].to_list())
+        self.assertIn("INPUT-11", result.issues.to_polars()["rule"].to_list())
         self.refused(result)
         (directory / "dm.csv").write_text(csv.replace("STUDYID", "WRONG"))
         result = self.call(directory)
-        self.assertIn("INPUT-11", result.issues["rule"].to_list())
+        self.assertIn("INPUT-11", result.issues.to_polars()["rule"].to_list())
         self.refused(result)
         (directory / "dm.csv").write_text(csv.replace(",F,USA", ",Z,USA"))
         result = self.call(directory)
-        issue = result.issues.filter(result.issues["rule"] == "CT-7").row(0, named=True)
+        issue = (
+            result.issues.to_polars()
+            .filter(result.issues.to_polars()["rule"] == "CT-7")
+            .row(0, named=True)
+        )
         self.assertEqual(issue["phase"], "verification")
         context = json.loads(issue["context"])
         self.assertEqual(context["value"], "Z")
@@ -824,13 +844,16 @@ class PublicDefine(unittest.TestCase):
         define_sentinel.write_bytes(b"original Define sentinel")
         names = sorted(path.name for path in directory.iterdir())
         result = self.call(directory)
-        self.assertEqual(result.issues["phase"].to_list(), ["validation"])
+        self.assertEqual(result.issues.to_polars()["phase"].to_list(), ["validation"])
         self.assertEqual(
-            result.issues["condition"].to_list(), ["transport_path_collision"]
+            result.issues.to_polars()["condition"].to_list(),
+            ["transport_path_collision"],
         )
-        self.assertEqual(result.issues["rule"].to_list(), ["JSON-2"])
-        self.assertEqual(result.issues["spec_paths"].to_list(), [["sdtm.specs[1]"]])
-        self.assertIn("dm.json", result.issues["context"][0])
+        self.assertEqual(result.issues.to_polars()["rule"].to_list(), ["JSON-2"])
+        self.assertEqual(
+            result.issues.to_polars()["spec_paths"].to_list(), [["sdtm.specs[1]"]]
+        )
+        self.assertIn("dm.json", result.issues.to_polars()["context"][0])
         self.refused(result)
         self.assertEqual(sentinel.read_bytes(), b"original publication sentinel")
         self.assertEqual(define_sentinel.read_bytes(), b"original Define sentinel")
@@ -851,7 +874,7 @@ class PublicDefine(unittest.TestCase):
             project.read_text().replace("sdtm:\n", TRUTH["numeric_codelist_yaml"])
         )
         result = self.call(directory)
-        self.assertEqual(result.issues.height, 0, result.issues)
+        self.assertEqual(result.issues.num_rows, 0, result.issues)
         written = self.save(result, directory, ["dm.json", "define.xml"])
         self.validate_xml(written["define.xml"])
         data = json.loads(written["dm.json"])
@@ -878,7 +901,7 @@ class PublicDefine(unittest.TestCase):
                         "schema_version: '1.0'\nparent: base.yaml\n"
                     )
                 result = self.call(directory)
-                rows = result.issues.to_dicts()
+                rows = result.issues.to_pylist()
                 # Each finding is an error with a message, located in a file
                 # the case wrote or, when no file holds its first spec path,
                 # not at all (P-ISSUE-1); the case authors the rest.
@@ -933,7 +956,7 @@ class PublicDefine(unittest.TestCase):
                     case["standard"], created=case["created"]
                 )
                 if case["error"] is not None:
-                    first = result.issues.to_dicts()[0]
+                    first = result.issues.to_pylist()[0]
                     first["context"] = json.loads(first["context"])
                     want = case["error"]
                     for key in ("phase", "condition", "spec_paths", "rule"):
@@ -943,7 +966,7 @@ class PublicDefine(unittest.TestCase):
                     self.refused(result)
                     self.assertFalse((directory / "define.xml").exists())
                     continue
-                self.assertEqual(result.issues.height, 0, result.issues)
+                self.assertEqual(result.issues.num_rows, 0, result.issues)
                 written = self.save(result, directory, case["expected"])
                 for name, content in written.items():
                     self.assertEqual(
