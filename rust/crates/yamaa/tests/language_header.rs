@@ -604,7 +604,7 @@ fn a_value_level_entry_selects_the_rows_that_hold_none_of_its_values() {
         .spec_run(&study.path("xx.yaml"), None, &token)
         .unwrap();
     assert_eq!(rows(&run.issues()), []);
-    run.save().unwrap();
+    run.save(&CancellationToken::new()).unwrap();
     study.write("raw.csv", "USUBJID,KIND,VALUE\nP1,X,A\nP2,,\nP3,Y,C\n");
     let issues = rows(
         &engine
@@ -630,7 +630,7 @@ fn a_value_level_entry_selects_the_rows_that_hold_none_of_its_values() {
         )
         .unwrap();
     assert_eq!(rows(&submission.issues()), []);
-    submission.save().unwrap();
+    submission.save(&CancellationToken::new()).unwrap();
     let define = String::from_utf8(study.read("define.xml")).unwrap();
     for comparator in ["NE", "EQ"] {
         assert!(

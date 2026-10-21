@@ -785,12 +785,6 @@ impl Build {
         self.project_failures.as_deref()
     }
 
-    /// Borrow the first interrupt-classified project host failure, if any.
-    /// Hosts propagate the original payload from this record.
-    pub fn interrupt(&self) -> Option<&FunctionError> {
-        self.interrupt.as_ref()
-    }
-
     /// Whether a project function raised the host's interrupt, which cancels
     /// the call that built this (D46).
     pub(crate) fn interrupted(&self) -> bool {
@@ -908,7 +902,7 @@ mod tests {
         assert!(build.observations(false).is_none());
         assert!(build.preparation_sources().is_empty());
         assert!(build.project_failures().is_none());
-        assert!(build.interrupt().is_none());
+        assert!(!build.interrupted());
     }
 
     #[test]

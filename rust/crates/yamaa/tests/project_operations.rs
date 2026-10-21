@@ -1697,7 +1697,7 @@ fn a_submission_composes_the_artifacts_their_run_reports_record_and_refuses_stal
             .project_run(&study.project(), section, &token)
             .unwrap();
         assert_eq!(run.issues().rows(), 0, "{:?}", rows(&run.issues()));
-        run.save().unwrap();
+        run.save(&CancellationToken::new()).unwrap();
     };
     let submit = || {
         let submission = engine
