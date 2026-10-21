@@ -14,6 +14,11 @@ installs both outside it, and runs on those installs:
   diagnostic parity truth and the host-fixture families.
 
 Building fresh means the gate never judges a stale development extension.
+`--hosts python` runs the Python half alone: its build, its conformance and
+the installed suites; `--hosts r` the R half: its build, its conformance and
+`R CMD check`. Together the halves are the whole gate, which runs by default.
+CI runs the two halves as parallel jobs and reports them as one check
+(#3386).
 """
 
 import argparse
@@ -31,6 +36,7 @@ from tools.conformance import public_conformance
 from tools.paths import ROOT
 
 FIXTURES = ROOT / "benchmarks"
+HOSTS = ("python", "r")
 
 
 def install_python(work, uv):
@@ -175,7 +181,15 @@ def r_conformance(work, environment, plan, revision, fixtures=FIXTURES):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--uv", default="uv")
-    uv = parser.parse_args(argv).uv
+    parser.add_argument(
+        "--hosts",
+        default="python,r",
+        help="comma-separated hosts to run: python, r (default: python,r)",
+    )
+    args = parser.parse_args(argv)
+    hosts = [host.strip() for host in args.hosts.split(",") if host.strip()]
+    if not hosts or any(host not in HOSTS for host in hosts):
+        parser.error(f"--hosts names python, r or both, not {args.hosts!r}")
     revision = subprocess.check_output(
         ["git", "-C", str(ROOT), "rev-parse", "HEAD"], text=True
     ).strip()
@@ -185,15 +199,17 @@ def main(argv=None):
         public_conformance.main(
             ["plan", "--fixtures", str(FIXTURES), "--output", str(plan)]
         )
-        python = install_python(work / "python-install", uv)
-        if python_conformance(work / "python", python, plan, revision):
-            raise SystemExit("Python public benchmark conformance failed")
-        run_installed_suites(python, work / "python-suites")
-        archive, environment = r_tests.install(work / "r-install")
-        if r_conformance(work / "r", environment, plan, revision):
-            raise SystemExit("R public benchmark conformance failed")
-        check(archive, work / "r-check", environment)
-    print("equivalence gate passed")
+        if "python" in hosts:
+            python = install_python(work / "python-install", args.uv)
+            if python_conformance(work / "python", python, plan, revision):
+                raise SystemExit("Python public benchmark conformance failed")
+            run_installed_suites(python, work / "python-suites")
+        if "r" in hosts:
+            archive, environment = r_tests.install(work / "r-install")
+            if r_conformance(work / "r", environment, plan, revision):
+                raise SystemExit("R public benchmark conformance failed")
+            check(archive, work / "r-check", environment)
+    print(f"equivalence gate passed on {', '.join(hosts)}")
 
 
 if __name__ == "__main__":
