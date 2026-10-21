@@ -306,6 +306,15 @@ def required_jobs(coverage):
     for platform in coverage["offline_source"]["os"]:
         for host in coverage["offline_source"]["host"]:
             jobs[f"native-offline-source ({platform}, {host})"] = offline_steps[host]
+    # The offline toolchain route on Linux: the minimum Rust, installed from
+    # its standalone installer with no rustup and no network, then each
+    # published source archive built and installed with it as above.
+    for platform in coverage["offline_toolchain"]["os"]:
+        for host in coverage["offline_toolchain"]["host"]:
+            jobs[f"native-offline-toolchain ({platform}, {host})"] = (
+                "Install Rust from its standalone installer without a network",
+                *offline_steps[host],
+            )
     # Each R binary package that a release publishes, built from the R source
     # archive that it publishes, then installed on a runner with no Rust, no
     # Rtools and no network, where it runs the conformance corpus and the
