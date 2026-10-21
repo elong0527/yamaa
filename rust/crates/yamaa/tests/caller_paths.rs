@@ -350,3 +350,91 @@ fn any_other_failure_to_read_a_caller_path_stays_the_opaque_engine_fault() {
     spec_routes(&engine, "dm.yaml", &expected);
     project_routes(&engine, "project.yaml", "dm.yaml", &expected);
 }
+
+/// A specification a project lists is not the caller's path but the project
+/// file's: one the walk cannot reach fails with its file rule's condition at
+/// its listing, naming the path as written (FILE-11), as a listed function or
+/// codelist file does (#3030 D107).
+#[test]
+fn a_listed_specification_the_walk_cannot_reach_fails_at_its_listing_as_written() {
+    let study = Study::new();
+    #[cfg_attr(not(unix), allow(unused_mut))]
+    let mut listings = vec![
+        ("absent.yaml", "resource_path_missing", "FILE-7"),
+        ("absent/dm.yaml", "resource_path_missing", "FILE-7"),
+        ("folder.yaml", "resource_path_not_regular_file", "FILE-7"),
+    ];
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink(study.0.join("dm.yaml"), study.0.join("dm-link.yaml")).unwrap();
+        listings.push(("dm-link.yaml", "resource_path_symlink", "FILE-8"));
+    }
+    let engine = engine();
+    let token = CancellationToken::new();
+    for (written, condition, rule) in listings {
+        study.write(
+            "listing.yaml",
+            &format!("yamaa: \"1.0\"\ntype: project\nsdtm:\n  specs: [{written}]\n"),
+        );
+        let project = study.path("listing.yaml");
+        let check = engine
+            .project_check(&project, &token)
+            .unwrap()
+            .diagnostics();
+        let run = engine
+            .project_run(&project, None, &token)
+            .unwrap()
+            .diagnostics();
+        for issues in [check, run] {
+            let [issue] = issues.as_slice() else {
+                panic!("one issue: {issues:?}")
+            };
+            assert_eq!(
+                (issue.code.as_str(), issue.rule.as_deref()),
+                (condition, Some(rule)),
+                "{written}"
+            );
+            assert_eq!(issue.spec_path, ["sdtm.specs[0]"]);
+            assert_eq!(
+                issue.context.get("path"),
+                Some(&yamaa::ContextValue::Text(written.into()))
+            );
+        }
+    }
+}
+
+/// A submission reads each specification its section lists: one the walk
+/// cannot reach fails at its listing, as the project's check and run report
+/// it.
+#[test]
+fn a_submission_refuses_a_listed_specification_the_walk_cannot_reach_at_its_listing() {
+    let study = Study::new();
+    let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../../benchmarks/sdtm-dm-metadata/project.yaml");
+    let project = std::fs::read_to_string(fixture).unwrap();
+    let moved = project.replace("  - spec.yaml\n", "  - absent.yaml\n");
+    assert_ne!(moved, project);
+    study.write("metadata.yaml", &moved);
+    let submission = engine()
+        .project_submission(
+            &study.path("metadata.yaml"),
+            Some("sdtm"),
+            Some("2026-09-11T00:00:00"),
+            "0",
+            &CancellationToken::new(),
+        )
+        .unwrap();
+    let issues = submission.diagnostics();
+    let [issue] = issues.as_slice() else {
+        panic!("one issue: {issues:?}")
+    };
+    assert_eq!(
+        (issue.code.as_str(), issue.rule.as_deref()),
+        ("resource_path_missing", Some("FILE-7"))
+    );
+    assert_eq!(issue.spec_path, ["sdtm.specs[0]"]);
+    assert_eq!(
+        issue.context.get("path"),
+        Some(&yamaa::ContextValue::Text("absent.yaml".into()))
+    );
+}

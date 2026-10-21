@@ -133,8 +133,23 @@ fn text(document: &Document, node: usize) -> Option<&str> {
     }
 }
 
+/// The refusal of the specification a project lists at `listing` as
+/// `written`. A path its written form refuses, or one that reaches no entry,
+/// a directory or another entry that is not a regular file, or a link, fails
+/// with its file rule's condition at the listing, naming the path as written,
+/// as a listed function or codelist file does (FILE-11, #3030 D107); any
+/// other failure stays the opaque resource refusal there.
 fn listing_failure(listing: &str, written: &str, error: &ResourceError) -> Vec<Diagnostic> {
-    if let ResourceError::WrittenForm(failure) = error {
+    use yamaa_core::resource::ResourceFailure as R;
+    if let Some(
+        failure @ (R::UriScheme
+        | R::Backslash
+        | R::EmptySegment
+        | R::Missing
+        | R::NotRegularFile
+        | R::Symlink),
+    ) = crate::file_resources::resource_failure(error)
+    {
         return vec![failure.field_diagnostic(listing, written)];
     }
     let mut issues = crate::file_application::resource_failure(issue::Step::Prepare, error);
@@ -503,15 +518,25 @@ fn read_listing(
             return (listed, None);
         }
     }
-    // A specification that cannot be prepared has no name or links here; its
-    // own check or build reports why.
-    let Ok(document) = crate::file_preparation::prepare_document_from(
+    let document = match crate::file_preparation::prepare_document_from(
         resources,
         Some(project),
         written,
         Some(Arc::clone(schema)),
-    ) else {
-        return (listed, None);
+    ) {
+        Ok(document) => document,
+        // A listed file the walk cannot reach is the listing's own finding.
+        Err(crate::file_preparation::Error::Resource(
+            error @ (ResourceError::Missing
+            | ResourceError::NotRegularFile
+            | ResourceError::Symlink),
+        )) => {
+            listed.failure = listing_failure(&listed.listing(), written, &error);
+            return (listed, None);
+        }
+        // A specification that cannot be prepared otherwise has no name or
+        // links here; its own check or build reports why.
+        Err(_) => return (listed, None),
     };
     let locate = |resources: &Resources, origin: yamaa_core::resource::WrittenPath<'_>| {
         resources
