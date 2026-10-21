@@ -153,11 +153,13 @@ fn a_saved_item_table_holds_the_bytes_the_csv_cards_fix() {
     let engine = engine();
     let table = items(&study, &engine);
     // The extension selects the profile whatever its case (OUTPUT-5), and the
-    // save returns the absolute path it wrote (D38).
-    let out = study.path("items.CSV");
+    // save returns the absolute path it wrote (D38). The two files differ by
+    // more than case, since a case-insensitive filesystem, as macOS and
+    // Windows use by default, holds `x.CSV` and `x.csv` as one entry.
+    let out = study.path("upper.CSV");
     assert_eq!(engine.save_table(&table, &out).unwrap(), [out.as_str()]);
     assert_eq!(
-        String::from_utf8(study.read("items.CSV")).unwrap(),
+        String::from_utf8(study.read("upper.CSV")).unwrap(),
         ITEMS_CSV
     );
     // A save replaces an existing file whole and leaves nothing beside it.
@@ -168,7 +170,7 @@ fn a_saved_item_table_holds_the_bytes_the_csv_cards_fix() {
         String::from_utf8(study.read("items.csv")).unwrap(),
         ITEMS_CSV
     );
-    assert_eq!(study.entries(), ["items.CSV", "items.csv", "odm.xml"]);
+    assert_eq!(study.entries(), ["items.csv", "odm.xml", "upper.CSV"]);
 }
 
 /// A table with no rows saves its header record alone (CSV-2), and a

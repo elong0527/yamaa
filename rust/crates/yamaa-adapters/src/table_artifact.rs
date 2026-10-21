@@ -217,6 +217,34 @@ mod tests {
     }
 
     #[test]
+    fn a_parquet_file_needs_the_parquet_codec() {
+        let schema = Arc::new(arrow_schema::Schema::new(vec![arrow_schema::Field::new(
+            "ID",
+            arrow_schema::DataType::Utf8,
+            true,
+        )]));
+        let batch = arrow_array::RecordBatch::try_new(
+            Arc::clone(&schema),
+            vec![Arc::new(arrow_array::StringArray::from(vec![Some("a")]))],
+        )
+        .unwrap();
+        let table = PublicTable::from_batches(schema, vec![batch]).unwrap();
+        assert_eq!(encode(&table, "csv").unwrap(), b"ID\na\n");
+        match encode(&table, "parquet") {
+            Ok(bytes) => {
+                assert!(cfg!(feature = "parquet"));
+                assert!(bytes.starts_with(b"PAR1") && bytes.ends_with(b"PAR1"));
+            }
+            Err(issues) => {
+                assert!(!cfg!(feature = "parquet"), "{issues:?}");
+                let [refused] = issues.try_into().unwrap();
+                assert_eq!(refused.context["stage"], text("output"));
+                assert_eq!(refused.context["code"], text("parquet_codec_unavailable"));
+            }
+        }
+    }
+
+    #[test]
     fn a_stop_is_recorded_as_a_run_records_it() {
         // A target refused before the save entered the file names no file.
         let [refused] = refusal(Cause::Target(PublicationError::Changed), "out.csv")
