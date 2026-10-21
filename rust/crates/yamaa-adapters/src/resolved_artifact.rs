@@ -34,15 +34,36 @@ pub fn resolve(
     host: Option<Language>,
     resolver: Option<std::sync::Arc<dyn crate::host_resources::Resolver>>,
 ) -> Result<ResolvedArtifact, crate::file_application::Failure> {
+    resolve_located(specification, environment, host, resolver).map_err(|(issues, _)| issues)
+}
+
+/// [`resolve`], whose refusal keeps what locates its issues: the
+/// specification as far as it was read and the project files read
+/// (P-ISSUE-1).
+pub fn resolve_located(
+    specification: &str,
+    environment: Option<&str>,
+    host: Option<Language>,
+    resolver: Option<std::sync::Arc<dyn crate::host_resources::Resolver>>,
+) -> Result<
+    ResolvedArtifact,
+    (
+        crate::file_application::Failure,
+        crate::issue_location::Locator,
+    ),
+> {
     let request = yamaa_core::build::Request {
         specification,
         environment,
     };
-    let selected = crate::file_application::select(host, request, resolver)
-        .map_err(|error| crate::project_application::selection_failure(&error))?;
-    selected
-        .resolved_specification()
-        .map_err(|error| match error {
+    let selected = crate::file_application::select(host, request, resolver).map_err(|error| {
+        (
+            crate::project_application::selection_failure(&error),
+            crate::issue_location::selection(&error),
+        )
+    })?;
+    selected.resolved_specification().map_err(|error| {
+        let issues = match error {
             Error::Resource(error) => crate::file_application::resource_failure(
                 yamaa_core::application_issue::Step::Resolve,
                 &error,
@@ -51,7 +72,9 @@ pub fn resolve(
                 yamaa_core::application_issue::Step::Resolve,
                 yamaa_core::application_issue::Fault::ArtifactRepresentation,
             ),
-        })
+        };
+        (issues, crate::issue_location::prepared(&selected))
+    })
 }
 
 /// The resolved specification of a 1.x chain, written as the artifact

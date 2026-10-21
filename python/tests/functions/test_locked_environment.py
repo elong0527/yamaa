@@ -45,6 +45,21 @@ def test_marker_environment_is_the_one_packaging_evaluated_markers_in():
     assert m.marker_environment() == default_environment()
 
 
+@pytest.fixture
+def integer_limit():
+    """Set the interpreter's integer-string limit for a test, then restore it."""
+    original = sys.get_int_max_str_digits()
+    yield sys.set_int_max_str_digits
+    sys.set_int_max_str_digits(original)
+
+
+def test_integer_digits_is_the_interpreter_s_own_limit(integer_limit):
+    assert m.integer_digits() == sys.get_int_max_str_digits()
+    for limit in (0, 640, 10_000):
+        integer_limit(limit)
+        assert m.integer_digits() == limit
+
+
 FUNCTION = """\
 description: Text without its common leading white space.
 params: [{name: text, type: str}]
@@ -212,6 +227,51 @@ def test_a_lock_the_engine_cannot_read_refuses_the_run_before_any_version(
     assert problems(result) == [
         ("engine_rejected", {"step": "build", "code": "opaque_host"})
     ]
+
+
+def test_a_version_number_past_the_integer_limit_refuses_the_run(study, monkeypatch):
+    """CPython converts at most 4,300 digits of text to an integer by default,
+    so packaging refused a version with a longer number: locked, installed or
+    read by a marker's version comparison."""
+    at, past = "1" * 4300, "1" * 4301
+    refused = [("engine_rejected", {"step": "build", "code": "opaque_host"})]
+    lock(study, (past, None))
+    assert problems(run(study)) == refused
+    lock(study, (INSTALLED, [f"python_version == '{past}'"]))
+    assert problems(run(study)) == refused
+    lock(study, (INSTALLED, [f"python_version == '{at}'"]))
+    assert problems(run(study)) == [mismatch("version_not_locked", [], None)]
+    lock(study, ("1.0", None))
+    monkeypatch.setattr(m, "installed_version", lambda name: at)
+    assert problems(run(study)) == [mismatch("version_mismatch", ["1.0"], at)]
+    monkeypatch.setattr(m, "installed_version", lambda name: past)
+    assert problems(run(study)) == refused
+
+
+def test_the_interpreter_s_own_integer_limit_decides(study, monkeypatch, integer_limit):
+    """Python lets the limit be raised, lowered or turned off, and the engine
+    reads the interpreter's own when a number of more than 640 digits needs
+    it."""
+    past, beyond = "1" * 4301, "1" * 641
+    refused = [("engine_rejected", {"step": "build", "code": "opaque_host"})]
+    for limit in (0, 10_000):
+        integer_limit(limit)
+        monkeypatch.setattr(m, "installed_version", lambda name: past)
+        lock(study, (past, None))
+        assert problems(run(study)) == []
+        lock(study, ("1.0", None))
+        assert problems(run(study)) == [mismatch("version_mismatch", ["1.0"], past)]
+        monkeypatch.undo()
+        lock(study, (INSTALLED, [f"python_version == '{past}'"]))
+        assert problems(run(study)) == [mismatch("version_not_locked", [], None)]
+    integer_limit(640)
+    lock(study, (beyond, None))
+    assert problems(run(study)) == refused
+    lock(study, (INSTALLED, [f"python_version == '{beyond}'"]))
+    assert problems(run(study)) == refused
+    lock(study, ("1.0", None))
+    monkeypatch.setattr(m, "installed_version", lambda name: beyond)
+    assert problems(run(study)) == refused
 
 
 @pytest.fixture
@@ -455,6 +515,26 @@ def test_editable_without_top_level_names_maps_actual_recorded_module_without_im
         "project_bmi": ["Clinical-Programs"]
     }
     assert "project_bmi" not in sys.modules
+
+
+def test_a_distribution_on_two_path_entries_provides_its_modules_once(
+    tmp_path, monkeypatch
+):
+    # A site directory that two path entries reach, as `lib` and `lib64` are
+    # on RHEL-family systems, lists each of its distributions twice.
+    site = tmp_path / "lib"
+    info = site / "yamaa_twice-1.0.dist-info"
+    info.mkdir(parents=True)
+    (info / "METADATA").write_text(
+        "Metadata-Version: 2.1\nName: yamaa-twice\nVersion: 1.0\n"
+    )
+    (info / "top_level.txt").write_text("yamaa_twice\n")
+    monkeypatch.setattr(sys, "path", [str(site), str(site / ".")])
+    assert metadata.packages_distributions()["yamaa_twice"] == [
+        "yamaa-twice",
+        "yamaa-twice",
+    ]
+    assert m._installed_providers(("yamaa_twice",)) == {"yamaa_twice": ["yamaa-twice"]}
 
 
 def test_namespace_editable_providers_are_added_even_when_other_distribution_is_mapped(
