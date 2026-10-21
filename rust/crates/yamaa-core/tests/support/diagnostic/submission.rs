@@ -164,8 +164,7 @@ pub(crate) fn compose_study(
     let section = &declared.sections[0];
     let required = composition::Required::admit(
         declared.study.as_ref(),
-        Some(section),
-        section.family,
+        section,
         yamaa_core::ast::Surface::V0_5,
     )?;
     composition::compose(required, catalogue, &inputs, &others, installed, created)
@@ -1015,18 +1014,6 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         JsonValue::Array(vec![JsonValue::String("UNKNOWN_DATASET".into())])
     );
     transport_refusals(&mut reached, &empty);
-    for valid in ["sdtm", "adam", "send"] {
-        assert!(define_diagnostics::standard_name(valid).is_ok());
-    }
-    let finding = define_diagnostics::standard_name("invalid").unwrap_err();
-    reached_finding(
-        &mut reached,
-        &[finding],
-        DefineStandardName,
-        "validation",
-        "value_not_permitted",
-        "DEFINE-6",
-    );
     // A section that lists only its specifications admits for runs. Define
     // composition reports the study and the section's guide and target it
     // still needs, together, before composing any dataset.
@@ -1050,15 +1037,6 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         "validation",
         "missing_required_field",
         "DEFINE-28",
-    );
-    // A project without the selected family's section names that section.
-    assert_eq!(
-        composition::Required::admit(None, None, Submission::Adam, yamaa_core::ast::Surface::V0_5)
-            .unwrap_err(),
-        [
-            Finding::cause(DefineRequiredDeclaration, "study", "study"),
-            Finding::cause(DefineRequiredDeclaration, "adam", "adam"),
-        ]
     );
     assert!(define_diagnostics::created_text("2026-09-30T00:00:00").is_ok());
     let finding = define_diagnostics::created_text("2026-09-30T00:00:00.1").unwrap_err();

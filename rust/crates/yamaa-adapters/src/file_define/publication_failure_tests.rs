@@ -26,7 +26,7 @@ fn target_admission_keeps_typed_publication_fault_and_original_error_in_both_hos
             ),
         ] {
             let cause = error.message();
-            let mut result = Define::prepare("", "sdtm", None, "0.4.0", Some(host), None);
+            let mut result = Define::prepare("", Submission::Sdtm, None, "0.4.0", Some(host), None);
             result.refuse(native_failure(service::Failure::TargetAdmission {
                 index: usize::MAX,
                 error,
@@ -96,7 +96,8 @@ fn public_define_issue_prefix_keeps_complete_raw_metadata_and_diagnostics_in_bot
                 Failure::Metadata(metadata),
                 Failure::Diagnostic(diagnostics),
             ] {
-                let mut result = Define::prepare("", "sdtm", None, "0.4.0", Some(host), None);
+                let mut result =
+                    Define::prepare("", Submission::Sdtm, None, "0.4.0", Some(host), None);
                 result.refuse(failure);
                 assert_eq!(result.issues().len(), Limits::FINDINGS);
                 for (index, issue) in result.issues().iter().enumerate() {
@@ -277,7 +278,7 @@ fn later_publication_failure_preserves_prior_bytes_original_cause_and_stopped_re
     fs::write(directory.join("define.xml"), b"prior document").unwrap();
     let mut result = Define::prepare(
         directory.join("project.yaml").to_str().unwrap(),
-        "sdtm",
+        Submission::Sdtm,
         Some("2026-09-11T00:00:00"),
         "0.3.0",
         Some(Language::Python),
@@ -354,7 +355,8 @@ fn define_caps_only_the_public_issue_prefix_and_retains_every_original_finding()
                 NEXT.fetch_add(1, Ordering::Relaxed),
             ));
             let missing = crate::file_resolver::caller_path(&missing).unwrap();
-            let mut result = Define::prepare(&missing, "sdtm", None, "0.4.0", Some(host), None);
+            let mut result =
+                Define::prepare(&missing, Submission::Sdtm, None, "0.4.0", Some(host), None);
             let failure = if diagnostic {
                 Failure::Diagnostic(
                     (0..10_001)
@@ -372,7 +374,7 @@ fn define_caps_only_the_public_issue_prefix_and_retains_every_original_finding()
                     (0..10_001)
                         .map(|index| {
                             Finding::cause(
-                                ConditionCode::DefineStandardName,
+                                ConditionCode::DefineRequiredDeclaration,
                                 &format!("findings[{index}]"),
                                 "authored metadata refusal",
                             )
