@@ -49,9 +49,16 @@ class ParquetContainment(unittest.TestCase):
         self.saved = self.specs["readable_parquet"].with_name("output.csv")
 
     def test_a_decoder_panic_is_an_invalid_source_and_later_reads_still_work(self):
+        # A truth row names its file relative to the specification's
+        # directory; a location names it by its absolute path (P-ISSUE-1).
+        directory = self.specs["contained_panic_parquet"].parent.resolve()
+        expected = [
+            {**row, "file": (directory / row["file"]).as_posix()}
+            for row in TRUTH["issues"]
+        ]
         for _ in range(2):
             result = yamaa.spec(self.specs["contained_panic_parquet"]).run()
-            self.assertEqual(result.issues.to_pylist(), TRUTH["issues"])
+            self.assertEqual(result.issues.to_pylist(), expected)
             self.assertIsNone(result.output)
             with self.assertRaises(yamaa.Error):
                 result.save()

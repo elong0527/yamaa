@@ -1,12 +1,32 @@
 //! PEP 508 environment markers, as Python's `packaging` 26 parses them and
 //! evaluates a uv lock's `resolution-markers` (its "lock_file" context).
-use super::version::specifier;
+use super::version::{specifier, Limit, Refusal};
 use std::collections::BTreeMap;
 
 /// A marker that cannot be parsed or evaluated. Every such marker refuses its
 /// lock alike, so no reason is kept.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct Invalid;
+
+/// Why a parsed marker could not be evaluated.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Failure {
+    /// A comparison that cannot be evaluated: of an undefined variable, of a
+    /// set on its left, or of text with `~=` or `===`.
+    Invalid,
+    /// A version comparison read a number of `digits` digits, more than the
+    /// interpreter's integer `limit`, which `packaging` refused to convert.
+    Digits { digits: usize, limit: usize },
+    /// A version comparison read a number that needs the interpreter's
+    /// integer limit, which is unread.
+    Unread,
+}
+
+impl From<Invalid> for Failure {
+    fn from(_: Invalid) -> Self {
+        Self::Invalid
+    }
+}
 
 /// The values PEP 508 names, which the Python host reads from `sys`,
 /// `platform` and `os`.
@@ -285,15 +305,24 @@ pub(crate) fn parse(source: &str) -> Result<Marker, Invalid> {
 }
 
 impl Marker {
-    /// Evaluate the marker in `environment`. Every comparison is evaluated,
-    /// so one that cannot be fails the marker whatever the others give;
-    /// `and` binds more tightly than `or`.
-    pub(crate) fn evaluate(&self, environment: &Environment) -> Result<bool, Invalid> {
-        evaluate(&self.0, environment)
+    /// Evaluate the marker in `environment`, under the interpreter's integer
+    /// limit `limit`. Every comparison is evaluated, so one that cannot be
+    /// fails the marker whatever the others give; `and` binds more tightly
+    /// than `or`.
+    pub(crate) fn evaluate(
+        &self,
+        environment: &Environment,
+        limit: Limit,
+    ) -> Result<bool, Failure> {
+        evaluate(&self.0, environment, limit)
     }
 }
 
-fn evaluate(elements: &[Element], environment: &Environment) -> Result<bool, Invalid> {
+fn evaluate(
+    elements: &[Element],
+    environment: &Environment,
+    limit: Limit,
+) -> Result<bool, Failure> {
     let mut groups = vec![true];
     for element in elements {
         let value = match element {
@@ -302,8 +331,8 @@ fn evaluate(elements: &[Element], environment: &Environment) -> Result<bool, Inv
                 continue;
             }
             Element::And => continue,
-            Element::Group(inner) => evaluate(inner, environment)?,
-            Element::Comparison(comparison) => comparison.evaluate(environment)?,
+            Element::Group(inner) => evaluate(inner, environment, limit)?,
+            Element::Comparison(comparison) => comparison.evaluate(environment, limit)?,
         };
         let group = groups.last_mut().expect("one group at least");
         *group = *group && value;
@@ -312,7 +341,7 @@ fn evaluate(elements: &[Element], environment: &Environment) -> Result<bool, Inv
 }
 
 impl Comparison {
-    fn evaluate(&self, environment: &Environment) -> Result<bool, Invalid> {
+    fn evaluate(&self, environment: &Environment, limit: Limit) -> Result<bool, Failure> {
         // The variable on the left, or else the right side, names the value
         // that the environment supplies.
         let (name, left, right) = match &self.left {
@@ -328,12 +357,18 @@ impl Comparison {
         };
         // A set can only be the right side of `in` or `not in`.
         let Value::Text(left) = left else {
-            return Err(Invalid);
+            return Err(Failure::Invalid);
         };
         if VERSIONS.contains(&name) {
             if let Value::Text(right) = right {
                 if let Some(specifier) = specifier(&format!("{}{right}", self.operator)) {
-                    return Ok(specifier.contains(left));
+                    return specifier
+                        .contains(left, limit)
+                        .map_err(|refusal| match refusal {
+                            Refusal::Digits { digits, limit } => Failure::Digits { digits, limit },
+                            Refusal::Unread => Failure::Unread,
+                            Refusal::Invalid => Failure::Invalid,
+                        });
                 }
             }
         }
@@ -348,7 +383,7 @@ impl Comparison {
             ("<=" | "==" | ">=", Value::EmptySet) => Ok(false),
             ("!=", Value::Text(right)) => Ok(left != right),
             ("!=", Value::EmptySet) => Ok(true),
-            _ => Err(Invalid),
+            _ => Err(Failure::Invalid),
         }
     }
 }
@@ -378,8 +413,10 @@ mod tests {
         )
     }
 
-    fn evaluated(source: &str, environment: &Environment) -> Result<bool, Invalid> {
-        parse(source)?.evaluate(environment)
+    /// Evaluate under CPython's default integer limit.
+    fn evaluated(source: &str, environment: &Environment) -> Result<bool, Failure> {
+        let limit = Limit::Read(Some(crate::python_packaging::version::DIGITS));
+        parse(source)?.evaluate(environment, limit)
     }
 
     #[test]
@@ -462,7 +499,11 @@ mod tests {
             "sys_platform == 'win32' or extra == 'cpu'",
             "python_versions == '3.12'",
         ] {
-            assert_eq!(evaluated(source, &environment), Err(Invalid), "{source:?}");
+            assert_eq!(
+                evaluated(source, &environment),
+                Err(Failure::Invalid),
+                "{source:?}"
+            );
         }
         let nested = format!(
             "{}sys_platform == 'linux'{}",
@@ -471,7 +512,7 @@ mod tests {
         );
         assert_eq!(evaluated(&nested, &environment), Ok(true));
         let deeper = format!("({nested})");
-        assert_eq!(evaluated(&deeper, &environment), Err(Invalid));
+        assert_eq!(evaluated(&deeper, &environment), Err(Failure::Invalid));
     }
 
     #[test]
@@ -490,10 +531,80 @@ mod tests {
         );
         // The host's values never define `extra`, nor a value PEP 508 does
         // not name.
-        assert_eq!(evaluated("extra == 'cpu'", &environment), Err(Invalid));
+        assert_eq!(
+            evaluated("extra == 'cpu'", &environment),
+            Err(Failure::Invalid)
+        );
         assert_eq!(
             evaluated("sys_platform == 'linux'", &environment),
-            Err(Invalid)
+            Err(Failure::Invalid)
+        );
+    }
+
+    #[test]
+    fn a_version_comparison_refuses_a_number_past_the_integer_limit() {
+        use crate::python_packaging::version::DIGITS;
+        let environment = linux();
+        let past = "1".repeat(DIGITS + 1);
+        let at = "1".repeat(DIGITS);
+        for source in [
+            format!("python_version == '{past}'"),
+            format!("'{past}' == python_version"),
+            format!("python_full_version < '{past}'"),
+            format!("python_version == '{past}.*'"),
+            format!("python_version ~= '1.{past}'"),
+            format!("sys_platform == 'linux' or python_version >= '{past}'"),
+        ] {
+            assert_eq!(
+                evaluated(&source, &environment),
+                Err(Failure::Digits {
+                    digits: DIGITS + 1,
+                    limit: DIGITS
+                }),
+                "{}",
+                &source[..24]
+            );
+        }
+        // No number is read: the candidate is no version, `===` compares
+        // text, the variable is no version, or `in` makes no specifier.
+        for source in [
+            format!("platform_release == '{past}'"),
+            format!("python_version === '{past}'"),
+            format!("sys_platform == '{past}'"),
+            format!("python_version in '{past}'"),
+            format!("python_version == '{at}'"),
+        ] {
+            assert_eq!(
+                evaluated(&source, &environment),
+                Ok(false),
+                "{}",
+                &source[..24]
+            );
+        }
+    }
+
+    #[test]
+    fn a_version_comparison_needs_the_interpreter_s_limit_only_past_the_threshold() {
+        use crate::python_packaging::version::THRESHOLD;
+        let environment = linux();
+        let within = parse(&format!("python_version == '{}'", "1".repeat(THRESHOLD))).unwrap();
+        let beyond = parse(&format!(
+            "python_version == '{}'",
+            "1".repeat(THRESHOLD + 1)
+        ))
+        .unwrap();
+        assert_eq!(within.evaluate(&environment, Limit::Unread), Ok(false));
+        assert_eq!(
+            beyond.evaluate(&environment, Limit::Unread),
+            Err(Failure::Unread)
+        );
+        assert_eq!(beyond.evaluate(&environment, Limit::Read(None)), Ok(false));
+        assert_eq!(
+            beyond.evaluate(&environment, Limit::Read(Some(THRESHOLD))),
+            Err(Failure::Digits {
+                digits: THRESHOLD + 1,
+                limit: THRESHOLD
+            })
         );
     }
 }

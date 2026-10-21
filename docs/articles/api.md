@@ -179,14 +179,18 @@ running project code. It does not open the input datasets, so some problems, suc
 as a column name that no input has, appear only when you call `run()`.
 
 Each problem is one row of `issues`: its `severity`, `phase` and
-`condition`, the `rule` it breaks, the `spec_paths` it concerns, its `file`,
-`line` and `column` once the engine locates them, a `message` to read, and its
-facts in `context` as JSON text. A call that cannot complete, such as a
-`save()` of a failed run, raises `yamaa.Error` in Python or signals a
-`yamaa_error` condition in R. Its message names the call and the first issue,
-such as `cannot save ADAE: column ASTDY reads TRTSDT, which is declared after
-it [forward_reference, COLUMN-5] (and 2 more issues)`, and its `issues` hold
-every row.
+`condition`, the `rule` it breaks, the `spec_paths` it concerns, a `message`
+to read, and its facts in `context` as JSON text. Its `file`, `line` and
+`column` say where to edit: the YAML file that wrote the first spec path,
+which is the parent layer when the specification inherits that value, and
+the line and column of that entry. A problem with no place in a YAML file,
+such as a project section that does not exist, leaves them missing. A call
+that cannot complete, such as a `save()` of a failed run, raises
+`yamaa.Error` in Python or signals a `yamaa_error` condition in R. Its
+message names the call and the first issue with its location, such as
+`cannot save ADAE: adam/adae.yaml:57:9: column ASTDY reads TRTSDT, which is
+declared after it [forward_reference, COLUMN-5] (and 2 more issues)`, and its
+`issues` hold every row.
 
 === "R"
 
@@ -432,12 +436,13 @@ yourself.
 
 ## Lint specifications
 
-`lint()` checks specification files against the
-[style guide](style.md) and returns one row per finding: the file, the line
-and column where the departure starts, the finding, its spec path and a
-message. A directory names the specification files beneath it. With `fix`,
-it first applies the proved layout fixes, replacing a file only when it reads
-as the same values with the same comments, and returns what remains.
+`lint()` checks yamaa files against the [style guide](style.md) and returns
+one row per finding: the file, the line and column where the departure
+starts, the finding, its spec path and a message. A directory names the
+yamaa files beneath it, of every file type. With `fix`, it first applies
+the proved fixes, replacing a file only when it reads as the same values
+with the same comments, or as those values with exactly the canonical
+rewrite a finding names, and returns what remains.
 
 === "R"
 
@@ -502,8 +507,7 @@ evidence of the installation:
     ```
 
 ```text
-yamaa selftest: succeeded, 4 of 4 cases passed
-not covered: odm
+yamaa selftest: succeeded, 5 of 5 cases passed
 engine 1.0.0, language 1.0, python 3.12.4, linux-x86_64
 ```
 

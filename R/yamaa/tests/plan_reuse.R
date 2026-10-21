@@ -40,7 +40,8 @@ read_text <- function(path) rawToChar(readBin(path, "raw", n = file.info(path)$s
 refused <- function(code) inherits(tryCatch({ force(code); NULL }, yamaa_error = identity), "yamaa_error")
 # Issue rows as the shared parity truth holds them, all twelve columns:
 # context as canonical JSON text, lines, columns and spans as doubles and
-# routes as character.
+# routes as character. A truth row names its file relative to the study's
+# directory; a location names it by its absolute path (P-ISSUE-1).
 issue_rows <- function(frame) {
   list(severity = frame$severity, phase = frame$phase, condition = frame$condition,
     rule = frame$rule, spec_paths = frame$spec_paths, file = frame$file, line = frame$line,
@@ -55,7 +56,9 @@ issue_truth <- function(expected) {
   list(severity = text("severity"), phase = text("phase"), condition = text("condition"),
     rule = text("rule"),
     spec_paths = lapply(expected, function(issue) as.character(unlist(issue$spec_paths))),
-    file = text("file"), line = number("line"), column = number("column"),
+    file = vapply(expected, function(issue)
+      if (is.null(issue$file)) NA_character_ else file.path(root, issue$file), ""),
+    line = number("line"), column = number("column"),
     message = enc2utf8(text("message")), context = enc2utf8(text("context")),
     source_span = lapply(expected, function(issue)
       if (is.null(issue$source_span)) NULL else as.double(unlist(issue$source_span))),

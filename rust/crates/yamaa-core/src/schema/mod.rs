@@ -52,7 +52,9 @@ pub use path_render::{
 };
 pub(crate) use spec_path::SpecPath;
 pub use type_expression::{TypeError, TypeExpression, TypeNode, TypeResource};
-pub use validation::{DefaultDiagnostics, SchemaContext, SchemaDiagnostic, ValidationError};
+pub use validation::{
+    DefaultDiagnostics, SchemaContext, SchemaDiagnostic, SiteRole, ValidationError, WrittenSite,
+};
 pub use versioned_composition::VersionedCompositionError;
 pub(crate) use versioned_composition::{shorthand_key, written_path};
 

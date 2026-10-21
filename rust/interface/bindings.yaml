@@ -83,7 +83,7 @@ values:
     rust: yamaa::REPORT_OUTCOMES
     values: [succeeded, failed, held, violated]
   # The findings of lint() (D40, P-LINT-2), in the order the style guide names
-  # them; the five 1.0 findings follow the 1.0 specification language.
+  # them; the 1.0 findings follow the 1.0 specification language.
   lint_finding:
     rust: yamaa::LINT_FINDINGS
     values:
@@ -96,6 +96,11 @@ values:
       - repeated_row_derivation
       - redundant_intermediate
       - missing_label
+      - redundant_long_form
+      - restated_default
+      - scalar_as_text
+      - unused_input_key
+      - equality_filter
   # The file types a yamaa file declares in `type` (SCHEMA-2), as schema()
   # takes them (D149).
   file_type:
@@ -319,7 +324,7 @@ public:
       table: lint
       raises: refusal
       calls: lint
-      doc: Lint specification files, first applying the proved layout fixes when fix is true.
+      doc: Lint yamaa files, first applying the proved fixes when fix is true.
     # D149: the JSON Schema of yaml/v1/json/, as canonical JSON text; any other
     # type is refused as unexpected_file_type (SCHEMA-2).
     - name: schema

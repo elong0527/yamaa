@@ -62,7 +62,13 @@ class PlanReuse(unittest.TestCase):
         output = self.root / "output.csv"
         output.unlink(missing_ok=True)
         run = spec.run()
-        self.assertEqual(run.issues.to_pylist(), study["issues"])
+        # A truth row names its file relative to the study's directory; a
+        # location names it by its absolute path (P-ISSUE-1).
+        expected = [
+            {**row, "file": (self.root / row["file"]).as_posix()}
+            for row in study["issues"]
+        ]
+        self.assertEqual(run.issues.to_pylist(), expected)
         if study["output_csv"] is None:
             self.assertIsNone(run.output)
             with self.assertRaises(yamaa.Error):

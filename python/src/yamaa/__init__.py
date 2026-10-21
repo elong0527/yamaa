@@ -252,7 +252,7 @@ def read_odm(
 
 
 def lint(paths, fix: bool = False) -> Table:
-    """Lint specification files, first applying the proved layout fixes when fix is true."""
+    """Lint yamaa files, first applying the proved fixes when fix is true."""
     return _call(_native._lint, _fspaths(paths), fix)
 
 

@@ -5,7 +5,8 @@
 use super::{
     path_render, spec_path, spec_path::SpecPath, validation::unknown_field, Document,
     DocumentNode as N, NormalizationError, NormalizedDocument, SchemaContext as C,
-    SchemaDiagnostic, SchemaOrigin, SchemaSource, SchemaStructure, ValidationError,
+    SchemaDiagnostic, SchemaOrigin, SchemaSource, SchemaStructure, SiteRole, ValidationError,
+    WrittenSite,
 };
 use crate::diagnostic::ConditionCode;
 
@@ -91,6 +92,58 @@ impl SchemaStructure {
         }
         findings.extend(repeated_identifiers(input));
         Ok(findings)
+    }
+}
+
+impl SchemaStructure {
+    /// The written values of a 1.x document as validation reads them against
+    /// this view, in walk order: each value of a class field, each value read
+    /// as a named value type, and each long form that restates its shorthand
+    /// (SCHEMA-15), with its spec path (P-CLR-2). A specification is read as
+    /// [`SchemaStructure::validate_layer`] reads one layer, field by root
+    /// field, and any other file type against its root class as a complete
+    /// document. Where a union's members all fail, the sites are those of the
+    /// member whose findings validation reports, so a document validation
+    /// refuses still has the sites of the structure it was read as. The lint
+    /// reads a file's defaults, expression fields and long forms from them.
+    pub fn written_sites(
+        &self,
+        input: &Document,
+        layer: bool,
+    ) -> Result<Vec<WrittenSite>, ValidationError> {
+        let class = self.root_class();
+        let root = input.root();
+        if !layer {
+            return Ok(self.versioned_root_sites(input)?.1);
+        }
+        let mut sites = Vec::new();
+        if !matches!(&input.nodes()[root], N::Mapping(_)) {
+            return Ok(sites);
+        }
+        for field in &class.fields {
+            let Some(value) = input.field(root, &field.name) else {
+                continue;
+            };
+            sites.push(WrittenSite {
+                node: value,
+                path: field.name.clone(),
+                role: SiteRole::Field {
+                    owner: class.name.clone(),
+                    field: field.name.clone(),
+                    descriptor: field.descriptor,
+                },
+            });
+            let fragment = COLLECTIONS.contains(&field.name.as_str());
+            let (_, found) = self.versioned_descriptor_sites(
+                field.descriptor,
+                input,
+                value,
+                &field.name,
+                fragment,
+            )?;
+            sites.extend(found);
+        }
+        Ok(sites)
     }
 }
 
@@ -374,5 +427,107 @@ mod tests {
         assert!(current.validate_layer(&layer).unwrap().is_empty());
         // The full closure and its views share descriptor indices.
         assert_eq!(schema.descriptors().len(), older.descriptors().len());
+    }
+
+    /// A root whose `terms` list holds a shorthand union: a bare variable or
+    /// a class whose `direction` defaults to `asc`.
+    fn terms_schema() -> SchemaStructure {
+        let field = |name: &str, entries: Vec<(&str, T)>| T::map(vec![(name, T::map(entries))]);
+        SchemaStructure::admit(
+            vec![SchemaModule {
+                name: "schema_spec.yaml".into(),
+                document: T::map(vec![
+                    ("version", T::text("1.0")),
+                    (
+                        "root_class",
+                        T::List(vec![field("terms", vec![("type", T::text("list[term]"))])]),
+                    ),
+                    (
+                        "term",
+                        T::map(vec![(
+                            "type",
+                            T::list(vec![T::text("str"), T::text("term_class")]),
+                        )]),
+                    ),
+                    (
+                        "term_class",
+                        T::List(vec![
+                            field(
+                                "variable",
+                                vec![("type", T::text("str")), ("required", T::boolean(true))],
+                            ),
+                            field(
+                                "direction",
+                                vec![("type", T::text("str")), ("default", T::text("asc"))],
+                            ),
+                        ]),
+                    ),
+                ])
+                .document(),
+            }],
+            0,
+            "root_class",
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn written_sites_follow_the_structure_validation_chooses() {
+        let schema = terms_schema();
+        let document = T::map(vec![(
+            "terms",
+            T::list(vec![
+                T::text("A"),
+                T::map(vec![("variable", T::text("B"))]),
+                T::map(vec![
+                    ("variable", T::text("C")),
+                    ("direction", T::text("asc")),
+                ]),
+                T::map(vec![("variable", T::integer(1))]),
+            ]),
+        )])
+        .document();
+        let sites = schema.written_sites(&document, true).unwrap();
+        let label = |site: &WrittenSite| match &site.role {
+            SiteRole::Field { owner, field, .. } => format!("{} field {owner}.{field}", site.path),
+            SiteRole::Alias { name } => format!("{} alias {name}", site.path),
+            SiteRole::LongForm { field, shorthand } => format!(
+                "{} long form {field} {}",
+                site.path,
+                shorthand.map_or("keyword".into(), |node| format!(
+                    "{:?}",
+                    document.nodes()[node]
+                ))
+            ),
+        };
+        assert_eq!(
+            sites.iter().map(label).collect::<Vec<_>>(),
+            [
+                "terms field root_class.terms",
+                "terms[0] alias term",
+                // `{variable: B}` restates its shorthand, which validation refuses.
+                "terms[1] alias term",
+                "terms[1].variable field term_class.variable",
+                "terms[1] long form variable Text(\"B\")",
+                // Writing the default keeps the class form valid.
+                "terms[2] alias term",
+                "terms[2].variable field term_class.variable",
+                "terms[2].direction field term_class.direction",
+                // Both members fail on a number: the class is the member
+                // whose findings validation reports, so its sites stay.
+                "terms[3] alias term",
+                "terms[3].variable field term_class.variable",
+            ]
+        );
+        let SiteRole::Field { descriptor, .. } = &sites[7].role else {
+            panic!("a field site");
+        };
+        let default = schema.descriptors()[*descriptor].descriptor.default_node();
+        assert!(default.is_some(), "the site names the field's descriptor");
+        // A complete document of another type is read against its root class.
+        assert_eq!(
+            schema.written_sites(&document, false).unwrap().len(),
+            sites.len()
+        );
     }
 }

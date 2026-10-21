@@ -320,7 +320,12 @@ class Table(unittest.TestCase):
                 self.assertEqual(row["operand_route"], route)
                 self.assertIs(type(row["operand_route"]), list)
                 self.assertTrue(all(type(item) is int for item in row["source_span"]))
-                self.assertIsNone(row["file"])
+                # The issue is located where the specification wrote RATIO.
+                self.assertEqual(
+                    row["file"], (self.root / "division.yaml").resolve().as_posix()
+                )
+                self.assertIs(type(row["line"]), int)
+                self.assertIs(type(row["column"]), int)
 
     def test_to_pylist_reads_every_batch_in_order(self):
         # The ODM reader returns its items in batches of 65,536 rows.

@@ -191,9 +191,9 @@ class PublicPortableMath(unittest.TestCase):
                     "condition": "assert_failed",
                     "rule": "CHECK-12",
                     "spec_paths": ["verifications[0].assert"],
-                    "file": None,
-                    "line": None,
-                    "column": None,
+                    "file": (self.root / "spec.yaml").resolve().as_posix(),
+                    "line": 1,
+                    "column": json.dumps(specification).index('"assert":') + 1,
                     "message": "the assert predicate is not TRUE in 1 of the rows",
                     "context": '{"failure_count":1,"keys":[{"ID":1}],'
                     '"verification_id":"historical-exp-one-limit"}',

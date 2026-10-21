@@ -35,6 +35,9 @@ columns:
     derivation: SUP_EP.QVAL
 
 rows:
+  # yamaa-lint: allow repeated_row_derivation -- the row phase reads are tested
+  # QVAL reads the lookup in each template, against QVAL_NAMED, which reads
+  # it in the column phase.
   - id: low_sequence
     dataset: LB
     filter: "LB.LBSEQ < 200"

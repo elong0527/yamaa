@@ -326,9 +326,18 @@ fn run_entry(engine: &Engine, call: &EntryCall) -> Result<Run, String> {
 
 fn check_negative(name: &str, want: &Json, runs: Vec<EntryRun>, findings: &mut Vec<String>) {
     let mut issues: Vec<Json> = Vec::new();
+    // Every negative's first issue is located in a file the case serves
+    // (P-ISSUE-1), named by the reference the resolver gave it.
+    let mut first_location = None;
     for EntryRun { call, outcome } in runs {
         match outcome {
             EntryOutcome::Ran { mut run, .. } => {
+                if first_location.is_none() {
+                    first_location = run
+                        .diagnostics()
+                        .first()
+                        .map(|issue| issue.location.clone());
+                }
                 issues.extend(issue_records(&run.issues()));
                 if run.output().is_some() {
                     findings.push(format!(
@@ -354,6 +363,12 @@ fn check_negative(name: &str, want: &Json, runs: Vec<EntryRun>, findings: &mut V
     if issues.is_empty() {
         findings.push(format!("{name}: negative benchmark produced no issues"));
         return;
+    }
+    match first_location.flatten() {
+        Some(location) if location.position.is_some() => {}
+        located => findings.push(format!(
+            "{name}: first issue is not located at a line and column: {located:?}"
+        )),
     }
     if !diagnostic_matches(want, &issues[0]) {
         findings.push(format!(

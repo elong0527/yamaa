@@ -1,0 +1,14 @@
+lifecycle: draft
+standard: SDTM
+domain: DI
+entries:
+  python:
+    - specification: spec_dm.yaml
+    - specification: spec_di.yaml
+  r:
+    - specification: spec_dm.yaml
+    - specification: spec_di.yaml
+define:
+  environment: project.yaml
+  standard: sdtm
+  created: '2026-09-11T00:00:00'

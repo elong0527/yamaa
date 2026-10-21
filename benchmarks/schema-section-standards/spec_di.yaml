@@ -1,0 +1,96 @@
+yamaa: "1.0"
+
+type: spec
+
+model: SDTM
+domain: DI
+keys: [STUDYID, SPDEVID, DIPARMCD]
+input:
+  DEVICES: input/devices.csv
+
+output:
+  path: di.csv
+  columns: [DOMAIN, STUDYID, SPDEVID, DIPARMCD, DIPARM, DIVAL]
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'DI'"
+    submission:
+      core: Req
+      role: Identifier
+      length: 2
+      origins:
+        - type: Assigned
+          source: Sponsor
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DEVICES.STUDYID
+    submission:
+      core: Req
+      role: Identifier
+      length: 5
+      origins:
+        - type: Protocol
+          source: Sponsor
+
+  - name: SPDEVID
+    type: str
+    label: Sponsor Device Identifier
+    derivation: DEVICES.SPDEVID
+    submission:
+      core: Req
+      role: Identifier
+      length: 6
+      origins:
+        - type: Assigned
+          source: Sponsor
+
+  - name: DIPARMCD
+    type: str
+    label: Device Identifier Element Short Name
+    derivation: DEVICES.DIPARMCD
+    submission:
+      core: Req
+      role: Topic
+      length: 6
+      origins:
+        - type: Assigned
+          source: Sponsor
+
+  - name: DIPARM
+    type: str
+    label: Device Identifier Element Name
+    derivation: DEVICES.DIPARM
+    submission:
+      core: Req
+      role: Synonym Qualifier
+      length: 13
+      origins:
+        - type: Assigned
+          source: Sponsor
+
+  # The model and serial numbers are printed on each device by its
+  # manufacturer.
+  - name: DIVAL
+    type: str
+    label: Device Identifier Element Value
+    derivation: DEVICES.DIVAL
+    submission:
+      core: Req
+      role: Result Qualifier
+      length: 7
+      origins:
+        - type: Collected
+          source: Vendor
+
+submission:
+  label: Device Identifiers
+  class: STUDY REFERENCE
+  structure: One record per device identifier per device
+  repeating: false
+  reference_data: true
+  standard: SDTMIG-MD

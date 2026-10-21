@@ -82,8 +82,9 @@ impl Engine {
     ///
     /// An engine that claims no host language, as the command line's does,
     /// reads through a memory resolver that serves a 1.0 specification and a
-    /// file that declares `schema_version`, which has no type. Lanes without
-    /// the `yaml` feature refuse both.
+    /// file that declares `schema_version`, which has no type, at its first
+    /// line. A refusal locates its issue in the file by the reference the
+    /// resolver gave it. Lanes without the `yaml` feature refuse both.
     ///
     /// ```
     /// use std::sync::Arc;
@@ -91,10 +92,10 @@ impl Engine {
     /// use yamaa::{Engine, EngineOptions, FileType, MemoryResolver};
     ///
     /// let resolver = Arc::new(MemoryResolver::new());
-    /// resolver.insert("/", "dm.yaml", "spec:1", Arc::from(
+    /// resolver.insert("/", "dm.yaml", "/study/dm.yaml", Arc::from(
     ///     &b"yamaa: \"1.0\"\ntype: spec\ndomain: DM\n"[..],
     /// ));
-    /// resolver.insert("/", "ae.yaml", "spec:2", Arc::from(
+    /// resolver.insert("/", "ae.yaml", "/study/ae.yaml", Arc::from(
     ///     &b"schema_version: \"1.0\"\ndomain: AE\n"[..],
     /// ));
     /// let engine = Engine::new(
@@ -105,8 +106,8 @@ impl Engine {
     ///     assert_eq!(engine.file_type("dm.yaml").unwrap(), FileType::Spec);
     ///     assert_eq!(
     ///         refused.message,
-    ///         "cannot read ae.yaml: this engine does not read language version 0.5 \
-    ///          [unsupported_language_version, SCHEMA-2]"
+    ///         "cannot read ae.yaml: /study/ae.yaml:1:1: this engine does not read \
+    ///          language version 0.5 [unsupported_language_version, SCHEMA-2]"
     ///     );
     /// } else {
     ///     assert!(engine.file_type("dm.yaml").is_err());
@@ -115,12 +116,17 @@ impl Engine {
     /// assert_eq!(FileType::Codelists.as_str(), "codelists");
     /// ```
     pub fn file_type(&self, path: &str) -> Result<FileType, Failure> {
-        yamaa_adapters::file_application::file_type(
+        yamaa_adapters::file_application::file_type_located(
             path,
             crate::internal::resolver_bridge(self.shared()),
         )
         .map(FileType::from_core)
-        .map_err(|issues| Failure::from_issues(Action::Read(path), &issues))
+        .map_err(|(issues, locator)| {
+            Failure::new(
+                Action::Read(path),
+                &crate::diagnostic::Report::located(&issues, &locator),
+            )
+        })
     }
 }
 
