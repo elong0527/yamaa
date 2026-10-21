@@ -1,7 +1,8 @@
 //! Normalized model shape, independent of the authored schema's shorthand rules.
 use super::{Field, Kind, Model};
 use crate::specification_submission_document::{
-    DatasetClass, DatasetSubclass, OriginSource, OriginType, ROLES,
+    Core, DataType, DatasetClass, DatasetSubclass, MethodType, OriginSource, OriginType, PageType,
+    ROLES,
 };
 use Kind::*;
 
@@ -211,7 +212,7 @@ model!(
     PAGE,
     "PageReference",
     [
-        required!("type", Enum(&["PhysicalRef", "NamedDestination"])),
+        required!("type", Enum(PageType::NAMES)),
         required!("refs", Text),
         optional!("title", Text),
     ]
@@ -234,7 +235,7 @@ model!(
     "SubmissionMethodClass",
     [
         optional!("name", Text),
-        field!("type", Enum(&["Computation", "Imputation"])),
+        field!("type", Enum(MethodType::NAMES)),
         required!("description", Text),
         optional!("expression", Object(FORMAL)),
         optional!("documents", List(&DOCUMENT_REFERENCE)),
@@ -258,31 +259,14 @@ model!(
         optional!("documents", List(&DOCUMENT_REFERENCE)),
     ]
 );
-const DATA_TYPE: Kind = Enum(&[
-    "text",
-    "integer",
-    "float",
-    "date",
-    "datetime",
-    "time",
-    "partialDate",
-    "partialTime",
-    "partialDatetime",
-    "incompleteDate",
-    "incompleteTime",
-    "incompleteDatetime",
-    "durationDatetime",
-    "intervalDatetime",
-    "URI",
-]);
 /// The metadata fields a column and each of its value-level entries share.
 macro_rules! submission_metadata {
     ($($field:expr),* $(,)?) => {
         [
-            optional!("core", Enum(&["Req", "Exp", "Perm", "Cond"])),
+            optional!("core", Enum(Core::NAMES)),
             optional!("mandatory", Boolean),
             optional!("role", Enum(ROLES)),
-            optional!("data_type", DATA_TYPE),
+            optional!("data_type", Enum(DataType::NAMES)),
             optional!("length", Integer),
             optional!("significant_digits", Integer),
             optional!("display_format", Text),
