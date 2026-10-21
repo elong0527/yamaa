@@ -808,10 +808,13 @@ notices name a crate that it does not bundle. Native qualification and the
 release selector require every wheel, source package, R binary package and
 command-line archive to carry its own host's notices unchanged, and refuse a
 package with any text that names a GNU license, the files inside the R source
-package's `vendor.tar.xz` included. The only exception is the unchanged
+package's `vendor.tar.xz` included. The exceptions are the unchanged
 upstream files of the vendored crates that
 `tools/packaging/check_package_notices.py` lists with its reasons: zstd's
-dual-licensed C sources, `r-efi`, and README or changelog prose.
+dual-licensed C sources, `r-efi`, and README or changelog prose; and an R
+binary package's namespace loader, `yamaa/R/yamaa`, which R writes itself
+from its own `share/R/nspackloader.R`, whose header names the GPL that R is
+under.
 
 Every package also carries `COMPONENTS.tsv` beside the notices, the component
 inventory of its host: the wheels and the Python source archive carry the

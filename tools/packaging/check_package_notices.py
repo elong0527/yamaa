@@ -24,13 +24,15 @@ standard library, as the wheels' does.
 No text in a package names a GNU license, apart from the clause of the LLVM
 exception that names GPLv2 (generate_third_party_notices.gnu_licenses). That
 covers every text member of the archive, and of the xz-compressed tar archive
-of vendored crates inside the R source package. The one exception is the
+of vendored crates inside the R source package. The exceptions are the
 upstream files of the vendored crates in VENDORED_GNU, which the packages
-carry unchanged, as `cargo vendor` writes them.
+carry unchanged, as `cargo vendor` writes them, and an R binary package's
+namespace loader, which R writes itself (R_LOADER).
 """
 
 import argparse
 import io
+import itertools
 import re
 import tarfile
 import tomllib
@@ -73,6 +75,26 @@ VENDORED_GNU = {
 VENDORED_CRATE = re.compile(
     r"(?:^|[/!])vendor/([A-Za-z0-9_-]+?)-[0-9]+\.[0-9]+\.[0-9]+[^/]*/"
 )
+# An R binary package's namespace loader, R/yamaa in the installed package
+# (#3393, D136). R CMD INSTALL writes it itself, a copy of R's own
+# share/R/nspackloader.R, whose header names the GNU General Public License
+# that R is under, so it is R's build output, not text of yamaa's. The loader
+# is a header of comment lines, the first naming R_LOADER_FILE, followed by
+# R_LOADER_BODY and nothing else, whitespace aside; any other text at that
+# path, and the same text anywhere else, is read as usual.
+R_LOADER = "yamaa/R/yamaa"
+R_LOADER_FILE = "File share/R/nspackloader.R"
+R_LOADER_BODY = """
+local({
+    info <- loadingNamespaceInfo()
+    pkg <- info$pkgname
+    ns <- .getNamespace(as.name(pkg))
+    if (is.null(ns))
+        stop("cannot find namespace environment for ", pkg, domain = NA);
+    dbbase <- file.path(info$libname, pkg, "R", pkg)
+    lazyLoad(dbbase, ns, filter = function(n) n != ".__NAMESPACE__.")
+})
+"""
 
 
 def package_notices(root=ROOT):
@@ -196,9 +218,22 @@ def expanded(members):
             yield member, read()
 
 
-def gnu_findings(name, data):
-    """Return a message for each text member of a package archive that names
-    a GNU license, outside the vendored crates of VENDORED_GNU."""
+def r_loader(text):
+    """Whether a text is R's namespace loader: comment lines, the first naming
+    R_LOADER_FILE, then R_LOADER_BODY alone, whitespace aside."""
+    lines = text.splitlines()
+    header = len(list(itertools.takewhile(lambda line: line.startswith("#"), lines)))
+    return (
+        header > 0
+        and lines[0].lstrip("#").split() == R_LOADER_FILE.split()
+        and " ".join(lines[header:]).split() == R_LOADER_BODY.split()
+    )
+
+
+def gnu_findings(name, data, form):
+    """Return a message for each text member of a package archive of `form`
+    that names a GNU license, outside the vendored crates of VENDORED_GNU and
+    an R binary package's namespace loader."""
     findings = []
     for member, payload in archive_files(name, data):
         try:
@@ -207,14 +242,15 @@ def gnu_findings(name, data):
             continue  # Compiled code and images hold no license text to read.
         found = third_party.gnu_licenses(text)
         crate = VENDORED_CRATE.search(member)
-        if found and (crate is None or crate[1] not in VENDORED_GNU):
+        loader = form == "r-binary" and member == R_LOADER and r_loader(text)
+        if found and not loader and (crate is None or crate[1] not in VENDORED_GNU):
             findings.append(f"{name}: {member} names a GNU license ({found[0]})")
     return findings
 
 
 def check_archive(path, root=ROOT):
     """Raise ValueError unless the package carries every notice unchanged and
-    no text in it names a GNU license outside VENDORED_GNU."""
+    no text in it names a GNU license outside VENDORED_GNU and R_LOADER."""
     identity, names = package_notices(root)
     form, members = notice_members(path.name, identity, names)
     payloads = read_members(path, set(members.values()))
@@ -226,7 +262,7 @@ def check_archive(path, root=ROOT):
             raise ValueError(
                 f"{path.name}: required notice differs or is missing: {member}"
             )
-    findings = gnu_findings(path.name, path.read_bytes())
+    findings = gnu_findings(path.name, path.read_bytes(), form)
     if findings:
         raise ValueError("\n".join(findings))
     return members
