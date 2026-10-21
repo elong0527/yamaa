@@ -36,7 +36,8 @@ open gates live in GitHub issues and pull requests, not here.
   GitHub release, which builds with its vendored crates and a Rust
   toolchain; CRAN, once it has 1.0.0; or, on a Linux machine without Rust
   1.82 or later, the offline toolchain route, which carries Rust in from its
-  standalone installers without rustup or a network (#3107).
+  standalone installers without rustup or a network
+  ([Installing in a restricted environment](articles/restricted-environments.md#the-offline-rust-toolchain-route)).
 - The `yamaa` command line as standalone binaries, which need no Python, R
   or Rust (#3030 D12, D49): for Linux x86_64 and aarch64, built for the
   `x86_64-unknown-linux-musl` and `aarch64-unknown-linux-musl` targets and
@@ -61,7 +62,9 @@ archive, so an offline Python build needs `maturin` installed, for
 `pip install --no-build-isolation --no-index`. Windows R builds also need
 Rtools45 and the GNU Rust target, as
 [Supported dependency combinations](#supported-dependency-combinations)
-describes.
+describes. [Installing in a restricted environment](articles/restricted-environments.md)
+gives every route for a machine without internet access, each with the native
+jobs that qualify it.
 
 `.github/workflows/native.yml` builds, installs and tests every supported
 combination on manual dispatch and weekly on main. A release is cut from a
