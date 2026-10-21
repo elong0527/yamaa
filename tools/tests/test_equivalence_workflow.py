@@ -184,8 +184,9 @@ class EquivalenceWorkflowTests(unittest.TestCase):
 
 class ConversionWorkflowTests(unittest.TestCase):
     """The conversion job runs on Python for a pull request whose diff reaches
-    the 1.0 front end, the converter, the 1.0 schemas or the gate, and on both
-    hosts on dispatch or its weekly schedule."""
+    the 1.0 front end, the converter, the 1.0 schemas or the gate, including
+    the conformance planner and runner it drives, and on both hosts on
+    dispatch or its weekly schedule."""
 
     def decide(self, path, **arguments):
         decision, notice = EquivalenceWorkflowTests.decide(
@@ -199,7 +200,10 @@ class ConversionWorkflowTests(unittest.TestCase):
             "tools/migrate/excepted.py",
             "yaml/v1/schema_spec.yaml",
             "tools/commands/conversion.py",
+            "tools/conformance/public_conformance.py",
+            "tools/surface.py",
             "python/tests/installed/conversion_define.py",
+            "python/tests/installed/public_conformance.py",
         ):
             with self.subTest(path=path):
                 self.assertEqual(

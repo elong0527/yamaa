@@ -12,6 +12,9 @@ HOSTS = ("python", "r")
 PROJECT = "project.yaml"
 LIFECYCLES = {"draft": "lightgrey", "reviewed": "yellow", "finalized": "brightgreen"}
 DEFINE_STANDARDS = ("sdtm", "adam", "send")
+# The models a 1.0 specification declares (D25); `standard` may also name
+# CDISC or TEST.
+MODELS = ("SDTM", "ADaM", "SEND")
 CREATED = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}")
 
 
@@ -288,12 +291,12 @@ def compare_define(case, staged, define):
     return problems
 
 
-def specification_name(path):
-    """The `domain` a project names a listed specification by (PROJECT-5).
+def layered_field(path, field):
+    """The value of a root `field` in a specification's layers, or None.
 
     Layers contribute from the root ancestor down to the entry file, a later
     layer taking precedence (LAYER-3), so the layer nearest the entry that
-    writes `domain` supplies the name.
+    writes the field supplies it.
     """
     import yaml12
 
@@ -307,20 +310,50 @@ def specification_name(path):
         except (OSError, UnicodeError, ValueError) as error:
             raise ValueError(f"{layer}: {error}") from error
         require(isinstance(document, dict), f"{layer}: expected a mapping")
-        if "domain" in document:
-            name = document["domain"]
-            break
+        if field in document:
+            return document[field]
         parent = document.get("parent")
         if parent is None:
-            name = None
-            break
+            return None
         require(isinstance(parent, str) and parent, f"{layer}: parent must be one path")
         layer = layer.parent / parent
+
+
+def specification_name(path):
+    """The `domain` a project names a listed specification by (PROJECT-5)."""
+    name = layered_field(path, "domain")
     require(
         isinstance(name, str) and bool(name),
         f"{path}: no layer names the specification's domain",
     )
     return name
+
+
+def check_standard_model(case, metadata=None):
+    """Require a benchmark's `standard` to be the model its entries declare.
+
+    `standard` stays in benchmark.yaml, where the dashboards and the Harbor
+    evaluation read it (#3030 Phase 1 and 2 plan, question 9). Where it names
+    a model, the `model` that each host's last entry specification declares
+    in the 1.0 surface (D25) is that model. A CDISC or TEST benchmark may
+    build any model, and a 0.5 specification declares none. Layers a negative
+    benchmark cannot compose leave its fault to the engine.
+    """
+    metadata = load_metadata(case) if metadata is None else metadata
+    standard = metadata["standard"]
+    if standard not in MODELS:
+        return
+    for calls in entries(case, metadata).values():
+        specification = calls[-1]["specification"]
+        try:
+            model = layered_field(case / specification, "model")
+        except ValueError:
+            continue
+        require(
+            model in (None, standard),
+            f"{case}: standard {standard} is not the model {model} that "
+            f"{specification} declares",
+        )
 
 
 def main():
