@@ -10,6 +10,7 @@ from and every one is unchanged, and compiles again otherwise.
 """
 
 from yamaa import _native
+from yamaa._native import Table
 from yamaa._support import (
     __version__,
     _fspath,
@@ -22,6 +23,7 @@ from yamaa._support import (
 
 __all__ = [
     "Error",
+    "Table",
     "__version__",
     "lint",
     "project",

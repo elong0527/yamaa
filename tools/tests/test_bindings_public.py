@@ -25,6 +25,7 @@ class RenderingTests(unittest.TestCase):
     def test_python_exports_the_declared_names(self):
         names = [
             "Error",
+            "Table",
             "__version__",
             "lint",
             "project",
@@ -170,15 +171,17 @@ class RenderingTests(unittest.TestCase):
 
     def test_a_long_export_list_is_split_one_name_per_line(self):
         text = self.public.render_python([])
-        self.assertIn('__all__ = [\n    "Error",\n    "__version__",\n', text)
+        self.assertIn(
+            '__all__ = [\n    "Error",\n    "Table",\n    "__version__",\n', text
+        )
         self.assertIn('    "spec",\n]\n', text)
         candidate = copy.deepcopy(self.definition)
         for name in ("lint", "schema"):
             candidate["public"]["functions"].remove(function(candidate, name))
         short = public.Public(candidate).render_python([])
         self.assertIn(
-            '__all__ = ["Error", "__version__", "project", "read_odm", "selftest", '
-            '"spec"]\n',
+            '__all__ = ["Error", "Table", "__version__", "project", "read_odm", '
+            '"selftest", "spec"]\n',
             short,
         )
 
@@ -211,6 +214,27 @@ class RenderingTests(unittest.TestCase):
         self.assertIn(
             "return Check(_native._spec_check(self._path, self._project))", text
         )
+
+    def test_a_python_only_class_is_the_native_class_exported_as_it_is(self):
+        python = self.public.render_python([])
+        self.assertIn(
+            "from yamaa import _native\nfrom yamaa._native import Table\n", python
+        )
+        self.assertNotIn("class Table", python)
+        self.assertNotIn("Table", self.public.render_r([]))
+        self.assertNotIn("Table", self.public.render_namespace([]))
+        self.assertEqual(self.public.kind("Table"), "native")
+        self.assertEqual(
+            list(self.public.r_classes()),
+            [name for name in self.definition["public"]["classes"] if name != "Table"],
+        )
+        # Without a Python-only class the module imports nothing from the
+        # native module by name.
+        candidate = copy.deepcopy(self.definition)
+        del candidate["public"]["classes"]["Table"]
+        text = public.Public(candidate).render_python([])
+        self.assertNotIn("from yamaa._native import", text)
+        self.assertNotIn('"Table"', text)
 
     def test_generated_python_is_valid_and_ascii(self):
         text = self.public.render_python(generator._PYI_HEADER)
@@ -366,6 +390,108 @@ class ValidationTests(unittest.TestCase):
             with self.subTest(message=message):
                 self.refuses(message, mutate)
 
+    def test_a_python_only_class_declares_each_native_method_once(self):
+        table = lambda d: d["public"]["classes"]["Table"]  # noqa: E731
+        cases = [
+            # A class for any other host is an ordinary class, which holds values.
+            ("is missing \\['holds', 'r'\\]", lambda d: table(d).update(hosts=["r"])),
+            ("unknown keys", lambda d: table(d).update(r="yamaa_table")),
+            ("must be yamaa.Table", lambda d: table(d).update(python="yamaa.Frame")),
+            (
+                "is no class of yamaa._native",
+                lambda d: d["public"]["classes"].update(
+                    Frame={**copy.deepcopy(table(d)), "python": "yamaa.Frame"}
+                ),
+            ),
+            (
+                "must declare every native method: to_pandas",
+                lambda d: table(d)["members"].pop(),
+            ),
+            (
+                "is no method of yamaa._native.Table",
+                lambda d: member(d, "Table", "to_arrow").update(name="to_numpy"),
+            ),
+            (
+                "declares the native __len__ twice",
+                lambda d: table(d)["members"].append(
+                    {**member(d, "Table", "length"), "name": "size"}
+                ),
+            ),
+            (
+                "a property exactly when its native method is a getter",
+                lambda d: member(d, "Table", "num_rows").update(kind="method"),
+            ),
+            (
+                "a property exactly when its native method is a getter",
+                lambda d: member(d, "Table", "to_pylist").update(kind="property"),
+            ),
+            (
+                "must spell its special method",
+                lambda d: member(d, "Table", "length").pop("python"),
+            ),
+            (
+                "only protocol and printing do",
+                lambda d: member(d, "Table", "to_arrow").update(python="to_arrow"),
+            ),
+            (
+                "must be __repr__",
+                lambda d: member(d, "Table", "preview").update(python="__str__"),
+            ),
+            (
+                "must declare what it returns",
+                lambda d: member(d, "Table", "to_pylist").pop("returns"),
+            ),
+            (
+                "must take its native method's arguments",
+                lambda d: member(d, "Table", "arrow_stream").pop("args"),
+            ),
+            (
+                "imports must list the modules",
+                lambda d: member(d, "Table", "num_rows").update(imports=["polars"]),
+            ),
+            (
+                "imports must list the modules",
+                lambda d: member(d, "Table", "to_pandas").update(
+                    imports=["pandas", "pandas"]
+                ),
+            ),
+            (
+                "needs host_only entries: Table.to_pylist",
+                lambda d: d["host_only"]["python"].remove("Table.to_pylist"),
+            ),
+            # A Python-only token or class stays out of both hosts' surface.
+            (
+                "uses the Python-only type token 'rows'",
+                lambda d: member(d, "Run", "issues").update(returns="rows"),
+            ),
+            (
+                "returns the Python-only class Table",
+                lambda d: function(d, "read_odm").update(returns="Table"),
+            ),
+            (
+                "invalid R refusal field",
+                lambda d: d["public"]["errors"]["refusal"]["r"]["fields"].update(
+                    issues="rows"
+                ),
+            ),
+            # Every column type projects into both hosts.
+            (
+                "must project str, int, float, date, datetime, list",
+                lambda d: d["public"]["value_types"].pop("list"),
+            ),
+            (
+                "public.value_types.date must be a mapping|is missing",
+                lambda d: d["public"]["value_types"].update(date={"python": "date"}),
+            ),
+            (
+                "tables.lint.line has a type",
+                lambda d: d["tables"]["lint"]["columns"][1].update(type="decimal"),
+            ),
+        ]
+        for message, mutate in cases:
+            with self.subTest(message=message):
+                self.refuses(message, mutate)
+
     def test_every_native_argument_and_member_argument_must_bind(self):
         cases = [
             # A member argument that no native argument takes.
@@ -391,7 +517,7 @@ class ValidationTests(unittest.TestCase):
             ),
             # A result made from the wrong native type.
             (
-                "returns _ArrowTable, not Run",
+                "returns Table, not Run",
                 lambda d: member(d, "Spec", "run").update(calls="spec_check"),
             ),
             # Members of one handle class call one native class.
@@ -425,6 +551,18 @@ class ManifestTests(unittest.TestCase):
             "public.classes.SelfTest.summary: printing; python __repr__; r print, format",
             "public.r.s3methods.yamaa_selftest.print",
             "public.r.s3methods.yamaa_selftest.format",
+            "public.types.polars_frame: python polars.DataFrame",
+            "public.value_types.date: python Arrow Date32, datetime.date; r Date",
+            "public.classes.Table: python yamaa.Table",
+            "public.classes.Table.num_rows: property; returns count",
+            "public.classes.Table.length: protocol; python __len__; returns count",
+            "public.classes.Table.preview: printing; python __repr__",
+            "public.classes.Table.arrow_stream.args[0]: "
+            "requested_schema: schema_request = None",
+            "public.classes.Table.to_pylist: method; returns rows",
+            "public.classes.Table.to_pandas: method; returns pandas_frame; "
+            "imports pandas, pyarrow",
+            "public.python.exports.Table",
         ):
             with self.subTest(expected=expected):
                 self.assertIn(expected, lines)

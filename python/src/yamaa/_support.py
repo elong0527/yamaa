@@ -35,13 +35,13 @@ def _fspaths(paths) -> list[str]:
 
 
 def _table(table) -> _pl.DataFrame:
-    """A native table as a Polars DataFrame."""
-    return _pl.DataFrame(table)
+    """A native yamaa.Table as a Polars DataFrame."""
+    return table.to_polars()
 
 
 def _optional_table(table) -> _pl.DataFrame | None:
-    """A native table, or None, as a Polars DataFrame or None."""
-    return None if table is None else _pl.DataFrame(table)
+    """A native yamaa.Table, or None, as a Polars DataFrame or None."""
+    return None if table is None else table.to_polars()
 
 
 class _Lazy:

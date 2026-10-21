@@ -52,6 +52,10 @@ test = [
   "pyarrow>=26.0.0; python_version >= '3.15'",
   "pydantic>=2.12.4; python_version < '3.15'",
   "pydantic>=2.14.0; python_version >= '3.15'",
+  # yamaa.Table.to_pandas(), which needs PyArrow too. The floors are the first
+  # releases with wheels for CPython 3.14 and for 3.15.
+  "pandas>=2.3.3; python_version < '3.15'",
+  "pandas>=3.0.6; python_version >= '3.15'",
   # Independent Dataset-JSON validation belongs to qualification, not runtime.
   "jsonschema>=4.25",
   # The dependency-graph tools read requirements with it; the package's lock

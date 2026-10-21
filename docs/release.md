@@ -441,18 +441,20 @@ license notices now accept.
 
 Python supports CPython 3.12 through 3.15 with the runtime ranges in
 `python/pyproject.toml`. On CPython 3.12 to 3.14, their declared floors are
-lxml 6.1.3, Polars 1.35.2, py-yaml12 0.2, PyArrow 23.0.1, Pydantic 2.12.4,
-packaging 25 and PyYAML 6.0.3.
+lxml 6.1.3, pandas 2.3.3, Polars 1.35.2, py-yaml12 0.2, PyArrow 23.0.1,
+Pydantic 2.12.4, packaging 25 and PyYAML 6.0.3.
 The Parquet 55.2.0 writer records only type-defined column orders, which
 Polars 1.35.2 reads; the IEEE 754 total-order form that later writers record
 for floating-point columns needs Polars 1.43.2. R supports R 4.4.0 and later
 and uses the shared Rust graph; its host qualification readers are the
 `Suggests` dependencies in `R/yamaa/DESCRIPTION`.
 
-Three of these floors do not work on CPython 3.15, so on 3.15 the declared
-floors are the oldest releases that do: Polars 2.0.0, PyArrow 26.0.0 and
-Pydantic 2.14.0. Environment markers split these three requirements by
-interpreter, and CPython 3.12 to 3.14 keep the floors that embedders hold.
+Four of these floors do not work on CPython 3.15, so on 3.15 the declared
+floors are the oldest releases that do: pandas 3.0.6, Polars 2.0.0, PyArrow
+26.0.0 and Pydantic 2.14.0. Environment markers split these four requirements
+by interpreter, and CPython 3.12 to 3.14 keep the floors that embedders hold.
+pandas 2.3.3 and 3.0.6 are the first releases with wheels for CPython 3.14 and
+3.15.
 Polars before 2.0.0 installs, but its Series methods that forward to
 expressions, such as `implode`, return `None`: 3.15 no longer stores a
 function's implicit `None` return in `co_consts`, which those releases use to

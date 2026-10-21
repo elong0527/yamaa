@@ -181,6 +181,7 @@ class PublicContract(unittest.TestCase):
             yamaa.__all__,
             [
                 "Error",
+                "Table",
                 "__version__",
                 "lint",
                 "project",
@@ -199,7 +200,7 @@ class PublicContract(unittest.TestCase):
         self.assertEqual(
             sorted(name for name in dir(_native) if not name.startswith("__")),
             [
-                "_ArrowTable",
+                "Table",
                 "_CORE_VERSION",
                 "_Error",
                 "_Plans",
