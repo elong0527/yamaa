@@ -5,6 +5,7 @@
 //! executable (#3556). A new family file gets its `mod` line below, which
 //! `every_family_file_is_declared` requires.
 
+mod caller_paths;
 mod copy_entry;
 mod csv_byte_order_mark;
 mod diagnostic_records;
@@ -26,6 +27,7 @@ mod read_odm;
 mod resolver_access;
 mod resolver_kinds;
 mod save_table;
+mod save_targets;
 mod schema;
 
 /// A file under `tests/` that is neither a module here nor its own `[[test]]`
