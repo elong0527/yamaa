@@ -399,9 +399,10 @@ run of the same commit cannot replace the run the release was reviewed against.
 The named run must be a completed successful native run of the peeled tag
 commit: a scheduled main run, a main dispatch, or a same-repository
 `qualification/issue-*` push. It requires all installed lanes, the offline
-source installs, the offline toolchain route and the R binary installs among
-them, the R binary builds, shared Rust/math, complete cohort comparisons,
-strict R package checks and CRAN's incoming checks to have passed. Branch dispatches cannot release. A tag other than the one the release
+source installs, the offline toolchain route, the R binary installs and the
+unpacked command-line archives among them, the R binary and command-line
+builds, shared Rust/math, complete cohort comparisons, strict R package
+checks and CRAN's incoming checks to have passed. Branch dispatches cannot release. A tag other than the one the release
 identity names fails before any request: a candidate tag on a final release, a
 final release tag on a candidate, or another version or candidate number. So
 does a lightweight tag or a missing, repeated or malformed trailer, and a named
