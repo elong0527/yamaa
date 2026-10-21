@@ -573,12 +573,41 @@ pub struct WhereClause {
     pub meta: Meta,
 }
 
-/// Today's list form is `In`, written EQ or IN by the number of values;
-/// `NotIn`, written NE or NOTIN, is the 1.0 addition (P-VLM-1).
+/// How a value-level where column compares with its values (SUB-12). A bare
+/// list is `In`, written EQ for one value and IN for several (D17); `Ne` and
+/// `NotIn` are written `comparator: NE` and `comparator: NOTIN` (D66,
+/// P-VLM-1).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Comparator {
     In,
+    Ne,
     NotIn,
+}
+
+impl Comparator {
+    /// Whether the comparison selects the rows that hold none of the values,
+    /// a missing value included, instead of one of them.
+    pub fn excludes(self) -> bool {
+        !matches!(self, Self::In)
+    }
+    /// Whether the comparison takes `count` values: `NE` exactly one and
+    /// `NOTIN` two or more; a bare list takes any nonempty list.
+    pub fn takes(self, count: usize) -> bool {
+        match self {
+            Self::In => true,
+            Self::Ne => count == 1,
+            Self::NotIn => count >= 2,
+        }
+    }
+    /// The spelling a written comparator has (`NE` or `NOTIN`), or none for
+    /// a bare list.
+    pub fn written(self) -> Option<&'static str> {
+        match self {
+            Self::In => None,
+            Self::Ne => Some("NE"),
+            Self::NotIn => Some("NOTIN"),
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]

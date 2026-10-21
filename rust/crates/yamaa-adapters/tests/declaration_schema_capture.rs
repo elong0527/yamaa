@@ -622,8 +622,8 @@ mod declaration {
         fn window_expansion_findings_use_the_retained_normalized_arena() {
             use yamaa_adapters::json;
             use yamaa_adapters::specification_diagnostics::capture_failure;
-            let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../../../benchmarks/negative-unknown-window");
+            // The 0.5 shorthand expansion, over the benchmark as 0.5 wrote it.
+            let root = crate::support::benchmarks::legacy("negative-unknown-window");
             let raw = std::fs::read(root.join("spec.yaml")).unwrap();
             let error = shipped_schema::capture()
                 .unwrap()

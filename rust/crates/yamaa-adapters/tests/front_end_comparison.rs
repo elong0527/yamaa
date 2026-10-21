@@ -40,8 +40,12 @@
 //! direction. Each 1.0 tree is also checked to be total and located. A
 //! benchmark already written in 1.0 has no 0.5 tree to compare: the
 //! converter copies it unchanged, and only its 1.0 tree is checked. The
-//! converter runs through `uv` in the locked tooling environment that
-//! `make setup` installs; without uv or PyYAML the test says so.
+//! corpus moves to 1.0 one prefix at a time (P2-5 to P2-8), so every
+//! specification checked, in either surface, counts toward the floor, and a
+//! listed specification whose benchmark is written in 1.0 is settled by its
+//! move (#3422). The converter runs through `uv` in the locked tooling
+//! environment that `make setup` installs; without uv or PyYAML the test
+//! says so.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -1061,6 +1065,8 @@ fn every_converted_benchmark_lowers_to_its_original_tree() {
         .collect::<Vec<_>>();
     cases.sort();
     let mut compared = 0;
+    let mut checked = 0;
+    let mut written_1_0 = BTreeSet::new();
     let mut refused = Vec::new();
     let mut differing = BTreeMap::new();
     let mut tally = BTreeMap::<Normalized, usize>::new();
@@ -1072,8 +1078,12 @@ fn every_converted_benchmark_lowers_to_its_original_tree() {
             let label = format!("{name}/{entry}");
             let converted = scratch.0.join("benchmarks").join(&name).join(&entry);
             if written_in_1_0(&case.join(&entry)) {
+                written_1_0.insert(label.clone());
                 match versioned(&converted) {
-                    Ok(new) => check_tree(&label, &new, &mut failures),
+                    Ok(new) => {
+                        checked += 1;
+                        check_tree(&label, &new, &mut failures);
+                    }
                     Err(new) => refused.push(format!("{label}: only 1.0, {new}")),
                 }
                 continue;
@@ -1081,6 +1091,7 @@ fn every_converted_benchmark_lowers_to_its_original_tree() {
             match (legacy(&case.join(&entry)), versioned(&converted)) {
                 (Ok((mut old, document)), Ok(mut new)) => {
                     compared += 1;
+                    checked += 1;
                     check_tree(&label, &new, &mut failures);
                     match declare_inferred(&mut old, &mut new, &document) {
                         Ok(declared) if declared.joins() => {
@@ -1111,7 +1122,8 @@ fn every_converted_benchmark_lowers_to_its_original_tree() {
         }
     }
     println!(
-        "compared {compared} specifications; both front ends refuse {}",
+        "compared {compared} specifications and checked {} written in 1.0; both front ends refuse {}",
+        checked - compared,
         refused.len()
     );
     for (normalized, count) in &tally {
@@ -1158,7 +1170,7 @@ fn every_converted_benchmark_lowers_to_its_original_tree() {
         .collect::<Vec<_>>();
     let settled = expected
         .iter()
-        .filter(|label| !differing.contains_key(*label))
+        .filter(|label| !differing.contains_key(*label) && !written_1_0.contains(*label))
         .cloned()
         .collect::<Vec<_>>();
     assert!(
@@ -1167,7 +1179,7 @@ fn every_converted_benchmark_lowers_to_its_original_tree() {
         unexpected.join("\n"),
         settled.join("\n")
     );
-    assert!(compared > 400, "only {compared} specifications compared");
+    assert!(checked > 400, "only {checked} specifications checked");
 }
 
 /// A value-level comparator has no 0.5 form, so no benchmark converts to one.
@@ -1220,7 +1232,7 @@ fn a_converted_value_level_comparator_stays_on_the_tree() {
         [
             (
                 "GLUC",
-                Comparator::NotIn,
+                Comparator::Ne,
                 vec!["GLUC"],
                 "columns.AVAL.submission.value_level.GLUC.where.PARAMCD.values[0]".to_string()
             ),

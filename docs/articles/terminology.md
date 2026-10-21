@@ -1,100 +1,187 @@
 # Codelists and controlled terminology
 
 A codelist may come from published controlled terminology or from a sponsor's
-own definitions. Both use the same list and column-binding fields. Declare
-the lists in the project file, and open a specification through that project
-to use them.
+own definitions. Both are written the same way: the lists of one source go in
+a file that declares `type: codelists`, the project file lists those files,
+and a column binds a list by its `id`. A specification uses the lists only
+when it is checked or run through its project.
 
 ## Select the sources and versions
 
 The programming lead selects the terminology release when preparing the
 specification. Review the published [SDTM terminology](https://evs.nci.nih.gov/ftp1/CDISC/SDTM/SDTM%20Terminology.html)
 and [ADaM terminology](https://evs.nci.nih.gov/ftp1/CDISC/ADaM/ADaM%20Terminology.html),
-choose the lists needed for the study, and record each selected release in its
-source's `standard.version`. These publishing sets can use different versions,
-but a Define-XML document cites one release of each: give every source of one
-publishing set the same `standard.version`.
-Keep sponsor-defined lists in a source that omits `standard`.
+choose the lists the study needs, and record each selected release in its
+file's `standard.version`. The publishing sets can use different releases,
+but a Define-XML document cites one release of each: give every file of one
+publishing set the same `standard.version`. Keep the sponsor's own lists in a
+file without `standard`.
 
 | Source | How to declare it |
 |---|---|
-| Published terminology | Set `standard.name`, `standard.publishing_set`, and `standard.version` once for all lists in that source. |
-| Sponsor-defined list | Omit `standard`; supply the list and its items. |
-| Sponsor extension of a published list | Keep the published `standard`, set the list's `extensible: true`, and mark added items `extended: true` with no `alias`: an added value has no NCI code. |
+| Published terminology | A codelists file whose `standard` gives `name`, `publishing_set` and `version` once for all its lists. |
+| Sponsor-defined lists | A codelists file without `standard`, listing each list and its items. |
+| Sponsor addition to a published list | An item marked `extended: true`, with no `alias`, in a published list marked `extensible: true`. |
 
-The terminology release is separate from `schema_version` and from an
-implementation-guide version such as `sdtm.standard.version` (`SDTMIG`).
-yamaa reads the declarations supplied by the author; it does not download the
-publisher's catalogue or verify that the declared items match that release.
-Review the selected values, concept aliases, and extensibility against the
-chosen release before using them in a study.
+The terminology release is separate from the language version in the
+`yamaa: "1.0"` header and from the implementation guides a project section
+lists in `standards`. yamaa reads the declarations the author supplies; it
+does not download the publisher's catalogue or verify that the declared items
+match that release. Review the selected values, concept aliases and
+extensibility against the chosen release before using them in a study.
 
-## Declare published and sponsor lists together
+## Write one file per source
 
-Save this as `project.yaml`. The published examples show selected values
-and use the illustrative release `2023-12-15`; they are not complete copies of
-either publishing set. The age groups are invented sponsor definitions. The
-`adam` section lists the specification of the next step, so the project can
-open it by its `domain` name.
+A codelists file holds one source: an optional `standard` naming its
+published terminology, and its `codelists`. The published examples below show
+selected values from the illustrative release `2023-12-15`; they are not
+complete copies of either publishing set. Save the SDTM terminology as
+`codelists/sdtm-ct.yaml`:
 
 ```yaml
-schema_version: "1.0"
+yamaa: "1.0"
+type: codelists
+standard:
+  name: CDISC/NCI
+  publishing_set: SDTM
+  version: "2023-12-15"
 codelists:
-  - standard:
-      name: CDISC/NCI
-      publishing_set: SDTM
-      version: "2023-12-15"
-    codelists:
-      - id: SEX
-        name: Sex
-        data_type: text
-        alias: C66731
-        items:
-          - {value: F, decode: Female, alias: C16576}
-          - {value: M, decode: Male, alias: C20197}
-          - {value: U, decode: Unknown, alias: C17998}
-  - standard:
-      name: CDISC/NCI
-      publishing_set: ADaM
-      version: "2023-12-15"
-    codelists:
-      - id: DTYPE
-        name: Derivation Type
-        data_type: text
-        alias: C81224
-        extensible: true
-        items:
-          - {value: AVERAGE}
-  - codelists:
-      - id: AGEGR1
-        name: Sponsor Age Group
-        data_type: text
-        items:
-          - {value: "<65"}
-          - {value: ">=65"}
-adam:
-  specs: [spec.yaml]
+  - id: SEX
+    name: Sex
+    alias: C66731
+    format_name: $SEX
+    items:
+      - {value: F, decode: Female, alias: C16576}
+      - {value: M, decode: Male, alias: C20197}
+      - {value: U, decode: Unknown, alias: C17998}
+  - id: EPOCH
+    name: Epoch
+    extensible: true
+    alias: C99079
+    items:
+      - {value: SCREENING, alias: C48262}
+      - {value: TREATMENT, alias: C101526}
+      - {value: EXTENSION, extended: true}
 ```
 
-List `id` and `name` must each be unique across all sources. A column binds
-the `id`, while `name` is the human-readable description. `alias` records a
-published concept identifier and is independent of the binding ID. Define-XML
-composition has additional alias requirements described in the
-[Define-XML rule](https://github.com/elong0527/yamaa/blob/main/rules/profiles/define-xml.md).
+the ADaM terminology as `codelists/adam-ct.yaml`:
 
-Sources may also live in local files: a project entry such as
-`codelists: [sdtm-ct.yaml, adam-ct.yaml, sponsor-codelists.yaml]` reads each file's
-`standard` and `codelists` mapping. Relative source paths resolve from the
-project file.
+```yaml
+yamaa: "1.0"
+type: codelists
+standard:
+  name: CDISC/NCI
+  publishing_set: ADaM
+  version: "2023-12-15"
+codelists:
+  - id: DTYPE
+    name: Derivation Type
+    extensible: true
+    alias: C81224
+    items:
+      - {value: AVERAGE, alias: C81209}
+```
+
+and the sponsor's own list, whose age groups are invented, as
+`codelists/sponsor.yaml`:
+
+```yaml
+yamaa: "1.0"
+type: codelists
+codelists:
+  - id: AGEGR1
+    name: Sponsor Age Group
+    items:
+      - {value: "<65"}
+      - {value: ">=65"}
+```
+
+A list's `id` is what a column binds, and its `name` is the human-readable
+description; each is unique across all the project's sources, and a duplicate
+fails validation with `duplicate_define_identifier`. `alias` records the
+published concept identifier of a list or of one item, independent of the
+binding `id`. A Define-XML document under `context: Submission` requires an
+`alias` on every `CDISC/NCI` list that declares items and on each of its
+items except a sponsor addition, as the
+[Define-XML rule](../../rules/profiles/define-xml.md#define-4) describes.
+
+Each list declares either `items` or `external`, never both and never
+neither. An `external` list defers to a dictionary and names the version
+used, such as `external: {dictionary: MedDRA, version: "26.1"}`, with an
+optional `href`. Coded values are unique within a list and of its
+`data_type`: `text`, the default, `integer` or `float`. `decode` and `rank`
+are declared for every item of a list or for none, and items keep their
+declared order in a generated document.
+
+## List the files in the project
+
+Save the project file as `project.yaml`. It lists the three codelists files,
+and its `adam` section lists the specification of the next step, so the
+project can open it by its `domain` name:
+
+```yaml
+yamaa: "1.0"
+type: project
+codelists:
+  - codelists/sdtm-ct.yaml
+  - codelists/adam-ct.yaml
+  - codelists/sponsor.yaml
+adam:
+  specs: [spec.yaml]
+  standards:
+    - {name: ADaMIG, version: "1.3", status: Final}
+```
+
+Relative paths resolve from the project file. A source may also be written
+inline, as an entry of `codelists` that holds `standard` and `codelists`
+itself in place of a path; a file lets several studies share one terminology
+release. A project may declare lists that no specification binds: a
+Define-XML document carries only the lists its datasets bind, so one set of
+files serves the `sdtm` and `adam` sections alike.
+
+## Terminology standards and implementation guides
+
+A codelists file's `standard` and a section's `standards` name different
+things. The section's `standards` lists the implementation guides its
+datasets follow, here ADaMIG 1.3: one or more guides of the section's model,
+each named once. Each codelists file's `standard` names the terminology
+release its lists are drawn from; terminology is never listed in a section's
+`standards`.
+
+`standard.name` takes the closed list a guide's name takes, the eleven
+standard names Define-XML 2.1 publishes, in their exact case: `ADaMIG`,
+`ADaMIG-MD`, `BIMO`, `CDISC/NCI`, `SDTMIG`, `SDTMIG-AP`, `SDTMIG-MD`,
+`SENDIG`, `SENDIG-AR`, `SENDIG-DART` and `SENDIG-GENETOX`. CDISC Controlled
+Terminology is `CDISC/NCI`. Any other name, such as `CDISC CT`, fails with
+`value_not_permitted` at the source's `standard.name` wherever the project's
+codelists are read: before any data, whether or not a document is generated.
+`publishing_set` is one of `ADaM`, `CDASH`, `DEFINE-XML`, `SDTM` and `SEND`,
+and `version` names the release, such as `2023-12-15`.
+
+A Define-XML document lists both kinds of standard: every guide of the
+section's `standards` in declaration order, whether or not a dataset binds
+it, then the terminology standard of each source whose lists its datasets
+bind. Each dataset is bound to the guide its `submission.standard` names, or
+to the first when it names none; a name the section does not list fails with
+`unknown_standard`. Each list of a published source names its terminology
+standard, and a sponsor list with items is marked `def:IsNonStandard="Yes"`.
+Sources that declare the same `name`, `publishing_set` and `version` share
+one standard, and a document cites one release per publishing set: when two
+sources whose lists one document binds declare one `publishing_set` with a
+different `name` or `version`, the later source's `publishing_set` fails with
+`duplicate_define_identifier`.
 
 ## Bind and check a column
 
-Save this minimal synthetic specification as `spec.yaml` beside `project.yaml`
-and place the invented input below beside it as `input.csv`. The example only demonstrates terminology
-bindings; it is not a complete SDTM or ADaM submission specification.
+Save this minimal synthetic specification as `spec.yaml` beside
+`project.yaml`, and the invented input below beside it as `input.csv`. The
+example only demonstrates terminology bindings; it is not a complete ADaM
+submission specification.
 
 ```yaml
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: EXAMPLE
 keys: [ID]
 input:
@@ -102,33 +189,55 @@ input:
 
 output:
   path: example.csv
-  columns: [ID, SEX, DTYPE, AGEGR1]
+  columns: [ID, SEX, EPOCH, DTYPE, AGEGR1]
 
 columns:
   - name: ID
     type: str
-    label: Synthetic identifier
+    label: Synthetic Identifier
     derivation: RAW.ID
+
   - name: SEX
     type: str
     label: Sex
     derivation: RAW.SEX
-    submission: {codelist: SEX, origin: {type: Assigned}}
+    submission:
+      codelist: SEX
+      origins:
+        - type: Assigned
+
+  - name: EPOCH
+    type: str
+    label: Epoch
+    derivation: RAW.EPOCH
+    submission:
+      codelist: EPOCH
+      origins:
+        - type: Assigned
+
   - name: DTYPE
     type: str
-    label: Derivation type
+    label: Derivation Type
     derivation: RAW.DTYPE
-    submission: {codelist: DTYPE, origin: {type: Assigned}}
+    submission:
+      codelist: DTYPE
+      origins:
+        - type: Assigned
+
   - name: AGEGR1
     type: str
-    label: Sponsor age group
+    label: Pooled Age Group 1
     derivation: RAW.AGEGR1
-    submission: {codelist: AGEGR1, origin: {type: Assigned}}
+    submission:
+      codelist: AGEGR1
+      origins:
+        - type: Assigned
 ```
 
 ```csv
-ID,SEX,DTYPE,AGEGR1
-SYNTHETIC-001,F,AVERAGE,<65
+ID,SEX,EPOCH,DTYPE,AGEGR1
+SYNTHETIC-001,F,TREATMENT,AVERAGE,<65
+SYNTHETIC-002,M,EXTENSION,AVERAGE,>=65
 ```
 
 === "R"
@@ -137,9 +246,9 @@ SYNTHETIC-001,F,AVERAGE,<65
     library(yamaa)
 
     spec <- yamaa_project("project.yaml")$spec("EXAMPLE")
-    spec$check()$issues  # Static binding and type checks; no study data is read.
+    spec$check()$issues  # Checks the bindings; reads no study data.
     run <- spec$run()
-    run$issues           # Also checks completed column values.
+    run$issues           # Also checks the completed values.
     run$output
     ```
 
@@ -149,36 +258,119 @@ SYNTHETIC-001,F,AVERAGE,<65
     import yamaa
 
     spec = yamaa.project("project.yaml").spec("EXAMPLE")
-    print(spec.check().issues)  # Static binding and type checks; no study data is read.
+    print(spec.check().issues)  # Checks the bindings; reads no study data.
     run = spec.run()
-    print(run.issues)           # Also checks completed column values.
+    print(run.issues)           # Also checks the completed values.
     print(run.output)
     ```
 
-A codelist binding can check a completed value; it does not translate an input
-code. Use the `mapping` derivation when source values need translation before
-checking.
+=== "Command line"
+
+    ```sh
+    yamaa check project.yaml --spec EXAMPLE
+    yamaa run project.yaml --spec EXAMPLE    # Also saves example.csv.
+    ```
+
+`submission.codelist` carries the list's `id`, not its values, and every
+column naming that `id` shares the one declaration. A codelist binding checks
+a completed value; it does not translate an input code. Use the `mapping`
+derivation when source values need translation before the check.
 
 | Bound list | What happens to completed column values |
 |---|---|
-| List with `items`, extensible or not | Every non-missing value must match a declared item; missing values pass. Declare `mandatory: true` in the column's submission metadata if absence must fail. |
-| `external` dictionary with a required version | The binding imposes no value check; yamaa does not read the dictionary. Declare `external` instead of `items`. |
+| List with `items`, extensible or not | Every non-missing value must equal a declared item; missing values pass. Declare `mandatory: true` in the column's submission metadata if absence must fail. |
+| `external` dictionary | The binding imposes no value check; yamaa does not read the dictionary. |
 
-In this example, changing `SEX` to `INVALID`, `AGEGR1` to `OTHER` or `DTYPE` to
-`OTHER` fails the run's value check. `DTYPE` is extensible, which lets the
-study add a value: declare it as an item marked `extended: true`, and the
-Define-XML document marks it as an extended value. An added value has no
-published concept identifier, so it declares no `alias`, and a submission
-document requires none of it. A text list binds to `str`, an integer list to
-`int`, and a float list to `float`.
+In this example, changing `SEX` to `INVALID`, `DTYPE` to `OTHER` or `AGEGR1`
+to `OTHER` fails the run's value check with `allowed_values_failed`, which
+names the column, the list, the row's key and the value. A text list binds a
+`str` column, an integer list an `int` column and a float list a `float`
+column; any other pairing fails validation with `codelist_type_mismatch`.
 
 A list with `items` already states its column's value set, so an
-`allowed_values` verification on the same column is rejected as a redundant
-declaration, even when the two lists agree. Beside an `external` dictionary, or
-on a column with no binding, `allowed_values` stays an ordinary check.
+`allowed_values` verification on the same column is rejected as a
+`redundant_declaration`, even when the two lists agree. Beside an `external`
+dictionary, or on a column with no binding, `allowed_values` stays an
+ordinary check. A value-level entry may bind its own list for the rows its
+`where` selects, and those rows are checked against that list instead.
 
-See the [project schema](https://github.com/elong0527/yamaa/blob/main/yaml/schema_project.yaml)
-for the accepted fields and the [controlled terminology rule](https://github.com/elong0527/yamaa/blob/main/rules/profiles/terminology.md)
-for binding, extension, and verification requirements. The
+## Extend a published list
+
+The published epoch list is extensible, so the study adds the period it
+lacks, its open-label `EXTENSION`, as an item marked `extended: true`:
+
+- `extended: true` is admitted only in a list marked `extensible: true` whose
+  file declares `standard`. Anywhere else it fails validation with
+  `codelist_extension_not_admitted`.
+- An added value has no published concept identifier, so it declares no
+  `alias`, and one that does fails with `codelist_extended_alias`. A
+  Define-XML document requires no alias of it and marks it
+  `def:ExtendedValue="Yes"`.
+- A published term the study uses is an ordinary item with its `alias`, even
+  in an extensible list.
+
+Both declaration checks run wherever the project's codelists are read, in
+every context and before any data. An extensible list's declared items, the
+additions included, are the whole value set the study admits: the published
+list's openness is what lets the study declare an addition, and a value the
+study never declared fails like any other. Changing an `EPOCH` in the input
+to `RUN-IN` fails the run's value check although the list is extensible.
+
+## Format names
+
+`format_name` is optional and names the SAS format a reader applies to a
+list's coded values; a Define-XML document writes it as `SASFormatName`. A
+`text` list's format is a character format and begins with `$`, as `$SEX`
+does above. An `integer` or `float` list's is a numeric format and does not,
+such as `AGEGRN` for numbered age groups. A `text` list whose `format_name`
+lacks the `$`, or a numeric list's that begins with one, fails validation with
+`value_not_permitted` at that `format_name`. The check runs wherever the
+project's codelists are read, before any data, so a run refuses it although
+only a Define-XML document carries the name.
+
+## A specification checked without its project
+
+A specification that binds a codelist names something only its project
+supplies. Checked or run on its own, it fails validation at each binding,
+before any input is read:
+
+=== "R"
+
+    ```r
+    yamaa_spec("spec.yaml")$check()$issues
+    ```
+
+=== "Python"
+
+    ```python
+    print(yamaa.spec("spec.yaml").check().issues)
+    ```
+
+=== "Command line"
+
+    ```sh
+    yamaa check spec.yaml
+    ```
+
+Each of the four bound columns gives one `project_binding_missing` issue
+([CT-13](../../rules/profiles/terminology.md#ct-13)) at its binding, such as
+`columns.SEX.submission.codelist`, with the message
+`columns.SEX.submission.codelist needs a project file, and none is given`.
+Its `context` names the `binding`, here `codelist`, the `column` and the
+`codelist`. `run()` reports the same issues and builds nothing. A column that
+declares `inventory_vocabulary: true` and a call to a project function fail
+the same way, since only a project file supplies them. Through its project,
+as above, each binding is checked in full, and one naming a list the project
+does not declare fails with `unknown_codelist`.
+
+`yamaa_schema("codelists")`, `yamaa.schema("codelists")` or
+`yamaa schema codelists` gives the codelists file's JSON Schema, which an
+editor can use to check a file as it is typed. See the
+[terminology schema](../../yaml/v1/schema_terminology.yaml) for the fields a
+codelists file or an inline source accepts and the
+[controlled terminology rule](../../rules/profiles/terminology.md) for
+binding, extension and verification requirements. The
 [DM metadata example](https://github.com/elong0527/yamaa/tree/main/benchmarks/sdtm-dm-metadata)
-shows versioned terminology sources in a complete Define-XML project.
+shows versioned terminology sources in a complete Define-XML project, and
+the [sponsor epoch example](https://github.com/elong0527/yamaa/tree/main/benchmarks/sdtm-ta-sponsor-epoch)
+an extended item in its document.

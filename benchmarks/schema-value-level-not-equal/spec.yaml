@@ -1,0 +1,121 @@
+yamaa: "1.0"
+
+type: spec
+
+model: ADaM
+domain: ADVS
+keys: [STUDYID, USUBJID, PARAMCD, AVISIT]
+input:
+  VS:
+    path: input/vs.csv
+    types: {VSSTRESN: float}
+
+output:
+  path: advs.csv
+  columns: [STUDYID, USUBJID, PARAMCD, AVISIT, DTYPE, AVAL]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: VS.STUDYID
+    submission:
+      core: Req
+      mandatory: true
+      length: 4
+      origins:
+        - type: Predecessor
+          description: VS.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: VS.USUBJID
+    submission:
+      core: Req
+      mandatory: true
+      length: 8
+      origins:
+        - type: Predecessor
+          description: VS.USUBJID
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+    derivation: "'SYSBP'"
+    submission:
+      core: Req
+      mandatory: true
+      length: 5
+      origins:
+        - type: Assigned
+
+  - name: AVISIT
+    type: str
+    label: Analysis Visit
+    submission:
+      core: Cond
+      mandatory: true
+      length: 7
+      origins:
+        - type: Assigned
+
+  - name: DTYPE
+    type: str
+    label: Derivation Type
+    submission:
+      core: Cond
+      mandatory: false
+      length: 7
+      origins:
+        - type: Assigned
+
+  # An observed value has no derivation type, so only NE can select its
+  # rows apart from the averages.
+  - name: AVAL
+    type: float
+    label: Analysis Value
+    submission:
+      core: Cond
+      mandatory: true
+      length: 8
+      significant_digits: 1
+      origins:
+        - type: Other
+          description: Observed or averaged, as each
+            value-level definition states
+      value_level:
+        - id: OBSERVED
+          where: {DTYPE: {comparator: NE, values: [AVERAGE]}}
+          origins:
+            - type: Predecessor
+              description: VS.VSSTRESN
+        - id: AVERAGE
+          where: {DTYPE: [AVERAGE]}
+          origins:
+            - type: Derived
+          method: Mean of the subject's observed values over all visits
+
+# Each observed value, then one average per subject.
+rows:
+  - id: observed
+    dataset: VS
+    derivations:
+      AVISIT: VS.VISIT
+      DTYPE: null
+      AVAL: VS.VSSTRESN
+
+  - id: average
+    dataset: VS
+    group_by: [VS.STUDYID, VS.USUBJID]
+    derivations:
+      AVISIT: "'OVERALL'"
+      DTYPE: "'AVERAGE'"
+      AVAL:
+        aggregate: "MEAN(VS.VSSTRESN)"
+
+submission:
+  label: Vital Signs Analysis Dataset
+  class: BASIC DATA STRUCTURE
+  structure: One record per subject per parameter per analysis visit
+  repeating: true

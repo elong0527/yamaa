@@ -1,0 +1,69 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADLB
+keys: [STUDYID, USUBJID, PARAMCD, AVISIT]
+input:
+  LB: {path: input/lb.csv, types: {LBSTRESN: float}}
+
+output:
+  path: adlb.csv
+  columns: [STUDYID, USUBJID, PARAMCD, PARAM, AVISIT, AVAL, DTYPE]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: LB.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: LB.USUBJID
+
+  - name: AVISIT
+    type: str
+    label: Analysis Visit
+    derivation: LB.VISIT
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+
+  - name: PARAM
+    type: str
+    label: Parameter
+
+  - name: AVAL
+    type: float
+    label: Analysis Value
+
+  - name: DTYPE
+    type: str
+    label: Derivation Type
+
+rows:
+  # Every collected component result, unchanged.
+  - id: collected
+    derivations:
+      PARAMCD: LB.LBTESTCD
+      PARAM: LB.LBTEST
+      AVAL: LB.LBSTRESN
+      DTYPE: null
+
+  # One TOTAL record per subject and visit, adding the results in stored
+  # record order. A missing result is skipped; if all are missing, the total
+  # is empty.
+  - id: total
+    group_by: [LB.STUDYID, LB.USUBJID, LB.VISIT]
+    derivations:
+      PARAMCD: "'TOTAL'"
+      PARAM: "'Total of Components'"
+      AVAL:
+        aggregate: "SUM(LB.LBSTRESN)"
+      DTYPE: "'CALCULATION'"
+
+verifications:
+  - row_count:
+      min: 17
+      max: 17

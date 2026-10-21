@@ -5,13 +5,13 @@
 #[allow(dead_code)]
 mod support;
 use std::path::{Path, PathBuf};
-use support::specification_run::{prepare, schema, Source};
+use support::specification_run::{compile, prepare, schema, try_prepare};
 use yamaa_core::{
     dataset::{
         resolved::{ColumnPhase, Grain, RegionId, RegionKind, Stage, Step},
         ResolvedPlan,
     },
-    specification::{PreparedSpecification, SourceInterpretation},
+    specification::SourceInterpretation,
     table::{Column, TableSchema},
     value::ColumnType,
 };
@@ -28,7 +28,7 @@ fn bind(case: &str) -> ResolvedPlan {
     let case = root.join("benchmarks").join(case);
     let captured = schema(&root.join("yaml"));
     let document = prepare(&captured, &std::fs::read(case.join("spec.yaml")).unwrap());
-    let prepared = PreparedSpecification::prepare(document.model()).unwrap();
+    let prepared = compile(&document).unwrap();
     let schemas: Vec<_> = prepared
         .sources()
         .iter()
@@ -67,7 +67,14 @@ fn a_derived_intermediate_resolves_its_donor_plan_as_its_own_region() {
     let qt = resolved
         .relations()
         .iter()
-        .position(|relation| &*relation.path == "intermediates[1]")
+        .position(|relation| {
+            // By identifier: a relation path is written in the language of
+            // the benchmark, which moves to 1.0 in its own pull request.
+            relation
+                .named
+                .as_ref()
+                .is_some_and(|named| named.identifier == "QT")
+        })
         .unwrap();
     let donor = resolved.relations()[qt].derivations.unwrap();
     assert_eq!(
@@ -181,13 +188,8 @@ fn try_bind(case: &str) -> Option<ResolvedPlan> {
     let case = root.join("benchmarks").join(case);
     let bytes = std::fs::read(case.join("spec.yaml")).ok()?;
     let captured = schema(&root.join("yaml"));
-    let document = captured
-        .prepare_standalone(Source {
-            identity: "spec.yaml".into(),
-            bytes,
-        })
-        .ok()?;
-    let prepared = PreparedSpecification::prepare(document.model()).ok()?;
+    let document = try_prepare(&captured, &bytes).ok()?;
+    let prepared = compile(&document).ok()?;
     let mut schemas = Vec::new();
     for (index, source) in prepared.sources().iter().enumerate() {
         let names: Vec<String> = match prepared.source_interpretation(index) {

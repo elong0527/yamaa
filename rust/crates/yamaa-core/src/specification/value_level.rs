@@ -5,8 +5,8 @@
 use super::*;
 use crate::json::Value as V;
 use crate::{
-    ast::{self, Comparator},
-    dataset::{Check, Verification, WhereClause},
+    ast,
+    dataset::{Check, Verification, WhereClause, WhereTerm},
     diagnostic::{ConditionCode as C, Diagnostic},
     project_terminology::Catalogue,
     submission_values::{self as values, Declared, Finding},
@@ -15,8 +15,8 @@ use std::collections::BTreeSet;
 
 /// An entry's where clause over the declared columns, when every where column
 /// is a declared `str` column other than `own` listing a value; static
-/// admission reports every other clause. A clause that excludes values
-/// (NE/NOTIN, 1.0 only) has no executable scope yet and compiles to none.
+/// admission reports every other clause. An `NE` or `NOTIN` term selects the
+/// rows that hold none of its values, a missing value included (SUB-12).
 pub(super) fn clause(
     entry: &ast::ValueLevel,
     output: &TableSchema,
@@ -30,19 +30,17 @@ pub(super) fn clause(
                 .columns()
                 .iter()
                 .position(|column| column.name == condition.column.name)?;
-            (condition.comparator == Comparator::In
-                && column != own
+            (column != own
                 && output.columns()[column].kind == ColumnType::Str
                 && !condition.values.is_empty())
-            .then(|| {
-                (
-                    column,
-                    condition
-                        .values
-                        .iter()
-                        .map(|value| value.text.clone())
-                        .collect(),
-                )
+            .then(|| WhereTerm {
+                column,
+                values: condition
+                    .values
+                    .iter()
+                    .map(|value| value.text.clone())
+                    .collect(),
+                excludes: condition.comparator.excludes(),
             })
         })
         .collect::<Option<Vec<_>>>()?;
@@ -71,6 +69,10 @@ fn diagnostic(column: &str, finding: &Finding<'_>) -> PreflightFinding {
             if let Some(refused) = fault.values() {
                 let refused = refused.iter().map(|value| text(value)).collect();
                 context.push(("values", V::Array(refused)));
+            }
+            // The comparator whose value count is refused.
+            if let Some(comparator) = fault.comparator() {
+                context.push(("comparator", text(comparator)));
             }
             let path = match where_column {
                 Some(where_column) => {
