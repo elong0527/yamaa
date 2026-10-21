@@ -5,10 +5,16 @@
 \alias{format.yamaa_project}
 \alias{print.yamaa_project_run}
 \alias{format.yamaa_project_run}
+\alias{names.yamaa_project_run}
+\alias{length.yamaa_project_run}
 \alias{print.yamaa_member_run}
 \alias{format.yamaa_member_run}
+\alias{names.yamaa_member_run}
+\alias{length.yamaa_member_run}
 \alias{print.yamaa_submission}
 \alias{format.yamaa_submission}
+\alias{names.yamaa_submission}
+\alias{length.yamaa_submission}
 \title{A project file, read only when a method runs}
 \description{
 Holds the path of a \code{project.yaml}: the study's specifications, codelists,
@@ -28,13 +34,25 @@ yamaa_project(path)
 
 \method{format}{yamaa_project_run}(x, ...)
 
+\method{names}{yamaa_project_run}(x)
+
+\method{length}{yamaa_project_run}(x)
+
 \method{print}{yamaa_member_run}(x, ...)
 
 \method{format}{yamaa_member_run}(x, ...)
 
+\method{names}{yamaa_member_run}(x)
+
+\method{length}{yamaa_member_run}(x)
+
 \method{print}{yamaa_submission}(x, ...)
 
 \method{format}{yamaa_submission}(x, ...)
+
+\method{names}{yamaa_submission}(x)
+
+\method{length}{yamaa_submission}(x)
 }
 \arguments{
   \item{path}{Path of a \code{project.yaml}.}
@@ -85,6 +103,12 @@ its status, its number of specifications and its issue count, then one line
 per specification with its status, size and issue count, then its first
 issue; one specification's run prints as a run does. A submission prints its
 status, its define.xml and transport files and its issue count.
+
+\code{names()} of a project run gives the names of its specifications, as
+\code{$names} does, and \code{length()} counts them. \code{names()} of one
+specification's run or of a submission lists its fields and methods in the
+order above, starting with \code{status}, and \code{length()} counts them;
+\code{ls()} lists the same names, sorted.
 }
 \examples{
 \dontrun{

@@ -81,21 +81,33 @@ class RenderingTests(unittest.TestCase):
                 "export(yamaa_schema)",
                 "export(yamaa_info)",
                 "export(yamaa_selftest)",
+                "S3method(names, yamaa_check)",
+                "S3method(length, yamaa_check)",
                 "S3method(print, yamaa_check)",
                 "S3method(format, yamaa_check)",
+                "S3method(names, yamaa_run)",
+                "S3method(length, yamaa_run)",
                 "S3method(print, yamaa_run)",
                 "S3method(format, yamaa_run)",
+                "S3method(names, yamaa_member_run)",
+                "S3method(length, yamaa_member_run)",
                 "S3method(print, yamaa_member_run)",
                 "S3method(format, yamaa_member_run)",
+                "S3method(names, yamaa_project_run)",
+                "S3method(length, yamaa_project_run)",
                 'S3method("[[", yamaa_project_run)',
                 "S3method(print, yamaa_project_run)",
                 "S3method(format, yamaa_project_run)",
+                "S3method(names, yamaa_submission)",
+                "S3method(length, yamaa_submission)",
                 "S3method(print, yamaa_submission)",
                 "S3method(format, yamaa_submission)",
                 "S3method(print, yamaa_spec)",
                 "S3method(format, yamaa_spec)",
                 "S3method(print, yamaa_project)",
                 "S3method(format, yamaa_project)",
+                "S3method(names, yamaa_selftest)",
+                "S3method(length, yamaa_selftest)",
                 "S3method(print, yamaa_selftest)",
                 "S3method(format, yamaa_selftest)",
             ],
@@ -170,6 +182,38 @@ class RenderingTests(unittest.TestCase):
         self.assertIn(
             "    def __repr__(self) -> str:\n"
             "        return self._native.member_summary(self._name)\n",
+            self.public.render_python([]),
+        )
+
+    def test_every_result_names_its_public_members_in_r(self):
+        r = self.public.render_r([])
+        # Its properties and methods in declaration order, never the handle.
+        self.assertIn(
+            'names.yamaa_run <- function(x) c("status", "output", "issues", '
+            '"report", "save")\n\nlength.yamaa_run <- function(x) 5L\n',
+            r,
+        )
+        self.assertIn(
+            'names.yamaa_submission <- function(x) c("status", "created", '
+            '"issues", "save")\n',
+            r,
+        )
+        # A container names its keys, as its names member gives them.
+        self.assertIn(
+            "names.yamaa_project_run <- function(x) {\n"
+            '  native <- get(".handle", envir = x, inherits = FALSE)\n'
+            "  .reply(.native_project_run_names(native))\n"
+            "}\n\n"
+            "length.yamaa_project_run <- function(x) length(names(x))\n",
+            r,
+        )
+        # A lazy object is no result and keeps R's own names() and length().
+        self.assertNotIn("names.yamaa_spec", r)
+        self.assertNotIn("length.yamaa_project <-", r)
+        self.assertIn(
+            "    def __len__(self) -> int:\n"
+            '        """The number of names."""\n'
+            "        return len(self._native.names())\n",
             self.public.render_python([]),
         )
 
@@ -487,6 +531,10 @@ class ManifestTests(unittest.TestCase):
             "public.classes.MemberRun.status: property; returns status; raises refusal",
             "public.classes.Spec.summary: printing; python __repr__; r print, format",
             "public.r.s3methods.yamaa_spec.format",
+            "public.classes.ProjectRun.length: protocol; python __len__",
+            "public.r.s3methods.yamaa_check.names: status, issues",
+            "public.r.s3methods.yamaa_check.length",
+            "public.r.s3methods.yamaa_project_run.names: keys of names",
         ):
             with self.subTest(expected=expected):
                 self.assertIn(expected, lines)

@@ -10,6 +10,10 @@
   .object(object, "yamaa_check")
 }
 
+names.yamaa_check <- function(x) c("status", "issues")
+
+length.yamaa_check <- function(x) 2L
+
 print.yamaa_check <- function(x, ...) {
   cat(format(x), sep = "\n")
   invisible(x)
@@ -32,6 +36,10 @@ format.yamaa_check <- function(x, ...) {
   object$save <- function() invisible(.reply(.native_run_save(native)))
   .object(object, "yamaa_run")
 }
+
+names.yamaa_run <- function(x) c("status", "output", "issues", "report", "save")
+
+length.yamaa_run <- function(x) 5L
 
 print.yamaa_run <- function(x, ...) {
   cat(format(x), sep = "\n")
@@ -61,6 +69,10 @@ format.yamaa_run <- function(x, ...) {
   .object(object, "yamaa_member_run")
 }
 
+names.yamaa_member_run <- function(x) c("status", "output", "issues", "report")
+
+length.yamaa_member_run <- function(x) 4L
+
 print.yamaa_member_run <- function(x, ...) {
   cat(format(x), sep = "\n")
   invisible(x)
@@ -84,6 +96,13 @@ format.yamaa_member_run <- function(x, ...) {
   object$save <- function() invisible(.reply(.native_project_run_save(native)))
   .object(object, "yamaa_project_run")
 }
+
+names.yamaa_project_run <- function(x) {
+  native <- get(".handle", envir = x, inherits = FALSE)
+  .reply(.native_project_run_names(native))
+}
+
+length.yamaa_project_run <- function(x) length(names(x))
 
 `[[.yamaa_project_run` <- function(x, i, ...) {
   native <- get(".handle", envir = x, inherits = FALSE)
@@ -114,6 +133,10 @@ format.yamaa_project_run <- function(x, ...) {
   object$save <- function() invisible(.reply(.native_submission_save(native)))
   .object(object, "yamaa_submission")
 }
+
+names.yamaa_submission <- function(x) c("status", "created", "issues", "save")
+
+length.yamaa_submission <- function(x) 4L
 
 print.yamaa_submission <- function(x, ...) {
   cat(format(x), sep = "\n")
@@ -193,6 +216,10 @@ format.yamaa_project <- function(x, ...) {
   .read_only(object, "info", function() .reply(.native_selftest_info(native)))
   .object(object, "yamaa_selftest")
 }
+
+names.yamaa_selftest <- function(x) c("status", "cases", "info")
+
+length.yamaa_selftest <- function(x) 3L
 
 print.yamaa_selftest <- function(x, ...) {
   cat(format(x), sep = "\n")

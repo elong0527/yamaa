@@ -90,7 +90,12 @@ _NATIVE_PY = {"text": "str", "bool": "bool", "index": "int", "i32": "int"}
 _PY_DEFAULT = {"None": "None", "false": "False", "true": "True"}
 _R_DEFAULT = {"None": "NULL", "false": "FALSE", "true": "TRUE"}
 _KINDS = {"property", "method", "index", "protocol", "private", "printing"}
-_PROTOCOLS = {"__contains__", "__iter__"}
+_PROTOCOLS = {"__contains__", "__iter__", "__len__"}
+# R's names() and length() of a result (D44): a container's names are the
+# keys its `names` member gives; any other result names these members.
+_R_LISTED = {"property", "method"}
+# The R generics every result has, listing and counting its names (D44).
+_R_NAMES = ("names", "length")
 # How a printing member is spelled: Python's repr() and str() return the text
 # its operation renders, and R's format() returns those lines and print()
 # writes them, returning the object invisibly (D37).
@@ -723,6 +728,9 @@ class Public:
             if member["python"] == "__contains__":
                 header = _py_def("__contains__", "self, name: object", "bool", "    ")
                 return header + doc + [f"        return name in {names}"]
+            if member["python"] == "__len__":
+                header = _py_def("__len__", "self", "int", "    ")
+                return header + doc + [f"        return len({names})"]
             return (
                 _py_def("__iter__", "self", None, "    ")
                 + doc
@@ -1010,7 +1018,47 @@ class Public:
         for member in self.classes[name]["members"]:
             if member["kind"] in {"index", "private", "printing"}:
                 reached |= self._r_bound(member, name)
+        if self.kind(name) == "handle" and self._r_listed(name) is None:
+            reached |= self._r_bound(self._names_member(name), name)
         return [hold for hold, _ in self.holds(name) if hold in reached]
+
+    def _names_member(self, name):
+        return next(m for m in self.classes[name]["members"] if m["name"] == "names")
+
+    def _r_listed(self, name):
+        """The public members that R's names() of a result lists, in
+        declaration order; None for a container, one with an `index` member,
+        whose names() are the keys its `names` member gives (D44)."""
+        members = self.classes[name]["members"]
+        if any(member["kind"] == "index" for member in members):
+            return None
+        return [member["name"] for member in members if member["kind"] in _R_LISTED]
+
+    def _r_names(self, name):
+        """R's names() and length() of a result: S3 methods that list its
+        public members, or a container's keys, and count them."""
+        cls = self.classes[name]
+        listed = self._r_listed(name)
+        if listed is None:
+            member = self._names_member(name)
+            what = f"public.classes.{name}.names"
+            call, _ = self._r_call(member, name, what, handle=self._handle(name))
+            return [
+                "",
+                f"names.{cls['r']} <- function(x) {{",
+                *self._r_reads(name, member, "x"),
+                *_r_lines(call, "  "),
+                "}",
+                "",
+                f"length.{cls['r']} <- function(x) length(names(x))",
+            ]
+        names = _Call("c", [f'"{member}"' for member in listed])
+        return [
+            "",
+            *_r_closure(f"names.{cls['r']} <- ", "x", names, ""),
+            "",
+            f"length.{cls['r']} <- function(x) {len(listed)}L",
+        ]
 
     def _r_reads(self, name, entry, envir):
         """Lines reading each held value the call of `entry` takes from its
@@ -1068,7 +1116,7 @@ class Public:
     def _r_extras(self, name):
         """S3 methods and private accessors that reach an object's handle."""
         cls = self.classes[name]
-        lines = []
+        lines = self._r_names(name) if self.kind(name) == "handle" else []
         for member in cls["members"]:
             what = f"public.classes.{name}.{member['name']}"
             if member["kind"] == "index":
@@ -1148,7 +1196,9 @@ class Public:
     def render_namespace(self, header):
         lines = [*header, f"useDynLib({self.package}, .registration = TRUE)"]
         lines += [f"export({function['r']})" for function in self.functions]
-        for cls in self.classes.values():
+        for name, cls in self.classes.items():
+            if self.kind(name) == "handle":
+                lines += [f"S3method({generic}, {cls['r']})" for generic in _R_NAMES]
             for member in cls["members"]:
                 if member["kind"] == "index":
                     lines.append(f'S3method("{member["r"]}", {cls["r"]})')
@@ -1219,7 +1269,14 @@ class Public:
         )
         lines += [f"public.python.exports.{name}" for name in self.python_names()]
         lines += [f"public.r.exports.{function['r']}" for function in self.functions]
-        for cls in self.classes.values():
+        for name, cls in self.classes.items():
+            if self.kind(name) == "handle":
+                listed = self._r_listed(name)
+                facts = "keys of names" if listed is None else ", ".join(listed)
+                lines += [
+                    f"public.r.s3methods.{cls['r']}.names: {facts}",
+                    f"public.r.s3methods.{cls['r']}.length",
+                ]
             for member in cls["members"]:
                 if member["kind"] == "index":
                     lines.append(f"public.r.s3methods.{cls['r']}.{member['r']}")

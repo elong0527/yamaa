@@ -207,7 +207,10 @@ first issue: this specification did not run because the producer of its input AD
 
 `yamaa_spec()`, `yamaa.spec()` and the project functions read nothing, so
 their objects print only the path you gave, such as `yamaa spec
-sdtm/dm.yaml`. In R, `format()` returns the printed lines.
+sdtm/dm.yaml`. In R, `format()` returns the printed lines, and `names()` of a
+result lists its fields and methods, starting with `status`, as
+`names(run)` gives `"status" "output" "issues" "report" "save"`; `length()`
+counts them.
 
 ## See the resolved specification
 
@@ -369,6 +372,7 @@ wrote. It checks every target before it writes anything.
     project$run("adam")$save()    # all ADaM datasets
     runs <- project$run()         # all SDTM and ADaM datasets
     runs$names                    # the specifications, in run order
+    length(runs)                  # how many; names(runs) lists them too
     runs[["ADSL"]]$output         # one specification's dataset
     runs$report                   # all run reports, in run order
     runs$save()                   # save every dataset and run report
@@ -381,6 +385,7 @@ wrote. It checks every target before it writes anything.
     project.run("adam").save()    # all ADaM datasets
     runs = project.run()          # all SDTM and ADaM datasets
     runs.names                    # the specifications, in run order
+    len(runs)                     # how many
     runs["ADSL"].output           # one specification's dataset
     runs.report                   # all run reports, in run order
     runs.save()                   # save every dataset and run report

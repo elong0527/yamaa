@@ -135,21 +135,28 @@ Generated code only delegates, and the delegation is declared, never written:
 Member kinds are `property` (a read-only view, an active binding in R),
 `method`, `index` (Python's `__getitem__` and R's `[[` S3 method: the key is
 checked against the class's `names`, and an absent one raises the refusal its
-`calls` operation gives), `protocol` (Python's `__contains__` and `__iter__`
-over `names`), `printing` (Python's `__repr__`, which `str()` falls back to,
-and R's `print` and `format` S3 methods: `format()` returns the lines its
-`calls` operation renders in Rust and `print()` writes them, so no host
+`calls` operation gives), `protocol` (Python's `__contains__`, `__iter__` and
+`__len__` over `names`), `printing` (Python's `__repr__`, which `str()` falls
+back to, and R's `print` and `format` S3 methods: `format()` returns the lines
+its `calls` operation renders in Rust and `print()` writes them, so no host
 formats a result or a lazy object, which prints from the path it holds; D37)
 and `private` (a qualification accessor such as R's `.run_observations(run)`,
-which Python reaches through the handle; the manifest leaves it out). A
-member that returns a record token (`info`) names the record it returns as
-`record`. A class's `interrupt` names the R host-only export it asks for a
-retained project interrupt before it is returned, which `.rethrow_interrupt`
-signals again; Python checks inside the native call. An R object keeps each
-held value that an S3 method or a private accessor reaches in a hidden
-binding: its handle in `.handle`, and any other value under its own name with
-a leading dot, such as a lazy object's `.path` or a project-run member's
-`.name`.
+which Python reaches through the handle; the manifest leaves it out). A member
+that returns a record token (`info`) names the record it returns as `record`.
+A class's `interrupt` names the R host-only export it asks for a retained
+project interrupt before it is returned, which `.rethrow_interrupt` signals
+again; Python checks inside the native call. An R object keeps each held value
+that an S3 method or a private accessor reaches in a hidden binding: its
+handle in `.handle`, and any other value under its own name with a leading
+dot, such as a lazy object's `.path` or a project-run member's `.name`.
+
+Every result, a class that holds a handle, also has R `names()` and `length()`
+S3 methods, which nothing declares (D44): the generator derives them. A result
+with an `index` member names the keys its `names` member gives; any other
+names its `property` and `method` members in declaration order, never its
+hidden bindings. `length()` counts the names. The manifest records each
+result's names, so a reordered member changes a frozen line. A lazy object
+keeps R's own `names()` and `length()` of an environment.
 
 ### Command line
 

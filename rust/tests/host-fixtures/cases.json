@@ -4838,7 +4838,32 @@
         "9007199254740993",
         "7",
         null
-      ]
+      ],
+      "r_names": {
+        "check": [
+          "status",
+          "issues"
+        ],
+        "run": [
+          "status",
+          "output",
+          "issues",
+          "report",
+          "save"
+        ],
+        "member_run": [
+          "status",
+          "output",
+          "issues",
+          "report"
+        ],
+        "submission": [
+          "status",
+          "created",
+          "issues",
+          "save"
+        ]
+      }
     },
     "public-grammar": {
       "grammar_conditions": {
@@ -5631,7 +5656,12 @@
         "yamaa selftest: succeeded, 4 of 4 cases passed",
         "not covered: odm"
       ],
-      "information_line": "engine {version}, language {language_versions}, {host} {host_version}, {platform}"
+      "information_line": "engine {version}, language {language_versions}, {host} {host_version}, {platform}",
+      "r_names": [
+        "status",
+        "cases",
+        "info"
+      ]
     },
     "schema": {
       "file_types": [

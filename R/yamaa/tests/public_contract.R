@@ -30,11 +30,15 @@ stopifnot(identical(as.character(packageVersion("yamaa")), "0.5.0"),
     c("yamaa_info", "yamaa_lint", "yamaa_project", "yamaa_read_odm", "yamaa_schema",
       "yamaa_selftest", "yamaa_spec")),
   identical(getNamespaceInfo("yamaa", "S3methods")[, 3L],
-    c("print.yamaa_check", "format.yamaa_check", "print.yamaa_run", "format.yamaa_run",
-      "print.yamaa_member_run", "format.yamaa_member_run", "[[.yamaa_project_run",
-      "print.yamaa_project_run", "format.yamaa_project_run", "print.yamaa_submission",
+    c("names.yamaa_check", "length.yamaa_check", "print.yamaa_check", "format.yamaa_check",
+      "names.yamaa_run", "length.yamaa_run", "print.yamaa_run", "format.yamaa_run",
+      "names.yamaa_member_run", "length.yamaa_member_run", "print.yamaa_member_run",
+      "format.yamaa_member_run", "names.yamaa_project_run", "length.yamaa_project_run",
+      "[[.yamaa_project_run", "print.yamaa_project_run", "format.yamaa_project_run",
+      "names.yamaa_submission", "length.yamaa_submission", "print.yamaa_submission",
       "format.yamaa_submission", "print.yamaa_spec", "format.yamaa_spec", "print.yamaa_project",
-      "format.yamaa_project", "print.yamaa_selftest", "format.yamaa_selftest")))
+      "format.yamaa_project", "names.yamaa_selftest", "length.yamaa_selftest",
+      "print.yamaa_selftest", "format.yamaa_selftest")))
 for (name in c("yamaa_domain", "yamaa_check", "yamaa_define", "yamaa_resolve_specification",
   "yamaa_read_resolved_specification", "yamaa_resource_resolver", "yamaa_memory_resolver",
   "yamaa_synthetic_remote_resolver", "yamaa_resource_result", "yamaa_resource_failure",
@@ -103,6 +107,15 @@ argument_failure <- function(code) {
 }
 members <- function(object) sort(ls(object), method = "radix")
 expected_members <- function(kind) fixture_strings(host_truth[["members"]][[kind]])
+# names() lists a result's public members in declaration order, never its
+# hidden handle, and length() counts them (D44); ls() and `$` still reach
+# each of them.
+named <- function(object, kind) {
+  expected <- fixture_strings(host_truth[["r_names"]][[kind]])
+  identical(names(object), expected) && identical(length(object), length(expected)) &&
+    setequal(expected, ls(object)) &&
+    all(vapply(expected, exists, logical(1), envir = object, inherits = FALSE))
+}
 arguments_of <- function(f) as.character(names(formals(f)))
 expected_arguments <- function(name) as.character(fixture_strings(host_truth[["arguments"]][[name]]))
 locked <- function(object, names) {
@@ -130,9 +143,11 @@ qualify_signatures <- function() {
   for (name in names(limits)) stopifnot(identical(options[[name]], as.numeric(limits[[name]])))
   stopifnot(identical(members(spec), expected_members("spec")),
     identical(members(project), expected_members("project")),
-    identical(members(spec$check()), expected_members("check")))
+    identical(members(spec$check()), expected_members("check")),
+    named(spec$check(), "check"))
   run <- spec$run()
-  stopifnot(identical(members(run), expected_members("run")),
+  stopifnot(identical(members(run), expected_members("run")), named(run, "run"),
+    is.character(run$status), identical(run[["status"]], run$status),
     identical(arguments_of(run$save), expected_arguments("run.save")))
   locked(spec, c(expected_members("spec"), "extra"))
   locked(project, c(expected_members("project"), "extra"))
@@ -426,6 +441,9 @@ qualify_project_run_members <- function() {
   member <- runs[["TEST"]]
   single <- project$spec("TEST")$run()
   stopifnot(identical(members(member), expected_members("member_run")),
+    named(member, "member_run"),
+    # A project run names its specifications, and counts them.
+    identical(names(runs), runs$names), identical(length(runs), length(runs$names)),
     nrow(check_issues(member$issues)) == 0L, identical(member$output, single$output),
     identical(member$report, single$report),
     # The project report stacks its members' reports in run order.
@@ -451,6 +469,8 @@ qualify_project_run_members <- function() {
     # the time it gave every section (D129).
     grepl("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}$", submission$created),
     identical(project$names, "TEST"))
+  empty <- project$run("sdtm")
+  stopifnot(identical(names(empty), character()), identical(length(empty), 0L))
   stopifnot(identical(project$run("adam")$names, "TEST"), identical(project$run("sdtm")$names, character()),
     !file.exists(file.path(case, "test.csv")), returns_paths(runs$save()),
     identical(readBin(file.path(case, "test.csv"), "raw", 100L), charToRaw("ID,RESULT\n01,1.5\n")))
@@ -559,6 +579,7 @@ qualify_project_refusals <- function() {
   stopifnot(identical(conditionMessage(error), error_text("no_member_built")), unknown_member(error, "[]"))
   submission <- project$submission("sdtm", created = "2026-09-11T00:00:00")
   stopifnot(identical(members(submission), expected_members("submission")),
+    named(submission, "submission"),
     identical(check_issues(submission$issues), unread),
     # The creation time given is kept, though nothing composed (D129).
     identical(submission$created, "2026-09-11T00:00:00"))

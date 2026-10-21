@@ -387,8 +387,6 @@ public:
       r: yamaa_check
       members:
         - {name: issues, kind: property, returns: table, table: issues}
-        - {name: names, kind: r_method, since: 1.0.0, r: names, returns: "c(\"status\", \"issues\")"}
-        - {name: length, kind: r_method, since: 1.0.0, r: length, returns: "2"}
     Run:
       python: yamaa.Run
       r: yamaa_run
@@ -397,8 +395,6 @@ public:
         - {name: issues, kind: property, returns: table, table: issues}
         - {name: report, kind: property, returns: optional_table, table: report}
         - {name: save, kind: method, args: {}, returns: paths_written, raises: refusal, since_returns: 1.0.0}
-        - {name: names, kind: r_method, since: 1.0.0, r: names, returns: "c(\"status\", \"output\", \"issues\", \"report\", \"save\")"}
-        - {name: length, kind: r_method, since: 1.0.0, r: length, returns: "5"}
     MemberRun:
       python: yamaa.MemberRun
       r: yamaa_member_run
@@ -406,8 +402,6 @@ public:
         - {name: output, kind: property, returns: optional_table}
         - {name: issues, kind: property, returns: table, table: issues}
         - {name: report, kind: property, returns: optional_table, table: report}
-        - {name: names, kind: r_method, since: 1.0.0, r: names, returns: "c(\"status\", \"output\", \"issues\", \"report\")"}
-        - {name: length, kind: r_method, since: 1.0.0, r: length, returns: "4"}
     ProjectRun:
       python: yamaa.ProjectRun
       r: yamaa_project_run
@@ -416,8 +410,6 @@ public:
         - {name: member, kind: index, args: {name: text}, returns: MemberRun, raises: refusal, python: "__getitem__", r: "[["}
         - {name: contains, kind: protocol, args: {name: text}, returns: flag, python: __contains__, r: "name %in% names(x)"}
         - {name: iterate, kind: protocol, returns: names, python: __iter__}
-        - {name: length, kind: protocol, since: 1.0.0, returns: count, python: __len__, r: length}
-        - {name: names_method, kind: r_method, since: 1.0.0, r: names, returns: names}
         - {name: issues, kind: property, returns: table, table: issues}
         - {name: report, kind: property, returns: table, table: report}
         - {name: save, kind: method, args: {}, returns: paths_written, raises: refusal, since_returns: 1.0.0}
@@ -427,8 +419,6 @@ public:
       members:
         - {name: issues, kind: property, returns: table, table: issues}
         - {name: save, kind: method, args: {}, returns: paths_written, raises: refusal, since_returns: 1.0.0}
-        - {name: names, kind: r_method, since: 1.0.0, r: names, returns: "c(\"status\", \"created\", \"issues\", \"save\")"}
-        - {name: length, kind: r_method, since: 1.0.0, r: length, returns: "4"}
     SelfTest:
       since: 1.0.0
       owner: "#3062"
@@ -438,8 +428,6 @@ public:
         - {name: status, kind: property, returns: status}
         - {name: cases, kind: property, returns: table, table: selftest_cases}
         - {name: info, kind: property, returns: info, record: info}
-        - {name: names, kind: r_method, r: names, returns: "c(\"status\", \"cases\", \"info\")"}
-        - {name: length, kind: r_method, r: length, returns: "3"}
         - {name: summary, kind: printing, python: __repr__, r: [print, format]}
     Table:
       since: 1.0.0
@@ -486,7 +474,6 @@ public:
       r: [yamaa_info, yamaa_lint, yamaa_project, yamaa_read_odm, yamaa_schema, yamaa_selftest, yamaa_spec]
       r_s3_methods:
         - "[[.yamaa_project_run"
-        - names and length for yamaa_check, yamaa_run, yamaa_member_run, yamaa_project_run, yamaa_submission, yamaa_selftest
 
 cli:
   binary: yamaa

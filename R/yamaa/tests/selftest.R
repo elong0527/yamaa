@@ -20,7 +20,10 @@ passed <- truth[["status"]]
 stopifnot(length(formals(yamaa_selftest)) == 0L)
 result <- yamaa_selftest()
 stopifnot(inherits(result, "yamaa_selftest"),
-  identical(sort(ls(result), method = "radix"), c("cases", "info", "status")))
+  identical(sort(ls(result), method = "radix"), c("cases", "info", "status")),
+  # names() lists the public members in declaration order, and length()
+  # counts them (D44).
+  identical(names(result), fixture_strings(truth[["r_names"]])), identical(length(result), 3L))
 cat("yamaa_selftest() takes no arguments and returns a selftest\n")
 
 stopifnot(is.character(result$status), length(result$status) == 1L,

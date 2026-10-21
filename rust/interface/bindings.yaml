@@ -340,7 +340,10 @@ public:
 
   # Result and lazy classes, in definition order: a class is defined before
   # any class that returns it. Every result has a `status` (D36, P-STATUS-1)
-  # and every class prints the text Rust renders for it (D37, P-PRINT-1).
+  # and every class prints the text Rust renders for it (D37, P-PRINT-1). In
+  # R every result also has names() and length() (D44), which the generator
+  # derives: a result with an index member names its keys, and any other its
+  # properties and methods in the order declared here.
   classes:
     Check:
       python: yamaa.Check
@@ -456,6 +459,8 @@ public:
           calls: project_run_member_issues
         - {name: contains, kind: protocol, python: __contains__}
         - {name: iterate, kind: protocol, python: __iter__, doc: "The names, as `names` lists them."}
+        # D44: len() counts the names, as R's length() does.
+        - {name: length, kind: protocol, python: __len__, doc: "The number of names."}
         - {name: issues, kind: property, returns: table, table: issues, calls: project_run_issues}
         - {name: report, kind: property, returns: table, table: report, calls: project_run_report}
         - name: save

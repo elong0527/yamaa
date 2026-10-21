@@ -4,8 +4,12 @@
 \alias{format.yamaa_spec}
 \alias{print.yamaa_check}
 \alias{format.yamaa_check}
+\alias{names.yamaa_check}
+\alias{length.yamaa_check}
 \alias{print.yamaa_run}
 \alias{format.yamaa_run}
+\alias{names.yamaa_run}
+\alias{length.yamaa_run}
 \title{One specification, read only when a method runs}
 \description{
 Holds the path of one specification. Nothing is read until a method runs, and
@@ -22,9 +26,17 @@ yamaa_spec(path)
 
 \method{format}{yamaa_check}(x, ...)
 
+\method{names}{yamaa_check}(x)
+
+\method{length}{yamaa_check}(x)
+
 \method{print}{yamaa_run}(x, ...)
 
 \method{format}{yamaa_run}(x, ...)
+
+\method{names}{yamaa_run}(x)
+
+\method{length}{yamaa_run}(x)
 }
 \arguments{
   \item{path}{Path of a specification file.}
@@ -60,6 +72,10 @@ A check prints \code{yamaa check of <path>: <status>, <n> issues}, and a run
 \code{yamaa run of <dataset>: <status>, <size>, <n> issues}, where the size
 is \code{<r> rows x <c> columns} or \code{no output}; either then prints its
 first issue on a line of its own.
+
+\code{names()} of a check or a run lists its fields and methods in the order
+above, starting with \code{status}, and \code{length()} counts them;
+\code{ls()} lists the same names, sorted.
 }
 \examples{
 \dontrun{

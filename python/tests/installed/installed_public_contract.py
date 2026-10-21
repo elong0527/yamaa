@@ -663,10 +663,11 @@ class PublicContract(unittest.TestCase):
         error = self.refusal(lambda: runs["ADSL"])
         self.assertEqual(str(error), error_text("unknown_member"))
         self.assertEqual(error.issues.to_dicts(), [unknown_member('["TEST"]')])
-        # Membership and iteration go by name, like indexing.
+        # Membership, iteration and length go by name, like indexing.
         self.assertIn("TEST", runs)
         self.assertNotIn("ADSL", runs)
         self.assertEqual(list(runs), ["TEST"])
+        self.assertEqual(len(runs), len(runs.names))
         self.assertEqual(project.run("adam").names, ["TEST"])
         # A section the project does not declare refuses the run (PROJECT-14).
         error = self.refusal(lambda: project.run("sdtm"))
@@ -675,6 +676,7 @@ class PublicContract(unittest.TestCase):
         with (case / "project.yaml").open("a", encoding="utf-8") as listing:
             listing.write("sdtm:\n  specs: []\n")
         self.assertEqual(project.run("sdtm").names, [])
+        self.assertEqual(len(project.run("sdtm")), 0)
         self.assertEqual(project.names, ["TEST"])
         # Without a creation time the submission reads the clock once and
         # reports the time it gave every section (D129).

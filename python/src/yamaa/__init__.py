@@ -162,6 +162,10 @@ class ProjectRun:
         """The names, as `names` lists them."""
         return iter(self._native.names())
 
+    def __len__(self) -> int:
+        """The number of names."""
+        return len(self._native.names())
+
     @property
     def issues(self) -> _pl.DataFrame:
         return _table(self._native.issues())
