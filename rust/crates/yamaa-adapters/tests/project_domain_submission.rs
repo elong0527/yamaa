@@ -692,6 +692,16 @@ mod project {
                     "columns.DAY.submission",
                     r#"{"column": "DAY", "declared_type": "date", "data_type": "date", "model": "ADaM"}"#,
                 ),
+                // An entry that inherits the type leaves it to its column.
+                (
+                    ADAM,
+                    "submission: {core: Perm, mandatory: false, origins: [{type: Assigned}]}\n",
+                    "submission: {core: Perm, mandatory: false, data_type: date, origins: [{type: Assigned}], value_level: [{id: B, where: {CODE: [B]}, mandatory: true}]}\n",
+                    "submission_data_type_not_admitted",
+                    "SUB-6",
+                    "columns.DAY.submission",
+                    r#"{"column": "DAY", "declared_type": "date", "data_type": "date", "model": "ADaM"}"#,
+                ),
                 (
                     SDTM,
                     "submission: {core: Perm, origins: [{type: Assigned",

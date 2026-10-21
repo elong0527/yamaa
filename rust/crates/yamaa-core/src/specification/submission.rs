@@ -196,12 +196,9 @@ fn admit_counts(
     let kind = column.kind.name();
     let resolved = data_type(kind, effective.data_type);
     let maxima = maxima(column);
-    // A date or datetime admits its own type and `integer` until the model
-    // says which one it is submitted as (SUB-6, SUB-25); a type its column
-    // never admits fails either way.
-    let model = spec.model.as_ref().map(|model| model.kind);
-    let admitted = crate::specification_submission_document::admits_data_type_names(kind, resolved);
-    if !admitted {
+    // A date or datetime admits its own type and `integer` here; the model
+    // decides which one it is submitted as (SUB-6, SUB-25).
+    if !crate::specification_submission_document::admits_data_type_names(kind, resolved) {
         result.push(finding(
             C::SubmissionDataType,
             path,
@@ -211,23 +208,6 @@ fn admit_counts(
                 ("data_type", s(resolved)),
             ],
         ));
-    } else if let (Some(model), Some(declared)) = (model, effective.data_type) {
-        if !crate::specification_submission_document::admits_model_data_type_names(
-            kind,
-            &declared.text,
-            model == ModelKind::Adam,
-        ) {
-            result.push(finding(
-                C::SubmissionDataType,
-                path,
-                &[
-                    ("column", s(name)),
-                    ("declared_type", s(kind)),
-                    ("data_type", s(&declared.text)),
-                    ("model", s(model.name())),
-                ],
-            ));
-        }
     }
     for (field, count) in [
         ("length", effective.length),
@@ -325,8 +305,9 @@ fn admit_dataset_model(
 /// column's or value-level entry's own declarations `own`, checked on the
 /// specification alone (SUB-23): a core designation the model publishes
 /// (SUB-10), `Req` never relaxed by `mandatory: false` under SDTM or SEND, no
-/// `role` under ADaM (SUB-9), a SAS numeric date's display format under ADaM
-/// (SUB-25), and origin pairs the model admits (SUB-15). `path` is the
+/// `role` under ADaM (SUB-9), the one data type and display format the model
+/// submits a date as (SUB-6, SUB-25), and origin pairs the model admits
+/// (SUB-15). `path` is the
 /// column's `submission` or the entry. `entry` names an entry, whose merged
 /// `core` and `mandatory` the effective arguments give; it reports only what
 /// it declares itself, since the column reports what it inherits.
@@ -393,8 +374,30 @@ fn admit_column_model(
             ));
         }
     }
+    // A date or datetime is submitted as the one type its model gives it; a
+    // type its column never admits already failed (SUB-6, SUB-25).
+    let kind = column.kind.name();
+    if let Some(declared) = &own.data_type {
+        if crate::specification_submission_document::admits_data_type_names(kind, &declared.text)
+            && !crate::specification_submission_document::admits_model_data_type_names(
+                kind,
+                &declared.text,
+                model == ModelKind::Adam,
+            )
+        {
+            result.push(finding(
+                C::SubmissionDataType,
+                path,
+                &context(&[
+                    ("declared_type", s(kind)),
+                    ("data_type", s(&declared.text)),
+                    ("model", s(model.name())),
+                ]),
+            ));
+        }
+    }
     let fixed = crate::specification_submission_document::numeric_date_format_name(
-        column.kind.name(),
+        kind,
         model == ModelKind::Adam,
     );
     if let (Some(fixed), Some(declared)) = (fixed, &own.display_format) {
