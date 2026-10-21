@@ -1,4 +1,5 @@
-"""Every crate that a host's source archive ships has a stated purpose."""
+"""Every crate that a host's source archive ships has a stated purpose, and
+every unconditional engine dependency that #3030 scopes has a stated reason."""
 
 import contextlib
 import io
@@ -9,6 +10,7 @@ from pathlib import Path
 from unittest import mock
 
 from tools.packaging import check_crate_purposes as purposes
+from tools.staging import engine_bundle
 
 GRAPHS = {
     "cli": {"yamaa-core", "parser", "cc"},
@@ -22,7 +24,35 @@ PURPOSES = {
     "extendr-api": "the R binding's interface to R",
     "cc": "build script: compiles the bundled C sources",
 }
+# The scoped crates that each engine crate depends on unconditionally, and
+# the reasons for them.
+DEPENDENCIES = {
+    "yamaa": {"arrow-array"},
+    "yamaa-adapters": {"arrow-array", "serde_json"},
+    "yamaa-core": set(),
+}
+REASONS = {
+    "yamaa": {"arrow-array": "the facade's public table is Arrow"},
+    "yamaa-adapters": {
+        "arrow-array": "every table on the always-on path is Arrow arrays",
+        "serde_json": "the wire form of the core's JSON values",
+    },
+}
 LABEL = "tools/packaging/crate_purposes.toml"
+SCOPES = "#3030 section 2.9 scopes"
+
+
+def no_reason(crate, name):
+    """The message for an unconditional dependency without a reason."""
+    return (
+        f"{LABEL}: no reason why {crate} depends on {name} unconditionally, "
+        f"although {SCOPES} {name} to the features or adapters that need it"
+    )
+
+
+def dependency(name, kind=None, optional=False, target=None):
+    """A dependency as `cargo metadata` lists it under a package."""
+    return {"name": name, "kind": kind, "optional": optional, "target": target}
 
 
 class ProblemsTest(unittest.TestCase):
@@ -70,30 +100,222 @@ class ProblemsTest(unittest.TestCase):
                     [f"{LABEL}: the purpose of parser {message}"],
                 )
 
-    def test_main_reports_each_problem_and_how_to_state_a_purpose(self):
-        missing = {name: text for name, text in PURPOSES.items() if name != "pyo3"}
-        errors = io.StringIO()
-        with (
-            mock.patch.object(purposes, "read", return_value=missing),
-            mock.patch.object(purposes, "shipped", return_value=GRAPHS),
-            contextlib.redirect_stderr(errors),
-            self.assertRaises(SystemExit) as stopped,
+
+class ReasonProblemsTest(unittest.TestCase):
+    def test_a_reason_for_each_unconditional_scoped_dependency_passes(self):
+        self.assertEqual(purposes.reason_problems(REASONS, DEPENDENCIES), [])
+
+    def test_an_unconditional_scoped_dependency_without_a_reason_fails(self):
+        # A new unconditional edge, and an engine crate with no table at all.
+        reasons = {"yamaa-adapters": {"arrow-array": "Arrow tables"}}
+        self.assertEqual(
+            purposes.reason_problems(reasons, DEPENDENCIES),
+            [
+                no_reason("yamaa", "arrow-array"),
+                no_reason("yamaa-adapters", "serde_json"),
+            ],
+        )
+
+    def test_a_reason_for_a_dependency_that_is_optional_or_gone_fails(self):
+        # The change that moves serde_json behind a feature, or into the
+        # adapters that use it, removes its reason.
+        moved = {**DEPENDENCIES, "yamaa-adapters": {"arrow-array"}}
+        self.assertEqual(
+            purposes.reason_problems(REASONS, moved),
+            [
+                f"{LABEL}: a reason why yamaa-adapters depends on serde_json "
+                "unconditionally, which it no longer does"
+            ],
+        )
+
+    def test_a_reason_for_a_crate_that_is_not_scoped_fails(self):
+        reasons = {
+            **REASONS,
+            "yamaa-adapters": {**REASONS["yamaa-adapters"], "serde": "derives"},
+        }
+        self.assertEqual(
+            purposes.reason_problems(reasons, DEPENDENCIES),
+            [
+                f"{LABEL}: a reason why yamaa-adapters depends on serde "
+                "unconditionally, but #3030 section 2.9 does not scope serde"
+            ],
+        )
+
+    def test_the_reasons_of_a_crate_that_is_not_an_engine_crate_fail(self):
+        reasons = {**REASONS, "yamaa-python": {"arrow-array": "the hand-off"}}
+        self.assertEqual(
+            purposes.reason_problems(reasons, DEPENDENCIES),
+            [
+                f"{LABEL}: [unconditional.yamaa-python] names no engine crate; "
+                "the engine crates are yamaa, yamaa-adapters and yamaa-core"
+            ],
+        )
+
+    def test_an_empty_reason_or_a_reason_that_is_not_a_table_fails(self):
+        for reason, message in (
+            ("", "is empty"),
+            (" \n\t", "is empty"),
+            (1, "must be a string"),
+            ({"why": "tables"}, "must be a string"),
         ):
-            purposes.main()
-        self.assertEqual(stopped.exception.code, 1)
-        lines = errors.getvalue().splitlines()
+            with self.subTest(reason=reason):
+                self.assertEqual(
+                    purposes.reason_problems(
+                        {**REASONS, "yamaa": {"arrow-array": reason}}, DEPENDENCIES
+                    ),
+                    [f"{LABEL}: the reason why yamaa depends on arrow-array {message}"],
+                )
+        self.assertEqual(
+            purposes.reason_problems({**REASONS, "yamaa": "Arrow"}, DEPENDENCIES),
+            [f"{LABEL}: [unconditional.yamaa] must be a table of reasons"],
+        )
+
+
+class DeclaredTest(unittest.TestCase):
+    def test_arrow_flatbuffers_serde_json_and_toml_are_scoped(self):
+        for name in ("arrow", "arrow-array", "arrow-ipc", "flatbuffers"):
+            with self.subTest(name=name):
+                self.assertTrue(purposes.scoped(name))
+        for name in ("serde_json", "toml"):
+            with self.subTest(name=name):
+                self.assertTrue(purposes.scoped(name))
+        for name in ("arrowhead", "serde", "toml_datetime", "parquet", "yamaa-core"):
+            with self.subTest(name=name):
+                self.assertFalse(purposes.scoped(name))
+
+    def test_the_scoped_normal_dependencies_that_no_feature_selects(self):
+        metadata = {
+            "packages": [
+                {"name": "yamaa-core", "dependencies": [dependency("regex")]},
+                {
+                    "name": "yamaa-adapters",
+                    "dependencies": [
+                        dependency("yamaa-core"),
+                        dependency("arrow-array"),
+                        dependency("serde_json"),
+                        # Unscoped, optional, development and build-only
+                        # dependencies do not count.
+                        dependency("serde"),
+                        dependency("parquet", optional=True),
+                        dependency("arrow-cast", optional=True),
+                        dependency("toml", kind="dev"),
+                        dependency("flatbuffers", kind="build"),
+                        # A platform's dependency counts.
+                        dependency("arrow-ipc", target="cfg(unix)"),
+                    ],
+                },
+                {
+                    "name": "yamaa",
+                    "dependencies": [
+                        dependency("yamaa-adapters"),
+                        dependency("arrow"),
+                        dependency("arrow-schema"),
+                    ],
+                },
+                # A binding is not an engine crate.
+                {
+                    "name": "yamaa-python",
+                    "dependencies": [dependency("yamaa"), dependency("arrow-array")],
+                },
+            ]
+        }
+        self.assertEqual(
+            purposes.declared(metadata),
+            {
+                "yamaa-core": set(),
+                "yamaa-adapters": {"arrow-array", "serde_json", "arrow-ipc"},
+                "yamaa": {"arrow", "arrow-schema"},
+            },
+        )
+
+    def test_a_missing_engine_crate_refuses(self):
+        metadata = {
+            "packages": [
+                {"name": "yamaa-core", "dependencies": []},
+                {"name": "yamaa-adapters", "dependencies": []},
+            ]
+        }
+        with self.assertRaisesRegex(ValueError, "yamaa is not a workspace member"):
+            purposes.declared(metadata)
+
+    @unittest.skipUnless(shutil.which("cargo"), "cargo is unavailable")
+    def test_the_engine_manifests_name_their_scoped_dependencies(self):
+        dependencies = purposes.unconditional()
+        self.assertEqual(sorted(dependencies), sorted(engine_bundle.ENGINE))
+        # Arrow, serde_json and toml left the core, and the facade's public
+        # table stays Arrow (#3030 section 2.9).
+        self.assertEqual(dependencies["yamaa-core"], set())
+        self.assertLessEqual({"arrow-array", "arrow-schema"}, dependencies["yamaa"])
+        for names in dependencies.values():
+            self.assertTrue(all(map(purposes.scoped, names)), names)
+
+
+class MainTest(unittest.TestCase):
+    def main(self, read=PURPOSES, reasons=REASONS):
+        """Run main over the fixtures; its exit code, stdout and stderr lines."""
+        output, errors = io.StringIO(), io.StringIO()
+        code = 0
+        with (
+            mock.patch.object(purposes, "read", return_value=read),
+            mock.patch.object(purposes, "shipped", return_value=GRAPHS),
+            mock.patch.object(purposes, "reasons", return_value=reasons),
+            mock.patch.object(purposes, "unconditional", return_value=DEPENDENCIES),
+            contextlib.redirect_stdout(output),
+            contextlib.redirect_stderr(errors),
+        ):
+            try:
+                purposes.main()
+            except SystemExit as stopped:
+                code = stopped.code
+        return code, output.getvalue().splitlines(), errors.getvalue().splitlines()
+
+    def test_main_counts_the_purposes_and_the_reasons(self):
+        self.assertEqual(
+            self.main(),
+            (
+                0,
+                [
+                    f"{LABEL}: a purpose for each of the 5 crates that the cli, "
+                    "python and r bundles ship",
+                    f"{LABEL}: a reason for each of the 3 unconditional "
+                    f"dependencies of the engine crates on crates that {SCOPES}",
+                ],
+                [],
+            ),
+        )
+
+    def test_main_reports_each_problem_and_how_to_state_a_purpose(self):
+        read = {name: text for name, text in PURPOSES.items() if name != "pyo3"}
+        code, output, lines = self.main(read=read)
+        self.assertEqual((code, output), (1, []))
         self.assertEqual(
             lines[0], f"{LABEL}: no purpose for pyo3, which the python bundle ships"
         )
         self.assertIn("--workspace --target all -i <crate>", lines[1])
+        self.assertEqual(len(lines), 2)
+
+    def test_main_reports_a_missing_reason_and_how_to_state_one(self):
+        reasons = {**REASONS, "yamaa": {}}
+        code, output, lines = self.main(reasons=reasons)
+        self.assertEqual((code, output), (1, []))
+        self.assertEqual(lines[0], no_reason("yamaa", "arrow-array"))
+        self.assertIn("under [unconditional.<engine crate>]", lines[1])
+        self.assertEqual(len(lines), 2)
 
 
 class ReadTest(unittest.TestCase):
+    def write(self, directory, text):
+        path = Path(directory) / "crate_purposes.toml"
+        path.write_text(text, encoding="utf-8")
+        return path
+
     def read(self, text):
         with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "crate_purposes.toml"
-            path.write_text(text, encoding="utf-8")
-            return purposes.read(path)
+            return purposes.read(self.write(directory, text))
+
+    def reasons(self, text):
+        with tempfile.TemporaryDirectory() as directory:
+            return purposes.reasons(self.write(directory, text))
 
     def test_the_purposes_are_the_crates_table(self):
         self.assertEqual(
@@ -101,18 +323,33 @@ class ReadTest(unittest.TestCase):
             {"cc": "build script"},
         )
 
-    def test_anything_but_one_crates_table_refuses(self):
+    def test_the_reasons_are_the_unconditional_tables(self):
+        text = (
+            '[crates]\ncc = "build script"\n'
+            '[unconditional.yamaa]\narrow-array = """\\\n  the facade\'s \\\n  table"""\n'
+        )
+        self.assertEqual(self.read(text), {"cc": "build script"})
+        self.assertEqual(
+            self.reasons(text), {"yamaa": {"arrow-array": "the facade's table"}}
+        )
+        # The reasons may be missing.
+        self.assertEqual(self.reasons('[crates]\ncc = "build script"\n'), {})
+
+    def test_anything_but_the_crates_and_unconditional_tables_refuses(self):
         for text in (
             'cc = "build script"\n',
             'cc = "build script"\n[crates]\nlibc = "C library bindings"\n',
             'crates = "build script"\n',
             "[crates]\n[other]\n",
+            'unconditional = "Arrow"\n[crates]\n',
+            '[unconditional.yamaa]\narrow-array = "Arrow"\n',
         ):
-            with (
-                self.subTest(text=text),
-                self.assertRaisesRegex(ValueError, "only a \\[crates\\] table"),
-            ):
-                self.read(text)
+            for reader in (self.read, self.reasons):
+                with (
+                    self.subTest(text=text, reader=reader.__name__),
+                    self.assertRaisesRegex(ValueError, "only a \\[crates\\] table"),
+                ):
+                    reader(text)
 
 
 class ShippedTest(unittest.TestCase):

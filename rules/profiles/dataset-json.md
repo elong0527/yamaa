@@ -132,7 +132,7 @@ is fixed-point text rounded once, and read back it is that rounded value, which
 would become the submitted value. A specification that a section requesting a
 transport composes therefore declares no `output.decimals`. One that does
 fails validation with `decimals_not_applicable` at
-`<family>.specs[<n>].output.decimals`, reporting the dataset, the
+`<section>.specs[<n>].output.decimals`, reporting the dataset, the
 specification as the section's `specs` writes it and the declared digits,
 before any artifact is read. The submitted display is the column's
 `submission.display_format` ([SUB-9](submission.md#sub-9)), which changes no

@@ -34,10 +34,11 @@ def test_installed_package_exports_exactly_the_public_api() -> None:
         "lint",
         "project",
         "read_odm",
+        "schema",
         "selftest",
         "spec",
     ]
-    for name in ("spec", "project", "read_odm", "lint", "selftest"):
+    for name in ("spec", "project", "read_odm", "lint", "schema", "selftest"):
         assert callable(getattr(yamaa, name))
     assert issubclass(yamaa.Error, Exception)
     for name in REMOVED:

@@ -140,12 +140,12 @@ column for a column label, the label, and the cause `ascii` or `length`;
 
 <a id="xpt-6"></a>
 
-### XPT-6. A `str` column is a character variable, a number a numeric one, and a date travels as its family submits it
+### XPT-6. A `str` column is a character variable, a number a numeric one, and a date travels as its model submits it
 
 A `str` column is a character variable, and an `int` or `float` column a
-numeric variable. Under `adam`, a `date` column is a numeric variable holding
+numeric variable. Under `ADaM`, a `date` column is a numeric variable holding
 days since 1960-01-01 and a `datetime` column one holding seconds since
-1960-01-01T00:00:00 ([SUB-25](submission.md#sub-25)); under `sdtm` and `send`,
+1960-01-01T00:00:00 ([SUB-25](submission.md#sub-25)); under `SDTM` and `SEND`,
 each is a character variable holding its canonical text
 ([VALUE-17](../values.md#value-17)). A character variable is as wide as
 [SUB-24](submission.md#sub-24) measures it, and a numeric one is 8 bytes.
@@ -154,7 +154,7 @@ Evidence: `sdtm-dm-xpt`, `adam-adsl-xpt`.
 
 A SAS date and datetime count from midnight on 1960-01-01 on the same wall
 clock the value names; a value before the origin is negative. The canonical
-text of an `sdtm` or `send` date is 10 bytes, and such a dataset carries no
+text of an `SDTM` or `SEND` date is 10 bytes, and such a dataset carries no
 `datetime` column ([SUB-27](submission.md#sub-27)).
 
 <a id="xpt-7"></a>
@@ -207,7 +207,7 @@ Every binary64 value in range converts exactly: its 53 significant bits fit the
 `int` is converted through its exact binary64 value. The failure reports
 `xpt_value_out_of_range` at `datasets.<dataset>.columns.<column>` with the row,
 its key values, the value and the cause `magnitude`, `integer` or `date`. SAS
-dates begin on 1582-01-01, and a date or datetime the `adam` family submits as
+dates begin on 1582-01-01, and a date or datetime the `ADaM` model submits as
 a number must not precede it.
 
 <a id="xpt-9"></a>
@@ -235,7 +235,7 @@ with width 10. `TIME8.` is the name `TIME` with width 8, the display of an
 any other numeric format. A value-level `display_format` is described in the document but
 not written in the file, which has one format per variable. The failure
 reports the dataset, the column and the declared format at
-`<family>.specs[<n>].columns.<column>.submission.display_format`, before any
+`<section>.specs[<n>].columns.<column>.submission.display_format`, before any
 data is read.
 
 <a id="xpt-10"></a>

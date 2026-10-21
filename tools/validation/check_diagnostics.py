@@ -76,12 +76,14 @@ RUST_PATH = re.compile(
     rf"(?<![A-Za-z_0-9#])(?:::\s*)?{RUST_NAME}(?:\s*::\s*{RUST_NAME})*"
 )
 # The codecs that read JSON text they own: the wire module itself, the
-# package-lock reader, the stored report rows and the resolved artifact.
+# package-lock reader, the stored report rows, the resolved artifact and the
+# JSON Schemas the package embeds.
 JSON_CODECS = {
     Path("rust/crates/yamaa-adapters/src/json_wire.rs"),
     Path("rust/crates/yamaa-adapters/src/project_lock.rs"),
     Path("rust/crates/yamaa-adapters/src/report_storage.rs"),
     Path("rust/crates/yamaa-adapters/src/resolved_artifact/model.rs"),
+    Path("rust/crates/yamaa-adapters/src/shipped_schema/json.rs"),
 }
 JSON_WIRE = "json_wire"
 # The wire module's public items that read JSON text: its decoders, the serde
