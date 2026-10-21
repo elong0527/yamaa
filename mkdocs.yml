@@ -101,7 +101,7 @@ nav:
       - Derivation: articles/derive.md
       - Excel to yamaa: articles/excel.md
       - SDTM to ADaM: articles/sdtm-to-adam.md
-      - Specification style guide: articles/style.md
+      - Style guide: articles/style.md
   - Reference:
       - Schema introduction: articles/schema-intro.md
       - Schema reference: articles/schema.md

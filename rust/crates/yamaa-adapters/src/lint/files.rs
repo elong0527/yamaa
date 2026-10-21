@@ -83,11 +83,12 @@ pub(super) fn lint(paths: &[String], fix: bool) -> Result<Vec<Linted>, Error> {
 }
 
 /// A named file is always linted. A directory names the `.yaml` files beneath
-/// it, outside hidden directories, in sorted path order, that are
-/// specifications: a root that declares the 1.x header and `type: spec`, or a
-/// root mapping holding `schema_version` and only 0.5 root fields, so a study
-/// document, a project environment, a project configuration and a 1.x file of
-/// another type are left out.
+/// it, outside hidden directories, in sorted path order, that are yamaa
+/// files: a root that declares the 1.x header with a `type` naming a file
+/// type (`spec`, `project`, `codelists` or `function`), or a 0.5
+/// specification, a root mapping holding `schema_version` and only 0.5 root
+/// fields. A mapping dictionary, a 0.5 project or environment file and any
+/// other YAML file are left out.
 fn expand(path: &Path) -> Result<Vec<File>, Error> {
     if !path.is_dir() {
         return Ok(vec![File::new(path.to_path_buf())]);
@@ -100,7 +101,7 @@ fn expand(path: &Path) -> Result<Vec<File>, Error> {
         let candidate = parts
             .iter()
             .fold(path.to_path_buf(), |path, part| path.join(part));
-        if is_specification(&candidate)? {
+        if is_yamaa_file(&candidate)? {
             files.push(File::new(candidate));
         }
     }
@@ -165,7 +166,7 @@ fn collect(
     Ok(())
 }
 
-fn is_specification(path: &Path) -> Result<bool, Error> {
+fn is_yamaa_file(path: &Path) -> Result<bool, Error> {
     let bytes = std::fs::read(path).map_err(|error| discovery_error(path, error))?;
     let Ok(text) = String::from_utf8(bytes) else {
         return Ok(false);
@@ -198,9 +199,12 @@ fn is_specification(path: &Path) -> Result<bool, Error> {
         let declared = document
             .member(document.root, "type")
             .and_then(|value| document.scalar(value));
-        return Ok(declared == Some(FileType::Spec.name()));
+        return Ok(declared.and_then(FileType::parse).is_some());
     }
-    Ok(declares("schema_version") && names.iter().all(|name| fields::LEGACY.root.contains(name)))
+    Ok(declares("schema_version")
+        && names
+            .iter()
+            .all(|name| fields::LEGACY_SPEC.fields.contains(name)))
 }
 
 /// Capture a file once through the local file resolver: its parent is
