@@ -59,9 +59,11 @@ PYTHON_MANIFEST_PATH = "crates/yamaa-python/Cargo.toml"
 # The profile that the Python wheels, as python/pyproject.toml selects, and the
 # command-line binaries build with: release without the symbol table. The R
 # bundle's manifest leaves it out, so that the R source package names no
-# stripping. Its Makevars build with release, and CRAN's Repository Policy asks
-# a package to keep the symbols of its shared objects
-# (tools/packaging/check_cargo_lock.py).
+# stripping. Its Makevars build with release: the R package strips nothing
+# itself, as CRAN's Repository Policy asks and
+# tools/packaging/check_cargo_lock.py checks. Its shared object keeps its
+# symbols on Linux and macOS, and on Windows R's own toolchain links every
+# package DLL with `-s` (#3030 D140).
 WHEEL_PROFILE = "dist"
 
 

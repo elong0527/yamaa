@@ -19,7 +19,7 @@ aarch64, macOS and Windows.
 the installed size. The notes, and why they remain:
 
 - `checking CRAN incoming feasibility ... NOTE`: a new submission, and the
-  size of the tarball, about 11.5 MB. About 9.7 MB of it is
+  size of the tarball, about 11.7 MB. About 9.7 MB of it is
   `src/rust/vendor.tar.xz`, the Rust crates that the package compiles, which
   CRAN's guidance for packages that use Rust asks to be bundled rather than
   downloaded. The Repository Policy allows a modestly increased size limit to
@@ -71,15 +71,25 @@ The package follows "Using Rust in CRAN packages":
   environment or a `.cargo/config.toml` in a parent directory sets.
 - `Authors@R` credits the authors of the bundled crates and of the bundled
   ReadStat C sources as contributors and copyright holders. `inst/AUTHORS`
-  lists each crate with the authors, license and repository that it declares,
-  and the `Copyright` field names `inst/LICENSE-THIRD-PARTY.txt`, which
-  reproduces the license, copyright and NOTICE texts of every bundled crate.
-  `inst/COMPONENTS.tsv` lists every bundled component, the ReadStat and zstd
+  lists every bundled third-party crate with the authors and repository that
+  it declares and the license that yamaa relies on.
+- The `Copyright` field names `inst/LICENSE-THIRD-PARTY.txt`, which
+  reproduces the license, copyright and NOTICE texts of the third-party
+  crates that the package links, and the licensing of the Rust standard
+  library, from the notice that the Rust project ships with its toolchain.
+  The other bundled crates, such as procedural macros and the crates of other
+  platforms, are not linked; their license files stay in
+  `src/rust/vendor.tar.xz`, as `cargo vendor` wrote them.
+- `inst/COMPONENTS.tsv` lists every bundled component, the ReadStat and zstd
   C sources included, with its version, license, source and purpose.
   `configure` appends one row to the copy that R installs, for the Rust
   standard library that rustc links into the package, with the version that
   rustc reports; `cleanup` removes it, so the archive carries the file
   unchanged.
+- Where a crate or component is offered under a choice of licenses,
+  `inst/AUTHORS`, `inst/LICENSE-THIRD-PARTY.txt` and `inst/COMPONENTS.tsv`
+  name only the one that yamaa relies on, such as BSD-3-Clause for the zstd
+  C library.
 - The archive contains no binary executable code. `wit-bindgen`, a crate
   that only WebAssembly targets build, ships prebuilt WebAssembly objects;
   they are left out, and their C sources remain.
