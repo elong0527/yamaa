@@ -1,0 +1,7 @@
+ARTIFACT,KIND,SPEC_PATH,NAME,ID,TARGET,RULE,SEVERITY,OUTCOME,CONDITION,COUNT,TOTAL,KEYS,DETAILS
+dm_v1.csv,run,output,,,,,,succeeded,,2,,,{}
+dm_v1.csv,input,input.DM_RAW,DM_RAW,,,,,,,2,,,"{""bytes"":56,""path"":""input/dm_raw.csv"",""profile"":""csv""}"
+dm_v1.csv,rows,base,DM_RAW,,,,,,,2,2,,{}
+dm_v1.csv,column,columns.DOMAIN,DOMAIN,,,,,,,0,2,,"{""max_length"":2}"
+dm_v1.csv,column,columns.STUDYID,STUDYID,,,,,,,0,2,,"{""max_length"":4}"
+dm_v1.csv,column,columns.USUBJID,USUBJID,,,,,,,0,2,,"{""max_length"":14}"

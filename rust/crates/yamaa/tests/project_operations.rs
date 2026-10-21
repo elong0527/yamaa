@@ -1492,3 +1492,190 @@ fn a_later_section_whose_target_cannot_be_written_saves_nothing() {
     assert_eq!(conditions(&submission.issues()), ["engine_rejected"]);
     assert_eq!(submission.status(), Status::Succeeded);
 }
+
+const GUARDED_PROJECT: &str = r#"yamaa: "1.0"
+type: project
+study:
+  id: CATH
+  name: CATH
+  description: Example study submitting its demographics and subject analysis
+  protocol_name: CATH-01
+sdtm:
+  standards:
+    - name: SDTMIG
+      version: "3.4"
+      status: Final
+  specs:
+    - dm.yaml
+  define: define.xml
+adam:
+  standards:
+    - name: ADaMIG
+      version: "1.3"
+      status: Final
+  specs:
+    - adsl.yaml
+  define: adam-define.xml
+"#;
+
+const GUARDED_DM: &str = r#"yamaa: "1.0"
+type: spec
+model: SDTM
+domain: DM
+keys: [STUDYID, USUBJID]
+input:
+  RAW: raw.csv
+output:
+  path: dm.csv
+  columns: [DOMAIN, STUDYID, USUBJID]
+  report: dm-report.csv
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'DM'"
+    submission:
+      core: Req
+      role: Identifier
+      length: 2
+      origins:
+        - type: Assigned
+          source: Sponsor
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: RAW.STUDYID
+    submission:
+      core: Req
+      role: Identifier
+      length: 4
+      origins:
+        - type: Protocol
+          source: Sponsor
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: RAW.USUBJID
+    submission:
+      core: Req
+      role: Identifier
+      length: 9
+      origins:
+        - type: Assigned
+          source: Sponsor
+submission:
+  label: Demographics
+  class: SPECIAL PURPOSE
+  structure: One record per subject
+  repeating: false
+"#;
+
+/// ADSL over DM's artifact through its `schema` link.
+const GUARDED_ADSL: &str = r#"yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  DM:
+    path: dm.csv
+    schema: dm.yaml
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID]
+  report: adsl-report.csv
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DM.STUDYID
+    submission:
+      core: Req
+      mandatory: true
+      length: 4
+      origins:
+        - type: Predecessor
+          description: DM.STUDYID
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM.USUBJID
+    submission:
+      core: Req
+      mandatory: true
+      length: 9
+      origins:
+        - type: Predecessor
+          description: DM.USUBJID
+submission:
+  label: Subject-Level Analysis Dataset
+  class: SUBJECT LEVEL ANALYSIS DATASET
+  structure: One record per subject
+  repeating: false
+"#;
+
+/// A specification that declares a run report composes only with the
+/// artifact and the inputs that report records (PROJECT-15): reports the
+/// engine saved compose, ADSL's included, which counted DM's held artifact;
+/// a changed raw input makes DM stale, and DM rebuilt alone makes ADSL stale.
+#[test]
+fn a_submission_composes_the_artifacts_their_run_reports_record_and_refuses_stale_ones() {
+    let study = Study::new();
+    study.write("project.yaml", GUARDED_PROJECT);
+    study.write("dm.yaml", GUARDED_DM);
+    study.write("adsl.yaml", GUARDED_ADSL);
+    let raw = "STUDYID,USUBJID\nCATH,CATH-0001\nCATH,CATH-0002\n";
+    study.write("raw.csv", raw);
+    let engine = engine();
+    let token = CancellationToken::new();
+    let build = |section: Option<&str>| {
+        let mut run = engine
+            .project_run(&study.project(), section, &token)
+            .unwrap();
+        assert_eq!(run.issues().rows(), 0, "{:?}", rows(&run.issues()));
+        run.save().unwrap();
+    };
+    let submit = || {
+        let submission = engine
+            .project_submission(
+                &study.project(),
+                None,
+                Some("2026-09-11T00:00:00"),
+                "0.4.0",
+                &token,
+            )
+            .unwrap();
+        rows(&submission.issues())
+    };
+    let assert_stale = |issues: &[Row], path: &str, dataset: &str, input: &str, bytes| {
+        assert_eq!(issues.len(), 1, "{issues:?}");
+        let issue = &issues[0];
+        assert_eq!(
+            (issue.phase.as_str(), issue.condition.as_str()),
+            ("validation", "stale_artifact")
+        );
+        assert_eq!(issue.rule.as_deref(), Some("PROJECT-15"));
+        assert_eq!(issue.spec_paths, [format!("{path}.output.report")]);
+        let report = format!("{}-report.csv", dataset.to_ascii_lowercase());
+        assert_eq!(issue.context["dataset"], text(dataset));
+        assert_eq!(issue.context["report"], text(&report));
+        assert_eq!(issue.context["reason"], text("input_bytes"));
+        assert_eq!(issue.context["input"], text(input));
+        assert_eq!(issue.context["actual"], Value::from(bytes));
+    };
+
+    build(None);
+    assert_eq!(submit().len(), 0, "{:?}", submit());
+
+    let grown = format!("{raw}CATH,CATH-0003\n");
+    study.write("raw.csv", &grown);
+    assert_stale(&submit(), "sdtm.specs[0]", "DM", "RAW", grown.len());
+
+    build(Some("sdtm"));
+    let dm = study.read("dm.csv").unwrap();
+    assert_eq!(dm.lines().count(), 4);
+    assert_stale(&submit(), "adam.specs[0]", "ADSL", "DM", dm.len());
+
+    build(Some("adam"));
+    assert_eq!(submit().len(), 0, "{:?}", submit());
+}

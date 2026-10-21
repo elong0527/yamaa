@@ -374,6 +374,7 @@ impl Ports for NativePorts {
             tree: document.tree(),
             source: &document.source().identity,
             output: document.written_output_origin(),
+            report: document.written_output_field_origin("report"),
             inputs,
         }
     }
@@ -436,6 +437,32 @@ impl Ports for NativePorts {
     }
     fn decode_parquet(&mut self, bytes: &[u8]) -> Result<Self::Parquet, Self::ParquetError> {
         read_parquet(bytes)
+    }
+    fn read_report(
+        &mut self,
+        path: &str,
+        declaring: &str,
+        written: &str,
+    ) -> Result<Option<yamaa_core::run_report::Recorded>, Failure> {
+        let (bytes, _) = self
+            .resources_mut()
+            .capture_from(declaring, written)
+            .map_err(|error| resource(path, written, error))?;
+        Ok(crate::run_report::recorded(&bytes, written))
+    }
+    fn count_records(
+        &mut self,
+        source: &yamaa_core::specification::SourceDeclaration,
+        bytes: &[u8],
+    ) -> Option<usize> {
+        crate::specification_run::decode_source(
+            source,
+            bytes,
+            yamaa_core::specification::SourceInterpretation::Ordinary,
+            None,
+        )
+        .ok()
+        .map(|table| table.row_count())
     }
     fn render_define(&mut self, study: &Study) -> Result<Vec<u8>, Finding> {
         crate::submission_xml::render(study)

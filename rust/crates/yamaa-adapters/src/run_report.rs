@@ -542,6 +542,43 @@ pub(crate) fn prepare(
     })
 }
 
+/// What a saved report file records (PROJECT-15), decoded under the profile
+/// its extension selects, as [`rendered`] wrote it: `None` when the bytes are
+/// not a run report.
+pub(crate) fn recorded(bytes: &[u8], path: &str) -> Option<core::Recorded> {
+    let (_, suffix) = path.rsplit('/').next()?.rsplit_once('.')?;
+    if suffix.eq_ignore_ascii_case("csv") {
+        // The report's own column types, so that COUNT and TOTAL read as
+        // integers and an empty field as missing.
+        let types = core::schema()
+            .columns()
+            .iter()
+            .map(|column| (column.name.clone(), column.kind))
+            .collect::<Vec<_>>();
+        let table = yamaa_core::typed_csv::PreparedTypes::new(&types)
+            .ok()?
+            .convert(crate::csv_source::parse(bytes).ok()?)
+            .ok()?;
+        core::recorded(&table, details_bytes)
+    } else if suffix.eq_ignore_ascii_case("parquet") {
+        core::recorded(&crate::parquet_source::parse(bytes).ok()?, details_bytes)
+    } else {
+        None
+    }
+}
+
+/// The `bytes` member of an input row's `DETAILS` (CHECK-24): `Some(None)`
+/// for `null`, `None` when the text holds no byte length.
+fn details_bytes(details: &str) -> Option<Option<usize>> {
+    match crate::json_wire::decode(details).ok()?.get("bytes")? {
+        Value::Null => Some(None),
+        value => value
+            .as_u64()
+            .and_then(|bytes| usize::try_from(bytes).ok())
+            .map(Some),
+    }
+}
+
 /// The run report's columns without rows, the stacked report of runs of
 /// which none built a report.
 pub(crate) fn empty_table() -> Result<PublicTable, Error> {

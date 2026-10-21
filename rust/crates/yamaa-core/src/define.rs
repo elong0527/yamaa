@@ -12,8 +12,11 @@ use crate::{
     project_environment::Submission,
     project_terminology::Catalogue,
     resource::WrittenPath,
+    run_report::Recorded,
     schema::{Document, DocumentNode},
+    specification::SourceDeclaration,
     submission_composition::{self as composition, Dataset, Finding, Study},
+    submission_staleness::{self as staleness, Reason},
     submission_transport,
     table::{CellError, TableAccess, TableSchema, ValueRef},
 };
@@ -32,6 +35,9 @@ pub struct SpecificationView<'a> {
     pub tree: &'a crate::ast::Spec,
     pub source: &'a str,
     pub output: Option<WrittenPath<'a>>,
+    /// The written origin of `output.report`, when the specification
+    /// declares one: the run report the staleness guard reads (PROJECT-15).
+    pub report: Option<WrittenPath<'a>>,
     /// Every declared input dataset and the written origin of its path; a
     /// transport file never replaces one (JSON-2).
     pub inputs: Vec<(&'a str, WrittenPath<'a>)>,
@@ -66,6 +72,8 @@ pub trait Ports {
     fn package_reference(&self, target: &str, define: &str) -> Option<String>;
     fn define_name(&self, location: &str) -> String;
     fn verify_metadata(&mut self, path: &str, source: &str) -> Result<(), Self::Error>;
+    /// Capture one file composition reads: a published artifact, or an input
+    /// the staleness guard measures (PROJECT-15).
     fn capture_published(
         &mut self,
         path: &str,
@@ -73,6 +81,19 @@ pub trait Ports {
         written: &str,
     ) -> Result<Self::Bytes, Self::Error>;
     fn decode_parquet(&mut self, bytes: &[u8]) -> Result<Self::Parquet, Self::ParquetError>;
+    /// Read what the run report a specification declares in `output.report`
+    /// records, decoded under the profile its extension selects (CHECK-24):
+    /// `None` when the file is not a run report (PROJECT-15).
+    fn read_report(
+        &mut self,
+        path: &str,
+        declaring: &str,
+        written: &str,
+    ) -> Result<Option<Recorded>, Self::Error>;
+    /// The records `source` decodes from `bytes` under its profile, as a run
+    /// counts an input's records (CHECK-24); `None` when the bytes do not
+    /// decode.
+    fn count_records(&mut self, source: &SourceDeclaration, bytes: &[u8]) -> Option<usize>;
     /// Encode the Define-XML document of a composed study, refusing text or a
     /// value the document cannot carry (DEFINE-24, DEFINE-25). Core calls it
     /// before any published artifact is read, and with a transport again once
@@ -182,6 +203,21 @@ fn published_csv_failure<E, PE>(
         }
         .diagnostic()]),
     }
+}
+/// A published artifact the Parquet profile does not read.
+fn published_parquet_failure<E, PE>(written: &str) -> Failure<E, PE> {
+    Failure::Metadata(vec![Finding::cause(
+        ConditionCode::ProducerContractMismatch,
+        written,
+        "published Parquet profile",
+    )])
+}
+/// A published artifact whose extension selects no dataset profile.
+fn published_format_failure<E, PE>(written: &str) -> Failure<E, PE> {
+    Failure::Metadata(vec![Finding::unsupported(
+        written,
+        "published_dataset_format",
+    )])
 }
 fn published_typed_csv_failure<E, PE>(
     error: &crate::typed_csv::Error,
@@ -545,6 +581,9 @@ impl<P: Ports> Application<P> {
         ports
             .verify_metadata(standard, identity)
             .map_err(Failure::Port)?;
+        // A specification that declares a run report composes only with the
+        // artifact and the inputs that report records (PROJECT-15).
+        self.guard(ports, standard, &composed, &outputs)?;
         let mut tables = Vec::new();
         if let Some(transport) = transport {
             for (dataset, (declaring, written)) in composed.datasets().iter().zip(&outputs) {
@@ -607,14 +646,84 @@ impl<P: Ports> Application<P> {
         self.preflight(ports)?;
         Ok(())
     }
-    /// JSON-5: read one published artifact exactly as a consumer reads its
-    /// producer's artifact, under the profile its extension selects.
-    fn published(
+    /// The staleness guard (PROJECT-15): in entry order, each listed
+    /// specification that declares `output.report` composes only with the
+    /// artifact and the inputs its saved run report records. Its `run` row
+    /// records a successful run of the declared `output.path` and the rows the
+    /// artifact holds, `submission.has_no_data` agrees with those rows, and
+    /// each declared input holds the byte length and records its `input` row
+    /// records. The first mismatch fails with `stale_artifact`; a report, an
+    /// artifact or an input that cannot be read fails as it does elsewhere.
+    fn guard(
+        &self,
+        ports: &mut P,
+        standard: &str,
+        composed: &Study,
+        outputs: &[(String, String)],
+    ) -> Result<(), Failure<P::Error, P::PublicationError>> {
+        fn stale<E, PE>(finding: Finding) -> Failure<E, PE> {
+            Failure::Metadata(vec![finding])
+        }
+        for (index, ((document, dataset), (declaring, written))) in self
+            .specifications
+            .iter()
+            .zip(composed.datasets())
+            .zip(outputs)
+            .enumerate()
+        {
+            let view = P::specification(document);
+            let Some(report) = view.report else {
+                continue;
+            };
+            let listing = format!("{standard}.specs[{index}]");
+            let guard = staleness::Guard {
+                path: format!("{listing}.output.report"),
+                dataset: dataset.id(),
+                report: report.written,
+            };
+            let recorded = ports
+                .read_report(&guard.path, report.base_source, report.written)
+                .map_err(Failure::Port)?
+                .ok_or_else(|| stale(guard.stale(Reason::ReportInvalid, [])))?;
+            let rows = guard.run(&recorded, written).map_err(stale)?;
+            let actual = Self::published_rows(ports, dataset, declaring, written)?;
+            guard
+                .artifact(rows, actual, dataset.has_no_data())
+                .map_err(stale)?;
+            for input in &view.tree.inputs {
+                let name = input.name.name.as_str();
+                let row = guard.input(&recorded, name).map_err(stale)?;
+                let Some((_, origin)) = view.inputs.iter().find(|(declared, _)| *declared == name)
+                else {
+                    return Err(stale(Finding::cause(
+                        ConditionCode::SubmissionMetadataMissing,
+                        &listing,
+                        "input path origin",
+                    )));
+                };
+                let bytes = ports
+                    .capture_published(
+                        &format!("{listing}.input.{name}.path"),
+                        origin.base_source,
+                        origin.written,
+                    )
+                    .map_err(Failure::Port)?;
+                let bytes = bytes.as_ref();
+                guard.input_bytes(row, bytes.len()).map_err(stale)?;
+                let records = staleness::counted(input)
+                    .and_then(|source| ports.count_records(&source, bytes));
+                guard.input_records(row, records).map_err(stale)?;
+            }
+        }
+        Ok(())
+    }
+    /// One published artifact's bytes, within the source byte limit.
+    fn artifact_bytes(
         ports: &mut P,
         dataset: &composition::Dataset,
         declaring: &str,
         written: &str,
-    ) -> Published<P> {
+    ) -> Result<P::Bytes, Failure<P::Error, P::PublicationError>> {
         let bytes = ports
             .capture_published(
                 &format!("datasets.{}.artifact", dataset.id()),
@@ -625,6 +734,40 @@ impl<P: Ports> Application<P> {
         if let Err(error) = Limits::source_bytes(bytes.as_ref().len()) {
             return Err(published_boundary_failure(error, dataset.id(), written));
         }
+        Ok(bytes)
+    }
+    /// The rows one published artifact holds, read under the profile its
+    /// extension selects without typing its values (PROJECT-15).
+    fn published_rows(
+        ports: &mut P,
+        dataset: &composition::Dataset,
+        declaring: &str,
+        written: &str,
+    ) -> Result<usize, Failure<P::Error, P::PublicationError>> {
+        let bytes = Self::artifact_bytes(ports, dataset, declaring, written)?;
+        let lower = written.to_ascii_lowercase();
+        if lower.ends_with(".csv") {
+            crate::csv_source::parse(bytes.as_ref())
+                .map(|source| source.records.len())
+                .map_err(|error| published_csv_failure(&error, dataset.id(), written))
+        } else if lower.ends_with(".parquet") {
+            ports
+                .decode_parquet(bytes.as_ref())
+                .map(|table| table.row_count())
+                .map_err(|_| published_parquet_failure(written))
+        } else {
+            Err(published_format_failure(written))
+        }
+    }
+    /// JSON-5: read one published artifact exactly as a consumer reads its
+    /// producer's artifact, under the profile its extension selects.
+    fn published(
+        ports: &mut P,
+        dataset: &composition::Dataset,
+        declaring: &str,
+        written: &str,
+    ) -> Published<P> {
+        let bytes = Self::artifact_bytes(ports, dataset, declaring, written)?;
         let lower = written.to_ascii_lowercase();
         if lower.ends_with(".csv") {
             let kinds: Vec<_> = dataset
@@ -646,21 +789,14 @@ impl<P: Ports> Application<P> {
                 .map_err(|error| published_typed_csv_failure(&error, dataset.id(), written))?;
             Ok(Held::Csv(table))
         } else if lower.ends_with(".parquet") {
-            let table = ports.decode_parquet(bytes.as_ref()).map_err(|_| {
-                Failure::Metadata(vec![Finding::cause(
-                    ConditionCode::ProducerContractMismatch,
-                    written,
-                    "published Parquet profile",
-                )])
-            })?;
+            let table = ports
+                .decode_parquet(bytes.as_ref())
+                .map_err(|_| published_parquet_failure(written))?;
             Limits::table(table.row_count(), table.schema().columns().len())
                 .map_err(|error| published_boundary_failure(error, dataset.id(), written))?;
             Ok(Held::Parquet(table))
         } else {
-            Err(Failure::Metadata(vec![Finding::unsupported(
-                written,
-                "published_dataset_format",
-            )]))
+            Err(published_format_failure(written))
         }
     }
     fn preflight(&self, ports: &mut P) -> PreflightResult<P> {

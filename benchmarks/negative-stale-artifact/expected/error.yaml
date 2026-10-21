@@ -1,0 +1,11 @@
+phase: validation
+condition: stale_artifact
+spec_paths:
+  - sdtm.specs[0].output.report
+rule: PROJECT-15
+context:
+  dataset: DM
+  report: dm-report.csv
+  reason: artifact_path
+  recorded: dm_v1.csv
+  actual: dm.csv

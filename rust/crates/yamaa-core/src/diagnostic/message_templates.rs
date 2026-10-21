@@ -179,6 +179,7 @@ pub(super) const TEMPLATES: &[(&str, &str)] = &[
     ("source_system_incomplete", "the source system version is empty"),
     ("source_text_after_quote", "record {record} of {path} has text after a closing quote"),
     ("sqrt_of_negative", "{expr} takes the square root of a negative value"),
+    ("stale_artifact", "the saved artifact of {dataset} is stale against its run report {report}"),
     ("standard_model_mismatch", "{value} is outside the {model} model of section {section}"),
     ("submission_data_type_not_admitted", "{spec_path} declares a data type its column cannot be submitted as"),
     ("submission_length_invalid", "{spec_path} declares a length or significant_digits that is not a positive integer"),

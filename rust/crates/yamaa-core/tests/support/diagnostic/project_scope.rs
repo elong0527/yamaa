@@ -1,12 +1,12 @@
 //! Project operation findings: names, sections, unlinked producers, blocked
-//! consumers, run-scope cycles and saves with nothing to write, each with its
-//! independently authored mapping.
-use super::rendered;
+//! consumers, run-scope cycles, saves with nothing to write and stale
+//! artifacts, each with its independently authored mapping.
+use super::{rendered, Record};
 use std::collections::BTreeSet;
 use yamaa_core::{
     diagnostic::{ConditionCode, Diagnostic},
     json::Value,
-    project_scope,
+    project_scope, run_report, submission_staleness,
 };
 
 fn texts(values: &[&str]) -> Value {
@@ -147,6 +147,32 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         "PROJECT-13",
         &[],
         &[],
+    ));
+    // A run report that records another artifact than the one a section
+    // composes: reported at the listing's report, naming the dataset, the
+    // report and what disagrees.
+    let guard = submission_staleness::Guard {
+        path: "sdtm.specs[0].output.report".into(),
+        dataset: "DM",
+        report: "dm-report.csv",
+    };
+    let recorded = run_report::Recorded {
+        artifact: "dm.csv".into(),
+        run: run_report::Run::Succeeded { rows: 2 },
+        inputs: Vec::new(),
+    };
+    reached.insert(check(
+        &guard.run(&recorded, "out/dm.csv").unwrap_err().record(),
+        "stale_artifact",
+        "PROJECT-15",
+        &["sdtm.specs[0].output.report"],
+        &[
+            ("dataset", Value::String("DM".into())),
+            ("report", Value::String("dm-report.csv".into())),
+            ("reason", Value::String("artifact_path".into())),
+            ("recorded", Value::String("dm.csv".into())),
+            ("actual", Value::String("out/dm.csv".into())),
+        ],
     ));
     reached
 }

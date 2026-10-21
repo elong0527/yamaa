@@ -351,6 +351,9 @@ conditions! {
     ProducerWorkflowCycle => ("validation", "producer_workflow_cycle", Some("PROJECT-8")),
     ProjectRunNothingToSave => ("output", "nothing_to_save", Some("PROJECT-12")),
     ProjectSubmissionNothingToSave => ("output", "nothing_to_save", Some("PROJECT-13")),
+    // A listed specification's saved artifact or inputs disagree with what
+    // its declared run report records (#3030 D151).
+    StaleArtifact => ("validation", "stale_artifact", Some("PROJECT-15")),
     OutputUnknownProfile => ("validation", "unknown_artifact_profile", Some("OUTPUT-5")),
     MissingReport => ("validation", "missing_report", Some("CHECK-22")),
     ReportPathCollision => ("validation", "artifact_path_collision", Some("OUTPUT-9")),

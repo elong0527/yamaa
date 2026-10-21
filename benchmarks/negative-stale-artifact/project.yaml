@@ -1,0 +1,16 @@
+# Fixed creation time is supplied by the submission call in benchmark.yaml.
+yamaa: "1.0"
+type: project
+study:
+  id: CATH
+  name: CATH
+  description: Example study submitting its demographics
+  protocol_name: CATH-01
+sdtm:
+  standards:
+    - name: SDTMIG
+      version: "3.4"
+      status: Final
+  specs:
+    - spec.yaml
+  define: define.xml

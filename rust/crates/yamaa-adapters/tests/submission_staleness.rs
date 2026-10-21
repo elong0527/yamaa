@@ -1,0 +1,386 @@
+#![cfg(feature = "yaml")]
+//! The staleness guard (PROJECT-15) through the shared Define service. A
+//! specification that declares `output.report` composes only with the
+//! artifact and the inputs its saved run report records. Each study here is
+//! built and saved by a real run first, so a report that matches is the one
+//! the engine wrote; each mismatch then changes one file after that save.
+mod staleness {
+    use std::{
+        fs,
+        path::PathBuf,
+        sync::atomic::{AtomicU64, Ordering},
+    };
+    use yamaa_adapters::{file_application, file_define::Define, specification_report::Identity};
+    use yamaa_core::{
+        diagnostic::{ConditionCode, Diagnostic},
+        domain_entry::Request,
+        json::Value,
+        project_environment::Submission,
+        project_function::Language,
+    };
+
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+
+    const PROJECT: &str = r#"yamaa: "1.0"
+type: project
+study:
+  id: CATH
+  name: CATH
+  description: Example study submitting demographics
+  protocol_name: CATH-01
+sdtm:
+  standards:
+    - name: SDTMIG
+      version: "3.4"
+      status: Final
+  specs:
+    - dm.yaml
+  define: define.xml
+"#;
+
+    /// DM over one raw input, saving its artifact and its run report.
+    const SPEC: &str = r#"yamaa: "1.0"
+type: spec
+model: SDTM
+domain: DM
+keys: [STUDYID, USUBJID]
+input:
+  RAW: raw.csv
+output:
+  path: dm.csv
+  columns: [DOMAIN, STUDYID, USUBJID]
+  report: dm-report.csv
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'DM'"
+    submission:
+      core: Req
+      role: Identifier
+      length: 2
+      origins:
+        - type: Assigned
+          source: Sponsor
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: RAW.STUDYID
+    submission:
+      core: Req
+      role: Identifier
+      length: 4
+      origins:
+        - type: Protocol
+          source: Sponsor
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: RAW.USUBJID
+    submission:
+      core: Req
+      role: Identifier
+      length: 9
+      origins:
+        - type: Assigned
+          source: Sponsor
+submission:
+  label: Demographics
+  class: SPECIAL PURPOSE
+  structure: One record per subject
+  repeating: false
+"#;
+
+    const RAW: &str = "STUDYID,USUBJID\nCATH,CATH-0001\nCATH,CATH-0002\n";
+    const DM: &str = "DOMAIN,STUDYID,USUBJID\nDM,CATH,CATH-0001\nDM,CATH,CATH-0002\n";
+
+    struct Study(PathBuf);
+    impl Study {
+        /// A study whose project lists `spec` as `dm.yaml`, over [`RAW`].
+        fn new(spec: &str) -> Self {
+            let root = std::env::temp_dir().join(format!(
+                "yamaa-staleness-{}-{}",
+                std::process::id(),
+                NEXT.fetch_add(1, Ordering::Relaxed)
+            ));
+            fs::create_dir_all(&root).unwrap();
+            let study = Self(yamaa_adapters::canonical_path::canonicalize(root).unwrap());
+            study.write("project.yaml", PROJECT);
+            study.write("dm.yaml", spec);
+            study.write("raw.csv", RAW);
+            study
+        }
+        /// [`Study::new`], built and saved: the artifact and the report the
+        /// engine writes.
+        fn built(spec: &str) -> Self {
+            let study = Self::new(spec);
+            let mut result = study.run();
+            assert!(result.issues().is_empty(), "{:?}", result.issues());
+            assert!(result.save().unwrap());
+            study
+        }
+        fn write(&self, name: &str, contents: impl AsRef<[u8]>) {
+            fs::write(self.0.join(name), contents).unwrap();
+        }
+        fn read(&self, name: &str) -> Vec<u8> {
+            fs::read(self.0.join(name)).unwrap()
+        }
+        fn path(&self, name: &str) -> String {
+            self.0.join(name).to_str().unwrap().to_owned()
+        }
+        /// One run of `dm.yaml` alone, which the composition reads back.
+        fn run(&self) -> file_application::Domain {
+            let path = self.path("dm.yaml");
+            file_application::domain(
+                Language::Python,
+                Request {
+                    specification: &path,
+                    environment: None,
+                },
+                Identity {
+                    runtime: "test",
+                    runtime_version: "test",
+                    engine_version: "test",
+                    example: "test",
+                    specification: &path,
+                    base_directory: ".",
+                },
+            )
+            .unwrap()
+        }
+        fn compose(&self) -> Define {
+            Define::prepare(
+                &self.path("project.yaml"),
+                Submission::Sdtm,
+                Some("2026-09-11T00:00:00"),
+                "0.0.0",
+                Some(Language::Python),
+                None,
+            )
+        }
+    }
+    impl Drop for Study {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    fn text(value: &str) -> Value {
+        Value::String(value.into())
+    }
+
+    /// The one issue a refused composition reports.
+    fn issue(define: &Define) -> Diagnostic {
+        assert!(
+            define.plan().is_none(),
+            "a refused composition saves nothing"
+        );
+        let [issue] = define.issues() else {
+            panic!("one issue: {:?}", define.issues())
+        };
+        issue.clone()
+    }
+
+    /// The facts a stale artifact's finding compared, after asserting its
+    /// condition, its path at the listing's report and the dataset and report
+    /// every such finding names.
+    fn stale(define: &Define, reason: &str) -> Vec<(String, Value)> {
+        let issue = issue(define);
+        assert_eq!(issue.code, ConditionCode::StaleArtifact, "{issue:?}");
+        assert_eq!(issue.spec_paths, ["sdtm.specs[0].output.report"]);
+        let mut context = issue.context;
+        assert_eq!(context.remove("dataset"), Some(text("DM")));
+        assert_eq!(context.remove("report"), Some(text("dm-report.csv")));
+        assert_eq!(context.remove("reason"), Some(text(reason)));
+        context.into_iter().collect()
+    }
+
+    fn facts(values: &[(&str, Value)]) -> Vec<(String, Value)> {
+        let mut facts: Vec<_> = values
+            .iter()
+            .map(|(key, value)| ((*key).to_owned(), value.clone()))
+            .collect();
+        facts.sort_by(|left, right| left.0.cmp(&right.0));
+        facts
+    }
+
+    #[test]
+    fn a_matching_report_composes() {
+        let study = Study::built(SPEC);
+        assert_eq!(study.read("dm.csv"), DM.as_bytes());
+        let mut define = study.compose();
+        assert!(define.issues().is_empty(), "{:?}", define.issues());
+        assert!(define.save().unwrap());
+        let document = String::from_utf8(study.read("define.xml")).unwrap();
+        assert!(document.contains("xlink:href=\"dm.csv\""), "{document}");
+    }
+
+    #[test]
+    fn a_specification_without_a_report_is_not_compared() {
+        let spec = SPEC.replace("  report: dm-report.csv\n", "");
+        let study = Study::built(&spec);
+        // Neither the artifact's rows nor the input are compared with
+        // anything: the saved files compose as they stand.
+        study.write("dm.csv", "DOMAIN,STUDYID,USUBJID\nDM,CATH,CATH-0009\n");
+        study.write("raw.csv", "STUDYID,USUBJID\nCATH,CATH-0009\n");
+        let define = study.compose();
+        assert!(define.issues().is_empty(), "{:?}", define.issues());
+    }
+
+    #[test]
+    fn a_report_that_names_another_output_path_is_stale() {
+        let study = Study::built(SPEC);
+        // The output is renamed after the run; its report records dm.csv.
+        study.write("dm.yaml", SPEC.replace("path: dm.csv", "path: dm2.csv"));
+        study.write("dm2.csv", DM);
+        assert_eq!(
+            stale(&study.compose(), "artifact_path"),
+            facts(&[("recorded", text("dm.csv")), ("actual", text("dm2.csv"))])
+        );
+    }
+
+    #[test]
+    fn a_report_of_a_failed_run_is_stale() {
+        let study = Study::built(SPEC);
+        // A later run fails on a missing key and replaces only the report,
+        // leaving the earlier artifact (OUTPUT-10).
+        study.write("raw.csv", "STUDYID,USUBJID\nCATH,\nCATH,CATH-0002\n");
+        let mut failed = study.run();
+        assert!(failed.output().is_none());
+        assert!(failed.save_report().unwrap());
+        assert_eq!(study.read("dm.csv"), DM.as_bytes());
+        let condition = ConditionCode::OutputMissingKeyFailed.definition().condition;
+        assert_eq!(
+            stale(&study.compose(), "run_failed"),
+            facts(&[("recorded", text(condition))])
+        );
+    }
+
+    #[test]
+    fn an_artifact_with_other_rows_than_its_report_records_is_stale() {
+        let study = Study::built(SPEC);
+        study.write("dm.csv", format!("{DM}DM,CATH,CATH-0003\n"));
+        assert_eq!(
+            stale(&study.compose(), "row_count"),
+            facts(&[("recorded", Value::from(2)), ("actual", Value::from(3))])
+        );
+    }
+
+    #[test]
+    fn has_no_data_must_agree_with_the_rows_of_the_artifact() {
+        // Declared without data, the run still saves rows.
+        let spec = SPEC.replace(
+            "  repeating: false\n",
+            "  repeating: false\n  has_no_data: true\n  comment: No subject was enrolled.\n",
+        );
+        let study = Study::built(&spec);
+        assert_eq!(
+            stale(&study.compose(), "has_no_data"),
+            facts(&[
+                ("has_no_data", Value::Bool(true)),
+                ("actual", Value::from(2))
+            ])
+        );
+        // Not declared, the run saves no rows.
+        let study = Study::new(SPEC);
+        study.write("raw.csv", "STUDYID,USUBJID\n");
+        let mut result = study.run();
+        assert!(result.issues().is_empty(), "{:?}", result.issues());
+        assert!(result.save().unwrap());
+        assert_eq!(
+            stale(&study.compose(), "has_no_data"),
+            facts(&[
+                ("has_no_data", Value::Bool(false)),
+                ("actual", Value::from(0))
+            ])
+        );
+    }
+
+    #[test]
+    fn an_input_the_report_does_not_record_is_stale() {
+        let study = Study::built(SPEC);
+        // The input is renamed after the run: its report records RAW.
+        study.write("dm.yaml", SPEC.replace("RAW", "SOURCE"));
+        assert_eq!(
+            stale(&study.compose(), "input_missing"),
+            facts(&[("input", text("SOURCE"))])
+        );
+    }
+
+    #[test]
+    fn an_input_with_another_byte_length_is_stale() {
+        let study = Study::built(SPEC);
+        study.write("raw.csv", format!("{RAW}CATH,CATH-0003\n"));
+        assert_eq!(
+            stale(&study.compose(), "input_bytes"),
+            facts(&[
+                ("input", text("RAW")),
+                ("recorded", Value::from(RAW.len())),
+                ("actual", Value::from(RAW.len() + 15)),
+            ])
+        );
+    }
+
+    #[test]
+    fn an_input_with_other_records_in_as_many_bytes_is_stale() {
+        let study = Study::built(SPEC);
+        // One quoted record of the recorded length: the same bytes count,
+        // one record instead of two.
+        let header = "STUDYID,USUBJID\n";
+        let padding = RAW.len() - header.len() - "CATH,\"\"\n".len();
+        let one = format!("{header}CATH,\"{}\"\n", "X".repeat(padding));
+        assert_eq!(one.len(), RAW.len());
+        study.write("raw.csv", &one);
+        assert_eq!(
+            stale(&study.compose(), "input_records"),
+            facts(&[
+                ("input", text("RAW")),
+                ("recorded", Value::from(2)),
+                ("actual", Value::from(1)),
+            ])
+        );
+        // Bytes that no longer decode count no records.
+        let mut undecodable = RAW.as_bytes().to_vec();
+        *undecodable.last_mut().unwrap() = b'"';
+        study.write("raw.csv", undecodable);
+        assert_eq!(
+            stale(&study.compose(), "input_records"),
+            facts(&[
+                ("input", text("RAW")),
+                ("recorded", Value::from(2)),
+                ("actual", Value::Null),
+            ])
+        );
+    }
+
+    #[test]
+    fn a_file_that_is_not_a_run_report_is_stale() {
+        let study = Study::built(SPEC);
+        study.write("dm-report.csv", "ARTIFACT,KIND\ndm.csv,run\n");
+        assert_eq!(stale(&study.compose(), "report_invalid"), facts(&[]));
+    }
+
+    #[test]
+    fn a_declared_report_that_is_absent_fails_as_a_missing_file() {
+        let study = Study::built(SPEC);
+        fs::remove_file(study.0.join("dm-report.csv")).unwrap();
+        let issue = issue(&study.compose());
+        assert_eq!(issue.code, ConditionCode::ResourceMissing, "{issue:?}");
+        assert_eq!(issue.spec_paths, ["sdtm.specs[0].output.report"]);
+        assert_eq!(issue.context["path"], text("dm-report.csv"));
+    }
+
+    #[cfg(feature = "parquet")]
+    #[test]
+    fn a_parquet_report_is_read_back_as_it_was_written() {
+        let study =
+            Study::built(&SPEC.replace("report: dm-report.csv", "report: dm-report.parquet"));
+        let define = study.compose();
+        assert!(define.issues().is_empty(), "{:?}", define.issues());
+        study.write("dm.csv", format!("{DM}DM,CATH,CATH-0003\n"));
+        let issue = issue(&study.compose());
+        assert_eq!(issue.code, ConditionCode::StaleArtifact, "{issue:?}");
+        assert_eq!(issue.context["report"], text("dm-report.parquet"));
+        assert_eq!(issue.context["reason"], text("row_count"));
+    }
+}

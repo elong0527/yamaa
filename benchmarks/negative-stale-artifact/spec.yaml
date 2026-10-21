@@ -1,0 +1,59 @@
+yamaa: "1.0"
+
+type: spec
+
+model: SDTM
+domain: DM
+keys: [STUDYID, USUBJID]
+input:
+  DM_RAW: input/dm_raw.csv
+
+# The run report is the one the last build saved; that build wrote the
+# dataset as dm_v1.csv (spec_saved.yaml), so it records no run of dm.csv.
+output:
+  path: dm.csv
+  columns: [DOMAIN, STUDYID, USUBJID]
+  report: dm-report.csv
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'DM'"
+    submission:
+      core: Req
+      role: Identifier
+      length: 2
+      origins:
+        - type: Assigned
+          source: Sponsor
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DM_RAW.STUDYID
+    submission:
+      core: Req
+      role: Identifier
+      length: 4
+      origins:
+        - type: Protocol
+          source: Sponsor
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM_RAW.USUBJID
+    submission:
+      core: Req
+      role: Identifier
+      length: 14
+      origins:
+        - type: Assigned
+          source: Sponsor
+
+submission:
+  label: Demographics
+  class: SPECIAL PURPOSE
+  structure: One record per subject
+  repeating: false
