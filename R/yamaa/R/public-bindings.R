@@ -221,4 +221,6 @@ yamaa_lint <- function(paths, fix = FALSE) .reply(.native_lint(.texts(paths, "pa
 
 yamaa_schema <- function(file_type) .reply(.native_schema(.text(file_type, "file_type")))
 
+yamaa_info <- function() .reply(.native_info(.version()))
+
 yamaa_selftest <- function() .self_test(.reply(.native_selftest(.version())))

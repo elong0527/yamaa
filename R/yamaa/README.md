@@ -169,7 +169,7 @@ time, and test time.
 ## Learn more
 
 - Package help: `?yamaa_spec`, `?yamaa_project`, `?yamaa_read_odm`,
-  `?yamaa_lint`, `?yamaa_schema` and `?yamaa_selftest`.
+  `?yamaa_lint`, `?yamaa_schema`, `?yamaa_info` and `?yamaa_selftest`.
 - The [repository README](../../README.md#example) shows a complete
   specification, and the [benchmarks](https://elong0527.github.io/yamaa/benchmark/)
   provide many more.

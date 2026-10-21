@@ -1045,7 +1045,9 @@
         "python/tests/installed/installed_schema.py",
         "R/yamaa/tests/schema.R",
         "python/tests/installed/installed_printing.py",
-        "R/yamaa/tests/printing.R"
+        "R/yamaa/tests/printing.R",
+        "python/tests/installed/installed_info.py",
+        "R/yamaa/tests/info.R"
       ]
     },
     {

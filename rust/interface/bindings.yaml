@@ -101,6 +101,15 @@ values:
   file_type:
     rust: yamaa::FILE_TYPES
     values: [spec, project, codelists, function]
+  # The optional features an engine compiles, sorted, by their Cargo names
+  # (D41, P-INFO-1); every shipped package and binary compiles all four.
+  feature:
+    rust: yamaa::FEATURES
+    values: [odm, parquet, readstat, yaml]
+  # The hosts that report engine information (D41).
+  host:
+    rust: yamaa::HOSTS
+    values: [python, r, cli]
 
 # Table columns, in order. Each table names the facade constant that holds
 # its column names, and the generator refuses any difference. Column types are
@@ -215,7 +224,7 @@ tables:
 # Named records a host returns as a dict or named list.
 records:
   # D41 (P-INFO-1): what the engine is and where it runs, in the order of the
-  # facade's yamaa::Info.
+  # facade's yamaa::Info; info() returns it, and a selftest holds it.
   info:
     owner: "section 2.8 (D41); yamaa::Info"
     fields:
@@ -223,8 +232,8 @@ records:
       - name: language_versions
         type: list<str>
         meaning: "every `yamaa:` language version the engine reads, oldest first"
-      - {name: features, type: list<str>, meaning: "the optional features compiled in, sorted"}
-      - {name: host, type: str, meaning: "`python`, `r` or `cli`"}
+      - {name: features, type: list<str>, values: feature, meaning: "the optional features compiled in, sorted"}
+      - {name: host, type: str, values: host}
       - {name: host_version, type: optional<str>, meaning: "the Python or R version; missing for cli"}
       - {name: platform, type: str, meaning: "`<os>-<arch>` of the compiled engine, such as linux-x86_64"}
 
@@ -313,6 +322,15 @@ public:
       raises: refusal
       calls: schema
       doc: The JSON Schema of a file type, spec, project, codelists or function, as canonical JSON text.
+    # D41: the record a selftest's `info` holds, made by the same helper in
+    # each binding.
+    - name: info
+      python: yamaa.info
+      r: yamaa_info
+      returns: info
+      record: info
+      calls: info
+      doc: The engine version, the language versions it reads, its features, the host and the platform.
     - name: selftest
       python: yamaa.selftest
       r: yamaa_selftest
@@ -720,6 +738,11 @@ python:
       args: {file_type: text}
       returns: text
     - kind: function
+      name: _info
+      rust: api_entry::_info
+      args: {}
+      returns: context_object
+    - kind: function
       name: _selftest
       rust: api_entry::_selftest
       args: {}
@@ -786,6 +809,7 @@ r:
         - {name: submission_summary, args: {handle: robj}, returns: r_reply}
         - {name: lint, args: {paths: robj, fix: bool}, returns: r_reply}
         - {name: schema, args: {file_type: raw}, returns: r_reply}
+        - {name: info, args: {version: raw}, returns: r_reply}
         - {name: selftest, args: {version: raw}, returns: r_reply}
         - {name: selftest_status, args: {handle: robj}, returns: r_reply}
         - {name: selftest_cases, args: {handle: robj}, returns: r_reply}
@@ -834,6 +858,7 @@ operations:
   submission_summary: {python: [_Submission.summary], r: [submission_summary]}
   lint: {python: [_lint], r: [lint]}
   schema: {python: [_schema], r: [schema]}
+  info: {python: [_info], r: [info]}
   selftest: {python: [_selftest], r: [selftest]}
   selftest_status: {python: [_SelfTest.status], r: [selftest_status]}
   selftest_cases: {python: [_SelfTest.cases], r: [selftest_cases]}

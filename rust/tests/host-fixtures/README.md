@@ -38,8 +38,9 @@ the held bytes.
 | parquet-containment | A Parquet file that makes the native decoder panic, its issue row, and a readable file with its saved CSV |
 | plan-reuse | One specification run A, B, A on one object with exact output CSV and issue rows; a changed specification's output; a changed function default's output |
 | lint | One specification with layout, authoring and suppression findings: its exact `lint()` rows, the text the proved fixes write, the rows that remain, and two refusals |
-| selftest | The bundled cases in list order, the cases table's columns, the status vocabulary, the report's lines and the layout of its information line, the engine information's fields in order, and a shipped build's features and language versions |
+| selftest | The bundled cases in list order, the cases table's columns, the status vocabulary, and the report's lines and the layout of its information line |
 | schema | The four file types, each JSON Schema's dialect, title and `$ref`, the canonical order of its top-level keys, and two refusals with their error text and issue rows |
+| info | The engine information's fields in order, the host vocabulary, and a shipped build's language versions and features |
 | printing | A study's files, and the status and printed lines of each result: a check, a failed check, a project check, a run, a failed run, a project run and each of its members, a submission, and a lazy specification and project; `{path}` stands for the path the test gave |
 
 `plan-reuse` is the repeated-run truth for #2821. A spec object's first
@@ -105,6 +106,11 @@ and its refusal text was written from D39's prefix and the template that
 each schema is one ASCII line whose top-level keys come in key order, as
 canonical JSON text keeps them; the facade's tests compare the whole text
 with the committed files.
+
+`info` pairs the installed Python and R `info()` suites (#3030 D41). Its
+fields are those of `records.info` in `rust/interface/bindings.yaml`, and its
+features and hosts that record's vocabularies, which a tools test checks. The
+`selftest` suites read it for a selftest's `info`, which `info()` equals.
 
 `printing` pairs the installed Python and R printing suites (#3030 D36,
 D37, P-PRINT-1). Its lines were written from the forms of

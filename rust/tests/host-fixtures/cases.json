@@ -5627,24 +5627,7 @@
         "yamaa selftest: succeeded, 4 of 4 cases passed",
         "not covered: odm"
       ],
-      "information_line": "engine {version}, language {language_versions}, {host} {host_version}, {platform}",
-      "info_fields": [
-        "version",
-        "language_versions",
-        "features",
-        "host",
-        "host_version",
-        "platform"
-      ],
-      "language_versions": [
-        "1.0"
-      ],
-      "features": [
-        "odm",
-        "parquet",
-        "readstat",
-        "yaml"
-      ]
+      "information_line": "engine {version}, language {language_versions}, {host} {host_version}, {platform}"
     },
     "schema": {
       "file_types": [
@@ -5822,6 +5805,30 @@
           "yamaa submission of {path}, section sdtm: succeeded, 1 define.xml and 1 transport file, 0 issues"
         ]
       }
+    },
+    "info": {
+      "fields": [
+        "version",
+        "language_versions",
+        "features",
+        "host",
+        "host_version",
+        "platform"
+      ],
+      "hosts": [
+        "python",
+        "r",
+        "cli"
+      ],
+      "language_versions": [
+        "1.0"
+      ],
+      "features": [
+        "odm",
+        "parquet",
+        "readstat",
+        "yaml"
+      ]
     }
   }
 }

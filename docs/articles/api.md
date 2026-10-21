@@ -21,6 +21,7 @@ SDTM and ADaM datasets and define.xml files.
 | Lint specifications | `yamaa_lint(paths)` | `yamaa.lint(paths)` |
 | JSON Schema of a file type | `yamaa_schema("spec")` | `yamaa.schema("spec")` |
 | Check an installation | `yamaa_selftest()` | `yamaa.selftest()` |
+| Engine version and platform | `yamaa_info()` | `yamaa.info()` |
 
 Examples in R and Python are shown in tabs, R first; pick a language once and
 every tab on the page follows. Both packages run the same Rust engine, so the
@@ -511,6 +512,28 @@ yamaa selftest: succeeded, 4 of 4 cases passed
 not covered: odm
 engine 1.0.0, language 1.0, python 3.12.4, linux-x86_64
 ```
+
+## Engine information
+
+`info()` returns what the installed engine is and where it runs: its
+`version`, the `language_versions` it reads, the optional `features` it was
+built with, the `host`, the host's own `host_version`, and the `platform`,
+such as `linux-x86_64`. R returns a named list and Python a dict, in that
+order. A selftest's `info` holds the same facts, and the command line prints
+them for `yamaa --version`. The engine version is the same in every host;
+`packageVersion("yamaa")` and `yamaa.__version__` stay the package versions.
+
+=== "R"
+
+    ```r
+    yamaa_info()$version
+    ```
+
+=== "Python"
+
+    ```python
+    yamaa.info()["version"]
+    ```
 
 ## Inputs, outputs and paths
 

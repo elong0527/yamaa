@@ -356,7 +356,7 @@ class Public:
             function,
             what,
             {"name", "python", "r", "returns"},
-            {"args", "keyword_only", "table", "raises", "calls", "doc"},
+            {"args", "keyword_only", "table", "record", "raises", "calls", "doc"},
         )
         name = function["name"]
         if not isinstance(name, str) or not _NAME.fullmatch(name):

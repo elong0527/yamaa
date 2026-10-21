@@ -270,37 +270,57 @@ impl SelfTest {
     fn cases(&self) -> ArrowTable {
         ArrowTable::from(&self.inner.table())
     }
-    /// The engine information, keyed in the facade's field order.
+    /// The engine information that ran the cases, as `info()` gives it.
     fn info<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
-        let info = self.inner.info();
-        let fields = PyDict::new(py);
-        fields.set_item("version", info.version)?;
-        fields.set_item("language_versions", &info.language_versions)?;
-        fields.set_item("features", &info.features)?;
-        fields.set_item("host", info.host.as_str())?;
-        fields.set_item("host_version", info.host_version.as_deref())?;
-        fields.set_item("platform", &info.platform)?;
-        Ok(fields)
+        info_dict(py, self.inner.info())
     }
     fn summary(&self) -> String {
         self.inner.summary().to_string()
     }
 }
 
-/// Run every selftest case through this engine as the Python host, with the
-/// running interpreter's version, such as `3.12.4`.
-#[pyfunction]
-pub fn _selftest(py: Python<'_>) -> SelfTest {
+/// The running interpreter's version, such as `3.12.4`, spelled as
+/// `platform.python_version()` spells it.
+fn python_version(py: Python<'_>) -> String {
     let version = py.version_info();
-    let version = format!(
+    format!(
         "{}.{}.{}{}",
         version.major,
         version.minor,
         version.patch,
         version.suffix.unwrap_or_default()
-    );
+    )
+}
+
+/// The engine information as a dict keyed in the facade's field order: the
+/// one construction that `info()` and a selftest's `info` share (D41).
+fn info_dict<'py>(py: Python<'py>, info: &yamaa::Info) -> PyResult<Bound<'py, PyDict>> {
+    let fields = PyDict::new(py);
+    fields.set_item("version", info.version)?;
+    fields.set_item("language_versions", &info.language_versions)?;
+    fields.set_item("features", &info.features)?;
+    fields.set_item("host", info.host.as_str())?;
+    fields.set_item("host_version", info.host_version.as_deref())?;
+    fields.set_item("platform", &info.platform)?;
+    Ok(fields)
+}
+
+/// What this engine is and where it runs, as the Python host on the running
+/// interpreter (D41, P-INFO-1).
+#[pyfunction]
+pub fn _info(py: Python<'_>) -> PyResult<Bound<'_, PyDict>> {
+    info_dict(
+        py,
+        &yamaa::info(yamaa::Host::Python, Some(&python_version(py))),
+    )
+}
+
+/// Run every selftest case through this engine as the Python host, with the
+/// running interpreter's version.
+#[pyfunction]
+pub fn _selftest(py: Python<'_>) -> SelfTest {
     SelfTest {
-        inner: yamaa::selftest(yamaa::Host::Python, Some(&version)),
+        inner: yamaa::selftest(yamaa::Host::Python, Some(&python_version(py))),
     }
 }
 

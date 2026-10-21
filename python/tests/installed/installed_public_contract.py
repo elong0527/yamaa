@@ -182,6 +182,7 @@ class PublicContract(unittest.TestCase):
             [
                 "Error",
                 "__version__",
+                "info",
                 "lint",
                 "project",
                 "read_odm",
@@ -208,6 +209,7 @@ class PublicContract(unittest.TestCase):
                 "_Run",
                 "_SelfTest",
                 "_Submission",
+                "_info",
                 "_lint",
                 "_plans",
                 "_project_check",

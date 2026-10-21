@@ -23,6 +23,7 @@ from yamaa._support import (
 __all__ = [
     "Error",
     "__version__",
+    "info",
     "lint",
     "project",
     "read_odm",
@@ -317,6 +318,11 @@ def lint(paths, fix: bool = False) -> _pl.DataFrame:
 def schema(file_type: str) -> str:
     """The JSON Schema of a file type, spec, project, codelists or function, as canonical JSON text."""
     return _call(_native._schema, file_type)
+
+
+def info() -> dict:
+    """The engine version, the language versions it reads, its features, the host and the platform."""
+    return _native._info()
 
 
 def selftest() -> SelfTest:

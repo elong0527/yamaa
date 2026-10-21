@@ -165,6 +165,10 @@
   .Call(wrap__schema, file_type)
 }
 
+.native_info <- function(version) {
+  .Call(wrap__info, version)
+}
+
 .native_selftest <- function(version) {
   .Call(wrap__selftest, version)
 }

@@ -44,6 +44,13 @@ values.file_type.spec
 values.file_type.project
 values.file_type.codelists
 values.file_type.function
+values.feature.odm
+values.feature.parquet
+values.feature.readstat
+values.feature.yaml
+values.host.python
+values.host.r
+values.host.cli
 tables.issues.columns[0]: severity: str, values severity
 tables.issues.columns[1]: phase: str, values phase
 tables.issues.columns[2]: condition: str, values yaml/conditions.yaml
@@ -111,8 +118,8 @@ tables.selftest_cases.columns[1]: status: str, values status
 tables.selftest_cases.columns[2]: message: optional<str>
 records.info.fields[0]: version: str
 records.info.fields[1]: language_versions: list<str>
-records.info.fields[2]: features: list<str>
-records.info.fields[3]: host: str
+records.info.fields[2]: features: list<str>, values feature
+records.info.fields[3]: host: str, values host
 records.info.fields[4]: host_version: optional<str>
 records.info.fields[5]: platform: str
 public.types.path: python str or os.PathLike, unannotated; r character(1)
@@ -146,6 +153,7 @@ public.functions.lint.args[0]: paths: path_list
 public.functions.lint.args[1]: fix: flag = false
 public.functions.schema: python yamaa.schema; r yamaa_schema; returns json_text; raises refusal
 public.functions.schema.args[0]: file_type: file_type
+public.functions.info: python yamaa.info; r yamaa_info; returns info; record info
 public.functions.selftest: python yamaa.selftest; r yamaa_selftest; returns SelfTest
 public.classes.Check: python yamaa.Check; r yamaa_check
 public.classes.Check.status: property; returns status
@@ -203,6 +211,7 @@ public.classes.SelfTest.summary: printing; python __repr__; r print, format
 public.errors.refusal: python yamaa.Error(Exception) with issues: table, paths: paths_written; r yamaa_error, error, condition with message: text, call: NULL, issues: table, paths: paths_written
 public.python.exports.Error
 public.python.exports.__version__
+public.python.exports.info
 public.python.exports.lint
 public.python.exports.project
 public.python.exports.read_odm
@@ -214,6 +223,7 @@ public.r.exports.yamaa_project
 public.r.exports.yamaa_read_odm
 public.r.exports.yamaa_lint
 public.r.exports.yamaa_schema
+public.r.exports.yamaa_info
 public.r.exports.yamaa_selftest
 public.r.s3methods.yamaa_check.print
 public.r.s3methods.yamaa_check.format

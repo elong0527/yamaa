@@ -83,7 +83,7 @@ pub use functions::{
     FunctionIdentity, HostLanguage, LockContext, LockKind, Parameter, ProjectFunctions, RenvLock,
     Signature,
 };
-pub use info::{info, Host, Info};
+pub use info::{info, Host, Info, FEATURES, HOSTS};
 pub use lint::{lint, Lint, LintFinding, LINT_COLUMNS, LINT_FINDINGS};
 pub use observe::{CallStage, DatasetPhase, Event, Outcome, Phase, Progress, Refusal};
 pub use odm::{read_odm, OdmOptions, ODM_COLUMNS};

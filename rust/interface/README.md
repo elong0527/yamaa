@@ -78,11 +78,11 @@ draft.
 `values` holds the closed vocabularies of the public surface, `tables` the
 columns of each table a host returns, in order, and `records` the named
 records a host returns as a dict or named list: today `info`, the engine
-information of a selftest (D41). Each vocabulary and table names, as
+information that `info()` returns and a selftest holds (D41). Each vocabulary and table names, as
 `rust: yamaa::NAME`, the facade constant that owns it: the statuses, the
 issues, run report, lint and selftest columns, the ODM item columns, the
-phases, the report's kinds and outcomes, the severities, the lint findings
-and the file types. The generator reads the constant from the facade sources,
+phases, the report's kinds and outcomes, the severities, the lint findings,
+the file types, the features and the hosts. The generator reads the constant from the facade sources,
 following an alias such as
 `pub const ODM_COLUMNS: [&str; 30] = yamaa_core::odm_items::COLUMNS;` into
 the core or adapters crate, and refuses a declaration that differs from it in

@@ -43,6 +43,7 @@ yamaa::Engine: pub use yamaa::engine::Engine
 yamaa::EngineOptions: pub use yamaa::engine::EngineOptions
 yamaa::Error: pub use yamaa::error::Error
 yamaa::Event: pub use yamaa::observe::Event
+yamaa::FEATURES: pub use yamaa::info::FEATURES
 yamaa::FFI_ArrowArrayStream: pub use yamaa::table::FFI_ArrowArrayStream
 yamaa::FILE_TYPES: pub use yamaa::file_type::FILE_TYPES
 yamaa::Failure: pub use yamaa::api::Failure
@@ -53,6 +54,7 @@ yamaa::Float64Array: pub use yamaa::table::Float64Array
 yamaa::FunctionError: pub use yamaa::error::FunctionError
 yamaa::FunctionHandle: pub use yamaa::functions::FunctionHandle
 yamaa::FunctionIdentity: pub use yamaa::functions::FunctionIdentity
+yamaa::HOSTS: pub use yamaa::info::HOSTS
 yamaa::Host: pub use yamaa::info::Host
 yamaa::HostLanguage: pub use yamaa::functions::HostLanguage
 yamaa::HostPayload: pub use yamaa::error::HostPayload
@@ -441,6 +443,8 @@ yamaa::functions::Signature::parameters: pub parameters: Vec<Parameter>
 yamaa::functions::Signature::returns: pub returns: ColumnType
 yamaa::functions::decode_renv_lock: pub fn decode_renv_lock(bytes: &[u8]) -> Result<RenvLock, LockSyntaxError>
 yamaa::info: pub use yamaa::info::info
+yamaa::info::FEATURES: pub const FEATURES: [&str; 4]
+yamaa::info::HOSTS: pub const HOSTS: [&str; 3]
 yamaa::info::Host: impl Host
 yamaa::info::Host: pub enum Host [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
 yamaa::info::Host::Cli: Cli

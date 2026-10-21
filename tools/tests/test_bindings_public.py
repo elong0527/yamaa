@@ -26,6 +26,7 @@ class RenderingTests(unittest.TestCase):
         names = [
             "Error",
             "__version__",
+            "info",
             "lint",
             "project",
             "read_odm",
@@ -78,6 +79,7 @@ class RenderingTests(unittest.TestCase):
                 "export(yamaa_read_odm)",
                 "export(yamaa_lint)",
                 "export(yamaa_schema)",
+                "export(yamaa_info)",
                 "export(yamaa_selftest)",
                 "S3method(print, yamaa_check)",
                 "S3method(format, yamaa_check)",
@@ -224,7 +226,7 @@ class RenderingTests(unittest.TestCase):
         self.assertIn('__all__ = [\n    "Error",\n    "__version__",\n', text)
         self.assertIn('    "spec",\n]\n', text)
         candidate = copy.deepcopy(self.definition)
-        for name in ("lint", "schema"):
+        for name in ("lint", "schema", "info"):
             candidate["public"]["functions"].remove(function(candidate, name))
         short = public.Public(candidate).render_python([])
         self.assertIn(

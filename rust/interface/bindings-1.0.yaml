@@ -349,14 +349,6 @@ public:
       python: yamaa.schema(file_type)
       r: yamaa_schema(file_type)
       cli: schema TYPE
-    - name: info
-      since: 1.0.0
-      args: {}
-      returns: info
-      record: info
-      python: yamaa.info()
-      r: yamaa_info()
-      cli: --version
     - name: selftest
       since: 1.0.0
       args: {}
@@ -729,11 +721,6 @@ python:
       args: {file_type: text}
       returns: text
     - kind: function
-      name: _info
-      rust: api_entry::_info
-      args: {}
-      returns: context_object
-    - kind: function
       name: _selftest
       rust: api_entry::_selftest
       args: {}
@@ -790,7 +777,6 @@ r:
         - {name: submission_save, args: {handle: robj}, returns: r_reply}
         - {name: lint, args: {paths: robj, fix: bool}, returns: r_reply}
         - {name: schema, args: {file_type: raw}, returns: r_reply}
-        - {name: info, args: {version: raw}, returns: r_reply}
         - {name: selftest, args: {version: raw}, returns: r_reply}
         - {name: selftest_status, args: {handle: robj}, returns: r_reply}
         - {name: selftest_cases, args: {handle: robj}, returns: r_reply}
@@ -829,7 +815,6 @@ operations:
   submission_save: {python: [_Submission.save], r: [submission_save], cli: [submission]}
   lint: {python: [_lint], r: [lint], cli: [lint]}
   schema: {python: [_schema], r: [schema], cli: [schema]}
-  info: {python: [_info], r: [info], cli: [--version]}
   selftest: {python: [_selftest], r: [selftest], cli: [selftest]}
   selftest_status: {python: [_SelfTest.status], r: [selftest_status], cli: [selftest]}
   selftest_cases: {python: [_SelfTest.cases], r: [selftest_cases], cli: [selftest]}

@@ -765,8 +765,7 @@ fn selftest_cases(handle: Robj) -> List {
     })
 }
 
-/// The engine information as a named list in the facade's field order, with
-/// `host_version` `NULL` when the facade has none.
+/// The engine information that ran the cases, as `yamaa_info()` gives it.
 #[extendr]
 fn selftest_info(handle: Robj) -> List {
     reply(|| {
@@ -774,20 +773,38 @@ fn selftest_info(handle: Robj) -> List {
         let selftest = selftest
             .try_borrow()
             .map_err(|_| "selftest handle in use")?;
-        let info = selftest.info();
-        let host_version = info
-            .host_version
-            .as_deref()
-            .map_or_else(|| NULL.into_robj(), |version| r!(version));
-        Ok(list!(
-            version = info.version,
-            language_versions = Strings::from_values(&info.language_versions),
-            features = Strings::from_values(info.features.clone()),
-            host = info.host.as_str(),
-            host_version = host_version,
-            platform = info.platform.as_str()
-        )
-        .into_robj())
+        Ok(info_list(selftest.info()))
+    })
+}
+
+/// The engine information as a named list in the facade's field order, with
+/// `host_version` `NULL` when the facade has none: the one construction that
+/// `yamaa_info()` and a selftest's `info` share (D41).
+fn info_list(info: &yamaa::Info) -> Robj {
+    let host_version = info
+        .host_version
+        .as_deref()
+        .map_or_else(|| NULL.into_robj(), |version| r!(version));
+    list!(
+        version = info.version,
+        language_versions = Strings::from_values(&info.language_versions),
+        features = Strings::from_values(info.features.clone()),
+        host = info.host.as_str(),
+        host_version = host_version,
+        platform = info.platform.as_str()
+    )
+    .into_robj()
+}
+
+/// What this engine is and where it runs, as the R host with R's `version`,
+/// such as `4.6.1` (D41, P-INFO-1).
+#[extendr]
+fn info(version: Raw) -> List {
+    reply(|| {
+        Ok(info_list(&yamaa::info(
+            yamaa::Host::R,
+            Some(&text(&version)?),
+        )))
     })
 }
 

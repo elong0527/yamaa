@@ -12,6 +12,7 @@ if (!requireNamespace("jsonlite", quietly = TRUE)) {
 host_fixture_root <- normalizePath("host-fixtures", winslash = "/", mustWork = TRUE)
 source(file.path(host_fixture_root, "reader.R"), local = TRUE)
 truth <- read_host_fixture(host_fixture_root, "selftest")
+info_truth <- read_host_fixture(host_fixture_root, "info")
 statuses <- fixture_strings(truth[["statuses"]])
 cases <- fixture_strings(truth[["cases"]])
 passed <- truth[["status"]]
@@ -39,13 +40,13 @@ systems <- c(Linux = "linux", Darwin = "macos", Windows = "windows")
 architectures <- c(x86_64 = "x86_64", aarch64 = "aarch64", arm64 = "aarch64")
 expected_info <- list(
   version = yamaa:::.core_version(),
-  language_versions = fixture_strings(truth[["language_versions"]]),
-  features = fixture_strings(truth[["features"]]),
+  language_versions = fixture_strings(info_truth[["language_versions"]]),
+  features = fixture_strings(info_truth[["features"]]),
   host = "r",
   host_version = as.character(getRversion()),
   platform = paste0(systems[[Sys.info()[["sysname"]]]], "-", architectures[[R.version$arch]])
 )
-stopifnot(identical(names(result$info), fixture_strings(truth[["info_fields"]])),
+stopifnot(identical(names(result$info), fixture_strings(info_truth[["fields"]])),
   identical(result$info, expected_info))
 cat("info gives the engine information of this host\n")
 
