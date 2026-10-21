@@ -1,0 +1,10 @@
+phase: validation
+condition: unknown_standard
+spec_paths:
+  - sdtm.specs[0].submission.standard
+rule: DEFINE-8
+context:
+  value: SDTMIG-MD
+  section: sdtm
+  standards:
+    - SDTMIG

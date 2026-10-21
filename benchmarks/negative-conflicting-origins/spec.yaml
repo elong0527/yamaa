@@ -1,0 +1,60 @@
+yamaa: "1.0"
+
+type: spec
+
+model: ADaM
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  DM: input/dm.csv
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, AGE]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DM.STUDYID
+    submission:
+      core: Req
+      mandatory: true
+      length: 4
+      origins:
+        - type: Predecessor
+          description: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM.USUBJID
+    submission:
+      core: Req
+      mandatory: true
+      length: 14
+      origins:
+        - type: Predecessor
+          description: DM.USUBJID
+
+  # The age is read unchanged from demographics, yet also claims to be
+  # derived.
+  - name: AGE
+    type: int
+    label: Age
+    derivation: DM.AGE
+    submission:
+      core: Req
+      mandatory: true
+      length: 3
+      origins:
+        - type: Predecessor
+          description: DM.AGE
+        - type: Derived
+      method: Age in years at informed consent
+
+submission:
+  label: Subject-Level Analysis Dataset
+  class: SUBJECT LEVEL ANALYSIS DATASET
+  structure: One record per subject
+  repeating: false

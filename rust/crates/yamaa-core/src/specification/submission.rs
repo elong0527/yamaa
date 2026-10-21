@@ -79,7 +79,10 @@ fn reserved(
     let governed = if column.is_some() {
         crate::specification_submission_document::COLUMN_METADATA_FIELDS
     } else {
-        crate::specification_submission_document::DATASET_METADATA_FIELDS
+        crate::specification_submission_document::dataset_metadata_fields(matches!(
+            spec.header.surface,
+            ast::Surface::V1 { .. }
+        ))
     };
     for (key, _) in metadata {
         if governed.iter().any(|field| field.name() == key.name) {
@@ -111,51 +114,70 @@ impl Declared<'_> {
             .and_then(origin::predecessor)
     }
 }
+/// The origins a column or a value-level entry declares at `path`, each
+/// checked on its own: at least one (SUB-14), each one's description
+/// (SUB-16), and a method beside a `Derived` origin anywhere (SUB-18). A 1.0
+/// origin's missing description is reported at its own `origins[<i>]`, and a
+/// 0.5 one's at `path`, as 0.5.0 reports it (D75).
 fn origins<'a>(
+    spec: &ast::Spec,
     metadata: &'a SubmissionMetadata,
     name: &str,
     entry: Option<&str>,
     path: &str,
     inherited_method: bool,
     result: &mut Vec<PreflightFinding>,
-) -> Option<Declared<'a>> {
+) -> Vec<Declared<'a>> {
     let mut fields = vec![("column", s(name))];
     if let Some(entry) = entry {
         fields.push(("entry", s(entry)));
     }
-    let Some(origin) = metadata.origins.first() else {
+    if metadata.origins.is_empty() {
         result.push(finding(C::SubmissionOriginMissing, path, &fields));
-        return None;
-    };
-    let declaration = Declared {
-        kind: &origin.kind.text,
-        description: origin
-            .description
-            .as_ref()
-            .map(|description| description.text.as_str()),
-    };
-    let kind = declaration.kind;
-    if ["Predecessor", "Other", "Not Available"].contains(&kind)
-        && declaration.description.is_none_or(str::is_empty)
-    {
-        let mut context = fields.clone();
-        context.push(("origin_type", s(kind)));
-        result.push(finding(C::SubmissionOriginDescription, path, &context));
-    } else if kind == OriginType::Predecessor.name() && declaration.predecessor().is_none() {
-        // SUB-16: a Predecessor description names `<dataset>.<column>`.
-        let mut context = fields.clone();
-        context.push(("origin_type", s(kind)));
-        context.push(("reason", s("predecessor_form")));
-        result.push(finding(
-            C::SubmissionOriginDescription,
-            &format!("{path}.origin.description"),
-            &context,
-        ));
+        return Vec::new();
     }
-    if kind == "Derived" && metadata.method.is_none() && !inherited_method {
+    let v1 = matches!(spec.header.surface, ast::Surface::V1 { .. });
+    let mut declared = Vec::with_capacity(metadata.origins.len());
+    for origin in &metadata.origins {
+        let declaration = Declared {
+            kind: &origin.kind.text,
+            description: origin
+                .description
+                .as_ref()
+                .map(|description| description.text.as_str()),
+        };
+        let kind = declaration.kind;
+        if ["Predecessor", "Other", "Not Available"].contains(&kind)
+            && declaration.description.is_none_or(str::is_empty)
+        {
+            let mut context = fields.clone();
+            context.push(("origin_type", s(kind)));
+            let at = if v1 {
+                spec.cite(origin.meta)
+            } else {
+                path.to_string()
+            };
+            result.push(finding(C::SubmissionOriginDescription, &at, &context));
+        } else if kind == OriginType::Predecessor.name() && declaration.predecessor().is_none() {
+            // SUB-16: a Predecessor description names `<dataset>.<column>`.
+            let mut context = fields.clone();
+            context.push(("origin_type", s(kind)));
+            context.push(("reason", s("predecessor_form")));
+            result.push(finding(
+                C::SubmissionOriginDescription,
+                &format!("{}.description", spec.cite(origin.meta)),
+                &context,
+            ));
+        }
+        declared.push(declaration);
+    }
+    if declared.iter().any(|origin| origin.kind == "Derived")
+        && metadata.method.is_none()
+        && !inherited_method
+    {
         result.push(finding(C::SubmissionMethodMissing, path, &fields));
     }
-    Some(declaration)
+    declared
 }
 
 /// A column's or a value-level entry's effective submission metadata: the
@@ -482,12 +504,13 @@ fn admit_entries(
         for entry in &submission.value_level {
             let path = spec.cite(entry.meta);
             let own = &entry.metadata;
-            // An entry without its own origin answers with the column's,
+            // An entry without origins of its own answers with the column's,
             // which the column's own refutation already covers.
-            let declaration = if own.origins.is_empty() {
-                None
+            let declared = if own.origins.is_empty() {
+                Vec::new()
             } else {
                 origins(
+                    spec,
                     own,
                     name,
                     Some(&entry.id.name),
@@ -530,40 +553,44 @@ fn admit_entries(
                     path: format!("{path}.length"),
                 });
             }
-            let Some(declaration) = declaration else {
-                continue;
-            };
-            let derivations = values::entry_expressions(spec, column, entry);
-            let refuting = derivations
-                .iter()
-                .map(|&expr| origin::classify_expr(spec, expr, reads))
-                .find(|kind| !kind.admitted().contains(&declaration.kind));
-            let copy = if refuting.is_some() {
-                None
+            // Each of the entry's own origins is refuted on its rows (SUB-13).
+            let derivations = if declared.is_empty() {
+                Vec::new()
             } else {
-                declaration.predecessor().and_then(|predecessor| {
-                    derivations.iter().find_map(|&expr| {
-                        origin::copies_expr(spec, expr, &predecessor, reads)
-                            .err()
-                            .map(|failure| (expr, failure))
+                values::entry_expressions(spec, column, entry)
+            };
+            for declaration in &declared {
+                let refuting = derivations
+                    .iter()
+                    .map(|&expr| origin::classify_expr(spec, expr, reads))
+                    .find(|kind| !kind.admitted().contains(&declaration.kind));
+                let copy = if refuting.is_some() {
+                    None
+                } else {
+                    declaration.predecessor().and_then(|predecessor| {
+                        derivations.iter().find_map(|&expr| {
+                            origin::copies_expr(spec, expr, &predecessor, reads)
+                                .err()
+                                .map(|failure| (expr, failure))
+                        })
                     })
-                })
-            };
-            let kind = match (refuting, copy) {
-                (Some(kind), _) => kind,
-                (None, Some((expr, _))) => origin::classify_expr(spec, expr, reads),
-                (None, None) => continue,
-            };
-            let mut context = vec![
-                ("column", s(name)),
-                ("entry", s(&entry.id.name)),
-                ("derivation_kind", s(kind.name())),
-                ("origin_type", s(declaration.kind)),
-            ];
-            if let Some((_, failure)) = copy {
-                context.push(("reason", s(failure.reason())));
+                };
+                let kind = match (refuting, copy) {
+                    (Some(kind), _) => kind,
+                    (None, Some((expr, _))) => origin::classify_expr(spec, expr, reads),
+                    (None, None) => continue,
+                };
+                let mut context = vec![
+                    ("column", s(name)),
+                    ("entry", s(&entry.id.name)),
+                    ("derivation_kind", s(kind.name())),
+                    ("origin_type", s(declaration.kind)),
+                ];
+                if let Some((_, failure)) = copy {
+                    context.push(("reason", s(failure.reason())));
+                }
+                result.push(finding(C::SubmissionValueOriginRefuted, &path, &context));
             }
-            result.push(finding(C::SubmissionValueOriginRefuted, &path, &context));
         }
     }
     lengths
@@ -768,28 +795,32 @@ pub(super) fn admit(
                 check,
             });
         }
-        let Some(origin) = origins(metadata, name, None, &path, false, result) else {
-            continue;
-        };
-        // The column's origin answers for every construction whose rows an
-        // entry declaring its own origin does not all select (SUB-19).
+        let declared = origins(spec, metadata, name, None, &path, false, result);
+        // The column's origins answer for every construction whose rows an
+        // entry declaring its own origins does not all select, each declared
+        // type checked against them (SUB-19).
         let derivations = values::column_expressions(spec, column);
-        if !derivations.is_empty() {
-            let mut admitted = origin::classify_expr(spec, derivations[0], &reads).admitted();
-            for &expr in &derivations[1..] {
-                let kinds = origin::classify_expr(spec, expr, &reads).admitted();
-                admitted.retain(|kind| kinds.contains(kind));
-            }
-            if admitted.is_empty() {
-                result.push(finding(
-                    C::SubmissionOriginRefuted,
-                    &path,
-                    &[
-                        ("column", s(name)),
-                        ("reason", s("row_derivations_disagree")),
-                    ],
-                ));
-            } else if !admitted.contains(&origin.kind) {
+        if declared.is_empty() || derivations.is_empty() {
+            continue;
+        }
+        let mut admitted = origin::classify_expr(spec, derivations[0], &reads).admitted();
+        for &expr in &derivations[1..] {
+            let kinds = origin::classify_expr(spec, expr, &reads).admitted();
+            admitted.retain(|kind| kinds.contains(kind));
+        }
+        if admitted.is_empty() {
+            result.push(finding(
+                C::SubmissionOriginRefuted,
+                &path,
+                &[
+                    ("column", s(name)),
+                    ("reason", s("row_derivations_disagree")),
+                ],
+            ));
+            continue;
+        }
+        for origin in &declared {
+            if !admitted.contains(&origin.kind) {
                 result.push(finding(
                     C::SubmissionOriginRefuted,
                     &path,
