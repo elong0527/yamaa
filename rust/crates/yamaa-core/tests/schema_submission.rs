@@ -1104,8 +1104,7 @@ mod schema {
             let section = &declared.sections[0];
             let required = submission_composition::Required::admit(
                 declared.study.as_ref(),
-                Some(section),
-                section.family,
+                section,
                 yamaa_core::ast::Surface::V0_5,
             )?;
             submission_composition::compose(
@@ -1864,8 +1863,7 @@ mod schema {
                 assert_eq!(s.context, ast::DefineContext::Submission);
                 assert_eq!(s.xml_lang.text, "en");
                 // Only Define-XML composition requires the study, guide and target.
-                let Err(findings) =
-                    Required::admit(owned.study.as_ref(), Some(s), family, ast::Surface::V0_5)
+                let Err(findings) = Required::admit(owned.study.as_ref(), s, ast::Surface::V0_5)
                 else {
                     panic!("composition requires the define declarations")
                 };
@@ -2423,8 +2421,7 @@ mod schema {
             let section = &declared.sections[0];
             let required = submission_composition::Required::admit(
                 declared.study.as_ref(),
-                Some(section),
-                section.family,
+                section,
                 yamaa_core::ast::Surface::V0_5,
             )?;
             let tree = crate::support::submission_tree(document);

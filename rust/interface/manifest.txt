@@ -39,6 +39,10 @@ values.lint_finding.invalid_suppression
 values.lint_finding.repeated_row_derivation
 values.lint_finding.redundant_intermediate
 values.lint_finding.missing_label
+values.file_type.spec
+values.file_type.project
+values.file_type.codelists
+values.file_type.function
 tables.issues.columns[0]: severity: str, values severity
 tables.issues.columns[1]: phase: str, values phase
 tables.issues.columns[2]: condition: str, values yaml/conditions.yaml
@@ -119,9 +123,11 @@ public.types.flag: python bool; r logical(1)
 public.types.names: python list[str]; r character()
 public.types.paths_written: python list[str], absolute with forward slashes, in publication order; r character(), the same paths; save() returns them invisibly
 public.types.tree: python dict; r named list
+public.types.json_text: python str, canonical JSON (RFC 8785); r character(1), canonical JSON (RFC 8785)
 public.types.table: python polars.DataFrame; r data.frame
 public.types.optional_table: python polars.DataFrame | None; r data.frame or NULL
 public.types.status: python str, one of values.status; r character(1), one of values.status
+public.types.file_type: python str, one of values.file_type; r character(1), one of values.file_type
 public.types.info: python dict, keys in records.info order; r named list, names in records.info order
 public.types.nothing: python None; r NULL, invisibly
 public.functions.spec: python yamaa.spec; r yamaa_spec; returns Spec
@@ -137,6 +143,8 @@ public.functions.read_odm.args[4]: max_xml_depth: count = 64; keyword-only
 public.functions.lint: python yamaa.lint; r yamaa_lint; returns table; table lint; raises refusal
 public.functions.lint.args[0]: paths: path_list
 public.functions.lint.args[1]: fix: flag = false
+public.functions.schema: python yamaa.schema; r yamaa_schema; returns json_text; raises refusal
+public.functions.schema.args[0]: file_type: file_type
 public.functions.selftest: python yamaa.selftest; r yamaa_selftest; returns SelfTest
 public.classes.Check: python yamaa.Check; r yamaa_check
 public.classes.Check.issues: field; returns table; table issues
@@ -185,12 +193,14 @@ public.python.exports.__version__
 public.python.exports.lint
 public.python.exports.project
 public.python.exports.read_odm
+public.python.exports.schema
 public.python.exports.selftest
 public.python.exports.spec
 public.r.exports.yamaa_spec
 public.r.exports.yamaa_project
 public.r.exports.yamaa_read_odm
 public.r.exports.yamaa_lint
+public.r.exports.yamaa_schema
 public.r.exports.yamaa_selftest
 public.r.s3methods.yamaa_project_run.[[
 public.r.s3methods.yamaa_selftest.print

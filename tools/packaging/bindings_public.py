@@ -50,15 +50,28 @@ _PY_ANNOTATION = {
     "names": "list[str]",
     "paths_written": "list[str]",
     "tree": "dict",
+    "json_text": "str",
     "table": "_pl.DataFrame",
     "optional_table": "_pl.DataFrame | None",
     "status": "str",
+    "file_type": "str",
     "info": "dict",
     "nothing": "None",
 }
 # Tokens whose value is one of the `records`; a member returning one names it.
 _RECORD_TOKENS = {"info"}
-_ARGUMENT_TOKENS = {"path", "path_list", "text", "optional_text", "count", "flag"}
+# Tokens whose value is text from the vocabulary of the same name in
+# `values`; each host projection names that vocabulary.
+_VOCABULARY_TOKENS = {"status", "file_type"}
+_ARGUMENT_TOKENS = {
+    "path",
+    "path_list",
+    "text",
+    "optional_text",
+    "count",
+    "flag",
+    "file_type",
+}
 _DEFAULTS = {
     "optional_text": {"None"},
     "flag": {"false", "true"},
@@ -72,6 +85,7 @@ _R_ARGUMENT = {
     "path_list": ".texts",
     "text": ".text",
     "optional_text": ".optional_text",
+    "file_type": ".text",
 }
 _NATIVE_PY = {"text": "str", "bool": "bool", "index": "int", "i32": "int"}
 _PY_DEFAULT = {"None": "None", "false": "False", "true": "True"}
@@ -202,6 +216,12 @@ class Public:
             for host, text in entry.items():
                 if not isinstance(text, str) or not text.strip():
                     raise ValueError(f"public.types.{token}.{host} must be text")
+                if token in _VOCABULARY_TOKENS and f"values.{token}" not in text:
+                    raise ValueError(
+                        f"public.types.{token}.{host} must name values.{token}"
+                    )
+            if token in _VOCABULARY_TOKENS and token not in self.definition["values"]:
+                raise ValueError(f"public.types.{token} names an undeclared vocabulary")
         self._validate_errors()
         if not isinstance(self.classes, dict) or not self.classes:
             raise ValueError("public.classes must be a nonempty mapping")
@@ -861,7 +881,13 @@ class Public:
                 ]
             )
         doc = self.public["python"]["doc"].split("\n")
-        names = ", ".join(f'"{name}"' for name in self.python_names())
+        quoted = [f'"{name}"' for name in self.python_names()]
+        exports = f"__all__ = [{', '.join(quoted)}]"
+        if len(exports) > _PY_WIDTH:
+            # ruff format splits a long list one item per line.
+            exports = "\n".join(
+                ["__all__ = [", *(f"    {name}," for name in quoted), "]"]
+            )
         lines = [
             *header,
             f'"""{doc[0]}',
@@ -871,7 +897,7 @@ class Public:
             "from yamaa import _native",
             single,
             "",
-            f"__all__ = [{names}]",
+            exports,
             "",
             "",
             text,

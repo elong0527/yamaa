@@ -271,6 +271,9 @@ conditions! {
     HeaderFileType => ("validation", "unexpected_file_type", Some("SCHEMA-2")),
     ReferenceLanguageVersion => ("validation", "unsupported_language_version", Some("SCHEMA-2")),
     ReferenceFileType => ("validation", "unexpected_file_type", Some("SCHEMA-2")),
+    // A file type a call takes as its argument, which names no file: the type
+    // whose JSON Schema `schema` gives.
+    ArgumentFileType => ("validation", "unexpected_file_type", Some("SCHEMA-2")),
     SchemaUnknownFieldSince => ("validation", "unknown_field", Some("SCHEMA-2")),
     SchemaBareDerivationScalar => ("validation", "bare_derivation_scalar", Some("EXPR-5")),
     SchemaRedundantLongForm => ("validation", "redundant_long_form", Some("SCHEMA-15")),
@@ -471,6 +474,12 @@ conditions! {
     ValueLevelUnmatched => ("verification", "value_level_unmatched", Some("SUB-13")),
     SubmissionPredecessorLabel => ("validation", "predecessor_label_mismatch", Some("SUB-20")),
     SubmissionStandardFamily => ("validation", "unknown_standard_family", Some("SUB-3")),
+    // A 1.0 specification without the `model` its submission metadata or a
+    // section's listing requires (D25).
+    SubmissionModelRequired => ("validation", "missing_required_field", Some("SUB-3")),
+    // A 1.0 section's guide, or a listed specification's `model`, outside the
+    // section's model: the 1.0 name of `unknown_standard_family` (D58).
+    SubmissionModelMismatch => ("validation", "standard_model_mismatch", Some("SUB-3")),
     SubmissionDefineExtension => ("validation", "value_not_permitted", Some("DEFINE-2")),
     SubmissionDefineName => ("validation", "value_not_permitted", Some("DEFINE-2")),
     SubmissionSourceVersion => ("validation", "source_system_incomplete", Some("DEFINE-12")),
@@ -495,7 +504,6 @@ conditions! {
     SubmissionXmlInvalid => ("validation", "value_not_permitted", Some("DEFINE-25")),
     SubmissionJsonInvalid => ("validation", "value_not_permitted", Some("JSON-4")),
     SubmissionInventoryFailed => ("verification", "allowed_values_failed", Some("CT-11")),
-    DefineStandardName => ("validation", "value_not_permitted", Some("DEFINE-6")),
     DefineRequiredDeclaration => ("validation", "missing_required_field", Some("DEFINE-28")),
     DefineArtifactOutsidePackage => ("validation", "artifact_outside_document", Some("DEFINE-16")),
     DefineArtifactCollision => ("validation", "artifact_path_collision", Some("JSON-2")),

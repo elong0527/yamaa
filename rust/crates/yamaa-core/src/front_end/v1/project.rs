@@ -549,8 +549,7 @@ mod tests {
             let declarations = project.submission.as_ref().unwrap();
             let Err(findings) = crate::submission_composition::Required::admit(
                 declarations.study.as_ref(),
-                declarations.sections.first(),
-                crate::project_environment::Submission::Adam,
+                &declarations.sections[0],
                 project.header.surface,
             ) else {
                 panic!("a section without a guide")
@@ -602,8 +601,7 @@ mod tests {
         let declarations = project.submission.as_ref().unwrap();
         let required = crate::submission_composition::Required::admit(
             declarations.study.as_ref(),
-            declarations.sections.first(),
-            crate::project_environment::Submission::Sdtm,
+            &declarations.sections[0],
             project.header.surface,
         )
         .unwrap();
@@ -617,11 +615,25 @@ mod tests {
         ) else {
             panic!("a guide of another model")
         };
-        assert!(
-            findings.iter().any(|finding| finding.code
-                == crate::diagnostic::ConditionCode::SubmissionStandardFamily
-                && finding.path == "sdtm.standards[0].name"),
-            "{findings:?}"
+        // A 1.0 section reports it as `standard_model_mismatch` (D58), naming
+        // the guide, the section and the section's model.
+        let finding = findings
+            .iter()
+            .find(|finding| finding.path == "sdtm.standards[0].name")
+            .unwrap_or_else(|| panic!("{findings:?}"));
+        assert_eq!(
+            finding.code,
+            crate::diagnostic::ConditionCode::SubmissionModelMismatch
+        );
+        let text = |value: &str| crate::json::Value::String(value.into());
+        assert_eq!(
+            finding.context,
+            [
+                ("model".to_string(), text("SDTM")),
+                ("section".to_string(), text("sdtm")),
+                ("value".to_string(), text("ADaMIG")),
+            ]
+            .into()
         );
     }
 

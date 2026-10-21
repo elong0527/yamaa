@@ -19,7 +19,7 @@ implementation guide, supporting documents, an ordered `specs` list and one
 `define` target. Each section produces exactly one Define-XML document. The
 selected project section is the only place the composition is declared.
 
-Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-adapters/tests/file_resources.rs::explicit_section_selector_datetime_and_missing_published_artifact_are_refused`, `python/tests/installed/installed_public_define.py::test_defaults_selection_bound_lists_and_required_acrf_aliases`.
+Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa/tests/project_operations.rs::a_submission_composes_the_selected_section`, `python/tests/installed/installed_public_define.py::test_defaults_selection_bound_lists_and_required_acrf_aliases`.
 
 An implementation must not assemble a document from whatever specifications a
 directory holds: which datasets one submission represents is a study decision,
@@ -84,8 +84,8 @@ Evidence: `sdtm-dm-metadata`, `sdtm-ta-sponsor-epoch`, `sdtm-vs-epoch-from-subje
 Nothing in this profile is relaxed by `Other`; that context only omits the
 requirements a regulator imposes. Under `Submission`:
 
-- every dataset declares `submission.domain` or inherits one, for the `sdtm`
-  and `send` families;
+- every dataset declares `submission.domain` or inherits one, for the `SDTM`
+  and `SEND` models;
 - every dataset's `SASDatasetName` and every column's `SASFieldName` is
   written, so [DEFINE-22](#define-22) must admit every name;
 - every dataset's `submission.label` and every column's `label` is at most 40
@@ -155,12 +155,12 @@ belong to the selected section's family. The `sdtm`, `adam` and `send` sections 
 documents, and each document carries the controlled-terminology standards cited
 by its bound codelists' sources.
 
-Fails: `value_not_permitted`.
 Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/src/front_end/v1/project.rs::define_names_a_1_0_section_s_guide_by_its_place_in_standards`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionStandardFamily`, `rust/crates/yamaa-core/tests/schema_submission.rs::every_shipped_guide_spelling_is_closed_metadata_not_family_composition`.
 
-[SUB-3](submission.md#sub-3) reads each dataset's family from the bound
-standard's name. A project file that declares `schema_version` writes this
-guide as `standard`, reported at `<section>.standard.name`.
+[SUB-3](submission.md#sub-3) checks the bound guide against the model the
+specification declares, which a 1.0 section's listing makes the section's. A
+project file that declares `schema_version` writes this guide as `standard`,
+reported at `<section>.standard.name`.
 
 <a id="define-7"></a>
 
@@ -404,13 +404,13 @@ collected origin requires one fails with `origin_document_missing`.
 
 <a id="define-15"></a>
 
-### DEFINE-15. Each dataset produces one `ItemGroupDef`, whose `Purpose` follows from its family
+### DEFINE-15. Each dataset produces one `ItemGroupDef`, whose `Purpose` follows from its model
 
 Each dataset produces one `ItemGroupDef` with the attributes and children the
-table below lists. `Purpose` is derived from the family alone, not declared:
-`Tabulation` for `sdtm` and `send`, and `Analysis` for `adam`. `Domain` is
+table below lists. `Purpose` is derived from the model alone, not declared:
+`Tabulation` for `SDTM` and `SEND`, and `Analysis` for `ADaM`. `Domain` is
 `submission.domain`, defaulting to the specification's `domain`, and is omitted
-for `adam`.
+for `ADaM`.
 
 Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-adapters/tests/file_resources.rs::ae_and_vs_metadata_only_fixed_time_projection_has_independent_structure`.
 
@@ -418,8 +418,8 @@ Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-adapters/tests/file_resources.r
 |---|---|
 | `OID` | generated |
 | `Name` | the specification's `domain`, per [DEFINE-5](#define-5) |
-| `Domain` | `submission.domain`, default `domain`; omit for `adam` |
-| `Purpose` | `Tabulation` for `sdtm` and `send`, `Analysis` for `adam` |
+| `Domain` | `submission.domain`, default `domain`; omit for `ADaM` |
+| `Purpose` | `Tabulation` for `SDTM` and `SEND`, `Analysis` for `ADaM` |
 | `SASDatasetName` | the specification's `domain`, when [DEFINE-22](#define-22) admits it |
 | `Repeating` | `Yes` when `submission.repeating`, else `No` |
 | `IsReferenceData` | `Yes` when `submission.reference_data`, else `No` |
@@ -535,8 +535,8 @@ Evidence: `sdtm-dm-metadata`, `sdtm-lb-metadata`, `rust/crates/yamaa-adapters/te
 | `CodeListRef` | the bound codelist's generated identifier, when declared |
 | `def:Origin` | per the origin mapping below |
 
-[SUB-15](submission.md#sub-15) derives the origin `Source` for the `adam`
-family. The `def:Origin` `Description` child carries `origin.description` when
+[SUB-15](submission.md#sub-15) derives the origin `Source` for the `ADaM`
+model. The `def:Origin` `Description` child carries `origin.description` when
 declared, and one `def:DocumentRef` child follows per document reference in
 declaration order, including the page-less annotated case report form
 reference [SUB-17](submission.md#sub-17) derives under `context: Other` when a
@@ -773,15 +773,15 @@ entry; it never quietly omits a per-value definition.
 
 ### DEFINE-28. Define-XML requires the project's `study` and the section's `standards` and `define`, which a run does not
 
-A Define-XML generation whose project declares no `study`, no section for the
-selected model, or a selected section without `standards` or `define` fails
-with `missing_required_field` before any specification is captured. It reports
+A Define-XML generation whose project declares no `study`, or whose selected
+section declares no `standards` or `define`, fails with
+`missing_required_field` before any specification is captured. It reports
 every missing field at once, each at its project path such as `study`,
 `sdtm.standards` or `sdtm.define`. A run of the same project needs none of them
 and does not report them.
 
 Fails: `missing_required_field`.
-Evidence: `rust/crates/yamaa-adapters/tests/file_resources.rs::define_reports_every_missing_study_section_guide_and_target_before_reading_specifications`, `rust/crates/yamaa-core/src/front_end/v1/project.rs::define_requires_a_1_0_section_s_standards_by_their_1_0_name`.
+Evidence: `rust/crates/yamaa-adapters/tests/file_resources.rs::define_reports_every_missing_study_guide_and_target_before_reading_specifications`, `rust/crates/yamaa-core/src/front_end/v1/project.rs::define_requires_a_1_0_section_s_standards_by_their_1_0_name`.
 
 A project can therefore list its specifications and run them before its
 submission metadata is ready ([PROJECT-3](project.md#project-3)). An empty

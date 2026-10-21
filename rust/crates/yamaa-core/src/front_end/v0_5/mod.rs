@@ -368,7 +368,7 @@ impl<'d> Lower<'d> {
             meta: version.meta,
             version,
         };
-        // `model` is stored unchecked; P1-10 checks it (P-MODEL-1).
+        // `model` (P-MODEL-1), which a 1.0 specification alone declares.
         let model = self.field(root, "model").and_then(|node| {
             let kind = match self.text(node)? {
                 "SDTM" => ModelKind::Sdtm,

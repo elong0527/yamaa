@@ -11,6 +11,7 @@ use std::path::Path;
 use yamaa_core::{
     ast::Transport,
     diagnostic::Diagnostic,
+    project_environment::Submission,
     project_function::Language,
     submission_composition::{Dataset, Finding, Study},
     table::TableAccess,
@@ -51,12 +52,13 @@ pub struct Define {
 #[derive(Debug)]
 pub struct SaveError;
 impl Define {
-    /// Compose `standard`'s submission from the project file `environment`,
+    /// Compose `section`'s submission from the project file `environment`,
     /// reading it and everything it declares through `resolver`: the
-    /// caller's, or the local file resolver without one.
+    /// caller's, or the local file resolver without one. The caller selects
+    /// a section the project declares (PROJECT-14).
     pub fn prepare(
         environment: &str,
-        standard: &str,
+        section: Submission,
         created: Option<&str>,
         installed: &str,
         host: Option<Language>,
@@ -74,7 +76,7 @@ impl Define {
             &mut ports,
             service::Request {
                 environment,
-                standard,
+                section,
                 created,
                 installed,
             },
