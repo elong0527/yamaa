@@ -1,4 +1,5 @@
-# Independently authored fixed-time submission witness; no study execution.
+# Independently authored submission witness: the case runs its completed
+# layer with these codelists, and the Define tests compose it at a fixed time.
 schema_version: '1.0'
 study:
   id: STUDY01
