@@ -65,7 +65,7 @@ pub mod text;
 mod internal;
 mod outcome;
 
-pub use api::{Check, Failure, Plans, ProjectRun, Run, Status, Submission, STATUSES};
+pub use api::{Check, Failure, Plans, ProjectRun, Run, Status, Submission, SECTIONS, STATUSES};
 pub use cancel::CancellationToken;
 pub use diagnostic::{
     ContextValue, Diagnostic, DiagnosticContext, Location, Position, Report, Severity, SourceSpan,

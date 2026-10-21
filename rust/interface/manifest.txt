@@ -49,6 +49,9 @@ values.file_type.spec
 values.file_type.project
 values.file_type.codelists
 values.file_type.function
+values.section.sdtm
+values.section.adam
+values.section.send
 values.feature.odm
 values.feature.parquet
 values.feature.readstat
