@@ -13,10 +13,11 @@ tables and the vendored saphyr-parser crate.
 The list covers the third-party crates that the shipped crate yamaa-r links,
 as locked in rust/Cargo.lock: its normal dependency closure on each of the
 targets x86_64-unknown-linux-gnu, aarch64-unknown-linux-gnu,
-aarch64-apple-darwin, x86_64-pc-windows-msvc, x86_64-pc-windows-gnu, without
-procedural macros. Crates that only build scripts or procedural macros use,
-and crates of other platforms, are not linked, so they are not listed. Crates
-come from crates.io unless an entry names another source.
+x86_64-unknown-linux-musl, aarch64-unknown-linux-musl, aarch64-apple-darwin,
+x86_64-pc-windows-msvc, x86_64-pc-windows-gnu, without procedural macros.
+Crates that only build scripts or procedural macros use, and crates of other
+platforms, are not linked, so they are not listed. Crates come from crates.io
+unless an entry names another source.
 
 Where a crate offers a choice of licenses, yamaa relies on the first license
 in this order that the crate offers and whose text the crate ships: MIT,

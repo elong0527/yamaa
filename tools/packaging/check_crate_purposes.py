@@ -6,12 +6,14 @@ host's binding crate, the vendored YAML parser and every crates.io crate that
 they reach on any platform with any feature, all vendored. The archive ships
 and builds the crates that only build scripts and procedural macros use, and
 vendors those that Cargo locks for platforms or features that no yamaa build
-selects, so each of them needs a purpose too.
+selects, so each of them needs a purpose too. The command line's trimmed lock,
+with yamaa-cli in place of a binding crate, is the graph that its binaries
+build from, and its component inventory lists it.
 
 tools/packaging/crate_purposes.toml states why yamaa ships each crate, one
-purpose per crate name. This fails while a crate of either host's trimmed lock
-has no purpose, a purpose names a crate that neither host ships, or a purpose
-is empty.
+purpose per crate name. This fails while a crate of any host's trimmed lock
+has no purpose, a purpose names a crate that no host ships, or a purpose is
+empty.
 """
 
 import sys
@@ -54,6 +56,11 @@ def shipped(workspace=WORKSPACE):
         }
 
 
+def listed(hosts):
+    """Name hosts in prose: python and r, or cli, python and r."""
+    return " and ".join([", ".join(hosts[:-1]), hosts[-1]] if hosts[1:] else hosts)
+
+
 def problems(purposes, graphs):
     """Messages for the crates without a purpose, the purposes of crates that
     no host ships, and the empty purposes.
@@ -70,8 +77,7 @@ def problems(purposes, graphs):
         shipping = hosts[name]
         bundles = "bundles ship" if len(shipping) > 1 else "bundle ships"
         messages.append(
-            f"{LABEL}: no purpose for {name}, which the "
-            f"{' and '.join(shipping)} {bundles}"
+            f"{LABEL}: no purpose for {name}, which the {listed(shipping)} {bundles}"
         )
     for name in sorted(set(purposes) - set(hosts)):
         messages.append(f"{LABEL}: {name} has a purpose, but no host's bundle ships it")
@@ -98,7 +104,7 @@ def main():
     names = set().union(*graphs.values())
     print(
         f"{LABEL}: a purpose for each of the {len(names)} crates that the "
-        f"{' and '.join(sorted(graphs))} bundles ship"
+        f"{listed(sorted(graphs))} bundles ship"
     )
 
 

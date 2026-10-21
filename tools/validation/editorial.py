@@ -226,6 +226,7 @@ UNICODE_DATA_AND_NOTICES = {
     # Generated from the crates' own license, copyright and NOTICE files.
     "R/yamaa/inst/LICENSE-THIRD-PARTY.txt",
     "python/LICENSE-THIRD-PARTY.txt",
+    "rust/crates/yamaa-cli/LICENSE-THIRD-PARTY.txt",
 }
 
 

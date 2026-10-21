@@ -1,21 +1,22 @@
 """Generate the license notices for the third-party code in the native packages.
 
-The yamaa wheels and the installed R package statically link Rust crates from
-the locked graph. Each host's LICENSE-THIRD-PARTY.txt lists the third-party
-crates that the host's shipped binding crate links: its normal dependency
-closure on each of the supported TARGETS, without procedural macros, which run
-inside the compiler. Crates that only build scripts or procedural macros use,
-and the crates of other platforms, are not linked and are not listed; the
-source packages carry their license files with their vendored sources.
-python/ holds the copy of the Python packages, which covers yamaa-python, and
-R/yamaa/inst/ the copy of the R package, which covers yamaa-r. Each entry names
-the one license that yamaa relies on, with the license, copyright and NOTICE
-texts that the crate ships for it. The inventory comes from `cargo metadata
---locked` for rust/Cargo.lock and the texts from the crate packages Cargo
-unpacks.
+The yamaa wheels, the installed R package and the command-line binaries
+statically link Rust crates from the locked graph. Each host's
+LICENSE-THIRD-PARTY.txt lists the third-party crates that the host's shipped
+crate links: its normal dependency closure on each of the supported TARGETS,
+without procedural macros, which run inside the compiler. Crates that only
+build scripts or procedural macros use, and the crates of other platforms,
+are not linked and are not listed; the source packages carry their license
+files with their vendored sources. python/ holds the copy of the Python
+packages, which covers yamaa-python, R/yamaa/inst/ the copy of the R package,
+which covers yamaa-r, and rust/crates/yamaa-cli/ the copy of the command-line
+archives, which covers yamaa-cli. Each entry names the one license that yamaa
+relies on, with the license, copyright and NOTICE texts that the crate ships
+for it. The inventory comes from `cargo metadata --locked` for rust/Cargo.lock
+and the texts from the crate packages Cargo unpacks.
 
-The native extension also links the Rust standard library of the toolchain
-that rust/rust-toolchain.toml pins. Its notices come from the notice that the
+The native code also links the Rust standard library of the toolchain that
+rust/rust-toolchain.toml pins. Its notices come from the notice that the
 Rust project ships with that toolchain, share/doc/rust/COPYRIGHT-library.html,
 and the license texts beside it, of whose out-of-tree crates they keep those
 that LIBRARY_LINKED names. No license text is looked up anywhere else.
@@ -49,19 +50,33 @@ from tools.staging import engine_bundle
 NOTICES = "LICENSE-THIRD-PARTY.txt"
 PROJECT_LICENSE = "LICENSE.txt"
 # The component inventory: tools/packaging/generate_component_inventory.py
-# writes each host's copy from its trimmed lock and checks both.
+# writes each host's copy from its trimmed lock and checks them.
 INVENTORY = "COMPONENTS.tsv"
-# The package notices whose Python and R copies differ, because each lists the
+# The package notices whose hosts' copies differ, because each lists the
 # components of its own host; the hosts share the other package notices.
 HOST_NOTICES = (NOTICES, INVENTORY)
 # The Python project lists the package notices; the R package installs its
-# copies from inst/.
+# copies from inst/. The command line keeps only its HOST_NOTICES beside its
+# crate: its archives carry the Python packages' copies of the other notices
+# (tools/packaging/cli_archive.py).
 PYTHON = ROOT / "python"
 R_INST = ROOT / "R/yamaa/inst"
-# How each host's notices name the packages that link the crates.
+CLI = ROOT / "rust/crates/yamaa-cli"
+# How each host's notices name the packages that link the crates and what the
+# crates are linked into.
 LINKED_BY = {
-    "python": ("The yamaa Python wheels link", "their"),
-    "r": ("The installed yamaa R package links", "its"),
+    "python": (
+        "The yamaa Python wheels link",
+        "their native extension",
+    ),
+    "r": (
+        "The installed yamaa R package links",
+        "its native extension",
+    ),
+    "cli": (
+        "The yamaa command-line binaries link",
+        "the yamaa executable",
+    ),
 }
 CRATES_IO = "registry+https://github.com/rust-lang/crates.io-index"
 # The targets whose linked crates the notices list: those that the wheels, the
@@ -422,7 +437,7 @@ def version_key(version):
 
 def copies():
     """The checkout directory of each host's package notices, by host."""
-    return {"python": PYTHON, "r": R_INST}
+    return {"python": PYTHON, "r": R_INST, "cli": CLI}
 
 
 def dependency_closure(metadata, crate):
@@ -878,11 +893,11 @@ def render(notices, library, host):
     for crate in library_notices(library):
         standard += entry(crate, "the Rust project's notice reproduces none")
 
-    subject, possessive = LINKED_BY[host]
+    subject, destination = LINKED_BY[host]
     lines = ["yamaa third-party notices", "=" * 25, ""]
     lines += paragraph(
         f"{subject} third-party Rust crates and the Rust standard library into "
-        f"{possessive} native extension. "
+        f"{destination}. "
         "This file lists those crates with the license that yamaa relies on and "
         "the license, copyright and NOTICE texts that each crate ships for it, "
         "and the standard library's licensing from the Rust project's notice. "
@@ -1031,7 +1046,8 @@ def python_project():
 def check_copies(project):
     """Require the package copies of the project license and notices to agree.
 
-    The hosts' copies of HOST_NOTICES differ; their generators check them.
+    The hosts' copies of HOST_NOTICES differ; their generators check them. The
+    command line keeps no copy of the other notices.
     """
     errors = []
     names = project["license-files"]
@@ -1055,6 +1071,14 @@ def check_copies(project):
                 errors.append(
                     f"{relative}/{path.name}: not a package notice in license-files"
                 )
+    # The command-line archives carry the Python packages' copies of the
+    # shared notices, so a copy beside the crate would go unused.
+    for path in sorted(CLI.glob("LICENSE*")):
+        if path.name not in HOST_NOTICES:
+            errors.append(
+                f"{CLI.relative_to(ROOT).as_posix()}/{path.name}: the command "
+                f"line keeps only its own {NOTICES} and {INVENTORY}"
+            )
     project_license = (ROOT / "LICENSE").read_bytes()
     for directory, relative in ((PYTHON, "python"), (R_INST, "R/yamaa/inst")):
         path = directory / PROJECT_LICENSE
@@ -1112,7 +1136,9 @@ def write(graphs, library):
         selected[host] = notices_for(graphs, engine_bundle.BINDINGS[host])
         payload = render(selected[host], library, host).encode("utf-8")
         (directory / NOTICES).write_bytes(payload)
-        (directory / PROJECT_LICENSE).write_bytes(project_license)
+        # The command line's archives carry the Python packages' copy.
+        if host != "cli":
+            (directory / PROJECT_LICENSE).write_bytes(project_license)
     return selected
 
 

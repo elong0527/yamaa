@@ -679,6 +679,8 @@ yamaa::style_same_value: pub fn style_same_value(before: &[u8], after: &[u8]) ->
 yamaa::table::Array: pub use arrow_array::Array
 yamaa::table::DataType: pub use arrow_schema::DataType
 yamaa::table::Date32Array: pub use arrow_array::Date32Array
+yamaa::table::Engine: impl Engine
+yamaa::table::Engine::save_table: pub fn save_table(&self, table: &Table, out: &str) -> Result<Vec<String>, Failure>
 yamaa::table::FFI_ArrowArrayStream: pub use arrow_array::ffi_stream::FFI_ArrowArrayStream
 yamaa::table::Field: pub use arrow_schema::Field
 yamaa::table::Fields: pub use arrow_schema::Fields

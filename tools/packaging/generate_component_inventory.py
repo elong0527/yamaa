@@ -2,23 +2,25 @@
 
 Every package carries COMPONENTS.tsv beside LICENSE-THIRD-PARTY.txt: each
 wheel in its .dist-info/licenses directory, the Python source archive at its
-root and the R source package in inst/, from which R installs it at the
-package root. The wheels carry the Python inventory, python/COMPONENTS.tsv,
-and the Python source archive the same inventory without its rust-std row
-(source_inventory); the R source package carries the R inventory,
-R/yamaa/inst/COMPONENTS.tsv. The R package's configure step,
-R/yamaa/tools/configure.R, appends a rust-std row for the rustc that compiles
-the installation to the copy that R installs, so an installed R package and an
-R binary package carry the R inventory with that row (installed_inventory).
+root, the R source package in inst/, from which R installs it at the package
+root, and each command-line archive beside the executable. The wheels carry
+the Python inventory, python/COMPONENTS.tsv, and the Python source archive the
+same inventory without its rust-std row (source_inventory); the R source
+package carries the R inventory, R/yamaa/inst/COMPONENTS.tsv. The R package's
+configure step, R/yamaa/tools/configure.R, appends a rust-std row for the
+rustc that compiles the installation to the copy that R installs, so an
+installed R package and an R binary package carry the R inventory with that
+row (installed_inventory). The command-line archives carry the command
+line's inventory, rust/crates/yamaa-cli/COMPONENTS.tsv.
 
 A host's inventory lists the components that its packages are built from:
 
 - every package of the host's trimmed lock, which
   tools/staging/engine_bundle.py stages (#3030 D55): the engine crates, the
-  host's binding crate, the vendored YAML parser and every crates.io crate
-  that they reach on any platform with any feature, including the crates that
-  only build scripts and procedural macros use and those that no supported
-  target compiles;
+  host's binding crate, or yamaa-cli for the command line, the vendored YAML
+  parser and every crates.io crate that they reach on any platform with any
+  feature, including the crates that only build scripts and procedural macros
+  use and those that no supported target compiles;
 - the C code that those crates compile from sources that they carry: ReadStat,
   vendored in yamaa-adapters, and the zstd library that zstd-sys bundles;
 - for a host in BINARY_HOSTS, whose committed inventory is that of binary
@@ -46,7 +48,7 @@ configure step appends follows them), with these columns:
   bundled C code, the crate that bundles it; for the standard library, the
   Rust repository at the release's tag;
 - purpose: the crate's purpose in tools/packaging/crate_purposes.toml, or the
-  C code's in VENDORED below, or the standard library's, WHEEL_PURPOSE or,
+  C code's in VENDORED below, or the standard library's, BINARY_PURPOSE or,
   for the row that configure appends, INSTALLED_PURPOSE.
 
 No column holds a digest: a component is named by its name, version, license,
@@ -79,21 +81,22 @@ NAME = notices.INVENTORY
 COLUMNS = ("name", "version", "license", "source", "purpose")
 REGISTRY = "crates.io"
 # The hosts whose committed inventory is that of binary packages that the
-# pinned toolchain builds: the Python wheels. Their inventory names that
-# toolchain's standard library, which they link; the R source package's names
-# none, and the Python source archive's leaves it out (source_inventory). The
-# R package's configure step appends the row to the copy that R installs
-# (installed_inventory).
-BINARY_HOSTS = frozenset({"python"})
+# pinned toolchain builds: the Python wheels and the command-line binaries.
+# Their inventory names that toolchain's standard library, which they link;
+# the R source package's names none, and the Python source archive's leaves it
+# out (source_inventory). The R package's configure step appends the row to
+# the copy that R installs (installed_inventory).
+BINARY_HOSTS = frozenset({"python", "cli"})
 # The standard library's row: rustup's name for the component that holds it,
 # and the license that yamaa relies on of its MIT OR Apache-2.0.
 STANDARD_LIBRARY = "rust-std"
 STANDARD_LIBRARY_LICENSE = "MIT"
 RUST_REPOSITORY = "https://github.com/rust-lang/rust"
-# The row's purpose in the wheels' inventory, and in an installed R package's.
-# R/yamaa/tools/configure.R writes the second as STANDARD_LIBRARY_PURPOSE, and
-# tools/tests/test_r_configure.py keeps the two texts equal.
-WHEEL_PURPOSE = (
+# The row's purpose in the inventory of the wheels and the command-line
+# binaries, and in an installed R package's. R/yamaa/tools/configure.R writes
+# the second as STANDARD_LIBRARY_PURPOSE, and tools/tests/test_r_configure.py
+# keeps the two texts equal.
+BINARY_PURPOSE = (
     "the Rust standard library (core, alloc and std) of the pinned toolchain "
     "that builds this package, statically linked into its native code; "
     "LICENSE-THIRD-PARTY.txt carries its notices"
@@ -200,10 +203,10 @@ VENDORED = (
 )
 
 
-def standard_library(release, purpose=WHEEL_PURPOSE):
+def standard_library(release, purpose=BINARY_PURPOSE):
     """The row of the Rust standard library of the pinned toolchain, whose
-    release rust/rust-toolchain.toml names, with the wheels' purpose unless
-    another is given."""
+    release rust/rust-toolchain.toml names, with the binary packages' purpose
+    unless another is given."""
     if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", release):
         raise ValueError(
             f"rust/rust-toolchain.toml pins {release!r}, not a Rust release such "
@@ -358,7 +361,7 @@ def installed_inventory(text, release):
 
 def committed():
     """The committed inventory of each host, by host."""
-    return {"python": notices.PYTHON / NAME, "r": notices.R_INST / NAME}
+    return {host: directory / NAME for host, directory in notices.copies().items()}
 
 
 def listed(text):
