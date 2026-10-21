@@ -199,6 +199,16 @@ impl Declaration {
     pub(super) fn unknown_value(&self, owner: Owner<'_>) -> Diagnostic {
         lookup::range_reference(&format!("{}.value", self.path), owner, &self.value)
     }
+    /// Whether the value is a bare name that no output column takes. In 1.0
+    /// a bare name is an output column alone (NAME-3), so such a value names
+    /// nothing a row holds, whatever field an input stores (LOOKUP-9).
+    pub(super) fn names_no_column(&self, catalog: &Catalog) -> bool {
+        !self.value.contains('.')
+            && !matches!(
+                catalog.bind(&self.value),
+                Some(reference_binding::Binding::Output { .. })
+            )
+    }
     /// Whether the value names a field that `driver`, the named intermediate
     /// whose records build the row, derives. That field is a value of the row
     /// (ROW-2), but a range value reads only the stored record that built the
@@ -392,6 +402,7 @@ mod tests {
             &|_| true,
             &catalog,
             &driver,
+            false,
             &[],
             &secondary,
             &mut findings,

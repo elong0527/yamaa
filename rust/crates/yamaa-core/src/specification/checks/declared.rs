@@ -574,6 +574,18 @@ impl Checks<'_> {
         if !self.join(scope, &path(spec, e), variable, findings) {
             return Ok(());
         }
+        // A read of another input through its implicit join binds its range.
+        if variable.split_once('.').is_some_and(|(owner, _)| {
+            !scope.drivers.contains(&owner)
+                && self
+                    .prepared
+                    .sources
+                    .iter()
+                    .any(|input| input.name == owner)
+        }) {
+            findings.extend(join_range(spec, e));
+            return Ok(());
+        }
         let binds = match variable.split_once('.') {
             Some((owner, _)) => match spec
                 .intermediates
@@ -656,8 +668,34 @@ impl Checks<'_> {
                 ));
             }
         }
+        let column = scope.is_some_and(|scope| !matches!(scope.phase, Some(Phase::Row { .. })));
+        let one_meaning = spec.header.surface.one_meaning_per_form();
+        if let (true, true, Some(relation)) = (column, one_meaning, relation) {
+            self.aggregate_keys(e, aggregate, relation, findings)?;
+        }
         if scope.is_some() && findings.len() != start {
             return Ok(());
+        }
+        // Once nothing else of it fails, binding binds its range: on a 1.0
+        // tree a bare value is an output column alone, and one that no column
+        // takes names nothing the row holds (LOOKUP-9).
+        if let Some((between, value)) = aggregate
+            .between
+            .as_ref()
+            .filter(|between| {
+                column
+                    && one_meaning
+                    && relation.is_some()
+                    && (between.lower.is_some() || between.upper.is_some())
+            })
+            .and_then(|between| Some((between, name(spec, between.value)?)))
+            .filter(|(_, value)| !value.contains('.') && !self.column(value))
+        {
+            findings.push(BindFinding::AggregateDiagnostic(lookup::range_reference(
+                &format!("{}.value", render(spec, between.meta)),
+                Owner::Unnamed,
+                value,
+            )));
         }
         // Each derive binding reads the relation the aggregate reduces, in
         // an ungrouped row phase ([`Self::donor_walk`]), typed by the
@@ -1988,6 +2026,168 @@ impl Checks<'_> {
         Ok(donors)
     }
 
+    /// Whether `name` is a declared column, the output column a bare name
+    /// reads (NAME-3).
+    fn column(&self, name: &str) -> bool {
+        self.spec
+            .columns
+            .iter()
+            .any(|column| column.name.name == name)
+    }
+
+    fn unknown_match_value(&self, name: &str) -> bool {
+        unknown_match_value(self.spec, self.prepared, name)
+    }
+
+    /// On a 1.0 tree, each reference of a written key match value of the
+    /// lookup at `index` that reads no current-row value
+    /// ([`unknown_match_value`]), at the path binding cites it
+    /// (`intermediates::bind_one`): a name written as the value at `key`,
+    /// any other value at its own entry, `key.<column>`. A lookup that
+    /// another lookup's derivations read binds its key values at each read
+    /// instead. True when one is refused: binding then binds nothing of the
+    /// lookup.
+    fn key_values(&self, index: usize, findings: &mut Vec<BindFinding>) -> bool {
+        let spec = self.spec;
+        let item = &spec.intermediates[index];
+        if !spec.header.surface.one_meaning_per_form() || donor_read(spec, index) {
+            return false;
+        }
+        let fields = match &item.key {
+            Some(JoinKey::Columns { columns, .. }) => columns
+                .iter()
+                .map(|column| column.name.as_str())
+                .collect::<Vec<_>>(),
+            Some(JoinKey::Pairs { pairs, .. }) => {
+                pairs.iter().map(|(field, _)| field.name.as_str()).collect()
+            }
+            _ => return false,
+        };
+        let at = render(spec, item.meta);
+        let start = findings.len();
+        for field in fields {
+            let Some(value) = self
+                .prepared
+                .intermediates
+                .match_declaration(&item.id.name, field)
+            else {
+                continue;
+            };
+            let (path, suggests) = match value {
+                match_values::Declaration::Variable(_) => (format!("{at}.key"), true),
+                match_values::Declaration::Expression { .. } => {
+                    (format!("{at}.key.{field}"), false)
+                }
+                _ => (format!("{at}.key.{field}"), true),
+            };
+            for reference in value
+                .references()
+                .filter(|name| self.unknown_match_value(name))
+            {
+                // `SELF` names donor rows, so binding suggests the bare name
+                // of a column the current row carries.
+                let suggestion = reference
+                    .strip_prefix("SELF.")
+                    .filter(|bare| suggests && self.column(bare))
+                    .map(String::from);
+                findings.push(BindFinding::Lookup(LookupFinding::reference(
+                    &path,
+                    reference,
+                    Some(&item.id.name),
+                    ReferenceCause::OutputKey,
+                    suggestion,
+                )));
+            }
+        }
+        findings.len() != start
+    }
+
+    /// On a 1.0 tree, what binding refuses of a column aggregate's written
+    /// `key` over `relation` that the declarations decide, for each pair in
+    /// written order (`aggregates::bound_relation`), each where a named
+    /// intermediate's would be (LOOKUP-5): a pair whose declared types cannot
+    /// compare at `key` (LOOKUP-9), then each reference of its match value
+    /// that reads no current-row value ([`unknown_match_value`]) at the
+    /// pair, `key.<column>`. A key column the relation does not store is
+    /// decided once its records are read.
+    fn aggregate_keys(
+        &self,
+        e: ExprId,
+        aggregate: &ast::Aggregate,
+        relation: &str,
+        findings: &mut Vec<BindFinding>,
+    ) -> Result<(), BindError> {
+        use crate::diagnostic::AggregateFinding as Finding;
+        let spec = self.spec;
+        let calls = self.prepared.project_calls.is_some();
+        let pairs = match &aggregate.key {
+            Some(JoinKey::Columns { columns, .. }) => {
+                let mut pairs = Vec::new();
+                for column in columns {
+                    let name = column.name.as_str();
+                    if !pairs.iter().any(|(prior, _)| *prior == name) {
+                        pairs.push((name, match_values::Declaration::Variable(name.into())));
+                    }
+                }
+                pairs
+            }
+            Some(JoinKey::Pairs { pairs, .. }) => pairs
+                .iter()
+                .map(|(field, value)| {
+                    match_values::Declaration::from_tree(spec, field.meta, *value, calls)
+                        .map(|declaration| (field.name.as_str(), declaration))
+                        .map_err(|_| BindError::Internal)
+                })
+                .collect::<Result<Vec<_>, _>>()?,
+            _ => return Ok(()),
+        };
+        let path = path(spec, e);
+        let key = format!("{path}.key");
+        let names = |name: &str| self.declared.name(name);
+        for (field, value) in pairs {
+            let actual = self
+                .declared
+                .name(&format!("{relation}.{field}"))
+                .column_type();
+            let expected = match &value {
+                match_values::Declaration::Variable(read)
+                | match_values::Declaration::Source(read) => names(read),
+                match_values::Declaration::Literal(_, expr)
+                | match_values::Declaration::StrPad(_, expr)
+                | match_values::Declaration::Expression { expr, .. } => {
+                    self.result_type(*expr, ast::Scope::Row, &names)
+                }
+            };
+            if let Some(actual) = actual.filter(|&actual| !expected.comparable(actual.into())) {
+                findings.push(BindFinding::AggregateDiagnostic(
+                    Finding::KeyType {
+                        path: &key,
+                        source: &value.display_name(field),
+                        expected,
+                        actual,
+                    }
+                    .diagnostic()
+                    .map_err(|_| BindError::Internal)?,
+                ));
+            }
+            let pair = format!("{key}.{field}");
+            for reference in value
+                .references()
+                .filter(|name| self.unknown_match_value(name))
+            {
+                findings.push(BindFinding::AggregateDiagnostic(
+                    Finding::MatchValueReference {
+                        path: &pair,
+                        identifier: reference,
+                    }
+                    .diagnostic()
+                    .map_err(|_| BindError::Internal)?,
+                ));
+            }
+        }
+        Ok(())
+    }
+
     /// The static type faults of an intermediate's filter over its donor
     /// record and the record it is read from (FORMULA-5).
     fn filter_types(
@@ -2153,6 +2353,9 @@ impl Checks<'_> {
                     )));
                 }
             }
+            if self.key_values(index, findings) {
+                refused.insert(index);
+            }
             if let Some(filter) = item.filter {
                 self.grammar(filter, findings)?;
             }
@@ -2162,17 +2365,32 @@ impl Checks<'_> {
                     .map(BindFinding::Predicate),
             );
             // A range's value is a value of the reading row: an output
-            // column, else a field of the primary input's record, or a field
-            // of an earlier intermediate or of an input. Its bounds are donor
-            // fields; each stated one must be typed (LOOKUP-9).
+            // column, or on the 0.5 surface a field of the primary input's
+            // record, or a field of an earlier intermediate or of an input.
+            // Its bounds are donor fields; each stated one must be typed
+            // (LOOKUP-9). On a 1.0 tree a bare value is an output column
+            // alone, and binding refuses one that no column takes at
+            // `between.value`, whatever its bounds bind, before it types the
+            // range.
             if let Some(between) = &item.between {
+                let one_meaning = spec.header.surface.one_meaning_per_form();
+                if let Some(value) = name(spec, between.value)
+                    .filter(|value| one_meaning && !value.contains('.') && !self.column(value))
+                {
+                    findings.push(BindFinding::Lookup(LookupFinding::from_diagnostic(
+                        lookup::range_reference(
+                            &format!("{}.value", render(spec, between.meta)),
+                            Owner::Intermediate(identifier),
+                            value,
+                        ),
+                    )));
+                    continue;
+                }
                 let primary = self.prepared.source().name.as_str();
                 let earlier = &donors[..position];
                 let value =
                     name(spec, between.value).and_then(|value| match value.split_once('.') {
-                        None if spec.columns.iter().any(|column| column.name.name == value) => {
-                            Some(declared.name(value))
-                        }
+                        None if self.column(value) => Some(declared.name(value)),
                         None => stored(primary, value),
                         Some((owner, field)) => {
                             match earlier.iter().find(|prior| prior.item.id.name == owner) {
@@ -2972,6 +3190,31 @@ fn group_key(variable: &str, driver: &str, phase: Phase<'_>) -> bool {
             own.peek().is_some() && own.all(|(_, group)| group.contains(&variable))
         }
     }
+}
+
+/// On a 1.0 tree, the range value of the implicit join a structured source at
+/// `e` reads, when the value is a bare name that no column takes: a bare name
+/// is an output column alone (NAME-3), so it names nothing the row holds and
+/// binding refuses it at `between.value` (LOOKUP-9), naming the variable.
+pub(super) fn join_range(spec: &Spec, e: ExprId) -> Option<BindFinding> {
+    let ExprKind::Source(source) = &spec.expr(e).kind else {
+        return None;
+    };
+    let between = source
+        .between
+        .as_ref()
+        .filter(|between| between.lower.is_some() || between.upper.is_some())
+        .filter(|_| spec.header.surface.one_meaning_per_form())?;
+    let value = name(spec, between.value)
+        .filter(|value| !value.contains('.'))
+        .filter(|value| !spec.columns.iter().any(|column| column.name.name == *value))?;
+    Some(BindFinding::Source(
+        source_expressions::SourceFinding::from_diagnostic(lookup::range_reference(
+            &format!("{}.value", render(spec, between.meta)),
+            Owner::Source(name(spec, source.variable).unwrap_or_default()),
+            value,
+        )),
+    ))
 }
 
 /// `require_match` asserts what only an implicit join can miss, and

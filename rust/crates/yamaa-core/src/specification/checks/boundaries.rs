@@ -383,6 +383,10 @@ impl<'a> Reads<'a> {
                     self.group(&at, value, findings);
                 }
                 Some(_) => {}
+                // On a 1.0 tree a bare value is an output column alone.
+                None if self.output(value).is_none() => {
+                    findings.extend(super::declared::join_range(spec, e));
+                }
                 None => {
                     self.bare(&at, value, findings);
                 }
@@ -492,18 +496,7 @@ impl<'a> Reads<'a> {
     /// binding then defers its matching and refuses a read of it on other
     /// grounds.
     fn deferred(&self, index: usize) -> bool {
-        let spec = self.spec;
-        let item = &spec.intermediates[index];
-        spec.intermediates
-            .iter()
-            .enumerate()
-            .any(|(reader, other)| {
-                other.bindings.iter().any(|binding| {
-                    spec.reads(binding.derivation.expr, Scope::Donor(reader))
-                        .iter()
-                        .any(|read| read.name.owner() == Some(item.id.name.as_str()))
-                })
-            })
+        donor_read(self.spec, index)
     }
 
     /// The read at `path` of the lookup at `index`, as binding admits it

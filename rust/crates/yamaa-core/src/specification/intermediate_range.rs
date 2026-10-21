@@ -29,9 +29,12 @@ fn reference(path: &str, name: &str, intermediate: &str, code: C, findings: &mut
     findings.push(BindFinding::Lookup(finding));
 }
 /// Bind a named intermediate's range. The value names a value of the row that
-/// reads the intermediate, or, in a donor derivation, a bare field of the donor
-/// record; an input's record keeps that input's record port, and every context
-/// that reads the intermediate admits it (LOOKUP-9).
+/// reads the intermediate; an input's record keeps that input's record port,
+/// and every context that reads the intermediate admits it (LOOKUP-9). With
+/// `one_meaning` (1.0) a bare name is an output column alone, so one that no
+/// column takes fails at `between.value`, whatever the bounds bind. On the
+/// 0.5 surface such a name reads a field of the driver's record, as at the
+/// `yamaa-v0.5.0` tag (D75).
 #[allow(clippy::too_many_arguments)]
 pub(super) fn bind(
     declaration: &lookup_range::Declaration,
@@ -41,6 +44,7 @@ pub(super) fn bind(
     admits: &impl Fn(usize) -> bool,
     catalog: &Catalog,
     driver: &TableSchema,
+    one_meaning: bool,
     previous: &[Option<Intermediate>],
     secondary: &[crate::dataset::SecondarySource],
     findings: &mut Vec<BindFinding>,
@@ -52,14 +56,18 @@ pub(super) fn bind(
     let bounds = declaration.bind_bounds(owner, donor, donor_kind, admits, &mut diagnostics);
     findings.extend(diagnostics.into_iter().map(wrap));
     let Some(bounds) = bounds else {
+        if one_meaning && declaration.names_no_column(catalog) {
+            findings.push(wrap(declaration.unknown_value(owner)));
+        }
         return Ok(None);
     };
     let name = declaration.value.as_str();
     let current = declaration
         .current_value(catalog, secondary, previous, None, None, &mut Vec::new())?
         .or_else(|| {
-            // A bare name that no output column takes is a donor record field.
-            (!name.contains('.'))
+            // A 0.5 bare name that no output column takes is a field of the
+            // driver's record.
+            (!one_meaning && !name.contains('.'))
                 .then(|| {
                     driver
                         .columns()

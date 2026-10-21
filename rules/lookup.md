@@ -75,7 +75,7 @@ no record, and a record missing a key or a stated bound does not match.
 `between` names a current-row value and at least one bound field.
 
 Fails: `incompatible_input_type`, `incomparable_range_types`, `invalid_field_type`, `prohibited_construct`, `unknown_field`.
-Evidence: `negative-lookup-bad-range`, `negative-lookup-range-other-input`, `negative-aggregate-range-other-input`, `schema-lookup-source-range`, `schema-lookup-source-range-driver`, `schema-lookup-intermediate-range-driver`, `schema-aggregate-range-driver`, `sdtm-lb-lab-specific-ranges`, `adam-advs-window-table`, `adam-adtr-nadir`, `adam-adsl-new-therapy`, `rust/crates/yamaa-adapters/tests/execution_lookup_model.rs`.
+Evidence: `negative-lookup-bad-range`, `negative-lookup-range-other-input`, `negative-lookup-range-bare-field`, `negative-source-range-other-input`, `negative-aggregate-range-other-input`, `schema-lookup-source-range`, `schema-lookup-source-range-driver`, `schema-lookup-intermediate-range-driver`, `schema-aggregate-range-driver`, `sdtm-lb-lab-specific-ranges`, `adam-advs-window-table`, `adam-adtr-nadir`, `adam-adsl-new-therapy`, `rust/crates/yamaa-adapters/tests/execution_lookup_model.rs`, `rust/crates/yamaa-adapters/tests/check_variable_forms.rs`.
 
 The key pairs are those of [LOOKUP-5](#lookup-5). Every pair is compared on
 every record offered, so a record value whose type cannot compare with its
@@ -105,25 +105,30 @@ intermediates:
     between: {value: AGE, lower: AGELO, upper: AGEHI}
 ```
 
-The value names what the current row holds: an output column, written bare; a
-field of the record of the row's driver, qualified by the driver; or a column
-a named intermediate selects for the row, qualified by its id. A value read
-from a driver's record must name the driver of every row that reads the
-lookup, wherever the lookup is read: in a row template, that template's driver
+The value names what the current row holds, and each form has one meaning: a
+bare name is an output column ([NAME-3](names.md#name-3)); a name qualified by
+the row's driver is a field of the record that built the row; and a name
+qualified by a named intermediate's id is the column it selects for the row. A
+bare name that no column takes names nothing the row holds, even when the
+driver's record stores a field of that name. A value read from a driver's
+record must name the driver of every row that reads the lookup, wherever the
+lookup is read: in a row template, that template's driver
 ([LOOKUP-2](#lookup-2)), and during column derivation, the driver of every row
-template the read can evaluate on: the templates that leave the column to the
-column phase. A row template's `filter` reads its lookups for that template's
-rows, and a dataset verification for the rows of every template. A named
-intermediate is also read through an aggregate's `derive` binding and through
-the range value of another lookup. A value naming nothing the current row
-holds, such as a field of another input or of the lookup's own relation, fails
-as `unknown_field` at `between.value`, once per range, whichever kind of
-lookup declares it. Which input drives each row is declared, so `check`
-reports a value qualified by an input that drives none of the rows reading the
-lookup from the declarations alone, whether or not that input stores the
-field. A field of another input is never read through the implicit join
-([LOOKUP-1](#lookup-1)); bring it onto the row as a column first, and name the
-column:
+template the read can evaluate on: the templates that leave the column to
+column derivation. A row template's `filter` reads its lookups for that
+template's rows, and a dataset verification for the rows of every template. A
+named intermediate is also read through an aggregate's `derive` binding and
+through the range value of another lookup. A value naming nothing the current
+row holds, such as a bare name that no column takes or a field of another
+input or of the lookup's own relation, fails as `unknown_field` at
+`between.value`, once per range, whichever kind of lookup declares it and
+whatever its bounds bind. Which columns a specification declares and which
+input drives each row are declared, so `check` reports a bare name that no
+column takes, and a value qualified by an input that does not drive every row
+reading the lookup, from the declarations alone, whether or not that input
+stores the field. A field of another input is never read through the implicit
+join ([LOOKUP-1](#lookup-1)); bring it onto the row as a column first, and name
+the column:
 
 ```yaml
 columns:
@@ -150,6 +155,12 @@ driver's own record, an output column or a named intermediate has no implicit
 join to narrow, and `between` there fails as `prohibited_construct` at the
 field. A `between` on an unqualified or grouped-row aggregate, which matches
 no relation, fails as `invalid_aggregate_context` ([LOOKUP-18](#lookup-18)).
+
+A file that declares `schema_version` is read under the rules at the
+`yamaa-v0.5.0` tag, where a named intermediate's bare `between.value` that no
+column takes reads the field of that name of the record that builds the rows
+of the first row template, or of `base`, and a value that no row holds fails
+only once its bounds bind.
 
 <a id="lookup-8"></a>
 
@@ -382,7 +393,7 @@ input's declared `key`. A lookup names at least one pair, every column must
 exist, and every match value must read a known current-row value.
 
 Fails: `invalid_field_type`, `no_applicable_keys`, `unknown_field`, `invalid_aggregate_context`.
-Evidence: `negative-lookup-mismatched`, `negative-lookup-unknown-key`, `negative-lookup-repeated-key`, `negative-lookup-key-other-template`, `negative-aggregate-key-other-template`, `negative-verification-lookup-key`, `negative-row-aggregate-keys`, `sdtm-lb-lab-specific-ranges`, `rust/crates/yamaa-adapters/tests/fixtures/intermediate_key_reference.json`, `rust/crates/yamaa-adapters/tests/fixtures/correlated_aggregates.json`, `rust/crates/yamaa-adapters/tests/execution_lookup_read_contexts.rs`, `rust/crates/yamaa-adapters/tests/execution_aggregate_key_reads.rs`, `rust/crates/yamaa-core/src/specification/declared_keys.rs`, `rust/crates/yamaa-core/src/key_relation.rs::a_declared_key_pairs_every_column_it_names`, `rust/crates/yamaa-adapters/tests/front_end_comparison.rs`.
+Evidence: `negative-lookup-mismatched`, `negative-lookup-unknown-key`, `negative-lookup-repeated-key`, `negative-lookup-key-other-template`, `negative-lookup-key-lookup-qualified`, `negative-aggregate-key-other-template`, `negative-aggregate-key-bare-field`, `negative-verification-lookup-key`, `negative-row-aggregate-keys`, `sdtm-lb-lab-specific-ranges`, `rust/crates/yamaa-adapters/tests/fixtures/intermediate_key_reference.json`, `rust/crates/yamaa-adapters/tests/fixtures/correlated_aggregates.json`, `rust/crates/yamaa-adapters/tests/execution_lookup_read_contexts.rs`, `rust/crates/yamaa-adapters/tests/execution_aggregate_key_reads.rs`, `rust/crates/yamaa-core/src/specification/declared_keys.rs`, `rust/crates/yamaa-core/src/key_relation.rs::a_declared_key_pairs_every_column_it_names`, `rust/crates/yamaa-adapters/tests/front_end_comparison.rs`, `rust/crates/yamaa-adapters/tests/check_variable_forms.rs`.
 
 ```yaml
 intermediates:
@@ -422,7 +433,30 @@ of fails naming the column. A `key` that no read uses is admitted, and the
 lint reports it as `unused_input_key`. `SELF` names donor rows and is never a
 current-row scope, so a match value written `SELF.field` names no current-row
 value and fails the same way; when the current row carries `field`, the
-diagnostic suggests that bare name.
+diagnostic suggests that bare name. A bare name is an output column
+([NAME-3](names.md#name-3)), so a field of the driver's record that no column
+takes fails too. A match value never reads a lookup: a name qualified by a
+named intermediate's id fails as `unknown_field`, whether written alone or
+read by an expression ([LOOKUP-11](#lookup-11)). Derive the lookup's value
+into a column, then match on the column:
+
+```yaml
+columns:
+  - {name: SEX, type: str, derivation: SUBJECT.SEX}
+intermediates:
+  - id: RANGE
+    dataset: LBRANGE
+    key: [LBTESTCD, SEX]
+```
+
+A written `key` reports its refusals where they are written, for a named
+intermediate and a qualified aggregate alike: a column the relation does not
+have, and a pair whose types cannot compare, at `key`. A match value that
+reads no current-row value fails at a named intermediate's `key` when it is a
+name written alone and at `key.<column>` for any other value, and at a
+qualified aggregate's pair, `key.<column>`, whatever its form. The pair's
+match value is read even when its column is missing. A key an input declares
+reports its refusals at the read.
 
 A match value read from an input's record names the driver of every row that
 reads the lookup, wherever the lookup is read: in a row template's derivations
@@ -451,7 +485,10 @@ and a named intermediate or qualified aggregate without `key`, pair the
 applicable keys: the output `keys`, in output-key order, that the lookup's
 relation also carries, each paired with the current row's same-named value.
 With no applicable key the lookup fails as `no_applicable_keys`, reporting the
-dataset and the output keys with a hint.
+dataset and the output keys with a hint. A qualified aggregate's key refusals
+are reported at its `expr`, or at the `filter` that names its relation when
+its reduction names no field, and a column the relation does not have stops
+the pair before its match value is read.
 
 <a id="lookup-6"></a>
 
@@ -772,17 +809,21 @@ rows:
 ### LOOKUP-11. A lookup-qualified variable reads a column of the selected record
 
 A variable qualified by a lookup id, such as `DEATHEV.AEDECOD`, reads the named
-column of the selected record in any field typed as `variable`. A declared
+column of the selected record in any field typed as `variable` except a key
+match value, which never reads a lookup ([LOOKUP-5](#lookup-5)). A declared
 `columns` list restricts which columns the lookup may read; without it every
 stored and derived column is available. A column the lookup's dataset does not
 have, or one outside a declared `columns` list, fails.
 
 Fails: `unknown_field`.
-Evidence: `adam-adae-death`, `rust/crates/yamaa-core/tests/relations_reference_scope.rs`.
+Evidence: `adam-adae-death`, `negative-lookup-key-lookup-qualified`, `rust/crates/yamaa-core/tests/relations_reference_scope.rs`, `rust/crates/yamaa-adapters/tests/check_variable_forms.rs`.
 
 Naming in `columns` a column the dataset does not have fails as
 `unknown_field`, and so does a lookup-qualified read of a missing or
-unlisted column.
+unlisted column. In a `between.value` a lookup-qualified variable reads the
+column the lookup selects for the row ([LOOKUP-9](#lookup-9)). In a key match
+value it fails as `unknown_field` at the pair, written alone or read by an
+expression; derive the value into a column first and match on the column.
 
 <a id="lookup-12"></a>
 

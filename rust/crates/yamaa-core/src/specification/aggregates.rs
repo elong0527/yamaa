@@ -1011,11 +1011,25 @@ fn bound_relation(
             // record of any input at that input's own port, as a named
             // intermediate's key does (LOOKUP-5). Whether the rows that
             // evaluate the aggregate have that record is admitted for each
-            // reading context (`admit_record_keys`).
+            // reading context (`admit_record_keys`). A written 1.0 `key` owns
+            // its refusals, as a named intermediate's does (LOOKUP-5): a key
+            // column the relation lacks, or a pair whose types cannot
+            // compare, at `key`; a match value that reads no current-row
+            // value at its pair, `key.<column>`, where a row context that
+            // lacks its record refuses it too. A 0.5 key, and the key a 1.0
+            // input declares, report at the read.
+            let owned = (declaration.keys.is_some()
+                && tree.spec().header.surface.one_meaning_per_form())
+            .then(|| format!("{}.key", declaration.path));
             let records = record_catalog(catalog, driver, output, secondary)?;
             let values = records.as_ref().unwrap_or(catalog);
             let mut keys = Vec::new();
             for (field, value) in pairs {
+                let pair = format!("{}.key.{field}", declaration.path);
+                let (key_path, value_path) = match &owned {
+                    Some(key) => (key.as_str(), pair.as_str()),
+                    None => (key_path, key_path),
+                };
                 let written = format!("{relation}.{field}");
                 let donor_field = match donor {
                     AggregateSource::Primary => match catalog.bind(&written) {
@@ -1032,45 +1046,56 @@ fn bound_relation(
                         .find(|(_, column)| column.name == *field)
                         .map(|(index, column)| (index, column.kind)),
                 };
-                let Some((source_column, actual)) = donor_field else {
-                    finding(
-                        Finding::DonorKeyReference {
-                            path: key_path,
-                            identifier: &written,
-                        },
-                        findings,
-                    )?;
-                    continue;
-                };
-                let expected = value.result_type(tree, values)?;
-                if !expected.comparable(actual.into()) {
-                    finding(
-                        Finding::KeyType {
-                            path: key_path,
-                            source: &value.display_name(field),
-                            expected,
-                            actual,
-                        },
-                        findings,
-                    )?;
+                match donor_field {
+                    Some((_, actual)) => {
+                        let expected = value.result_type(tree, values)?;
+                        if !expected.comparable(actual.into()) {
+                            finding(
+                                Finding::KeyType {
+                                    path: key_path,
+                                    source: &value.display_name(field),
+                                    expected,
+                                    actual,
+                                },
+                                findings,
+                            )?;
+                        }
+                    }
+                    None => {
+                        finding(
+                            Finding::DonorKeyReference {
+                                path: key_path,
+                                identifier: &written,
+                            },
+                            findings,
+                        )?;
+                        // A 1.0 key still reads its match value, as a named
+                        // intermediate's does; a 0.5 key reads nothing more
+                        // of the pair.
+                        if owned.is_none() {
+                            continue;
+                        }
+                    }
                 }
                 let before_references = findings.len();
                 for reference in value.references() {
                     if values.bind(reference).is_none() {
                         finding(
                             Finding::MatchValueReference {
-                                path: key_path,
+                                path: value_path,
                                 identifier: reference,
                             },
                             findings,
                         )?;
                     }
                 }
-                if findings.len() != before_references {
+                let Some((source_column, _)) =
+                    donor_field.filter(|_| findings.len() == before_references)
+                else {
                     continue;
-                }
+                };
                 let bound = value.bind(
-                    &format!("{}.key.{field}", declaration.path),
+                    &pair,
                     relation,
                     values,
                     findings,
@@ -1095,7 +1120,7 @@ fn bound_relation(
                     }
                     keys.push(IntermediateKey {
                         source_column,
-                        path: format!("{}.key.{field}", declaration.path),
+                        path: pair,
                         value,
                     });
                 }
@@ -1314,6 +1339,7 @@ pub(super) fn bind(
         &donor_schema,
         secondary,
         intermediates,
+        tree.spec().header.surface.one_meaning_per_form(),
         edges,
         findings,
     )?;
@@ -1516,13 +1542,16 @@ pub(super) fn late_reads(plan: &crate::dataset::DatasetPlan) -> Vec<BindFinding>
 
 /// A qualified aggregate's range (LOOKUP-9): bounds are fields of its
 /// relation and the value a value of the current row, admitted for every row
-/// the column is derived for ([`lookup_range::admit`]).
+/// the column is derived for ([`lookup_range::admit`]). With `one_meaning`
+/// (1.0) a bare value that no column takes fails whatever the bounds bind.
+#[allow(clippy::too_many_arguments)]
 fn bind_range(
     declaration: &Declaration,
     catalog: &Catalog,
     donor: &TableSchema,
     secondary: &[SecondarySource],
     intermediates: &[Option<crate::dataset::Intermediate>],
+    one_meaning: bool,
     edges: &mut Vec<usize>,
     findings: &mut Vec<BindFinding>,
 ) -> Result<Option<crate::dataset::RelationRange>, BindError> {
@@ -1548,6 +1577,11 @@ fn bind_range(
             .map(BindFinding::AggregateDiagnostic),
     );
     let Some(bounds) = bounds else {
+        if one_meaning && range.names_no_column(catalog) {
+            findings.push(BindFinding::AggregateDiagnostic(
+                range.unknown_value(Owner::Unnamed),
+            ));
+        }
         return Ok(None);
     };
     let Some((read, kind)) =
