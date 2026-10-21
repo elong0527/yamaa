@@ -678,6 +678,64 @@ fn only_a_refused_file_locates_an_issue_without_a_written_node() {
     );
 }
 
+/// A parent layer the reader refuses gives the issue an entry it refuses
+/// gives, `invalid_yaml` or `non_ascii_source` at `$` with the reader's
+/// position, located in that parent, on both surfaces and on every route
+/// that reads the specification (SCHEMA-3, SPEC-8; #3519).
+#[test]
+fn a_parent_the_reader_refuses_locates_its_issue_in_that_parent() {
+    let token = CancellationToken::new();
+    for header in SURFACES {
+        let study = Study::new();
+        let (child, _) = spec(header, &["parent: refused.yaml"]);
+        write(&study, "child.yaml", &child);
+        let entry = study.path("child.yaml");
+        // The flow sequence is never closed: the reader stops at the line
+        // after it, at column 1.
+        let (invalid, lines) = spec(header, &["domain: [ADSL"]);
+        write(&study, "refused.yaml", &invalid);
+        // The comment's sixth character, after `# caf`, is not ASCII.
+        let (accented, _) = spec(header, &["domain: ADSL", "# caf\u{e9}"]);
+        for (text, condition, rule, line, column) in [
+            (invalid, "invalid_yaml", "SCHEMA-3", lines + 2, 1),
+            (accented, "non_ascii_source", "SPEC-8", lines + 2, 6),
+        ] {
+            write(&study, "refused.yaml", &text);
+            let checked = engine().spec_check(&entry, None, &token).unwrap();
+            let ran = engine().spec_run(&entry, None, &token).unwrap();
+            let resolved = engine().spec_resolve(&entry, None).unwrap_err();
+            for issues in [
+                checked.diagnostics(),
+                ran.diagnostics(),
+                resolved.diagnostics,
+            ] {
+                let [issue] = issues.as_slice() else {
+                    panic!("one issue: {issues:?}")
+                };
+                assert_eq!(
+                    (issue.code.as_str(), issue.rule.as_deref()),
+                    (condition, Some(rule)),
+                    "{header:?}"
+                );
+                assert_eq!(issue.spec_path, ["$"]);
+                assert_eq!(
+                    issue.context.get("line"),
+                    Some(&ContextValue::Int(line as i64))
+                );
+                assert_eq!(
+                    issue.context.get("column"),
+                    Some(&ContextValue::Int(column as i64))
+                );
+                assert_eq!(
+                    location(&issues),
+                    Some((study.file("refused.yaml"), line, column)),
+                    "{header:?} {condition}"
+                );
+            }
+        }
+    }
+}
+
 /// Every negative benchmark whose failure belongs to its submission locates
 /// its first issue, as the memory route checks for every other negative. A
 /// submission composed here reads no saved artifact, so a case whose authored

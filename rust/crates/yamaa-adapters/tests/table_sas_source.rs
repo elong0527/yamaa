@@ -2000,7 +2000,7 @@ mod table {
             assert_eq!(
                 projection::failure(&semantic, None),
                 projection::Rejection::Fault(yamaa_core::application_issue::rejected(
-                    yamaa_core::application_issue::Stage::Ingest,
+                    yamaa_core::application_issue::Step::Ingest,
                     yamaa_core::application_issue::Fault::DiagnosticContext,
                 ))
             );
@@ -2039,7 +2039,7 @@ mod table {
                 assert_eq!(
                     projection::failure(&collected, None),
                     projection::Rejection::Fault(yamaa_core::application_issue::rejected(
-                        yamaa_core::application_issue::Stage::Ingest,
+                        yamaa_core::application_issue::Step::Ingest,
                         yamaa_core::application_issue::Fault::SourceCollectionBoundary,
                     ))
                 );
@@ -2195,7 +2195,7 @@ mod table {
             assert_eq!(
                 projection::failure(&error, None),
                 projection::Rejection::Fault(yamaa_core::application_issue::rejected(
-                    yamaa_core::application_issue::Stage::Ingest,
+                    yamaa_core::application_issue::Step::Ingest,
                     yamaa_core::application_issue::Fault::SourceCollectionBoundary,
                 ))
             );
@@ -2230,7 +2230,7 @@ mod table {
             assert_eq!(
                 projection::failure(&held, None),
                 projection::Rejection::Fault(yamaa_core::application_issue::rejected(
-                    yamaa_core::application_issue::Stage::Ingest,
+                    yamaa_core::application_issue::Step::Ingest,
                     yamaa_core::application_issue::Fault::SourceCollectionBoundary,
                 ))
             );

@@ -21,7 +21,7 @@ fn source(profile: SourceProfile) -> SourceDeclaration {
     }
 }
 
-/// An omitted reader is an engine fault naming its stage and closed code.
+/// An omitted reader is an engine fault naming its step and closed code.
 #[cfg(not(all(feature = "yaml", feature = "parquet", feature = "odm")))]
 fn assert_fault(
     rejection: yamaa_adapters::specification_diagnostics::Rejection,
@@ -32,7 +32,7 @@ fn assert_fault(
         panic!("an omitted reader is an engine fault: {rejection:?}");
     };
     assert_eq!(issue.condition(), "engine_rejected", "{issue:?}");
-    assert_eq!(issue.context["stage"].as_str(), Some(stage), "{issue:?}");
+    assert_eq!(issue.context["step"].as_str(), Some(stage), "{issue:?}");
     assert_eq!(issue.context["code"].as_str(), Some(code), "{issue:?}");
 }
 

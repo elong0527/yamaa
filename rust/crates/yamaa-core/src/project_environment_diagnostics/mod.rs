@@ -28,39 +28,6 @@ pub enum Error {
     UnavailableShape,
 }
 
-/// Closed native root-read facts; arbitrary error messages cannot establish them.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
-pub enum ReadFailure {
-    #[error("project environment diagnostics missing")]
-    Missing,
-    #[error("project environment diagnostics unreadable")]
-    Unreadable,
-}
-impl ReadFailure {
-    pub fn diagnostic(self, path: &str) -> Diagnostic {
-        Diagnostic {
-            code: C::ProjectEnvironmentMissing,
-            spec_paths: vec!["environment".into()],
-            context: [
-                ("path".into(), JsonValue::String(path.into())),
-                (
-                    "cause".into(),
-                    JsonValue::String(
-                        match self {
-                            Self::Missing => "missing",
-                            Self::Unreadable => "unreadable",
-                        }
-                        .into(),
-                    ),
-                ),
-            ]
-            .into(),
-            source_span: None,
-            operand_route: None,
-        }
-    }
-}
-
 /// Project scalar failures with the written text each finding keeps. Integer
 /// values outside runtime i64 keep their exact mathematical decimal text.
 /// A normalized-shape contradiction has no fabricated language condition.

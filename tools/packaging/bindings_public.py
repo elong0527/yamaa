@@ -26,16 +26,15 @@ code for it beyond the export.
 
 Delegation is declared, never written as code. A class ``holds`` an ordered
 set of values, each named by what it fills: ``handle``, the native handle the
-object wraps; the name of one of its ``field`` members; or the name of a
-native argument, which the value fills in the object's native calls. A class
-that holds neither a handle nor a field is lazy: it holds paths, and it keeps
-a plans handle when a native call it makes takes ``plans``. A member or a
-function ``calls`` an operation of the ``operations`` table, and each native
-argument of that operation's Python and R exports is bound by name: to the
-member's own arguments, to a held value, to the plans handle, or in R to the
-host's ``version`` and ``capabilities``. A member that returns a class makes
-it from the call's result and the values it holds. README.md lists the member
-kinds and these rules.
+object wraps, or the name of a native argument, which the value fills in the
+object's native calls. A class that holds no handle is lazy: it holds paths,
+and it keeps a plans handle when a native call it makes takes ``plans``. A
+member or a function ``calls`` an operation of the ``operations`` table, and
+each native argument of that operation's Python and R exports is bound by
+name: to the member's own arguments, to a held value, to the plans handle, or
+in R to the host's ``version`` and ``capabilities``. A member that returns a
+class makes it from the call's result and the values it holds. README.md lists
+the member kinds and these rules.
 """
 
 import re
@@ -110,8 +109,13 @@ _R_ARGUMENT = {
 _NATIVE_PY = {"text": "str", "bool": "bool", "index": "int", "i32": "int"}
 _PY_DEFAULT = {"None": "None", "false": "False", "true": "True"}
 _R_DEFAULT = {"None": "NULL", "false": "FALSE", "true": "TRUE"}
-_KINDS = {"property", "method", "field", "index", "protocol", "private", "printing"}
-_PROTOCOLS = {"__contains__", "__iter__"}
+_KINDS = {"property", "method", "index", "protocol", "private", "printing"}
+_PROTOCOLS = {"__contains__", "__iter__", "__len__"}
+# R's names() and length() of a result (D44): a container's names are the
+# keys its `names` member gives; any other result names these members.
+_R_LISTED = {"property", "method"}
+# The R generics every result has, listing and counting its names (D44).
+_R_NAMES = ("names", "length")
 # The member kinds of a Python-only class: a property is a native getter, a
 # protocol or printing member a native special method spelled by `python`.
 _NATIVE_KINDS = {"property", "method", "protocol", "printing"}
@@ -418,7 +422,7 @@ class Public:
             function,
             what,
             {"name", "python", "r", "returns"},
-            {"args", "keyword_only", "table", "raises", "calls", "doc"},
+            {"args", "keyword_only", "table", "record", "raises", "calls", "doc"},
         )
         name = function["name"]
         if not isinstance(name, str) or not _NAME.fullmatch(name):
@@ -472,9 +476,6 @@ class Public:
             if member["name"] in names:
                 raise ValueError(f"{what} declares {member['name']} twice")
             names.add(member["name"])
-        fields = {m["name"] for m in members if m["kind"] == "field"}
-        if {role for role in roles if role in fields} != fields:
-            raise ValueError(f"{what}.holds must fill each field")
         for member in members:
             self._validate_member(
                 name, cls, member, f"{what}.{member['name']}", defined
@@ -526,8 +527,8 @@ class Public:
                     f"{what} must be spelled __repr__ and [print, format] and call "
                     "the operation that renders its text"
                 )
-            if "handle" not in cls["holds"].values():
-                raise ValueError(f"{what} reaches a handle, which {class_name} lacks")
+            # A result's text comes from its handle and a lazy object's from
+            # the paths it holds; the call's binding is checked as it renders.
             if member["calls"] not in self.operations:
                 raise ValueError(
                     f"{what} calls an unknown operation: {member['calls']!r}"
@@ -557,10 +558,7 @@ class Public:
             )
         if kind in {"index", "private"} and "handle" not in cls["holds"].values():
             raise ValueError(f"{what} reaches a handle, which {class_name} lacks")
-        if kind == "field":
-            if "calls" in member or member.get("args"):
-                raise ValueError(f"{what} is held, so it calls nothing")
-        elif "calls" not in member:
+        if "calls" not in member:
             raise ValueError(f"{what} must name the operation it calls")
         if kind == "property" and member.get("args"):
             raise ValueError(f"{what} is a property and takes no arguments")
@@ -677,15 +675,10 @@ class Public:
         return list(self.classes[name]["holds"].items())
 
     def kind(self, name):
+        """A native class, a result wrapping a handle, or a lazy object."""
         if self.python_only(name):
             return "native"
-        roles = set(self.classes[name]["holds"].values())
-        if "handle" in roles:
-            return "handle"
-        fields = {
-            m["name"] for m in self.classes[name]["members"] if m["kind"] == "field"
-        }
-        return "value" if roles & fields else "lazy"
+        return "handle" if "handle" in self.classes[name]["holds"].values() else "lazy"
 
     def _handle(self, name):
         for hold, role in self.holds(name):
@@ -858,7 +851,6 @@ class Public:
 
     def _py_init(self, name):
         kind = self.kind(name)
-        members = {m["name"]: m for m in self.classes[name]["members"]}
         params, body = [], []
         for index, (hold, role) in enumerate(self.holds(name)):
             if kind == "lazy" and index > 0:
@@ -867,9 +859,7 @@ class Public:
                 params.append(f"{hold}: {self._held_annotation(name, role)}")
             else:
                 params.append(hold)
-            if role in members and members[role]["kind"] == "field":
-                body.append(f"self.{role} = {hold}")
-            elif kind == "lazy" and index == 0:
+            if kind == "lazy" and index == 0:
                 body.append(f"self._{hold} = _fspath({hold})")
             else:
                 body.append(f"self._{hold} = {hold}")
@@ -904,6 +894,9 @@ class Public:
             if member["python"] == "__contains__":
                 header = _py_def("__contains__", "self, name: object", "bool", "    ")
                 return header + doc + [f"        return name in {names}"]
+            if member["python"] == "__len__":
+                header = _py_def("__len__", "self", "int", "    ")
+                return header + doc + [f"        return len({names})"]
             return (
                 _py_def("__iter__", "self", None, "    ")
                 + doc
@@ -953,7 +946,7 @@ class Public:
             lines += [f'    """{cls["doc"]}"""', ""]
         lines += self._py_init(name)
         for member in cls["members"]:
-            if member["kind"] in {"field", "private"}:
+            if member["kind"] == "private":
                 continue
             lines += ["", *self._py_member(name, member)]
         return lines
@@ -1164,6 +1157,83 @@ class Public:
             )
         return ", ".join(parts)
 
+    def _r_bound(self, entry, class_name):
+        """The held values that the R call of `entry` takes."""
+        _, reference = self._operation(entry["calls"], class_name)
+        args = entry.get("args", {})
+        bound = set()
+        for native in self.r_functions[reference]["args"]:
+            if native in args or native in {"version", "capabilities", "plans"}:
+                continue
+            bound.update(
+                hold for hold, role in self.holds(class_name) if role == native
+            )
+        return bound
+
+    def _r_binding(self, name, hold):
+        """The hidden binding that keeps `hold`: `.handle` for the handle."""
+        return ".handle" if hold == self._handle(name) else f".{hold}"
+
+    def _r_hidden(self, name):
+        """The held values that an S3 method or a private accessor reaches,
+        in hold order; the object keeps each in its hidden binding."""
+        reached = set()
+        for member in self.classes[name]["members"]:
+            if member["kind"] in {"index", "private", "printing"}:
+                reached |= self._r_bound(member, name)
+        if self.kind(name) == "handle" and self._r_listed(name) is None:
+            reached |= self._r_bound(self._names_member(name), name)
+        return [hold for hold, _ in self.holds(name) if hold in reached]
+
+    def _names_member(self, name):
+        return next(m for m in self.classes[name]["members"] if m["name"] == "names")
+
+    def _r_listed(self, name):
+        """The public members that R's names() of a result lists, in
+        declaration order; None for a container, one with an `index` member,
+        whose names() are the keys its `names` member gives (D44)."""
+        members = self.classes[name]["members"]
+        if any(member["kind"] == "index" for member in members):
+            return None
+        return [member["name"] for member in members if member["kind"] in _R_LISTED]
+
+    def _r_names(self, name):
+        """R's names() and length() of a result: S3 methods that list its
+        public members, or a container's keys, and count them."""
+        cls = self.classes[name]
+        listed = self._r_listed(name)
+        if listed is None:
+            member = self._names_member(name)
+            what = f"public.classes.{name}.names"
+            call, _ = self._r_call(member, name, what, handle=self._handle(name))
+            return [
+                "",
+                f"names.{cls['r']} <- function(x) {{",
+                *self._r_reads(name, member, "x"),
+                *_r_lines(call, "  "),
+                "}",
+                "",
+                f"length.{cls['r']} <- function(x) length(names(x))",
+            ]
+        names = _Call("c", [f'"{member}"' for member in listed])
+        return [
+            "",
+            *_r_closure(f"names.{cls['r']} <- ", "x", names, ""),
+            "",
+            f"length.{cls['r']} <- function(x) {len(listed)}L",
+        ]
+
+    def _r_reads(self, name, entry, envir):
+        """Lines reading each held value the call of `entry` takes from its
+        hidden binding in `envir`, as a variable named for the value."""
+        bound = self._r_bound(entry, name)
+        return [
+            f'  {hold} <- get("{self._r_binding(name, hold)}", envir = {envir}, '
+            "inherits = FALSE)"
+            for hold, _ in self.holds(name)
+            if hold in bound
+        ]
+
     def _r_constructor(self, name):
         cls = self.classes[name]
         holds = [hold for hold, _ in self.holds(name)]
@@ -1175,9 +1245,10 @@ class Public:
         if self.plans(name):
             lines.append("  plans <- NULL")
         lines.append("  object <- new.env(parent = emptyenv())")
-        kinds = {member["kind"] for member in cls["members"]}
-        if handle and kinds & {"index", "private", "printing"}:
-            lines.append(f"  object$.handle <- {handle}")
+        lines += [
+            f"  object${self._r_binding(name, hold)} <- {hold}"
+            for hold in self._r_hidden(name)
+        ]
         for member in cls["members"]:
             lines += self._r_member(name, member, handle)
         lines += [f'  .object(object, "{cls["r"]}")', "}"]
@@ -1186,9 +1257,6 @@ class Public:
     def _r_member(self, name, member, handle):
         what = f"public.classes.{name}.{member['name']}"
         kind = member["kind"]
-        if kind == "field":
-            held = next(h for h, role in self.holds(name) if role == member["name"])
-            return [f"  object${member['name']} <- {held}"]
         if kind not in {"property", "method"}:
             return []
         call, plans = self._r_call(member, name, what, handle=handle)
@@ -1211,7 +1279,7 @@ class Public:
     def _r_extras(self, name):
         """S3 methods and private accessors that reach an object's handle."""
         cls = self.classes[name]
-        lines = []
+        lines = self._r_names(name) if self.kind(name) == "handle" else []
         for member in cls["members"]:
             what = f"public.classes.{name}.{member['name']}"
             if member["kind"] == "index":
@@ -1250,9 +1318,10 @@ class Public:
                     "}",
                 ]
             elif member["kind"] == "printing":
-                # format() returns the lines Rust renders; print() writes them,
+                # format() returns the lines Rust renders, from the handle of
+                # a result or the path of a lazy object; print() writes them,
                 # each ended by a line feed, and returns the object invisibly.
-                call, _ = self._r_call(member, name, what, handle="native")
+                call, _ = self._r_call(member, name, what, handle=self._handle(name))
                 lines += [
                     "",
                     f"print.{cls['r']} <- function(x, ...) {{",
@@ -1261,7 +1330,7 @@ class Public:
                     "}",
                     "",
                     f"format.{cls['r']} <- function(x, ...) {{",
-                    '  native <- get(".handle", envir = x, inherits = FALSE)',
+                    *self._r_reads(name, member, "x"),
                     *_r_lines(call, "  "),
                     "}",
                 ]
@@ -1290,7 +1359,9 @@ class Public:
     def render_namespace(self, header):
         lines = [*header, f"useDynLib({self.package}, .registration = TRUE)"]
         lines += [f"export({function['r']})" for function in self.functions]
-        for cls in self.delegating_classes().values():
+        for name, cls in self.delegating_classes().items():
+            if self.kind(name) == "handle":
+                lines += [f"S3method({generic}, {cls['r']})" for generic in _R_NAMES]
             for member in cls["members"]:
                 if member["kind"] == "index":
                     lines.append(f'S3method("{member["r"]}", {cls["r"]})')
@@ -1372,7 +1443,14 @@ class Public:
         )
         lines += [f"public.python.exports.{name}" for name in self.python_names()]
         lines += [f"public.r.exports.{function['r']}" for function in self.functions]
-        for cls in self.delegating_classes().values():
+        for name, cls in self.delegating_classes().items():
+            if self.kind(name) == "handle":
+                listed = self._r_listed(name)
+                facts = "keys of names" if listed is None else ", ".join(listed)
+                lines += [
+                    f"public.r.s3methods.{cls['r']}.names: {facts}",
+                    f"public.r.s3methods.{cls['r']}.length",
+                ]
             for member in cls["members"]:
                 if member["kind"] == "index":
                     lines.append(f"public.r.s3methods.{cls['r']}.{member['r']}")

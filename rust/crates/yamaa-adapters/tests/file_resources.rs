@@ -1199,18 +1199,20 @@ mod file {
             assert!(run.save().is_err());
             assert!(run.failure().is_some());
             assert!(!temp.0.join("dm.json").exists());
-            // A directory at the target is refused as an invalid target.
+            // A directory at the target is refused as the walk refuses it, at
+            // the section's `define`, naming the file as written (FILE-7,
+            // #3030 D189).
             let text = |i: &yamaa_core::diagnostic::Diagnostic, key: &str| {
                 i.context
                     .get(key)
                     .and_then(|value| value.as_str())
                     .map(str::to_owned)
             };
-            assert!(run.issues().iter().any(|i| i.phase() == "engine"
-                && i.condition() == "engine_rejected"
-                && i.rule().is_none()
-                && text(i, "stage").as_deref() == Some("publication_target_admission")
-                && text(i, "code").as_deref() == Some("invalid_target")));
+            assert!(run.issues().iter().any(|i| i.phase() == "output"
+                && i.condition() == "resource_path_not_regular_file"
+                && i.rule() == Some("FILE-7")
+                && i.spec_paths == ["sdtm.define"]
+                && text(i, "path").as_deref() == Some("define.xml")));
             assert!(matches!(
                 run.failure(),
                 Some(yamaa_adapters::file_define::Failure::TargetAdmission { index: 1, .. })

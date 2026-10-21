@@ -33,17 +33,17 @@ mod diagnostics {
 
         #[test]
         fn fixed_refusals_preserve_exact_resource_facts_and_authored_paths() {
-            use yamaa_core::application_issue::{Fault, Stage};
+            use yamaa_core::application_issue::{Fault, Step};
             for (stage, fault, code) in [
-                (Stage::Capture, Fault::ResourceLimit, "resource_limit"),
-                (Stage::Prepare, Fault::CompilerLimit, "compiler_limit"),
-                (Stage::Check, Fault::CompilerLimit, "compiler_limit"),
-                (Stage::Ingest, Fault::SourceLimit, "source_limit"),
-                (Stage::Bind, Fault::SourceLimit, "source_limit"),
-                (Stage::Execute, Fault::ExecutionLimit, "execution_limit"),
-                (Stage::Build, Fault::SourceBoundary, "source_boundary"),
-                (Stage::Build, Fault::ExecutionBoundary, "execution_boundary"),
-                (Stage::Output, Fault::ResourceLimit, "resource_limit"),
+                (Step::Capture, Fault::ResourceLimit, "resource_limit"),
+                (Step::Prepare, Fault::CompilerLimit, "compiler_limit"),
+                (Step::Check, Fault::CompilerLimit, "compiler_limit"),
+                (Step::Ingest, Fault::SourceLimit, "source_limit"),
+                (Step::Bind, Fault::SourceLimit, "source_limit"),
+                (Step::Execute, Fault::ExecutionLimit, "execution_limit"),
+                (Step::Build, Fault::SourceBoundary, "source_boundary"),
+                (Step::Build, Fault::ExecutionBoundary, "execution_boundary"),
+                (Step::Output, Fault::ResourceLimit, "resource_limit"),
             ] {
                 let finding = yamaa_core::application_issue::resource_rejected(
                     stage,
@@ -59,7 +59,7 @@ mod diagnostics {
                 assert_eq!(
                     finding.context,
                     [
-                        ("stage".into(), JsonValue::String(stage.as_str().into())),
+                        ("step".into(), JsonValue::String(stage.as_str().into())),
                         ("code".into(), JsonValue::String(code.into())),
                         ("resource".into(), JsonValue::String("bytes".into())),
                         ("limit".into(), JsonValue::from(7)),
@@ -71,7 +71,7 @@ mod diagnostics {
                 assert_eq!(finding.operand_route, None);
             }
             let finding = yamaa_core::application_issue::resource_rejected(
-                Stage::Execute,
+                Step::Execute,
                 Fault::ExecutionLimit,
                 "table_cells",
                 640_000_000,
@@ -81,7 +81,7 @@ mod diagnostics {
             assert_eq!(
                 finding.context,
                 [
-                    ("stage".into(), JsonValue::String("execute".into())),
+                    ("step".into(), JsonValue::String("execute".into())),
                     ("code".into(), JsonValue::String("execution_limit".into())),
                     ("resource".into(), JsonValue::String("table_cells".into())),
                     ("limit".into(), JsonValue::from(640_000_000)),
@@ -90,24 +90,24 @@ mod diagnostics {
             );
             assert_eq!(finding.spec_paths, ["columns"]);
             assert_eq!(
-                yamaa_core::application_issue::rejected(Stage::Capture, Fault::ResourceChanged)
+                yamaa_core::application_issue::rejected(Step::Capture, Fault::ResourceChanged)
                     .context,
                 [
-                    ("stage".into(), JsonValue::String("capture".into())),
+                    ("step".into(), JsonValue::String("capture".into())),
                     ("code".into(), JsonValue::String("resource_changed".into())),
                 ]
                 .into()
             );
         }
 
-        /// The engine fault vocabulary is public context: every `stage` and
+        /// The engine fault vocabulary is public context: every `step` and
         /// `code` spelling is frozen here, in declaration order, so renaming a
         /// variant cannot move what a refusal reports.
         #[test]
         fn engine_fault_stages_and_codes_keep_their_spellings() {
-            use yamaa_core::application_issue::{Fault, Stage};
+            use yamaa_core::application_issue::{Fault, Step};
             assert_eq!(
-                Stage::ALL
+                Step::ALL
                     .iter()
                     .map(|stage| stage.as_str())
                     .collect::<Vec<_>>(),
@@ -242,6 +242,46 @@ mod diagnostics {
                 JsonValue::String("generated/producer.csv".into())
             );
             reached.insert(rendered(&publication));
+            // A save's walk refusal of a target: its file rule's condition,
+            // decided while publishing, at the declaring field or none.
+            {
+                use yamaa_core::resource::ResourceFailure as R;
+                for (failure, condition, rule) in [
+                    (R::Missing, "resource_path_missing", "FILE-7"),
+                    (
+                        R::NotRegularFile,
+                        "resource_path_not_regular_file",
+                        "FILE-7",
+                    ),
+                    (R::Symlink, "resource_path_symlink", "FILE-8"),
+                ] {
+                    let finding = failure
+                        .target_diagnostic(Some("output.path"), "out/dm.csv")
+                        .unwrap();
+                    assert_eq!(
+                        (
+                            finding.definition().phase,
+                            finding.definition().condition,
+                            finding.definition().rule
+                        ),
+                        ("output", condition, Some(rule))
+                    );
+                    assert_eq!(finding.spec_paths, ["output.path"]);
+                    assert_eq!(
+                        finding.context,
+                        [("path".into(), JsonValue::String("out/dm.csv".into()))].into()
+                    );
+                    assert!(failure
+                        .target_diagnostic(None, "out/dm.csv")
+                        .unwrap()
+                        .spec_paths
+                        .is_empty());
+                    reached.insert(rendered(&finding));
+                }
+                assert!(R::ContentChanged
+                    .target_diagnostic(Some("output.path"), "out/dm.csv")
+                    .is_none());
+            }
             for (finding, phase, condition, context) in [
                 (
                     yamaa_core::application_issue::unsupported("environment", Some("environment")),
@@ -251,12 +291,12 @@ mod diagnostics {
                 ),
                 (
                     yamaa_core::application_issue::rejected(
-                        yamaa_core::application_issue::Stage::Capture,
+                        yamaa_core::application_issue::Step::Capture,
                         yamaa_core::application_issue::Fault::ResourceChanged,
                     ),
                     "engine",
                     "engine_rejected",
-                    [("code", "resource_changed"), ("stage", "capture")].as_slice(),
+                    [("code", "resource_changed"), ("step", "capture")].as_slice(),
                 ),
             ] {
                 let definition = finding.definition();

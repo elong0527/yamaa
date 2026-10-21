@@ -181,7 +181,7 @@ mod declaration {
             assert_eq!(
                 capture_failure(&error),
                 Rejection::Fault(yamaa_core::application_issue::rejected(
-                    yamaa_core::application_issue::Stage::Capture,
+                    yamaa_core::application_issue::Step::Capture,
                     yamaa_core::application_issue::Fault::SchemaBundle,
                 ))
             );

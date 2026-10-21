@@ -46,6 +46,8 @@ pub use service::PublicationState;
 pub struct Define {
     ports: NativePorts,
     application: service::Application<NativePorts>,
+    /// The section composed, whose `define` decides where its files go.
+    section: Submission,
     failure: Option<Failure>,
     issues: Vec<Diagnostic>,
 }
@@ -84,6 +86,7 @@ impl Define {
         let mut result = Self {
             ports,
             application: attempt.application,
+            section,
             failure: None,
             issues: Vec::new(),
         };
@@ -162,15 +165,15 @@ impl Define {
         stopped: Option<(usize, crate::publication::Cause)>,
     ) {
         use crate::publication::Cause;
+        let written = |position: usize| {
+            self.application
+                .artifacts()
+                .nth(position)
+                .map_or("", |(written, _, _)| written)
+        };
         let failure = stopped.map(|(index, cause)| match cause {
             Cause::Target(error) => service::Failure::TargetAdmission { index, error },
             Cause::Collision { earlier } => {
-                let written = |position: usize| {
-                    self.application
-                        .artifacts()
-                        .nth(position)
-                        .map_or("", |(written, _, _)| written)
-                };
                 service::Failure::Metadata(vec![service::shared_target(
                     written(earlier),
                     written(index),
@@ -187,9 +190,32 @@ impl Define {
                 )])
             }
         });
+        // A target the walk cannot reach fails with its file rule's condition
+        // at the section's `define`, which places every file of the section,
+        // naming the file as written (#3030 D189); the failure keeps its
+        // original error.
+        let unreached = match &failure {
+            Some(
+                service::Failure::TargetAdmission { index, error }
+                | service::Failure::Publication { index, error },
+            ) => match error {
+                file_publication::Error::Unreachable(cause) => cause.target_diagnostic(
+                    Some(&format!(
+                        "{}.define",
+                        yamaa_core::project_scope::key(self.section)
+                    )),
+                    written(*index),
+                ),
+                _ => None,
+            },
+            _ => None,
+        };
         self.application.record(committed, failure.as_ref());
         if let Some(failure) = failure {
             self.refuse(native_failure(failure));
+            if let Some(issue) = unreached {
+                self.issues = vec![issue];
+            }
         }
     }
     /// A save that stopped at this composition for `issues` of its own,
@@ -315,14 +341,20 @@ impl Ports for NativePorts {
         utc_seconds()
     }
     fn capture_environment(&mut self, written: &str) -> Result<Self::Environment, Failure> {
+        // A project file that cannot be read is the caller's own path, named
+        // as given (FILE-7, FILE-8, FILE-11).
+        let unreadable = |error: &file_resources::Error| {
+            Failure::Diagnostic(vec![crate::file_application::caller_read_failure(
+                written, error,
+            )])
+        };
         let (resources, entry) = match &self.resolver {
             Some(resolver) => (
                 Resources::with_resolver(std::sync::Arc::clone(resolver), written),
                 written.to_owned(),
             ),
-            None => file_configuration::resources(written).map_err(|error| {
-                Failure::Project(project_application::Error::Configuration(error))
-            })?,
+            None => file_configuration::resources(written)
+                .map_err(|file_configuration::Error::Path(error)| unreadable(&error))?,
         };
         self.resources = Some(resources);
         self.environment_written = written.into();
@@ -330,8 +362,12 @@ impl Ports for NativePorts {
             .map_err(|error| Failure::Project(project_application::Error::Schema(error)))?;
         let host = self.host;
         let environment =
-            file_project::capture_environment(self.resources_mut(), &entry, host, schema)
-                .map_err(|error| Failure::Project(project_application::Error::Project(error)))?;
+            file_project::capture_environment(self.resources_mut(), &entry, host, schema).map_err(
+                |error| match error {
+                    file_project::Error::Resource(error) => unreadable(&error),
+                    error => Failure::Project(project_application::Error::Project(error)),
+                },
+            )?;
         let environment = std::sync::Arc::new(environment);
         self.environment = Some(std::sync::Arc::clone(&environment));
         Ok(environment)
@@ -357,10 +393,25 @@ impl Ports for NativePorts {
             written,
             None,
         )
-        .map_err(|error| {
-            Failure::Project(project_application::Error::Project(
+        .map_err(|error| match error {
+            // A listed file the walk cannot reach fails at its listing, as
+            // reading the project refuses it (FILE-11, #3030 D188).
+            file_preparation::Error::Resource(
+                error @ (file_resources::Error::Missing
+                | file_resources::Error::NotRegularFile
+                | file_resources::Error::Symlink),
+            ) => match file_resources::resource_failure(&error) {
+                Some(failure) => Failure::ClassifiedResource {
+                    diagnostic: failure.field_diagnostic(path, written),
+                    error,
+                },
+                None => Failure::Project(project_application::Error::Project(
+                    file_project::Error::Document(file_preparation::Error::Resource(error)),
+                )),
+            },
+            error => Failure::Project(project_application::Error::Project(
                 file_project::Error::Document(error.entry_field(path, written)),
-            ))
+            )),
         })?;
         let document = std::sync::Arc::new(document);
         self.specifications.push((

@@ -202,6 +202,7 @@ class PublicContract(unittest.TestCase):
                 "Error",
                 "Table",
                 "__version__",
+                "info",
                 "lint",
                 "project",
                 "read_odm",
@@ -221,24 +222,29 @@ class PublicContract(unittest.TestCase):
             [
                 "Table",
                 "_CORE_VERSION",
+                "_Check",
                 "_Error",
                 "_Plans",
                 "_ProjectRun",
                 "_Run",
                 "_SelfTest",
                 "_Submission",
+                "_info",
                 "_lint",
                 "_plans",
                 "_project_check",
+                "_project_names",
                 "_project_run",
                 "_project_spec",
                 "_project_submission",
+                "_project_summary",
                 "_read_odm",
                 "_schema",
                 "_selftest",
                 "_spec_check",
                 "_spec_resolve",
                 "_spec_run",
+                "_spec_summary",
             ],
         )
         self.assertEqual(yamaa.__version__, "0.5.0")
@@ -319,11 +325,11 @@ class PublicContract(unittest.TestCase):
         absent = self.root / "absent.yaml"
         spec = yamaa.spec(absent)
         checked = self.issues(spec.check())
-        self.assertEqual(checked["condition"].to_list(), ["engine_rejected"])
-        self.assertEqual(
-            json.loads(checked["context"][0]),
-            {"code": "resource_missing", "stage": "prepare"},
-        )
+        # The caller's own path, named as given at no field (FILE-7).
+        self.assertEqual(checked["condition"].to_list(), ["resource_path_missing"])
+        self.assertEqual(checked["rule"].to_list(), ["FILE-7"])
+        self.assertEqual(checked["spec_paths"].to_list(), [[]])
+        self.assertEqual(json.loads(checked["context"][0]), {"path": os.fspath(absent)})
         run = spec.run()
         self.assertIsNone(run.output)
         self.assertIsNone(run.report)
@@ -670,6 +676,9 @@ class PublicContract(unittest.TestCase):
         project, case = self.function_study()
         runs = project.run()
         self.assertEqual(runs.names, ["TEST"])
+        # The project names what a run of every section builds, read without
+        # data (D45).
+        self.assertEqual(project.names, runs.names)
         self.assertTrue(self.issues(runs).is_empty())
         member = runs["TEST"]
         self.assertEqual(public_names(member), TRUTH["members"]["member_run"])
@@ -685,10 +694,11 @@ class PublicContract(unittest.TestCase):
         error = self.refusal(lambda: runs["ADSL"])
         self.assertEqual(str(error), error_text("unknown_member"))
         self.assertEqual(error.issues.to_pylist(), [unknown_member('["TEST"]')])
-        # Membership and iteration go by name, like indexing.
+        # Membership, iteration and length go by name, like indexing.
         self.assertIn("TEST", runs)
         self.assertNotIn("ADSL", runs)
         self.assertEqual(list(runs), ["TEST"])
+        self.assertEqual(len(runs), len(runs.names))
         self.assertEqual(project.run("adam").names, ["TEST"])
         # A section the project does not declare refuses the run (PROJECT-14).
         error = self.refusal(lambda: project.run("sdtm"))
@@ -699,6 +709,13 @@ class PublicContract(unittest.TestCase):
         with (case / "project.yaml").open("a", encoding="utf-8") as listing:
             listing.write("sdtm:\n  specs: []\n")
         self.assertEqual(project.run("sdtm").names, [])
+        self.assertEqual(len(project.run("sdtm")), 0)
+        self.assertEqual(project.names, ["TEST"])
+        # Without a creation time the submission reads the clock once and
+        # reports the time it gave every section (D129).
+        self.assertRegex(
+            project.submission().created, r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$"
+        )
         # A run or a submission that built nothing has nothing to save.
         for result, key, rule in (
             (project.run("sdtm"), "empty_project_run_save", "PROJECT-12"),
@@ -812,14 +829,21 @@ class PublicContract(unittest.TestCase):
         absent = self.root / "absent-project.yaml"
         project = yamaa.project(absent)
         error = self.refusal(lambda: project.spec("TEST"))
-        self.assertEqual(str(error), error_text("unread_project"))
+        self.assertEqual(str(error), error_text("unread_project", absent))
         unread = error.issues.to_pylist()
+        # The caller's own path, named as given at no field (FILE-7).
         self.assertEqual(
-            [(row["condition"], row["spec_paths"]) for row in unread],
-            [("project_environment_missing", ["environment"])],
+            [
+                (row["condition"], row["spec_paths"], json.loads(row["context"]))
+                for row in unread
+            ],
+            [("resource_path_missing", [], {"path": os.fspath(absent)})],
         )
         checked = self.issues(project.check())
         self.assertEqual(checked.to_dicts(), unread)
+        error = self.refusal(lambda: project.names)
+        self.assertEqual(str(error), error_text("unread_project_names", absent))
+        self.assertEqual(error.issues.to_pylist(), unread)
         runs = project.run()
         self.assertEqual(runs.names, [])
         self.assertEqual(self.issues(runs).to_dicts(), unread)
@@ -834,6 +858,8 @@ class PublicContract(unittest.TestCase):
         self.assertEqual(error.issues.to_pylist(), [unknown_member("[]")])
         submission = project.submission("sdtm", created="2026-09-11T00:00:00")
         self.assertEqual(public_names(submission), TRUTH["members"]["submission"])
+        # The creation time given is kept, though nothing composed (D129).
+        self.assertEqual(submission.created, "2026-09-11T00:00:00")
         self.assertEqual(self.issues(submission).to_dicts(), unread)
         for _ in range(2):
             error = self.refusal(submission.save)
@@ -844,8 +870,11 @@ class PublicContract(unittest.TestCase):
         for name in TRUTH["read_only_views"]["project_run"]:
             with self.subTest(name=name), self.assertRaises(AttributeError):
                 setattr(runs, name, None)
+        for name in TRUTH["read_only_views"]["submission"]:
+            with self.subTest(name=name), self.assertRaises(AttributeError):
+                setattr(submission, name, None)
         with self.assertRaises(AttributeError):
-            submission.issues = None
+            project.names = []
         # The project file is read first: one that cannot be read reports its
         # own findings, and no section is checked.
         self.assertEqual(self.issues(project.run("bogus")).to_dicts(), unread)
@@ -945,9 +974,22 @@ class PublicContract(unittest.TestCase):
                         fixture_bytes(case["input_csv"])
                     )
                 call = getattr(yamaa.spec(spec), case["call"])
+                # `{path}` stands for the specification path given, as JSON
+                # text in the context.
+                given = os.fspath(spec)
+                expected = [
+                    {
+                        **row,
+                        "message": row["message"].replace("{path}", given),
+                        "context": row["context"].replace(
+                            "{path}", json.dumps(given, ensure_ascii=False)[1:-1]
+                        ),
+                    }
+                    for row in case["issues"]
+                ]
                 self.assertEqual(
                     self.issues(call()).to_dicts(),
-                    located(case["issues"], spec.parent.resolve()),
+                    located(expected, spec.parent.resolve()),
                 )
 
 
@@ -1170,7 +1212,7 @@ class Resolve(unittest.TestCase):
         self.assertEqual(str(caught.exception), error_text("resolve", spec))
         self.assertEqual(
             caught.exception.issues.to_polars()["condition"].to_list(),
-            ["engine_rejected"],
+            ["resource_path_missing"],
         )
 
 

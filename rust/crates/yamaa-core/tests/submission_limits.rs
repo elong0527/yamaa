@@ -25,7 +25,7 @@ fn oversized_published_table_refuses_before_schema_or_cell_access() {
     assert_eq!(finding.code, ConditionCode::ApplicationRejected);
     assert_eq!(finding.definition().rule, None);
     assert_eq!(finding.path, "datasets.D0.transport");
-    assert_eq!(finding.context["stage"], "define");
+    assert_eq!(finding.context["step"], "define");
     assert_eq!(finding.context["code"], "resource_limit");
     assert_eq!(
         finding.context["detail"],

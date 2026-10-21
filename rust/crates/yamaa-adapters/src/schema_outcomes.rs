@@ -9,7 +9,7 @@ pub(crate) enum Error {
 // Stable outcomes keep language findings, policy refusal and transport defects separate.
 
 use crate::specification_diagnostics::{bound, fault, Rejection};
-use yamaa_core::application_issue::{Fault, Stage};
+use yamaa_core::application_issue::{Fault, Step};
 use yamaa_core::{portable_regex, schema::*};
 
 fn regex_resource(resource: portable_regex::Resource) -> &'static str {
@@ -24,16 +24,16 @@ fn document_resource(resource: DocumentResource) -> &'static str {
         DocumentResource::Depth => "yaml_depth",
     }
 }
-fn limit(stage: Stage, phase: &str, resource: &str, limit: usize) -> Rejection {
-    bound(stage, phase, resource, limit, None)
+fn limit(step: Step, phase: &str, resource: &str, limit: usize) -> Rejection {
+    bound(step, phase, resource, limit, None)
 }
-pub(crate) fn document(error: DocumentError, stage: Stage) -> Result<Rejection, Error> {
+pub(crate) fn document(error: DocumentError, step: Step) -> Result<Rejection, Error> {
     match error {
         DocumentError::Limit {
             resource,
             limit: maximum,
         } => Ok(limit(
-            stage,
+            step,
             "decoded_document",
             document_resource(resource),
             maximum,
@@ -41,14 +41,14 @@ pub(crate) fn document(error: DocumentError, stage: Stage) -> Result<Rejection, 
         _ => Err(Error::InvalidDocument),
     }
 }
-pub(crate) fn validation(error: ValidationError, stage: Stage) -> Result<Rejection, Error> {
+pub(crate) fn validation(error: ValidationError, step: Step) -> Result<Rejection, Error> {
     Ok(match error {
         ValidationError::Type(TypeError::Invalid { .. }) => return Err(Error::InvalidQuery),
         ValidationError::Type(TypeError::Limit {
             resource,
             limit: maximum,
         }) => limit(
-            stage,
+            step,
             "type",
             match resource {
                 TypeResource::Depth => "semantic_depth",
@@ -57,13 +57,13 @@ pub(crate) fn validation(error: ValidationError, stage: Stage) -> Result<Rejecti
         ),
         ValidationError::InvalidDescriptor => return Err(Error::InvalidQuery),
         ValidationError::Depth { limit: maximum } => {
-            limit(stage, "validation", "semantic_depth", maximum)
+            limit(step, "validation", "semantic_depth", maximum)
         }
     })
 }
-pub(crate) fn normalization(error: NormalizationError, stage: Stage) -> Result<Rejection, Error> {
+pub(crate) fn normalization(error: NormalizationError, step: Step) -> Result<Rejection, Error> {
     Ok(match error {
-        NormalizationError::Validation(error) => return validation(error, stage),
+        NormalizationError::Validation(error) => return validation(error, step),
         NormalizationError::Invalid(_) | NormalizationError::Defaults(_) => {
             return Err(Error::Internal)
         }
@@ -71,7 +71,7 @@ pub(crate) fn normalization(error: NormalizationError, stage: Stage) -> Result<R
             resource,
             limit: maximum,
         } => limit(
-            stage,
+            step,
             "normalization",
             match resource {
                 NormalizationResource::Depth => "semantic_depth",
@@ -82,7 +82,7 @@ pub(crate) fn normalization(error: NormalizationError, stage: Stage) -> Result<R
             resource,
             limit: maximum,
         }) => limit(
-            stage,
+            step,
             "normalized_document",
             document_resource(resource),
             maximum,
@@ -90,7 +90,7 @@ pub(crate) fn normalization(error: NormalizationError, stage: Stage) -> Result<R
         // A mapping key that is not a scalar reports the projection fault of
         // the preparation stage it has always reported.
         NormalizationError::Document(DocumentError::NonScalarKey) => {
-            fault(Stage::Prepare, Fault::IssueProjection)
+            fault(Step::Prepare, Fault::IssueProjection)
         }
         NormalizationError::Document(_) => return Err(Error::Internal),
     })
@@ -98,7 +98,7 @@ pub(crate) fn normalization(error: NormalizationError, stage: Stage) -> Result<R
 /// Dependency discovery never turns a resource refusal into a missing edge.
 pub(crate) fn inheritance_dependencies(
     error: yamaa_core::resolution::Error,
-    stage: Stage,
+    step: Step,
 ) -> Result<Rejection, Error> {
     use yamaa_core::expression::{CompileError, Context, Resource};
     use yamaa_core::resolution::Error as E;
@@ -124,13 +124,13 @@ pub(crate) fn inheritance_dependencies(
             };
             match resource {
                 Resource::Depth => limit(
-                    stage,
+                    step,
                     &format!("inheritance_{field}"),
                     "semantic_depth",
                     maximum,
                 ),
                 Resource::Regex(resource) => limit(
-                    stage,
+                    step,
                     &format!("inheritance_{field}_regex"),
                     regex_resource(resource),
                     maximum,
@@ -138,6 +138,6 @@ pub(crate) fn inheritance_dependencies(
             }
         }
         E::Limit { .. } => return Err(Error::Internal),
-        E::Document(error) => return normalization(NormalizationError::Document(error), stage),
+        E::Document(error) => return normalization(NormalizationError::Document(error), step),
     })
 }

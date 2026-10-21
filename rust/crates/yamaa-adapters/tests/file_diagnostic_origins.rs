@@ -320,17 +320,17 @@ mod file {
                 },
                 identity(&path),
             );
+            // The project file is read first: the caller's own path, named
+            // as given (FILE-7, #3321).
             assert_eq!(issues.len(), 1);
             assert_eq!(issues[0].phase(), "validation");
-            assert_eq!(issues[0].condition(), "project_environment_missing");
+            assert_eq!(issues[0].condition(), "resource_path_missing");
             assert_eq!(
                 yamaa_core::json::Value::Object(issues[0].context.clone()),
-                yamaa_adapters::json!({
-                    "cause": "missing", "path": project,
-                })
+                yamaa_adapters::json!({"path": project})
             );
-            assert_eq!(issues[0].spec_paths, ["environment"]);
-            assert_eq!(issues[0].rule(), Some("FUNC-1"));
+            assert!(issues[0].spec_paths.is_empty());
+            assert_eq!(issues[0].rule(), Some("FILE-7"));
             fs::write(
                 study.0.join("spec.yaml"),
                 VALID.replace("input: {SRC: input.csv}", "input: {SRC: input.unknown}"),
@@ -445,10 +445,15 @@ mod file {
             fs::write(study.0.join("spec.yaml"), b"[changed").unwrap();
             assert!(!result.save().unwrap());
             assert_eq!(result.observations(), observations);
+            // A missing directory is refused at the field that declares the
+            // file, naming it as written (FILE-7, #3030 D189).
             assert_eq!(result.issues().len(), 1);
+            assert_eq!(result.issues()[0].condition(), "resource_path_missing");
+            assert_eq!(result.issues()[0].phase(), "output");
+            assert_eq!(result.issues()[0].spec_paths, ["output.path"]);
             assert_eq!(
                 yamaa_adapters::json_wire::encode_object(&result.issues()[0].context),
-                "{\"code\":\"invalid_target\",\"stage\":\"output\"}"
+                "{\"path\":\"absent/output.csv\"}"
             );
             assert_eq!(result.output().unwrap(), before);
             fs::create_dir(study.0.join("absent")).unwrap();
@@ -604,7 +609,7 @@ mod file {
                 file_configuration::resources(&study.text("entry/link.yaml")).unwrap();
             assert!(matches!(
                 FileSpecification::prepare(resources, &entry),
-                Err(yamaa_adapters::file_preparation::Error::Resource(
+                Err(yamaa_adapters::file_preparation::Error::Entry(
                     Error::Symlink
                 ))
             ));
@@ -646,9 +651,11 @@ mod file {
                 let mut result = study.build();
                 assert!(result.output().is_some());
                 assert!(!result.save().unwrap());
+                assert_eq!(result.issues()[0].condition(), "resource_path_symlink");
+                assert_eq!(result.issues()[0].spec_paths, ["output.path"]);
                 assert_eq!(
                     yamaa_adapters::json_wire::encode_object(&result.issues()[0].context),
-                    "{\"code\":\"invalid_target\",\"stage\":\"output\"}"
+                    "{\"path\":\"link/output.csv\"}"
                 );
                 if existing {
                     assert_eq!(fs::read(outside.0.join("output.csv")).unwrap(), b"retained");
@@ -843,7 +850,7 @@ mod file {
                         assert_eq!(
                             yamaa_core::json::Value::Object(issue.context.clone()),
                             json!({
-                                "stage":"prepare", "code":"compiler_limit", "resource":resource, "limit":limit, "actual":actual,
+                                "step":"prepare", "code":"compiler_limit", "resource":resource, "limit":limit, "actual":actual,
                             })
                         );
                     }

@@ -100,7 +100,7 @@ mod tests {
                 issue.code,
                 yamaa_core::diagnostic::ConditionCode::ApplicationRejected
             );
-            assert_eq!(issue.context["stage"].as_str(), Some("ingest"));
+            assert_eq!(issue.context["step"].as_str(), Some("ingest"));
             assert_eq!(
                 issue.context["code"].as_str(),
                 Some("sas_reader_unavailable")

@@ -22,17 +22,25 @@ messages <- host_truth[["messages"]]
 error_text <- function(key, path = NULL, file = NULL) {
   text <- messages[[key]]
   if (!is.null(file)) text <- sub("{file}", file, text, fixed = TRUE)
-  if (is.null(path)) text else sub("{path}", path, text, fixed = TRUE)
+  if (is.null(path)) text else gsub("{path}", path, text, fixed = TRUE)
 }
 namespace <- asNamespace("yamaa")
 
 stopifnot(identical(as.character(packageVersion("yamaa")), "0.5.0"),
   identical(yamaa:::.core_version(), as.character(packageVersion("yamaa"))),
   identical(sort(getNamespaceExports("yamaa")),
-    c("yamaa_lint", "yamaa_project", "yamaa_read_odm", "yamaa_schema", "yamaa_selftest",
-      "yamaa_spec")),
+    c("yamaa_info", "yamaa_lint", "yamaa_project", "yamaa_read_odm", "yamaa_schema",
+      "yamaa_selftest", "yamaa_spec")),
   identical(getNamespaceInfo("yamaa", "S3methods")[, 3L],
-    c("[[.yamaa_project_run", "print.yamaa_selftest", "format.yamaa_selftest")))
+    c("names.yamaa_check", "length.yamaa_check", "print.yamaa_check", "format.yamaa_check",
+      "names.yamaa_run", "length.yamaa_run", "print.yamaa_run", "format.yamaa_run",
+      "names.yamaa_member_run", "length.yamaa_member_run", "print.yamaa_member_run",
+      "format.yamaa_member_run", "names.yamaa_project_run", "length.yamaa_project_run",
+      "[[.yamaa_project_run", "print.yamaa_project_run", "format.yamaa_project_run",
+      "names.yamaa_submission", "length.yamaa_submission", "print.yamaa_submission",
+      "format.yamaa_submission", "print.yamaa_spec", "format.yamaa_spec", "print.yamaa_project",
+      "format.yamaa_project", "names.yamaa_selftest", "length.yamaa_selftest",
+      "print.yamaa_selftest", "format.yamaa_selftest")))
 for (name in c("yamaa_domain", "yamaa_check", "yamaa_define", "yamaa_resolve_specification",
   "yamaa_read_resolved_specification", "yamaa_resource_resolver", "yamaa_memory_resolver",
   "yamaa_synthetic_remote_resolver", "yamaa_resource_result", "yamaa_resource_failure",
@@ -103,6 +111,15 @@ argument_failure <- function(code) {
 }
 members <- function(object) sort(ls(object), method = "radix")
 expected_members <- function(kind) fixture_strings(host_truth[["members"]][[kind]])
+# names() lists a result's public members in declaration order, never its
+# hidden handle, and length() counts them (D44); ls() and `$` still reach
+# each of them.
+named <- function(object, kind) {
+  expected <- fixture_strings(host_truth[["r_names"]][[kind]])
+  identical(names(object), expected) && identical(length(object), length(expected)) &&
+    setequal(expected, ls(object)) &&
+    all(vapply(expected, exists, logical(1), envir = object, inherits = FALSE))
+}
 arguments_of <- function(f) as.character(names(formals(f)))
 expected_arguments <- function(name) as.character(fixture_strings(host_truth[["arguments"]][[name]]))
 locked <- function(object, names) {
@@ -130,9 +147,11 @@ qualify_signatures <- function() {
   for (name in names(limits)) stopifnot(identical(options[[name]], as.numeric(limits[[name]])))
   stopifnot(identical(members(spec), expected_members("spec")),
     identical(members(project), expected_members("project")),
-    identical(members(spec$check()), expected_members("check")))
+    identical(members(spec$check()), expected_members("check")),
+    named(spec$check(), "check"))
   run <- spec$run()
-  stopifnot(identical(members(run), expected_members("run")),
+  stopifnot(identical(members(run), expected_members("run")), named(run, "run"),
+    is.character(run$status), identical(run[["status"]], run$status),
     identical(arguments_of(run$save), expected_arguments("run.save")))
   locked(spec, c(expected_members("spec"), "extra"))
   locked(project, c(expected_members("project"), "extra"))
@@ -206,8 +225,10 @@ run_contract <- function() {
   absent <- yamaa_spec(path("absent.yaml"))
   checked <- check_issues(absent$check()$issues)
   run <- absent$run()
-  stopifnot(identical(checked$condition, "engine_rejected"),
-    identical(checked$context, '{"code":"resource_missing","stage":"prepare"}'),
+  # The caller's own path, named as given at no field (FILE-7).
+  stopifnot(identical(checked$condition, "resource_path_missing"), identical(checked$rule, "FILE-7"),
+    identical(checked$spec_paths, list(character())),
+    identical(checked$context, paste0('{"path":"', path("absent.yaml"), '"}')),
     is.null(run$output), is.null(run$report), identical(run$issues, checked))
   for (attempt in 1:2) {
     error <- refusal(run$save())
@@ -423,10 +444,16 @@ qualify_project_run_members <- function() {
     readLines(entry), fixed = TRUE), entry)
   project <- yamaa_project(file.path(case, "project.yaml"))
   runs <- project$run()
-  stopifnot(identical(runs$names, "TEST"), nrow(check_issues(runs$issues)) == 0L)
+  stopifnot(identical(runs$names, "TEST"), nrow(check_issues(runs$issues)) == 0L,
+    # The project names what a run of every section builds, read without data
+    # (D45).
+    identical(project$names, runs$names))
   member <- runs[["TEST"]]
   single <- project$spec("TEST")$run()
   stopifnot(identical(members(member), expected_members("member_run")),
+    named(member, "member_run"),
+    # A project run names its specifications, and counts them.
+    identical(names(runs), runs$names), identical(length(runs), length(runs$names)),
     nrow(check_issues(member$issues)) == 0L, identical(member$output, single$output),
     identical(member$report, single$report),
     # The project report stacks its members' reports in run order.
@@ -444,9 +471,16 @@ qualify_project_run_members <- function() {
   error <- refusal(project$run("sdtm")$save())
   stopifnot(identical(conditionMessage(error), error_text("empty_project_run_save", listing)),
     nothing_to_save(error, "PROJECT-12"))
-  error <- refusal(project$submission()$save())
+  submission <- project$submission()
+  error <- refusal(submission$save())
   stopifnot(identical(conditionMessage(error), error_text("empty_submission_save", listing)),
-    nothing_to_save(error, "PROJECT-13"))
+    nothing_to_save(error, "PROJECT-13"),
+    # Without a creation time the submission reads the clock once and reports
+    # the time it gave every section (D129).
+    grepl("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}$", submission$created),
+    identical(project$names, "TEST"))
+  empty <- project$run("sdtm")
+  stopifnot(identical(names(empty), character()), identical(length(empty), 0L))
   stopifnot(identical(project$run("adam")$names, "TEST"), identical(project$run("sdtm")$names, character()),
     !file.exists(file.path(case, "test.csv")), returns_paths(runs$save()),
     identical(readBin(file.path(case, "test.csv"), "raw", 100L), charToRaw("ID,RESULT\n01,1.5\n")))
@@ -537,10 +571,15 @@ qualify_project_refusals <- function() {
   project <- yamaa_project(absent)
   error <- refusal(project$spec("TEST"))
   unread <- error$issues
-  stopifnot(identical(conditionMessage(error), error_text("unread_project")),
-    identical(unread$condition, "project_environment_missing"),
-    identical(unread$spec_paths, list("environment")),
+  # The caller's own path, named as given at no field (FILE-7).
+  stopifnot(identical(conditionMessage(error), error_text("unread_project", absent)),
+    identical(unread$condition, "resource_path_missing"),
+    identical(unread$spec_paths, list(character())),
+    identical(unread$context, paste0('{"path":"', absent, '"}')),
     identical(check_issues(project$check()$issues), unread))
+  error <- refusal(project$names)
+  stopifnot(identical(conditionMessage(error), error_text("unread_project_names", absent)),
+    identical(error$issues, unread))
   runs <- project$run()
   stopifnot(identical(runs$names, character()), identical(check_issues(runs$issues), unread),
     identical(names(runs$report), fixture_strings(host_truth[["report_columns"]])),
@@ -553,7 +592,10 @@ qualify_project_refusals <- function() {
   stopifnot(identical(conditionMessage(error), error_text("no_member_built")), unknown_member(error, "[]"))
   submission <- project$submission("sdtm", created = "2026-09-11T00:00:00")
   stopifnot(identical(members(submission), expected_members("submission")),
-    identical(check_issues(submission$issues), unread))
+    named(submission, "submission"),
+    identical(check_issues(submission$issues), unread),
+    # The creation time given is kept, though nothing composed (D129).
+    identical(submission$created, "2026-09-11T00:00:00"))
   locked(submission, c(fixture_strings(host_truth[["read_only_views"]][["submission"]]), "save"))
   for (attempt in 1:2) {
     error <- refusal(submission$save())
@@ -634,8 +676,13 @@ qualify_issue_parity <- function() {
     }
     frame <- check_issues(yamaa_spec(spec)[[case$call]]()$issues)
     expected <- case$issues
+    # `{path}` stands for the specification path given, as JSON text in the
+    # context.
+    given <- c(message = spec, context = gsub("\\", "\\\\", spec, fixed = TRUE))
     text <- function(field) vapply(expected, function(issue)
-      if (is.null(issue[[field]])) NA_character_ else issue[[field]], "")
+      if (is.null(issue[[field]])) NA_character_
+      else if (field %in% names(given)) gsub("{path}", given[[field]], issue[[field]], fixed = TRUE)
+      else issue[[field]], "")
     number <- function(field) vapply(expected, function(issue)
       if (is.null(issue[[field]])) NA_real_ else as.double(issue[[field]]), 0)
     actual <- list(severity = frame$severity, phase = frame$phase, condition = frame$condition,
@@ -684,7 +731,7 @@ qualify_resolve <- function() {
   unlink(entry)
   error <- refusal(spec$resolve())
   stopifnot(identical(conditionMessage(error), error_text("resolve", entry)),
-    identical(error$issues$condition, "engine_rejected"))
+    identical(error$issues$condition, "resource_path_missing"))
 
   # The project supplies the function and names itself; the same file alone
   # names an unknown function. No callable is activated.

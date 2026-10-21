@@ -2253,7 +2253,7 @@ columns:
                     "condition": "engine_rejected",
                     "rule": null,
                     "spec_paths": [],
-                    "context": {"stage": "build", "code": "result_projection"},
+                    "context": {"step": "build", "code": "result_projection"},
                 })]
             );
             assert!(!fixture.0.join("output.csv").exists());

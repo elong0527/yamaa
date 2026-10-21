@@ -373,7 +373,7 @@ fn window_context_table_counts_its_source_field_against_the_column_limit() {
             "rule": null,
             "spec_paths": ["columns.W.derivation.row_number"],
             "context": {
-                "stage": "execute",
+                "step": "execute",
                 "code": "execution_limit",
                 "resource": "columns",
                 "limit": 1024,

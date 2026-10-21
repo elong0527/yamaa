@@ -8,7 +8,7 @@
 //! unreadable file reports. A path that reaches no regular file is refused
 //! before the reader runs, with FILE-7's and FILE-8's conditions.
 use super::{ConditionCode as C, Context, Diagnostic};
-use crate::application_issue::{rejected, Fault, Stage};
+use crate::application_issue::{rejected, Fault, Step};
 use crate::json::Value as V;
 use crate::odm_items::Error;
 
@@ -59,7 +59,7 @@ impl OdmReadFinding<'_> {
     pub fn diagnostic(self) -> Diagnostic {
         let Some(code) = self.code() else {
             // A host read failure is no fact about the document (D107).
-            return rejected(Stage::Ingest, Fault::ResourceUnreadable);
+            return rejected(Step::Ingest, Fault::ResourceUnreadable);
         };
         if let Error::Option { option, minimum } = self.refusal {
             return Diagnostic {

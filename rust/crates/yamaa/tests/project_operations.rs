@@ -188,6 +188,70 @@ fn save_refusal(subject: &str, failure: &yamaa::Failure) -> String {
     )
 }
 
+/// D45: a project's names in run order, producer first, as a run of every
+/// section orders them, read without data. A listing that cannot be read has
+/// no name, as in a run; a project that cannot be read, or that lists a name
+/// twice, refuses as `cannot read <project>` (D39).
+#[test]
+fn project_names_list_the_run_order_and_refuse_as_a_read() {
+    let study = study();
+    let engine = engine();
+    // ADSL, listed first, reads DM, so DM runs before it.
+    study.write(
+        "project.yaml",
+        "schema_version: '1.0'\nsdtm:\n  specs: [adam/adsl.yaml, sdtm/dm.yaml, sdtm/ae.yaml]\n",
+    );
+    let names = engine.project_names(&study.project()).unwrap();
+    assert_eq!(names, ["DM", "ADSL", "AE"]);
+    let runs = engine
+        .project_run(&study.project(), None, &CancellationToken::new())
+        .unwrap();
+    assert_eq!(runs.names(), names);
+
+    study.write(
+        "project.yaml",
+        PROJECT.replace("sdtm/ae.yaml", "sdtm/absent.yaml"),
+    );
+    assert_eq!(
+        engine.project_names(&study.project()).unwrap(),
+        ["DM", "ADSL"]
+    );
+
+    study.write("adam/dm.yaml", DM.replace("../out/dm", "../out/dm-copy"));
+    study.write(
+        "project.yaml",
+        PROJECT.replace("[adam/adsl.yaml]", "[adam/adsl.yaml, adam/dm.yaml]"),
+    );
+    let duplicate = engine.project_names(&study.project()).unwrap_err();
+    // Listing and selecting report the same located duplicate-name finding.
+    let selected = engine.project_spec(&study.project(), "DM").unwrap_err();
+    assert_eq!(duplicate.diagnostics, selected.diagnostics);
+    assert!(
+        duplicate.message.starts_with(&format!("cannot read {}: ", study.project()))
+            && duplicate
+                .message
+                .ends_with("the project lists two specifications named DM [duplicate_specification_name, PROJECT-5]"),
+        "{}",
+        duplicate.message
+    );
+    assert_eq!(
+        conditions(&duplicate.issues),
+        ["duplicate_specification_name"]
+    );
+    assert!(duplicate.paths.is_empty());
+
+    let absent = study.path("absent.yaml");
+    let missing = engine.project_names(&absent).unwrap_err();
+    assert!(
+        missing
+            .message
+            .starts_with(&format!("cannot read {absent}: ")),
+        "{}",
+        missing.message
+    );
+    assert_eq!(rows(&missing.issues).len(), 1);
+}
+
 #[test]
 fn names_select_listed_specifications_and_refuse_unknown_or_shared_names() {
     let study = study();
@@ -363,14 +427,11 @@ fn a_section_the_project_does_not_declare_refuses_the_call() {
     // own findings as the result's issues, and no section is checked.
     let absent = study.path("absent.yaml");
     let run = engine.project_run(&absent, Some("adm"), &token).unwrap();
-    assert_eq!(conditions(&run.issues()), ["project_environment_missing"]);
+    assert_eq!(conditions(&run.issues()), ["resource_path_missing"]);
     let submission = engine
         .project_submission(&absent, Some("adm"), None, "0.4.0", &token)
         .unwrap();
-    assert_eq!(
-        conditions(&submission.issues()),
-        ["project_environment_missing"]
-    );
+    assert_eq!(conditions(&submission.issues()), ["resource_path_missing"]);
 }
 
 /// Counts its calls and interrupts every one, as a user's Ctrl-C would.
@@ -1478,18 +1539,21 @@ fn a_later_section_whose_target_cannot_be_written_saves_nothing() {
     let failure = submission.save().unwrap_err();
     assert_eq!(failure.message, save_refusal(&study.project(), &failure));
     assert!(failure.paths.is_empty());
+    // A directory where the file belongs is refused at the section's
+    // `define`, naming the file as written (FILE-7, #3030 D189).
     let issues = rows(&failure.issues);
     assert_eq!(issues.len(), 1, "{issues:?}");
-    assert_eq!(issues[0].condition, "engine_rejected");
-    assert_eq!(
-        issues[0].context["stage"],
-        text("publication_target_admission")
-    );
-    assert_eq!(issues[0].context["code"], text("invalid_target"));
+    assert_eq!(issues[0].phase, "output");
+    assert_eq!(issues[0].condition, "resource_path_not_regular_file");
+    assert_eq!(issues[0].spec_paths, ["adam.define"]);
+    assert_eq!(issues[0].context["path"], text("adam-define.xml"));
     assert!(!study.exists("define.xml"));
     assert!(!study.exists("dm.json"));
     // The submission keeps the cause; its status describes the composition.
-    assert_eq!(conditions(&submission.issues()), ["engine_rejected"]);
+    assert_eq!(
+        conditions(&submission.issues()),
+        ["resource_path_not_regular_file"]
+    );
     assert_eq!(submission.status(), Status::Succeeded);
 }
 

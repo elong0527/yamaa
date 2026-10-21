@@ -1079,7 +1079,7 @@ mod service {
                     finding.context,
                     [
                         ("path".into(), C::String("declared.yaml".into())),
-                        ("stage".into(), C::String("define".into())),
+                        ("step".into(), C::String("define".into())),
                         ("code".into(), C::String(expected.into())),
                     ]
                     .into()
@@ -1157,7 +1157,7 @@ mod service {
                 if let P::TargetAdmission(fault) = stage {
                     expected.insert("code".into(), C::String(fault.as_str().into()));
                     expected.insert(
-                        "stage".into(),
+                        "step".into(),
                         C::String("publication_target_admission".into()),
                     );
                 }
@@ -1192,7 +1192,7 @@ mod service {
                                 "path".into(),
                                 yamaa_core::json::Value::from("declared.yaml")
                             ),
-                            ("stage".into(), yamaa_core::json::Value::from("define")),
+                            ("step".into(), yamaa_core::json::Value::from("define")),
                             (
                                 "code".into(),
                                 yamaa_core::json::Value::from("resource_limit")

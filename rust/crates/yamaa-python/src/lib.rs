@@ -12,6 +12,7 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add("_CORE_VERSION", yamaa::VERSION)?;
     module.add_class::<arrow_bridge::Table>()?;
     module.add("_Error", module.py().get_type::<api_entry::_Error>())?;
+    module.add_class::<api_entry::Check>()?;
     module.add_class::<api_entry::Run>()?;
     module.add_class::<api_entry::ProjectRun>()?;
     module.add_class::<api_entry::Submission>()?;
@@ -19,15 +20,19 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<api_entry::Plans>()?;
     module.add_function(wrap_pyfunction!(api_entry::_plans, module)?)?;
     module.add_function(wrap_pyfunction!(api_entry::_spec_check, module)?)?;
+    module.add_function(wrap_pyfunction!(api_entry::_spec_summary, module)?)?;
     module.add_function(wrap_pyfunction!(api_entry::_spec_run, module)?)?;
     module.add_function(wrap_pyfunction!(api_entry::_spec_resolve, module)?)?;
     module.add_function(wrap_pyfunction!(api_entry::_project_spec, module)?)?;
+    module.add_function(wrap_pyfunction!(api_entry::_project_summary, module)?)?;
+    module.add_function(wrap_pyfunction!(api_entry::_project_names, module)?)?;
     module.add_function(wrap_pyfunction!(api_entry::_project_check, module)?)?;
     module.add_function(wrap_pyfunction!(api_entry::_project_run, module)?)?;
     module.add_function(wrap_pyfunction!(api_entry::_project_submission, module)?)?;
     module.add_function(wrap_pyfunction!(api_entry::_read_odm, module)?)?;
     module.add_function(wrap_pyfunction!(api_entry::_lint, module)?)?;
     module.add_function(wrap_pyfunction!(api_entry::_schema, module)?)?;
+    module.add_function(wrap_pyfunction!(api_entry::_info, module)?)?;
     module.add_function(wrap_pyfunction!(api_entry::_selftest, module)?)?;
     Ok(())
 }

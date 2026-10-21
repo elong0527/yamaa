@@ -1226,11 +1226,11 @@ mod diagnostics {
                     submission_transport::admit(&study, &study.datasets()[0], &table).unwrap_err();
                 assert_eq!(finding.code, ConditionCode::ApplicationRejected);
                 assert_eq!(finding.path, "datasets.D0.transport");
-                // An engine fault names its stage, closed code and bound.
+                // An engine fault names its step, closed code and bound.
                 assert_eq!(
                     finding.context,
                     [
-                        ("stage".into(), JsonValue::String("define".into())),
+                        ("step".into(), JsonValue::String("define".into())),
                         ("code".into(), JsonValue::String("resource_limit".into())),
                         (
                             "detail".into(),

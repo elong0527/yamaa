@@ -6,7 +6,7 @@
 //! projection: quoted strings, streamed escaping and the output-byte boundary.
 use std::io::{self, Write};
 use yamaa_core::{
-    application_issue::{Fault, Stage},
+    application_issue::{Fault, Step},
     diagnostic::ConditionCode,
     limits::{LimitExceeded, Limits},
     project_environment::Submission,
@@ -177,9 +177,9 @@ impl Writer<'_> {
             .get_ref()
             .and_then(|cause| cause.downcast_ref::<LimitExceeded>())
         {
-            Some(bound) => Finding::limit(self.path, Stage::Define, Fault::OutputLimit, *bound)
+            Some(bound) => Finding::limit(self.path, Step::Define, Fault::OutputLimit, *bound)
                 .with_detail(bound.to_string()),
-            None => Finding::fault(self.path, Stage::Define, Fault::OutputProjection)
+            None => Finding::fault(self.path, Step::Define, Fault::OutputProjection)
                 .with_detail(error.to_string()),
         }
     }
@@ -333,7 +333,7 @@ mod tests {
             assert_eq!(finding.code, ConditionCode::ApplicationRejected);
             assert_eq!(finding.definition().rule, None);
             assert_eq!(finding.path, "datasets.DM.transport");
-            assert_eq!(finding.context["stage"], "define");
+            assert_eq!(finding.context["step"], "define");
             assert_eq!(finding.context["code"], "output_limit");
             assert_eq!(finding.context["resource"], "output_bytes");
             assert_eq!(finding.context["limit"], Limits::OUTPUT_BYTES);
@@ -343,7 +343,7 @@ mod tests {
             );
         }
         let other = writer.failure(io::Error::other("opaque projection failure"));
-        assert_eq!(other.context["stage"], "define");
+        assert_eq!(other.context["step"], "define");
         assert_eq!(other.context["code"], "output_projection");
         assert_eq!(other.context["detail"], "opaque projection failure");
         assert!(!other.context.contains_key("resource"));
@@ -407,7 +407,7 @@ mod tests {
             ),
             ("limit".into(), V::from(Limits::OUTPUT_BYTES)),
             ("resource".into(), text("output_bytes")),
-            ("stage".into(), text("define")),
+            ("step".into(), text("define")),
         ]
         .into();
         let direct = writer.failure(Refusing.write(b"x").unwrap_err());
@@ -423,7 +423,7 @@ mod tests {
             [
                 ("code".into(), text("output_projection")),
                 ("detail".into(), text("not a bound")),
-                ("stage".into(), text("define")),
+                ("step".into(), text("define")),
             ]
             .into()
         );

@@ -9,7 +9,7 @@ use crate::{
     specification_diagnostics,
     specification_run::{Attempt, BoundaryFailure, CapturedAttempt, PortError, PreparedRun},
 };
-use yamaa_core::application_issue::{Fault, Stage};
+use yamaa_core::application_issue::{Fault, Step};
 use yamaa_core::dataset::ExecutionError;
 use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::json::{Map, Value};
@@ -221,7 +221,7 @@ fn run_findings(
         }
         RunError::Bind(error) => specification_diagnostics::binding(error, run.source()),
         error @ RunError::Boundary { .. } => resources::run_limit(error, sources)
-            .map(|refusal| vec![refusal.diagnostic(Stage::Ingest, Fault::SourceLimit)]),
+            .map(|refusal| vec![refusal.diagnostic(Step::Ingest, Fault::SourceLimit)]),
     })
 }
 
@@ -319,7 +319,7 @@ fn dataset_failure<'a, C, E>(
                         run.compiled().sources(),
                         run.compiled().driver_index(),
                     )
-                    .map(|refusal| refusal.diagnostic(Stage::Execute, Fault::ExecutionLimit))
+                    .map(|refusal| refusal.diagnostic(Step::Execute, Fault::ExecutionLimit))
                     .ok_or(Error::UnsupportedOutcome)?],
                     Outcome::Success => return Err(Error::UnsupportedOutcome.into()),
                 }
@@ -599,11 +599,11 @@ impl<E> Refusal<'_, E> {
             Self::Opaque(_) => Fault::OpaqueHost,
             Self::Boundary(_) => Fault::ActivationBoundary,
             Self::Report(Error::ResourceLimit(limit)) => {
-                return limit.issues(Stage::Build, Fault::ResultProjection)
+                return limit.issues(Step::Build, Fault::ResultProjection)
             }
             Self::Report(_) => Fault::ResultProjection,
         };
-        crate::file_application::rejected(Stage::Build, code)
+        crate::file_application::rejected(Step::Build, code)
     }
 }
 
@@ -747,8 +747,8 @@ fn rejected_output(
 ) -> Result<yamaa_core::specification_output::PreparedOutput<StoredReport>, Error> {
     let mut diagnostics = report.diagnostics().to_vec();
     diagnostics.push(match error {
-        Error::ResourceLimit(refusal) => refusal.diagnostic(Stage::Output, Fault::OutputLimit),
-        _ => yamaa_core::application_issue::rejected(Stage::Output, Fault::OutputProjection),
+        Error::ResourceLimit(refusal) => refusal.diagnostic(Step::Output, Fault::OutputLimit),
+        _ => yamaa_core::application_issue::rejected(Step::Output, Fault::OutputProjection),
     });
     report.set_diagnostics(diagnostics);
     report["outcome"] = json!("failure");
