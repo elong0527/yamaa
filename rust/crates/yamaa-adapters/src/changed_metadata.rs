@@ -18,7 +18,9 @@ use yamaa_core::{
 pub(crate) struct Environment<'a> {
     /// The project file path as preparation was given it.
     pub(crate) written: &'a str,
-    pub(crate) host: Language,
+    /// The host language, or none for an engine that claims no host language,
+    /// which holds no environment file or lock.
+    pub(crate) host: Option<Language>,
     pub(crate) root: &'a CapturedDocument,
     pub(crate) project: &'a ast::Project,
     pub(crate) environment_file: Option<&'a CapturedDocument>,
@@ -95,12 +97,14 @@ pub(crate) fn environment(
     // linked environment file its lock and functions; a 1.0 project declares
     // its lock, function files and codelists itself (D8).
     let project = environment.project;
-    let host = project.environment(environment.host);
+    let host = environment
+        .host
+        .and_then(|language| project.environment(language));
     if environment
         .environment_file
         .is_some_and(|file| file.source().identity == identity)
     {
-        let key = environment.host.key();
+        let key = environment.host?.key();
         let written = &host?.file.as_ref()?.text;
         return Some(failure.field_diagnostic(&format!("environments.{key}"), written));
     }
@@ -111,7 +115,7 @@ pub(crate) fn environment(
         let written = &host?.lock.as_ref()?.text;
         let field = match project.header.surface {
             ast::Surface::V0_5 => "lock".into(),
-            ast::Surface::V1 { .. } => format!("environments.{}.lock", environment.host.key()),
+            ast::Surface::V1 { .. } => format!("environments.{}.lock", environment.host?.key()),
         };
         return Some(failure.field_diagnostic(&field, written));
     }

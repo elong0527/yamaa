@@ -187,7 +187,8 @@ mod inventory_rejection_tests {
                 yamaa_core::submission_inventory::MetadataError::Shape,
             )
         };
-        let (_, environment) = OwnedEnvironment::without_environment(Language::Python).into_parts();
+        let (_, environment) =
+            OwnedEnvironment::without_environment(Some(Language::Python)).into_parts();
         let base = crate::file_resolver::caller_path(&std::env::current_dir().unwrap()).unwrap();
         let rejected = crate::file_workflow::SelectionError::Preparation(
             crate::file_workflow::Error::Entry(Box::new(RejectedEntry {

@@ -171,7 +171,7 @@ pub fn schema_sources<E>(rejected: &RejectedEnvironment<E>) -> Result<Vec<Diagno
         if !same_schema(rejected, &source.origin, captured.schema()) {
             return Err(Error::InvalidOrigin);
         }
-        let declaration = metadata_path(&source.origin, rejected);
+        let declaration = metadata_path(&source.origin, rejected)?;
         schema_issues(
             captured,
             &rejected.root.source().identity,
@@ -183,18 +183,19 @@ pub fn schema_sources<E>(rejected: &RejectedEnvironment<E>) -> Result<Vec<Diagno
 }
 /// The field that declares a captured file: in 0.5 the lock and function
 /// files are declared by the environment file, and in 1.0 every file by the
-/// project file (D8).
-fn metadata_path<E>(origin: &Origin, rejected: &RejectedEnvironment<E>) -> String {
-    match origin {
+/// project file (D8). Only a host language reads a lock.
+fn metadata_path<E>(origin: &Origin, rejected: &RejectedEnvironment<E>) -> Result<String, Error> {
+    Ok(match origin {
         Origin::Environment(language) => format!("environments.{}", language.key()),
         Origin::Lock if versioned(rejected) => {
-            format!("environments.{}.lock", rejected.host.key())
+            let host = rejected.host.ok_or(Error::InvalidOrigin)?;
+            format!("environments.{}.lock", host.key())
         }
         Origin::Lock => "lock".into(),
         Origin::Function(name) => format!("functions.{name}"),
         Origin::FunctionFile(index) => format!("functions[{index}]"),
         Origin::Codelist(index) => format!("codelists[{index}]"),
-    }
+    })
 }
 fn resource_limit(bound: yamaa_core::limits::LimitExceeded, declaration: &str) -> Error {
     Error::ResourceLimit(crate::resource_diagnostics::Refusal::new(
@@ -355,7 +356,7 @@ pub(crate) fn capture_sources(
             continue;
         }
         let entry = &rejected.root.source().identity;
-        let declaration = metadata_path(&source.origin, rejected);
+        let declaration = metadata_path(&source.origin, rejected)?;
         match &source.error {
             CaptureFailure::Port(error) | CaptureFailure::Interrupted(error)
                 if versioned(rejected) =>
@@ -395,7 +396,7 @@ fn declared_read_issue(
     match error {
         E::Limit(bound) => Err(resource_limit(*bound, declaration)),
         E::InvalidLock if source.origin == Origin::Lock => Ok(core::invalid_packaging_lock(
-            rejected.host,
+            rejected.host.ok_or(Error::InvalidOrigin)?,
             &rejected.root.source().identity,
             &source.written,
         )),

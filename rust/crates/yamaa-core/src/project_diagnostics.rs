@@ -213,7 +213,11 @@ pub fn binding_diagnostics<'a, 'e, E>(
     selection(definitions)?;
     let mut seen = BTreeSet::new();
     for (failure, host) in failures.iter().zip(details) {
-        if definitions.get(failure.function).is_none() {
+        // Only a host language binds a callable.
+        let Some(source) = definitions.get(failure.function) else {
+            return Err(Error::InvalidContext);
+        };
+        if source.function.language().is_none() {
             return Err(Error::InvalidContext);
         }
         if !seen.insert(failure.function) {
@@ -237,9 +241,13 @@ pub fn binding_diagnostics<'a, 'e, E>(
             // A 0.5 definition's callable is its `function`; a 1.0 function
             // file names the host's under `implementations` (FUNC-8).
             let (code, field) = if source.function.definition().header.is_some() {
+                let language = source
+                    .function
+                    .language()
+                    .expect("preflighted host language");
                 (
                     ConditionCode::FunctionFileInvalid,
-                    format!("implementations.{}", source.function.language().key()),
+                    format!("implementations.{}", language.key()),
                 )
             } else {
                 (ConditionCode::ProjectEnvironmentInvalid, "function".into())

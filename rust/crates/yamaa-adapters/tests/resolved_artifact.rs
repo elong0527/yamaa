@@ -32,7 +32,7 @@ impl Study {
         fs::write(file, text).unwrap();
     }
     fn resolve(&self, path: &str) -> ResolvedArtifact {
-        resolved_artifact::resolve(&self.path(path), None, Language::Python, None).unwrap()
+        resolved_artifact::resolve(&self.path(path), None, Some(Language::Python), None).unwrap()
     }
 }
 impl Drop for Study {
@@ -64,7 +64,7 @@ fn two_studies_and_their_schema_links_match_the_actual_direct_preparation() {
                 specification: &path,
                 environment: None,
             },
-            Language::Python,
+            Some(Language::Python),
         )
         .unwrap();
         let artifact = study.resolve(&format!("{wrapper}/spec.yaml"));
@@ -234,7 +234,7 @@ fn absolute_and_parent_relative_paths_are_facts_and_never_fallback_searches() {
     assert!(resolved_artifact::resolve(
         &study.path("study/missing.yaml"),
         None,
-        Language::Python,
+        Some(Language::Python),
         None
     )
     .is_err());
@@ -290,12 +290,12 @@ fn named_dictionaries_and_mapping_order_are_retained_without_changing_the_compil
             specification: &path,
             environment: None,
         },
-        Language::Python,
+        Some(Language::Python),
     )
     .unwrap();
     assert_eq!(artifact, direct.resolved_specification().unwrap());
     fs::remove_file(study.0.join("dict.yaml")).unwrap();
-    assert!(resolved_artifact::resolve(&path, None, Language::Python, None).is_err());
+    assert!(resolved_artifact::resolve(&path, None, Some(Language::Python), None).is_err());
     assert!(ResolvedArtifact::from_json(&artifact.to_json().unwrap()).is_ok());
 }
 

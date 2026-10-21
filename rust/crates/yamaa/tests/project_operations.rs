@@ -1036,6 +1036,101 @@ fn an_engine_without_functions_runs_every_build_that_calls_no_project_function()
         found[0].context.get("operation"),
         Some(&text("environment"))
     );
+    // An engine that claims no host language reads no 0.5 environment file,
+    // so it knows no function the project declares and refuses the call while
+    // the specification compiles (#3030 section 2.10).
+    let neutral = Engine::new(EngineOptions::neutral("cli".into(), String::new()));
+    let check = neutral
+        .spec_check(&study.path("one.yaml"), Some(&study.project()), &token)
+        .unwrap();
+    let found = rows(&check.issues());
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert_eq!(found[0].condition, "unsupported_operation");
+    assert_eq!(found[0].spec_paths, ["columns.W.derivation.function.name"]);
+    assert_eq!(
+        found[0].context.get("operation"),
+        Some(&text("environment"))
+    );
+}
+
+/// An engine that claims no host language, as the command line's does,
+/// reads no project's `environments.<host>` entry, so it verifies no lock
+/// and activates nothing (#3030 section 2.10). Through a 1.0 project whose
+/// Python lock does not exist, it runs the specification that calls no
+/// function. It checks and resolves the one that calls the project's
+/// function, and refuses to run it before reading any input, as
+/// `unsupported_operation` (D110). An engine that claims Python reads the same
+/// project's lock, and fails where the lock is missing.
+#[test]
+fn an_engine_without_a_host_language_reads_no_lock_and_refuses_each_function_call() {
+    let study = Study::new();
+    study.write("raw.csv", "ID,V\n1,a\n");
+    study.write(
+        "functions/shout.yaml",
+        "yamaa: \"1.0\"\ntype: function\nname: shout\ndescription: The value in capitals.\nparams: [{name: x, type: str}]\nreturns: str\nimplementations: {python: pkg.shout}\ntests:\n  - {id: normal, covers: [normal], args: {x: a}, result: A}\n  - {id: empty, covers: [boundary], args: {x: ''}, result: ''}\n  - {id: missing, covers: ['short-circuit-missing:x'], args: {x: null}, result: null}\n",
+    );
+    study.write(
+        "plain.yaml",
+        "yamaa: \"1.0\"\ntype: spec\ndomain: PLAIN\nkeys: [ID]\ninput: {RAW: raw.csv}\noutput: {path: plain.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: Identifier, derivation: RAW.ID}\n  - {name: V, type: str, label: Value, derivation: RAW.V}\n",
+    );
+    // The input this one names does not exist, so a run that read it would
+    // fail there.
+    study.write(
+        "calls.yaml",
+        "yamaa: \"1.0\"\ntype: spec\ndomain: CALLS\nkeys: [ID]\ninput: {RAW: absent.csv}\noutput: {path: calls.csv, columns: [ID, LOUD]}\ncolumns:\n  - {name: ID, type: str, label: Identifier, derivation: RAW.ID}\n  - {name: LOUD, type: str, label: Loud, derivation: {function: {name: shout, args: {x: RAW.V}}}}\n",
+    );
+    study.write(
+        "project.yaml",
+        "yamaa: \"1.0\"\ntype: project\nfunctions: [functions/shout.yaml]\nenvironments:\n  python: {lock: missing/uv.lock}\nadam: {specs: [plain.yaml, calls.yaml]}\n",
+    );
+    let neutral = Engine::new(EngineOptions::neutral("cli".into(), String::new()));
+    let token = CancellationToken::new();
+    let project = study.project();
+    let (plain, calls) = (study.path("plain.yaml"), study.path("calls.yaml"));
+
+    let run = neutral.spec_run(&plain, Some(&project), &token).unwrap();
+    assert_eq!(conditions(&run.issues()), Vec::<String>::new());
+    assert_eq!(run.status(), Status::Succeeded);
+    assert_eq!(run.output().unwrap().rows(), 1);
+    let check = neutral.spec_check(&calls, Some(&project), &token).unwrap();
+    assert_eq!(conditions(&check.issues()), Vec::<String>::new());
+    assert!(neutral.spec_resolve(&calls, Some(&project)).is_ok());
+    let refused = neutral.spec_run(&calls, Some(&project), &token).unwrap();
+    assert_eq!(refused.status(), Status::Failed);
+    assert!(refused.output().is_none() && refused.report().is_none());
+    let found = rows(&refused.issues());
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert_eq!(
+        (found[0].phase.as_str(), found[0].condition.as_str()),
+        ("planning", "unsupported_operation")
+    );
+    assert_eq!(found[0].spec_paths, ["environment"]);
+    assert_eq!(
+        found[0].context.get("operation"),
+        Some(&text("environment"))
+    );
+    let runs = neutral.project_run(&project, None, &token).unwrap();
+    assert_eq!(runs.names(), ["PLAIN", "CALLS"]);
+    assert_eq!(runs.get("PLAIN").unwrap().status(), Status::Succeeded);
+    assert_eq!(
+        conditions(&runs.get("CALLS").unwrap().issues()),
+        ["unsupported_operation"]
+    );
+
+    // An engine that claims Python reads its own lock, which does not exist.
+    let python = Engine::new(EngineOptions::new(
+        HostLanguage::Python,
+        "project-test".into(),
+        "0".into(),
+    ));
+    for spec in [&plain, &calls] {
+        let check = python.spec_check(spec, Some(&project), &token).unwrap();
+        let found = rows(&check.issues());
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(found[0].condition, "resource_path_missing");
+        assert_eq!(found[0].spec_paths, ["environments.python.lock"]);
+        assert_eq!(found[0].context.get("path"), Some(&text("missing/uv.lock")));
+    }
 }
 
 fn define_study() -> Study {

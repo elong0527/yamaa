@@ -217,7 +217,7 @@ pub struct Engine { /* resolver + host configuration, Arc-shared */ }
 #[non_exhaustive]
 pub struct EngineOptions {
     pub resolver: Option<Arc<dyn ResourceResolver>>,
-    pub host_language: HostLanguage,
+    pub host_language: Option<HostLanguage>,  // none: a neutral engine
     pub runtime_name: String,      // folds in specification_report::Identity
     pub runtime_version: String,
     pub functions: Option<Arc<dyn ProjectFunctions>>,
@@ -230,6 +230,7 @@ impl EngineOptions {
         runtime_name: String,
         runtime_version: String,
     ) -> Self;
+    pub fn neutral(runtime_name: String, runtime_version: String) -> Self;
     pub fn with_resolver(mut self, resolver: Arc<dyn ResourceResolver>) -> Self;
     pub fn with_functions(mut self, functions: Arc<dyn ProjectFunctions>) -> Self;
     pub fn with_observer(mut self, observer: Arc<dyn Progress>) -> Self;
@@ -316,6 +317,13 @@ impl DefineBuild {
   `#[non_exhaustive]`, so external crates cannot use struct literals; the
   `new` plus `with_*` constructors above are the only way to build them, which
   keeps additive field changes non-breaking.
+- `EngineOptions::new` claims a host language, as the Python and R hosts do.
+  `EngineOptions::neutral`, which `EngineOptions::default()` also gives,
+  claims none, for the command line and a bare Rust embedder (#3030 section
+  2.10). It reads no project's `environments.<host>` entry, so it verifies no
+  lock and activates nothing; a build that calls a project function is refused
+  before any input is read as `unsupported_operation` with operation
+  `environment`, and every other build runs as a host runs it.
 - `check` reports admission and preparation failures as diagnostics in the
   returned `Report`, as today's `check_with_resolver` does, never as a second
   error channel. Only cancellation fails it: a cancelled call returns
