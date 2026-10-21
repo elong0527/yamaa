@@ -1,6 +1,8 @@
 """The command line's conformance runner (#3060) and the caller that runs it
 over the corpus written as 1.0, over stand-in binaries."""
 
+import contextlib
+import io
 import json
 import os
 import shutil
@@ -259,16 +261,21 @@ class CommandLineRunner(unittest.TestCase):
 # The benchmarks written as 1.0, which the binary reads (#3030 D122).
 SPEC_1_0 = 'yamaa: "1.0"\ntype: spec\n' + SPEC.split("\n", 1)[1]
 PROJECT_1_0 = 'yamaa: "1.0"\ntype: project\nsdtm:\n  specs: [spec.yaml]\n'
-# Runs every call and prints one result document naming what it was asked
-# and the file it read, as a binary that reads 1.x files does.
-CONVERTED = """import json, sys
+# Runs every call, saves the specification's declared output, here the one
+# row `ROW`, and prints one result document naming what it was asked, the
+# file it read and the absolute path it saved, as a binary that reads 1.x
+# files does.
+CONVERTED = """import json, os, sys
 arguments = sys.argv[1:]
 if arguments == ["--version"]:
     sys.stdout.write("yamaa 0.0.0\\n")
     sys.exit(0)
 with open(arguments[3], encoding="utf-8") as read:
     header = read.readline()
-document = {"arguments": arguments, "header": header, "issues": [], "paths": [], "status": "succeeded"}
+with open("result.csv", "w", encoding="utf-8", newline="") as saved:
+    saved.write("ID\\nROW\\n")
+paths = [os.getcwd().replace(os.sep, "/") + "/result.csv"]
+document = {"arguments": arguments, "header": header, "issues": [], "paths": paths, "status": "succeeded"}
 sys.stdout.write(json.dumps(document) + "\\n")
 sys.exit(0)
 """
@@ -276,18 +283,23 @@ sys.exit(0)
 
 @unittest.skipIf(os.name == "nt", "a stand-in binary is a script run by its #! line")
 class ConvertedCorpus(unittest.TestCase):
-    """`tools.commands.cli_conformance` runs the runner over converted copies."""
+    """`tools.commands.cli_conformance` runs the runner over converted copies,
+    then judges what it saved against the expected files."""
 
-    def test_the_runner_runs_the_converted_copies_without_the_excepted_ones(self):
+    def run_converted(self, row, evidence=()):
+        """Run the command over three converted benchmarks, whose expected
+        output has the row 1, with a binary that saves the row `row`; return
+        its exit status and its output directory."""
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)
         root = Path(temp.name).resolve()
         # What the converter writes, here for three benchmarks.
         source = root / "source"
         for name in ("plain", "project", "excepted"):
-            (source / name).mkdir(parents=True)
+            (source / name / "expected").mkdir(parents=True)
             (source / name / "spec.yaml").write_text(SPEC_1_0)
             (source / name / "benchmark.yaml").write_text(METADATA)
+            (source / name / "expected/result.csv").write_text("ID\n1\n")
         (source / "project/project.yaml").write_text(PROJECT_1_0)
 
         def convert(target):
@@ -296,12 +308,13 @@ class ConvertedCorpus(unittest.TestCase):
             return fixtures
 
         binary = root / "yamaa"
-        binary.write_text(f"#!{sys.executable}\n{CONVERTED}")
+        binary.write_text(f"#!{sys.executable}\n{CONVERTED.replace('ROW', row)}")
         binary.chmod(0o755)
         output = root / "output"
         with (
             mock.patch.object(conversion, "convert", convert),
             mock.patch.object(conversion, "EXCEPTED", {"excepted": "a decided item"}),
+            contextlib.redirect_stdout(io.StringIO()),
         ):
             status = cli_conformance.main(
                 [
@@ -311,8 +324,13 @@ class ConvertedCorpus(unittest.TestCase):
                     str(output),
                     "--source-revision",
                     "test",
+                    *evidence,
                 ]
             )
+        return status, output
+
+    def test_the_runner_runs_the_converted_copies_without_the_excepted_ones(self):
+        status, output = self.run_converted("1", ["--evidence", "unit-run"])
         self.assertEqual(status, 0)
         # The plan is the converted corpus's, with the gate's exception.
         plan = json.loads((output / "plan/plan.json").read_text())
@@ -337,9 +355,35 @@ class ConvertedCorpus(unittest.TestCase):
                 call["document"]["arguments"], ["--format", "json", *arguments]
             )
             self.assertEqual(call["document"]["header"], 'yamaa: "1.0"\n')
+            self.assertEqual(call["document"]["paths"], ["result.csv"])
         self.assertTrue((output / "benchmarks/plain/spec.yaml").is_file())
         run = json.loads((output / "observed/run.json").read_text())
-        self.assertEqual(run["source_revision"], "test")
+        self.assertEqual(
+            (run["source_revision"], run["evidence"]), ("test", "unit-run")
+        )
+        # The comparator judged both runs against the expected files, and
+        # the excepted benchmark with its reason.
+        inventory = json.loads((output / "inventory.json").read_text())
+        self.assertEqual(
+            {
+                result["example"]: result["verdict"]
+                for result in inventory["benchmarks"]
+            },
+            {"excepted": "excluded", "plain": "pass", "project": "pass"},
+        )
+        self.assertEqual(inventory["gate"]["failing"], [])
+
+    def test_any_difference_from_the_expected_files_fails_the_command(self):
+        status, output = self.run_converted("2")
+        self.assertEqual(status, 1)
+        inventory = json.loads((output / "inventory.json").read_text())
+        self.assertEqual(inventory["gate"]["failing"], ["plain", "project"])
+        [plain] = [
+            result for result in inventory["benchmarks"] if result["example"] == "plain"
+        ]
+        self.assertEqual(plain["findings"], ["saved CSV bytes differ: result.csv"])
+        run = json.loads((output / "observed/run.json").read_text())
+        self.assertIsNone(run["evidence"])
 
     def test_the_output_must_be_fresh(self):
         temp = tempfile.TemporaryDirectory()
