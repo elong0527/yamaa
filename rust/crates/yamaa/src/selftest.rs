@@ -323,19 +323,20 @@ fn run(case: &Case, info: &Info) -> SelfTestCase {
 /// not match them.
 fn check(case: &Case, info: &Info) -> Result<(), String> {
     let served = serve(case);
-    // The cases call no project function, so the host language decides
-    // nothing they read.
-    let language = match info.host {
-        Host::R => HostLanguage::R,
-        _ => HostLanguage::Python,
+    // Each host claims its own language, and the command line none (#3030
+    // section 2.10); the cases call no project function, so the claim
+    // decides nothing they read.
+    let (name, version) = (
+        info.host.as_str().to_owned(),
+        info.host_version.clone().unwrap_or_default(),
+    );
+    let options = match info.host {
+        Host::Python => EngineOptions::new(HostLanguage::Python, name, version),
+        Host::R => EngineOptions::new(HostLanguage::R, name, version),
+        Host::Cli => EngineOptions::neutral(name, version),
     };
     let engine = Engine::new(
-        EngineOptions::new(
-            language,
-            info.host.as_str().to_owned(),
-            info.host_version.clone().unwrap_or_default(),
-        )
-        .with_resolver(Arc::clone(&served.resolver) as Arc<dyn ResourceResolver>),
+        options.with_resolver(Arc::clone(&served.resolver) as Arc<dyn ResourceResolver>),
     );
     let token = CancellationToken::new();
     let expected_issue = case
