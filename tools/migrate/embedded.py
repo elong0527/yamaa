@@ -107,6 +107,10 @@ def convert_embedded(paths, base=None, table=None):
     for path in paths:
         if not path.exists():
             raise FileNotFoundError(f"{path} does not exist")
+        if path.is_file() and path.suffix.lower() not in READERS:
+            raise migrate.SourceError(
+                f"{path} is not a Rust, Python, R, JSON or TSV file"
+            )
     if base is None:
         anchors = [path if path.is_dir() else path.parent for path in paths]
         base = Path(os.path.commonpath(anchors)) if anchors else Path.cwd()

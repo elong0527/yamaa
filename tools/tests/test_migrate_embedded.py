@@ -7,6 +7,7 @@ gives for the same document, a second run changes nothing, and every string
 built by interpolation whose YAML the conversion would change is listed.
 """
 
+import io
 import json
 import re
 import shutil
@@ -64,6 +65,18 @@ def values(text):
 
 
 class RustTests(unittest.TestCase):
+    def test_concat_pieces_are_listed_without_converting_partial_documents(self):
+        header, columns = SPEC.split("columns:", 1)
+        source = (
+            "fn t() {\n    let text = concat!(\n"
+            f"        {rust_string(header)},\n"
+            f"        {rust_string('columns:' + columns)},\n"
+            "    );\n}\n"
+        )
+        converted, result = run("t.rs", source)
+        self.assertEqual(converted, source)
+        self.assertEqual([note.line for note in notes(result, "interpolated")], [3, 4])
+
     def test_a_document_converts_in_its_own_literal_style(self):
         raw = SPEC.replace("'1.0'", '"1.0"')
         doubled = SPEC.replace("{", "{{").replace("}", "}}")
@@ -166,6 +179,21 @@ class RustTests(unittest.TestCase):
 
 
 class GuardTests(unittest.TestCase):
+    def test_an_unsupported_source_reports_a_cli_error(self):
+        from tools.migrate.__main__ import main
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "spec.yaml"
+            path.write_text(SPEC, encoding="utf-8")
+            errors = io.StringIO()
+            with mock.patch("sys.stderr", errors):
+                status = main(["--embedded", str(path), "--output", directory + "-out"])
+            self.assertEqual(status, 2)
+            self.assertEqual(
+                errors.getvalue(),
+                f"error: {path} is not a Rust, Python, R, JSON or TSV file\n",
+            )
+
     def test_a_string_the_file_converter_fails_on_is_listed_and_left(self):
         source = f"fn t() {{\n    let a = {rust_string(SPEC)};\n}}\n"
         with mock.patch.object(embedded, "convert_files", side_effect=TypeError("odd")):
@@ -252,6 +280,24 @@ class PythonTests(unittest.TestCase):
 
 
 class RTests(unittest.TestCase):
+    def test_raw_strings_stay_whole_and_do_not_hide_later_literals(self):
+        for prefix, opening, closing in (
+            ('r"(', 'r"(', ')"'),
+            ('R"--[', 'R"--[', ']--"'),
+            ("r'{", "r'{", "}'"),
+        ):
+            raw = opening + SPEC + '# "quoted" \\n\n' + closing
+            ordinary = sources.RStyle().encode(SPEC)
+            source = f"raw <- {raw}\nordinary <- {ordinary}\n"
+            with self.subTest(prefix=prefix):
+                converted, result = run("t.R", source)
+                self.assertIn(f"raw <- {raw}\n", converted)
+                self.assertEqual(result.stats["documents converted"], 1)
+                self.assertEqual(
+                    [group.text for group in sources.r_extraction(converted).groups],
+                    [CONVERTED],
+                )
+
     def test_a_vector_of_lines_gains_and_loses_elements(self):
         source = (
             'writeLines(c("schema_version: \'1.0\'", "domain: TEST", "keys: [ID]",\n'

@@ -765,6 +765,10 @@ def _rust_group(stream, index):
         or (call and frame.name in RUST_PUSH_METHODS)
     )
     behind = after < len(tokens) and tokens[after].text == "+"
+    if call and frame.kind == "macro" and frame.name == "concat":
+        # A piece of concat! lacks the other arguments' document context.
+        # Keep its readable text so a changing fragment is listed for manual work.
+        return _template(group, piece.value)
     if before or behind:
         return _template(
             group, (HOLE if before else "") + piece.value + (HOLE if behind else "")
@@ -1203,6 +1207,16 @@ def r_tokens(text):
             tokens.append(Token("ident", position, stop, text[position:stop]))
             position = stop
             continue
+        if character in "rR" and text[position + 1 : position + 2] in ('"', "'"):
+            raw = re.match(r"[rR]([\"'])(-*)([(\[{])", text[position:])
+            if raw:
+                closer = {"(": ")", "[": "]", "{": "}"}[raw.group(3)]
+                closer += raw.group(2) + raw.group(1)
+                stop = text.find(closer, position + raw.end())
+                stop = size if stop < 0 else stop + len(closer)
+                tokens.append(Token("other", position, stop, text[position:stop]))
+                position = stop
+                continue
         match = _R_IDENT.match(text, position)
         if match:
             tokens.append(Token("ident", position, match.end(), match.group()))
