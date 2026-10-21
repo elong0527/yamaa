@@ -71,6 +71,7 @@ mod tests {
                 profile,
                 types: vec![],
                 encoding: Some("windows-1252".into()),
+                byte_order_mark: false,
                 empty_string_present: false,
                 ordinal: None,
             };

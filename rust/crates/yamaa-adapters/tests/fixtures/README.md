@@ -85,6 +85,8 @@ Thirteen independently authored byte containers were run through the unchanged P
 
 All ten closed R023 CSV failure causes are exercised. Decode precedes BOM/syntax, complete syntax precedes header/width checks, and quoted-prefix UTF-8 coordinates retain record/field identity. The parser algorithm and existing collected-text fixtures are preserved. Resource limits remain boundary policy failures without fabricated language diagnostics.
 
+CSV-10 later admitted a byte-order mark that the input declares, so `source_byte_order_mark` records whether the input declares one: the `bom` case, whose input declares none, gained `declared: false` in both of its contexts. Nothing else in the fixture changed.
+
 Rust and both installed hosts replay all complete reports, then drop the prepared specification and verify owned observations and repeated failed-save gates without recapture or publication. No existing benchmark expectation is changed.
 
 ## file_preparation

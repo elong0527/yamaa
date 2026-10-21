@@ -50,6 +50,7 @@ pub(crate) fn source() -> SourceDeclaration {
         types: vec![],
         profile: SourceProfile::Csv,
         encoding: None,
+        byte_order_mark: false,
         empty_string_present: false,
         ordinal: None,
     }

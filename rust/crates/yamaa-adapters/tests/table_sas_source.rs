@@ -28,6 +28,7 @@ mod table {
                 types: vec![],
                 profile: SourceProfile::from_path(name).unwrap(),
                 encoding: Some("windows-1252".into()),
+                byte_order_mark: false,
                 empty_string_present: false,
                 ordinal: None,
             }
@@ -1750,6 +1751,7 @@ mod table {
                 types: vec![],
                 profile: SourceProfile::from_path(path).unwrap(),
                 encoding: None,
+                byte_order_mark: false,
                 empty_string_present: false,
                 ordinal: None,
             }

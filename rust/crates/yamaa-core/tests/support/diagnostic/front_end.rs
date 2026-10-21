@@ -1,6 +1,6 @@
-//! The 1.0 front end's own causes (FUNC-6, WINDOW-5, TIME-10, LOOKUP-3), raised
-//! by its checks on a lowered 1.0 tree and pinned to their phase, condition,
-//! rule, path and context.
+//! The 1.0 front end's own causes (FUNC-6, WINDOW-5, TIME-10, LOOKUP-3,
+//! CSV-10), raised by its checks on a lowered 1.0 tree and pinned to their
+//! phase, condition, rule, path and context.
 use super::rendered;
 use crate::support::document::Tree as T;
 use std::collections::BTreeSet;
@@ -15,6 +15,11 @@ fn spec(column: T) -> Document {
 
 /// [`spec`], with the further root fields `extra`.
 fn with(column: T, extra: Vec<(&str, T)>) -> Document {
+    tree(column, extra).document()
+}
+
+/// The tree of [`with`].
+fn tree(column: T, extra: Vec<(&str, T)>) -> T {
     let mut fields = vec![
         ("yamaa", T::text("1.0")),
         ("type", T::text("spec")),
@@ -44,7 +49,7 @@ fn with(column: T, extra: Vec<(&str, T)>) -> Document {
         ),
     ];
     fields.extend(extra);
-    T::map(fields).document()
+    T::map(fields)
 }
 
 fn column(name: &str, kind: &str, operation: &str, payload: T) -> T {
@@ -180,5 +185,42 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             ("class", C::Text("intermediate_class".into())),
         ],
     );
+    // Only the csv profile reads a byte-order mark (CSV-10): an input that
+    // another profile reads declares none, whatever the value written, and
+    // an input whose extension selects no profile leaves that fault to
+    // INPUT-1.
+    let marked = |path: &str, value: bool| {
+        let mut tree = tree(
+            T::map(vec![
+                ("name", T::text("V")),
+                ("type", T::text("str")),
+                ("derivation", T::map(vec![("value", T::text("SRC.V"))])),
+            ]),
+            Vec::new(),
+        );
+        tree.set(
+            &["input", "SRC"],
+            T::map(vec![
+                ("path", T::text(path)),
+                ("byte_order_mark", T::boolean(value)),
+            ]),
+        );
+        tree.document()
+    };
+    for (path, value) in [("src.parquet", true), ("src.xpt", false)] {
+        pinned(
+            &mut reached,
+            finding(&marked(path, value)),
+            ("value_not_permitted", "CSV-10"),
+            "input.SRC.byte_order_mark",
+            vec![("dataset", C::Text("SRC".into()))],
+        );
+    }
+    for path in ["src.csv", "src.txt"] {
+        for value in [true, false] {
+            let lowered = front_end::lower(&marked(path, value), None);
+            assert_eq!(front_end::checks::findings(lowered.spec()), []);
+        }
+    }
     reached
 }
