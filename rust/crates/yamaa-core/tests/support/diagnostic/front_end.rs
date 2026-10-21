@@ -1,6 +1,6 @@
 //! The 1.0 front end's own causes (FUNC-6, WINDOW-5, TIME-10, LOOKUP-3,
-//! CSV-10), raised by its checks on a lowered 1.0 tree and pinned to their
-//! phase, condition, rule, path and context.
+//! CSV-10, SUB-3), raised by its checks on a lowered 1.0 tree and pinned to
+//! their phase, condition, rule, path and context.
 use super::rendered;
 use crate::support::document::Tree as T;
 use std::collections::BTreeSet;
@@ -222,6 +222,44 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             assert_eq!(front_end::checks::findings(lowered.spec()), []);
         }
     }
+    // A specification that declares submission metadata, here one column's,
+    // names its model (SUB-3, D25); one that declares none follows none.
+    let described = |model: Option<&str>| {
+        let mut extra = Vec::new();
+        if let Some(model) = model {
+            extra.push(("model", T::text(model)));
+        }
+        with(
+            T::map(vec![
+                ("name", T::text("SEX")),
+                ("type", T::text("str")),
+                ("derivation", T::map(vec![("value", T::text("SRC.SEX"))])),
+                (
+                    "submission",
+                    T::map(vec![(
+                        "origins",
+                        T::list(vec![T::map(vec![
+                            ("type", T::text("Collected")),
+                            ("source", T::text("Subject")),
+                        ])]),
+                    )]),
+                ),
+            ]),
+            extra,
+        )
+    };
+    pinned(
+        &mut reached,
+        finding(&described(None)),
+        ("missing_required_field", "SUB-3"),
+        "model",
+        vec![
+            ("field", C::Text("model".into())),
+            ("class", C::Text("root_class".into())),
+        ],
+    );
+    let lowered = front_end::lower(&described(Some("SDTM")), None);
+    assert_eq!(front_end::checks::findings(lowered.spec()), []);
     reached
 }
 

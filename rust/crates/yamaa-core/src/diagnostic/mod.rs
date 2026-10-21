@@ -474,6 +474,12 @@ conditions! {
     ValueLevelUnmatched => ("verification", "value_level_unmatched", Some("SUB-13")),
     SubmissionPredecessorLabel => ("validation", "predecessor_label_mismatch", Some("SUB-20")),
     SubmissionStandardFamily => ("validation", "unknown_standard_family", Some("SUB-3")),
+    // A 1.0 specification without the `model` its submission metadata or a
+    // section's listing requires (D25).
+    SubmissionModelRequired => ("validation", "missing_required_field", Some("SUB-3")),
+    // A 1.0 section's guide, or a listed specification's `model`, outside the
+    // section's model: the 1.0 name of `unknown_standard_family` (D58).
+    SubmissionModelMismatch => ("validation", "standard_model_mismatch", Some("SUB-3")),
     SubmissionDefineExtension => ("validation", "value_not_permitted", Some("DEFINE-2")),
     SubmissionDefineName => ("validation", "value_not_permitted", Some("DEFINE-2")),
     SubmissionSourceVersion => ("validation", "source_system_incomplete", Some("DEFINE-12")),
