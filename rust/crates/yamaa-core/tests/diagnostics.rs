@@ -586,7 +586,10 @@ mod diagnostics {
             // A row two value-level entries select fails; an entry that
             // selects no row is a warning (SUB-13).
             let clause = |value: &str| yamaa_core::dataset::WhereClause {
-                terms: vec![(1, vec![value.into()])],
+                terms: vec![yamaa_core::dataset::WhereTerm::listed(
+                    1,
+                    vec![value.into()],
+                )],
             };
             for (check, path, condition) in [
                 (
