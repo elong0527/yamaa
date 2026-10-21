@@ -1,12 +1,8 @@
 phase: validation
-condition: no_applicable_keys
+condition: missing_required_field
 spec_paths:
-  - intermediates[0]
-rule: LOOKUP-5
+  - intermediates.REFRANGE.key
+rule: LOOKUP-3
 context:
-  dataset: LBRANGE
-  keys:
-    - STUDYID
-    - USUBJID
-    - LBSEQ
-  hint: declare the `key` explicitly
+  field: key
+  class: intermediate_class
