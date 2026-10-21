@@ -269,7 +269,9 @@ fn every_refusal_names_its_call() {
     let runs = engine.project_run(&project, None, &token).unwrap();
     let failure = runs.member("ADXX").err().unwrap();
     assert_eq!(failure.message, format!("cannot select ADXX: {unknown}"));
-    // A save with nothing to write: the subject names the section.
+    // A save with nothing to write: the subject names the section, which
+    // lists no specification.
+    study.write("project.yaml", format!("{PROJECT}send:\n  specs: []\n"));
     let mut send = engine.project_run(&project, Some("send"), &token).unwrap();
     assert_eq!(
         send.summary().to_string(),
@@ -299,11 +301,9 @@ fn every_refusal_names_its_call() {
         panic!("an unknown section refuses the run");
     };
     let failure = Failure::from_error(Action::Select("sdtn"), &error);
-    assert!(
-        failure.message.starts_with("cannot select sdtn: ")
-            && failure.message.ends_with(" [engine_rejected]"),
-        "{}",
-        failure.message
+    assert_eq!(
+        failure.message,
+        "cannot select sdtn: the project declares no section sdtn [unknown_section, PROJECT-14]"
     );
     // A refusal with no issue keeps the error's own text after the prefix.
     let failure = Failure::from_error(Action::Read("edc/odm.xml"), &Error::Cancelled);

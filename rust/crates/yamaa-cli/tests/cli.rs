@@ -524,6 +524,8 @@ fn a_section_run_prints_its_members_every_issue_and_the_files_it_saved() {
 #[test]
 fn a_save_with_nothing_to_write_prints_its_issue_and_exits_1() {
     let study = Study::new();
+    // The `send` section lists no specification, so its scope is empty.
+    study.write("project.yaml", format!("{PROJECT}send:\n  specs: []\n"));
     let project = study.path("project.yaml");
     let refusal = engine()
         .project_run(&project, Some("send"), &CancellationToken::new())
