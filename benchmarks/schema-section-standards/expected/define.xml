@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ODM xmlns="http://www.cdisc.org/ns/odm/v1.3" xmlns:def="http://www.cdisc.org/ns/def/v2.1" xmlns:xlink="http://www.w3.org/1999/xlink" ODMVersion="1.3.2" FileType="Snapshot" FileOID="DEV01.sdtm.Define-XML_2.1" CreationDateTime="2026-09-11T00:00:00" SourceSystem="yamaa" SourceSystemVersion="1.0" def:Context="Submission">
+  <Study OID="STDY.DEV01">
+    <GlobalVariables>
+      <StudyName>DEV01</StudyName>
+      <StudyDescription>Example study of an implanted glucose sensor</StudyDescription>
+      <ProtocolName>DEV-01</ProtocolName>
+    </GlobalVariables>
+    <MetaDataVersion OID="MDV.DEV01.sdtm" Name="DEV01 sdtm metadata" def:DefineVersion="2.1.11">
+      <def:Standards>
+        <def:Standard OID="STD.SDTMIG" Name="SDTMIG" Type="IG" Version="3.4" Status="Final"/>
+        <def:Standard OID="STD.SDTMIG-MD" Name="SDTMIG-MD" Type="IG" Version="1.1" Status="Final"/>
+      </def:Standards>
+      <ItemGroupDef OID="IG.DM" Name="DM" Domain="DM" Purpose="Tabulation" SASDatasetName="DM" Repeating="No" IsReferenceData="No" def:Structure="One record per subject" def:ArchiveLocationID="LF.DM" def:StandardOID="STD.SDTMIG">
+        <Description>
+          <TranslatedText xml:lang="en">Demographics</TranslatedText>
+        </Description>
+        <ItemRef ItemOID="IT.DM.DOMAIN" OrderNumber="1" Mandatory="Yes" Role="Identifier"/>
+        <ItemRef ItemOID="IT.DM.STUDYID" OrderNumber="2" Mandatory="Yes" KeySequence="1" Role="Identifier"/>
+        <ItemRef ItemOID="IT.DM.USUBJID" OrderNumber="3" Mandatory="Yes" KeySequence="2" Role="Identifier"/>
+        <def:Class Name="SPECIAL PURPOSE"/>
+        <def:leaf ID="LF.DM" xlink:href="dm.csv">
+          <def:title>dm.csv</def:title>
+        </def:leaf>
+      </ItemGroupDef>
+      <ItemGroupDef OID="IG.DI" Name="DI" Domain="DI" Purpose="Tabulation" SASDatasetName="DI" Repeating="No" IsReferenceData="Yes" def:Structure="One record per device identifier per device" def:ArchiveLocationID="LF.DI" def:StandardOID="STD.SDTMIG-MD">
+        <Description>
+          <TranslatedText xml:lang="en">Device Identifiers</TranslatedText>
+        </Description>
+        <ItemRef ItemOID="IT.DI.DOMAIN" OrderNumber="1" Mandatory="Yes" Role="Identifier"/>
+        <ItemRef ItemOID="IT.DI.STUDYID" OrderNumber="2" Mandatory="Yes" KeySequence="1" Role="Identifier"/>
+        <ItemRef ItemOID="IT.DI.SPDEVID" OrderNumber="3" Mandatory="Yes" KeySequence="2" Role="Identifier"/>
+        <ItemRef ItemOID="IT.DI.DIPARMCD" OrderNumber="4" Mandatory="Yes" KeySequence="3" Role="Topic"/>
+        <ItemRef ItemOID="IT.DI.DIPARM" OrderNumber="5" Mandatory="Yes" Role="Synonym Qualifier"/>
+        <ItemRef ItemOID="IT.DI.DIVAL" OrderNumber="6" Mandatory="Yes" Role="Result Qualifier"/>
+        <def:Class Name="STUDY REFERENCE"/>
+        <def:leaf ID="LF.DI" xlink:href="di.csv">
+          <def:title>di.csv</def:title>
+        </def:leaf>
+      </ItemGroupDef>
+      <ItemDef OID="IT.DM.DOMAIN" Name="DOMAIN" DataType="text" Length="2" SASFieldName="DOMAIN">
+        <Description>
+          <TranslatedText xml:lang="en">Domain Abbreviation</TranslatedText>
+        </Description>
+        <def:Origin Type="Assigned" Source="Sponsor"/>
+      </ItemDef>
+      <ItemDef OID="IT.DM.STUDYID" Name="STUDYID" DataType="text" Length="5" SASFieldName="STUDYID">
+        <Description>
+          <TranslatedText xml:lang="en">Study Identifier</TranslatedText>
+        </Description>
+        <def:Origin Type="Protocol" Source="Sponsor"/>
+      </ItemDef>
+      <ItemDef OID="IT.DM.USUBJID" Name="USUBJID" DataType="text" Length="9" SASFieldName="USUBJID">
+        <Description>
+          <TranslatedText xml:lang="en">Unique Subject Identifier</TranslatedText>
+        </Description>
+        <def:Origin Type="Assigned" Source="Sponsor"/>
+      </ItemDef>
+      <ItemDef OID="IT.DI.DOMAIN" Name="DOMAIN" DataType="text" Length="2" SASFieldName="DOMAIN">
+        <Description>
+          <TranslatedText xml:lang="en">Domain Abbreviation</TranslatedText>
+        </Description>
+        <def:Origin Type="Assigned" Source="Sponsor"/>
+      </ItemDef>
+      <ItemDef OID="IT.DI.STUDYID" Name="STUDYID" DataType="text" Length="5" SASFieldName="STUDYID">
+        <Description>
+          <TranslatedText xml:lang="en">Study Identifier</TranslatedText>
+        </Description>
+        <def:Origin Type="Protocol" Source="Sponsor"/>
+      </ItemDef>
+      <ItemDef OID="IT.DI.SPDEVID" Name="SPDEVID" DataType="text" Length="6" SASFieldName="SPDEVID">
+        <Description>
+          <TranslatedText xml:lang="en">Sponsor Device Identifier</TranslatedText>
+        </Description>
+        <def:Origin Type="Assigned" Source="Sponsor"/>
+      </ItemDef>
+      <ItemDef OID="IT.DI.DIPARMCD" Name="DIPARMCD" DataType="text" Length="6" SASFieldName="DIPARMCD">
+        <Description>
+          <TranslatedText xml:lang="en">Device Identifier Element Short Name</TranslatedText>
+        </Description>
+        <def:Origin Type="Assigned" Source="Sponsor"/>
+      </ItemDef>
+      <ItemDef OID="IT.DI.DIPARM" Name="DIPARM" DataType="text" Length="13" SASFieldName="DIPARM">
+        <Description>
+          <TranslatedText xml:lang="en">Device Identifier Element Name</TranslatedText>
+        </Description>
+        <def:Origin Type="Assigned" Source="Sponsor"/>
+      </ItemDef>
+      <ItemDef OID="IT.DI.DIVAL" Name="DIVAL" DataType="text" Length="7" SASFieldName="DIVAL">
+        <Description>
+          <TranslatedText xml:lang="en">Device Identifier Element Value</TranslatedText>
+        </Description>
+        <def:Origin Type="Collected" Source="Vendor"/>
+      </ItemDef>
+    </MetaDataVersion>
+  </Study>
+</ODM>

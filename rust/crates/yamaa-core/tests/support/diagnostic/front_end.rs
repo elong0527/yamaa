@@ -260,6 +260,131 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     );
     let lowered = front_end::lower(&described(Some("SDTM")), None);
     assert_eq!(front_end::checks::findings(lowered.spec()), []);
+    // Two origins with one type and source, or any origin beside a
+    // Predecessor or Not Available one, conflict at the later origin (SUB-14,
+    // D69); distinct origins do not.
+    let origin = |kind: &str, source: Option<&str>| {
+        let mut fields = vec![("type", T::text(kind))];
+        if let Some(source) = source {
+            fields.push(("source", T::text(source)));
+        }
+        if matches!(kind, "Predecessor" | "Not Available") {
+            fields.push(("description", T::text("SRC.SEX")));
+        }
+        T::map(fields)
+    };
+    let declaring = |origins: Vec<T>| {
+        with(
+            T::map(vec![
+                ("name", T::text("SEX")),
+                ("type", T::text("str")),
+                ("derivation", T::map(vec![("value", T::text("SRC.SEX"))])),
+                ("submission", T::map(vec![("origins", T::list(origins))])),
+            ]),
+            vec![("model", T::text("SEND"))],
+        )
+    };
+    let lowered = front_end::lower(
+        &declaring(vec![
+            origin("Collected", Some("Investigator")),
+            origin("Collected", Some("Subject")),
+            origin("Derived", Some("Sponsor")),
+        ]),
+        None,
+    );
+    assert_eq!(front_end::checks::findings(lowered.spec()), []);
+    for (origins, path, mut context) in [
+        (
+            vec![
+                origin("Collected", Some("Subject")),
+                origin("Collected", Some("Subject")),
+            ],
+            "columns.SEX.submission.origins[1]",
+            vec![
+                ("origin_type", C::Text("Collected".into())),
+                ("origin_source", C::Text("Subject".into())),
+                ("reason", C::Text("same_type_and_source".into())),
+            ],
+        ),
+        (
+            vec![
+                origin("Collected", Some("Subject")),
+                origin("Not Available", None),
+            ],
+            "columns.SEX.submission.origins[1]",
+            vec![
+                ("origin_type", C::Text("Not Available".into())),
+                ("reason", C::Text("exclusive_type".into())),
+            ],
+        ),
+        (
+            vec![
+                origin("Predecessor", None),
+                origin("Derived", Some("Sponsor")),
+            ],
+            "columns.SEX.submission.origins[1]",
+            vec![
+                ("origin_type", C::Text("Derived".into())),
+                ("origin_source", C::Text("Sponsor".into())),
+                ("reason", C::Text("exclusive_type".into())),
+            ],
+        ),
+    ] {
+        context.insert(0, ("column", C::Text("SEX".into())));
+        pinned(
+            &mut reached,
+            finding(&declaring(origins)),
+            ("conflicting_origins", "SUB-14"),
+            path,
+            context,
+        );
+    }
+    // A value-level entry's own origins conflict the same way, naming it.
+    let mut entry = tree(
+        T::map(vec![
+            ("name", T::text("SEX")),
+            ("type", T::text("str")),
+            ("derivation", T::map(vec![("value", T::text("SRC.SEX"))])),
+            (
+                "submission",
+                T::map(vec![
+                    (
+                        "origins",
+                        T::list(vec![origin("Collected", Some("Subject"))]),
+                    ),
+                    (
+                        "value_level",
+                        T::list(vec![T::map(vec![
+                            ("id", T::text("CODED")),
+                            ("where", T::map(vec![("ID", T::list(vec![T::text("1")]))])),
+                            (
+                                "origins",
+                                T::list(vec![
+                                    origin("Assigned", Some("Sponsor")),
+                                    origin("Assigned", Some("Sponsor")),
+                                ]),
+                            ),
+                        ])]),
+                    ),
+                ]),
+            ),
+        ]),
+        Vec::new(),
+    );
+    entry.set(&["model"], T::text("SDTM"));
+    pinned(
+        &mut reached,
+        finding(&entry.document()),
+        ("conflicting_origins", "SUB-14"),
+        "columns.SEX.submission.value_level.CODED.origins[1]",
+        vec![
+            ("column", C::Text("SEX".into())),
+            ("entry", C::Text("CODED".into())),
+            ("origin_type", C::Text("Assigned".into())),
+            ("origin_source", C::Text("Sponsor".into())),
+            ("reason", C::Text("same_type_and_source".into())),
+        ],
+    );
     reached
 }
 
