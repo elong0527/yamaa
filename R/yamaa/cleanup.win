@@ -1,4 +1,11 @@
 #!/bin/sh
-# Remove the Makevars that configure writes and the Rust build tree.
+# Remove what configure writes: the Makevars, the Rust build tree, and the
+# rust-std row that it appends to inst/COMPONENTS.tsv, so that R CMD build
+# ships the inventory as the source package carries it.
 rm -f src/Makevars src/Makevars.win
 rm -rf src/rust/target
+tab=$(printf '\t')
+if grep -q "^rust-std${tab}" inst/COMPONENTS.tsv 2>/dev/null; then
+  grep -v "^rust-std${tab}" inst/COMPONENTS.tsv > inst/COMPONENTS.tsv.new
+  mv inst/COMPONENTS.tsv.new inst/COMPONENTS.tsv
+fi
