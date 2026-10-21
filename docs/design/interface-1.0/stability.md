@@ -1,5 +1,10 @@
 # Stability contract (draft)
 
+**Published.** The contract is published in
+[Release and migration](../../release.md#stability-contract), brought to what
+was built, with three open points settled (#3030 D160 to D162). This page
+keeps the approved draft and the design of its check as a record.
+
 Part of the [1.0 interface RFC](../interface-1.0.md): #3030 section 2.11,
 D20 and P-STAB-1. The contract goes into `docs/release.md`, or a page it
 links, before 1.0.0, and replaces the unadopted policy proposal of #2599. The
