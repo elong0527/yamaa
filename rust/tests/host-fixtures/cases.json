@@ -4757,7 +4757,7 @@
         ]
       },
       "messages": {
-        "failed_run_save": "cannot save TEST: column VALUE holds a value outside its range in 1 of the rows [range_failed, CHECK-7]",
+        "failed_run_save": "cannot save TEST: {file}:12:9: column VALUE holds a value outside its range in 1 of the rows [range_failed, CHECK-7]",
         "missing_run_save": "cannot save {path}: the engine refused the operation in its prepare stage: resource_missing [engine_rejected]",
         "resolve": "cannot resolve {path}: the engine refused the operation in its prepare stage: resource_missing [engine_rejected]",
         "unread_project": "cannot select TEST: environment needs an environment file for this host that is not declared or cannot be read [project_environment_missing, FUNC-1]",
@@ -4857,9 +4857,9 @@
               "spec_paths": [
                 "columns.N.derivation.literal"
               ],
-              "file": null,
-              "line": null,
-              "column": null,
+              "file": "spec.yaml",
+              "line": 7,
+              "column": 39,
               "message": "an int value is outside the range -9223372036854775808 to 9223372036854775807",
               "context": "{\"actual\":18446744073709551616,\"maximum\":9223372036854775807,\"minimum\":-9223372036854775808}",
               "source_span": null,
@@ -4883,9 +4883,9 @@
               "spec_paths": [
                 "columns.RATIO.derivation.compute"
               ],
-              "file": null,
-              "line": null,
-              "column": null,
+              "file": "spec.yaml",
+              "line": 16,
+              "column": 45,
               "message": "VALUE / ZERO divides by zero",
               "context": "{\"expr\":\"VALUE / ZERO\",\"keys\":[{\"EXACT\":9007199254740992,\"GAP\":null,\"ID\":\"Zo\u00eb\",\"LOW\":-9223372036854775808,\"RATE\":2.5,\"TAG\":\"a\\u0000b\",\"WHOLE\":3.0,\"WIDE\":9007199254740993}]}",
               "source_span": [
@@ -4910,9 +4910,9 @@
               "spec_paths": [
                 "columns.RATIO.derivation.compute"
               ],
-              "file": null,
-              "line": null,
-              "column": null,
+              "file": "spec.yaml",
+              "line": 9,
+              "column": 45,
               "message": "1 + VALUE / ZERO divides by zero",
               "context": "{\"expr\":\"1 + VALUE / ZERO\",\"keys\":[{\"ID\":\"a\"}]}",
               "source_span": [
@@ -4939,9 +4939,9 @@
               "spec_paths": [
                 "columns.V.derivation.aggregate"
               ],
-              "file": null,
-              "line": null,
-              "column": null,
+              "file": "spec.yaml",
+              "line": 8,
+              "column": 39,
               "message": "columns.V.derivation.aggregate has a value of the wrong type or form",
               "context": "{\"dataset\":\"SRC\",\"expected\":\"at least one match pair\"}",
               "source_span": null,
@@ -4963,9 +4963,9 @@
               "spec_paths": [
                 "columns.V.derivation.aggregate"
               ],
-              "file": null,
-              "line": null,
-              "column": null,
+              "file": "spec.yaml",
+              "line": 8,
+              "column": 39,
               "message": "columns.V.derivation.aggregate has a value of the wrong type or form",
               "context": "{\"dataset\":\"SRC\",\"expected\":\"at least one match pair\"}",
               "source_span": null,
@@ -4987,9 +4987,9 @@
               "spec_paths": [
                 "columns.V.derivation.aggregate.between"
               ],
-              "file": null,
-              "line": null,
-              "column": null,
+              "file": "spec.yaml",
+              "line": 8,
+              "column": 71,
               "message": "columns.V.derivation.aggregate.between has a value of the wrong type or form",
               "context": "{\"expected\":\"at least one of lower, upper\"}",
               "source_span": null,
@@ -5011,9 +5011,9 @@
               "spec_paths": [
                 "output.columns[1]"
               ],
-              "file": null,
-              "line": null,
-              "column": null,
+              "file": "spec.yaml",
+              "line": 7,
+              "column": 42,
               "message": "X is not a declared column",
               "context": "{\"column\":\"X\"}",
               "source_span": null,
@@ -5027,9 +5027,9 @@
               "spec_paths": [
                 "output.columns[2]"
               ],
-              "file": null,
-              "line": null,
-              "column": null,
+              "file": "spec.yaml",
+              "line": 7,
+              "column": 45,
               "message": "Y is not a declared column",
               "context": "{\"column\":\"Y\"}",
               "source_span": null,
@@ -5073,9 +5073,9 @@
               "spec_paths": [
                 "columns.WT.derivation.aggregate.between.value"
               ],
-              "file": null,
-              "line": null,
-              "column": null,
+              "file": "spec.yaml",
+              "line": 17,
+              "column": 19,
               "message": "aggregate_range_window_read is not supported by this engine",
               "context": "{\"operation\":\"aggregate_range_window_read\"}",
               "source_span": null,
@@ -5097,9 +5097,9 @@
               "spec_paths": [
                 "columns.WT.derivation.aggregate.derive[1].derivation.source"
               ],
-              "file": null,
-              "line": null,
-              "column": null,
+              "file": "spec.yaml",
+              "line": 21,
+              "column": 34,
               "message": "aggregate_derive_window_read is not supported by this engine",
               "context": "{\"operation\":\"aggregate_derive_window_read\"}",
               "source_span": null,
@@ -5121,9 +5121,9 @@
               "spec_paths": [
                 "columns.N.derivation.aggregate"
               ],
-              "file": null,
-              "line": null,
-              "column": null,
+              "file": "spec.yaml",
+              "line": 15,
+              "column": 7,
               "message": "output_aggregate_key is not supported by this engine",
               "context": "{\"operation\":\"output_aggregate_key\"}",
               "source_span": null,
@@ -5453,9 +5453,9 @@
           "spec_paths": [
             "input.SRC.path"
           ],
-          "file": null,
-          "line": null,
-          "column": null,
+          "file": "spec.yaml",
+          "line": 4,
+          "column": 9,
           "message": "input.parquet is not a valid Parquet file",
           "context": "{\"dataset\":\"SRC\",\"path\":\"input.parquet\"}",
           "source_span": null,
@@ -5487,9 +5487,9 @@
               "spec_paths": [
                 "columns.RATIO.derivation.compute"
               ],
-              "file": null,
-              "line": null,
-              "column": null,
+              "file": "spec.yaml",
+              "line": 9,
+              "column": 45,
               "message": "1 + VALUE / ZERO divides by zero",
               "context": "{\"expr\":\"1 + VALUE / ZERO\",\"keys\":[{\"ID\":\"a\"}]}",
               "source_span": [
@@ -5612,11 +5612,11 @@
         "adam-adae-analysis-time",
         "adam-adsl-xpt",
         "negative-transport-empty-string",
-        "schema-source-xpt"
+        "schema-source-xpt",
+        "sdtm-dm-odm-snapshot"
       ],
       "lines": [
-        "yamaa selftest: succeeded, 4 of 4 cases passed",
-        "not covered: odm"
+        "yamaa selftest: succeeded, 5 of 5 cases passed"
       ],
       "information_line": "engine {version}, language {language_versions}, {host} {host_version}, {platform}",
       "info_fields": [
@@ -5690,6 +5690,276 @@
           "rule": "SCHEMA-2",
           "issue_message": "a Spec file is given where a spec, project, codelists, function file is expected",
           "context": "{\"expected\":[\"spec\",\"project\",\"codelists\",\"function\"],\"type\":\"Spec\"}"
+        }
+      ]
+    },
+    "issue-locations": {
+      "cases": [
+        {
+          "name": "a_mapping_member_at_its_key",
+          "files": {
+            "adae.yaml": "schema_version: '1.0'\ndomain: ADAE\nkeys: [USUBJID]\ninput: {AE: {path: ae.csv, types: {TRTSDT: int}}}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: AE.USUBJID}\n  - name: ASTDY\n    type: int\n    label: Study Day\n    derivation: {compute: {expr: TRTSDT + 1}}\n  - {name: TRTSDT, type: int, label: Start, derivation: AE.TRTSDT}\noutput: {path: adae.csv, columns: [USUBJID, ASTDY, TRTSDT]}\n",
+            "ae.csv": "USUBJID,TRTSDT\nS1,3\n"
+          },
+          "call": {"operation": "check", "path": "adae.yaml"},
+          "issue": {
+            "condition": "forward_reference",
+            "spec_path": "columns.ASTDY.derivation.compute",
+            "file": "adae.yaml",
+            "line": 10,
+            "column": 18
+          }
+        },
+        {
+          "name": "a_1_0_expression_field_at_its_key",
+          "files": {
+            "adae.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: ADAE\nkeys: [USUBJID]\ninput: {AE: {path: ae.csv, types: {TRTSDT: int}}}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: AE.USUBJID}\n  - name: ASTDY\n    type: int\n    label: Study Day\n    derivation: TRTSDT + 1\n  - {name: TRTSDT, type: int, label: Start, derivation: AE.TRTSDT}\noutput: {path: adae.csv, columns: [USUBJID, ASTDY, TRTSDT]}\n",
+            "ae.csv": "USUBJID,TRTSDT\nS1,3\n"
+          },
+          "call": {"operation": "check", "path": "adae.yaml"},
+          "issue": {
+            "condition": "forward_reference",
+            "spec_path": "columns.ASTDY.derivation",
+            "file": "adae.yaml",
+            "line": 11,
+            "column": 5
+          }
+        },
+        {
+          "name": "an_expanded_long_form_at_the_written_node",
+          "files": {
+            "dm.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: DM\nkeys: [USUBJID]\ninput: {RAW: raw.csv}\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Subject\n    derivation: RAW.USUBJID\n  - name: AGE\n    type: int\n    label: Age\n    derivation: RAW.AGEYRS\noutput: {path: dm.csv, columns: [USUBJID, AGE]}\n",
+            "raw.csv": "USUBJID,AGE\nS1,30\n"
+          },
+          "call": {"operation": "run", "path": "dm.yaml"},
+          "issue": {
+            "condition": "unknown_field",
+            "spec_path": "columns.AGE.derivation.source",
+            "file": "dm.yaml",
+            "line": 14,
+            "column": 5
+          }
+        },
+        {
+          "name": "an_inherited_value_in_the_parent",
+          "files": {
+            "parent.yaml": "schema_version: '1.0'\ndomain: ADSL\nkeys: [USUBJID]\ninput: {DM: {path: dm.csv, types: {AGE: int, ZERO: int}}}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: DM.USUBJID}\n  - name: RATIO\n    type: float\n    label: Ratio\n    derivation: {compute: {expr: AGE / ZERO}}\n  - {name: AGE, type: int, label: Age, derivation: DM.AGE}\n  - {name: ZERO, type: int, label: Zero, derivation: DM.ZERO}\noutput: {path: adsl.csv, columns: [USUBJID, RATIO, AGE, ZERO]}\n",
+            "child.yaml": "schema_version: '1.0'\nparent: parent.yaml\ncolumns:\n  - name: RATIO\n    label: Age Ratio\n",
+            "dm.csv": "USUBJID,AGE,ZERO\nS1,30,0\n"
+          },
+          "call": {"operation": "run", "path": "child.yaml"},
+          "issue": {
+            "condition": "division_by_zero",
+            "spec_path": "columns.RATIO.derivation.compute",
+            "file": "parent.yaml",
+            "line": 10,
+            "column": 18
+          }
+        },
+        {
+          "name": "an_overriding_value_in_the_child",
+          "files": {
+            "parent.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: ADSL\nkeys: [USUBJID]\ninput: {DM: {path: dm.csv, types: {AGE: int, ZERO: int}}}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: DM.USUBJID}\n  - name: RATIO\n    type: float\n    label: Ratio\n    derivation: AGE / ZERO\n  - {name: AGE, type: int, label: Age, derivation: DM.AGE}\n  - {name: ZERO, type: int, label: Zero, derivation: DM.ZERO}\noutput: {path: adsl.csv, columns: [USUBJID, RATIO, AGE, ZERO]}\n",
+            "child.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: parent.yaml\ncolumns:\n  - name: RATIO\n    derivation: AGE / (ZERO * 2)\n",
+            "dm.csv": "USUBJID,AGE,ZERO\nS1,30,0\n"
+          },
+          "call": {"operation": "run", "path": "child.yaml"},
+          "issue": {
+            "condition": "division_by_zero",
+            "spec_path": "columns.RATIO.derivation",
+            "file": "child.yaml",
+            "line": 6,
+            "column": 5
+          }
+        },
+        {
+          "name": "a_1_0_shorthand_overrides_a_structured_parent",
+          "files": {
+            "parent.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: IT\nkeys: [ID]\ninput: {RAW: raw.csv}\noutput: {path: out.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: Identifier, derivation: RAW.ID}\n  - name: V\n    type: str\n    label: Value\n    derivation:\n      source:\n        variable: RAW.OLD\n        filter: RAW.ID IS NOT NULL\n",
+            "child.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: parent.yaml\ncolumns:\n  - name: V\n    derivation: RAW.NEW\n",
+            "raw.csv": "ID,OLD\nS1,old\n"
+          },
+          "call": {"operation": "run", "path": "child.yaml"},
+          "issue": {
+            "condition": "unknown_field",
+            "spec_path": "columns.V.derivation.source",
+            "file": "child.yaml",
+            "line": 6,
+            "column": 5
+          }
+        },
+        {
+          "name": "a_0_5_shorthand_overrides_a_structured_parent",
+          "files": {
+            "parent.yaml": "schema_version: '1.0'\ndomain: IT\nkeys: [ID]\ninput: {RAW: raw.csv}\noutput: {path: out.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: Identifier, derivation: RAW.ID}\n  - name: V\n    type: str\n    label: Value\n    derivation:\n      source:\n        variable: RAW.OLD\n        filter: RAW.ID IS NOT NULL\n",
+            "child.yaml": "schema_version: '1.0'\nparent: parent.yaml\ncolumns:\n  - name: V\n    derivation: RAW.NEW\n",
+            "raw.csv": "ID,OLD\nS1,old\n"
+          },
+          "call": {"operation": "run", "path": "child.yaml"},
+          "issue": {
+            "condition": "unknown_field",
+            "spec_path": "columns.V.derivation.source",
+            "file": "child.yaml",
+            "line": 5,
+            "column": 5
+          }
+        },
+        {
+          "name": "a_0_5_root_replacement_hides_parent_fields",
+          "files": {
+            "parent.yaml": "schema_version: '1.0'\ndomain: IT\nkeys: [ID]\ninput: {RAW: raw.csv}\noutput:\n  path: out.csv\n  columns: [ID]\n  report: report.csv\ncolumns:\n  - {name: ID, type: str, label: Identifier, derivation: RAW.ID}\nverifications:\n  - row_count: {min: 1, severity: warning}\n",
+            "child.yaml": "schema_version: '1.0'\nparent: parent.yaml\noutput:\n  path: child.csv\n  columns: [ID]\n",
+            "raw.csv": "ID\nS1\n"
+          },
+          "call": {"operation": "check", "path": "child.yaml"},
+          "issue": {
+            "condition": "missing_report",
+            "spec_path": "output.report",
+            "file": "child.yaml",
+            "line": 3,
+            "column": 1
+          }
+        },
+        {
+          "name": "a_1_0_root_replacement_hides_parent_fields",
+          "files": {
+            "parent.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: IT\nkeys: [ID]\ninput: {RAW: raw.csv}\noutput:\n  path: out.csv\n  columns: [ID]\n  report: report.csv\ncolumns:\n  - {name: ID, type: str, label: Identifier, derivation: RAW.ID}\nverifications:\n  - row_count: {min: 1, severity: warning}\n",
+            "child.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: parent.yaml\noutput:\n  path: child.csv\n  columns: [ID]\n",
+            "raw.csv": "ID\nS1\n"
+          },
+          "call": {"operation": "check", "path": "child.yaml"},
+          "issue": {
+            "condition": "missing_report",
+            "spec_path": "output.report",
+            "file": "child.yaml",
+            "line": 4,
+            "column": 1
+          }
+        },
+        {
+          "name": "a_1_0_cleared_report_locates_at_the_clear_entry",
+          "files": {
+            "parent.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: IT\nkeys: [ID]\ninput: {RAW: raw.csv}\noutput:\n  path: out.csv\n  columns: [ID]\n  report: report.csv\ncolumns:\n  - {name: ID, type: str, label: Identifier, derivation: RAW.ID}\nverifications:\n  - row_count: {min: 1, severity: warning}\n",
+            "child.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: parent.yaml\nclear: [output.report]\n",
+            "raw.csv": "ID\nS1\n"
+          },
+          "call": {"operation": "check", "path": "child.yaml"},
+          "issue": {
+            "condition": "missing_report",
+            "spec_path": "output.report",
+            "file": "child.yaml",
+            "line": 4,
+            "column": 9
+          }
+        },
+        {
+          "name": "a_1_0_cleared_derivation_locates_at_the_clear_entry",
+          "files": {
+            "parent.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: IT\nkeys: [ID]\ninput: {RAW: raw.csv}\noutput:\n  path: out.csv\n  columns: [ID]\n  report: report.csv\ncolumns:\n  - {name: ID, type: str, label: Identifier, derivation: RAW.ID}\nverifications:\n  - row_count: {min: 1, severity: warning}\n",
+            "child.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: parent.yaml\nclear: [columns.ID.derivation]\n",
+            "raw.csv": "ID\nS1\n"
+          },
+          "call": {"operation": "check", "path": "child.yaml"},
+          "issue": {
+            "condition": "missing_derivation",
+            "spec_path": "columns.ID.derivation",
+            "file": "child.yaml",
+            "line": 4,
+            "column": 9
+          }
+        },
+        {
+          "name": "a_project_path_in_the_project_file",
+          "files": {
+            "dm.yaml": "schema_version: '1.0'\ndomain: DM\nkeys: [USUBJID]\ninput: {RAW: raw.csv}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: RAW.USUBJID}\noutput: {path: dm.csv, columns: [USUBJID]}\n",
+            "again.yaml": "schema_version: '1.0'\ndomain: DM\nkeys: [USUBJID]\ninput: {RAW: raw.csv}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: RAW.USUBJID}\noutput: {path: dm.csv, columns: [USUBJID]}\n",
+            "project.yaml": "schema_version: '1.0'\nsdtm:\n  specs:\n    - dm.yaml\n    - again.yaml\n"
+          },
+          "call": {"operation": "project_check", "path": "project.yaml"},
+          "issue": {
+            "condition": "duplicate_specification_name",
+            "spec_path": "sdtm.specs[0]",
+            "file": "project.yaml",
+            "line": 4,
+            "column": 7
+          }
+        },
+        {
+          "name": "a_project_path_into_the_file_it_lists",
+          "files": {
+            "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy:\n  id: CATH\n  name: CATH\n  description: A study\n  protocol_name: CATH-01\nsdtm:\n  standards:\n    - {name: SDTMIG, version: \"3.4\", status: Final}\n  specs:\n    - spec.yaml\n  define: define.xml\n",
+            "spec.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: ADSL\nkeys: [USUBJID]\ninput: {RAW: raw.csv}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: RAW.USUBJID}\noutput: {path: adsl.csv, columns: [USUBJID]}\n"
+          },
+          "call": {
+            "operation": "submission",
+            "path": "project.yaml",
+            "section": "sdtm",
+            "created": "2026-09-11T00:00:00"
+          },
+          "issue": {
+            "condition": "standard_model_mismatch",
+            "spec_path": "sdtm.specs[0].model",
+            "file": "spec.yaml",
+            "line": 3,
+            "column": 1
+          }
+        },
+        {
+          "name": "a_data_file_value_at_its_declaration",
+          "files": {
+            "dm.yaml": "schema_version: '1.0'\ndomain: DM\nkeys: [USUBJID]\ninput: {RAW: {path: raw.csv, types: {AGE: int}}}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: RAW.USUBJID}\n  - {name: AGE, type: int, label: Age, derivation: RAW.AGE}\noutput: {path: dm.csv, columns: [USUBJID, AGE]}\n",
+            "raw.csv": "USUBJID,AGE\nS1,30\nS2,NA\n"
+          },
+          "call": {"operation": "run", "path": "dm.yaml"},
+          "issue": {
+            "condition": "field_parse_failed",
+            "spec_path": "input.RAW.types.AGE",
+            "file": "dm.yaml",
+            "line": 4,
+            "column": 38
+          }
+        },
+        {
+          "name": "invalid_yaml_at_the_reader_position",
+          "files": {
+            "invalid.yaml": "schema_version: '1.0'\ndomain: [ADSL\n"
+          },
+          "call": {"operation": "check", "path": "invalid.yaml"},
+          "issue": {
+            "condition": "invalid_yaml",
+            "spec_path": "$",
+            "file": "invalid.yaml",
+            "line": 3,
+            "column": 1
+          }
+        },
+        {
+          "name": "non_ascii_text_at_the_reader_position",
+          "files": {
+            "accented.yaml": "schema_version: '1.0'\ndomain: ADSL\n# caf\u00e9\n"
+          },
+          "call": {"operation": "check", "path": "accented.yaml"},
+          "issue": {
+            "condition": "non_ascii_source",
+            "spec_path": "$",
+            "file": "accented.yaml",
+            "line": 3,
+            "column": 6
+          }
+        },
+        {
+          "name": "no_spec_path_and_no_location",
+          "files": {
+            "project.yaml": "schema_version: '1.0'\nsdtm:\n  specs: []\n"
+          },
+          "call": {"operation": "select", "path": "project.yaml", "name": "ADXX"},
+          "issue": {
+            "condition": "unknown_specification_name",
+            "spec_path": null,
+            "file": null,
+            "line": null,
+            "column": null
+          }
         }
       ]
     }

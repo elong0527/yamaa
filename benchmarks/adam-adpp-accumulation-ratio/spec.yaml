@@ -77,6 +77,7 @@ columns:
     label: Analysis Value Unit
 
 rows:
+  # yamaa-lint: allow repeated_row_derivation -- keys stay beside each grouping
   # Every PP record, also one whose parameter was not calculated.
   - id: collected
     dataset: PPARM

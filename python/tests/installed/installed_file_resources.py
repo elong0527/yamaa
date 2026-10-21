@@ -36,6 +36,20 @@ class AnyMessage:
         return "<a message>"
 
 
+class Located:
+    """Equal to a location cell holding a `kind`: these cases pin what an
+    issue is, and installed_issue_locations pins where it is (P-ISSUE-1)."""
+
+    def __init__(self, kind):
+        self.kind = kind
+
+    def __eq__(self, other):
+        return isinstance(other, self.kind) and not isinstance(other, bool)
+
+    def __repr__(self):
+        return f"<a located {self.kind.__name__}>"
+
+
 ROOT = Path(__file__).with_name("specification-original")
 PATHS = TRUTH["lookup_paths"]
 
@@ -190,9 +204,9 @@ class FileResources(unittest.TestCase):
                 {
                     "severity": "error",
                     **finding,
-                    "file": None,
-                    "line": None,
-                    "column": None,
+                    "file": Located(str),
+                    "line": Located(int),
+                    "column": Located(int),
                     "message": AnyMessage(),
                     "context": json.dumps(
                         finding["context"],
@@ -376,9 +390,9 @@ class FileResources(unittest.TestCase):
                         "condition": "resource_path_symlink",
                         "rule": "FILE-8",
                         "spec_paths": ["input.SRC.path"],
-                        "file": None,
-                        "line": None,
-                        "column": None,
+                        "file": Located(str),
+                        "line": Located(int),
+                        "column": Located(int),
                         "message": AnyMessage(),
                         "context": TRUTH["alias_context_json"],
                         "source_span": None,

@@ -261,6 +261,7 @@ pub(super) fn matches_member(
         nulls,
         written: false,
         surface: Surface::Legacy,
+        sites: None,
     }
     .single(
         member.0,
@@ -369,6 +370,37 @@ impl ConstraintOwner {
     }
 }
 
+/// One written value that a validation walk read under the structure it
+/// chose for the document ([`SchemaStructure::written_sites`]): its node in
+/// the written document, its spec path and what the schema reads it as.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct WrittenSite {
+    pub node: usize,
+    pub path: String,
+    pub role: SiteRole,
+}
+
+/// What a schema reads one written value as.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SiteRole {
+    /// The value of a class field: the class, or the registry entry whose
+    /// payload is a class, the field and the field's descriptor.
+    Field {
+        owner: String,
+        field: String,
+        descriptor: usize,
+    },
+    /// A value read as the named value type `name`.
+    Alias { name: String },
+    /// A long form that restates the shorthand of its union (SCHEMA-15): the
+    /// field it writes and the node of the shorthand to write instead, or no
+    /// node when the shorthand is the bare keyword `field`.
+    LongForm {
+        field: String,
+        shorthand: Option<usize>,
+    },
+}
+
 struct Run<'a> {
     schema: &'a SchemaStructure,
     input: &'a Document,
@@ -380,11 +412,40 @@ struct Run<'a> {
     /// produced by normalization holds those long forms and is never checked.
     written: bool,
     surface: Surface,
+    /// The written sites read so far, when the caller asked for them.
+    sites: Option<Vec<WrittenSite>>,
 }
 
 impl Run<'_> {
     fn step(&mut self, site: Site<'_>) -> Result<(), ValidationError> {
         depth(site.depth)
+    }
+    /// Record that `site`'s value is read as `role`.
+    fn record(&mut self, site: Site<'_>, role: SiteRole) {
+        if let Some(sites) = &mut self.sites {
+            sites.push(WrittenSite {
+                node: site.value,
+                path: site.path.to_owned(),
+                role,
+            });
+        }
+    }
+    /// How many sites are recorded, to set aside what one union member read.
+    fn mark(&self) -> usize {
+        self.sites.as_ref().map_or(0, Vec::len)
+    }
+    /// The sites recorded since `mark`, removed.
+    fn since(&mut self, mark: usize) -> Vec<WrittenSite> {
+        self.sites
+            .as_mut()
+            .map(|sites| sites.split_off(mark))
+            .unwrap_or_default()
+    }
+    /// Keep the sites of the union member whose result the union returns.
+    fn keep(&mut self, kept: Vec<WrittenSite>) {
+        if let Some(sites) = &mut self.sites {
+            sites.extend(kept);
+        }
     }
     fn text(value: impl Into<String>) -> SchemaContext {
         SchemaContext::Text(value.into())
@@ -534,6 +595,14 @@ impl Run<'_> {
                     child.members = site.root
                         && self.nulls.clears()
                         && MAPPING_MEMBERS.contains(&field.name.as_str());
+                    self.record(
+                        child,
+                        SiteRole::Field {
+                            owner: name.to_owned(),
+                            field: field.name.clone(),
+                            descriptor: field.descriptor,
+                        },
+                    );
                     diagnostics.extend(self.descriptor(field.descriptor, child)?)
                 }
                 None if !site.fragment
@@ -768,7 +837,15 @@ impl Run<'_> {
             // the same union that names it bare, as `- not_missing: {}`
             // restates `- not_missing` (P-HND-4): the keyword is both the
             // long form's field and its shorthand.
-            let keyword = Self::text(field.as_str());
+            let field = field.clone();
+            self.record(
+                site,
+                SiteRole::LongForm {
+                    field: field.clone(),
+                    shorthand: None,
+                },
+            );
+            let keyword = Self::text(field);
             return Ok(vec![self.diagnostic(
                 site,
                 ConditionCode::SchemaRedundantLongForm,
@@ -777,6 +854,14 @@ impl Run<'_> {
         } else {
             return Ok(Vec::new());
         };
+        let field = field.clone();
+        self.record(
+            site,
+            SiteRole::LongForm {
+                field: field.clone(),
+                shorthand: Some(shorthand),
+            },
+        );
         let shorthand = match &self.input.nodes()[shorthand] {
             N::Sequence(_) | N::Mapping(_) => Self::text(flow_text(self.input, shorthand, 0)?),
             _ => SchemaContext::InputValue(shorthand),
@@ -826,6 +911,8 @@ impl Run<'_> {
         site: Site<'_>,
     ) -> Result<Vec<SchemaDiagnostic>, ValidationError> {
         self.step(site)?;
+        // Each member that fails keeps aside the sites it read; the union
+        // keeps those of the member whose result it returns.
         let mut attempted = Vec::new();
         for member in members {
             if let TypeNode::Name(span) = &member.nodes()[member.root()] {
@@ -838,25 +925,30 @@ impl Run<'_> {
                     continue;
                 }
             }
+            let mark = self.mark();
             let result = self.single(member, member.root(), site.deeper())?;
             if result.is_empty() {
                 return self.restated(members, member, alias, site);
             }
-            attempted.push((member, result));
+            let sites = self.since(mark);
+            attempted.push((member, result, sites));
         }
-        for (member, diagnostics) in &mut attempted {
+        for (member, diagnostics, sites) in &mut attempted {
             if self.outer(member, member.root(), site.deeper())?
                 && self.declares_written_keys(member, member.root(), site.deeper())?
             {
+                self.keep(std::mem::take(sites));
                 return Ok(std::mem::take(diagnostics));
             }
         }
-        for (member, diagnostics) in &mut attempted {
+        for (member, diagnostics, sites) in &mut attempted {
             if self.outer(member, member.root(), site.deeper())? {
+                self.keep(std::mem::take(sites));
                 return Ok(std::mem::take(diagnostics));
             }
         }
-        if let Some((_, diagnostics)) = attempted.into_iter().next() {
+        if let Some((_, diagnostics, sites)) = attempted.into_iter().next() {
+            self.keep(sites);
             return Ok(diagnostics);
         }
         let expected = members
@@ -875,6 +967,9 @@ impl Run<'_> {
     ) -> Result<Vec<SchemaDiagnostic>, ValidationError> {
         if self.active.contains(&(site.value, id)) {
             return self.invalid(site, name);
+        }
+        if matches!(kind, SchemaAliasKind::Descriptor(_)) {
+            self.record(site, SiteRole::Alias { name: name.into() });
         }
         self.active.push((site.value, id));
         let result = (|| {
@@ -1196,6 +1291,7 @@ impl SchemaStructure {
             nulls: NullPolicy::Value,
             written,
             surface,
+            sites: None,
         }
         .union(
             types,
@@ -1247,6 +1343,7 @@ impl SchemaStructure {
             // A resolved document is the canonical result of normalization.
             written: !resolved_output,
             surface: Surface::Legacy,
+            sites: None,
         };
         let site = Site {
             value: input.root(),
@@ -1342,6 +1439,74 @@ impl SchemaStructure {
             Surface::Versioned,
         )
     }
+    /// [`SchemaStructure::validate_versioned_descriptor`], keeping each
+    /// written site the walk reads under the structure it chooses.
+    pub(super) fn versioned_descriptor_sites(
+        &self,
+        descriptor: usize,
+        input: &Document,
+        value: usize,
+        path: &str,
+        fragment: bool,
+    ) -> Result<(Vec<SchemaDiagnostic>, Vec<WrittenSite>), ValidationError> {
+        if descriptor >= self.descriptors().len() || value >= input.nodes().len() {
+            return Err(ValidationError::InvalidDescriptor);
+        }
+        let mut run = Run {
+            schema: self,
+            input,
+            active: Vec::new(),
+            resolved_output: false,
+            nulls: NullPolicy::Value,
+            written: true,
+            surface: Surface::Versioned,
+            sites: Some(Vec::new()),
+        };
+        let found = run.descriptor(
+            descriptor,
+            Site {
+                value,
+                path,
+                depth: 0,
+                fragment,
+                root: false,
+                members: false,
+            },
+        )?;
+        Ok((found, run.sites.unwrap_or_default()))
+    }
+    /// A complete 1.x document checked against its root class as an author
+    /// wrote it, as [`SchemaStructure::normalize_root`] checks it, keeping
+    /// each written site the walk reads under the structure it chooses.
+    pub(super) fn versioned_root_sites(
+        &self,
+        input: &Document,
+    ) -> Result<(Vec<SchemaDiagnostic>, Vec<WrittenSite>), ValidationError> {
+        let types = self.parse_query_types(&[self.root_class().name.clone()])?;
+        let mut run = Run {
+            schema: self,
+            input,
+            active: Vec::new(),
+            resolved_output: false,
+            nulls: NullPolicy::Value,
+            written: true,
+            surface: Surface::Versioned,
+            sites: Some(Vec::new()),
+        };
+        let found = run.union(
+            &types,
+            None,
+            Site {
+                value: input.root(),
+                path: "",
+                depth: 0,
+                fragment: false,
+                root: false,
+                members: false,
+            },
+        )?;
+        Ok((found, run.sites.unwrap_or_default()))
+    }
     /// Interpret a descriptor over a canonical document that normalization or
     /// composition produced, whose long forms restate expanded shorthand.
     pub(super) fn validate_canonical_descriptor(
@@ -1387,6 +1552,7 @@ impl SchemaStructure {
             nulls,
             written,
             surface,
+            sites: None,
         }
         .descriptor(
             descriptor,

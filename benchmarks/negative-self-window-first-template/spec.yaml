@@ -41,6 +41,7 @@ columns:
   - {name: VISIT, type: str, label: Visit Name}
 
 rows:
+  # yamaa-lint: allow repeated_row_derivation -- the fault is in the row phase
   # Each collected measurement. Its visit is the window of the subject's
   # latest record built so far, but these are the first rows built, so no
   # such record exists yet, and the specification is rejected before any
