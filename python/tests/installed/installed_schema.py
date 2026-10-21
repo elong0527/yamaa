@@ -3,7 +3,7 @@
 The facade's own tests compare each schema with the file the repository
 commits in yaml/v1/json/ (the schema module of the yamaa crate); this checks
 what the installed host returns and raises for the shared truth, which R reads
-too (#3030 section 2.12, D136).
+too (#3030 section 2.12, D149).
 """
 
 import inspect

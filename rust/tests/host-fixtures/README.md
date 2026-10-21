@@ -96,7 +96,7 @@ passes and only the adapter that the list leaves uncovered is named. Each
 host fills the information line from its own facts: the compiled core
 version, its interpreter's version, and the platform its interpreter reports.
 
-`schema` pairs the installed Python and R `schema()` suites (#3030 D136). Its
+`schema` pairs the installed Python and R `schema()` suites (#3030 D149). Its
 facts were read by hand from the JSON Schemas committed in `yaml/v1/json/`,
 and its refusal text was written from D39's prefix and the template that
 `yaml/conditions.yaml` holds for `unexpected_file_type`. The suites check that

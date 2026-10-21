@@ -1,4 +1,4 @@
-"""yamaa.schema(): the JSON Schema of a file type (#3030 section 2.12, D136).
+"""yamaa.schema(): the JSON Schema of a file type (#3030 section 2.12, D149).
 
 The engine embeds the JSON Schema that the repository commits for each file
 type in yaml/v1/json/ and returns it as canonical JSON text: the committed

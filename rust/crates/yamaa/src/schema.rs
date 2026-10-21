@@ -1,4 +1,4 @@
-//! The JSON Schema of each file type (#3030 section 2.12, D136): the
+//! The JSON Schema of each file type (#3030 section 2.12, D149): the
 //! machine-readable contract that editors validate and complete a yamaa file
 //! against as it is typed.
 //!

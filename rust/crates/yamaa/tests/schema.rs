@@ -1,6 +1,6 @@
 //! `yamaa::schema` gives the JSON Schema of a file type as canonical JSON
 //! text: the document committed in `yaml/v1/json/`, which the engine embeds
-//! when it is built (#3030 section 2.12, D136). Any other text is refused as
+//! when it is built (#3030 section 2.12, D149). Any other text is refused as
 //! `unexpected_file_type` (SCHEMA-2), as `cannot give the schema of <type>`
 //! (D39). No build feature is needed: the schema is text the engine holds.
 

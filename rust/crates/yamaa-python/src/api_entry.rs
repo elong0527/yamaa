@@ -192,7 +192,7 @@ pub fn _lint(py: Python<'_>, paths: Vec<String>, fix: bool) -> PyResult<ArrowTab
         .map_err(|failure| raise(py, failure))
 }
 
-/// The JSON Schema of a file type as canonical JSON text (#3030 D136); a
+/// The JSON Schema of a file type as canonical JSON text (#3030 D149); a
 /// type the facade does not know raises `_Error`.
 #[pyfunction]
 pub fn _schema(py: Python<'_>, file_type: &str) -> PyResult<String> {

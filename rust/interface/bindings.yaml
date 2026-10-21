@@ -97,7 +97,7 @@ values:
       - redundant_intermediate
       - missing_label
   # The file types a yamaa file declares in `type` (SCHEMA-2), as schema()
-  # takes them (D136).
+  # takes them (D149).
   file_type:
     rust: yamaa::FILE_TYPES
     values: [spec, project, codelists, function]
@@ -303,7 +303,7 @@ public:
       raises: refusal
       calls: lint
       doc: Lint specification files, first applying the proved layout fixes when fix is true.
-    # D136: the JSON Schema of yaml/v1/json/, as canonical JSON text; any other
+    # D149: the JSON Schema of yaml/v1/json/, as canonical JSON text; any other
     # type is refused as unexpected_file_type (SCHEMA-2).
     - name: schema
       python: yamaa.schema

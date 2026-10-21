@@ -375,7 +375,7 @@ pub fn read_declared_header(
 
 /// The finding for a file type a call takes as its argument, `written`, that
 /// names none of the four types, as the type whose JSON Schema `schema` gives
-/// (#3030 D136): `unexpected_file_type`, expecting any of them, as a `type`
+/// (#3030 D149): `unexpected_file_type`, expecting any of them, as a `type`
 /// header naming none of them does (SCHEMA-2). The call reads no file, so the
 /// finding has no spec path.
 pub fn unknown_file_type(written: &str) -> Diagnostic {
