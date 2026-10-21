@@ -10,20 +10,15 @@ report beside it, `dm-report.csv`.
 **Variables:**
 
 - `DOMAIN` is `DM` on every record.
-- `STUDYID` and `USUBJID` are copied from the collected record.
+- `STUDYID` is the collected study identifier. A record without it is refused.
+- `USUBJID` is the collected unique subject identifier. A record without it is
+  refused.
 
-**Note:** the dataset is now saved as `dm.csv`, but it has not been built
-since it was renamed. Its run report still describes the last build: each
-row names the dataset that build saved (`ARTIFACT`), the kind of item it
-describes (`KIND`), where the specification states that item (`SPEC_PATH`)
-and its name (`NAME`), with the build's outcome (`OUTCOME`), and with the
-collected records read, the subjects built and each column's missing values
-and longest text (`COUNT`, `TOTAL`, `DETAILS`); no check ran, so its label,
-column, rule, severity, failure and failing subjects (`ID`, `TARGET`,
-`RULE`, `SEVERITY`, `CONDITION`, `KEYS`) stay empty. The report records
-`dm_v1.csv`, not `dm.csv`, so the submission is refused before any document
-is written: its data definition would describe a dataset that no build of
-the current specification saved.
+**Note:** the last build saved `dm_v1.csv`, but the current submission names
+`dm.csv`. The dataset has not been rebuilt since that name changed. Its run
+report still records the earlier filename, so the submission is refused
+before any document is written: its data definition would describe a dataset
+that no build of the current specification saved.
 
 ## How to fix
 
@@ -35,6 +30,12 @@ p = yamaa.project("project.yaml")
 p.spec("DM").run().save()
 p.submission("sdtm")
 ```
+
+The rebuilt report names its saved file (`ARTIFACT`), item kind and location
+(`KIND`, `SPEC_PATH`, `NAME`), outcome (`OUTCOME`, `CONDITION`), counts
+(`COUNT`, `TOTAL`) and measurements (`DETAILS`). Check labels and targets
+(`ID`, `TARGET`), rules and severity (`RULE`, `SEVERITY`), and failing subject
+keys (`KEYS`) describe any checks that ran.
 
 Do not edit the run report or rename the saved file to match it: the report
 records what a build read and wrote, and only a new build replaces it.
