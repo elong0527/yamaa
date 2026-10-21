@@ -325,12 +325,13 @@ frozen surfaces with the newest final release of the same major, the tag
 `yamaa-vM.m.p` with no candidate suffix, and refuses a break in the
 conditions and their phases in `yaml/conditions.yaml`, the lines of
 `rust/interface/manifest.txt` and those of
-`rust/crates/yamaa/public-api.txt` (#3442).
+`rust/crates/yamaa/public-api.txt` (#3442), the named types and fields of
+the four file types' JSON Schemas, and the functions, reducers, keywords,
+operators, productions and reserved words of the grammars in
+`yaml/grammar/` (#3444).
 
 The remaining comparisons are tracked separately:
 
-- the four file types' JSON Schemas and the grammars in `yaml/grammar/`
-  (#3444);
 - each existing failure's phase, condition and rule, the rule card IDs, and
   every benchmark present at that tag, whose specification, input and
   expected files stay byte for byte (#3445).

@@ -9,6 +9,7 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import yaml
 from tools.commands import repository
@@ -60,8 +61,13 @@ def git(root, *arguments):
 
 
 def run_check(root):
+    """Run the check with the line manifests' comparer alone: these
+    repositories hold no other comparer's manifests."""
     output = io.StringIO()
-    with contextlib.redirect_stdout(output):
+    with (
+        mock.patch.object(STABILITY, "COMPARERS", (LINES.__name__,)),
+        contextlib.redirect_stdout(output),
+    ):
         status = STABILITY.main(["--root", str(root)])
     return status, output.getvalue()
 
