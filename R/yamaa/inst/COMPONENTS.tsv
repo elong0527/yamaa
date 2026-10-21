@@ -1,11 +1,11 @@
 name	version	license	source	purpose
-adler2	2.0.1	0BSD OR MIT OR Apache-2.0	crates.io	transitive dependency of miniz_oxide: Adler-32 checksums of zlib streams
-ahash	0.8.12	MIT OR Apache-2.0	crates.io	transitive dependency of arrow-array, arrow-select and parquet: the hasher of their hash tables
-aho-corasick	1.1.5	Unlicense OR MIT	crates.io	not compiled: locked because the std features of regex and regex-automata name it; yamaa-core leaves regex's perf-literal feature off
+adler2	2.0.1	MIT	crates.io	transitive dependency of miniz_oxide: Adler-32 checksums of zlib streams
+ahash	0.8.12	MIT	crates.io	transitive dependency of arrow-array, arrow-select and parquet: the hasher of their hash tables
+aho-corasick	1.1.5	MIT	crates.io	not compiled: locked because the std features of regex and regex-automata name it; yamaa-core leaves regex's perf-literal feature off
 alloc-no-stdlib	2.0.4	BSD-3-Clause	crates.io	transitive dependency of brotli: its allocator interface
 alloc-stdlib	0.2.4	BSD-3-Clause	crates.io	transitive dependency of brotli: the standard library allocator behind that interface
-android_system_properties	0.1.6	MIT OR Apache-2.0	crates.io	not compiled: iana-time-zone's time zone lookup on Android
-arraydeque	0.5.1	MIT OR Apache-2.0	crates.io	transitive dependency of yamaa-saphyr-parser: the fixed-capacity buffer of its scanner
+android_system_properties	0.1.6	MIT	crates.io	not compiled: iana-time-zone's time zone lookup on Android
+arraydeque	0.5.1	MIT	crates.io	transitive dependency of yamaa-saphyr-parser: the fixed-capacity buffer of its scanner
 arrow-array	55.2.0	Apache-2.0	crates.io	Arrow arrays: the tables of yamaa-adapters and the Rust facade, and the Python hand-off through the Arrow C data interface
 arrow-buffer	55.2.0	Apache-2.0	crates.io	Arrow buffers that table columns are built from (yamaa-adapters)
 arrow-cast	55.2.0	Apache-2.0	crates.io	transitive dependency of parquet: conversions between Parquet and Arrow types
@@ -14,135 +14,135 @@ arrow-ipc	55.2.0	Apache-2.0	crates.io	Arrow IPC streams of tables, and the Arrow
 arrow-schema	55.2.0	Apache-2.0	crates.io	Arrow schemas and data types of those tables (yamaa-adapters and the Rust facade)
 arrow-select	55.2.0	Apache-2.0	crates.io	transitive dependency of parquet and arrow-cast: Arrow selection kernels
 atoi	2.0.0	MIT	crates.io	transitive dependency of arrow-cast: integer parsing
-autocfg	1.5.1	Apache-2.0 OR MIT	crates.io	build script: compiler feature probes of num-traits, and of memoffset in the Python binding
-base64	0.22.1	MIT OR Apache-2.0	crates.io	decodes the base64 Arrow schema in Parquet metadata (the parquet feature); an older release comes with parquet and arrow-cast
-base64	0.23.1	MIT OR Apache-2.0	crates.io	decodes the base64 Arrow schema in Parquet metadata (the parquet feature); an older release comes with parquet and arrow-cast
-bitflags	2.13.2	MIT OR Apache-2.0	crates.io	transitive dependency of arrow-schema, flatbuffers and rustix: typed flag sets
-brotli	8.0.4	BSD-3-Clause AND MIT	crates.io	Brotli codec for Parquet pages (the parquet feature)
-brotli-decompressor	5.0.3	BSD-3-Clause OR MIT	crates.io	transitive dependency of brotli: the Brotli decoder
-bumpalo	3.20.3	MIT OR Apache-2.0	crates.io	not compiled: wasm-bindgen's macro support (wasm32 only)
-byteorder	1.5.0	Unlicense OR MIT	crates.io	transitive dependency of thrift: endian-aware integer reading and writing
+autocfg	1.5.1	MIT	crates.io	build script: compiler feature probes of num-traits, and of memoffset in the Python binding
+base64	0.22.1	MIT	crates.io	decodes the base64 Arrow schema in Parquet metadata (the parquet feature); an older release comes with parquet and arrow-cast
+base64	0.23.1	MIT	crates.io	decodes the base64 Arrow schema in Parquet metadata (the parquet feature); an older release comes with parquet and arrow-cast
+bitflags	2.13.2	MIT	crates.io	transitive dependency of arrow-schema, flatbuffers and rustix: typed flag sets
+brotli	8.0.4	MIT AND BSD-3-Clause	crates.io	Brotli codec for Parquet pages (the parquet feature)
+brotli-decompressor	5.0.3	BSD-3-Clause	crates.io	transitive dependency of brotli: the Brotli decoder
+bumpalo	3.20.3	MIT	crates.io	not compiled: wasm-bindgen's macro support (wasm32 only)
+byteorder	1.5.0	MIT	crates.io	transitive dependency of thrift: endian-aware integer reading and writing
 bytes	1.12.1	MIT	crates.io	byte buffers of admitted Parquet pages (the parquet feature); arrow-buffer and parquet use it too
-cc	1.8.0	MIT OR Apache-2.0	crates.io	build script: compiles the bundled ReadStat C sources (the readstat feature) and, for zstd-sys, the bundled zstd library
-cfg-if	1.0.5	MIT OR Apache-2.0	crates.io	transitive dependency of ahash, crc32fast, getrandom and half: platform-conditional code
-chrono	0.4.45	MIT OR Apache-2.0	crates.io	transitive dependency of arrow-array, arrow-cast and parquet: the date and time types of temporal arrays
-const-random	0.1.18	MIT OR Apache-2.0	crates.io	not compiled: ahash's compile-time random seed, which arrow-array and parquet select only for wasm32
-const-random-macro	0.1.16	MIT OR Apache-2.0	crates.io	not compiled: the procedural macro of const-random (wasm32 only)
-core-foundation-sys	0.8.7	MIT OR Apache-2.0	crates.io	transitive dependency of iana-time-zone on macOS: the system time zone through Core Foundation
-crc32fast	1.5.2	MIT OR Apache-2.0	crates.io	transitive dependency of flate2: CRC-32 checksums of gzip streams
+cc	1.8.0	MIT	crates.io	build script: compiles the bundled ReadStat C sources (the readstat feature) and, for zstd-sys, the bundled zstd library
+cfg-if	1.0.5	MIT	crates.io	transitive dependency of ahash, crc32fast, getrandom and half: platform-conditional code
+chrono	0.4.45	MIT	crates.io	transitive dependency of arrow-array, arrow-cast and parquet: the date and time types of temporal arrays
+const-random	0.1.18	MIT	crates.io	not compiled: ahash's compile-time random seed, which arrow-array and parquet select only for wasm32
+const-random-macro	0.1.16	MIT	crates.io	not compiled: the procedural macro of const-random (wasm32 only)
+core-foundation-sys	0.8.7	MIT	crates.io	transitive dependency of iana-time-zone on macOS: the system time zone through Core Foundation
+crc32fast	1.5.2	MIT	crates.io	transitive dependency of flate2: CRC-32 checksums of gzip streams
 crunchy	0.2.4	MIT	crates.io	not compiled: loop unrolling for tiny-keccak (wasm32 only) and for half on SPIR-V
-equivalent	1.0.3	Apache-2.0 OR MIT	crates.io	not compiled: transitive dependency of indexmap, which no build compiles
-errno	0.3.14	MIT OR Apache-2.0	crates.io	transitive dependency of rustix on macOS: errno access where rustix calls the C library
+equivalent	1.0.3	MIT	crates.io	not compiled: transitive dependency of indexmap, which no build compiles
+errno	0.3.14	MIT	crates.io	transitive dependency of rustix on macOS: errno access where rustix calls the C library
 extendr-api	0.9.0	MIT	crates.io	the R binding's interface to R (yamaa-r)
 extendr-ffi	0.9.0	MIT	crates.io	transitive dependency of extendr-api: raw bindings to R's C API
 extendr-macros	0.9.0	MIT	crates.io	procedural macro: the #[extendr] attributes of the R binding
-find-msvc-tools	0.1.14	MIT OR Apache-2.0	crates.io	build script: finds the MSVC tools for cc on Windows
+find-msvc-tools	0.1.14	MIT	crates.io	build script: finds the MSVC tools for cc on Windows
 flatbuffers	25.12.19	Apache-2.0	crates.io	bounds the FlatBuffers-encoded Arrow schema in Parquet metadata before it is converted (yamaa-adapters); arrow-ipc depends on it too
-flate2	1.1.10	MIT OR Apache-2.0	crates.io	gzip codec for Parquet pages (the parquet feature) and gzip TAR input (the odm feature)
-futures-core	0.3.34	MIT OR Apache-2.0	crates.io	not compiled: transitive dependency of futures-util (wasm32 only)
-futures-task	0.3.34	MIT OR Apache-2.0	crates.io	not compiled: transitive dependency of futures-util (wasm32 only)
-futures-util	0.3.34	MIT OR Apache-2.0	crates.io	not compiled: js-sys's futures support (wasm32 only)
-getrandom	0.2.17	MIT OR Apache-2.0	crates.io	transitive dependency of ahash: random hash seeds at run time; the older release, through const-random-macro, is not compiled
-getrandom	0.3.4	MIT OR Apache-2.0	crates.io	transitive dependency of ahash: random hash seeds at run time; the older release, through const-random-macro, is not compiled
-half	2.7.1	MIT OR Apache-2.0	crates.io	transitive dependency of the Arrow crates and parquet: the 16-bit float type
-hashbrown	0.15.5	MIT OR Apache-2.0	crates.io	transitive dependency of arrow-array and parquet: hash tables; the newer release comes with indexmap and is not compiled
-hashbrown	0.16.1	MIT OR Apache-2.0	crates.io	transitive dependency of arrow-array and parquet: hash tables; the newer release comes with indexmap and is not compiled
-iana-time-zone	0.1.65	MIT OR Apache-2.0	crates.io	transitive dependency of chrono on Linux and macOS: the local time zone lookup of chrono's clock feature, which arrow-array enables
-iana-time-zone-haiku	0.1.2	MIT OR Apache-2.0	crates.io	not compiled: iana-time-zone's time zone lookup on Haiku
-indexmap	2.13.1	Apache-2.0 OR MIT	crates.io	not compiled: locked because toml's std feature names it; yamaa-adapters leaves toml's preserve_order feature off
+flate2	1.1.10	MIT	crates.io	gzip codec for Parquet pages (the parquet feature) and gzip TAR input (the odm feature)
+futures-core	0.3.34	MIT	crates.io	not compiled: transitive dependency of futures-util (wasm32 only)
+futures-task	0.3.34	MIT	crates.io	not compiled: transitive dependency of futures-util (wasm32 only)
+futures-util	0.3.34	MIT	crates.io	not compiled: js-sys's futures support (wasm32 only)
+getrandom	0.2.17	MIT	crates.io	transitive dependency of ahash: random hash seeds at run time; the older release, through const-random-macro, is not compiled
+getrandom	0.3.4	MIT	crates.io	transitive dependency of ahash: random hash seeds at run time; the older release, through const-random-macro, is not compiled
+half	2.7.1	MIT	crates.io	transitive dependency of the Arrow crates and parquet: the 16-bit float type
+hashbrown	0.15.5	MIT	crates.io	transitive dependency of arrow-array and parquet: hash tables; the newer release comes with indexmap and is not compiled
+hashbrown	0.16.1	MIT	crates.io	transitive dependency of arrow-array and parquet: hash tables; the newer release comes with indexmap and is not compiled
+iana-time-zone	0.1.65	MIT	crates.io	transitive dependency of chrono on Linux and macOS: the local time zone lookup of chrono's clock feature, which arrow-array enables
+iana-time-zone-haiku	0.1.2	MIT	crates.io	not compiled: iana-time-zone's time zone lookup on Haiku
+indexmap	2.13.1	MIT	crates.io	not compiled: locked because toml's std feature names it; yamaa-adapters leaves toml's preserve_order feature off
 integer-encoding	3.0.4	MIT	crates.io	transitive dependency of thrift: variable-length integer encoding
-itoa	1.0.18	MIT OR Apache-2.0	crates.io	transitive dependency of serde_json: integer formatting
-jobserver	0.1.34	MIT OR Apache-2.0	crates.io	build script: shares Cargo's job slots with cc's parallel C compilation, which zstd-sys enables
-js-sys	0.3.106	MIT OR Apache-2.0	crates.io	not compiled: iana-time-zone's time zone lookup in JavaScript environments (wasm32 only)
-lazy_static	1.5.1	MIT OR Apache-2.0	crates.io	procedural macro: lazily initialized statics in extendr-macros
-lexical-core	1.0.6	MIT OR Apache-2.0	crates.io	transitive dependency of arrow-cast: number parsing and formatting in casts to and from strings
-lexical-parse-float	1.0.6	MIT OR Apache-2.0	crates.io	transitive dependency of lexical-core: float parsing
-lexical-parse-integer	1.0.6	MIT OR Apache-2.0	crates.io	transitive dependency of lexical-core: integer parsing
-lexical-util	1.0.7	MIT OR Apache-2.0	crates.io	transitive dependency of lexical-core: shared parsing and formatting utilities
-lexical-write-float	1.0.6	MIT OR Apache-2.0	crates.io	transitive dependency of lexical-core: float formatting
-lexical-write-integer	1.0.6	MIT OR Apache-2.0	crates.io	transitive dependency of lexical-core: integer formatting
-libc	0.2.191	MIT OR Apache-2.0	crates.io	transitive dependency of rustix, getrandom and errno, and of pyo3 in the Python binding: C library bindings
+itoa	1.0.18	MIT	crates.io	transitive dependency of serde_json: integer formatting
+jobserver	0.1.34	MIT	crates.io	build script: shares Cargo's job slots with cc's parallel C compilation, which zstd-sys enables
+js-sys	0.3.106	MIT	crates.io	not compiled: iana-time-zone's time zone lookup in JavaScript environments (wasm32 only)
+lazy_static	1.5.1	MIT	crates.io	procedural macro: lazily initialized statics in extendr-macros
+lexical-core	1.0.6	MIT	crates.io	transitive dependency of arrow-cast: number parsing and formatting in casts to and from strings
+lexical-parse-float	1.0.6	MIT	crates.io	transitive dependency of lexical-core: float parsing
+lexical-parse-integer	1.0.6	MIT	crates.io	transitive dependency of lexical-core: integer parsing
+lexical-util	1.0.7	MIT	crates.io	transitive dependency of lexical-core: shared parsing and formatting utilities
+lexical-write-float	1.0.6	MIT	crates.io	transitive dependency of lexical-core: float formatting
+lexical-write-integer	1.0.6	MIT	crates.io	transitive dependency of lexical-core: integer formatting
+libc	0.2.191	MIT	crates.io	transitive dependency of rustix, getrandom and errno, and of pyo3 in the Python binding: C library bindings
 libm	0.2.16	MIT	crates.io	portable mathematics, pinned exactly so that results agree on every platform (yamaa-core); num-traits uses it too, through a feature that half enables
-libzstd	1.5.7	BSD-3-Clause OR GPL-2.0-only	bundled in zstd-sys 2.1.2+zstd.1.5.7	the Zstandard C library that zstd-sys compiles and links: the zstd codec of Parquet pages (the parquet feature)
-linux-raw-sys	0.12.1	Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT	crates.io	transitive dependency of rustix on Linux: raw Linux system call bindings
-log	0.4.34	MIT OR Apache-2.0	crates.io	not compiled: iana-time-zone's logging on wasm32
+libzstd	1.5.7	BSD-3-Clause	bundled in zstd-sys 2.1.2+zstd.1.5.7	the Zstandard C library that zstd-sys compiles and links: the zstd codec of Parquet pages (the parquet feature)
+linux-raw-sys	0.12.1	MIT	crates.io	transitive dependency of rustix on Linux: raw Linux system call bindings
+log	0.4.34	MIT	crates.io	not compiled: iana-time-zone's logging on wasm32
 lz4_flex	0.11.6	MIT	crates.io	LZ4 codec for Parquet pages (the parquet feature); an older release comes with parquet's lz4 support
 lz4_flex	0.13.1	MIT	crates.io	LZ4 codec for Parquet pages (the parquet feature); an older release comes with parquet's lz4 support
-memchr	2.8.3	Unlicense OR MIT	crates.io	transitive dependency of quick-xml and serde_json: fast byte search
-miniz_oxide	0.9.1	MIT OR Zlib OR Apache-2.0	crates.io	transitive dependency of flate2: the pure-Rust DEFLATE backend that yamaa-adapters names; flate2 prefers zlib-rs, which parquet's flate2 feature selects
-num	0.4.3	MIT OR Apache-2.0	crates.io	transitive dependency of the Arrow crates and parquet: generic numeric traits, re-exporting the num-* crates
-num-bigint	0.4.8	MIT OR Apache-2.0	crates.io	big integers for exact decimal rounding (yamaa-core) and YAML integer scalars (the yaml feature); an older release comes with num and parquet
-num-bigint	0.5.1	MIT OR Apache-2.0	crates.io	big integers for exact decimal rounding (yamaa-core) and YAML integer scalars (the yaml feature); an older release comes with num and parquet
-num-complex	0.4.6	MIT OR Apache-2.0	crates.io	transitive dependency of num: the complex number types that it re-exports
-num-integer	0.1.47	MIT OR Apache-2.0	crates.io	transitive dependency of num-bigint, num-rational and num: integer algorithms
-num-iter	0.1.46	MIT OR Apache-2.0	crates.io	transitive dependency of num: numeric range iterators
-num-rational	0.4.2	MIT OR Apache-2.0	crates.io	transitive dependency of num: rational numbers
-num-traits	0.2.19	MIT OR Apache-2.0	crates.io	transitive dependency of num, num-bigint, chrono and half: numeric traits
-once_cell	1.21.4	MIT OR Apache-2.0	crates.io	transitive dependency of ahash, of pyo3 in the Python binding and of extendr-api in the R binding: lazily initialized values
+memchr	2.8.3	MIT	crates.io	transitive dependency of quick-xml and serde_json: fast byte search
+miniz_oxide	0.9.1	MIT	crates.io	transitive dependency of flate2: the pure-Rust DEFLATE backend that yamaa-adapters names; flate2 prefers zlib-rs, which parquet's flate2 feature selects
+num	0.4.3	MIT	crates.io	transitive dependency of the Arrow crates and parquet: generic numeric traits, re-exporting the num-* crates
+num-bigint	0.4.8	MIT	crates.io	big integers for exact decimal rounding (yamaa-core) and YAML integer scalars (the yaml feature); an older release comes with num and parquet
+num-bigint	0.5.1	MIT	crates.io	big integers for exact decimal rounding (yamaa-core) and YAML integer scalars (the yaml feature); an older release comes with num and parquet
+num-complex	0.4.6	MIT	crates.io	transitive dependency of num: the complex number types that it re-exports
+num-integer	0.1.47	MIT	crates.io	transitive dependency of num-bigint, num-rational and num: integer algorithms
+num-iter	0.1.46	MIT	crates.io	transitive dependency of num: numeric range iterators
+num-rational	0.4.2	MIT	crates.io	transitive dependency of num: rational numbers
+num-traits	0.2.19	MIT	crates.io	transitive dependency of num, num-bigint, chrono and half: numeric traits
+once_cell	1.21.4	MIT	crates.io	transitive dependency of ahash, of pyo3 in the Python binding and of extendr-api in the R binding: lazily initialized values
 ordered-float	2.10.1	MIT	crates.io	transitive dependency of thrift: totally ordered floating-point values
 parquet	55.2.0	Apache-2.0	crates.io	Parquet reader and writer (the parquet feature)
-paste	1.0.15	MIT OR Apache-2.0	crates.io	procedural macro: identifier pasting in parquet, and in extendr-api in the R binding
-pin-project-lite	0.2.17	Apache-2.0 OR MIT	crates.io	not compiled: transitive dependency of futures-util (wasm32 only)
-pkg-config	0.3.34	MIT OR Apache-2.0	crates.io	build script: lets zstd-sys use a system zstd when asked; the bundled one is the default
-proc-macro2	1.0.107	MIT OR Apache-2.0	crates.io	procedural macro: the token streams of every procedural macro
+paste	1.0.15	MIT	crates.io	procedural macro: identifier pasting in parquet, and in extendr-api in the R binding
+pin-project-lite	0.2.17	MIT	crates.io	not compiled: transitive dependency of futures-util (wasm32 only)
+pkg-config	0.3.34	MIT	crates.io	build script: lets zstd-sys use a system zstd when asked; the bundled one is the default
+proc-macro2	1.0.107	MIT	crates.io	procedural macro: the token streams of every procedural macro
 quick-xml	0.41.0	MIT	crates.io	XML tokenizer of the ODM reader (the odm feature)
-quote	1.0.47	MIT OR Apache-2.0	crates.io	procedural macro: quasi-quoting of the code that every procedural macro generates
-r-efi	5.3.0	MIT OR Apache-2.0 OR LGPL-2.1-or-later	crates.io	not compiled: getrandom on UEFI
-readonly	0.2.14	MIT OR Apache-2.0	crates.io	procedural macro: read-only struct fields in extendr-api
+quote	1.0.47	MIT	crates.io	procedural macro: quasi-quoting of the code that every procedural macro generates
+r-efi	5.3.0	MIT	crates.io	not compiled: getrandom on UEFI
+readonly	0.2.14	MIT	crates.io	procedural macro: read-only struct fields in extendr-api
 ReadStat	1.1.9	MIT	rust/crates/yamaa-adapters/vendor/readstat, from https://github.com/WizardMac/ReadStat at 104ba03a8da116eb8c094abc18bc2530b733eda9	SAS data set and transport file reading (the readstat feature): the SAS reader subset that yamaa-adapters compiles, with the later upstream fixes and the local changes that its README lists
-regex	1.13.1	MIT OR Apache-2.0	crates.io	linear-time matching for the portable regex subset (yamaa-core)
-regex-automata	0.4.18	MIT OR Apache-2.0	crates.io	transitive dependency of regex: its matching engines
-regex-syntax	0.8.11	MIT OR Apache-2.0	crates.io	transitive dependency of regex: its pattern parser
-rustc_version	0.4.1	MIT OR Apache-2.0	crates.io	build script: the compiler version check of flatbuffers
-rustix	1.1.5	Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT	crates.io	descriptor-relative file IO and atomic publication on Linux and macOS (yamaa-adapters)
-rustversion	1.0.23	MIT OR Apache-2.0	crates.io	procedural macro: compiler version conditions in indoc's build script, which only the Python binding compiles, and in wasm-bindgen's, which no supported target compiles
-ryu	1.0.23	Apache-2.0 OR BSL-1.0	crates.io	shortest round-trip formatting of floating-point numbers (yamaa-core); arrow-cast uses it too
-semver	1.0.28	MIT OR Apache-2.0	crates.io	build script: version parsing for rustc_version
-seq-macro	0.3.6	MIT OR Apache-2.0	crates.io	procedural macro: parquet's unrolled bit-packing loops
-serde	1.0.229	MIT OR Apache-2.0	crates.io	Serialize and Deserialize for the records that yamaa-adapters writes and reads as JSON
-serde_core	1.0.229	MIT OR Apache-2.0	crates.io	transitive dependency of serde, serde_json and toml: the serde traits
-serde_derive	1.0.229	MIT OR Apache-2.0	crates.io	procedural macro: derive(Serialize, Deserialize) for the records of yamaa-adapters
-serde_json	1.0.154	MIT OR Apache-2.0	crates.io	JSON reading and writing in yamaa-adapters: the core's JSON values, R renv.lock files, reports and artifact facts
-serde_spanned	1.0.4	MIT OR Apache-2.0	crates.io	transitive dependency of toml: values with their source spans
-shlex	2.0.1	MIT OR Apache-2.0	crates.io	build script: splits the compiler flags that cc reads from the environment
+regex	1.13.1	MIT	crates.io	linear-time matching for the portable regex subset (yamaa-core)
+regex-automata	0.4.18	MIT	crates.io	transitive dependency of regex: its matching engines
+regex-syntax	0.8.11	MIT	crates.io	transitive dependency of regex: its pattern parser
+rustc_version	0.4.1	MIT	crates.io	build script: the compiler version check of flatbuffers
+rustix	1.1.5	MIT	crates.io	descriptor-relative file IO and atomic publication on Linux and macOS (yamaa-adapters)
+rustversion	1.0.23	MIT	crates.io	procedural macro: compiler version conditions in indoc's build script, which only the Python binding compiles, and in wasm-bindgen's, which no supported target compiles
+ryu	1.0.23	Apache-2.0	crates.io	shortest round-trip formatting of floating-point numbers (yamaa-core); arrow-cast uses it too
+semver	1.0.28	MIT	crates.io	build script: version parsing for rustc_version
+seq-macro	0.3.6	MIT	crates.io	procedural macro: parquet's unrolled bit-packing loops
+serde	1.0.229	MIT	crates.io	Serialize and Deserialize for the records that yamaa-adapters writes and reads as JSON
+serde_core	1.0.229	MIT	crates.io	transitive dependency of serde, serde_json and toml: the serde traits
+serde_derive	1.0.229	MIT	crates.io	procedural macro: derive(Serialize, Deserialize) for the records of yamaa-adapters
+serde_json	1.0.154	MIT	crates.io	JSON reading and writing in yamaa-adapters: the core's JSON values, R renv.lock files, reports and artifact facts
+serde_spanned	1.0.4	MIT	crates.io	transitive dependency of toml: values with their source spans
+shlex	2.0.1	MIT	crates.io	build script: splits the compiler flags that cc reads from the environment
 simd-adler32	0.3.10	MIT	crates.io	transitive dependency of miniz_oxide: SIMD Adler-32 checksums
 slab	0.4.12	MIT	crates.io	not compiled: transitive dependency of futures-util (wasm32 only)
 snap	1.1.2	BSD-3-Clause	crates.io	Snappy codec for Parquet pages (the parquet feature)
-syn	2.0.119	MIT OR Apache-2.0	crates.io	procedural macro: Rust syntax parsing for every procedural macro, in the two major releases that those macros require
-syn	3.0.9	MIT OR Apache-2.0	crates.io	procedural macro: Rust syntax parsing for every procedural macro, in the two major releases that those macros require
-thiserror	2.0.21	MIT OR Apache-2.0	crates.io	derive(Error) for the error types of yamaa-core and the vendored YAML parser
-thiserror-impl	2.0.21	MIT OR Apache-2.0	crates.io	procedural macro: thiserror's derive(Error)
+syn	2.0.119	MIT	crates.io	procedural macro: Rust syntax parsing for every procedural macro, in the two major releases that those macros require
+syn	3.0.9	MIT	crates.io	procedural macro: Rust syntax parsing for every procedural macro, in the two major releases that those macros require
+thiserror	2.0.21	MIT	crates.io	derive(Error) for the error types of yamaa-core and the vendored YAML parser
+thiserror-impl	2.0.21	MIT	crates.io	procedural macro: thiserror's derive(Error)
 thrift	0.17.0	Apache-2.0	crates.io	transitive dependency of parquet: the Thrift compact protocol of Parquet metadata
 tiny-keccak	2.0.2	CC0-1.0	crates.io	not compiled: hashing in const-random-macro (wasm32 only)
-toml	1.0.7+spec-1.1.0	MIT OR Apache-2.0	crates.io	parses uv.lock files, the Python project locks of project environments (yamaa-adapters)
-toml_datetime	1.0.1+spec-1.1.0	MIT OR Apache-2.0	crates.io	transitive dependency of toml: TOML date and time values
-toml_parser	1.0.10+spec-1.1.0	MIT OR Apache-2.0	crates.io	transitive dependency of toml: the TOML lexer and parser
-toml_writer	1.0.7+spec-1.1.0	MIT OR Apache-2.0	crates.io	not compiled: locked because toml's std feature names it; yamaa-adapters leaves toml's display feature off
+toml	1.0.7+spec-1.1.0	MIT	crates.io	parses uv.lock files, the Python project locks of project environments (yamaa-adapters)
+toml_datetime	1.0.1+spec-1.1.0	MIT	crates.io	transitive dependency of toml: TOML date and time values
+toml_parser	1.0.10+spec-1.1.0	MIT	crates.io	transitive dependency of toml: the TOML lexer and parser
+toml_writer	1.0.7+spec-1.1.0	MIT	crates.io	not compiled: locked because toml's std feature names it; yamaa-adapters leaves toml's display feature off
 twox-hash	2.1.5	MIT	crates.io	transitive dependency of parquet and lz4_flex: xxHash for Parquet bloom filters and LZ4 frame checksums
-unicode-ident	1.0.27	(MIT OR Apache-2.0) AND Unicode-3.0	crates.io	procedural macro: Unicode identifier tables for proc-macro2 and syn
-version_check	0.9.5	MIT OR Apache-2.0	crates.io	build script: the compiler version check of ahash
-wasi	0.11.1+wasi-snapshot-preview1	Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT	crates.io	not compiled: the older getrandom on WASI, through const-random-macro
-wasip2	1.0.1+wasi-0.2.4	Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT	crates.io	not compiled: getrandom on WASI preview 2
-wasm-bindgen	0.2.129	MIT OR Apache-2.0	crates.io	not compiled: JavaScript bindings for iana-time-zone and js-sys (wasm32 only)
-wasm-bindgen-macro	0.2.129	MIT OR Apache-2.0	crates.io	not compiled: the procedural macro of wasm-bindgen (wasm32 only)
-wasm-bindgen-macro-support	0.2.129	MIT OR Apache-2.0	crates.io	not compiled: the code generation behind wasm-bindgen-macro (wasm32 only)
-wasm-bindgen-shared	0.2.129	MIT OR Apache-2.0	crates.io	not compiled: definitions shared by wasm-bindgen and its macro (wasm32 only)
-windows-core	0.62.2	MIT OR Apache-2.0	crates.io	not compiled: iana-time-zone's lookup on Windows, where chrono does not use iana-time-zone
-windows-implement	0.60.2	MIT OR Apache-2.0	crates.io	not compiled: a procedural macro of windows-core
-windows-interface	0.59.3	MIT OR Apache-2.0	crates.io	not compiled: a procedural macro of windows-core
-windows-link	0.2.1	MIT OR Apache-2.0	crates.io	transitive dependency of windows-sys and chrono on Windows: links the Windows system libraries
-windows-result	0.4.1	MIT OR Apache-2.0	crates.io	not compiled: transitive dependency of windows-core
-windows-strings	0.5.1	MIT OR Apache-2.0	crates.io	not compiled: transitive dependency of windows-core
-windows-sys	0.61.2	MIT OR Apache-2.0	crates.io	handle-relative file IO and atomic publication on Windows (yamaa-adapters)
+unicode-ident	1.0.27	MIT AND Unicode-3.0	crates.io	procedural macro: Unicode identifier tables for proc-macro2 and syn
+version_check	0.9.5	MIT	crates.io	build script: the compiler version check of ahash
+wasi	0.11.1+wasi-snapshot-preview1	MIT	crates.io	not compiled: the older getrandom on WASI, through const-random-macro
+wasip2	1.0.1+wasi-0.2.4	MIT	crates.io	not compiled: getrandom on WASI preview 2
+wasm-bindgen	0.2.129	MIT	crates.io	not compiled: JavaScript bindings for iana-time-zone and js-sys (wasm32 only)
+wasm-bindgen-macro	0.2.129	MIT	crates.io	not compiled: the procedural macro of wasm-bindgen (wasm32 only)
+wasm-bindgen-macro-support	0.2.129	MIT	crates.io	not compiled: the code generation behind wasm-bindgen-macro (wasm32 only)
+wasm-bindgen-shared	0.2.129	MIT	crates.io	not compiled: definitions shared by wasm-bindgen and its macro (wasm32 only)
+windows-core	0.62.2	MIT	crates.io	not compiled: iana-time-zone's lookup on Windows, where chrono does not use iana-time-zone
+windows-implement	0.60.2	MIT	crates.io	not compiled: a procedural macro of windows-core
+windows-interface	0.59.3	MIT	crates.io	not compiled: a procedural macro of windows-core
+windows-link	0.2.1	MIT	crates.io	transitive dependency of windows-sys and chrono on Windows: links the Windows system libraries
+windows-result	0.4.1	MIT	crates.io	not compiled: transitive dependency of windows-core
+windows-strings	0.5.1	MIT	crates.io	not compiled: transitive dependency of windows-core
+windows-sys	0.61.2	MIT	crates.io	handle-relative file IO and atomic publication on Windows (yamaa-adapters)
 winnow	1.0.4	MIT	crates.io	transitive dependency of toml and toml_parser: parser combinators
-wit-bindgen	0.46.0	Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT	crates.io	not compiled: transitive dependency of wasip2 (WASI preview 2 only)
+wit-bindgen	0.46.0	MIT	crates.io	not compiled: transitive dependency of wasip2 (WASI preview 2 only)
 yamaa	0.5.0	MIT	rust/crates/yamaa	the Rust facade over yamaa-core and yamaa-adapters, which both host bindings depend on
 yamaa-adapters	0.5.0	MIT	rust/crates/yamaa-adapters	the engine's codecs, storage formats, physical IO and filesystem environment capture
 yamaa-core	0.5.0	MIT AND Unicode-3.0	rust/crates/yamaa-core	the language engine: specification admission, expressions, dataset execution, project lifecycle, verification and Define rendering
 yamaa-r	0.5.0	MIT	rust/crates/yamaa-r	the R binding: the static library that the R package links
-yamaa-saphyr-parser	0.2.1	MIT OR Apache-2.0	rust/vendor/saphyr-parser, from https://github.com/saphyr-rs/saphyr at 1583482c4f08f3c14caea0e2f1a8526950fb0eff	the YAML parser (the yaml feature): saphyr-parser 0.2.1 with the reviewed compact-flow fix and 0.2.2's raw NUL fix, vendored in rust/vendor
-zerocopy	0.8.63	BSD-2-Clause OR Apache-2.0 OR MIT	crates.io	transitive dependency of ahash and half: checked byte-level conversions
-zerocopy-derive	0.8.63	BSD-2-Clause OR Apache-2.0 OR MIT	crates.io	procedural macro: zerocopy's derives, which half enables
+yamaa-saphyr-parser	0.2.1	MIT	rust/vendor/saphyr-parser, from https://github.com/saphyr-rs/saphyr at 1583482c4f08f3c14caea0e2f1a8526950fb0eff	the YAML parser (the yaml feature): saphyr-parser 0.2.1 with the reviewed compact-flow fix and 0.2.2's raw NUL fix, vendored in rust/vendor
+zerocopy	0.8.63	MIT	crates.io	transitive dependency of ahash and half: checked byte-level conversions
+zerocopy-derive	0.8.63	MIT	crates.io	procedural macro: zerocopy's derives, which half enables
 zlib-rs	0.6.8	Zlib	crates.io	transitive dependency of flate2: the DEFLATE backend that parquet's flate2 feature selects, which flate2 prefers
 zmij	1.0.23	MIT	crates.io	transitive dependency of serde_json: floating-point formatting
 zstd	0.13.3	MIT	crates.io	Zstandard codec for Parquet pages (the parquet feature); an older release comes with parquet's zstd support
