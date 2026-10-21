@@ -510,7 +510,7 @@ Evidence: `negative-adlb-duplicate-wbc`, `negative-multiple-baselines`, `tools/t
 
 | Phase | Decided while |
 | --- | --- |
-| `validation` | checking files before any input byte is read (P9) |
+| `validation` | checking the files and each input's stored fields, before any input record is read (P9) |
 | `planning` | lowering a valid specification to a plan (`unsupported_operation`) |
 | `ingest` | reading an input snapshot into typed records |
 | `row_construction` | building output rows ([Row construction](rows.md)) |
