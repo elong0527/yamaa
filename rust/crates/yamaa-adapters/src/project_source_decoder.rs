@@ -98,6 +98,7 @@ mod tests {
             empty_string_present: false,
             ordinal: None,
             encoding: None,
+            byte_order_mark: false,
         }
     }
 
@@ -268,6 +269,7 @@ mod tests {
             ],
             profile: SourceProfile::Csv,
             encoding: None,
+            byte_order_mark: false,
             empty_string_present: false,
             ordinal: None,
         };

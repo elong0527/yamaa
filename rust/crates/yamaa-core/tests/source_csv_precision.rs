@@ -168,6 +168,95 @@ mod source {
             );
         }
 
+        /// CSV-10: a declared mark begins the source and is skipped once; the
+        /// first record starts after it. Every other leading mark fails, and
+        /// a mark after the first character is text.
+        #[test]
+        fn a_declared_mark_is_skipped_once_and_any_other_mark_fails() {
+            use yamaa_core::csv_source::parse_declared;
+            let mark = |declared, record, field| {
+                Err(Error::Profile {
+                    cause: ProfileCause::ByteOrderMark { declared },
+                    record,
+                    field: Field::Index(field),
+                })
+            };
+            // A spreadsheet's UTF-8 export: the mark, then CR LF records.
+            assert_eq!(
+                parse_declared(b"\xef\xbb\xbfID,NAME\r\n1,H\xc3\xb4pital\r\n", true),
+                Ok(CsvSource {
+                    names: vec!["ID".into(), "NAME".into()],
+                    records: vec![vec![Some("1".into()), Some("H\u{f4}pital".into())]],
+                })
+            );
+            // The declared mark followed by a source reads as the source
+            // alone, findings and coordinates included, unless the source
+            // starts with a mark of its own.
+            for source in [
+                &b"ID\n1\n"[..],
+                b"",
+                b"A,B\r\nx,y",
+                b"\xff",
+                b"\xef\xbb",
+                b"A\n\"x",
+                b"A,A\nx,y",
+                b"A\nx\ry\n",
+                b"A\n\"x\ny\",\xff",
+            ] {
+                let marked = [&b"\xef\xbb\xbf"[..], source].concat();
+                assert_eq!(parse_declared(&marked, true), parse(source), "{source:?}");
+            }
+            // The first field starts after the mark, so it may be quoted.
+            assert_eq!(
+                parse_declared(b"\xef\xbb\xbf\"ID\"\n1", true)
+                    .unwrap()
+                    .names,
+                ["ID"]
+            );
+            // A mark later in the source is a character of its field.
+            assert_eq!(
+                parse_declared(b"\xef\xbb\xbfID\nx\xef\xbb\xbfy\n", true)
+                    .unwrap()
+                    .records,
+                [[Some("x\u{feff}y".into())]]
+            );
+            assert_eq!(
+                parse(b"ID\nx\xef\xbb\xbfy\n").unwrap().records,
+                [[Some("x\u{feff}y".into())]]
+            );
+            // The declaration decides: an absent declared mark, a second mark
+            // and an undeclared mark fail at the first field of the header.
+            assert_eq!(parse_declared(b"ID\n1\n", true), mark(true, 1, 1));
+            assert_eq!(parse_declared(b"", true), mark(true, 1, 1));
+            assert_eq!(
+                parse_declared(b"\xef\xbb\xbf\xef\xbb\xbfID\n", true),
+                mark(true, 1, 1)
+            );
+            assert_eq!(
+                parse_declared(b"\xef\xbb\xbfID\r\n1\r\n", false),
+                mark(false, 1, 1)
+            );
+            assert_eq!(parse(b"\xef\xbb\xbfID\n"), mark(false, 1, 1));
+            // What follows a declared mark is read as any source: a mark
+            // alone holds no header, and decoding precedes the mark.
+            assert_eq!(
+                parse_declared(b"\xef\xbb\xbf", true),
+                Err(Error::Profile {
+                    cause: ProfileCause::HeaderAbsent,
+                    record: 1,
+                    field: Field::Index(1),
+                })
+            );
+            assert_eq!(
+                parse_declared(b"ID\n\xff", true),
+                Err(Error::Profile {
+                    cause: ProfileCause::InvalidText,
+                    record: 2,
+                    field: Field::Index(1),
+                })
+            );
+        }
+
         // Independent operands and expected results from python/tests/io/test_csv.py
         // at c7b88a4f. Keep the original edge cases after retiring the Python parser.
         #[test]
@@ -466,7 +555,7 @@ mod source {
         fn cause(condition: &str) -> ProfileCause {
             match condition {
                 "invalid_text" => ProfileCause::InvalidText,
-                "source_byte_order_mark" => ProfileCause::ByteOrderMark,
+                "source_byte_order_mark" => ProfileCause::ByteOrderMark { declared: false },
                 "source_header_absent" => ProfileCause::HeaderAbsent,
                 "source_field_name_empty" => ProfileCause::FieldNameEmpty,
                 "source_field_name_duplicate" => ProfileCause::FieldNameDuplicate,
@@ -1499,16 +1588,17 @@ mod source {
             let wanted: Vec<_> = cases
                 .into_iter()
                 .map(|(_, code, record, field)| {
-                    expected(
-                        code,
-                        "input.SRC.path",
-                        vec![
-                            ("dataset", text("SRC")),
-                            ("path", text("source.csv")),
-                            ("record", V::from(record)),
-                            ("field", field),
-                        ],
-                    )
+                    let mut context = vec![
+                        ("dataset", text("SRC")),
+                        ("path", text("source.csv")),
+                        ("record", V::from(record)),
+                        ("field", field),
+                    ];
+                    // A mark records whether its input declares one (CSV-10).
+                    if code == C::CsvByteOrderMark {
+                        context.push(("declared", V::Bool(false)));
+                    }
+                    expected(code, "input.SRC.path", context)
                 })
                 .collect();
             assert_eq!(actual, wanted);
@@ -1517,6 +1607,37 @@ mod source {
                 assert_eq!(
                     finding.definition().rule,
                     Some(if index == 9 { "CSV-10" } else { "CSV-16" })
+                );
+            }
+        }
+
+        /// A declared mark that is absent, and a second mark after the
+        /// declared one, keep the undeclared mark's condition, rule and path;
+        /// the context records the declaration (CSV-10).
+        #[test]
+        fn a_declared_mark_that_fails_records_its_declaration() {
+            for bytes in [b"ID\n".as_slice(), b"\xef\xbb\xbf\xef\xbb\xbfID\n"] {
+                let error = csv_source::parse_declared(bytes, true).unwrap_err();
+                assert_eq!(error.rule(), Some("CSV-16"));
+                let finding = error.finding("SRC", "source.csv").unwrap();
+                assert_eq!(
+                    finding.diagnostic(),
+                    expected(
+                        C::CsvByteOrderMark,
+                        "input.SRC.path",
+                        vec![
+                            ("dataset", text("SRC")),
+                            ("path", text("source.csv")),
+                            ("record", V::from(1usize)),
+                            ("field", V::from(1usize)),
+                            ("declared", V::Bool(true)),
+                        ],
+                    )
+                );
+                assert_eq!(
+                    finding.diagnostic().message(),
+                    "source.csv starts with a byte order mark that its input does not \
+                     declare, or does not start with the one it declares"
                 );
             }
         }

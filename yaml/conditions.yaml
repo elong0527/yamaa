@@ -454,7 +454,7 @@ conditions:
     message: "the version at {spec_path} does not match the version expected there"
   source_byte_order_mark:
     phases: [ingest]
-    message: "{path} starts with a byte order mark"
+    message: "{path} starts with a byte order mark that its input does not declare, or does not start with the one it declares"
   source_carriage_return:
     phases: [ingest]
     message: "record {record} of {path} holds a carriage return"

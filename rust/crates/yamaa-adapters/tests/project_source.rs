@@ -727,6 +727,7 @@ mod project {
                     .collect(),
                 profile: SourceProfile::Csv,
                 encoding: None,
+                byte_order_mark: false,
                 empty_string_present: false,
                 ordinal: None,
             };
@@ -793,6 +794,7 @@ mod project {
                 ],
                 profile: SourceProfile::Csv,
                 encoding: None,
+                byte_order_mark: false,
                 empty_string_present: false,
                 ordinal: None,
             };
@@ -907,6 +909,7 @@ mod project {
                 ],
                 profile: SourceProfile::Csv,
                 encoding: None,
+                byte_order_mark: false,
                 empty_string_present: true,
                 ordinal: None,
             };
@@ -998,6 +1001,7 @@ mod project {
                         types: vec![("I".into(), ColumnType::Int), ("S".into(), ColumnType::Str)],
                         profile: SourceProfile::Parquet,
                         encoding: None,
+                        byte_order_mark: false,
                         empty_string_present: present,
                         ordinal: None,
                     };

@@ -262,6 +262,10 @@ EXPECTED = {
         copied("role"),
     ],
     "new.spec.input.key": [Field("dataset_class", "key", "list[identifier]")],
+    # D15 and D79: a csv input declares a leading byte-order mark (CSV-10).
+    "new.spec.input.byte_order_mark": [
+        Field("dataset_class", "byte_order_mark", "bool")
+    ],
     "new.spec.clear": [Field("root_class", "clear", "list[spec_path]")],
     # A lint suppression comment and a profile chosen by the path's
     # extension: neither is a schema field.
