@@ -457,12 +457,13 @@ yourself.
 
 ## Lint specifications
 
-`lint()` checks specification files against the
-[style guide](style.md) and returns one row per finding: the file, the line
-and column where the departure starts, the finding, its spec path and a
-message. A directory names the specification files beneath it. With `fix`,
-it first applies the proved layout fixes, replacing a file only when it reads
-as the same values with the same comments, and returns what remains.
+`lint()` checks yamaa files against the [style guide](style.md) and returns
+one row per finding: the file, the line and column where the departure
+starts, the finding, its spec path and a message. A directory names the
+yamaa files beneath it, of every file type. With `fix`, it first applies
+the proved fixes, replacing a file only when it reads as the same values
+with the same comments, or as those values with exactly the canonical
+rewrite a finding names, and returns what remains.
 
 === "R"
 

@@ -64,9 +64,10 @@ the yamaa spec must be built as a robust and succinct yamaa spec.
 - **Every column declares `label:`**, unless a `copy` entry takes it from the
   producer.
 - **Write each spec in the specification style.** Field order, blank lines,
-  line width, and the three authoring lints (uniform row-template
-  derivations, redundant intermediates, missing output-column labels) are
-  fixed by the [style guide](style.md).
+  line width, the canonical spellings and the authoring findings (uniform
+  row-template derivations, redundant intermediates, missing output-column
+  labels, unused input keys, equality filters) are fixed by the
+  [style guide](style.md).
   Run `yamaa.lint("<spec>.yaml", fix=True)` (`yamaa_lint("<spec>.yaml", fix = TRUE)`
   in R, `yamaa lint --fix <spec>.yaml` on the command line) with the pinned
   yamaa, then correct the findings it still returns.
