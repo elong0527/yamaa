@@ -433,16 +433,30 @@ class PublicDefine(unittest.TestCase):
         written = self.save(result, directory, ["dm.json", "define.xml"])
         for name, content in written.items():
             self.assertEqual(content, (directory / "expected" / name).read_bytes())
-        # A section the project does not declare is a submission issue.
-        absent = self.call(directory, section="adam")
+        # A section the project does not declare refuses the call, naming the
+        # sections it declares (PROJECT-14).
+        with self.assertRaises(yamaa.Error) as caught:
+            self.call(directory, section="adam")
         self.assertEqual(
             [
-                (row["condition"], row["rule"], row["spec_paths"])
-                for row in absent.issues.to_dicts()
+                (
+                    row["condition"],
+                    row["rule"],
+                    row["spec_paths"],
+                    json.loads(row["context"]),
+                )
+                for row in caught.exception.issues.to_dicts()
             ],
-            [("missing_required_field", "DEFINE-28", ["adam"])],
+            [
+                (
+                    "unknown_section",
+                    "PROJECT-14",
+                    [],
+                    {"section": "adam", "sections": ["sdtm"]},
+                )
+            ],
         )
-        self.refused(absent)
+        self.assertEqual(caught.exception.paths, [])
 
     def test_ae_vs_independent_fixed_time_schema_and_structure(self):
         expected = {

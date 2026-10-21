@@ -294,21 +294,82 @@ fn a_project_spelled_through_a_linked_directory_keeps_its_authority() {
     assert_eq!(conditions(&run.issues()), ["resource_path_symlink"]);
 }
 
-#[test]
-fn unknown_sections_are_refused_arguments() {
-    let study = study();
-    let token = CancellationToken::new();
-    let error = engine()
-        .project_run(&study.project(), Some("adm"), &token)
-        .err()
-        .unwrap();
-    let yamaa::Error::Rejected(report) = error else {
-        panic!("an unknown section is a refused argument")
-    };
-    assert_eq!(report.diagnostics[0].code, "engine_rejected");
+/// The issue of a call refused for selecting `section`, which the project
+/// does not declare; `declared` are the sections it does, sorted.
+fn assert_unknown_section(error: Option<yamaa::Error>, section: &str, declared: &[&str]) {
+    let error = error.unwrap_or_else(|| panic!("selecting {section} refuses the call"));
+    assert!(matches!(error, yamaa::Error::Rejected(_)), "{error:?}");
+    let failure = yamaa::Failure::from_error(yamaa::Action::Select(section), &error);
     assert_eq!(
-        report.diagnostics[0].context.get("section"),
-        Some(&yamaa::ContextValue::Text("adm".into()))
+        failure.message,
+        format!(
+            "cannot select {section}: the project declares no section {section} \
+             [unknown_section, PROJECT-14]"
+        )
+    );
+    let issues = rows(&failure.issues);
+    assert_eq!(issues.len(), 1, "{issues:?}");
+    assert_eq!(issues[0].phase, "validation");
+    assert_eq!(issues[0].condition, "unknown_section");
+    assert_eq!(issues[0].rule.as_deref(), Some("PROJECT-14"));
+    assert!(issues[0].spec_paths.is_empty());
+    assert_eq!(issues[0].context["section"], text(section));
+    assert_eq!(
+        issues[0].context["sections"],
+        Value::Array(declared.iter().map(|section| text(section)).collect())
+    );
+}
+
+/// A project run or submission accepts only a section the project declares:
+/// a name outside `sdtm`, `adam` and `send`, and one of them the project does
+/// not declare, both refuse the call before anything builds (PROJECT-14,
+/// #3030 D73 and D98).
+#[test]
+fn a_section_the_project_does_not_declare_refuses_the_call() {
+    let study = study();
+    let engine = engine();
+    let token = CancellationToken::new();
+    let project = study.project();
+    for section in ["send", "adm", "SDTM"] {
+        assert_unknown_section(
+            engine.project_run(&project, Some(section), &token).err(),
+            section,
+            &["adam", "sdtm"],
+        );
+        assert_unknown_section(
+            engine
+                .project_submission(&project, Some(section), None, "0.4.0", &token)
+                .err(),
+            section,
+            &["adam", "sdtm"],
+        );
+    }
+    assert_eq!(std::fs::read_dir(study.0.join("out")).unwrap().count(), 0);
+    // A 1.0 project file declares its sections the same way; one whose
+    // `specs` is empty is declared, and selecting it builds nothing.
+    study.write(
+        "project.yaml",
+        "yamaa: \"1.0\"\ntype: project\nsend: {specs: []}\nadam: {specs: []}\n",
+    );
+    assert_unknown_section(
+        engine.project_run(&project, Some("sdtm"), &token).err(),
+        "sdtm",
+        &["adam", "send"],
+    );
+    let send = engine.project_run(&project, Some("send"), &token).unwrap();
+    assert!(send.names().is_empty());
+    assert_eq!(send.issues().rows(), 0);
+    // The project file is read first: one that cannot be read reports its
+    // own findings as the result's issues, and no section is checked.
+    let absent = study.path("absent.yaml");
+    let run = engine.project_run(&absent, Some("adm"), &token).unwrap();
+    assert_eq!(conditions(&run.issues()), ["project_environment_missing"]);
+    let submission = engine
+        .project_submission(&absent, Some("adm"), None, "0.4.0", &token)
+        .unwrap();
+    assert_eq!(
+        conditions(&submission.issues()),
+        ["project_environment_missing"]
     );
 }
 
@@ -384,9 +445,10 @@ fn assert_nothing_to_save(issues: &Table, rule: &str) {
 #[test]
 fn a_save_that_would_write_nothing_fails() {
     let study = study();
+    // The `send` section lists no specification: the run builds nothing.
+    study.write("project.yaml", format!("{PROJECT}send:\n  specs: []\n"));
     let engine = engine();
     let token = CancellationToken::new();
-    // The project declares no `send` section: the run builds nothing.
     let mut send = engine
         .project_run(&study.project(), Some("send"), &token)
         .unwrap();
@@ -455,6 +517,7 @@ fn a_project_run_refuses_a_name_it_did_not_build() {
         );
     }
     // A run that built nothing has no name to offer.
+    study.write("project.yaml", format!("{PROJECT}send:\n  specs: []\n"));
     let send = engine
         .project_run(&study.project(), Some("send"), &token)
         .unwrap();
