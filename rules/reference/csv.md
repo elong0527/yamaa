@@ -327,7 +327,7 @@ Evidence: `negative-source-unterminated-quote`, `negative-source-unnamed-field`,
 | Condition | Rejects |
 |---|---|
 | `source_profile_unknown` | an extension the [Source ingestion](../inputs.md#input-1) mapping does not name |
-| `source_byte_order_mark` | a byte-order mark the input does not declare, or a declared one that is absent ([CSV-10](#csv-10)) |
+| `source_byte_order_mark` | a byte-order mark the input does not declare, a declared one that is absent, or a second leading mark ([CSV-10](#csv-10)) |
 | `source_header_absent` | a file with no header record |
 | `source_field_name_empty` | an empty header name |
 | `source_field_name_duplicate` | one name twice in the header |

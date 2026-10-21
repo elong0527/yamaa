@@ -178,8 +178,8 @@ fn assert_mark(issue: &Issue, declared: bool) {
     );
     assert_eq!(
         issue.message,
-        "raw.csv starts with a byte order mark that its input does not declare, or does not \
-         start with the one it declares"
+        "raw.csv must start with exactly one byte order mark when its input declares one, \
+         and none otherwise"
     );
 }
 

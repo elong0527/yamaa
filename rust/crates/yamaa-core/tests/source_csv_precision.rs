@@ -1636,8 +1636,8 @@ mod source {
                 );
                 assert_eq!(
                     finding.diagnostic().message(),
-                    "source.csv starts with a byte order mark that its input does not \
-                     declare, or does not start with the one it declares"
+                    "source.csv must start with exactly one byte order mark when its input \
+                     declares one, and none otherwise"
                 );
             }
         }
