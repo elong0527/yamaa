@@ -7,7 +7,8 @@ test oracle; reproduce a discrepancy independently before changing that truth.
 Until 1.0.0, a change that breaks a user-facing interface needs an owner
 decision and a one-line release-note entry (see AGENTS.md). Remove obsolete
 interfaces and their callers together instead of keeping compatibility
-aliases. From 1.0.0, the stability contract of #3030 applies.
+aliases. From 1.0.0, the [stability contract](docs/release.md#stability-contract)
+applies.
 
 ## Where changes belong
 
