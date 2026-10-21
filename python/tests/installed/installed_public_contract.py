@@ -601,30 +601,32 @@ class PublicContract(unittest.TestCase):
         # function, and nothing is published. Every call is a builtin, so no
         # Python code runs that could raise it earlier.
         _, case = self.function_study()
-        environment = case / "python" / "environment.yaml"
-        environment.write_text(
-            "schema_version: '1.0'\n"
-            "lock: uv.lock\n"
-            "functions:\n"
-            "  project_value:\n"
-            "    function: yamaa_benchmarks.project_value\n"
-            "    description: Mark an interrupt pending.\n"
-            "    params: []\n"
-            "    returns: str\n"
-            "    may_return_missing: true\n"
-            "    tests:\n"
-            "    - {id: once, covers: [normal, boundary, nullable-output], args: {}, result: null}\n",
+        function = case / "functions" / "project_value.yaml"
+        function.write_text(
+            'yamaa: "1.0"\n'
+            "type: function\n"
+            "name: project_value\n"
+            "description: Mark an interrupt pending.\n"
+            "params: []\n"
+            "returns: str\n"
+            "may_return_missing: true\n"
+            "implementations:\n"
+            "  python: yamaa_benchmarks.project_value\n"
+            "  r: yamaabenchmarks::project_value\n"
+            "tests:\n"
+            "- {id: once, covers: [normal, boundary, nullable-output], args: {}, result: null}\n",
             encoding="utf-8",
         )
         spec = case / "spec.yaml"
-        spec.write_text(
-            spec.read_text(encoding="utf-8")
-            .replace("args: {x: SOURCE.VALUE}", "args: {}")
-            .replace(
-                "type: float\n    label: Project", "type: str\n    label: Project"
-            ),
-            encoding="utf-8",
-        )
+        text = spec.read_text(encoding="utf-8")
+        for written, edited in (
+            ("        args: {x: SOURCE.VALUE}\n", ""),
+            ("type: float\n    label: Project", "type: str\n    label: Project"),
+        ):
+            # An edit that no longer applies would test another case.
+            self.assertIn(written, text)
+            text = text.replace(written, edited)
+        spec.write_text(text, encoding="utf-8")
         project = yamaa.project(case / "project.yaml")
         rows = []
 
