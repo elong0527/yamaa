@@ -1,0 +1,31 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  # The study expects the export of a program that starts its files with a
+  # byte-order mark.
+  DM:
+    path: input/dm.csv
+    byte_order_mark: true
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, SITENM]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM.USUBJID
+
+  - name: SITENM
+    type: str
+    label: Study Site Name
+    derivation: DM.SITENM
