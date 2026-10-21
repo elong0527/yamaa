@@ -623,6 +623,43 @@ class Breaks(Temporary):
                 with self.assertRaisesRegex(ManifestError, message):
                     repo.changes()
 
+    def test_unsupported_object_constraints_fail_closed(self):
+        repo, document, definitions, _ = self.repository()
+        for constraints, message in (
+            ({"required": ["strict"]}, "required alongside \\$ref"),
+            (
+                {"properties": {"name": {"type": "integer"}}},
+                "properties alongside \\$ref",
+            ),
+        ):
+            with self.subTest(constraints=constraints):
+                repo.save({**document, **constraints})
+                with self.assertRaisesRegex(ManifestError, message):
+                    repo.changes()
+        definitions["thing_class"]["required"].append("undeclared")
+        repo.save(document)
+        with self.assertRaisesRegex(
+            ManifestError, "required names must have property schemas"
+        ):
+            repo.changes()
+
+    def test_record_property_name_constraints_are_compared(self):
+        repo, document, definitions, _ = self.repository()
+        definitions["thing_class"]["propertyNames"] = {"pattern": "^x$"}
+        repo.save(document)
+        self.assertEqual(
+            repo.changes(),
+            {
+                SCHEMA: [
+                    (
+                        "thing_class",
+                        'propertyNames changed from none to `{"pattern": "^x$"}`',
+                        True,
+                    )
+                ]
+            },
+        )
+
     def test_a_removed_grammar_element_breaks(self):
         repo, *_ = self.repository()
         grammar = repo.grammar(SCHEMAS.EXPRESSION)

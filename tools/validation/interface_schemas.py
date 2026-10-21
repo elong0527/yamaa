@@ -136,7 +136,9 @@ def _alternatives(node, where, inner=False):
     if unread:
         raise ManifestError(f"{where}: cannot compare {', '.join(unread)} in a type")
     for keyword in ("$ref", "anyOf"):
-        siblings = sorted((set(node) & TYPE_KEYWORDS) - {keyword})
+        siblings = sorted(
+            (set(node) & (TYPE_KEYWORDS | {"properties", "required"})) - {keyword}
+        )
         if keyword in node and siblings:
             raise ManifestError(
                 f"{where}: cannot compare {', '.join(siblings)} alongside {keyword}"
@@ -230,6 +232,7 @@ def _facts(node, where, parent, required):
             keyword: _canonical(value)
             for keyword, value in node.items()
             if keyword not in READ
+            or (keyword == "propertyNames" and "properties" in node)
         },
     }
 
@@ -261,6 +264,8 @@ def schema_inventory(tree, path):
         properties, needed = node.get("properties", {}), node.get("required", [])
         if not (isinstance(properties, dict) and isinstance(needed, list)):
             raise ManifestError(f"{where}: expected properties and their names")
+        if any(not isinstance(name, str) or name not in properties for name in needed):
+            raise ManifestError(f"{where}: required names must have property schemas")
         for name, field in properties.items():
             add(f"{element}.{name}", field, element, name in needed)
 
