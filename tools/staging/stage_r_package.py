@@ -42,12 +42,17 @@ AUTHORS = "inst/AUTHORS"
 AUTHORS_PREAMBLE = (
     "The yamaa R source package bundles the Rust crates below. The crates.io "
     f"crates that src/rust/Cargo.lock selects are in {VENDOR_ARCHIVE}, as "
-    "`cargo vendor` writes them, apart from the prebuilt binaries and Rust "
-    "toolchain files that an entry names as left out; "
-    f"{VENDOR_SCRIPT} wrote the archive. The other crates "
-    "are in the directory their entry names. Each crate keeps its own license "
-    "and copyright files beside its sources, and LICENSE-THIRD-PARTY.txt "
-    "reproduces those texts for every crate that the installed package links.",
+    "`cargo vendor` writes them, apart from the files that an entry names as "
+    "left out: Rust toolchain files, the license texts of alternatives to the "
+    "license that yamaa relies on, and, of a crate that no supported target "
+    "compiles, every file but its manifest, which Cargo reads to resolve the "
+    "lock (with an empty src/lib.rs where Cargo needs one to read the "
+    f"manifest); {VENDOR_SCRIPT} wrote the archive. The other crates "
+    "are in the directory their entry names. Every crate that a supported "
+    "target compiles keeps its own license and copyright files beside its "
+    "sources, apart from those that its entry names as left out, and "
+    "LICENSE-THIRD-PARTY.txt reproduces those texts for every crate that the "
+    "installed package links.",
     "Each entry gives the authors and repository that the crate's manifest "
     "declares, and the one license that yamaa relies on of those that it "
     "offers. The yamaa authors are in DESCRIPTION.",
@@ -169,11 +174,12 @@ def bundle_rust(destination: Path):
 def authors_text(metadata, crates, listed, locked):
     """Name the authors and license of every Rust crate the package bundles.
 
-    `crates` are the vendored crates, `locked` the (name, version, source)
-    packages of the bundle's trimmed lock and `listed` the (name, version)
-    pairs that the package's LICENSE-THIRD-PARTY.txt covers. The vendored
-    crates must be exactly the crates.io crates of that lock, and the notices
-    may name only bundled crates: those that the R binding links.
+    `crates` are the vendored crates, as tools/staging/vendor_crates.py
+    returns them, `locked` the (name, version, source) packages of the
+    bundle's trimmed lock and `listed` the (name, version) pairs that the
+    package's LICENSE-THIRD-PARTY.txt covers. The vendored crates must be
+    exactly the crates.io crates of that lock, and the notices may name only
+    bundled crates: those that the R binding links.
     """
     members = set(metadata["workspace_members"])
     bundled = [
@@ -186,7 +192,9 @@ def authors_text(metadata, crates, listed, locked):
     bundled.sort(
         key=lambda package: (package["name"], notices.version_key(package["version"]))
     )
-    vendored = {(name, version): left_out for name, version, left_out in crates}
+    vendored = {
+        (name, version): (left_out, whole) for name, version, left_out, whole in crates
+    }
     registry = {
         (package["name"], package["version"])
         for package in bundled
@@ -220,8 +228,11 @@ def authors_text(metadata, crates, listed, locked):
             lines.append("    Authors: none declared")
         lines.append(f"    License: {notices.relied_on(package, metadata)}")
         lines.append(f"    Repository: {package['repository'] or 'none declared'}")
-        if vendored.get(label):
-            lines += notices.wrapped("Left out:", vendored[label], indent="    ")
+        left_out, whole = vendored.get(label, ([], True))
+        if not whole:
+            lines.append("    Left out: every file but its manifest")
+        elif left_out:
+            lines += notices.wrapped("Left out:", left_out, indent="    ")
         lines.append("")
     return notices.refuse_gnu("\n".join(lines), AUTHORS)
 

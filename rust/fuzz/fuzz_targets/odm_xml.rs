@@ -2,14 +2,20 @@
 //! format detection, plain and gzip TAR member selection, the XML tokenizer
 //! and the clinical-item table, under the default options. That reader takes a
 //! path, so each input is first written to one scratch file. Its `.xml` name
-//! leaves the format to the reader's content detection.
+//! leaves the format to the reader's content detection. The same bytes then
+//! go through the shared source decode as a specification's `.xml` input,
+//! which reads them as XML alone, as an ordinary and as an ODM input.
 #![no_main]
 
 use std::{path::PathBuf, sync::LazyLock};
 
 use libfuzzer_sys::fuzz_target;
-use yamaa_adapters::{ipc_table::TableError, odm_xml};
-use yamaa_core::odm_items::{Error, Options};
+use yamaa_adapters::{ipc_table::TableError, odm_xml, specification_run};
+use yamaa_core::{
+    odm_items::{Error, Options},
+    specification::{SourceInterpretation, SourceProfile},
+};
+use yamaa_fuzz::{decode, source};
 
 /// One scratch file per fuzzing process, rewritten for each input.
 static SCRATCH: LazyLock<PathBuf> = LazyLock::new(|| {
@@ -30,5 +36,15 @@ fuzz_target!(|data: &[u8]| {
         }
         Err(odm_xml::Error::Unavailable) => panic!("this build omits the ODM reader"),
         Ok(_) | Err(odm_xml::Error::Read(_) | odm_xml::Error::Table(_)) => {}
+    }
+    // An input's held bytes are read, or refused as a document; never as a
+    // host read, an option, a missing reader or an internal fault.
+    let input = source(SourceProfile::OdmXml, Vec::new(), None);
+    for interpretation in [SourceInterpretation::Ordinary, SourceInterpretation::Odm] {
+        match decode(&input, data, interpretation) {
+            Ok(_) => {}
+            Err(specification_run::Error::OdmSource(error)) if error.refuses_document() => {}
+            Err(error) => panic!("an `.xml` input was refused for no reason it holds: {error:?}"),
+        }
     }
 });

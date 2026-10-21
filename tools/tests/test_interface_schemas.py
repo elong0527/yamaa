@@ -242,10 +242,10 @@ class Temporary(unittest.TestCase):
         self.addCleanup(directory.cleanup)
         self.directory = Path(directory.name)
 
-    def repository(self, document=DOCUMENT):
+    def repository(self, document=DOCUMENT, *, name="repo"):
         """The repository, then its working tree's JSON Schema to edit and
         save: the document, its named types and the fields of thing_class."""
-        repo = Repository(self.directory / "repo", document)
+        repo = Repository(self.directory / name, document)
         document = repo.document()
         definitions = document["$defs"]
         return repo, document, definitions, definitions["thing_class"]["properties"]
@@ -555,6 +555,169 @@ class Breaks(Temporary):
                 SCHEMA: [
                     ("step.copy", "extra properties now refused", True),
                     ("thing_class", "extra properties now admitted", False),
+                ]
+            },
+        )
+
+    def test_root_schema_constraints_are_compared(self):
+        repo, document, _, _ = self.repository()
+        document["allOf"] = [False]
+        repo.save(document)
+        self.assertEqual(
+            repo.changes(),
+            {SCHEMA: [("$ref", "allOf changed from none to `[false]`", True)]},
+        )
+
+    def test_schema_valued_extra_property_rules_are_compared(self):
+        document = copy.deepcopy(DOCUMENT)
+        document["$defs"]["thing_class"]["additionalProperties"] = {"type": "string"}
+        repo, document, definitions, _ = self.repository(document)
+        for rule, what, breaking in (
+            (
+                {"type": "integer"},
+                'extra-property rule changed from `{"type": "string"}` '
+                'to `{"type": "integer"}`',
+                True,
+            ),
+            (False, "extra properties now refused", True),
+            (True, "extra properties now admitted", False),
+            ({}, "extra properties now admitted", False),
+        ):
+            with self.subTest(rule=rule):
+                definitions["thing_class"]["additionalProperties"] = rule
+                repo.save(document)
+                self.assertEqual(
+                    repo.changes(), {SCHEMA: [("thing_class", what, breaking)]}
+                )
+
+        definitions["thing_class"]["additionalProperties"] = {"type": "string"}
+        definitions["step"]["additionalProperties"] = {"type": "string"}
+        repo.save(document)
+        self.assertEqual(
+            repo.changes(),
+            {
+                SCHEMA: [
+                    (
+                        "step",
+                        "extra-property rule changed from `closed` "
+                        'to `{"type": "string"}`',
+                        False,
+                    )
+                ]
+            },
+        )
+
+    def test_unsupported_type_keyword_conjunctions_fail_closed(self):
+        repo, document, _, fields = self.repository()
+        for node, message in (
+            ({**IDENTIFIER, "type": "integer"}, "type alongside \\$ref"),
+            (
+                {"anyOf": [{"type": "string"}], "type": "integer"},
+                "type alongside anyOf",
+            ),
+            ({**IDENTIFIER, "items": {"type": "integer"}}, "items alongside \\$ref"),
+        ):
+            with self.subTest(node=node):
+                fields["name"] = node
+                repo.save(document)
+                with self.assertRaisesRegex(ManifestError, message):
+                    repo.changes()
+
+    def test_extra_property_schema_prose_is_not_compared(self):
+        for name, wrap in (
+            ("direct", lambda value: value),
+            ("items", lambda value: {"type": "array", "items": value}),
+            ("anyOf", lambda value: {"anyOf": [value, {"type": "null"}]}),
+            (
+                "properties",
+                lambda value: {"type": "object", "properties": {"description": value}},
+            ),
+        ):
+            with self.subTest(schema=name):
+                document = copy.deepcopy(DOCUMENT)
+                leaf = {"type": "string"}
+                rule = wrap(leaf)
+                document["$defs"]["thing_class"]["additionalProperties"] = rule
+                repo, current, definitions, _ = self.repository(document, name=name)
+                leaf.update({keyword: "New prose" for keyword in SCHEMAS.PROSE})
+                definitions["thing_class"]["additionalProperties"] = rule
+                repo.save(current)
+                self.assertEqual(repo.changes(), {})
+
+        document = copy.deepcopy(DOCUMENT)
+        document["$defs"]["thing_class"]["additionalProperties"] = True
+        repo, current, definitions, _ = self.repository(document)
+        definitions["thing_class"]["additionalProperties"] = {
+            keyword: "Only prose" for keyword in SCHEMAS.PROSE
+        }
+        repo.save(current)
+        self.assertEqual(repo.changes(), {})
+
+    def test_extra_property_schema_data_and_property_names_are_compared(self):
+        for index, rule in enumerate(
+            (
+                {"enum": [{"description": "before"}]},
+                {"default": {"title": "before"}},
+                {"type": "object", "properties": {"description": {"type": "string"}}},
+            )
+        ):
+            with self.subTest(rule=rule):
+                document = copy.deepcopy(DOCUMENT)
+                document["$defs"]["thing_class"]["additionalProperties"] = rule
+                repo, current, definitions, _ = self.repository(
+                    document, name=f"data-{index}"
+                )
+                definitions["thing_class"]["additionalProperties"] = json.loads(
+                    json.dumps(rule)
+                    .replace("before", "after")
+                    .replace('"description": {', '"title": {')
+                )
+                repo.save(current)
+                self.assertTrue(repo.changes()[SCHEMA][0][2])
+
+    def test_nested_prose_in_conservative_constraints_is_not_compared(self):
+        document = copy.deepcopy(DOCUMENT)
+        document["allOf"] = [{"type": "string"}]
+        document["$defs"]["thing_class"]["propertyNames"] = {"pattern": "^x$"}
+        repo, current, definitions, _ = self.repository(document)
+        current["allOf"][0]["description"] = "Root documentation."
+        definitions["thing_class"]["propertyNames"]["title"] = "A property name."
+        repo.save(current)
+        self.assertEqual(repo.changes(), {})
+
+    def test_unsupported_object_constraints_fail_closed(self):
+        repo, document, definitions, _ = self.repository()
+        for constraints, message in (
+            ({"required": ["strict"]}, "required alongside \\$ref"),
+            (
+                {"properties": {"name": {"type": "integer"}}},
+                "properties alongside \\$ref",
+            ),
+        ):
+            with self.subTest(constraints=constraints):
+                repo.save({**document, **constraints})
+                with self.assertRaisesRegex(ManifestError, message):
+                    repo.changes()
+        definitions["thing_class"]["required"].append("undeclared")
+        repo.save(document)
+        with self.assertRaisesRegex(
+            ManifestError, "required names must have property schemas"
+        ):
+            repo.changes()
+
+    def test_record_property_name_constraints_are_compared(self):
+        repo, document, definitions, _ = self.repository()
+        definitions["thing_class"]["propertyNames"] = {"pattern": "^x$"}
+        repo.save(document)
+        self.assertEqual(
+            repo.changes(),
+            {
+                SCHEMA: [
+                    (
+                        "thing_class",
+                        'propertyNames changed from none to `{"pattern": "^x$"}`',
+                        True,
+                    )
                 ]
             },
         )

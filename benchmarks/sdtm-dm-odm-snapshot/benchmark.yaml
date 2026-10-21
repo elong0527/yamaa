@@ -1,0 +1,5 @@
+lifecycle: draft
+standard: SDTM
+domain: DM
+harbor:
+  opensas_exclusion: opensas has no ODM XML reader
