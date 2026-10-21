@@ -26,6 +26,7 @@ CHECKS = (
     "tools.packaging.generate_message_templates",
     "tools.packaging.generate_json_schema",
     "tools.packaging.generate_facade_api",
+    "tools.packaging.generate_selftest_cases",
     "tools.packaging.generate_bindings",
     "tools.validation.validate_repository",
     "tools.validation.check_execution_manifest",
