@@ -107,40 +107,222 @@ class BinaryTests(unittest.TestCase):
                 with self.subTest(name=name):
                     self.assertIs(vendor_crates.is_binary(path), expected)
 
-    def test_listed_binaries_leave_the_crate_and_its_checksum_record(self):
-        files = {
-            "src/lib.rs": b"//\n",
-            "src/rt/runtime.o": b"\x00asm\x01",
-            "src/rt/runtime.c": b"int x;\n",
-        }
-        with (
-            tempfile.TemporaryDirectory() as scratch,
-            mock.patch.dict(vendor_crates.PREBUILT, {"wasm": ("src/rt/runtime.o",)}),
-        ):
-            root = crate(Path(scratch), "wasm", "1.0.0", files)
-            found = vendor_crates.prebuilt(root, "wasm", root.name)
-            self.assertEqual(found, ["src/rt/runtime.o"])
-            vendor_crates.leave_out(root, found, root.name)
-            self.assertFalse((root / "src/rt/runtime.o").exists())
-            self.assertTrue((root / "src/rt/runtime.c").is_file())
-            record = json.loads((root / ".cargo-checksum.json").read_text())
-            self.assertEqual(
-                sorted(record["files"]), ["src/lib.rs", "src/rt/runtime.c"]
-            )
-            self.assertEqual(record["package"], "p")
-
-    def test_unreviewed_or_vanished_binaries_stop_vendoring(self):
+    def test_a_binary_stops_vendoring_a_crate_that_a_target_compiles(self):
         with tempfile.TemporaryDirectory() as scratch:
             root = crate(Path(scratch), "tool", "1.0.0", {"bin/tool": b"\x7fELF\x02"})
             with self.assertRaisesRegex(ValueError, "prebuilt binary bin/tool"):
-                vendor_crates.prebuilt(root, "tool", root.name)
+                vendor_crates.binaries(root, root.name)
             self.assertTrue((root / "bin/tool").is_file())
             (root / "bin/tool").unlink()
-            with (
-                mock.patch.dict(vendor_crates.PREBUILT, {"tool": ("bin/gone.o",)}),
-                self.assertRaisesRegex(ValueError, "no longer ships"),
+            vendor_crates.binaries(root, root.name)
+
+
+class AlternativeLicenseTests(unittest.TestCase):
+    """The packages carry no text of a license that yamaa does not rely on."""
+
+    def test_listed_texts_leave_the_crate_and_its_checksum_record(self):
+        files = {
+            "src/lib.rs": b"//\n",
+            "zstd/COPYING": b"the other license\n",
+            "zstd/LICENSE": b"BSD License\n",
+        }
+        with tempfile.TemporaryDirectory() as scratch:
+            root = crate(Path(scratch), "zstd-sys", "2.1.2", files)
+            found = vendor_crates.alternative_licenses(root, "zstd-sys", root.name)
+            self.assertEqual(found, ["zstd/COPYING"])
+            vendor_crates.leave_out(root, found, root.name)
+            self.assertFalse((root / "zstd/COPYING").exists())
+            self.assertTrue((root / "zstd/LICENSE").is_file())
+            record = json.loads((root / ".cargo-checksum.json").read_text())
+            self.assertEqual(sorted(record["files"]), ["src/lib.rs", "zstd/LICENSE"])
+            self.assertEqual(record["package"], "p")
+            # Other crates ship none.
+            self.assertEqual(
+                vendor_crates.alternative_licenses(root, "zstd", root.name), []
+            )
+
+    def test_a_vanished_text_stops_vendoring(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            root = crate(Path(scratch), "zstd-sys", "2.1.3", {"src/lib.rs": b"//\n"})
+            with self.assertRaisesRegex(
+                ValueError, "no longer ships the listed license text zstd/COPYING"
             ):
-                vendor_crates.prebuilt(root, "tool", root.name)
+                vendor_crates.alternative_licenses(root, "zstd-sys", root.name)
+
+
+def files_of(root):
+    """The files below a directory, with their bytes, by relative path."""
+    return {
+        path.relative_to(root).as_posix(): path.read_bytes()
+        for path in root.rglob("*")
+        if path.is_file()
+    }
+
+
+class StubTests(unittest.TestCase):
+    """A crate that no supported target compiles keeps only its manifest."""
+
+    def test_a_stub_keeps_its_manifest_and_its_checksum_entry(self):
+        manifest = (
+            b'[package]\nname = "wasm"\nversion = "1.0.0"\n\n'
+            b'[lib]\npath = "src/lib.rs"\n'
+        )
+        files = {
+            "Cargo.toml": manifest,
+            "Cargo.toml.orig": b"[package]\n",
+            "LICENSE-MIT": b"Copyright\n",
+            "src/lib.rs": b"//\n",
+            "src/rt/runtime.o": b"\x00asm\x01",
+        }
+        with tempfile.TemporaryDirectory() as scratch:
+            root = crate(Path(scratch), "wasm", "1.0.0", files)
+            left_out = vendor_crates.stub(root, root.name)
+            self.assertEqual(
+                left_out,
+                ["Cargo.toml.orig", "LICENSE-MIT", "src/lib.rs", "src/rt/runtime.o"],
+            )
+            # The emptied directories go too, and Cargo finds the library
+            # through the manifest's own path.
+            names = sorted(path.name for path in root.iterdir())
+            self.assertEqual(names, [".cargo-checksum.json", "Cargo.toml"])
+            self.assertEqual((root / "Cargo.toml").read_bytes(), manifest)
+            record = json.loads((root / ".cargo-checksum.json").read_text())
+            # The package checksum, which Cargo compares with Cargo.lock, stays.
+            self.assertEqual(
+                record,
+                {"$comment": "x", "files": {"Cargo.toml": "recorded"}, "package": "p"},
+            )
+
+    def test_a_manifest_without_a_library_path_gets_an_empty_library(self):
+        manifest = b'[package]\nname = "keccak"\nversion = "2.0.2"\n'
+        files = {"Cargo.toml": manifest, "src/lib.rs": b"//\n", "src/f.rs": b"//\n"}
+        with tempfile.TemporaryDirectory() as scratch:
+            root = crate(Path(scratch), "keccak", "2.0.2", files)
+            self.assertEqual(
+                vendor_crates.stub(root, root.name), ["src/f.rs", "src/lib.rs"]
+            )
+            # Cargo cannot read the manifest without src/lib.rs, which takes
+            # the place of the crate's, empty and unrecorded.
+            remaining = files_of(root)
+            self.assertEqual(
+                sorted(remaining),
+                [".cargo-checksum.json", "Cargo.toml", vendor_crates.LIBRARY],
+            )
+            self.assertEqual(remaining["Cargo.toml"], manifest)
+            self.assertEqual(remaining[vendor_crates.LIBRARY], b"")
+            record = json.loads((root / ".cargo-checksum.json").read_text())
+            self.assertEqual(record["files"], {"Cargo.toml": "recorded"})
+
+
+def resolved(name, version, dependencies=(), macro=False):
+    """A package and its resolve node, as `cargo metadata` gives them;
+    `dependencies` are (package, kind) pairs."""
+    identifier = f"{name} {version}"
+    library = ["proc-macro"] if macro else ["lib"]
+    package = {
+        "id": identifier,
+        "name": name,
+        "version": version,
+        "targets": [{"kind": library}],
+    }
+    node = {
+        "id": identifier,
+        "deps": [
+            {"pkg": dependency, "dep_kinds": [{"kind": kind, "target": None}]}
+            for dependency, kind in dependencies
+        ],
+    }
+    return package, node
+
+
+def metadata(*entries):
+    """The `cargo metadata` output of resolved() packages."""
+    return {
+        "packages": [package for package, _ in entries],
+        "resolve": {"nodes": [node for _, node in entries]},
+    }
+
+
+class CompiledTests(unittest.TestCase):
+    def test_each_target_compiles_its_linked_and_build_time_packages(self):
+        # `cargo tree` gives what each target links; `cargo metadata` resolves
+        # every dependency for the target, the optional ones that no build
+        # selects included.
+        trees = {
+            "first": ["app v0.1.0 (/checkout/app)", "linked v1.0.0"],
+            "second": ["app v0.1.0 (/checkout/app)", "other v2.0.0 (*)"],
+        }
+        resolutions = {
+            "first": metadata(
+                resolved(
+                    "app",
+                    "0.1.0",
+                    [
+                        ("linked 1.0.0", None),
+                        ("helper 1.0.0", "build"),
+                        ("derive 1.0.0", None),
+                        ("weak 1.0.0", None),
+                    ],
+                ),
+                resolved("linked", "1.0.0"),
+                resolved("helper", "1.0.0", [("host 1.0.0", None)]),
+                resolved("host", "1.0.0"),
+                resolved("derive", "1.0.0", [("syntax 1.0.0", None)], macro=True),
+                resolved("syntax", "1.0.0"),
+                resolved("weak", "1.0.0"),
+            ),
+            "second": metadata(
+                resolved(
+                    "app", "0.1.0", [("other 2.0.0", None), ("helper 1.0.0", "build")]
+                ),
+                resolved("other", "2.0.0"),
+                resolved("helper", "1.0.0"),
+            ),
+        }
+        calls = []
+
+        def run(command, cwd, stdout, text, check):
+            calls.append(command)
+            if command[1] == "tree":
+                output = "\n".join(trees[command[command.index("--target") + 1]])
+            else:
+                target = command[command.index("--filter-platform") + 1]
+                output = json.dumps(resolutions[target])
+            return subprocess.CompletedProcess(command, 0, stdout=output)
+
+        with mock.patch.object(vendor_crates.subprocess, "run", run):
+            found = vendor_crates.compiled(
+                Path("workspace"), Path("crates"), ("first", "second")
+            )
+        self.assertEqual(
+            found,
+            {
+                ("app", "0.1.0"),
+                ("linked", "1.0.0"),
+                ("other", "2.0.0"),
+                # A build script's dependencies and a procedural macro, with
+                # what they reach for the target.
+                ("helper", "1.0.0"),
+                ("host", "1.0.0"),
+                ("derive", "1.0.0"),
+                ("syntax", "1.0.0"),
+            },
+        )
+        directory = json.dumps(str(Path("crates").absolute()), ensure_ascii=False)
+        for command in calls:
+            self.assertEqual(
+                command[-6:],
+                [
+                    "--locked",
+                    "--offline",
+                    "--config",
+                    'source.crates-io.replace-with="vendored-sources"',
+                    "--config",
+                    f"source.vendored-sources.directory={directory}",
+                ],
+            )
+        self.assertEqual([command[1] for command in calls], ["tree", "metadata"] * 2)
+        self.assertIn("normal,no-proc-macro", calls[0])
 
 
 class ToolchainFileTests(unittest.TestCase):
@@ -210,50 +392,84 @@ class ToolchainFileTests(unittest.TestCase):
 
 
 class VendorTests(unittest.TestCase):
-    def vendor(self, populate):
-        """Run vendor() with `cargo vendor` replaced by populate(directory)."""
+    def vendor(self, populate, linked):
+        """Run vendor() for one target with Cargo replaced: `cargo vendor` by
+        populate(directory), and the target's resolution by one that links the
+        (name, version) pairs `linked`. Returns the crates and the files of
+        the vendor directory from which Cargo resolves the lock at the end."""
+        remaining = {}
 
-        def run(command, cwd, stdout, check):
-            self.assertEqual(
-                command[:4], ["cargo", "vendor", "--locked", "--versioned-dirs"]
-            )
-            populate(Path(command[-1]))
+        def run(command, cwd, stdout, check, text=False):
+            if command[1] == "vendor":
+                self.assertEqual(
+                    command[:4], ["cargo", "vendor", "--locked", "--versioned-dirs"]
+                )
+                populate(Path(command[-1]))
+                return subprocess.CompletedProcess(command, 0)
+            self.assertEqual(command[-5:-3], ["--offline", "--config"])
+            if command[1] == "tree":
+                output = "\n".join(f"{name} v{version}" for name, version in linked)
+            elif "--filter-platform" in command:
+                output = json.dumps(metadata())
+            else:
+                setting = command[-1].partition("=")[2]
+                remaining.update(files_of(Path(json.loads(setting))))
+                output = "{}"
+            return subprocess.CompletedProcess(command, 0, stdout=output)
 
         with tempfile.TemporaryDirectory() as scratch:
             with mock.patch.object(vendor_crates.subprocess, "run", run):
-                return vendor_crates.vendor(Path(scratch), Path(scratch) / "vendor")
+                crates = vendor_crates.vendor(
+                    Path(scratch), Path(scratch) / "vendor", ["target"]
+                )
+        return crates, remaining
 
-    def test_vendored_crates_are_named_by_their_manifests(self):
+    def test_crates_that_no_target_compiles_keep_only_their_manifests(self):
+        wasm = b'[package]\nname = "wasm"\nversion = "0.1.0"\n'
+
         def populate(directory):
             crate(directory, "zeta", "1.0.0+extra", {"src/lib.rs": b"//\n"})
             crate(
                 directory,
-                "wit-bindgen",
+                "zstd-sys",
+                "2.1.2",
+                {"zstd/COPYING": b"text\n", "zstd/lib/zstd.h": b"/* BSD */\n"},
+            )
+            crate(
+                directory,
+                "wasm",
                 "0.1.0",
                 {
-                    **dict.fromkeys(
-                        vendor_crates.PREBUILT["wit-bindgen"], b"\x00asm\x01"
-                    ),
+                    "Cargo.toml": wasm,
+                    "src/rt/runtime.o": b"\x00asm\x01",
                     "rust-toolchain.toml": b"[toolchain]\n",
                 },
             )
             crate(directory, "quote", "1.0.0", {"rust-toolchain.toml": b""})
 
-        crates = self.vendor(populate)
+        linked = [("zeta", "1.0.0+extra"), ("zstd-sys", "2.1.2"), ("quote", "1.0.0")]
+        crates, remaining = self.vendor(populate, linked)
         self.assertEqual(
             crates,
             [
-                ("quote", "1.0.0", ["rust-toolchain.toml"]),
-                (
-                    "wit-bindgen",
-                    "0.1.0",
-                    sorted(
-                        [*vendor_crates.PREBUILT["wit-bindgen"], "rust-toolchain.toml"]
-                    ),
-                ),
-                ("zeta", "1.0.0+extra", []),
+                ("quote", "1.0.0", ["rust-toolchain.toml"], True),
+                ("wasm", "0.1.0", ["rust-toolchain.toml", "src/rt/runtime.o"], False),
+                ("zeta", "1.0.0+extra", [], True),
+                ("zstd-sys", "2.1.2", ["zstd/COPYING"], True),
             ],
         )
+        # Cargo resolves the lock from the trimmed crates.
+        self.assertEqual(
+            sorted(name for name in remaining if name.startswith("wasm-0.1.0/")),
+            [
+                "wasm-0.1.0/.cargo-checksum.json",
+                "wasm-0.1.0/Cargo.toml",
+                "wasm-0.1.0/src/lib.rs",
+            ],
+        )
+        self.assertEqual(remaining["wasm-0.1.0/src/lib.rs"], b"")
+        self.assertNotIn("zstd-sys-2.1.2/zstd/COPYING", remaining)
+        self.assertIn("zstd-sys-2.1.2/zstd/lib/zstd.h", remaining)
 
     def test_unexpected_vendor_output_is_refused(self):
         def misnamed(directory):
@@ -267,14 +483,23 @@ class VendorTests(unittest.TestCase):
         def stale_table(directory):
             crate(directory, "alpha", "1.0.0", {})
 
+        def binary(directory):
+            stale_table(directory)
+            crate(directory, "zstd-sys", "2.1.2", {"zstd/COPYING": b""})
+            crate(directory, "tool", "1.0.0", {"bin/tool": b"\x7fELF\x02"})
+
         for populate, message in (
             (misnamed, "declares alpha 1.0.0"),
             (unrecorded, "has no .cargo-checksum.json"),
-            (stale_table, "PREBUILT lists wit-bindgen"),
+            (stale_table, "ALTERNATIVE_LICENSES lists zstd-sys"),
+            (binary, "tool-1.0.0 ships the prebuilt binary bin/tool"),
         ):
             with self.subTest(case=populate.__name__):
                 with self.assertRaisesRegex(ValueError, message):
-                    self.vendor(populate)
+                    self.vendor(populate, [("alpha", "1.0.0"), ("tool", "1.0.0")])
+        # A binary in a crate that no target compiles leaves with the rest.
+        crates, _ = self.vendor(binary, [("alpha", "1.0.0")])
+        self.assertIn(("tool", "1.0.0", ["bin/tool"], False), crates)
 
     def test_the_script_runs_without_the_repository(self):
         # The R source package carries this file alone as tools/vendor_crates.py.
@@ -360,9 +585,9 @@ class AuthorsTests(unittest.TestCase):
 
     def test_every_bundled_crate_is_named_with_its_declared_facts(self):
         crates = [
-            ("alpha", "0.1.0", ["src/rt/runtime.o"]),
-            ("zeta", "1.9.0", []),
-            ("zeta", "1.10.0", []),
+            ("alpha", "0.1.0", ["zstd/COPYING"], True),
+            ("zeta", "1.9.0", ["src/lib.rs"], False),
+            ("zeta", "1.10.0", [], True),
         ]
         # The notices list only the crates that the R binding links.
         listed = {("alpha", "0.1.0"), ("zeta", "1.10.0"), ("parser", "0.2.1")}
@@ -373,10 +598,13 @@ class AuthorsTests(unittest.TestCase):
             ["alpha 0.1.0", "parser 0.2.1", "zeta 1.9.0", "zeta 1.10.0"],
         )
         self.assertIn("    Authors: A, B\n", entries[0])
-        self.assertIn("    Left out: src/rt/runtime.o\n", entries[0])
+        self.assertIn("    Left out: zstd/COPYING\n", entries[0])
         self.assertIn("    Directory: src/rust/vendor/saphyr-parser\n", entries[1])
         self.assertIn("    Authors: none declared\n", entries[2])
         self.assertIn("    Repository: https://example.org/z\n", entries[2])
+        # A crate that no supported target compiles keeps its manifest alone.
+        self.assertIn("    Left out: every file but its manifest\n", entries[2])
+        self.assertNotIn("Left out", entries[3])
         self.assertIn("    Repository: none declared\n", entries[3])
         # Each entry names the one license that yamaa relies on.
         self.assertIn("    License: MIT\n", entries[2])
@@ -387,7 +615,11 @@ class AuthorsTests(unittest.TestCase):
         self.assertTrue(text.endswith("\n"))
 
     def test_unvendored_or_unlicensed_crates_stop_staging(self):
-        crates = [("alpha", "0.1.0", []), ("zeta", "1.9.0", []), ("zeta", "1.10.0", [])]
+        crates = [
+            ("alpha", "0.1.0", [], True),
+            ("zeta", "1.9.0", [], True),
+            ("zeta", "1.10.0", [], True),
+        ]
         listed = {
             ("alpha", "0.1.0"),
             ("zeta", "1.9.0"),
@@ -418,7 +650,7 @@ class AuthorsTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "pyo3 0.27.2: the vendored"):
             staging.authors_text(
                 self.metadata(),
-                [*crates, ("pyo3", "0.27.2", [])],
+                [*crates, ("pyo3", "0.27.2", [], True)],
                 listed,
                 self.LOCKED,
             )

@@ -18,7 +18,7 @@ use super::{
     xml::Xml,
     Error, Fault,
 };
-use crate::{file_resources::Resources, public_table::PublicTable};
+use crate::{arrow_table::ArrowTable, file_resources::Resources, public_table::PublicTable};
 use flate2::read::MultiGzDecoder;
 use std::{
     io::{self, BufReader, Seek},
@@ -98,6 +98,20 @@ pub(super) fn read_with_resolver(
         }
         Format::Tar(compression) => tar(open, compression, length, options),
     }
+}
+
+/// A specification input's captured `.xml` bytes, read as one plain XML
+/// document under the default options: its extension selected the profile,
+/// so nothing detects an archive, and the bytes are held already, so only
+/// `max_expanded_bytes` bounds them before the parser reads them (ODM-1).
+pub(super) fn read_input(bytes: &[u8]) -> Result<ArrowTable, Error> {
+    let options = Options::default();
+    admit_xml(u64::try_from(bytes.len()).unwrap_or(u64::MAX), &options)?;
+    let table = xml(bytes, &options)?;
+    // The reader fills the canonical batches of the clinical-item schema,
+    // which the engine's own table admits unchanged.
+    ArrowTable::try_new(odm_items::schema(), table.batches().to_vec())
+        .map_err(|_| Error::Table(crate::ipc_table::TableError::Internal))
 }
 
 /// A capture over its bound is over `limit`, the read's limit that bound

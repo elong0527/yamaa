@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ODM xmlns="http://www.cdisc.org/ns/odm/v1.3"
+     ODMVersion="1.3.2"
+     FileType="Snapshot"
+     FileOID="STUDY01.EXPORT.20260302"
+     CreationDateTime="2026-03-02T09:15:00+00:00">
+  <Study OID="STUDY01">
+    <GlobalVariables>
+      <StudyName>STUDY01</StudyName>
+      <StudyDescription>An invented study for this benchmark</StudyDescription>
+      <ProtocolName>STUDY01</ProtocolName>
+    </GlobalVariables>
+    <MetaDataVersion OID="MDV.1" Name="Version 1">
+      <Protocol>
+        <StudyEventRef StudyEventOID="SE.SCREENING" Mandatory="Yes"/>
+      </Protocol>
+      <StudyEventDef OID="SE.SCREENING" Name="Screening" Repeating="No"
+                     Type="Scheduled">
+        <FormRef FormOID="F.DM" Mandatory="Yes"/>
+      </StudyEventDef>
+      <FormDef OID="F.DM" Name="Demographics" Repeating="No">
+        <ItemGroupRef ItemGroupOID="IG.DM" Mandatory="Yes"/>
+      </FormDef>
+      <ItemGroupDef OID="IG.DM" Name="Demographics" Repeating="No">
+        <ItemRef ItemOID="IT.DM.BRTHDAT" Mandatory="No"/>
+        <ItemRef ItemOID="IT.DM.AGE" Mandatory="Yes"/>
+        <ItemRef ItemOID="IT.DM.SEX" Mandatory="Yes"/>
+      </ItemGroupDef>
+      <ItemDef OID="IT.DM.BRTHDAT" Name="Date of birth" DataType="partialDate">
+        <Question><TranslatedText xml:lang="en">Date of birth</TranslatedText></Question>
+      </ItemDef>
+      <ItemDef OID="IT.DM.AGE" Name="Age" DataType="integer" Length="3">
+        <Question><TranslatedText xml:lang="en">Age in years</TranslatedText></Question>
+      </ItemDef>
+      <ItemDef OID="IT.DM.SEX" Name="Sex" DataType="text" Length="1">
+        <Question><TranslatedText xml:lang="en">Sex</TranslatedText></Question>
+        <CodeListRef CodeListOID="CL.SEX"/>
+      </ItemDef>
+      <CodeList OID="CL.SEX" Name="Sex" DataType="text">
+        <CodeListItem CodedValue="F">
+          <Decode><TranslatedText xml:lang="en">Female</TranslatedText></Decode>
+        </CodeListItem>
+        <CodeListItem CodedValue="M">
+          <Decode><TranslatedText xml:lang="en">Male</TranslatedText></Decode>
+        </CodeListItem>
+      </CodeList>
+    </MetaDataVersion>
+  </Study>
+  <AdminData StudyOID="STUDY01">
+    <User OID="USR.CRC">
+      <FullName>Study coordinator</FullName>
+    </User>
+    <User OID="USR.PI">
+      <FullName>Principal investigator</FullName>
+    </User>
+    <Location OID="LOC.01" Name="Site 01">
+      <MetaDataVersionRef StudyOID="STUDY01" MetaDataVersionOID="MDV.1"
+                          EffectiveDate="2026-01-01"/>
+    </Location>
+    <SignatureDef OID="SIG.PI" Methodology="Electronic">
+      <Meaning>Approval of the case report form</Meaning>
+      <LegalReason>I approve the data on this form</LegalReason>
+    </SignatureDef>
+  </AdminData>
+  <ClinicalData StudyOID="STUDY01" MetaDataVersionOID="MDV.1">
+    <SubjectData SubjectKey="101">
+      <SiteRef LocationOID="LOC.01"/>
+      <StudyEventData StudyEventOID="SE.SCREENING">
+        <FormData FormOID="F.DM">
+          <Signature>
+            <UserRef UserOID="USR.PI"/>
+            <LocationRef LocationOID="LOC.01"/>
+            <SignatureRef SignatureOID="SIG.PI"/>
+            <DateTimeStamp>2026-02-20T16:40:00+00:00</DateTimeStamp>
+          </Signature>
+          <ItemGroupData ItemGroupOID="IG.DM" TransactionType="Insert">
+            <ItemData ItemOID="IT.DM.BRTHDAT" Value="1958-07-21"/>
+            <ItemData ItemOID="IT.DM.AGE" Value="67"/>
+            <ItemData ItemOID="IT.DM.SEX" Value="F"/>
+          </ItemGroupData>
+        </FormData>
+      </StudyEventData>
+    </SubjectData>
+    <SubjectData SubjectKey="102">
+      <SiteRef LocationOID="LOC.01"/>
+      <StudyEventData StudyEventOID="SE.SCREENING">
+        <FormData FormOID="F.DM">
+          <ItemGroupData ItemGroupOID="IG.DM" TransactionType="Update">
+            <ItemData ItemOID="IT.DM.BRTHDAT" Value="1990-02"/>
+            <ItemData ItemOID="IT.DM.AGE" Value="36"/>
+            <ItemData ItemOID="IT.DM.SEX" Value="M">
+              <AuditRecord>
+                <UserRef UserOID="USR.CRC"/>
+                <LocationRef LocationOID="LOC.01"/>
+                <DateTimeStamp>2026-02-24T11:05:00+00:00</DateTimeStamp>
+                <ReasonForChange>Entered as F in error; corrected from the source document</ReasonForChange>
+                <SourceID>QUERY.0042</SourceID>
+              </AuditRecord>
+            </ItemData>
+          </ItemGroupData>
+        </FormData>
+      </StudyEventData>
+    </SubjectData>
+    <SubjectData SubjectKey="103">
+      <SiteRef LocationOID="LOC.01"/>
+      <StudyEventData StudyEventOID="SE.SCREENING">
+        <FormData FormOID="F.DM">
+          <ItemGroupData ItemGroupOID="IG.DM">
+            <ItemData ItemOID="IT.DM.BRTHDAT" IsNull="Yes">
+              <Annotation SeqNum="1">
+                <Comment>The subject declined to give the date of birth</Comment>
+              </Annotation>
+            </ItemData>
+            <ItemData ItemOID="IT.DM.AGE" Value="45"/>
+            <ItemData ItemOID="IT.DM.SEX" Value="F"/>
+          </ItemGroupData>
+        </FormData>
+      </StudyEventData>
+    </SubjectData>
+  </ClinicalData>
+</ODM>

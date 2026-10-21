@@ -33,6 +33,7 @@ pub fn source(
         SourceProfile::Parquet => "raw.parquet",
         SourceProfile::Xport => "raw.xpt",
         SourceProfile::Sas7bdat => "raw.sas7bdat",
+        SourceProfile::OdmXml => "raw.xml",
     };
     SourceDeclaration {
         name: "RAW".into(),
@@ -47,8 +48,9 @@ pub fn source(
 }
 
 /// Decode held bytes through the source decode that both host routes call:
-/// the profile selects the CSV, Parquet or ReadStat reader, and the declared
-/// types and interpretation apply as they do for a specification input.
+/// the profile selects the CSV, Parquet, ReadStat or ODM XML reader, and the
+/// declared types and interpretation apply as they do for a specification
+/// input.
 pub fn decode(
     source: &SourceDeclaration,
     bytes: &[u8],

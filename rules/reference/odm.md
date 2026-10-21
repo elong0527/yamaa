@@ -1,9 +1,11 @@
 # ODM source profile
 
 The `odm` profile reads a CDISC ODM 1.3 or 2.0 snapshot into the fixed item
-table that an `odm` read binds ([NAME-8](../names.md#name-8)). The host
-function `read_odm` reads a file into the same table, with the same refusals.
-No value, name or record is inferred beyond what the document states.
+table that an `odm` read binds ([NAME-8](../names.md#name-8)). An input whose
+path ends in `.xml` selects it ([INPUT-1](../inputs.md#input-1)), and the
+host function `read_odm` reads a file into the same table, with the same
+refusals. No value, name or record is inferred beyond what the document
+states.
 
 ## Reading
 
@@ -22,12 +24,7 @@ present value. `AuditRecord`, `Signature`, `Annotation`, `ReferenceData` and
 refusals.
 
 Fails: `source_odm_transactional`, `source_odm_no_clinical_data`, `source_odm_xml_malformed`, `source_odm_xml_unsupported`, `source_odm_document_unsupported`, `source_odm_layout_unsupported`, `source_odm_attribute_missing`, `source_odm_attribute_ambiguous`, `source_odm_attribute_invalid`, `source_odm_metadata_conflict`, `source_odm_value_unsupported`, `source_odm_limit_exceeded`, `source_odm_archive_invalid`, `source_odm_compression_unsupported`, `source_odm_archive_member`, `value_not_permitted`.
-Evidence: `rust/crates/yamaa-adapters/tests/odm_xml.rs::a_transactional_file_is_refused_before_any_item`, `rust/crates/yamaa-adapters/tests/odm_xml.rs::a_removal_on_any_element_read_is_refused`, `rust/crates/yamaa-adapters/tests/odm_xml.rs::other_transaction_types_read_as_the_present_value`, `rust/crates/yamaa-adapters/tests/odm_xml.rs::undefined_file_and_transaction_types_are_invalid_attributes`, `rust/crates/yamaa-adapters/tests/odm_xml.rs::skipped_elements_and_their_content_are_not_read`, `rust/crates/yamaa-adapters/tests/odm_xml.rs::a_document_without_clinical_data_is_refused`, `rust/crates/yamaa-adapters/tests/odm_xml.rs::missing_paths_and_directories_fail_as_any_caller_path_does`, `rust/crates/yamaa-core/tests/support/diagnostic/odm_read.rs`, `rust/crates/yamaa/tests/read_odm.rs::refusals_carry_their_registered_issue`, `rust/crates/yamaa/tests/read_odm.rs::only_a_snapshot_with_clinical_data_reads`, `rust/tests/host-fixtures/cases.json::archive-over-member-limit`, `python/tests/installed/installed_read_odm.py::test_refusals_raise_yamaa_error_carrying_their_issue`.
-
-Until the engine builds the `.xml` input, an input whose path names an ODM
-file is refused as `unsupported_operation`
-([COLUMN-15](../columns.md#column-15)) before any data is read, and
-`read_odm` is the route to this profile.
+Evidence: `rust/crates/yamaa-adapters/tests/odm_xml.rs::a_transactional_file_is_refused_before_any_item`, `rust/crates/yamaa-adapters/tests/odm_xml.rs::a_removal_on_any_element_read_is_refused`, `rust/crates/yamaa-adapters/tests/odm_xml.rs::other_transaction_types_read_as_the_present_value`, `rust/crates/yamaa-adapters/tests/odm_xml.rs::undefined_file_and_transaction_types_are_invalid_attributes`, `rust/crates/yamaa-adapters/tests/odm_xml.rs::skipped_elements_and_their_content_are_not_read`, `rust/crates/yamaa-adapters/tests/odm_xml.rs::a_document_without_clinical_data_is_refused`, `rust/crates/yamaa-adapters/tests/odm_xml.rs::missing_paths_and_directories_fail_as_any_caller_path_does`, `rust/crates/yamaa-core/tests/support/diagnostic/odm_read.rs`, `rust/crates/yamaa/tests/read_odm.rs::refusals_carry_their_registered_issue`, `rust/crates/yamaa/tests/read_odm.rs::only_a_snapshot_with_clinical_data_reads`, `rust/tests/host-fixtures/cases.json::archive-over-member-limit`, `python/tests/installed/installed_read_odm.py::test_refusals_raise_yamaa_error_carrying_their_issue`, `sdtm-dm-odm-snapshot`, `negative-odm-transactional`, `negative-odm-no-clinical-data`, `rust/crates/yamaa/tests/odm_input.rs::odm_reads_bind_the_item_table_of_an_xml_input`, `rust/crates/yamaa/tests/odm_input.rs::an_xml_input_no_odm_read_names_reads_every_column`, `rust/crates/yamaa/tests/odm_input.rs::the_profile_refuses_a_transactional_document_at_the_input`, `rust/crates/yamaa/tests/odm_input.rs::the_profile_refuses_a_document_without_clinical_data_at_the_input`, `rust/crates/yamaa/tests/odm_input.rs::an_xml_input_declares_no_types`, `rust/crates/yamaa-adapters/tests/format_features.rs::odm_reader_is_an_independent_capability`.
 
 **The item table.** `ClinicalData` gives `StudyOID` and `MetaDataVersionOID`,
 `SubjectData` gives `SubjectKey`, `StudyEventData`, `FormData` and
@@ -39,9 +36,22 @@ outer one giving the form columns. A name comes from the data element's
 namespaced name attribute, or else from the definition outside `ClinicalData`
 that precedes the item, keyed by study OID, metadata version OID and OID; two
 definitions of one key with different names are refused. `ItemData` outside
-`ClinicalData` gives no record. An `.xml` input that an `odm` read names
-declares no `types`, `schema` or `ordinal` (NAME-8,
-[INPUT-4](../inputs.md#input-4)).
+`ClinicalData` gives no record.
+
+**An `.xml` input.** The input is captured once, as every input is
+([FILE-11](files.md#file-11)), and its bytes are read as one plain XML
+document under `read_odm`'s defaults, so an archive is refused as XML. One
+that an `odm` read names declares no `types`, `schema` or `ordinal` (NAME-8,
+[INPUT-4](../inputs.md#input-4)). One that no `odm` read names reads every
+column of the table, as the Parquet file of `read_odm`'s table would: each
+`types` entry fails as `redundant_field_type`
+([INPUT-6](../inputs.md#input-6)), and `schema`, `ordinal`, `empty_string`,
+`key` and `require_match` apply to it as to a Parquet input. The run report
+records the input's profile as `odm` and the items it decoded as its records
+([CHECK-24](../verification.md#check-24)). A build without the ODM reader
+refuses the input as `engine_rejected` with stage `ingest` and code
+`odm_reader_unavailable`, as it refuses the other formats it does not
+compile.
 
 **The document.** It is UTF-8 without a DOCTYPE, well formed under XML 1.0
 and Namespaces 1.0, with the root `ODM` in the ODM 1.3 or 2.0 namespace and an

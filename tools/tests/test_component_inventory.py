@@ -285,6 +285,44 @@ class ComponentsTest(Checkout):
                 self.checkout.kept(), self.checkout.metadata(), PURPOSES, "stable"
             )
 
+    def test_the_command_line_names_the_musl_that_its_musl_binaries_link(self):
+        # #3030 D168: the release is the one that the notices' MUSL pairs
+        # with the pinned toolchain.
+        reviewed, release = notices.MUSL
+        rows = inventory.components(
+            self.checkout.kept(), self.checkout.metadata(), PURPOSES, reviewed
+        )
+        linked = inventory.components(
+            self.checkout.kept(), self.checkout.metadata(), PURPOSES, reviewed, True
+        )
+        (added,) = set(linked) - set(rows)
+        self.assertEqual(
+            (added.name, added.version, added.license, added.source),
+            (
+                "musl",
+                release,
+                "MIT",
+                f"{notices.MUSL_HOME}, bundled in rust-std {reviewed} for the musl "
+                "targets",
+            ),
+        )
+        # Every command-line archive carries the row, so it names the targets
+        # whose binaries link musl.
+        for target in notices.MUSL_TARGETS:
+            self.assertIn(target, added.purpose)
+        self.assertIn(notices.MUSL_NOTICE, added.purpose)
+        self.assertNotIn("apple", added.purpose)
+        # Another pinned toolchain stops the row until musl is reviewed, and
+        # only the pinned toolchain's packages link it.
+        with self.assertRaisesRegex(ValueError, "the musl notice was reviewed for"):
+            inventory.components(
+                self.checkout.kept(), self.checkout.metadata(), PURPOSES, "1.2.3", True
+            )
+        with self.assertRaisesRegex(ValueError, "musl is linked only by packages"):
+            inventory.components(
+                self.checkout.kept(), self.checkout.metadata(), PURPOSES, None, True
+            )
+
     def test_the_source_archive_leaves_out_the_standard_library_row(self):
         wheels = inventory.render(
             inventory.components(
@@ -724,6 +762,13 @@ class GraphTest(unittest.TestCase):
                     )
                 else:
                     self.assertNotIn("rust-std", rows)
+                # Only the command line's binaries for the musl targets link
+                # the musl C library (#3030 D168).
+                if host in inventory.MUSL_HOSTS:
+                    ((musl, license_, _),) = rows["musl"]
+                    self.assertEqual((musl, license_), (notices.MUSL[1], "MIT"))
+                else:
+                    self.assertNotIn("musl", rows)
 
 
 if __name__ == "__main__":

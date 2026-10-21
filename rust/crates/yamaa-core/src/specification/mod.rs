@@ -317,6 +317,10 @@ pub enum SourceProfile {
     Parquet,
     Xport,
     Sas7bdat,
+    /// An ODM 1.3 or 2.0 document read into the clinical-item table
+    /// (`crate::odm_items`; INPUT-1, ODM-1). Only a 1.0 specification selects
+    /// it: a 0.5 one keeps refusing `.xml` as an unknown profile.
+    OdmXml,
 }
 /// Core-selected semantic source interpretation, independent of storage profile.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -325,6 +329,8 @@ pub enum SourceInterpretation {
     Odm,
 }
 impl SourceProfile {
+    /// The profile a path's case-insensitive extension names (INPUT-1). The
+    /// front end admits [`Self::OdmXml`] on a 1.0 tree only.
     pub fn from_path(path: &str) -> Option<Self> {
         let name = path.rsplit('/').next()?;
         let (stem, extension) = name.rsplit_once('.')?;
@@ -339,6 +345,8 @@ impl SourceProfile {
             Some(Self::Xport)
         } else if extension.eq_ignore_ascii_case("sas7bdat") {
             Some(Self::Sas7bdat)
+        } else if extension.eq_ignore_ascii_case("xml") {
+            Some(Self::OdmXml)
         } else {
             None
         }
@@ -523,8 +531,15 @@ fn build_sources(
                 .map(|(field, kind)| (field.name.clone(), *kind))
                 .collect(),
             path: path.into(),
-            // Unsupported formats never produce an accepted plan.
-            profile: SourceProfile::from_path(path).unwrap_or(SourceProfile::Csv),
+            // The profile the front end selected for the tree's language
+            // version; an input without one never produces an accepted plan.
+            profile: match input.source.profile {
+                Some(ast::Profile::Csv) | None => SourceProfile::Csv,
+                Some(ast::Profile::Parquet) => SourceProfile::Parquet,
+                Some(ast::Profile::Xport) => SourceProfile::Xport,
+                Some(ast::Profile::Sas7bdat) => SourceProfile::Sas7bdat,
+                Some(ast::Profile::OdmXml) => SourceProfile::OdmXml,
+            },
             encoding: input.source.encoding.as_ref().map(|text| text.text.clone()),
             byte_order_mark: input.source.byte_order_mark,
             empty_string_present: input.source.empty_string == ast::EmptyString::Present,
