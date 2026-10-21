@@ -1,0 +1,60 @@
+yamaa: "1.0"
+type: spec
+model: SDTM
+domain: DM
+keys: [STUDYID, USUBJID]
+input:
+  # The EDC system's ODM snapshot, read as it was exported.
+  ODM: input/odm.xml
+
+output:
+  path: dm.csv
+  columns: [DOMAIN, STUDYID, USUBJID, SUBJID, BRTHDTC, AGE, AGEU, SEX]
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'DM'"
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: ODM.StudyOID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: {str_template: "{ODM.StudyOID}-{ODM.SubjectKey}"}
+
+  - name: SUBJID
+    type: str
+    label: Subject Identifier for the Study
+    derivation: ODM.SubjectKey
+
+  # As collected: a partial date stays partial, and an item recorded as
+  # not collected reads missing.
+  - name: BRTHDTC
+    type: str
+    label: Date/Time of Birth
+    derivation: {odm: ODM.IT.DM.BRTHDAT}
+
+  - name: AGE
+    type: int
+    label: Age
+    derivation: {odm: ODM.IT.DM.AGE}
+
+  - name: AGEU
+    type: str
+    label: Age Units
+    derivation:
+      case:
+        - when: "AGE IS NOT NULL"
+          then: "'YEARS'"
+        - otherwise: null
+
+  # The current value: the audit trail of a correction adds no record.
+  - name: SEX
+    type: str
+    label: Sex
+    derivation: {odm: ODM.IT.DM.SEX}

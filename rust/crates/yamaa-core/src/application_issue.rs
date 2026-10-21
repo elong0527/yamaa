@@ -76,6 +76,7 @@ vocabulary! {
         Normalization => "normalization",
         NumericPolicy => "numeric_policy",
         OdmProjectionBoundary => "odm_projection_boundary",
+        OdmReaderUnavailable => "odm_reader_unavailable",
         OpaqueHost => "opaque_host",
         OutputLimit => "output_limit",
         OutputProjection => "output_projection",

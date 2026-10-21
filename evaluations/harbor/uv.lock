@@ -2646,7 +2646,6 @@ name = "yamaa"
 version = "0.5.0"
 source = { directory = "../../python" }
 dependencies = [
-    { name = "packaging" },
     { name = "polars" },
 ]
 
@@ -2654,6 +2653,7 @@ dependencies = [
 test = [
     { name = "jsonschema" },
     { name = "lxml" },
+    { name = "packaging" },
     { name = "py-yaml12" },
     { name = "pyarrow" },
     { name = "pydantic" },
@@ -2668,7 +2668,7 @@ test = [
 requires-dist = [
     { name = "jsonschema", marker = "extra == 'test'", specifier = ">=4.25" },
     { name = "lxml", marker = "extra == 'test'", specifier = ">=6.1.3" },
-    { name = "packaging", specifier = ">=25" },
+    { name = "packaging", marker = "extra == 'test'", specifier = ">=25" },
     { name = "polars", marker = "python_full_version < '3.15'", specifier = ">=1.35.2" },
     { name = "polars", marker = "python_full_version >= '3.15'", specifier = ">=2.0.0" },
     { name = "py-yaml12", marker = "extra == 'test'", specifier = ">=0.2" },

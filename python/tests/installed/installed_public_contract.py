@@ -500,7 +500,7 @@ class PublicContract(unittest.TestCase):
 
     def test_each_callback_stage_preserves_original_interrupt_identity(self):
         project, case = self.function_study()
-        verify, resolve = host.verify_versions, host.resolve_callable
+        providers, resolve = host._installed_providers, host.resolve_callable
         entries = {
             "spec": lambda: project.spec("TEST").run(),
             "project": lambda: project.run(),
@@ -512,10 +512,10 @@ class PublicContract(unittest.TestCase):
                         original = kind(TRUTH["interrupt_message"])
                         calls = []
 
-                        def versions(*arguments):
+                        def observed(*arguments):
                             if stage == "lock":
                                 raise original
-                            return verify(*arguments)
+                            return providers(*arguments)
 
                         def binding(*arguments):
                             if stage == "binding":
@@ -533,7 +533,9 @@ class PublicContract(unittest.TestCase):
                             return callback
 
                         with (
-                            patch.object(host, "verify_versions", side_effect=versions),
+                            patch.object(
+                                host, "_installed_providers", side_effect=observed
+                            ),
                             patch.object(host, "resolve_callable", side_effect=binding),
                             self.assertRaises(kind) as seen,
                         ):
@@ -1023,7 +1025,7 @@ class Resolve(unittest.TestCase):
             ),
             patch.object(
                 host,
-                "verify_versions",
+                "_installed_providers",
                 side_effect=AssertionError("unexpected verification"),
             ),
         ):
@@ -1122,7 +1124,7 @@ class Resolve(unittest.TestCase):
             ),
             patch.object(
                 host,
-                "verify_versions",
+                "_installed_providers",
                 side_effect=AssertionError("unexpected verification"),
             ),
         ):

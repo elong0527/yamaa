@@ -22,9 +22,6 @@ pub const SUBMISSION_STANDARD: &str = "submission_standard";
 /// A value-level `where` comparator, NE or NOTIN (P-VLM-1), refused until
 /// P1-14.
 pub const VALUE_LEVEL_COMPARATOR: &str = "value_level_comparator";
-/// An input whose path names an ODM XML file (P-ODMIN-1), refused until
-/// P1-15.
-pub const ODM_XML_INPUT: &str = "odm_xml_input";
 
 fn unsupported(operation: &str, path: String) -> UnsupportedFeature {
     UnsupportedFeature {
@@ -34,18 +31,10 @@ fn unsupported(operation: &str, path: String) -> UnsupportedFeature {
 }
 
 /// What a lowered 1.0 specification writes that the engine does not build
-/// yet, in written order: an ODM XML input; more than one origin; a
-/// value-level comparator; and a dataset's `standard`.
+/// yet, in written order: more than one origin; a value-level comparator;
+/// and a dataset's `standard`.
 pub fn unbuilt(spec: &Spec) -> Vec<UnsupportedFeature> {
     let mut found = Vec::new();
-    for input in &spec.inputs {
-        if input.source.profile == Some(Profile::OdmXml) {
-            found.push(unsupported(
-                ODM_XML_INPUT,
-                spec.cite(input.source.path.meta),
-            ));
-        }
-    }
     let origins = |metadata: &SubmissionMetadata, at: String, found: &mut Vec<_>| {
         if metadata.origins.len() > 1 {
             found.push(unsupported(MULTIPLE_ORIGINS, format!("{at}.origins")));

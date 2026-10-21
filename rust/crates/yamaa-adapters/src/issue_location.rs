@@ -8,13 +8,15 @@
 //! held are each held as written.
 //!
 //! [`Locator::locate`] takes an issue's first spec path, in either notation,
-//! and walks it through each layer to the deepest node that layer wrote: a
+//! and walks it through each layer's normalized contribution: a
 //! mapping member by its key, a list item by its index or by the `id` or
-//! `name` it declares. A path reaches no node a schema default, a shorthand
-//! expansion or composition made, since no layer wrote one, so it stops at
-//! the written node above: the shorthand, the named window, the file that
-//! holds a dictionary. Among a specification's layers the deepest node wins
-//! and, on a tie, the latest layer in contribution order, whose value took
+//! `name` it declares. A path into a shorthand expansion or composition
+//! has the position of the deepest written node above:
+//! the shorthand, the named window, the file that holds a dictionary.
+//! Shorthand and long form reach the same contribution depth, so a later
+//! shorthand can override a parent's structured value. Schema defaults have
+//! no written position and stop the walk. Among a specification's layers the
+//! deepest contribution wins and, on a tie, the latest layer, whose value took
 //! effect (LAYER-3). An indexed row or intermediate (`rows[1]`) is the item
 //! of the resolved specification at that position, found in each layer by
 //! its `id`. Among roots the deepest node wins too; on a tie, the root the
@@ -31,7 +33,9 @@
 
 use yamaa_core::diagnostic::{ConditionCode, Diagnostic};
 use yamaa_core::json::Value;
-use yamaa_core::schema::{scalar_diagnostic_label, Document, DocumentNode as N};
+use yamaa_core::schema::{
+    scalar_diagnostic_label, Document, DocumentNode as N, NormalizedDocument, SchemaSource,
+};
 
 use crate::specification_source::{CapturedDocument, PreparedDocument};
 use crate::yaml_decode::{decode_yaml, DecodeFailure, DecodedYaml, SourcePosition};
@@ -54,13 +58,13 @@ struct Written {
     column: usize,
 }
 
-/// One file as written: its document and where the YAML reader found each
-/// node.
+/// One file as written, its positions, and its normalized contribution.
 #[derive(Clone, Debug)]
 struct Layer {
     file: usize,
     document: Document,
     locations: Vec<SourcePosition>,
+    contribution: Option<NormalizedDocument>,
 }
 
 impl Layer {
@@ -70,6 +74,47 @@ impl Layer {
             line: at.line,
             column: at.column,
         })
+    }
+
+    /// How far this layer contributes along a path, including shorthand
+    /// expansion. Defaults contribute nothing written by this layer.
+    fn contribution_depth(&self, steps: &[Step]) -> usize {
+        let Some(normalized) = &self.contribution else {
+            return 0;
+        };
+        let document = &normalized.document;
+        let mut node = document.root();
+        let mut depth = 0;
+        for step in steps {
+            // The normalizer wraps an expression in an implicit `value`
+            // member. Diagnostic paths omit that generated wrapper.
+            while child(document, node, step).is_none() {
+                let Some((key, value)) = child(document, node, &Step::Name("value".into())) else {
+                    break;
+                };
+                if !normalized.origins[key].generated
+                    || normalized.origins[key].source != SchemaSource::Input
+                {
+                    break;
+                }
+                node = value;
+            }
+            let Some((key, value)) = child(document, node, step) else {
+                // A scalar replaces the inherited value whole. In 1.x an
+                // expression such as RAW.NEW stays text until lowering; any
+                // diagnostic path inside that expression belongs here.
+                if !matches!(document.nodes()[node], N::Mapping(_) | N::Sequence(_)) {
+                    return steps.len();
+                }
+                break;
+            };
+            if normalized.origins[key].source != SchemaSource::Input {
+                break;
+            }
+            node = value;
+            depth += 1;
+        }
+        depth
     }
 }
 
@@ -258,6 +303,7 @@ impl Locator {
             file: self.file(identity),
             document: decoded.document.clone(),
             locations: decoded.locations.clone(),
+            contribution: None,
         }
     }
 
@@ -297,19 +343,29 @@ impl Locator {
         self.root(identity, vec![layer], None, fields)
     }
 
-    /// The specification `document` resolves to: each layer that wrote it as
-    /// written, the latest first, and its resolved document.
+    /// The specification `document` resolves to: each layer as written and
+    /// normalized for composition, the latest first, and its resolved document.
     pub(crate) fn specification(&mut self, document: &PreparedDocument) -> usize {
         let entry = document.source().identity.as_str();
         // The layers in contribution order, the root ancestor first.
-        let (resolved, contributed): (&Document, Vec<&str>) =
+        let (resolved, contributed): (&Document, Vec<(&str, Option<NormalizedDocument>)>) =
             if let Some(versioned) = document.versioned() {
                 (
                     versioned.resolved(),
                     versioned
                         .layers()
                         .iter()
-                        .map(|layer| layer.source.identity.as_str())
+                        .map(|layer| {
+                            (
+                                layer.source.identity.as_str(),
+                                document
+                                    .schema()
+                                    .structure()
+                                    .at_version(layer.version)
+                                    .normalize_versioned_layer(&layer.document)
+                                    .ok(),
+                            )
+                        })
                         .collect(),
                 )
             } else if let Some(inherited) = document.inheritance() {
@@ -318,11 +374,19 @@ impl Locator {
                     inherited
                         .layers()
                         .iter()
-                        .map(|layer| layer.source.identity.as_str())
+                        .map(|layer| {
+                            (
+                                layer.source.identity.as_str(),
+                                Some(NormalizedDocument {
+                                    document: layer.document.clone(),
+                                    origins: layer.origins.clone(),
+                                }),
+                            )
+                        })
                         .collect(),
                 )
             } else {
-                (document.model().document(), vec![entry])
+                (document.model().document(), vec![(entry, None)])
             };
         let decoded = |identity: &str| -> Option<&DecodedYaml> {
             if identity == entry {
@@ -335,9 +399,10 @@ impl Locator {
                 .map(|parent| parent.raw())
         };
         let mut layers = Vec::new();
-        for identity in contributed.into_iter().rev() {
+        for (identity, normalized) in contributed.into_iter().rev() {
             if let Some(raw) = decoded(identity) {
-                let layer = self.layer(identity, raw);
+                let mut layer = self.layer(identity, raw);
+                layer.contribution = normalized;
                 layers.push(layer);
             }
         }
@@ -470,13 +535,17 @@ impl Locator {
         written
     }
 
-    /// Walk `steps` through every layer of `root`, keeping the deepest node a
-    /// layer wrote; on a tie, the latest layer's.
+    /// Walk `steps` through every layer of `root`, keeping the deepest
+    /// contribution, and on a tie the latest layer's written position.
     fn walk(&self, root: usize, steps: &[Step], visited: &mut Vec<usize>) -> Walk {
         let written = self.written_steps(root, steps);
         let mut best: Option<Walk> = None;
         for layer in &self.roots[root].layers {
-            let walk = self.walk_layer(root, layer, &written, visited);
+            let mut walk = self.walk_layer(root, layer, &written, visited);
+            // Compare effective contributions, but keep the position of the
+            // deepest node written in this layer. A shorthand reaches its
+            // expanded path without having written those extra keys.
+            walk.depth = walk.depth.max(layer.contribution_depth(&written));
             if best.is_none_or(|best| walk.depth > best.depth) {
                 best = Some(walk);
             }

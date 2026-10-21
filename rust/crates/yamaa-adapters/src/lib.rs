@@ -80,6 +80,7 @@ pub mod project_source;
 
 pub mod project_lock;
 pub mod project_lock_diagnostics;
+mod python_packaging;
 
 pub mod project_environment_diagnostics;
 

@@ -22,8 +22,10 @@ packaging checks. Python and R usage lives in the
 in [python/README.md](../python/README.md) and
 [R/yamaa/README.md](../R/yamaa/README.md).
 
-Expected benchmark data and Parquet fixtures are authored truth. Preserve their
-bytes when changing implementation or repository structure.
+Expected benchmark data is authored truth. Preserve its bytes when changing
+implementation or repository structure. The adapters' Parquet test inputs are
+written when the tests run (`crates/yamaa-adapters/tests/support/parquet_files.rs`),
+since binary files live only under `benchmarks/`.
 
 Layer composition and null handling follow the
 [composition contract](../rules/inheritance.md).
@@ -48,7 +50,7 @@ other configuration.
 | `yaml` | Saphyr parser and adapter scalar decoding; admits specification, schema, environment and project-lock YAML bytes, and the files `lint` checks. |
 | `parquet` | Parquet source and artifact encoding, schema metadata, and Brotli, Gzip, LZ4, Snappy and Zstd codecs. Zstd builds native C through `zstd-sys` and `cc`. |
 | `readstat` | Bundled read-only C backend and direct `cc` build dependency for `.sas7bdat` and `.xpt` input. |
-| `odm` | The `quick-xml` tokenizer and the pure-Rust Gzip codec; reads CDISC ODM 1.3 and 2.0 XML clinical items from plain XML or plain/Gzip TAR files into the fixed clinical-item table. |
+| `odm` | The `quick-xml` tokenizer and the pure-Rust Gzip codec; reads CDISC ODM 1.3 and 2.0 XML clinical items from plain XML or plain/Gzip TAR files into the fixed clinical-item table, for `read_odm` and for a specification's `.xml` inputs. |
 | No format features | CSV and Arrow table/IPC representation remain available, including supplied Arrow batches. No YAML parser, Parquet codec, ODM XML reader, ReadStat or native compression build is selected. |
 
 Arrow arrays, buffers, schemas, IPC and FlatBuffers are representation and host
@@ -64,9 +66,9 @@ returns `parquet_source::Error::ReaderUnavailable`, Parquet output returns
 `sas_source::Error::Unavailable`, and ODM XML input returns
 `odm_xml::Error::Unavailable`. These capability failures do not become
 malformed-source language findings. Capture and ingest boundary replies expose
-`yaml_reader_unavailable`, `parquet_reader_unavailable` and
-`sas_reader_unavailable`; unavailable Parquet compression retains its separate
-`parquet_codec_unavailable` code.
+`yaml_reader_unavailable`, `parquet_reader_unavailable`,
+`sas_reader_unavailable` and `odm_reader_unavailable`; unavailable Parquet
+compression retains its separate `parquet_codec_unavailable` code.
 
 The Release compatibility workflow's Rust job adds two minimal facade builds:
 no optional formats and YAML + Parquet. Each compiles the adapter's unit tests,
@@ -532,8 +534,8 @@ With no format feature, CSV and Arrow routes remain, exactly as described in
 the feature table above. A capability a build omits fails the same way it does
 today: the stable codes (`yaml_reader_unavailable`,
 `parquet_reader_unavailable`, `sas_reader_unavailable`,
-`parquet_codec_unavailable`) surface as diagnostics or as
-`Error::Unavailable`. The facade adds no native dependencies of its own.
+`odm_reader_unavailable`, `parquet_codec_unavailable`) surface as
+diagnostics or as `Error::Unavailable`. The facade adds no native dependencies of its own.
 
 ### Stability policy
 
@@ -609,7 +611,7 @@ was removed. Any module not listed here is internal by default.
 | `issue_rows` | Removed -- core's `Diagnostic` is the one record; the facade's `Diagnostic` and `Report` are its public form. |
 | `project_application` | Internal -- selection failures convert into diagnostics. |
 | `project_attempt` | Internal -- host-failure traversal; failures surface as `Error::Host`. |
-| `project_lock` | Facade -- `LockFinding`/`LockReason` are the public lock-finding types and `decode_renv_lock` is the public renv admission; lock-kind detection stays internal (the engine supplies `LockKind` through `LockContext`). |
+| `project_lock` | Facade -- `LockFinding`/`LockReason` are the public lock-finding types, `decode_renv_lock` is the public renv admission, and `verify_uv_lock` compares a uv lock with the installation an `InstalledDistributions` reports (#3030 D172); lock-kind detection stays internal (the engine supplies `LockKind` through `LockContext`). |
 | `project_report` | Internal -- the activation and project-function half of the one result builder; `Classified` stays an internal constructor. |
 | `project_run` | Removed -- `specification_run::PreparedRun` is the one prepared run, alone or with a project; `Plan` wraps it (#2821), and it stays internal with its `Attempt`. |
 | `public_table` | Facade -- `Table`. |

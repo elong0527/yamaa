@@ -282,6 +282,116 @@ fn a_layered_issue_is_located_in_the_layer_whose_value_took_effect() {
     }
 }
 
+/// A shorthand contributes the same source variable as its long form. The
+/// A label-only child keeps the parent's source. A 0.5 source shorthand
+/// inherits the parent's filter; a 1.x text expression replaces it whole.
+#[test]
+fn a_child_source_shorthand_is_located_in_the_child_over_a_structured_parent() {
+    for header in SURFACES {
+        let study = Study::new();
+        let (text, parent_offset) = spec(
+            header,
+            &[
+                "domain: IT",
+                "keys: [ID]",
+                "input: {RAW: raw.csv}",
+                "output: {path: out.csv, columns: [ID, V]}",
+                "columns:",
+                "  - {name: ID, type: str, label: Identifier, derivation: RAW.ID}",
+                "  - name: V",
+                "    type: str",
+                "    label: Value",
+                "    derivation:",
+                "      source:",
+                "        variable: RAW.OLD",
+                "        filter: RAW.ID IS NOT NULL",
+            ],
+        );
+        write(&study, "parent.yaml", &text);
+        study.write("raw.csv", &["ID,OLD", "S1,old"]);
+        for derivation in [
+            "    derivation: RAW.NEW",
+            "    derivation: {source: {variable: RAW.NEW, filter: RAW.ID IS NOT NULL}}",
+        ] {
+            let (text, offset) = spec(
+                header,
+                &["parent: parent.yaml", "columns:", "  - name: V", derivation],
+            );
+            write(&study, "child.yaml", &text);
+            let run = engine()
+                .spec_run(&study.path("child.yaml"), None, &CancellationToken::new())
+                .unwrap();
+            let issues = run.diagnostics();
+            assert_eq!(issues[0].code, "unknown_field", "{issues:?}");
+            assert_eq!(issues[0].spec_path, ["columns.V.derivation.source"]);
+            // Shorthand is at its derivation key; the long form at source.
+            let column = if derivation == "    derivation: RAW.NEW" {
+                5
+            } else {
+                18
+            };
+            assert_eq!(
+                location(&issues),
+                Some((study.file("child.yaml"), offset + 4, column))
+            );
+        }
+        // A label-only contribution keeps the parent's source location.
+        let (text, _) = spec(
+            header,
+            &[
+                "parent: parent.yaml",
+                "columns:",
+                "  - name: V",
+                "    label: Renamed",
+            ],
+        );
+        write(&study, "child.yaml", &text);
+        study.write("raw.csv", &["ID", "S1"]);
+        let run = engine()
+            .spec_run(&study.path("child.yaml"), None, &CancellationToken::new())
+            .unwrap();
+        assert_eq!(
+            location(&run.diagnostics()),
+            Some((study.file("parent.yaml"), parent_offset + 11, 7))
+        );
+
+        // Exercise the source's inherited sibling, rather than assigning
+        // every path below derivation to the latest layer indiscriminately.
+        let parent = std::fs::read_to_string(study.path("parent.yaml"))
+            .unwrap()
+            .replace(
+                "filter: RAW.ID IS NOT NULL",
+                "filter: RAW.MISSING IS NOT NULL",
+            );
+        std::fs::write(study.path("parent.yaml"), parent).unwrap();
+        let (text, _) = spec(
+            header,
+            &[
+                "parent: parent.yaml",
+                "columns:",
+                "  - name: V",
+                "    derivation: RAW.NEW",
+            ],
+        );
+        write(&study, "child.yaml", &text);
+        study.write("raw.csv", &["ID,NEW", "S1,new"]);
+        let run = engine()
+            .spec_run(&study.path("child.yaml"), None, &CancellationToken::new())
+            .unwrap();
+        let issues = run.diagnostics();
+        if header.len() == 1 {
+            assert_eq!(issues[0].code, "unknown_field", "{issues:?}");
+            assert_eq!(issues[0].spec_path, ["columns.V.derivation.source.filter"]);
+            assert_eq!(
+                location(&issues),
+                Some((study.file("parent.yaml"), parent_offset + 13, 9))
+            );
+        } else {
+            assert!(issues.is_empty(), "{issues:?}");
+        }
+    }
+}
+
 /// Rule 4: a path that starts in the project file locates there, or in the
 /// listed file it continues into. Two listings name one dataset; the first
 /// path, `sdtm.specs[0]`, is the first listing, at its first character. A
