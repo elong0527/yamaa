@@ -143,7 +143,7 @@ impl Command {
 
     /// Refuse a missing or extra positional argument, and two flags that
     /// exclude each other.
-    fn check(&self, positional: &[&OsString], given: &[&'static str]) -> Result<(), Usage> {
+    fn check(&self, positional: &[OsString], given: &[&'static str]) -> Result<(), Usage> {
         if let Some(missing) = self.arguments.get(positional.len()) {
             return Err(usage(format!("{}: missing {missing}", self.name)));
         }
@@ -188,8 +188,32 @@ pub(crate) enum Invocation {
     Help,
     /// `--version`: the engine information.
     Version(Format),
-    /// A command, by name, with every argument checked.
-    Command(&'static str, Format),
+    /// A command, with every argument checked.
+    Command(Call, Format),
+}
+
+/// One command with its checked arguments, in their native spelling: the
+/// positional arguments in order, and each flag given with its value.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct Call {
+    pub(crate) name: &'static str,
+    pub(crate) arguments: Vec<OsString>,
+    flags: Vec<(&'static str, Option<OsString>)>,
+}
+
+impl Call {
+    /// The value given to `flag`, when the flag was given.
+    pub(crate) fn value(&self, flag: &str) -> Option<&OsStr> {
+        self.flags
+            .iter()
+            .find(|(name, _)| *name == flag)
+            .and_then(|(_, value)| value.as_deref())
+    }
+
+    /// Whether the switch `flag` was given.
+    pub(crate) fn has(&self, flag: &str) -> bool {
+        self.flags.iter().any(|(name, _)| *name == flag)
+    }
 }
 
 /// A usage error: why the command line is refused, with exit status 2.
@@ -234,7 +258,7 @@ pub(crate) fn parse(arguments: &[OsString]) -> Result<Invocation, Usage> {
     let mut version = false;
     let mut command: Option<&'static Command> = None;
     let mut positional = Vec::new();
-    let mut given = Vec::new();
+    let mut given: Vec<(&'static str, Option<OsString>)> = Vec::new();
     let mut ended = false;
     let mut rest = arguments.iter();
     while let Some(argument) = rest.next() {
@@ -249,7 +273,7 @@ pub(crate) fn parse(arguments: &[OsString]) -> Result<Invocation, Usage> {
                             .ok_or_else(|| usage(format!("unknown command {text}")))?,
                     );
                 }
-                Some(_) => positional.push(argument),
+                Some(_) => positional.push(argument.clone()),
             }
             continue;
         }
@@ -289,11 +313,12 @@ pub(crate) fn parse(arguments: &[OsString]) -> Result<Invocation, Usage> {
                     .flag(name)
                     .ok_or_else(|| usage(format!("{}: unknown option {name}", current.name)))?;
                 once(
-                    given.contains(&flag.name),
+                    given.iter().any(|(given, _)| *given == flag.name),
                     &format!("{}: {name}", current.name),
                 )?;
-                given.push(flag.name);
-                if flag.takes != Takes::Nothing {
+                let value = if flag.takes == Takes::Nothing {
+                    None
+                } else {
                     let value = rest
                         .next()
                         .ok_or_else(|| usage(format!("{}: {name} needs a value", current.name)))?;
@@ -304,7 +329,9 @@ pub(crate) fn parse(arguments: &[OsString]) -> Result<Invocation, Usage> {
                             value.to_string_lossy()
                         )));
                     }
-                }
+                    Some(value.clone())
+                };
+                given.push((flag.name, value));
             }
         }
     }
@@ -316,8 +343,16 @@ pub(crate) fn parse(arguments: &[OsString]) -> Result<Invocation, Usage> {
         };
     }
     let command = command.ok_or_else(|| usage("no command given"))?;
-    command.check(&positional, &given)?;
-    Ok(Invocation::Command(command.name, format))
+    let names = given.iter().map(|(name, _)| *name).collect::<Vec<_>>();
+    command.check(&positional, &names)?;
+    Ok(Invocation::Command(
+        Call {
+            name: command.name,
+            arguments: positional,
+            flags: given,
+        },
+        format,
+    ))
 }
 
 #[cfg(test)]
@@ -328,6 +363,29 @@ mod tests {
         parse(&words.iter().map(OsString::from).collect::<Vec<_>>())
     }
 
+    /// The command, its positional arguments and its format, when `words`
+    /// name a command.
+    fn command(words: &[&str]) -> Option<(&'static str, Vec<String>, Format)> {
+        match parsed(words) {
+            Ok(Invocation::Command(call, format)) => Some((
+                call.name,
+                call.arguments
+                    .iter()
+                    .map(|argument| argument.to_str().unwrap().to_owned())
+                    .collect(),
+                format,
+            )),
+            _ => None,
+        }
+    }
+
+    fn call(words: &[&str]) -> Call {
+        match parsed(words) {
+            Ok(Invocation::Command(call, _)) => call,
+            other => panic!("{words:?} is no command: {other:?}"),
+        }
+    }
+
     #[test]
     fn the_format_may_come_before_or_after_the_command() {
         for words in [
@@ -336,14 +394,14 @@ mod tests {
             &["check", "spec.yaml", "--format", "json"],
         ] {
             assert_eq!(
-                parsed(words),
-                Ok(Invocation::Command("check", Format::Json)),
+                command(words),
+                Some(("check", vec!["spec.yaml".to_owned()], Format::Json)),
                 "{words:?}"
             );
         }
         assert_eq!(
-            parsed(&["check", "spec.yaml"]),
-            Ok(Invocation::Command("check", Format::Text))
+            command(&["check", "spec.yaml"]),
+            Some(("check", vec!["spec.yaml".to_owned()], Format::Text))
         );
         assert_eq!(
             parsed(&["--version"]),
@@ -354,18 +412,37 @@ mod tests {
     #[test]
     fn a_double_dash_ends_the_flags() {
         assert_eq!(
-            parsed(&["lint", "--", "--fix", "-"]),
-            Ok(Invocation::Command("lint", Format::Text))
+            command(&["lint", "--", "--fix", "-"]),
+            Some((
+                "lint",
+                vec!["--fix".to_owned(), "-".to_owned()],
+                Format::Text
+            ))
         );
+        assert!(!call(&["lint", "--", "--fix", "-"]).has("--fix"));
         // After `--`, `--help` is a PATH, not a request for the usage.
         assert_eq!(
-            parsed(&["check", "--", "--help"]),
-            Ok(Invocation::Command("check", Format::Text))
+            command(&["check", "--", "--help"]),
+            Some(("check", vec!["--help".to_owned()], Format::Text))
         );
         assert_eq!(
             parsed(&["check", "--", "a.yaml", "b.yaml"]),
             Err(Usage("check: unexpected argument b.yaml".into()))
         );
+    }
+
+    #[test]
+    fn a_call_keeps_each_flag_with_its_value() {
+        let run = call(&["run", "project.yaml", "--section", "adam"]);
+        assert_eq!(run.value("--section"), Some(OsStr::new("adam")));
+        assert_eq!(run.value("--spec"), None);
+        assert!(run.has("--section") && !run.has("--spec"));
+        let lint = call(&["lint", "a.yaml", "--fix", "b.yaml"]);
+        assert!(lint.has("--fix"));
+        assert_eq!(lint.value("--fix"), None);
+        assert_eq!(lint.arguments, [OsString::from("a.yaml"), "b.yaml".into()]);
+        let odm = call(&["read-odm", "s.xml", "o.csv", "--max-xml-depth", "64"]);
+        assert_eq!(odm.value("--max-xml-depth"), Some(OsStr::new("64")));
     }
 
     #[test]
