@@ -213,6 +213,29 @@ class BundleArchiveTests(unittest.TestCase):
                 )
                 self.assertEqual(entries[staged + "expected/out.csv"], b"A\n1\n")
 
+    def test_only_a_manifest_alone_may_have_an_empty_unrecorded_library(self):
+        # tools/staging/vendor_crates.py reduces a crate that no supported
+        # target compiles to its manifest, with an empty src/lib.rs, which its
+        # checksum record does not list, where Cargo needs one to read it.
+        library = "parser-1.0.0/src/lib.rs"
+        for host in ("python", "r"):
+            for contents, admitted in (
+                ({"src/lib.rs": b""}, True),
+                ({"src/lib.rs": b"//\n"}, False),
+                ({"src/lib.rs": b"", "src/main.rs": b"//\n"}, False),
+            ):
+                parser = {**self.CRATES[host]["parser-1.0.0"], **contents}
+                crates = dict(self.CRATES[host], **{"parser-1.0.0": parser})
+                entries = self.entries(host, self.vendored(crates, (library,)))
+                with self.subTest(host=host, contents=contents):
+                    if admitted:
+                        self.assertEqual(self.check(entries)[0], host)
+                    else:
+                        with self.assertRaisesRegex(
+                            ValueError, "parser-1.0.0 differs from the files its"
+                        ):
+                            self.check(entries)
+
     def test_no_toolchain_file_anywhere(self):
         for host, name in (
             ("python", "rust-toolchain.toml"),

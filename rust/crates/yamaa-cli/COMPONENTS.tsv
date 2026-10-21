@@ -66,6 +66,7 @@ lz4_flex	0.11.6	MIT	crates.io	LZ4 codec for Parquet pages (the parquet feature);
 lz4_flex	0.13.1	MIT	crates.io	LZ4 codec for Parquet pages (the parquet feature); an older release comes with parquet's lz4 support
 memchr	2.8.3	MIT	crates.io	transitive dependency of quick-xml and serde_json: fast byte search
 miniz_oxide	0.9.1	MIT	crates.io	transitive dependency of flate2: the pure-Rust DEFLATE backend that yamaa-adapters names; flate2 prefers zlib-rs, which parquet's flate2 feature selects
+musl	1.2.5	MIT	https://musl.libc.org/, bundled in rust-std 1.99.1 for the musl targets	the C library that only the yamaa executables for x86_64-unknown-linux-musl and aarch64-unknown-linux-musl link, statically; their archives carry its notice, LICENSE-MUSL.txt
 num	0.4.3	MIT	crates.io	transitive dependency of the Arrow crates and parquet: generic numeric traits, re-exporting the num-* crates
 num-bigint	0.4.8	MIT	crates.io	big integers for exact decimal rounding (yamaa-core) and YAML integer scalars (the yaml feature); an older release comes with num and parquet
 num-bigint	0.5.1	MIT	crates.io	big integers for exact decimal rounding (yamaa-core) and YAML integer scalars (the yaml feature); an older release comes with num and parquet

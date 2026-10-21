@@ -39,7 +39,9 @@ The package follows "Using Rust in CRAN packages":
 - The crates.io crates that `src/rust/Cargo.lock` selects are bundled in
   `src/rust/vendor.tar.xz`, an xz-compressed tar written with
   `cargo vendor --locked --versioned-dirs` by `tools/vendor_crates.py`, which
-  the package carries. Nothing is downloaded at installation.
+  the package carries. A crate that no supported platform compiles keeps
+  only its manifest, which Cargo reads to resolve the lock. Nothing is
+  downloaded at installation.
 - `src/rust` holds only the crates that the package builds, with a
   `Cargo.lock` trimmed from the project's. The package has no
   `rust-toolchain.toml` or `rust-toolchain` file anywhere, the bundled crates
@@ -92,7 +94,8 @@ The package follows "Using Rust in CRAN packages":
   C library.
 - The archive contains no binary executable code. `wit-bindgen`, a crate
   that only WebAssembly targets build, ships prebuilt WebAssembly objects;
-  they are left out, and their C sources remain.
+  like every crate that no supported platform compiles, it is bundled as
+  its manifest alone.
 
 ## Reverse dependencies
 

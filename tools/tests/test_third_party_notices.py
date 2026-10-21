@@ -44,6 +44,16 @@ LLVM_CLAUSE = (
     "the License, but only in their entirety and only with respect to the Combined\n"
     "Software.\n"
 )
+# compiler-builtins' LICENSE.txt: its statement, MIT, and Apache-2.0 with the
+# LLVM exception (#3494).
+BUILTINS = (
+    "The compiler-builtins crate is available for use under both the MIT "
+    "license\nand the Apache-2.0 license with the LLVM exception.\n\n"
+    + MIT.format(holder="compiler-builtins")
+    + APACHE
+    + "---- LLVM Exceptions to the Apache 2.0 License ----\n\n"
+    + LLVM_CLAUSE
+)
 # The targets of the test graphs: a crate of any other target is not linked.
 LINUX, WINDOWS = "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc"
 PROJECT_LICENSE = b"MIT License\n\nCopyright (c) 2026 yamaa contributors\n"
@@ -215,7 +225,8 @@ def standard_library_sources(root):
     std links cfg-if and hashbrown everywhere, libc off Windows, and with its
     backtrace feature addr2line and gimli. hashbrown asks for foldhash only
     through a weak feature, unwinding and dlmalloc are xous's, rand is a
-    dev-dependency and cc a build dependency.
+    dev-dependency and cc a build dependency. Of the in-tree crates, std links
+    compiler_builtins everywhere, which declares a license of its own.
     """
     library = root / "library"
     registry = '\nsource = "registry+https://github.com/rust-lang/crates.io-index"'
@@ -233,10 +244,11 @@ def standard_library_sources(root):
             package(
                 "std",
                 "0.0.0",
-                ["addr2line", "cc", "cfg-if", "core", "dlmalloc", "hashbrown"]
-                + ["libc", "rand", "unwind"],
+                ["addr2line", "cc", "cfg-if", "compiler_builtins", "core"]
+                + ["dlmalloc", "hashbrown", "libc", "rand", "unwind"],
                 source=False,
             ),
+            package("compiler_builtins", "0.1.160", ["core"], source=False),
             package("core", "0.0.0", source=False),
             package(core, "1.99.0", ["core"], source=False),
             package("unwind", "0.0.0", ["libc", core, "unwinding"], source=False),
@@ -264,6 +276,7 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 core = { path = "../core" }
+compiler_builtins = { path = "../compiler-builtins/compiler-builtins" }
 cfg-if = { version = "1.0", features = ['rustc-dep-of-std'] }
 hashbrown = { version = "0.17", default-features = false, features = [
     'rustc-dep-of-std',
@@ -291,6 +304,13 @@ backtrace = ['addr2line/rustc-dep-of-std']
 panic-unwind = []
 """,
         "core/Cargo.toml": '[package]\nname = "core"\nversion = "0.0.0"\n',
+        "compiler-builtins/compiler-builtins/Cargo.toml": (
+            '[package]\nname = "compiler_builtins"\nversion = "0.1.160"\n'
+            'license = "MIT AND Apache-2.0 WITH LLVM-exception AND (MIT OR '
+            'Apache-2.0)"\n\n[dependencies]\ncore = { path = "../../core" }\n'
+        ),
+        "compiler-builtins/LICENSE.txt": BUILTINS,
+        "compiler-builtins/libm/LICENSE.txt": MIT.format(holder="libm"),
         f"{core}/Cargo.toml": (
             f'[package]\nname = "{core}"\nversion = "1.99.0"\n\n'
             '[dependencies]\ncore = { path = "../core" }\n'
@@ -682,7 +702,8 @@ class StandardLibraryNotice(unittest.TestCase):
         )
         self.assertEqual(
             [crate.name for crate in expected.crates],
-            ["addr2line", "cfg-if", "gimli", "hashbrown", "libc"],
+            ["addr2line", "cfg-if", "compiler_builtins", "gimli", "hashbrown"]
+            + ["libc"],
         )
         printed = [
             "rustc 1.99.1\nrelease: 1.99.1\n",
@@ -759,6 +780,7 @@ class StandardLibrarySources(unittest.TestCase):
             [
                 ("addr2line", "0.27.1"),
                 ("cfg-if", "1.0.4"),
+                ("compiler_builtins", "0.1.160"),
                 ("gimli", "0.34.0"),
                 ("hashbrown", "0.17.1"),
                 ("libc", "0.2.189"),
@@ -776,11 +798,74 @@ class StandardLibrarySources(unittest.TestCase):
                 (),
             ),
         )
+        # An in-tree crate that declares a license of its own is chosen like a
+        # crate from the files that LIBRARY_IN_TREE names (#3494): every part
+        # of MIT AND Apache-2.0 WITH LLVM-exception AND (MIT OR Apache-2.0).
+        self.assertEqual(
+            crates[2],
+            notices.Notice(
+                "compiler_builtins",
+                "0.1.160",
+                "in-tree, compiler-builtins/compiler-builtins",
+                ("MIT", "Apache-2.0 WITH LLVM-exception"),
+                (
+                    ("compiler-builtins/LICENSE.txt", BUILTINS),
+                    ("compiler-builtins/libm/LICENSE.txt", MIT.format(holder="libm")),
+                ),
+                (),
+            ),
+        )
         # Windows with MSVC links neither libc nor the backtrace crates.
-        self.assertEqual(self.linked(sources, PLATFORMS[1:]), ["cfg-if", "hashbrown"])
+        self.assertEqual(
+            self.linked(sources, PLATFORMS[1:]),
+            ["cfg-if", "compiler_builtins", "hashbrown"],
+        )
         # Without backtrace, std links no crate that symbolizes backtraces.
         with mock.patch.object(notices, "LIBRARY_FEATURES", ("panic-unwind",)):
-            self.assertEqual(self.linked(sources), ["cfg-if", "hashbrown", "libc"])
+            self.assertEqual(
+                self.linked(sources),
+                ["cfg-if", "compiler_builtins", "hashbrown", "libc"],
+            )
+
+    def test_in_tree_crates_of_their_own_license_are_the_reviewed_ones(self):
+        # Another license than the notice's, unreviewed, stops generation, as
+        # do a reviewed crate that std does not link and one that declares
+        # the notice's license.
+        builtins = "compiler-builtins/compiler-builtins/Cargo.toml"
+        for message, table, edit in (
+            (
+                "compiler_builtins 0.1.160: the in-tree crate declares 'MIT AND "
+                "Apache-2.0 WITH LLVM-exception AND (MIT OR Apache-2.0)'",
+                {},
+                None,
+            ),
+            (
+                "LIBRARY_IN_TREE lists profiler_builtins, which std does not link",
+                dict(notices.LIBRARY_IN_TREE, profiler_builtins=()),
+                None,
+            ),
+            (
+                "compiler_builtins 0.1.160: the in-tree crate declares "
+                "'Apache-2.0 OR MIT'",
+                notices.LIBRARY_IN_TREE,
+                (
+                    builtins,
+                    "MIT AND Apache-2.0 WITH LLVM-exception AND (MIT OR Apache-2.0)",
+                    "Apache-2.0 OR MIT",
+                ),
+            ),
+        ):
+            sources = self.sources()
+            if edit:
+                relative, old, new = edit
+                manifest = sources / relative
+                manifest.write_text(manifest.read_text().replace(old, new))
+            with (
+                self.subTest(message=message),
+                mock.patch.object(notices, "LIBRARY_IN_TREE", table),
+                self.assertRaisesRegex(ValueError, re.escape(message)),
+            ):
+                notices.library_crates(sources, PLATFORMS)
 
     def test_a_feature_enables_an_optional_dependency_and_a_weak_one_does_not(self):
         sources = self.sources()
@@ -1355,7 +1440,8 @@ class LockedClosure(unittest.TestCase):
         # each with the one license relied on.
         self.assertIn(
             "From the rust-src component of Rust 1.99.1, lib/rustlib/src/rust/library, "
-            "the\ncrates that the standard library links:\n\n"
+            "the\ncrates that the standard library links, and those of its in-tree "
+            "crates that\ndeclare a license of their own:\n\n"
             "Crate: windows-sys 0.61.2\n    License: MIT\n    Texts: [",
             standard,
         )
@@ -1374,6 +1460,25 @@ class LockedClosure(unittest.TestCase):
         )
         self.assertIn("Crate: vex-sdk 0.27.1\n    License: MIT\n    Texts: [", rendered)
         self.assertIn("canonical MIT text; the crate package ships none", rendered)
+        # An in-tree crate names its directory and every license relied on.
+        builtins = notices.Notice(
+            "compiler_builtins",
+            "0.1.160",
+            "in-tree, compiler-builtins/compiler-builtins",
+            ("MIT", "Apache-2.0 WITH LLVM-exception"),
+            (("compiler-builtins/LICENSE.txt", BUILTINS),),
+            (),
+        )
+        rendered = notices.render(
+            notice, dataclasses.replace(LIBRARY, crates=(builtins,)), "python"
+        )
+        self.assertIn(
+            "Crate: compiler_builtins 0.1.160\n"
+            "    Source: in-tree, compiler-builtins/compiler-builtins\n"
+            "    License: MIT AND Apache-2.0 WITH LLVM-exception\n"
+            "    Texts: [",
+            rendered,
+        )
 
     def test_the_command_line_notices_name_musl_for_the_musl_targets(self):
         metadata, closures = self.built()

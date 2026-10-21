@@ -28,7 +28,11 @@ A host's inventory lists the components that its packages are built from:
   that toolchain, which those packages link. A source archive links the
   standard library of whatever toolchain builds it, so its inventory has no
   such row; the R package's configure step adds the row of the toolchain that
-  builds it when R installs it.
+  builds it when R installs it;
+- for the command line (MUSL_HOSTS), the musl C library that the pinned
+  toolchain bundles for the musl targets, which the command-line binaries
+  for those targets alone link (#3030 D168). Every command-line archive
+  carries the same inventory, so the row's purpose names those targets.
 
 It is tab-separated UTF-8 text with LF line endings: a header row, then one
 row per component, sorted by name and version (the row that the R package's
@@ -36,7 +40,9 @@ configure step appends follows them), with these columns:
 
 - name and version: the locked crate's, the C code's upstream release, or
   rust-std and the Rust release that rust/rust-toolchain.toml pins, or for
-  the row that configure appends, the release that rustc reports;
+  the row that configure appends, the release that rustc reports, or musl
+  and the release that MUSL in generate_third_party_notices.py pairs with
+  that pinned toolchain;
 - license: the license that yamaa relies on, as the notices choose it from
   the expression that the crate's manifest declares
   (generate_third_party_notices.relied_on), or that it relies on for the C
@@ -46,10 +52,12 @@ configure step appends follows them), with these columns:
   the yamaa repository, followed for a vendored copy of third-party code by
   the upstream repository and the commit that its provenance names; for
   bundled C code, the crate that bundles it; for the standard library, the
-  Rust repository at the release's tag;
+  Rust repository at the release's tag; for musl, its home and the
+  standard library that bundles it;
 - purpose: the crate's purpose in tools/packaging/crate_purposes.toml, or the
   C code's in VENDORED below, or the standard library's, BINARY_PURPOSE or,
-  for the row that configure appends, INSTALLED_PURPOSE.
+  for the row that configure appends, INSTALLED_PURPOSE, or musl's
+  (musl_library).
 
 No column holds a digest: a component is named by its name, version, license,
 source and purpose (AGENTS.md, no content hashing).
@@ -113,6 +121,14 @@ INSTALLED_PURPOSE = (
     "compiled this package, statically linked into its native code; configure "
     "adds this row at installation with the version that rustc reports"
 )
+# The hosts whose binaries for the musl targets link the musl C library that
+# the pinned toolchain bundles for them, statically (#3030 D168): the command
+# line. Its release is the one that MUSL in generate_third_party_notices.py
+# pairs with that toolchain, so another pinned toolchain stops the inventory,
+# as it stops the notices, until the musl release is reviewed.
+MUSL_HOSTS = frozenset({"cli"})
+MUSL_LIBRARY = "musl"
+MUSL_LICENSE = "MIT"
 # A vendored crate's PROVENANCE.md names the upstream commit it was taken from.
 UPSTREAM_COMMIT = re.compile(r"The upstream release commit is `([0-9a-f]{40})`\.")
 # The README of the vendored ReadStat sources names their upstream release,
@@ -241,6 +257,22 @@ def standard_library(release, purpose=BINARY_PURPOSE):
     )
 
 
+def musl_library(release):
+    """The row of the musl C library that Rust `release`, the pinned
+    toolchain, bundles for the musl targets, which only the command-line
+    binaries for those targets link."""
+    targets = " and ".join(notices.MUSL_TARGETS)
+    return Component(
+        MUSL_LIBRARY,
+        notices.musl_release(release),
+        MUSL_LICENSE,
+        f"{notices.MUSL_HOME}, bundled in {STANDARD_LIBRARY} {release} for the "
+        "musl targets",
+        f"the C library that only the yamaa executables for {targets} link, "
+        f"statically; their archives carry its notice, {notices.MUSL_NOTICE}",
+    )
+
+
 def crate_source(package):
     """Where a locked crate comes from: crates.io, or its directory, with the
     upstream repository and commit of a vendored copy in rust/vendor."""
@@ -261,14 +293,15 @@ def crate_source(package):
     return f"{directory}, from {repository} at {match[1]}"
 
 
-def components(kept, metadata, crate_purposes, release=None):
+def components(kept, metadata, crate_purposes, release=None, musl=False):
     """The inventory rows of a host, sorted by name and version.
 
     `kept` holds the (name, version, source) keys of the host's trimmed lock,
     `metadata` is the canonical lock's `cargo metadata` and `crate_purposes`
     maps crate names to purposes. `release` is the pinned Rust release for a
     host in BINARY_HOSTS, whose packages link its standard library, and None
-    for a host whose packages are source archives.
+    for a host whose packages are source archives. `musl` adds the row of
+    the musl C library that `release` bundles, for a host in MUSL_HOSTS.
     """
     packages = {
         (package["name"], package["version"], package["source"]): package
@@ -307,6 +340,10 @@ def components(kept, metadata, crate_purposes, release=None):
                 )
     if release is not None:
         rows.append(standard_library(release))
+    if musl:
+        if release is None:
+            raise ValueError("musl is linked only by packages of the pinned toolchain")
+        rows.append(musl_library(release))
     seen = set()
     for row in rows:
         if (row.name, row.version) in seen:
@@ -345,8 +382,9 @@ def generate(hosts, metadata):
         for host in hosts:
             kept = engine_bundle.stage_workspace(host, Path(scratch) / host)
             release = pinned if host in BINARY_HOSTS else None
+            musl = host in MUSL_HOSTS
             inventories[host] = render(
-                components(kept, metadata, crate_purposes, release)
+                components(kept, metadata, crate_purposes, release, musl)
             )
     return inventories
 

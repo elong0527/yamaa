@@ -26,7 +26,11 @@ library links, so those crates come from the toolchain's rust-src component
 instead (#3369): the crates that std links on each of the TARGETS, as
 library/std/Cargo.toml declares them for the features that LIBRARY_FEATURES
 names and library/Cargo.lock locks them, each with the texts that its package
-in library/vendor ships, chosen as for a locked crate. The repository checks
+in library/vendor ships, chosen as for a locked crate. The in-tree crates
+that std links and whose manifests declare a license that the notice does
+not give the standard library's files, such as compiler_builtins, are listed
+with them, with the license files that LIBRARY_IN_TREE names (#3494). The
+repository checks
 add rust-src to the pinned toolchain (tools/ci/toolchain.py); where it cannot
 be added, the environment variable that LIBRARY_SOURCES_VARIABLE names gives
 the library directory of an unpacked copy of the same component. The
@@ -282,6 +286,22 @@ LIBRARY_SOURCES_VARIABLE = "YAMAA_RUST_SRC_LIBRARY"
 # default (its rust.backtrace setting) and which links the crates that
 # symbolize backtraces.
 LIBRARY_FEATURES = ("backtrace", "panic-unwind")
+# The license that the notice gives the standard library's own files, which
+# an in-tree crate's manifest declares in either order, if it declares any.
+LIBRARY_STATEMENT = frozenset({("LICENSE", "MIT"), ("LICENSE", "Apache-2.0")})
+# The in-tree crates that std links whose manifests declare another license,
+# which the notice does not give them (#3494), each with the license files
+# that its sources carry, relative to the library directory. Each is listed
+# with the crates of LIBRARY_SOURCES and chosen like a crate. Another such
+# crate stops generation until it is reviewed here.
+LIBRARY_IN_TREE = {
+    # A port of LLVM's compiler-rt, MIT AND Apache-2.0 WITH LLVM-exception,
+    # which compiles in the code of libm, MIT, a port of musl's libm.
+    "compiler_builtins": (
+        "compiler-builtins/LICENSE.txt",
+        "compiler-builtins/libm/LICENSE.txt",
+    ),
+}
 # A cfg option that `rustc --print cfg` prints: a name, or a name and a value.
 CFG_OPTION = re.compile(r'([A-Za-z_][A-Za-z0-9_]*)(?:="([^"\\]*)")?')
 # The tokens of a cfg() expression that selects a manifest's target table.
@@ -924,7 +944,9 @@ def enabled_features(unit, wanted):
 def library_crates(sources, platforms):
     """The notices of the out-of-tree crates that std links on the platforms,
     from the standard library's sources, a rust-src component's library
-    directory, chosen like a locked crate's from the package in vendor/.
+    directory, chosen like a locked crate's from the package in vendor/,
+    and of the in-tree crates of LIBRARY_IN_TREE that it links, chosen from
+    the files that the table names.
 
     library/Cargo.lock covers every platform and every feature of the
     workspace, so the crates follow the manifests: from std, built with
@@ -1012,7 +1034,7 @@ def library_crates(sources, platforms):
                 requested.add("default")
             requested |= asked.get(key, set()) | weak.get(key, set())
             pending.append((dependency(current, key, table), frozenset(requested)))
-    linked = set()
+    reached = set()
     for platform in platforms:
         seen, pending = set(), [root]
         while pending:
@@ -1024,11 +1046,19 @@ def library_crates(sources, platforms):
             for key, table in declared(current.manifest, platform):
                 if not table.get("optional") or key in enabled[identity]:
                     pending.append(dependency(current, key, table))
-        linked |= {identity for identity in seen if "source" in units[identity].locked}
-    notices = []
-    for name, version in sorted(
-        linked, key=lambda identity: (identity[0], version_key(identity[1]))
-    ):
+        reached |= seen
+    linked = {identity for identity in reached if "source" in units[identity].locked}
+    notices = [
+        in_tree_notice(sources, units[identity])
+        for identity in sorted(reached - linked)
+        if in_tree_license(units[identity])
+    ]
+    stale = set(LIBRARY_IN_TREE) - {notice.name for notice in notices}
+    if stale:
+        raise ValueError(
+            f"LIBRARY_IN_TREE lists {sorted(stale)[0]}, which std does not link"
+        )
+    for name, version in sorted(linked):
         current = units[(name, version)]
         package = {
             "name": name,
@@ -1043,7 +1073,42 @@ def library_crates(sources, platforms):
             raise ValueError(
                 f"{error} (the standard library's {LIBRARY_SOURCES})"
             ) from error
-    return tuple(notices)
+    return tuple(
+        sorted(notices, key=lambda notice: (notice.name, version_key(notice.version)))
+    )
+
+
+def in_tree_license(unit):
+    """Whether an in-tree crate of the standard library declares a license
+    that the notice does not give the library's files; one that does stops
+    generation unless LIBRARY_IN_TREE lists it."""
+    declared = unit.manifest["package"].get("license")
+    if declared is None:
+        own = False
+    else:
+        node = parse_expression(declared)
+        own = node[0] != "OR" or frozenset(node[1]) != LIBRARY_STATEMENT
+    if own != (unit.locked["name"] in LIBRARY_IN_TREE):
+        raise ValueError(
+            f"{unit.label}: the in-tree crate declares {declared!r}; list "
+            "in LIBRARY_IN_TREE exactly the in-tree crates that std links and "
+            "that declare another license than MIT OR Apache-2.0"
+        )
+    return own
+
+
+def in_tree_notice(sources, unit):
+    """The notice of an in-tree crate of LIBRARY_IN_TREE, chosen like a
+    crate's from the license files that the table names for it."""
+    name, version = unit.locked["name"], unit.locked["version"]
+    texts = {
+        relative: read_text(sources / relative) for relative in LIBRARY_IN_TREE[name]
+    }
+    files = [(relative, None) for relative in texts]
+    declared = unit.manifest["package"]["license"]
+    relied = relied_texts(unit.label, declared, files, texts)
+    directory = unit.directory.relative_to(sources).as_posix()
+    return Notice(name, version, f"in-tree, {directory}", *relied)
 
 
 def read_standard_library(documents, sources, release, platforms):
@@ -1182,7 +1247,8 @@ def render(notices, library, host):
     standard += wrapped("License texts:", references) + [""]
     standard += paragraph(
         f"From the rust-src component of Rust {release}, {LIBRARY_SOURCES}, "
-        "the crates that the standard library links:"
+        "the crates that the standard library links, and those of its in-tree "
+        "crates that declare a license of their own:"
     )
     for crate in library.crates:
         standard += entry(crate, "the crate package ships none")
@@ -1246,7 +1312,9 @@ def render(notices, library, host):
         "and for the features that the Rust project builds std with, and their "
         "dependencies, at the versions that library/Cargo.lock locks, each with "
         "the texts that its package in library/vendor ships, chosen like a "
-        "crate's."
+        "crate's, and the in-tree crates that the standard library links whose "
+        "manifests declare a license that the notice does not give them, with "
+        "the license files of their sources."
     )
     lines += paragraph(
         "This file is generated by tools/packaging/generate_third_party_notices.py "

@@ -376,7 +376,13 @@ class PackageNotices(unittest.TestCase):
         return data.getvalue()
 
     def test_no_text_names_a_gnu_license_outside_the_reviewed_vendored_crates(self):
-        gpl = b"GNU GENERAL PUBLIC LICENSE\nVersion 2, June 1991\n"
+        # The header of a zstd source, which offers BSD-3-Clause or GPL-2.0.
+        header = (
+            b" * This source code is licensed under both the BSD-style license "
+            b"(found in the\n * LICENSE file in the root directory of this "
+            b"source tree) and the GPLv2 (found\n * in the COPYING file in "
+            b"the root directory of this source tree).\n"
+        )
         llvm = (
             b"In addition, if you combine or link compiled forms of this Software "
             b'with\nsoftware that is licensed under the GPLv2 ("Combined Software") '
@@ -388,9 +394,13 @@ class PackageNotices(unittest.TestCase):
             b"entirety and only with respect to the Combined\nSoftware.\n"
         )
         vendored = {
-            # zstd's own sources and r-efi's notice, as cargo vendor writes them.
-            "vendor/zstd-sys-2.1.2+zstd.1.5.7/zstd/COPYING": gpl,
-            "vendor/r-efi-5.3.0/AUTHORS": b"the GNU Lesser General Public License\n",
+            # zstd's own sources, as cargo vendor writes them, and the manifest
+            # alone that the packages keep of r-efi, which no supported target
+            # compiles (tools/staging/vendor_crates.py).
+            "vendor/zstd-sys-2.1.2+zstd.1.5.7/zstd/lib/zstd.h": header,
+            "vendor/r-efi-5.3.0/Cargo.toml": (
+                b'license = "MIT OR Apache-2.0 OR LGPL-2.1-or-later"\n'
+            ),
             # The LLVM exception names GPLv2 but grants no GNU license.
             "vendor/rustix-1.1.5/LICENSE-Apache-2.0_WITH_LLVM-exception": llvm,
             "vendor/windows-sys-0.61.2/src/lib.rs": b"pub lgpl: LOGPALETTE,\n",
@@ -426,7 +436,7 @@ class PackageNotices(unittest.TestCase):
                     f"yamaa-0.4.0/{name}": data
                     for name, data in self.sdist_notices.items()
                 },
-                "yamaa-0.4.0/vendor/zstd-sys-2.1.2+zstd.1.5.7/zstd/COPYING": gpl,
+                "yamaa-0.4.0/vendor/zstd-sys-2.1.2+zstd.1.5.7/zstd/lib/zstd.h": header,
             },
         )
         self.assertEqual(len(packages.check_archive(sdist, self.root)), 3)
