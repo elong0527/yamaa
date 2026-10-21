@@ -1114,8 +1114,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         let section = &declared.sections[0];
         let required = composition::Required::admit(
             declared.study.as_ref(),
-            Some(section),
-            section.family,
+            section,
             yamaa_core::ast::Surface::V0_5,
         )
         .unwrap();
