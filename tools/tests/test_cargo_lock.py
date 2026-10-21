@@ -607,7 +607,8 @@ class RLinkStepTests(unittest.TestCase):
         self.assertEqual(
             str(caught.exception),
             "src/Makevars.in: -Wl,-s strips the shared object at R's link step; "
-            "the R package keeps its symbols, as CRAN's Repository Policy asks",
+            "the R package strips nothing itself, as CRAN's Repository Policy "
+            "asks (on Windows, R's own link flags strip every package DLL)",
         )
 
     def test_a_tab_led_line_is_a_recipe_only_in_an_open_rule(self):

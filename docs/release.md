@@ -633,12 +633,16 @@ recipe also keeps Cargo's build directory in the target directory and runs no
 rustc wrapper, whatever the environment or a `.cargo/config.toml` in a parent
 directory sets (`CARGO_BUILD_BUILD_DIR` or `build.build-dir`, and
 `RUSTC_WRAPPER`, `RUSTC_WORKSPACE_WRAPPER` or their `build.` keys). The Makevars
-build the release profile, which strips nothing, so the shared object keeps
-its symbols: CRAN's Repository Policy asks a package not to remove diagnostic
-information such as symbols in shared objects. The package's
+build the release profile, which strips nothing, and override none of R's
+link flags: CRAN's Repository Policy asks a package not to remove diagnostic
+information such as symbols in shared objects. The shared object therefore
+keeps its symbols on Linux and macOS. On Windows, R's own toolchain links
+every package DLL with `-s`, also in the binary packages that CRAN and the
+release build, so the Windows `yamaa.dll` carries no symbol table; the flag
+is R's, not the package's (#3030 D140). The package's
 `src/rust/Cargo.toml` leaves out the wheels' stripping `dist` profile, so it
 names no stripping, and `check_cargo_lock` refuses an R source package whose
-build would strip.
+Makevars or Cargo profile would strip.
 
 CRAN's policy admits no binary executable code in a source package, and
 neither package carries any: the vendoring script leaves out the prebuilt
