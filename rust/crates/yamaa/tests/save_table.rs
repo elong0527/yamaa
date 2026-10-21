@@ -326,6 +326,21 @@ fn an_extension_outside_the_closed_mapping_is_refused_before_anything_is_written
     assert_eq!(study.entries(), ["odm.xml"]);
 }
 
+/// The one issue of a refused save of a run of a 1.0 specification over
+/// `ids.csv` whose output is `output`.
+fn run_refusal(study: &Study, engine: &Engine, output: &str) -> Diagnostic {
+    study.write("ids.csv", "ID\n1\n");
+    study.write(
+        "ids.yaml",
+        &format!("yamaa: \"1.0\"\ntype: spec\ndomain: IDS\nkeys: [ID]\ninput:\n  RAW: {{path: ids.csv, types: {{ID: int}}}}\noutput: {{path: {output}, columns: [ID]}}\ncolumns:\n  - {{name: ID, type: int, label: Identifier, derivation: RAW.ID}}\n"),
+    );
+    let mut run = engine
+        .spec_run(&study.path("ids.yaml"), None, &CancellationToken::new())
+        .unwrap();
+    assert_eq!(run.status(), Status::Succeeded, "{:?}", run.diagnostics());
+    issue(&run.save().unwrap_err()).clone()
+}
+
 /// A target that cannot be written is refused as a run's save refuses one
 /// (OUTPUT-8, #3030 D99): a missing directory, a directory, a trailing
 /// separator and a link name no file the publisher may replace.
@@ -334,6 +349,18 @@ fn a_target_that_cannot_be_written_is_refused_as_a_run_refuses_it() {
     let study = Study::new();
     let engine = engine();
     let table = items(&study, &engine);
+    // A run whose output is in a missing directory records this issue.
+    let ran = run_refusal(&study, &engine, "absent/ids.csv");
+    let saved = engine
+        .save_table(&table, &study.path("absent/items.csv"))
+        .unwrap_err();
+    let saved = issue(&saved);
+    assert_eq!(
+        (&saved.code, &saved.spec_path, saved.context.to_json()),
+        (&ran.code, &ran.spec_path, ran.context.to_json())
+    );
+    std::fs::remove_file(study.0.join("ids.csv")).unwrap();
+    std::fs::remove_file(study.0.join("ids.yaml")).unwrap();
     std::fs::create_dir(study.0.join("folder.csv")).unwrap();
     #[cfg(unix)]
     {
@@ -390,17 +417,28 @@ fn a_file_that_cannot_be_staged_is_refused_and_leaves_nothing() {
     let probe = std::fs::write(locked.join("probe"), b"");
     let out = study.path("locked/items.csv");
     let saved = engine.save_table(&table, &out);
+    let ran = probe
+        .is_err()
+        .then(|| run_refusal(&study, &engine, "locked/ids.csv"));
     std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o700)).unwrap();
-    if probe.is_ok() {
+    let Some(ran) = ran else {
         // A privileged user is not refused; nothing to observe here.
         return;
-    }
+    };
     let failure = saved.unwrap_err();
     assert_output_fault(&failure, "publication_failed");
     let issue = issue(&failure);
     assert_eq!(issue.context.get("path"), Some(&text(&out)));
     assert_eq!(issue.context.get("entered"), Some(&ContextValue::Int(1)));
     assert_eq!(issue.context.get("completed"), Some(&ContextValue::Int(0)));
+    // A run's save stopped there records the same condition, code and
+    // attempt, at its output field and with the path its specification wrote.
+    assert_eq!(ran.code, issue.code);
+    assert_eq!(ran.spec_path, ["output.path"]);
+    for key in ["stage", "code", "entered", "completed"] {
+        assert_eq!(ran.context.get(key), issue.context.get(key), "{key}");
+    }
+    assert_eq!(ran.context.get("path"), Some(&text("locked/ids.csv")));
     assert_eq!(std::fs::read_dir(&locked).unwrap().count(), 0);
     // Once the directory admits it, the same call saves.
     assert_eq!(engine.save_table(&table, &out).unwrap(), [out.as_str()]);
@@ -426,10 +464,10 @@ fn a_table_neither_profile_writes_is_refused() {
     assert!(study.entries().is_empty());
 }
 
-/// Through a caller's resolver, a target the resolver refuses is refused as
-/// a run's target is.
+/// Through a caller's resolver, a target the resolver refuses fails with the
+/// resource code a run's refused target records, and nothing is staged.
 #[test]
-fn a_target_a_resolver_refuses_is_refused_as_a_run_refuses_it() {
+fn a_target_a_caller_resolver_refuses_fails_with_its_resource_code() {
     let resolver = Arc::new(MemoryResolver::new());
     resolver.insert("/", "odm.xml", "odm:1", Arc::from(ODM.as_bytes()));
     let engine = Engine::new(
