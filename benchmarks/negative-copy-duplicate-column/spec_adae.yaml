@@ -1,0 +1,44 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADAE
+keys: [STUDYID, USUBJID, AESEQ]
+
+input:
+  AE: input/ae.csv
+  ADSL:
+    path: adsl.csv
+    schema: spec_adsl.yaml
+    key: [STUDYID, USUBJID]
+
+base: AE
+
+output:
+  path: adae.csv
+  columns: [STUDYID, USUBJID, AESEQ, AETERM, AGE, SEX]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: AE.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: AE.USUBJID
+
+  - name: AESEQ
+    type: int
+    label: Sequence Number
+    derivation: AE.AESEQ
+
+  - name: AETERM
+    type: str
+    label: Reported Term for the Adverse Event
+    derivation: AE.AETERM
+
+  # The event records already carry USUBJID.
+  - copy:
+      dataset: ADSL
+      columns: [USUBJID, AGE, SEX]

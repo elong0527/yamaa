@@ -1,0 +1,54 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADSL
+keys: [STUDYID, USUBJID]
+
+input:
+  DM: input/dm.csv
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, AGE, SEX, ARM, TRTSDT]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM.USUBJID
+
+  - name: AGE
+    type: int
+    label: Age
+    derivation: DM.AGE
+    submission:
+      length: 8
+      origins:
+        - type: Predecessor
+          description: DM.AGE
+
+  - name: SEX
+    type: str
+    label: Sex
+    derivation: DM.SEX
+    submission:
+      length: 1
+      origins:
+        - type: Predecessor
+          description: DM.SEX
+
+  - name: ARM
+    type: str
+    label: Description of Planned Arm
+    derivation: DM.ARM
+
+  # A subject never exposed to treatment has no first exposure date.
+  - name: TRTSDT
+    type: date
+    label: Date of First Exposure to Treatment
+    derivation: DM.RFXSTDTC
