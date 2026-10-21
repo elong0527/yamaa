@@ -430,9 +430,12 @@ unchanged or trimmed and verified against them, and the repository check keeps
 the committed notices equal to those generated from the canonical lock; these
 compatibility lanes supplement [native qualification](rust/qualification/README.md).
 
-Before every merge into `main` or a `release/X.Y.Z` branch, run a fresh
-read-only review check with an authenticated GitHub CLI, supplying the exact
-final commit:
+Before every merge into `main` or a `release/X.Y.Z` branch, bring the branch up
+to date with its base and wait until CI is green on the exact head, the
+`equivalence` legs and `conversion` included. Never merge while a required job
+is queued, running or cancelled (D176 on #3030). Then run a fresh read-only
+review check with an authenticated GitHub CLI, supplying the exact final
+commit:
 
 ```sh
 python -m tools.ci.review_gate --repository elong0527/yamaa --pr <number> --head <full-commit>
@@ -462,7 +465,10 @@ PRs above 300 changed files require bounded coverage below, including when a
 shared head already has a successful status. Triage findings outside inline
 threads as well.
 The fresh manual check above remains mandatory before every merge, except when
-CodeRabbit cannot review the PR; AGENTS.md states what replaces it then.
+CodeRabbit cannot review the PR (its free reviews are exhausted, or it skips
+the PR). Merging then does not wait for it: the owner's maintenance session
+(D175 on #3030) records its review of the exact diff on the PR as
+`## Review of <full sha>`.
 An atomic change above CodeRabbit's 300-file review limit can use bounded
 review-only PRs. Each review PR must have a distinct head commit with the
 **complete target head tree**, a synthetic base in this repository, and at
