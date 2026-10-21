@@ -25,10 +25,12 @@ These break:
 - a new required field of an element the baseline has, or a field made
   required;
 - a removed enumerated value, or enumerated values where there were none;
-- extra properties refused where they were admitted.
+- extra properties refused where they were admitted, or a changed schema
+  restricting their values, conservatively unless they were already refused.
 
 Descriptions and the notation type (`x-yamaa-type`) are not compared, and any
-change to a keyword not named here breaks.
+change to a keyword not named here breaks, including at the schema root.
+Unsupported conjunctions of type keywords fail the check.
 
 The grammars, yaml/grammar/expression.yaml and
 yaml/grammar/string-template.yaml. Each one is normalized into its functions,
@@ -133,6 +135,12 @@ def _alternatives(node, where, inner=False):
     unread = sorted(set(node) - TYPE_KEYWORDS - PROSE) if inner else []
     if unread:
         raise ManifestError(f"{where}: cannot compare {', '.join(unread)} in a type")
+    for keyword in ("$ref", "anyOf"):
+        siblings = sorted((set(node) & TYPE_KEYWORDS) - {keyword})
+        if keyword in node and siblings:
+            raise ManifestError(
+                f"{where}: cannot compare {', '.join(siblings)} alongside {keyword}"
+            )
     if "$ref" in node:
         reference = node["$ref"]
         if not (isinstance(reference, str) and reference.startswith(DEFINITIONS)):
@@ -199,7 +207,15 @@ def _facts(node, where, parent, required):
         raise ManifestError(f"{where}: expected a list of values and integer bounds")
     extra = None
     if "properties" in node:
-        extra = "closed" if node.get("additionalProperties") is False else "open"
+        rule = node.get("additionalProperties", True)
+        if type(rule) is bool:
+            extra = "open" if rule else "closed"
+        elif isinstance(rule, dict):
+            extra = _canonical(rule) if rule else "open"
+        else:
+            raise ManifestError(
+                f"{where}: expected an extra-property schema or boolean"
+            )
     return {
         "parent": parent,
         "type": _alternatives(node, where),
@@ -248,7 +264,9 @@ def schema_inventory(tree, path):
         for name, field in properties.items():
             add(f"{element}.{name}", field, element, name in needed)
 
-    add("$ref", {"$ref": document.get("$ref")})
+    root = {key: value for key, value in document.items() if key != "$defs"}
+    root.setdefault("$ref", None)
+    add("$ref", root)
     for name, node in definitions.items():
         add(name, node)
     return inventory
@@ -306,9 +324,18 @@ def _compare_facts(manifest, element, old, new):
             if gained := [value for value in new["enum"] if value not in old["enum"]]:
                 yield change(_many("enumerated value", gained, "added"), False)
     if None not in (old["extra"], new["extra"]) and old["extra"] != new["extra"]:
-        closed = new["extra"] == "closed"
-        what = "extra properties" + (" now refused" if closed else " now admitted")
-        yield change(what, closed)
+        if new["extra"] in ("open", "closed"):
+            closed = new["extra"] == "closed"
+            what = "extra properties" + (" now refused" if closed else " now admitted")
+            yield change(what, closed)
+        else:
+            # A schema can restrict the values of extra properties. Except
+            # when extras were already forbidden, conservatively report a
+            # changed schema as breaking rather than treating it as open.
+            yield change(
+                _changed("extra-property rule", old["extra"], new["extra"]),
+                old["extra"] != "closed",
+            )
     for bound in LOWER_BOUNDS + UPPER_BOUNDS:
         before, after = old[bound], new[bound]
         if before != after:

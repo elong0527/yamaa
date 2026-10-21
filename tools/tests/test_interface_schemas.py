@@ -559,6 +559,70 @@ class Breaks(Temporary):
             },
         )
 
+    def test_root_schema_constraints_are_compared(self):
+        repo, document, _, _ = self.repository()
+        document["allOf"] = [False]
+        repo.save(document)
+        self.assertEqual(
+            repo.changes(),
+            {SCHEMA: [("$ref", "allOf changed from none to `[false]`", True)]},
+        )
+
+    def test_schema_valued_extra_property_rules_are_compared(self):
+        document = copy.deepcopy(DOCUMENT)
+        document["$defs"]["thing_class"]["additionalProperties"] = {"type": "string"}
+        repo, document, definitions, _ = self.repository(document)
+        for rule, what, breaking in (
+            (
+                {"type": "integer"},
+                'extra-property rule changed from `{"type": "string"}` '
+                'to `{"type": "integer"}`',
+                True,
+            ),
+            (False, "extra properties now refused", True),
+            (True, "extra properties now admitted", False),
+            ({}, "extra properties now admitted", False),
+        ):
+            with self.subTest(rule=rule):
+                definitions["thing_class"]["additionalProperties"] = rule
+                repo.save(document)
+                self.assertEqual(
+                    repo.changes(), {SCHEMA: [("thing_class", what, breaking)]}
+                )
+
+        definitions["thing_class"]["additionalProperties"] = {"type": "string"}
+        definitions["step"]["additionalProperties"] = {"type": "string"}
+        repo.save(document)
+        self.assertEqual(
+            repo.changes(),
+            {
+                SCHEMA: [
+                    (
+                        "step",
+                        "extra-property rule changed from `closed` "
+                        'to `{"type": "string"}`',
+                        False,
+                    )
+                ]
+            },
+        )
+
+    def test_unsupported_type_keyword_conjunctions_fail_closed(self):
+        repo, document, _, fields = self.repository()
+        for node, message in (
+            ({**IDENTIFIER, "type": "integer"}, "type alongside \\$ref"),
+            (
+                {"anyOf": [{"type": "string"}], "type": "integer"},
+                "type alongside anyOf",
+            ),
+            ({**IDENTIFIER, "items": {"type": "integer"}}, "items alongside \\$ref"),
+        ):
+            with self.subTest(node=node):
+                fields["name"] = node
+                repo.save(document)
+                with self.assertRaisesRegex(ManifestError, message):
+                    repo.changes()
+
     def test_a_removed_grammar_element_breaks(self):
         repo, *_ = self.repository()
         grammar = repo.grammar(SCHEMAS.EXPRESSION)
