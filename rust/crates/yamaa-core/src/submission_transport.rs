@@ -273,7 +273,8 @@ fn width(value: ValueRef<'_>) -> usize {
 }
 
 /// Whether a value-level entry selects one held row: every where column's
-/// value is one of the values its clause lists.
+/// value is one of the values its clause lists, or none of them under `NE`
+/// and `NOTIN`.
 fn selects<T: TableAccess>(
     dataset: &Dataset,
     table: &T,

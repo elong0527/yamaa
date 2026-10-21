@@ -13,8 +13,12 @@ mod scalar {
         use yamaa_adapters::{file_application, specification_report::Identity};
         use yamaa_core::domain_entry::Request;
         static NEXT: AtomicUsize = AtomicUsize::new(0);
+        // The two benchmarks' specifications as 1.0 writes them, so that the
+        // tests that edit their text edit one language, whichever language
+        // the benchmarks are written in (#3422); the inputs and the expected
+        // output are the benchmark's own.
         const POSITIVE: &str =
-            include_str!("../../../../benchmarks/schema-round-half-away-from-zero-ties/spec.yaml");
+            include_str!("fixtures/converted/schema-round-half-away-from-zero-ties/spec.yaml");
         const INPUT: &[u8] = include_bytes!(
             "../../../../benchmarks/schema-round-half-away-from-zero-ties/input/adsl.csv"
         );
@@ -22,8 +26,8 @@ mod scalar {
             "../../../../benchmarks/schema-round-half-away-from-zero-ties/expected/adsl.csv"
         );
         const NEGATIVE: &str = include_str!(
-    "../../../../benchmarks/negative-round-half-away-from-zero-non-numeric-source/spec.yaml"
-);
+            "fixtures/converted/negative-round-half-away-from-zero-non-numeric-source/spec.yaml"
+        );
         struct Study(PathBuf);
         impl Study {
             fn new(source: &str, input: bool) -> Self {
@@ -273,19 +277,19 @@ mod scalar {
                     .replace("source: VAL1", "source: SOURCE.VAL1"),
                 false,
             );
-            let source = POSITIVE.replace("SOURCE: input/adsl.csv", "SOURCE: input/adsl.csv\n  LOOKUP: {path: input/lookup.csv, types: {VAL1: float}}\nbase: SOURCE\nintermediates:\n  - id: SELECTED\n    dataset: LOOKUP\n    key: [STUDYID, USUBJID]\n    no_match: {literal: null}").replace("source: VAL1", "source: SELECTED.VAL1");
+            let source = POSITIVE.replace("SOURCE: input/adsl.csv", "SOURCE: input/adsl.csv\n  LOOKUP: {path: input/lookup.csv, types: {VAL1: float}}\nbase: SOURCE\nintermediates:\n  - id: SELECTED\n    dataset: LOOKUP\n    key: [STUDYID, USUBJID]").replace("source: VAL1", "source: SELECTED.VAL1");
             qualified(&source, true);
         }
         #[test]
         fn nested_case_and_row_template_rounding_keep_the_same_independent_expected_rows() {
-            let source = POSITIVE.replace("round_half_away_from_zero:\n        source: VAL1\n        digits: 1", "case:\n        - when: \"VAL1 IS NOT NULL\"\n          then: {round_half_away_from_zero: {source: VAL1, digits: 1}}\n        - otherwise: {literal: null}");
+            let source = POSITIVE.replace("round_half_away_from_zero:\n        source: VAL1\n        digits: 1", "case:\n        - when: \"VAL1 IS NOT NULL\"\n          then: {round_half_away_from_zero: {source: VAL1, digits: 1}}\n        - otherwise: null");
             qualified(&source, false);
             let source = format!("{POSITIVE}\nrows:\n  - id: RECORDS\n    dataset: SOURCE\n    derivations:\n      RND1: {{round_half_away_from_zero: {{source: VAL1, digits: 1}}}}\n");
             qualified(&source, false);
         }
         #[test]
         fn unselected_case_uses_static_known_type_validation_before_study_capture() {
-            let source = NEGATIVE.replace("round_half_away_from_zero:\n        source: SEX\n        digits: 1", "case:\n        - when: \"SEX = 'NEVER'\"\n          then: {round_half_away_from_zero: {source: SEX, digits: 1}}\n        - otherwise: {literal: null}");
+            let source = NEGATIVE.replace("round_half_away_from_zero:\n        source: SEX\n        digits: 1", "case:\n        - when: \"SEX = 'NEVER'\"\n          then: {round_half_away_from_zero: {source: SEX, digits: 1}}\n        - otherwise: null");
             let study = Study::new(&source, false);
             let path = study.path();
             let findings = file_application::check(
@@ -913,8 +917,10 @@ mod scalar {
                     expected["spec_paths"],
                     "{name}"
                 );
+                // A 1.x specification's schema finding also names the files
+                // the run loaded, which the golden does not compare (#3422).
                 assert_eq!(
-                    yamaa_core::json::Value::Object(actual.context.clone()),
+                    crate::support::benchmarks::without_layer(actual.context.clone()),
                     expected["context"],
                     "{name}"
                 );
@@ -1269,10 +1275,13 @@ columns:
         fn runtime_impute_failure_retains_current_key_and_is_not_answered_by_invalid_handler() {
             let fixture = Fixture::new("negative-impute-bad-day");
             let specification = fixture.0.join("spec.yaml");
-            let unchanged = fs::read_to_string(&specification).unwrap();
+            // The benchmark's specification as 1.0 writes it, so the edit is
+            // in one language, whichever language the benchmark is written
+            // in (#3422); its inputs and expected error are its own.
+            let unchanged = include_str!("fixtures/converted/negative-impute-bad-day/spec.yaml");
             let handled = unchanged.replace(
                 "        day: 31\n",
-                "        day: 31\n        invalid: {literal: null}\n",
+                "        day: 31\n        invalid: null\n",
             );
             assert_ne!(handled, unchanged);
             fs::write(&specification, handled).unwrap();
@@ -1527,22 +1536,28 @@ columns:
                     Err(issues) => issues,
                 };
                 assert_eq!(issues.len(), 1);
-                assert_eq!(issue_json(&issues[0]), golden(&fixture), "{name}");
+                // A 1.x specification's schema finding also names the files
+                // the run loaded, which neither the golden nor the capture
+                // compares (#3422).
+                let mut found = issue_json(&issues[0]);
+                found["context"] =
+                    crate::support::benchmarks::without_layer(issues[0].context.clone());
+                assert_eq!(found, golden(&fixture), "{name}");
                 let reference: yamaa_core::json::Value = yamaa_adapters::json_wire::decode(
                     include_str!("fixtures/text_case_reference.json"),
                 )
                 .unwrap();
                 let mut shared = reference[name][0].clone();
                 if name == "negative-str-case-unknown" {
-                    // The complete independent legacy capture retains loader provenance.
-                    // Native schema diagnostics currently publish only normative facts.
+                    // The complete independent legacy capture retains loader provenance,
+                    // the files that capture loaded.
                     let context = shared["context"].as_object_mut().unwrap();
                     let source = context.remove("source").unwrap();
                     let entry = context.remove("entry").unwrap();
                     assert_eq!(source, entry);
                     assert_eq!(source, "/private/tmp/yamaa-root-text-operators/benchmarks/negative-str-case-unknown/spec.yaml");
                 }
-                assert_eq!(issue_json(&issues[0]), shared, "{name}");
+                assert_eq!(found, shared, "{name}");
             }
         }
         fn bespoke(source: &str, input: &[u8]) -> Fixture {
@@ -2175,7 +2190,11 @@ columns:
                 Ok(_) => panic!("invalid width must fail before input capture"),
             };
             assert_eq!(issues.len(), 1);
-            assert_eq!(issue_json(&issues[0]), golden(&fixture));
+            // A 1.x specification's schema finding also names the files the
+            // run loaded, which the golden does not compare (#3422).
+            let mut found = issue_json(&issues[0]);
+            found["context"] = crate::support::benchmarks::without_layer(issues[0].context.clone());
+            assert_eq!(found, golden(&fixture));
         }
         /// A positive width beyond any representable length is admitted
         /// (TEXT-2). A missing source yields missing without needing it, while

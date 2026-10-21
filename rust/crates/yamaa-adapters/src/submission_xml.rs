@@ -561,14 +561,22 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
                 let mut clause = Element::new("def:WhereClauseDef", value.path())
                     .attr("OID", format!("WC.{identity}"));
                 // One range check per where column, in written order: one
-                // value is an equality and several a membership.
-                for (position, listed) in value.clause() {
-                    let target = &dataset.columns()[*position].declaration().name.value;
+                // value is an equality and several a membership, and an
+                // exclusion is NE for one value and NOTIN for several
+                // (DEFINE-27).
+                for term in value.clause() {
+                    let target = &dataset.columns()[term.column].declaration().name.value;
+                    let comparator = match (term.excludes, term.values.len()) {
+                        (false, 1) => "EQ",
+                        (false, _) => "IN",
+                        (true, 1) => "NE",
+                        (true, _) => "NOTIN",
+                    };
                     let mut check = Element::new("RangeCheck", value.path())
-                        .attr("Comparator", if listed.len() == 1 { "EQ" } else { "IN" })
+                        .attr("Comparator", comparator)
                         .attr("SoftHard", "Soft")
                         .attr("def:ItemOID", format!("IT.{}.{target}", dataset.id()));
-                    for checked in listed {
+                    for checked in &term.values {
                         let mut code = Element::new("CheckValue", value.path());
                         code.text = Some(checked.clone());
                         check.push(code);

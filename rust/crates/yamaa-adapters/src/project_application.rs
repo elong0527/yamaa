@@ -402,8 +402,7 @@ fn inheritance_issues<'a>(
                 V::Entry(S::Findings(_))
                 | V::Clear { .. }
                 | V::Copy { .. }
-                | V::Producer(P::Findings(_))
-                | V::Unsupported(_) => true,
+                | V::Producer(P::Findings(_)) => true,
                 // A copy entry's producer that did not prepare reports its
                 // own findings, as a link's producer does (INPUT-10).
                 V::Producer(P::Preparation(producer)) => {
@@ -434,8 +433,7 @@ fn inheritance_issues<'a>(
         return Err(IssueError::Original(owner));
     }
     // Typed cause selection precedes projection; only language findings are
-    // kept, with a 1.x specification's refusal of a feature the engine does
-    // not build yet, and any other refusal stays with its original owner.
+    // kept, and any other refusal stays with its original owner.
     match diagnostics::inheritance_failure_ref(cause) {
         Ok(Rejection::Invalid(findings) | Rejection::Unsupported(findings))
             if findings.is_empty() =>
@@ -443,7 +441,6 @@ fn inheritance_issues<'a>(
             Err(invalid())
         }
         Ok(Rejection::Invalid(findings)) => Ok(findings),
-        Ok(Rejection::Unsupported(issues)) if matches!(cause, I::Versioned { .. }) => Ok(issues),
         _ => Err(IssueError::Original(owner)),
     }
 }

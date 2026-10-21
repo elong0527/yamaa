@@ -495,14 +495,15 @@ it is not redundant.
 
 A column's `submission` may declare `value_level` entries. Each entry has an
 `id` unique within the column, a `where` clause, and metadata fields that
-override the column's on the rows the clause selects; a field it leaves absent
-inherits the column's. `where` maps declared `str` output columns, other than
-the column itself, to nonempty lists of distinct values, and selects a row
-when every listed column holds one of its values. Two entries whose where
-clauses can select one row fail validation.
+override the column's on the rows the clause selects. `where` maps declared
+`str` output columns, other than the column itself, to nonempty lists of
+distinct values, and selects a row when every listed column holds one of its
+values or, under the comparator `NE` or `NOTIN`, none of them, missing
+included. Two entries whose where clauses can select one row fail
+validation.
 
 Fails: `value_level_where_invalid`, `duplicate_identifier`, `value_level_overlap`.
-Evidence: `sdtm-lb-metadata`, `adam-adlb-metadata`, `sdtm-suppdm-metadata`, `negative-value-level-overlap`, `negative-value-level-where-column`, `negative-numeric-test-code`, `negative-value-level-where-not-in-codelist`, `rust/crates/yamaa-core/src/submission_values.rs::static_findings_name_the_entry_column_and_fault`, `rust/crates/yamaa-core/tests/schema_submission.rs::each_independent_value_admission_control_has_the_required_condition_and_entry_path`, `rust/crates/yamaa-core/tests/schema_submission.rs::where_values_outside_the_where_columns_codelists_fail_composition`, `rust/crates/yamaa-core/tests/schema_submission.rs::entries_inherit_complete_metadata_and_preserve_written_occurrences`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::where_values_outside_the_where_columns_codelists_fail_before_data`, `rust/crates/yamaa/tests/project_binding.rs::a_where_value_is_never_left_unchecked_against_its_codelist`.
+Evidence: `sdtm-lb-metadata`, `adam-adlb-metadata`, `sdtm-suppdm-metadata`, `schema-value-level-not-equal`, `schema-value-level-not-in`, `negative-value-level-overlap`, `negative-value-level-excluded-overlap`, `negative-value-level-comparator-count`, `negative-value-level-where-column`, `negative-numeric-test-code`, `negative-value-level-where-not-in-codelist`, `rust/crates/yamaa/tests/language_header.rs::a_value_level_entry_selects_the_rows_that_hold_none_of_its_values`, `rust/crates/yamaa-core/src/submission_values.rs::an_exclusion_shares_the_values_it_does_not_list_and_the_missing_value`, `rust/crates/yamaa-core/src/submission_values.rs::ne_takes_one_value_and_notin_two_or_more`, `rust/crates/yamaa-core/src/submission_values.rs::static_findings_name_the_entry_column_and_fault`, `rust/crates/yamaa-core/tests/schema_submission.rs::each_independent_value_admission_control_has_the_required_condition_and_entry_path`, `rust/crates/yamaa-core/tests/schema_submission.rs::where_values_outside_the_where_columns_codelists_fail_composition`, `rust/crates/yamaa-core/tests/schema_submission.rs::entries_inherit_complete_metadata_and_preserve_written_occurrences`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::where_values_outside_the_where_columns_codelists_fail_before_data`, `rust/crates/yamaa/tests/project_binding.rs::a_where_value_is_never_left_unchecked_against_its_codelist`.
 
 The column-level `submission` stays the shared declaration for the column,
 and each entry supplies the metadata of the rows its where clause selects. An
@@ -513,30 +514,39 @@ shared metadata.
 
 An entry declares any column metadata field except `value_level`: `core`,
 `mandatory`, `role`, `data_type`, `length`, `significant_digits`,
-`display_format`, `codelist`, `inventory_vocabulary`, `origin`, `method` and
+`display_format`, `codelist`, `inventory_vocabulary`, `origins`, `method` and
 `comment`, and `label`, the description of its definition
 ([DEFINE-27](define-xml.md#define-27)), which defaults to the column's
 `label`. The entry's metadata merges field by field over the column's: a
-field the entry declares replaces the column's whole, nested classes such as
-`origin` included, and every rule of this profile applies to the merged
+field the entry declares replaces the column's whole, nested classes and the
+`origins` list included, and every rule of this profile applies to the merged
 metadata. An entry is reported at
 `columns.<column>.submission.value_level.<id>`.
 
 One value in a where clause selects the rows holding it, several values the
 rows holding any of them, and several columns the rows meeting every column.
+A where column written `{comparator: NE, values: [X]}` selects the rows that
+do not hold `X`, and `{comparator: NOTIN, values: [X, Y]}` the rows that hold
+none of its values; a row whose value is missing is among the rows either
+selects. `NE` takes exactly one value and `NOTIN` two or more. A comparison
+class without a comparator restates its list and fails as
+`redundant_long_form` ([SCHEMA-15](../reference/schema-language.md#schema-15)).
 A where column is compared on its completed value under [Values](../values.md)
 equality, and a missing value matches no listed value. Listed values are
 strings, which a value of another type never equals under
 [VALUE-19](../values.md#value-19), so a where column must be `str`. A where
 clause that names no column, or a where column that is the column itself, is
 not a declared column, is not in `output.columns`, is not of type `str`, lists
-no value, lists one value twice or lists a value its codelists do not admit,
-fails with `value_level_where_invalid` at `<entry>.where.<where column>`, or at
+no value, lists a number of values its comparator does not take, lists one
+value twice or lists a value its codelists do not admit, fails with
+`value_level_where_invalid` at `<entry>.where.<where column>`, or at
 `<entry>.where` for a clause without columns, reporting the column, the entry,
 the where column and the `reason`: `no_columns`, `self`, `undeclared`,
-`not_output`, `not_str`, `no_values`, `duplicate_value` or `not_in_codelist`.
-With `not_in_codelist` it also reports, in `values`, the listed values that
-none of the where column's codelists admits, in their declared order.
+`not_output`, `not_str`, `no_values`, `value_count`, `duplicate_value` or
+`not_in_codelist`. With `value_count` it also reports the comparator, `NE`
+or `NOTIN`, in `comparator`. With `not_in_codelist` it also reports, in
+`values`, the listed values that none of the where column's codelists
+admits, in their declared order.
 A schema-valid `id` is an identifier; two entries of one column with the same
 `id` fail with `duplicate_identifier` at `<entry>.id`.
 
@@ -555,8 +565,12 @@ against them.
 
 Validation decides that two where clauses can select one row when one
 clause's columns are all columns of the other and every column they share
-lists a common value: the clauses then select at least one common row
-whatever the data. The failure is `value_level_overlap`, naming both where
+admits a common value: two lists that meet, a list holding a value an `NE` or
+`NOTIN` column does not list, or any two `NE` or `NOTIN` columns, which both
+select the missing value. The clauses then select at least one common row
+whatever the data. `{comparator: NE, values: [X]}` and `[X]` on one column
+admit no common value, so the rows of an ADaM dataset whose `DTYPE` is
+missing and those it derives can each have their own entry. The failure is `value_level_overlap`, naming both where
 clauses in declaration order and reporting the column and both entries. Two
 clauses over columns neither of which contains the other's are admitted, and
 [SUB-13](#sub-13) fails a row both select.
@@ -601,9 +615,11 @@ the row when the specification declares one.
 
 A construction is a row template, or the construction from column derivations
 of a specification without row templates. A construction cannot produce a row
-an entry selects when it derives a where column as a bare `literal` outside
-the entry's values, a missing literal included, and every row it produces is
-selected when it derives every where column as a literal among them. Each of
+an entry selects when it derives a where column as a bare `literal` the
+column's term does not select: one outside its values, a missing literal
+included, or under `NE` and `NOTIN` one among them. Every row it produces is
+selected when it derives every where column as a literal its term selects,
+which under `NE` and `NOTIN` a missing literal is. Each of
 an entry's own origins is refuted against the column's derivation in every
 construction that can produce its rows, with the table and the copy check of
 [SUB-19](#sub-19) and [SUB-20](#sub-20); the column's own origins answer for

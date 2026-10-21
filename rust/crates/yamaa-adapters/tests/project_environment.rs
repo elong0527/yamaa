@@ -1482,12 +1482,11 @@ mod project {
                 "negative-row-no-prior",
             ] {
                 let case = benchmarks.join(example);
-                let document = schemas::domain_schema()
-                    .prepare_standalone(source(
-                        "spec.yaml",
-                        &std::fs::read(case.join("spec.yaml")).unwrap(),
-                    ))
-                    .unwrap();
+                // Each benchmark in the language it is written in (#3422).
+                let document = crate::support::specification_run::prepare(
+                    &schemas::domain_schema(),
+                    &std::fs::read(case.join("spec.yaml")).unwrap(),
+                );
                 let run = PreparedRun::prepare_with_environment(document, environment("")).unwrap();
                 let mut study = Study {
                     root: case.clone(),

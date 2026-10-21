@@ -1,0 +1,11 @@
+phase: validation
+condition: value_level_overlap
+spec_paths:
+  - columns.LBORRES.submission.value_level.CENTRAL.where
+  - columns.LBORRES.submission.value_level.SITE.where
+rule: SUB-12
+context:
+  column: LBORRES
+  entries:
+    - CENTRAL
+    - SITE
