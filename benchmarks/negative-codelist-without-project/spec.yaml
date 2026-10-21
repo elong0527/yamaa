@@ -1,0 +1,58 @@
+yamaa: "1.0"
+
+type: spec
+
+model: SDTM
+domain: DM
+keys: [STUDYID, USUBJID]
+input:
+  DM_RAW: input/dm_raw.csv
+
+output:
+  path: dm.csv
+  columns: [STUDYID, USUBJID, SEX]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DM_RAW.STUDYID
+    submission:
+      core: Req
+      role: Identifier
+      length: 7
+      origins:
+        - type: Protocol
+          source: Sponsor
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM_RAW.USUBJID
+    submission:
+      core: Req
+      role: Identifier
+      length: 11
+      origins:
+        - type: Collected
+          source: Investigator
+
+  # The sex terminology is declared once, in the study's project file.
+  - name: SEX
+    type: str
+    label: Sex
+    derivation: DM_RAW.SEX
+    submission:
+      core: Req
+      role: Record Qualifier
+      length: 1
+      codelist: SEX
+      origins:
+        - type: Collected
+          source: Investigator
+
+submission:
+  label: Demographics
+  class: SPECIAL PURPOSE
+  structure: One record per subject
+  repeating: false

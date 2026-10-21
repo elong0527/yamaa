@@ -23,6 +23,10 @@ pub enum Cause {
     /// operation `environment`, as a run of a 1.0 project's call is
     /// (#3030 section 2.10, D110, D123).
     NoHostLanguage,
+    /// A 1.x specification checked or run without a project file: no project
+    /// supplies the function, so the call fails as `project_binding_missing`
+    /// (CT-13).
+    NoProject,
     UnknownReference(String),
     RowPhase {
         identifier: String,
@@ -89,6 +93,10 @@ impl FunctionFinding {
             Cause::NoHostLanguage => {
                 context.insert("operation".into(), text("environment"));
                 (C::ApplicationUnsupported, None)
+            }
+            Cause::NoProject => {
+                context.insert("binding".into(), text("function"));
+                (C::ProjectBindingMissing, None)
             }
             Cause::UnknownArgument => (C::InvalidFunctionArgument, Some("unknown_argument")),
             Cause::DuplicateArgument => (C::InvalidFunctionArgument, Some("duplicate_argument")),
@@ -299,13 +307,17 @@ pub(super) fn prepare(
     spec: &ast::Spec,
     functions: &[Function],
     undeclared: Option<crate::project_environment::Undeclared>,
+    projectless: bool,
 ) -> Result<Prepared, PrepareError> {
     use crate::project_environment::Undeclared;
     // Without a host environment no call names a declared function; the absent
-    // environment, not the function name, is the cause each call reports.
+    // environment, not the function name, is the cause each call reports. A
+    // 1.x specification compiled without a project file reports the missing
+    // project the same way (CT-13); a 0.5 one keeps reporting the name.
     let unknown = || match undeclared {
         Some(Undeclared::Language(language)) => Cause::UndeclaredEnvironment(language),
         Some(Undeclared::NoHostLanguage) => Cause::NoHostLanguage,
+        None if projectless => Cause::NoProject,
         None => Cause::UnknownFunction,
     };
     let mut function_index = BTreeMap::new();

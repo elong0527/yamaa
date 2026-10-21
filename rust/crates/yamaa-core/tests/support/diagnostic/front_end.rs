@@ -262,3 +262,128 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     assert_eq!(front_end::checks::findings(lowered.spec()), []);
     reached
 }
+
+/// A 1.0 specification prepared without a project file binds nothing a
+/// project supplies: each codelist, inventory vocabulary and project function
+/// it names fails as `project_binding_missing` (CT-13) at the field that
+/// binds it, naming what it binds. A 0.5 specification keeps its 0.5.0
+/// meaning (#3030 D75).
+pub fn project_binding_reached() -> BTreeSet<ConditionCode> {
+    use yamaa_core::json::Value;
+    use yamaa_core::specification::{PrepareError, PreparedSpecification};
+    let submitted = |name: &str, submission: Vec<(&str, T)>| {
+        T::map(vec![
+            ("name", T::text(name)),
+            ("type", T::text("str")),
+            (
+                "derivation",
+                T::map(vec![("value", T::text(format!("SRC.{name}")))]),
+            ),
+            ("submission", T::map(submission)),
+        ])
+    };
+    let mut tree = tree(
+        submitted("SEX", vec![("codelist", T::text("SEX"))]),
+        Vec::new(),
+    );
+    // After `ID` and `SEX`, a column whose glucose rows bind the inventory,
+    // and one that calls a project function, all published.
+    let T::Map(fields) = &tree else {
+        unreachable!("a specification is a map")
+    };
+    let Some((_, T::List(written))) = fields.iter().find(|(key, _)| key == "columns") else {
+        unreachable!("the specification declares its columns")
+    };
+    let mut columns = written.clone();
+    columns.extend([
+        submitted(
+            "SRCDOM",
+            vec![(
+                "value_level",
+                T::list(vec![T::map(vec![
+                    ("id", T::text("AE")),
+                    ("where", T::map(vec![("SEX", T::list(vec![T::text("F")]))])),
+                    ("inventory_vocabulary", T::boolean(true)),
+                ])]),
+            )],
+        ),
+        column(
+            "BMI",
+            "float",
+            "function",
+            T::map(vec![
+                ("name", T::text("bmi")),
+                ("args", T::map(vec![("weight", T::text("SRC.WEIGHT"))])),
+            ]),
+        ),
+    ]);
+    tree.set(&["columns"], T::list(columns));
+    tree.set(
+        &["output", "columns"],
+        T::list(vec![
+            T::text("ID"),
+            T::text("SEX"),
+            T::text("SRCDOM"),
+            T::text("BMI"),
+        ]),
+    );
+    let document = tree.document();
+    let prepare = |document: &Document| {
+        let lowered = front_end::lower(document, None);
+        PreparedSpecification::prepare_tree_linked(
+            lowered.into_spec(),
+            document,
+            None,
+            Default::default(),
+        )
+    };
+    let Err(PrepareError::Invalid(findings)) = prepare(&document) else {
+        panic!("a 1.0 specification without its project fails validation")
+    };
+    let text = |value: &str| Value::String(value.into());
+    let found = findings
+        .iter()
+        .map(|finding| finding.diagnostic())
+        .filter(|diagnostic| diagnostic.code == ConditionCode::ProjectBindingMissing)
+        .collect::<Vec<_>>();
+    let expected = [
+        (
+            "columns.BMI.derivation.function.name",
+            vec![("binding", text("function")), ("function", text("bmi"))],
+        ),
+        (
+            "columns.SEX.submission.codelist",
+            vec![
+                ("binding", text("codelist")),
+                ("codelist", text("SEX")),
+                ("column", text("SEX")),
+            ],
+        ),
+        (
+            "columns.SRCDOM.submission.value_level.AE.inventory_vocabulary",
+            vec![
+                ("binding", text("inventory_vocabulary")),
+                ("column", text("SRCDOM")),
+            ],
+        ),
+    ];
+    assert_eq!(found.len(), expected.len(), "{found:?}");
+    let mut reached = BTreeSet::new();
+    for (diagnostic, (path, context)) in found.iter().zip(expected) {
+        let definition = diagnostic.definition();
+        assert_eq!(
+            (definition.phase, definition.condition, definition.rule),
+            ("validation", "project_binding_missing", Some("CT-13"))
+        );
+        assert_eq!(diagnostic.spec_paths, [path]);
+        assert_eq!(
+            diagnostic.context,
+            context
+                .into_iter()
+                .map(|(key, value)| (key.to_owned(), value))
+                .collect()
+        );
+        reached.insert(rendered(diagnostic));
+    }
+    reached
+}

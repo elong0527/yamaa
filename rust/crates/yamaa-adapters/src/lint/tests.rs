@@ -230,6 +230,182 @@ fn sections_need_a_blank_line_and_the_header_does_not() {
     assert!(names(&spaced).is_empty());
 }
 
+/// A 1.0 specification layer in canonical form: it declares the 1.x header,
+/// and writes `clear`, `model`, an input's `byte_order_mark` and `key` and an
+/// intermediate's `absent`, which only the 1.0 schema orders.
+const VERSIONED: &str = r#"yamaa: "1.0"
+type: spec
+model: ADaM
+parent: base.yaml
+clear:
+  - columns.TRTSDT.derivation
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  DM:
+    path: input/dm.csv
+    byte_order_mark: true
+    key: [STUDYID, USUBJID]
+  EX: input/ex.csv
+base: DM
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, TRTSDT]
+
+intermediates:
+  - id: FIRSTDOSE
+    dataset: EX
+    key: [STUDYID, USUBJID]
+    order_by: [EX.EXSTDTC]
+    keep: first
+    absent: NONE
+
+columns:
+  - name: TRTSDT
+    type: str
+    label: Date of First Exposure
+    derivation: FIRSTDOSE.EXSTDTC
+"#;
+
+#[test]
+fn a_1_0_header_stands_together_before_parent_and_domain() {
+    assert!(findings(VERSIONED).is_empty());
+    // As the 0.5 header may, the fields before `output` may also stand apart,
+    // so a fix leaves such a header as written.
+    let spaced = VERSIONED.replace("type: spec\nmodel: ADaM\n", "\ntype: spec\n\nmodel: ADaM\n");
+    assert!(names(&spaced).is_empty());
+    assert_eq!(fixed(&spaced), spaced);
+    let text = VERSIONED.replace("base: DM\n\noutput:", "base: DM\noutput:");
+    assert_eq!(
+        paths(&text),
+        [("root_spacing", "output".to_owned())],
+        "`output` still opens a section"
+    );
+    assert_eq!(fix(&text), (VERSIONED.to_owned(), vec![]));
+}
+
+#[test]
+fn a_1_0_specification_follows_the_1_0_field_order() {
+    for (text, spec_path, message) in [
+        (
+            VERSIONED
+                .replace("model: ADaM\n", "")
+                .replace("domain: ADSL\n", "domain: ADSL\nmodel: ADaM\n"),
+            "model",
+            "write `model` before `domain`",
+        ),
+        (
+            VERSIONED
+                .replace("clear:\n  - columns.TRTSDT.derivation\n", "")
+                .replace(
+                    "keys: [STUDYID, USUBJID]\n",
+                    "keys: [STUDYID, USUBJID]\nclear:\n  - columns.TRTSDT.derivation\n",
+                ),
+            "clear",
+            "write `clear` before `keys`",
+        ),
+        (
+            VERSIONED
+                .replace(
+                    "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\n",
+                    "yamaa: \"1.0\"\n",
+                )
+                .replace("base: DM\n", "base: DM\ntype: spec\nmodel: ADaM\n"),
+            "type",
+            "write `type` before `base`",
+        ),
+        (
+            VERSIONED.replace(
+                "    byte_order_mark: true\n    key: [STUDYID, USUBJID]\n",
+                "    key: [STUDYID, USUBJID]\n    byte_order_mark: true\n",
+            ),
+            "input.DM.byte_order_mark",
+            "write `byte_order_mark` before `key`",
+        ),
+        (
+            VERSIONED.replace(
+                "    keep: first\n    absent: NONE\n",
+                "    absent: NONE\n    keep: first\n",
+            ),
+            "intermediates[0].keep",
+            "write `keep` before `absent`",
+        ),
+    ] {
+        let found = findings(&text);
+        assert_eq!(
+            found
+                .iter()
+                .map(|item| (item.finding, item.spec_path.as_str(), item.message.as_str()))
+                .collect::<Vec<_>>(),
+            [("field_order", spec_path, message)]
+        );
+        // The fix moves the fields back, the 1.0 header together.
+        assert_eq!(fix(&text), (VERSIONED.to_owned(), vec![]));
+    }
+}
+
+#[test]
+fn a_0_5_file_keeps_the_0_5_orders() {
+    // `model` is no 0.5 field, so it opens a section of its own.
+    let text = CANONICAL.replace("domain: ADSL\n", "model: ADaM\ndomain: ADSL\n");
+    assert_eq!(
+        findings(&text)
+            .iter()
+            .map(|item| (item.finding, item.message.as_str()))
+            .collect::<Vec<_>>(),
+        [("root_spacing", "leave one blank line before `model`")]
+    );
+    // A root that declares `schema_version` is read by the 0.5 orders even
+    // beside `yamaa`, as the engine reads it.
+    let both = CANONICAL.replace(
+        "domain: ADSL\n",
+        "yamaa: \"1.0\"\ntype: spec\ndomain: ADSL\n",
+    );
+    assert_eq!(
+        paths(&both),
+        [
+            ("root_spacing", "yamaa".to_owned()),
+            ("root_spacing", "type".to_owned())
+        ]
+    );
+    // And the 1.0 orders do not reach a 0.5 input or intermediate.
+    let fields = CANONICAL
+        .replace(
+            "  DM: input/dm.csv\n",
+            "  DM:\n    key: [USUBJID]\n    path: input/dm.csv\n",
+        )
+        .replace("    keep: first\n", "    absent: NONE\n    keep: first\n");
+    assert!(names(&fields).is_empty());
+}
+
+#[test]
+fn a_1_0_file_of_another_type_follows_no_specification_order() {
+    let project = r#"yamaa: "1.0"
+type: project
+study:
+  id: STUDY01
+codelists:
+  - codelists.yaml
+sdtm:
+  specs:
+    - spec.yaml
+"#;
+    let function = r#"yamaa: "1.0"
+type: function
+name: bmi
+description: Body mass index from kilograms and centimetres.
+returns: float
+"#;
+    for text in [project, function] {
+        assert!(names(text).is_empty());
+        // The layout every file shares is still read.
+        let doubled = text.replacen('\n', "\n\n\n", 1);
+        assert_eq!(names(&doubled), ["blank_lines"]);
+        assert_eq!(fix(&doubled), (text.replacen('\n', "\n\n", 1), vec![]));
+    }
+}
+
 #[test]
 fn blank_lines_are_reported_and_removed() {
     for (text, message) in [
@@ -1182,7 +1358,7 @@ fn lint_faults_keep_their_existing_codes_and_resource_facts() {
 }
 
 mod files {
-    use super::{super::lint, CANONICAL};
+    use super::{super::lint, CANONICAL, VERSIONED};
     use std::path::{Path, PathBuf};
     use yamaa_core::diagnostic::ConditionCode;
 
@@ -1256,6 +1432,46 @@ mod files {
         assert!(linted
             .iter()
             .all(|file| file.findings.len() == 1 && file.findings[0].finding == "root_spacing"));
+    }
+
+    #[test]
+    fn directories_expand_to_1_0_specifications_by_their_header() {
+        let directory = Directory::new("expand-versioned");
+        let broken = VERSIONED.replace("base: DM\n\noutput:", "base: DM\noutput:");
+        let legacy = directory.write(
+            "adae.yaml",
+            &CANONICAL.replace("base: DM\n\noutput:", "base: DM\noutput:"),
+        );
+        let entry = directory.write("adsl.yaml", &broken);
+        // A layer declares the type of the chain; its unknown field is the
+        // engine's to refuse, not discovery's.
+        let layer = directory.write("layers/base.yaml", &format!("{broken}\nunknown: 1\n"));
+        directory.write("project.yaml", "yamaa: \"1.0\"\ntype: project\nsdtm: {}\n");
+        directory.write(
+            "functions/bmi.yaml",
+            "yamaa: \"1.0\"\ntype: function\nname: bmi\n",
+        );
+        directory.write("untyped.yaml", &broken.replace("type: spec\n", ""));
+        // `schema_version` beside `yamaa` keeps the 0.5 path, where `yamaa`
+        // and `type` are no root fields.
+        directory.write(
+            "both.yaml",
+            &broken.replace(
+                "yamaa: \"1.0\"\n",
+                "schema_version: \"1.0\"\nyamaa: \"1.0\"\n",
+            ),
+        );
+        let linted = lint(&[text(&directory.0)], false).unwrap();
+        assert_eq!(
+            linted
+                .iter()
+                .map(|file| file.file.clone())
+                .collect::<Vec<_>>(),
+            [display(&legacy), display(&entry), display(&layer)]
+        );
+        assert!(linted.iter().all(|file| file.findings.len() == 1
+            && file.findings[0].finding == "root_spacing"
+            && file.findings[0].spec_path == "output"));
     }
 
     #[test]

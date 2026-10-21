@@ -27,9 +27,6 @@ pub const VALUE_LEVEL_COMPARATOR: &str = "value_level_comparator";
 /// An input whose path names an ODM XML file (P-ODMIN-1), refused until
 /// P1-15.
 pub const ODM_XML_INPUT: &str = "odm_xml_input";
-/// A codelist or project function a specification run without its project
-/// binds (D32), refused until P1-11.
-pub const PROJECT_BINDING: &str = "project_binding";
 
 fn unsupported(operation: &str, path: String) -> UnsupportedFeature {
     UnsupportedFeature {
@@ -93,31 +90,6 @@ pub fn unbuilt(spec: &Spec) -> Vec<UnsupportedFeature> {
     }
     if let Some(standard) = spec.submission.as_ref().and_then(|s| s.standard.as_ref()) {
         found.push(unsupported(SUBMISSION_STANDARD, spec.cite(standard.meta)));
-    }
-    found
-}
-
-/// What a lowered 1.0 specification compiled without its project binds,
-/// which D32 refuses as `project_binding_missing` once P1-11 builds it: each
-/// codelist a column or value-level entry binds, and each project function
-/// it calls, in written order.
-pub fn project_bindings(spec: &Spec) -> Vec<UnsupportedFeature> {
-    let mut found = Vec::new();
-    for column in &spec.columns {
-        let Some(submission) = &column.submission else {
-            continue;
-        };
-        let codelists = std::iter::once(&submission.metadata)
-            .chain(submission.value_level.iter().map(|entry| &entry.metadata))
-            .filter_map(|metadata| metadata.codelist.as_ref());
-        for codelist in codelists {
-            found.push(unsupported(PROJECT_BINDING, spec.cite(codelist.meta)));
-        }
-    }
-    for expr in &spec.exprs {
-        if matches!(expr.kind, ExprKind::Call { .. }) {
-            found.push(unsupported(PROJECT_BINDING, spec.cite(expr.meta)));
-        }
     }
     found
 }

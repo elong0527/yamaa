@@ -123,6 +123,7 @@ pub(super) const TEMPLATES: &[(&str, &str)] = &[
     ("producer_workflow_cycle", "the producer links form a cycle: {cycle}"),
     ("prohibited_construct", "a construct is written where its field does not admit it"),
     ("prohibited_function", "function {function} is not allowed here"),
+    ("project_binding_missing", "{spec_path} needs a project file, and none is given"),
     ("project_environment_invalid", "the environment file cannot be admitted"),
     ("project_environment_missing", "{spec_path} needs an environment file for this host that is not declared or cannot be read"),
     ("publication_failed", "the file of {spec_path} could not be published"),

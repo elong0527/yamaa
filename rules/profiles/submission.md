@@ -494,7 +494,7 @@ when every listed column holds one of its values. Two entries whose where
 clauses can select one row fail validation.
 
 Fails: `value_level_where_invalid`, `duplicate_identifier`, `value_level_overlap`.
-Evidence: `sdtm-lb-metadata`, `adam-adlb-metadata`, `sdtm-suppdm-metadata`, `negative-value-level-overlap`, `negative-value-level-where-column`, `negative-numeric-test-code`, `negative-value-level-where-not-in-codelist`, `rust/crates/yamaa-core/src/submission_values.rs::static_findings_name_the_entry_column_and_fault`, `rust/crates/yamaa-core/tests/schema_submission.rs::each_independent_value_admission_control_has_the_required_condition_and_entry_path`, `rust/crates/yamaa-core/tests/schema_submission.rs::where_values_outside_the_where_columns_codelists_fail_composition`, `rust/crates/yamaa-core/tests/schema_submission.rs::entries_inherit_complete_metadata_and_preserve_written_occurrences`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::where_values_outside_the_where_columns_codelists_fail_before_data`.
+Evidence: `sdtm-lb-metadata`, `adam-adlb-metadata`, `sdtm-suppdm-metadata`, `negative-value-level-overlap`, `negative-value-level-where-column`, `negative-numeric-test-code`, `negative-value-level-where-not-in-codelist`, `rust/crates/yamaa-core/src/submission_values.rs::static_findings_name_the_entry_column_and_fault`, `rust/crates/yamaa-core/tests/schema_submission.rs::each_independent_value_admission_control_has_the_required_condition_and_entry_path`, `rust/crates/yamaa-core/tests/schema_submission.rs::where_values_outside_the_where_columns_codelists_fail_composition`, `rust/crates/yamaa-core/tests/schema_submission.rs::entries_inherit_complete_metadata_and_preserve_written_occurrences`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::where_values_outside_the_where_columns_codelists_fail_before_data`, `rust/crates/yamaa/tests/project_binding.rs::a_where_value_is_never_left_unchecked_against_its_codelist`.
 
 The column-level `submission` stays the shared declaration for the column,
 and each entry supplies the metadata of the rows its where clause selects. An
@@ -537,8 +537,13 @@ each of its own entries, the lists that decide its rows under
 [CT-7](terminology.md#ct-7). They admit their items, an extensible list's
 `extended: true` items included. A where column that declares no `codelist` of
 its own, or one of whose codelists is `external`, admits every value. A domain
-build with a project and a composed document read the codelists; a build
-without a project checks no listed value against them.
+build with a project and a composed document read the codelists. A
+specification checked or run without a project file fails at each codelist it
+binds ([CT-13](terminology.md#ct-13)), so a specification that passes
+validation has checked every listed value against its where column's
+codelists. A file that declares `schema_version` is read under the rules at the
+`yamaa-v0.5.0` tag, where a build without a project file checks no listed value
+against them.
 
 Validation decides that two where clauses can select one row when one
 clause's columns are all columns of the other and every column they share

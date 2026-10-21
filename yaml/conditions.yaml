@@ -383,6 +383,10 @@ conditions:
   prohibited_function:
     phases: [validation]
     message: "function {function} is not allowed here"
+  # CT-13
+  project_binding_missing:
+    phases: [validation]
+    message: "{spec_path} needs a project file, and none is given"
   project_environment_invalid:
     phases: [validation]
     message: "the environment file cannot be admitted"
