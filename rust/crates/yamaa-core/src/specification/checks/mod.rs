@@ -191,6 +191,35 @@ pub(super) fn undeclared_key(path: &str, dataset: &str) -> BindFinding {
     ))
 }
 
+/// A name a flag or `case` predicate cannot read there (`unknown_field`,
+/// FORMULA-9).
+pub(super) fn predicate_unknown(path: &str, name: &str) -> BindFinding {
+    BindFinding::Predicate(crate::diagnostic::Diagnostic {
+        code: crate::diagnostic::ConditionCode::PredicateUnknownField,
+        spec_paths: vec![path.into()],
+        context: [("identifier".into(), crate::json::Value::String(name.into()))].into(),
+        source_span: None,
+        operand_route: None,
+    })
+}
+
+/// The refusal of the value of the range at `between`, owned by `owner`,
+/// which reads `value`, a field of a lookup binding does not bind
+/// (`unknown_field`, LOOKUP-9), as `lookup_range::Declaration::unknown_value`
+/// reports it.
+pub(super) fn unknown_range_value(
+    spec: &Spec,
+    between: &ast::Between,
+    owner: crate::diagnostic::lookup::Owner<'_>,
+    value: &str,
+) -> BindFinding {
+    BindFinding::Scalar(crate::diagnostic::lookup::range_reference(
+        &format!("{}.value", render(spec, between.meta)),
+        owner,
+        value,
+    ))
+}
+
 /// What a 1.0 implicit join pairs each column of its input's declared `key`
 /// with (LOOKUP-1, LOOKUP-2).
 #[derive(Clone, Copy)]

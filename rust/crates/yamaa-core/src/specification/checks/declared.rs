@@ -1,11 +1,13 @@
 //! The declaration findings `check()` reports: what binding finds that the
 //! declarations decide (#2844 decision 3), over the tree and typed by
 //! [`DeclaredTypes`]. `run()` reports the same findings from binding, in
-//! binding's order, and this pass reports them in that order too: the root
-//! filter, the intermediates in the order they are derived, then each column
-//! (or each row template's filter and derivations and then the column
-//! phase), column order, the lookup ranges each row reads, and the scopes of
-//! the lookups and aggregate keys the rows read ([`super::scopes`]). Under
+//! binding's order, and this pass reports them in that order too: the
+//! intermediates in the order they are derived, then each column (or each
+//! row template's filter and derivations and then the column phase), column
+//! order, the root filter of a spec without row templates, the lookup ranges
+//! each row reads, and the scopes of the lookups and aggregate keys the rows
+//! read ([`super::scopes`]). Every read of a lookup whose key types fail is
+//! refused where it is read, as binding binds nothing of that lookup. Under
 //! row templates each derivation is checked node by node in binding's order,
 //! with what binding decides of each read ([`super::boundaries`]), and so is
 //! each lookup's own derivation and each aggregate's derive binding, over the
@@ -108,12 +110,15 @@ pub(in crate::specification) fn findings(
         refused: BTreeSet::new(),
     };
     let mut findings = Vec::new();
-    if let Some(filter) = checks.spec.rows.filter {
-        checks.grammar(filter, &mut findings)?;
-    }
     checks.refused = checks.intermediates(&mut findings)?;
     let bound = match &prepared.rows {
-        rows::Rows::Implicit(_) => Bound::Implicit(checks.base(&mut findings)?),
+        rows::Rows::Implicit(_) => {
+            let bound = checks.base(&mut findings)?;
+            if let Some(filter) = checks.spec.rows.filter {
+                checks.root_filter(filter, &mut findings)?;
+            }
+            Bound::Implicit(bound)
+        }
         rows::Rows::Templates(rows) => Bound::Templates(checks.rows(rows, &mut findings)?),
     };
     checks.ranges(&bound, &mut findings)?;
@@ -411,7 +416,7 @@ impl Checks<'_> {
             }
             ExprKind::Ref(read) => {
                 if let Some(scope) = scope {
-                    self.join(scope, &path(spec, e), read.as_str(), findings);
+                    self.read(scope, &path(spec, e), read.as_str(), findings);
                 }
             }
             ExprKind::Source(_) => self.selection(e, scope, false, findings)?,
@@ -442,7 +447,7 @@ impl Checks<'_> {
                     for operand in operands {
                         if let Some(read) = name(spec, operand.expr) {
                             let at = template.clone().unwrap_or_else(|| path(spec, operand.expr));
-                            self.join(scope, &at, read, findings);
+                            self.read(scope, &at, read, findings);
                         }
                     }
                 }
@@ -474,6 +479,13 @@ impl Checks<'_> {
                         }
                     }
                 }
+            }
+            ExprKind::Formula(ast::Formula {
+                compiled: Ok(compiled),
+                text,
+                ..
+            }) if branch && scope.is_some() => {
+                self.branch_formula(compiled, &render(spec, text.meta), findings);
             }
             ExprKind::Literal(_) | ExprKind::Formula(_) | ExprKind::Unsupported(_) => {}
         }
@@ -524,11 +536,76 @@ impl Checks<'_> {
         false
     }
 
+    /// Whether `name` reads a lookup whose key types fail, which binding
+    /// does not bind.
+    fn refused_lookup(&self, name: &str) -> bool {
+        name.split_once('.').is_some_and(|(owner, _)| {
+            self.spec
+                .intermediates
+                .iter()
+                .position(|item| item.id.name == owner)
+                .is_some_and(|index| self.refused.contains(&index))
+        })
+    }
+
+    /// Without row templates, a read at `path`: of a lookup binding does not
+    /// bind, which fails as unknown (NAME-3), or of another input through
+    /// its implicit join ([`Self::join`]). True when it binds, as far as this
+    /// decides.
+    fn read(
+        &self,
+        scope: Scope<'_>,
+        path: &str,
+        name: &str,
+        findings: &mut Vec<BindFinding>,
+    ) -> bool {
+        if self.refused_lookup(name) {
+            findings.push(BindFinding::UnknownReference {
+                path: path.into(),
+                name: name.into(),
+            });
+            return false;
+        }
+        self.join(scope, path, name, findings)
+    }
+
+    /// Without row templates, a formula in a `case` result, at its text
+    /// `path`, reads only lookups and columns (`BindContext::branch_formula`):
+    /// each name, once, that is no column, no lookup's field, or a field of a
+    /// lookup binding does not bind fails as unknown (NAME-3).
+    fn branch_formula(
+        &self,
+        compiled: &CompiledExpression,
+        path: &str,
+        findings: &mut Vec<BindFinding>,
+    ) {
+        for name in compiled.identifiers() {
+            let unknown = match name.split_once('.') {
+                Some((owner, _)) if self.prepared.intermediates.contains(owner) => {
+                    self.refused_lookup(name)
+                }
+                Some(_) => true,
+                None => !self
+                    .spec
+                    .columns
+                    .iter()
+                    .any(|column| column.name.name == name),
+            };
+            if unknown {
+                findings.push(BindFinding::UnknownReference {
+                    path: path.into(),
+                    name: name.into(),
+                });
+            }
+        }
+    }
+
     /// Without row templates, each name a flag's or `case` predicate's
-    /// condition reads, once: a read of another input through its implicit
-    /// join that fails ([`Self::join`]) leaves the name unknown to the
-    /// predicate too (FORMULA-9), as binding reports a refused join read
-    /// there.
+    /// condition reads, once, which a name that binding cannot read there
+    /// leaves unknown to the predicate (FORMULA-9): one qualified by nothing
+    /// an input or a lookup is, a field of a lookup binding does not bind,
+    /// or a read of another input through its implicit join that fails
+    /// ([`Self::join`]), whose refusal comes first.
     fn predicate_joins(
         &self,
         scope: Scope<'_>,
@@ -536,15 +613,16 @@ impl Checks<'_> {
         findings: &mut Vec<BindFinding>,
     ) {
         for (at, read) in names(self.spec, condition) {
-            if !self.join(scope, &at, read, findings) {
-                findings.push(BindFinding::Predicate(Diagnostic {
-                    code: C::PredicateUnknownField,
-                    spec_paths: vec![at],
-                    context: [("identifier".into(), crate::json::Value::String(read.into()))]
-                        .into(),
-                    source_span: None,
-                    operand_route: None,
-                }));
+            let undeclared = read.split_once('.').is_some_and(|(owner, _)| {
+                !self.prepared.intermediates.contains(owner)
+                    && !self
+                        .prepared
+                        .sources
+                        .iter()
+                        .any(|input| input.name == owner)
+            });
+            if undeclared || self.refused_lookup(read) || !self.join(scope, &at, read, findings) {
+                findings.push(predicate_unknown(&at, read));
             }
         }
     }
@@ -569,7 +647,7 @@ impl Checks<'_> {
         let start = findings.len();
         // A name, in either rules, reads another input through its join.
         if let (ExprKind::Ref(read), Some(scope)) = (&spec.expr(e).kind, scope) {
-            self.join(scope, &path(spec, e), read.as_str(), findings);
+            self.read(scope, &path(spec, e), read.as_str(), findings);
             return Ok(());
         }
         let (false, Some(scope), ExprKind::Source(source)) =
@@ -591,7 +669,33 @@ impl Checks<'_> {
             return Ok(());
         }
         let variable = name(spec, source.variable).unwrap_or_default();
-        if !self.join(scope, &path(spec, e), variable, findings) {
+        if !self.read(scope, &path(spec, e), variable, findings) {
+            return Ok(());
+        }
+        // A join that binds keeps its range, whose value reads the current
+        // row; a lookup binding does not bind gives it none (LOOKUP-9).
+        if let Some((between, value)) = source
+            .between
+            .as_ref()
+            .and_then(|between| Some((between, name(spec, between.value)?)))
+            .filter(|_| {
+                variable.split_once('.').is_some_and(|(owner, _)| {
+                    !scope.drivers.contains(&owner)
+                        && self
+                            .prepared
+                            .sources
+                            .iter()
+                            .any(|input| input.name == owner)
+                })
+            })
+            .filter(|&(_, value)| self.refused_lookup(value))
+        {
+            findings.push(unknown_range_value(
+                spec,
+                between,
+                Owner::Source(variable),
+                value,
+            ));
             return Ok(());
         }
         let binds = match variable.split_once('.') {
@@ -1468,9 +1572,10 @@ impl Checks<'_> {
     /// any field is bound: a range without a bound, an unpaired selection
     /// and two absence policies; then a filter on one value (a group key, an
     /// output column, a row's value or a named intermediate's field), the
-    /// filter's grammar and each name it reads outside its variable's input.
-    /// True when binding binds nothing more of it: a declaration defect, or
-    /// a filter on a group key.
+    /// filter's grammar and each name it reads outside its variable's input,
+    /// unless the variable reads a lookup binding does not bind, whose read
+    /// fails first. True when binding binds nothing more of it: a
+    /// declaration defect, or a filter on a group key.
     fn source(
         &self,
         e: ExprId,
@@ -1539,7 +1644,8 @@ impl Checks<'_> {
             }));
             return Ok(true);
         }
-        let Some(filter) = source.filter else {
+        // Binding reads a lookup it does not bind before it binds a filter.
+        let Some(filter) = source.filter.filter(|_| !self.refused_lookup(variable)) else {
             return Ok(false);
         };
         let qualifier = variable.split_once('.').map(|(owner, _)| owner);
@@ -2281,6 +2387,23 @@ impl Checks<'_> {
             // of an earlier intermediate or of an input. Its bounds are donor
             // fields; each stated one must be typed (LOOKUP-9).
             if let Some(between) = &item.between {
+                // A value read from a lookup binding did not bind is none.
+                if let Some(value) = name(spec, between.value).filter(|value| {
+                    value.split_once('.').is_some_and(|(owner, _)| {
+                        spec.intermediates
+                            .iter()
+                            .position(|other| other.id.name == owner)
+                            .is_some_and(|other| refused.contains(&other))
+                    })
+                }) {
+                    findings.push(unknown_range_value(
+                        spec,
+                        between,
+                        Owner::Intermediate(identifier),
+                        value,
+                    ));
+                    continue;
+                }
                 let primary = self.prepared.source().name.as_str();
                 let earlier = &donors[..position];
                 let value =
@@ -2339,10 +2462,11 @@ impl Checks<'_> {
     /// Without row templates, each column in declaration order: a key that
     /// reads other records, the derivation's defects and selections with its
     /// reads of other inputs' joins, its formula's qualified names
-    /// (FORMULA-9), its static types and its conversion (VALUE-24); then
-    /// column order over what every derivation reads (COLUMN-5, COLUMN-6,
-    /// COLUMN-7). Returns whether each column's derivation binds: a
-    /// conversion finding keeps it bound.
+    /// (FORMULA-9) and reads of a lookup binding does not bind (NAME-3), its
+    /// static types and its conversion (VALUE-24); then column order over
+    /// what every derivation reads (COLUMN-5, COLUMN-6, COLUMN-7). Returns
+    /// whether each column's derivation binds: a conversion finding keeps it
+    /// bound.
     fn base(&self, findings: &mut Vec<BindFinding>) -> Result<Vec<bool>, BindError> {
         let spec = self.spec;
         let prepared = self.prepared;
@@ -2380,12 +2504,18 @@ impl Checks<'_> {
                 ..
             }) = &spec.expr(root).kind
             {
-                qualified_numeric_findings(
-                    compiled,
-                    &render(spec, text.meta),
-                    &prepared.intermediates,
-                    findings,
-                );
+                let at = render(spec, text.meta);
+                qualified_numeric_findings(compiled, &at, &prepared.intermediates, findings);
+                // Then each read of a lookup binding does not bind (NAME-3).
+                for name in compiled
+                    .identifiers()
+                    .filter(|name| self.refused_lookup(name))
+                {
+                    findings.push(BindFinding::UnknownReference {
+                        path: at.clone(),
+                        name: name.into(),
+                    });
+                }
             }
             dependencies.push(Some(self.edges(root, Some(driver[0]))));
             self.predicate_types(root, findings)?;
@@ -2401,6 +2531,63 @@ impl Checks<'_> {
         }
         self.order(&dependencies, paths, false, findings)?;
         Ok(bound)
+    }
+
+    /// The root filter of a spec without row templates, which binding binds
+    /// over the base's records once every column and the column order are
+    /// bound (`root_filter::bind`): its grammar, then each name it reads,
+    /// once, in written order. A bare name fails, since no column has a value
+    /// before the rows are filtered (ROW-9), and so does a field of any
+    /// dataset but the base (NAME-3); without source schemas each field of
+    /// the base it names is stored.
+    fn root_filter(
+        &self,
+        filter: ExprId,
+        findings: &mut Vec<BindFinding>,
+    ) -> Result<(), BindError> {
+        let spec = self.spec;
+        let start = findings.len();
+        self.grammar(filter, findings)?;
+        let (
+            true,
+            ExprKind::Formula(ast::Formula {
+                compiled: Ok(plan),
+                text,
+                ..
+            }),
+        ) = (findings.len() == start, &spec.expr(filter).kind)
+        else {
+            return Ok(());
+        };
+        let at = render(spec, text.meta);
+        let base = self.prepared.source().name.as_str();
+        let mut seen = BTreeSet::new();
+        for identifier in plan.identifiers().filter(|&name| seen.insert(name)) {
+            match identifier.split_once('.') {
+                None => findings.push(BindFinding::Predicate(Diagnostic {
+                    code: C::RootFilterPhaseBoundary,
+                    spec_paths: vec![at.clone()],
+                    context: [
+                        ("identifier", identifier),
+                        ("available_phase", "column_derivation"),
+                        ("required_phase", "row_filter"),
+                    ]
+                    .into_iter()
+                    .map(|(name, text)| (name.into(), crate::json::Value::String(text.into())))
+                    .collect(),
+                    source_span: None,
+                    operand_route: None,
+                })),
+                Some((dataset, _)) if dataset != base => {
+                    findings.push(BindFinding::UnknownReference {
+                        path: at.clone(),
+                        name: identifier.into(),
+                    })
+                }
+                Some(_) => {}
+            }
+        }
+        Ok(())
     }
 
     /// With row templates: each template's filter and row-phase derivations,

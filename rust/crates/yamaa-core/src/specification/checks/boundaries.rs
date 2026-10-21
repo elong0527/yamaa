@@ -67,9 +67,9 @@ pub(super) struct Reads<'a> {
     /// The lookups whose key types fail, which binding does not bind: it
     /// reports each read of one as unknown, and the read binds nothing.
     refused: &'a BTreeSet<usize>,
-    /// Whether a lookup read since the last [`Self::bound`] failed. A refused
-    /// lookup's read fails without a finding of its own, and so does a read
-    /// whose phase boundary its site already reported.
+    /// Whether a lookup read since the last [`Self::bound`] failed. A read
+    /// whose phase boundary its site already reported fails without a
+    /// finding of its own.
     unbound: Cell<bool>,
 }
 
@@ -229,7 +229,7 @@ impl<'a> Reads<'a> {
             return self.bare(path, name, findings);
         };
         if let Some(index) = self.lookup(owner) {
-            return self.lookup_read(index, path, findings);
+            return self.lookup_read(index, path, name, findings);
         }
         if !self.record(owner) {
             return !self.input(owner) || self.join(path, owner, findings);
@@ -240,7 +240,7 @@ impl<'a> Reads<'a> {
         for &driver in self.drivers {
             bound &= match named {
                 _ if driver == owner => self.group(path, name, findings),
-                Some(index) => self.lookup_read(index, path, findings),
+                Some(index) => self.lookup_read(index, path, name, findings),
                 None if input => self.join(path, owner, findings),
                 None => true,
             };
@@ -333,7 +333,10 @@ impl<'a> Reads<'a> {
     }
 
     /// A name of a `case` predicate: in a row template another input's field
-    /// fails (FORMULA-9); any other name is read as an operand.
+    /// fails (FORMULA-9); any other name is read as an operand, and a read
+    /// the predicate cannot make, such as a lookup's binding does not bind,
+    /// is unknown to it (FORMULA-9), as
+    /// `case_predicates::retain_reference_owner` names it.
     pub(super) fn predicate(&self, path: &str, name: &str, findings: &mut Vec<BindFinding>) {
         if matches!(self.phase, Phase::Row { .. })
             && name
@@ -343,7 +346,23 @@ impl<'a> Reads<'a> {
             self.source_scope(path, name, findings);
             return;
         }
+        let start = findings.len();
         self.read(path, name, findings);
+        for finding in &mut findings[start..] {
+            let unknown = match finding {
+                BindFinding::UnknownReference { path, name }
+                | BindFinding::QualifiedReference {
+                    path,
+                    name,
+                    finding: crate::reference_scope::Finding::UnknownField,
+                    ..
+                } => Some(super::predicate_unknown(path, name)),
+                _ => None,
+            };
+            if let Some(unknown) = unknown {
+                *finding = unknown;
+            }
+        }
     }
 
     /// A name of a flag's condition, which reads columns, its driver's record
@@ -372,14 +391,7 @@ impl<'a> Reads<'a> {
             } else if input {
                 self.join(path, owner, findings);
             } else {
-                findings.push(BindFinding::Predicate(crate::diagnostic::Diagnostic {
-                    code: crate::diagnostic::ConditionCode::PredicateUnknownField,
-                    spec_paths: vec![path.into()],
-                    context: [("identifier".into(), crate::json::Value::String(name.into()))]
-                        .into(),
-                    source_span: None,
-                    operand_route: None,
-                }));
+                findings.push(super::predicate_unknown(path, name));
             }
         }
     }
@@ -425,16 +437,29 @@ impl<'a> Reads<'a> {
             {
                 super::declared::join_options(spec, e, findings);
             }
-        } else if let Some(value) = source
+        } else if let Some((between, value)) = source
             .between
             .as_ref()
             .filter(|_| bound)
-            .and_then(|between| name(spec, between.value))
+            .and_then(|between| Some((between, name(spec, between.value)?)))
         {
             let at = format!("{at}.between.value");
             match value.split_once('.') {
                 Some((owner, _)) if self.drivers.contains(&owner) => {
                     self.group(&at, value, findings);
+                }
+                // A lookup binding does not bind gives no value (LOOKUP-9).
+                Some((owner, _))
+                    if self
+                        .named(owner)
+                        .is_some_and(|index| self.refused.contains(&index)) =>
+                {
+                    findings.push(super::unknown_range_value(
+                        spec,
+                        between,
+                        crate::diagnostic::lookup::Owner::Source(variable),
+                        value,
+                    ));
                 }
                 Some(_) => {}
                 None => {
@@ -560,21 +585,28 @@ impl<'a> Reads<'a> {
             })
     }
 
-    /// The read at `path` of the lookup at `index`, as binding admits it
-    /// there (`row_intermediates::bind`). True when it binds, as far as the
-    /// declarations decide; a read that does not marks the reads unbound
-    /// ([`Self::bound`]).
-    fn lookup_read(&self, index: usize, path: &str, findings: &mut Vec<BindFinding>) -> bool {
-        let bound = self.lookup_binds(index, path, findings);
+    /// The read at `path` of `name`, a field of the lookup at `index`, as
+    /// binding admits it there (`row_intermediates::bind`). True when it
+    /// binds, as far as the declarations decide; a read that does not marks
+    /// the reads unbound ([`Self::bound`]).
+    fn lookup_read(
+        &self,
+        index: usize,
+        path: &str,
+        name: &str,
+        findings: &mut Vec<BindFinding>,
+    ) -> bool {
+        let bound = self.lookup_binds(index, path, name, findings);
         if !bound {
             self.unbound.set(true);
         }
         bound
     }
 
-    /// A lookup whose key types fail binds nothing, and a 1.0 row driver,
-    /// which declares no key, fails at its `key` wherever it is read as a
-    /// lookup (LOOKUP-3, ROW-2). Otherwise each key value in order, refused
+    /// A lookup whose key types fail binds nothing, so each read of it fails
+    /// as unknown (NAME-3), and a 1.0 row driver, which declares no key,
+    /// fails at its `key` wherever it is read as a lookup (LOOKUP-3, ROW-2).
+    /// Otherwise each key value in order, refused
     /// when it reads a column the row template leaves to the column phase
     /// (LOOKUP-2) or another input's record than the driver's (LOOKUP-5);
     /// then, once its keys are admitted, each other column it matches on that
@@ -583,10 +615,20 @@ impl<'a> Reads<'a> {
     /// refuses the read. A value read from the primary input's record is
     /// admitted for every row that reads the lookup once the rows are bound
     /// ([`super::scopes`]).
-    fn lookup_binds(&self, index: usize, path: &str, findings: &mut Vec<BindFinding>) -> bool {
+    fn lookup_binds(
+        &self,
+        index: usize,
+        path: &str,
+        name: &str,
+        findings: &mut Vec<BindFinding>,
+    ) -> bool {
         let spec = self.spec;
         let item = &spec.intermediates[index];
         if self.refused.contains(&index) {
+            findings.push(BindFinding::UnknownReference {
+                path: path.into(),
+                name: name.into(),
+            });
             return false;
         }
         if item.key.is_none() && !spec.header.surface.infers_join_keys() {
@@ -740,7 +782,7 @@ impl<'a> Reads<'a> {
                 Some(_) if grouped => {}
                 Some((owner, _)) => {
                     if let Some(index) = self.lookup(owner) {
-                        self.lookup_read(index, path, findings);
+                        self.lookup_read(index, path, identifier, findings);
                     } else if self.joined(owner) {
                         self.join(path, owner, findings);
                     }
