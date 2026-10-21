@@ -371,8 +371,8 @@ def packed_crates(label, data):
     """Read an xz tar of vendored crates in one pass.
 
     Refuses unsafe members, members outside vendor/ and Rust toolchain files.
-    Returns the names of its files below vendor/ and the parsed
-    `.cargo-checksum.json` of each crate, by crate directory.
+    Returns the size of each of its files, by name below vendor/, and the
+    parsed `.cargo-checksum.json` of each crate, by crate directory.
     """
     entries, records = [], {}
     with tarfile.open(fileobj=io.BytesIO(data), mode="r|xz") as packed:
@@ -387,16 +387,23 @@ def packed_crates(label, data):
         raise ValueError(f"{label}: archive members must sit below {top}/")
     for name in toolchain_files(entry.name for entry in entries):
         raise ValueError(f"{label} carries {name}")
-    files = [entry.name.removeprefix(f"{top}/") for entry in entries if entry.isfile()]
+    files = {
+        entry.name.removeprefix(f"{top}/"): entry.size
+        for entry in entries
+        if entry.isfile()
+    }
     return files, records
 
 
 def check_vendored(label, files, records, kept):
     """Check vendored crates against the lock that selects them.
 
-    `files` are the vendored file names below vendor/. Every crates.io package
-    of the lock must have one crate, holding exactly the files that its
-    `.cargo-checksum.json` lists.
+    `files` maps the vendored file names below vendor/ to their sizes. Every
+    crates.io package of the lock must have one crate, holding exactly the
+    files that its `.cargo-checksum.json` lists. A crate whose record lists
+    its manifest alone, as for a crate that no supported target compiles,
+    may also hold the empty library root that Cargo needs to read that
+    manifest (tools/staging/vendor_crates.py, stub).
     """
     crates = {}
     for name in files:
@@ -412,7 +419,11 @@ def check_vendored(label, files, records, kept):
             raise ValueError(
                 f"{label}: vendored crate {crate} has no {vendor_crates.CHECKSUMS}"
             )
-        if names - {vendor_crates.CHECKSUMS} != set(records[crate]["files"]):
+        listed = set(records[crate]["files"])
+        library = f"{crate}/{vendor_crates.LIBRARY}"
+        if listed == {vendor_crates.MANIFEST} and files.get(library) == 0:
+            listed.add(vendor_crates.LIBRARY)
+        if names - {vendor_crates.CHECKSUMS} != listed:
             raise ValueError(
                 f"{label}: vendored crate {crate} differs from the files "
                 "its .cargo-checksum.json lists"
@@ -427,7 +438,8 @@ def check_bundle_archive(path: Path, workspace=WORKSPACE):
     cases that the facade embeds, its manifest and Cargo configuration, a
     lock that verifies against the canonical lock, and each crates.io crate
     of that lock, with every file that its `.cargo-checksum.json` lists and
-    no other: in vendor/ in a Python source archive, and in
+    no other, apart from the empty library root of a crate that keeps only
+    its manifest: in vendor/ in a Python source archive, and in
     src/rust/vendor.tar.xz in an R source package. An R source
     package's Makevars must strip nothing, through the Cargo profile or at R's
     link step (check_r_symbols). Returns the host and the lock's packages.
@@ -488,9 +500,11 @@ def check_bundle_archive(path: Path, workspace=WORKSPACE):
         )
         if layout.packed is None:
             label, top = path.name, vendor_crates.DIRECTORY + "/"
-            vendored = [
-                name.removeprefix(top) for name in files if name.startswith(top)
-            ]
+            vendored = {
+                name.removeprefix(top): entry.size
+                for name, entry in files.items()
+                if name.startswith(top)
+            }
             records = {
                 name.partition("/")[0]: json.loads(read(top + name))
                 for name in vendored

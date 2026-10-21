@@ -902,12 +902,25 @@ is R's, not the package's (#3030 D140). The package's
 names no stripping, and `check_cargo_lock` refuses an R source package whose
 Makevars or Cargo profile would strip.
 
-CRAN's policy admits no binary executable code in a source package, and
-neither package carries any: the vendoring script leaves out the prebuilt
-WebAssembly objects that `wit-bindgen` ships, a crate that only wasm32 targets
-build, and stops on any other prebuilt binary until it is reviewed. Cargo's
+The vendoring script keeps whole only the crates that a build for one of the
+supported targets (`check_minimum_rust.TARGETS`) compiles, as Cargo resolves
+them for each target: the crates that the target links, with their procedural
+macros and their build scripts' dependencies (#3368). Each other crate, such
+as `r-efi`, `windows-core` and the WebAssembly and WASI crates, keeps only its
+manifest, which Cargo reads to resolve the lock. Where the manifest leaves its
+library to Cargo's discovery of `src/lib.rs`, an empty `src/lib.rs` takes the
+place of the crate's, so neither package carries any of those crates' code.
+The script then checks that Cargo resolves the lock offline from what remains.
+It also leaves out the license texts that a crate ships for an alternative to
+the license that yamaa relies on, which `ALTERNATIVE_LICENSES` lists: zstd's
+`COPYING`, the text of the license that zstd offers beside BSD-3-Clause (#3030
+D136). CRAN's policy admits no binary executable code in a source package, and
+neither package carries any: the prebuilt WebAssembly objects of `wit-bindgen`,
+a crate that only wasm32 targets build, leave with the rest of that crate, and
+a binary in a crate that a supported target compiles stops vendoring. Cargo's
 `.cargo-checksum.json` files stay as Cargo wrote them, apart from the entries
-of the files left out, binaries and toolchain files; the package checksum
+of the files left out, and do not list an empty `src/lib.rs` that the script
+writes; the package checksum
 stays too. Like the checksums in `Cargo.lock`, they belong to the packaging
 tool, and the script computes no digest of its own. `inst/AUTHORS`, written
 at staging from `cargo metadata`, gives every crate that the R package
@@ -935,7 +948,8 @@ links: its normal dependency closure on each supported target, with the
 features that the host's release build enables, without procedural macros.
 Crates that only build scripts or procedural macros use, and crates that only
 other features or other platforms select, are not linked and are not listed;
-the source packages carry their license files with their vendored sources.
+the source packages carry the license files of those that a supported target
+compiles with their vendored sources, and only the manifests of the others.
 Each entry names the one license that yamaa relies on, never the choice that
 the crate offers, and reproduces the license, copyright and NOTICE texts that
 the crate ships for it (#3364).
@@ -949,7 +963,12 @@ the licensing statement and the in-tree licenses and copyright holders; and
 from the toolchain's `rust-src` component, which that notice does not fully
 cover, the third-party crates that the standard library links on the supported
 targets, such as `addr2line` and `object`, each with its one license and the
-texts that its package ships (#3369). No package notice names a GNU license;
+texts that its package ships (#3369). From the same component, it also lists
+the in-tree crates that the standard library links whose manifests declare a
+license that the notice does not give them: `compiler_builtins`, a port of
+LLVM's compiler-rt with the code of libm, relied on under MIT AND Apache-2.0
+WITH LLVM-exception, with the license files of its sources (#3494). No
+package notice names a GNU license;
 the only GPL wording that remains is the clause of the LLVM exception to
 Apache-2.0, a permissive license, which names GPLv2. The command line keeps
 only that file, its component inventory and `LICENSE-MUSL.txt` beside its
@@ -986,10 +1005,10 @@ package with any text that names a GNU license, the files inside the R source
 package's `vendor.tar.xz` included. The exceptions are the unchanged
 upstream files of the vendored crates that
 `tools/packaging/check_package_notices.py` lists with its reasons: zstd's
-dual-licensed C sources, `r-efi`, and README or changelog prose; and an R
-binary package's namespace loader, `yamaa/R/yamaa`, which R writes itself
-from its own `share/R/nspackloader.R`, whose header names the GPL that R is
-under.
+dual-licensed sources, the manifest of `r-efi`, and README or changelog
+prose; and an R binary package's namespace loader, `yamaa/R/yamaa`, which R
+writes itself from its own `share/R/nspackloader.R`, whose header names the
+GPL that R is under.
 
 Every package also carries `COMPONENTS.tsv` beside the notices, the component
 inventory of its host: the wheels and the Python source archive carry the
@@ -1001,7 +1020,11 @@ those that no supported target compiles, and the C code that those crates
 compile from sources that they carry: ReadStat in `yamaa-adapters` and the
 zstd library that `zstd-sys` bundles. The inventory of the wheels and of
 the command-line binaries also lists `rust-std`, the Rust standard library
-of the pinned toolchain that builds them, which they link. A source archive links the standard library of
+of the pinned toolchain that builds them, which they link. The command
+line's also lists musl, the C library that the pinned toolchain bundles for
+the musl targets and that only the executables for those targets link, at
+the release that `MUSL` pairs with that toolchain (#3493, #3030 D168). A
+source archive links the standard library of
 whatever toolchain builds it, so the Python source archive carries the
 wheels' inventory without that row, and the R source package's inventory has
 none. Instead, the R package's `configure`, which already runs

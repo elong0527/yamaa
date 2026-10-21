@@ -1188,6 +1188,130 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         );
         reached.insert(rendered(finding));
     }
+    // DEFINE-6 and DEFINE-8 (D16): every guide a 1.0 section lists belongs to
+    // its model under a name of its own, and a dataset binds the guide its
+    // `submission.standard` names, or the first.
+    let standards = |names: &[&str], selected: Option<&str>| {
+        let project = project().document();
+        let mut declared = yamaa_core::front_end::v0_5::sections::sections(&project).unwrap();
+        let first = declared.sections[0].standards[0].clone();
+        declared.sections[0].standards = names
+            .iter()
+            .map(|name| yamaa_core::ast::ImplementationGuide {
+                name: yamaa_core::ast::Text {
+                    text: (*name).into(),
+                    meta: first.name.meta,
+                },
+                ..first.clone()
+            })
+            .collect();
+        let mut tree = crate::support::submission_tree(&specification().document());
+        tree.header.surface = yamaa_core::ast::Surface::V1 { minor: 0 };
+        tree.model = Some(yamaa_core::ast::Model {
+            kind: yamaa_core::ast::ModelKind::Sdtm,
+            meta: tree.meta,
+        });
+        let mut spec = specification();
+        if let Some(selected) = selected {
+            spec.at(&["submission"])
+                .set(&["standard"], Tree::text(selected));
+        }
+        let document = spec.document();
+        let required = composition::Required::admit(
+            declared.study.as_ref(),
+            &declared.sections[0],
+            yamaa_core::ast::Surface::V1 { minor: 0 },
+        )
+        .unwrap();
+        let input = Input {
+            document: &document,
+            tree: &tree,
+            source: "d0.yaml",
+            artifact: "d0.csv",
+            href: Some("d0.csv"),
+        };
+        composition::compose(
+            required,
+            &empty,
+            &[input],
+            &[],
+            "1.0",
+            "2026-09-30T00:00:00",
+        )
+    };
+    let two = ["SDTMIG", "SDTMIG-MD"];
+    let study = standards(&two, Some("SDTMIG-MD")).unwrap();
+    assert_eq!(study.datasets()[0].standard(), "SDTMIG-MD");
+    assert_eq!(
+        study
+            .standards()
+            .iter()
+            .map(|standard| standard.name.as_str())
+            .collect::<Vec<_>>(),
+        two
+    );
+    let study = standards(&two, None).unwrap();
+    assert_eq!(study.datasets()[0].standard(), "SDTMIG");
+    for (names, selected, code, condition, rule, path, context) in [
+        (
+            ["SDTMIG", "SENDIG"],
+            None,
+            SectionStandardModel,
+            "standard_model_mismatch",
+            "DEFINE-6",
+            "sdtm.standards[1].name",
+            vec![
+                ("model", text("SDTM")),
+                ("section", text("sdtm")),
+                ("value", text("SENDIG")),
+            ],
+        ),
+        (
+            ["SDTMIG", "SDTMIG"],
+            None,
+            SectionStandardDuplicate,
+            "duplicate_identifier",
+            "DEFINE-6",
+            "sdtm.standards[1].name",
+            vec![("identifier", text("SDTMIG"))],
+        ),
+        (
+            two,
+            Some("SDTMIG-AP"),
+            SubmissionUnknownStandard,
+            "unknown_standard",
+            "DEFINE-8",
+            "sdtm.specs[0].submission.standard",
+            vec![
+                ("section", text("sdtm")),
+                (
+                    "standards",
+                    JsonValue::Array(vec![text("SDTMIG"), text("SDTMIG-MD")]),
+                ),
+                ("value", text("SDTMIG-AP")),
+            ],
+        ),
+    ] {
+        let findings = standards(&names, selected).unwrap_err();
+        let [finding] = findings.as_slice() else {
+            panic!("one finding: {findings:?}")
+        };
+        let definition = finding.definition();
+        assert_eq!(finding.code, code);
+        assert_eq!(
+            (definition.phase, definition.condition, definition.rule),
+            ("validation", condition, Some(rule))
+        );
+        assert_eq!(finding.path, path);
+        assert_eq!(
+            finding.context,
+            context
+                .into_iter()
+                .map(|(key, value)| (key.to_string(), value))
+                .collect()
+        );
+        reached.insert(rendered(finding));
+    }
     reached
 }
 

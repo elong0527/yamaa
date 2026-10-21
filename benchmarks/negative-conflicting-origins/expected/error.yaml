@@ -1,0 +1,9 @@
+phase: validation
+condition: conflicting_origins
+spec_paths:
+  - columns.AGE.submission.origins[1]
+rule: SUB-14
+context:
+  column: AGE
+  origin_type: Derived
+  reason: exclusive_type

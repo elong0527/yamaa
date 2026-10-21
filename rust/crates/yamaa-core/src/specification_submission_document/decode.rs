@@ -393,6 +393,9 @@ impl<'a> Parser<'a> {
             false,
         )?;
         let domain = self.text_field(node, F::Domain, path, TextRule::Identifier, false)?;
+        // A guide name such as `SDTMIG-MD` is no identifier; the section's
+        // `standards` resolves it (DEFINE-8).
+        let standard = self.text_field(node, F::Standard, path, TextRule::NonEmpty, false)?;
         let comment = self.comment(self.get(node, F::Comment), path.field(F::Comment))?;
         Ok(has_no_data
             .zip(label)
@@ -413,6 +416,7 @@ impl<'a> Parser<'a> {
                         repeating,
                         reference_data,
                         domain,
+                        standard,
                         comment,
                     }
                 },
@@ -616,7 +620,7 @@ impl<'a> Parser<'a> {
             None,
             false,
         )?;
-        let origin_metadata = self.origin_of(node, path)?;
+        let origins = self.origins_of(node, path)?;
         let method = self.method(self.get(node, F::Method), path.field(F::Method))?;
         let comment = self.comment(self.get(node, F::Comment), path.field(F::Comment))?;
         Ok(ColumnSubmission {
@@ -631,41 +635,38 @@ impl<'a> Parser<'a> {
             display_format,
             codelist,
             inventory_vocabulary,
-            origin_metadata,
+            origins,
             method,
             comment,
             value_level: Vec::new(),
         })
     }
-    /// The origin `node` declares: a 0.5 `origin`, or the one entry of a
-    /// 1.0 `origins` (P-ORIGIN-1). Several origins are refused before any
-    /// composition reads them (#3030 D76, P1-13).
-    fn origin_of(&mut self, node: usize, path: Path) -> Result<Option<OriginMetadata>, Cause> {
+    /// The origins `node` declares, in declaration order: a 0.5 `origin`, or
+    /// each entry of a 1.0 `origins` (P-ORIGIN-1).
+    fn origins_of(&mut self, node: usize, path: Path) -> Result<Vec<OriginMetadata>, Cause> {
         let origins = self.get(node, F::Origins);
         let Some(list) = origins.node else {
-            return self.origin(self.get(node, F::Origin), path.field(F::Origin));
+            return Ok(self
+                .origin(self.get(node, F::Origin), path.field(F::Origin))?
+                .into_iter()
+                .collect());
         };
         let path = path.field(F::Origins);
         let N::Sequence(items) = &self.input.nodes()[list] else {
             self.fault(origins, path, Kind::ExpectedSequence, None)?;
-            return Ok(None);
+            return Ok(Vec::new());
         };
-        match items.as_slice() {
-            [] => Ok(None),
-            &[item] => self.origin(
-                Origin {
-                    container: list,
-                    key: None,
-                    node: Some(item),
-                    field: F::Origins,
-                },
-                path.child(Step::Index(0)),
-            ),
-            _ => {
-                self.fault(origins, path, Kind::ExpectedMapping, None)?;
-                Ok(None)
-            }
+        let mut declared = Vec::with_capacity(items.len());
+        for (index, &item) in items.iter().enumerate() {
+            let entry = Origin {
+                container: list,
+                key: None,
+                node: Some(item),
+                field: F::Origins,
+            };
+            declared.extend(self.origin(entry, path.child(Step::Index(index)))?);
         }
+        Ok(declared)
     }
     fn origin(&mut self, origin: Origin, path: Path) -> Result<Option<OriginMetadata>, Cause> {
         if origin.node.is_none() {
