@@ -1656,10 +1656,12 @@ mod files {
             ),
         );
         let clean = directory.write("clean.yaml", CANONICAL);
+        // No umask gives a new file an execute bit, so only a kept mode
+        // passes.
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(&packed, std::fs::Permissions::from_mode(0o644)).unwrap();
+            std::fs::set_permissions(&packed, std::fs::Permissions::from_mode(0o744)).unwrap();
         }
         let linted = lint(&[text(&packed), text(&clean)], true).unwrap();
         assert_eq!(std::fs::read_to_string(&packed).unwrap(), CANONICAL);
@@ -1669,7 +1671,7 @@ mod files {
         {
             use std::os::unix::fs::PermissionsExt;
             let mode = std::fs::metadata(&packed).unwrap().permissions().mode();
-            assert_eq!(mode & 0o777, 0o644);
+            assert_eq!(mode & 0o777, 0o744);
         }
         // Nothing staged is left beside the files.
         let mut names = std::fs::read_dir(&directory.0)

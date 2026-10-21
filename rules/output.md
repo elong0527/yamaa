@@ -203,7 +203,7 @@ one, never a prefix of it. A run that fails at any point leaves the target as
 it was, removes its temporary file and produces no accepted artifact.
 
 Fails: `publication_failed`.
-Evidence: `rust/crates/yamaa-adapters/src/file_publication.rs::replacing_the_parent_temporary_entry_does_not_replace_checked_bytes`, `rust/crates/yamaa-adapters/src/file_publication.rs::failed_cleanup_preserves_the_operation_error_and_foreign_entries`, `rust/crates/yamaa-adapters/src/file_define/publication_failure_tests.rs::later_publication_failure_preserves_prior_bytes_original_cause_and_stopped_remainder`.
+Evidence: `rust/crates/yamaa-adapters/src/file_publication.rs::replacing_the_parent_temporary_entry_does_not_replace_checked_bytes`, `rust/crates/yamaa-adapters/src/file_publication.rs::failed_cleanup_preserves_the_operation_error_and_foreign_entries`, `rust/crates/yamaa-adapters/src/file_define/publication_failure_tests.rs::later_publication_failure_preserves_prior_bytes_original_cause_and_stopped_remainder`, `rust/crates/yamaa-adapters/src/file_publication.rs::a_new_file_takes_0666_less_the_umask`, `rust/crates/yamaa-adapters/src/file_publication.rs::a_replaced_file_keeps_its_permission_bits`, `rust/crates/yamaa-adapters/src/file_publication.rs::the_staging_directory_stays_private_under_any_umask`.
 
 A failed atomic replacement fails and reports the target; the run produces no
 artifact and the previous one is unchanged.
@@ -215,6 +215,13 @@ users. The publisher retains its directory descriptor, so replacement of its
 entry in the target's parent cannot substitute the checked candidate.
 Temporary names or their private namespaces do not collide with the target or
 another run's candidate. The final replacement remains atomic.
+
+On Unix the published file's mode does not depend on the staging directory. A
+new file gets the mode `open(2)` gives a file it creates in the target's
+directory with mode 0666: 0666 less the process umask, where that directory
+has no default ACL. A file that replaces a target keeps the target's
+permission bits, the 0777 bits of its mode. The temporary file has that mode
+before it replaces the target.
 
 Publishers coordinate writes through an exclusive lock on the selected parent
 directory, and a lock refusal leaves the target untouched. A save holds the
