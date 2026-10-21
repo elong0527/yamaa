@@ -349,9 +349,9 @@ impl DefineBuild {
   extension, and the save's `engine_rejected` codes for a target that cannot
   be written (#3030 D134).
 - `define` mirrors `file_define::Define::prepare` plus its save step.
-- Every operation reads and writes through the engine's resolver: checks,
-  builds, plans, project reads, `define`, `resolve_specification`,
-  `read_odm`, `save_table` and `file_type`.
+- Every operation goes through the engine's resolver: checks, builds,
+  plans, project reads, `define`, `resolve_specification`, `read_odm`,
+  `save_table` and `file_type`.
   Without one, the engine's local file resolver serves the same requests, so a
   resolver that records them sees every access. A resolver serves a regular
   file or reports what else a name reaches with

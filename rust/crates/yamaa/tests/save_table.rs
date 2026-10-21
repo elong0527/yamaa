@@ -171,6 +171,32 @@ fn a_saved_item_table_holds_the_bytes_the_csv_cards_fix() {
     assert_eq!(study.entries(), ["items.CSV", "items.csv", "odm.xml"]);
 }
 
+/// A table with no rows saves its header record alone (CSV-2), and a
+/// readable Parquet file with every field (PARQUET-1).
+#[test]
+fn an_empty_table_saves_its_columns() {
+    let study = Study::new();
+    study.write(
+        "empty.xml",
+        "<ODM xmlns=\"http://www.cdisc.org/ns/odm/v1.3\"/>\n",
+    );
+    let engine = engine();
+    let table = engine
+        .read_odm(&study.path("empty.xml"), &OdmOptions::new())
+        .unwrap();
+    assert_eq!(table.rows(), 0);
+    let out = study.path("empty.csv");
+    assert_eq!(engine.save_table(&table, &out).unwrap(), [out.as_str()]);
+    let header = ITEMS_CSV.split_inclusive('\n').next().unwrap();
+    assert_eq!(String::from_utf8(study.read("empty.csv")).unwrap(), header);
+    if cfg!(feature = "parquet") {
+        let out = study.path("empty.parquet");
+        assert_eq!(engine.save_table(&table, &out).unwrap(), [out.as_str()]);
+        let bytes = study.read("empty.parquet");
+        assert!(bytes.starts_with(b"PAR1") && bytes.ends_with(b"PAR1"));
+    }
+}
+
 /// A local path is the caller's own, as `read_odm` reads its source: its
 /// file name need not be a written path (FILE-5), so on Unix it may hold a
 /// `:`, a `\` or a character outside ASCII.
@@ -244,7 +270,10 @@ fn a_saved_item_table_holds_the_bytes_a_run_saves_for_it() {
                 .unwrap(),
             [saved.as_str()]
         );
-        assert_eq!(resolver.published(&saved), resolver.published(&ran));
+        assert_eq!(
+            resolver.published(&saved).unwrap(),
+            resolver.published(&ran).unwrap()
+        );
         assert_eq!(resolver.staged_count(), 0);
     }
     let csv = resolver.published("memory:/saved.csv").unwrap();
