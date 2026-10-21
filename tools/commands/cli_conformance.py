@@ -6,10 +6,12 @@ the corpus moves to 1.0 (P2-5 to P2-8), its conformance runs converted
 copies, as the 1.0 conversion gate does (`tools.commands.conversion`). This
 writes every benchmark as 1.0 under OUTPUT/benchmarks, excludes each
 benchmark the gate excepts, with the gate's reason, plans the converted
-corpus into OUTPUT/plan, and runs the command line's runner,
-`rust/tests/public_conformance_cli.py`, over it into OUTPUT/observed. Unlike
-the gate, it keeps what it writes, so the records and the converted cases
-they ran can be read afterwards.
+corpus into OUTPUT/plan, runs the command line's runner,
+`rust/tests/public_conformance_cli.py`, over it into OUTPUT/observed, and
+judges the records against the converted expected files into
+OUTPUT/inventory.json. It exits 1 unless every benchmark the command line
+runs passes. Unlike the gate, it keeps what it writes, so the records and the
+converted cases they ran can be read afterwards.
 """
 
 import argparse
@@ -45,6 +47,9 @@ def main(argv=None):
         "--source-revision",
         help="the revision the records name (default: the checkout's HEAD)",
     )
+    parser.add_argument(
+        "--evidence", help="where the run is recorded, such as its Actions run"
+    )
     args = parser.parse_args(argv)
     output = args.output.resolve()
     if output.exists():
@@ -56,7 +61,10 @@ def main(argv=None):
         ).strip()
     )
     fixtures, plan = prepare(output)
-    return subprocess.run(
+    evidence = [] if args.evidence is None else ["--evidence", args.evidence]
+    # The runner writes to the same streams, after what was printed so far.
+    sys.stdout.flush()
+    ran = subprocess.run(
         [
             sys.executable,
             "-I",
@@ -71,9 +79,15 @@ def main(argv=None):
             str(output / "observed"),
             "--source-revision",
             revision,
+            *evidence,
         ],
         check=False,
-    ).returncode
+    )
+    if ran.returncode:
+        return ran.returncode
+    return public_conformance.compare(
+        fixtures, output / "observed", output / "inventory.json"
+    )
 
 
 if __name__ == "__main__":
