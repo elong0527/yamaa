@@ -1,0 +1,58 @@
+name: Next toolchain
+
+# The workspace builds with the stable release that rust/rust-toolchain.toml
+# pins, and the pin moves by hand. Beta is the next stable release: what it
+# refuses, a new rustc error or a lint of the new Clippy under -D warnings,
+# the pin's next move has to fix. So this lane lints and tests the workspace
+# with beta weekly on main, as Cargo's guide to continuous integration tests
+# a project with the toolchains beside stable, and the Main health workflow
+# reports a failing run. The lock stays as committed, so a failure is the
+# toolchain's. It is a report, not a development check: no pull request runs
+# it, and the pinned toolchain's checks stay the gate.
+on:
+  schedule:
+    - cron: '11 6 * * 2'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: next-toolchain-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  beta:
+    name: rust (beta toolchain)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The R binding's build script runs R, and no step imports the Python
+      # package.
+      - uses: ./.github/actions/setup
+        with:
+          r: runtime
+          package: 'false'
+      - name: Activate the beta toolchain
+        run: python -m tools.ci.toolchain --channel beta --install
+      - name: Report the beta release
+        run: |
+          rustc -vV
+          cargo --version
+      # The repository lint's Clippy command, over the R binding too since R
+      # is installed, and then the workspace tests of `make test-rust`, with
+      # the committed lock. rustfmt is left to the pinned toolchain: a beta
+      # formats as the next stable will, which the pin's move adopts.
+      - name: Lint the workspace with the beta toolchain
+        env:
+          RUSTFLAGS: -D warnings
+        run: cargo clippy --locked --manifest-path rust/Cargo.toml --workspace --all-targets --all-features -- -D warnings
+      - name: Test the workspace with the beta toolchain
+        run: python -m tools.commands.rust_tests
