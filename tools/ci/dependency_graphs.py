@@ -19,7 +19,11 @@ LOCKS = ("rust/Cargo.lock", "python/uv.lock")
 # The package notices that tools/packaging/generate_third_party_notices.py
 # writes from the canonical Cargo lock. A lane regenerates its copy's notices
 # for the graph it resolved and never writes the checkout's.
-NOTICES = ("python/LICENSE-THIRD-PARTY.txt", "R/yamaa/inst/LICENSE-THIRD-PARTY.txt")
+NOTICES = (
+    "python/LICENSE-THIRD-PARTY.txt",
+    "R/yamaa/inst/LICENSE-THIRD-PARTY.txt",
+    "rust/crates/yamaa-cli/LICENSE-THIRD-PARTY.txt",
+)
 IGNORED = {
     ".git",
     ".venv",

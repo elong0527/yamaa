@@ -87,13 +87,16 @@ class MinimumRustTest(unittest.TestCase):
             self.assertEqual(check.minimum(workspace), "1.82")
 
     def test_the_targets_are_the_supported_platforms(self):
-        # Linux x86_64 and aarch64, macOS arm64, and Windows x64 with MSVC for
-        # the wheel and the command line and GNU for the R package.
+        # Linux x86_64 and aarch64 with GNU for the host packages and musl for
+        # the command line, macOS arm64, and Windows x64 with MSVC for the wheel
+        # and the command line and GNU for the R package.
         self.assertEqual(
             set(check.TARGETS),
             {
                 "x86_64-unknown-linux-gnu",
                 "aarch64-unknown-linux-gnu",
+                "x86_64-unknown-linux-musl",
+                "aarch64-unknown-linux-musl",
                 "aarch64-apple-darwin",
                 "x86_64-pc-windows-msvc",
                 "x86_64-pc-windows-gnu",

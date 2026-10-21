@@ -8,7 +8,9 @@
 # that only build scripts and procedural macros use are shipped and compiled
 # with the rest. The crates that Cargo locks for a platform or a feature that
 # no yamaa build selects are shipped without being compiled. Each of them has
-# a purpose too.
+# a purpose too. The command line has no source archive; its trimmed lock,
+# with yamaa-cli in place of a binding crate, is the graph that its binaries
+# build from, and its inventory lists it too.
 #
 # A purpose is a short phrase written from the crate's place in yamaa's
 # graph. From rust/, `cargo tree --locked --offline --workspace --target all
@@ -28,8 +30,8 @@
 #     in the Python binding".
 #
 # tools/packaging/check_crate_purposes.py, which `make check-repository`
-# runs, fails while a crate of either host's trimmed lock has no purpose, a
-# purpose names a crate that neither host ships, or a purpose is empty.
+# runs, fails while a crate of any host's trimmed lock has no purpose, a
+# purpose names a crate that no host ships, or a purpose is empty.
 #
 # Every package ships these purposes in its component inventory,
 # COMPONENTS.tsv; after changing one, regenerate the inventories with
@@ -176,8 +178,9 @@ windows-strings = "not compiled: transitive dependency of windows-core"
 windows-sys = "handle-relative file IO and atomic publication on Windows (yamaa-adapters)"
 winnow = "transitive dependency of toml and toml_parser: parser combinators"
 wit-bindgen = "not compiled: transitive dependency of wasip2 (WASI preview 2 only)"
-yamaa = "the Rust facade over yamaa-core and yamaa-adapters, which both host bindings depend on"
+yamaa = "the Rust facade over yamaa-core and yamaa-adapters, which the host bindings and the command line depend on"
 yamaa-adapters = "the engine's codecs, storage formats, physical IO and filesystem environment capture"
+yamaa-cli = "the command line: the yamaa executable of the command-line archives"
 yamaa-core = "the language engine: specification admission, expressions, dataset execution, project lifecycle, verification and Define rendering"
 yamaa-python = "the Python binding: the native extension module of the Python package"
 yamaa-r = "the R binding: the static library that the R package links"
