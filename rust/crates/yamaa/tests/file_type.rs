@@ -11,8 +11,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use yamaa::{
-    CancellationToken, Engine, EngineOptions, Failure, FileType, HostLanguage, MemoryResolver,
-    ResolverFailure, ResolverKind, ResolverOperation, ResolverReply, ResolverRequest, ResourceKind,
+    CancellationToken, Engine, EngineOptions, Failure, FileType, MemoryResolver, ResolverFailure,
+    ResolverKind, ResolverOperation, ResolverReply, ResolverRequest, ResourceKind,
     ResourceResolver,
 };
 
@@ -46,19 +46,13 @@ impl Drop for Study {
     }
 }
 
+/// An engine that claims no host language, as the command line's does.
 fn engine() -> Engine {
-    Engine::new(EngineOptions::new(
-        HostLanguage::Python,
-        "file-type-test".into(),
-        "0".into(),
-    ))
+    Engine::new(EngineOptions::neutral("file-type-test".into(), "0".into()))
 }
 
 fn engine_with(resolver: Arc<dyn ResourceResolver>) -> Engine {
-    Engine::new(
-        EngineOptions::new(HostLanguage::Python, "file-type-test".into(), "0".into())
-            .with_resolver(resolver),
-    )
+    Engine::new(EngineOptions::neutral("file-type-test".into(), "0".into()).with_resolver(resolver))
 }
 
 /// The one issue of a refusal: its condition, rule, spec paths and context

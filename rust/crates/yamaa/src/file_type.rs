@@ -74,14 +74,15 @@ impl Engine {
     ///
     /// # Example
     ///
-    /// A memory resolver serves a 1.0 specification and a file that declares
-    /// `schema_version`, which has no type. Lanes without the `yaml` feature
-    /// refuse both.
+    /// An engine that claims no host language, as the command line's does,
+    /// reads through a memory resolver that serves a 1.0 specification and a
+    /// file that declares `schema_version`, which has no type. Lanes without
+    /// the `yaml` feature refuse both.
     ///
     /// ```
     /// use std::sync::Arc;
     ///
-    /// use yamaa::{Engine, EngineOptions, FileType, HostLanguage, MemoryResolver};
+    /// use yamaa::{Engine, EngineOptions, FileType, MemoryResolver};
     ///
     /// let resolver = Arc::new(MemoryResolver::new());
     /// resolver.insert("/", "dm.yaml", "spec:1", Arc::from(
@@ -91,8 +92,7 @@ impl Engine {
     ///     &b"schema_version: \"1.0\"\ndomain: AE\n"[..],
     /// ));
     /// let engine = Engine::new(
-    ///     EngineOptions::new(HostLanguage::Python, "doctest".into(), "0".into())
-    ///         .with_resolver(resolver),
+    ///     EngineOptions::neutral("doctest".into(), "0".into()).with_resolver(resolver),
     /// );
     /// let refused = engine.file_type("ae.yaml").unwrap_err();
     /// if cfg!(feature = "yaml") {
