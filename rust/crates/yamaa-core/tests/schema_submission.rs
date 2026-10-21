@@ -358,7 +358,7 @@ mod schema {
             assert!(!sub.inventory_vocabulary.as_ref().unwrap().value);
             assert_eq!(sub.fields[0].field, FieldName::Comment);
             assert_eq!(sub.fields[1].field, FieldName::Origin);
-            let origin = sub.origin_metadata.as_ref().unwrap();
+            let origin = sub.origins.first().unwrap();
             assert_eq!(origin.kind.value, OriginType::Collected);
             assert_eq!(origin.source.as_ref().unwrap().value, OriginSource::Subject);
             assert_eq!(origin.documents.value.len(), 3);
@@ -556,8 +556,8 @@ mod schema {
                         .submission
                         .as_ref()
                         .unwrap()
-                        .origin_metadata
-                        .as_ref()
+                        .origins
+                        .first()
                         .unwrap()
                         .kind
                         .value
@@ -577,8 +577,8 @@ mod schema {
                         .submission
                         .as_ref()
                         .unwrap()
-                        .origin_metadata
-                        .as_ref()
+                        .origins
+                        .first()
                         .unwrap()
                         .source
                         .as_ref()
@@ -1150,7 +1150,7 @@ mod schema {
                     let metadata = declared.submission.as_ref().unwrap();
                     assert_eq!(metadata.core.as_ref().unwrap().value, Core::Expected);
                     assert_eq!(metadata.length.as_ref().unwrap().value, "1");
-                    let origin = metadata.origin_metadata.as_ref().unwrap();
+                    let origin = metadata.origins.first().unwrap();
                     assert_eq!(origin.kind.value, OriginType::Assigned);
                     assert_eq!(origin.source.as_ref().unwrap().value, OriginSource::Sponsor);
                     assert!(compiled.values().is_empty());
@@ -2473,8 +2473,8 @@ mod schema {
             assert!(merged.value_level.is_empty());
             assert_eq!(
                 merged
-                    .origin_metadata
-                    .as_ref()
+                    .origins
+                    .first()
                     .unwrap()
                     .source
                     .as_ref()

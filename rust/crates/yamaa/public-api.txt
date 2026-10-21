@@ -421,6 +421,7 @@ yamaa::functions::HostLanguage::Python: Python
 yamaa::functions::HostLanguage::R: R
 yamaa::functions::InstalledDistributions: pub trait InstalledDistributions
 yamaa::functions::InstalledDistributions::environment: fn environment(&self) -> Result<BTreeMap<String, String>, FunctionError> [required]
+yamaa::functions::InstalledDistributions::integer_digits: fn integer_digits(&self) -> Result<Option<usize>, FunctionError> [default]
 yamaa::functions::InstalledDistributions::providers: fn providers(&self, modules: &[String]) -> Result<BTreeMap<String, Vec<String>>, FunctionError> [required]
 yamaa::functions::InstalledDistributions::standard_library: fn standard_library(&self, module: &str) -> Result<bool, FunctionError> [required]
 yamaa::functions::InstalledDistributions::version: fn version(&self, distribution: &str) -> Result<InstalledVersion, FunctionError> [required]

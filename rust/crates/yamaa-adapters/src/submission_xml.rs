@@ -245,7 +245,6 @@ fn item_definition(
         .submission
         .as_ref()
         .expect("composed column");
-    let origin = meta.origin_metadata.as_ref().expect("composed origin");
     let mut item = Element::new("ItemDef", path)
         .attr("OID", format!("IT.{identity}"))
         .attr("Name", name)
@@ -278,14 +277,18 @@ fn item_definition(
                 .attr("CodeListOID", format!("CL.{}", list.value)),
         );
     }
-    let mut node = Element::new("def:Origin", &item.path)
-        .attr("Type", origin.kind.value.name())
-        .optional("Source", column.source().map(|v| v.name()));
-    if let Some(description) = &origin.description {
-        node.translated("Description", &description.value, language);
+    // One `def:Origin` per declared origin, in declaration order (DEFINE-19).
+    for origin in column.origins() {
+        let declared = origin.declaration();
+        let mut node = Element::new("def:Origin", &item.path)
+            .attr("Type", declared.kind.value.name())
+            .optional("Source", origin.source().map(|v| v.name()));
+        if let Some(description) = &declared.description {
+            node.translated("Description", &description.value, language);
+        }
+        node.refs(origin.documents());
+        item.push(node);
     }
-    node.refs(column.documents());
-    item.push(node);
     item
 }
 /// Every base and per-value definition of a dataset, in `ItemDef` order: each
@@ -337,7 +340,8 @@ fn push_item_groups(metadata: &mut Element, study: &Study, language: &str) {
                 "def:ArchiveLocationID",
                 dataset.href().map(|_| format!("LF.{id}")),
             )
-            .attr("def:StandardOID", format!("STD.{}", study.guide()))
+            // The guide the dataset selects, or the section's first (DEFINE-6).
+            .attr("def:StandardOID", format!("STD.{}", dataset.standard()))
             .optional(
                 "def:CommentOID",
                 sub.comment.as_ref().map(|_| format!("COM.{id}")),

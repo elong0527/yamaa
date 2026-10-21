@@ -162,6 +162,7 @@ mod diagnostics {
                     "normalization",
                     "numeric_policy",
                     "odm_projection_boundary",
+                    "odm_reader_unavailable",
                     "opaque_host",
                     "output_limit",
                     "output_projection",

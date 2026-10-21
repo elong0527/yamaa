@@ -269,6 +269,55 @@ pub(crate) fn is_python_space(c: char) -> bool {
     c.is_whitespace() || ('\u{1c}'..='\u{1f}').contains(&c)
 }
 
+/// CPython's default limit on the digits of an integer converted from text
+/// (`sys.int_info.default_max_str_digits`).
+pub(crate) const DIGITS: usize = 4300;
+
+/// The digits up to which CPython converts text to an integer whatever its
+/// limit (`sys.int_info.str_digits_check_threshold`); a limit, when on, is no
+/// smaller.
+pub(crate) const THRESHOLD: usize = 640;
+
+/// CPython's limit on the digits of an integer converted from text, which
+/// `packaging` converted every number of a version under, with `int()`:
+/// leading zeros count. Python lets the limit be raised, lowered or turned
+/// off, so the engine reads the interpreter's own, and only when a number of
+/// more than [`THRESHOLD`] digits needs it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Limit {
+    /// The interpreter's limit is not read yet.
+    Unread,
+    /// The interpreter's limit: `None` when it is turned off.
+    Read(Option<usize>),
+}
+
+impl Limit {
+    /// Refuse a version whose longest number has `digits` digits when it does
+    /// not convert, or when that needs the limit, which is unread.
+    fn check(self, digits: usize) -> Result<(), Refusal> {
+        match self {
+            _ if digits <= THRESHOLD => Ok(()),
+            Self::Unread => Err(Refusal::Unread),
+            Self::Read(Some(limit)) if digits > limit => Err(Refusal::Digits { digits, limit }),
+            Self::Read(_) => Ok(()),
+        }
+    }
+}
+
+/// Why a text is not read as a version.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Refusal {
+    /// The text is no PEP 440 version.
+    Invalid,
+    /// The text is a PEP 440 version, but its longest number has `digits`
+    /// digits, more than the interpreter's `limit`.
+    Digits { digits: usize, limit: usize },
+    /// The text is a PEP 440 version with a number of more than
+    /// [`THRESHOLD`] digits, so it needs the interpreter's limit, which is
+    /// unread.
+    Unread,
+}
+
 /// What a version text may hold besides the release: everything, as in a
 /// version; or what each specifier operator allows.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -285,6 +334,8 @@ enum Grammar {
 struct Cursor<'a> {
     text: &'a str,
     at: usize,
+    /// The digits of the longest number read.
+    longest: usize,
 }
 
 impl<'a> Cursor<'a> {
@@ -337,34 +388,59 @@ impl<'a> Cursor<'a> {
         Some(*value)
     }
 
+    /// Read `digits` as a number, noting how long the longest is.
+    fn read(&mut self, digits: &str) -> Number {
+        self.longest = self.longest.max(digits.len());
+        Number::new(digits)
+    }
+
     fn number(&mut self) -> Number {
-        self.digits().map_or_else(Number::zero, Number::new)
+        match self.digits() {
+            Some(digits) => self.read(digits),
+            None => Number::zero(),
+        }
     }
 }
 
+/// A version text that a grammar admits.
+struct Parsed {
+    version: Version,
+    /// Whether the text ended in `.*`.
+    wildcard: bool,
+    /// The digits of its longest number, which `packaging` converted only
+    /// when the interpreter's limit allowed.
+    longest: usize,
+}
+
 /// Parse `text` as a version that `grammar` admits, after Python white space
-/// at either end. Returns the version and whether it ended in `.*`. Each
-/// optional part is taken whole or not at all, as `packaging`'s possessive
-/// pattern takes it.
-fn parse(text: &str, grammar: Grammar) -> Option<(Version, bool)> {
+/// at either end. Each optional part is taken whole or not at all, as
+/// `packaging`'s possessive pattern takes it. The grammar decides first: a
+/// number of any length is admitted, and the longest is noted for the
+/// interpreter's limit.
+fn parse(text: &str, grammar: Grammar) -> Option<Parsed> {
     let text = text.trim_matches(is_python_space);
-    let mut cursor = Cursor { text, at: 0 };
+    let mut cursor = Cursor {
+        text,
+        at: 0,
+        longest: 0,
+    };
     cursor.word(&[("v", ())]);
     let mut epoch = Number::zero();
     let start = cursor.at;
     if let Some(digits) = cursor.digits() {
         if cursor.eat('!') {
-            epoch = Number::new(digits);
+            epoch = cursor.read(digits);
         } else {
             cursor.at = start;
         }
     }
-    let mut release = vec![Number::new(cursor.digits()?)];
+    let first = cursor.digits()?;
+    let mut release = vec![cursor.read(first)];
     loop {
         let at = cursor.at;
         if cursor.eat('.') {
             if let Some(digits) = cursor.digits() {
-                release.push(Number::new(digits));
+                release.push(cursor.read(digits));
                 continue;
             }
         }
@@ -373,7 +449,11 @@ fn parse(text: &str, grammar: Grammar) -> Option<(Version, bool)> {
     }
     let mut version = Version::release(epoch, release);
     if grammar == Grammar::Equality && cursor.rest() == ".*" {
-        return Some((version, true));
+        return Some(Parsed {
+            version,
+            wildcard: true,
+            longest: cursor.longest,
+        });
     }
     if grammar == Grammar::Compatible && version.release.len() < 2 {
         return None;
@@ -399,7 +479,9 @@ fn parse(text: &str, grammar: Grammar) -> Option<(Version, bool)> {
     }
     let at = cursor.at;
     if cursor.eat('-') {
-        version.post = cursor.digits().map(Number::new);
+        if let Some(digits) = cursor.digits() {
+            version.post = Some(cursor.read(digits));
+        }
     }
     if version.post.is_none() {
         cursor.at = at;
@@ -428,7 +510,7 @@ fn parse(text: &str, grammar: Grammar) -> Option<(Version, bool)> {
             let mut parts = Vec::new();
             while let Some(part) = cursor.alphanumerics() {
                 parts.push(if part.bytes().all(|byte| byte.is_ascii_digit()) {
-                    Local::Number(Number::new(part))
+                    Local::Number(cursor.read(part))
                 } else {
                     Local::Text(part.to_ascii_lowercase())
                 });
@@ -450,12 +532,21 @@ fn parse(text: &str, grammar: Grammar) -> Option<(Version, bool)> {
             }
         }
     }
-    cursor.rest().is_empty().then_some((version, false))
+    cursor.rest().is_empty().then_some(Parsed {
+        version,
+        wildcard: false,
+        longest: cursor.longest,
+    })
 }
 
-/// Parse a PEP 440 version, as `packaging.version.Version` does.
-pub(crate) fn version(text: &str) -> Option<Version> {
-    parse(text, Grammar::Version).map(|(version, _)| version)
+/// Parse a PEP 440 version, as `packaging.version.Version` does under the
+/// interpreter's integer limit `limit`: a text that is no version is invalid
+/// however long its numbers are, and a version with a number longer than the
+/// limit allows is refused apart.
+pub(crate) fn version(text: &str, limit: Limit) -> Result<Version, Refusal> {
+    let parsed = parse(text, Grammar::Version).ok_or(Refusal::Invalid)?;
+    limit.check(parsed.longest)?;
+    Ok(parsed.version)
 }
 
 /// The smallest version there is, `0.dev0`.
@@ -481,8 +572,10 @@ pub(crate) struct Specifier {
     operator: Operator,
     /// The version text after the operator, without surrounding white space.
     text: String,
-    /// The parsed version, absent for `===`.
-    version: Option<Version>,
+    /// The parsed version with the digits of its longest number, absent for
+    /// `===`. `packaging` converted the numbers only when a comparison read
+    /// the version, after its candidate.
+    version: Option<(Version, usize)>,
     wildcard: bool,
 }
 
@@ -520,12 +613,12 @@ pub(crate) fn specifier(text: &str) -> Option<Specifier> {
         Operator::Compatible => Grammar::Compatible,
         _ => Grammar::Ordered,
     };
-    let (version, wildcard) = parse(rest, grammar)?;
+    let parsed = parse(rest, grammar)?;
     Some(Specifier {
         operator: *operator,
         text: rest.to_owned(),
-        version: Some(version),
-        wildcard,
+        version: Some((parsed.version, parsed.longest)),
+        wildcard: parsed.wildcard,
     })
 }
 
@@ -533,15 +626,23 @@ impl Specifier {
     /// Whether the specifier contains `candidate`, pre-releases included, as
     /// `Specifier.contains(candidate, prereleases=True)` answers. A candidate
     /// that is no version is contained only by an `===` that spells it.
-    pub(crate) fn contains(&self, candidate: &str) -> bool {
-        let Some(version) = &self.version else {
-            return candidate.to_lowercase() == self.text.to_lowercase();
+    /// Under the interpreter's integer limit `limit`, a number the limit
+    /// refuses, or one that needs the limit while it is unread, refuses the
+    /// comparison: the candidate's, which is read first, or else the
+    /// specifier's, which a candidate that is no version leaves unread. The
+    /// refusal is never [`Refusal::Invalid`].
+    pub(crate) fn contains(&self, candidate: &str, limit: Limit) -> Result<bool, Refusal> {
+        let Some((version, longest)) = &self.version else {
+            return Ok(candidate.to_lowercase() == self.text.to_lowercase());
         };
-        let Some(candidate) = self::version(candidate) else {
-            return false;
+        let candidate = match self::version(candidate, limit) {
+            Ok(candidate) => candidate,
+            Err(Refusal::Invalid) => return Ok(false),
+            Err(refusal) => return Err(refusal),
         };
+        limit.check(*longest)?;
         let candidate = &candidate;
-        match self.operator {
+        Ok(match self.operator {
             Operator::Equal | Operator::NotEqual if self.wildcard => {
                 let lower = Version::release(version.epoch.clone(), version.release.clone())
                     .with_development(Number::zero());
@@ -592,7 +693,7 @@ impl Specifier {
                 candidate >= version && candidate < &Version::next_prefix(&version.epoch, prefix)
             }
             Operator::Arbitrary => unreachable!("an arbitrary specifier holds no version"),
-        }
+        })
     }
 }
 
@@ -600,8 +701,16 @@ impl Specifier {
 mod tests {
     use super::*;
 
+    /// CPython's default limit, read.
+    const DEFAULT: Limit = Limit::Read(Some(DIGITS));
+
+    /// A version read under the default limit.
+    fn version(text: &str) -> Result<Version, Refusal> {
+        super::version(text, DEFAULT)
+    }
+
     fn normalized(text: &str) -> Option<String> {
-        version(text).map(|version| version.to_string())
+        version(text).ok().map(|version| version.to_string())
     }
 
     #[test]
@@ -704,8 +813,8 @@ mod tests {
         }
     }
 
-    fn contains(specifier_text: &str, candidate: &str) -> Option<bool> {
-        specifier(specifier_text).map(|specifier| specifier.contains(candidate))
+    fn contains(specifier_text: &str, candidate: &str) -> Option<Result<bool, Refusal>> {
+        specifier(specifier_text).map(|specifier| specifier.contains(candidate, DEFAULT))
     }
 
     #[test]
@@ -797,9 +906,174 @@ mod tests {
         ] {
             assert_eq!(
                 contains(specifier_text, candidate),
-                Some(expected),
+                Some(Ok(expected)),
                 "{specifier_text} {candidate}"
             );
         }
+    }
+
+    #[test]
+    fn a_version_number_past_the_integer_limit_is_refused_apart() {
+        let at = "1".repeat(DIGITS);
+        let past = "1".repeat(DIGITS + 1);
+        let zeros = format!("{}1", "0".repeat(DIGITS));
+        for text in [
+            at.clone(),
+            format!("{at}!1.{at}a{at}.post{at}.dev{at}+{at}"),
+            format!("1.0+a{past}"),
+        ] {
+            assert!(version(&text).is_ok(), "{}", text.len());
+        }
+        for text in [
+            past.clone(),
+            format!("v{past}"),
+            format!(" {past} "),
+            format!("{past}!1"),
+            format!("1.{past}"),
+            format!("1.0a{past}"),
+            format!("1.0.post{past}"),
+            format!("1.0-{past}"),
+            format!("1.0.dev{past}"),
+            format!("1.0+{past}"),
+            format!("1.0+abc.{past}"),
+            zeros.clone(),
+        ] {
+            assert_eq!(
+                version(&text),
+                Err(Refusal::Digits {
+                    digits: DIGITS + 1,
+                    limit: DIGITS
+                }),
+                "{}",
+                &text[..10]
+            );
+        }
+        // The grammar decides first: a text that is no version is invalid
+        // however long its numbers are.
+        for text in [format!("{past}."), format!("{past}x"), format!("1..{past}")] {
+            assert_eq!(version(&text), Err(Refusal::Invalid));
+        }
+        // The longest number is the one reported.
+        assert_eq!(
+            version(&format!("{}.{past}", "2".repeat(DIGITS + 2))),
+            Err(Refusal::Digits {
+                digits: DIGITS + 2,
+                limit: DIGITS
+            })
+        );
+    }
+
+    #[test]
+    fn a_comparison_meets_a_number_past_the_limit_only_when_it_reads_it() {
+        let past = "1".repeat(DIGITS + 1);
+        let at = "1".repeat(DIGITS);
+        // The specifier is one; the candidate is read first.
+        assert_eq!(
+            contains(&format!("=={past}"), "3.12"),
+            Some(Err(Refusal::Digits {
+                digits: DIGITS + 1,
+                limit: DIGITS
+            }))
+        );
+        assert_eq!(
+            contains("==3.12", &past),
+            Some(Err(Refusal::Digits {
+                digits: DIGITS + 1,
+                limit: DIGITS
+            }))
+        );
+        assert_eq!(
+            contains(&format!("=={past}"), &past),
+            Some(Err(Refusal::Digits {
+                digits: DIGITS + 1,
+                limit: DIGITS
+            }))
+        );
+        assert_eq!(
+            contains(&format!("=={past}.*"), "3.12"),
+            Some(Err(Refusal::Digits {
+                digits: DIGITS + 1,
+                limit: DIGITS
+            }))
+        );
+        assert_eq!(
+            contains(&format!("~=1.{past}"), "3.12"),
+            Some(Err(Refusal::Digits {
+                digits: DIGITS + 1,
+                limit: DIGITS
+            }))
+        );
+        assert_eq!(
+            contains(&format!("<{past}"), "3.12"),
+            Some(Err(Refusal::Digits {
+                digits: DIGITS + 1,
+                limit: DIGITS
+            }))
+        );
+        // A candidate that is no version leaves the specifier's number unread,
+        // and `===` reads no number.
+        assert_eq!(
+            contains(&format!("=={past}"), "6.8.0-generic"),
+            Some(Ok(false))
+        );
+        assert_eq!(contains(&format!("==={past}"), "3.12"), Some(Ok(false)));
+        assert_eq!(contains(&format!("==={past}"), &past), Some(Ok(true)));
+        assert_eq!(contains(&format!("=={at}"), "3.12"), Some(Ok(false)));
+        assert_eq!(contains(&format!("=={at}"), &at), Some(Ok(true)));
+    }
+
+    #[test]
+    fn the_interpreter_s_own_limit_decides_past_the_threshold() {
+        let within = "1".repeat(THRESHOLD);
+        let beyond = "1".repeat(THRESHOLD + 1);
+        // Up to the threshold, CPython converts whatever its limit, so the
+        // limit is not needed; past it, an unread limit is.
+        assert!(super::version(&within, Limit::Unread).is_ok());
+        assert_eq!(super::version(&beyond, Limit::Unread), Err(Refusal::Unread));
+        assert_eq!(
+            super::version(&format!("{beyond}x"), Limit::Unread),
+            Err(Refusal::Invalid)
+        );
+        for (limit, digits, converts) in [
+            (Some(THRESHOLD), THRESHOLD, true),
+            (Some(THRESHOLD), THRESHOLD + 1, false),
+            (Some(DIGITS), DIGITS + 1, false),
+            (Some(10_000), DIGITS + 1, true),
+            (Some(10_000), 10_001, false),
+            (None, 10_001, true),
+        ] {
+            let text = format!("1.{}", "0".repeat(digits));
+            let read = super::version(&text, Limit::Read(limit));
+            if converts {
+                assert!(read.is_ok(), "{limit:?} {digits}");
+            } else {
+                let limit = limit.expect("a limit refuses");
+                assert_eq!(
+                    read,
+                    Err(Refusal::Digits { digits, limit }),
+                    "{limit} {digits}"
+                );
+            }
+        }
+        // A specifier's own number needs the limit only when a comparison
+        // reads it, after a candidate that is a version.
+        let bound = specifier(&format!("=={beyond}")).unwrap();
+        assert_eq!(bound.contains("not a version", Limit::Unread), Ok(false));
+        assert_eq!(bound.contains("3.12", Limit::Unread), Err(Refusal::Unread));
+        assert_eq!(bound.contains("3.12", Limit::Read(None)), Ok(false));
+        assert_eq!(bound.contains(&beyond, Limit::Read(None)), Ok(true));
+        assert_eq!(
+            bound.contains("3.12", Limit::Read(Some(THRESHOLD))),
+            Err(Refusal::Digits {
+                digits: THRESHOLD + 1,
+                limit: THRESHOLD
+            })
+        );
+        assert_eq!(
+            specifier("==3.12")
+                .unwrap()
+                .contains(&beyond, Limit::Unread),
+            Err(Refusal::Unread)
+        );
     }
 }

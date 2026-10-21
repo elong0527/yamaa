@@ -17,9 +17,11 @@ define_fixtures <- normalizePath("define-fixtures",winslash="/",mustWork=TRUE)
 source(file.path(host_fixture_root,"reader.R"),local=TRUE)
 host_truth <- read_host_fixture(host_fixture_root,"public-contract")
 messages <- host_truth[["messages"]]
-# D39's error text the fixture authors under `key`, naming the path given.
-error_text <- function(key, path = NULL) {
+# D39's error text the fixture authors under `key`, naming the path given
+# and `file`, the file its first issue is located in.
+error_text <- function(key, path = NULL, file = NULL) {
   text <- messages[[key]]
+  if (!is.null(file)) text <- sub("{file}", file, text, fixed = TRUE)
   if (is.null(path)) text else sub("{path}", path, text, fixed = TRUE)
 }
 namespace <- asNamespace("yamaa")
@@ -40,7 +42,8 @@ for (name in c("yamaa_domain", "yamaa_check", "yamaa_define", "yamaa_resolve_spe
 
 # The one findings view: the twelve columns of D28, context as canonical JSON
 # text, the geometry columns lists holding NULL where nothing was recorded,
-# and no location recorded yet (#3262).
+# and a location in all three of file, line and column or in none
+# (P-ISSUE-1).
 check_issues <- function(frame) {
   stopifnot(is.data.frame(frame),
     identical(names(frame), fixture_strings(host_truth[["issue_columns"]])),
@@ -48,7 +51,8 @@ check_issues <- function(frame) {
       is.character, logical(1))),
     all(vapply(frame[c("line", "column")], is.double, logical(1))),
     all(frame$severity == "error"), all(nzchar(frame$message)),
-    all(is.na(frame$file)), all(is.na(frame$line)), all(is.na(frame$column)),
+    identical(is.na(frame$file), is.na(frame$line)),
+    identical(is.na(frame$file), is.na(frame$column)),
     all(vapply(frame[c("spec_paths", "source_span", "operand_route")], is.list, logical(1))),
     all(vapply(frame$spec_paths, is.character, logical(1))),
     all(startsWith(frame$context, "{")),
@@ -254,6 +258,8 @@ run_contract <- function() {
   failed_spec <- sub("output: {", host_truth[["unreached_row_count_yaml"]], failed_spec, fixed = TRUE)
   failed_spec <- sub("columns: [ID, VALUE]}", host_truth[["report_output_yaml"]], failed_spec, fixed = TRUE)
   write("spec.yaml", failed_spec); write("input.csv", host_truth[["failed_input_csv"]])
+  # The file the failed run's issue is located in, as a location names it.
+  failed_file <- normalizePath(path("spec.yaml"), winslash = "/", mustWork = TRUE)
   for (name in c("output.csv", "checks.csv")) write(name, "sentinel")
   failed <- yamaa_spec(path("spec.yaml"))$run(); issues <- check_issues(failed$issues)
   report <- failed$report
@@ -272,7 +278,7 @@ run_contract <- function() {
   # unchanged and the stale output is never touched.
   for (attempt in 1:2) {
     error <- refusal(failed$save())
-    stopifnot(identical(conditionMessage(error), error_text("failed_run_save")),
+    stopifnot(identical(conditionMessage(error), error_text("failed_run_save", file = failed_file)),
       identical(error$issues, issues), identical(failed$issues, issues), identical(failed$report, report),
       identical(rawfile("output.csv"), charToRaw("sentinel")),
       identical(rawfile("checks.csv"), charToRaw(host_truth[["failed_report_csv"]])))
@@ -636,7 +642,11 @@ qualify_issue_parity <- function() {
     truth <- list(severity = text("severity"), phase = text("phase"),
       condition = text("condition"), rule = text("rule"),
       spec_paths = lapply(expected, function(issue) as.character(unlist(issue$spec_paths))),
-      file = text("file"), line = number("line"), column = number("column"),
+      # A truth row names its file relative to the case's directory; a
+      # location names it by its absolute path (P-ISSUE-1).
+      file = vapply(expected, function(issue) if (is.null(issue$file)) NA_character_ else
+        normalizePath(file.path(directory, issue$file), winslash = "/", mustWork = TRUE), ""),
+      line = number("line"), column = number("column"),
       message = enc2utf8(text("message")), context = enc2utf8(text("context")),
       source_span = lapply(expected, function(issue)
         if (is.null(issue$source_span)) NULL else as.double(unlist(issue$source_span))),

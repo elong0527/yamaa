@@ -879,13 +879,15 @@ class PublicDefine(unittest.TestCase):
                     )
                 result = self.call(directory)
                 rows = result.issues.to_dicts()
-                # Each finding is an error with a message and, until issue
-                # locations land (#3262), no location; the case authors the
-                # rest.
+                # Each finding is an error with a message, located in a file
+                # the case wrote or, when no file holds its first spec path,
+                # not at all (P-ISSUE-1); the case authors the rest.
                 for row in rows:
                     self.assertEqual(row["severity"], "error")
+                    located = row["file"] is not None
                     self.assertEqual(
-                        (row["file"], row["line"], row["column"]), (None,) * 3
+                        (located, row["line"] is not None, row["column"] is not None),
+                        (located,) * 3,
                     )
                     self.assertTrue(row["message"])
                 unauthored = ("severity", "file", "line", "column", "message")

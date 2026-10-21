@@ -121,6 +121,17 @@ impl InstalledDistributions for Installed<'_> {
             .map(|(name, value)| Ok((text(&name)?, text(&value)?)))
             .collect()
     }
+
+    fn integer_digits(&self) -> Result<Option<usize>, FunctionError> {
+        let digits = self
+            .helper("integer_digits")?
+            .call0()
+            .map_err(|error| self.host(error))?
+            .extract::<usize>()
+            .map_err(|_| FunctionError::Protocol)?;
+        // Zero turns the limit off.
+        Ok((digits > 0).then_some(digits))
+    }
 }
 
 impl ProjectFunctions for Port {

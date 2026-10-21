@@ -39,16 +39,17 @@ environment file for R or Python.
 
 ## Dataset specification
 
-For example, `sdtm/dm.yaml` builds SDTM DM, one row per subject, from the ODM
-table saved in [Read ODM XML](#read-odm-xml).
+For example, `sdtm/dm.yaml` builds SDTM DM, one row per subject, from the
+study's ODM XML export ([Read ODM XML](#read-odm-xml)).
 
 ```yaml
 # sdtm/dm.yaml
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
 domain: DM
 keys: [STUDYID, USUBJID]
 input:
-  ODM: ../raw/odm.parquet
+  ODM: ../edc/odm.xml
 
 output:
   path: dm.parquet
@@ -64,7 +65,7 @@ columns:
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
-    derivation: {literal: DM}
+    derivation: "'DM'"
 
   - name: USUBJID
     type: str
@@ -90,8 +91,8 @@ columns:
     derivation:
       case:
         - when: "AGE IS NOT NULL"
-          then: {literal: YEARS}
-        - otherwise: {literal: null}
+          then: "'YEARS'"
+        - otherwise: null
 ```
 
 * `yamaa_spec()` and `yamaa.spec()` point to a specification file and read
@@ -137,14 +138,18 @@ running project code. It does not open the input datasets, so some problems, suc
 as a column name that no input has, appear only when you call `run()`.
 
 Each problem is one row of `issues`: its `severity`, `phase` and
-`condition`, the `rule` it breaks, the `spec_paths` it concerns, its `file`,
-`line` and `column` once the engine locates them, a `message` to read, and its
-facts in `context` as JSON text. A call that cannot complete, such as a
-`save()` of a failed run, raises `yamaa.Error` in Python or signals a
-`yamaa_error` condition in R. Its message names the call and the first issue,
-such as `cannot save ADAE: column ASTDY reads TRTSDT, which is declared after
-it [forward_reference, COLUMN-5] (and 2 more issues)`, and its `issues` hold
-every row.
+`condition`, the `rule` it breaks, the `spec_paths` it concerns, a `message`
+to read, and its facts in `context` as JSON text. Its `file`, `line` and
+`column` say where to edit: the YAML file that wrote the first spec path,
+which is the parent layer when the specification inherits that value, and
+the line and column of that entry. A problem with no place in a YAML file,
+such as a project section that does not exist, leaves them missing. A call
+that cannot complete, such as a `save()` of a failed run, raises
+`yamaa.Error` in Python or signals a `yamaa_error` condition in R. Its
+message names the call and the first issue with its location, such as
+`cannot save ADAE: adam/adae.yaml:57:9: column ASTDY reads TRTSDT, which is
+declared after it [forward_reference, COLUMN-5] (and 2 more issues)`, and its
+`issues` hold every row.
 
 === "R"
 
@@ -365,25 +370,27 @@ returns the paths it wrote.
 
 ## Read ODM XML
 
-Specifications read tables, not ODM XML. `read_odm()` reads an ODM 1.3 or 2.0
-XML file into one row per clinical item in file order. Save the table where your
-specifications' `input` reads it. Only a snapshot reads: a transactional file,
-and one without clinical data such as a define.xml, are refused with their
-issue, and audit records, signatures and annotations are skipped
+A 1.0 specification reads an ODM 1.3 or 2.0 XML file directly: an input whose
+path ends in `.xml`, such as `ODM: ../edc/odm.xml` in `sdtm/dm.yaml`, reads one
+row per clinical item in file order. Only a snapshot reads: a transactional
+file, and one without clinical data such as a define.xml, are refused with
+their issue, and audit records, signatures and annotations are skipped
 ([ODM-1](../../rules/reference/odm.md#odm-1)).
+
+`read_odm()` reads the same table in R or Python. Use it for an export inside
+a TAR archive, which an input does not open, or to look at the items
+yourself.
 
 === "R"
 
     ```r
-    odm <- yamaa_read_odm("edc/odm.xml")
-    arrow::write_parquet(odm, "raw/odm.parquet")
+    odm <- yamaa_read_odm("edc/export.tar.gz", archive_member = "odm.xml")
     ```
 
 === "Python"
 
     ```python
-    odm = yamaa.read_odm("edc/odm.xml")
-    odm.write_parquet("raw/odm.parquet")
+    odm = yamaa.read_odm("edc/export.tar.gz", archive_member="odm.xml")
     ```
 
 ## Lint specifications
@@ -458,21 +465,21 @@ evidence of the installation:
     ```
 
 ```text
-yamaa selftest: succeeded, 4 of 4 cases passed
-not covered: odm
+yamaa selftest: succeeded, 5 of 5 cases passed
 engine 1.0.0, language 1.0, python 3.12.4, linux-x86_64
 ```
 
 ## Inputs, outputs and paths
 
-Inputs can be CSV, Parquet, SAS datasets (`.sas7bdat`) or SAS transport v5/v8
-files (`.xpt`). A SAS input declares its `encoding`, for example
+Inputs can be CSV, Parquet, SAS datasets (`.sas7bdat`), SAS transport v5/v8
+files (`.xpt`) or, in a 1.0 specification, ODM XML files (`.xml`). A SAS
+input declares its `encoding`, for example
 `{path: input/dm.xpt, encoding: windows-1252, types: {SEQ: int}}`. Outputs are
 CSV or Parquet; Dataset-JSON and SAS Transport version 5 files come from
 `submission()`.
 
 A relative path resolves from the YAML file that writes it, so
-`../raw/odm.parquet` in `sdtm/dm.yaml` is the study's `raw/odm.parquet`.
+`../edc/odm.xml` in `sdtm/dm.yaml` is the study's `edc/odm.xml`.
 
 On Windows, a specification, project or ODM file you pass may sit on a network
 share (`\\server\share\study\project.yaml`) or a mapped drive, and the paths

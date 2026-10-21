@@ -286,32 +286,6 @@ fn each_1_0_feature_not_built_yet_is_refused_as_unsupported_operation() {
     let spec = |columns: &str| {
         format!("yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: DM\nkeys: [USUBJID]\ninput: {{RAW: raw.csv}}\noutput: {{path: dm.csv, columns: [USUBJID]}}\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Subject\n    derivation: RAW.USUBJID{columns}")
     };
-    // Several origins (P1-13).
-    study.write(
-        "spec.yaml",
-        &spec(&format!(
-            "{submission}        - {{type: Predecessor, description: RAW.USUBJID}}\n"
-        )),
-    );
-    assert_eq!(
-        refusals(&study, "spec.yaml", None),
-        [refusal(
-            "multiple_origins",
-            "columns.USUBJID.submission.origins"
-        )]
-    );
-    // A dataset's standard (P1-13).
-    study.write(
-        "spec.yaml",
-        &format!(
-            "{}submission: {{label: Demographics, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, standard: SDTMIG}}\n",
-            spec(submission)
-        ),
-    );
-    assert_eq!(
-        refusals(&study, "spec.yaml", None),
-        [refusal("submission_standard", "submission.standard")]
-    );
     // A value-level comparator (P1-14).
     study.write(
         "spec.yaml",
@@ -325,12 +299,6 @@ fn each_1_0_feature_not_built_yet_is_refused_as_unsupported_operation() {
             "value_level_comparator",
             "columns.USUBJID.submission.value_level.OTHER.where.USUBJID.comparator"
         )]
-    );
-    // An ODM XML input (P1-15).
-    study.write("spec.yaml", &spec("").replace("raw.csv", "raw.xml"));
-    assert_eq!(
-        refusals(&study, "spec.yaml", None),
-        [refusal("odm_xml_input", "input.RAW.path")]
     );
 }
 
@@ -431,8 +399,8 @@ fn submission_metadata_needs_a_model() {
 }
 
 /// SUB-3 (D25, D58): a section lists only specifications of its model, and
-/// the guide it binds belongs to that model. Each fault fails before any
-/// published dataset is read.
+/// each guide it lists belongs to that model under a name of its own
+/// (DEFINE-6). Each fault fails before any published dataset is read.
 #[test]
 fn a_section_lists_only_specifications_of_its_model() {
     let study = define_study();
@@ -488,9 +456,301 @@ fn a_section_lists_only_specifications_of_its_model() {
     );
     let (condition, rule, paths, context) = one(submit());
     assert_eq!(condition, "standard_model_mismatch");
-    assert_eq!(rule.as_deref(), Some("SUB-3"));
+    assert_eq!(rule.as_deref(), Some("DEFINE-6"));
     assert_eq!(paths, ["sdtm.standards[0].name"]);
     assert_eq!(context["value"], Value::String("ADaMIG".into()));
     assert_eq!(context["model"], Value::String("SDTM".into()));
     assert_eq!(context["section"], Value::String("sdtm".into()));
+    // Every guide the section lists is checked, not only its first.
+    let second = |guide: &str| {
+        declared.replace(
+            "status: Final}\n",
+            &format!("status: Final}}\n    - {guide}\n"),
+        )
+    };
+    study.write(
+        "project.yaml",
+        &second("{name: SENDIG, version: \"3.1\", status: Final}"),
+    );
+    let (condition, rule, paths, context) = one(submit());
+    assert_eq!(condition, "standard_model_mismatch");
+    assert_eq!(rule.as_deref(), Some("DEFINE-6"));
+    assert_eq!(paths, ["sdtm.standards[1].name"]);
+    assert_eq!(context["value"], Value::String("SENDIG".into()));
+    // A name an earlier entry takes, at the later entry.
+    study.write(
+        "project.yaml",
+        &second("{name: SDTMIG, version: \"3.3\", status: Final}"),
+    );
+    let (condition, rule, paths, context) = one(submit());
+    assert_eq!(condition, "duplicate_identifier");
+    assert_eq!(rule.as_deref(), Some("DEFINE-6"));
+    assert_eq!(paths, ["sdtm.standards[1].name"]);
+    assert_eq!(context["identifier"], Value::String("SDTMIG".into()));
+}
+
+/// P-ORIGIN-1 (D16, D70): a column lists one or more origins, and the
+/// document writes one `def:Origin` per origin, in declaration order
+/// (DEFINE-19); conflicting origins fail before any input is read (SUB-14,
+/// D69).
+#[test]
+fn a_column_declares_several_origins() {
+    let study = define_study();
+    let dm = String::from_utf8(study.read("dm.yaml")).unwrap();
+    let engine = engine();
+    let token = CancellationToken::new();
+    let check = || {
+        rows(
+            &engine
+                .spec_check(&study.path("dm.yaml"), None, &token)
+                .unwrap()
+                .issues(),
+        )
+    };
+    let several = |origins: &str| {
+        dm.replace(
+            "      origins:\n        - {type: Protocol, source: Sponsor}\n",
+            &format!("      origins:\n{origins}"),
+        )
+    };
+    study.write(
+        "dm.yaml",
+        &several(
+            "        - {type: Protocol, source: Sponsor}\n        - {type: Collected, source: Vendor}\n",
+        ),
+    );
+    assert_eq!(check(), []);
+    let mut submission = engine
+        .project_submission(
+            &study.path("project.yaml"),
+            Some("sdtm"),
+            Some("2026-09-11T00:00:00"),
+            "0.4.0",
+            &token,
+        )
+        .unwrap();
+    assert_eq!(rows(&submission.issues()), []);
+    submission.save(&CancellationToken::new()).unwrap();
+    let define = String::from_utf8(study.read("define.xml")).unwrap();
+    assert!(
+        define.contains(
+            "        <def:Origin Type=\"Protocol\" Source=\"Sponsor\"/>\n        <def:Origin Type=\"Collected\" Source=\"Vendor\"/>\n"
+        ),
+        "{define}"
+    );
+    // A repeated type and source, and an origin beside a Predecessor.
+    for (origins, condition_path, origin_type) in [
+        (
+            "        - {type: Protocol, source: Sponsor}\n        - {type: Protocol, source: Sponsor}\n",
+            "columns.STUDYID.submission.origins[1]",
+            "Protocol",
+        ),
+        (
+            "        - {type: Predecessor, description: RAW.STUDYID}\n        - {type: Protocol, source: Sponsor}\n",
+            "columns.STUDYID.submission.origins[1]",
+            "Protocol",
+        ),
+    ] {
+        study.write("dm.yaml", &several(origins));
+        let issues = check();
+        let [(condition, rule, paths, context)] = issues.as_slice() else {
+            panic!("one issue: {issues:?}")
+        };
+        assert_eq!(condition, "conflicting_origins");
+        assert_eq!(rule.as_deref(), Some("SUB-14"));
+        assert_eq!(paths, &[condition_path]);
+        assert_eq!(context["column"], Value::String("STUDYID".into()));
+        assert_eq!(context["origin_type"], Value::String(origin_type.into()));
+    }
+    // An empty list declares no origin.
+    study.write(
+        "dm.yaml",
+        &several("        []\n").replace(":\n        []", ": []"),
+    );
+    let issues = check();
+    let [(condition, rule, paths, _)] = issues.as_slice() else {
+        panic!("one issue: {issues:?}")
+    };
+    assert_eq!(condition, "origin_missing");
+    assert_eq!(rule.as_deref(), Some("SUB-14"));
+    assert_eq!(paths, &["columns.STUDYID.submission"]);
+}
+
+/// D65: a 1.0 SDTM or ADaM column takes no `Not Available` origin, which a
+/// SEND column keeps; a 0.5 specification keeps the pairs of 0.5.0 (D75).
+#[test]
+fn not_available_is_an_origin_of_send_alone() {
+    let study = define_study();
+    let dm = String::from_utf8(study.read("dm.yaml")).unwrap();
+    let engine = engine();
+    let token = CancellationToken::new();
+    let check = |name: &str| {
+        rows(
+            &engine
+                .spec_check(&study.path(name), None, &token)
+                .unwrap()
+                .issues(),
+        )
+    };
+    let unavailable = dm.replace(
+        "{type: Protocol, source: Sponsor}",
+        "{type: Not Available, description: Not recorded at this site}",
+    );
+    study.write("dm.yaml", &unavailable);
+    let issues = check("dm.yaml");
+    let [(condition, rule, paths, context)] = issues.as_slice() else {
+        panic!("one issue: {issues:?}")
+    };
+    assert_eq!(condition, "origin_source_not_admitted");
+    assert_eq!(rule.as_deref(), Some("SUB-15"));
+    assert_eq!(paths, &["columns.STUDYID.submission.origins[0]"]);
+    assert_eq!(
+        context["origin_type"],
+        Value::String("Not Available".into())
+    );
+    assert_eq!(context["model"], Value::String("SDTM".into()));
+    study.write(
+        "dm.yaml",
+        &unavailable.replace("model: SDTM", "model: SEND"),
+    );
+    assert_eq!(check("dm.yaml"), []);
+}
+
+/// SUB-2: a dataset's `standard` is governed in 1.0, so a 1.0 root
+/// `metadata` map does not carry it; a 0.5 one still may.
+#[test]
+fn a_1_0_root_metadata_reserves_standard() {
+    let study = Study::new();
+    study.write("raw.csv", "USUBJID\nP1\n");
+    study.write(
+        "spec.yaml",
+        &format!("{SPEC}metadata: {{standard: SDTMIG, note: kept}}\n"),
+    );
+    study.write(
+        "legacy.yaml",
+        &format!("{LEGACY}metadata: {{standard: SDTMIG}}\n"),
+    );
+    let engine = engine();
+    let token = CancellationToken::new();
+    let check = |spec: &str| {
+        rows(
+            &engine
+                .spec_check(&study.path(spec), None, &token)
+                .unwrap()
+                .issues(),
+        )
+    };
+    let issues = check("spec.yaml");
+    let [(condition, rule, paths, context)] = issues.as_slice() else {
+        panic!("one issue: {issues:?}")
+    };
+    assert_eq!(condition, "reserved_metadata_key");
+    assert_eq!(rule.as_deref(), Some("SUB-2"));
+    assert_eq!(paths, &["metadata.standard"]);
+    assert_eq!(context["key"], Value::String("standard".into()));
+    assert_eq!(check("legacy.yaml"), []);
+}
+
+/// D16 (P-STD-1, DEFINE-6, DEFINE-8): the document lists every guide of the
+/// section in declaration order, a `Provisional` one too, and each dataset
+/// binds the guide its `submission.standard` selects, or the first.
+#[test]
+fn a_dataset_binds_the_section_standard_it_selects() {
+    let study = define_study();
+    let declared = String::from_utf8(study.read("project.yaml")).unwrap();
+    study.write(
+        "project.yaml",
+        &declared.replace(
+            "status: Final}\n",
+            "status: Final}\n    - {name: SDTMIG-MD, version: \"1.0\", status: Provisional}\n",
+        ),
+    );
+    let dm = String::from_utf8(study.read("dm.yaml")).unwrap();
+    let engine = engine();
+    let token = CancellationToken::new();
+    let define = || {
+        let mut submission = engine
+            .project_submission(
+                &study.path("project.yaml"),
+                Some("sdtm"),
+                Some("2026-09-11T00:00:00"),
+                "0.4.0",
+                &token,
+            )
+            .unwrap();
+        assert_eq!(rows(&submission.issues()), []);
+        submission.save(&CancellationToken::new()).unwrap();
+        String::from_utf8(study.read("define.xml")).unwrap()
+    };
+    let standards = "<def:Standard OID=\"STD.SDTMIG\" Name=\"SDTMIG\" Type=\"IG\" Version=\"3.4\" Status=\"Final\"/>\n        <def:Standard OID=\"STD.SDTMIG-MD\" Name=\"SDTMIG-MD\" Type=\"IG\" Version=\"1.0\" Status=\"Provisional\"/>\n";
+    // Without a selection the dataset binds the first guide, and the second
+    // is still listed.
+    let document = define();
+    assert!(document.contains(standards), "{document}");
+    assert!(
+        document.contains("def:StandardOID=\"STD.SDTMIG\""),
+        "{document}"
+    );
+    // A selection is checked only where a section composes the dataset.
+    let selecting = dm.replace(
+        "repeating: false}",
+        "repeating: false, standard: SDTMIG-MD}",
+    );
+    study.write("dm.yaml", &selecting);
+    assert_eq!(
+        rows(
+            &engine
+                .spec_check(&study.path("dm.yaml"), None, &token)
+                .unwrap()
+                .issues()
+        ),
+        []
+    );
+    let document = define();
+    assert!(document.contains(standards), "{document}");
+    assert!(
+        document.contains("def:StandardOID=\"STD.SDTMIG-MD\""),
+        "{document}"
+    );
+    assert!(
+        !document.contains("def:StandardOID=\"STD.SDTMIG\""),
+        "{document}"
+    );
+    // A name the section does not list fails before any document is written.
+    std::fs::remove_file(study.0.join("define.xml")).unwrap();
+    study.write(
+        "dm.yaml",
+        &dm.replace(
+            "repeating: false}",
+            "repeating: false, standard: SDTMIG-AP}",
+        ),
+    );
+    let issues = rows(
+        &engine
+            .project_submission(
+                &study.path("project.yaml"),
+                Some("sdtm"),
+                Some("2026-09-11T00:00:00"),
+                "0.4.0",
+                &token,
+            )
+            .unwrap()
+            .issues(),
+    );
+    let [(condition, rule, paths, context)] = issues.as_slice() else {
+        panic!("one issue: {issues:?}")
+    };
+    assert_eq!(condition, "unknown_standard");
+    assert_eq!(rule.as_deref(), Some("DEFINE-8"));
+    assert_eq!(paths, &["sdtm.specs[0].submission.standard"]);
+    assert_eq!(context["value"], Value::String("SDTMIG-AP".into()));
+    assert_eq!(context["section"], Value::String("sdtm".into()));
+    assert_eq!(
+        context["standards"],
+        Value::Array(vec![
+            Value::String("SDTMIG".into()),
+            Value::String("SDTMIG-MD".into())
+        ])
+    );
+    assert!(!study.0.join("define.xml").exists());
 }

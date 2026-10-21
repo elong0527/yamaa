@@ -281,7 +281,7 @@ fn aggregate(spec: &Spec, e: ExprId) -> bool {
 
 /// Each input's declaration findings: its written path, the encoding its
 /// profile requires, the empty-string convention, its profile, what an ODM
-/// input may not declare and the types a Parquet input restates.
+/// input may not declare and the types a Parquet or ODM XML input restates.
 pub(in crate::specification) fn source_findings(
     spec: &Spec,
     odm_inputs: &BTreeSet<&str>,
@@ -349,7 +349,11 @@ pub(in crate::specification) fn source_findings(
             }
             continue;
         }
-        if profile == Some(ast::Profile::Parquet) && !input.source.types.is_empty() {
+        // A self-describing profile types every field it stores: Parquet by
+        // its schema, and ODM XML by the fixed item table (INPUT-6, ODM-1).
+        if matches!(profile, Some(ast::Profile::Parquet | ast::Profile::OdmXml))
+            && !input.source.types.is_empty()
+        {
             if input.source.types.len() > Limits::COLUMNS {
                 return Err(PrepareError::limit(
                     "source_fields",

@@ -10,6 +10,7 @@
 //! them in publication order. Its refusals name the result they save (D39).
 
 use std::ops::Range;
+use std::sync::Arc;
 
 use yamaa_adapters::file_application::Admitted;
 use yamaa_adapters::project_scope::identify;
@@ -18,7 +19,7 @@ use yamaa_core::diagnostic::Diagnostic;
 
 use crate::api::{Failure, Run, Status};
 use crate::cancel::CancellationToken;
-use crate::diagnostic::Severity;
+use crate::diagnostic::{Locator, Report, Severity};
 use crate::engine::Build;
 use crate::error::Error;
 use crate::internal::EngineShared;
@@ -32,10 +33,12 @@ pub(crate) fn fails(issues: &[Diagnostic]) -> bool {
 }
 
 /// What one operation produced: its members, in run order, and the
-/// project-level issues that refused the whole operation.
+/// project-level issues that refused the whole operation, with what locates
+/// them (P-ISSUE-1).
 pub(crate) struct Outcome {
     pub(crate) members: Vec<Member>,
     pub(crate) issues: Vec<Diagnostic>,
+    pub(crate) locator: Arc<Locator>,
 }
 
 /// One member of an outcome: a specification checked or built, or one
@@ -50,7 +53,8 @@ pub(crate) struct Member {
 }
 
 pub(crate) enum Work {
-    Checked(Vec<Diagnostic>),
+    /// A check's findings, with what locates them.
+    Checked(Vec<Diagnostic>, Arc<Locator>),
     Built(Box<Run>),
     Composed(Box<DefineBuild>),
 }
@@ -60,7 +64,7 @@ impl Member {
     /// project operation.
     pub(crate) fn issues(&self) -> Vec<Diagnostic> {
         let mut issues = match &self.work {
-            Work::Checked(issues) => issues.clone(),
+            Work::Checked(issues, _) => issues.clone(),
             Work::Built(run) => run.build().issues(),
             Work::Composed(define) => define.issues(),
         };
@@ -70,9 +74,23 @@ impl Member {
         issues
     }
 
+    /// What locates the member's issues: the documents it read.
+    fn locator(&self) -> &Locator {
+        match &self.work {
+            Work::Checked(_, locator) => locator,
+            Work::Built(run) => run.build().locator(),
+            Work::Composed(define) => &define.locator,
+        }
+    }
+
+    /// The member's issues as [`Member::issues`] gives them, located.
+    pub(crate) fn report(&self) -> Report {
+        Report::located(&self.issues(), self.locator())
+    }
+
     pub(crate) fn status(&self) -> Status {
         match &self.work {
-            Work::Checked(issues) => Status::of_all(issues, []),
+            Work::Checked(issues, _) => Status::of_all(issues, []),
             Work::Built(run) => run.status(),
             Work::Composed(define) => Status::of_all(define.composed(), []),
         }
@@ -94,6 +112,9 @@ pub(crate) struct DefineBuild {
     /// The issues of the composition as it was made: a later save's refusal
     /// joins its issues, never these.
     composed: Vec<Diagnostic>,
+    /// What locates its issues: the project file, the files it reads and the
+    /// specifications its section lists.
+    locator: Arc<Locator>,
 }
 
 impl DefineBuild {
@@ -116,7 +137,12 @@ impl DefineBuild {
             crate::internal::resolver_bridge(shared),
         );
         let composed = inner.issues().to_vec();
-        Self { inner, composed }
+        let locator = Arc::new(inner.locator());
+        Self {
+            inner,
+            composed,
+            locator,
+        }
     }
 
     /// The composition's issues, with those of a save that stopped at it.
@@ -157,21 +183,24 @@ impl DefineBuild {
 
 impl Outcome {
     /// The outcome of an operation that a project-level finding refused
-    /// before any member.
-    pub(crate) fn refused(issues: Vec<Diagnostic>) -> Self {
+    /// before any member, located by `locator`.
+    pub(crate) fn refused(issues: Vec<Diagnostic>, locator: Arc<Locator>) -> Self {
         Self {
             members: Vec::new(),
             issues,
+            locator,
         }
     }
 
-    /// The project-level issues, then every member's issues in run order.
-    pub(crate) fn issues(&self) -> Vec<Diagnostic> {
-        let mut issues = self.issues.clone();
+    /// The project-level issues, then every member's issues in run order,
+    /// each located by the documents of the operation or member that found
+    /// it (P-ISSUE-1).
+    pub(crate) fn report(&self) -> Report {
+        let mut report = Report::located(&self.issues, &self.locator);
         for member in &self.members {
-            issues.extend(member.issues());
+            report.diagnostics.extend(member.report().diagnostics);
         }
-        issues
+        report
     }
 
     pub(crate) fn status(&self) -> Status {
@@ -195,10 +224,17 @@ impl Outcome {
                     build: &mut run.build,
                 }),
                 Work::Composed(define) => Some(Part::Composed { define }),
-                Work::Checked(_) => None,
+                Work::Checked(..) => None,
             })
             .collect();
-        save(&self.issues, parts, operation, subject, token)
+        save(
+            &self.issues,
+            &self.locator,
+            parts,
+            operation,
+            subject,
+            token,
+        )
     }
 }
 
@@ -240,10 +276,19 @@ impl Part<'_> {
         }
     }
 
+    /// The part's issues as [`Part::issues`] gives them, located.
+    fn report(&self) -> Report {
+        let locator = match self {
+            Self::Built { build, .. } => build.locator(),
+            Self::Composed { define } => &define.locator,
+        };
+        Report::located(&self.issues(), locator)
+    }
+
     /// The refusal of a save of `subject` stopped at this part, which wrote
     /// `paths`: the part's issues say why.
     fn refusal(&self, subject: &str, paths: Vec<String>) -> Failure {
-        Failure::from_issues(Action::Save(subject), &self.issues()).with_paths(paths)
+        Failure::new(Action::Save(subject), &self.report()).with_paths(paths)
     }
 }
 
@@ -277,10 +322,13 @@ struct Planned {
 /// that wrote every planned file still refuses when a run failed, with every
 /// run's issues, or when a section stopped it, with that section's issues.
 /// Every refusal is D39's error text for saving `subject`, the result's
-/// subject, whichever member stopped it. A cancelled save records nothing
-/// on its parts, so the result can be saved again.
+/// subject, whichever member stopped it, and each issue is located by the
+/// documents of the operation or part that found it: `locator` for the
+/// `refusal` that refused the whole operation. A cancelled save records
+/// nothing on its parts, so the result can be saved again.
 pub(crate) fn save(
     refusal: &[Diagnostic],
+    locator: &Locator,
     mut parts: Vec<Part<'_>>,
     operation: Operation,
     subject: &str,
@@ -288,7 +336,7 @@ pub(crate) fn save(
 ) -> Result<Vec<String>, Failure> {
     let action = Action::Save(subject);
     if !refusal.is_empty() {
-        return Err(Failure::from_issues(action, refusal));
+        return Err(Failure::new(action, &Report::located(refusal, locator)));
     }
     if parts.is_empty() {
         let finding = match operation {
@@ -427,8 +475,13 @@ pub(crate) fn save(
         return Err(parts[part].refusal(subject, written));
     }
     if failed {
-        let issues = parts.iter().flat_map(Part::issues).collect::<Vec<_>>();
-        return Err(Failure::from_issues(action, &issues).with_paths(written));
+        let report = Report {
+            diagnostics: parts
+                .iter()
+                .flat_map(|part| part.report().diagnostics)
+                .collect(),
+        };
+        return Err(Failure::new(action, &report).with_paths(written));
     }
     Ok(written)
 }
