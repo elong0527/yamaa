@@ -110,7 +110,9 @@ impl Error {
         use yamaa_core::application_issue::{rejected, resource_rejected};
         match self {
             Self::Unavailable => vec![rejected(Stage::Prepare, Fault::YamlReaderUnavailable)],
-            Self::Read { file, error } => vec![read_diagnostic(file, error)],
+            Self::Read { file, error } => {
+                vec![crate::file_application::caller_read_failure(file, error)]
+            }
             Self::Source { file, failure } => source_diagnostics(file, failure),
             Self::Write { error, .. } => {
                 if let crate::file_publication::Error::Limit(limit) = error {
@@ -126,47 +128,6 @@ impl Error {
                 vec![rejected(Stage::Output, write_code(error))]
             }
         }
-    }
-}
-
-/// A classified resource failure names the path as given; any other read
-/// failure stays an opaque resource refusal.
-fn read_diagnostic(file: &str, error: &crate::file_resources::Error) -> Diagnostic {
-    use crate::file_resources::Error as E;
-    use yamaa_core::application_issue::{rejected, resource_rejected};
-    use yamaa_core::resource::ResourceFailure;
-    match crate::file_resources::resource_failure(error) {
-        Some(ResourceFailure::Boundary(limit)) => resource_rejected(
-            Stage::Prepare,
-            Fault::ResourceLimit,
-            limit.resource,
-            limit.limit,
-            limit.actual,
-            Vec::new(),
-        ),
-        Some(failure) => Diagnostic {
-            code: failure.code(),
-            spec_paths: Vec::new(),
-            context: [(
-                "path".to_owned(),
-                yamaa_core::json::Value::String(file.into()),
-            )]
-            .into(),
-            source_span: None,
-            operand_route: None,
-        },
-        None => rejected(
-            Stage::Prepare,
-            match error {
-                E::Host(_) => Fault::HostResourceFailure,
-                E::Unreadable => Fault::ResourceUnreadable,
-                E::InvalidRoot => Fault::ResourceRoot,
-                E::InvalidBase => Fault::ResourceBase,
-                E::OutsideRoots => Fault::ResourceOutsideRoots,
-                E::InvalidLock => Fault::InvalidPackagingLock,
-                _ => Fault::ResourcePath,
-            },
-        ),
     }
 }
 

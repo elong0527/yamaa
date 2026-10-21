@@ -514,34 +514,26 @@ fn resolved_value(
     Ok(context_value_from_core(&tree))
 }
 
-/// The section a caller names: `sdtm`, `adam` or `send`; any other text is a
-/// refused argument.
-fn section(section: Option<&str>) -> Result<Option<Section>, Error> {
+/// The section a caller names, which must be one `read` declares. Any other
+/// text, a name outside `sdtm`, `adam` and `send` included, refuses the call
+/// with `unknown_section`, naming the sections the project declares
+/// (PROJECT-14).
+fn select(
+    read: &yamaa_adapters::project_scope::Project,
+    section: Option<&str>,
+) -> Result<Option<Section>, Error> {
     let Some(key) = section else {
         return Ok(None);
     };
     yamaa_core::project_scope::section(key)
+        .filter(|section| read.sections().any(|declared| declared == *section))
         .map(Some)
         .ok_or_else(|| {
-            let mut finding =
-                yamaa_core::application_issue::rejected(Stage::Project, Fault::UnknownSection);
-            finding.context.insert(
-                "section".into(),
-                yamaa_core::json::Value::String(key.into()),
-            );
-            finding.context.insert(
-                "sections".into(),
-                yamaa_core::json::Value::Array(
-                    yamaa_core::project_scope::SECTIONS
-                        .into_iter()
-                        .map(|section| {
-                            yamaa_core::json::Value::String(
-                                yamaa_core::project_scope::key(section).into(),
-                            )
-                        })
-                        .collect(),
-                ),
-            );
+            let declared = read
+                .sections()
+                .map(yamaa_core::project_scope::key)
+                .collect::<Vec<_>>();
+            let finding = yamaa_core::project_scope::unknown_section(key, &declared);
             Error::Rejected(Report::from_issues(&[finding]))
         })
 }
@@ -815,7 +807,9 @@ impl Engine {
     /// failed specification stops only its consumers, and a user interrupt in
     /// project code stops the run after that specification. Project problems
     /// come back as issues of a run that built nothing; only an unknown
-    /// section (`Error::Rejected`) and cancellation fail the call.
+    /// section and cancellation fail the call. Once the project file is read,
+    /// a section it does not declare, or any other text, fails with
+    /// `unknown_section` (PROJECT-14) as `Error::Rejected`.
     pub fn project_run(
         &self,
         project: &str,
@@ -843,7 +837,6 @@ impl Engine {
             return Err(Error::Cancelled);
         }
         let subject = project_subject(project, section);
-        let section = self::section(section)?;
         let read = match crate::internal::read_project(self.shared(), project) {
             Ok(read) => read,
             Err(issues) => {
@@ -853,6 +846,7 @@ impl Engine {
                 })
             }
         };
+        let section = select(&read, section)?;
         // Identify every listed specification from this read, with the
         // project path resolved now rather than its raw spelling.
         let identities = read
@@ -913,8 +907,10 @@ impl Engine {
     /// One define.xml per section, selected or all declared, plus
     /// Dataset-JSON where the section sets `datasets: json`. Without a
     /// section, every declared section that names `define` is composed.
-    /// Project problems come back as issues; only an unknown section
-    /// (`Error::Rejected`) and cancellation fail the call.
+    /// Project problems come back as issues; only an unknown section and
+    /// cancellation fail the call. Once the project file is read, a section
+    /// it does not declare, or any other text, fails with `unknown_section`
+    /// (PROJECT-14) as `Error::Rejected`.
     pub fn project_submission(
         &self,
         project: &str,
@@ -927,7 +923,6 @@ impl Engine {
             return Err(Error::Cancelled);
         }
         let subject = project_subject(project, section);
-        let selected = self::section(section)?;
         let read = match crate::internal::read_project(self.shared(), project) {
             Ok(read) => read,
             Err(issues) => {
@@ -937,6 +932,7 @@ impl Engine {
                 })
             }
         };
+        let selected = select(&read, section)?;
         let duplicates = read.duplicates();
         if !duplicates.is_empty() {
             return Ok(Submission {

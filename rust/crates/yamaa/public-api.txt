@@ -6,6 +6,7 @@ yamaa: pub mod cancel
 yamaa: pub mod diagnostic
 yamaa: pub mod engine
 yamaa: pub mod error
+yamaa: pub mod file_type
 yamaa: pub mod functions
 yamaa: pub mod info
 yamaa: pub mod lint
@@ -48,6 +49,7 @@ yamaa::FFI_ArrowArrayStream: pub use yamaa::table::FFI_ArrowArrayStream
 yamaa::Failure: pub use yamaa::api::Failure
 yamaa::Field: pub use yamaa::table::Field
 yamaa::Fields: pub use yamaa::table::Fields
+yamaa::FileType: pub use yamaa::file_type::FileType
 yamaa::Float64Array: pub use yamaa::table::Float64Array
 yamaa::FunctionError: pub use yamaa::error::FunctionError
 yamaa::FunctionHandle: pub use yamaa::functions::FunctionHandle
@@ -392,6 +394,16 @@ yamaa::error::TableError: impl TableError
 yamaa::error::TableError: pub struct TableError [derive(Clone, Debug, Eq, PartialEq)] [non_exhaustive]
 yamaa::error::TableError::code: pub fn code(&self) -> &'static str
 yamaa::error::TableError::message: pub fn message(&self) -> &str
+yamaa::file_type::Engine: impl Engine
+yamaa::file_type::Engine::file_type: pub fn file_type(&self, path: &str) -> Result<FileType, Failure>
+yamaa::file_type::FileType: impl FileType
+yamaa::file_type::FileType: pub enum FileType [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
+yamaa::file_type::FileType::Codelists: Codelists
+yamaa::file_type::FileType::Function: Function
+yamaa::file_type::FileType::Project: Project
+yamaa::file_type::FileType::Spec: Spec
+yamaa::file_type::FileType::as_str: pub fn as_str(self) -> &'static str
+yamaa::file_type::FileType::parse: pub fn parse(text: &str) -> Option<Self>
 yamaa::functions::Argument: pub struct Argument<'a> [derive(Clone, Copy, Debug, PartialEq)] [non_exhaustive]
 yamaa::functions::Argument::name: pub name: &'a str
 yamaa::functions::Argument::value: pub value: ScalarRef<'a>

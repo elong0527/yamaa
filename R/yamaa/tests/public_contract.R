@@ -72,6 +72,16 @@ unknown_member <- function(error, available) {
     identical(issue$message, "the project has no specification named ADSL") &&
     identical(issue$context, paste0('{"available":', available, ',"name":"ADSL"}'))
 }
+# The one issue of a call that selects `section`, which the project does not
+# declare; `sections` is the canonical JSON of the sections it does.
+unknown_section <- function(error, section, sections) {
+  issue <- error$issues
+  nrow(issue) == 1L && identical(issue$phase, "validation") &&
+    identical(issue$condition, "unknown_section") &&
+    identical(issue$rule, "PROJECT-14") && identical(issue$spec_paths, list(character())) &&
+    identical(issue$message, paste("the project declares no section", section)) &&
+    identical(issue$context, paste0('{"section":"', section, '","sections":', sections, "}"))
+}
 # The one issue of a save with nothing to write, under `rule`.
 nothing_to_save <- function(error, rule) {
   issue <- error$issues
@@ -415,9 +425,13 @@ qualify_project_run_members <- function() {
   error <- refusal(runs[["ADSL"]])
   stopifnot(identical(conditionMessage(error), error_text("unknown_member")),
     unknown_member(error, '["TEST"]'))
-  # A run or a submission that built nothing has nothing to save.
-  error <- refusal(project$run("sdtm")$save())
+  # A section the project does not declare refuses the run (PROJECT-14).
+  stopifnot(unknown_section(refusal(project$run("sdtm")), "sdtm", '["adam"]'))
+  # A declared section that lists no specification builds nothing, and a run or
+  # a submission that built nothing has nothing to save.
   listing <- file.path(case, "project.yaml")
+  cat("sdtm:\n  specs: []\n", file = listing, append = TRUE)
+  error <- refusal(project$run("sdtm")$save())
   stopifnot(identical(conditionMessage(error), error_text("empty_project_run_save", listing)),
     nothing_to_save(error, "PROJECT-12"))
   error <- refusal(project$submission()$save())
@@ -535,15 +549,21 @@ qualify_project_refusals <- function() {
     stopifnot(identical(conditionMessage(error), error_text("refused_submission_save", absent)),
       identical(error$issues, submission$issues))
   }
+  # The project file is read first: one that cannot be read reports its own
+  # findings, and no section is checked.
+  stopifnot(identical(check_issues(project$run("bogus")$issues), unread),
+    identical(check_issues(project$submission("bogus")$issues), unread))
+  # A name that is no section of the project raises (PROJECT-14).
+  listing <- file.path(root, "project.yaml")
+  writeLines(c("schema_version: '1.0'", "adam:", "  specs: []"), listing)
+  project <- yamaa_project(listing)
   for (case in list(list(call = function() project$run("bogus"), message = "unknown_section_run"),
                     list(call = function() project$submission("bogus"), message = "unknown_section_submission"))) {
     error <- refusal(case$call())
     stopifnot(identical(conditionMessage(error), error_text(case$message)),
-      identical(error$issues$phase, "engine"), identical(error$issues$condition, "engine_rejected"),
-      identical(error$issues$context,
-        '{"code":"unknown_section","section":"bogus","sections":["sdtm","adam","send"],"stage":"project"}'))
+      unknown_section(error, "bogus", '["adam"]'))
   }
-  stopifnot(identical(list.files(root), character()))
+  stopifnot(identical(list.files(root), "project.yaml"))
   cat("project refusals are issues, refused saves fail and unknown sections raise\n")
 }
 qualify_project_refusals()

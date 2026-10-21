@@ -154,6 +154,35 @@ name of that run. Any other name, one that another section lists included,
 fails with `unknown_specification_name`, naming the requested name and, in
 sorted order, every name the run has.
 
+## Selecting a section
+
+<a id="project-14"></a>
+
+### PROJECT-14. Selecting a project section accepts only a section the project declares
+
+A project run or submission that selects a section accepts only a section the
+project file declares. Any other name fails with `unknown_section` before any
+specification builds, naming the requested name and, in sorted order, every
+section the project declares, whether the name is outside `sdtm`, `adam` and
+`send` or names one of them that the project does not declare.
+
+Fails: `unknown_section`.
+Evidence: `rust/crates/yamaa/tests/project_operations.rs::a_section_the_project_does_not_declare_refuses_the_call`, `rust/crates/yamaa-core/tests/support/diagnostic/project_scope.rs`, `python/tests/installed/installed_public_contract.py::test_project_refusals_are_issues_and_unknown_sections_raise`, `python/tests/installed/installed_public_define.py::test_every_declared_define_section_is_composed_without_a_section`.
+
+The project file is read first: a project file that cannot be read reports
+its own findings as the operation's issues, as every project operation does,
+and no section is checked. Section names compare exactly, so `SDTM` names no
+section. A declared section whose `specs` is empty is selected, and a project
+run of it builds nothing ([PROJECT-12](#project-12)). Without a selected
+section, a project run builds every declared section
+([PROJECT-8](#project-8)) and a submission composes every declared section
+that names `define` ([PROJECT-13](#project-13)).
+
+The finding has no spec path. Its `section` context is the requested name,
+and its `sections` context lists the declared sections. A project file that
+declares `schema_version` declares its sections under the same keys, and
+selecting one is checked the same way.
+
 ## Checking a project
 
 <a id="project-7"></a>
@@ -196,11 +225,13 @@ instead of that file. Independent specifications keep run-scope order.
 Fails: `producer_workflow_cycle`.
 Evidence: `rust/crates/yamaa/tests/project_operations.rs::a_section_run_builds_only_its_scope_and_a_full_run_hands_producers_over_in_memory`, `rust/crates/yamaa-adapters/tests/project_scope.rs::plans_order_their_scope_producer_first`, `rust/crates/yamaa-adapters/tests/project_scope.rs::unlinked_inputs_cycles_and_collisions_are_project_findings`.
 
-The project run is the caller that orders these builds. The link itself only
-types a stored artifact ([INPUT-10](../inputs.md#input-10)): a specification
-built on its own never builds a producer, and a project run never builds a
-producer outside its run scope ([PROJECT-9](#project-9)). The held artifact is
-read like a stored one, checked against the producer's output contract under
+The selected section must be one the project declares
+([PROJECT-14](#project-14)). The project run is the caller that orders these
+builds. The link itself only types a stored artifact
+([INPUT-10](../inputs.md#input-10)): a specification built on its own never
+builds a producer, and a project run never builds a producer outside its run
+scope ([PROJECT-9](#project-9)). The held artifact is read like a stored one,
+checked against the producer's output contract under
 [INPUT-11](../inputs.md#input-11), and the consumer's report records its
 encoded length ([CHECK-24](../verification.md#check-24)).
 
@@ -311,3 +342,7 @@ stops the save at its turn, after the sections before it. A submission that
 composed no section has nothing to save, and saving it fails with
 `nothing_to_save`. Each section publishes its transport files before its
 document under [JSON-14](dataset-json.md#json-14).
+
+The selected section must be one the project declares
+([PROJECT-14](#project-14)), so a section that the project does not declare is
+refused before any Define-XML document is composed.

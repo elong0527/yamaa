@@ -67,8 +67,22 @@ pub(super) const CASES: &[Case] = &[
             ("error.yaml", case_file!("negative-transport-empty-string/expected/error.yaml")),
         ],
     },
+    Case {
+        name: "schema-source-xpt",
+        features: &["readstat", "yaml"],
+        adapters: &["csv", "readstat"],
+        entries: &[Entry { specification: "spec.yaml", project: None }],
+        define: None,
+        files: &[
+            ("input/adsl_raw.xpt", case_file!("schema-source-xpt/input/adsl_raw.xpt")),
+            ("spec.yaml", case_file!("schema-source-xpt/spec.yaml")),
+        ],
+        expected: &[
+            ("adsl.csv", case_file!("schema-source-xpt/expected/adsl.csv")),
+        ],
+    },
 ];
 
 /// The adapters that no listed case covers (benchmarks/selftest.yaml).
 #[rustfmt::skip]
-pub(super) const UNCOVERED: &[&str] = &["odm", "readstat"];
+pub(super) const UNCOVERED: &[&str] = &["odm"];

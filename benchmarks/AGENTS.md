@@ -466,6 +466,12 @@ changes the list, reruns
 `uv run --project python --no-sync python -m tools.packaging.generate_selftest_cases --write`
 in the same change; `make quick` fails until the facade's table matches.
 
+A shipped file carries no third-party licence, so no case copies an upstream
+fixture. The SAS transport input of `schema-source-xpt` is written by
+`python -m tools.staging.build_xport_fixtures` from the literal table there,
+from the public record layout, without ReadStat or the engine's reader; change
+that table and rerun it rather than editing the file.
+
 ## Adding an expression
 
 An expression enters the vocabulary when a benchmark needs it, a negative
