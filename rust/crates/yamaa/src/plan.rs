@@ -36,10 +36,12 @@ struct CompiledPlan {
 impl Plan {
     pub(crate) fn new(shared: Arc<EngineShared>, specification: String, state: Compiled) -> Self {
         let report = match &state {
-            Compiled::Ready(_) => Report {
+            Compiled::Ready(..) => Report {
                 diagnostics: Vec::new(),
             },
-            Compiled::Refused { issues, .. } => Report::from_issues(issues),
+            Compiled::Refused {
+                issues, locator, ..
+            } => Report::located(issues, locator),
         };
         Self {
             shared,

@@ -374,6 +374,7 @@ yamaa::functions::HostLanguage::Python: Python
 yamaa::functions::HostLanguage::R: R
 yamaa::functions::InstalledDistributions: pub trait InstalledDistributions
 yamaa::functions::InstalledDistributions::environment: fn environment(&self) -> Result<BTreeMap<String, String>, FunctionError> [required]
+yamaa::functions::InstalledDistributions::integer_digits: fn integer_digits(&self) -> Result<Option<usize>, FunctionError> [default]
 yamaa::functions::InstalledDistributions::providers: fn providers(&self, modules: &[String]) -> Result<BTreeMap<String, Vec<String>>, FunctionError> [required]
 yamaa::functions::InstalledDistributions::standard_library: fn standard_library(&self, module: &str) -> Result<bool, FunctionError> [required]
 yamaa::functions::InstalledDistributions::version: fn version(&self, distribution: &str) -> Result<InstalledVersion, FunctionError> [required]
@@ -424,7 +425,7 @@ yamaa::info::Info::version: pub version: &'static str
 yamaa::info::info: pub fn info(host: Host, host_version: Option<&str>) -> Info
 yamaa::lint: pub use yamaa::lint::lint
 yamaa::lint::LINT_COLUMNS: pub const LINT_COLUMNS: [&str; 6]
-yamaa::lint::LINT_FINDINGS: pub const LINT_FINDINGS: [&str; 9]
+yamaa::lint::LINT_FINDINGS: pub const LINT_FINDINGS: [&str; 14]
 yamaa::lint::Lint: impl Lint
 yamaa::lint::Lint: pub struct Lint [derive(Clone, Debug, Eq, PartialEq)] [non_exhaustive]
 yamaa::lint::Lint::files: pub fn files(&self) -> usize

@@ -20,6 +20,8 @@
 
 use std::collections::BTreeMap;
 
+pub(crate) use yamaa_adapters::issue_location::Locator;
+
 use crate::table::Table;
 
 // The host tables' columns and the closed vocabularies of their values.
@@ -274,9 +276,14 @@ pub struct Diagnostic {
     pub code: String,
     pub rule: Option<String>,
     pub spec_path: Vec<String>,
-    /// Where the first spec path is written. Issue locations (P-ISSUE-1,
-    /// #3262) are not recorded yet, so this is `None` and the table's `file`,
-    /// `line` and `column` are missing.
+    /// Where the first spec path is written (P-ISSUE-1): the YAML file of
+    /// the layer whose value took effect, at the key of the deepest written
+    /// mapping member or the first character of the deepest written list
+    /// item, or, for `invalid_yaml` and `non_ascii_source`, the file the YAML
+    /// reader refused at the position it reported. `None`, and the table's
+    /// `file`, `line` and `column` missing, when the issue has no spec path
+    /// or no file the operation read holds it, such as a path that names a
+    /// data file's record or a written artifact.
     pub location: Option<Location>,
     /// The issue's message, rendered in Rust from the template the condition
     /// registry holds for its condition. Messages are not frozen: match on
@@ -299,7 +306,12 @@ pub(crate) fn severity(diagnostic: &yamaa_core::diagnostic::Diagnostic) -> Sever
 }
 
 impl Diagnostic {
-    pub(crate) fn from_core(diagnostic: &yamaa_core::diagnostic::Diagnostic) -> Self {
+    /// The public form of `diagnostic`, located by `locator`: the documents
+    /// of the operation that found it.
+    pub(crate) fn located(
+        diagnostic: &yamaa_core::diagnostic::Diagnostic,
+        locator: &Locator,
+    ) -> Self {
         let definition = diagnostic.definition();
         Self {
             severity: severity(diagnostic),
@@ -307,7 +319,13 @@ impl Diagnostic {
             code: definition.condition.to_owned(),
             rule: definition.rule.map(str::to_owned),
             spec_path: diagnostic.spec_paths.clone(),
-            location: None,
+            location: locator.locate(diagnostic).map(|location| Location {
+                file: location.file,
+                position: Some(Position {
+                    line: location.line,
+                    column: location.column,
+                }),
+            }),
             message: diagnostic.message(),
             context: DiagnosticContext::from_core(&diagnostic.context),
             source_span: diagnostic.source_span.map(|span| SourceSpan {
@@ -396,9 +414,22 @@ pub struct Report {
 }
 
 impl Report {
+    /// The report of issues that no YAML file the operation read holds, such
+    /// as a refusal before any file was read: none is located.
     pub(crate) fn from_issues(issues: &[yamaa_core::diagnostic::Diagnostic]) -> Self {
+        Self::located(issues, &Locator::none())
+    }
+
+    /// The report of `issues`, each located by `locator` (P-ISSUE-1).
+    pub(crate) fn located(
+        issues: &[yamaa_core::diagnostic::Diagnostic],
+        locator: &Locator,
+    ) -> Self {
         Self {
-            diagnostics: issues.iter().map(Diagnostic::from_core).collect(),
+            diagnostics: issues
+                .iter()
+                .map(|issue| Diagnostic::located(issue, locator))
+                .collect(),
         }
     }
 
@@ -713,7 +744,8 @@ mod tests {
         let paths = list("spec_paths").value(0);
         let paths = paths.as_any().downcast_ref::<StringArray>().unwrap();
         assert_eq!(paths.value(0), "columns.A");
-        // No location is recorded yet (#3262): the three columns are missing.
+        // An issue no file the operation read locates has the three columns
+        // missing; a located one has all three.
         assert!(text("file").is_null(0) && int("line").is_null(0) && int("column").is_null(0));
         assert_eq!(text("file").value(1), "/study/sdtm/dm.yaml");
         assert_eq!((int("line").value(1), int("column").value(1)), (41, 5));

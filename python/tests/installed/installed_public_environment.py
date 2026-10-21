@@ -72,18 +72,32 @@ class AnyMessage:
         return "<a message>"
 
 
+class Located:
+    """Equal to a location cell holding a `kind`: these cases pin what an
+    issue is, and installed_issue_locations pins where it is (P-ISSUE-1)."""
+
+    def __init__(self, kind):
+        self.kind = kind
+
+    def __eq__(self, other):
+        return isinstance(other, self.kind) and not isinstance(other, bool)
+
+    def __repr__(self):
+        return f"<a located {self.kind.__name__}>"
+
+
 def issue(condition, rule, spec_paths, context, phase="validation"):
-    """One row of the twelve-column issues table (D28): an error with no
-    location recorded yet (#3262)."""
+    """One row of the twelve-column issues table (D28): an error, located in
+    a file the case wrote (P-ISSUE-1)."""
     return {
         "severity": "error",
         "phase": phase,
         "condition": condition,
         "rule": rule,
         "spec_paths": spec_paths,
-        "file": None,
-        "line": None,
-        "column": None,
+        "file": Located(str),
+        "line": Located(int),
+        "column": Located(int),
         "message": AnyMessage(),
         "context": compact(context),
         "source_span": None,
@@ -809,9 +823,9 @@ class PublicEnvironment(unittest.TestCase):
         expected = yaml.safe_load((case / "expected/error.yaml").read_text())
         expected.update(
             severity="error",
-            file=None,
-            line=None,
-            column=None,
+            file=Located(str),
+            line=Located(int),
+            column=Located(int),
             message=AnyMessage(),
             source_span=None,
             operand_route=None,

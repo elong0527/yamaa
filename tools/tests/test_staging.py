@@ -196,6 +196,7 @@ class StagingTests(unittest.TestCase):
                 {crate.name for crate in crates},
                 {f"{name}-{version}" for name, version in registry},
             )
+            stubs = {}
             for crate in crates:
                 files = {
                     path.relative_to(crate).as_posix()
@@ -203,11 +204,30 @@ class StagingTests(unittest.TestCase):
                     if path.is_file()
                 }
                 record = json.loads((crate / ".cargo-checksum.json").read_text())
+                # A crate that no supported target compiles keeps its manifest
+                # alone, with an empty, unrecorded src/lib.rs where Cargo
+                # needs one to read it.
+                if set(record["files"]) == {vendor_crates.MANIFEST}:
+                    stubs[crate.name] = files - {".cargo-checksum.json"}
+                    library = crate / vendor_crates.LIBRARY
+                    if library.is_file():
+                        self.assertEqual(library.read_bytes(), b"")
+                        files.discard(vendor_crates.LIBRARY)
                 self.assertEqual(set(record["files"]), files - {".cargo-checksum.json"})
                 for path in crate.rglob("*"):
                     if path.is_file():
                         self.assertFalse(vendor_crates.is_binary(path), path)
                         self.assertNotIn(path.name, vendor_crates.TOOLCHAIN_FILES)
+            directories = {name: f"{name}-{version}" for name, version in registry}
+            self.assertIn(directories["r-efi"], stubs)
+            self.assertNotIn(directories["extendr-api"], stubs)
+            for remaining in stubs.values():
+                self.assertLessEqual(remaining, {"Cargo.toml", vendor_crates.LIBRARY})
+            # The packages carry no text of a license that yamaa does not rely on.
+            vendored = unpacked / vendor_crates.DIRECTORY
+            for name, texts in vendor_crates.ALTERNATIVE_LICENSES.items():
+                for text in texts:
+                    self.assertFalse((vendored / directories[name] / text).exists())
             self.assertEqual(
                 (destination / staging.VENDOR_CONFIG).read_text(encoding="utf-8"),
                 engine_bundle.CARGO_CONFIG,
@@ -225,6 +245,13 @@ class StagingTests(unittest.TestCase):
                 },
                 registry | {("yamaa-saphyr-parser", "0.2.1")},
             )
+            entries = {
+                entry.split(" ", 1)[0]: entry for entry in authors.split("\nCrate: ")
+            }
+            self.assertIn(
+                "    Left out: every file but its manifest\n", entries["r-efi"]
+            )
+            self.assertIn("    Left out: zstd/COPYING\n", entries["zstd-sys"])
             # The notices cover the bundled crates that the R binding links,
             # not the procedural macros or the crates of other platforms, and
             # the inventory names one license each.

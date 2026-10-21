@@ -71,6 +71,7 @@ pub mod file_resolver;
 pub mod file_resources;
 pub mod file_workflow;
 pub mod host_resources;
+pub mod issue_location;
 pub mod publication;
 pub mod resolved_artifact;
 pub mod table_artifact;

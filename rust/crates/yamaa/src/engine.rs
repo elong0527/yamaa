@@ -18,7 +18,7 @@ use yamaa_core::diagnostic::Diagnostic;
 
 use crate::api::Failure;
 use crate::cancel::CancellationToken;
-use crate::diagnostic::Report;
+use crate::diagnostic::{Locator, Report};
 use crate::error::{Error, FunctionError};
 use crate::functions::{HostLanguage, ProjectFunctions};
 use crate::internal::{EngineShared, ObserverBridge};
@@ -216,11 +216,18 @@ impl Engine {
     }
 
     /// A project-run specification that did not build, with the findings
-    /// that explain why, named by `subject` in what it prints.
-    pub(crate) fn refused_build(&self, issues: Vec<Diagnostic>, subject: &str) -> Build {
+    /// that explain why, named by `subject` in what it prints and located by
+    /// `locator`, the project's.
+    pub(crate) fn refused_build(
+        &self,
+        issues: Vec<Diagnostic>,
+        subject: &str,
+        locator: Arc<Locator>,
+    ) -> Build {
         let measurements = Arc::new(Measurements::new());
         measurements.complete(false);
-        Build::new(Err(issues), Vec::new(), measurements, &self.shared).with_subject(subject)
+        Build::new(Err(issues), Vec::new(), measurements, &self.shared, locator)
+            .with_subject(subject)
     }
 
     pub(crate) fn shared(&self) -> &EngineShared {
@@ -233,14 +240,14 @@ impl Engine {
         &self,
         request: &Request<'_>,
     ) -> Result<ResolvedSpecification, Error> {
-        match yamaa_adapters::resolved_artifact::resolve(
+        match yamaa_adapters::resolved_artifact::resolve_located(
             request.specification,
             request.environment,
             self.shared.language,
             crate::internal::resolver_bridge(&self.shared),
         ) {
             Ok(artifact) => Ok(ResolvedSpecification { inner: artifact }),
-            Err(issues) => Err(Error::Rejected(Report::from_issues(&issues))),
+            Err((issues, locator)) => Err(Error::Rejected(Report::located(&issues, &locator))),
         }
     }
 }
@@ -270,17 +277,22 @@ pub(crate) struct Build {
     /// for a member whose listing could not be read (D130); otherwise the
     /// dataset name once read, or else the path as given.
     subject: String,
+    /// What locates the build's issues (P-ISSUE-1): the documents its
+    /// compilation read, or a refused project member's project.
+    locator: Arc<Locator>,
 }
 
 impl Build {
     /// One build of a member: its `result`, the measurements its operation
     /// observed and the host failures its run retained, of which one the
     /// engine's project functions classify as an interrupt cancels the call.
+    /// `locator` locates its issues.
     pub(crate) fn new(
         result: Result<Box<Domain>, Vec<Diagnostic>>,
         failures: Vec<FunctionError>,
         measurements: Arc<Measurements>,
         shared: &EngineShared,
+        locator: Arc<Locator>,
     ) -> Self {
         let interrupted = shared.functions.as_ref().is_some_and(|functions| {
             failures
@@ -297,10 +309,16 @@ impl Build {
             _failures: failures,
             interrupted,
             subject: String::new(),
+            locator,
         };
         build.built = build.issues();
         build.refresh();
         build
+    }
+
+    /// What locates the build's issues.
+    pub(crate) fn locator(&self) -> &Arc<Locator> {
+        &self.locator
     }
 
     /// The same build, named by `subject` in what it prints.
@@ -319,7 +337,7 @@ impl Build {
     }
 
     fn refresh(&mut self) {
-        self.report = Report::from_issues(&self.issues());
+        self.report = Report::located(&self.issues(), &self.locator);
         (self.output, self.run_report) = match self.domain() {
             Some(domain) => (
                 domain.output_table().map(Table::from_adapter),
@@ -443,6 +461,7 @@ impl Build {
         let subject = self.subject.clone();
         crate::outcome::save(
             &[],
+            &Locator::none(),
             vec![crate::outcome::Part::Built {
                 identity: None,
                 build: self,

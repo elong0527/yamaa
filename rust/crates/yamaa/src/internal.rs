@@ -15,6 +15,7 @@ use std::sync::Arc;
 use yamaa_adapters::application_measurements::Measurements;
 
 use crate::cancel::CancellationToken;
+use crate::diagnostic::Locator;
 use crate::engine::Build;
 use crate::error::{Error, FunctionError, ResolverFailure};
 use crate::functions::{
@@ -148,13 +149,22 @@ pub(crate) fn resolver_bridge(
         .map(|bridge| bridge as Arc<dyn yamaa_adapters::host_resources::Resolver>)
 }
 
+/// The findings of a project file that could not be read, with what locates
+/// them: the files read before it stopped.
+pub(crate) type Unread = (Vec<yamaa_core::diagnostic::Diagnostic>, Arc<Locator>);
+
 /// Read a project file and its listed specifications through the engine's
 /// resolver: the caller's, or the local file resolver.
 pub(crate) fn read_project(
     shared: &EngineShared,
     project: &str,
-) -> Result<yamaa_adapters::project_scope::Project, Vec<yamaa_core::diagnostic::Diagnostic>> {
-    yamaa_adapters::project_scope::Project::read(project, shared.language, resolver_bridge(shared))
+) -> Result<yamaa_adapters::project_scope::Project, Unread> {
+    yamaa_adapters::project_scope::Project::read_located(
+        project,
+        shared.language,
+        resolver_bridge(shared),
+    )
+    .map_err(|(issues, locator)| (issues, Arc::new(locator)))
 }
 
 struct HostPort<'a> {
@@ -296,36 +306,41 @@ fn classify(failure: &HostFailure) -> yamaa_adapters::file_application::Classifi
     }
 }
 
-/// The static check of one specification. Its findings are issues; only a
-/// cancelled token fails the call, with no issue.
+/// The static check of one specification: its findings, which are issues,
+/// and what locates them. Only a cancelled token fails the call, with no
+/// issue.
 pub(crate) fn run_check(
     shared: &EngineShared,
     specification: &str,
     environment: Option<&str>,
     token: &CancellationToken,
-) -> Result<Vec<yamaa_core::diagnostic::Diagnostic>, Error> {
+) -> Result<(Vec<yamaa_core::diagnostic::Diagnostic>, Arc<Locator>), Error> {
     if token.is_cancelled() {
         return Err(Error::Cancelled);
     }
-    let identity = shared.identity("check", specification);
-    Ok(yamaa_adapters::file_application::check_with_resolver(
+    let (issues, locator) = yamaa_adapters::file_application::check_located(
         shared.language,
         yamaa_core::domain_entry::Request {
             specification,
             environment,
         },
-        identity,
         resolver_bridge(shared),
-    ))
+    );
+    Ok((issues, Arc::new(locator)))
 }
 
 /// One compiled request: the prepared member, or a refused compilation that
-/// still owns its diagnostics and the dataset name it read.
+/// still owns its diagnostics and the dataset name it read. Either keeps
+/// what locates the issues of its runs (P-ISSUE-1).
 pub(crate) enum Compiled {
-    Ready(Box<yamaa_adapters::file_preparation::FileSpecification>),
+    Ready(
+        Box<yamaa_adapters::file_preparation::FileSpecification>,
+        Arc<Locator>,
+    ),
     Refused {
         issues: Vec<yamaa_core::diagnostic::Diagnostic>,
         name: Option<String>,
+        locator: Arc<Locator>,
     },
 }
 
@@ -334,8 +349,16 @@ impl Compiled {
     /// read: what a run's printed summary names.
     pub(crate) fn name(&self) -> Option<&str> {
         match self {
-            Self::Ready(prepared) => prepared.run().document().domain(),
+            Self::Ready(prepared, _) => prepared.run().document().domain(),
             Self::Refused { name, .. } => name.as_deref(),
+        }
+    }
+
+    /// What locates the issues of this compilation and of its runs: the
+    /// documents it read.
+    pub(crate) fn locator(&self) -> &Arc<Locator> {
+        match self {
+            Self::Ready(_, locator) | Self::Refused { locator, .. } => locator,
         }
     }
 }
@@ -359,7 +382,10 @@ pub(crate) fn compile(
         )
     });
     match prepared {
-        Ok(prepared) => Compiled::Ready(Box::new(prepared)),
+        Ok(prepared) => {
+            let locator = Arc::new(yamaa_adapters::issue_location::prepared(&prepared));
+            Compiled::Ready(Box::new(prepared), locator)
+        }
         Err(error) => Compiled::Refused {
             issues: yamaa_adapters::project_application::selection_failure(&error),
             name: match &error {
@@ -368,6 +394,7 @@ pub(crate) fn compile(
                 }
                 yamaa_adapters::file_workflow::SelectionError::Preparation(_) => None,
             },
+            locator: Arc::new(yamaa_adapters::issue_location::selection(&error)),
         },
     }
 }
@@ -390,11 +417,18 @@ pub(crate) fn run(
     let cancelled = || token.is_cancelled();
     let scope = yamaa_core::application_observer::Scope::new(observer).cancellable(&cancelled);
     let measurements = Arc::clone(observer.measurements);
+    let locator = Arc::clone(compiled.locator());
     let prepared = match compiled {
-        Compiled::Ready(prepared) => prepared,
+        Compiled::Ready(prepared, _) => prepared,
         Compiled::Refused { issues, .. } => {
             yamaa_core::domain_entry::finish(scope);
-            return Build::new(Err(issues.clone()), Vec::new(), measurements, shared);
+            return Build::new(
+                Err(issues.clone()),
+                Vec::new(),
+                measurements,
+                shared,
+                locator,
+            );
         }
     };
     let built = yamaa_core::domain_entry::run(scope, || {
@@ -404,7 +438,7 @@ pub(crate) fn run(
         Ok(built) => built,
         Err(never) => match never {},
     };
-    Build::new(result, failures, measurements, shared)
+    Build::new(result, failures, measurements, shared, locator)
 }
 
 /// What one run of a member yields: its result, or the findings that explain
@@ -511,7 +545,7 @@ pub(crate) fn same_authority(left: &EngineShared, right: &EngineShared) -> bool 
 /// holds still has the bytes it was compiled from. A refused compilation is
 /// never reused, so it reports `false`.
 pub(crate) fn unchanged(compiled: &Compiled) -> bool {
-    let Compiled::Ready(prepared) = compiled else {
+    let Compiled::Ready(prepared, _) = compiled else {
         return false;
     };
     prepared.verify_metadata().is_ok()

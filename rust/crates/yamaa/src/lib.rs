@@ -20,10 +20,11 @@
 //! combination of them. With no format feature, CSV and Arrow routes remain.
 //! A capability a build omits fails the same way it does in adapters: the
 //! stable codes (`yaml_reader_unavailable`, `parquet_reader_unavailable`,
-//! `sas_reader_unavailable`, `parquet_codec_unavailable`) surface as
-//! diagnostics or as [`Error::Unavailable`], and [`Engine::read_odm`] without
-//! `odm` returns `Error::Unavailable { feature: "odm" }`. The facade adds no
-//! native dependencies of its own.
+//! `sas_reader_unavailable`, `odm_reader_unavailable`,
+//! `parquet_codec_unavailable`) surface as diagnostics or as
+//! [`Error::Unavailable`], and [`Engine::read_odm`] without `odm` returns
+//! `Error::Unavailable { feature: "odm" }`. The facade adds no native
+//! dependencies of its own.
 //!
 //! Malformed Parquet input can make the Parquet or Arrow crate panic. The
 //! engine contains each such panic as a finding and keeps it off stderr: its

@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ODM xmlns="http://www.cdisc.org/ns/odm/v1.3"
+     ODMVersion="1.3.2"
+     FileType="Transactional"
+     FileOID="STUDY01.TRANSACTIONS.20260302"
+     CreationDateTime="2026-03-02T09:15:00+00:00">
+  <ClinicalData StudyOID="STUDY01" MetaDataVersionOID="MDV.1">
+    <SubjectData SubjectKey="101">
+      <StudyEventData StudyEventOID="SE.SCREENING">
+        <FormData FormOID="F.DM">
+          <ItemGroupData ItemGroupOID="IG.DM" TransactionType="Insert">
+            <ItemData ItemOID="IT.DM.SEX" Value="M">
+              <AuditRecord>
+                <UserRef UserOID="USR.CRC"/>
+                <LocationRef LocationOID="LOC.01"/>
+                <DateTimeStamp>2026-02-18T09:30:00+00:00</DateTimeStamp>
+              </AuditRecord>
+            </ItemData>
+          </ItemGroupData>
+        </FormData>
+      </StudyEventData>
+    </SubjectData>
+    <SubjectData SubjectKey="101">
+      <StudyEventData StudyEventOID="SE.SCREENING">
+        <FormData FormOID="F.DM">
+          <ItemGroupData ItemGroupOID="IG.DM" TransactionType="Update">
+            <ItemData ItemOID="IT.DM.SEX" Value="F">
+              <AuditRecord>
+                <UserRef UserOID="USR.CRC"/>
+                <LocationRef LocationOID="LOC.01"/>
+                <DateTimeStamp>2026-02-24T11:05:00+00:00</DateTimeStamp>
+                <ReasonForChange>Entered in error; corrected from the source document</ReasonForChange>
+              </AuditRecord>
+            </ItemData>
+          </ItemGroupData>
+        </FormData>
+      </StudyEventData>
+    </SubjectData>
+    <SubjectData SubjectKey="102">
+      <StudyEventData StudyEventOID="SE.SCREENING">
+        <FormData FormOID="F.DM">
+          <ItemGroupData ItemGroupOID="IG.DM" TransactionType="Insert">
+            <ItemData ItemOID="IT.DM.SEX" Value="F">
+              <AuditRecord>
+                <UserRef UserOID="USR.CRC"/>
+                <LocationRef LocationOID="LOC.01"/>
+                <DateTimeStamp>2026-02-19T14:10:00+00:00</DateTimeStamp>
+              </AuditRecord>
+            </ItemData>
+          </ItemGroupData>
+        </FormData>
+      </StudyEventData>
+    </SubjectData>
+    <SubjectData SubjectKey="102">
+      <StudyEventData StudyEventOID="SE.SCREENING">
+        <FormData FormOID="F.DM">
+          <ItemGroupData ItemGroupOID="IG.DM" TransactionType="Remove">
+            <ItemData ItemOID="IT.DM.SEX">
+              <AuditRecord>
+                <UserRef UserOID="USR.CRC"/>
+                <LocationRef LocationOID="LOC.01"/>
+                <DateTimeStamp>2026-02-26T08:45:00+00:00</DateTimeStamp>
+                <ReasonForChange>Form entered for the wrong subject</ReasonForChange>
+              </AuditRecord>
+            </ItemData>
+          </ItemGroupData>
+        </FormData>
+      </StudyEventData>
+    </SubjectData>
+  </ClinicalData>
+</ODM>

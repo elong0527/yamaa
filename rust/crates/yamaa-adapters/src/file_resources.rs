@@ -417,7 +417,12 @@ impl Resources {
     }
     /// Own immutable raw evidence without copying content or reopening files.
     pub(crate) fn retain_sources(&self) -> RetainedSources {
-        self.store.sources()
+        self.store.sources(None)
+    }
+    /// Metadata captures alone can hold YAML diagnostic locations. Input
+    /// data remains in the complete evidence returned by `retain_sources`.
+    pub(crate) fn retain_metadata_sources(&self) -> RetainedSources {
+        self.store.sources(Some(Kind::Metadata))
     }
     /// Metadata only: no bytes read and no snapshot created.
     pub fn inspect(&self, written: &str) -> Result<(), Error> {
@@ -557,7 +562,7 @@ impl Resources {
             .capture(&declaring, written, kind, maximum)
             .map_err(|failure| Error::from_capture(failure, kind, maximum))?;
         self.reads += usize::from(result.1);
-        self.host_sources = self.store.sources();
+        self.host_sources = self.store.sources(None);
         Ok(result)
     }
 }

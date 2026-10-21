@@ -418,10 +418,11 @@ one, and every identifier an expression reads must be one, or the match fails
 as `unknown_field`. An input's key is checked where an implicit join or a
 keyless qualified aggregate reads it, at that read: a column the input does not
 store fails naming `INPUT.COLUMN`, and one the specification declares no column
-of fails naming the column. A `key` that no read uses is admitted. `SELF` names
-donor rows and is never a current-row scope, so a match value written
-`SELF.field` names no current-row value and fails the same way; when the
-current row carries `field`, the diagnostic suggests that bare name.
+of fails naming the column. A `key` that no read uses is admitted, and the
+lint reports it as `unused_input_key`. `SELF` names donor rows and is never a
+current-row scope, so a match value written `SELF.field` names no current-row
+value and fails the same way; when the current row carries `field`, the
+diagnostic suggests that bare name.
 
 A match value read from an input's record names the driver of every row that
 reads the lookup, wherever the lookup is read: in a row template's derivations

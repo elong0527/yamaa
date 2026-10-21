@@ -22,7 +22,7 @@ use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::project_environment::Submission as Section;
 
 use crate::cancel::CancellationToken;
-use crate::diagnostic::{context_value_from_core, ContextValue, Report};
+use crate::diagnostic::{context_value_from_core, ContextValue, Locator, Report};
 use crate::engine::{Build, Engine, Request};
 use crate::error::Error;
 use crate::outcome::{fails, DefineBuild, Member, Outcome, Work};
@@ -153,12 +153,12 @@ impl Check {
     /// What is wrong, one row per finding; empty when nothing is. A project
     /// check lists the project findings first, then each specification's.
     pub fn issues(&self) -> Table {
-        Report::from_issues(&self.outcome.issues()).table()
+        self.outcome.report().table()
     }
 
     /// The issues as typed records, in the table's order.
     pub fn diagnostics(&self) -> Vec<crate::diagnostic::Diagnostic> {
-        Report::from_issues(&self.outcome.issues()).diagnostics
+        self.outcome.report().diagnostics
     }
 
     /// `succeeded` when the check found no error-severity issue.
@@ -359,6 +359,9 @@ struct Node<'a> {
     /// The producer identity and location under which consumers read the
     /// member's artifact.
     artifact: Option<(String, String)>,
+    /// What locates the findings that stop the member before it builds: the
+    /// project's documents, or none for a specification run.
+    locator: Arc<Locator>,
 }
 
 impl Engine {
@@ -389,9 +392,9 @@ impl Engine {
                 .map(|(_, finding)| finding)
                 .collect::<Vec<_>>();
             let build = if !node.refused.is_empty() {
-                self.refused_build(node.refused, node.request.specification)
+                self.refused_build(node.refused, node.request.specification, node.locator)
             } else if !blocked.is_empty() {
-                self.refused_build(blocked, node.request.specification)
+                self.refused_build(blocked, node.request.specification, node.locator)
             } else {
                 self.build_reusing(
                     plans,
@@ -420,6 +423,7 @@ impl Engine {
         Ok(Outcome {
             members,
             issues: Vec::new(),
+            locator: Arc::new(Locator::none()),
         })
     }
 
@@ -462,15 +466,17 @@ impl Engine {
         project: Option<&str>,
         token: &CancellationToken,
     ) -> Result<Check, Error> {
-        let issues = crate::internal::run_check(self.shared(), specification, project, token)?;
+        let (issues, locator) =
+            crate::internal::run_check(self.shared(), specification, project, token)?;
         Ok(Check {
             outcome: Outcome {
                 members: vec![Member {
                     name: None,
                     identity: None,
-                    work: Work::Checked(issues),
+                    work: Work::Checked(issues, locator),
                 }],
                 issues: Vec::new(),
+                locator: Arc::new(Locator::none()),
             },
             subject: specification.to_owned(),
         })
@@ -570,6 +576,7 @@ impl Engine {
             refused: Vec::new(),
             producers: Vec::new(),
             artifact: None,
+            locator: Arc::new(Locator::none()),
         };
         let outcome = self.run_graph(vec![node], plans, token)?;
         let member = outcome
@@ -579,7 +586,7 @@ impl Engine {
             .expect("a graph of one member builds it");
         match member.work {
             Work::Built(run) => Ok(*run),
-            Work::Checked(_) | Work::Composed(..) => unreachable!("a graph builds its members"),
+            Work::Checked(..) | Work::Composed(..) => unreachable!("a graph builds its members"),
         }
     }
 
@@ -706,12 +713,12 @@ impl ProjectRun {
     /// Every run's issues in run order, after any project finding that
     /// refused the run. Each names its specification as its `entry`.
     pub fn issues(&self) -> Table {
-        Report::from_issues(&self.outcome.issues()).table()
+        self.outcome.report().table()
     }
 
     /// The issues as typed records, in the table's order.
     pub fn diagnostics(&self) -> Vec<crate::diagnostic::Diagnostic> {
-        Report::from_issues(&self.outcome.issues()).diagnostics
+        self.outcome.report().diagnostics
     }
 
     /// The printed text (D37, P-PRINT-1): `yamaa project run of <path>[,
@@ -800,12 +807,12 @@ pub struct Submission {
 impl Submission {
     /// Every section's issues in section order, after any project finding.
     pub fn issues(&self) -> Table {
-        Report::from_issues(&self.outcome.issues()).table()
+        self.outcome.report().table()
     }
 
     /// The issues as typed records, in the table's order.
     pub fn diagnostics(&self) -> Vec<crate::diagnostic::Diagnostic> {
-        Report::from_issues(&self.outcome.issues()).diagnostics
+        self.outcome.report().diagnostics
     }
 
     /// The printed text (D37, P-PRINT-1): `yamaa submission of <path>[,
@@ -880,11 +887,15 @@ impl Engine {
     /// does not list, whose issue names the listed names.
     pub fn project_spec(&self, project: &str, name: &str) -> Result<String, Failure> {
         let action = Action::Select(name);
-        let read = crate::internal::read_project(self.shared(), project)
-            .map_err(|issues| Failure::from_issues(action, &issues))?;
+        let read = crate::internal::read_project(self.shared(), project).map_err(
+            |(issues, locator)| Failure::new(action, &Report::located(&issues, &locator)),
+        )?;
         let duplicates = read.duplicates();
         if !duplicates.is_empty() {
-            return Err(Failure::from_issues(action, &duplicates));
+            return Err(Failure::new(
+                action,
+                &Report::located(&duplicates, read.locator()),
+            ));
         }
         match read.find(name) {
             Ok(listed) => Ok(listed.path().to_owned()),
@@ -903,9 +914,9 @@ impl Engine {
         }
         let read = match crate::internal::read_project(self.shared(), project) {
             Ok(read) => read,
-            Err(issues) => {
+            Err((issues, locator)) => {
                 return Ok(Check {
-                    outcome: Outcome::refused(issues),
+                    outcome: Outcome::refused(issues, locator),
                     subject: project.to_owned(),
                 })
             }
@@ -915,21 +926,22 @@ impl Engine {
             if token.is_cancelled() {
                 return Err(Error::Cancelled);
             }
-            let issues = if listed.failure().is_empty() {
+            let (issues, locator) = if listed.failure().is_empty() {
                 crate::internal::run_check(self.shared(), listed.path(), Some(project), token)?
             } else {
-                listed.failure().to_vec()
+                (listed.failure().to_vec(), Arc::clone(read.locator()))
             };
             members.push(Member {
                 name: listed.name().map(str::to_owned),
                 identity: Some(listed.identity().to_owned()),
-                work: Work::Checked(issues),
+                work: Work::Checked(issues, locator),
             });
         }
         Ok(Check {
             outcome: Outcome {
                 members,
                 issues: read.check_findings(),
+                locator: Arc::clone(read.locator()),
             },
             subject: project.to_owned(),
         })
@@ -974,9 +986,9 @@ impl Engine {
         let subject = project_subject(project, section);
         let read = match crate::internal::read_project(self.shared(), project) {
             Ok(read) => read,
-            Err(issues) => {
+            Err((issues, locator)) => {
                 return Ok(ProjectRun {
-                    outcome: Outcome::refused(issues),
+                    outcome: Outcome::refused(issues, locator),
                     subject,
                 })
             }
@@ -1000,7 +1012,7 @@ impl Engine {
         let plan = read.plan(section);
         if !plan.refusal().is_empty() {
             return Ok(ProjectRun {
-                outcome: Outcome::refused(plan.refusal().to_vec()),
+                outcome: Outcome::refused(plan.refusal().to_vec(), Arc::clone(read.locator())),
                 subject,
             });
         }
@@ -1031,6 +1043,7 @@ impl Engine {
                     artifact: listed
                         .artifact_location()
                         .map(|location| (listed.identity().to_owned(), location.to_owned())),
+                    locator: Arc::clone(read.locator()),
                 }
             })
             .collect();
@@ -1087,12 +1100,12 @@ impl Engine {
     ) -> Result<Outcome, Error> {
         let read = match crate::internal::read_project(self.shared(), project) {
             Ok(read) => read,
-            Err(issues) => return Ok(Outcome::refused(issues)),
+            Err((issues, locator)) => return Ok(Outcome::refused(issues, locator)),
         };
         let selected = select(&read, section)?;
         let duplicates = read.duplicates();
         if !duplicates.is_empty() {
-            return Ok(Outcome::refused(duplicates));
+            return Ok(Outcome::refused(duplicates, Arc::clone(read.locator())));
         }
         let sections = match selected {
             Some(section) => vec![section],
@@ -1113,6 +1126,7 @@ impl Engine {
         Ok(Outcome {
             members,
             issues: Vec::new(),
+            locator: Arc::clone(read.locator()),
         })
     }
 }

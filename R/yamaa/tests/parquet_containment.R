@@ -32,8 +32,10 @@ saved <- file.path(dirname(readable), "output.csv")
 readable_csv <- charToRaw(enc2utf8(truth[["readable_csv"]]))
 saved_csv <- function() readBin(saved, "raw", file.size(saved))
 
-# Field for field, as public_contract.R compares the shared parity truth.
-issues_equal <- function(frame, expected) {
+# Field for field, as public_contract.R compares the shared parity truth. A
+# truth row names its file relative to `directory`, the specification's; a
+# location names it by its absolute path (P-ISSUE-1).
+issues_equal <- function(frame, expected, directory) {
   text <- function(field) vapply(expected, function(issue)
     if (is.null(issue[[field]])) NA_character_ else issue[[field]], "")
   number <- function(field) vapply(expected, function(issue)
@@ -43,7 +45,9 @@ issues_equal <- function(frame, expected) {
     frame$operand_route)
   authored <- list(text("severity"), text("phase"), text("condition"), text("rule"),
     lapply(expected, function(issue) as.character(unlist(issue$spec_paths))),
-    text("file"), number("line"), number("column"), enc2utf8(text("message")),
+    vapply(expected, function(issue)
+      if (is.null(issue$file)) NA_character_ else file.path(directory, issue$file), ""),
+    number("line"), number("column"), enc2utf8(text("message")),
     enc2utf8(text("context")),
     lapply(expected, function(issue)
       if (is.null(issue$source_span)) NULL else as.double(unlist(issue$source_span))),
@@ -56,7 +60,7 @@ issues_equal <- function(frame, expected) {
 for (attempt in 1:2) {
   result <- yamaa_spec(contained)$run()
   failure <- tryCatch({result$save(); NULL}, yamaa_error = identity)
-  stopifnot(issues_equal(result$issues, truth[["issues"]]), is.null(result$output),
+  stopifnot(issues_equal(result$issues, truth[["issues"]], dirname(contained)), is.null(result$output),
     inherits(failure, "yamaa_error"))
   result <- yamaa_spec(readable)$run()
   stopifnot(nrow(result$issues) == 0L, returns_paths(result$save()), identical(saved_csv(), readable_csv))
