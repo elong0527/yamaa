@@ -138,6 +138,10 @@ benchmark that the command line runs passes:
 python -m tools.commands.cli_conformance --binary rust/target/debug/yamaa --output /tmp/public-cli
 ```
 
-Each `native-cli-install` job runs it with the unpacked binary of its archive
-(`docs/release.md`), and the cohort comparison reads the output beside its
+With `--prepare-only` in place of `--binary`, it writes the copies and the
+plan and stops. Each `native-cli-install` job prepares them while the
+network is up, then runs the runner over them with the unpacked binary of
+its archive, with the network disabled, and judges the records with
+`python -m tools.conformance.public_conformance compare`
+(`docs/release.md`). The cohort comparison reads the output beside its
 platform's owners.

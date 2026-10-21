@@ -68,8 +68,11 @@ R_BINARY_VERSIONS = (R_RELEASE, R_OLDREL)
 # yamaa executable of rust/crates/yamaa-cli, built for each target on a runner
 # of its own platform, statically with musl on Linux and with the static C
 # runtime on Windows, and archived with its notices. Each archive is then
-# unpacked on a fresh runner of its platform, where the binary runs its
-# selftest and then the conformance corpus, written as 1.0 (D122).
+# unpacked and run on a fresh runner of its platform with the network
+# disabled, on Linux in containers without a network and on macOS and Windows
+# behind a proxy that refuses every connection: the binary runs its selftest
+# and then the conformance corpus, written as 1.0 (D122), which the job
+# prepares while the network is up.
 CLI_TARGETS = {
     "ubuntu-24.04": "x86_64-unknown-linux-musl",
     "macos-15": "aarch64-apple-darwin",

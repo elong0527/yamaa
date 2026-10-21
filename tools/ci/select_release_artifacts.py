@@ -342,8 +342,9 @@ def required_jobs(coverage):
                 "Run installed R supplemental suites outside checkout",
             )
     # Each command-line archive that a release publishes, built on a runner
-    # of its target's platform, then unpacked on a fresh one, where the binary
-    # prints its version, passes its selftest and runs the conformance corpus.
+    # of its target's platform, then unpacked on a fresh one with the network
+    # disabled, where the binary prints its version, passes its selftest and
+    # runs the conformance corpus, still without a network.
     for lane in coverage["cli"]["include"]:
         label = f"({lane['os']}, {lane['target']})"
         jobs[f"native-cli {label}"] = (
@@ -352,7 +353,7 @@ def required_jobs(coverage):
             "Check the command-line archive",
         )
         jobs[f"native-cli-install {label}"] = (
-            "Unpack the command-line archive",
+            "Unpack the command-line archive without a network",
             "Run the command-line selftest",
             "Report command-line public benchmark conformance",
         )

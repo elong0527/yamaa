@@ -1192,51 +1192,112 @@ class NativeWorkflowContract(unittest.TestCase):
                     steps.index("Preserve the command-line archive"),
                 )
 
-    def test_each_cli_archive_runs_its_selftest_unpacked_on_a_fresh_runner(self):
-        # Nothing from the build, and nothing set up before the selftest: no
-        # checkout, no Rust and no Python.
+    def test_each_cli_archive_is_unpacked_and_run_without_a_network(self):
+        # D150 criterion 4 (#3030): nothing from the build but the archive.
+        # The steps before the unpacking, which reach package mirrors and the
+        # image registry, never run the binary. The unpacking and each step
+        # after it that runs a command go behind a proxy that refuses every
+        # connection (macOS and Windows) and run in a container without a
+        # network and with a read-only root, as the runner's user, from the
+        # image pulled beforehand (Linux).
+        proxy = {
+            "http_proxy": "http://127.0.0.1:9",
+            "HTTPS_PROXY": "http://127.0.0.1:9",
+            "ALL_PROXY": "http://127.0.0.1:9",
+            "NO_PROXY": "",
+        }
+        names = {name.lower() for name in proxy}
         required = release.required_jobs(self.coverage)
         for platform, target in self.cli_lanes():
             job = f"native-cli-install ({platform}, {target})"
             definitions = self.jobs[job]["definitions"]
+            titles = [step.get("name") for step in definitions]
             steps = {step.get("name"): step for step in definitions}
-            names = [step.get("name") for step in definitions]
-            fresh = definitions[: names.index("Run the command-line selftest") + 1]
+            unpack = titles.index("Unpack the command-line archive without a network")
+            prepare = titles.index("Prepare the command-line conformance corpus")
             with self.subTest(job=job):
                 self.assertEqual(self.jobs[job]["job"]["needs"], "cli")
                 self.assertEqual(self.jobs[job]["downloads"], [f"native-cli-{target}"])
                 self.assertEqual(
-                    [step.get("uses", "").split("@")[0] for step in fresh],
-                    ["actions/download-artifact", "", ""],
-                )
-                self.assertEqual(
                     required[job],
                     (
-                        "Unpack the command-line archive",
+                        "Unpack the command-line archive without a network",
                         "Run the command-line selftest",
                         "Report command-line public benchmark conformance",
                     ),
                 )
-                unpack = steps["Unpack the command-line archive"]["run"]
-                self.assertIn('unzip "${archives[0]}" -d unpacked', unpack)
-                self.assertIn("Expand-Archive -LiteralPath", unpack)
+                self.assertEqual(
+                    [
+                        step.get("name")
+                        for step in definitions[unpack:]
+                        if "run" in step
+                    ],
+                    list(required[job]),
+                )
+                # The image of the containers is pulled while the network is up.
+                self.assertLess(prepare, unpack)
+                pull = steps["Prepare the command-line conformance corpus"]["run"]
+                self.assertIn("from tools.ci.manylinux import IMAGES", pull)
+                self.assertIn('echo "OFFLINE_IMAGE=${image}"', pull)
+                self.assertIn('docker pull "${image}"', pull)
+                inherited = {name.lower() for name in self.jobs[job]["context"]["env"]}
+                self.assertFalse(names & inherited)
+                for index, step in enumerate(definitions):
+                    chosen = {
+                        name: value
+                        for name, value in step.get("env", {}).items()
+                        if name.lower() in names
+                    }
+                    if index < unpack or "run" not in step:
+                        self.assertEqual(chosen, {})
+                        self.assertNotIn("unpacked/", step.get("run", ""))
+                        continue
+                    self.assertEqual(chosen, proxy)
+                    self.assertNotIn("if", step)
+                    containers = [
+                        line
+                        for line in step["run"].replace("\\\n", " ").splitlines()
+                        if "docker run" in line
+                    ]
+                    self.assertEqual(len(containers), 1)
+                    self.assertEqual(containers[0].count("--network"), 1)
+                    for option in (
+                        "--network none",
+                        "--read-only",
+                        '--user "$(id -u):$(id -g)"',
+                        '"${OFFLINE_IMAGE}"',
+                    ):
+                        self.assertIn(option, containers[0])
+                # unzip restores the executable's mode, in the container on
+                # Linux and on macOS; Expand-Archive unpacks on Windows.
+                unpacking = definitions[unpack]["run"]
+                self.assertEqual(
+                    unpacking.count('unzip "${archives[0]}" -d unpacked'), 2
+                )
+                self.assertIn("Expand-Archive -LiteralPath", unpacking)
+                # The version and the selftest of the same binary, which on
+                # Linux sees the unpacked archive alone, read-only.
                 run = steps["Run the command-line selftest"]["run"]
-                self.assertIn('"${binary}" --version | tee cli-version.txt', run)
+                self.assertIn('yamaa=("${binary}")', run)
+                self.assertIn('--volume "${PWD}/unpacked:/work/unpacked:ro"', run)
+                self.assertIn('"${OFFLINE_IMAGE}" "/work/${binary}")', run)
+                self.assertIn('"${yamaa[@]}" --version | tee cli-version.txt', run)
                 self.assertIn('if [ "${first}" != "yamaa ${version}" ]; then', run)
-                self.assertTrue(run.rstrip().endswith('"${binary}" selftest'))
-                for step in fresh:
-                    self.assertNotIn("tools.ci.toolchain", step.get("run", ""))
-                    self.assertNotIn("python", step.get("run", ""))
+                self.assertTrue(run.rstrip().endswith('"${yamaa[@]}" selftest'))
 
     def test_each_cli_archive_runs_the_corpus_written_as_1_0_after_its_selftest(self):
-        # #3060: the repository's tools convert the corpus (D122), run it
-        # through the unpacked binary and judge the records; no Rust.
+        # #3060: while the network is up, the repository's tools convert the
+        # corpus (D122) and plan it; after the selftest, the command line's
+        # runner runs it through the unpacked binary and the comparator judges
+        # the records. No Rust.
+        required = release.required_jobs(self.coverage)
+        directory = "${{ runner.temp }}/offline"
         for platform, target in self.cli_lanes():
             job = f"native-cli-install ({platform}, {target})"
             definitions = self.jobs[job]["definitions"]
-            names = [step.get("name") for step in definitions]
-            later = definitions[names.index("Run the command-line selftest") + 1 :]
+            titles = [step.get("name") for step in definitions]
             steps = {step.get("name"): step for step in definitions}
+            prepare = steps["Prepare the command-line conformance corpus"]
             conformance = steps["Report command-line public benchmark conformance"]
             upload = steps[
                 "Preserve command-line public benchmark inventory and saved artifacts"
@@ -1244,18 +1305,22 @@ class NativeWorkflowContract(unittest.TestCase):
             script = " ".join(conformance["run"].replace("\\\n", " ").split())
             with self.subTest(job=job):
                 self.assertEqual(
-                    [step.get("uses", "").split("@")[0] for step in later],
+                    [step.get("uses", "").split("@")[0] for step in definitions],
                     [
+                        "actions/download-artifact",
                         "",
                         "actions/checkout",
                         "actions/setup-python",
+                        "",
+                        "",
+                        "",
                         "",
                         "",
                         "actions/upload-artifact",
                     ],
                 )
                 self.assertEqual(
-                    later[0]["run"].split(),
+                    definitions[1]["run"].split(),
                     "git config --global core.autocrlf false "
                     "git config --global core.symlinks true".split(),
                 )
@@ -1264,27 +1329,76 @@ class NativeWorkflowContract(unittest.TestCase):
                     "pyarrow==25.0.1",
                     steps["Install repository tools"]["run"],
                 )
+                self.assertIn(
+                    "python -I -m tools.commands.cli_conformance --prepare-only "
+                    "--output public-conformance-cli",
+                    prepare["run"],
+                )
+                self.assertEqual(
+                    titles[titles.index("Install repository tools") + 1 :][:4],
+                    [
+                        "Prepare the command-line conformance corpus",
+                        *required[job],
+                    ],
+                )
+                # The archive, the prepared corpus and the records share one
+                # directory, which the Linux containers mount.
+                self.assertEqual(definitions[0]["with"]["path"], f"{directory}/cli")
+                for title in (
+                    "Prepare the command-line conformance corpus",
+                    *required[job],
+                ):
+                    self.assertEqual(steps[title]["working-directory"], directory)
                 # The binary that passed the selftest, with Windows' suffix.
                 self.assertIn(
                     'binary="unpacked/$(basename "${archives[0]}" .zip)/yamaa"', script
                 )
                 self.assertIn('binary="${binary}.exe"', script)
                 self.assertIn(
-                    'python -I -m tools.commands.cli_conformance --binary "${binary}" '
-                    "--output public-conformance-cli --evidence "
-                    '"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/'
+                    'revision=$(git -C "${GITHUB_WORKSPACE}" rev-parse HEAD)', script
+                )
+                self.assertIn(
+                    'evidence="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/'
                     '${GITHUB_RUN_ID}"',
                     script,
                 )
-                self.assertEqual(conformance["working-directory"], "${{ runner.temp }}")
+                # The runner over the prepared copies: with the image's CPython
+                # in the container on Linux, which mounts the checkout
+                # read-only, and with the runner's Python on macOS and Windows.
+                self.assertIn(
+                    "corpus=(--plan public-conformance-cli/plan "
+                    "--fixtures public-conformance-cli/benchmarks "
+                    '--binary "${binary}" --output public-conformance-cli/observed '
+                    '--source-revision "${revision}" --evidence "${evidence}")',
+                    script,
+                )
+                self.assertIn('--volume "${GITHUB_WORKSPACE}:/checkout:ro"', script)
+                self.assertIn(
+                    '"${OFFLINE_IMAGE}" "${OFFLINE_PYTHON}" -I '
+                    '/checkout/rust/tests/public_conformance_cli.py "${corpus[@]}"',
+                    script,
+                )
+                self.assertIn(
+                    'python -I "${GITHUB_WORKSPACE}/rust/tests/public_conformance_cli.py" '
+                    '"${corpus[@]}"',
+                    script,
+                )
+                self.assertTrue(
+                    script.endswith(
+                        "python -I -m tools.conformance.public_conformance compare "
+                        "--fixtures public-conformance-cli/benchmarks "
+                        "--observed public-conformance-cli/observed "
+                        "--output public-conformance-cli/inventory.json"
+                    )
+                )
                 self.assertEqual(
                     self.jobs[job]["uploads"], [f"public-conformance-cli-{target}"]
                 )
                 self.assertEqual(
                     upload["with"]["path"].splitlines(),
                     [
-                        "${{ runner.temp }}/public-conformance-cli/inventory.json",
-                        "${{ runner.temp }}/public-conformance-cli/observed",
+                        f"{directory}/public-conformance-cli/inventory.json",
+                        f"{directory}/public-conformance-cli/observed",
                     ],
                 )
                 self.assertIn(

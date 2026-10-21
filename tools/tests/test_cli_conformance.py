@@ -286,15 +286,13 @@ class ConvertedCorpus(unittest.TestCase):
     """`tools.commands.cli_conformance` runs the runner over converted copies,
     then judges what it saved against the expected files."""
 
-    def run_converted(self, row, evidence=()):
-        """Run the command over three converted benchmarks, whose expected
-        output has the row 1, with a binary that saves the row `row`; return
-        its exit status and its output directory."""
+    def setUp(self):
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)
-        root = Path(temp.name).resolve()
-        # What the converter writes, here for three benchmarks.
-        source = root / "source"
+        self.root = Path(temp.name).resolve()
+        # What the converter writes, here for three benchmarks, whose expected
+        # output has the row 1.
+        source = self.root / "source"
         for name in ("plain", "project", "excepted"):
             (source / name / "expected").mkdir(parents=True)
             (source / name / "spec.yaml").write_text(SPEC_1_0)
@@ -307,26 +305,41 @@ class ConvertedCorpus(unittest.TestCase):
             shutil.copytree(source, fixtures)
             return fixtures
 
-        binary = root / "yamaa"
-        binary.write_text(f"#!{sys.executable}\n{CONVERTED.replace('ROW', row)}")
-        binary.chmod(0o755)
-        output = root / "output"
-        with (
+        for patcher in (
             mock.patch.object(conversion, "convert", convert),
             mock.patch.object(conversion, "EXCEPTED", {"excepted": "a decided item"}),
-            contextlib.redirect_stdout(io.StringIO()),
         ):
-            status = cli_conformance.main(
-                [
-                    "--binary",
-                    str(binary),
-                    "--output",
-                    str(output),
-                    "--source-revision",
-                    "test",
-                    *evidence,
-                ]
-            )
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def converted_binary(self, row):
+        """A binary that reads 1.x files and saves the row `row`."""
+        binary = self.root / "yamaa"
+        binary.write_text(f"#!{sys.executable}\n{CONVERTED.replace('ROW', row)}")
+        binary.chmod(0o755)
+        return binary
+
+    def command(self, arguments):
+        """Run the command quietly; return its exit status."""
+        with contextlib.redirect_stdout(io.StringIO()):
+            return cli_conformance.main(arguments)
+
+    def run_converted(self, row, evidence=()):
+        """Run the command over the three converted benchmarks with a binary
+        that saves the row `row`; return its exit status and its output
+        directory."""
+        output = self.root / "output"
+        status = self.command(
+            [
+                "--binary",
+                str(self.converted_binary(row)),
+                "--output",
+                str(output),
+                "--source-revision",
+                "test",
+                *evidence,
+            ]
+        )
         return status, output
 
     def test_the_runner_runs_the_converted_copies_without_the_excepted_ones(self):
@@ -384,6 +397,91 @@ class ConvertedCorpus(unittest.TestCase):
         self.assertEqual(plain["findings"], ["saved CSV bytes differ: result.csv"])
         run = json.loads((output / "observed/run.json").read_text())
         self.assertIsNone(run["evidence"])
+
+    def test_prepare_only_writes_the_copies_and_their_plan_and_runs_nothing(self):
+        output = self.root / "output"
+        self.assertEqual(self.command(["--prepare-only", "--output", str(output)]), 0)
+        self.assertEqual(
+            sorted(path.name for path in output.iterdir()), ["benchmarks", "plan"]
+        )
+        plan = json.loads((output / "plan/plan.json").read_text())
+        self.assertEqual(
+            {
+                example["name"]: example["cli"]["excluded"]
+                for example in plan["examples"]
+            },
+            {
+                "excepted": "excepted by the 1.0 conversion gate: a decided item",
+                "plain": None,
+                "project": None,
+            },
+        )
+
+    def test_the_prepared_copies_run_and_compare_as_native_qualification_does(self):
+        # native.yml prepares the copies while the network is up, then runs
+        # the runner and the comparator over them with the network disabled:
+        # the verdicts are the whole command's.
+        output = self.root / "output"
+        self.command(["--prepare-only", "--output", str(output)])
+        ran = subprocess.run(
+            [
+                sys.executable,
+                "-I",
+                str(RUNNER),
+                "--plan",
+                str(output / "plan"),
+                "--fixtures",
+                str(output / "benchmarks"),
+                "--binary",
+                str(self.converted_binary("1")),
+                "--output",
+                str(output / "observed"),
+                "--source-revision",
+                "test",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(ran.returncode, 0, ran.stderr)
+        with contextlib.redirect_stdout(io.StringIO()):
+            status = judge.main(
+                [
+                    "compare",
+                    "--fixtures",
+                    str(output / "benchmarks"),
+                    "--observed",
+                    str(output / "observed"),
+                    "--output",
+                    str(output / "inventory.json"),
+                ]
+            )
+        self.assertEqual(status, 0)
+        inventory = json.loads((output / "inventory.json").read_text())
+        self.assertEqual(
+            {
+                result["example"]: result["verdict"]
+                for result in inventory["benchmarks"]
+            },
+            {"excepted": "excluded", "plain": "pass", "project": "pass"},
+        )
+
+    def test_prepare_only_takes_no_binary_and_names_no_run(self):
+        output = self.root / "output"
+        for arguments in (
+            ["--prepare-only", "--binary", "yamaa"],
+            ["--prepare-only", "--source-revision", "test"],
+            ["--prepare-only", "--evidence", "unit-run"],
+            [],
+        ):
+            with (
+                self.subTest(arguments=arguments),
+                contextlib.redirect_stderr(io.StringIO()),
+                self.assertRaises(SystemExit) as raised,
+            ):
+                cli_conformance.main([*arguments, "--output", str(output)])
+            self.assertEqual(raised.exception.code, 2)
+            self.assertFalse(output.exists())
 
     def test_the_output_must_be_fresh(self):
         temp = tempfile.TemporaryDirectory()
