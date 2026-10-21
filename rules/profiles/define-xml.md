@@ -539,16 +539,17 @@ presented order survives any later reordering of the document.
 
 <a id="define-19"></a>
 
-### DEFINE-19. Each column produces one base `ItemDef` carrying exactly one `def:Origin`
+### DEFINE-19. Each column produces one base `ItemDef` carrying one `def:Origin` per declared origin
 
 Each column produces one base `ItemDef` with the attributes and children the
 table below lists; per-value definitions use the same mapping with the
-effective metadata of [DEFINE-27](#define-27). `def:Origin` carries `Type` and,
-when [Submission metadata](submission.md) admits one, `Source`. Exactly one
-`def:Origin` is generated per base or per-value `ItemDef`. A `def:DocumentRef`
-carries `leafID`, the referenced document's generated leaf identifier.
+effective metadata of [DEFINE-27](#define-27). A base or per-value `ItemDef`
+carries one `def:Origin` per origin, in declaration order, each with `Type`
+and, when [Submission metadata](submission.md) admits one, `Source`. A
+`def:DocumentRef` carries `leafID`, the referenced document's generated leaf
+identifier.
 
-Evidence: `sdtm-dm-metadata`, `sdtm-lb-metadata`, `rust/crates/yamaa-adapters/tests/file_resources.rs::lb_value_metadata_uses_original_published_bytes_and_family_valid_completion`.
+Evidence: `sdtm-dm-metadata`, `sdtm-lb-metadata`, `schema-column-origins`, `rust/crates/yamaa/tests/language_header.rs::a_column_declares_several_origins`, `rust/crates/yamaa-adapters/tests/file_resources.rs::lb_value_metadata_uses_original_published_bytes_and_family_valid_completion`.
 
 | Attribute or child | Source |
 |---|---|
@@ -562,14 +563,16 @@ Evidence: `sdtm-dm-metadata`, `sdtm-lb-metadata`, `rust/crates/yamaa-adapters/te
 | `def:CommentOID` | generated, when `submission.comment` is declared |
 | `Description` | the column's `label`, or a per-value definition's entry `label` when declared |
 | `CodeListRef` | the bound codelist's generated identifier, when declared |
-| `def:Origin` | per the origin mapping below |
+| `def:Origin` | one per declared origin, per the origin mapping below |
 
 [SUB-15](submission.md#sub-15) derives the origin `Source` for the `ADaM`
-model. The `def:Origin` `Description` child carries `origin.description` when
-declared, and one `def:DocumentRef` child follows per document reference in
-declaration order, including the page-less annotated case report form
-reference [SUB-17](submission.md#sub-17) derives under `context: Other` when a
-collected origin declares none.
+model. Each `def:Origin`'s `Description` child carries that origin's
+`description` when declared, and one `def:DocumentRef` child follows per
+document reference of that origin in declaration order, including the
+page-less annotated case report form reference
+[SUB-17](submission.md#sub-17) derives under `context: Other` when a
+collected origin declares none. A value-level entry without origins of its
+own takes the column's ([DEFINE-27](#define-27)).
 Rows with different provenance use the separate per-value definitions of
 [DEFINE-27](#define-27).
 
@@ -770,7 +773,7 @@ The mapping to Define-XML is fixed:
   position among the column's entries, `Mandatory`, the entry's resolution of
   [SUB-10](submission.md#sub-10), and `Role` and `MethodOID` when its merged
   metadata declares them. The column's `ItemDef` carries its single
-  `def:ValueListRef` after its `def:Origin`;
+  `def:ValueListRef` after its `def:Origin` elements;
 - each `def:WhereClauseDef` carries one `RangeCheck` per where column, in the
   clause's written order: `Comparator="EQ"` when the column lists one value
   and `"IN"` when it lists several, `SoftHard="Soft"`, `def:ItemOID` the where
@@ -779,8 +782,10 @@ The mapping to Define-XML is fixed:
 - each per-value `ItemDef` maps the merged metadata as
   [DEFINE-19](#define-19) does, with the entry's `label` as its
   `Description` when declared and its `Length` from
-  [SUB-24](submission.md#sub-24) or [SUB-7](submission.md#sub-7). Associated
-  methods, comments and document references remain resolvable.
+  [SUB-24](submission.md#sub-24) or [SUB-7](submission.md#sub-7). An entry
+  that declares origins writes its own, and one that declares none takes
+  the column's whole list. Associated methods, comments and document
+  references remain resolvable.
 
 A transport file carries columns, not value-level definitions
 ([JSON-9](dataset-json.md#json-9), [XPT-4](xpt.md#xpt-4)); a value-level

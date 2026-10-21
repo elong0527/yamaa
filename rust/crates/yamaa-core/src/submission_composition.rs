@@ -92,12 +92,35 @@ pub struct Column {
     /// Declared, or fixed for an ADaM numeric date (SUB-25).
     pub(crate) display_format: Option<String>,
     pub(crate) mandatory: bool,
-    pub(crate) source: Option<spec::OriginSource>,
-    pub(crate) documents: Vec<spec::DocumentReference>,
+    /// One per declared origin, in declaration order (DEFINE-19).
+    pub(crate) origins: Vec<OriginDefinition>,
     pub(crate) key_sequence: Option<usize>,
     pub(crate) values: Vec<ValueDefinition>,
     /// The width a transport file gives a character column (SUB-24).
     pub(crate) transport_length: Option<usize>,
+}
+/// One composed origin of a column or value-level entry: its declaration, the
+/// source the model admits or derives (SUB-15) and its document references,
+/// with the annotated case report form reference `context: Other` derives
+/// (SUB-17).
+#[derive(Clone, Debug)]
+pub struct OriginDefinition {
+    pub(crate) declaration: spec::OriginMetadata,
+    pub(crate) source: Option<spec::OriginSource>,
+    pub(crate) documents: Vec<spec::DocumentReference>,
+}
+impl OriginDefinition {
+    pub fn declaration(&self) -> &spec::OriginMetadata {
+        &self.declaration
+    }
+    /// The origin's source, when its type takes one (SUB-15).
+    pub fn source(&self) -> Option<spec::OriginSource> {
+        self.source
+    }
+    /// The origin's document references.
+    pub fn documents(&self) -> &[spec::DocumentReference] {
+        &self.documents
+    }
 }
 /// One value-level entry's definition: the rows its where clause selects take
 /// the column's metadata merged with the entry's (SUB-12, DEFINE-27).
@@ -267,13 +290,10 @@ impl Column {
     pub fn mandatory(&self) -> bool {
         self.mandatory
     }
-    /// The origin's source, when its type takes one (SUB-15).
-    pub fn source(&self) -> Option<spec::OriginSource> {
-        self.source
-    }
-    /// The origin's document references.
-    pub fn documents(&self) -> &[spec::DocumentReference] {
-        &self.documents
+    /// The composed origins, one per declared origin in declaration order
+    /// (DEFINE-19).
+    pub fn origins(&self) -> &[OriginDefinition] {
+        &self.origins
     }
     pub fn key_sequence(&self) -> Option<usize> {
         self.key_sequence
@@ -663,15 +683,9 @@ impl ColumnAdmission<'_> {
             tree,
             section,
             known,
-            acrfs,
             keys,
-            reads,
             ..
         } = *self;
-        let refutation = match level {
-            Level::Column => ConditionCode::SubmissionOriginRefuted,
-            Level::Value => ConditionCode::SubmissionValueOriginRefuted,
-        };
         let name = &column.name.value;
         let Some(metadata) = &column.submission else {
             findings.push(Finding::cause(
@@ -681,14 +695,14 @@ impl ColumnAdmission<'_> {
             ));
             return None;
         };
-        let Some(origin) = &metadata.origin_metadata else {
+        if metadata.origins.is_empty() {
             findings.push(Finding::cause(
                 ConditionCode::SubmissionOriginMissing,
                 column_path,
                 name,
             ));
             return None;
-        };
+        }
         if column.label.is_none() {
             findings.push(Finding::cause(
                 ConditionCode::SubmissionMetadataMissing,
@@ -739,114 +753,43 @@ impl ColumnAdmission<'_> {
                 name,
             ));
         }
-        let source = origin.source.as_ref().map(|s| s.value);
-        if !origin
-            .kind
-            .value
-            .admits_source(section_model(section.family), source)
+        // Each origin is admitted on its own, at its own position: 1.0's
+        // `origins[<i>]`, or 0.5's one `origin` (P-ORIGIN-1).
+        let v1 = matches!(tree.header.surface, ast::Surface::V1 { .. });
+        let origins = metadata
+            .origins
+            .iter()
+            .enumerate()
+            .map(|(index, declared)| {
+                let at = if v1 {
+                    format!("{column_path}.origins[{index}]")
+                } else {
+                    format!("{column_path}.origin")
+                };
+                self.admit_origin(
+                    declared,
+                    &at,
+                    column_path,
+                    name,
+                    derivations,
+                    level,
+                    findings,
+                )
+            })
+            .collect();
+        // SUB-18: a `Derived` origin anywhere needs the method that derives it.
+        if metadata
+            .origins
+            .iter()
+            .any(|declared| declared.kind.value == spec::OriginType::Derived)
+            && metadata.method.is_none()
         {
-            findings.push(Finding::cause(
-                ConditionCode::SubmissionOriginSource,
-                &format!("{column_path}.origin"),
-                name,
-            ));
-        }
-        let description = origin.description.as_ref().map(|d| d.value.as_str());
-        let predecessor = description
-            .filter(|_| origin.kind.value == spec::OriginType::Predecessor)
-            .and_then(origin::predecessor);
-        if matches!(
-            origin.kind.value,
-            spec::OriginType::Other
-                | spec::OriginType::Predecessor
-                | spec::OriginType::NotAvailable
-        ) && description.is_none()
-        {
-            findings.push(Finding::cause(
-                ConditionCode::SubmissionOriginDescription,
-                &format!("{column_path}.origin"),
-                name,
-            ));
-        } else if origin.kind.value == spec::OriginType::Predecessor && predecessor.is_none() {
-            // SUB-16: a Predecessor description names `<dataset>.<column>`.
-            let mut finding = Finding::cause(
-                ConditionCode::SubmissionOriginDescription,
-                &format!("{column_path}.origin.description"),
-                name,
-            );
-            finding.context.insert(
-                "reason".into(),
-                crate::json::Value::String("predecessor_form".into()),
-            );
-            findings.push(finding);
-        }
-        if origin.kind.value == spec::OriginType::Derived && metadata.method.is_none() {
             findings.push(Finding::cause(
                 ConditionCode::SubmissionMethodMissing,
                 column_path,
                 name,
             ));
         }
-        if refuting(tree, derivations, origin.kind.value, reads).is_some() {
-            findings.push(Finding::cause(refutation, column_path, name));
-        } else if let Some(failure) = predecessor
-            .as_ref()
-            .and_then(|predecessor| copy_failure(tree, derivations, predecessor, reads))
-        {
-            // SUB-20: a Predecessor is a bare `source` of the column it names.
-            let mut finding = Finding::cause(refutation, column_path, name);
-            finding.context.insert(
-                "reason".into(),
-                crate::json::Value::String(failure.reason().into()),
-            );
-            findings.push(finding);
-        }
-        let mut refs = origin.documents.value.clone();
-        if origin.kind.value == spec::OriginType::Collected
-            && matches!(
-                source,
-                Some(spec::OriginSource::Investigator | spec::OriginSource::Subject)
-            )
-        {
-            // SUB-17: under `Submission` the reference says where in the form
-            // the value was collected; only `Other` derives a page-less one.
-            let submission = section.context == ast::DefineContext::Submission;
-            if acrfs.len() != 1 {
-                findings.push(Finding::cause(
-                    ConditionCode::SubmissionAnnotatedCrfMissing,
-                    &format!("{column_path}.origin"),
-                    name,
-                ));
-            } else if origin.documents.origin.key.is_none() {
-                if submission {
-                    findings.push(Finding::cause(
-                        ConditionCode::SubmissionOriginDocument,
-                        &format!("{column_path}.origin"),
-                        name,
-                    ));
-                } else {
-                    refs.push(spec::DocumentReference::Plain(spec::Field {
-                        value: acrfs[0].id.name.clone(),
-                        origin: origin.documents.origin,
-                    }));
-                }
-            } else if refs.is_empty()
-                || refs.iter().any(|r| reference_id(r) != acrfs[0].id.name)
-                || (submission && !refs.iter().any(paged))
-            {
-                findings.push(Finding::cause(
-                    ConditionCode::SubmissionOriginDocument,
-                    &format!("{column_path}.origin.documents"),
-                    name,
-                ));
-            }
-        }
-        references(
-            findings,
-            &refs,
-            known,
-            &format!("{column_path}.origin.documents"),
-        );
         if let Some(spec::Method::Class(class)) = &metadata.method {
             references(
                 findings,
@@ -955,18 +898,170 @@ impl ColumnAdmission<'_> {
             length,
             display_format,
             mandatory,
-            source: if section.family == Submission::Adam
-                && origin.kind.value != spec::OriginType::Predecessor
+            origins,
+            key_sequence: keys.iter().position(|key| key == name).map(|k| k + 1),
+            values: Vec::new(),
+            transport_length: None,
+        })
+    }
+    /// Admit one declared origin of the column or entry at `column_path`, at
+    /// `at`, its own position: its type and source pair (SUB-15), its
+    /// description (SUB-16), its annotated case report form reference
+    /// (SUB-17) and the derivations its type claims (SUB-19, SUB-20), each
+    /// refutation naming the refuted type.
+    #[allow(clippy::too_many_arguments)]
+    fn admit_origin(
+        &self,
+        declared: &spec::OriginMetadata,
+        at: &str,
+        column_path: &str,
+        name: &str,
+        derivations: &[ast::ExprId],
+        level: Level,
+        findings: &mut Vec<Finding>,
+    ) -> OriginDefinition {
+        let Self {
+            tree,
+            section,
+            known,
+            acrfs,
+            reads,
+            ..
+        } = *self;
+        let kind = declared.kind.value;
+        let model = section_model(section.family);
+        let source = declared.source.as_ref().map(|s| s.value);
+        // D65: a 1.0 specification takes no `Not Available` origin under
+        // SDTM; a 0.5 one keeps the pairs of 0.5.0 (D75).
+        let admitted = match tree.header.surface {
+            ast::Surface::V0_5 => kind.admits_source_v0_5(model, source),
+            ast::Surface::V1 { .. } => kind.admits_source(model, source),
+        };
+        if !admitted {
+            findings.push(Finding::cause(
+                ConditionCode::SubmissionOriginSource,
+                at,
+                name,
+            ));
+        }
+        let description = declared.description.as_ref().map(|d| d.value.as_str());
+        let predecessor = description
+            .filter(|_| kind == spec::OriginType::Predecessor)
+            .and_then(origin::predecessor);
+        if matches!(
+            kind,
+            spec::OriginType::Other
+                | spec::OriginType::Predecessor
+                | spec::OriginType::NotAvailable
+        ) && description.is_none()
+        {
+            findings.push(Finding::cause(
+                ConditionCode::SubmissionOriginDescription,
+                at,
+                name,
+            ));
+        } else if kind == spec::OriginType::Predecessor && predecessor.is_none() {
+            // SUB-16: a Predecessor description names `<dataset>.<column>`.
+            let mut finding = Finding::cause(
+                ConditionCode::SubmissionOriginDescription,
+                &format!("{at}.description"),
+                name,
+            );
+            finding.context.insert(
+                "reason".into(),
+                crate::json::Value::String("predecessor_form".into()),
+            );
+            findings.push(finding);
+        }
+        // SUB-19 and SUB-20: the derivations refute the declared type, or are
+        // not the copy a Predecessor claims. A Predecessor that is not the
+        // named copy is refuted by a bare `source`, which SUB-19 alone admits.
+        let refuted = refuting(tree, derivations, kind, reads)
+            .map(|derivation| (derivation, None))
+            .or_else(|| {
+                predecessor
+                    .as_ref()
+                    .and_then(|predecessor| copy_failure(tree, derivations, predecessor, reads))
+                    .map(|failure| {
+                        (
+                            origin::classify_expr(tree, derivations[0], reads),
+                            Some(failure),
+                        )
+                    })
+            });
+        if let Some((derivation, failure)) = refuted {
+            let code = match level {
+                Level::Column => ConditionCode::SubmissionOriginRefuted,
+                Level::Value => ConditionCode::SubmissionValueOriginRefuted,
+            };
+            let mut finding = Finding::cause(code, column_path, name);
+            let text = |value: &str| crate::json::Value::String(value.into());
+            finding
+                .context
+                .insert("origin_type".into(), text(kind.name()));
+            if level == Level::Value {
+                finding
+                    .context
+                    .insert("derivation_kind".into(), text(derivation.name()));
+            }
+            if let Some(failure) = failure {
+                finding
+                    .context
+                    .insert("reason".into(), text(failure.reason()));
+            }
+            findings.push(finding);
+        }
+        let mut refs = declared.documents.value.clone();
+        if kind == spec::OriginType::Collected
+            && matches!(
+                source,
+                Some(spec::OriginSource::Investigator | spec::OriginSource::Subject)
+            )
+        {
+            // SUB-17: under `Submission` the reference says where in the form
+            // the value was collected; only `Other` derives a page-less one.
+            let submission = section.context == ast::DefineContext::Submission;
+            if acrfs.len() != 1 {
+                findings.push(Finding::cause(
+                    ConditionCode::SubmissionAnnotatedCrfMissing,
+                    at,
+                    name,
+                ));
+            } else if declared.documents.origin.key.is_none() {
+                if submission {
+                    findings.push(Finding::cause(
+                        ConditionCode::SubmissionOriginDocument,
+                        at,
+                        name,
+                    ));
+                } else {
+                    refs.push(spec::DocumentReference::Plain(spec::Field {
+                        value: acrfs[0].id.name.clone(),
+                        origin: declared.documents.origin,
+                    }));
+                }
+            } else if refs.is_empty()
+                || refs.iter().any(|r| reference_id(r) != acrfs[0].id.name)
+                || (submission && !refs.iter().any(paged))
             {
+                findings.push(Finding::cause(
+                    ConditionCode::SubmissionOriginDocument,
+                    &format!("{at}.documents"),
+                    name,
+                ));
+            }
+        }
+        references(findings, &refs, known, &format!("{at}.documents"));
+        OriginDefinition {
+            declaration: declared.clone(),
+            // SUB-15: an ADaM source is derived, never declared.
+            source: if section.family == Submission::Adam && kind != spec::OriginType::Predecessor {
                 Some(spec::OriginSource::Sponsor)
             } else {
                 source
             },
             documents: refs,
-            key_sequence: keys.iter().position(|key| key == name).map(|k| k + 1),
-            values: Vec::new(),
-            transport_length: None,
-        })
+        }
     }
     /// Admit length and significant-digit declarations; return the effective length.
     fn admit_length(
@@ -1336,13 +1431,10 @@ fn compose_values(
                     name,
                 ));
             }
-            // An entry without its own origin answers with the column's,
+            // An entry without origins of its own answers with the column's,
             // which the column's own refutation already covers (SUB-13).
-            let derivations = match (
-                &entry.metadata.origin_metadata,
-                tree_column(admission.tree, name),
-            ) {
-                (Some(_), Some(column)) => values::levels(column)
+            let derivations = match tree_column(admission.tree, name) {
+                Some(column) if !entry.metadata.origins.is_empty() => values::levels(column)
                     .iter()
                     .find(|level| level.id.name == *id)
                     .map_or_else(Vec::new, |level| {
@@ -1363,32 +1455,6 @@ fn compose_values(
                     finding
                         .context
                         .insert(key.into(), crate::json::Value::String(value.into()));
-                }
-                if finding.code == ConditionCode::SubmissionValueOriginRefuted {
-                    let origin = effective
-                        .submission
-                        .as_ref()
-                        .and_then(|m| m.origin_metadata.as_ref())
-                        .expect("refuted admitted origin");
-                    // A Predecessor that is not the named copy is refuted by a
-                    // bare `source`, which SUB-19 alone admits.
-                    let kind = refuting(
-                        admission.tree,
-                        &derivations,
-                        origin.kind.value,
-                        admission.reads,
-                    )
-                    .unwrap_or_else(|| {
-                        origin::classify_expr(admission.tree, derivations[0], admission.reads)
-                    });
-                    for (key, value) in [
-                        ("derivation_kind", kind.name()),
-                        ("origin_type", origin.kind.value.name()),
-                    ] {
-                        finding
-                            .context
-                            .insert(key.into(), crate::json::Value::String(value.into()));
-                    }
                 }
             }
             if let (Some(value), Some(clause)) = (value, clause) {
@@ -1852,19 +1918,18 @@ fn compose_datasets(
                 continue;
             };
             redundant_mandatory_checks(&admission, column, &path, findings);
-            let own = column
+            // Every origin the column and its entries declare.
+            let origins: Vec<_> = column
                 .submission
-                .as_ref()
-                .and_then(|metadata| metadata.origin_metadata.as_ref());
-            let origins: Vec<_> = own
-                .into_iter()
-                .chain(
-                    column
-                        .submission
-                        .iter()
-                        .flat_map(|metadata| &metadata.value_level)
-                        .filter_map(|entry| entry.metadata.origin_metadata.as_ref()),
-                )
+                .iter()
+                .flat_map(|metadata| {
+                    metadata.origins.iter().chain(
+                        metadata
+                            .value_level
+                            .iter()
+                            .flat_map(|entry| &entry.metadata.origins),
+                    )
+                })
                 .collect();
             predecessor_labels(study, column, &origins, &path, findings);
             // The column's origin answers for every construction whose rows an

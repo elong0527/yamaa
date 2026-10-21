@@ -67,6 +67,10 @@ conditions:
   conflicting_absence_policy:
     phases: [validation]
     message: "the lookup at {spec_path} declares an answer for absence together with require_match: true"
+  # SUB-14 (D69)
+  conflicting_origins:
+    phases: [validation]
+    message: "column {column} declares a {origin_type} origin that conflicts with another of its origins"
   conflicting_row_construction:
     phases: [validation]
     message: "a root filter cannot be declared together with rows"

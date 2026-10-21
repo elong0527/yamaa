@@ -283,20 +283,6 @@ fn each_1_0_feature_not_built_yet_is_refused_as_unsupported_operation() {
     let spec = |columns: &str| {
         format!("yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: DM\nkeys: [USUBJID]\ninput: {{RAW: raw.csv}}\noutput: {{path: dm.csv, columns: [USUBJID]}}\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Subject\n    derivation: RAW.USUBJID{columns}")
     };
-    // Several origins (P1-13).
-    study.write(
-        "spec.yaml",
-        &spec(&format!(
-            "{submission}        - {{type: Predecessor, description: RAW.USUBJID}}\n"
-        )),
-    );
-    assert_eq!(
-        refusals(&study, "spec.yaml", None),
-        [refusal(
-            "multiple_origins",
-            "columns.USUBJID.submission.origins"
-        )]
-    );
     // A value-level comparator (P1-14).
     study.write(
         "spec.yaml",
@@ -501,6 +487,133 @@ fn a_section_lists_only_specifications_of_its_model() {
     assert_eq!(rule.as_deref(), Some("DEFINE-6"));
     assert_eq!(paths, ["sdtm.standards[1].name"]);
     assert_eq!(context["identifier"], Value::String("SDTMIG".into()));
+}
+
+/// P-ORIGIN-1 (D16, D70): a column lists one or more origins, and the
+/// document writes one `def:Origin` per origin, in declaration order
+/// (DEFINE-19); conflicting origins fail before any input is read (SUB-14,
+/// D69).
+#[test]
+fn a_column_declares_several_origins() {
+    let study = define_study();
+    let dm = String::from_utf8(study.read("dm.yaml")).unwrap();
+    let engine = engine();
+    let token = CancellationToken::new();
+    let check = || {
+        rows(
+            &engine
+                .spec_check(&study.path("dm.yaml"), None, &token)
+                .unwrap()
+                .issues(),
+        )
+    };
+    let several = |origins: &str| {
+        dm.replace(
+            "      origins:\n        - {type: Protocol, source: Sponsor}\n",
+            &format!("      origins:\n{origins}"),
+        )
+    };
+    study.write(
+        "dm.yaml",
+        &several(
+            "        - {type: Protocol, source: Sponsor}\n        - {type: Collected, source: Vendor}\n",
+        ),
+    );
+    assert_eq!(check(), []);
+    let mut submission = engine
+        .project_submission(
+            &study.path("project.yaml"),
+            Some("sdtm"),
+            Some("2026-09-11T00:00:00"),
+            "0.4.0",
+            &token,
+        )
+        .unwrap();
+    assert_eq!(rows(&submission.issues()), []);
+    submission.save().unwrap();
+    let define = String::from_utf8(study.read("define.xml")).unwrap();
+    assert!(
+        define.contains(
+            "        <def:Origin Type=\"Protocol\" Source=\"Sponsor\"/>\n        <def:Origin Type=\"Collected\" Source=\"Vendor\"/>\n"
+        ),
+        "{define}"
+    );
+    // A repeated type and source, and an origin beside a Predecessor.
+    for (origins, condition_path, origin_type) in [
+        (
+            "        - {type: Protocol, source: Sponsor}\n        - {type: Protocol, source: Sponsor}\n",
+            "columns.STUDYID.submission.origins[1]",
+            "Protocol",
+        ),
+        (
+            "        - {type: Predecessor, description: RAW.STUDYID}\n        - {type: Protocol, source: Sponsor}\n",
+            "columns.STUDYID.submission.origins[1]",
+            "Protocol",
+        ),
+    ] {
+        study.write("dm.yaml", &several(origins));
+        let issues = check();
+        let [(condition, rule, paths, context)] = issues.as_slice() else {
+            panic!("one issue: {issues:?}")
+        };
+        assert_eq!(condition, "conflicting_origins");
+        assert_eq!(rule.as_deref(), Some("SUB-14"));
+        assert_eq!(paths, &[condition_path]);
+        assert_eq!(context["column"], Value::String("STUDYID".into()));
+        assert_eq!(context["origin_type"], Value::String(origin_type.into()));
+    }
+    // An empty list declares no origin.
+    study.write(
+        "dm.yaml",
+        &several("        []\n").replace(":\n        []", ": []"),
+    );
+    let issues = check();
+    let [(condition, rule, paths, _)] = issues.as_slice() else {
+        panic!("one issue: {issues:?}")
+    };
+    assert_eq!(condition, "origin_missing");
+    assert_eq!(rule.as_deref(), Some("SUB-14"));
+    assert_eq!(paths, &["columns.STUDYID.submission"]);
+}
+
+/// D65: a 1.0 SDTM or ADaM column takes no `Not Available` origin, which a
+/// SEND column keeps; a 0.5 specification keeps the pairs of 0.5.0 (D75).
+#[test]
+fn not_available_is_an_origin_of_send_alone() {
+    let study = define_study();
+    let dm = String::from_utf8(study.read("dm.yaml")).unwrap();
+    let engine = engine();
+    let token = CancellationToken::new();
+    let check = |name: &str| {
+        rows(
+            &engine
+                .spec_check(&study.path(name), None, &token)
+                .unwrap()
+                .issues(),
+        )
+    };
+    let unavailable = dm.replace(
+        "{type: Protocol, source: Sponsor}",
+        "{type: Not Available, description: Not recorded at this site}",
+    );
+    study.write("dm.yaml", &unavailable);
+    let issues = check("dm.yaml");
+    let [(condition, rule, paths, context)] = issues.as_slice() else {
+        panic!("one issue: {issues:?}")
+    };
+    assert_eq!(condition, "origin_source_not_admitted");
+    assert_eq!(rule.as_deref(), Some("SUB-15"));
+    assert_eq!(paths, &["columns.STUDYID.submission.origins[0]"]);
+    assert_eq!(
+        context["origin_type"],
+        Value::String("Not Available".into())
+    );
+    assert_eq!(context["model"], Value::String("SDTM".into()));
+    study.write(
+        "dm.yaml",
+        &unavailable.replace("model: SDTM", "model: SEND"),
+    );
+    assert_eq!(check("dm.yaml"), []);
 }
 
 /// SUB-2: a dataset's `standard` is governed in 1.0, so a 1.0 root

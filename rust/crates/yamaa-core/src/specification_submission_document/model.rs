@@ -257,8 +257,9 @@ impl OriginType {
         Self::VALUES.iter().map(|(_, kind)| *kind)
     }
     /// Whether `model` admits this type with `source` (SUB-15): SDTM by its
-    /// table of pairs, SEND without a source or with a pair SDTM admits, and
-    /// ADaM four types whose source is derived, never declared.
+    /// table of pairs, which has no `Not Available` (D65), SEND without a
+    /// source or with a pair SDTM admits, and ADaM four types whose source is
+    /// derived, never declared.
     pub fn admits_source(self, model: crate::ast::ModelKind, source: Option<OriginSource>) -> bool {
         use crate::ast::ModelKind as M;
         use OriginSource as S;
@@ -268,7 +269,8 @@ impl OriginType {
                 Self::Assigned | Self::Derived => matches!(source, Some(S::Vendor | S::Sponsor)),
                 Self::Protocol => source == Some(S::Sponsor),
                 Self::Other => source.is_some(),
-                Self::Predecessor | Self::NotAvailable => source.is_none(),
+                Self::Predecessor => source.is_none(),
+                Self::NotAvailable => false,
             },
             M::Send => source.is_none() || self.admits_source(M::Sdtm, source),
             M::Adam => {
@@ -279,6 +281,19 @@ impl OriginType {
                     )
             }
         }
+    }
+    /// The pairs of 0.5.0, which a specification that declares
+    /// `schema_version` keeps (D75): SDTM also admits `Not Available`
+    /// without a source.
+    pub fn admits_source_v0_5(
+        self,
+        model: crate::ast::ModelKind,
+        source: Option<OriginSource>,
+    ) -> bool {
+        self.admits_source(model, source)
+            || (model == crate::ast::ModelKind::Sdtm
+                && self == Self::NotAvailable
+                && source.is_none())
     }
 }
 impl OriginSource {
@@ -407,7 +422,10 @@ pub struct ColumnSubmission {
     pub display_format: Option<Field<String>>,
     pub codelist: Option<Field<String>>,
     pub inventory_vocabulary: Option<Field<bool>>,
-    pub origin_metadata: Option<OriginMetadata>,
+    /// The declared origins, in declaration order: 0.5's one `origin`, or
+    /// each entry of 1.0's `origins` (P-ORIGIN-1). Empty when none is
+    /// declared.
+    pub origins: Vec<OriginMetadata>,
     pub method: Option<Method>,
     pub comment: Option<Comment>,
     /// The column's value-level entries in declaration order; always empty for
@@ -435,8 +453,10 @@ pub struct WhereTerm {
 }
 impl ColumnSubmission {
     /// Missing entry fields inherit the complete column declaration. Nested
-    /// class values replace their counterpart; occurrence facts stay attached.
-    /// The merged metadata describes one entry, so it carries no entries.
+    /// class values replace their counterpart, and an entry without origins of
+    /// its own takes the column's whole list (DEFINE-27); occurrence facts stay
+    /// attached. The merged metadata describes one entry, so it carries no
+    /// entries.
     pub fn inherit(&self, base: &Self) -> Self {
         let mut merged = self.clone();
         macro_rules! inherit {
@@ -454,10 +474,12 @@ impl ColumnSubmission {
             display_format,
             codelist,
             inventory_vocabulary,
-            origin_metadata,
             method,
             comment
         );
+        if merged.origins.is_empty() {
+            merged.origins = base.origins.clone();
+        }
         merged.value_level = Vec::new();
         merged
     }

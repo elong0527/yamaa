@@ -20,6 +20,7 @@ pub(super) const TEMPLATES: &[(&str, &str)] = &[
     ("codelist_shape_invalid", "codelist {codelist} has an item list or item value its declaration does not admit"),
     ("codelist_type_mismatch", "{spec_path} binds a codelist whose data type the column's type does not admit"),
     ("conflicting_absence_policy", "the lookup at {spec_path} declares an answer for absence together with require_match: true"),
+    ("conflicting_origins", "column {column} declares a {origin_type} origin that conflicts with another of its origins"),
     ("conflicting_row_construction", "a root filter cannot be declared together with rows"),
     ("conversion_failed", "{spec_path} gives a value that does not convert to its declared type, or leaves the range of its type"),
     ("core_mandatory_conflict", "the core designation at {spec_path} does not fit its model or its mandatory setting"),

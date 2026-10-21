@@ -572,7 +572,7 @@ in a document independently of entry order ([DEFINE-9](define-xml.md#define-9)).
 Every build of a specification declaring value-level entries checks the
 completed rows before publication: a row two entries of one column select
 fails, reporting its keys and the entries' ids, and an entry that selects no
-row is a `warning`. An entry's own origin is refuted under
+row is a `warning`. An entry's own origins are refuted under
 [SUB-19](#sub-19) against every derivation of the column that can produce a
 row its where clause selects, and against every derivation of the column when
 that cannot be known.
@@ -603,13 +603,14 @@ A construction is a row template, or the construction from column derivations
 of a specification without row templates. A construction cannot produce a row
 an entry selects when it derives a where column as a bare `literal` outside
 the entry's values, a missing literal included, and every row it produces is
-selected when it derives every where column as a literal among them. An
-entry's origin is refuted against the column's derivation in every
+selected when it derives every where column as a literal among them. Each of
+an entry's own origins is refuted against the column's derivation in every
 construction that can produce its rows, with the table and the copy check of
-[SUB-19](#sub-19) and [SUB-20](#sub-20); the column's own origin answers for
-every construction no entry declaring its own origin selects completely. An
-entry without its own origin answers with the column's, which the column's
-refutation covers. A refuted entry fails with `refuted_value_origin` at the
+[SUB-19](#sub-19) and [SUB-20](#sub-20); the column's own origins answer for
+every construction no entry declaring origins of its own selects completely.
+An entry without origins of its own takes the column's
+([DEFINE-27](define-xml.md#define-27)), which the column's refutation covers.
+Each refuted origin of an entry fails with `refuted_value_origin` at the
 entry's path, reporting the column, the entry, the refuting derivation and the
 declared type.
 
@@ -619,18 +620,31 @@ declared type.
 
 ### SUB-14. Every column with submission metadata declares an origin from closed type and source vocabularies
 
-`origin` is required for every column carrying submission metadata.
-`origin.type` is one of `Assigned`, `Collected`, `Derived`, `Not Available`,
-`Other`, `Predecessor` or `Protocol`. `origin.source` is one of
-`Investigator`, `Sponsor`, `Subject` or `Vendor`. Both vocabularies are closed,
-and neither is extended by a specification. An `origin` absent from a column
-carrying submission metadata fails.
+`origins` is required for every column carrying submission metadata and
+lists one or more origins. Each origin's `type` is one of `Assigned`,
+`Collected`, `Derived`, `Not Available`, `Other`, `Predecessor` or
+`Protocol`, and its `source` one of `Investigator`, `Sponsor`, `Subject` or
+`Vendor`. Both vocabularies are closed, and neither is extended by a
+specification. Two origins with the same type and source, or a `Predecessor`
+or `Not Available` origin beside another, fail, as does a column carrying
+submission metadata without `origins`.
 
-Fails: `origin_missing`.
-Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionOriginMissing`, `rust/crates/yamaa-core/tests/schema_submission.rs::portable_choice_and_identifier_failures_use_only_applicable_current_causes`.
+Fails: `origin_missing`, `conflicting_origins`.
+Evidence: `sdtm-dm-metadata`, `schema-column-origins`, `negative-conflicting-origins`, `rust/crates/yamaa/tests/language_header.rs::a_column_declares_several_origins`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionOriginMissing`, `rust/crates/yamaa-core/tests/support/diagnostic/front_end.rs`, `rust/crates/yamaa-core/tests/schema_submission.rs::portable_choice_and_identifier_failures_use_only_applicable_current_causes`.
 
 A submission document states where every value came from, and a column with no
-declared origin has no place in a submission document.
+declared origin has no place in a submission document. An empty `origins`
+fails as `origin_missing`, at the column's `submission`. A value-level entry
+declares `origins` too, and one without origins of its own takes the column's
+([SUB-13](#sub-13)). The origins of one column or entry are checked before
+any input is read: each origin with the same type and source as an earlier
+one, and each origin beside a `Predecessor` or `Not Available` one, fails
+with `conflicting_origins` at its own `origins[<i>]`, naming the column, an
+entry in `entry`, its type in `origin_type`, a declared source in
+`origin_source`, and in `reason` either `same_type_and_source` or
+`exclusive_type`. Which pairs a model admits, `Not Available` among them, is
+[SUB-15](#sub-15)'s. A specification that declares `schema_version` writes
+one `origin`.
 
 <a id="sub-15"></a>
 
@@ -655,35 +669,38 @@ Evidence: `sdtm-lb-metadata`, `rust/crates/yamaa-adapters/tests/file_resources.r
 | `Protocol` | `Sponsor` |
 | `Other` | any |
 | `Predecessor` | none; `source` must be absent |
-| `Not Available` | none; `source` must be absent |
 
-An `SDTM` `Not Available` origin declares no source and carries the
-description [SUB-16](#sub-16) requires, which says why the value is not
-available. For `ADaM`, a declared `source` is rejected, and `Collected`,
-`Protocol` and `Not Available` are not admitted. A `SEND` source is optional:
+`Not Available` is not admitted for `SDTM` or `ADaM`; a `SEND` origin keeps
+it, for legacy data, without a source and with the description
+[SUB-16](#sub-16) requires, which says why the value is not available. For
+`ADaM`, a declared `source` is rejected, and `Collected`, `Protocol` and
+`Not Available` are not admitted. A `SEND` source is optional:
 the model identifies responsibility through its own trial-summary and
 findings columns, and a declared source states it with the pairs the `SDTM`
 table admits, so a `SEND` `Predecessor` or `Not Available` declares none. An
 origin type and source pair the model does not admit, a `source` present where
 these rules require absence, or one absent where they require presence fails
-with `origin_source_not_admitted`.
+with `origin_source_not_admitted`. A specification that declares
+`schema_version` keeps the pairs of 0.5.0, whose `SDTM` table also admits
+`Not Available` without a source.
 
 A specification that declares its model checks the pairs on its own
 ([SUB-23](#sub-23)), for each origin a column or value-level entry declares,
 at that origin's `origins[<i>]`; the context names the column, an entry in
 `entry`, the origin's type in `origin_type`, its declared source in
 `origin_source`, and the model in `model`. A document checks them when it
-composes the dataset, at the column's or entry's `origin`.
+composes the dataset, for each origin, at its `origins[<i>]`, or at a 0.5
+specification's `origin`.
 
 <a id="sub-16"></a>
 
 ### SUB-16. A Predecessor, Other or Not Available origin carries a description
 
-`origin.description` is required when `type` is `Predecessor`, and names the
-dataset and column the value was copied from as `<dataset>.<column>`,
-optionally followed by ` where ` and a condition written for reviewers. The
-description is also required when `type` is `Other` or `Not Available`, and is
-optional elsewhere. A description absent where this rule requires it, or a
+An origin's `description` is required when its `type` is `Predecessor`, and
+names the dataset and column the value was copied from as
+`<dataset>.<column>`, optionally followed by ` where ` and a condition
+written for reviewers. The description is also required when its `type` is
+`Other` or `Not Available`, and is optional elsewhere. A description absent where this rule requires it, or a
 `Predecessor` description of another form, fails.
 
 Fails: `origin_description_missing`.
@@ -694,10 +711,12 @@ column are identifiers joined by one period, and the condition after the
 lowercase ` where ` names the records the predecessor column contributes, as
 in `SUPPDM.QVAL where QNAM = 'RACEOTH'`. No rule parses the condition; a
 generated document carries the whole description, and [SUB-20](#sub-20)
-requires the copy to declare a `filter` when a condition is written. A
-description absent where this rule requires it fails with
-`origin_description_missing`, reporting the column; a `Predecessor`
-description of another form fails the same way at `origin.description`.
+requires the copy to declare a `filter` when a condition is written. Each
+origin is checked on its own. A description absent where this rule requires
+it fails with `origin_description_missing`, reporting the column and the
+origin's type, at the origin's `origins[<i>]`, or at a 0.5 specification's
+column `submission`; a `Predecessor` description of another form fails the
+same way at the origin's `description`.
 
 <a id="sub-17"></a>
 
@@ -721,19 +740,22 @@ it is admitted only under `Other`; a regulatory submission states the page a
 reviewer opens, and [DEFINE-4](define-xml.md#define-4) lists the requirement.
 Under `Submission`, omitted `documents`, or declared references none of which
 carries `pages`, fail with `origin_document_missing`, reporting the column.
+Each such origin of a column or entry is checked on its own, at its
+`origins[<i>]`.
 
 <a id="sub-18"></a>
 
 ### SUB-18. A Derived origin declares its method
 
-A column whose `origin.type` is `Derived` must declare `method`. A `Derived`
-origin with no `method` fails.
+A column with a `Derived` origin must declare `method`. A `Derived` origin
+with no `method` fails.
 
 Fails: `method_missing`.
 Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::metadata_admission_has_exact_causes_before_study_access`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionMethodMissing`.
 
 The algorithm is what a derived origin claims exists; a claim with no
-algorithm attached is not traceable.
+algorithm attached is not traceable. One `Derived` origin among several
+needs the method too, and the column or entry reports it once.
 
 ## What the derivation refutes
 
@@ -816,8 +838,10 @@ which only a bare `source` of the predecessor's input dataset makes.
 
 When the entries of a row-derived column disagree, no shared type is an error,
 not a silently admitted origin. A row template every row of which a value-level
-entry declaring its own origin selects answers to that entry instead
-([SUB-13](#sub-13)). A refuted origin fails with
+entry declaring origins of its own selects answers to that entry instead
+([SUB-13](#sub-13)). A column with several origins has each declared type
+checked against its derivation, as one origin is, so every type it declares
+is one the derivation admits. A refuted origin fails with
 `origin_contradicts_derivation`, reporting the column, the declared type and
 the derivation that refutes it.
 

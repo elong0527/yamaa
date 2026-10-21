@@ -476,6 +476,9 @@ conditions! {
     SubmissionReservedMetadata => ("validation", "reserved_metadata_key", Some("SUB-2")),
     SubmissionMetadataMissing => ("validation", "submission_metadata_missing", Some("DEFINE-7")),
     SubmissionOriginMissing => ("validation", "origin_missing", Some("SUB-14")),
+    // Two origins with one type and source, or a Predecessor or Not
+    // Available origin beside another (D69).
+    SubmissionConflictingOrigins => ("validation", "conflicting_origins", Some("SUB-14")),
     SubmissionSasName => ("validation", "sas_name_too_long", Some("DEFINE-22")),
     SubmissionCoreMandatory => ("validation", "core_mandatory_conflict", Some("SUB-10")),
     SubmissionKeyMandatory => ("validation", "value_not_permitted", Some("SUB-10")),
