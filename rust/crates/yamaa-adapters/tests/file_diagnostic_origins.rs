@@ -447,10 +447,15 @@ mod file {
             fs::write(study.0.join("spec.yaml"), b"[changed").unwrap();
             assert!(!result.save().unwrap());
             assert_eq!(result.observations(), observations);
+            // A missing directory is refused at the field that declares the
+            // file, naming it as written (FILE-7, #3030 D189).
             assert_eq!(result.issues().len(), 1);
+            assert_eq!(result.issues()[0].condition(), "resource_path_missing");
+            assert_eq!(result.issues()[0].phase(), "output");
+            assert_eq!(result.issues()[0].spec_paths, ["output.path"]);
             assert_eq!(
                 yamaa_adapters::json_wire::encode_object(&result.issues()[0].context),
-                "{\"code\":\"invalid_target\",\"stage\":\"output\"}"
+                "{\"path\":\"absent/output.csv\"}"
             );
             assert_eq!(result.output().unwrap(), before);
             fs::create_dir(study.0.join("absent")).unwrap();
@@ -648,9 +653,11 @@ mod file {
                 let mut result = study.build();
                 assert!(result.output().is_some());
                 assert!(!result.save().unwrap());
+                assert_eq!(result.issues()[0].condition(), "resource_path_symlink");
+                assert_eq!(result.issues()[0].spec_paths, ["output.path"]);
                 assert_eq!(
                     yamaa_adapters::json_wire::encode_object(&result.issues()[0].context),
-                    "{\"code\":\"invalid_target\",\"stage\":\"output\"}"
+                    "{\"path\":\"link/output.csv\"}"
                 );
                 if existing {
                     assert_eq!(fs::read(outside.0.join("output.csv")).unwrap(), b"retained");

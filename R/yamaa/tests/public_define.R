@@ -251,10 +251,10 @@ dir.create(file.path(root, "define.xml"))
 error <- tryCatch(result$save(), yamaa_error = identity)
 stopifnot(inherits(error, "yamaa_error"), identical(error$issues, result$issues),
   !file.exists(file.path(root, "dm.json")), dir.exists(file.path(root, "define.xml")),
-  identical(result$issues$phase, "engine"), identical(result$issues$condition, "engine_rejected"),
-  all(is.na(result$issues$rule)), grepl("publication_target_admission", result$issues$context, fixed = TRUE),
-  grepl('"code":"invalid_target"', result$issues$context, fixed = TRUE),
-  grepl("cause", result$issues$context, fixed = TRUE))
+  identical(result$issues$phase, "output"),
+  identical(result$issues$condition, "resource_path_not_regular_file"),
+  identical(result$issues$rule, "FILE-7"), identical(result$issues$spec_paths, list("sdtm.define")),
+  identical(result$issues$context, '{"path":"define.xml"}'))
 unlink(root, recursive = TRUE)
 
 root <- fixture("sdtm-dm-metadata", TRUE)

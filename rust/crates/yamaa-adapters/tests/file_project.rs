@@ -962,9 +962,12 @@ mod file {
                 Publisher::new("declared.csv", "relative.csv"),
                 Err(Error::InvalidTarget)
             ));
+            // A directory where the file belongs cannot be reached (FILE-7).
             assert!(matches!(
                 Publisher::new("declared.csv", directory.0.to_str().unwrap()),
-                Err(Error::InvalidTarget)
+                Err(Error::Unreachable(
+                    yamaa_core::resource::ResourceFailure::NotRegularFile
+                ))
             ));
         }
         #[test]
@@ -1034,7 +1037,9 @@ mod file {
             std::os::unix::fs::symlink(&other, directory.target()).unwrap();
             assert!(matches!(
                 publisher.publish("declared.csv", b"new"),
-                Err(Error::InvalidTarget)
+                Err(Error::Unreachable(
+                    yamaa_core::resource::ResourceFailure::Symlink
+                ))
             ));
             assert_eq!(fs::read(&other).unwrap(), b"retained");
             assert!(fs::symlink_metadata(directory.target())
@@ -1045,7 +1050,9 @@ mod file {
             fs::create_dir(directory.target()).unwrap();
             assert!(matches!(
                 publisher.publish("declared.csv", b"new"),
-                Err(Error::InvalidTarget)
+                Err(Error::Unreachable(
+                    yamaa_core::resource::ResourceFailure::NotRegularFile
+                ))
             ));
             assert_eq!(directory.names().len(), 2);
         }

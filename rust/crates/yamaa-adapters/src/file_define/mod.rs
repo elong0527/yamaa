@@ -46,6 +46,8 @@ pub use service::PublicationState;
 pub struct Define {
     ports: NativePorts,
     application: service::Application<NativePorts>,
+    /// The section composed, whose `define` decides where its files go.
+    section: Submission,
     failure: Option<Failure>,
     issues: Vec<Diagnostic>,
 }
@@ -84,6 +86,7 @@ impl Define {
         let mut result = Self {
             ports,
             application: attempt.application,
+            section,
             failure: None,
             issues: Vec::new(),
         };
@@ -140,15 +143,15 @@ impl Define {
         stopped: Option<(usize, crate::publication::Cause)>,
     ) {
         use crate::publication::Cause;
+        let written = |position: usize| {
+            self.application
+                .artifacts()
+                .nth(position)
+                .map_or("", |(written, _, _)| written)
+        };
         let failure = stopped.map(|(index, cause)| match cause {
             Cause::Target(error) => service::Failure::TargetAdmission { index, error },
             Cause::Collision { earlier } => {
-                let written = |position: usize| {
-                    self.application
-                        .artifacts()
-                        .nth(position)
-                        .map_or("", |(written, _, _)| written)
-                };
                 service::Failure::Metadata(vec![service::shared_target(
                     written(earlier),
                     written(index),
@@ -165,9 +168,32 @@ impl Define {
                 )])
             }
         });
+        // A target the walk cannot reach fails with its file rule's condition
+        // at the section's `define`, which places every file of the section,
+        // naming the file as written (#3030 D189); the failure keeps its
+        // original error.
+        let unreached = match &failure {
+            Some(
+                service::Failure::TargetAdmission { index, error }
+                | service::Failure::Publication { index, error },
+            ) => match error {
+                file_publication::Error::Unreachable(cause) => cause.target_diagnostic(
+                    Some(&format!(
+                        "{}.define",
+                        yamaa_core::project_scope::key(self.section)
+                    )),
+                    written(*index),
+                ),
+                _ => None,
+            },
+            _ => None,
+        };
         self.application.record(committed, failure.as_ref());
         if let Some(failure) = failure {
             self.refuse(native_failure(failure));
+            if let Some(issue) = unreached {
+                self.issues = vec![issue];
+            }
         }
     }
     /// A save that stopped at this composition for `issues` of its own,

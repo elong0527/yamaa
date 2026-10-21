@@ -285,7 +285,8 @@ stopifnot(nrow(built$issues)==0L,inherits(unheld,"yamaa_error"),
   identical(conditionMessage(unheld),"integer -9223372036854775808 is beyond 2^53 and cannot be held exactly by an R double"),
   identical(built$report$COUNT[[1L]],2))
 writeLines("[changed",entry); writeLines("changed",file.path(directory,"input.csv"))
-stopifnot(refused_save(built),identical(built$issues$condition,"engine_rejected"))
+# The output directory does not exist (FILE-7).
+stopifnot(refused_save(built),identical(built$issues$condition,"resource_path_missing"))
 dir.create(file.path(directory,"absent"))
 stopifnot(saved(built),nrow(built$issues)==0L,identical(rawfile(file.path(directory,"absent/output.csv")),fixture_bytes(host_truth[["integer_boundary_csv"]])))
 # A missing project file refuses every project operation before any
@@ -339,7 +340,9 @@ for(late in c(FALSE,TRUE)) for(existing in c(FALSE,TRUE)) {
   if(late) {
     stopifnot(identical(unlink(link,recursive=TRUE),0L),!file.exists(link),file.symlink(outside,link))
   }
-  stopifnot(refused_save(built),identical(built$issues$context,'{"code":"invalid_target","stage":"output"}'),
+  # A link on the way to the target (FILE-8).
+  stopifnot(refused_save(built),identical(built$issues$condition,"resource_path_symlink"),
+            identical(built$issues$context,'{"path":"link/output.csv"}'),
             identical(list.files(outside,all.files=TRUE,no..=TRUE),if(existing) c("output.csv","sentinel") else "sentinel"))
   stopifnot(identical(rawfile(sentinel),sentinel_bytes))
   if(existing) stopifnot(identical(rawfile(target),charToRaw("retained")))

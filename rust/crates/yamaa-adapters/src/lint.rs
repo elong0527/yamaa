@@ -198,7 +198,7 @@ fn write_code(error: &crate::file_publication::Error) -> Fault {
     use crate::file_publication::Error as E;
     match error {
         E::Host(_) => Fault::HostPublicationFailure,
-        E::InvalidTarget => Fault::InvalidTarget,
+        E::InvalidTarget | E::Unreachable(_) => Fault::InvalidTarget,
         E::PathMismatch => Fault::PathMismatch,
         E::Limit(_) => Fault::PublicationLimit,
         E::StagingCollision => Fault::StagingCollision,

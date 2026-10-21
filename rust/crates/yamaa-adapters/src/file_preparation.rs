@@ -226,18 +226,26 @@ impl FileSpecification {
     pub fn retained_sources(&self) -> crate::file_resources::RetainedSources {
         self.resources.retain_sources()
     }
+    /// The save target of the output file `field` declares, resolved in
+    /// `run`; a target its resolver cannot reach is refused as a save's walk
+    /// refuses it, at `output.<field>`.
     pub(crate) fn publication_field_target(
         &self,
         run: &RunScope,
         field: &str,
-    ) -> Result<crate::publication::AnchoredTarget, ResourceError> {
+    ) -> Result<crate::publication::AnchoredTarget, crate::file_application::Failure> {
+        use crate::file_application::{resource_failure, unresolved_target};
+        use yamaa_core::application_issue::Stage;
         let origin = self
             .run
             .document()
             .written_output_field_origin(field)
-            .ok_or(ResourceError::InvalidPath)?;
+            .ok_or_else(|| resource_failure(Stage::Output, &ResourceError::InvalidPath))?;
         run.resources()
             .publication_target_from(origin.base_source, origin.written)
+            .map_err(|error| {
+                unresolved_target(&error, Some(&format!("output.{field}")), origin.written)
+            })
     }
     /// Activate, capture, decode, bind and execute in `run`; this value is
     /// unchanged. A specification that calls no project function never

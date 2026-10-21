@@ -598,13 +598,16 @@ class PublicDefine(unittest.TestCase):
         self.assertTrue((directory / "define.xml").is_dir())
         # The refused save explains itself, and the submission keeps that cause.
         self.assertTrue(caught.exception.issues.equals(result.issues))
-        self.assertEqual(result.issues["phase"].to_list(), ["engine"])
-        self.assertEqual(result.issues["condition"].to_list(), ["engine_rejected"])
-        self.assertEqual(result.issues["rule"].to_list(), [None])
+        # A directory where define.xml goes is refused at the section's
+        # `define`, naming the file as written (FILE-7).
+        self.assertEqual(result.issues["phase"].to_list(), ["output"])
+        self.assertEqual(
+            result.issues["condition"].to_list(), ["resource_path_not_regular_file"]
+        )
+        self.assertEqual(result.issues["rule"].to_list(), ["FILE-7"])
+        self.assertEqual(result.issues["spec_paths"].to_list(), [["sdtm.define"]])
         context = json.loads(result.issues["context"][0])
-        self.assertEqual(context["stage"], "publication_target_admission")
-        self.assertEqual(context["code"], "invalid_target")
-        self.assertIn("cause", context)
+        self.assertEqual(context, {"path": "define.xml"})
 
     def test_source_version_defaults_and_schema_facet_failures(self):
         directory = self.fixture("sdtm-dm-metadata", published=True)

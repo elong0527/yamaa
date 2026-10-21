@@ -149,10 +149,44 @@ pub(crate) fn publication_fault(error: &crate::file_publication::Error) -> Fault
         E::Changed => Fault::TargetChanged,
         E::Limit(_) => Fault::PublicationLimit,
         E::StagingCollision => Fault::StagingCollision,
-        E::InvalidTarget => Fault::InvalidTarget,
+        // A walk refusal reports its file rule's condition where the save
+        // knows the file (see `target_failure`).
+        E::InvalidTarget | E::Unreachable(_) => Fault::InvalidTarget,
         E::PathMismatch => Fault::PathMismatch,
         E::Io(_) => Fault::PublicationFailed,
     }
+}
+/// The issues of a save refused at the file `written`, which the field
+/// `field` declares, or no field for a file the caller names: a target the
+/// walk cannot reach fails with its file rule's condition under `output`,
+/// naming the file as written (FILE-7, FILE-8, FILE-11; #3030 D189), and any
+/// other refusal is the engine's.
+pub(crate) fn target_failure(
+    error: &crate::file_publication::Error,
+    field: Option<&str>,
+    written: &str,
+) -> Failure {
+    match error {
+        crate::file_publication::Error::Unreachable(failure) => failure
+            .target_diagnostic(field, written)
+            .map_or_else(|| publication_failure(error), |issue| vec![issue]),
+        error => publication_failure(error),
+    }
+}
+/// The issues of a target that could not be resolved when a run was built:
+/// a kind its resolver reports refuses it as the walk does
+/// ([`target_failure`]), and any other failure stays the opaque refusal.
+pub(crate) fn unresolved_target(
+    error: &crate::file_resources::Error,
+    field: Option<&str>,
+    written: &str,
+) -> Failure {
+    crate::file_resources::resource_failure(error)
+        .and_then(|failure| failure.target_diagnostic(field, written))
+        .map_or_else(
+            || resource_failure(Stage::Output, error),
+            |issue| vec![issue],
+        )
 }
 pub(crate) fn publication_failure(error: &crate::file_publication::Error) -> Failure {
     use crate::file_publication::Error as E;
@@ -263,12 +297,7 @@ impl Domain {
     }
     fn from_build(
         result: BuildResult,
-        mut target: impl FnMut(
-            &str,
-        ) -> Result<
-            crate::publication::AnchoredTarget,
-            crate::file_resources::Error,
-        >,
+        mut target: impl FnMut(&str) -> Result<crate::publication::AnchoredTarget, Failure>,
     ) -> Self {
         let fields = [
             ("report", result.report_file()),
@@ -281,7 +310,7 @@ impl Domain {
             .collect::<Result<Vec<_>, _>>();
         let (targets, publication_issues) = match targets {
             Ok(targets) => (Some(targets), Vec::new()),
-            Err(error) => (None, resource_failure(Stage::Output, &error)),
+            Err(issues) => (None, issues),
         };
         Self {
             result,
@@ -442,11 +471,12 @@ impl Domain {
         let at = |issues, attempt: &PublicationAttempt| {
             publication_at(issues, fields[file], &written[file], attempt)
         };
+        let field = format!("output.{}", fields[file]);
         self.publication_issues = match cause {
             // The save never entered this file: its target is refused.
             Cause::Target(error) => {
                 attempt.entered = 0;
-                let issues = publication_failure(&error);
+                let issues = target_failure(&error, Some(&field), &written[file]);
                 attempt.failure = Some(error);
                 issues
             }
@@ -459,7 +489,10 @@ impl Domain {
             }
             Cause::Stage(error) | Cause::Commit(error) => {
                 attempt.entered = file + 1;
-                let issues = at(publication_failure(&error), attempt);
+                let issues = at(
+                    target_failure(&error, Some(&field), &written[file]),
+                    attempt,
+                );
                 attempt.failure = Some(error);
                 issues
             }
@@ -791,8 +824,10 @@ mod tests {
             let origin = prepared
                 .document()
                 .written_output_field_origin(field)
-                .ok_or(crate::file_resources::Error::InvalidPath)?;
-            resources.publication_target_from(origin.base_source, origin.written)
+                .unwrap();
+            resources
+                .publication_target_from(origin.base_source, origin.written)
+                .map_err(|error| resource_failure(Stage::Output, &error))
         });
         assert!(result.output().is_some());
         assert!(result.result.publication_items().last().unwrap().1.len() > 8 * 1024 * 1024);
@@ -1130,8 +1165,21 @@ mod tests {
         assert_eq!(result.publication_attempt.completed, 0);
         assert!(matches!(
             result.publication_attempt.failure,
-            Some(crate::file_publication::Error::InvalidTarget)
+            Some(crate::file_publication::Error::Unreachable(
+                yamaa_core::resource::ResourceFailure::Symlink
+            ))
         ));
+        // FILE-8 at the field that declares the file, naming it as written.
+        let issue = result.issues().pop().unwrap();
+        assert_eq!(
+            issue.code,
+            yamaa_core::diagnostic::ConditionCode::PublicationTargetSymlink
+        );
+        assert_eq!(issue.spec_paths, ["output.report"]);
+        assert_eq!(
+            Value::Object(issue.context),
+            crate::json!({"path": "nested/adsl-checks.csv"})
+        );
         assert_eq!(result.observations(), original);
         assert_eq!(fs::read_dir(study.0.join("foreign")).unwrap().count(), 0);
         fs::remove_file(study.0.join("nested")).unwrap();
@@ -1246,8 +1294,10 @@ mod tests {
                 let origin = prepared
                     .document()
                     .written_output_field_origin(field)
-                    .ok_or(crate::file_resources::Error::InvalidPath)?;
-                resources.publication_target_from(origin.base_source, origin.written)
+                    .unwrap();
+                resources
+                    .publication_target_from(origin.base_source, origin.written)
+                    .map_err(|error| resource_failure(Stage::Output, &error))
             });
             let mut domain = domain;
             assert!(domain.output().is_some());

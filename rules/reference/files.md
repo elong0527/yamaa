@@ -178,7 +178,7 @@ that reaches a directory, FIFO, socket, device or any other non-regular file
 is rejected.
 
 Fails: `resource_path_missing`, `resource_path_not_regular_file`.
-Evidence: `negative-path-missing`, `negative-path-directory`, `rust/crates/yamaa-adapters/tests/file_resources.rs::absent_artifact_location_has_no_fallback_and_nonregular_input_is_terminal`, `rust/crates/yamaa-adapters/src/file_resolver.rs::walks_report_the_kind_of_the_entry_that_stops_them`, `rust/crates/yamaa/tests/resolver_kinds.rs::every_reported_kind_raises_its_file_rule_condition`, `rust/crates/yamaa/tests/caller_paths.rs::a_specification_path_that_reaches_no_regular_file_fails_with_its_file_rule_on_every_route`, `rust/crates/yamaa/tests/caller_paths.rs::a_project_path_that_reaches_no_regular_file_fails_with_its_file_rule_on_every_route`, `rust/crates/yamaa/tests/caller_paths.rs::every_kind_a_caller_resolver_reports_for_a_caller_path_raises_its_file_rule_condition`.
+Evidence: `negative-path-missing`, `negative-path-directory`, `rust/crates/yamaa-adapters/tests/file_resources.rs::absent_artifact_location_has_no_fallback_and_nonregular_input_is_terminal`, `rust/crates/yamaa-adapters/src/file_resolver.rs::walks_report_the_kind_of_the_entry_that_stops_them`, `rust/crates/yamaa/tests/resolver_kinds.rs::every_reported_kind_raises_its_file_rule_condition`, `rust/crates/yamaa/tests/caller_paths.rs::a_specification_path_that_reaches_no_regular_file_fails_with_its_file_rule_on_every_route`, `rust/crates/yamaa/tests/caller_paths.rs::a_project_path_that_reaches_no_regular_file_fails_with_its_file_rule_on_every_route`, `rust/crates/yamaa/tests/caller_paths.rs::every_kind_a_caller_resolver_reports_for_a_caller_path_raises_its_file_rule_condition`, `rust/crates/yamaa/tests/save_targets.rs::a_save_refuses_a_target_its_walk_cannot_reach_at_the_field_that_declares_it`.
 
 The caller's entry parent, and the parent of the project file the caller
 passes, are each canonicalized and opened once; aliases the caller used for a
@@ -211,7 +211,7 @@ declared paths do not select exempt directories. A path outside those parents
 retains the no-link check on every component below its filesystem root.
 
 Fails: `resource_path_symlink`.
-Evidence: `negative-path-symlink`, `rust/crates/yamaa-adapters/tests/file_resources.rs::outside_parent_and_file_links_remain_terminal`, `rust/crates/yamaa-adapters/tests/file_resources.rs::retired_python_junctions_reject_descent_and_keep_caller_selected_root_authority`, `rust/crates/yamaa-adapters/src/file_resolver.rs::walks_report_junctions_and_reparse_points_as_links`, `rust/crates/yamaa-adapters/tests/network_shares.rs::links_on_a_network_share_stay_refused`, `rust/crates/yamaa/tests/resolver_kinds.rs::every_reported_kind_raises_its_file_rule_condition`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::a_symbolic_link_in_a_listed_path_fails_as_any_file_a_run_reads`, `rust/crates/yamaa-adapters/tests/host_resources.rs::a_linked_parent_is_refused_at_parent_on_every_route`, `rust/crates/yamaa-adapters/tests/file_diagnostic_origins.rs::dictionary_symlink_failure_names_authored_field_without_host_identity`, `rust/crates/yamaa/tests/caller_paths.rs::a_specification_path_that_reaches_no_regular_file_fails_with_its_file_rule_on_every_route`, `rust/crates/yamaa/tests/caller_paths.rs::every_kind_a_caller_resolver_reports_for_a_caller_path_raises_its_file_rule_condition`.
+Evidence: `negative-path-symlink`, `rust/crates/yamaa-adapters/tests/file_resources.rs::outside_parent_and_file_links_remain_terminal`, `rust/crates/yamaa-adapters/tests/file_resources.rs::retired_python_junctions_reject_descent_and_keep_caller_selected_root_authority`, `rust/crates/yamaa-adapters/src/file_resolver.rs::walks_report_junctions_and_reparse_points_as_links`, `rust/crates/yamaa-adapters/tests/network_shares.rs::links_on_a_network_share_stay_refused`, `rust/crates/yamaa/tests/resolver_kinds.rs::every_reported_kind_raises_its_file_rule_condition`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::a_symbolic_link_in_a_listed_path_fails_as_any_file_a_run_reads`, `rust/crates/yamaa-adapters/tests/host_resources.rs::a_linked_parent_is_refused_at_parent_on_every_route`, `rust/crates/yamaa-adapters/tests/file_diagnostic_origins.rs::dictionary_symlink_failure_names_authored_field_without_host_identity`, `rust/crates/yamaa/tests/caller_paths.rs::a_specification_path_that_reaches_no_regular_file_fails_with_its_file_rule_on_every_route`, `rust/crates/yamaa/tests/caller_paths.rs::every_kind_a_caller_resolver_reports_for_a_caller_path_raises_its_file_rule_condition`, `rust/crates/yamaa/tests/save_targets.rs::a_save_refuses_a_target_its_walk_cannot_reach_at_the_field_that_declares_it`, `rust/crates/yamaa/tests/save_targets.rs::a_kind_a_caller_resolver_reports_for_a_target_is_refused_as_the_walk_refuses_it`.
 
 Each walk verifies the retained directory and file entries, and a name
 substitution cannot redirect a read or publication silently.
@@ -283,16 +283,28 @@ canonical path, a symbolic link's target or any other host path the
 specification did not itself write. The written form is decided first, in a
 fixed order, then the anchor, then the walk. Every condition is decided before
 any data is read and reports under the `validation` phase, except
-`resource_path_content_changed`, which reports under `ingest`.
+`resource_path_content_changed`, under `ingest`, and a save's refusal of a
+target it walks to, under `output`.
 
 Fails: `resource_path_uri_scheme`, `resource_path_not_normalized`, `resource_path_symlink`, `resource_path_missing`, `resource_path_not_regular_file`, `resource_path_content_changed`.
-Evidence: `negative-path-symlink`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::written_form_checks_keep_normative_order_and_allow_root_dot_and_parent_paths`, `rust/crates/yamaa-core/tests/diagnostics.rs::every_registered_cause_is_reached_with_its_normative_mapping`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::a_listed_file_or_lock_that_cannot_be_read_fails_as_any_file_a_run_reads`.
+Evidence: `negative-path-symlink`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::written_form_checks_keep_normative_order_and_allow_root_dot_and_parent_paths`, `rust/crates/yamaa-core/tests/diagnostics.rs::every_registered_cause_is_reached_with_its_normative_mapping`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::a_listed_file_or_lock_that_cannot_be_read_fails_as_any_file_a_run_reads`, `rust/crates/yamaa/tests/save_targets.rs::the_report_file_is_refused_at_its_own_field_and_a_later_save_retries`, `rust/crates/yamaa/tests/save_targets.rs::a_submission_save_refuses_its_files_at_the_section_define`, `rust/crates/yamaa/tests/save_targets.rs::a_table_saved_to_a_path_its_caller_names_is_refused_at_no_field`.
 
 An absolute written path supplied by the specification may be repeated.
 Resolved paths retained as provenance are not substituted for the authored
 path in these diagnostics. A path the caller passes, the entry or the project
 file, has no declaring field: its failure names the path as the caller gave
 it, at no field ([FILE-1](#file-1)).
+
+A save walks to each file it publishes as it publishes the file
+([OUTPUT-8](../output.md#output-8)). A directory on the way that does not
+exist fails with `resource_path_missing`; one that is not a directory, or a
+target that is a directory or another entry that is not a regular file, fails
+with `resource_path_not_regular_file`; and a link on the way or at the target
+fails with `resource_path_symlink`. Each reports under `output`, at the field
+that declares the file and naming it as written: a run's `output.path` or
+`output.report`, or a submission section's `define`, which places every file
+of the section. A file the caller names, such as a table saved to a path the
+caller gives, is named as given, at no field.
 
 The written-form conditions are decided in the order the written-form rules
 state them: the form of [FILE-4](#file-4), then a URI scheme, a `\`, and an

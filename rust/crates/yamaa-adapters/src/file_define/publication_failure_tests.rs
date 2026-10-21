@@ -318,14 +318,23 @@ fn later_publication_failure_preserves_prior_bytes_original_cause_and_stopped_re
         panic!("lost original publication failure")
     };
     assert_eq!(*index, 1);
-    assert!(matches!(error, file_publication::Error::InvalidTarget));
+    assert!(matches!(
+        error,
+        file_publication::Error::Unreachable(yamaa_core::resource::ResourceFailure::NotRegularFile)
+    ));
+    // A target that became a directory is refused as the walk refuses it, at
+    // the section's `define`, naming the file as written (#3030 D189).
+    assert_eq!(result.issues().len(), 1);
     assert_eq!(result.issues()[0].phase(), "output");
-    assert_eq!(result.issues()[0].condition(), "publication_failed");
-    assert_eq!(result.issues()[0].rule(), Some("OUTPUT-8"));
-    assert_eq!(result.issues()[0].spec_paths, ["define"]);
+    assert_eq!(
+        result.issues()[0].condition(),
+        "resource_path_not_regular_file"
+    );
+    assert_eq!(result.issues()[0].rule(), Some("FILE-7"));
+    assert_eq!(result.issues()[0].spec_paths, ["sdtm.define"]);
     assert_eq!(
         yamaa_core::json::Value::Object(result.issues()[0].context.clone()),
-        crate::json!({"artifact":1,"cause":error.message()})
+        crate::json!({"path":"dm2.json"})
     );
     assert_eq!(result.capture_reads(), reads);
     assert!(result.save().is_err());

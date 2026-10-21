@@ -244,6 +244,46 @@ mod diagnostics {
                 JsonValue::String("generated/producer.csv".into())
             );
             reached.insert(rendered(&publication));
+            // A save's walk refusal of a target: its file rule's condition,
+            // decided while publishing, at the declaring field or none.
+            {
+                use yamaa_core::resource::ResourceFailure as R;
+                for (failure, condition, rule) in [
+                    (R::Missing, "resource_path_missing", "FILE-7"),
+                    (
+                        R::NotRegularFile,
+                        "resource_path_not_regular_file",
+                        "FILE-7",
+                    ),
+                    (R::Symlink, "resource_path_symlink", "FILE-8"),
+                ] {
+                    let finding = failure
+                        .target_diagnostic(Some("output.path"), "out/dm.csv")
+                        .unwrap();
+                    assert_eq!(
+                        (
+                            finding.definition().phase,
+                            finding.definition().condition,
+                            finding.definition().rule
+                        ),
+                        ("output", condition, Some(rule))
+                    );
+                    assert_eq!(finding.spec_paths, ["output.path"]);
+                    assert_eq!(
+                        finding.context,
+                        [("path".into(), JsonValue::String("out/dm.csv".into()))].into()
+                    );
+                    assert!(failure
+                        .target_diagnostic(None, "out/dm.csv")
+                        .unwrap()
+                        .spec_paths
+                        .is_empty());
+                    reached.insert(rendered(&finding));
+                }
+                assert!(R::ContentChanged
+                    .target_diagnostic(Some("output.path"), "out/dm.csv")
+                    .is_none());
+            }
             for (finding, phase, condition, context) in [
                 (
                     yamaa_core::application_issue::unsupported("environment", Some("environment")),

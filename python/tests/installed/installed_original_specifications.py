@@ -2156,7 +2156,10 @@ columns:
             entry.write_bytes(b"[changed")
             with self.assertRaises(yamaa.Error):
                 built.save()
-            self.assertEqual(built.issues["condition"].to_list(), ["engine_rejected"])
+            # The output directory does not exist (FILE-7).
+            self.assertEqual(
+                built.issues["condition"].to_list(), ["resource_path_missing"]
+            )
             (root / "absent").mkdir()
             built.save()
             self.assertTrue(built.issues.is_empty())
@@ -2191,9 +2194,13 @@ columns:
                         link.symlink_to(outside, target_is_directory=True)
                     with self.assertRaises(yamaa.Error):
                         built.save()
+                    # A link on the way to the target (FILE-8).
+                    self.assertEqual(
+                        built.issues["condition"].to_list(), ["resource_path_symlink"]
+                    )
                     self.assertEqual(
                         json.loads(built.issues["context"][0]),
-                        {"code": "invalid_target", "stage": "output"},
+                        {"path": "link/output.csv"},
                     )
                     self.assertEqual(
                         sorted(p.name for p in outside.iterdir()),

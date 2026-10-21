@@ -430,16 +430,16 @@ conditions:
     phases: [ingest]
     message: "{path} changed while it was being read"
   resource_path_missing:
-    phases: [validation]
+    phases: [output, validation]
     message: "{path} does not exist"
   resource_path_not_normalized:
     phases: [validation]
     message: "{path} is not a normalized relative path"
   resource_path_not_regular_file:
-    phases: [validation]
+    phases: [output, validation]
     message: "{path} is not a regular file"
   resource_path_symlink:
-    phases: [validation]
+    phases: [output, validation]
     message: "{path} is a symbolic link"
   resource_path_uri_scheme:
     phases: [validation]
