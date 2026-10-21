@@ -96,6 +96,7 @@ nav:
   - Start:
       - Introduction: articles/intro.md
       - R and Python API: articles/api.md
+      - Restricted environments: articles/restricted-environments.md
       - Principles: articles/principles.md
       - Derivation: articles/derive.md
       - Excel to yamaa: articles/excel.md

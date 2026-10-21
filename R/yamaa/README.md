@@ -76,8 +76,11 @@ Rtools45 and the `x86_64-pc-windows-gnu` target:
 Rust crates, so installation needs no network; it compiles with two jobs and
 writes nothing outside its build directory and the temporary directory. A
 Linux machine without such a Rust can take the offline toolchain route:
-install Rust from its standalone installers, carried in, without rustup or a
-network ([#3107](https://github.com/elong0527/yamaa/issues/3107)). The
+install Rust from its standalone installer, carried in, without rustup or a
+network.
+[Installing in a restricted environment](../../docs/articles/restricted-environments.md)
+gives its steps, and those for installing on a machine without internet
+access from an internal CRAN mirror or from files carried in. The
 [release guidance](../../docs/release.md#supported-platforms) lists the
 supported platforms.
 
