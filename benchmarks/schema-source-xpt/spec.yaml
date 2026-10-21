@@ -1,0 +1,56 @@
+schema_version: "1.0"
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  # A SAS transport file (version 5), written from the public record layout
+  # by tools/staging/build_xport_fixtures.py. It declares the encoding of its
+  # text. Its numeric fields read as float unless narrowed here: AGE to int,
+  # and TRTSDT and TRTSDTM, which count days and seconds from 1960-01-01, to
+  # date and datetime. The display formats the file carries decide no type.
+  ADSL_RAW:
+    path: input/adsl_raw.xpt
+    types: {AGE: int, TRTSDT: date, TRTSDTM: datetime}
+    encoding: windows-1252
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, TRT01A, AGE, HEIGHTBL, TRTSDT, TRTSDTM]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: ADSL_RAW.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: ADSL_RAW.USUBJID
+
+  # Blank padding is removed from the right, and blanks read as missing.
+  - name: TRT01A
+    type: str
+    label: Actual Treatment for Period 01
+    derivation: ADSL_RAW.TRT01A
+
+  - name: AGE
+    type: int
+    label: Age
+    derivation: ADSL_RAW.AGE
+
+  # Not narrowed: numeric storage reads as float, and a SAS missing value as
+  # missing.
+  - name: HEIGHTBL
+    type: float
+    label: Baseline Height (cm)
+    derivation: ADSL_RAW.HEIGHTBL
+
+  - name: TRTSDT
+    type: date
+    label: Date of First Exposure to Treatment
+    derivation: ADSL_RAW.TRTSDT
+
+  - name: TRTSDTM
+    type: datetime
+    label: Datetime of First Exposure to Treatment
+    derivation: ADSL_RAW.TRTSDTM
