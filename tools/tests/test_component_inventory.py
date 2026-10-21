@@ -111,6 +111,20 @@ def workspace(root):
     return checkout
 
 
+def notice_text(*crates):
+    """A LICENSE-THIRD-PARTY.txt whose crate section lists the crates; its
+    standard library section lists a crate of its own."""
+    entries = "".join(
+        f"Crate: {name} {version}\n    License: MIT\n\n" for name, version in crates
+    )
+    return (
+        "yamaa third-party notices\n=========================\n\n"
+        f"Crates\n------\n\n{entries}"
+        "Rust standard library\n---------------------\n\n"
+        "Crate: hashbrown 0.17.1\n    License: MIT\n"
+    )
+
+
 class Checkout(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
@@ -458,6 +472,11 @@ class CheckTest(Checkout):
             mock.patch.object(
                 inventory.notices, "python_project", return_value=self.project
             ),
+            mock.patch.object(
+                inventory.notices,
+                "locked_metadata",
+                return_value=self.checkout.metadata(),
+            ),
             mock.patch("sys.argv", ["generate_component_inventory", *arguments]),
             contextlib.redirect_stdout(output),
             contextlib.redirect_stderr(errors),
@@ -499,13 +518,151 @@ class CheckTest(Checkout):
         # Any host's inventory goes to standard output byte for byte.
         printed = io.TextIOWrapper(io.BytesIO(), newline="\r\n")
         with (
-            mock.patch.object(inventory, "generate", return_value=self.generated),
+            mock.patch.object(
+                inventory, "generate", return_value=self.generated
+            ) as generate,
+            mock.patch.object(
+                inventory.notices,
+                "locked_metadata",
+                return_value=self.checkout.metadata(),
+            ),
             mock.patch("sys.argv", ["generate_component_inventory", "--host", "r"]),
             contextlib.redirect_stdout(printed),
         ):
             inventory.main()
         printed.flush()
         self.assertEqual(printed.buffer.getvalue(), self.generated["r"].encode())
+        generate.assert_called_once_with(["r"], self.checkout.metadata())
+
+    def test_main_names_the_notices_that_list_other_crates_than_the_inventory(self):
+        # The Python and R notices list the crates that their inventories mark
+        # as linked; the command line's also lists pyo3, which its inventory
+        # does not list.
+        shared = [("yamaa-saphyr-parser", "0.2.1"), ("zstd-sys", "2.1.2+zstd.1.5.7")]
+        for host, crates in (
+            ("python", [("pyo3", "0.27.2"), *shared]),
+            ("r", shared),
+            ("cli", [("pyo3", "0.27.2"), *shared]),
+        ):
+            path = notices.copies()[host] / notices.NOTICES
+            path.write_text(notice_text(*crates), encoding="utf-8")
+        unlisted = (
+            "rust/crates/yamaa-cli/LICENSE-THIRD-PARTY.txt: lists pyo3 0.27.2, which "
+            "rust/crates/yamaa-cli/COMPONENTS.tsv does not mark as linked"
+        )
+        code, _, errors = self.run_main()
+        self.assertEqual((code, errors), (1, f"{unlisted}\n{inventory.NOTICE_HINT}\n"))
+        self.assertIn("generate_third_party_notices --write", inventory.NOTICE_HINT)
+        # A stale inventory as well gets both hints, the inventory's first.
+        self.paths["r"].write_text(self.generated["python"], encoding="utf-8")
+        code, _, errors = self.run_main()
+        lines = errors.splitlines()
+        self.assertEqual(code, 1)
+        self.assertEqual(
+            lines[-3:],
+            [
+                unlisted,
+                "Run: python -m tools.packaging.generate_component_inventory --write",
+                inventory.NOTICE_HINT,
+            ],
+        )
+
+
+class NoticeTest(Checkout):
+    """Each host's notices list the crates that its inventory marks as linked."""
+
+    PYO3 = ("pyo3", "0.27.2")
+    PARSER = ("yamaa-saphyr-parser", "0.2.1")
+    ZSTD = ("zstd-sys", "2.1.2+zstd.1.5.7")
+
+    def setUp(self):
+        super().setUp()
+        for directory in notices.copies().values():
+            directory.mkdir(parents=True)
+
+    def generated(self, purposes=PURPOSES):
+        return {
+            host: inventory.render(self.rows(purposes)) for host in notices.copies()
+        }
+
+    def write_notices(self, *crates):
+        for directory in notices.copies().values():
+            (directory / notices.NOTICES).write_text(notice_text(*crates))
+
+    def test_linked_crates_are_the_third_party_rows_of_linked_purposes(self):
+        metadata = self.checkout.metadata()
+        # Not the workspace members, nor the C code that crates compile, nor
+        # the standard library.
+        text = inventory.render(
+            inventory.components(self.checkout.kept(), metadata, PURPOSES, "1.99.1")
+        )
+        self.assertIn("\nrust-std\t", text)
+        self.assertIn("\nReadStat\t", text)
+        self.assertEqual(
+            inventory.linked_crates(text, metadata), {self.PYO3, self.PARSER, self.ZSTD}
+        )
+        for start in inventory.UNLINKED:
+            purposes = dict(PURPOSES, pyo3=f"{start} what pulls it in")
+            with self.subTest(purpose=start):
+                self.assertEqual(
+                    inventory.linked_crates(
+                        inventory.render(self.rows(purposes)), metadata
+                    ),
+                    {self.PARSER, self.ZSTD},
+                )
+
+    def test_each_notice_lists_the_crates_that_its_inventory_marks_as_linked(self):
+        metadata = self.checkout.metadata()
+        self.write_notices(self.PYO3, self.PARSER, self.ZSTD)
+        self.assertEqual(inventory.notice_problems(self.generated(), metadata), [])
+        # A crate that the inventory marks as not compiled, one that it does
+        # not list, and a linked one that the notices leave out.
+        self.write_notices(self.PYO3, self.PARSER, ("rogue", "1.0.0"))
+        generated = self.generated(dict(PURPOSES, pyo3="not compiled: on wasm32"))
+        expected = []
+        for directory in ("python", "R/yamaa/inst", "rust/crates/yamaa-cli"):
+            notice = f"{directory}/LICENSE-THIRD-PARTY.txt"
+            inventory_path = f"{directory}/COMPONENTS.tsv"
+            expected += [
+                f"{notice}: lists pyo3 0.27.2, which {inventory_path} does not mark "
+                "as linked",
+                f"{notice}: lists rogue 1.0.0, which {inventory_path} does not mark "
+                "as linked",
+                f"{notice}: no entry for zstd-sys 2.1.2+zstd.1.5.7, which "
+                f"{inventory_path} marks as linked",
+            ]
+        self.assertEqual(inventory.notice_problems(generated, metadata), expected)
+        # A missing notice is the notices' generator's to report.
+        for directory in notices.copies().values():
+            (directory / notices.NOTICES).unlink()
+        self.assertEqual(inventory.notice_problems(generated, metadata), [])
+
+    def test_one_purpose_covers_every_release_of_a_name(self):
+        # The inventory marks a name, so the notices need some release of it.
+        self.checkout.crate("pyo3", "0.26.0", "MIT")
+        metadata = self.checkout.metadata()
+        generated = self.generated()
+        self.assertIn("\npyo3\t0.26.0\t", generated["python"])
+        self.write_notices(self.PYO3, self.PARSER, self.ZSTD)
+        self.assertEqual(inventory.notice_problems(generated, metadata), [])
+        self.write_notices(self.PARSER, self.ZSTD)
+        problems = inventory.notice_problems(generated, metadata)
+        self.assertEqual(
+            problems[:2],
+            [
+                "python/LICENSE-THIRD-PARTY.txt: no entry for pyo3 0.26.0, which "
+                "python/COMPONENTS.tsv marks as linked",
+                "python/LICENSE-THIRD-PARTY.txt: no entry for pyo3 0.27.2, which "
+                "python/COMPONENTS.tsv marks as linked",
+            ],
+        )
+        # A release that the inventory does not list is still not linked.
+        self.write_notices(("pyo3", "0.25.0"), self.PARSER, self.ZSTD)
+        self.assertEqual(
+            inventory.notice_problems(generated, metadata)[0],
+            "python/LICENSE-THIRD-PARTY.txt: lists pyo3 0.25.0, which "
+            "python/COMPONENTS.tsv does not mark as linked",
+        )
 
 
 class GraphTest(unittest.TestCase):
@@ -514,7 +671,9 @@ class GraphTest(unittest.TestCase):
         # The wheels and the command-line binaries are built with the pinned
         # toolchain (#3120); the R source package is not.
         self.assertEqual(inventory.BINARY_HOSTS, {"python", "cli"})
-        generated = inventory.generate(["python", "r", "cli"])
+        generated = inventory.generate(
+            ["python", "r", "cli"], notices.locked_metadata()
+        )
         for host, binding, others in (
             ("python", "yamaa-python", ("yamaa-r", "yamaa-cli")),
             ("r", "yamaa-r", ("yamaa-python", "yamaa-cli")),

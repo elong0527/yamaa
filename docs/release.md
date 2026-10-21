@@ -931,13 +931,15 @@ root, the R source package in `inst/`, which R installs at the package
 root, each R binary package at that root, and each command-line archive
 beside the executable. `LICENSE.txt` is the project's MIT license.
 `LICENSE-THIRD-PARTY.txt` lists the third-party crates that its host's crate
-links: its normal dependency closure on each supported target, without
-procedural macros. Crates that only build scripts or procedural macros use,
-and crates of other platforms, are not linked and are not listed; the source
-packages carry their license files with their vendored sources. Each entry
-names the one license that yamaa relies on, never the choice that the crate
-offers, and reproduces the license, copyright and NOTICE texts that the crate
-ships for it (#3364). The Python packages' copy covers the Python binding's
+links: its normal dependency closure on each supported target, with the
+features that the host's release build enables, without procedural macros.
+Crates that only build scripts or procedural macros use, and crates that only
+other features or other platforms select, are not linked and are not listed;
+the source packages carry their license files with their vendored sources.
+Each entry names the one license that yamaa relies on, never the choice that
+the crate offers, and reproduces the license, copyright and NOTICE texts that
+the crate ships for it (#3364).
+The Python packages' copy covers the Python binding's
 crates, the R package's copy the R binding's, all of which the R source package
 bundles, and the command line's copy, `rust/crates/yamaa-cli/LICENSE-THIRD-PARTY.txt`,
 the crates of `yamaa-cli`. It also gives the standard library's licensing,
@@ -964,7 +966,11 @@ project, the crates linked into the wheels and the standard library, which is
 relied on under MIT, with Unicode-3.0 for the Unicode tables in `core`.
 
 `tools.packaging.generate_third_party_notices` generates each host's crate
-notices from `rust/Cargo.lock` and the standard library section from the
+notices from `rust/Cargo.lock`, with the crates that `cargo tree` resolves
+for the host's release build (#3470): the wheels build with the features
+that `python/pyproject.toml` gives maturin, and the R package and the
+command-line binaries with their bindings' default features. It generates the
+standard library section from the
 toolchain that `rust/rust-toolchain.toml` pins, its notice and its `rust-src`
 component, which the repository checks add to it, and it derives that
 expression from the Python binding's linked crates. The repository check
@@ -1022,7 +1028,10 @@ vendored sources' provenance and the pinned toolchain give. The package
 notice checks require each package to carry its own host's inventory
 unchanged, apart from the standard library row: the Python source archive's
 leaves it out, and an R binary package's adds exactly the one that
-`configure` appends for the pinned toolchain.
+`configure` appends for the pinned toolchain. The repository check also
+fails while a host's notices list other crates than its inventory marks as
+linked: a crate whose purpose starts with `build script:`,
+`procedural macro:` or `not compiled:` is one that no build links (#3470).
 
 Native qualification exercises the static source bridge on every supported
 platform and compares both installed hosts with independently authored binary

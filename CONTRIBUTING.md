@@ -91,16 +91,19 @@ Every package ships the third-party notices of its host's crate,
 `rust/crates/yamaa-cli/LICENSE-THIRD-PARTY.txt` for the command-line archives,
 generated from `rust/Cargo.lock` and from the standard library notice and the
 `rust-src` component of the toolchain that `rust/rust-toolchain.toml` pins.
-They list only the crates that the host links on the supported targets, each
-with the one license that yamaa relies on, and no notice names a GNU license
-(#3364). The standard library's own crates come from `rust-src`: those that
+They list only the crates that the host links on the supported targets, with
+the features that its release build enables, as `cargo tree` resolves them
+(`BUILD_FEATURES` in the generator, #3470), each with the one license that
+yamaa relies on, and no notice names a GNU license (#3364). The standard
+library's own crates come from `rust-src`: those that
 `library/std/Cargo.toml` declares for the supported targets, at the versions
 that `library/Cargo.lock` locks, with the license files of their packages in
 `library/vendor` (#3369). The archives for the musl targets also carry
 `rust/crates/yamaa-cli/LICENSE-MUSL.txt`, the notice of the musl C library that
-their executables link. After changing the lock or the pinned toolchain,
-regenerate the notices and commit the results. The generator runs `rustc` in
-`rust/`, where rustup selects the pinned toolchain:
+their executables link. After changing the lock, the pinned toolchain or a
+host's build features (`BUILD_FEATURES`, which a tools test holds to the
+builds), regenerate the notices and commit the results. The generator runs
+`rustc` and `cargo tree` in `rust/`, where rustup selects the pinned toolchain:
 
 ```sh
 uv run --project python --no-sync python -m tools.packaging.generate_third_party_notices --write
@@ -155,8 +158,11 @@ the Python source archive carries the Python one without that row. The R one
 names none: the R package's
 `configure` appends the row of the `rustc` that builds the installation to
 the copy that R installs. `make check-repository` fails while one differs
-from what they give. After changing the lock, a purpose, a vendored
-component or the pinned toolchain, regenerate them and commit the results:
+from what they give, and while a host's `LICENSE-THIRD-PARTY.txt` lists other
+crates than its inventory marks as linked: a crate whose purpose starts with
+`build script:`, `procedural macro:` or `not compiled:` is not linked. After
+changing the lock, a purpose, a vendored component or the pinned toolchain,
+regenerate them and commit the results:
 
 ```sh
 uv run --project python --no-sync python -m tools.packaging.generate_component_inventory --write
