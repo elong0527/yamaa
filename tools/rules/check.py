@@ -7,6 +7,9 @@ One run reads the shared rules model (:mod:`tools.rules.model`) and checks:
 - cards: anchor, prefix, unique ID, title, statement length, the ``Fails`` and
   ``Evidence`` lines, and the verification checks the verification rules
   define;
+- every condition ``yaml/conditions.yaml`` registers is named on a card's
+  ``Fails`` line, so every condition is cited by a rule card (#3030 section
+  2.7); a mention in a statement or detail does not cite it;
 - every rule ID cited anywhere in the repository, and the rule each negative
   benchmark expects, names a card, and no retired ``REQ-NNNN`` ID is
   cited outside the records that keep them;
@@ -14,16 +17,12 @@ One run reads the shared rules model (:mod:`tools.rules.model`) and checks:
   text is a rule ID targets that rule;
 - schema descriptions and comments cite rules that resolve;
 - rules prose states behavior without rationale phrases.
-
-It also prints, without failing, the registered conditions that no card's
-``Fails`` line names.
 """
 
 import argparse
 import fnmatch
 import posixpath
 import re
-import textwrap
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
@@ -133,17 +132,27 @@ LINK_EXEMPT = frozenset({"docs/articles/benchmark.md"})
 class Report:
     rules: object
     errors: list
-    unnamed_conditions: list
 
 
 def registered_conditions(root):
-    """The condition names ``yaml/conditions.yaml`` registers, or None."""
+    """The line of ``yaml/conditions.yaml`` that registers each condition, by
+    name, or None when the registry cannot be read."""
     try:
-        document = yaml.safe_load((root / "yaml/conditions.yaml").read_text("utf-8"))
+        document = yaml.compose(
+            (root / "yaml/conditions.yaml").read_text("utf-8"), Loader=yaml.SafeLoader
+        )
     except (OSError, UnicodeError, yaml.YAMLError):
         return None
-    conditions = document.get("conditions") if isinstance(document, dict) else None
-    return set(conditions) if isinstance(conditions, dict) else None
+    if not isinstance(document, yaml.MappingNode):
+        return None
+    for key, value in document.value:
+        if key.value == "conditions" and isinstance(value, yaml.MappingNode):
+            return {
+                name.value: name.start_mark.line + 1
+                for name, _ in value.value
+                if isinstance(name, yaml.ScalarNode)
+            }
+    return None
 
 
 # -- the index ----------------------------------------------------------------
@@ -568,10 +577,20 @@ def rationale_errors(root):
     return errors
 
 
-def unnamed_conditions(rules, conditions):
-    """Registered conditions that no card's Fails line names."""
+def condition_errors(rules, conditions):
+    """Every registered condition is named on a card's Fails line.
+
+    Only a Fails line cites a condition: a statement or detail that mentions
+    one does not. Whether each Fails item is registered is checked with the
+    card's metadata.
+    """
     named = {name for card in rules.all_cards() for name in card.fails}
-    return sorted(set(conditions or ()) - named)
+    return [
+        f"yaml/conditions.yaml:{line}: {name} is registered, but no card's "
+        "Fails line names it"
+        for name, line in sorted((conditions or {}).items(), key=lambda item: item[1])
+        if name not in named
+    ]
 
 
 def check(root):
@@ -584,33 +603,20 @@ def check(root):
         *principle_errors(rules),
         *file_errors(rules),
         *card_errors(root, rules, conditions),
+        *condition_errors(rules, conditions),
         *verification_errors(root, rules),
         *citation_errors(root, rules),
         *link_errors(root, rules),
         *schema_errors(root, rules),
         *rationale_errors(root),
     ]
-    return Report(rules, errors, unnamed_conditions(rules, conditions))
+    return Report(rules, errors)
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=ROOT)
     report = check(parser.parse_args().root)
-    if report.unnamed_conditions:
-        print(
-            f"NOTE: {len(report.unnamed_conditions)} registered conditions are named "
-            "by no card Fails line:"
-        )
-        print(
-            textwrap.fill(
-                ", ".join(report.unnamed_conditions),
-                width=88,
-                initial_indent="NOTE:   ",
-                subsequent_indent="NOTE:   ",
-                break_on_hyphens=False,
-            )
-        )
     for error in report.errors:
         print(f"ERROR: {error}")
     if report.errors:
@@ -618,8 +624,8 @@ def main():
         return 1
     rules = report.rules
     print(
-        f"PASS: {len(rules.cards)} cards; citations, links, schema navigation and "
-        "rules prose resolve."
+        f"PASS: {len(rules.cards)} cards name every registered condition on a Fails "
+        "line; citations, links, schema navigation and rules prose resolve."
     )
     return 0
 
