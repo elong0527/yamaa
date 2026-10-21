@@ -7,7 +7,9 @@ successful build's save() returns the absolute paths of those declared files in
 publication order, the report first (D38, OUTPUT-10). The runners record each
 path relative to the case's root, so every lane's records read the same on
 every machine, container and operating system. R holds a declared integer as a
-plain double, which must equal that integer exactly.
+plain double, which must equal that integer exactly. The command line's records
+hold no typed view, so the files its runs saved and the issues they printed
+are judged by the same criteria.
 """
 
 from __future__ import annotations
@@ -899,6 +901,80 @@ def declared_paths(specification, output):
     ]
 
 
+def uncompared_truth(example, case):
+    """The expected files that no domain runner's record is compared with,
+    each with its reason: a resolved specification, and a Define benchmark's
+    documents and its expected Define failure."""
+    entries = []
+    if (case / "expected/spec_resolved.yaml").exists():
+        entries.append({"artifact": "spec_resolved.yaml", "reason": RESOLVED_REASON})
+    if example.get("define"):
+        for truth in sorted((case / "expected").iterdir()):
+            if truth.suffix in {".xml", ".json", ".xpt"} or truth.name == "error.yaml":
+                entries.append(
+                    {
+                        "artifact": truth.name,
+                        "reason": "Define not compared by domain runner; fixed-time public Define suite is separate",
+                    }
+                )
+    return entries
+
+
+def missing_validation_paths(want, issues):
+    """The spec paths of a validation truth that no observed issue owns.
+
+    expected/error.yaml is a partial structured assertion. An issue owns a
+    declared path when it is a validation issue of the expected condition
+    whose every spec path is that path or below it. Independent same-phase
+    findings may coexist (for example, a cycle and a separate forward
+    reference); complete-report truth owns exhaustive finding checks.
+    """
+    paths = want["spec_paths"]
+
+    def matches_path(actual, expected):
+        return (
+            actual == expected
+            or actual.startswith(expected + ".")
+            or actual.startswith(expected + "[")
+        )
+
+    matched = set()
+    for issue in issues:
+        actual_paths = issue.get("spec_paths", [])
+        owned = (
+            issue.get("phase") == "validation"
+            and issue.get("condition") == want["condition"]
+            and bool(actual_paths)
+            and all(
+                any(matches_path(actual, expected) for expected in paths)
+                for actual in actual_paths
+            )
+        )
+        if owned:
+            matched.update(
+                expected
+                for expected in paths
+                if any(matches_path(actual, expected) for actual in actual_paths)
+            )
+    return [path for path in paths if path not in matched]
+
+
+def saved_file_findings(truth, candidate, declared, expected_types, expected):
+    """What differs between one saved file and its independent truth: CSV
+    bytes compare exactly; Parquet compares its logical schema, then its
+    logical table, `expected`."""
+    if not candidate.is_file():
+        return [f"save did not publish {declared}"]
+    if truth.suffix == ".csv" and candidate.read_bytes() != truth.read_bytes():
+        return [f"saved CSV bytes differ: {declared}"]
+    if truth.suffix == ".parquet":
+        if parquet_signature(candidate) != parquet_signature(truth):
+            return [f"saved Parquet logical schema differs: {declared}"]
+        if expected_table(candidate, expected_types) != expected:
+            return [f"saved Parquet logical table differs: {declared}"]
+    return []
+
+
 def compare_example(example, runtime, record, fixtures, observed, expectations=None):
     if expectations is None:
         expectations = load_metamorphic_expectations(fixtures)
@@ -920,19 +996,7 @@ def compare_example(example, runtime, record, fixtures, observed, expectations=N
         result.update(verdict="excluded", reason=example["excluded"])
         return result
     case = fixtures / example["name"]
-    if (case / "expected/spec_resolved.yaml").exists():
-        result["not_compared"].append(
-            {"artifact": "spec_resolved.yaml", "reason": RESOLVED_REASON}
-        )
-    if example.get("define"):
-        for truth in sorted((case / "expected").iterdir()):
-            if truth.suffix in {".xml", ".json", ".xpt"} or truth.name == "error.yaml":
-                result["not_compared"].append(
-                    {
-                        "artifact": truth.name,
-                        "reason": "Define not compared by domain runner; fixed-time public Define suite is separate",
-                    }
-                )
+    result["not_compared"].extend(uncompared_truth(example, case))
     entries = example["entries"][runtime]
     if record.get("error"):
         result["findings"].append(record["error"])
@@ -1006,39 +1070,7 @@ def compare_example(example, runtime, record, fixtures, observed, expectations=N
             # expected/error.yaml is independent diagnostic truth. Keep the
             # complete-path controls here, against observations from actual
             # installed public hosts.
-            paths = want["spec_paths"]
-
-            def matches_path(actual, expected):
-                return (
-                    actual == expected
-                    or actual.startswith(expected + ".")
-                    or actual.startswith(expected + "[")
-                )
-
-            matched = set()
-            for issue in issues:
-                actual_paths = issue.get("spec_paths", [])
-                owned = (
-                    issue.get("phase") == "validation"
-                    and issue.get("condition") == want["condition"]
-                    and bool(actual_paths)
-                    and all(
-                        any(matches_path(actual, expected) for expected in paths)
-                        for actual in actual_paths
-                    )
-                )
-                if not owned:
-                    # expected/error.yaml is a partial structured assertion.
-                    # Independent same-phase findings may coexist (for
-                    # example, a cycle and a separate forward reference).
-                    # Complete-report truth owns exhaustive finding checks.
-                    continue
-                matched.update(
-                    expected
-                    for expected in paths
-                    if any(matches_path(actual, expected) for actual in actual_paths)
-                )
-            missing = [path for path in paths if path not in matched]
+            missing = missing_validation_paths(want, issues)
             if missing:
                 result["findings"].append({"missing_validation_paths": missing})
         if any(b["tables"].get("output") is not None or b.get("saved") for b in builds):
@@ -1096,21 +1128,11 @@ def compare_example(example, runtime, record, fixtures, observed, expectations=N
                         "actual": actual,
                     }
                 )
-            if not candidate.is_file():
-                result["findings"].append(f"save did not publish {declared}")
-            elif (
-                truth.suffix == ".csv" and candidate.read_bytes() != truth.read_bytes()
-            ):
-                result["findings"].append(f"saved CSV bytes differ: {declared}")
-            elif truth.suffix == ".parquet":
-                if parquet_signature(candidate) != parquet_signature(truth):
-                    result["findings"].append(
-                        f"saved Parquet logical schema differs: {declared}"
-                    )
-                elif expected_table(candidate, expected_types) != expected:
-                    result["findings"].append(
-                        f"saved Parquet logical table differs: {declared}"
-                    )
+            result["findings"].extend(
+                saved_file_findings(
+                    truth, candidate, declared, expected_types, expected
+                )
+            )
         if not build.get("saved"):
             result["findings"].append(
                 f"successful {entry['specification']} did not save"
@@ -1136,11 +1158,190 @@ def compare_example(example, runtime, record, fixtures, observed, expectations=N
     return finish()
 
 
+def cli_unexpected_saves(case, observed, call):
+    """What a failed command-line run saved besides its declared report, the
+    one file a failed run writes (PROJECT-12): each other path it lists, and
+    its declared output when that file exists in the staged case."""
+    specification = call["specification"]
+    try:
+        _, output = declarations(case / specification)
+    except Exception:  # noqa: BLE001 -- an unreadable specification declares no file
+        output = {}
+    report = declared_paths(specification, {"report": output.get("report")})
+    unexpected = [path for path in call["document"]["paths"] if path not in report]
+    for path in declared_paths(specification, {"path": output.get("path")}):
+        if path not in unexpected and (observed / "work" / case.name / path).exists():
+            unexpected.append(path)
+    return unexpected
+
+
+def compare_cli_example(example, record, fixtures, observed):
+    """Judge one command-line record against its benchmark's expected files.
+
+    The command line holds no typed host view and runs each call once, with
+    no metamorphic variant, so the files its runs saved and the issues they
+    printed are judged, by the criteria the hosts' records meet. Each run of
+    a positive, and each domain build of a Define benchmark, exits 0 with
+    the status `succeeded`, reports no issue and saves its declared report,
+    then its output, whose bytes match the expected files: CSV exactly,
+    Parquet logically. Each run of a negative exits 1, the first issue
+    matches `expected/error.yaml`, and no run saves more than the report
+    that a failed run writes (PROJECT-12).
+    """
+    result = {
+        "example": example["name"],
+        "verdict": "error",
+        "unsupported_operations": [],
+        "findings": [],
+        "not_compared": [],
+        "metamorphic": {
+            "judged": False,
+            "differences": [],
+            "expected_failures": [],
+            "stale": [],
+            "problems": [],
+        },
+    }
+    planned = example["cli"]
+    if planned["excluded"]:
+        result.update(verdict="excluded", reason=planned["excluded"])
+        return result
+    case = fixtures / example["name"]
+    result["not_compared"].extend(uncompared_truth(example, case))
+    if record.get("error"):
+        result["findings"].append(record["error"])
+        return result
+    calls = record.get("calls", [])
+
+    def identity(call):
+        return (
+            call.get("specification"),
+            call.get("environment"),
+            call.get("arguments"),
+        )
+
+    if record.get("excluded") or list(map(identity, calls)) != list(
+        map(identity, planned["calls"])
+    ):
+        result["findings"].append("observed calls do not match the runner plan")
+        return result
+    refused = [call["arguments"] for call in calls if call["not_implemented"]]
+    if refused:
+        result["findings"].append({"not_implemented": refused})
+        return result
+    issues = [issue for call in calls for issue in call["document"]["issues"]]
+    if any(issue["phase"] == "engine" for issue in issues):
+        result["findings"].append({"engine_issues": issues})
+        return result
+    operations = [
+        issue.get("context", {}).get("operation")
+        for issue in issues
+        if issue["condition"] == "unsupported_operation"
+    ]
+    if operations:
+        if any(operation is None for operation in operations):
+            result["findings"].append(
+                "unsupported_operation issue omitted its operation"
+            )
+            return result
+        result.update(
+            verdict="unsupported", unsupported_operations=sorted(set(operations))
+        )
+        return result
+    negative = case / "expected/error.yaml"
+    if negative.exists() and not example.get("define"):
+        want = load_yaml(negative)
+        if not issues or not diagnostic_matches(want, issues[0]):
+            result["findings"].append(
+                {
+                    "diagnostic": "first issue differs",
+                    "expected": want,
+                    "actual": issues[0] if issues else None,
+                }
+            )
+        if want.get("phase") == "validation":
+            missing = missing_validation_paths(want, issues)
+            if missing:
+                result["findings"].append({"missing_validation_paths": missing})
+        for call in calls:
+            # Exit status 1: the run failed, or its save was refused.
+            if call["exit_status"] != 1:
+                result["findings"].append(
+                    {
+                        "run": call["arguments"],
+                        "expected_exit_status": 1,
+                        "exit_status": call["exit_status"],
+                    }
+                )
+            unexpected = cli_unexpected_saves(case, observed, call)
+            if unexpected:
+                result["findings"].append(
+                    {"negative_run_saved": call["arguments"], "paths": unexpected}
+                )
+        result["verdict"] = "mismatch" if result["findings"] else "pass"
+        return result
+    if issues:
+        result.update(verdict="mismatch")
+        result["findings"].append({"unexpected_issues": issues})
+        return result
+    compared = set()
+    for call in calls:
+        specification = call["specification"]
+        ran = [call["exit_status"], call["document"]["status"]]
+        if ran != [0, "succeeded"]:
+            result["findings"].append(
+                {"run": call["arguments"], "expected": [0, "succeeded"], "actual": ran}
+            )
+        types, output = declarations(case / specification)
+        for slot, key in (("output", "path"), ("report", "report")):
+            declared = output.get(key)
+            if declared is None:
+                continue
+            truth = case / "expected" / Path(declared).name
+            compared.add(truth.name)
+            if not truth.is_file():
+                result["findings"].append(
+                    f"declared {slot} lacks independent expected artifact: {declared}"
+                )
+                continue
+            expected_types = types if slot == "output" else report_types(truth)
+            candidate = (
+                observed / "work" / case.name / Path(specification).parent / declared
+            )
+            result["findings"].extend(
+                saved_file_findings(
+                    truth,
+                    candidate,
+                    declared,
+                    expected_types,
+                    expected_table(truth, expected_types),
+                )
+            )
+        written = declared_paths(specification, output)
+        paths = call["document"]["paths"]
+        if paths != written:
+            result["findings"].append(
+                {"saved_paths": specification, "expected": written, "actual": paths}
+            )
+    for truth in (case / "expected").iterdir():
+        if truth.suffix in {".csv", ".parquet"} and truth.name not in compared:
+            result["findings"].append(
+                f"independent table artifact was not compared: {truth.name}"
+            )
+    result["verdict"] = "mismatch" if result["findings"] else "pass"
+    return result
+
+
 def compare(fixtures, observed, output):
     meta = read_json(observed / "run.json")
-    if meta["protocol"] != PROTOCOL or meta["runtime"] not in {"python", "r"}:
+    if meta["protocol"] != PROTOCOL or meta["runtime"] not in {"python", "r", "cli"}:
         raise ValueError("unknown runner protocol/runtime")
     runtime = meta["runtime"]
+
+    def excluded(example):
+        """Why this runtime runs no part of `example`, or None."""
+        return example["cli"]["excluded"] if runtime == "cli" else example["excluded"]
+
     payload = plan(fixtures)
     authored = {entry["name"] for entry in payload["examples"]}
     unexpected = {p.stem for p in (observed / "records").glob("*.json")} - authored
@@ -1158,8 +1359,12 @@ def compare(fixtures, observed, output):
                 if path.is_file()
                 else {"error": "missing installed runner record"}
             )
-            result = compare_example(
-                example, runtime, record, fixtures, observed, expectations
+            result = (
+                compare_cli_example(example, record, fixtures, observed)
+                if runtime == "cli"
+                else compare_example(
+                    example, runtime, record, fixtures, observed, expectations
+                )
             )
         except Exception as error:  # noqa: BLE001 -- retain one record for every benchmark
             result = {
@@ -1203,7 +1408,7 @@ def compare(fixtures, observed, output):
     # The gate is derived from the current directories and exclusions alone:
     # every active benchmark must pass on this lane. No prior observations
     # are consulted, so a new benchmark needs no registry edit to be gated.
-    required = {entry["name"] for entry in payload["examples"] if not entry["excluded"]}
+    required = {entry["name"] for entry in payload["examples"] if not excluded(entry)}
     passed = {r["example"] for r in results if r["verdict"] == "pass"}
     failing = sorted(required - passed)
     inventory["gate"] = {"mode": "all-active-must-pass", "failing": failing}
@@ -1247,11 +1452,19 @@ def main(argv=None):
     complete.add_argument("--r-evidence", type=Path, required=True)
     complete.add_argument("--output", type=Path, required=True)
     complete.add_argument("--source-revision", required=True)
+    complete.add_argument(
+        "--cli-evidence",
+        type=Path,
+        help="a command-line conformance run whose saved outputs join the comparison",
+    )
     args = parser.parse_args(argv)
     if args.command == "complete-reports":
         import subprocess
 
-        from tools.conformance.complete_reports import compare_owners
+        from tools.conformance.complete_reports import (
+            compare_cli_outputs,
+            compare_owners,
+        )
 
         if args.fixtures.resolve() != (ROOT / "benchmarks").resolve():
             parser.error(
@@ -1270,6 +1483,9 @@ def main(argv=None):
             args.fixtures, args.python_evidence, args.r_evidence, args.output, actual
         )
         print(json.dumps(result["summary"], indent=2))
+        if args.cli_evidence is not None:
+            cli = compare_cli_outputs(args.cli_evidence, args.output, actual)
+            print(json.dumps({"cli": cli["summary"]}, indent=2))
         return 0
     if args.command == "plan":
         emit_plan(args.fixtures, args.output)

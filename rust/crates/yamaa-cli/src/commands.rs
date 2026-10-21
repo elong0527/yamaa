@@ -12,8 +12,9 @@
 //!   place of the summary line: it carries the first issue's line, so the
 //!   lines of the other issues follow. `lint` prints each finding's line,
 //!   then its summary line; `resolve` prints the resolved specification as
-//!   canonical JSON. `selftest` prints the facade's report as the hosts print
-//!   it (D119): its summary line, `first failure:` when a case failed, `not
+//!   canonical JSON; `read-odm` prints only the file it saved, as an absolute
+//!   path. `selftest` prints the facade's report as the hosts print it
+//!   (D119): its summary line, `first failure:` when a case failed, `not
 //!   covered:` when an adapter is not covered, then the engine, language,
 //!   host and platform.
 //! - **JSON** (`--format json`). One canonical JSON document (RFC 8785) on
@@ -23,16 +24,17 @@
 //!   written `paths`. `resolve` prints the resolved specification itself. A
 //!   submission's `created` is the time its documents carry (D129); a
 //!   refused submission has none, so its `created` is `--created` as given,
-//!   or null. `selftest` gives its `cases` and the engine `info` as
+//!   or null. `read-odm` names SOURCE as its `path` and counts the items read
+//!   in `rows`. `selftest` gives its `cases` and the engine `info` as
 //!   `--version` prints it; the adapters no case covers are named on its
 //!   printed line alone (D119).
 //! - **Exit status.** 0 when the result succeeded and its save wrote
-//!   everything, when `resolve` printed, when no lint finding remains, and
-//!   when no selftest case failed; 1 for a `failed` or `skipped` result, a
-//!   refusal, a remaining lint finding or a failed selftest case (D68, D98).
-//!   A selftest case that this build does not cover fails nothing (D119). An
-//!   argument the facade cannot take, a value that is not UTF-8 text, exits
-//!   2.
+//!   everything, when `read-odm` saved OUT, when `resolve` printed, when no
+//!   lint finding remains, and when no selftest case failed; 1 for a
+//!   `failed` or `skipped` result, a refusal, a remaining lint finding or a
+//!   failed selftest case (D68, D98). A selftest case that this build does
+//!   not cover fails nothing (D119). An argument the facade cannot take, a
+//!   value that is not UTF-8 text, exits 2.
 //!
 //! `check`, `run`, `submission` and `resolve` dispatch on the type their PATH
 //! declares in its `type:` header, which the facade reads before anything
@@ -47,14 +49,19 @@
 //! such as `--spec` with a spec, is a usage error, which exits 2.
 //! `selftest` takes no PATH: it runs the cases the facade carries on an
 //! engine like the command line's, which claims no host language (D108,
-//! D123). `read-odm` and `schema` are refused as not implemented yet (D96).
+//! D123). `read-odm SOURCE OUT` reads SOURCE as the hosts' `read_odm()` reads
+//! it, then saves the item table to OUT, whose extension selects CSV or
+//! Parquet (D134). The facade decides both: a SOURCE it cannot read, a bound
+//! below its minimum, and an OUT with another extension, which it refuses
+//! before writing anything, are refusals with exit status 1. `schema` is
+//! refused as not implemented yet (D96).
 
 use std::collections::BTreeMap;
 use std::ffi::OsStr;
 
 use yamaa::{
     Action, CancellationToken, ContextValue, Diagnostic, Engine, EngineOptions, Error, Failure,
-    FileType, Host, Info, LintFinding, ProjectRun, Run, Status, Summary,
+    FileType, Host, Info, LintFinding, OdmOptions, ProjectRun, Run, Status, Summary,
 };
 
 use crate::arguments::{Call, Format, Usage};
@@ -81,10 +88,11 @@ pub(crate) fn execute(call: &Call, format: Format) -> Execution {
         "run" => run(call),
         "submission" => submission(call),
         "resolve" => resolve(call),
+        "read-odm" => read_odm(call),
         "lint" => lint(call),
         "selftest" => Ok(selftest()),
-        // `read-odm` needs a writer for OUT and `schema` the schema text,
-        // which the facade does not offer yet.
+        // `schema` needs the schema text, which the facade does not offer
+        // yet (#3331, D149).
         other => Err(Execution::NotImplemented(other.to_owned())),
     };
     match printed {
@@ -529,6 +537,65 @@ fn resolve(call: &Call) -> Result<Printed, Execution> {
             document: value,
             status: SUCCEEDED,
         },
+        Err(failure) => refusal(document, failure),
+    })
+}
+
+/// `yamaa read-odm SOURCE OUT`: `read_odm(source, ...)` with the archive
+/// member and bounds given, then the table saved to OUT, whose extension
+/// selects the csv or parquet profile (D134). It prints the one path the save
+/// wrote. A refused read names SOURCE and a refused save names OUT, each as
+/// given (D39); a refused save writes nothing. The JSON `rows` counts the
+/// items read, so it is null only when the read is refused.
+fn read_odm(call: &Call) -> Result<Printed, Execution> {
+    let source = utf8(call, "SOURCE", &call.arguments[0])?;
+    let out = utf8(call, "OUT", &call.arguments[1])?;
+    let mut options = OdmOptions::new();
+    if let Some(member) = flag(call, "--archive-member")? {
+        options = options.with_archive_member(member);
+    }
+    // A bound beyond the platform's `usize` saturates; none of the shipped
+    // targets has one narrower than the 64 bits the arguments admit.
+    let wide = |limit: u64| usize::try_from(limit).unwrap_or(usize::MAX);
+    if let Some(limit) = call.count("--max-archive-members") {
+        options = options.with_max_archive_members(wide(limit));
+    }
+    if let Some(limit) = call.count("--max-expanded-bytes") {
+        options = options.with_max_expanded_bytes(limit);
+    }
+    if let Some(limit) = call.count("--max-xml-depth") {
+        options = options.with_max_xml_depth(wide(limit));
+    }
+    let mut document = document(
+        "read-odm",
+        [
+            ("path", text(source)),
+            ("rows", ContextValue::Null),
+            ("paths", ContextValue::List(Vec::new())),
+        ],
+    );
+    let engine = engine();
+    let table = match engine.read_odm(source, &options) {
+        Ok(table) => table,
+        Err(error) => {
+            return Ok(refusal(
+                document,
+                Failure::from_error(Action::Read(source), &error),
+            ))
+        }
+    };
+    document.insert("rows".into(), count(table.rows()));
+    Ok(match engine.save_table(&table, out) {
+        Ok(paths) => {
+            document.insert("status".into(), text(Status::Succeeded.as_str()));
+            document.insert("issues".into(), ContextValue::List(Vec::new()));
+            document.insert("paths".into(), texts(&paths));
+            Printed {
+                lines: paths,
+                document: ContextValue::Map(document),
+                status: SUCCEEDED,
+            }
+        }
         Err(failure) => refusal(document, failure),
     })
 }

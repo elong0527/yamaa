@@ -1363,5 +1363,233 @@ class PublicConformance(unittest.TestCase):
                 )
 
 
+class CommandLineJudgement(unittest.TestCase):
+    """The comparator judges a command-line record by what its runs saved and
+    the issues they printed, as the command line's runner records them."""
+
+    def setUp(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        self.root = Path(temp.name)
+        self.fixtures = self.root / "fixtures"
+        self.case = self.fixtures / "simple"
+        (self.case / "expected").mkdir(parents=True)
+        (self.case / "spec.yaml").write_text(SPEC)
+        (self.case / "benchmark.yaml").write_text(METADATA)
+        (self.case / "expected/result.csv").write_bytes(b'ID,VALUE\n1,""\n2,\n')
+        self.observed = self.root / "observed"
+        self.work = self.observed / "work/simple"
+        self.work.mkdir(parents=True)
+        shutil.copyfile(self.case / "expected/result.csv", self.work / "result.csv")
+        judge.write_json(
+            self.observed / "run.json",
+            {"protocol": judge.PROTOCOL, "runtime": "cli", "source_revision": "test"},
+        )
+        # Written independently, as the runner records one run of a binary.
+        self.call = {
+            "specification": "spec.yaml",
+            "environment": None,
+            "arguments": ["run", "spec.yaml"],
+            "exit_status": 0,
+            "stderr": "",
+            "not_implemented": False,
+            "document": {"status": "succeeded", "issues": [], "paths": ["result.csv"]},
+        }
+        self.record = {
+            "example": "simple",
+            "excluded": None,
+            "calls": [self.call],
+            "error": None,
+        }
+
+    def verdict(self):
+        example = judge.plan(self.fixtures)["examples"][0]
+        return judge.compare_cli_example(
+            example, self.record, self.fixtures, self.observed
+        )
+
+    def fails(self, finding, verdict="mismatch"):
+        result = self.verdict()
+        self.assertEqual(result["verdict"], verdict)
+        self.assertIn(finding, result["findings"])
+
+    def fail_negative(self):
+        """Make the benchmark a negative whose one run failed as expected."""
+        (self.case / "expected/result.csv").unlink()
+        (self.work / "result.csv").unlink()
+        (self.case / "expected/error.yaml").write_text(
+            "phase: derivation\ncondition: test_failure\nspec_paths: [columns.VALUE]\n"
+            "rule: REQ-test\ncontext: {keys: [{ID: 2}]}\n"
+        )
+        issue = {
+            "phase": "derivation",
+            "condition": "test_failure",
+            "spec_paths": ["columns.VALUE"],
+            "rule": "REQ-test",
+            "severity": "error",
+            "context": {"keys": [{"ID": 2}], "extra": "retained"},
+        }
+        self.call.update(exit_status=1)
+        self.call["document"].update(status="failed", issues=[issue], paths=[])
+        return issue
+
+    def test_a_run_passes_on_its_status_saved_bytes_and_saved_paths(self):
+        self.assertEqual(self.verdict()["verdict"], "pass")
+        self.call["document"]["paths"] = ["out/result.csv"]
+        self.fails(
+            {
+                "saved_paths": "spec.yaml",
+                "expected": ["result.csv"],
+                "actual": ["out/result.csv"],
+            }
+        )
+        self.call["document"]["paths"] = ["result.csv"]
+        self.call.update(exit_status=1)
+        self.fails(
+            {
+                "run": ["run", "spec.yaml"],
+                "expected": [0, "succeeded"],
+                "actual": [1, "succeeded"],
+            }
+        )
+        self.call.update(exit_status=0)
+        (self.work / "result.csv").write_bytes(b"ID,VALUE\n1,\n2,\n")
+        self.fails("saved CSV bytes differ: result.csv")
+        (self.work / "result.csv").unlink()
+        self.fails("save did not publish result.csv")
+
+    def test_a_saved_parquet_output_compares_logically(self):
+        import pyarrow as pa
+        import pyarrow.parquet as pq
+
+        (self.case / "spec.yaml").write_text(
+            SPEC.replace("result.csv", "result.parquet")
+        )
+        (self.case / "expected/result.csv").unlink()
+        self.call["document"]["paths"] = ["result.parquet"]
+        table = pa.table({"ID": pa.array([1, 2], type=pa.int64()), "VALUE": ["", None]})
+        pq.write_table(table, self.case / "expected/result.parquet")
+        pq.write_table(table, self.work / "result.parquet", compression="snappy")
+        self.assertEqual(self.verdict()["verdict"], "pass")
+        pq.write_table(table.slice(1), self.work / "result.parquet")
+        self.fails("saved Parquet logical table differs: result.parquet")
+
+    def test_a_negative_needs_its_first_issue_and_saves_no_output(self):
+        issue = self.fail_negative()
+        self.assertEqual(self.verdict()["verdict"], "pass")
+        issue["context"]["keys"][0]["ID"] = 3
+        self.assertEqual(self.verdict()["verdict"], "mismatch")
+        issue["context"]["keys"][0]["ID"] = 2
+        self.call.update(exit_status=0)
+        self.fails(
+            {"run": ["run", "spec.yaml"], "expected_exit_status": 1, "exit_status": 0}
+        )
+        self.call.update(exit_status=1)
+        self.call["document"]["paths"] = ["result.csv"]
+        self.fails(
+            {"negative_run_saved": ["run", "spec.yaml"], "paths": ["result.csv"]}
+        )
+        # An output on disk that the run did not list was saved all the same.
+        self.call["document"]["paths"] = []
+        (self.work / "result.csv").write_text("ID,VALUE\n")
+        self.fails(
+            {"negative_run_saved": ["run", "spec.yaml"], "paths": ["result.csv"]}
+        )
+
+    def test_a_failed_run_may_save_its_declared_report(self):
+        # PROJECT-12: a failed run writes its report, then refuses.
+        self.fail_negative()
+        (self.case / "spec.yaml").write_text(
+            SPEC.replace("output: {", "output: {report: result-checks.csv, ")
+        )
+        self.call["document"]["paths"] = ["result-checks.csv"]
+        self.assertEqual(self.verdict()["verdict"], "pass")
+        self.call["document"]["paths"] = ["result-checks.csv", "other.csv"]
+        self.fails({"negative_run_saved": ["run", "spec.yaml"], "paths": ["other.csv"]})
+
+    def test_a_validation_negative_needs_every_declared_path(self):
+        issue = self.fail_negative()
+        (self.case / "expected/error.yaml").write_text(
+            "phase: validation\ncondition: test_failure\n"
+            "spec_paths: [columns.ID, columns.VALUE]\n"
+        )
+        issue.update(phase="validation", spec_paths=["columns.ID", "columns.VALUE"])
+        # An independent finding beside the expected one is allowed.
+        self.call["document"]["issues"].append(
+            {**issue, "condition": "other_failure", "spec_paths": ["columns.ID"]}
+        )
+        self.assertEqual(self.verdict()["verdict"], "pass")
+        issue["spec_paths"].pop()
+        self.fails({"missing_validation_paths": ["columns.VALUE"]})
+
+    def test_the_record_must_follow_the_plan_and_run_every_call(self):
+        self.call["arguments"] = ["run", "other.yaml"]
+        self.fails("observed calls do not match the runner plan", "error")
+        self.call["arguments"] = ["run", "spec.yaml"]
+        self.call.update(not_implemented=True, exit_status=2, document=None)
+        self.fails({"not_implemented": [["run", "spec.yaml"]]}, "error")
+        self.record.update(error="ValueError: yamaa printed no single JSON line")
+        self.fails("ValueError: yamaa printed no single JSON line", "error")
+        self.record.update(error=None, excluded="a reason the plan does not give")
+        self.fails("observed calls do not match the runner plan", "error")
+
+    def test_engine_unsupported_and_unexpected_issues_never_pass(self):
+        issue = {
+            "phase": "engine",
+            "condition": "internal",
+            "spec_paths": ["columns.VALUE"],
+            "context": {},
+        }
+        self.call["document"]["issues"] = [issue]
+        self.fails({"engine_issues": [issue]}, "error")
+        issue.update(
+            phase="validation",
+            condition="unsupported_operation",
+            context={"operation": "a later feature"},
+        )
+        result = self.verdict()
+        self.assertEqual(
+            (result["verdict"], result["unsupported_operations"]),
+            ("unsupported", ["a later feature"]),
+        )
+        issue.update(condition="test_failure", context={})
+        self.fails({"unexpected_issues": [issue]})
+
+    def test_the_gate_requires_what_the_command_line_runs(self):
+        # A benchmark whose project supplies functions is excluded for the
+        # command line alone (#3030 section 2.3), and named with its reason.
+        functions = self.fixtures / "functions"
+        shutil.copytree(self.case, functions)
+        (functions / "project.yaml").write_text(
+            'schema_version: "1.0"\nenvironments:\n  python: python/environment.yaml\n'
+        )
+        judge.write_json(self.observed / "records/simple.json", self.record)
+        judge.write_json(
+            self.observed / "records/functions.json",
+            {
+                "example": "functions",
+                "excluded": judge.CLI_FUNCTION_EXCLUSION,
+                "calls": [],
+                "error": None,
+            },
+        )
+        inventory = self.root / "inventory.json"
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(judge.compare(self.fixtures, self.observed, inventory), 0)
+        written = judge.read_json(inventory)
+        self.assertEqual(
+            {(r["example"], r["verdict"]) for r in written["benchmarks"]},
+            {("functions", "excluded"), ("simple", "pass")},
+        )
+        self.assertEqual(
+            [r.get("reason") for r in written["benchmarks"]],
+            [judge.CLI_FUNCTION_EXCLUSION, None],
+        )
+        (self.work / "result.csv").write_text("broken\n")
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(judge.compare(self.fixtures, self.observed, inventory), 1)
+        self.assertEqual(judge.read_json(inventory)["gate"]["failing"], ["simple"])
+
+
 if __name__ == "__main__":
     unittest.main()

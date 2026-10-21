@@ -47,11 +47,13 @@ their prerequisites. Local targets and CI share the owned scripts under
   skipped alone or older-head reviews do not count. Run the fresh read-only
   review gate in `CONTRIBUTING.md` before every merge, alongside CI. When
   environment policy blocks GitHub CLI reads, approved authenticated connector
-  reads must prove the same predicates on fresh exact-head evidence. When
-  CodeRabbit cannot review a PR (its free reviews are exhausted, or it skips
-  the PR), merging does not wait for it: the merging agent reviews the exact
-  diff itself, records that review on the PR, and still requires green CI on
-  that exact head.
+  reads must prove the same predicates on fresh exact-head evidence. The
+  author never reviews its own PR (D148 on #3030). When CodeRabbit cannot
+  review a PR (its free reviews are exhausted, or it skips the PR), merging
+  does not wait for it: another agent reviews the exact diff and records
+  `## Review of <full sha>` (or `## Independent review of <full sha>`) on
+  the PR, and the merging agent relies on that record and still requires
+  green CI on that exact head.
 - **Expected data is truth.** Files under `benchmarks/**/expected/` are
   independently authored and define what an implementation must
   reproduce. Never regenerate them from the implementation, and never
@@ -120,32 +122,52 @@ steps and the review gate.
   too; "does not close #N" once closed the planning issue. Write a
   closing keyword only for the pull request's own issue, and name every
   other issue without one.
-- **Prove engine changes on the exact head.** A pull request under
-  rewrite 2, rewrite 3 or Phase 1 or 2 of #3030 passes
-  `make check-equivalence` on its final head and says so in its
-  description. A session that cannot run the gate itself, because its
-  machine has no R, relies on CI's `equivalence` job and merges only once
-  that job is green on the head it merges.
+- **Open pull requests ready for review.** A pull request opens ready for
+  review, not as a draft, once it builds and its nearest tests pass (D148
+  on #3030). The one exception is a pull request that cannot merge until
+  another one merges: it stays a draft, with `[hold: after #N]` at the
+  start of its title (owner decision of 2026-10-20, recorded on #3030).
+- **Prove engine changes on the exact head.** CI's `equivalence` and
+  `conversion` jobs, green on the exact head, are the proof for every
+  session, and no session needs to run them locally (D148 on #3030).
 - **Bring the branch up to date before merging**, wait for green CI on
   that exact head, then run the review gate. When no review bot can
-  review, the merging agent reviews the exact diff itself and records that
-  review on the pull request, as the hard rules say. Main broke three
-  times on 2026-10-20 from green pull requests merged on a stale base.
+  review, another agent, never the author, reviews the exact diff and
+  records that review on the pull request, as the hard rules say. Main
+  broke three times on 2026-10-20 from green pull requests merged on a
+  stale base.
 - **Decide under the owner's standing instruction, and record it.** A
   routine decision follows the recorded plan and is written on #3030 as
-  the next D-number, so the owner can see and reverse it. Ask the owner
-  only about a new user-facing concept, a reversal of a D-decision, or a
-  golden change that no D-decision covers.
+  the next D-number, so the owner can see and reverse it. D-numbers come
+  from one shared counter, so parallel sessions never take the same
+  number; a session that cannot reach the counter posts "D-next" on the
+  planning issue for the 1.0 session to assign. Ask the owner only about
+  a new user-facing concept, a reversal of a D-decision, or a golden
+  change that no D-decision covers.
 - **Sequence shared files.** Read the issue's "Order" line and its
   sequencing comments before starting. An issue that edits a file an open
   pull request reshapes waits for that pull request.
 
 ## Before a push
 
-Run `make setup` once, then `make quick` before each push. It runs the
-lint and repository checks CI runs, leaving out only the R binding's
-Clippy, and no test suite, so it needs no R. Pull request CI runs the
-complete `make check`, so there is no need to run it locally.
+Run `make setup` once. Pull request CI runs the complete `make check` and
+the `equivalence` and `conversion` jobs, so run only these locally (D148
+on #3030):
+
+- the tests nearest the change, listed below;
+- after a Rust change, `cargo fmt --all --check` and Clippy on each
+  touched crate, from `rust/`:
+  `cargo clippy --locked -p <crate> --all-targets --all-features -- -D warnings`;
+- `make quick`, only for a change to generated files, rule cards,
+  schemas, docs generators or Python. It runs the lint and repository
+  checks CI runs, leaving out only the R binding's Clippy, and no test
+  suite, so it needs no R.
+
+Never run `make check-equivalence` or `make check-conversion` locally,
+except to debug a CI failure of that job. Pull request CI runs only on
+Linux, so a change to paths, file handling, `cfg`-gated code or
+packaging also gets one native qualification run on its branch before
+merge: `gh workflow run native.yml --ref <branch>`.
 
 While developing, run only the tests nearest the change:
 
@@ -162,9 +184,10 @@ While developing, run only the tests nearest the change:
   run the case from the root with
   `uv run --project python --no-sync python -m tools.benchmark benchmarks/<name>`.
 - **Rules, schemas or docs** (`rules/`, `yaml/`, `docs/`, `README.md`):
-  `make quick` checks them and builds the strict site. Follow the
-  terminology and requirement-allocation rules in `rules/README.md` and
-  the maintenance rules in `yaml/README.md`.
+  `make quick` checks them and builds the strict site; a docs-only
+  change needs only `make docs-test docs`. Follow the terminology and
+  requirement-allocation rules in `rules/README.md` and the maintenance
+  rules in `yaml/README.md`.
 
 When a CI job fails, reproduce it with that job's own target from
 `make help` (`check-lint`, `check-repository`, `test-rust`,

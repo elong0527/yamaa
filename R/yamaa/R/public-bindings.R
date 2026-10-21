@@ -137,4 +137,6 @@ yamaa_read_odm <- function(source, archive_member = NULL, max_archive_members = 
 
 yamaa_lint <- function(paths, fix = FALSE) .reply(.native_lint(.texts(paths, "paths"), fix))
 
+yamaa_schema <- function(file_type) .reply(.native_schema(.text(file_type, "file_type")))
+
 yamaa_selftest <- function() .self_test(.reply(.native_selftest(.version())))

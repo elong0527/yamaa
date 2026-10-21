@@ -25,9 +25,6 @@ pub const VALUE_LEVEL_COMPARATOR: &str = "value_level_comparator";
 /// An input whose path names an ODM XML file (P-ODMIN-1), refused until
 /// P1-15.
 pub const ODM_XML_INPUT: &str = "odm_xml_input";
-/// A specification `model` the engine cannot check yet (SUB-3), refused
-/// until P1-10.
-pub const MODEL_CHECK: &str = "model_check";
 
 fn unsupported(operation: &str, path: String) -> UnsupportedFeature {
     UnsupportedFeature {
@@ -38,10 +35,7 @@ fn unsupported(operation: &str, path: String) -> UnsupportedFeature {
 
 /// What a lowered 1.0 specification writes that the engine does not build
 /// yet, in written order: an ODM XML input; more than one origin; a
-/// value-level comparator; a dataset's `standard`; and submission metadata
-/// without the `model` it requires (SUB-3). A specification that declares
-/// submission metadata needs `model`, which P1-10 checks; until then a
-/// declared `model` is read and not checked.
+/// value-level comparator; and a dataset's `standard`.
 pub fn unbuilt(spec: &Spec) -> Vec<UnsupportedFeature> {
     let mut found = Vec::new();
     for input in &spec.inputs {
@@ -57,12 +51,10 @@ pub fn unbuilt(spec: &Spec) -> Vec<UnsupportedFeature> {
             found.push(unsupported(MULTIPLE_ORIGINS, format!("{at}.origins")));
         }
     };
-    let mut declares_submission = spec.submission.is_some();
     for column in &spec.columns {
         let Some(submission) = &column.submission else {
             continue;
         };
-        declares_submission = true;
         origins(&submission.metadata, spec.cite(submission.meta), &mut found);
         for entry in &submission.value_level {
             for clause in &entry.conditions {
@@ -79,15 +71,31 @@ pub fn unbuilt(spec: &Spec) -> Vec<UnsupportedFeature> {
     if let Some(standard) = spec.submission.as_ref().and_then(|s| s.standard.as_ref()) {
         found.push(unsupported(SUBMISSION_STANDARD, spec.cite(standard.meta)));
     }
-    if declares_submission && spec.model.is_none() {
-        found.push(unsupported(MODEL_CHECK, "model".into()));
-    }
     found
 }
 
 /// The findings of a lowered 1.0 specification, in written order.
 pub fn findings(spec: &Spec) -> Vec<SchemaDiagnostic> {
     let mut findings = Vec::new();
+    // A specification that declares root or column submission metadata
+    // names the model its dataset follows (SUB-3, D25); one without it, such
+    // as a language test, follows none. The record is the schema's own for a
+    // missing required field.
+    let declares_submission = spec.submission.is_some()
+        || spec
+            .columns
+            .iter()
+            .any(|column| column.submission.is_some());
+    if declares_submission && spec.model.is_none() {
+        findings.push(SchemaDiagnostic {
+            path: "model".into(),
+            code: ConditionCode::SubmissionModelRequired,
+            context: vec![
+                ("field", C::Text("model".into())),
+                ("class", C::Text("root_class".into())),
+            ],
+        });
+    }
     // Only the csv profile reads a byte-order mark (CSV-10). An input of
     // another profile declares none, whatever the value written; an input
     // whose extension selects no profile leaves its fault to

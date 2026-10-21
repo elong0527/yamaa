@@ -1,6 +1,6 @@
 //! The `yamaa` binary as a user runs it: what it prints, on which stream, and
 //! its exit status (#3030 section 2.8, D12, D41, D68, D96 to D99, D103, D119,
-//! D122, D125).
+//! D122, D125, D134).
 //!
 //! What the command line composes is written out here: the summary and
 //! member lines, the order of the lines, the written paths, the JSON keys and
@@ -16,7 +16,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use yamaa::{CancellationToken, ContextValue, Diagnostic, Engine, EngineOptions, Host};
+use yamaa::{CancellationToken, ContextValue, Diagnostic, Engine, EngineOptions, Host, OdmOptions};
 
 const HINT: &str = "run 'yamaa --help' for usage\n";
 
@@ -270,7 +270,20 @@ fn a_usage_error_exits_with_status_2_and_writes_only_to_standard_error() {
             &["resolve", "project.yaml", "--fix"],
             "resolve: unknown option --fix",
         ),
+        (&["read-odm"], "read-odm: missing SOURCE"),
         (&["read-odm", "study.xml"], "read-odm: missing OUT"),
+        (
+            &["read-odm", "study.xml", "items.csv", "items.parquet"],
+            "read-odm: unexpected argument items.parquet",
+        ),
+        (
+            &["read-odm", "study.xml", "items.csv", "--archive-member"],
+            "read-odm: --archive-member needs a value",
+        ),
+        (
+            &["read-odm", "study.xml", "items.csv", "--spec", "DM"],
+            "read-odm: unknown option --spec",
+        ),
         (
             &[
                 "read-odm",
@@ -325,45 +338,26 @@ fn a_usage_error_exits_with_status_2_and_writes_only_to_standard_error() {
 }
 
 /// What the command line cannot run yet checks its arguments, then refuses
-/// with exit status 2 and writes nothing (D96): `read-odm` and `schema`.
+/// with exit status 2 and writes nothing (D96): `schema`.
 #[test]
 fn the_commands_not_implemented_yet_check_their_arguments_then_refuse() {
     let study = Study::new();
-    let cases: &[(&[&str], &str)] = &[
-        (&["read-odm", "study.xml", "items.parquet"], "read-odm"),
-        (
-            &[
-                "read-odm",
-                "study.tar.gz",
-                "items.csv",
-                "--archive-member",
-                "study.xml",
-                "--max-archive-members",
-                "10",
-                "--max-expanded-bytes",
-                "1024",
-                "--max-xml-depth",
-                "64",
-            ],
-            "read-odm",
-        ),
-        (&["schema", "spec"], "schema"),
-        (&["--format", "json", "schema", "project"], "schema"),
-    ];
-    for (arguments, what) in cases {
+    for arguments in [
+        &["schema", "spec"][..],
+        &["--format", "json", "schema", "project"],
+    ] {
         assert_eq!(
             outcome(&yamaa_in(&study.0, arguments)),
             (
                 Some(2),
                 String::new(),
-                format!("yamaa: {what} is not implemented yet\n")
+                "yamaa: schema is not implemented yet\n".to_owned()
             ),
             "{arguments:?}"
         );
     }
-    // Nothing ran, so nothing was written, OUT included.
+    // Nothing ran, so nothing was written.
     assert!(study.files("out").is_empty());
-    assert!(!study.exists("items.parquet") && !study.exists("items.csv"));
 }
 
 /// `yamaa selftest` runs the cases the binary carries and prints the facade's
@@ -1462,6 +1456,311 @@ fn a_submission_without_a_section_or_a_time_composes_every_section_at_one_time()
     );
 }
 
+/// The adapters' ODM 1.3 document, which the hosts' installed `read_odm`
+/// suites read too (`read-odm` in `rust/tests/host-fixtures/cases.json`).
+fn odm_document() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../yamaa-adapters/tests/fixtures/odm/odm13.xml")
+}
+
+/// A study that holds that document as `odm13.xml`.
+fn odm_study() -> Study {
+    let study = Study::empty();
+    study.write("odm13.xml", std::fs::read(odm_document()).unwrap());
+    study
+}
+
+/// The document's item table in the csv profile, written by hand from the
+/// three rows the hosts' shared truth gives it and the csv cards: a header
+/// of the column names (CSV-2), a field quoted exactly when it holds a quote
+/// or a comma or is empty (CSV-3), missing as an empty bare field and the
+/// empty string as `""` (CSV-4), an integer as its digits (CSV-5), and a line
+/// feed after every record (CSV-1).
+const ODM_ITEMS_CSV: &str = concat!(
+    "ODMVersion,FileOID,StudyOID,MetaDataVersionOID,SubjectKey,StudySubjectID,",
+    "SubjectStatus,StudyEventOID,StudyEventRepeatKey,EventName,StartDate,EventStatus,",
+    "EventWorkflowStatus,FormOID,FormRepeatKey,FormName,FormLayoutOID,FormStatus,",
+    "FormWorkflowStatus,OpenQueries,ItemGroupOID,ItemGroupRepeatKey,ItemGroupName,",
+    "TransactionType,ItemOID,ItemName,Value,ValuePresent,IsNull,SourceOrdinal\n",
+    "1.3,FILE.13,S.13,M.13,SUBJECT-1,DISPLAY-1,Available,E.13,,Screening,2026-01-02,,,",
+    "F.13,,Demographics,,,,,G.13,7,Subject details,Insert,I.DATE,Collection date,",
+    "2026-01-02,true,false,1\n",
+    "1.3,FILE.13,S.13,M.13,SUBJECT-1,DISPLAY-1,Available,E.13,,Screening,2026-01-02,,,",
+    "F.13,,Demographics,,,,,G.13,7,Subject details,Insert,I.EMPTY,Collected empty,",
+    "\"\",true,false,2\n",
+    "1.3,FILE.13,S.13,M.13,SUBJECT-1,DISPLAY-1,Available,E.13,,Screening,2026-01-02,,,",
+    "F.13,,Demographics,,,,,G.13,7,Subject details,Insert,I.NULL,Explicit null,",
+    ",false,true,3\n",
+);
+
+/// `yamaa read-odm SOURCE OUT` reads SOURCE as the hosts' `read_odm()` reads
+/// it and saves its items to OUT, whose extension selects the csv profile
+/// whatever its case (OUTPUT-5, D134). It prints only the absolute path it
+/// wrote (D38) and exits 0; with `--format json`, its `path` is SOURCE as
+/// given and its `rows` counts the items read. The file holds the bytes the
+/// csv cards give the hosts' truth, also when every bound is given at the
+/// tightest value the document meets.
+#[test]
+fn read_odm_saves_the_items_of_a_document_and_prints_the_path_it_wrote() {
+    let study = odm_study();
+    assert_eq!(
+        outcome(&yamaa_in(&study.0, &["read-odm", "odm13.xml", "items.csv"])),
+        printed(0, format!("{}\n", study.path("items.csv")))
+    );
+    // The two files differ by more than case, since a case-insensitive file
+    // system, as macOS and Windows use by default, holds `x.CSV` and `x.csv`
+    // as one entry.
+    let upper = study.path("upper.CSV");
+    assert_eq!(
+        outcome(&yamaa_in(
+            &study.0,
+            &["--format", "json", "read-odm", "odm13.xml", "upper.CSV"]
+        )),
+        printed(
+            0,
+            format!(
+                "{{\"command\":\"read-odm\",\"issues\":[],\"path\":\"odm13.xml\",\
+                 \"paths\":[\"{upper}\"],\"rows\":3,\"status\":\"succeeded\"}}\n"
+            )
+        )
+    );
+    // The document nests 7 elements deep, and a plain XML file holds no
+    // archive members.
+    assert_eq!(
+        outcome(&yamaa_in(
+            &study.0,
+            &[
+                "read-odm",
+                "odm13.xml",
+                "bounded.csv",
+                "--max-archive-members",
+                "1",
+                "--max-expanded-bytes",
+                "65536",
+                "--max-xml-depth",
+                "8",
+            ]
+        )),
+        printed(0, format!("{}\n", study.path("bounded.csv")))
+    );
+    for name in ["items.csv", "upper.CSV", "bounded.csv"] {
+        assert_eq!(
+            std::fs::read_to_string(study.0.join(name)).unwrap(),
+            ODM_ITEMS_CSV,
+            "{name}"
+        );
+    }
+    assert_eq!(
+        study.files("."),
+        ["bounded.csv", "items.csv", "odm13.xml", "upper.CSV"]
+    );
+}
+
+/// A 1.0 specification that copies every item column of `items.parquet` to
+/// `output`. The input keeps a stored empty string as the collected empty
+/// value the table holds (INPUT-9).
+fn copying_spec(output: &str) -> String {
+    let mut spec = format!(
+        "yamaa: \"1.0\"\ntype: spec\ndomain: ITEMS\nkeys: [SourceOrdinal]\ninput: {{ODM: {{path: items.parquet, empty_string: present}}}}\noutput:\n  path: {output}\n  columns: [{}]\ncolumns:\n",
+        yamaa::ODM_COLUMNS.join(", ")
+    );
+    for name in yamaa::ODM_COLUMNS {
+        let kind = if name == "SourceOrdinal" {
+            "int"
+        } else {
+            "str"
+        };
+        spec.push_str(&format!(
+            "  - {{name: {name}, type: {kind}, label: {name}, derivation: ODM.{name}}}\n"
+        ));
+    }
+    spec
+}
+
+/// OUT may name a Parquet file, which every shipped build writes (D134), and
+/// it holds the same table: a run of a specification that copies every column
+/// of `items.parquet` saves, under each profile, the bytes `read-odm` saves,
+/// so the command saves what the hosts' `read_odm()` and a run save.
+#[test]
+fn read_odm_saves_parquet_and_both_files_hold_what_a_run_saves() {
+    let study = odm_study();
+    for out in ["items.parquet", "items.csv"] {
+        assert_eq!(
+            outcome(&yamaa_in(&study.0, &["read-odm", "odm13.xml", out])),
+            printed(0, format!("{}\n", study.path(out))),
+            "{out}"
+        );
+    }
+    let parquet = std::fs::read(study.0.join("items.parquet")).unwrap();
+    assert!(parquet.starts_with(b"PAR1") && parquet.ends_with(b"PAR1"));
+    for extension in ["csv", "parquet"] {
+        let spec = format!("copy-{extension}.yaml");
+        let ran = format!("run.{extension}");
+        study.write(&spec, copying_spec(&ran));
+        assert_eq!(
+            outcome(&yamaa_in(&study.0, &["run", &spec])),
+            printed(
+                0,
+                format!(
+                    "yamaa run of ITEMS: succeeded, 3 rows x 30 columns, 0 issues\n{}\n",
+                    study.path(&ran)
+                )
+            ),
+            "{extension}"
+        );
+        assert_eq!(
+            std::fs::read(study.0.join(&ran)).unwrap(),
+            std::fs::read(study.0.join(format!("items.{extension}"))).unwrap(),
+            "{extension}"
+        );
+    }
+}
+
+/// A refused read names SOURCE as given, and a refused save names OUT as
+/// given (D39, D134): either prints D39's error text on standard output,
+/// writes nothing and exits 1, as the hosts raise it.
+///
+/// - The save refuses an extension outside OUTPUT-5's closed mapping, or
+///   none, before it writes anything, and a target that cannot be written,
+///   as a run's save refuses it (D99): a missing directory or a directory.
+///   The items were read, so the JSON `rows` counts them.
+/// - The reader refuses a file that does not exist, a bound below its
+///   minimum or one the document exceeds, and an archive member of a plain
+///   XML file. Each message names the option or its value, so each flag is
+///   seen to reach its own option. Until P1-15 registers the `source_odm_*`
+///   conditions, such a refusal carries the reader's code and no issue, as
+///   the hosts' does. The read comes first, so a SOURCE it refuses is the
+///   refusal whatever OUT names.
+#[test]
+fn a_refused_read_or_save_prints_its_error_text_and_exits_1() {
+    let study = odm_study();
+    std::fs::create_dir(study.0.join("folder.csv")).unwrap();
+    let source = study.path("odm13.xml");
+    let engine = engine();
+    let table = engine.read_odm(&source, &OdmOptions::new()).unwrap();
+    for (name, condition, code) in [
+        ("items.txt", "unknown_artifact_profile", None),
+        ("items", "unknown_artifact_profile", None),
+        (
+            "absent/items.csv",
+            "engine_rejected",
+            Some("invalid_target"),
+        ),
+        ("folder.csv", "engine_rejected", Some("invalid_target")),
+    ] {
+        let out = study.path(name);
+        let refused = engine.save_table(&table, &out).unwrap_err();
+        assert!(
+            refused.message.starts_with(&format!("cannot save {out}: ")),
+            "{}",
+            refused.message
+        );
+        let [issue] = refused.diagnostics.as_slice() else {
+            panic!("one issue: {:?}", refused.diagnostics);
+        };
+        let code = code.map(|code| ContextValue::Text(code.to_owned()));
+        assert_eq!(
+            (issue.code.as_str(), issue.context.get("code")),
+            (condition, code.as_ref()),
+            "{name}"
+        );
+        assert_eq!(
+            outcome(&yamaa(&["read-odm", &source, &out])),
+            printed(1, format!("{}\n", refused.message)),
+            "{name}"
+        );
+        assert_eq!(
+            outcome(&yamaa(&["--format", "json", "read-odm", &source, &out])),
+            printed(
+                1,
+                format!(
+                    "{{\"command\":\"read-odm\",\"issues\":{},\"path\":\"{source}\",\
+                     \"paths\":[],\"rows\":3,\"status\":\"failed\"}}\n",
+                    json(&refused.diagnostics)
+                )
+            ),
+            "{name}"
+        );
+    }
+    let absent = study.path("absent.xml");
+    let out = study.path("items.csv");
+    // The read's refusal, as the hosts' `read_odm()` raises it.
+    let refusal = |read: &str, options: &OdmOptions| {
+        let error = engine.read_odm(read, options).unwrap_err();
+        yamaa::Failure::from_error(yamaa::Action::Read(read), &error)
+    };
+    let cases: [(&str, &[&str], OdmOptions, &str); 6] = [
+        (&absent, &[], OdmOptions::new(), "not_found"),
+        (
+            &source,
+            &["--max-expanded-bytes", "0"],
+            OdmOptions::new().with_max_expanded_bytes(0),
+            "invalid_option",
+        ),
+        (
+            &source,
+            &["--max-archive-members", "0"],
+            OdmOptions::new().with_max_archive_members(0),
+            "invalid_option",
+        ),
+        (
+            &source,
+            &["--max-xml-depth", "7"],
+            OdmOptions::new().with_max_xml_depth(7),
+            "invalid_option",
+        ),
+        (
+            &source,
+            &["--archive-member", "odm13.xml"],
+            OdmOptions::new().with_archive_member("odm13.xml"),
+            "archive_member",
+        ),
+        (
+            &source,
+            &["--max-expanded-bytes", "100"],
+            OdmOptions::new().with_max_expanded_bytes(100),
+            "limit",
+        ),
+    ];
+    for (read, flags, options, code) in cases {
+        let refused = refusal(read, &options);
+        assert!(
+            refused
+                .message
+                .starts_with(&format!("cannot read {read}: ODM read failure ({code}): ")),
+            "{}",
+            refused.message
+        );
+        assert!(refused.diagnostics.is_empty());
+        let arguments = [&["read-odm", read, &out][..], flags].concat();
+        assert_eq!(
+            outcome(&yamaa(&arguments)),
+            printed(1, format!("{}\n", refused.message)),
+            "{arguments:?}"
+        );
+        assert_eq!(
+            outcome(&yamaa(&[&["--format", "json"][..], &arguments].concat())),
+            printed(
+                1,
+                format!(
+                    "{{\"command\":\"read-odm\",\"issues\":[],\"path\":\"{read}\",\"paths\":[],\
+                     \"rows\":null,\"status\":\"failed\"}}\n"
+                )
+            ),
+            "{arguments:?}"
+        );
+    }
+    // The read comes first: an OUT the save would refuse is never examined.
+    assert_eq!(
+        outcome(&yamaa(&["read-odm", &absent, &study.path("items.txt")])),
+        printed(
+            1,
+            format!("{}\n", refusal(&absent, &OdmOptions::new()).message)
+        )
+    );
+    assert_eq!(study.files("."), ["folder.csv", "odm13.xml"]);
+    assert!(study.files("folder.csv").is_empty());
+}
+
 /// `lint` prints each finding's line, then its summary line (D103), and
 /// exits 1 while a finding remains; `--fix` rewrites the file and names it in
 /// the JSON `paths`.
@@ -1674,4 +1973,30 @@ fn a_value_that_is_not_utf8_exits_with_status_2() {
             format!("yamaa: check: PATH is not UTF-8: project-\u{fffd}.yaml\n{HINT}")
         )
     );
+    // `read-odm` checks SOURCE, OUT and the archive member before it reads
+    // SOURCE, which does not exist here either.
+    for (arguments, what) in [
+        (&[text("read-odm"), odd, text("items.csv")][..], "SOURCE"),
+        (&[text("read-odm"), text("odm.xml"), odd], "OUT"),
+        (
+            &[
+                text("read-odm"),
+                text("odm.xml"),
+                text("items.csv"),
+                text("--archive-member"),
+                odd,
+            ],
+            "--archive-member",
+        ),
+    ] {
+        assert_eq!(
+            run(arguments),
+            (
+                Some(2),
+                String::new(),
+                format!("yamaa: read-odm: {what} is not UTF-8: project-\u{fffd}.yaml\n{HINT}")
+            ),
+            "{what}"
+        );
+    }
 }

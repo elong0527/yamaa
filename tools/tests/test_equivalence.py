@@ -1,5 +1,6 @@
 """Pin how the executor equivalence gate composes the existing owners."""
 
+import contextlib
 import tempfile
 import unittest
 from pathlib import Path
@@ -11,7 +12,9 @@ from tools.paths import ROOT
 
 
 class GateRun:
-    """Replace every expensive step and record what the gate asked of it."""
+    """Replace every expensive step and record what the gate asked of it.
+
+    Every run works in the same directory, so two runs' steps compare."""
 
     def __init__(self, statuses=(0, 0)):
         self.statuses = list(statuses)
@@ -27,8 +30,13 @@ class GateRun:
         self.compared.append(Path(argv[argv.index("--observed") + 1]).parent.name)
         return self.statuses.pop(0)
 
-    def run(self):
+    def run(self, *argv):
         with (
+            mock.patch.object(
+                equivalence.tempfile,
+                "TemporaryDirectory",
+                return_value=contextlib.nullcontext("gate-work"),
+            ),
             mock.patch.object(
                 equivalence.public_conformance, "main", side_effect=self.conformance
             ),
@@ -47,7 +55,18 @@ class GateRun:
             ) as self.install_r,
             mock.patch.object(equivalence, "check") as self.check,
         ):
-            equivalence.main([])
+            equivalence.main(list(argv))
+
+    def steps(self):
+        """Each step that the run asked for after its plan, with its arguments."""
+        return {
+            "compared": self.compared,
+            "commands": list(self.subprocess.call_args_list),
+            "python installs": list(self.install_python.call_args_list),
+            "python suites": list(self.suites.call_args_list),
+            "r installs": list(self.install_r.call_args_list),
+            "r checks": list(self.check.call_args_list),
+        }
 
 
 class EquivalenceGateTests(unittest.TestCase):
@@ -112,6 +131,52 @@ class EquivalenceGateTests(unittest.TestCase):
             gate.run()
         self.assertIn("R public", str(stopped.exception.code))
         gate.check.assert_not_called()
+
+    def test_each_host_runs_its_half_alone(self):
+        """`--hosts python` builds, compares and runs the suites of Python
+        alone; `--hosts r` builds, compares and checks the R package alone."""
+        python = GateRun(statuses=(0,))
+        python.run("--hosts", "python")
+        self.assertEqual(python.compared, ["python"])
+        python.suites.assert_called_once()
+        python.install_r.assert_not_called()
+        python.check.assert_not_called()
+        r = GateRun(statuses=(0,))
+        r.run("--hosts", "r")
+        self.assertEqual(r.compared, ["r"])
+        r.install_python.assert_not_called()
+        r.suites.assert_not_called()
+        r.check.assert_called_once()
+
+    def test_the_two_halves_are_the_whole_gate(self):
+        """Run apart, as CI's two host jobs run them, the halves plan alike
+        and ask for every step of the default run, and for nothing else."""
+        whole = GateRun()
+        whole.run()
+        python = GateRun(statuses=(0,))
+        python.run("--hosts", "python")
+        r = GateRun(statuses=(0,))
+        r.run("--hosts", "r")
+        self.assertEqual(python.plans, whole.plans)
+        self.assertEqual(r.plans, whole.plans)
+        self.assertEqual(
+            {name: python.steps()[name] + r.steps()[name] for name in whole.steps()},
+            whole.steps(),
+        )
+
+    def test_a_failing_r_half_fails_alone(self):
+        """The R half reports its own conformance failure."""
+        gate = GateRun(statuses=(1,))
+        with self.assertRaises(SystemExit) as stopped:
+            gate.run("--hosts", "r")
+        self.assertIn("R public", str(stopped.exception.code))
+        gate.install_python.assert_not_called()
+        gate.check.assert_not_called()
+
+    def test_hosts_name_python_or_r(self):
+        for hosts in ("julia", "python,julia", ","):
+            with self.subTest(hosts=hosts), self.assertRaises(SystemExit):
+                GateRun().run("--hosts", hosts)
 
     def test_python_installs_wheels_built_from_the_checkout(self):
         """The Python host is a new environment, never the development install."""

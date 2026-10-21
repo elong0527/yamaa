@@ -30,6 +30,7 @@ columns:
       length: 1
       origin:
         type: Collected
+        source: Investigator
 
 submission:
   label: Demographics

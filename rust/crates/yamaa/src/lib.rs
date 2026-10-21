@@ -56,6 +56,7 @@ pub mod odm;
 pub mod plan;
 pub mod resolver;
 pub mod scalar;
+pub mod schema;
 pub mod selftest;
 pub mod table;
 pub mod text;
@@ -77,7 +78,7 @@ pub use error::{
     Error, FunctionError, HostPayload, LockFinding, LockReason, LockSyntaxError, OdmError,
     ResolverFailure, TableError,
 };
-pub use file_type::FileType;
+pub use file_type::{FileType, FILE_TYPES};
 pub use functions::{
     decode_renv_lock, Argument, BatchArgument, CallError, ColumnType, FunctionHandle,
     FunctionIdentity, HostLanguage, LockContext, LockKind, Parameter, ProjectFunctions, RenvLock,
@@ -93,6 +94,7 @@ pub use resolver::{
     ResourceResolver,
 };
 pub use scalar::{Date, DateTime, EncodedScalar, Scalar, ScalarDecodeError, ScalarRef};
+pub use schema::schema;
 pub use selftest::{selftest, SelfTest, SelfTestCase, SELFTEST_COLUMNS};
 pub use table::{
     Array, DataType, Date32Array, FFI_ArrowArrayStream, Field, Fields, Float64Array, InputFrame,

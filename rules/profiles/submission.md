@@ -51,33 +51,60 @@ Evidence: `schema-column-composition`, `rust/crates/yamaa-adapters/tests/project
 A study moves governed facts from the map to submission metadata. A reserved
 key fails validation with `reserved_metadata_key`, reporting the key.
 
-## Standard families
+## Models
 
 <a id="sub-3"></a>
 
-### SUB-3. A dataset's family is read from the implementation guide the study document binds it to
+### SUB-3. A specification declares its model, and the implementation guide a document binds it to must belong to that model
 
-Every dataset follows one foundational standard, and the study document binds
-it: [DEFINE-6](define-xml.md#define-6) resolves each dataset to a declared
-standard of type `IG`. A specification does not name the standard. This
-profile reads the bound standard's published name as one of three closed
-families, as the table below fixes. A dataset bound to an `IG` standard outside
-the table, or to a standard of type `CT`, fails.
+A specification names the CDISC model its dataset follows in `model`:
+`SDTM`, `SEND` or `ADaM`. `model` is required when the specification
+declares root or column `submission` or a project section lists it, and the
+`sdtm`, `send` and `adam` sections list only specifications of their model.
+When a document composes the specification, the implementation guide
+[DEFINE-6](define-xml.md#define-6) binds it to must be one the table below
+lists for that model; a guide of another model, or a standard of type `CT`,
+fails.
 
-Fails: `unknown_standard_family`.
-Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionStandardFamily`, `python/tests/installed/installed_public_define.py::test_missing_artifact_only_when_requested_and_semantic_failure_zero_writes`.
+Fails: `missing_required_field`, `standard_model_mismatch`, `unknown_standard_family`.
+Evidence: `sdtm-dm-metadata`, `negative-submission-model-missing`, `negative-section-model-mismatch`, `rust/crates/yamaa/tests/language_header.rs::submission_metadata_needs_a_model`, `rust/crates/yamaa/tests/language_header.rs::a_section_lists_only_specifications_of_its_model`, `rust/crates/yamaa-core/tests/support/diagnostic/front_end.rs`, `rust/crates/yamaa-core/src/front_end/v1/project.rs::define_names_a_1_0_section_s_guide_by_its_place_in_standards`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionModelMismatch`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionStandardFamily`, `python/tests/installed/installed_public_define.py::test_missing_artifact_only_when_requested_and_semantic_failure_zero_writes`.
 
-| Family | Standard names |
+| Model | Standard names |
 |---|---|
-| `sdtm` | `SDTMIG`, `SDTMIG-AP`, `SDTMIG-MD` |
-| `send` | `SENDIG`, `SENDIG-AR`, `SENDIG-DART`, `SENDIG-GENETOX` |
-| `adam` | `ADaMIG`, `ADaMIG-MD` |
+| `SDTM` | `SDTMIG`, `SDTMIG-AP`, `SDTMIG-MD` |
+| `SEND` | `SENDIG`, `SENDIG-AR`, `SENDIG-DART`, `SENDIG-GENETOX` |
+| `ADaM` | `ADaMIG`, `ADaMIG-MD` |
 
-The table is closed, and `BIMO` is excluded. A dataset must not be bound to a
+`model` stays optional elsewhere, since a language test follows no model.
+Declared, it decides the rules of this profile that depend on a model, which
+[SUB-23](#sub-23) checks on the specification alone, and a declared
+`submission.class` must belong to it ([SUB-10](#sub-10)). A specification
+that declares submission metadata without `model` fails validation with
+`missing_required_field` at `model`, before any input is read; a document
+that composes it reports the same issue.
+
+The section's listing is checked when [Define-XML](define-xml.md) composes
+the section, since it reads the project file ([SUB-23](#sub-23)). A listed
+specification without `model` fails there with `missing_required_field`, and
+one that declares another model with `standard_model_mismatch`, each at
+`<section>.specs[<n>].model`; the context names the section in `section`
+and its model in `model`, and the mismatch names the declared model in
+`value`. Neither dataset composes further.
+
+The table is closed, and `BIMO` is excluded. The guide composition binds is
+the first entry of the section's `standards`; one outside the section's
+model fails with `standard_model_mismatch` at
+`<section>.standards[0].name`, naming the guide in `value`, the section in
+`section` and its model in `model`. A dataset must not be bound to a
 standard of type `CT`: controlled terminology qualifies a codelist and not a
-dataset, and [Controlled terminology](terminology.md) owns that binding. The
-failure reports the dataset and the standard;
+dataset, and [Controlled terminology](terminology.md) owns that binding.
 [DEFINE-6](define-xml.md#define-6) owns the binding that fails.
+
+A specification that declares `schema_version` declares no model: a document
+that composes it gives it its section's model. A project file that declares
+`schema_version` binds one `standard`, and a guide outside the section's
+model fails there with `unknown_standard_family` at
+`<section>.standard.name`, reporting the guide in `detail`.
 
 ## Dataset metadata
 
@@ -111,31 +138,34 @@ domain execution or replace row-count checks.
 
 <a id="sub-5"></a>
 
-### SUB-5. A dataset's domain defaults to the specification's domain and is declared only for sdtm and send
+### SUB-5. A dataset's domain defaults to the specification's domain and is declared only for SDTM and SEND
 
 `domain` names the domain the dataset belongs to. It defaults to the
 specification's `domain`, so an ordinary dataset states the domain once. A
 split or supplemental dataset declares the domain; the dataset's own name is
-not its parent domain. `domain` is declared only for a dataset whose family is
-`sdtm` or `send`: the `adam` family has no domain, and declaring one there
+not its parent domain. `domain` is declared only for a dataset whose model is
+`SDTM` or `SEND`: the `ADaM` model has no domain, and declaring one there
 fails validation, reporting the field.
 
 Fails: `value_not_permitted`.
-Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionAdamField`.
+Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionAdamField`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::rules_that_read_the_model_are_checked_on_the_specification_alone`.
 
-A domain declared for the `adam` family is an error rather than an unused
-value. A `role` declared for that family fails the same way under
-[SUB-9](#sub-9).
+A domain declared for the `ADaM` model is an error rather than an unused
+value. A `role` declared for that model fails the same way under
+[SUB-9](#sub-9). A specification that declares `model: ADaM` fails at its
+`submission.domain` on its own ([SUB-23](#sub-23)), with the declared value
+in `value` and the model in `model`; a document fails it at
+`<section>.specs[<n>].submission.domain`.
 
 ## Column metadata
 
 <a id="sub-6"></a>
 
-### SUB-6. A column's submission data type defaults from its column type and family, within the closed set that type admits
+### SUB-6. A column's submission data type defaults from its column type and model, within the closed set that type admits
 
 `data_type` states the type the submission represents the column as. It
 defaults from the declared column type and, for a `date` or `datetime`, from
-the family ([SUB-25](#sub-25)); each declared type admits the closed set the
+the model ([SUB-25](#sub-25)); each declared type admits the closed set the
 table below fixes. `data_type` never changes a value: it states how a value
 [Values](../values.md) already typed appears in the document, and no
 derivation, key, order term or artifact byte can observe it; only the check of
@@ -143,15 +173,15 @@ a date or time type's form ([SUB-26](#sub-26)) reads it. A `data_type` outside
 the admitted set fails validation.
 
 Fails: `submission_data_type_not_admitted`.
-Evidence: `sdtm-vs-epoch-from-subject-elements`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionDataType`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::submission_fields_do_not_change_any_original_domain_artifact`.
+Evidence: `sdtm-vs-epoch-from-subject-elements`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionDataType`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::submission_fields_do_not_change_any_original_domain_artifact`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::rules_that_read_the_model_are_checked_on_the_specification_alone`.
 
 | Declared type | Default | Also admits |
 |---|---|---|
 | `str` | `text` | the types listed below |
 | `int` | `integer` | none |
 | `float` | `float` | none |
-| `date` | `date`; `integer` under `adam` | none |
-| `datetime` | `datetime`; `integer` under `adam` | none |
+| `date` | `date`; `integer` under `ADaM` | none |
+| `datetime` | `datetime`; `integer` under `ADaM` | none |
 
 `str` admits `date`, `datetime`, `time`, `partialDate`, `partialTime`,
 `partialDatetime`, `incompleteDate`, `incompleteTime`, `incompleteDatetime`,
@@ -166,11 +196,14 @@ temporal column types admit only their matching submission type:
 [Values](../values.md) defines each temporal type as a
 complete value, and the submission types of the same name mean the same thing.
 A number's submission type is fixed: [Values](../values.md)
-already decides integer or binary64. The family decides a temporal column's
-one type, so the specification alone admits a `date` or `datetime` declared
-`integer` as well as its own type, and a document admits only the type its
-family submits: its own under `sdtm` and `send`, and `integer` under `adam`.
-The failure reports the column, the declared type and the submission type.
+already decides integer or binary64. The model decides a temporal column's
+one type: its own under `SDTM` and `SEND`, and `integer` under `ADaM`. A
+specification that declares its model admits only that type on its own
+([SUB-23](#sub-23)), and so does a document; a specification that declares
+none admits a `date` or `datetime` declared `integer` as well as its own type
+until a document gives it its section's model. The failure reports the
+column, the declared type and the submission type, and on the specification
+alone the model in `model` when only the model refuses the type.
 
 <a id="sub-7"></a>
 
@@ -190,7 +223,7 @@ Evidence: `sdtm-lb-metadata`, `rust/crates/yamaa-core/tests/support/diagnostic/s
 
 The other submission types carry fixed-form values, so a length for such a type
 restates that form. A `date` or `datetime` column has the fixed length its
-family gives it, none under `sdtm` and `send` and 8 under `adam`
+model gives it, none under `SDTM` and `SEND` and 8 under `ADaM`
 ([SUB-25](#sub-25)), whatever `data_type` it declares. A `length` that is not a
 positive integer, or a negative `significant_digits`, fails validation with
 `submission_length_invalid`. A `length` or `significant_digits` absent where
@@ -281,11 +314,11 @@ computed value, a rendered artifact value or the `output.decimals` of
 [CSV-6](../reference/csv.md#csv-6). `role` states how the column is used within
 its dataset and is one of the nine roles the SDTM model publishes, which the
 table below lists; any other role fails validation. `role` must not be declared
-for a dataset whose family is `adam`; a role there fails validation, reporting
+for a dataset whose model is `ADaM`; a role there fails validation, reporting
 the field.
 
 Fails: `value_not_permitted`.
-Evidence: `sdtm-dm-metadata`, `negative-role-unknown`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionAdamField`, `rust/crates/yamaa-core/tests/schema_submission.rs::complete_nested_metadata_retains_integer_text_documents_pages_and_order_after_drop`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::a_role_outside_the_nine_fails_where_the_specification_is_read`.
+Evidence: `sdtm-dm-metadata`, `negative-role-unknown`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionAdamField`, `rust/crates/yamaa-core/tests/schema_submission.rs::complete_nested_metadata_retains_integer_text_documents_pages_and_order_after_drop`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::a_role_outside_the_nine_fails_where_the_specification_is_read`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::rules_that_read_the_model_are_checked_on_the_specification_alone`.
 
 | Role | The column |
 |---|---|
@@ -303,7 +336,10 @@ A role is written exactly as the table spells it, at column or value level
 ([SUB-12](#sub-12)). The vocabulary is checked when the specification is read
 ([SUB-23](#sub-23)), so a role outside the table fails with
 `value_not_permitted` at its `role` before any data is read, whether or not a
-document composes the dataset. The `send` family uses the same nine roles.
+document composes the dataset. The `SEND` model uses the same nine roles. A
+role under `ADaM` fails on a specification that declares its model, at its
+`role` with the role in `value` and the model in `model`
+([SUB-23](#sub-23)), and when a document composes the dataset.
 `yaml/vocabulary/cdisc.yaml` holds them with the other closed CDISC
 vocabularies.
 
@@ -318,51 +354,54 @@ and this profile does not reconcile them: one is a display a document reports
 and the other is a display an artifact carries. A transport carries the
 artifact's values, so a specification that a section requesting one composes
 declares no `output.decimals` ([JSON-5](dataset-json.md#json-5)) and keeps its
-display in `display_format`. The `adam` family defines no role vocabulary, so
-a role in that family would name nothing.
+display in `display_format`. The `ADaM` model defines no role vocabulary, so
+a role in that model would name nothing.
 
 <a id="sub-10"></a>
 
-### SUB-10. `core` uses its family's designations, and `mandatory` resolves from the keys, its declaration and the dataset's class
+### SUB-10. `core` takes its model's designations, and `mandatory` comes from the keys, the declaration, or the class and `core`
 
-`core` is the standard's core designation and is declared for every family:
-`Req`, `Exp` or `Perm` for `sdtm` and `send`, and `Req`, `Cond` or `Perm` for
-`adam`. `mandatory` states whether every completed value must be present and
+`core` is the standard's core designation and is declared for every model:
+`Req`, `Exp` or `Perm` for `SDTM` and `SEND`, and `Req`, `Cond` or `Perm` for
+`ADaM`. `mandatory` states whether every completed value must be present and
 resolves without a study document. A key column is mandatory, and declaring
 `mandatory: false` on one fails. Otherwise a declared `mandatory` wins, and
-`adam` must declare one; without one, a column is mandatory exactly when its
+`ADaM` must declare one; without one, a column is mandatory exactly when its
 dataset's class is a tabulation class and its `core` is `Req`.
 
 Fails: `core_mandatory_conflict`, `value_not_permitted`.
-Evidence: `sdtm-dm-metadata`, `negative-required-sex-missing`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::mandatory_columns_are_checked_without_a_study_document`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::restated_facts_and_relaxed_keys_fail_validation_before_data`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionCoreMandatory`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionClassFamily`.
+Evidence: `sdtm-dm-metadata`, `negative-required-sex-missing`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::mandatory_columns_are_checked_without_a_study_document`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::restated_facts_and_relaxed_keys_fail_validation_before_data`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::rules_that_read_the_model_are_checked_on_the_specification_alone`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionCoreMandatory`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionClassFamily`.
 
-For `sdtm` and `send`, `Req` is required, `Exp` expected and `Perm`
-permissible. For `adam`, `Req` is required, `Cond` conditionally required and
+For `SDTM` and `SEND`, `Req` is required, `Exp` expected and `Perm`
+permissible. For `ADaM`, `Req` is required, `Cond` conditionally required and
 `Perm` permissible, as the ADaM implementation guides publish them. An `Exp`
-for `adam`, or a `Cond` for `sdtm` or `send`, names no designation its standard
+for `ADaM`, or a `Cond` for `SDTM` or `SEND`, names no designation its standard
 publishes.
 
-The dataset's `submission.class` names its family group, so the domain build
+The dataset's `submission.class` names its group, so the domain build
 resolves `mandatory` from the specification alone:
 
-| Group | Classes | Families |
+| Group | Classes | Models |
 |---|---|---|
-| tabulation | `EVENTS`, `FINDINGS`, `FINDINGS ABOUT`, `INTERVENTIONS`, `RELATIONSHIP`, `SPECIAL PURPOSE`, `STUDY REFERENCE`, `TRIAL DESIGN` | `sdtm`, `send` |
-| analysis | `ADAM OTHER`, `BASIC DATA STRUCTURE`, `DEVICE LEVEL ANALYSIS DATASET`, `MEDICAL DEVICE BASIC DATA STRUCTURE`, `MEDICAL DEVICE OCCURRENCE DATA STRUCTURE`, `OCCURRENCE DATA STRUCTURE`, `REFERENCE DATA STRUCTURE`, `SUBJECT LEVEL ANALYSIS DATASET` | `adam` |
+| tabulation | `EVENTS`, `FINDINGS`, `FINDINGS ABOUT`, `INTERVENTIONS`, `RELATIONSHIP`, `SPECIAL PURPOSE`, `STUDY REFERENCE`, `TRIAL DESIGN` | `SDTM`, `SEND` |
+| analysis | `ADAM OTHER`, `BASIC DATA STRUCTURE`, `DEVICE LEVEL ANALYSIS DATASET`, `MEDICAL DEVICE BASIC DATA STRUCTURE`, `MEDICAL DEVICE OCCURRENCE DATA STRUCTURE`, `OCCURRENCE DATA STRUCTURE`, `REFERENCE DATA STRUCTURE`, `SUBJECT LEVEL ANALYSIS DATASET` | `ADaM` |
 
 A dataset that declares no class resolves `mandatory` from its keys and its
-declarations alone. A document that composes a dataset whose class belongs to
-the other group fails with `value_not_permitted`, reporting `submission.class`:
-the group the domain build read must be the family the study document binds.
+declarations alone. A declared class belongs to the group of the dataset's
+model, so the group the domain build read is the model's. A specification
+that declares its model fails on its own when its class belongs to the other
+group ([SUB-23](#sub-23)), with the class in `value` and the model in
+`model`; a document fails a dataset whose class belongs to the other group of
+its section's model. Each fails with `value_not_permitted`, reporting
+`submission.class`.
 
 For a tabulation class, `core` derives `mandatory`: `Req` gives true, and `Exp`
 and `Perm` give false. A declared `mandatory: true` on an `Exp` or `Perm`
 column is an accepted sponsor restriction. A declared `mandatory: false` on a
-`Req` column is rejected when a document composes the dataset: the standard
-requires the column, and a specification cannot relax its standard by
-declaration.
+`Req` column of an `SDTM` or `SEND` dataset is rejected: the standard requires
+the column, and a specification cannot relax its standard by declaration.
 
-For `adam`, the ADaM guides state that `Core` assists preparation and allows
+For `ADaM`, the ADaM guides state that `Core` assists preparation and allows
 nulls unless otherwise specified, and Define-XML has no Core attribute. A `Req`
 core requires the variable's inclusion in the dataset but allows nulls;
 `mandatory` states whether every row carries a non-missing value, as the
@@ -376,14 +415,29 @@ with `value_not_permitted`, reporting the field. A value-level entry
 ([SUB-12](#sub-12)) resolves the same way over its merged metadata, taking
 `mandatory` and `core` from the column where it declares neither.
 
-Each of these fails with `core_mandatory_conflict` when a document composes
-the dataset, reporting the column:
+Each of these fails with `core_mandatory_conflict`, reporting the column:
 
-- a `core` absent for any family;
-- an `Exp` for `adam`;
-- a `Cond` for `sdtm` or `send`;
-- a `mandatory: false` on a `Req` column for `sdtm` or `send`;
-- a `mandatory` absent for `adam`.
+- a `core` absent for any model;
+- an `Exp` for `ADaM`;
+- a `Cond` for `SDTM` or `SEND`;
+- a `mandatory: false` on a `Req` column for `SDTM` or `SEND`;
+- a `mandatory` absent for `ADaM`.
+
+A document checks each of them when it composes the dataset, at the column's
+`<section>.specs[<n>].columns.<column>.submission` or the entry's. A
+specification checks them on its own ([SUB-23](#sub-23)). A designation that
+its model does not publish fails at the `core` that declares it, and a
+`mandatory: false` on a `Req` column at that `mandatory`, wherever a column or
+value-level entry declares it; an entry reports only a conflict its own
+`core` or `mandatory` makes, since the column reports what the entry
+inherits. An absent `core`, and under `ADaM` an absent `mandatory`, fail at
+the column's `submission` when the specification declares dataset metadata;
+without it, the column metadata is not yet complete, and a document reports
+the absence. A specification that declares no model checks only an absent
+`core`. The context names the column, an entry in `entry`, the cause in
+`reason` (`core_missing`, `core_not_admitted`, `required_not_mandatory` or
+`mandatory_missing`), and the declared `core` and the `model` where they
+decide it.
 
 [SUB-11](#sub-11) enforces the resolution, and
 [DEFINE-18](define-xml.md#define-18) writes it as `Mandatory`.
@@ -572,20 +626,20 @@ declared origin has no place in a submission document.
 
 <a id="sub-15"></a>
 
-### SUB-15. Each family admits its own origin type and source pairs
+### SUB-15. Each model admits its own origin type and source pairs
 
-Which origin type and source pairs are admitted depends on the family. For
-`sdtm`, the table below fixes them. For `send`, every type is admitted, and
-`source` is either absent or a source the `sdtm` table admits for the type.
-For `adam`, the admitted types are `Derived`, `Assigned`, `Predecessor` and
+Which origin type and source pairs are admitted depends on the model. For
+`SDTM`, the table below fixes them. For `SEND`, every type is admitted, and
+`source` is either absent or a source the `SDTM` table admits for the type.
+For `ADaM`, the admitted types are `Derived`, `Assigned`, `Predecessor` and
 `Other`, and `source` is derived rather than declared: `Sponsor` for
 `Derived`, `Assigned` and `Other`, and absent for `Predecessor`. A pair the
-family does not admit fails.
+model does not admit fails.
 
 Fails: `origin_source_not_admitted`.
-Evidence: `sdtm-lb-metadata`, `rust/crates/yamaa-adapters/tests/file_resources.rs::original_lb_source_rejection_and_per_value_published_vocabulary_have_zero_writes`, `rust/crates/yamaa-adapters/tests/file_resources.rs::not_available_and_send_sources_follow_the_family_pairs`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionOriginSource`.
+Evidence: `sdtm-lb-metadata`, `rust/crates/yamaa-adapters/tests/file_resources.rs::original_lb_source_rejection_and_per_value_published_vocabulary_have_zero_writes`, `rust/crates/yamaa-adapters/tests/file_resources.rs::not_available_and_send_sources_follow_the_family_pairs`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::rules_that_read_the_model_are_checked_on_the_specification_alone`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionOriginSource`.
 
-| Type | Admitted sources for `sdtm` |
+| Type | Admitted sources for `SDTM` |
 |---|---|
 | `Collected` | `Subject`, `Investigator`, `Vendor` |
 | `Derived` | `Vendor`, `Sponsor` |
@@ -595,16 +649,23 @@ Evidence: `sdtm-lb-metadata`, `rust/crates/yamaa-adapters/tests/file_resources.r
 | `Predecessor` | none; `source` must be absent |
 | `Not Available` | none; `source` must be absent |
 
-An `sdtm` `Not Available` origin declares no source and carries the
+An `SDTM` `Not Available` origin declares no source and carries the
 description [SUB-16](#sub-16) requires, which says why the value is not
-available. For `adam`, a declared `source` is rejected, and `Collected`,
-`Protocol` and `Not Available` are not admitted. A `send` source is optional:
-the family identifies responsibility through its own trial-summary and
-findings columns, and a declared source states it with the pairs the `sdtm`
-table admits, so a `send` `Predecessor` or `Not Available` declares none. An
-origin type and source pair the family does not admit, a `source` present where
+available. For `ADaM`, a declared `source` is rejected, and `Collected`,
+`Protocol` and `Not Available` are not admitted. A `SEND` source is optional:
+the model identifies responsibility through its own trial-summary and
+findings columns, and a declared source states it with the pairs the `SDTM`
+table admits, so a `SEND` `Predecessor` or `Not Available` declares none. An
+origin type and source pair the model does not admit, a `source` present where
 these rules require absence, or one absent where they require presence fails
 with `origin_source_not_admitted`.
+
+A specification that declares its model checks the pairs on its own
+([SUB-23](#sub-23)), for each origin a column or value-level entry declares,
+at that origin's `origins[<i>]`; the context names the column, an entry in
+`entry`, the origin's type in `origin_type`, its declared source in
+`origin_source`, and the model in `model`. A document checks them when it
+composes the dataset, at the column's or entry's `origin`.
 
 <a id="sub-16"></a>
 
@@ -850,20 +911,24 @@ document reference holding only `document` restate their string and fail as
 
 <a id="sub-23"></a>
 
-### SUB-23. Rules needing no family or project file, and the `mandatory` resolution, are checked on the specification alone, and the rest when a document composes it
+### SUB-23. Rules needing no project file are checked on the specification alone, and the rest when a document composes it
 
-Every rule of this profile that needs neither a family nor the project file is
-checked when the specification is validated on its own, and so is the
-resolution and enforcement of `mandatory`, which reads its family group from
-the dataset's `class`. Every other rule is checked when
+Every rule of this profile that needs no project file is checked when the
+specification is validated on its own, including each rule that depends on
+the model the specification declares ([SUB-3](#sub-3)), such as core
+designations, origin pairs and date types, and the resolution of
+`mandatory`. A rule that reads the project file, such as the guide a section
+binds, the documents a section declares or the labels of a predecessor
+another listed specification declares, is checked when
 [Define-XML](define-xml.md) composes the specification into a document.
 
-Evidence: `sdtm-lb-metadata`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::metadata_admission_has_exact_causes_before_study_access`, `rust/crates/yamaa-adapters/tests/file_resources.rs::original_lb_source_rejection_and_per_value_published_vocabulary_have_zero_writes`.
+Evidence: `sdtm-lb-metadata`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::metadata_admission_has_exact_causes_before_study_access`, `rust/crates/yamaa-adapters/tests/file_resources.rs::original_lb_source_rejection_and_per_value_published_vocabulary_have_zero_writes`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::rules_that_read_the_model_are_checked_on_the_specification_alone`.
 
 Checked when the specification is validated on its own:
 
 - the vocabularies;
-- the required and prohibited field combinations;
+- the required and prohibited field combinations, `model` among them
+  ([SUB-3](#sub-3));
 - the length binding of [SUB-8](#sub-8) and the date and time forms of
   [SUB-26](#sub-26);
 - the refusal of a `datetime` column under a tabulation class
@@ -876,30 +941,35 @@ Checked when the specification is validated on its own:
 - the presence of `method` for a declared `Derived` origin
   ([SUB-18](#sub-18));
 - the resolution of `mandatory` from the keys, its declaration and the class's
-  family group, a key column's declared `mandatory: false`, and the presence
-  check and redundant `not_missing` of [SUB-10](#sub-10) and
-  [SUB-11](#sub-11).
+  group, a key column's declared `mandatory: false`, and the presence check
+  and redundant `not_missing` of [SUB-10](#sub-10) and [SUB-11](#sub-11);
+- with a declared model, the core designations and `core`/`mandatory`
+  conflicts of [SUB-10](#sub-10), the agreement of the class's group with the
+  model, the date types of [SUB-6](#sub-6) and [SUB-25](#sub-25), the origin
+  pairs of [SUB-15](#sub-15), and the prohibitions of [SUB-5](#sub-5) and
+  [SUB-9](#sub-9).
 
 Checked when a document composes the specification:
 
-- the core designations and `core`/`mandatory` conflicts of
-  [SUB-10](#sub-10), and the agreement of the class's group with the family;
-- the one data type and display format a family gives a `date` or `datetime`
-  ([SUB-6](#sub-6), [SUB-25](#sub-25));
-- the remaining family-dependent rules, such as the origin pairs of
-  [SUB-15](#sub-15);
+- the section's listing and the guide it binds ([SUB-3](#sub-3));
 - the annotated case report form references of [SUB-17](#sub-17), which name
   the section's documents and depend on its `context`, and the predecessor
-  labels of [SUB-20](#sub-20), which read every section's specifications.
+  labels of [SUB-20](#sub-20), which read every section's specifications;
+- the rules that depend on the model again, under the section's model, which
+  [SUB-3](#sub-3) makes the specification's.
+
+A specification that declares `schema_version` declares no model
+([SUB-3](#sub-3)), so the rules that depend on one are checked only when a
+document composes it, under its section's model.
 
 The row checks of [SUB-13](#sub-13) run in every build of the specification,
 before publication. The transport lengths of [SUB-24](#sub-24) are measured
 after composition, from the published artifacts, when a transport is
 requested.
 
-Only the study document says which standard the identifier names. A
-specification that is never composed carries declarations no family has
-judged; it is not yet part of a submission.
+The specification names its model, and only the study document names the
+standard its identifier refers to. A specification that is never composed is
+not yet part of a submission.
 
 ## Transport lengths and dates
 
@@ -928,33 +998,36 @@ read, and the declared `length` is the document's `Length`.
 
 <a id="sub-25"></a>
 
-### SUB-25. Under `adam` a date or datetime is submitted as a SAS numeric date with a fixed display format and length
+### SUB-25. Under `ADaM` a date or datetime is submitted as a SAS numeric date with a fixed display format and length
 
-Under the `adam` family, a `date` column is submitted as SAS days since
+Under the `ADaM` model, a `date` column is submitted as SAS days since
 1960-01-01 with display format `DATE9.`, and a `datetime` column as seconds
 since 1960-01-01T00:00:00 with `DATETIME20.`. The document describes each as
 `DataType` `integer`, `Length` 8 and that `def:DisplayFormat`. A declared
 `data_type` other than `integer`, or a declared `display_format` other than that
-format, fails when a document composes the specification. Under `sdtm` and
-`send` a `date` keeps its own type and canonical text, and
+format, fails when a document composes the specification. Under `SDTM` and
+`SEND` a `date` keeps its own type and canonical text, and
 [SUB-27](#sub-27) refuses a `datetime`.
 
 Fails: `submission_data_type_not_admitted`, `value_not_permitted`.
-Evidence: `adam-adsl-xpt`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionDisplayFormatConflict`.
+Evidence: `adam-adsl-xpt`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionDisplayFormatConflict`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::rules_that_read_the_model_are_checked_on_the_specification_alone`.
 
 Dataset-JSON keeps the ISO value and asks for the integer with
 `targetDataType` ([JSON-10](dataset-json.md#json-10)), and a SAS Transport file
 writes the number ([XPT-6](xpt.md#xpt-6)). A conflicting `display_format` fails
 with `value_not_permitted` at the column's `display_format`; a conflicting
 `data_type` fails as [SUB-6](#sub-6) states. No `length` is declared on such a
-column ([SUB-7](#sub-7)).
+column ([SUB-7](#sub-7)). A specification that declares `model: ADaM` fails
+both on its own ([SUB-23](#sub-23)), wherever a column or value-level entry
+declares them; the `display_format` failure names the column, the declared
+format in `value` and the fixed one in `permitted`.
 
 <a id="sub-27"></a>
 
-### SUB-27. An `sdtm` or `send` dataset carries its dates and times as text, never in a `datetime` column
+### SUB-27. An `SDTM` or `SEND` dataset carries its dates and times as text, never in a `datetime` column
 
 A dataset whose `submission.class` is a tabulation class of
-[SUB-10](#sub-10), so of the `sdtm` or `send` family, must not carry a
+[SUB-10](#sub-10), so of the `SDTM` or `SEND` model, must not carry a
 `datetime` column in `output.columns`: such a column writes the seconds that
 the canonical text of [VALUE-17](../values.md#value-17) always shows, collected
 or not. Its dates and times are `str` columns with a date or time `data_type`
@@ -964,13 +1037,13 @@ or not. Its dates and times are `str` columns with a date or time `data_type`
 Fails: `value_not_permitted`.
 Evidence: `negative-sdtm-datetime-column`, `sdtm-vs-epoch-from-subject-elements`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::tabulation_datasets_refuse_a_datetime_output_column`, `rust/crates/yamaa-adapters/tests/file_resources.rs::an_sdtm_document_refuses_a_datetime_output_column`.
 
-The family is read from the dataset's class, as the resolution of `mandatory`
-reads it, so the refusal needs no study document; a dataset that declares no
-class is not checked, and a document composing an `sdtm` or `send` dataset
-refuses such a column the same way. The failure reports `value_not_permitted`
+The model's group is read from the dataset's class, as the resolution of
+`mandatory` reads it, so the refusal needs no study document; a dataset that
+declares no class is not checked, and a document composing an `SDTM` or `SEND`
+dataset refuses such a column the same way. The failure reports `value_not_permitted`
 at `columns.<column>.type` with the column, the value `datetime`, the class and
 the permitted column types `str` and `date`, or at
-`<family>.specs[<n>].columns.<column>.type` when a document composes the
+`<section>.specs[<n>].columns.<column>.type` when a document composes the
 dataset. A `date` column is admitted: its
 canonical text carries the day alone. An internal `datetime`, such as the
 moment an element lookup compares, never reaches the artifact. Text collected
