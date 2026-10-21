@@ -151,17 +151,19 @@ such as sccache, and a Cargo build directory that the environment or a parent
 After Rust changes, rerun `make setup`: it rebuilds the Python extension whenever
 a file listed under `tool.uv.cache-keys` in `python/pyproject.toml` changes.
 
-Before a push, run `make quick` and the tests nearest the change. It runs lint
-and the repository checks, which leave the R binding's Clippy to `make test-r`,
-and no test suite, so it needs no R. Pull request CI runs the complete
-`make check`; when a job fails, reproduce it with that job's own target below.
-Run `make setup` again after changing `rust/` or `python/src/` before Python
-tests, which import the installed package.
+Before a push, run the tests nearest the change and, after a Rust change,
+`cargo fmt` and Clippy on the touched crates. Run `make quick` only for a
+change to generated files, rule cards, schemas, docs generators or Python
+(D148 on #3030). It runs lint and the repository checks, which leave the R
+binding's Clippy to `make test-r`, and no test suite, so it needs no R. Pull
+request CI runs the complete `make check`; when a job fails, reproduce it with
+that job's own target below. Run `make setup` again after changing `rust/` or
+`python/src/` before Python tests, which import the installed package.
 
 | Command | Purpose |
 | --- | --- |
 | `make setup` | Install the locked development environment. |
-| `make quick` | Run lint and the repository checks, before a push. |
+| `make quick` | Run lint and the repository checks. |
 | `make check` | Run the checks required by ordinary CI. |
 | `make check-lint` | Check formatting and lint across Python and Rust, except the R binding. |
 | `make check-repository` | Check authored specifications, layout, rules, references and the site. |
@@ -226,12 +228,14 @@ Passing static repository validation does not establish engine release
 qualification.
 
 A change to the executor, such as rewrite 1 (#2785), must leave every result
-unchanged. Each such PR passes ordinary CI and `make check-equivalence` on its
-exact head, and says so in the PR. CI's `equivalence` job runs the gate on a
-pull request unless its diff is confined to root `README.md`,
+unchanged. Each such PR passes ordinary CI and the `equivalence` and
+`conversion` jobs below on its exact head. Those jobs are the proof: run
+`make check-equivalence` or `make check-conversion` locally only to debug a
+CI failure of that gate (D148 on #3030). CI's `equivalence` job runs the gate
+on a pull request unless its diff is confined to root `README.md`,
 `CONTRIBUTING.md`, `AGENTS.md` and Markdown files under `docs/`. Such a
 documentation-only pull request passes with a notice without running the
-gate; the command stays the local route. All other paths, including new
+gate. All other paths, including new
 build configuration, package metadata, checkout attributes and repository
 tools, trigger it. The gate builds the Python and R packages from the exact
 pull-request head and installs both outside the checkout. On each host it
