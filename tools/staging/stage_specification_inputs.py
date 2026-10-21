@@ -8,6 +8,7 @@ import shutil
 from pathlib import Path
 
 from tools.paths import ROOT
+from tools.staging import build_parquet_source_inputs
 
 REPOSITORY = ROOT
 CASES = (
@@ -1484,9 +1485,7 @@ def stage(destination: Path):
         REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/specs",
         destination / "expected",
     )
-    shutil.copytree(
-        REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/pq", destination / "pq"
-    )
+    build_parquet_source_inputs.build(destination / "pq")
 
     # R compares complete JSON without adding a JSON-library runtime dependency.
     for path in (destination / "expected").glob("*.json"):

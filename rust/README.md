@@ -22,8 +22,10 @@ packaging checks. Python and R usage lives in the
 in [python/README.md](../python/README.md) and
 [R/yamaa/README.md](../R/yamaa/README.md).
 
-Expected benchmark data and Parquet fixtures are authored truth. Preserve their
-bytes when changing implementation or repository structure.
+Expected benchmark data is authored truth. Preserve its bytes when changing
+implementation or repository structure. The adapters' Parquet test inputs are
+written when the tests run (`crates/yamaa-adapters/tests/support/parquet_files.rs`),
+since binary files live only under `benchmarks/`.
 
 Layer composition and null handling follow the
 [composition contract](../rules/inheritance.md).

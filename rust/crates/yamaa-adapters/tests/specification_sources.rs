@@ -60,10 +60,7 @@ output: {{path: output.csv, columns: [I, S]}}
 "#
                 );
                 let run = PreparedRun::prepare(prepare(&schema, raw.as_bytes())).unwrap();
-                let content = std::fs::read(
-                    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/pq/text.parquet"),
-                )
-                .unwrap();
+                let content = crate::support::parquet_files::file("text");
                 let mut port = Port {
                     content: content.into(),
                     calls: 0,
