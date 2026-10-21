@@ -214,6 +214,25 @@ def test_a_lock_the_engine_cannot_read_refuses_the_run_before_any_version(
     ]
 
 
+def test_a_version_number_past_the_integer_limit_refuses_the_run(study, monkeypatch):
+    """CPython converts at most 4,300 digits of text to an integer by default,
+    so packaging refused a version with a longer number: locked, installed or
+    read by a marker's version comparison. The engine keeps that default."""
+    at, past = "1" * 4300, "1" * 4301
+    refused = [("engine_rejected", {"stage": "build", "code": "opaque_host"})]
+    lock(study, (past, None))
+    assert problems(run(study)) == refused
+    lock(study, (INSTALLED, [f"python_version == '{past}'"]))
+    assert problems(run(study)) == refused
+    lock(study, (INSTALLED, [f"python_version == '{at}'"]))
+    assert problems(run(study)) == [mismatch("version_not_locked", [], None)]
+    lock(study, ("1.0", None))
+    monkeypatch.setattr(m, "installed_version", lambda name: at)
+    assert problems(run(study)) == [mismatch("version_mismatch", ["1.0"], at)]
+    monkeypatch.setattr(m, "installed_version", lambda name: past)
+    assert problems(run(study)) == refused
+
+
 @pytest.fixture
 def installed_callable(monkeypatch):
     from types import ModuleType

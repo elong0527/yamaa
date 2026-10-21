@@ -136,6 +136,12 @@ pub enum Installed {
     Unreadable,
 }
 
+/// The most digits a version number may have, CPython's default limit on
+/// converting text to an integer, under which `packaging` refused a version
+/// with a longer number. Python lets the limit be raised, lowered or turned
+/// off; the engine does not observe that setting and keeps the default.
+pub const VERSION_DIGITS: usize = version::DIGITS;
+
 /// Why uv lock verification refused instead of reporting findings.
 #[derive(Debug, PartialEq, Eq)]
 pub enum UvFailure<E> {
@@ -145,6 +151,11 @@ pub enum UvFailure<E> {
     /// The host reported an installed distribution whose name is no valid
     /// distribution name.
     Distribution,
+    /// A version that verification read has a number of more than
+    /// [`VERSION_DIGITS`] digits, which `packaging` refused to convert:
+    /// `origin` says where the version was written, and `digits` how long the
+    /// first such number is.
+    Digits { origin: &'static str, digits: usize },
     /// A host observation failed.
     Host(E),
 }
@@ -190,7 +201,13 @@ fn selected<H: PythonInstallation>(
         let environment = environment.as_ref().expect("read above");
         any |= parsed
             .evaluate(environment)
-            .map_err(|_| UvFailure::Lock(MARKERS))?;
+            .map_err(|failure| match failure {
+                marker::Failure::Invalid => UvFailure::Lock(MARKERS),
+                marker::Failure::Digits(digits) => UvFailure::Digits {
+                    origin: MARKERS,
+                    digits,
+                },
+            })?;
     }
     Ok(any)
 }
@@ -274,11 +291,17 @@ pub fn verify_uv<H: PythonInstallation>(
             if !selected(record, &mut environment, host)? {
                 continue;
             }
-            let locked = record
+            let text = record
                 .get("version")
                 .and_then(toml::Value::as_str)
-                .and_then(version::version)
                 .ok_or(UvFailure::Lock(VERSION))?;
+            let locked = version::version(text).map_err(|refusal| match refusal {
+                version::Refusal::Invalid => UvFailure::Lock(VERSION),
+                version::Refusal::Digits(digits) => UvFailure::Digits {
+                    origin: VERSION,
+                    digits,
+                },
+            })?;
             if !expected.contains(&locked) {
                 expected.push(locked);
             }
@@ -301,12 +324,18 @@ pub fn verify_uv<H: PythonInstallation>(
         let (reason, actual) = match host.version(&name).map_err(UvFailure::Host)? {
             Installed::Missing => (Reason::PackageNotInstalled, None),
             Installed::Unreadable => (Reason::InvalidInstalledVersion, None),
+            // A version that is no version is a finding, but one with a
+            // number too long to convert refuses, as it did in `packaging`.
             Installed::Version(text) => match version::version(&text) {
-                None => (Reason::InvalidInstalledVersion, Some(text)),
-                Some(installed) if installed != expected[0] => {
-                    (Reason::VersionMismatch, Some(text))
+                Err(version::Refusal::Invalid) => (Reason::InvalidInstalledVersion, Some(text)),
+                Err(version::Refusal::Digits(digits)) => {
+                    return Err(UvFailure::Digits {
+                        origin: "installed version",
+                        digits,
+                    })
                 }
-                Some(_) => continue,
+                Ok(installed) if installed != expected[0] => (Reason::VersionMismatch, Some(text)),
+                Ok(_) => continue,
             },
         };
         findings.push(Finding {

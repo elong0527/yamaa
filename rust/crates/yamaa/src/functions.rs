@@ -348,6 +348,14 @@ pub enum InstalledVersion {
 /// whose name is invalid with [`FunctionError::Protocol`]; and a failure of
 /// `installed` propagates unchanged. No functions means no lock read and no
 /// observation.
+///
+/// A version that the comparison reads with a number of more than 4,300
+/// digits, the limit CPython puts by default on converting text to an
+/// integer, fails with [`LockSyntaxError::Limit`], wherever it is written:
+/// in the lock, in a resolution marker or in the installed metadata.
+/// `packaging` refused such a version with that default; Python lets the
+/// limit be raised, lowered or turned off, and the engine does not observe
+/// that setting.
 pub fn verify_uv_lock(
     lock: &[u8],
     functions: &[FunctionIdentity],
@@ -401,6 +409,13 @@ pub fn verify_uv_lock(
             Err(FunctionError::LockSyntax(LockSyntaxError::Shape { field }))
         }
         Err(UvFailure::Distribution) => Err(FunctionError::Protocol),
+        Err(UvFailure::Digits { origin, digits }) => {
+            Err(FunctionError::LockSyntax(LockSyntaxError::Limit {
+                resource: origin,
+                limit: yamaa_adapters::project_lock::VERSION_DIGITS,
+                actual: Some(digits),
+            }))
+        }
         Err(UvFailure::Host(error)) => Err(error),
     }
 }
@@ -620,6 +635,18 @@ mod tests {
         let untouched = Installation::new(&[]);
         assert!(verify_uv_lock(b"not a lock", &[], &untouched).is_ok());
         assert!(untouched.observed.lock().unwrap().is_empty());
+        // A version number that CPython would not convert by default refuses
+        // with its length, wherever the version is written.
+        let past: &'static str = Box::leak("1".repeat(4301).into_boxed_str());
+        let huge: &'static [(&'static str, &'static str)] = Box::leak(Box::new([("yamaa", past)]));
+        assert!(matches!(
+            verify_uv_lock(lock, &calls, &Installation::new(huge)),
+            Err(FunctionError::LockSyntax(LockSyntaxError::Limit {
+                resource: "installed version",
+                limit: 4300,
+                actual: Some(4301)
+            }))
+        ));
     }
 
     #[cfg(feature = "yaml")]
