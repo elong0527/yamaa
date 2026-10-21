@@ -5612,11 +5612,11 @@
         "adam-adae-analysis-time",
         "adam-adsl-xpt",
         "negative-transport-empty-string",
-        "schema-source-xpt"
+        "schema-source-xpt",
+        "sdtm-dm-odm-snapshot"
       ],
       "lines": [
-        "yamaa selftest: succeeded, 4 of 4 cases passed",
-        "not covered: odm"
+        "yamaa selftest: succeeded, 5 of 5 cases passed"
       ],
       "information_line": "engine {version}, language {language_versions}, {host} {host_version}, {platform}",
       "info_fields": [

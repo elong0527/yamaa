@@ -93,9 +93,10 @@ empty, so the R suite proves containment on the Windows GNU build too.
 `selftest` pairs the installed Python and R selftest suites. Its cases are
 the list in `benchmarks/selftest.yaml`, and its lines are the printed lines of
 #3030 D119 for a shipped build, which compiles every feature, so every case
-passes and only the adapter that the list leaves uncovered is named. Each
-host fills the information line from its own facts: the compiled core
-version, its interpreter's version, and the platform its interpreter reports.
+passes, and a listed case covers every adapter, so no `not covered:` line is
+printed. Each host fills the information line from its own facts: the
+compiled core version, its interpreter's version, and the platform its
+interpreter reports.
 
 `schema` pairs the installed Python and R `schema()` suites (#3030 D149). Its
 facts were read by hand from the JSON Schemas committed in `yaml/v1/json/`,
