@@ -376,11 +376,13 @@ Evidence: `negative-stale-artifact`, `rust/crates/yamaa-core/src/submission_stal
 
 The comparison uses declared identities only, the facts the report records
 under [CHECK-24](../verification.md#check-24), and no timestamp or digest: the
-report's `ARTIFACT` against `output.path` as written, the `run` row's `COUNT`
-against the rows the artifact holds, and each input row's `COUNT` and
-`DETAILS.bytes` against the records the input's profile decodes from its bytes
-now and their length. Declaring a report adds nothing to it, and a
-specification that declares no `output.report` composes without a comparison.
+report's `ARTIFACT` against `output.path` as the run records it, with inherited
+paths respelled relative to the entry under [LAYER-10](../inheritance.md#layer-10),
+the `run` row's `COUNT` against the rows the artifact holds, and each input
+row's `COUNT` and `DETAILS.bytes` against the records the input's profile
+decodes from its bytes now and their length. Declaring a report adds nothing
+to it, and a specification that declares no `output.report` composes without
+a comparison.
 
 The comparison follows every fault of the document itself and precedes the
 transport files. Specifications compare in entry order, each its `run` row,

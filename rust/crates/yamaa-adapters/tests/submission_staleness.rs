@@ -216,6 +216,50 @@ submission:
     }
 
     #[test]
+    fn an_inherited_output_report_compares_the_entry_relative_output_path() {
+        let study = Study::new("yamaa: \"1.0\"\ntype: spec\nparent: base/parent.yaml\n");
+        fs::create_dir(study.0.join("base")).unwrap();
+        study.write("base/parent.yaml", SPEC);
+        study.write("base/raw.csv", RAW);
+        let mut result = study.run();
+        assert!(result.issues().is_empty(), "{:?}", result.issues());
+        assert!(result.save().unwrap());
+        assert_eq!(study.read("base/dm.csv"), DM.as_bytes());
+        let report = String::from_utf8(study.read("base/dm-report.csv")).unwrap();
+        assert!(report
+            .lines()
+            .nth(1)
+            .unwrap()
+            .starts_with("base/dm.csv,run,"));
+        let mut define = study.compose();
+        assert!(define.issues().is_empty(), "{:?}", define.issues());
+        assert!(define.save().unwrap());
+    }
+
+    #[test]
+    fn renaming_an_inherited_output_still_makes_its_report_stale() {
+        let study = Study::new("yamaa: \"1.0\"\ntype: spec\nparent: base/parent.yaml\n");
+        fs::create_dir(study.0.join("base")).unwrap();
+        study.write("base/parent.yaml", SPEC);
+        study.write("base/raw.csv", RAW);
+        let mut result = study.run();
+        assert!(result.issues().is_empty(), "{:?}", result.issues());
+        assert!(result.save().unwrap());
+        study.write(
+            "base/parent.yaml",
+            SPEC.replace("path: dm.csv", "path: dm2.csv"),
+        );
+        study.write("base/dm2.csv", DM);
+        assert_eq!(
+            stale(&study.compose(), "artifact_path"),
+            facts(&[
+                ("recorded", text("base/dm.csv")),
+                ("actual", text("base/dm2.csv"))
+            ])
+        );
+    }
+
+    #[test]
     fn a_specification_without_a_report_is_not_compared() {
         let spec = SPEC.replace("  report: dm-report.csv\n", "");
         let study = Study::built(&spec);

@@ -685,7 +685,11 @@ impl<P: Ports> Application<P> {
                 .read_report(&guard.path, report.base_source, report.written)
                 .map_err(Failure::Port)?
                 .ok_or_else(|| stale(guard.stale(Reason::ReportInvalid, [])))?;
-            let rows = guard.run(&recorded, written).map_err(stale)?;
+            // The run records the lowered entry-relative path, including
+            // inherited paths respelled under LAYER-10.
+            let rows = guard
+                .run(&recorded, &view.tree.output.path.text)
+                .map_err(stale)?;
             let actual = Self::published_rows(ports, dataset, declaring, written)?;
             guard
                 .artifact(rows, actual, dataset.has_no_data())
