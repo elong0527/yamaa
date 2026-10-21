@@ -107,8 +107,8 @@ its native mapping, and the delegating classes and functions), and R's
 `R/yamaa/R/public-bindings.R` (the exported functions, the constructors of the
 result and lazy objects, S3 methods and private accessors) and
 `R/yamaa/NAMESPACE`. The handwritten rest stays beside them:
-`python/src/yamaa/_support.py` holds the Polars table conversion, path
-conversion, lazy-object pickling and the version lookup, and `R/yamaa/R/api.R`
+`python/src/yamaa/_support.py` holds path conversion, lazy-object pickling and
+the version lookup, and `R/yamaa/R/api.R`
 holds the reply and argument conversions, the host-function capabilities, the
 interrupt rethrow and the locked-object helpers. Docstrings come from `doc`;
 R's help pages stay handwritten under `R/yamaa/man/`.
@@ -158,6 +158,21 @@ hidden bindings. `length()` counts the names. The manifest records each
 result's names, so a reordered member changes a frozen line. A lazy object
 keeps R's own `names()` and `length()` of an environment.
 
+A class with `hosts: [python]` is Python's alone: a native class of
+`yamaa._native` that the public module imports and exports as it is, today
+only `yamaa.Table` (D11, D43), which R has no counterpart for because its
+tables are data frames (D44). It has no `r`, `holds` or `doc`. Each member
+names one method of the native class, by its `python` spelling for a
+`protocol` or `printing` member (`printing` is `__repr__`) and by its own name
+otherwise, and declares that method's arguments; a `property` is a native
+getter, and a `method` may list the modules it `imports` when it is called.
+Every native method of the class is one member, and `host_only` names each. A
+type token with only a `python` projection, such as `polars_frame`, serves
+only such members. `value_types` gives both hosts' projection of each of the
+language's column types, the type of a table's column and of each value its
+rows hold; every table column's type is one of them, possibly inside `list<T>`
+or `optional<T>`.
+
 ### Command line
 
 `cli` is empty until the `yamaa-cli` commands are implemented (#3060): the
@@ -183,7 +198,10 @@ Python uses `str`, `bytes`, `int`, `None`, lists and tuples; R's `raw`, `robj`,
 `r_list` and `r_function` denote `Raw`, `Robj`, `List` and `Function` in extendr.
 `host_object`, `host_callback` and `host_exception` are interpreter-rooted
 objects, never serialized addresses. Named Python classes refer to owned native
-handles. `arrow_stream_capsule` is the named `arrow_array_stream` PyCapsule.
+handles. `arrow_stream_capsule` is the named `arrow_array_stream` PyCapsule,
+and `row` is one table row as a `dict[str, object]`. A class method with
+`kind: getter` is a read-only attribute, a `#[getter]` in Rust, which the stub
+declares as a property.
 
 The `python` and `r` sections inventory the complete current registration lists,
 including class methods, the private qualification accessor `observations`, the
@@ -191,8 +209,8 @@ one native exception, version metadata and the ODM reader. The `python` section
 holds only `module`, `registration` and `exports`, and the generator refuses any
 other key. There is no issue-record declaration: the Rust facade builds the
 twelve-column issues table of #3030 D28 once, and every issues view crosses the
-boundary as a table like any output or report. Python reads it from an `_ArrowTable` as a
-Polars DataFrame, and the R binding converts it natively into a data.frame.
+boundary as a table like any output or report. Python returns it as the
+native `Table`, and the R binding converts it natively into a data.frame.
 `context_object` is the owned tree `spec_resolve` returns, a `dict[str, object]`
 of text, booleans, exact integers, floats, `None`, lists and nested objects.
 `r_reply` describes the existing `{value, error}` list, whose error carries a
@@ -206,8 +224,8 @@ counterpart, such as `_project_run` and `project_run`. Every Python export,
 each class method included, and every R function names its counterpart under
 `operations` unless `host_only` declares it host transport. The generator
 refuses an export that has neither and an operation that names only one host.
-`host_only` holds Python's Arrow capsule `_ArrowTable.__arrow_c_stream__` and
-R's two interrupt helpers, `run_interrupt` and `project_run_interrupt`. Python
+`host_only` holds the methods of Python's `Table` and R's two interrupt
+helpers, `run_interrupt` and `project_run_interrupt`. Python
 checks for a host interrupt inside each native call; R asks a returned run or
 project run handle for the interrupt it retained and rethrows that original
 condition. extendr-generated `wrap__*`, metadata, registration and finalizer functions are
@@ -408,16 +426,18 @@ valid if a later call on the build is cancelled.
 ## Arrow C Data/Stream handoff
 
 Use the existing [host handoff](../README.md#arrow-host-handoff) implemented in
-[the shared bridge](../crates/yamaa-adapters/src/arrow_bridge.rs), with PyArrow
->=23.0.1 and Polars >=1.35.2. Tables only leave the engine: Python receives each
-output, issues and report table as an `_ArrowTable` and reads it into Polars,
+[the shared bridge](../crates/yamaa-adapters/src/arrow_bridge.rs). Tables only
+leave the engine: Python returns each output, issues and report table as a
+`yamaa.Table`, whose `to_arrow()`, `to_polars()` and `to_pandas()` read it
+through this stream with PyArrow >=23.0.1, Polars >=1.35.2 or pandas
+>=2.3.3, and whose `to_pylist()` reads it in Rust,
 while the R binding copies each table into plain R vectors in Rust, so no Arrow
 stream crosses the R boundary. No host passes a table into the engine. The
 generated declarations must preserve these shapes:
 
 | Transfer | Ownership transition |
 | --- | --- |
-| Python export | `_ArrowTable.__arrow_c_stream__()` creates a fresh named capsule owning a stream header shell and independent reader cursor. |
+| Python export | `Table.__arrow_c_stream__()` creates a fresh named capsule owning a stream header shell and independent reader cursor. |
 | Stream schema/next batch | Each successful emitted schema/array has its own release callback. End of stream is an array with `release == NULL`, distinct from an empty batch. |
 
 The current owner invokes each non-null release callback once. Moving ownership
@@ -441,11 +461,12 @@ nulls, slices, empty batches and chunks. Public dates use Date32 days and
 zone-free datetimes whole TimestampSecond values. Requested Python export
 schema conversion is refused. Nonfinite floats become missing under the
 existing engine rule. Buffer sharing covers retained public Arrow
-value/validity buffers. Build materialization, Polars conversion and R
-data-frame conversion can copy. Conversions preserve values or raise an error:
-R raises for an integer beyond 2^53 or text containing NUL, which no plain R
-vector holds exactly. The generator must reuse these adapters rather than
-promise zero copies for those conversions.
+value/validity buffers. Build materialization, `to_pylist()`, the Polars and
+pandas conversions and R data-frame conversion can copy. Conversions preserve
+values or raise an error: `to_pandas()` keeps each Arrow type as a
+`pandas.ArrowDtype`, and R raises for an integer beyond 2^53 or text containing
+NUL, which no plain R vector holds exactly. The generator must reuse these
+adapters rather than promise zero copies for those conversions.
 
 ## Follow-up verification
 

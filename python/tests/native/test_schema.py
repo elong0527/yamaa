@@ -57,7 +57,7 @@ def test_any_other_text_raises_the_refusal_with_its_issue(file_type):
         "[unexpected_file_type, SCHEMA-2]"
     )
     assert error.paths == []
-    [issue] = error.issues.to_dicts()
+    [issue] = error.issues.to_pylist()
     assert issue["severity"] == "error"
     assert issue["phase"] == "validation"
     assert issue["condition"] == "unexpected_file_type"

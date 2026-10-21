@@ -293,13 +293,6 @@ public:
       python: "repr() and str() return it"
       r: "format() returns its lines; print() writes them and returns the object invisibly"
       cli: the summary line of text output
-    value_types:
-      str: {python: "Arrow Utf8, Python str", r: character}
-      int: {python: "Arrow Int64, Python int", r: "double; an error beyond 2^53"}
-      float: {python: "Arrow Float64, Python float", r: double}
-      date: {python: "Arrow Date32, datetime.date", r: Date}
-      datetime: {python: "Arrow Timestamp(second), naive datetime.datetime", r: "POSIXct in UTC"}
-      list: {python: "Arrow List, Python list", r: "list column; NULL for a missing list"}
 
   functions:
     - name: spec
@@ -429,21 +422,6 @@ public:
         - {name: cases, kind: property, returns: table, table: selftest_cases}
         - {name: info, kind: property, returns: info, record: info}
         - {name: summary, kind: printing, python: __repr__, r: [print, format]}
-    Table:
-      since: 1.0.0
-      hosts: [python]
-      python: yamaa.Table
-      meaning: "every Python table (D11, D43); implements the Arrow PyCapsule stream interface; no runtime dependency"
-      members:
-        - {name: num_rows, kind: property, returns: count}
-        - {name: column_names, kind: property, returns: names}
-        - {name: length, kind: protocol, python: __len__, returns: count}
-        - {name: arrow_stream, kind: protocol, python: __arrow_c_stream__, args: {requested_schema: "object | None = None"}, returns: PyCapsule}
-        - {name: to_polars, kind: method, args: {}, returns: polars.DataFrame, imports: polars, on: call}
-        - {name: to_pandas, kind: method, args: {}, returns: pandas.DataFrame, imports: "pandas and pyarrow", on: call}
-        - {name: to_arrow, kind: method, args: {}, returns: pyarrow.Table, imports: pyarrow, on: call}
-        - {name: to_pylist, kind: method, args: {}, returns: "list[dict[str, object]]", imports: nothing}
-        - {name: preview, kind: printing, python: __repr__}
 
   errors:
     refusal:
@@ -580,22 +558,6 @@ python:
       name: _CORE_VERSION
       rust: yamaa_core::VERSION
       type: text
-    - kind: class
-      name: Table
-      rust: arrow_bridge::Table
-      constructible: false
-      methods:
-        - name: __arrow_c_stream__
-          args: {requested_schema: "optional<host_object> = None"}
-          returns: arrow_stream_capsule
-        - {name: num_rows, kind: getter, args: {}, returns: index}
-        - {name: column_names, kind: getter, args: {}, returns: "list<text>"}
-        - {name: __len__, args: {}, returns: index}
-        - {name: __repr__, args: {}, returns: text}
-        - {name: to_pylist, args: {}, returns: "list<host_object>"}
-        - {name: to_polars, args: {}, returns: host_object}
-        - {name: to_pandas, args: {}, returns: host_object}
-        - {name: to_arrow, args: {}, returns: host_object}
     - kind: exception
       name: _Error
       rust: api_entry::_Error
@@ -704,8 +666,8 @@ python:
       rust: api_entry::_selftest
       args: {}
       returns: _SelfTest
-  # Removed with 1.0: _ArrowTable (now Table) and _style_same_value (lint is
-  # in Rust, so the Python style package and its private command go).
+  # Removed with 1.0: _style_same_value (lint is in Rust, so the Python style
+  # package and its private command go).
 
 # Native registrations (private). R: extendr functions behind .native_* wrappers.
 r:
@@ -796,19 +758,9 @@ operations:
   selftest_info: {python: [_SelfTest.info], r: [selftest_info], cli: [selftest]}
   selftest_summary: {python: [_SelfTest.summary], r: [selftest_summary], cli: [selftest]}
 
-# Host transport and host-only presentation: Python checks interrupts inside
-# each native call, R through the two helpers; yamaa.Table is Python's table
-# type, and R converts every table to a data.frame instead.
+# Host transport: Python checks interrupts inside each native call, R through
+# the two helpers. yamaa.Table's methods are Python-only (bindings.yaml).
 host_only:
-  python:
-    - Table.__arrow_c_stream__
-    - Table.num_rows
-    - Table.column_names
-    - Table.__len__
-    - Table.__repr__
-    - Table.to_pylist
-    - Table.to_polars
-    - Table.to_pandas
-    - Table.to_arrow
+  python: []
   r: [run_interrupt, project_run_interrupt]
   cli: []

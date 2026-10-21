@@ -128,9 +128,12 @@ of `yaml/conditions.yaml` before the engine ran. In its study ADSL builds,
 ADAE fails its own check (COLUMN-5), and ADTTE reads ADAE through its
 `schema` link and so is skipped; its submission is
 `define-fixtures/sdtm-dm-metadata`, with the creation time of
-`public-define`. Issue locations are not recorded yet (#3262), so no
-`first issue:` line names one. Every status comes from the `selftest`
-family's vocabulary.
+`public-define`. Each `first issue:` line names its location as D181 gives
+it, counted by hand in the study's files: ADAE's at its `derivation` key,
+ADTTE's at its `schema` key. The study lies outside the current directory,
+so the location names its file by its absolute path, which `{root}` stands
+for with forward slashes. Every status comes from the `selftest` family's
+vocabulary.
 
 The R grammar suite's conditional failure and original
 CSV preservation controls also remain. Exact float bit witnesses, NUL/invalid

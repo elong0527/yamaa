@@ -116,7 +116,7 @@ def _worsening_rows(tmp_path, track, ae=None, fa=None):
             writer = csv.DictWriter(stream, fieldnames=header)
             writer.writeheader()
             writer.writerows(rows)
-    result = yamaa.spec(study / "spec.yaml").run().output
+    result = yamaa.spec(study / "spec.yaml").run().output.to_polars()
     result.write_csv(study / "actual.csv", datetime_format="%Y-%m-%dT%H:%M:%S")
     return _read(study / "actual.csv")[1]
 
@@ -443,7 +443,7 @@ def _pro_deterioration_rows(tmp_path, track, qs):
         writer = csv.DictWriter(stream, fieldnames=header)
         writer.writeheader()
         writer.writerows(qs)
-    result = yamaa.spec(study / "spec.yaml").run().output
+    result = yamaa.spec(study / "spec.yaml").run().output.to_polars()
     result.write_csv(study / "actual.csv")
     return _read(study / "actual.csv")[1]
 
@@ -819,7 +819,9 @@ def test_replicate_qtc_average_pairs_by_replicate_and_skips_absent_rr(
             writer = csv.DictWriter(stream, fieldnames=list(row))
             writer.writeheader()
             writer.writerows(records)
-        yamaa.spec(study / "spec.yaml").run().output.write_csv(study / "actual.csv")
+        yamaa.spec(study / "spec.yaml").run().output.to_polars().write_csv(
+            study / "actual.csv"
+        )
         rows = _read(study / "actual.csv")[1]
     else:
         rows = _run(tmp_path, name, qtc_track, changes)["adeg.csv"]
@@ -948,7 +950,9 @@ def test_placebo_comparator_pools_by_parameter_and_time_point(tmp_path, placebo_
             writer = csv.DictWriter(stream, fieldnames=list(row))
             writer.writeheader()
             writer.writerows(records)
-        yamaa.spec(study / "spec.yaml").run().output.write_csv(study / "actual.csv")
+        yamaa.spec(study / "spec.yaml").run().output.to_polars().write_csv(
+            study / "actual.csv"
+        )
         rows = _read(study / "actual.csv")[1]
     else:
         rows = _run(tmp_path, name, placebo_track, {"adeg_raw.csv": records})[

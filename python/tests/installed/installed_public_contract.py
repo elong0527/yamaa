@@ -162,10 +162,11 @@ class PublicContract(unittest.TestCase):
         (self.root / "input.csv").write_bytes(INPUT)
 
     def issues(self, result):
-        """The one findings view: twelve typed columns, context as JSON text."""
-        frame = result.issues
-        self.assertIsInstance(frame, pl.DataFrame)
-        self.assertEqual(frame.columns, TRUTH["issue_columns"])
+        """The one findings view, a yamaa.Table of twelve typed columns with
+        the context as JSON text, as a Polars DataFrame."""
+        self.assertIsInstance(result.issues, yamaa.Table)
+        self.assertEqual(result.issues.column_names, TRUTH["issue_columns"])
+        frame = result.issues.to_polars()
         self.assertEqual(frame.dtypes, ISSUE_TYPES)
         for row in frame.to_dicts():
             self.assertEqual(row["severity"], "error")
@@ -199,6 +200,7 @@ class PublicContract(unittest.TestCase):
             yamaa.__all__,
             [
                 "Error",
+                "Table",
                 "__version__",
                 "info",
                 "lint",
@@ -218,7 +220,7 @@ class PublicContract(unittest.TestCase):
         self.assertEqual(
             sorted(name for name in dir(_native) if not name.startswith("__")),
             [
-                "_ArrowTable",
+                "Table",
                 "_CORE_VERSION",
                 "_Check",
                 "_Error",
@@ -337,32 +339,33 @@ class PublicContract(unittest.TestCase):
             # A run whose file was not read names the path as given.
             self.assertEqual(str(error), error_text("missing_run_save", absent))
             self.assertEqual(error.paths, [])
-            self.assertTrue(error.issues.equals(checked))
-            self.assertTrue(run.issues.equals(checked))
+            self.assertTrue(error.issues.to_polars().equals(checked))
+            self.assertTrue(run.issues.to_polars().equals(checked))
         error = self.refusal(spec.resolve)
         self.assertEqual(str(error), error_text("resolve", absent))
-        self.assertTrue(error.issues.equals(checked))
+        self.assertTrue(error.issues.to_polars().equals(checked))
         self.assertFalse((self.root / "output.csv").exists())
 
     def test_results_are_snapshots_and_save_publishes_held_bytes(self):
         first, second = yamaa.spec(self.spec).run(), yamaa.spec(self.spec).run()
         for result in (first, second):
             self.assertTrue(self.issues(result).is_empty())
-            self.assertEqual(result.output["VALUE"].to_list(), VALUES)
-            self.assertEqual(result.report.columns, TRUTH["report_columns"])
+            self.assertEqual(result.output.to_polars()["VALUE"].to_list(), VALUES)
+            self.assertEqual(result.report.column_names, TRUTH["report_columns"])
             self.assertEqual(
-                result.report["KIND"].to_list(),
+                result.report.to_polars()["KIND"].to_list(),
                 ["run", "input", "rows", "column", "column"],
             )
-            self.assertEqual(result.report["OUTCOME"][0], "succeeded")
-            self.assertEqual(result.report["COUNT"][0], 3)
+            self.assertEqual(result.report.to_polars()["OUTCOME"][0], "succeeded")
+            self.assertEqual(result.report.to_polars()["COUNT"][0], 3)
             for name in TRUTH["read_only_views"]["run"]:
                 with self.subTest(name=name), self.assertRaises(AttributeError):
                     setattr(result, name, None)
         self.assertFalse((self.root / "output.csv").exists())
-        view = first.output
+        # A conversion is the caller's own copy.
+        view = first.output.to_polars()
         view[0, "VALUE"] = 9
-        self.assertEqual(first.output["VALUE"].to_list(), VALUES)
+        self.assertEqual(first.output.to_polars()["VALUE"].to_list(), VALUES)
         self.spec.unlink()
         (self.root / "input.csv").unlink()
         gc.collect()
@@ -370,7 +373,7 @@ class PublicContract(unittest.TestCase):
         self.assertEqual((self.root / "output.csv").read_bytes(), INPUT)
         del first
         gc.collect()
-        self.assertEqual(second.output["VALUE"].to_list(), VALUES)
+        self.assertEqual(second.output.to_polars()["VALUE"].to_list(), VALUES)
         self.assertEqual(second.save(), paths_of(self.root / "output.csv"))
 
     def test_typed_columns_keep_their_exact_values(self):
@@ -378,7 +381,7 @@ class PublicContract(unittest.TestCase):
         (self.root / "input.csv").write_bytes(TRUTH["typed_input_csv"].encode("utf-8"))
         result = yamaa.spec(self.spec).run()
         self.assertTrue(self.issues(result).is_empty(), result.issues)
-        frame = result.output
+        frame = result.output.to_polars()
         self.assertEqual(
             frame.dtypes[:5], [pl.Int64, pl.String, pl.Int64, pl.Float64, pl.Date]
         )
@@ -414,8 +417,10 @@ class PublicContract(unittest.TestCase):
         (self.root / "input.csv").write_bytes(b"ID,VALUE\na,a\x00b\nb,\xc3\xa9\nc,\n")
         result = yamaa.spec(self.spec).run()
         self.assertTrue(self.issues(result).is_empty())
-        self.assertEqual(result.output["VALUE"].to_list(), ["a\x00b", "\u00e9", None])
-        self.assertEqual(result.output["EMPTY"].to_list(), ["", "", ""])
+        self.assertEqual(
+            result.output.to_polars()["VALUE"].to_list(), ["a\x00b", "\u00e9", None]
+        )
+        self.assertEqual(result.output.to_polars()["EMPTY"].to_list(), ["", "", ""])
         self.assertEqual(result.save(), paths_of(self.root / "output.csv"))
         self.assertEqual(
             (self.root / "output.csv").read_bytes(),
@@ -450,7 +455,7 @@ class PublicContract(unittest.TestCase):
             },
         )
         self.assertIsNone(result.output)
-        report = result.report
+        report = result.report.to_polars()
         self.assertEqual(report.columns, TRUTH["report_columns"])
         self.assertEqual(
             report["KIND"].to_list(), ["run", "input", "rows", "check", "check"]
@@ -475,9 +480,9 @@ class PublicContract(unittest.TestCase):
                 error_text("failed_run_save", file=self.spec.resolve().as_posix()),
             )
             self.assertEqual(error.paths, paths_of(self.root / "checks.csv"))
-            self.assertEqual(error.issues.to_dicts(), issues)
-            self.assertEqual(result.issues.to_dicts(), issues)
-            self.assertEqual(result.report.to_dicts(), truth)
+            self.assertEqual(error.issues.to_pylist(), issues)
+            self.assertEqual(result.issues.to_pylist(), issues)
+            self.assertEqual(result.report.to_pylist(), truth)
             self.assertEqual((self.root / "output.csv").read_bytes(), b"sentinel")
             self.assertEqual(
                 (self.root / "checks.csv").read_bytes(),
@@ -487,7 +492,7 @@ class PublicContract(unittest.TestCase):
         held = result.report
         del result
         gc.collect()
-        self.assertEqual(held.to_dicts(), truth)
+        self.assertEqual(held.to_pylist(), truth)
 
     def function_study(self):
         original = (
@@ -564,9 +569,9 @@ class PublicContract(unittest.TestCase):
             def callback(**arguments):
                 checked = yamaa.spec(self.spec).check()
                 nested = yamaa.spec(self.spec).run()
-                self.assertTrue(checked.issues.is_empty())
-                self.assertTrue(nested.issues.is_empty())
-                self.assertEqual(nested.output["VALUE"].to_list(), VALUES)
+                self.assertEqual(checked.issues.num_rows, 0)
+                self.assertEqual(nested.issues.num_rows, 0)
+                self.assertEqual(nested.output.to_polars()["VALUE"].to_list(), VALUES)
                 calls.append(nested)
                 return invoke(**arguments)
 
@@ -578,7 +583,7 @@ class PublicContract(unittest.TestCase):
         self.assertGreaterEqual(len(calls), 3)
         self.spec.unlink()
         gc.collect()
-        self.assertEqual(calls[0].output["VALUE"].to_list(), VALUES)
+        self.assertEqual(calls[0].output.to_polars()["VALUE"].to_list(), VALUES)
         self.assertFalse((self.root / "output.csv").exists())
         self.assertFalse((case / "test.csv").exists())
 
@@ -590,9 +595,11 @@ class PublicContract(unittest.TestCase):
             def __str__(error):
                 if reentrant:
                     nested = yamaa.spec(self.spec).run()
-                    self.assertTrue(nested.issues.is_empty(), nested.issues)
-                    self.assertEqual(nested.output["VALUE"].to_list(), VALUES)
-                    reentries.append(nested.output.height)
+                    self.assertEqual(nested.issues.num_rows, 0, nested.issues)
+                    self.assertEqual(
+                        nested.output.to_polars()["VALUE"].to_list(), VALUES
+                    )
+                    reentries.append(nested.output.num_rows)
                 return "retained callback failure"
 
         held = [OriginalError()]
@@ -610,7 +617,7 @@ class PublicContract(unittest.TestCase):
         self.assertEqual(
             set(self.issues(result)["condition"]), {"function_conformance_failed"}
         )
-        for row in result.issues.to_dicts():
+        for row in result.issues.to_pylist():
             failure = json.loads(row["context"])["failure"]
             self.assertEqual(failure["context"]["host_error"], "OriginalError")
             self.assertEqual(
@@ -658,7 +665,7 @@ class PublicContract(unittest.TestCase):
         self.assertEqual(
             self.issues(result)["condition"].to_list(), ["function_call_failed"]
         )
-        context = json.loads(result.issues["context"][0])
+        context = json.loads(result.issues.to_polars()["context"][0])
         self.assertEqual(context["host_error"], "RuntimeError")
         self.assertEqual(context["host_message"], message)
         self.assertNotIn("host_details_truncated", context)
@@ -679,13 +686,13 @@ class PublicContract(unittest.TestCase):
                 setattr(member, name, None)
         single = project.spec("TEST").run()
         self.assertTrue(self.issues(member).is_empty())
-        self.assertTrue(member.output.equals(single.output))
-        self.assertTrue(member.report.equals(single.report))
+        self.assertTrue(member.output.to_polars().equals(single.output.to_polars()))
+        self.assertTrue(member.report.to_polars().equals(single.report.to_polars()))
         # The project report stacks its members' reports in run order.
-        self.assertTrue(runs.report.equals(member.report))
+        self.assertTrue(runs.report.to_polars().equals(member.report.to_polars()))
         error = self.refusal(lambda: runs["ADSL"])
         self.assertEqual(str(error), error_text("unknown_member"))
-        self.assertEqual(error.issues.to_dicts(), [unknown_member('["TEST"]')])
+        self.assertEqual(error.issues.to_pylist(), [unknown_member('["TEST"]')])
         # Membership, iteration and length go by name, like indexing.
         self.assertIn("TEST", runs)
         self.assertNotIn("ADSL", runs)
@@ -694,7 +701,9 @@ class PublicContract(unittest.TestCase):
         self.assertEqual(project.run("adam").names, ["TEST"])
         # A section the project does not declare refuses the run (PROJECT-14).
         error = self.refusal(lambda: project.run("sdtm"))
-        self.assertEqual(error.issues.to_dicts(), [unknown_section("sdtm", '["adam"]')])
+        self.assertEqual(
+            error.issues.to_pylist(), [unknown_section("sdtm", '["adam"]')]
+        )
         # A declared section that lists no specification builds nothing.
         with (case / "project.yaml").open("a", encoding="utf-8") as listing:
             listing.write("sdtm:\n  specs: []\n")
@@ -714,7 +723,7 @@ class PublicContract(unittest.TestCase):
             error = self.refusal(result.save)
             self.assertEqual(str(error), error_text(key, case / "project.yaml"))
             self.assertEqual(error.paths, [])
-            self.assertEqual(error.issues.to_dicts(), [nothing_to_save(rule)])
+            self.assertEqual(error.issues.to_pylist(), [nothing_to_save(rule)])
         self.assertFalse((case / "test.csv").exists())
         self.assertEqual(runs.save(), paths_of(case / "test.csv"))
         self.assertEqual((case / "test.csv").read_bytes(), b"ID,RESULT\n01,1.5\n")
@@ -798,7 +807,7 @@ class PublicContract(unittest.TestCase):
         (case / "large.csv").write_bytes(expected)
         result = yamaa.project(case / "project.yaml").spec("TEXT").run()
         self.assertTrue(self.issues(result).is_empty(), result.issues)
-        self.assertEqual(result.output["V"].to_list(), [value])
+        self.assertEqual(result.output.to_polars()["V"].to_list(), [value])
         for name in (
             "spec.yaml",
             "project.yaml",
@@ -814,7 +823,7 @@ class PublicContract(unittest.TestCase):
         project = yamaa.project(absent)
         error = self.refusal(lambda: project.spec("TEST"))
         self.assertEqual(str(error), error_text("unread_project"))
-        unread = error.issues.to_dicts()
+        unread = error.issues.to_pylist()
         self.assertEqual(
             [(row["condition"], row["spec_paths"]) for row in unread],
             [("project_environment_missing", ["environment"])],
@@ -823,19 +832,19 @@ class PublicContract(unittest.TestCase):
         self.assertEqual(checked.to_dicts(), unread)
         error = self.refusal(lambda: project.names)
         self.assertEqual(str(error), error_text("unread_project_names", absent))
-        self.assertEqual(error.issues.to_dicts(), unread)
+        self.assertEqual(error.issues.to_pylist(), unread)
         runs = project.run()
         self.assertEqual(runs.names, [])
         self.assertEqual(self.issues(runs).to_dicts(), unread)
-        self.assertEqual(runs.report.columns, TRUTH["report_columns"])
-        self.assertTrue(runs.report.is_empty())
+        self.assertEqual(runs.report.column_names, TRUTH["report_columns"])
+        self.assertEqual(runs.report.num_rows, 0)
         self.assertEqual(public_names(runs), TRUTH["members"]["project_run"])
         error = self.refusal(runs.save)
         self.assertEqual(str(error), error_text("refused_project_run_save", absent))
-        self.assertEqual(error.issues.to_dicts(), unread)
+        self.assertEqual(error.issues.to_pylist(), unread)
         error = self.refusal(lambda: runs["ADSL"])
         self.assertEqual(str(error), error_text("no_member_built"))
-        self.assertEqual(error.issues.to_dicts(), [unknown_member("[]")])
+        self.assertEqual(error.issues.to_pylist(), [unknown_member("[]")])
         submission = project.submission("sdtm", created="2026-09-11T00:00:00")
         self.assertEqual(public_names(submission), TRUTH["members"]["submission"])
         # The creation time given is kept, though nothing composed (D129).
@@ -844,7 +853,9 @@ class PublicContract(unittest.TestCase):
         for _ in range(2):
             error = self.refusal(submission.save)
             self.assertEqual(str(error), error_text("refused_submission_save", absent))
-            self.assertTrue(error.issues.equals(submission.issues))
+            self.assertTrue(
+                error.issues.to_polars().equals(submission.issues.to_polars())
+            )
         for name in TRUTH["read_only_views"]["project_run"]:
             with self.subTest(name=name), self.assertRaises(AttributeError):
                 setattr(runs, name, None)
@@ -873,7 +884,7 @@ class PublicContract(unittest.TestCase):
             error = self.refusal(call)
             self.assertEqual(str(error), expected)
             self.assertEqual(
-                error.issues.to_dicts(), [unknown_section("bogus", '["adam"]')]
+                error.issues.to_pylist(), [unknown_section("bogus", '["adam"]')]
             )
         self.assertEqual(
             sorted(path.name for path in self.root.iterdir()),
@@ -1062,9 +1073,9 @@ class Resolve(unittest.TestCase):
         with self.assertRaises(yamaa.Error) as caught:
             yamaa.spec(source).resolve()
         self.assertEqual(
-            caught.exception.issues.select(
-                "condition", "rule", "spec_paths", "context"
-            ).rows(),
+            caught.exception.issues.to_polars()
+            .select("condition", "rule", "spec_paths", "context")
+            .rows(),
             [
                 (
                     "unknown_project_function",
@@ -1127,8 +1138,8 @@ class Resolve(unittest.TestCase):
             (study / "output").mkdir()
             yamaa.spec(study / "producer.yaml").run().save()
             result = spec.run()
-            self.assertTrue(result.issues.is_empty(), result.issues)
-            self.assertEqual(result.output["ID"].to_list(), [identifier])
+            self.assertEqual(result.issues.num_rows, 0, result.issues)
+            self.assertEqual(result.output.to_polars()["ID"].to_list(), [identifier])
             self.assertFalse((study / "output/final.csv").exists())
 
     def test_resolve_returns_owned_facts_and_raises_for_an_unreadable_spec(self):
@@ -1176,7 +1187,8 @@ class Resolve(unittest.TestCase):
             handle.resolve()
         self.assertEqual(str(caught.exception), error_text("resolve", spec))
         self.assertEqual(
-            caught.exception.issues["condition"].to_list(), ["engine_rejected"]
+            caught.exception.issues.to_polars()["condition"].to_list(),
+            ["engine_rejected"],
         )
 
 

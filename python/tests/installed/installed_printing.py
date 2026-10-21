@@ -3,7 +3,8 @@
 Every printed line comes from the shared truth, which R reads too: its lines
 were written from the forms of docs/design/interface-1.0/api.md and the
 message templates of yaml/conditions.yaml before the engine ran. `{path}`
-stands for the path the test gave. Rust renders the text, so `repr()` and
+stands for the path the test gave, and `{root}` for the study directory as
+an issue location names it. Rust renders the text, so `repr()` and
 `str()` return it unchanged; the facade's own tests cover each form further
 (rust/crates/yamaa/tests/printed_text.rs).
 """
@@ -33,7 +34,7 @@ class Printing(unittest.TestCase):
             (self.root / name).write_text(text, encoding="utf-8")
 
     def printed(self, value, lines, path):
-        """`value` prints `lines`, with `{path}` standing for `path`."""
+        """`value` prints `lines`, filling `{path}` and the study's `{root}`."""
         text = (
             "\n".join(lines)
             .replace("{path}", os.fspath(path))

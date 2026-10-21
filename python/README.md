@@ -20,12 +20,16 @@ project = yamaa.project("project.yaml")
 run = project.spec("DM").run()      # one dataset, built in memory
 run.output, run.issues, run.report
 run.status                          # "succeeded" or "failed"
+dm = run.output.to_polars()         # or to_pandas(), to_arrow(), to_pylist()
 paths = run.save()                  # write the dataset and its run report
 project.run("adam").save()          # every ADaM dataset
 ```
 
-`save()` returns the absolute paths of the files it wrote, in the order it
-wrote them.
+Every table is a `yamaa.Table`, which needs no other package: it prints a
+preview, `num_rows` and `column_names` describe it, and `to_pylist()` gives
+its rows. `to_polars()`, `to_pandas()` and `to_arrow()` convert it when
+Polars, pandas or PyArrow is installed. `save()` returns the absolute paths of
+the files it wrote, in the order it wrote them.
 
 The [R and Python API](https://elong0527.github.io/yamaa/articles/api/) page
 describes every call, and the
@@ -88,9 +92,10 @@ cd yamaa
 make setup
 ```
 
-The development package requires only Polars at runtime. The
-`test` extra adds the Python YAML readers, PyArrow, lxml and Pydantic for
-independent artifact and conformance checks. `make setup` installs it.
+The package has no runtime dependencies. The `test` extra adds Polars,
+pandas, PyArrow, the Python YAML readers, lxml and Pydantic for the table
+conversions' tests and independent artifact and conformance checks.
+`make setup` installs it.
 
 The [release guidance](https://elong0527.github.io/yamaa/release/#supported-platforms)
 lists the supported Python versions and platforms.

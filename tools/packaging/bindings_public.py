@@ -13,10 +13,16 @@ with their members, the refusal error and the type tokens. From it
 - the ``public`` lines of the normalized manifest.
 
 Generated code only delegates. The handwritten rest stays where it was:
-Python's Polars table conversion, path conversion, lazy-object pickling and
-version lookup in ``python/src/yamaa/_support.py``; R's reply and argument
+Python's path conversion, lazy-object pickling and version lookup in
+``python/src/yamaa/_support.py``; R's reply and argument
 conversions, host-function capabilities, interrupt rethrow and locked-object
 helpers in ``R/yamaa/R/api.R``; and every native body in the binding crates.
+
+A class with ``hosts: [python]`` is a native class of ``yamaa._native`` that
+the public module exports as it is: today only ``yamaa.Table``, which every
+call returns for a table, as the native call does. Each of its members is a
+method of that class, which ``host_only`` names, and the generator writes no
+code for it beyond the export.
 
 Delegation is declared, never written as code. A class ``holds`` an ordered
 set of values, each named by what it fills: ``handle``, the native handle the
@@ -36,7 +42,7 @@ import re
 _PY_WIDTH = 88
 _R_WIDTH = 100
 
-_PUBLIC_KEYS = {"python", "types", "functions", "classes", "errors"}
+_PUBLIC_KEYS = {"python", "types", "value_types", "functions", "classes", "errors"}
 # Python annotation of each type token in generated code; None leaves the
 # argument unannotated.
 _PY_ANNOTATION = {
@@ -50,13 +56,26 @@ _PY_ANNOTATION = {
     "paths_written": "list[str]",
     "tree": "dict",
     "json_text": "str",
-    "table": "_pl.DataFrame",
-    "optional_table": "_pl.DataFrame | None",
+    # A table is the native yamaa.Table that the native call returns.
+    "table": "Table",
+    "optional_table": "Table | None",
     "status": "str",
     "file_type": "str",
     "info": "dict",
     "nothing": "None",
+    # Tokens with only a Python projection, which only the members of a
+    # Python-only class use; the generator writes no annotation with them.
+    "rows": "list[dict[str, object]]",
+    "arrow_capsule": "object",
+    "schema_request": "object | None",
+    "arrow_table": "object",
+    "polars_frame": "object",
+    "pandas_frame": "object",
 }
+# The language's column types, each projected into both hosts by
+# public.value_types; a table column's type is one of them, possibly inside
+# list<T> or optional<T>.
+_VALUE_TYPES = ("str", "int", "float", "date", "datetime", "list")
 # Tokens whose value is one of the `records`; a member returning one names it.
 _RECORD_TOKENS = {"info"}
 # Tokens whose value is text from the vocabulary of the same name in
@@ -70,14 +89,15 @@ _ARGUMENT_TOKENS = {
     "count",
     "flag",
     "file_type",
+    "schema_request",
 }
 _DEFAULTS = {
     "optional_text": {"None"},
+    "schema_request": {"None"},
     "flag": {"false", "true"},
     "count": None,  # a nonnegative integer
 }
 # Handwritten conversions the generated code calls.
-_PY_RESULT = {"table": "_table", "optional_table": "_optional_table"}
 _PY_ARGUMENT = {"path": "_fspath", "path_list": "_fspaths"}
 _R_ARGUMENT = {
     "path": ".text",
@@ -96,6 +116,10 @@ _PROTOCOLS = {"__contains__", "__iter__", "__len__"}
 _R_LISTED = {"property", "method"}
 # The R generics every result has, listing and counting its names (D44).
 _R_NAMES = ("names", "length")
+# The member kinds of a Python-only class: a property is a native getter, a
+# protocol or printing member a native special method spelled by `python`.
+_NATIVE_KINDS = {"property", "method", "protocol", "printing"}
+_MODULE = re.compile(r"[a-z][a-z0-9_]*")
 # How a printing member is spelled: Python's repr() and str() return the text
 # its operation renders, and R's format() returns those lines and print()
 # writes them, returning the object invisibly (D37).
@@ -216,7 +240,8 @@ class Public:
         for token, projection in types.items():
             if token not in _PY_ANNOTATION:
                 raise ValueError(f"public.types declares an unknown token: {token!r}")
-            entry = _keys(projection, f"public.types.{token}", {"python", "r"})
+            # A token without an R projection is Python-only.
+            entry = _keys(projection, f"public.types.{token}", {"python"}, {"r"})
             for host, text in entry.items():
                 if not isinstance(text, str) or not text.strip():
                     raise ValueError(f"public.types.{token}.{host} must be text")
@@ -226,13 +251,22 @@ class Public:
                     )
             if token in _VOCABULARY_TOKENS and token not in self.definition["values"]:
                 raise ValueError(f"public.types.{token} names an undeclared vocabulary")
+        self._validate_value_types()
         self._validate_errors()
         if not isinstance(self.classes, dict) or not self.classes:
             raise ValueError("public.classes must be a nonempty mapping")
         defined = set()
         for name, cls in self.classes.items():
-            self._validate_class(name, cls, defined)
+            if self.python_only(name):
+                self._validate_native_class(name, cls)
+            else:
+                self._validate_class(name, cls, defined)
             defined.add(name)
+        # The table tokens annotate the class that every table is.
+        if "Table" not in self.classes or not self.python_only("Table"):
+            raise ValueError(
+                "public.classes.Table, the class every table is, is missing"
+            )
         if not isinstance(self.functions, list) or not self.functions:
             raise ValueError("public.functions must be a nonempty list")
         names = set()
@@ -249,17 +283,44 @@ class Public:
         self.render_python([])
         self.render_r([])
 
-    def _token(self, token, what):
+    def _token(self, token, what, python_only=False):
         if token not in self.public["types"]:
             raise ValueError(f"{what} uses an undeclared type token: {token!r}")
+        if not python_only and "r" not in self.public["types"][token]:
+            raise ValueError(f"{what} uses the Python-only type token {token!r}")
         return token
 
     def _returns(self, value, what, defined):
         if value in self.classes:
             if value not in defined:
                 raise ValueError(f"{what} returns {value}, which is defined later")
+            if self.python_only(value):
+                raise ValueError(f"{what} returns the Python-only class {value}")
             return value
         return self._token(value, what)
+
+    def _validate_value_types(self):
+        """Both hosts' projection of each column type, covering every table."""
+        value_types = self.public["value_types"]
+        if not isinstance(value_types, dict) or list(value_types) != list(_VALUE_TYPES):
+            raise ValueError(
+                f"public.value_types must project {', '.join(_VALUE_TYPES)}, in order"
+            )
+        for kind, projection in value_types.items():
+            entry = _keys(projection, f"public.value_types.{kind}", {"python", "r"})
+            for host, text in entry.items():
+                if not isinstance(text, str) or not text.strip():
+                    raise ValueError(f"public.value_types.{kind}.{host} must be text")
+        for table, entry in self.definition["tables"].items():
+            for column in entry["columns"]:
+                kind = column["type"]
+                while kind.startswith(("optional<", "list<")) and kind.endswith(">"):
+                    kind = kind.partition("<")[2][:-1]
+                if kind not in value_types:
+                    raise ValueError(
+                        f"tables.{table}.{column['name']} has a type that "
+                        "public.value_types does not project"
+                    )
 
     def _validate_errors(self):
         if not isinstance(self.errors, dict) or set(self.errors) != {"refusal"}:
@@ -302,7 +363,7 @@ class Public:
             raise ValueError("the R refusal's fields must be a nonempty mapping")
         for field, kind in r["fields"].items():
             if not _NAME.fullmatch(field) or (
-                kind != "NULL" and kind not in self.public["types"]
+                kind != "NULL" and "r" not in self.public["types"].get(kind, {})
             ):
                 raise ValueError(f"invalid R refusal field: {field}: {kind}")
         if "table" in error and error["table"] not in self.definition["tables"]:
@@ -312,7 +373,7 @@ class Public:
         if len(self.py_exceptions) != 1:
             raise ValueError("the refusal needs exactly one native Python exception")
 
-    def _validate_signature(self, entry, what):
+    def _validate_signature(self, entry, what, python_only=False):
         args = entry.get("args", {})
         if not isinstance(args, dict):
             raise ValueError(f"{what}.args must be a mapping")
@@ -321,7 +382,7 @@ class Public:
             if not _NAME.fullmatch(argument):
                 raise ValueError(f"{what} has an invalid argument name: {argument!r}")
             token, default = _argument(spec, f"{what}.{argument}")
-            self._token(token, f"{what}.{argument}")
+            self._token(token, f"{what}.{argument}", python_only)
             if default is None and defaults:
                 raise ValueError(
                     f"{what}.{argument} without a default follows one with"
@@ -504,13 +565,119 @@ class Public:
         if "calls" in member:
             self._python_target(member["calls"], class_name, what)
 
+    def _validate_native_class(self, name, cls):
+        """A Python-only class: a native class the public module exports, each
+        member one of its methods, which host_only names."""
+        what = f"public.classes.{name}"
+        _keys(cls, what, {"python", "hosts", "members"})
+        if not _CLASS.fullmatch(name) or cls["python"] != f"yamaa.{name}":
+            raise ValueError(f"{what}.python must be yamaa.{name}")
+        if name not in self.py_classes:
+            raise ValueError(f"{what} is no class of yamaa._native")
+        native = self.py_classes[name]
+        members = cls["members"]
+        if not isinstance(members, list) or not members:
+            raise ValueError(f"{what}.members must be a nonempty list")
+        names, methods = set(), set()
+        for member in members:
+            mwhat = (
+                f"{what}.{member.get('name') if isinstance(member, dict) else member}"
+            )
+            _keys(
+                member,
+                mwhat,
+                {"name", "kind"},
+                {"python", "args", "returns", "imports"},
+            )
+            if not isinstance(member["name"], str) or not _NAME.fullmatch(
+                member["name"]
+            ):
+                raise ValueError(f"invalid member name in {what}: {member['name']!r}")
+            if member["name"] in names:
+                raise ValueError(f"{what} declares {member['name']} twice")
+            names.add(member["name"])
+            kind = member["kind"]
+            if kind not in _NATIVE_KINDS:
+                raise ValueError(f"{mwhat} has an unknown kind: {kind!r}")
+            if kind in {"protocol", "printing"}:
+                method = member.get("python")
+                if not isinstance(method, str) or not re.fullmatch(
+                    r"__[a-z][a-z0-9_]*__", method
+                ):
+                    raise ValueError(f"{mwhat} must spell its special method")
+                if kind == "printing" and (method != "__repr__" or "returns" in member):
+                    raise ValueError(
+                        f"{mwhat} must be __repr__, which returns its text"
+                    )
+            elif "python" in member:
+                raise ValueError(
+                    f"{mwhat} spells a host name, which only protocol and printing do"
+                )
+            else:
+                method = member["name"]
+            if method not in native:
+                raise ValueError(f"{mwhat} is no method of yamaa._native.{name}")
+            if method in methods:
+                raise ValueError(f"{what} declares the native {method} twice")
+            methods.add(method)
+            if (kind == "property") != (native[method].get("kind") == "getter"):
+                raise ValueError(
+                    f"{mwhat} is a property exactly when its native method is a getter"
+                )
+            if kind != "printing":
+                if "returns" not in member:
+                    raise ValueError(f"{mwhat} must declare what it returns")
+                self._token(member["returns"], mwhat, python_only=True)
+            self._validate_signature(member, mwhat, python_only=True)
+            if list(member.get("args", {})) != list(native[method]["args"]):
+                raise ValueError(f"{mwhat} must take its native method's arguments")
+            imports = member.get("imports")
+            if imports is not None and (
+                kind != "method"
+                or not isinstance(imports, list)
+                or not imports
+                or len(set(imports)) != len(imports)
+                or not all(
+                    isinstance(module, str) and _MODULE.fullmatch(module)
+                    for module in imports
+                )
+            ):
+                raise ValueError(
+                    f"{mwhat}.imports must list the modules a method imports"
+                )
+        if methods != set(native):
+            raise ValueError(
+                f"{what} must declare every native method: "
+                f"{', '.join(sorted(set(native) - methods))}"
+            )
+        transport = set(self.definition["host_only"]["python"])
+        missing = sorted(f"{name}.{method}" for method in native)
+        missing = [method for method in missing if method not in transport]
+        if missing:
+            raise ValueError(f"{what} needs host_only entries: {', '.join(missing)}")
+
     # --- Classes and native targets ------------------------------------------------
+
+    def python_only(self, name):
+        """Whether `name` is a Python-only class, a native class exported as is."""
+        return self.classes[name].get("hosts") == ["python"]
+
+    def delegating_classes(self):
+        """The classes the generator writes in both hosts, each delegating to
+        its native calls, by name in definition order."""
+        return {
+            name: cls
+            for name, cls in self.classes.items()
+            if not self.python_only(name)
+        }
 
     def holds(self, name):
         return list(self.classes[name]["holds"].items())
 
     def kind(self, name):
-        """`handle` for a result, which wraps a native handle, else `lazy`."""
+        """A native class, a result wrapping a handle, or a lazy object."""
+        if self.python_only(name):
+            return "native"
         return "handle" if "handle" in self.classes[name]["holds"].values() else "lazy"
 
     def _handle(self, name):
@@ -662,8 +829,7 @@ class Public:
             ] != self._native_class(returns):
                 raise ValueError(f"{what} returns {native['returns']}, not {returns}")
             return self._py_construct(returns, call, class_name, args, what)
-        helper = _PY_RESULT.get(returns)
-        return _Call(helper, [call]) if helper else call
+        return call
 
     def _py_signature(self, entry, first=None):
         parts = [first] if first else []
@@ -804,8 +970,12 @@ class Public:
 
     def python_names(self):
         refusal = self.errors["refusal"]["python"]["class"].removeprefix("yamaa.")
-        names = [refusal, self.public["python"]["version"]]
+        names = [refusal, self.public["python"]["version"], *self._native_exports()]
         return sorted(names + [function["name"] for function in self.functions])
+
+    def _native_exports(self):
+        """The Python-only classes, which the public module imports as they are."""
+        return [name for name in self.classes if self.python_only(name)]
 
     def render_python(self, header):
         error = self.errors["refusal"]
@@ -821,11 +991,7 @@ class Public:
         body += _py_def("__init__", signature, None, "    ")
         body.append("        super().__init__(message)")
         body += [f"        self.{name} = {name}" for name in attributes]
-        mapped = []
-        for name, token in attributes.items():
-            value = f'getattr(error, "{name}")'
-            helper = _PY_RESULT.get(token)
-            mapped.append(_Call(helper, [value]) if helper else value)
+        mapped = [f'getattr(error, "{name}")' for name in attributes]
         body += [
             "",
             "",
@@ -842,7 +1008,7 @@ class Public:
                 " from None",
             ),
         ]
-        for name in self.classes:
+        for name in self.delegating_classes():
             body += ["", "", *self._py_class(name)]
         for function in self.functions:
             body += ["", "", *self._py_function(function)]
@@ -850,14 +1016,7 @@ class Public:
         # Import exactly the handwritten helpers the generated code uses.
         helpers = [
             name
-            for name in (
-                "_fspath",
-                "_fspaths",
-                "_Lazy",
-                "_optional_table",
-                "_pl",
-                "_table",
-            )
+            for name in ("_fspath", "_fspaths", "_Lazy")
             if re.search(rf"(?<![\w.]){name}\b", text)
         ]
         imported = ["__version__", *helpers]
@@ -879,13 +1038,17 @@ class Public:
             exports = "\n".join(
                 ["__all__ = [", *(f"    {name}," for name in quoted), "]"]
             )
+        native = self._native_exports()
+        imports = ["from yamaa import _native"]
+        if native:
+            imports.append(f"from yamaa._native import {', '.join(native)}")
         lines = [
             *header,
             f'"""{doc[0]}',
             *doc[1:],
             '"""',
             "",
-            "from yamaa import _native",
+            *imports,
             single,
             "",
             exports,
@@ -1187,7 +1350,7 @@ class Public:
 
     def render_r(self, header):
         lines = list(header)
-        for name in self.classes:
+        for name in self.delegating_classes():
             lines += ["", *self._r_constructor(name), *self._r_extras(name)]
         for function in self.functions:
             lines += ["", *self._r_function(function)]
@@ -1196,7 +1359,7 @@ class Public:
     def render_namespace(self, header):
         lines = [*header, f"useDynLib({self.package}, .registration = TRUE)"]
         lines += [f"export({function['r']})" for function in self.functions]
-        for name, cls in self.classes.items():
+        for name, cls in self.delegating_classes().items():
             if self.kind(name) == "handle":
                 lines += [f"S3method({generic}, {cls['r']})" for generic in _R_NAMES]
             for member in cls["members"]:
@@ -1218,6 +1381,8 @@ class Public:
             facts.append(f"record {entry['record']}")
         if "raises" in entry:
             facts.append(f"raises {entry['raises']}")
+        if "imports" in entry:
+            facts.append(f"imports {', '.join(entry['imports'])}")
         return facts
 
     def _argument_lines(self, prefix, entry):
@@ -1232,8 +1397,14 @@ class Public:
         """The frozen elements of the public surface, one per line."""
         lines = []
         for token, projection in self.public["types"].items():
+            facts = [f"python {projection['python']}"]
+            if "r" in projection:
+                facts.append(f"r {projection['r']}")
+            lines.append(f"public.types.{token}: {'; '.join(facts)}")
+        for kind, projection in self.public["value_types"].items():
             lines.append(
-                f"public.types.{token}: python {projection['python']}; r {projection['r']}"
+                f"public.value_types.{kind}: python {projection['python']}; "
+                f"r {projection['r']}"
             )
         for function in self.functions:
             prefix = f"public.functions.{function['name']}"
@@ -1242,7 +1413,10 @@ class Public:
             lines += self._argument_lines(prefix, function)
         for name, cls in self.classes.items():
             prefix = f"public.classes.{name}"
-            lines.append(f"{prefix}: python {cls['python']}; r {cls['r']}")
+            if self.python_only(name):
+                lines.append(f"{prefix}: python {cls['python']}")
+            else:
+                lines.append(f"{prefix}: python {cls['python']}; r {cls['r']}")
             for member in cls["members"]:
                 if member["kind"] == "private":
                     continue
@@ -1269,7 +1443,7 @@ class Public:
         )
         lines += [f"public.python.exports.{name}" for name in self.python_names()]
         lines += [f"public.r.exports.{function['r']}" for function in self.functions]
-        for name, cls in self.classes.items():
+        for name, cls in self.delegating_classes().items():
             if self.kind(name) == "handle":
                 listed = self._r_listed(name)
                 facts = "keys of names" if listed is None else ", ".join(listed)

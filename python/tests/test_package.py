@@ -30,6 +30,7 @@ def test_installed_package_exports_exactly_the_public_api() -> None:
     assert yamaa.__version__ == version("yamaa")
     assert yamaa.__all__ == [
         "Error",
+        "Table",
         "__version__",
         "info",
         "lint",
@@ -41,6 +42,7 @@ def test_installed_package_exports_exactly_the_public_api() -> None:
     ]
     for name in ("spec", "project", "read_odm", "lint", "schema", "info", "selftest"):
         assert callable(getattr(yamaa, name))
+    assert yamaa.Table is yamaa._native.Table
     assert issubclass(yamaa.Error, Exception)
     for name in REMOVED:
         assert name not in dir(yamaa), name

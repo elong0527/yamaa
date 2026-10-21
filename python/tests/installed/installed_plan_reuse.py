@@ -68,7 +68,7 @@ class PlanReuse(unittest.TestCase):
             {**row, "file": (self.root / row["file"]).as_posix()}
             for row in study["issues"]
         ]
-        self.assertEqual(run.issues.to_dicts(), expected)
+        self.assertEqual(run.issues.to_pylist(), expected)
         if study["output_csv"] is None:
             self.assertIsNone(run.output)
             with self.assertRaises(yamaa.Error):
@@ -102,7 +102,7 @@ class PlanReuse(unittest.TestCase):
         self.write("spec.yaml", "schema_version: '1.0'\ndomain: TEST\n")
         refused = spec.run()
         self.assertIsNone(refused.output)
-        self.assertGreater(refused.issues.height, 0)
+        self.assertGreater(refused.issues.num_rows, 0)
         self.write("spec.yaml", TRUTH["specification_yaml"])
         self.assertTrue(compiled(self.run_study(spec, study)))
 
@@ -179,7 +179,7 @@ class PlanReuse(unittest.TestCase):
         def saved():
             runs = project.run()
             self.assertEqual(runs.names, ["DM", "ADSL"])
-            self.assertEqual(runs.issues.height, 0)
+            self.assertEqual(runs.issues.num_rows, 0)
             runs.save()
             return (self.root / "out/adsl.csv").read_text(encoding="utf-8")
 
@@ -242,7 +242,7 @@ class PlanReuse(unittest.TestCase):
             (plan_of(moved), saved(moved, "b", "out.csv")), ("compiled", b)
         )
         self.assertEqual((self.root / "a/out.csv").read_text(encoding="utf-8"), a)
-        self.assertEqual(spec.check().issues.height, 0)
+        self.assertEqual(spec.check().issues.num_rows, 0)
         self.assertEqual(saved(project.run(), "b", "dm.csv"), b)
         self.assertEqual((self.root / "a/dm.csv").read_text(encoding="utf-8"), a)
         # `project.spec(name)` keeps its located specification, A's, with the
@@ -262,12 +262,12 @@ class PlanReuse(unittest.TestCase):
         project = yamaa.project(link / "project.yaml")
         self.assertEqual(plan_of(spec.run()), "compiled")
         self.assertEqual(plan_of(spec.run()), "reused")
-        self.assertEqual(project.run()["DM"].output.height, 2)
+        self.assertEqual(project.run()["DM"].output.num_rows, 2)
         link.unlink()
         link.symlink_to(self.root / "b", target_is_directory=True)
         moved = spec.run()
-        self.assertEqual((plan_of(moved), moved.output.height), ("compiled", 3))
-        self.assertEqual(project.run()["DM"].output.height, 3)
+        self.assertEqual((plan_of(moved), moved.output.num_rows), ("compiled", 3))
+        self.assertEqual(project.run()["DM"].output.num_rows, 3)
 
     def test_objects_pickle_and_copy_and_start_with_nothing_kept(self):
         spec = yamaa.spec(self.write("spec.yaml", PLAIN))
@@ -296,7 +296,7 @@ class PlanReuse(unittest.TestCase):
         project.run()
         for clone in (pickle.loads(pickle.dumps(project)), copy.deepcopy(project)):
             with self.subTest(clone=clone):
-                self.assertEqual(clone.run()["DM"].output.height, 1)
+                self.assertEqual(clone.run()["DM"].output.num_rows, 1)
                 self.assertEqual(plan_of(clone.spec("DM").run()), "compiled")
 
 

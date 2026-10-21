@@ -2,7 +2,8 @@
 # Every printed line comes from the shared truth, which Python reads too: its
 # lines were written from the forms of docs/design/interface-1.0/api.md and the
 # message templates of yaml/conditions.yaml before the engine ran. `{path}`
-# stands for the path the test gave. Rust renders the text: format() returns
+# stands for the path the test gave, and `{root}` for the study directory as
+# an issue location names it. Rust renders the text: format() returns
 # its lines, and print() writes them and returns the object invisibly.
 library(yamaa)
 # The truth is JSON, and jsonlite, which reads it, is a suggested package:
@@ -24,8 +25,8 @@ for (name in names(truth[["files"]])) {
   writeBin(charToRaw(enc2utf8(truth[["files"]][[name]])), file.path(root, name))
 }
 
-# `value` formats as `lines`, with `{path}` standing for `path`, and print()
-# writes each line ended by a line feed and returns `value` invisibly.
+# `value` formats as `lines`, filling `{path}` and the study's `{root}`.
+# print() writes each line ended by a line feed and returns `value` invisibly.
 printed <- function(value, lines, path) {
   lines <- gsub("{path}", path, fixture_strings(lines), fixed = TRUE)
   lines <- gsub("{root}", normalizePath(root, winslash = "/", mustWork = TRUE),

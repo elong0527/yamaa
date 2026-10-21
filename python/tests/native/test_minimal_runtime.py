@@ -1,4 +1,5 @@
-"""The installed public API works without the test extra's readers."""
+"""The installed public API works without the test extra's packages: the
+package has no runtime dependency, and its tables convert in Rust."""
 
 import subprocess
 import sys
@@ -15,7 +16,16 @@ def test_runtime_without_optional_python_readers(tmp_path):
         from importlib.metadata import requires, version
         from pathlib import Path
 
-        blocked = {"yaml", "yaml12", "pyarrow", "lxml", "pydantic", "packaging"}
+        blocked = {
+            "yaml",
+            "yaml12",
+            "polars",
+            "pyarrow",
+            "pandas",
+            "lxml",
+            "pydantic",
+            "packaging",
+        }
 
         class OptionalReaders:
             def find_spec(self, fullname, path=None, target=None):
@@ -31,12 +41,12 @@ def test_runtime_without_optional_python_readers(tmp_path):
         import yamaa
         from yamaa import _locked_functions
 
-        # A runtime requirement is one that no extra selects.
+        # A runtime requirement is one that no extra selects: none remains.
         assert {
             re.match(r"[A-Za-z0-9._-]+", value).group().lower()
             for value in requires("yamaa")
             if "extra" not in value.partition(";")[2]
-        } == {"polars"}
+        } == set()
 
         root = Path(sys.argv[1])
         source = "ID,VALUE\\na,-9223372036854775808\\nb,9223372036854775807\\nc,\\n"
@@ -54,15 +64,16 @@ def test_runtime_without_optional_python_readers(tmp_path):
         path = root / "spec.yaml"
         path.write_text(specification)
         spec = yamaa.spec(path)
-        assert spec.check().issues.is_empty()
+        assert spec.check().issues.num_rows == 0
         run = spec.run()
-        assert run.issues.is_empty()
+        assert run.issues.num_rows == 0
+        assert isinstance(run.output, yamaa.Table)
         expected = [
             {"ID": "a", "VALUE": -9223372036854775808},
             {"ID": "b", "VALUE": 9223372036854775807},
             {"ID": "c", "VALUE": None},
         ]
-        assert run.output.to_dicts() == expected
+        assert run.output.to_pylist() == expected
         run.save()
         assert (root / "output.parquet").is_file()
 
@@ -72,8 +83,8 @@ def test_runtime_without_optional_python_readers(tmp_path):
             .replace("path: output.parquet", "path: roundtrip.csv")
         )
         roundtrip = yamaa.spec(path).run()
-        assert roundtrip.issues.is_empty()
-        assert roundtrip.output.to_dicts() == expected
+        assert roundtrip.issues.num_rows == 0
+        assert roundtrip.output.to_pylist() == expected
         roundtrip.save()
         assert (root / "roundtrip.csv").read_text() == source
 
@@ -106,8 +117,8 @@ def test_runtime_without_optional_python_readers(tmp_path):
             .replace("path: output.parquet", "path: called.csv")
         )
         called = yamaa.project(root / "project.yaml").spec("TEST").run()
-        assert called.issues.is_empty(), called.issues
-        assert called.output["TEXT"].to_list() == ["a", "b", "c"]
+        assert called.issues.num_rows == 0, called.issues
+        assert [row["TEXT"] for row in called.output.to_pylist()] == ["a", "b", "c"]
         activation = json.loads(called._native.observations())["activation"]
         assert activation["lock"] == "verified"
         assert not any(name.split(".")[0] in blocked for name in sys.modules)
