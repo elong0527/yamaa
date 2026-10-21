@@ -576,6 +576,8 @@ mod project {
                 assert!(issues.is_empty(), "{spec}\n{issues:?}");
             }
             let value = |json: &str| yamaa_adapters::json_wire::decode(json).unwrap();
+            // A value-level selector names a text column (SUB-12).
+            let sdtm_text_key = SDTM.replacen("type: int", "type: str", 1);
             for (base, from, to, condition, rule, path, context) in [
                 // A designation the model does not publish (SUB-10).
                 (
@@ -626,18 +628,18 @@ mod project {
                 ),
                 // An entry can inherit either half of the conflict.
                 (
-                    SDTM,
+                    sdtm_text_key.as_str(),
                     "{core: Perm, length: 3, origins: [{type: Collected, source: Investigator}]}",
-                    "{core: Perm, mandatory: false, length: 3, origins: [{type: Collected, source: Investigator}], value_level: [{id: A, where: {ID: [1]}, core: Req}]}",
+                    "{core: Perm, mandatory: false, length: 3, origins: [{type: Collected, source: Investigator}], value_level: [{id: A, where: {ID: ['1']}, core: Req}]}",
                     "core_mandatory_conflict",
                     "SUB-10",
                     "columns.VALUE.submission.value_level.A.core",
                     r#"{"column": "VALUE", "entry": "A", "reason": "required_not_mandatory", "model": "SDTM"}"#,
                 ),
                 (
-                    SDTM,
+                    sdtm_text_key.as_str(),
                     "{core: Perm, length: 3, origins: [{type: Collected, source: Investigator}]}",
-                    "{core: Req, length: 3, origins: [{type: Collected, source: Investigator}], value_level: [{id: A, where: {ID: [1]}, mandatory: false}]}",
+                    "{core: Req, length: 3, origins: [{type: Collected, source: Investigator}], value_level: [{id: A, where: {ID: ['1']}, mandatory: false}]}",
                     "core_mandatory_conflict",
                     "SUB-10",
                     "columns.VALUE.submission.value_level.A.mandatory",
