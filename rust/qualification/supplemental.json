@@ -1059,5 +1059,7 @@
   "suite_ids": {
     "python/tests/installed/installed_project_functions.py": "python/project_functions"
   },
-  "support_roles": {}
+  "support_roles": {
+    "rust/tests/host-fixtures/unreached-conditions.yaml": "documentation"
+  }
 }

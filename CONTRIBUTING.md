@@ -15,7 +15,7 @@ applies.
 | Area | Responsibility |
 | --- | --- |
 | `rules/`, `yaml/` | Normative contracts, diagnostics, schemas and grammar fixtures. |
-| `rust/crates/yamaa-core/` | Specification admission, expressions, dataset execution, project lifecycle, verification and Define rendering. |
+| `rust/crates/yamaa-core/` | Specification admission, expressions, dataset execution, project lifecycle, verification and submission metadata composition. |
 | `rust/crates/yamaa-adapters/` | Codecs, storage formats, physical IO and filesystem environment capture. |
 | `rust/crates/yamaa-python/`, `rust/crates/yamaa-r/` | Host arguments, callbacks, scalar conversion and owned result views. |
 | `rust/crates/yamaa-cli/` | The `yamaa` command line: its arguments, exit statuses and printed output, over the facade alone, with the third-party notices and component inventory of its release archives. |
@@ -36,7 +36,15 @@ activation and the complete build lifecycle; its dataset model owns execution.
 `yamaa-adapters` implements physical boundaries, and the `yamaa` facade
 composes the two. The two binding crates and the `yamaa-cli` command line
 implement their host boundaries and depend on the facade alone. Core may use
-`std`; portable math still uses the pinned libm policy.
+`std` but holds no file or format code: it keeps the formats' metadata models,
+and the adapters read and write their bytes. Portable math still uses the
+pinned libm policy. `make check-repository` holds both rules of #3030 section
+2.10 (`tools.validation.check_architecture`): every dependency table of every
+crate keeps those edges, and a scan of core's sources, outside test-only items,
+refuses the standard library's file, IO, network, process, environment, OS and
+path modules and its clock, decoding bytes as text, and the XML, SAS transport
+and Parquet marks of a format. A core file that still holds such code is listed
+with the issue that moves it, and its entry goes with the move.
 
 The [shared host interface](rust/interface/README.md) owns the binding-generation
 design, declaration input, version negotiation and lifetime contract. Public
@@ -242,8 +250,9 @@ import repository packages.
 
 For rule or schema changes, follow their area guides; `make quick` runs the
 repository checks. `make check-repository` runs `tools.rules.check`, which reads the
-rules once through `tools/rules/model.py` and checks cards,
-every rule citation and markdown links. Run
+rules once through `tools/rules/model.py` and checks cards, that a card's
+`Fails` line names every registered condition, every rule citation and
+markdown links. Run
 `python -m tools.rules.migrate statements --base origin/main` to list
 the card titles and statements a pull request adds, changes or removes for
 review.

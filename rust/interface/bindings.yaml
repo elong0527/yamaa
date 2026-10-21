@@ -264,12 +264,29 @@ public:
       r: "character(), the same paths; save() returns them invisibly"
     tree: {python: dict, r: named list}
     json_text: {python: "str, canonical JSON (RFC 8785)", r: "character(1), canonical JSON (RFC 8785)"}
-    table: {python: polars.DataFrame, r: data.frame}
-    optional_table: {python: "polars.DataFrame | None", r: data.frame or NULL}
+    table: {python: yamaa.Table, r: data.frame}
+    optional_table: {python: "yamaa.Table | None", r: data.frame or NULL}
     status: {python: "str, one of values.status", r: "character(1), one of values.status"}
     file_type: {python: "str, one of values.file_type", r: "character(1), one of values.file_type"}
     info: {python: "dict, keys in records.info order", r: "named list, names in records.info order"}
     nothing: {python: None, r: "NULL, invisibly"}
+    # Python-only projections, which only yamaa.Table's members use.
+    rows: {python: "list[dict[str, object]], one dict per row, keyed by the column names in order"}
+    arrow_capsule: {python: "PyCapsule named arrow_array_stream, a fresh Arrow C stream"}
+    schema_request: {python: "object or None; anything but None is refused"}
+    arrow_table: {python: pyarrow.Table}
+    polars_frame: {python: polars.DataFrame}
+    pandas_frame: {python: "pandas.DataFrame, each column a pandas.ArrowDtype of its Arrow type"}
+
+  # Host projections of the language's column types (D11, D44): the type of
+  # each table column, and of each value that a row holds.
+  value_types:
+    str: {python: "Arrow Utf8, Python str", r: character}
+    int: {python: "Arrow Int64, Python int", r: "double; an error beyond 2^53"}
+    float: {python: "Arrow Float64, Python float", r: double}
+    date: {python: "Arrow Date32, datetime.date", r: Date}
+    datetime: {python: "Arrow Timestamp(second), naive datetime.datetime", r: "POSIXct in UTC"}
+    list: {python: "Arrow List, Python list", r: "list column; NULL for a missing list"}
 
   functions:
     - name: spec
@@ -509,6 +526,29 @@ public:
           calls: selftest_info
           doc: The engine, language versions, features, host and platform that ran the cases.
         - {name: summary, kind: printing, python: __repr__, r: [print, format], calls: selftest_summary}
+    # Every table a Python call returns (D11, D43): the native class Table of
+    # yamaa._native, which the public module exports as it is, so each member
+    # is a native method that host_only names. R's tables are data frames
+    # (D44), so the class is Python's alone. A conversion imports its library
+    # only when it is called; to_pylist() imports nothing, and the package
+    # has no runtime dependency.
+    Table:
+      python: yamaa.Table
+      hosts: [python]
+      members:
+        - {name: num_rows, kind: property, returns: count}
+        - {name: column_names, kind: property, returns: names}
+        - {name: length, kind: protocol, python: __len__, returns: count}
+        - {name: preview, kind: printing, python: __repr__}
+        - name: arrow_stream
+          kind: protocol
+          python: __arrow_c_stream__
+          args: {requested_schema: schema_request = None}
+          returns: arrow_capsule
+        - {name: to_pylist, kind: method, returns: rows}
+        - {name: to_arrow, kind: method, returns: arrow_table, imports: [pyarrow]}
+        - {name: to_polars, kind: method, returns: polars_frame, imports: [polars]}
+        - {name: to_pandas, kind: method, returns: pandas_frame, imports: [pandas, pyarrow]}
 
   errors:
     refusal:
@@ -543,14 +583,23 @@ python:
       name: _CORE_VERSION
       rust: yamaa_core::VERSION
       type: text
+    # yamaa.Table: the public module exports this class as it is.
     - kind: class
-      name: _ArrowTable
-      rust: arrow_bridge::ArrowTable
+      name: Table
+      rust: arrow_bridge::Table
       constructible: false
       methods:
+        - {name: num_rows, kind: getter, args: {}, returns: index}
+        - {name: column_names, kind: getter, args: {}, returns: "list<text>"}
+        - {name: __len__, args: {}, returns: index}
+        - {name: __repr__, args: {}, returns: text}
         - name: __arrow_c_stream__
           args: {requested_schema: "optional<host_object> = None"}
           returns: arrow_stream_capsule
+        - {name: to_pylist, args: {}, returns: "list<row>"}
+        - {name: to_arrow, args: {}, returns: host_object}
+        - {name: to_polars, args: {}, returns: host_object}
+        - {name: to_pandas, args: {}, returns: host_object}
     - kind: exception
       name: _Error
       rust: api_entry::_Error
@@ -560,9 +609,9 @@ python:
       rust: api_entry::Run
       constructible: false
       methods:
-        - {name: output, args: {}, returns: "optional<_ArrowTable>"}
-        - {name: issues, args: {}, returns: _ArrowTable}
-        - {name: report, args: {}, returns: "optional<_ArrowTable>"}
+        - {name: output, args: {}, returns: "optional<Table>"}
+        - {name: issues, args: {}, returns: Table}
+        - {name: report, args: {}, returns: "optional<Table>"}
         - {name: save, args: {}, returns: "list<text>"}
         - {name: observations, args: {include_measurements: "bool = false"}, returns: "optional<text>"}
     - kind: class
@@ -571,18 +620,18 @@ python:
       constructible: false
       methods:
         - {name: names, args: {}, returns: "list<text>"}
-        - {name: output, args: {name: text}, returns: "optional<_ArrowTable>"}
-        - {name: member_issues, args: {name: text}, returns: _ArrowTable}
-        - {name: member_report, args: {name: text}, returns: "optional<_ArrowTable>"}
-        - {name: issues, args: {}, returns: _ArrowTable}
-        - {name: report, args: {}, returns: _ArrowTable}
+        - {name: output, args: {name: text}, returns: "optional<Table>"}
+        - {name: member_issues, args: {name: text}, returns: Table}
+        - {name: member_report, args: {name: text}, returns: "optional<Table>"}
+        - {name: issues, args: {}, returns: Table}
+        - {name: report, args: {}, returns: Table}
         - {name: save, args: {}, returns: "list<text>"}
     - kind: class
       name: _Submission
       rust: api_entry::Submission
       constructible: false
       methods:
-        - {name: issues, args: {}, returns: _ArrowTable}
+        - {name: issues, args: {}, returns: Table}
         - {name: save, args: {}, returns: "list<text>"}
     - kind: class
       name: _SelfTest
@@ -590,7 +639,7 @@ python:
       constructible: false
       methods:
         - {name: status, args: {}, returns: text}
-        - {name: cases, args: {}, returns: _ArrowTable}
+        - {name: cases, args: {}, returns: Table}
         - {name: info, args: {}, returns: context_object}
         - {name: summary, args: {}, returns: text}
     - kind: class
@@ -607,7 +656,7 @@ python:
       name: _spec_check
       rust: api_entry::_spec_check
       args: {specification: text, project: "optional<text> = None"}
-      returns: _ArrowTable
+      returns: Table
     - kind: function
       name: _spec_run
       rust: api_entry::_spec_run
@@ -627,7 +676,7 @@ python:
       name: _project_check
       rust: api_entry::_project_check
       args: {project: text}
-      returns: _ArrowTable
+      returns: Table
     - kind: function
       name: _project_run
       rust: api_entry::_project_run
@@ -647,12 +696,12 @@ python:
         max_archive_members: "index = 10000"
         max_expanded_bytes: "index = 268435456"
         max_xml_depth: "index = 64"
-      returns: _ArrowTable
+      returns: Table
     - kind: function
       name: _lint
       rust: api_entry::_lint
       args: {paths: "list<text>", fix: "bool = false"}
-      returns: _ArrowTable
+      returns: Table
     - kind: function
       name: _schema
       rust: api_entry::_schema
@@ -753,7 +802,17 @@ operations:
   selftest_info: {python: [_SelfTest.info], r: [selftest_info]}
   selftest_summary: {python: [_SelfTest.summary], r: [selftest_summary]}
 # Host transport: Python checks interrupts inside the native calls, R through
-# these two helpers; the Arrow capsule is Python-only.
+# these two helpers. yamaa.Table is Python's table type, and R converts every
+# table to a data frame instead, so each of its methods is Python-only.
 host_only:
-  python: [_ArrowTable.__arrow_c_stream__]
+  python:
+    - Table.num_rows
+    - Table.column_names
+    - Table.__len__
+    - Table.__repr__
+    - Table.__arrow_c_stream__
+    - Table.to_pylist
+    - Table.to_arrow
+    - Table.to_polars
+    - Table.to_pandas
   r: [run_interrupt, project_run_interrupt]

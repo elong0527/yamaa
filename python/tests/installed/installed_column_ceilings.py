@@ -82,14 +82,16 @@ class ColumnCeilings(unittest.TestCase):
         return specification.check(), specification.run()
 
     def assert_build(self, spec, width=1):
-        self.assertEqual(yamaa.spec(spec).check().issues.height, 0)
+        self.assertEqual(yamaa.spec(spec).check().issues.num_rows, 0)
         built = yamaa.spec(spec).run()
-        self.assertEqual(built.issues.height, 0)
-        self.assertEqual(built.output.row(0), ("S-001", *["x"] * (width - 1)))
-        self.assertEqual(built.output.shape, (1, width))
+        self.assertEqual(built.issues.num_rows, 0)
+        self.assertEqual(
+            built.output.to_polars().row(0), ("S-001", *["x"] * (width - 1))
+        )
+        self.assertEqual(built.output.to_polars().shape, (1, width))
 
     def assert_refusal(self, result, compiler=False):
-        rows = result.issues.to_dicts()
+        rows = result.issues.to_pylist()
         self.assertTrue(rows)
         self.assertTrue(
             any(row["condition"] == "engine_rejected" for row in rows), rows
@@ -141,7 +143,7 @@ class ColumnCeilings(unittest.TestCase):
             spec.write_text(json.dumps(document))
             for refused in self.routes(spec, route):
                 self.assert_refusal(refused, compiler=True)
-                rows = refused.issues.to_dicts()
+                rows = refused.issues.to_pylist()
                 self.assertEqual(len(rows), 1)
                 context = json.loads(rows[0]["context"])
                 self.assertNotIn("incomplete_checks_from", context)
@@ -162,7 +164,7 @@ class ColumnCeilings(unittest.TestCase):
             }
             spec.write_text(json.dumps(repaired))
             for result in self.routes(spec, route):
-                rows = result.issues.to_dicts()
+                rows = result.issues.to_pylist()
                 self.assertEqual(len(rows), 1)
                 self.assertEqual(rows[0]["condition"], "incompatible_input_type")
                 self.assertEqual(rows[0]["rule"], "TEXT-1")
@@ -239,10 +241,10 @@ class ColumnCeilings(unittest.TestCase):
                 ).encode("ascii")
                 for spec in (parent, explicit, child, grandchild):
                     with self.subTest(spec=spec.name):
-                        self.assertEqual(yamaa.spec(spec).check().issues.height, 0)
+                        self.assertEqual(yamaa.spec(spec).check().issues.num_rows, 0)
                         built = yamaa.spec(spec).run()
-                        self.assertEqual(built.issues.height, 0)
-                        self.assertEqual(built.output.rows(), expected)
+                        self.assertEqual(built.issues.num_rows, 0)
+                        self.assertEqual(built.output.to_polars().rows(), expected)
                         built.save()
                         self.assertEqual(
                             (root / "out.csv").read_bytes(), expected_bytes
@@ -260,9 +262,9 @@ class ColumnCeilings(unittest.TestCase):
         base.with_name("layer-8193.yaml").write_bytes(base.read_bytes())
         for result in self.routes(base.with_name("layer-0.yaml")):
             self.assert_refusal(result)
-            self.assertEqual(result.issues.height, 1)
+            self.assertEqual(result.issues.num_rows, 1)
             self.assertEqual(
-                json.loads(result.issues["context"][0]),
+                json.loads(result.issues.to_polars()["context"][0]),
                 {
                     "code": "resource_limit",
                     "step": "prepare",
@@ -338,7 +340,7 @@ class ColumnCeilings(unittest.TestCase):
                     + "\n",
                     encoding="ascii",
                 )
-                self.assertEqual(yamaa.spec(consumer).check().issues.height, 0)
+                self.assertEqual(yamaa.spec(consumer).check().issues.num_rows, 0)
                 if width == 1024:
                     self.assert_build(consumer)
                 else:

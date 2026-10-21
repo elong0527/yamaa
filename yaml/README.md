@@ -159,7 +159,13 @@ rule, grammar, or fixture:
   with `uv run --project python --no-sync python -m
   tools.packaging.generate_message_templates --write`. `make quick` refuses a
   stale table, and the Rust test that reaches every registry cause fails when
-  a message names a key some cause does not record.
+  a message names a key some cause does not record. Name the condition on the
+  `Fails` line of the card whose rule raises it: `tools.rules.check` refuses a
+  registered condition that no card's `Fails` line names. Give it a parity
+  case too, a negative benchmark or a case in `rust/tests/host-fixtures/`, or
+  list it in `rust/tests/host-fixtures/unreached-conditions.yaml` with the
+  reason: `tools.validation.check_diagnostics` refuses a registered condition
+  with neither.
 - Keep handler fields local to the expression or result stage that can use them;
   do not recreate a generic exception list.
 - Store each cohesive semantic area in one rule file under `rules/`.
@@ -183,13 +189,24 @@ rule, grammar, or fixture:
 - Change a closed CDISC vocabulary in `vocabulary/cdisc.yaml` first, giving
   each added value the language version that admits it, then the schema
   type or class field the vocabulary names, in `yaml/` and `v1/` or only in
-  the schema sets its `schemas` lists, and the engine's list.
+  the schema sets its `schemas` lists, the engine's list, and each rule card
+  table that lists it: those of
+  [SUB-3](../rules/profiles/submission.md#sub-3),
+  [SUB-9](../rules/profiles/submission.md#sub-9),
+  [SUB-10](../rules/profiles/submission.md#sub-10),
+  [SUB-15](../rules/profiles/submission.md#sub-15),
+  [SUB-26](../rules/profiles/submission.md#sub-26) and
+  [JSON-10](../rules/profiles/dataset-json.md#json-10).
   `python -m tools.validation.check_cdisc_vocabulary` keeps each list that
   names a Define-XML enumeration equal to that enumeration in the Define-XML
   schema bundled with the engine, and each schema type or field equal to its
-  list; Rust tests compare the engine's own lists with the file for every
-  vocabulary but the where comparators, for which the engine keeps no list.
-  A vocabulary only grows: no value is removed in 1.x.
+  list. `python -m tools.validation.check_cdisc_tables` keeps those tables to
+  the file: each value they list is one of its values, and each value of a
+  vocabulary they divide among their rows sits in one row, unless the check
+  names it as belonging in none, as it does `BIMO`. Rust tests compare the
+  engine's own lists with the file for every vocabulary but the where
+  comparators, for which the engine keeps no list. A vocabulary only grows:
+  no value is removed in 1.x.
 - Keep repository-authored source ASCII-only. Spell non-ASCII characters by
   code point in rules, documentation, schemas, specifications, and tests;
   literal Unicode belongs only in input and expected-output data fixtures.

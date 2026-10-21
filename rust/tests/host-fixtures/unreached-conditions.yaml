@@ -1,0 +1,130 @@
+# The registered conditions (yaml/conditions.yaml) that no parity case reaches
+# (#2846): no negative benchmark's expected/error.yaml names one, and no case
+# of the shared host fixtures (the JSON files beside this list) does. Each is
+# unreachable by design, with the reason no case can reach it, or not covered
+# yet, under the family issue that adds its case (#3423 for validation, #3424
+# for planning and ingest, #3428 for row_construction to convert, #3432 for
+# verification, output and engine, by the condition's first registered phase).
+# tools/validation/check_diagnostics.py keeps the list exact: a registered
+# condition needs a case or an entry, and an entry names a registered
+# condition that no case reaches. A family issue removes each entry it covers,
+# or moves it to unreachable with its reason; not_covered is empty when #2846
+# is done. Each list is sorted.
+
+unreachable:
+  day_not_permitted: >-
+    only the 0.5 path raises it, until P2-13 removes that path: 1.0 drops
+    minimum_source_precision, and #3030 D61 retired its benchmarks
+  day_required: >-
+    only the 0.5 path raises it, until P2-13 removes that path: 1.0 drops
+    minimum_source_precision, and #3030 D61 retired its benchmarks
+  month_not_permitted: >-
+    only the 0.5 path raises it, until P2-13 removes that path: 1.0 drops
+    minimum_source_precision, and #3030 D61 retired its benchmarks
+  month_required: >-
+    only the 0.5 path raises it, until P2-13 removes that path: 1.0 drops
+    minimum_source_precision, and #3030 D61 retired its benchmarks
+not_covered:
+  "#3423":
+    - artifact_outside_document
+    - artifact_path_collision
+    - bare_derivation_scalar
+    - codelist_duplicate_value
+    - codelist_extended_alias
+    - codelist_extension_not_admitted
+    - codelist_partial_item_field
+    - codelist_shape_invalid
+    - codelist_type_mismatch
+    - conflicting_row_construction
+    - core_mandatory_conflict
+    - correlated_derivation_with_unique_verification
+    - correlated_filter_with_unique_verification
+    - declared_length_conflict
+    - driver_unavailable
+    - duplicate_dataset_entry
+    - duplicate_derivation
+    - empty_string_present_unsupported
+    - function_conformance_failed
+    - function_file_invalid
+    - function_implementation_missing
+    - invalid_declaration
+    - invalid_operation_count
+    - invalid_producer_contract
+    - invalid_size
+    - method_missing
+    - minimum_length
+    - mixed_relations
+    - model_contract_mismatch
+    - nested_reduction
+    - origin_contradicts_derivation
+    - origin_description_missing
+    - origin_document_missing
+    - origin_missing
+    - origin_source_not_admitted
+    - parent_not_found
+    - parent_on_another_share
+    - pattern_mismatch
+    - predecessor_label_mismatch
+    - producer_contract_mismatch
+    - producer_not_completed
+    - producer_workflow_cycle
+    - project_environment_invalid
+    - project_environment_missing
+    - reference_data_repeating_conflict
+    - refuted_value_origin
+    - reserved_metadata_key
+    - resource_path_not_normalized
+    - runtime_artifact_mismatch
+    - schema_version_mismatch
+    - source_system_incomplete
+    - submission_data_type_not_admitted
+    - submission_length_invalid
+    - submission_length_missing
+    - submission_length_not_applicable
+    - submission_metadata_missing
+    - submission_not_output_column
+    - transport_path_collision
+    - unknown_codelist
+    - unknown_derive_variable
+    - unknown_document
+    - unknown_intermediate_driver_type
+    - unknown_project_function
+    - unknown_reference
+    - unknown_section
+    - unknown_standard_family
+    - unlinked_producer
+    - xpt_display_format_invalid
+  "#3424":
+    - resource_path_content_changed
+    - source_carriage_return
+    - source_field_type_unsupported
+    - source_field_value_invalid
+    - source_header_absent
+    - source_odm_archive_invalid
+    - source_odm_attribute_ambiguous
+    - source_odm_attribute_invalid
+    - source_odm_attribute_missing
+    - source_odm_compression_unsupported
+    - source_odm_document_unsupported
+    - source_odm_layout_unsupported
+    - source_odm_metadata_conflict
+    - source_odm_value_unsupported
+    - source_odm_xml_malformed
+    - source_odm_xml_unsupported
+    - source_quote_in_bare_field
+    - source_text_after_quote
+  "#3428":
+    - function_call_failed
+    - invalid_function_result
+    - invalid_power
+    - missing_input
+    - unmatched_pattern
+  "#3432":
+    - engine_rejected
+    - nothing_to_save
+    - publication_failed
+    - transport_dataset_empty
+    - value_level_unmatched
+    - xpt_file_too_large
+    - xpt_last_row_blank
+    - xpt_value_out_of_range

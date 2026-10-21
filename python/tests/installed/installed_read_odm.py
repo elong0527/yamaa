@@ -62,21 +62,21 @@ class ReadOdm(unittest.TestCase):
         ]
         for read in TRUTH["reads"]:
             with self.subTest(document=read["document"]):
-                frame = yamaa.read_odm(self.source(read["document"]))
-                self.assertIsInstance(frame, pl.DataFrame)
-                self.assertEqual(frame.columns, TRUTH["columns"])
-                self.assertEqual(frame.dtypes, types)
-                self.assertEqual(frame.to_dicts(), expected_rows(read["rows"]))
+                table = yamaa.read_odm(self.source(read["document"]))
+                self.assertIsInstance(table, yamaa.Table)
+                self.assertEqual(table.column_names, TRUTH["columns"])
+                self.assertEqual(table.to_polars().dtypes, types)
+                self.assertEqual(table.to_pylist(), expected_rows(read["rows"]))
 
     def test_an_archive_member_reads_like_its_document(self):
         archive = TRUTH["archive"]
         selected = next(
             read for read in TRUTH["reads"] if read["document"] == archive["selected"]
         )
-        frame = yamaa.read_odm(
+        table = yamaa.read_odm(
             self.root / archive["name"], archive_member=archive["selected"]
         )
-        self.assertEqual(frame.to_dicts(), expected_rows(selected["rows"]))
+        self.assertEqual(table.to_pylist(), expected_rows(selected["rows"]))
 
     def test_refusals_raise_yamaa_error_carrying_their_issue(self):
         for refusal in TRUTH["refusals"]:
@@ -100,8 +100,8 @@ class ReadOdm(unittest.TestCase):
                     f"cannot read {given}: {message} "
                     f"[{expected['condition']}, {expected['rule']}]",
                 )
-                self.assertEqual(error.issues.columns, ISSUE_COLUMNS)
-                [row] = error.issues.to_dicts()
+                self.assertEqual(error.issues.column_names, ISSUE_COLUMNS)
+                [row] = error.issues.to_pylist()
                 self.assertEqual(
                     {
                         name: row[name]

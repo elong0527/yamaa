@@ -60,9 +60,9 @@ class SelfTest(unittest.TestCase):
         self.assertEqual(self.result.status, TRUTH["status"])
 
     def test_cases_has_one_row_per_case_in_list_order(self):
-        cases = self.result.cases
-        self.assertIsInstance(cases, pl.DataFrame)
-        self.assertEqual(cases.columns, TRUTH["columns"])
+        self.assertIsInstance(self.result.cases, yamaa.Table)
+        self.assertEqual(self.result.cases.column_names, TRUTH["columns"])
+        cases = self.result.cases.to_polars()
         self.assertEqual(cases.dtypes, [pl.String] * len(TRUTH["columns"]))
         self.assertEqual(cases["case"].to_list(), TRUTH["cases"])
         statuses = cases["status"].to_list()

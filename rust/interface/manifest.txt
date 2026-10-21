@@ -130,12 +130,24 @@ public.types.names: python list[str]; r character()
 public.types.paths_written: python list[str], absolute with forward slashes, in publication order; r character(), the same paths; save() returns them invisibly
 public.types.tree: python dict; r named list
 public.types.json_text: python str, canonical JSON (RFC 8785); r character(1), canonical JSON (RFC 8785)
-public.types.table: python polars.DataFrame; r data.frame
-public.types.optional_table: python polars.DataFrame | None; r data.frame or NULL
+public.types.table: python yamaa.Table; r data.frame
+public.types.optional_table: python yamaa.Table | None; r data.frame or NULL
 public.types.status: python str, one of values.status; r character(1), one of values.status
 public.types.file_type: python str, one of values.file_type; r character(1), one of values.file_type
 public.types.info: python dict, keys in records.info order; r named list, names in records.info order
 public.types.nothing: python None; r NULL, invisibly
+public.types.rows: python list[dict[str, object]], one dict per row, keyed by the column names in order
+public.types.arrow_capsule: python PyCapsule named arrow_array_stream, a fresh Arrow C stream
+public.types.schema_request: python object or None; anything but None is refused
+public.types.arrow_table: python pyarrow.Table
+public.types.polars_frame: python polars.DataFrame
+public.types.pandas_frame: python pandas.DataFrame, each column a pandas.ArrowDtype of its Arrow type
+public.value_types.str: python Arrow Utf8, Python str; r character
+public.value_types.int: python Arrow Int64, Python int; r double; an error beyond 2^53
+public.value_types.float: python Arrow Float64, Python float; r double
+public.value_types.date: python Arrow Date32, datetime.date; r Date
+public.value_types.datetime: python Arrow Timestamp(second), naive datetime.datetime; r POSIXct in UTC
+public.value_types.list: python Arrow List, Python list; r list column; NULL for a missing list
 public.functions.spec: python yamaa.spec; r yamaa_spec; returns Spec
 public.functions.spec.args[0]: path: path
 public.functions.project: python yamaa.project; r yamaa_project; returns Project
@@ -193,8 +205,20 @@ public.classes.SelfTest.status: property; returns status
 public.classes.SelfTest.cases: property; returns table; table selftest_cases
 public.classes.SelfTest.info: property; returns info; record info
 public.classes.SelfTest.summary: printing; python __repr__; r print, format
+public.classes.Table: python yamaa.Table
+public.classes.Table.num_rows: property; returns count
+public.classes.Table.column_names: property; returns names
+public.classes.Table.length: protocol; python __len__; returns count
+public.classes.Table.preview: printing; python __repr__
+public.classes.Table.arrow_stream: protocol; python __arrow_c_stream__; returns arrow_capsule
+public.classes.Table.arrow_stream.args[0]: requested_schema: schema_request = None
+public.classes.Table.to_pylist: method; returns rows
+public.classes.Table.to_arrow: method; returns arrow_table; imports pyarrow
+public.classes.Table.to_polars: method; returns polars_frame; imports polars
+public.classes.Table.to_pandas: method; returns pandas_frame; imports pandas, pyarrow
 public.errors.refusal: python yamaa.Error(Exception) with issues: table, paths: paths_written; r yamaa_error, error, condition with message: text, call: NULL, issues: table, paths: paths_written
 public.python.exports.Error
+public.python.exports.Table
 public.python.exports.__version__
 public.python.exports.lint
 public.python.exports.project

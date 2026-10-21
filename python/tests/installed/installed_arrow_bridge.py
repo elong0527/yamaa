@@ -59,7 +59,7 @@ class ArrowBridge(unittest.TestCase):
 
     def run_spec(self):
         result = yamaa.spec(self.root / "spec.yaml").run()
-        self.assertEqual(result.issues.height, 0)
+        self.assertEqual(result.issues.num_rows, 0)
         return result
 
     def test_exact_types_buffer_sharing_and_frames_without_ipc(self):
@@ -88,7 +88,7 @@ class ArrowBridge(unittest.TestCase):
         )
         # Each export is a fresh stream over the same held buffers.
         self.assertEqual(addresses(first), addresses(pa.table(run._native.output())))
-        # The public frames traverse the same bridge, without IPC.
+        # The public tables convert through the same bridge, without IPC.
         with (
             patch.object(
                 pl, "read_ipc_stream", side_effect=AssertionError("IPC host handoff")
@@ -97,9 +97,9 @@ class ArrowBridge(unittest.TestCase):
                 pl, "read_ipc", side_effect=AssertionError("IPC host handoff")
             ),
         ):
-            frame = run.output
-            issues = run.issues
-            report = run.report
+            frame = run.output.to_polars()
+            issues = run.issues.to_polars()
+            report = run.report.to_polars()
         self.assertEqual(frame["I"].to_list(), [-(2**63), None, 2**63 - 1])
         self.assertEqual(frame["S"].to_list(), ["a\0\U0001f980", None, "\u03b2"])
         self.assertEqual(frame["D"].dtype, pl.Date)
@@ -177,7 +177,9 @@ class ArrowBridge(unittest.TestCase):
         empty = self.run_spec()
         empty_table = pa.table(empty._native.output())
         self.assertEqual(empty_table.shape, (0, 6))
-        self.assertEqual(empty.output.shape, (0, 6))
+        self.assertEqual(
+            (empty.output.num_rows, len(empty.output.column_names)), (0, 6)
+        )
         self.assertEqual(empty_table.schema, pa.table(run._native.output()).schema)
 
 

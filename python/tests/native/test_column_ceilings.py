@@ -63,11 +63,11 @@ def write_case(tmp_path, *, columns, typed_fields=0, source_format="csv"):
 
 def compiler_limit_rows(result):
     issues = result.issues
-    if issues.height == 0:
+    if issues.num_rows == 0:
         return []
     return [
         row
-        for row in issues.iter_rows(named=True)
+        for row in issues.to_pylist()
         if row["condition"] == "engine_rejected" and "compiler_limit" in row["context"]
     ]
 
@@ -105,8 +105,8 @@ def refusals(spec, project):
         frames = [listed.check().issues, listed.run().issues]
     findings = []
     for frame in frames:
-        assert frame.height == 1
-        finding = frame.row(0, named=True)
+        assert frame.num_rows == 1
+        (finding,) = frame.to_pylist()
         finding["context"] = json.loads(finding["context"])
         if project is not None:
             identity = spec.resolve().as_posix()
@@ -118,11 +118,11 @@ def refusals(spec, project):
 
 def test_declared_and_output_columns_admit_1024_and_refuse_1025(tmp_path):
     spec = write_case(tmp_path, columns=1024)
-    assert yamaa.spec(spec).check().issues.height == 0
+    assert yamaa.spec(spec).check().issues.num_rows == 0
     built = yamaa.spec(spec).run()
-    assert built.issues.height == 0
-    assert built.output.width == 1024
-    assert built.output.row(0) == ("S-001", *["x"] * 1023)
+    assert built.issues.num_rows == 0
+    assert built.output.to_polars().width == 1024
+    assert built.output.to_polars().row(0) == ("S-001", *["x"] * 1023)
 
     spec = write_case(tmp_path, columns=1025)
     assert compiler_limit_rows(yamaa.spec(spec).check())
@@ -130,10 +130,10 @@ def test_declared_and_output_columns_admit_1024_and_refuse_1025(tmp_path):
 
 def test_typed_source_fields_admit_1024_and_refuse_1025(tmp_path):
     spec = write_case(tmp_path, columns=1, typed_fields=1024)
-    assert yamaa.spec(spec).check().issues.height == 0
+    assert yamaa.spec(spec).check().issues.num_rows == 0
     built = yamaa.spec(spec).run()
-    assert built.issues.height == 0
-    assert built.output.to_dict(as_series=False) == {"ID": ["S-001"]}
+    assert built.issues.num_rows == 0
+    assert built.output.to_polars().to_dict(as_series=False) == {"ID": ["S-001"]}
 
     spec = write_case(tmp_path, columns=1, typed_fields=1025)
     assert compiler_limit_rows(yamaa.spec(spec).check())
@@ -151,11 +151,13 @@ def test_source_width_admits_1024_and_refuses_1025(tmp_path, source_format):
         spec.write_text(yaml.safe_dump(document))
         built = yamaa.spec(spec).run()
         if width == 1024:
-            assert built.issues.height == 0
-            assert built.output.to_dict(as_series=False) == {"ID": ["S-001"]}
+            assert built.issues.num_rows == 0
+            assert built.output.to_polars().to_dict(as_series=False) == {
+                "ID": ["S-001"]
+            }
         else:
             assert built.output is None
-            assert "engine_rejected" in built.issues["condition"].to_list()
+            assert "engine_rejected" in built.issues.to_polars()["condition"].to_list()
 
 
 def test_wide_producer_contract_and_decoder_build(tmp_path):
@@ -169,12 +171,12 @@ def test_wide_producer_contract_and_decoder_build(tmp_path):
     consumer["output"] = {"path": "consumer.csv", "columns": ["ID"]}
     spec = tmp_path / "consumer.yaml"
     spec.write_text(yaml.safe_dump(consumer))
-    assert yamaa.spec(spec).check().issues.height == 0
+    assert yamaa.spec(spec).check().issues.num_rows == 0
     # Callers build and save the producer before the consumer reads its artifact.
     yamaa.spec(producer).run().save()
     built = yamaa.spec(spec).run()
-    assert built.issues.height == 0
-    assert built.output.to_dict(as_series=False) == {"ID": ["S-001"]}
+    assert built.issues.num_rows == 0
+    assert built.output.to_polars().to_dict(as_series=False) == {"ID": ["S-001"]}
 
 
 @pytest.mark.parametrize("project", [False, True])
@@ -208,8 +210,8 @@ def test_compiler_refusal_details_on_check_and_run(
         document["output"]["columns"] = ["ID"] * actual
     spec.write_text(yaml.safe_dump(document))
     for result in operations(spec, project_file(tmp_path) if project else None):
-        assert result.issues.height == 1
-        issue = result.issues.row(0, named=True)
+        assert result.issues.num_rows == 1
+        issue = result.issues.to_polars().row(0, named=True)
         assert issue["phase"] == "engine"
         assert issue["condition"] == "engine_rejected"
         assert issue["rule"] is None
@@ -237,9 +239,9 @@ def test_inheritance_depth_admits_original_chain_and_parent_occurrences_keep_fix
     spec.write_text("schema_version: '1.0'\nparent: layer-0.yaml\n")
     project = project_file(tmp_path) if project else None
     checked, built = operations(spec, project)
-    assert checked.issues.height == 0
-    assert built.issues.height == 0
-    assert built.output.to_dict(as_series=False) == {"ID": ["S-001"]}
+    assert checked.issues.num_rows == 0
+    assert built.issues.num_rows == 0
+    assert built.output.to_polars().to_dict(as_series=False) == {"ID": ["S-001"]}
     built.save()
     assert (tmp_path / "out.csv").read_bytes() == b"ID\nS-001\n"
 
