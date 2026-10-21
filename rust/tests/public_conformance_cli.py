@@ -22,11 +22,11 @@ benchmark with a project. The binary dispatches on the type a PATH declares
 in its `type:` header and reads only 1.x files (#3030 D122, D125), so until
 the corpus moves to 1.0 the runner runs converted copies, which
 `python -m tools.commands.cli_conformance` writes and plans before it runs
-this runner over them. A call the binary refuses as not implemented yet
-(D96) is recorded as `not_implemented`; any other run must exit with status 0
-or 1 and print one JSON document, or its record is an error. The comparator,
-`python -m tools.conformance.public_conformance compare`, judges the records
-against the expected files.
+this runner over them. Each run must exit with status 0 or 1 and print one
+JSON document; any other run, such as one that exits 2 because the command
+line could not run it as asked (D68), makes its record an error. The
+comparator, `python -m tools.conformance.public_conformance compare`, judges
+the records against the expected files.
 """
 
 from __future__ import annotations
@@ -38,9 +38,6 @@ import subprocess
 from pathlib import Path
 
 PROTOCOL = "public-conformance/1"
-# What the binary writes to standard error, with exit status 2, for a command
-# it does not implement yet.
-NOT_IMPLEMENTED = " is not implemented yet\n"
 # Seconds one run may take before it is an error.
 TIMEOUT = 600
 
@@ -90,12 +87,7 @@ def observe(example, fixtures, work, binary):
             )
         ran = invoke(binary, ["--format", "json", *call["arguments"]], case)
         stdout = ran.pop("stdout")
-        ran["not_implemented"] = ran["exit_status"] == 2 and ran["stderr"].endswith(
-            NOT_IMPLEMENTED
-        )
-        ran["document"] = (
-            None if ran["not_implemented"] else document(ran, stdout, case)
-        )
+        ran["document"] = document(ran, stdout, case)
         record["calls"].append({**call, **ran})
     return record
 
@@ -144,13 +136,11 @@ def relative(paths, case):
 
 
 def state(record):
-    """excluded, not_implemented, observed or error."""
+    """excluded, observed or error."""
     if record["error"]:
         return "error"
     if record["excluded"]:
         return "excluded"
-    if record["calls"] and all(call["not_implemented"] for call in record["calls"]):
-        return "not_implemented"
     return "observed"
 
 
@@ -185,7 +175,7 @@ def main(argv=None):
             "evidence": args.evidence,
         },
     )
-    counts = dict.fromkeys(("excluded", "not_implemented", "observed", "error"), 0)
+    counts = dict.fromkeys(("excluded", "observed", "error"), 0)
     for example in plan["examples"]:
         try:
             record = observe(example, fixtures, output / "work", str(binary))

@@ -111,7 +111,7 @@ the conditions that path still raises.
 
 | File | Prefix | Covers |
 | --- | --- | --- |
-| [Specification structure](specification.md) | SPEC | Declare root fields, unique identifiers, column derivation coverage, internal columns, and ASCII source. |
+| [Specification structure](specification.md) | SPEC | Declare root fields, unique identifiers, column derivation coverage, internal and copied columns, and ASCII source. |
 | [Inheritance](inheritance.md) | LAYER | Resolve inherited layers into one minimal, ordered specification. |
 | [Name binding](names.md) | NAME | Resolve input datasets, qualified and bare names, driver reads, and ODM item reads. |
 | [Values](values.md) | VALUE | Define column types, missing values, numbers, text, dates and datetimes, conversion, and order. |
@@ -130,6 +130,7 @@ the conditions that path still raises.
 | [CSV profile](reference/csv.md) | CSV | Read admitted CSV spellings and write canonical CSV bytes and display precision. |
 | [Parquet profile](reference/parquet.md) | PARQUET | Read and write the closed Parquet field and value mapping. |
 | [SAS source profiles](reference/sas.md) | SAS | Read SAS datasets and Transport v5/v8 through declared encoding and explicit numeric narrowing. |
+| [ODM source profile](reference/odm.md) | ODM | Read an ODM 1.3 or 2.0 snapshot into the item table, refusing transactional content and documents without clinical data, and skip audit records. |
 | [Schema language](reference/schema-language.md) | SCHEMA | Define schema notation, registries, constraints, canonical shorthand expansion, and the one spelling of a written value. |
 | [Submission metadata](profiles/submission.md) | SUB | Govern dataset and column metadata, origin, methods, and document references. |
 | [Controlled terminology](profiles/terminology.md) | CT | Declare codelists once and enforce the items each binding lists. |

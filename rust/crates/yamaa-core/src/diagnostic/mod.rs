@@ -25,6 +25,9 @@ pub use aggregate::{AggregateContextCause, AggregateFinding};
 mod odm;
 pub use odm::{OdmDeclared, OdmFinding, OdmLocation};
 
+mod odm_read;
+pub use odm_read::OdmReadFinding;
+
 mod inheritance;
 pub use inheritance::InheritanceFinding;
 
@@ -284,6 +287,11 @@ conditions! {
     SchemaLayerInvalidClear => ("validation", "invalid_clear", Some("LAYER-9")),
     SchemaLayerIdentifierRepeated => ("validation", "duplicate_identifier", Some("LAYER-4")),
     SchemaLayerVersionMismatch => ("validation", "schema_version_mismatch", Some("LAYER-4")),
+    CopyDuplicateIdentifier => ("validation", "duplicate_identifier", Some("SPEC-9")),
+    CopyUnknownDataset => ("validation", "unknown_field", Some("SPEC-9")),
+    CopyUnlinkedInput => ("validation", "prohibited_construct", Some("SPEC-9")),
+    CopyUnknownColumn => ("validation", "unknown_field", Some("SPEC-9")),
+    CopyProducerCycle => ("validation", "producer_workflow_cycle", Some("SPEC-9")),
     SchemaUnknownWindow => ("validation", "unknown_window", Some("WINDOW-1")),
     SchemaResolvedOutputRequired => ("validation", "missing_required_field", Some("LAYER-12")),
     SchemaDescriptorValueNotPermitted => ("validation", "value_not_permitted", Some("SCHEMA-12")),
@@ -379,6 +387,26 @@ conditions! {
     OdmInvalidContext => ("validation", "invalid_odm_context", Some("NAME-11")),
     OdmNotUnique => ("derivation", "odm_not_unique", Some("NAME-13")),
     OdmRowNotUnique => ("row_construction", "odm_not_unique", Some("NAME-13")),
+    // The refusals of an ODM source (ODM-1; #3030 D73, D158): `read_odm`
+    // reports each with the source as given.
+    OdmSourceArchiveInvalid => ("ingest", "source_odm_archive_invalid", Some("ODM-1")),
+    OdmSourceArchiveMember => ("ingest", "source_odm_archive_member", Some("ODM-1")),
+    OdmSourceAttributeAmbiguous => ("ingest", "source_odm_attribute_ambiguous", Some("ODM-1")),
+    OdmSourceAttributeInvalid => ("ingest", "source_odm_attribute_invalid", Some("ODM-1")),
+    OdmSourceAttributeMissing => ("ingest", "source_odm_attribute_missing", Some("ODM-1")),
+    OdmSourceCompressionUnsupported => ("ingest", "source_odm_compression_unsupported", Some("ODM-1")),
+    OdmSourceDocumentUnsupported => ("ingest", "source_odm_document_unsupported", Some("ODM-1")),
+    OdmSourceLayoutUnsupported => ("ingest", "source_odm_layout_unsupported", Some("ODM-1")),
+    OdmSourceLimitExceeded => ("ingest", "source_odm_limit_exceeded", Some("ODM-1")),
+    OdmSourceMetadataConflict => ("ingest", "source_odm_metadata_conflict", Some("ODM-1")),
+    OdmSourceNoClinicalData => ("ingest", "source_odm_no_clinical_data", Some("ODM-1")),
+    OdmSourceTransactional => ("ingest", "source_odm_transactional", Some("ODM-1")),
+    OdmSourceValueUnsupported => ("ingest", "source_odm_value_unsupported", Some("ODM-1")),
+    OdmSourceXmlMalformed => ("ingest", "source_odm_xml_malformed", Some("ODM-1")),
+    OdmSourceXmlUnsupported => ("ingest", "source_odm_xml_unsupported", Some("ODM-1")),
+    // A `read_odm` option below its minimum, refused before the source is
+    // read, as a submission's `created` argument is (DEFINE-3).
+    OdmSourceOptionInvalid => ("validation", "value_not_permitted", Some("ODM-1")),
     CsvInvalidText => ("ingest", "invalid_text", Some("CSV-10")),
     CsvByteOrderMark => ("ingest", "source_byte_order_mark", Some("CSV-16")),
     // A byte-order mark declared on an input that another profile reads.

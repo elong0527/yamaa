@@ -283,15 +283,6 @@ fn each_1_0_feature_not_built_yet_is_refused_as_unsupported_operation() {
     let spec = |columns: &str| {
         format!("yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: DM\nkeys: [USUBJID]\ninput: {{RAW: raw.csv}}\noutput: {{path: dm.csv, columns: [USUBJID]}}\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Subject\n    derivation: RAW.USUBJID{columns}")
     };
-    // A copy entry, before the layers compose (P1-12).
-    study.write(
-        "spec.yaml",
-        &format!("{}\n  - copy: {{dataset: RAW, columns: [AGE]}}\n", spec("")),
-    );
-    assert_eq!(
-        refusals(&study, "spec.yaml", None),
-        [refusal("copy", "columns[1]")]
-    );
     // Several origins (P1-13).
     study.write(
         "spec.yaml",

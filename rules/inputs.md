@@ -274,13 +274,14 @@ string outside `str`. The delimited profile admits no empty string
 `dataset_class.schema` names the complete yamaa specification that produces
 the stored artifact at `path`. The link is type metadata only: the producer is
 read and validated as a specification, and its output columns type the
-artifact under [INPUT-11](#input-11), but it is never compiled or run, and its
-own sources and `schema` links are not followed. The consumer reads the
+artifact under [INPUT-11](#input-11), but it is never compiled or run, its own
+sources are not read, and its own `schema` links are followed only for its
+copy entries ([SPEC-9](specification.md#spec-9)). The consumer reads the
 artifact like any other input, so the caller builds and saves the producer
 first. A link cannot name the consuming specification.
 
 Fails: `invalid_producer_contract`.
-Evidence: `adam-results-ae-incidence`, `sdtm-dm-race-ethnicity`, `adam-adae-exposure-adjusted-incidence`, `schema-linked-csv-types`, `rust/crates/yamaa-adapters/tests/file_producer_links.rs::callers_build_and_save_the_producer_before_its_consumer_reads_the_artifact`, `rust/crates/yamaa-adapters/tests/file_producer_links.rs::the_producing_specification_is_read_but_never_compiled_or_executed`, `rust/crates/yamaa-core/tests/support/diagnostic/producer.rs`.
+Evidence: `adam-results-ae-incidence`, `sdtm-dm-race-ethnicity`, `adam-adae-exposure-adjusted-incidence`, `schema-linked-csv-types`, `rust/crates/yamaa/tests/copy_entry.rs::a_copy_reads_a_producer_that_copies_in_turn_and_refuses_a_cycle`, `rust/crates/yamaa-adapters/tests/file_producer_links.rs::callers_build_and_save_the_producer_before_its_consumer_reads_the_artifact`, `rust/crates/yamaa-adapters/tests/file_producer_links.rs::the_producing_specification_is_read_but_never_compiled_or_executed`, `rust/crates/yamaa-core/tests/support/diagnostic/producer.rs`.
 
 ```yaml
 input:
@@ -298,6 +299,13 @@ by `schema` that does not validate as a complete yamaa specification, whose
 [INPUT-11](#input-11), or that is the consuming specification itself fails
 with `invalid_producer_contract`. A missing producing specification fails like
 any missing file, at `input.<dataset>.schema`.
+
+A producer whose columns a `copy` entry declares has their types and labels
+only through its own producer, so reading it resolves its copy entries
+([SPEC-9](specification.md#spec-9)): each reads the output contract of the
+producer its input links, in turn, and no other link, source or artifact of
+the producer is read. A consumer's copy entries read its producers this way
+before its layers compose.
 
 Checking reads the producing specification but no study data, so it admits a
 link whose artifact does not exist yet. Building the consumer reads the

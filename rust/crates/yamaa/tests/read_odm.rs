@@ -66,31 +66,120 @@ fn clinical_items_read_into_the_fixed_table() {
     assert!(!table.ipc().unwrap().is_empty());
 }
 
+/// The one issue of a refusal, which a rejected report carries.
+#[cfg(feature = "odm")]
+#[track_caller]
+fn refusal(result: Result<yamaa::Table, Error>) -> yamaa::Diagnostic {
+    let Err(Error::Rejected(report)) = result else {
+        panic!("the read must be refused with its issue");
+    };
+    let [issue] = report.diagnostics.as_slice() else {
+        panic!("one issue, not {:?}", report.diagnostics);
+    };
+    issue.clone()
+}
+
+/// Every refusal carries its registered issue (#3030 D73, D158): the source
+/// as given, its condition and ODM-1, and D39's error text names it.
 #[cfg(feature = "odm")]
 #[test]
-fn refusals_carry_a_stable_code_and_message() {
+fn refusals_carry_their_registered_issue() {
+    use yamaa::{Action, ContextValue, Failure};
     let file = File::new(
         "refused.xml",
         &DOCUMENT.replace("IsNull=\"Yes\"", "IsNull=\"maybe\""),
     );
-    let Err(Error::Odm(refusal)) = read_odm(&file.0, &OdmOptions::new()) else {
-        panic!("the document must be refused");
-    };
-    assert_eq!(refusal.code(), "invalid_is_null");
-    assert_eq!(refusal.message(), "unsupported IsNull value \"maybe\"");
-    let options = OdmOptions::new().with_max_xml_depth(7);
-    let Err(error) = read_odm(&file.0, &options) else {
-        panic!("the options must be refused");
-    };
+    let shown = file.0.display().to_string();
+    let text = |value: &str| ContextValue::Text(value.to_owned());
+    let invalid = refusal(read_odm(&file.0, &OdmOptions::new()));
     assert_eq!(
-        error.to_string(),
-        "ODM read failure (invalid_option): max_xml_depth must be at least 8"
+        (
+            invalid.phase.as_str(),
+            invalid.code.as_str(),
+            invalid.rule.as_deref()
+        ),
+        ("ingest", "source_odm_attribute_invalid", Some("ODM-1"))
     );
+    assert!(invalid.spec_path.is_empty());
+    assert_eq!(invalid.context.get("path"), Some(&text(&shown)));
+    assert_eq!(invalid.context.get("element"), Some(&text("ItemData")));
+    assert_eq!(invalid.context.get("attribute"), Some(&text("IsNull")));
+    assert_eq!(invalid.context.get("value"), Some(&text("maybe")));
+    assert_eq!(
+        invalid.message,
+        format!("ItemData in {shown} has the unsupported IsNull value 'maybe'")
+    );
+
+    // An option below its minimum is refused at its name, before the source
+    // is read.
+    let options = OdmOptions::new().with_max_xml_depth(7);
+    let error = read_odm(&file.0, &options).unwrap_err();
+    let failure = Failure::from_error(Action::Read("edc/odm.xml"), &error);
+    assert_eq!(
+        failure.message,
+        "cannot read edc/odm.xml: max_xml_depth has a value that is not permitted \
+         [value_not_permitted, ODM-1]"
+    );
+    let option = refusal(Err(error));
+    assert_eq!(
+        (option.phase.as_str(), option.spec_path.as_slice()),
+        ("validation", &["max_xml_depth".to_owned()][..])
+    );
+    assert_eq!(option.context.get("minimum"), Some(&ContextValue::Int(8)));
+
     let options = OdmOptions::new().with_archive_member("odm.xml");
-    let Err(Error::Odm(refusal)) = read_odm(&file.0, &options) else {
-        panic!("a plain XML input must refuse archive_member");
-    };
-    assert_eq!(refusal.code(), "archive_member");
+    let member = refusal(read_odm(&file.0, &options));
+    assert_eq!(member.code, "source_odm_archive_member");
+    assert_eq!(
+        member.message,
+        format!("no member of {shown} can be read: archive_member requires a TAR input")
+    );
+}
+
+/// Only a snapshot reads: a transactional document, and one without
+/// `ClinicalData` such as a define.xml, are refused (ODM-1).
+#[cfg(feature = "odm")]
+#[test]
+fn only_a_snapshot_with_clinical_data_reads() {
+    let transactional = File::new(
+        "transactional.xml",
+        &DOCUMENT.replace(
+            "ODMVersion=\"2.0\"",
+            "ODMVersion=\"2.0\" FileType=\"Transactional\"",
+        ),
+    );
+    let issue = refusal(read_odm(&transactional.0, &OdmOptions::new()));
+    assert_eq!(issue.code, "source_odm_transactional");
+    assert_eq!(
+        issue.message,
+        format!(
+            "{} is not a snapshot: ODM declares FileType Transactional",
+            transactional.0.display()
+        )
+    );
+    let start = DOCUMENT.find("  <ClinicalData").unwrap();
+    let end = DOCUMENT.find("</ODM>").unwrap();
+    let metadata = File::new(
+        "metadata.xml",
+        &format!("{}{}", &DOCUMENT[..start], &DOCUMENT[end..]),
+    );
+    let issue = refusal(read_odm(&metadata.0, &OdmOptions::new()));
+    assert_eq!(
+        (issue.phase.as_str(), issue.code.as_str()),
+        ("ingest", "source_odm_no_clinical_data")
+    );
+    // A source path that reaches no file is a caller's path (FILE-7).
+    let absent =
+        std::env::temp_dir().join(format!("yamaa-facade-{}-absent.xml", std::process::id()));
+    let issue = refusal(read_odm(&absent, &OdmOptions::new()));
+    assert_eq!(
+        (issue.code.as_str(), issue.rule.as_deref()),
+        ("resource_path_missing", Some("FILE-7"))
+    );
+    assert_eq!(
+        issue.message,
+        format!("{} does not exist", absent.display())
+    );
 }
 
 #[cfg(not(feature = "odm"))]

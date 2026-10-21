@@ -158,7 +158,10 @@ keep the declaring layer's provenance under
 [LAYER-10](#layer-10); an entry can inherit `relative_to: entry` or replace
 `output` whole. Dataset shorthand is expanded before datasets are matched: a
 bare path becomes the long dataset form, so a later `relative_to` governs an
-inherited `path` and `schema` without restating them.
+inherited `path` and `schema` without restating them. A `copy` entry expands
+to the columns it declares before its layer composes
+([SPEC-9](specification.md#spec-9)), so each copied column composes by its
+`name`, and a later layer's column of that name merges with it.
 
 <a id="layer-6"></a>
 
@@ -257,7 +260,9 @@ A path is written in the notation diagnostics use: a root field, then `.key`
 for a key made of letters, digits, `_` and `-`, and `['key']` for any other
 key, with `'` written twice. Keyed members are named by identity, as
 [LAYER-5](#layer-5) composes them: `input` and `windows` members by key,
-`columns` by `name`, and `intermediates` and `rows` by `id`. A list replaces
+`columns` by `name`, and `intermediates` and `rows` by `id`. A column a `copy`
+entry declares is named as any column is: `columns.AGE.label` clears the label
+a copied `AGE` takes from its producer ([SPEC-9](specification.md#spec-9)). A list replaces
 whole ([LAYER-6](#layer-6)), so a path never holds a list index, and `$`, the
 root, appears only in diagnostics. A value written through a shorthand is named
 through it, as its layer wrote it: `columns.DCSREAS.derivation.mapping.dict.PD`

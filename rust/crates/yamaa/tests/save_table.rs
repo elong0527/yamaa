@@ -180,7 +180,7 @@ fn an_empty_table_saves_its_columns() {
     let study = Study::new();
     study.write(
         "empty.xml",
-        "<ODM xmlns=\"http://www.cdisc.org/ns/odm/v1.3\"/>\n",
+        "<ODM xmlns=\"http://www.cdisc.org/ns/odm/v1.3\">\n  <ClinicalData StudyOID=\"S\" MetaDataVersionOID=\"M\"/>\n</ODM>\n",
     );
     let engine = engine();
     let table = engine

@@ -304,17 +304,18 @@ fn column_bindings_run_one_driver_after_another() {
 #[test]
 fn a_column_holding_an_aggregate_keeps_the_whole_dataset() {
     // A qualified aggregate reduces its declared input for every row; DM is
-    // read through the join on USUBJID, for the DM rows as well.
+    // read through the join on USUBJID, for the DM rows as well. X holds an
+    // aggregate, so no template may state it (SPEC-6): the column phase
+    // completes the rows of all three drivers.
     Fixture::new(&specification(
         "int",
         "{case: [{when: \"DM.SEX = 'F'\", then: {aggregate: {expr: \"COUNT(AE.AESEQ)\", key: [USUBJID]}}}, {otherwise: {literal: 0}}]}",
         &["ae", "dm", "cm"],
-        &["cm"],
-    )
-    .replace("X: {literal: OWN}", "X: {literal: -1}"))
+        &[],
+    ))
     .saved(
         "USUBJID,SRC,SEQ,X\nS1,AE,1,2\nS1,AE,2,2\nS2,AE,1,0\nS1,DM,0,2\nS2,DM,0,0\n\
-         S3,DM,0,\nS1,CM,1,-1\nS3,CM,1,-1\n",
+         S3,DM,0,\nS1,CM,1,2\nS3,CM,1,\n",
     );
 }
 

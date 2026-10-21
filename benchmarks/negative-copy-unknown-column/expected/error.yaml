@@ -1,0 +1,7 @@
+phase: validation
+condition: unknown_field
+spec_paths:
+  - columns[4].copy.columns[2]
+rule: SPEC-9
+context:
+  identifier: ADSL.WEIGHTBL

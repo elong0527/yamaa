@@ -70,9 +70,12 @@ jobs:
     # expected bytes and every negative benchmark's first issue. Run by
     # default, including new build/configuration inputs. Only changes
     # confined to the documentation paths below pass without running.
-    # Scheduled runs leave it out: the gate rebuilds both hosts. The
-    # equivalence job below reports the two jobs as one check.
-    name: equivalence (${{ matrix.host }})
+    # Scheduled runs leave it out: the gate rebuilds both hosts. Its two legs,
+    # equivalence (python) and equivalence (r), are the gate's checks; no job
+    # reports them as one (#3492). The name holds no matrix expression, so
+    # GitHub appends each leg's host to it, and a run that skips the job
+    # shows the plain name rather than an unexpanded expression.
+    name: equivalence
     if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     timeout-minutes: 120
@@ -132,29 +135,6 @@ jobs:
         env:
           HOSTS: ${{ matrix.host }}
         run: make check-equivalence HOSTS="$HOSTS"
-  equivalence:
-    # The engine gate's one check, under the name that branch protection and
-    # the merge tooling read. It passes only when both host jobs passed,
-    # including a documentation-only pull request's pass without building,
-    # so branch protection can require it on every pull request. It runs on
-    # the host jobs' events even when one of them fails or is cancelled, and
-    # scheduled runs leave it out with them.
-    needs: equivalence-host
-    if: >-
-      always() &&
-      (github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch')
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    steps:
-      - name: Require every host job to pass
-        env:
-          RESULT: ${{ needs.equivalence-host.result }}
-        run: |
-          if [ "$RESULT" != success ] && [ "$RESULT" != skipped ]; then
-            echo "::error::An equivalence host job ended with the result $RESULT."
-            exit 1
-          fi
-          echo "The equivalence host jobs ended with the result $RESULT."
   conversion:
     # The 1.0 conversion gate (#3030 P1-9, D76): every benchmark, converted to
     # 1.0 by tools/migrate, must give its expected result on a fresh install.

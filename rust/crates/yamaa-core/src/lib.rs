@@ -11,6 +11,7 @@ pub mod aggregate_reduction;
 pub mod bound_expression;
 pub mod column_dependencies;
 pub mod conversion;
+pub mod copy_expansion;
 pub mod csv_precision;
 pub mod csv_source;
 pub mod dataset;

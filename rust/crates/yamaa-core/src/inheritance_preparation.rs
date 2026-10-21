@@ -17,6 +17,20 @@ pub trait PathPort: InheritanceSourcePort {
         entry: &Source,
         written: &str,
     ) -> Result<String, Self::Error>;
+    /// The output contract of the producing specification that `written`,
+    /// input `dataset`'s `schema` link as `declaring` writes it, names, which
+    /// a copy entry copies columns from (SPEC-9). The producer is read and
+    /// resolved, never compiled or run (INPUT-10). `None` when it cannot be:
+    /// the port keeps why, and the chain does not resolve.
+    fn producer(
+        &mut self,
+        declaring: &Source,
+        written: &str,
+        dataset: &str,
+    ) -> Option<crate::producer_contract::Contract> {
+        let _ = (declaring, written, dataset);
+        None
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -309,6 +323,20 @@ pub enum VersionedError<E> {
         layer: usize,
         findings: Vec<SchemaDiagnostic>,
     },
+    /// A copy entry of the layer numbered `layer` names a dataset that is
+    /// not an input linked through `schema`, or a column its producer does
+    /// not output: findings in that layer, each at the entry's `dataset` or
+    /// listed name (SPEC-9).
+    Copy {
+        layer: usize,
+        findings: Vec<SchemaDiagnostic>,
+    },
+    /// The producing specification input `dataset` links, which a copy entry
+    /// copies from, could not be read; [`PathPort::producer`]'s port says
+    /// why (SPEC-9).
+    Producer {
+        dataset: String,
+    },
     /// The composed specification is not valid at the chain's version, a
     /// required field missing among them (LAYER-7, LAYER-12). Findings
     /// address the retained composed document, whose provenance names the
@@ -353,12 +381,14 @@ fn clear_input_bases(document: &Document, bases: &mut BTreeMap<String, bool>) {
 
 /// Resolve a 1.x chain that [`inheritance::traverse_versioned`] admitted
 /// against `schema`, the 1.0 specification closure. Each layer is normalized
-/// at the version it declares; its relative paths are respelled from the
-/// entry (LAYER-10); the layers compose, each layer's `clear` applied before
-/// its own fields (LAYER-9); the chain's version replaces `yamaa`; the
-/// composition is pruned and ordered on its 1.0 lowering (LAYER-11,
-/// LAYER-13); and what survives is normalized at the chain's version, which
-/// materializes defaults and checks requiredness (LAYER-7, LAYER-12).
+/// at the version it declares, and its copy entries replaced by the columns
+/// they declare, read from the producers their inputs link (SPEC-9); its
+/// relative paths are respelled from the entry (LAYER-10); the layers
+/// compose, each layer's `clear` applied before its own fields (LAYER-9); the
+/// chain's version replaces `yamaa`; the composition is pruned and ordered on
+/// its 1.0 lowering (LAYER-11, LAYER-13); and what survives is normalized at
+/// the chain's version, which materializes defaults and checks requiredness
+/// (LAYER-7, LAYER-12).
 pub fn prepare_versioned<P: PathPort>(
     schema: &SchemaStructure,
     chain: &VersionedChain,
@@ -375,6 +405,7 @@ pub fn prepare_versioned<P: PathPort>(
                 })?,
         );
     }
+    crate::copy_expansion::expand(schema, chain, &mut normalized, port)?;
     let entry = &chain.layers.last().expect("a chain holds its entry").source;
     // As in a 0.5 chain, the final base of each input is selected before any
     // contributing path is respelled; a cleared `relative_to` selects the

@@ -22,7 +22,7 @@ fuzz_target!(|data: &[u8]| {
     // just written, so a missing file or a failed read is the reader's own
     // fault, as are an internal table error and a build without the reader.
     match odm_xml::read(&SCRATCH, &Options::default()) {
-        Err(odm_xml::Error::Read(Error::NotFound { .. } | Error::Io { .. })) => {
+        Err(odm_xml::Error::Resource(_) | odm_xml::Error::Read(Error::Io { .. })) => {
             panic!("the ODM reader could not read the file it was given")
         }
         Err(odm_xml::Error::Table(TableError::Internal)) => {

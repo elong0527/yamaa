@@ -12,6 +12,12 @@ judges the records against the converted expected files into
 OUTPUT/inventory.json. It exits 1 unless every benchmark the command line
 runs passes. Unlike the gate, it keeps what it writes, so the records and the
 converted cases they ran can be read afterwards.
+
+With --prepare-only it writes the converted copies and their plan, and stops.
+Native qualification prepares them while the network is up, then runs the
+runner over them with the network disabled and judges the records itself with
+`python -m tools.conformance.public_conformance compare`
+(`.github/workflows/native.yml`).
 """
 
 import argparse
@@ -41,7 +47,13 @@ def prepare(output):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--binary", type=Path, required=True)
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--binary", type=Path)
+    mode.add_argument(
+        "--prepare-only",
+        action="store_true",
+        help="write the converted copies and their plan, and run nothing",
+    )
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument(
         "--source-revision",
@@ -54,6 +66,13 @@ def main(argv=None):
     output = args.output.resolve()
     if output.exists():
         parser.error("output must be a fresh directory")
+    if args.prepare_only:
+        if args.source_revision is not None or args.evidence is not None:
+            parser.error(
+                "--prepare-only writes no records: no --source-revision or --evidence"
+            )
+        prepare(output)
+        return 0
     revision = (
         args.source_revision
         or subprocess.check_output(

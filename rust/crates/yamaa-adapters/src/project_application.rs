@@ -401,9 +401,18 @@ fn inheritance_issues<'a>(
             _ => false,
         },
         I::Versioned { error, .. } => {
-            use crate::document::SpecificationError as V;
+            use crate::document::{ProducerFailure as P, SpecificationError as V};
             match error.as_ref() {
-                V::Entry(S::Findings(_)) | V::Clear { .. } | V::Unsupported(_) => true,
+                V::Entry(S::Findings(_))
+                | V::Clear { .. }
+                | V::Copy { .. }
+                | V::Producer(P::Findings(_))
+                | V::Unsupported(_) => true,
+                // A copy entry's producer that did not prepare reports its
+                // own findings, as a link's producer does (INPUT-10).
+                V::Producer(P::Preparation(producer)) => {
+                    return inheritance_issues(owner, producer)
+                }
                 V::Entry(S::Decode { error, .. }) => matches!(
                     error,
                     DecodeFailure::NonAscii(_)
