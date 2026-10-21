@@ -1,6 +1,6 @@
 //! The `yamaa` binary as a user runs it: what it prints, on which stream, and
-//! its exit status (#3030 section 2.8, D12, D41, D68, D96 to D99, D103, D119,
-//! D122, D125, D134).
+//! its exit status (#3030 section 2.8, D12, D41, D68, D97 to D99, D103, D119,
+//! D122, D125, D134, D149).
 //!
 //! What the command line composes is written out here: the summary and
 //! member lines, the order of the lines, the written paths, the JSON keys and
@@ -337,27 +337,71 @@ fn a_usage_error_exits_with_status_2_and_writes_only_to_standard_error() {
     }
 }
 
-/// What the command line cannot run yet checks its arguments, then refuses
-/// with exit status 2 and writes nothing (D96): `schema`.
+/// `yamaa schema TYPE` prints the JSON Schema of each file type as the
+/// facade gives it, canonical JSON text on one line, then one line feed, in
+/// both formats, and exits 0 (D149). It writes no file.
 #[test]
-fn the_commands_not_implemented_yet_check_their_arguments_then_refuse() {
-    let study = Study::new();
-    for arguments in [
-        &["schema", "spec"][..],
-        &["--format", "json", "schema", "project"],
-    ] {
+fn schema_prints_the_json_schema_of_each_file_type() {
+    let study = Study::empty();
+    for file_type in ["spec", "project", "codelists", "function"] {
+        let schema = yamaa::schema(file_type).unwrap();
+        assert!(!schema.contains('\n'), "{file_type}");
+        for arguments in [
+            &["schema", file_type][..],
+            &["--format", "json", "schema", file_type],
+            &["schema", file_type, "--format", "json"],
+        ] {
+            assert_eq!(
+                outcome(&yamaa_in(&study.0, arguments)),
+                printed(0, format!("{schema}\n")),
+                "{arguments:?}"
+            );
+        }
+    }
+    assert!(study.files(".").is_empty());
+}
+
+/// TYPE goes to the facade as given, which compares it exactly with the four
+/// file types, so any other text is its refusal, `unexpected_file_type`
+/// (SCHEMA-2): D39's error text and exit status 1, as the hosts raise it and
+/// as an unknown section is refused (D98, D149). Its JSON holds the command,
+/// the status and the issue, whose context names TYPE as given.
+#[test]
+fn schema_of_a_type_naming_no_file_type_is_refused_with_exit_status_1() {
+    for file_type in ["specs", "Spec", ""] {
+        let refused = yamaa::schema(file_type).unwrap_err();
+        assert!(
+            refused
+                .message
+                .starts_with(&format!("cannot give the schema of {file_type}: ")),
+            "{}",
+            refused.message
+        );
+        let [issue] = refused.diagnostics.as_slice() else {
+            panic!("one issue: {:?}", refused.diagnostics);
+        };
         assert_eq!(
-            outcome(&yamaa_in(&study.0, arguments)),
-            (
-                Some(2),
-                String::new(),
-                "yamaa: schema is not implemented yet\n".to_owned()
+            (issue.code.as_str(), issue.rule.as_deref()),
+            ("unexpected_file_type", Some("SCHEMA-2")),
+            "{file_type:?}"
+        );
+        assert_eq!(
+            outcome(&yamaa(&["schema", file_type])),
+            printed(1, format!("{}\n", refused.message)),
+            "{file_type:?}"
+        );
+        assert_eq!(
+            outcome(&yamaa(&["--format", "json", "schema", file_type])),
+            printed(
+                1,
+                format!(
+                    "{{\"command\":\"schema\",\"issues\":{},\"status\":\"failed\"}}\n",
+                    json(&refused.diagnostics)
+                )
             ),
-            "{arguments:?}"
+            "{file_type:?}"
         );
     }
-    // Nothing ran, so nothing was written.
-    assert!(study.files("out").is_empty());
 }
 
 /// `yamaa selftest` runs the cases the binary carries and prints the facade's
@@ -1971,6 +2015,14 @@ fn a_value_that_is_not_utf8_exits_with_status_2() {
             Some(2),
             String::new(),
             format!("yamaa: check: PATH is not UTF-8: project-\u{fffd}.yaml\n{HINT}")
+        )
+    );
+    assert_eq!(
+        run(&[text("schema"), odd]),
+        (
+            Some(2),
+            String::new(),
+            format!("yamaa: schema: TYPE is not UTF-8: project-\u{fffd}.yaml\n{HINT}")
         )
     );
     // `read-odm` checks SOURCE, OUT and the archive member before it reads

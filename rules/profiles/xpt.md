@@ -250,7 +250,7 @@ and every value missing, fails: a reader drops trailing all-blank observations
 as the padding of the final record.
 
 Fails: `xpt_file_too_large`, `xpt_last_row_blank`.
-Evidence: `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::XptFileTooLarge`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::XptLastRowBlank`.
+Evidence: `rust/crates/yamaa-adapters/tests/submission_encoders.rs::a_blank_last_row_or_a_file_past_five_billion_bytes_is_refused_before_writing`, `rust/crates/yamaa-adapters/src/submission_xpt.rs::file_size_pads_namestrs_and_observations_to_whole_records`.
 
 Both failures report the dataset and the artifact at
 `datasets.<dataset>.artifact`, the size with `bytes` and the row with `row`. A

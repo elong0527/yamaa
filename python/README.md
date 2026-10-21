@@ -19,9 +19,12 @@ import yamaa
 project = yamaa.project("project.yaml")
 run = project.spec("DM").run()      # one dataset, built in memory
 run.output, run.issues, run.report
-run.save()                          # write the dataset and its run report
+paths = run.save()                  # write the dataset and its run report
 project.run("adam").save()          # every ADaM dataset
 ```
+
+`save()` returns the absolute paths of the files it wrote, in the order it
+wrote them.
 
 The [R and Python API](https://elong0527.github.io/yamaa/articles/api/) page
 describes every call, and the

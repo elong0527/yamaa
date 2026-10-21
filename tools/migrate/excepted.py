@@ -3,14 +3,12 @@
 The conversion gate of #3030 Phase 1 (P1-9, #3259, `make check-conversion`)
 converts every benchmark to 1.0 and runs it: a positive must reproduce its
 expected bytes, and a negative its condition, rule and context, with spec
-paths changed only by the rename table's `paths` block. Decided items change
-these cases, so they are excepted until P2-4 and P2-7 land: D60 re-authors
-three negatives' expected errors for their 1.0 fault, and D61 retires two
-negatives with their conditions. Two more negatives change their first issue
-under decided items that no re-authoring decision lists yet. The selftest case
-list refuses every excepted benchmark too
-(`tools/validation/check_selftest_cases.py`), since their expected files are
-about to change.
+paths changed only by the rename table's `paths` block. A decided item that
+changes a case excepts it until its pull request lands; P2-4 landed D60's
+three re-authored negatives and retired the D61 and D137 negatives, so what
+remains waits for P2-7. The selftest case list refuses every excepted
+benchmark too (`tools/validation/check_selftest_cases.py`), since their
+expected files are about to change.
 """
 
 EXCEPTED = {
@@ -18,13 +16,4 @@ EXCEPTED = {
         "D58 (P-ORD-2): its context names diff.bounds values, which 1.0 renames and "
         "TIME-5 names as closed values (D71); P2-7 re-authors it"
     ),
-    "negative-derivation-call-form": (
-        "D18: its derivation is a call outside the closed vocabulary in 1.0 "
-        "(prohibited_function); owner decision pending (#3283), P2-4"
-    ),
-    "negative-impute-missing-month": "D61: retires with month_required (P2-4)",
-    "negative-impute-unreachable-month": "D61: retires with month_not_permitted (P2-4)",
-    "negative-literal-structure": "D60: its expected error is re-authored (P2-4)",
-    "negative-lookup-unknown-key": "D60: its expected error is re-authored (P2-4)",
-    "negative-version-mismatch": "D60: its expected error is re-authored (P2-4)",
 }

@@ -14,7 +14,8 @@ A yamaa specification transforms ODM XML data, extracted from an EDC system,
 into SDTM and ADaM datasets following CDISC standards. The engine can also
 generate define.xml.
 yamaa's rules fix what every item means, so the same specification with the same
-inputs always produces the same datasets through both the R and Python packages.
+inputs always produces the same datasets, whether the R package, the Python
+package or the `yamaa` command line runs it.
 
 The one principle behind everything:
 
@@ -34,7 +35,7 @@ engine, and benchmark.
 | --- | --- | --- |
 | Schema | Declares the vocabulary of the specification. | [Repository](https://github.com/elong0527/yamaa/tree/main/yaml) / [Introduction](https://elong0527.github.io/yamaa/articles/schema-intro/) |
 | Rules | Defines the meaning of each specification. | [Repository](https://github.com/elong0527/yamaa/tree/main/rules) / [Rules](https://elong0527.github.io/yamaa/articles/rules/) |
-| Engine | Executes specifications in Rust for Python and R. | [Rust](https://github.com/elong0527/yamaa/tree/main/rust) / [Python](https://github.com/elong0527/yamaa/tree/main/python) / [R](https://github.com/elong0527/yamaa/tree/main/R/yamaa) |
+| Engine | Executes specifications in Rust for Python, R and the command line. | [Rust](https://github.com/elong0527/yamaa/tree/main/rust) / [Python](https://github.com/elong0527/yamaa/tree/main/python) / [R](https://github.com/elong0527/yamaa/tree/main/R/yamaa) |
 | Benchmark | Provides runnable specification examples. | [Repository](https://github.com/elong0527/yamaa/tree/main/benchmarks) / [Dashboards](https://elong0527.github.io/yamaa/benchmark/) |
 
 ## From ODM XML to SDTM and ADaM
@@ -56,14 +57,18 @@ deterministic, validated builds while preserving metadata lineage.
 
 ## Example
 
-A complete specification in 24 lines:
+A complete specification in 33 lines:
 
 ```yaml
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADSL
 keys: [STUDYID, USUBJID]        # one row per subject
 input:
-  DM: {path: input/dm.csv, types: {AGE: int}}   # CSV fields are text; cut needs a numeric source
+  # CSV fields are text, and cut needs a numeric source.
+  DM: {path: input/dm.csv, types: {AGE: int}}
+
 output:
   path: adsl.csv
   columns: [STUDYID, USUBJID, AGEGR1]
@@ -71,12 +76,17 @@ output:
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation: DM.STUDYID
+
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation: DM.USUBJID
+
   - name: AGEGR1
     type: str
+    label: Pooled Age Group 1
     derivation:
       cut:
         source: DM.AGE
@@ -85,9 +95,15 @@ columns:
         missing: UNKNOWN
 ```
 
-Read it top to bottom: one input, one driver, two keys, three columns. The
-derivation verbs (`source`, `cut`, `mapping`, `compute`, ...) come from a
-closed registry (see [Schema introduction](https://elong0527.github.io/yamaa/articles/schema-intro/)).
+Read it top to bottom. The first line names the oldest language version the
+file needs, the second says the file is a specification, and `model` names
+its CDISC model. Then come two keys, one input that drives the rows, and three
+columns. A derivation is an expression or a verb from a closed registry, such
+as `cut`, `mapping` or `case` (see [Schema introduction](https://elong0527.github.io/yamaa/articles/schema-intro/)).
+In an expression, a bare name such as `DM.STUDYID` reads a column, text is
+quoted, as in `derivation: "'Y'"`, and YAML `null` is the missing value. A
+verb's value fields, such as `labels` and `missing` above, hold only
+constants, so `UNKNOWN` there is text.
 
 ## Installation
 
@@ -195,6 +211,7 @@ download mark first with `Unblock-File` in PowerShell.
 
 - New here? [Introduction](https://elong0527.github.io/yamaa/articles/intro/) explains the model in five minutes.
 - Running specifications? [R and Python API](https://elong0527.github.io/yamaa/articles/api/) shows every call in both languages.
+- Building on yamaa? The draft [stability contract](https://elong0527.github.io/yamaa/design/interface-1.0/stability/) lists what every 1.x release keeps from 1.0.0.
 - Coming from Excel specs? [Excel to yamaa](https://elong0527.github.io/yamaa/articles/excel/) translates what you already know.
 - Looking for worked examples? [Benchmarks](https://elong0527.github.io/yamaa/benchmark/) illustrate the ideas.
 - Developing the engine? [Contributing](CONTRIBUTING.md) describes the shared architecture and checks; [release guidance](docs/release.md) records supported platforms and migration notes.
