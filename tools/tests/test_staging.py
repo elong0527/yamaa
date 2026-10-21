@@ -345,13 +345,14 @@ class StagingTests(unittest.TestCase):
                 self.assertEqual(set(lock["Packages"]), {"yamaa"})
             # The R callable is named in the R environment file a 0.5 project
             # links, or in the function files a 1.x project lists (D8).
-            callables = staging.r_callables(projects / "negative-function-contract")
-            self.assertTrue(callables)
-            for path in callables:
-                self.assertIn("base::identity", path.read_text(), str(path))
-            self.assertIn(
-                "base::signif", (projects / "base-round/r/environment.yaml").read_text()
-            )
+            for case, callable_ in (
+                ("negative-function-contract", "base::identity"),
+                ("base-round", "base::signif"),
+            ):
+                callables = staging.r_callables(projects / case)
+                self.assertTrue(callables)
+                for path in callables:
+                    self.assertIn(callable_, path.read_text(), str(path))
             self.assertEqual(list(original.glob("*.json")), [])
             fixtures = staging.WORKSPACE / "crates/yamaa-adapters/tests/fixtures/sas"
             for name in ("LICENSE-haven.txt", "LICENSE-pandas.txt"):

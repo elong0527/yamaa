@@ -10,8 +10,9 @@ above the upper limit of normal (`LBNRIND`).
 (`input/lb_raw.csv`), each carrying the test code (`LBTESTCD`), the study day
 (`LBDY`), the result as text (`RESULT`) or, when there is none, a character
 result (`RESULTC`), the numeric result (`STRESN`) and the upper limit of
-normal (`HIGH`). The `project.yaml` links each host's environment, whose
-routine returns the numeric result it is given.
+normal (`HIGH`). The `project.yaml` lists the function file
+`functions/project_value.yaml`, whose routine returns the numeric result it
+is given.
 
 **Variables:**
 

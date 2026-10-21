@@ -735,20 +735,26 @@ class PublicContract(unittest.TestCase):
 
     def test_callback_string_larger_than_one_mebibyte_is_owned_and_saved_exactly(self):
         _, case = self.function_study()
-        environment = case / "python/environment.yaml"
-        environment.write_text(
-            "schema_version: '1.0'\nlock: uv.lock\n"
-            "functions:\n  text:\n    function: yamaa_benchmarks.project_value\n"
-            "    description: Return text unchanged.\n"
-            "    params: [{name: x, type: str}]\n    returns: str\n    tests:\n"
-            "      - {id: normal, covers: [normal], args: {x: short}, result: short}\n"
-            "      - {id: empty, covers: [boundary], args: {x: ''}, result: ''}\n"
-            "      - {id: missing, covers: ['short-circuit-missing:x'], args: {x: null}, result: null}\n",
+        function = case / "functions/text.yaml"
+        function.write_text(
+            "yamaa: '1.0'\ntype: function\nname: text\n"
+            "description: Return text unchanged.\n"
+            "params: [{name: x, type: str}]\nreturns: str\n"
+            "implementations: {python: yamaa_benchmarks.project_value}\ntests:\n"
+            "  - {id: normal, covers: [normal], args: {x: short}, result: short}\n"
+            "  - {id: empty, covers: [boundary], args: {x: ''}, result: ''}\n"
+            "  - {id: missing, covers: ['short-circuit-missing:x'], args: {x: null}, result: null}\n",
+            encoding="utf-8",
+        )
+        (case / "project.yaml").write_text(
+            "yamaa: '1.0'\ntype: project\nfunctions: [functions/text.yaml]\n"
+            "environments: {python: {lock: python/uv.lock}}\n"
+            "adam: {specs: [spec.yaml]}\n",
             encoding="utf-8",
         )
         source = case / "spec.yaml"
         source.write_text(
-            "schema_version: '1.0'\ndomain: TEXT\nkeys: [ID]\n"
+            "yamaa: '1.0'\ntype: spec\nmodel: ADaM\ndomain: TEXT\nkeys: [ID]\n"
             "input: {SRC: {path: large.csv, types: {ID: int, V: str}}}\n"
             "columns:\n  - {name: ID, type: int, derivation: SRC.ID}\n"
             "  - {name: V, type: str, derivation: {function: {name: text, args: {x: SRC.V}}}}\n"
@@ -764,7 +770,7 @@ class PublicContract(unittest.TestCase):
         for name in (
             "spec.yaml",
             "project.yaml",
-            "python/environment.yaml",
+            "functions/text.yaml",
             "large.csv",
         ):
             (case / name).unlink()

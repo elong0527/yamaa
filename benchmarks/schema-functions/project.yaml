@@ -1,7 +1,12 @@
-schema_version: '1.0'
+yamaa: "1.0"
+type: project
+functions:
+- functions/project_ratio.yaml
 environments:
-  python: python/environment.yaml
-  r: r/environment.yaml
+  python:
+    lock: python/uv.lock
+  r:
+    lock: r/renv.lock
 adam:
   specs:
   - spec.yaml

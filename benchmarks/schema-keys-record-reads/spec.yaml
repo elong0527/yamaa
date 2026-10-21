@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADEX
 keys: [USUBJID, DOSE, ABOVEFL]
 input:
@@ -14,6 +16,7 @@ intermediates:
   # The subject's planned dose; every subject has one.
   - id: PLANNED
     dataset: PLAN
+    key: [USUBJID]
     require_match: true
 
 columns:
@@ -41,7 +44,7 @@ columns:
         condition: "EX.EXDOSE > PLANNED.PLANDOSE"
         true_value: "Y"
         false_value: "N"
-        missing: {literal: null}
+        missing: null
 
   - name: PLANDOSE
     type: float

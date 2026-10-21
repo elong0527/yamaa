@@ -60,59 +60,64 @@ refused <- function(result, condition, rule, reason) {
 run <- function() yamaa_project("project.yaml")$spec("TEST")$run()
 
 # Read before the runs move into their own directory.
-rounding <- readLines(file.path("project-base", "base-round", "r", "environment.yaml"))
+rounding <- normalizePath(file.path("project-base", "base-round", "functions", "rounded_value.yaml"))
 work <- tempfile("function-values-"); dir.create(work)
 previous <- setwd(work)
-writeLines(c("schema_version: '1.0'", "environments: {r: environment.yaml}",
-  "adam: {specs: [spec.yaml]}"), "project.yaml")
-identity_function <- function(name, type, cases, extra = character()) c(
-  paste0("  ", name, ":"), "    function: base::identity",
-  paste0("    description: Return the ", type, " argument unchanged."), extra,
-  paste0("    params: [{name: x, type: ", type,
+# One function file per function, each implemented in base R (D8).
+dir.create("functions")
+function_names <- c("int_value", "float_value", "text_value", "date_value", "datetime_value",
+  "maybe_int", "rounded_value", "bool_value")
+writeLines(c("yamaa: '1.0'", "type: project", "functions:",
+  paste0("  - functions/", function_names, ".yaml"), "adam: {specs: [spec.yaml]}"), "project.yaml")
+function_file <- function(name, lines) writeLines(c("yamaa: '1.0'", "type: function",
+  paste0("name: ", name), lines), file.path("functions", paste0(name, ".yaml")))
+identity_function <- function(name, type, cases, extra = character()) function_file(name, c(
+  paste0("description: Return the ", type, " argument unchanged."), extra,
+  paste0("params: [{name: x, type: ", type,
     if (length(extra)) ", accepts_missing: true" else "", "}]"),
-  paste0("    returns: ", type), "    tests:", paste0("      - ", cases))
+  paste0("returns: ", type), "implementations: {r: base::identity}", "tests:",
+  paste0("  - ", cases)))
 missing_case <- "{id: missing, covers: ['short-circuit-missing:x'], args: {x: null}, result: null}"
-writeLines(c("schema_version: '1.0'", "functions:",
-  identity_function("int_value", "int", c(
-    "{id: normal, covers: [normal], args: {x: 7}, result: 7}",
-    "{id: boundary, covers: [boundary], args: {x: 9007199254740992}, result: 9007199254740992}",
-    missing_case)),
-  identity_function("float_value", "float", c(
-    "{id: normal, covers: [normal, numeric-comparison], args: {x: 2.5}, result: 2.5}",
-    "{id: boundary, covers: [boundary, numeric-comparison], args: {x: 0.0}, result: 0.0}",
-    missing_case)),
-  identity_function("text_value", "str", c(
-    "{id: normal, covers: [normal], args: {x: \"\\u00e9t\\u00e9\"}, result: \"\\u00e9t\\u00e9\"}",
-    "{id: boundary, covers: [boundary], args: {x: ''}, result: ''}",
-    missing_case)),
-  identity_function("date_value", "date", c(
-    "{id: normal, covers: [normal], args: {x: {date: '2024-02-29'}}, result: {date: '2024-02-29'}}",
-    "{id: boundary, covers: [boundary], args: {x: {date: '1969-12-31'}}, result: {date: '1969-12-31'}}",
-    missing_case)),
-  identity_function("datetime_value", "datetime", c(
-    "{id: normal, covers: [normal], args: {x: {datetime: '2024-02-29T12:30:45'}}, result: {datetime: '2024-02-29T12:30:45'}}",
-    "{id: boundary, covers: [boundary], args: {x: {datetime: '1969-12-31T23:59:59'}}, result: {datetime: '1969-12-31T23:59:59'}}",
-    missing_case)),
-  identity_function("maybe_int", "int", c(
-    "{id: normal, covers: [normal], args: {x: 1}, result: 1}",
-    "{id: boundary, covers: [boundary], args: {x: 0}, result: 0}",
-    "{id: missing, covers: ['accepted-missing:x', nullable-output], args: {x: null}, result: null}"),
-    "    may_return_missing: true"),
-  rounding[seq(which(rounding == "functions:") + 1L, length(rounding))],
-  "  bool_value:", "    function: base::ifelse",
-  "    description: Select an integer using a boolean argument.",
-  "    params:", "      - {name: test, type: bool}",
-  "      - {name: yes, type: int, required: false, default: 1}",
-  "      - {name: no, type: int, required: false, default: 0}",
-  "    returns: int", "    tests:",
-  "      - {id: true-value, covers: [normal, boundary, 'boolean-true:test', 'default:yes', 'default:no'], args: {test: true}, result: 1}",
-  "      - {id: false-value, covers: ['boolean-false:test'], args: {test: false, yes: 1, no: 0}, result: 0}",
-  "      - {id: missing-test, covers: ['short-circuit-missing:test'], args: {test: null, yes: 1, no: 0}, result: null}",
-  "      - {id: missing-yes, covers: ['short-circuit-missing:yes'], args: {test: true, yes: null, no: 0}, result: null}",
-  "      - {id: missing-no, covers: ['short-circuit-missing:no'], args: {test: false, yes: 1, no: null}, result: null}"), "environment.yaml")
+identity_function("int_value", "int", c(
+  "{id: normal, covers: [normal], args: {x: 7}, result: 7}",
+  "{id: boundary, covers: [boundary], args: {x: 9007199254740992}, result: 9007199254740992}",
+  missing_case))
+identity_function("float_value", "float", c(
+  "{id: normal, covers: [normal, numeric-comparison], args: {x: 2.5}, result: 2.5}",
+  "{id: boundary, covers: [boundary, numeric-comparison], args: {x: 0.0}, result: 0.0}",
+  missing_case))
+identity_function("text_value", "str", c(
+  "{id: normal, covers: [normal], args: {x: \"\\u00e9t\\u00e9\"}, result: \"\\u00e9t\\u00e9\"}",
+  "{id: boundary, covers: [boundary], args: {x: ''}, result: ''}",
+  missing_case))
+identity_function("date_value", "date", c(
+  "{id: normal, covers: [normal], args: {x: '2024-02-29'}, result: '2024-02-29'}",
+  "{id: boundary, covers: [boundary], args: {x: '1969-12-31'}, result: '1969-12-31'}",
+  missing_case))
+identity_function("datetime_value", "datetime", c(
+  "{id: normal, covers: [normal], args: {x: '2024-02-29T12:30:45'}, result: '2024-02-29T12:30:45'}",
+  "{id: boundary, covers: [boundary], args: {x: '1969-12-31T23:59:59'}, result: '1969-12-31T23:59:59'}",
+  missing_case))
+identity_function("maybe_int", "int", c(
+  "{id: normal, covers: [normal], args: {x: 1}, result: 1}",
+  "{id: boundary, covers: [boundary], args: {x: 0}, result: 0}",
+  "{id: missing, covers: ['accepted-missing:x', nullable-output], args: {x: null}, result: null}"),
+  "may_return_missing: true")
+stopifnot(file.copy(rounding, "functions"))
+function_file("bool_value", c(
+  "description: Select an integer using a boolean argument.",
+  "params:", "  - {name: test, type: bool}",
+  "  - {name: yes, type: int, required: false, default: 1}",
+  "  - {name: no, type: int, required: false, default: 0}",
+  "returns: int", "implementations: {r: base::ifelse}", "tests:",
+  "  - {id: true-value, covers: [normal, boundary, 'boolean-true:test', 'default:yes', 'default:no'], args: {test: true}, result: 1}",
+  "  - {id: false-value, covers: ['boolean-false:test'], args: {test: false, yes: 1, no: 0}, result: 0}",
+  "  - {id: missing-test, covers: ['short-circuit-missing:test'], args: {test: null, yes: 1, no: 0}, result: null}",
+  "  - {id: missing-yes, covers: ['short-circuit-missing:yes'], args: {test: true, yes: null, no: 0}, result: null}",
+  "  - {id: missing-no, covers: ['short-circuit-missing:no'], args: {test: false, yes: 1, no: null}, result: null}"))
 
 # One build calls every function, so activation runs every declared case.
-writeLines(c("schema_version: '1.0'", "domain: TEST", "keys: [ID]",
+writeLines(c("yamaa: '1.0'", "type: spec", "model: ADaM", "domain: TEST", "keys: [ID]",
   "input: {SRC: {path: input.csv, types: {ID: int, I: int, F: float, S: str, D: date, T: datetime, M: int}}}",
   "columns:", "  - {name: ID, type: int, derivation: SRC.ID}",
   "  - {name: I, type: int, derivation: {function: {name: int_value, args: {x: SRC.I}}}}",
@@ -170,7 +175,7 @@ cat("plain R function arguments and results round trip every type and repeat\n")
 # One function column over authored cells, each cell raw bytes or text.
 column <- function(type, name, cells, resolve = capabilities$resolve,
                    parameter = "x", argument = "SRC.X") {
-  writeLines(c("schema_version: '1.0'", "domain: TEST", "keys: [ID]",
+  writeLines(c("yamaa: '1.0'", "type: spec", "model: ADaM", "domain: TEST", "keys: [ID]",
     paste0("input: {SRC: {path: input.csv, types: {ID: int, X: ", type, "}}}"),
     "columns:", "  - {name: ID, type: int, derivation: SRC.ID}",
     paste0("  - {name: X, type: ", type, ", derivation: {function: {name: ", name,
@@ -187,7 +192,7 @@ column <- function(type, name, cells, resolve = capabilities$resolve,
 seen <- list()
 for (value in c("true", "false", "null")) {
   logicals <- column("int", "bool_value", list("1"), wrapped(record),
-    parameter = "test", argument = if (value == "null") "{literal: null}" else value)
+    parameter = "test", argument = value)
   stopifnot(nrow(logicals$issues) == 0L,
     identical(logicals$output$X, switch(value, true = 1, false = 0, null = NA_real_)))
 }

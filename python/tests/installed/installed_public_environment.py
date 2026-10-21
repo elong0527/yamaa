@@ -55,6 +55,50 @@ def no_activation():
         yield
 
 
+# negative-function-contract as 0.5 wrote it, its argument supplied, for the
+# tests whose subject is an environment file (PublicEnvironment.legacy_study).
+LEGACY_SPEC = (
+    "schema_version: '1.0'\n"
+    "domain: TEST\n"
+    "keys: [ID]\n"
+    "input: {SOURCE: {path: input/source.csv, types: {VALUE: float}}}\n"
+    "output: {path: test.csv, columns: [ID, RESULT]}\n"
+    "columns:\n"
+    "  - {name: ID, type: str, label: Identifier, derivation: SOURCE.ID}\n"
+    "  - name: RESULT\n"
+    "    type: float\n"
+    "    label: Project Function Result\n"
+    "    derivation: {function: {name: project_value, args: {x: SOURCE.VALUE}}}\n"
+)
+LEGACY_PROJECT = (
+    "schema_version: '1.0'\n"
+    "environments: {python: python/environment.yaml, r: r/environment.yaml}\n"
+    "adam: {specs: [spec.yaml]}\n"
+)
+
+
+def legacy_environment(callable_, lock):
+    """A 0.5 environment file that declares project_value and its tests."""
+    return (
+        "schema_version: '1.0'\n"
+        f"lock: {lock}\n"
+        "functions:\n"
+        "  project_value:\n"
+        f"    function: {callable_}\n"
+        "    description: Return the supplied numeric value.\n"
+        "    params:\n"
+        "    - {name: x, type: float}\n"
+        "    returns: float\n"
+        "    tests:\n"
+        "    - {id: ordinary, covers: [normal, numeric-comparison],"
+        " args: {x: 1.5}, result: 1.5}\n"
+        "    - {id: zero-boundary, covers: [boundary, numeric-comparison],"
+        " args: {x: 0.0}, result: 0.0}\n"
+        "    - {id: missing-short-circuits, covers: ['short-circuit-missing:x'],"
+        " args: {x: null}, result: null}\n"
+    )
+
+
 def compact(value, *, sort_keys=True):
     return json.dumps(
         value, ensure_ascii=False, sort_keys=sort_keys, separators=(",", ":")
@@ -115,6 +159,23 @@ class PublicEnvironment(unittest.TestCase):
         source.write_text(
             source.read_text().replace("args: {}", "args: {x: SOURCE.VALUE}")
         )
+        return case
+
+    def legacy_study(self):
+        """negative-function-contract, its argument supplied, as 0.5 wrote it
+        with its environment files inline: for the tests whose subject is an
+        environment file, which 1.0 removes (D8). They go with those files."""
+        case = self.study("negative-function-contract")
+        shutil.rmtree(case / "functions")
+        (case / "spec.yaml").write_text(LEGACY_SPEC)
+        (case / "project.yaml").write_text(LEGACY_PROJECT)
+        for language, callable_, lock in (
+            ("python", "yamaa_benchmarks.project_value", "uv.lock"),
+            ("r", "yamaabenchmarks::project_value", "renv.lock"),
+        ):
+            (case / language / "environment.yaml").write_text(
+                legacy_environment(callable_, lock)
+            )
         return case
 
     def project(self, case=None):
@@ -778,15 +839,9 @@ class PublicEnvironment(unittest.TestCase):
 
     def test_functions_without_packaging_lock_keep_conformance_and_saved_bytes(self):
         case = self.study("adam-adsl-bmi")
-        environment = case / "python/environment.yaml"
-        environment.write_text(
-            "\n".join(
-                line
-                for line in environment.read_text().splitlines()
-                if not line.startswith("lock:")
-            )
-            + "\n"
-        )
+        # The project names an R lock and no Python lock (D8).
+        environments = yaml.safe_load((case / "project.yaml").read_text())
+        self.assertEqual(list(environments["environments"]), ["r"])
         (case / "python/uv.lock").unlink(missing_ok=True)
         project = self.project(case)
         with patch.object(
@@ -902,17 +957,19 @@ class PublicEnvironment(unittest.TestCase):
     def test_every_failed_case_is_retained_before_data_and_run_repeats_tests(self):
         case = self.value_study()
         shutil.rmtree(case / "input")
-        env = case / "python/environment.yaml"
-        source = yaml.safe_load(env.read_text())
-        tests = source["functions"]["project_value"]["tests"]
-        tests[0]["result"] = 9.5
-        tests[1]["result"] = 9.0
+        function_file = case / "functions/project_value.yaml"
+        function = yaml.safe_load(function_file.read_text())
+        function["tests"][0]["result"] = 9.5
+        function["tests"][1]["result"] = 9.0
+        function_file.write_text(yaml.safe_dump(function, sort_keys=False))
+        project_file = case / "project.yaml"
+        document = yaml.safe_load(project_file.read_text())
         project = self.project(case)
         for declared_lock in (True, False):
             with self.subTest(declared_lock=declared_lock):
                 if not declared_lock:
-                    source.pop("lock")
-                env.write_text(yaml.safe_dump(source, sort_keys=False))
+                    del document["environments"]["python"]
+                project_file.write_text(yaml.safe_dump(document, sort_keys=False))
                 for _ in range(2):
                     result = project.spec("TEST").run()
                     report = self.report(result)
@@ -950,7 +1007,7 @@ class PublicEnvironment(unittest.TestCase):
         spec = yaml.safe_load(spec_path.read_text())
         spec["columns"][0]["submission"] = {
             "codelist": "IDENTIFIERS",
-            "origin": {"type": "Assigned"},
+            "origins": [{"type": "Assigned"}],
         }
         spec_path.write_text(yaml.safe_dump(spec, sort_keys=False))
         project = yamaa.project(project_file.resolve())
@@ -970,7 +1027,7 @@ class PublicEnvironment(unittest.TestCase):
         self.assertEqual({row["rule"] for row in rows}, {"FUNC-5", "CT-1"})
 
     def test_approved_math_is_identical_in_root_row_and_nested_case_compute(self):
-        expression = {"compute": {"expr": "EXP(0) + LN(1) + POWER(2, 3)"}}
+        expression = "EXP(0) + LN(1) + POWER(2, 3)"
         for context in tuple(TRUTH["quota_modes"]):
             with self.subTest(context=context):
                 case = (
@@ -1005,11 +1062,11 @@ class PublicEnvironment(unittest.TestCase):
                                             "when": "ID = '01'",
                                             "then": copy.deepcopy(expression),
                                         },
-                                        {"otherwise": {"literal": 99.0}},
+                                        {"otherwise": 99.0},
                                     ]
                                 },
                             },
-                            {"otherwise": {"literal": 98.0}},
+                            {"otherwise": 98.0},
                         ]
                     }
                 path.write_text(yaml.safe_dump(spec, sort_keys=False))
@@ -1018,10 +1075,10 @@ class PublicEnvironment(unittest.TestCase):
                     shutil.copytree(
                         ROOT / "negative-function-contract/input", case / "input"
                     )
-                    shutil.copyfile(
-                        ROOT / "negative-function-contract/python/environment.yaml",
-                        case / "python/environment.yaml",
-                    )
+                    for name in ("project.yaml", "functions/project_value.yaml"):
+                        shutil.copyfile(
+                            ROOT / "negative-function-contract" / name, case / name
+                        )
                 result = self.project(case).spec("TEST").run()
                 self.assertTrue(result.issues.is_empty(), result.issues)
                 self.assertEqual(result.output["RESULT"].to_list(), [9.0])
@@ -1060,12 +1117,8 @@ class PublicEnvironment(unittest.TestCase):
                 "id": "records",
                 "dataset": "SOURCE",
                 "derivations": {
-                    "RESULT": {
-                        "compute": {
-                            "expr": "LN(1) + EXP(0) - 1 + EARLIER + SOURCE.VALUE"
-                        }
-                    },
-                    "EARLIER": {"literal": 2.5},
+                    "RESULT": "LN(1) + EXP(0) - 1 + EARLIER + SOURCE.VALUE",
+                    "EARLIER": 2.5,
                 },
             }
         ]
@@ -1105,8 +1158,34 @@ class PublicEnvironment(unittest.TestCase):
         gc.collect()
         self.assertIsNone(reference())
 
-    def test_lock_format_and_host_language_are_static_independent_findings(self):
+    def test_lock_format_is_a_static_finding_of_the_captured_lock(self):
         case = self.value_study()
+        project = self.project(case)
+        entry = (case / "project.yaml").as_posix()
+        # Captured syntax, rather than the file name, identifies the lock.
+        shutil.copyfile(case / "r/renv.lock", case / "python/uv.lock")
+        with no_activation():
+            self.assertEqual(
+                project.check().issues.to_dicts(),
+                [
+                    issue(
+                        "function_file_invalid",
+                        "FUNC-2",
+                        ["environments.python.lock"],
+                        {
+                            "actual_lock_kind": "renv",
+                            "entry": entry,
+                            "environment_path": "environments.python.lock",
+                            "language": "python",
+                            "reason": "lock_kind_mismatch",
+                            "source": entry,
+                        },
+                    )
+                ],
+            )
+
+    def test_an_environment_file_is_read_in_the_language_its_project_states(self):
+        case = self.legacy_study()
         project = self.project(case)
         entry = (case / "project.yaml").as_posix()
 
@@ -1153,9 +1232,7 @@ class PublicEnvironment(unittest.TestCase):
             ],
         )
         # An environment file no longer states its language.
-        shutil.copyfile(
-            ROOT / "negative-function-contract/project.yaml", case / "project.yaml"
-        )
+        (case / "project.yaml").write_text(LEGACY_PROJECT)
         environment = case / "python/environment.yaml"
         environment.write_text(
             environment.read_text().replace(
@@ -1174,12 +1251,18 @@ class PublicEnvironment(unittest.TestCase):
 
     def test_called_only_selection_and_no_code_effects_for_empty_selection(self):
         case = self.value_study()
-        env = case / "python/environment.yaml"
-        source = yaml.safe_load(env.read_text())
-        unused = copy.deepcopy(source["functions"]["project_value"])
-        unused["function"] = "absent_package.never_called"
-        source["functions"]["unused"] = unused
-        env.write_text(yaml.safe_dump(source, sort_keys=False))
+        # A second function file the project lists, whose Python callable no
+        # package provides, and which no specification calls.
+        unused = yaml.safe_load((case / "functions/project_value.yaml").read_text())
+        unused["name"] = "unused"
+        unused["implementations"]["python"] = "absent_package.never_called"
+        (case / "functions/unused.yaml").write_text(
+            yaml.safe_dump(unused, sort_keys=False)
+        )
+        project_file = case / "project.yaml"
+        document = yaml.safe_load(project_file.read_text())
+        document["functions"].append("functions/unused.yaml")
+        project_file.write_text(yaml.safe_dump(document, sort_keys=False))
         project = self.project(case)
         result = project.spec("TEST").run()
         self.assertTrue(result.issues.is_empty(), result.issues)
@@ -1190,8 +1273,9 @@ class PublicEnvironment(unittest.TestCase):
         spec = case / "spec.yaml"
         spec.write_text(
             spec.read_text().replace(
-                "function:\n        name: project_value\n        args: {x: SOURCE.VALUE}",
-                "literal: 1.0",
+                "derivation:\n      function:\n        name: project_value\n"
+                "        args: {x: SOURCE.VALUE}",
+                "derivation: 1.0",
             )
         )
         with no_activation():

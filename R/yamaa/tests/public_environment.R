@@ -186,8 +186,9 @@ qualify_functions_without_packaging_lock <- function() {
   on.exit(unlink(work, recursive = TRUE), add = TRUE)
   stopifnot(file.copy(file.path(root, "base-round"), work, recursive = TRUE))
   setwd(file.path(work, "base-round"))
-  environment <- "r/environment.yaml"
-  writeLines(readtext(environment)[!grepl("^lock:", readtext(environment))], environment)
+  # The project names no packaging lock.
+  project_text <- readtext("project.yaml")
+  writeLines(project_text[!grepl("^environments:|^  r:$|^    lock:", project_text)], "project.yaml")
   unlink("r/renv.lock")
   expected <- list.files("expected", pattern = "[.]csv$", full.names = TRUE)
   project <- yamaa_project("project.yaml")
@@ -260,12 +261,16 @@ stopifnot(identical(failed$issues$condition, "runtime_artifact_mismatch"),
           grepl('"bindings":[]', observations(failed), fixed = TRUE))
 invisible(file.copy(file.path(root, name, "r/renv.lock"), lock, overwrite = TRUE))
 # Independently failing test results collect completely on every attempted run.
-env <- "r/environment.yaml"
-text <- readtext(env)
+contract <- "functions/project_value.yaml"
+text <- readtext(contract)
 text <- sub("result: 1.5", "result: 9.5", text, fixed = TRUE)
 text <- sub("result: 0.0", "result: 9.0", text, fixed = TRUE)
+writeLines(text, contract)
+project_text <- readtext("project.yaml")
 for (declared_lock in c(TRUE, FALSE)) {
-  writeLines(if (declared_lock) text else text[!grepl("^lock:", text)], env)
+  # Without its lock, the project names no R environment.
+  writeLines(if (declared_lock) project_text else
+    project_text[!grepl("^  r:$|^    lock: r/", project_text)], "project.yaml")
   for (attempt in 1:2) {
     failed <- project$spec("TEST")$run()
     stopifnot(identical(failed$issues$condition, rep("function_conformance_failed", 2L)),
@@ -274,15 +279,30 @@ for (declared_lock in c(TRUE, FALSE)) {
         observations(failed), fixed = TRUE))
   }
 }
-invisible(file.copy(file.path(root, name, "r/environment.yaml"), env, overwrite = TRUE))
+invisible(file.copy(file.path(root, name, contract), contract, overwrite = TRUE))
+invisible(file.copy(file.path(root, name, "project.yaml"), "project.yaml", overwrite = TRUE))
 # Captured syntax, rather than the selected host or basename, identifies the lock.
 invisible(file.copy(file.path(root, name, "python/uv.lock"), lock, overwrite = TRUE))
+same_issues(refuse_activation(project$check())$issues, list(issue("function_file_invalid", "FUNC-2",
+  "environments.r.lock", paste0('{"actual_lock_kind":"uv","entry":"', here("project.yaml"),
+    '","environment_path":"environments.r.lock","language":"r","reason":"lock_kind_mismatch","source":"',
+    here("project.yaml"), '"}'))))
+invisible(file.copy(file.path(root, name, "r/renv.lock"), lock, overwrite = TRUE))
+# An environment file is read in the language its project states. The study
+# is written in 0.5 inline, since 1.0 removes environment files (D8).
+legacy_environment <- function(callable, lock) c("schema_version: '1.0'", paste0("lock: ", lock),
+  "functions:", "  project_value:", paste0("    function: ", callable),
+  "    description: Return the supplied numeric value.", "    params: [{name: x, type: float}]",
+  "    returns: float", "    tests:",
+  "      - {id: ordinary, covers: [normal, numeric-comparison], args: {x: 1.5}, result: 1.5}",
+  "      - {id: zero-boundary, covers: [boundary, numeric-comparison], args: {x: 0.0}, result: 0.0}",
+  "      - {id: missing-short-circuits, covers: ['short-circuit-missing:x'], args: {x: null}, result: null}")
+writeLines(legacy_environment("yamaa_benchmarks.project_value", "uv.lock"), "python/environment.yaml")
+writeLines(legacy_environment("base::identity", "renv.lock"), "r/environment.yaml")
 lock_kind <- function(environment) issue("project_environment_invalid", "FUNC-2", "lock",
   paste0('{"actual_lock_kind":"uv","entry":"', here("project.yaml"),
     '","environment_path":"lock","language":"r","reason":"lock_kind_mismatch","source":"',
     here(environment), '"}'))
-same_issues(refuse_activation(project$check())$issues, list(lock_kind("r/environment.yaml")))
-invisible(file.copy(file.path(root, name, "r/renv.lock"), lock, overwrite = TRUE))
 # The environments key states the language: R reads the Python file as an R
 # environment and refuses its lock and callable.
 writeLines(c("schema_version: '1.0'", "environments: {python: python/environment.yaml, r: python/environment.yaml}",
@@ -292,19 +312,22 @@ stopifnot(identical(row_of(checked), lock_kind("python/environment.yaml")),
   identical(checked$condition, rep("project_environment_invalid", 2L)),
   grepl('"reason":"invalid_callable"', checked$context[[2L]], fixed = TRUE))
 # An environment file no longer states its language.
-invisible(file.copy(file.path(root, name, "project.yaml"), "project.yaml", overwrite = TRUE))
-writeLines(c("schema_version: '1.0'", "language: r", readtext(env)[-1L]), env)
+writeLines(c("schema_version: '1.0'", "environments: {python: python/environment.yaml, r: r/environment.yaml}",
+  "adam: {specs: [spec.yaml]}"), "project.yaml")
+writeLines(c("schema_version: '1.0'", "language: r", readtext("r/environment.yaml")[-1L]),
+  "r/environment.yaml")
 checked <- refuse_activation(project$check())$issues
 stopifnot(identical(checked$condition, "unknown_field"), identical(checked$rule, "SCHEMA-13"),
   identical(checked$spec_paths, list("language")),
   grepl('"environment_path":"environments.r"', checked$context, fixed = TRUE))
-invisible(file.copy(file.path(root, name, "r/environment.yaml"), env, overwrite = TRUE))
+unlink(c("python/environment.yaml", "r/environment.yaml"))
+invisible(file.copy(file.path(root, name, "project.yaml"), "project.yaml", overwrite = TRUE))
 # Project codelists bind and function argument admission collect independent findings.
 writeLines(c(readtext("project.yaml"), "codelists:", "  - codelists:", "      - id: IDENTIFIERS",
   "        name: Identifiers", "        items: [{value: '01'}]"), "project.yaml")
 invisible(file.copy(file.path(root, name, "input"), case, recursive = TRUE))
 text <- readtext(file.path(root, name, "spec.yaml"))
-text <- sub("label: Identifier", "label: Identifier\n    submission: {codelist: IDENTIFIERS, origin: {type: Assigned}}", text, fixed = TRUE)
+text <- sub("label: Identifier", "label: Identifier\n    submission: {codelist: IDENTIFIERS, origins: [{type: Assigned}]}", text, fixed = TRUE)
 text <- sub("args: {}", "args: {x: SOURCE.VALUE}", text, fixed = TRUE)
 writeLines(text, "spec.yaml")
 stopifnot(nrow(project$spec("TEST")$check()$issues) == 0L)
@@ -584,12 +607,15 @@ qualify_submission_versions <- function() {
 }
 qualify_submission_versions()
 
-# A fresh directory with the negative-function-contract R environment and a
-# project that lists one spec.
+# A fresh directory with the negative-function-contract function file and R
+# lock, and a project that lists one spec.
 callback_study <- function(prefix) {
-  work <- tempfile(prefix); dir.create(work); setwd(work); dir.create("r")
-  stopifnot(file.copy(file.path(root, "negative-function-contract", "r", c("environment.yaml", "renv.lock")), "r"))
-  writeLines(adam_project(), "project.yaml")
+  work <- tempfile(prefix); dir.create(work); setwd(work); dir.create("r"); dir.create("functions")
+  case <- file.path(root, "negative-function-contract")
+  stopifnot(file.copy(file.path(case, "r", "renv.lock"), "r"),
+    file.copy(file.path(case, "functions", "project_value.yaml"), "functions"))
+  writeLines(c("yamaa: '1.0'", "type: project", "functions: [functions/project_value.yaml]",
+    "environments: {r: {lock: r/renv.lock}}", "adam: {specs: [spec.yaml]}"), "project.yaml")
   yamaa_project("project.yaml")
 }
 
