@@ -36,6 +36,9 @@ pub struct RejectedEntry {
 }
 
 impl RejectedEntry {
+    pub(crate) fn retained_metadata_sources(&self) -> crate::file_resources::RetainedSources {
+        self.resources.retain_metadata_sources()
+    }
     pub fn error(&self) -> &Error {
         &self.error
     }

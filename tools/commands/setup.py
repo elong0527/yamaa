@@ -1,7 +1,9 @@
 """Install repository tools editable after building the normal development wheel.
 
 `--without-package` installs the same locked environment and tools without the
-development package, for a CI job that never imports it.
+development package, for a CI job that never imports it. `--keep-toolchain`
+adds no components to the pinned toolchain, which CI's setup action installs
+first with the components that its job needs.
 """
 
 import argparse
@@ -21,13 +23,22 @@ def main(argv=None):
         action="store_true",
         help="leave out the development package, and so its engine build",
     )
+    parser.add_argument(
+        "--keep-toolchain",
+        action="store_true",
+        help="leave the pinned toolchain's components as the caller installed them",
+    )
     arguments = parser.parse_args(argv)
     uv = arguments.uv
     # The toolchain file names only what a build needs, so `make quick` needs
     # Clippy and rustfmt for its lint, and rust-src for its notice check,
-    # added to the pinned toolchain where rustup runs.
-    if shutil.which("rustup"):
-        subprocess.run(install_command(declaration()), cwd=ROOT, check=True)
+    # added to the pinned toolchain where rustup runs. CI's setup action adds
+    # rust-src only for the jobs that run the notices generator
+    # (tools.ci.toolchain --notices), and passes --keep-toolchain.
+    if shutil.which("rustup") and not arguments.keep_toolchain:
+        subprocess.run(
+            install_command(declaration(), notices=True), cwd=ROOT, check=True
+        )
     environment = os.environ | {"RUSTUP_TOOLCHAIN": channel()}
     subprocess.run(
         [

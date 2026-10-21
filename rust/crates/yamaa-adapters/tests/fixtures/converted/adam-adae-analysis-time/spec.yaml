@@ -1,0 +1,142 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADAE
+keys: [STUDYID, USUBJID, AESEQ]
+input:
+  AE: {path: input/ae.csv, types: {AESEQ: int}}
+
+output:
+  path: adae.csv
+  columns: [STUDYID, USUBJID, AESEQ, AETERM, ASTDTM, ASTDT, ASTTM, ASTTMF]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: AE.STUDYID
+    submission:
+      core: Req
+      mandatory: true
+      length: 20
+      origins:
+        - type: Predecessor
+          description: AE.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: AE.USUBJID
+    submission:
+      core: Req
+      mandatory: true
+      length: 30
+      origins:
+        - type: Predecessor
+          description: AE.USUBJID
+
+  - name: AESEQ
+    type: int
+    label: Sequence Number
+    derivation: AE.AESEQ
+    submission:
+      core: Req
+      mandatory: true
+      length: 8
+      origins:
+        - type: Predecessor
+          description: AE.AESEQ
+
+  - name: AETERM
+    type: str
+    label: Reported Term for the Adverse Event
+    derivation: AE.AETERM
+    submission:
+      core: Req
+      mandatory: true
+      length: 200
+      origins:
+        - type: Predecessor
+          description: AE.AETERM
+
+  # A start collected to the hour or minute takes zero for the rest of its
+  # time, and a date alone takes midnight; a start without its day gives
+  # none.
+  - name: ASTDTM
+    type: datetime
+    label: Analysis Start Date/Time
+    derivation:
+      impute:
+        type: datetime
+        source: AE.AESTDTC
+        time: first
+    submission:
+      core: Perm
+      mandatory: false
+      origins:
+        - type: Derived
+      method: AESTDTC completed with the earliest time its collected parts
+        admit; missing when AESTDTC carries no complete date.
+
+  - name: ASTDT
+    type: date
+    label: Analysis Start Date
+    derivation:
+      to_date:
+        source: ASTDTM
+    submission:
+      core: Cond
+      mandatory: false
+      origins:
+        - type: Derived
+      method: Date part of ASTDTM.
+
+  # The time of day of the start in seconds since midnight, shown as
+  # hh:mm:ss.
+  - name: ASTTM
+    type: int
+    label: Analysis Start Time
+    derivation:
+      time_of_day:
+        source: ASTDTM
+    submission:
+      core: Perm
+      mandatory: false
+      length: 8
+      display_format: TIME8.
+      origins:
+        - type: Derived
+      method: Time part of ASTDTM as seconds since midnight.
+
+  - name: ASTTMF
+    type: str
+    label: Analysis Start Time Imputation Flag
+    derivation:
+      imputation_flag:
+        source: ASTDTM
+        part: time
+    verifications:
+      - allowed_values:
+          values: [H, M, S]
+    submission:
+      core: Cond
+      mandatory: false
+      length: 1
+      origins:
+        - type: Derived
+      method: H when the start was collected without a time, M when it stops
+        at the hour and S when it stops at the minute.
+
+verifications:
+  - row_count:
+      min: 5
+      max: 5
+  - all_or_none:
+      id: analysis-start-completeness
+      columns: [ASTDTM, ASTDT, ASTTM]
+
+submission:
+  label: Adverse Events Analysis Dataset
+  class: OCCURRENCE DATA STRUCTURE
+  structure: One record per adverse event
+  repeating: true

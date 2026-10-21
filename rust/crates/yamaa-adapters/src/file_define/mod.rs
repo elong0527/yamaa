@@ -99,6 +99,28 @@ impl Define {
     pub fn issues(&self) -> &[Diagnostic] {
         &self.issues
     }
+    /// What locates the composition's issues (P-ISSUE-1): the project file
+    /// and the files it reads, and each specification a section lists,
+    /// linked from the listing that names it (`sdtm.specs[0]`).
+    pub fn locator(&self) -> crate::issue_location::Locator {
+        crate::issue_location::project(
+            self.ports
+                .environment
+                .as_deref()
+                .map(Into::into)
+                .unwrap_or_default(),
+            self.ports
+                .specifications
+                .iter()
+                .map(|(path, _, document)| (path.as_str(), &**document)),
+            &self
+                .ports
+                .resources
+                .as_ref()
+                .map(Resources::retain_metadata_sources)
+                .unwrap_or_default(),
+        )
+    }
     pub fn failure(&self) -> Option<&Failure> {
         self.failure.as_ref()
     }

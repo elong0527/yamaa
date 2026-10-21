@@ -2083,13 +2083,17 @@ mod declaration {
                     expected.contains(&format!("cycle: {cycle}")),
                     "{name}: flat expectation pins {cycle}"
                 );
+                // The empty child is written in its parent's language, as
+                // every layer of a chain is (LAYER-4).
+                let child: &[u8] = if crate::support::benchmarks::declares_header(&parent) {
+                    b"yamaa: '1.0'\ntype: spec\nparent: parent.yaml\n"
+                } else {
+                    b"schema_version: '1.0'\nparent: parent.yaml\n"
+                };
                 let mut host = new_host(&parent);
-                let error = shipped_schema::prepare(
-                    source(b"schema_version: '1.0'\nparent: parent.yaml\n".to_vec()),
-                    "entry.yaml".into(),
-                    &mut host,
-                )
-                .unwrap_err();
+                let error =
+                    shipped_schema::prepare(source(child.to_vec()), "entry.yaml".into(), &mut host)
+                        .unwrap_err();
                 let actual = outcome(error);
                 let diagnostics = actual.as_array().unwrap();
                 assert_eq!(diagnostics.len(), 1, "{name}: {diagnostics:?}");

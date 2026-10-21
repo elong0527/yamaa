@@ -923,6 +923,29 @@ mod tests {
         );
     }
 
+    /// The ODM case compares what the ODM reader read: a collected age that
+    /// the export holds otherwise, 67 exported as 68, fails its case.
+    #[test]
+    fn a_changed_odm_value_fails_its_case() {
+        let case = edited("sdtm-dm-odm-snapshot", |files, _| {
+            replace(
+                files,
+                "input/odm.xml",
+                r#"<ItemData ItemOID="IT.DM.AGE" Value="67"/>"#,
+                r#"<ItemData ItemOID="IT.DM.AGE" Value="68"/>"#,
+            );
+        });
+        if !compiled(&case) {
+            return;
+        }
+        let outcome = run(&case, &engine_info());
+        assert_eq!(outcome.status, Status::Failed);
+        assert_eq!(
+            outcome.message.as_deref(),
+            Some("the output bytes of dm.csv differ from the expected bytes")
+        );
+    }
+
     /// A Parquet file is compared by how it stores each column and by what it
     /// holds, never by its bytes, which the listed case's saved file does not
     /// share with the authored one: a file whose columns are stored otherwise
@@ -952,12 +975,17 @@ mod tests {
     #[test]
     fn a_changed_parquet_value_fails_its_case() {
         let case = edited("negative-transport-empty-string", |files, _| {
-            replace(
-                files,
-                "spec.yaml",
-                "derivation: {literal: DM}",
-                "derivation: {literal: XX}",
-            );
+            // The literal as the language the case is written in spells it:
+            // the benchmark moves to 1.0 in its own pull request (#3422).
+            let legacy = files.iter().any(|(file, bytes)| {
+                *file == "spec.yaml" && String::from_utf8_lossy(bytes).contains("{literal: DM}")
+            });
+            let (from, to) = if legacy {
+                ("derivation: {literal: DM}", "derivation: {literal: XX}")
+            } else {
+                ("derivation: \"'DM'\"", "derivation: \"'XX'\"")
+            };
+            replace(files, "spec.yaml", from, to);
         });
         if !compiled(&case) {
             return;
@@ -1179,11 +1207,12 @@ mod tests {
         );
     }
 
-    /// The printed text of the listed cases: every case passes in a build
-    /// with every feature, and the adapters the list leaves uncovered are
-    /// named; the command line has no host version.
+    /// The printed text of the listed cases: in a build with every feature,
+    /// as every package ships, every case passes and a listed case covers
+    /// each adapter, so no `not covered:` line is printed; the command line
+    /// has no host version.
     #[test]
-    fn the_summary_names_what_is_not_covered() {
+    fn a_full_build_covers_every_adapter() {
         let result = selftest(Host::Cli, None);
         let printed = result.summary();
         let lines = printed.lines().collect::<Vec<_>>();
@@ -1204,15 +1233,15 @@ mod tests {
             assert!(result.not_covered().contains(adapter), "{adapter}");
         }
         if info.features.len() == 4 {
+            let not_covered = result.not_covered();
+            assert!(not_covered.is_empty(), "{not_covered:?}");
+            assert_eq!(lines.len(), 2, "{lines:?}");
             assert_eq!(
-                lines[..2],
-                [
-                    format!(
-                        "yamaa selftest: succeeded, {0} of {0} cases passed",
-                        cases::CASES.len()
-                    ),
-                    format!("not covered: {}", cases::UNCOVERED.join(", ")),
-                ]
+                lines[0],
+                format!(
+                    "yamaa selftest: succeeded, {0} of {0} cases passed",
+                    cases::CASES.len()
+                )
             );
         }
     }

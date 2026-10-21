@@ -15,7 +15,7 @@
 
 use std::collections::HashMap;
 
-use crate::yaml_decode::{decode_yaml, DecodeFailure};
+use crate::yaml_decode::{decode_yaml, DecodeFailure, DecodedYaml};
 use crate::yaml_source::{scan_strict, LocatedEvent, SourceEvent, SourceText};
 use yamaa_saphyr_parser::ScalarStyle;
 
@@ -72,7 +72,7 @@ pub(super) struct Suppression {
     pub last: usize,
 }
 
-/// A parsed specification file. Line numbers are zero-based here.
+/// A parsed yamaa file. Line numbers are zero-based here.
 pub(super) struct Document {
     pub text: String,
     pub lines: Vec<String>,
@@ -81,6 +81,15 @@ pub(super) struct Document {
     content: Vec<bool>,
     pub suppressions: Vec<Suppression>,
     pub newline: &'static str,
+    /// The root declares the 1.x header as the engine reads it: `yamaa` and
+    /// no `schema_version` (SCHEMA-2). Its findings write the 1.x spec path
+    /// notation (P-CLR-2).
+    pub versioned: bool,
+    /// Each node's spec path; a mapping key has its value's.
+    paths: Vec<String>,
+    /// The values document admission decoded, which the schema findings
+    /// read; none for the directory scan's structure alone.
+    pub decoded: Option<DecodedYaml>,
 }
 
 // --- Text as Python's str methods read it ---------------------------------------
@@ -374,8 +383,10 @@ impl Document {
     /// Admit `source` through the shared document admission, then keep its
     /// nodes, lines, comment lines and suppressions.
     pub(super) fn parse(source: &[u8]) -> Result<Self, DecodeFailure> {
-        decode_yaml(source)?;
-        Self::structure(source)
+        let decoded = decode_yaml(source)?;
+        let mut document = Self::structure(source)?;
+        document.decoded = Some(decoded);
+        Ok(document)
     }
 
     /// The nodes and lines without document admission, as the directory scan
@@ -389,15 +400,23 @@ impl Document {
             text: text.to_owned(),
             content: vec![false; lines.len()],
             lines,
+            paths: vec![String::new(); nodes.len()],
             nodes,
             root,
             suppressions: Vec::new(),
             newline: dominant_ending(text),
+            versioned: false,
+            decoded: None,
         };
+        document.versioned = document.key(document.root, "yamaa").is_some()
+            && document.key(document.root, "schema_version").is_none();
         if let Some(root) = document.root {
             let mut content = std::mem::take(&mut document.content);
             document.mark_content(root, &mut content);
             document.content = content;
+            let mut paths = std::mem::take(&mut document.paths);
+            document.mark_paths(root, "$".to_owned(), &mut paths);
+            document.paths = paths;
         }
         document.suppressions = document.find_suppressions();
         Ok(document)
@@ -504,30 +523,103 @@ impl Document {
         end.line
     }
 
-    /// Every node with its positional spec path (`columns[3].name`), the
-    /// root first, then each value or entry depth first.
+    /// Every node with its spec path, the root first, then each value or
+    /// entry depth first.
     pub(super) fn walk(&self) -> Vec<(String, usize)> {
         let mut nodes = Vec::new();
         if let Some(root) = self.root {
-            self.walk_from(root, "$".to_owned(), &mut nodes);
+            self.walk_from(root, &mut nodes);
         }
         nodes
     }
 
-    fn walk_from(&self, id: usize, path: String, nodes: &mut Vec<(String, usize)>) {
-        nodes.push((path.clone(), id));
+    fn walk_from(&self, id: usize, nodes: &mut Vec<(String, usize)>) {
+        nodes.push((self.paths[id].clone(), id));
+        match &self.nodes[id].value {
+            Value::Mapping { pairs, .. } => {
+                for &(_, value) in pairs {
+                    self.walk_from(value, nodes);
+                }
+            }
+            Value::Sequence { items, .. } => {
+                for &item in items {
+                    self.walk_from(item, nodes);
+                }
+            }
+            Value::Scalar { .. } => {}
+        }
+    }
+
+    /// The spec path of a node, `$` for the root; a mapping key has its
+    /// value's. A 0.5 file names a list entry by its index
+    /// (`columns[3].name`). A 1.x file writes the notation its findings use
+    /// (P-CLR-1, P-CLR-2): a list entry that writes `name`, or else `id`, as
+    /// text is named by it (`columns.AGE.name`), any other by its index, and
+    /// a key that is not a bare segment is quoted (`['NOT DONE']`).
+    pub(super) fn path(&self, id: usize) -> &str {
+        &self.paths[id]
+    }
+
+    fn mark_paths(&self, id: usize, path: String, paths: &mut [String]) {
         match &self.nodes[id].value {
             Value::Mapping { pairs, .. } => {
                 for &(key, value) in pairs {
-                    self.walk_from(value, join(&path, self.scalar(key).unwrap_or("")), nodes);
+                    let step = self.key_path(&path, key);
+                    paths[key] = step.clone();
+                    self.mark_paths(value, step, paths);
                 }
             }
             Value::Sequence { items, .. } => {
                 for (index, &item) in items.iter().enumerate() {
-                    self.walk_from(item, format!("{path}[{index}]"), nodes);
+                    self.mark_paths(item, self.item_path(&path, index, item), paths);
                 }
             }
             Value::Scalar { .. } => {}
+        }
+        paths[id] = path;
+    }
+
+    /// `path` followed by the step that names mapping key `key`.
+    fn key_path(&self, path: &str, key: usize) -> String {
+        let name = self.scalar(key).unwrap_or("");
+        if !self.versioned {
+            return join(path, name);
+        }
+        let parent = if path == "$" { "" } else { path };
+        match self.text_scalar(key) {
+            Some(name) => spec_join(parent, name),
+            // An integer, Boolean or null key takes the bracketed spelling.
+            None => format!("{parent}[{name}]"),
+        }
+    }
+
+    /// `path` followed by the step that names entry `index` of a list.
+    fn item_path(&self, path: &str, index: usize, item: usize) -> String {
+        if self.versioned {
+            // The engine takes `name` when the entry writes it, else `id`,
+            // and names the entry by it only when it is text.
+            let identity = self
+                .member(Some(item), "name")
+                .or_else(|| self.member(Some(item), "id"))
+                .and_then(|node| self.text_scalar(node));
+            if let Some(identity) = identity {
+                return spec_join(if path == "$" { "" } else { path }, identity);
+            }
+        }
+        format!("{path}[{index}]")
+    }
+
+    /// The text of a scalar that reads as text: quoted or a block scalar, or
+    /// a plain scalar the YAML 1.2 core schema reads as no null, Boolean or
+    /// number.
+    pub(super) fn text_scalar(&self, id: usize) -> Option<&str> {
+        match &self.nodes[id].value {
+            Value::Scalar {
+                text,
+                style: Style::Plain,
+            } => super::authoring::plain_text(text).then_some(text.as_str()),
+            Value::Scalar { text, .. } => Some(text),
+            _ => None,
         }
     }
 
@@ -629,6 +721,22 @@ fn join(path: &str, key: &str) -> String {
         key.to_owned()
     } else {
         format!("{path}.{key}")
+    }
+}
+
+/// `path` followed by the step naming `key` in the 1.x spec path notation,
+/// as the engine writes it: `.key` for a bare segment of ASCII letters,
+/// digits, `_` and `-`, else `['key']` with `'` written twice; a bare key
+/// starts a path at the root.
+fn spec_join(path: &str, key: &str) -> String {
+    let plain = !key.is_empty()
+        && key
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'));
+    match (path.is_empty(), plain) {
+        (true, true) => key.to_owned(),
+        (false, true) => format!("{path}.{key}"),
+        (_, false) => format!("{path}['{}']", key.replace('\'', "''")),
     }
 }
 

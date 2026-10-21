@@ -470,11 +470,12 @@ tokens exact (`Int`, `Uint`, or `Wide` with the decimal spelling of a token
 outside both 64-bit ranges), fraction/exponent tokens as `Float`, and nested
 lists and maps; `to_json()` returns the canonical text the host frames show.
 Geometry is optional and absent means unrecorded: a present zero-width span or
-empty route is a fact, never a default. `location` stays `None` until issue
-locations land (#3262). The one record feeds every form of an issue:
-`Report::table()` builds the twelve-column issues table both hosts return
-(D28), `text()` its printed line and `to_value()` its JSON object, whose
-`context` is an object. The boundary version and record definition in #2674
+empty route is a fact, never a default. `location` names the YAML file, line
+and column where the first spec path is written (P-ISSUE-1), and is `None`
+when no file the operation read holds that path. The one record feeds every
+form of an issue: `Report::table()` builds the twelve-column issues table
+both hosts return (D28), `text()` its printed line and `to_value()` its JSON
+object, whose `context` is an object. The boundary version and record definition in #2674
 conform to this struct; the cross-host parity tests are #2677.
 
 Every result prints a `Summary` rendered here (`yamaa::text`, D37), and a

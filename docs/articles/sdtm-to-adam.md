@@ -42,8 +42,8 @@ the yamaa spec must be built as a robust and succinct yamaa spec.
   `columns[].derivation`, never inside `rows:` derivations. Row templates
   should be minimized for section level details. An `aggregate`, a window
   derivation, a read through a named intermediate, or a driver read when
-  templates build from different datasets is row-phase dependent
-  and stays in its row template.
+  templates build from different datasets depends on its template's row
+  construction and stays in its row template.
 - **Read the input dataset directly.** A named intermediate whose `key`
   restates its input's `key`, with no `filter`, selection or handler that
   changes behavior, reads what the implicit join already reads; qualify the
@@ -64,9 +64,10 @@ the yamaa spec must be built as a robust and succinct yamaa spec.
 - **Every column declares `label:`**, unless a `copy` entry takes it from the
   producer.
 - **Write each spec in the specification style.** Field order, blank lines,
-  line width, and the three authoring lints (uniform row-template
-  derivations, redundant intermediates, missing output-column labels) are
-  fixed by the [style guide](style.md).
+  line width, the canonical spellings and the authoring findings (uniform
+  row-template derivations, redundant intermediates, missing output-column
+  labels, unused input keys, equality filters) are fixed by the
+  [style guide](style.md).
   Run `yamaa.lint("<spec>.yaml", fix=True)` (`yamaa_lint("<spec>.yaml", fix = TRUE)`
   in R, `yamaa lint --fix <spec>.yaml` on the command line) with the pinned
   yamaa, then correct the findings it still returns.

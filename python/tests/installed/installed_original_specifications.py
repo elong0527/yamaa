@@ -71,6 +71,36 @@ def fixture_bytes(value):
     )
 
 
+def without_layer(context):
+    """A finding's context without the layer a refused layer names. A schema
+    finding in a 1.x specification names the files the run loaded, `source`
+    and `entry` together, as an inherited 0.5 finding does; a standalone 0.5
+    specification's finding names none (#3422)."""
+    if "entry" in context:
+        context = {k: v for k, v in context.items() if k not in ("entry", "source")}
+    return context
+
+
+def error_lines(issue):
+    """The lines of an expected/error.yaml that states `issue` exactly, in
+    any order: its fields, each path as an item and each context entry, with
+    a list in flow style. Read without a YAML parser, as this suite reads
+    every original (#3422)."""
+    lines = {
+        f"phase: {issue['phase']}",
+        f"condition: {issue['condition']}",
+        f"rule: {issue['rule']}",
+        "spec_paths:",
+        *(f"  - {path}" for path in issue["spec_paths"]),
+    }
+    if issue["context"]:
+        lines.add("context:")
+    for key, value in issue["context"].items():
+        text = f"[{', '.join(value)}]" if isinstance(value, list) else value
+        lines.add(f"  {key}: {text}")
+    return lines
+
+
 def specification_name(name):
     return "spec_study.yaml" if name == "schema-inheritance" else "spec.yaml"
 
@@ -1162,61 +1192,19 @@ class PublicDomains(unittest.TestCase):
                     (case / "adsl.csv").read_bytes(),
                     (case / "expected/adsl.csv").read_bytes(),
                 )
-            for name, path, source, actual in [
-                (
-                    "negative-date-diff-endpoints",
-                    "columns.SURVDD.derivation.diff.start",
-                    "RFSTDTM",
-                    "datetime",
-                ),
-                (
-                    "negative-study-day-datetime",
-                    "columns.DTHDY.derivation.study_day.date",
-                    "DTHDTM",
-                    "datetime",
-                ),
-                (
-                    "negative-epoch-day-non-date",
-                    "columns.EXSTDY.derivation.to_epoch_day.source",
-                    "EX.EXSTDT",
-                    "str",
-                ),
-                (
-                    "negative-date-diff-units",
-                    "columns.TRTDURM.derivation.diff.bounds",
-                    None,
-                    None,
-                ),
+            for name, rule in [
+                ("negative-date-diff-endpoints", "TIME-1"),
+                ("negative-study-day-datetime", "TIME-1"),
+                ("negative-epoch-day-non-date", "TIME-1"),
+                ("negative-date-diff-units", "TIME-5"),
             ]:
                 case = Path(directory) / name
                 shutil.copytree(ROOT / "cases" / name, case)
                 shutil.rmtree(case / "input")
-                bounds = source is None
-                condition = (
-                    "value_not_permitted" if bounds else "incompatible_input_type"
-                )
-                rule = "TIME-5" if bounds else "TIME-1"
-                context = (
-                    {"value": "inclusive", "permitted": ["exclusive"]}
-                    if bounds
-                    else {"source": source, "expected": "date", "actual": actual}
-                )
-                context_yaml = (
-                    "  value: inclusive\n  permitted: [exclusive]\n"
-                    if bounds
-                    else f"  source: {source}\n  expected: date\n  actual: {actual}\n"
-                )
-                self.assertEqual(
-                    (case / "expected/error.yaml").read_text(),
-                    f"phase: validation\ncondition: {condition}\nspec_paths:\n  - {path}\nrule: {rule}\ncontext:\n{context_yaml}",
-                )
-                expected_issue = {
-                    "phase": "validation",
-                    "condition": condition,
-                    "rule": rule,
-                    "spec_paths": [path],
-                    "context": context,
-                }
+                # Each benchmark states its one complete finding in its
+                # expected/error.yaml, in the language it is written in
+                # (#3422); its lines are the finding's, in any order.
+                stated = set((case / "expected/error.yaml").read_text().splitlines())
                 for result in [
                     yamaa.spec(case / "spec.yaml").check(),
                     yamaa.spec(case / "spec.yaml").run(),
@@ -1224,7 +1212,10 @@ class PublicDomains(unittest.TestCase):
                     issues = result.issues.select(FIELDS).to_dicts()
                     self.assertEqual(len(issues), 1)
                     issues[0]["context"] = json.loads(issues[0]["context"])
-                    self.assertEqual(issues[0], expected_issue)
+                    self.assertEqual(
+                        (issues[0]["phase"], issues[0]["rule"]), ("validation", rule)
+                    )
+                    self.assertEqual(error_lines(issues[0]), stated)
                 self.assertIsNone(result.output)
                 self.assertIsNone(result._native.observations())
                 with self.assertRaises(yamaa.Error):
@@ -1242,7 +1233,7 @@ class PublicDomains(unittest.TestCase):
         def issues(result):
             records = result.issues.select(FIELDS).to_dicts()
             for record in records:
-                record["context"] = json.loads(record["context"])
+                record["context"] = without_layer(json.loads(record["context"]))
             return records
 
         with tempfile.TemporaryDirectory() as directory:
@@ -1317,7 +1308,7 @@ class PublicDomains(unittest.TestCase):
         def issues(result):
             records = result.issues.select(FIELDS).to_dicts()
             for record in records:
-                record["context"] = json.loads(record["context"])
+                record["context"] = without_layer(json.loads(record["context"]))
             return records
 
         with tempfile.TemporaryDirectory() as directory:
@@ -1476,7 +1467,7 @@ columns:
         def issues(result):
             records = result.issues.select(FIELDS).to_dicts()
             for record in records:
-                record["context"] = json.loads(record["context"])
+                record["context"] = without_layer(json.loads(record["context"]))
             return records
 
         with tempfile.TemporaryDirectory() as directory:
@@ -1603,9 +1594,13 @@ columns:
                     work = Path(directory) / name
                     shutil.copytree(ROOT / cohort / name, work)
                     entry = work / "spec.yaml"
-                    self.assertEqual(
-                        entry.read_text(encoding="utf-8"), case["specification"]
-                    )
+                    if cohort == "flags":
+                        # A witness is staged from its capture. A benchmark
+                        # runs as it is written, in either language, whose
+                        # findings and handlers are the same (#3422).
+                        self.assertEqual(
+                            entry.read_text(encoding="utf-8"), case["specification"]
+                        )
                     retained = {
                         path: path.read_bytes()
                         for path in work.rglob("*")
@@ -1625,7 +1620,14 @@ columns:
                         with self.subTest(attempt=attempt):
                             self.assertFalse(output.exists())
                             result = yamaa.spec(entry).run()
-                            self.assertEqual(issues(result), expected)
+                            found = issues(result)
+                            if schema_failure:
+                                # A 1.x specification's schema finding names
+                                # the files this run loaded; a 0.5 one none.
+                                for finding in found:
+                                    finding["context"].pop("source", None)
+                                    finding["context"].pop("entry", None)
+                            self.assertEqual(found, expected)
                             wire = result._native.observations()
                             if wire is None:
                                 self.assertEqual(case.get("handlers", []), [])
@@ -2062,12 +2064,15 @@ columns:
                     result.issues.select([*FIELDS, *GEOMETRY]).rows(), expected_rows
                 )
                 self.assertEqual(result.issues.schema, issue_schema())
-                # Every issue is an error with a message, and no location is
-                # recorded yet (#3262).
+                # Every issue is an error with a message, located in a file the
+                # case read or, when no file holds its first spec path, not at
+                # all (P-ISSUE-1).
                 for row in result.issues.to_dicts():
                     self.assertEqual(row["severity"], "error")
+                    located = row["file"] is not None
                     self.assertEqual(
-                        (row["file"], row["line"], row["column"]), (None,) * 3
+                        (located, row["line"] is not None, row["column"] is not None),
+                        (located,) * 3,
                     )
                     self.assertTrue(row["message"])
                 # The run report records the same outcome as the complete truth.

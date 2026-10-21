@@ -6,12 +6,51 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+import yaml
 from tools.ci import toolchain
+from tools.commands import repository
 from tools.paths import ROOT
+from tools.validation._repository_yaml import UniqueKeyLoader
+
+# The commands that run the third-party notices generator, which reads the
+# toolchain's rust-src: the generator itself, the Make targets whose
+# repository check runs it (tools.commands.repository.CHECKS) and the
+# dependency graphs lane, which regenerates the notices of its copy.
+GENERATOR = re.compile(
+    r"python -m tools\.packaging\.generate_third_party_notices\b"
+    r"|\bmake (?:check-repository|quick|check)(?![\w-])"
+    r"|python -m tools\.ci\.dependency_graphs\b"
+)
+SETUP_ACTION = "./.github/actions/setup"
 
 
 def release(version):
     return tuple(map(int, version.split(".")))
+
+
+def load(relative):
+    return yaml.load(
+        (ROOT / relative).read_text(encoding="utf-8"), Loader=UniqueKeyLoader
+    )
+
+
+def workflow_jobs():
+    """Yield each workflow job, as workflow:job, with its steps."""
+    for path in sorted((ROOT / ".github/workflows").iterdir()):
+        if path.suffix in (".yml", ".yaml"):
+            for name, job in load(path.relative_to(ROOT))["jobs"].items():
+                yield f"{path.name}:{name}", job.get("steps", [])
+
+
+def adds_rust_src(step):
+    """Whether a step adds rust-src: the setup action given notices, or the
+    toolchain module given --notices."""
+    if step.get("uses") == SETUP_ACTION:
+        return (step.get("with") or {}).get("notices") == "true"
+    return any(
+        "python -m tools.ci.toolchain" in line and "--notices" in line.split()
+        for line in step.get("run", "").splitlines()
+    )
 
 
 class ToolchainTest(unittest.TestCase):
@@ -64,23 +103,26 @@ class ToolchainTest(unittest.TestCase):
             f"Cargo (Rust's package manager) (>= {minimum}), rustc (>= {minimum})",
         )
 
-    def test_repository_checks_install_their_lint_format_and_source_components(self):
-        # Clippy and rustfmt lint and format; rust-src holds the standard
+    def test_repository_checks_install_their_lint_and_format_components(self):
+        # Clippy and rustfmt lint and format. rust-src holds the standard
         # library's sources, from which the third-party notices list the
-        # crates that it links.
+        # crates that it links, so it comes only with notices.
         install = ["rustup", "toolchain", "install", "1.99.1", "--profile", "minimal"]
-        for declared, components in (
-            ({}, ["clippy", "rustfmt", "rust-src"]),
-            # A declared component is installed once, before the check components.
+        for declared, notices, components in (
+            ({}, False, ["clippy", "rustfmt"]),
+            ({}, True, ["clippy", "rustfmt", "rust-src"]),
+            # A declared component is installed once, before the others.
             (
                 {"components": ["rustfmt", "llvm-tools"]},
+                True,
                 ["rustfmt", "llvm-tools", "clippy", "rust-src"],
             ),
         ):
-            with self.subTest(declared=declared):
+            with self.subTest(declared=declared, notices=notices):
                 self.assertEqual(
                     toolchain.install_command(
-                        {"channel": "1.99.1", "profile": "minimal", **declared}
+                        {"channel": "1.99.1", "profile": "minimal", **declared},
+                        notices,
                     ),
                     [
                         *install,
@@ -92,6 +134,81 @@ class ToolchainTest(unittest.TestCase):
                         ],
                     ],
                 )
+
+    def test_install_adds_rust_src_only_with_notices(self):
+        for arguments, notices in (
+            (["--install"], False),
+            (["--install", "--notices"], True),
+        ):
+            with (
+                self.subTest(arguments=arguments),
+                mock.patch.dict(toolchain.os.environ, {"GITHUB_ENV": ""}),
+                mock.patch.object(toolchain.subprocess, "run") as run,
+            ):
+                toolchain.main(arguments)
+                run.assert_called_once_with(
+                    toolchain.install_command(toolchain.declaration(), notices),
+                    check=True,
+                )
+
+    def test_only_the_jobs_that_run_the_notices_generator_add_rust_src(self):
+        # D157 (#3030) adds rust-src for the notices generator alone; every
+        # other job builds, tests and lints without it (#3528).
+        self.assertIn("tools.packaging.generate_third_party_notices", repository.CHECKS)
+        self.assertIn(
+            '"-m", "tools.packaging.generate_third_party_notices"',
+            (ROOT / "tools/ci/dependency_graphs.py").read_text(encoding="utf-8"),
+        )
+        generators, sources, named = set(), set(), []
+        for job, steps in workflow_jobs():
+            if any(GENERATOR.search(step.get("run", "")) for step in steps):
+                generators.add(job)
+            if any(adds_rust_src(step) for step in steps):
+                sources.add(job)
+            # rust-src comes only from NOTICE_COMPONENTS.
+            named += [job for step in steps if "rust-src" in step.get("run", "")]
+        self.assertEqual(sources, generators)
+        self.assertEqual(named, [])
+        # So that a pattern that matches nothing cannot pass.
+        self.assertLessEqual(
+            {
+                "ci.yml:repository",
+                "dependency-graphs.yml:graph",
+                "native.yml:cli",
+                "native.yml:dist",
+            },
+            generators,
+        )
+
+    def test_the_setup_action_adds_rust_src_only_when_given_notices(self):
+        steps = load(".github/actions/setup/action.yml")["runs"]["steps"]
+        activate = {step.get("name"): step for step in steps}[
+            "Activate the workspace toolchain"
+        ]
+        self.assertEqual(activate["env"], {"NOTICES": "${{ inputs.notices }}"})
+        self.assertEqual(
+            activate["run"].splitlines(),
+            [
+                'if [ "$NOTICES" = true ]; then',
+                "  python -m tools.ci.toolchain --install --notices",
+                "else",
+                "  python -m tools.ci.toolchain --install",
+                "fi",
+            ],
+        )
+        # The setup command keeps that toolchain: make setup adds rust-src,
+        # which make quick needs.
+        self.assertEqual(
+            [
+                step["run"]
+                for step in steps
+                if re.search(r"tools\.commands\.setup|make setup", step.get("run", ""))
+            ],
+            [
+                "python -m tools.commands.setup --keep-toolchain",
+                "python -m tools.commands.setup --keep-toolchain --without-package",
+            ],
+        )
 
 
 if __name__ == "__main__":

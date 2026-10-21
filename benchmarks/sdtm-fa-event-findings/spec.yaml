@@ -111,6 +111,7 @@ columns:
           order_by: [FALNKID, TESTORD, FAORRES]
 
 rows:
+  # yamaa-lint: allow repeated_row_derivation -- each test reads its occurrence
   # One row template per test, each grouping the items by event occurrence:
   # an occurrence gives one record per answered test, and none when the test
   # has no answer. FAOBJ is the adverse event term on the same occurrence. It

@@ -234,8 +234,7 @@ mod project {
         /// `data_type` from `Core::NAMES` and `DataType::NAMES`. The tests
         /// below reach the lists a reader or the Define-XML writer keeps to
         /// itself. The engine keeps no list of where comparators: the 1.0
-        /// lowering reads any written comparator as `Comparator::NotIn`, and
-        /// only the 1.0 schema spells NE and NOTIN.
+        /// lowering reads the two the 1.0 schema spells, NE and NOTIN, by name.
         #[test]
         fn engine_vocabularies_equal_the_cdisc_vocabulary_file() {
             use yamaa_core::specification_submission_document::{
