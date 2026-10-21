@@ -1,14 +1,20 @@
 //! Deterministic UTF-8 Define-XML for the shared admitted column metadata profile.
-use crate::{
+//!
+//! yamaa-core owns the composed metadata model (`submission_composition`) and
+//! the findings this writer raises (`define_diagnostics`); this writer owns the
+//! element tree, its schema checks, escaping and the bytes.
+use std::collections::BTreeSet;
+use yamaa_core::{
     application_issue::{Fault, Stage},
     ast,
+    define_diagnostics::{xml_invalid, xml_whitespace},
     diagnostic::ConditionCode,
     limits::Limits,
+    project_environment::Submission,
     specification_submission_document as s,
     submission_composition::{self as model, Finding, Study},
     value::Value,
 };
-use std::collections::BTreeSet;
 
 struct Element {
     name: &'static str,
@@ -132,13 +138,10 @@ impl Element {
         references: &mut Vec<String>,
         oid_references: &mut Vec<String>,
     ) -> Result<(), Finding> {
-        let invalid =
-            |detail| Finding::cause(ConditionCode::SubmissionXmlInvalid, &self.path, detail);
+        let invalid = |facet| xml_invalid(&self.path, facet);
         for (name, value) in &self.attributes {
             match *name {
-                "Name" | "Role" if value.is_empty() => {
-                    return Err(invalid("schema_violation: nonempty name"))
-                }
+                "Name" | "Role" if value.is_empty() => return Err(invalid("nonempty name")),
                 "OID" | "ID" => {
                     if !identities.insert(value.clone()) {
                         return Err(Finding::cause(
@@ -149,7 +152,7 @@ impl Element {
                     }
                     if *name == "ID" {
                         if !ncname(value) {
-                            return Err(invalid("schema_violation: leaf ID NCName"));
+                            return Err(invalid("leaf ID NCName"));
                         }
                         leaves.insert(value.clone());
                     }
@@ -160,9 +163,7 @@ impl Element {
                 | "def:CommentOID" | "ValueListOID" | "WhereClauseOID" => {
                     oid_references.push(value.clone())
                 }
-                "xml:lang" if !language(value) => {
-                    return Err(invalid("schema_violation: xml:lang language"))
-                }
+                "xml:lang" if !language(value) => return Err(invalid("xml:lang language")),
                 _ => {}
             }
         }
@@ -190,21 +191,13 @@ fn escape(value: &str, path: &str, attribute: bool) -> Result<String, Finding> {
         .chars()
         .any(|c| c == '\r' || c == '\t' || attribute && c == '\n')
     {
-        return Err(Finding::cause(
-            ConditionCode::SubmissionXmlWhitespace,
-            path,
-            "forbidden XML whitespace",
-        ));
+        return Err(xml_whitespace(path));
     }
     if value
         .chars()
         .any(|c| c < '\u{20}' && c != '\n' || c == '\u{fffe}' || c == '\u{ffff}')
     {
-        return Err(Finding::cause(
-            ConditionCode::SubmissionXmlInvalid,
-            path,
-            "schema_violation: forbidden XML character",
-        ));
+        return Err(xml_invalid(path, "forbidden XML character"));
     }
     let mut out = value
         .replace('&', "&amp;")
@@ -219,7 +212,7 @@ fn scalar(value: &Value) -> String {
     match value {
         Value::Str(s) => s.clone(),
         Value::Int(i) => i.to_string(),
-        Value::Float(f) => crate::conversion::float_text(*f),
+        Value::Float(f) => yamaa_core::conversion::float_text(*f),
         _ => String::new(),
     }
 }
@@ -246,9 +239,9 @@ fn item_definition(
     label_path: &str,
     language: &str,
 ) -> Element {
-    let name = &column.declaration.name.value;
+    let name = &column.declaration().name.value;
     let meta = column
-        .declaration
+        .declaration()
         .submission
         .as_ref()
         .expect("composed column");
@@ -256,14 +249,14 @@ fn item_definition(
     let mut item = Element::new("ItemDef", path)
         .attr("OID", format!("IT.{identity}"))
         .attr("Name", name)
-        .attr("DataType", column.data_type.name())
-        .optional("Length", column.length.as_ref())
+        .attr("DataType", column.data_type().name())
+        .optional("Length", column.length())
         .optional(
             "SignificantDigits",
             meta.significant_digits.as_ref().map(|v| &v.value),
         )
         .optional("SASFieldName", model::column_name(name).then_some(name))
-        .optional("def:DisplayFormat", column.display_format.as_ref())
+        .optional("def:DisplayFormat", column.display_format())
         .optional(
             "def:CommentOID",
             meta.comment.as_ref().map(|_| format!("COM.{identity}")),
@@ -271,7 +264,7 @@ fn item_definition(
     item.translated_at(
         "Description",
         &column
-            .declaration
+            .declaration()
             .label
             .as_ref()
             .expect("composed label")
@@ -287,11 +280,11 @@ fn item_definition(
     }
     let mut node = Element::new("def:Origin", &item.path)
         .attr("Type", origin.kind.value.name())
-        .optional("Source", column.source.map(|v| v.name()));
+        .optional("Source", column.source().map(|v| v.name()));
     if let Some(description) = &origin.description {
         node.translated("Description", &description.value, language);
     }
-    node.refs(&column.documents);
+    node.refs(column.documents());
     item.push(node);
     item
 }
@@ -299,37 +292,37 @@ fn item_definition(
 /// column followed by its value-level entries, with the entry `id` closing
 /// the per-value identity (DEFINE-9).
 fn variants(dataset: &model::Dataset) -> impl Iterator<Item = (&model::Column, String)> {
-    dataset.columns.iter().flat_map(move |column| {
-        let identity = format!("{}.{}", dataset.id, column.declaration.name.value);
+    dataset.columns().iter().flat_map(move |column| {
+        let identity = format!("{}.{}", dataset.id(), column.declaration().name.value);
         std::iter::once((column, identity.clone())).chain(
             column
-                .values
+                .values()
                 .iter()
-                .map(move |value| (&value.column, format!("{identity}.{}", value.id))),
+                .map(move |value| (value.column(), format!("{identity}.{}", value.id()))),
         )
     })
 }
 
 /// Append one item-group definition per dataset, in dataset order.
 fn push_item_groups(metadata: &mut Element, study: &Study, language: &str) {
-    let section = &study.section;
-    for dataset in &study.datasets {
-        let id = &dataset.id;
-        let sub = &dataset.metadata;
+    let section = study.section();
+    for dataset in study.datasets() {
+        let id = dataset.id();
+        let sub = dataset.metadata();
         let mut group = Element::new("ItemGroupDef", &format!("datasets.{id}.submission"))
             .attr("OID", format!("IG.{id}"))
             .attr("Name", id)
             .optional(
                 "Domain",
-                if section.family == crate::project_environment::Submission::Adam {
+                if section.family == Submission::Adam {
                     None
                 } else {
-                    Some(&dataset.domain)
+                    Some(dataset.domain())
                 },
             )
             .attr(
                 "Purpose",
-                if section.family == crate::project_environment::Submission::Adam {
+                if section.family == Submission::Adam {
                     "Analysis"
                 } else {
                     "Tabulation"
@@ -342,19 +335,19 @@ fn push_item_groups(metadata: &mut Element, study: &Study, language: &str) {
             // A dataset with no data and no transport file has no leaf.
             .optional(
                 "def:ArchiveLocationID",
-                dataset.href.as_ref().map(|_| format!("LF.{id}")),
+                dataset.href().map(|_| format!("LF.{id}")),
             )
-            .attr("def:StandardOID", format!("STD.{}", study.guide))
+            .attr("def:StandardOID", format!("STD.{}", study.guide()))
             .optional(
                 "def:CommentOID",
                 sub.comment.as_ref().map(|_| format!("COM.{id}")),
             )
             .optional("def:HasNoData", sub.has_no_data.value.then_some("Yes"));
         group.translated("Description", &sub.label.value, language);
-        for (index, column) in dataset.columns.iter().enumerate() {
-            let name = &column.declaration.name.value;
+        for (index, column) in dataset.columns().iter().enumerate() {
+            let name = &column.declaration().name.value;
             let meta = column
-                .declaration
+                .declaration()
                 .submission
                 .as_ref()
                 .expect("composed column");
@@ -362,8 +355,8 @@ fn push_item_groups(metadata: &mut Element, study: &Study, language: &str) {
                 Element::new("ItemRef", &group.path)
                     .attr("ItemOID", format!("IT.{id}.{name}"))
                     .attr("OrderNumber", index + 1)
-                    .attr("Mandatory", yes(column.mandatory))
-                    .optional("KeySequence", column.key_sequence)
+                    .attr("Mandatory", yes(column.mandatory()))
+                    .optional("KeySequence", column.key_sequence())
                     .optional("Role", meta.role.as_ref().map(|v| &v.value))
                     .optional(
                         "MethodOID",
@@ -378,7 +371,7 @@ fn push_item_groups(metadata: &mut Element, study: &Study, language: &str) {
             );
         }
         group.push(class);
-        if let Some(href) = &dataset.href {
+        if let Some(href) = dataset.href() {
             group.leaf(id, href, href.rsplit('/').next().unwrap_or(href), None);
         }
         metadata.push(group);
@@ -387,7 +380,7 @@ fn push_item_groups(metadata: &mut Element, study: &Study, language: &str) {
 
 /// Append one code-list definition per bound codelist, in catalogue order.
 fn push_codelists(metadata: &mut Element, study: &Study, language: &str) {
-    for list in &study.codelists {
+    for list in study.codelists() {
         let c = &list.declaration;
         let mut code = Element::new("CodeList", &format!("codelists.{}", c.id.name))
             .attr("OID", format!("CL.{}", c.id.name))
@@ -450,7 +443,7 @@ fn push_codelists(metadata: &mut Element, study: &Study, language: &str) {
 /// keys and cross-references; character admission happens before bytes escape.
 pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
     validate_profile(study)?;
-    let section = &study.section;
+    let section = study.section();
     let language = &section.xml_lang.text;
     let mut odm = Element::new("ODM", "study")
         .attr("xmlns", "http://www.cdisc.org/ns/odm/v1.3")
@@ -458,11 +451,11 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
         .attr("xmlns:xlink", "http://www.w3.org/1999/xlink")
         .attr("ODMVersion", "1.3.2")
         .attr("FileType", "Snapshot")
-        .attr("FileOID", &study.file_oid)
-        .attr("CreationDateTime", &study.created)
+        .attr("FileOID", study.file_oid())
+        .attr("CreationDateTime", study.created())
         .optional("Originator", section.originator.as_ref().map(|v| &v.text))
         .attr("SourceSystem", "yamaa")
-        .attr("SourceSystemVersion", &study.source_version)
+        .attr("SourceSystemVersion", study.source_version())
         .attr(
             "def:Context",
             match section.context {
@@ -470,13 +463,13 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
                 ast::DefineContext::Other => "Other",
             },
         );
-    let mut root =
-        Element::new("Study", "study").attr("OID", format!("STDY.{}", study.study.id.name));
+    let declared = study.study();
+    let mut root = Element::new("Study", "study").attr("OID", format!("STDY.{}", declared.id.name));
     let mut globals = Element::new("GlobalVariables", "study");
     for (name, value) in [
-        ("StudyName", &study.study.name.text),
-        ("StudyDescription", &study.study.description.text),
-        ("ProtocolName", &study.study.protocol_name.text),
+        ("StudyName", &declared.name.text),
+        ("StudyDescription", &declared.description.text),
+        ("ProtocolName", &declared.protocol_name.text),
     ] {
         let mut node = Element::new(name, "study");
         node.text = Some(value.clone());
@@ -484,12 +477,12 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
     }
     root.push(globals);
     let mut metadata = Element::new("MetaDataVersion", "metadata_version")
-        .attr("OID", format!("MDV.{}", study.metadata_id))
-        .attr("Name", &study.metadata_name)
-        .optional("Description", study.metadata_description.as_ref())
+        .attr("OID", format!("MDV.{}", study.metadata_id()))
+        .attr("Name", study.metadata_name())
+        .optional("Description", study.metadata_description())
         .attr("def:DefineVersion", "2.1.11");
     let mut standards = Element::new("def:Standards", "standards");
-    for standard in &study.standards {
+    for standard in study.standards() {
         standards.push(
             Element::new("def:Standard", "standards")
                 .attr("OID", format!("STD.{}", standard.id))
@@ -518,33 +511,33 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
             metadata.push(parent);
         }
     }
-    for dataset in &study.datasets {
-        for column in &dataset.columns {
-            if column.values.is_empty() {
+    for dataset in study.datasets() {
+        for column in dataset.columns() {
+            if column.values().is_empty() {
                 continue;
             }
-            let identity = format!("{}.{}", dataset.id, column.declaration.name.value);
+            let identity = format!("{}.{}", dataset.id(), column.declaration().name.value);
             let mut list = Element::new("def:ValueListDef", &format!("datasets.{identity}.values"))
                 .attr("OID", format!("VL.{identity}"));
-            for (index, value) in column.values.iter().enumerate() {
-                let identity = format!("{identity}.{}", value.id);
+            for (index, value) in column.values().iter().enumerate() {
+                let identity = format!("{identity}.{}", value.id());
                 let meta = value
-                    .column
-                    .declaration
+                    .column()
+                    .declaration()
                     .submission
                     .as_ref()
                     .expect("composed value");
-                let mut reference = Element::new("ItemRef", &value.path)
+                let mut reference = Element::new("ItemRef", value.path())
                     .attr("ItemOID", format!("IT.{identity}"))
                     .attr("OrderNumber", index + 1)
-                    .attr("Mandatory", yes(value.column.mandatory))
+                    .attr("Mandatory", yes(value.column().mandatory()))
                     .optional("Role", meta.role.as_ref().map(|v| &v.value))
                     .optional(
                         "MethodOID",
                         meta.method.as_ref().map(|_| format!("MT.{identity}")),
                     );
                 reference.push(
-                    Element::new("def:WhereClauseRef", &value.path)
+                    Element::new("def:WhereClauseRef", value.path())
                         .attr("WhereClauseOID", format!("WC.{identity}")),
                 );
                 list.push(reference);
@@ -552,25 +545,27 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
             metadata.push(list);
         }
     }
-    for dataset in &study.datasets {
-        for column in &dataset.columns {
-            for value in &column.values {
+    for dataset in study.datasets() {
+        for column in dataset.columns() {
+            for value in column.values() {
                 let identity = format!(
                     "{}.{}.{}",
-                    dataset.id, column.declaration.name.value, value.id
+                    dataset.id(),
+                    column.declaration().name.value,
+                    value.id()
                 );
-                let mut clause = Element::new("def:WhereClauseDef", &value.path)
+                let mut clause = Element::new("def:WhereClauseDef", value.path())
                     .attr("OID", format!("WC.{identity}"));
                 // One range check per where column, in written order: one
                 // value is an equality and several a membership.
-                for (position, listed) in &value.clause {
-                    let target = &dataset.columns[*position].declaration.name.value;
-                    let mut check = Element::new("RangeCheck", &value.path)
+                for (position, listed) in value.clause() {
+                    let target = &dataset.columns()[*position].declaration().name.value;
+                    let mut check = Element::new("RangeCheck", value.path())
                         .attr("Comparator", if listed.len() == 1 { "EQ" } else { "IN" })
                         .attr("SoftHard", "Soft")
-                        .attr("def:ItemOID", format!("IT.{}.{target}", dataset.id));
+                        .attr("def:ItemOID", format!("IT.{}.{target}", dataset.id()));
                     for checked in listed {
-                        let mut code = Element::new("CheckValue", &value.path);
+                        let mut code = Element::new("CheckValue", value.path());
                         code.text = Some(checked.clone());
                         check.push(code);
                     }
@@ -581,7 +576,7 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
         }
     }
     push_item_groups(&mut metadata, study, language);
-    for dataset in &study.datasets {
+    for dataset in study.datasets() {
         for (column, identity) in variants(dataset) {
             let mut item = item_definition(
                 column,
@@ -589,11 +584,12 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
                 &format!("datasets.{identity}.submission"),
                 &format!(
                     "datasets.{}.columns.{}.label",
-                    dataset.id, column.declaration.name.value
+                    dataset.id(),
+                    column.declaration().name.value
                 ),
                 language,
             );
-            if !column.values.is_empty() {
+            if !column.values().is_empty() {
                 item.push(
                     Element::new("def:ValueListRef", &item.path)
                         .attr("ValueListOID", format!("VL.{identity}")),
@@ -603,10 +599,10 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
         }
     }
     push_codelists(&mut metadata, study, language);
-    for dataset in &study.datasets {
+    for dataset in study.datasets() {
         for (column, name) in variants(dataset) {
             let meta = column
-                .declaration
+                .declaration()
                 .submission
                 .as_ref()
                 .expect("composed column");
@@ -635,14 +631,14 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
             metadata.push(node);
         }
     }
-    for dataset in &study.datasets {
+    for dataset in study.datasets() {
         let mut comments: Vec<(String, &s::Comment)> = Vec::new();
-        if let Some(c) = &dataset.metadata.comment {
-            comments.push((dataset.id.clone(), c));
+        if let Some(c) = &dataset.metadata().comment {
+            comments.push((dataset.id().to_owned(), c));
         }
         for (column, name) in variants(dataset) {
             if let Some(c) = &column
-                .declaration
+                .declaration()
                 .submission
                 .as_ref()
                 .expect("composed column")
@@ -685,10 +681,9 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
         .iter()
         .any(|reference| !identities.contains(reference))
     {
-        return Err(Finding::cause(
-            ConditionCode::SubmissionXmlInvalid,
+        return Err(xml_invalid(
             "metadata_version",
-            "schema_violation: unresolved generated metadata reference",
+            "unresolved generated metadata reference",
         ));
     }
     if references
@@ -712,22 +707,16 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
     Ok(out.into_bytes())
 }
 fn validate_profile(study: &Study) -> Result<(), Finding> {
-    let invalid = |path: &str, detail: &str| {
-        Finding::cause(
-            ConditionCode::SubmissionXmlInvalid,
-            path,
-            &format!("schema_violation: {detail}"),
-        )
-    };
-    if study.created.len() != 19 || study.created.parse::<crate::temporal::DateTime>().is_err() {
-        return Err(invalid("created", "CreationDateTime"));
+    let created = study.created();
+    if created.len() != 19 || created.parse::<yamaa_core::temporal::DateTime>().is_err() {
+        return Err(xml_invalid("created", "CreationDateTime"));
     }
     // Complete scalar facets for this closed generated element profile. The
     // immutable writer fixes element order/cardinality and generated references;
     // independent installed tests validate bytes with the unchanged official XSD.
-    for standard in &study.standards {
+    for standard in study.standards() {
         if !ast::STANDARD_NAMES.contains(&standard.name.as_str()) {
-            return Err(invalid("standards", "StandardName enumeration"));
+            return Err(xml_invalid("standards", "StandardName enumeration"));
         }
         if standard.publishing_set.as_ref().is_some_and(|set| {
             !matches!(
@@ -735,13 +724,16 @@ fn validate_profile(study: &Study) -> Result<(), Finding> {
                 "ADaM" | "CDASH" | "DEFINE-XML" | "SDTM" | "SEND"
             )
         }) {
-            return Err(invalid("standards", "StandardPublishingSet enumeration"));
+            return Err(xml_invalid(
+                "standards",
+                "StandardPublishingSet enumeration",
+            ));
         }
     }
-    for list in &study.codelists {
+    for list in study.codelists() {
         let declaration = &list.declaration;
         if declaration.items.as_ref().is_some_and(Vec::is_empty) {
-            return Err(invalid(
+            return Err(xml_invalid(
                 &format!("codelists.{}", declaration.id.name),
                 "CodeList requires an item or dictionary",
             ));
@@ -754,7 +746,7 @@ fn validate_profile(study: &Study) -> Result<(), Finding> {
                     .is_some_and(|c| c.is_ascii_alphabetic() || b"_$".contains(&c))
                 || !bytes.all(|c| c.is_ascii_alphanumeric() || b"_.".contains(&c))
             {
-                return Err(invalid(
+                return Err(xml_invalid(
                     &format!("codelists.{}.format_name", declaration.id.name),
                     "SASFormatName facet",
                 ));
