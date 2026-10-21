@@ -8,7 +8,7 @@ use crate::{
     public_table::PublicTable,
 };
 use std::sync::Arc;
-use yamaa_core::application_issue::{Fault, Stage};
+use yamaa_core::application_issue::{self as issue, Fault};
 use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::json::Value;
 use yamaa_core::project_environment::Submission;
@@ -133,7 +133,7 @@ fn listing_failure(listing: &str, written: &str, error: &ResourceError) -> Vec<D
     if let ResourceError::WrittenForm(failure) = error {
         return vec![failure.field_diagnostic(listing, written)];
     }
-    let mut issues = crate::file_application::resource_failure(Stage::Prepare, error);
+    let mut issues = crate::file_application::resource_failure(issue::Step::Prepare, error);
     for issue in &mut issues {
         issue.spec_paths = vec![listing.into()];
         issue
@@ -165,7 +165,7 @@ impl Project {
             .project()
             .and_then(|project| project.submission.as_ref().ok())
             .ok_or_else(|| {
-                crate::file_application::rejected(Stage::Project, Fault::ProjectSections)
+                crate::file_application::rejected(issue::Step::Project, Fault::ProjectSections)
             })?;
         let mut sections = Vec::new();
         let mut written = Vec::new();
@@ -584,7 +584,7 @@ impl Plan {
 /// Stack run reports in the given order into one table with the run report's
 /// columns; no report gives the columns without rows.
 pub fn stack_reports(reports: &[&PublicTable]) -> Result<PublicTable, Vec<Diagnostic>> {
-    let refused = || crate::file_application::rejected(Stage::Report, Fault::ReportStack);
+    let refused = || crate::file_application::rejected(issue::Step::Report, Fault::ReportStack);
     let Some(first) = reports.first() else {
         return crate::run_report::empty_table().map_err(|_| refused());
     };

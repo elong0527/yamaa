@@ -25,7 +25,7 @@
 
 use std::sync::Arc;
 
-use yamaa_core::application_issue::{self as issue, Fault, Stage};
+use yamaa_core::application_issue::{self as issue, Fault, Step};
 use yamaa_core::json::Value;
 
 use crate::{
@@ -90,7 +90,7 @@ fn encode(table: &PublicTable, profile: &str) -> Result<Vec<u8>, Failure> {
     )
     .map_err(|error| unrepresentable(table, error))?;
     let projection = (0..table.columns().len()).collect::<Vec<_>>();
-    let refused = |fault| vec![issue::rejected(Stage::Output, fault)];
+    let refused = |fault| vec![issue::rejected(Step::Output, fault)];
     if profile == "csv" {
         crate::csv_artifact::render(&snapshot, &projection, None).map_err(|error| match error {
             crate::csv_artifact::Error::Limit {
@@ -117,7 +117,7 @@ fn encode(table: &PublicTable, profile: &str) -> Result<Vec<u8>, Failure> {
 /// A bound the encoded file exceeds.
 fn over(resource: &'static str, limit: usize, actual: Option<usize>) -> Failure {
     vec![issue::resource_rejected(
-        Stage::Output,
+        Step::Output,
         Fault::OutputLimit,
         resource,
         limit,
@@ -136,7 +136,7 @@ fn unrepresentable(table: &PublicTable, error: TableError) -> Failure {
             required,
         } => over(resource, limit, required),
         error => {
-            let mut finding = issue::rejected(Stage::Output, Fault::OutputSchema);
+            let mut finding = issue::rejected(Step::Output, Fault::OutputSchema);
             if let TableError::ArrayType { column, .. } = error {
                 if let Some(field) = table.columns().get(column) {
                     finding
@@ -194,7 +194,7 @@ fn refusal(cause: Cause, written: &str) -> Failure {
         Cause::Collision { .. } => publication_failure(&PublicationError::InvalidTarget),
         Cause::Stage(error) | Cause::Commit(error) => at(target_failure(&error, None, written)),
         Cause::Unwind(_) => at(vec![issue::rejected(
-            Stage::Output,
+            Step::Output,
             Fault::PublicationUnwind,
         )]),
     }
@@ -250,7 +250,7 @@ mod tests {
             assert!(bytes.starts_with(b"PAR1") && bytes.ends_with(b"PAR1"));
         } else {
             let [refused] = parquet.unwrap_err().try_into().unwrap();
-            assert_eq!(refused.context["stage"], text("output"));
+            assert_eq!(refused.context["step"], text("output"));
             assert_eq!(refused.context["code"], text("parquet_codec_unavailable"));
         }
     }
@@ -266,10 +266,7 @@ mod tests {
             yamaa_core::diagnostic::ConditionCode::ApplicationRejected
         );
         assert!(refused.spec_paths.is_empty());
-        assert_eq!(
-            refused.context.keys().collect::<Vec<_>>(),
-            ["code", "stage"]
-        );
+        assert_eq!(refused.context.keys().collect::<Vec<_>>(), ["code", "step"]);
         assert_eq!(refused.context["code"], text("target_changed"));
         // A file the save entered names itself and the attempt, at no spec
         // path, whether it failed or a caller's resolver unwound.
@@ -282,7 +279,7 @@ mod tests {
         ] {
             let [stopped] = refusal(cause, "out.csv").try_into().unwrap();
             assert!(stopped.spec_paths.is_empty());
-            assert_eq!(stopped.context["stage"], text("output"));
+            assert_eq!(stopped.context["step"], text("output"));
             assert_eq!(stopped.context["code"], text(code));
             assert_eq!(stopped.context["path"], text("out.csv"));
             assert_eq!(stopped.context["entered"], Value::from(1_usize));

@@ -76,7 +76,7 @@ fn issue(failure: &Failure) -> &Diagnostic {
     issue
 }
 
-/// Assert `failure` is the engine fault `code` in the output stage, at no
+/// Assert `failure` is the engine fault `code` in the output step, at no
 /// spec path, with nothing written.
 #[track_caller]
 fn assert_output_fault(failure: &Failure, code: &str) {
@@ -84,7 +84,7 @@ fn assert_output_fault(failure: &Failure, code: &str) {
     assert_eq!(issue.code, "engine_rejected");
     assert_eq!(issue.rule, None);
     assert!(issue.spec_path.is_empty(), "{:?}", issue.spec_path);
-    assert_eq!(issue.context.get("stage"), Some(&text("output")));
+    assert_eq!(issue.context.get("step"), Some(&text("output")));
     assert_eq!(issue.context.get("code"), Some(&text(code)));
     assert!(failure.paths.is_empty());
 }
@@ -432,7 +432,7 @@ fn a_target_that_cannot_be_written_is_refused_as_a_run_refuses_it() {
     assert_eq!(
         failure.message,
         format!(
-            "cannot save {out}: the engine refused the operation in its output stage: \
+            "cannot save {out}: the engine refused the operation in its output step: \
              invalid_target [engine_rejected]"
         )
     );
@@ -488,7 +488,7 @@ fn a_file_that_cannot_be_staged_is_refused_and_leaves_nothing() {
     // attempt, at its output field and with the path its specification wrote.
     assert_eq!(ran.code, issue.code);
     assert_eq!(ran.spec_path, ["output.path"]);
-    for key in ["stage", "code", "entered", "completed"] {
+    for key in ["step", "code", "entered", "completed"] {
         assert_eq!(ran.context.get(key), issue.context.get(key), "{key}");
     }
     assert_eq!(ran.context.get("path"), Some(&text("locked/ids.csv")));

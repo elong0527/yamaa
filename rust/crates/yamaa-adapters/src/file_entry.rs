@@ -219,7 +219,7 @@ mod inventory_rejection_tests {
         assert_eq!(
             crate::project_application::selection_failure(&rejected),
             crate::file_application::rejected(
-                yamaa_core::application_issue::Stage::Prepare,
+                yamaa_core::application_issue::Step::Prepare,
                 yamaa_core::application_issue::Fault::Inventory,
             )
         );

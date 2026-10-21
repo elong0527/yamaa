@@ -389,7 +389,7 @@ mod root_read_tests {
             ),
             (
                 Failure::Unreadable,
-                crate::json!({"stage": "prepare", "code": "resource_unreadable"}),
+                crate::json!({"step": "prepare", "code": "resource_unreadable"}),
             ),
         ] {
             let rejection = select_with_resolver(

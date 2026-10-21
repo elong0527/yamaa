@@ -317,7 +317,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
     assert_eq!(
         diagnostic.context,
         BTreeMap::from([
-            ("stage".to_owned(), text("ingest")),
+            ("step".to_owned(), text("ingest")),
             ("code".to_owned(), text("resource_unreadable")),
         ])
     );

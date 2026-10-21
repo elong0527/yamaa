@@ -7,7 +7,7 @@ use crate::{
     specification_run::Attempt,
 };
 use std::any::Any;
-use yamaa_core::application_issue::{Fault, Stage};
+use yamaa_core::application_issue::{Fault, Step};
 use yamaa_core::application_observer::Scope;
 use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::domain_entry::{self, Request};
@@ -21,8 +21,8 @@ pub type Failure = Vec<Diagnostic>;
 pub fn unsupported(operation: &str, path: Option<&str>) -> Failure {
     vec![yamaa_core::application_issue::unsupported(operation, path)]
 }
-pub fn rejected(stage: Stage, fault: Fault) -> Failure {
-    vec![yamaa_core::application_issue::rejected(stage, fault)]
+pub fn rejected(step: Step, fault: Fault) -> Failure {
+    vec![yamaa_core::application_issue::rejected(step, fault)]
 }
 /// The public issues of one result: every finding up to the findings limit.
 /// Raw facts and retained reports remain complete; taking the prefix here
@@ -36,8 +36,8 @@ pub fn collect(issues: impl IntoIterator<Item = Diagnostic>) -> Failure {
 pub(crate) fn classified_resource(diagnostic: &Diagnostic) -> Failure {
     vec![diagnostic.clone()]
 }
-pub(crate) fn resource_failure(stage: Stage, error: &crate::file_resources::Error) -> Failure {
-    with_source(resource_diagnostic(stage, error), None)
+pub(crate) fn resource_failure(step: Step, error: &crate::file_resources::Error) -> Failure {
+    with_source(resource_diagnostic(step, error), None)
 }
 /// Verify a compiled value's held metadata at the start of a run, before
 /// activation or any study read. Every snapshot is captured again through the
@@ -60,18 +60,18 @@ pub(crate) fn verify_held(
             .filter(|failure| matches!(failure, R::ContentChanged | R::Missing))
             .and_then(|failure| declared(&identity, failure))
             .map_or_else(
-                || resource_failure_from(Stage::Prepare, &error, &identity),
+                || resource_failure_from(Step::Prepare, &error, &identity),
                 |diagnostic| classified_resource(&diagnostic),
             )
     })
 }
 /// A failure observed on an already captured file also names that file.
 pub(crate) fn resource_failure_from(
-    stage: Stage,
+    step: Step,
     error: &crate::file_resources::Error,
     source: &str,
 ) -> Failure {
-    with_source(resource_diagnostic(stage, error), Some(source))
+    with_source(resource_diagnostic(step, error), Some(source))
 }
 fn with_source(mut diagnostic: Diagnostic, source: Option<&str>) -> Failure {
     if let Some(source) = source {
@@ -81,10 +81,10 @@ fn with_source(mut diagnostic: Diagnostic, source: Option<&str>) -> Failure {
     }
     vec![diagnostic]
 }
-fn resource_diagnostic(stage: Stage, error: &crate::file_resources::Error) -> Diagnostic {
+fn resource_diagnostic(step: Step, error: &crate::file_resources::Error) -> Diagnostic {
     if let crate::file_resources::Error::Limit(limit) = error {
         return yamaa_core::application_issue::resource_rejected(
-            stage,
+            step,
             Fault::ResourceLimit,
             limit.resource,
             limit.limit,
@@ -92,7 +92,7 @@ fn resource_diagnostic(stage: Stage, error: &crate::file_resources::Error) -> Di
             Vec::new(),
         );
     }
-    yamaa_core::application_issue::rejected(stage, resource_fault(error))
+    yamaa_core::application_issue::rejected(step, resource_fault(error))
 }
 /// The closed code of the opaque refusal a resource failure reports. A bound
 /// reports its facts beside the code (`resource_limit`).
@@ -121,7 +121,7 @@ pub(crate) fn caller_read_failure(path: &str, error: &crate::file_resources::Err
     use yamaa_core::resource::ResourceFailure;
     match crate::file_resources::resource_failure(error) {
         Some(ResourceFailure::Boundary(limit)) => yamaa_core::application_issue::resource_rejected(
-            Stage::Prepare,
+            Step::Prepare,
             Fault::ResourceLimit,
             limit.resource,
             limit.limit,
@@ -135,7 +135,7 @@ pub(crate) fn caller_read_failure(path: &str, error: &crate::file_resources::Err
             source_span: None,
             operand_route: None,
         },
-        None => yamaa_core::application_issue::rejected(Stage::Prepare, resource_fault(error)),
+        None => yamaa_core::application_issue::rejected(Step::Prepare, resource_fault(error)),
     }
 }
 /// The closed code a refused publication reports, selected from its typed cause.
@@ -184,7 +184,7 @@ pub(crate) fn unresolved_target(
     crate::file_resources::resource_failure(error)
         .and_then(|failure| failure.target_diagnostic(field, written))
         .map_or_else(
-            || resource_failure(Stage::Output, error),
+            || resource_failure(Step::Output, error),
             |issue| vec![issue],
         )
 }
@@ -194,7 +194,7 @@ pub(crate) fn publication_failure(error: &crate::file_publication::Error) -> Fai
 
     if let E::Limit(error) = error {
         return vec![yamaa_core::application_issue::resource_rejected(
-            Stage::Output,
+            Step::Output,
             Fault::PublicationLimit,
             error.resource,
             error.limit,
@@ -203,7 +203,7 @@ pub(crate) fn publication_failure(error: &crate::file_publication::Error) -> Fai
         )];
     }
     let mut finding =
-        yamaa_core::application_issue::rejected(Stage::Output, publication_fault(error));
+        yamaa_core::application_issue::rejected(Step::Output, publication_fault(error));
     if let E::Cleanup {
         operation,
         staging,
@@ -398,9 +398,9 @@ impl Domain {
         })();
         let (report, artifacts) = report.map_err(|error| match &error {
             specification_report::Error::ResourceLimit(refusal) => {
-                refusal.issues(Stage::Output, Fault::PublicationReportLimit)
+                refusal.issues(Step::Output, Fault::PublicationReportLimit)
             }
-            _ => rejected(Stage::Output, Fault::PublicationReportLimit),
+            _ => rejected(Step::Output, Fault::PublicationReportLimit),
         })?;
         let fields = [("report", self.result.report_file()), ("path", !diagnostic)]
             .into_iter()
@@ -498,7 +498,7 @@ impl Domain {
             }
             Cause::Unwind(payload) => {
                 attempt.entered = file + 1;
-                let issues = at(rejected(Stage::Output, Fault::PublicationUnwind), attempt);
+                let issues = at(rejected(Step::Output, Fault::PublicationUnwind), attempt);
                 attempt.unwind = Some(payload);
                 issues
             }
@@ -585,7 +585,7 @@ pub fn run<A: ActivationPort>(
 ) {
     let attempt = prepared.build(run, activation, scope);
     if let Some(error) = file_preparation::opaque_resource_failure(&attempt.dataset) {
-        let failure = resource_failure(Stage::Capture, error);
+        let failure = resource_failure(Step::Capture, error);
         return (attempt, Err(failure));
     }
     scope.phase(yamaa_core::application_observer::Phase::Output);
@@ -741,14 +741,14 @@ mod collect_tests {
 
     #[test]
     fn the_findings_limit_keeps_the_first_ten_thousand_across_stages() {
-        use yamaa_core::application_issue::{rejected, Fault, Stage};
+        use yamaa_core::application_issue::{rejected, Fault, Step};
         fn row(index: usize) -> Diagnostic {
-            let stage = if index < 6_000 {
-                Stage::Ingest
+            let step = if index < 6_000 {
+                Step::Ingest
             } else {
-                Stage::Output
+                Step::Output
             };
-            let mut finding = rejected(stage, Fault::Internal);
+            let mut finding = rejected(step, Fault::Internal);
             finding.spec_paths = vec![format!("columns.C{index}")];
             finding
         }
@@ -827,7 +827,7 @@ mod tests {
                 .unwrap();
             resources
                 .publication_target_from(origin.base_source, origin.written)
-                .map_err(|error| resource_failure(Stage::Output, &error))
+                .map_err(|error| resource_failure(Step::Output, &error))
         });
         assert!(result.output().is_some());
         assert!(result.result.publication_items().last().unwrap().1.len() > 8 * 1024 * 1024);
@@ -1297,7 +1297,7 @@ mod tests {
                     .unwrap();
                 resources
                     .publication_target_from(origin.base_source, origin.written)
-                    .map_err(|error| resource_failure(Stage::Output, &error))
+                    .map_err(|error| resource_failure(Step::Output, &error))
             });
             let mut domain = domain;
             assert!(domain.output().is_some());

@@ -43,7 +43,7 @@ impl ResourceFailure {
     pub fn field_diagnostic(self, field: &str, written_path: &str) -> Diagnostic {
         if let Self::Boundary(error) = self {
             let mut diagnostic = crate::application_issue::resource_rejected(
-                crate::application_issue::Stage::Capture,
+                crate::application_issue::Step::Capture,
                 crate::application_issue::Fault::ResourceLimit,
                 error.resource,
                 error.limit,

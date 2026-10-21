@@ -32,7 +32,7 @@ mod fix;
 mod tests;
 
 use crate::yaml_decode::DecodeFailure;
-use yamaa_core::application_issue::{Fault, Stage};
+use yamaa_core::application_issue::{Fault, Step};
 use yamaa_core::diagnostic::Diagnostic;
 
 /// Every finding the lint reports, in the order the style guide names them.
@@ -109,7 +109,7 @@ impl Error {
     pub fn diagnostics(&self) -> Vec<Diagnostic> {
         use yamaa_core::application_issue::{rejected, resource_rejected};
         match self {
-            Self::Unavailable => vec![rejected(Stage::Prepare, Fault::YamlReaderUnavailable)],
+            Self::Unavailable => vec![rejected(Step::Prepare, Fault::YamlReaderUnavailable)],
             Self::Read { file, error } => {
                 vec![crate::file_application::caller_read_failure(file, error)]
             }
@@ -117,7 +117,7 @@ impl Error {
             Self::Write { error, .. } => {
                 if let crate::file_publication::Error::Limit(limit) = error {
                     return vec![resource_rejected(
-                        Stage::Output,
+                        Step::Output,
                         Fault::PublicationLimit,
                         limit.resource,
                         limit.limit,
@@ -125,7 +125,7 @@ impl Error {
                         Vec::new(),
                     )];
                 }
-                vec![rejected(Stage::Output, write_code(error))]
+                vec![rejected(Step::Output, write_code(error))]
             }
         }
     }
@@ -182,15 +182,15 @@ fn source_diagnostics(file: &str, failure: &DecodeFailure) -> Vec<Diagnostic> {
             })
             .collect(),
         DecodeFailure::Limit(limit) => vec![resource_rejected(
-            Stage::Prepare,
+            Step::Prepare,
             Fault::ResourceLimit,
             limit.resource,
             limit.limit,
             limit.actual,
             Vec::new(),
         )],
-        DecodeFailure::Unavailable => vec![rejected(Stage::Prepare, Fault::YamlReaderUnavailable)],
-        DecodeFailure::Internal => vec![rejected(Stage::Prepare, Fault::YamlAdmission)],
+        DecodeFailure::Unavailable => vec![rejected(Step::Prepare, Fault::YamlReaderUnavailable)],
+        DecodeFailure::Internal => vec![rejected(Step::Prepare, Fault::YamlAdmission)],
     }
 }
 

@@ -40,7 +40,7 @@ fn target_admission_keeps_typed_publication_fault_and_original_error_in_both_hos
             assert_eq!(
                 yamaa_core::json::Value::Object(finding.context.clone()),
                 crate::json!({
-                    "stage": "publication_target_admission",
+                    "step": "publication_target_admission",
                     "code": code,
                     "artifact": usize::MAX,
                     "cause": cause,
@@ -77,7 +77,7 @@ fn public_define_issue_prefix_keeps_complete_raw_metadata_and_diagnostics_in_bot
             let diagnostics = (0..length)
                 .map(|index| {
                     let mut finding = application_issue::rejected(
-                        application_issue::Stage::Define,
+                        application_issue::Step::Define,
                         application_issue::Fault::Internal,
                     );
                     finding.spec_paths = vec![format!("datasets.D{index}.artifact")];

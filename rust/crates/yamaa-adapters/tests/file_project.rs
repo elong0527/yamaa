@@ -2263,7 +2263,7 @@ mod file {
                 assert_eq!(refusal.actual, expected.actual);
                 assert_eq!(refusal.spec_paths, ["codelists[1]"]);
                 let expected_rows = refusal.issues(
-                    yamaa_core::application_issue::Stage::Environment,
+                    yamaa_core::application_issue::Step::Environment,
                     yamaa_core::application_issue::Fault::ResourceLimit,
                 );
                 assert_eq!(
@@ -2308,7 +2308,7 @@ mod file {
                     assert_eq!(
                         yamaa_core::json::Value::Object(rows[0].context.clone()),
                         yamaa_adapters::json!({
-                            "stage": "environment", "code": "resource_limit",
+                            "step": "environment", "code": "resource_limit",
                             "resource": expected.resource, "limit": expected.limit,
                             "actual": expected.actual,
                         }),
@@ -2375,7 +2375,7 @@ mod file {
                             &Limits::yaml_depth(Limits::YAML_DEPTH + 1).unwrap_err()
                         );
                         yamaa_adapters::json!({"phase": "engine", "condition": "engine_rejected", "rule": null, "spec_paths": ["$"], "context": {
-                            "stage":"environment", "code":"resource_limit",
+                            "step":"environment", "code":"resource_limit",
                             "resource":"yaml_depth", "limit":Limits::YAML_DEPTH,
                             "actual":Limits::YAML_DEPTH + 1,
                         }})

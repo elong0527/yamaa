@@ -42,7 +42,7 @@ pub(super) const TEMPLATES: &[(&str, &str)] = &[
     ("duplicate_order_term", "output.order_by names column {column} more than once"),
     ("duplicate_specification_name", "the project lists two specifications named {name}"),
     ("empty_string_present_unsupported", "input {dataset} declares empty_string: present, which a delimited source cannot hold"),
-    ("engine_rejected", "the engine refused the operation in its {stage} stage: {code}"),
+    ("engine_rejected", "the engine refused the operation in its {step} step: {code}"),
     ("field_parse_failed", "field {field} of input {dataset} holds '{value}', which does not parse as {type}"),
     ("forward_reference", "column {column} reads {dependency}, which is declared after it"),
     ("function_call_failed", "the call to project function {call} failed"),

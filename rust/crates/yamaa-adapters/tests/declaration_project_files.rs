@@ -1114,7 +1114,7 @@ mod declaration {
             assert!(issue.spec_paths.is_empty());
             assert_eq!(
                 Value::Object(issue.context.clone()),
-                json!({"stage": "environment", "code": "resource_unreadable"})
+                json!({"step": "environment", "code": "resource_unreadable"})
             );
         }
 

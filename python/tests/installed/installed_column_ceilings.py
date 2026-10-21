@@ -265,7 +265,7 @@ class ColumnCeilings(unittest.TestCase):
                 json.loads(result.issues["context"][0]),
                 {
                     "code": "resource_limit",
-                    "stage": "prepare",
+                    "step": "prepare",
                     "phase": "inheritance",
                     "resource": "parent_occurrences",
                     "limit": 8192,

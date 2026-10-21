@@ -216,7 +216,7 @@ def test_compiler_refusal_details_on_check_and_run(
         assert issue["spec_paths"] == [path]
         assert json.loads(issue["context"]) == {
             "code": "compiler_limit",
-            "stage": "prepare",
+            "step": "prepare",
             "resource": resource,
             "limit": limit,
             "actual": actual,
@@ -258,7 +258,7 @@ def test_inheritance_depth_admits_original_chain_and_parent_occurrences_keep_fix
         assert issue["spec_paths"] == []
         assert issue["context"] == {
             "code": "resource_limit",
-            "stage": "prepare",
+            "step": "prepare",
             "phase": "inheritance",
             "resource": "parent_occurrences",
             "limit": 8192,

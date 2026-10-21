@@ -113,7 +113,7 @@ def run(study):
 def problems(result):
     """Each issue's condition and the facts of its context that a lock
     verification decides."""
-    facts = ("package", "reason", "expected", "actual", "stage", "code")
+    facts = ("package", "reason", "expected", "actual", "step", "code")
     return [
         (
             issue["condition"],
@@ -210,7 +210,7 @@ def test_a_lock_the_engine_cannot_read_refuses_the_run_before_any_version(
     result = run(study)
     assert result.output is None
     assert problems(result) == [
-        ("engine_rejected", {"stage": "build", "code": "opaque_host"})
+        ("engine_rejected", {"step": "build", "code": "opaque_host"})
     ]
 
 

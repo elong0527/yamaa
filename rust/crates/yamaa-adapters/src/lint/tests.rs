@@ -1298,21 +1298,21 @@ fn lint_faults_keep_their_existing_codes_and_resource_facts() {
     for (error, context) in [
         (
             Error::Unavailable,
-            crate::json!({"stage":"prepare", "code":"yaml_reader_unavailable"}),
+            crate::json!({"step":"prepare", "code":"yaml_reader_unavailable"}),
         ),
         (
             Error::Source {
                 file: "spec.yaml".into(),
                 failure: crate::yaml_decode::DecodeFailure::Internal,
             },
-            crate::json!({"stage":"prepare", "code":"yaml_admission"}),
+            crate::json!({"step":"prepare", "code":"yaml_admission"}),
         ),
         (
             Error::Write {
                 file: "spec.yaml".into(),
                 error: crate::file_publication::Error::Io(std::io::Error::other("write failed")),
             },
-            crate::json!({"stage":"output", "code":"output_publication_failed"}),
+            crate::json!({"step":"output", "code":"output_publication_failed"}),
         ),
         (
             Error::Write {
@@ -1321,7 +1321,7 @@ fn lint_faults_keep_their_existing_codes_and_resource_facts() {
                     crate::host_resources::Failure::Cancelled,
                 ),
             },
-            crate::json!({"stage":"output", "code":"host_publication_failure"}),
+            crate::json!({"step":"output", "code":"host_publication_failure"}),
         ),
         (
             Error::Write {
@@ -1330,7 +1330,7 @@ fn lint_faults_keep_their_existing_codes_and_resource_facts() {
                     crate::host_resources::Failure::Cleanup,
                 ),
             },
-            crate::json!({"stage":"output", "code":"host_publication_failure"}),
+            crate::json!({"step":"output", "code":"host_publication_failure"}),
         ),
         (
             Error::Write {
@@ -1341,7 +1341,7 @@ fn lint_faults_keep_their_existing_codes_and_resource_facts() {
                     actual: Some(1025),
                 }),
             },
-            crate::json!({"stage":"output", "code":"publication_limit",
+            crate::json!({"step":"output", "code":"publication_limit",
                 "resource":"output_bytes", "limit":1024, "actual":1025}),
         ),
     ] {
@@ -1603,7 +1603,7 @@ mod files {
                 assert_eq!(
                     error.diagnostics(),
                     [yamaa_core::application_issue::rejected(
-                        yamaa_core::application_issue::Stage::Prepare,
+                        yamaa_core::application_issue::Step::Prepare,
                         yamaa_core::application_issue::Fault::ResourceUnreadable
                     )]
                 );
@@ -1637,7 +1637,7 @@ mod files {
             assert_eq!(
                 error.diagnostics(),
                 [yamaa_core::application_issue::rejected(
-                    yamaa_core::application_issue::Stage::Prepare,
+                    yamaa_core::application_issue::Step::Prepare,
                     yamaa_core::application_issue::Fault::ResourceUnreadable
                 )]
             );

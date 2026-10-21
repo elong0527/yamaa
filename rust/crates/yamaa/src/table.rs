@@ -127,9 +127,11 @@ impl Engine {
     /// (FILE-7, FILE-8). The path returned is absolute, with forward
     /// slashes, or the reference a caller's resolver gave its target (D38).
     ///
-    /// A target that cannot be written fails as a run's does, as
-    /// `engine_rejected` in the `output` stage with the save's code, such as
-    /// `invalid_target` for a missing directory, a directory or a link. A
+    /// A target that cannot be written fails as a run's does. One in a
+    /// directory that does not exist, a directory or a link fails with
+    /// FILE-7's or FILE-8's condition under `output`, at no field, naming
+    /// `out` as given (#3030 D189); any other fails as `engine_rejected` in
+    /// the `output` step with the save's code, such as `invalid_target`. A
     /// table with a column of a type neither profile writes, such as the list
     /// columns of an issues table, fails as `engine_rejected` with the code
     /// `output_schema`, naming the column. A refusal names the call as

@@ -345,7 +345,7 @@ fn any_other_failure_to_read_a_caller_path_stays_the_opaque_engine_fault() {
         "engine_rejected".to_owned(),
         None,
         Vec::new(),
-        r#"{"code":"resource_unreadable","stage":"prepare"}"#.to_owned(),
+        r#"{"code":"resource_unreadable","step":"prepare"}"#.to_owned(),
     )];
     spec_routes(&engine, "dm.yaml", &expected);
     project_routes(&engine, "project.yaml", "dm.yaml", &expected);

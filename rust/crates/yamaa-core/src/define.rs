@@ -5,7 +5,7 @@
 //! byte encoders without interpreting submission declarations.
 use crate::json::Value as JsonValue;
 use crate::{
-    application_issue::{Fault, Stage},
+    application_issue::{Fault, Step},
     ast::{self, Transport},
     diagnostic::{ConditionCode, Diagnostic},
     limits::Limits,
@@ -818,7 +818,7 @@ pub fn resource_diagnostic(
     use ResourceObservation as R;
     if let R::Limit(error) = observation {
         let mut diagnostic = crate::application_issue::resource_rejected(
-            Stage::Define,
+            Step::Define,
             Fault::ResourceLimit,
             error.resource,
             error.limit,
@@ -849,7 +849,7 @@ pub fn resource_diagnostic(
                     unreachable!("normative resource cause selected")
                 }
             };
-            let mut diagnostic = crate::application_issue::rejected(Stage::Define, fault);
+            let mut diagnostic = crate::application_issue::rejected(Step::Define, fault);
             diagnostic.spec_paths = vec![path.into()];
             diagnostic
                 .context
@@ -884,7 +884,7 @@ pub fn publication_diagnostic(
 ) -> Diagnostic {
     let mut diagnostic = match stage {
         PublicationFailure::TargetAdmission(fault) => {
-            crate::application_issue::rejected(Stage::PublicationTargetAdmission, fault)
+            crate::application_issue::rejected(Step::PublicationTargetAdmission, fault)
         }
         PublicationFailure::Publication => Diagnostic {
             code: ConditionCode::OutputPublicationFailed,
@@ -944,7 +944,7 @@ mod projection_tests {
             assert_eq!(diagnostic.code, ConditionCode::ApplicationRejected);
             assert_eq!(diagnostic.code.definition().rule, None);
             assert_eq!(diagnostic.spec_paths, ["datasets.DM.artifact"]);
-            assert_eq!(diagnostic.context["stage"], "define");
+            assert_eq!(diagnostic.context["step"], "define");
             assert_eq!(diagnostic.context["code"], "resource_limit");
             assert_eq!(diagnostic.context["path"], "published.csv");
             assert_eq!(diagnostic.context["resource"], resource);
@@ -982,7 +982,7 @@ mod projection_tests {
             assert_eq!(finding.code, ConditionCode::ApplicationRejected);
             assert_eq!(finding.spec_paths, ["datasets.DM.artifact"]);
             assert_eq!(finding.context["path"], "dm.csv");
-            assert_eq!(finding.context["stage"], "define");
+            assert_eq!(finding.context["step"], "define");
             assert_eq!(finding.context["code"], "resource_limit");
             assert_eq!(finding.context["resource"], "columns");
             assert_eq!(finding.context["limit"], Limits::COLUMNS);

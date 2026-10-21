@@ -26,8 +26,10 @@ macro_rules! vocabulary {
 }
 
 vocabulary! {
-    /// Where the engine refused, named in an engine fault's `stage` context key.
-    Stage {
+    /// The step of an operation in which the engine refused, named in an
+    /// engine fault's `step` context key (P-PHASE-1: a phase is a
+    /// condition's, never an engine step's).
+    Step {
         Bind => "bind",
         Build => "build",
         Capture => "capture",
@@ -164,16 +166,16 @@ pub fn unsupported(operation: &str, path: Option<&str>) -> Diagnostic {
     }
 }
 
-/// An engine fault: the stage that refused and its closed code. No rule
+/// An engine fault: the step that refused and its closed code. No rule
 /// is fabricated.
-pub fn rejected(stage: Stage, fault: Fault) -> Diagnostic {
+pub fn rejected(step: Step, fault: Fault) -> Diagnostic {
     Diagnostic {
         code: ConditionCode::ApplicationRejected,
         spec_paths: Vec::new(),
         context: vec![
             (
-                String::from("stage"),
-                JsonValue::String(stage.as_str().into()),
+                String::from("step"),
+                JsonValue::String(step.as_str().into()),
             ),
             (
                 String::from("code"),
@@ -190,14 +192,14 @@ pub fn rejected(stage: Stage, fault: Fault) -> Diagnostic {
 /// A policy refusal names its exhausted capacity without inventing a language
 /// rule. The caller supplies only admitted, typed resource facts.
 pub fn resource_rejected(
-    stage: Stage,
+    step: Step,
     fault: Fault,
     resource: &str,
     limit: usize,
     actual: Option<usize>,
     spec_paths: Vec<String>,
 ) -> Diagnostic {
-    let mut finding = rejected(stage, fault);
+    let mut finding = rejected(step, fault);
     finding.spec_paths = spec_paths;
     finding
         .context
@@ -239,11 +241,11 @@ mod tests {
     }
 
     #[test]
-    fn stages_and_faults_are_closed_lists_of_distinct_codes() {
+    fn steps_and_faults_are_closed_lists_of_distinct_codes() {
         for spellings in [
-            Stage::ALL
+            Step::ALL
                 .iter()
-                .map(|stage| stage.as_str())
+                .map(|step| step.as_str())
                 .collect::<Vec<_>>(),
             Fault::ALL
                 .iter()
@@ -257,10 +259,10 @@ mod tests {
     }
 
     #[test]
-    fn an_engine_fault_names_its_stage_and_code_and_cites_no_rule() {
-        for &stage in Stage::ALL {
+    fn an_engine_fault_names_its_step_and_code_and_cites_no_rule() {
+        for &step in Step::ALL {
             for &fault in Fault::ALL {
-                let finding = rejected(stage, fault);
+                let finding = rejected(step, fault);
                 assert_eq!(finding.code, ConditionCode::ApplicationRejected);
                 assert_eq!(finding.rule(), None);
                 assert!(finding.spec_paths.is_empty());
@@ -268,7 +270,7 @@ mod tests {
                     finding.context,
                     [
                         ("code".into(), JsonValue::String(fault.as_str().into())),
-                        ("stage".into(), JsonValue::String(stage.as_str().into())),
+                        ("step".into(), JsonValue::String(step.as_str().into())),
                     ]
                     .into()
                 );

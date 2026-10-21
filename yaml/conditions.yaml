@@ -136,7 +136,7 @@ conditions:
     message: "input {dataset} declares empty_string: present, which a delimited source cannot hold"
   engine_rejected:
     phases: [engine]
-    message: "the engine refused the operation in its {stage} stage: {code}"
+    message: "the engine refused the operation in its {step} step: {code}"
   field_parse_failed:
     phases: [ingest]
     message: "field {field} of input {dataset} holds '{value}', which does not parse as {type}"

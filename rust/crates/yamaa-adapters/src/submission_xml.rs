@@ -5,7 +5,7 @@
 //! element tree, its schema checks, escaping and the bytes.
 use std::collections::BTreeSet;
 use yamaa_core::{
-    application_issue::{Fault, Stage},
+    application_issue::{Fault, Step},
     ast,
     define_diagnostics::{xml_invalid, xml_whitespace},
     diagnostic::ConditionCode,
@@ -97,7 +97,7 @@ impl Element {
     fn write(&self, level: usize, out: &mut String) -> Result<(), Finding> {
         let append = |out: &mut String, text: &str| -> Result<(), Finding> {
             Limits::output_extension(out.len(), text.len()).map_err(|bound| {
-                Finding::limit(&self.path, Stage::Define, Fault::OutputLimit, bound)
+                Finding::limit(&self.path, Step::Define, Fault::OutputLimit, bound)
                     .with_detail("render_byte_limit")
             })?;
             out.push_str(text);

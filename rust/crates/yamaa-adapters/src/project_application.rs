@@ -8,7 +8,7 @@ use crate::{
     specification_diagnostics::{self as diagnostics, Rejection},
     specification_source::Error as SourceError,
 };
-use yamaa_core::application_issue::{Fault, Stage};
+use yamaa_core::application_issue::{Fault, Step};
 use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::{project_function::Language, specification::PrepareError};
 
@@ -46,8 +46,8 @@ pub(crate) fn environment_path(environment: &str) -> Result<String, crate::file_
     let environment = std::path::absolute(environment).map_err(|_| Error::InvalidPath)?;
     crate::file_resolver::caller_path(&environment)
 }
-fn refused(stage: Stage) -> Failure {
-    file_application::rejected(stage, Fault::IssueProjection)
+fn refused(step: Step) -> Failure {
+    file_application::rejected(step, Fault::IssueProjection)
 }
 /// The issues of a refused inherited preparation; an opaque host failure
 /// reports the projection fault of the preparation stage.
@@ -56,26 +56,26 @@ fn inherited(
 ) -> Failure {
     diagnostics::inheritance_failure_ref(error)
         .map(Rejection::into_issues)
-        .unwrap_or_else(|_| refused(Stage::Prepare))
+        .unwrap_or_else(|_| refused(Step::Prepare))
 }
 pub fn failure(error: &Error) -> Failure {
     match error {
         Error::Configuration(crate::file_configuration::Error::Path(error)) => {
-            file_application::resource_failure(Stage::Prepare, error)
+            file_application::resource_failure(Step::Prepare, error)
         }
-        Error::Schema(_) => file_application::rejected(Stage::Prepare, Fault::ShippedSchema),
+        Error::Schema(_) => file_application::rejected(Step::Prepare, Fault::ShippedSchema),
         Error::Project(error) => project_failure(error),
     }
 }
 fn project_failure(error: &file_project::Error) -> Failure {
     match error {
         file_project::Error::Resource(error) => {
-            file_application::resource_failure(Stage::Environment, error)
+            file_application::resource_failure(Step::Environment, error)
         }
         file_project::Error::Document(error) => match error {
             crate::file_preparation::Error::Entry(error)
             | crate::file_preparation::Error::Resource(error) => {
-                file_application::resource_failure(Stage::Prepare, error)
+                file_application::resource_failure(Step::Prepare, error)
             }
             crate::file_preparation::Error::ResourceFinding { diagnostic, .. }
             | crate::file_preparation::Error::PreparationFinding { diagnostic, .. } => {
@@ -87,9 +87,9 @@ fn project_failure(error: &file_project::Error) -> Failure {
                     PrepareError::Limit(_) | PrepareError::Numeric { .. },
                 ),
             ) => diagnostics::failure(error, None).into_issues(),
-            crate::file_preparation::Error::Compile(_) => refused(Stage::Prepare),
+            crate::file_preparation::Error::Compile(_) => refused(Step::Prepare),
             crate::file_preparation::Error::Inventory(_) => {
-                file_application::rejected(Stage::Prepare, Fault::Inventory)
+                file_application::rejected(Step::Prepare, Fault::Inventory)
             }
         },
         file_project::Error::Compile(run) => compile_failure(run),
@@ -101,7 +101,7 @@ fn project_failure(error: &file_project::Error) -> Failure {
 fn compile_failure(run: &crate::specification_run::RejectedRun) -> Failure {
     match &run.rejection.error {
         PrepareError::Invalid(_) => {
-            crate::specification_check::rejected(run).unwrap_or_else(|_| refused(Stage::Check))
+            crate::specification_check::rejected(run).unwrap_or_else(|_| refused(Step::Check))
         }
         PrepareError::Unsupported(features) => features
             .iter()
@@ -139,7 +139,7 @@ fn environment_failure(error: &EnvironmentFailure<crate::file_resources::Error>)
             Ok(issues)
         }
         EnvironmentFailure::Interrupted { error, .. } => {
-            return file_application::resource_failure(Stage::Environment, error)
+            return file_application::resource_failure(Step::Environment, error)
         }
         EnvironmentFailure::Root(error @ SourceError::Decode { identity, .. }) => {
             diagnostics::root_boundary(error, identity)
@@ -148,7 +148,7 @@ fn environment_failure(error: &EnvironmentFailure<crate::file_resources::Error>)
             if let Some(error) = diagnostics::root_limit(error) {
                 return environment_projection_failure(error);
             }
-            return file_application::rejected(Stage::Environment, Fault::EnvironmentBoundary);
+            return file_application::rejected(Step::Environment, Fault::EnvironmentBoundary);
         }
     };
     projected.unwrap_or_else(environment_projection_failure)
@@ -156,14 +156,14 @@ fn environment_failure(error: &EnvironmentFailure<crate::file_resources::Error>)
 fn environment_projection_failure(error: crate::project_environment_diagnostics::Error) -> Failure {
     match error {
         crate::project_environment_diagnostics::Error::ResourceLimit(refusal) => {
-            refusal.issues(Stage::Environment, Fault::ResourceLimit)
+            refusal.issues(Step::Environment, Fault::ResourceLimit)
         }
         // A file a 1.0 project names failed for a host reason no condition
         // classifies: the opaque resource refusal, as for the project file.
         crate::project_environment_diagnostics::Error::Resource(fault) => {
-            file_application::rejected(Stage::Environment, fault)
+            file_application::rejected(Step::Environment, fault)
         }
-        _ => refused(Stage::Environment),
+        _ => refused(Step::Environment),
     }
 }
 pub fn check(specification: &str, environment: &str, host: Language) -> Failure {
@@ -182,9 +182,9 @@ pub fn workflow_rejection(error: &crate::file_workflow::Error) -> Failure {
 fn workflow_issues(error: &crate::file_workflow::Error) -> Failure {
     preparation_issues(error).unwrap_or_else(|error| match error {
         IssueError::Original(error) => workflow_failure(error),
-        IssueError::Projection => refused(Stage::Check),
+        IssueError::Projection => refused(Step::Check),
         IssueError::ResourceLimit(refusal) => {
-            refusal.issues(Stage::Environment, Fault::ResourceLimit)
+            refusal.issues(Step::Environment, Fault::ResourceLimit)
         }
     })
 }
@@ -201,7 +201,7 @@ fn workflow_failure(error: &crate::file_workflow::Error) -> Failure {
     use crate::file_workflow::Error as W;
     match error {
         W::Caller { path, error } => vec![file_application::caller_read_failure(path, error)],
-        W::Schema(_) => file_application::rejected(Stage::Prepare, Fault::ShippedSchema),
+        W::Schema(_) => file_application::rejected(Step::Prepare, Fault::ShippedSchema),
         W::Environment(environment) => project_failure(environment.error()),
         W::Entry(entry) => entry_failure(entry.error()),
     }
@@ -214,10 +214,10 @@ fn entry_failure(error: &crate::file_entry::Error) -> Failure {
     match error {
         E::Caller { path, error } => vec![file_application::caller_read_failure(path, error)],
         E::Document(D::Entry(error) | D::Resource(error)) => {
-            file_application::resource_failure(Stage::Prepare, error)
+            file_application::resource_failure(Step::Prepare, error)
         }
         E::Snapshot { identity, error } => {
-            file_application::resource_failure_from(Stage::Prepare, error, identity)
+            file_application::resource_failure_from(Step::Prepare, error, identity)
         }
         E::Document(D::ResourceFinding { diagnostic, .. })
         | E::Document(D::PreparationFinding { diagnostic, .. }) => {
@@ -229,10 +229,8 @@ fn entry_failure(error: &crate::file_entry::Error) -> Failure {
                 PrepareError::Limit(_) | PrepareError::Numeric { .. },
             ),
         )) => diagnostics::failure(error, None).into_issues(),
-        E::Document(D::Compile(_)) => refused(Stage::Prepare),
-        E::Document(D::Inventory(_)) => {
-            file_application::rejected(Stage::Prepare, Fault::Inventory)
-        }
+        E::Document(D::Compile(_)) => refused(Step::Prepare),
+        E::Document(D::Inventory(_)) => file_application::rejected(Step::Prepare, Fault::Inventory),
     }
 }
 // Semantic findings have already passed the complete static preflight. These
@@ -245,7 +243,7 @@ fn preparation_boundary(
     let I::Entry(source) = error else {
         return match diagnostics::inheritance_failure_ref(error) {
             Ok(rejection @ Rejection::Limit(_)) => rejection.into_issues(),
-            _ => refused(Stage::Prepare),
+            _ => refused(Step::Prepare),
         };
     };
     if matches!(source, S::Findings(_) | S::Decode { .. }) {
@@ -259,7 +257,7 @@ fn preparation_boundary(
                 ..
             }
         ) {
-            return refused(Stage::Prepare);
+            return refused(Step::Prepare);
         }
     }
     inherited(error)
@@ -477,7 +475,7 @@ mod resource_tests {
                 cause,
             )));
             let mut context = crate::json!({
-                "stage":"environment", "code":"resource_limit", "resource":resource, "limit":limit,
+                "step":"environment", "code":"resource_limit", "resource":resource, "limit":limit,
             });
             if let Some(actual) = actual {
                 context["actual"] = actual.into();
@@ -506,13 +504,13 @@ mod resource_tests {
                 yamaa_core::submission_inventory::MetadataError::Shape,
             )
         };
-        let original = file_application::rejected(Stage::Prepare, Fault::Inventory);
+        let original = file_application::rejected(Step::Prepare, Fault::Inventory);
         let project = failure(&Error::Project(file_project::Error::Document(inventory())));
         assert_eq!(project, original);
         assert_eq!(project.len(), 1);
         assert_eq!(
             Value::Object(project[0].context.clone()),
-            crate::json!({"stage":"prepare", "code":"inventory"})
+            crate::json!({"step":"prepare", "code":"inventory"})
         );
     }
 
@@ -526,18 +524,18 @@ mod resource_tests {
                     error: crate::file_resources::Error::Changed,
                 },
                 crate::json!({
-                    "stage":"prepare", "code":"resource_changed", "source":"/study/input/dm.csv",
+                    "step":"prepare", "code":"resource_changed", "source":"/study/input/dm.csv",
                 }),
             ),
             (
                 E::Document(D::Resource(crate::file_resources::Error::OutsideRoots)),
-                crate::json!({"stage":"prepare", "code":"resource_outside_roots"}),
+                crate::json!({"step":"prepare", "code":"resource_outside_roots"}),
             ),
             (
                 E::Document(D::Inventory(
                     yamaa_core::submission_inventory::MetadataError::Shape,
                 )),
-                crate::json!({"stage":"prepare", "code":"inventory"}),
+                crate::json!({"step":"prepare", "code":"inventory"}),
             ),
         ];
         for (error, context) in cases {
@@ -599,7 +597,7 @@ mod resource_tests {
         assert_eq!(
             Value::Object(issue.context.clone()),
             crate::json!({
-                "code":"resource_limit", "stage":"prepare", "phase":"validation", "resource":"semantic_depth", "limit":128,
+                "code":"resource_limit", "step":"prepare", "phase":"validation", "resource":"semantic_depth", "limit":128,
             })
         );
     }

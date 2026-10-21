@@ -235,12 +235,12 @@ impl FileSpecification {
         field: &str,
     ) -> Result<crate::publication::AnchoredTarget, crate::file_application::Failure> {
         use crate::file_application::{resource_failure, unresolved_target};
-        use yamaa_core::application_issue::Stage;
+        use yamaa_core::application_issue::Step;
         let origin = self
             .run
             .document()
             .written_output_field_origin(field)
-            .ok_or_else(|| resource_failure(Stage::Output, &ResourceError::InvalidPath))?;
+            .ok_or_else(|| resource_failure(Step::Output, &ResourceError::InvalidPath))?;
         run.resources()
             .publication_target_from(origin.base_source, origin.written)
             .map_err(|error| {

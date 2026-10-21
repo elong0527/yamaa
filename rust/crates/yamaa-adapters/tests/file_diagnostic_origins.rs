@@ -852,7 +852,7 @@ mod file {
                         assert_eq!(
                             yamaa_core::json::Value::Object(issue.context.clone()),
                             json!({
-                                "stage":"prepare", "code":"compiler_limit", "resource":resource, "limit":limit, "actual":actual,
+                                "step":"prepare", "code":"compiler_limit", "resource":resource, "limit":limit, "actual":actual,
                             })
                         );
                     }
