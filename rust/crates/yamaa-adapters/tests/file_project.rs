@@ -3552,7 +3552,7 @@ mod file {
                     specification: &study.path("root.yaml"),
                     environment: None,
                 },
-                Language::Python,
+                Some(Language::Python),
             )
             .unwrap_or_else(|error| {
                 panic!(
@@ -3610,7 +3610,7 @@ mod file {
                             specification: &study.path("entry/root.yaml"),
                             environment: None,
                         },
-                        Language::Python,
+                        Some(Language::Python),
                     )
                 else {
                     panic!("plain route must retain its preparation rejection");

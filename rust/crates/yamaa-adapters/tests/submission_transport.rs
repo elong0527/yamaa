@@ -116,7 +116,7 @@ mod transport {
             define["standard"].as_str().unwrap(),
             Some(define["created"].as_str().unwrap()),
             "0.0.0",
-            Language::Python,
+            Some(Language::Python),
             None,
         )
     }
@@ -191,7 +191,7 @@ mod transport {
                     define["standard"].as_str().unwrap(),
                     Some(define["created"].as_str().unwrap()),
                     "0.0.0",
-                    host,
+                    Some(host),
                     None,
                 );
                 let oracle = case.join("expected/error.yaml");

@@ -113,7 +113,9 @@ impl yamaa_core::application_observer::Observer for ObserverBridge<'_> {
 
 pub(crate) struct EngineShared {
     pub resolver: Option<Arc<ResolverBridge>>,
-    pub language: yamaa_core::project_function::Language,
+    /// The host language, or none for an engine that claims no host language
+    /// (#3030 section 2.10).
+    pub language: Option<yamaa_core::project_function::Language>,
     pub runtime_name: String,
     pub runtime_version: String,
     pub functions: Option<Arc<dyn ProjectFunctions>>,
@@ -127,10 +129,12 @@ impl EngineShared {
                 .resolver
                 .clone()
                 .map(|resolver| Arc::new(ResolverBridge { inner: resolver })),
-            language: options.host_language.into_core(),
+            language: options.host_language.map(HostLanguage::into_core),
             runtime_name: options.runtime_name.clone(),
             runtime_version: options.runtime_version.clone(),
-            functions: options.functions.clone(),
+            // Implementations are named per host language, so an engine that
+            // claims none has no function to call: its port stays empty.
+            functions: options.host_language.and(options.functions.clone()),
             observer: options.observer.clone(),
         }
     }
@@ -474,7 +478,9 @@ fn run_member(
     let project = prepared.run().has_project();
     // Without project functions the port is empty: a member that calls a
     // project function is unsupported before it reads data, and any other
-    // member, with or without a project, runs as a host runs it.
+    // member, with or without a project, runs as a host runs it. An engine
+    // that claims no host language keeps no functions, so this refuses its
+    // calls too.
     let functions: &dyn ProjectFunctions = match shared.functions.as_deref() {
         Some(functions) => functions,
         None if !prepared.run().compiled().called_functions().is_empty() => {

@@ -29,7 +29,8 @@ pub fn prepare(
     specification_schema: Arc<CapturedSchema>,
     project_schemas: project_source::ProjectSchemas,
 ) -> Result<FileSpecification, Error> {
-    let mut environment = capture_environment(&mut resources, environment, host, project_schemas)?;
+    let mut environment =
+        capture_environment(&mut resources, environment, Some(host), project_schemas)?;
     let document = file_preparation::prepare_document(
         &mut resources,
         specification,
@@ -65,8 +66,10 @@ pub fn prepare(
 /// same approved reader: for a 0.5 project, the environment file it links for
 /// the host and that file's lock and functions; for a 1.0 project, the host's
 /// lock and every function file it lists (D8); and the codelist files of
-/// either. Static workflow preparation reuses this transfer without
-/// introducing a second capture or any activation or study-source port.
+/// either. An engine that claims no host language (`host` is none) reads no
+/// environment file and no lock. Static workflow preparation reuses this
+/// transfer without introducing a second capture or any activation or
+/// study-source port.
 ///
 /// `schemas` decide whether a 1.0 project is read
 /// ([`project_source::ProjectSchemas::versioned`]): public calls pass the
@@ -74,7 +77,7 @@ pub fn prepare(
 pub(crate) fn capture_environment(
     resources: &mut Resources,
     written: &str,
-    host: Language,
+    host: Option<Language>,
     schemas: project_source::ProjectSchemas,
 ) -> Result<project_source::OwnedEnvironment, Error> {
     let mut reader = crate::file_metadata::Reader { resources };

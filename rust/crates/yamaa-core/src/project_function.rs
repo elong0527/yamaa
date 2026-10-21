@@ -82,20 +82,24 @@ pub enum CallFinding {
 /// Immutable definition admitted with every inferable coverage obligation.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Function {
-    language: Language,
+    /// The host language whose callable the build binds, or none on an engine
+    /// that claims no host language (#3030 section 2.10).
+    language: Option<Language>,
     definition: ast::Function,
 }
 impl Function {
     /// The environment has already admitted the complete definition collection
     /// once. Transfer its definitions without repeating admission or copying
     /// their test cases.
-    pub(crate) fn from_admitted(language: Language, definition: ast::Function) -> Self {
+    pub(crate) fn from_admitted(language: Option<Language>, definition: ast::Function) -> Self {
         Self {
             language,
             definition,
         }
     }
-    pub fn language(&self) -> Language {
+    /// The host language whose callable the build binds; none on an engine
+    /// that claims no host language, which binds no callable.
+    pub fn language(&self) -> Option<Language> {
         self.language
     }
     /// The lowered definition.
@@ -109,13 +113,20 @@ impl Function {
     /// The callable this host binds. Admission refuses a 0.5 definition
     /// without a valid one for its language; a 1.0 function file may name
     /// none for this host, and a call to it then fails before any data is
-    /// read (FUNC-1).
+    /// read (FUNC-1). An engine that claims no host language binds none, so
+    /// the callable is empty.
     pub fn call(&self) -> &str {
-        callable_of(self.language, &self.definition)
+        self.language
+            .map_or("", |language| callable_of(language, &self.definition))
     }
-    /// Whether the definition names a callable for this host (FUNC-1).
-    pub fn implemented(&self) -> bool {
-        self.definition.implementation(self.language).is_some()
+    /// The host language this definition names no callable for, so that a
+    /// call to it fails before any data is read (FUNC-1). None when it names
+    /// one, and on an engine that claims no host language, which misses no
+    /// implementation: it runs no project function, and a run that calls one
+    /// is refused instead (D110).
+    pub fn missing_implementation(&self) -> Option<Language> {
+        self.language
+            .filter(|&language| self.definition.implementation(language).is_none())
     }
     /// Reuse the shared exact-type/default/missing invocation signature without
     /// inventing versions or a logical-to-host parameter mapping.
@@ -192,10 +203,10 @@ impl Function {
         findings
     }
     pub fn admit(language: Language, definition: ast::Function) -> Result<Self, Vec<Finding>> {
-        let findings = validate(language, &definition);
+        let findings = validate(Some(language), &definition);
         if findings.is_empty() {
             Ok(Self {
-                language,
+                language: Some(language),
                 definition,
             })
         } else {
@@ -425,11 +436,13 @@ fn function_file(def: &ast::Function) -> bool {
 /// lexical tag order. Cases with invalid arguments/results cannot supply coverage.
 ///
 /// A 0.5 definition binds one callable, for `language`, the language its
-/// environment file's key states. A 1.0 function file is language-neutral:
-/// every callable it names must be one of its language, and each parameter
-/// name a name in every language it implements, whichever host runs the
-/// build (FUNC-4, FUNC-8).
-pub fn validate(language: Language, def: &ast::Function) -> Vec<Finding> {
+/// environment file's key states; without a language it has no valid
+/// callable, although an engine that claims no host language reads no
+/// environment file and so admits no 0.5 definition. A 1.0 function file is
+/// language-neutral: every callable it names must be one of its language,
+/// and each parameter name a name in every language it implements, whichever
+/// host runs the build (FUNC-4, FUNC-8).
+pub fn validate(language: Option<Language>, def: &ast::Function) -> Vec<Finding> {
     let mut findings = Vec::new();
     if !identifier(&def.name.name) {
         findings.push(Finding::InvalidName);
@@ -448,10 +461,10 @@ pub fn validate(language: Language, def: &ast::Function) -> Vec<Finding> {
             .map(|implementation| implementation.language)
             .collect()
     } else {
-        if !callable(language, callable_of(language, def)) {
+        if !language.is_some_and(|language| callable(language, callable_of(language, def))) {
             findings.push(Finding::InvalidCallable);
         }
-        vec![language]
+        language.into_iter().collect()
     };
     if def.description.text.is_empty() {
         findings.push(Finding::EmptyDescription);

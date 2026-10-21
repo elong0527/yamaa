@@ -204,7 +204,7 @@ impl PreparedEnvironment {
     }
 }
 impl OwnedEnvironment {
-    pub(crate) fn without_environment(host: Language) -> Self {
+    pub(crate) fn without_environment(host: Option<Language>) -> Self {
         Self {
             project: None,
             origins: SourceOrigins::default(),
@@ -367,7 +367,7 @@ pub fn prepare<P: ProjectCapturePort>(
     adapt_preparation(application::prepare(
         &mut Decoder(schemas),
         source,
-        host,
+        Some(host),
         port,
     ))
 }
