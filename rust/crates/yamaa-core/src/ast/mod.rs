@@ -282,10 +282,15 @@ pub struct InputSource {
     pub profile: Option<Profile>,
     pub types: Vec<(Named, ColumnType)>,
     pub encoding: Option<Text>,
+    /// A 1.0 input's `byte_order_mark: true`: the csv source begins with one
+    /// UTF-8 byte-order mark, which is skipped (CSV-10). 0.5 has no such
+    /// field.
+    pub byte_order_mark: bool,
     pub schema: Option<Text>,
     pub empty_string: EmptyString,
     pub ordinal: Option<Named>,
-    /// Of `types`, written even when it declares no field (NAME-8).
+    /// Of `types`, written even when it declares no field (NAME-8), and of
+    /// `byte_order_mark`, written whatever its value (CSV-10).
     pub written: Written,
 }
 

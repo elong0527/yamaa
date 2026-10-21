@@ -1,0 +1,11 @@
+phase: ingest
+condition: source_byte_order_mark
+spec_paths:
+  - input.DM.path
+rule: CSV-16
+context:
+  dataset: DM
+  path: input/dm.csv
+  record: 1
+  field: 1
+  declared: false

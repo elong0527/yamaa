@@ -40,6 +40,7 @@ pub fn source(
         types,
         profile,
         encoding: encoding.map(Into::into),
+        byte_order_mark: false,
         empty_string_present: false,
         ordinal: None,
     }
