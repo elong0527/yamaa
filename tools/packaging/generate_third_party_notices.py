@@ -4,16 +4,18 @@ The yamaa wheels, the installed R package and the command-line binaries
 statically link Rust crates from the locked graph. Each host's
 LICENSE-THIRD-PARTY.txt lists the third-party crates that the host's shipped
 crate links: its normal dependency closure on each of the supported TARGETS,
+with the features that the host's release build enables (BUILD_FEATURES),
 without procedural macros, which run inside the compiler. Crates that only
-build scripts or procedural macros use, and the crates of other platforms,
-are not linked and are not listed; the source packages carry their license
-files with their vendored sources. python/ holds the copy of the Python
-packages, which covers yamaa-python, R/yamaa/inst/ the copy of the R package,
-which covers yamaa-r, and rust/crates/yamaa-cli/ the copy of the command-line
-archives, which covers yamaa-cli. Each entry names the one license that yamaa
-relies on, with the license, copyright and NOTICE texts that the crate ships
-for it. The inventory comes from `cargo metadata --locked` for rust/Cargo.lock
-and the texts from the crate packages Cargo unpacks.
+build scripts or procedural macros use, and crates that only other features
+or other platforms select, are not linked and are not listed; the source
+packages carry their license files with their vendored sources. python/ holds
+the copy of the Python packages, which covers yamaa-python, R/yamaa/inst/ the
+copy of the R package, which covers yamaa-r, and rust/crates/yamaa-cli/ the
+copy of the command-line archives, which covers yamaa-cli. Each entry names
+the one license that yamaa relies on, with the license, copyright and NOTICE
+texts that the crate ships for it. Each closure comes from `cargo tree` over
+rust/Cargo.lock (build_closure), the crates' metadata from `cargo metadata
+--locked`, and the texts from the crate packages Cargo unpacks.
 
 The native code also links the Rust standard library of the toolchain that
 rust/rust-toolchain.toml pins. Its licensing statement and the licenses of its
@@ -109,6 +111,22 @@ CRATES_IO = "registry+https://github.com/rust-lang/crates.io-index"
 # The targets whose linked crates the notices list: those that the wheels, the
 # command-line binaries and the R package are built for.
 TARGETS = check_minimum_rust.TARGETS
+# The features that each host's release build enables besides its binding's
+# default features, which decide the crates that the binding links (#3470).
+# maturin builds the wheels with the features that [tool.maturin] in
+# python/pyproject.toml names; the one cargo build of R/yamaa/src/Makevars.in
+# and Makevars.win.in builds the R package, and the native-cli lane of
+# .github/workflows/native.yml the command-line binaries, with no feature
+# options. tools/tests/test_third_party_notices.py holds this table to those
+# builds.
+BUILD_FEATURES = {
+    "python": ("extension-module",),
+    "r": (),
+    "cli": (),
+}
+# A package as `cargo tree --format {p}` prints it: its name, its version after
+# a v, and for a package that is not from crates.io its source in parentheses.
+TREE_PACKAGE = re.compile(r"(\S+) v(\S+)(?: \(.+\))?")
 SPDX_TEXTS = Path(__file__).with_name("spdx")
 SPDX_RELEASE = "3.29.0"
 WIDTH = 78
@@ -329,19 +347,72 @@ class LibraryUnit:
         return f"{self.locked['name']} {self.locked['version']}"
 
 
-def locked_metadata(target=None):
-    """Resolve the locked graph with every feature of every workspace member,
-    for every platform or, given a target, for that target alone."""
+def locked_metadata():
+    """Describe the packages of the locked graph and its workspace members:
+    the graph resolved with every feature of every workspace member, for
+    every platform."""
     command = ["cargo", "metadata", "--locked", "--all-features"]
     command += ["--format-version", "1"]
-    if target is not None:
-        command += ["--filter-platform", target]
     return json.loads(subprocess.check_output(command, cwd=WORKSPACE))
 
 
-def linked_metadata():
-    """The locked graph of each of TARGETS, by target."""
-    return {target: locked_metadata(target) for target in TARGETS}
+def build_closure(crate, features, target):
+    """Return the (name, version) of each package that a build of a shipped
+    crate with its default features and `features` links for a target, the
+    crate itself included.
+
+    `cargo tree` prints the graph that Cargo's feature resolver gives that one
+    build: the package's normal dependencies that its features and the target
+    select, without dev-dependencies, and without build scripts' dependencies
+    and procedural macros, which run while compiling. The graph of `cargo
+    metadata` cannot stand in for it, whatever its feature options: it
+    resolves the whole workspace, with every member's dev-dependencies and
+    the features that any platform's dependencies ask for, and it keeps an
+    optional dependency that only a weak `dependency?/feature` item names, so
+    it holds crates that no build compiles (#3470).
+    """
+    command = ["cargo", "tree", "--locked", "--package", crate]
+    if features:
+        command += ["--features", ",".join(features)]
+    command += ["--target", target, "--edges", "normal,no-proc-macro"]
+    command += ["--prefix", "none", "--format", "{p}"]
+    printed = subprocess.check_output(command, cwd=WORKSPACE, encoding="utf-8")
+    found = set()
+    for line in printed.splitlines():
+        # A package printed before ends in (*).
+        match = TREE_PACKAGE.fullmatch(line.removesuffix(" (*)"))
+        if match is None:
+            raise ValueError(
+                f"cargo tree printed {line!r} for {crate} on {target}, not a package"
+            )
+        found.add((match[1], match[2]))
+    return found
+
+
+def linked_packages(metadata):
+    """Return the IDs of the packages that each host's shipped crate links on
+    any of TARGETS, built as the host's release build builds it, by host."""
+    identities = {}
+    for package in metadata["packages"]:
+        key = (package["name"], package["version"])
+        identities.setdefault(key, []).append(package["id"])
+    linked = {}
+    for host in copies():
+        crate = engine_bundle.BINDINGS[host]
+        linked[host] = set()
+        for target in TARGETS:
+            closure = build_closure(crate, BUILD_FEATURES[host], target)
+            for name, version in sorted(closure):
+                found = identities.get((name, version), [])
+                if len(found) != 1:
+                    raise ValueError(
+                        f"{crate} links {name} {version} on {target}, which the "
+                        f"locked graph holds {len(found)} times, not once"
+                    )
+                linked[host].add(found[0])
+            if not any(name == crate for name, _ in closure):
+                raise ValueError(f"cargo tree printed no {crate} for {target}")
+    return linked
 
 
 def parse_expression(text):
@@ -485,59 +556,12 @@ def copies():
     return {"python": PYTHON, "r": R_INST, "cli": CLI}
 
 
-def dependency_closure(metadata, crate):
-    """Return the package IDs that a shipped crate links, itself included.
-
-    The closure follows normal edges and stops at procedural macros, which run
-    inside the compiler instead of the shipped binaries; build scripts and
-    their dependencies run only while compiling. A graph that `cargo metadata
-    --filter-platform` resolved for one target holds only that target's edges.
-    """
+def third_party(metadata, linked):
+    """Return the third-party packages among the IDs of linked packages, in a
+    stable order."""
     packages = {package["id"]: package for package in metadata["packages"]}
-    nodes = {node["id"]: node for node in metadata["resolve"]["nodes"]}
-    roots = [
-        identity
-        for identity in metadata["workspace_members"]
-        if packages[identity]["name"] == crate
-    ]
-    if len(roots) != 1:
-        raise ValueError(f"the workspace must contain the shipped crate {crate} once")
-    seen, pending = set(), roots
-    while pending:
-        identity = pending.pop()
-        if identity in seen:
-            continue
-        seen.add(identity)
-        for dependency in nodes[identity]["deps"]:
-            kinds = {kind["kind"] for kind in dependency["dep_kinds"]}
-            target = packages[dependency["pkg"]]
-            if None in kinds and not any(
-                "proc-macro" in item["kind"] for item in target["targets"]
-            ):
-                pending.append(dependency["pkg"])
-    return seen
-
-
-def linked_closure(graphs, crate):
-    """Return the package IDs that a shipped crate links on any target;
-    `graphs` maps each of TARGETS to its locked graph."""
-    return set().union(*(dependency_closure(graph, crate) for graph in graphs.values()))
-
-
-def third_party(graphs, crate):
-    """Return the third-party packages that a shipped crate links on any
-    target, in a stable order."""
-    packages = {
-        package["id"]: package
-        for graph in graphs.values()
-        for package in graph["packages"]
-    }
-    members = set().union(*(graph["workspace_members"] for graph in graphs.values()))
-    selected = [
-        packages[identity]
-        for identity in linked_closure(graphs, crate)
-        if identity not in members
-    ]
+    members = set(metadata["workspace_members"])
+    selected = [packages[identity] for identity in linked if identity not in members]
     return sorted(
         selected,
         key=lambda package: (package["name"], version_key(package["version"])),
@@ -1097,6 +1121,16 @@ def library_tree(entry, indent=""):
     return lines
 
 
+def build_features(host):
+    """Name the features that a host's release build enables, as its notices
+    say it."""
+    features = BUILD_FEATURES[host]
+    if not features:
+        return "its default features"
+    named = ", ".join(features)
+    return f"its default features and the feature{'s' * (len(features) > 1)} {named}"
+
+
 def render(notices, library, host):
     """Render a host's notices file from the texts of its crates and the
     standard library."""
@@ -1175,12 +1209,13 @@ def render(notices, library, host):
     )
     lines += paragraph(
         "The list covers the third-party crates that the shipped crate "
-        f"{engine_bundle.BINDINGS[host]} links, as locked in rust/Cargo.lock: its "
-        f"normal dependency closure on each of the targets {', '.join(TARGETS)}, "
-        "without procedural macros. Crates that only build scripts or procedural "
-        "macros use, and crates of other platforms, are not linked, so they are "
-        "not listed. Crates come from crates.io unless an entry names another "
-        "source."
+        f"{engine_bundle.BINDINGS[host]} links, as locked in rust/Cargo.lock and "
+        f"built with {build_features(host)}: its normal dependency closure on "
+        f"each of the targets {', '.join(TARGETS)}, without procedural macros. "
+        "Crates that only build scripts or procedural macros use, and crates "
+        "that only other features or other platforms select, are not linked, so "
+        "they are not listed. Crates come from crates.io unless an entry names "
+        "another source."
     )
     lines += paragraph(
         "Where a crate offers a choice of licenses, yamaa relies on the first "
@@ -1271,9 +1306,10 @@ def lender(package, packages):
     return lenders[0]
 
 
-def notices_for(graphs, crate):
-    """The notices of the third-party crates that a shipped crate links."""
-    packages = third_party(graphs, crate)
+def notices_for(metadata, linked):
+    """The notices of the third-party crates among the IDs of a shipped
+    crate's linked packages."""
+    packages = third_party(metadata, linked)
     return [crate_notice(package, lender(package, packages)) for package in packages]
 
 
@@ -1300,16 +1336,12 @@ def committed_entries(text):
     }
 
 
-def license_expression(graphs, notices):
+def license_expression(metadata, linked, notices):
     """Combine the licenses of the members that the Python binding links with
-    those its linked crates rely on; `notices` are the Python host's."""
-    packages = {
-        package["id"]: package
-        for graph in graphs.values()
-        for package in graph["packages"]
-    }
-    members = set().union(*(graph["workspace_members"] for graph in graphs.values()))
-    linked = linked_closure(graphs, engine_bundle.BINDINGS["python"])
+    those its linked crates rely on; `linked` holds the IDs of the packages
+    that the Python binding links and `notices` are the Python host's."""
+    packages = {package["id"]: package for package in metadata["packages"]}
+    members = set(metadata["workspace_members"])
     licenses = set()
     for identity in linked & members:
         member = packages[identity]
@@ -1402,13 +1434,14 @@ def check_musl_notice(release):
     return [f"{relative}: names a GNU license ({found[0]})"] if found else []
 
 
-def check(graphs, library):
+def check(metadata, closures, library):
     """Return each host's notices and every finding for the committed notices
-    and license copies; `graphs` maps each of TARGETS to its locked graph."""
+    and license copies; `closures` maps each host to the IDs of the packages
+    that its shipped crate links (linked_packages)."""
     selected, errors = {}, []
     for host, directory in copies().items():
         crate = engine_bundle.BINDINGS[host]
-        selected[host] = notices_for(graphs, crate)
+        selected[host] = notices_for(metadata, closures[host])
         expected = render(selected[host], library, host).encode("utf-8")
         linked = {(notice.name, notice.version) for notice in selected[host]}
         path = directory / NOTICES
@@ -1434,7 +1467,7 @@ def check(graphs, library):
     project = python_project()
     errors += check_copies(project)
     errors += check_musl_notice(library.release)
-    expression = license_expression(graphs, selected["python"])
+    expression = license_expression(metadata, closures["python"], selected["python"])
     if project["license"] != expression:
         errors.append(
             f"python/pyproject.toml: license must be {expression!r} to cover the "
@@ -1443,13 +1476,13 @@ def check(graphs, library):
     return selected, errors
 
 
-def write(graphs, library):
+def write(metadata, closures, library):
     """Write each host's notices and project license copy; return each host's
     notices."""
     project_license = (ROOT / "LICENSE").read_bytes()
     selected = {}
     for host, directory in copies().items():
-        selected[host] = notices_for(graphs, engine_bundle.BINDINGS[host])
+        selected[host] = notices_for(metadata, closures[host])
         payload = render(selected[host], library, host).encode("utf-8")
         (directory / NOTICES).write_bytes(payload)
         # The command line's archives carry the Python packages' copy.
@@ -1468,12 +1501,13 @@ def main():
     args = parser.parse_args()
     errors = []
     try:
-        graphs = linked_metadata()
+        metadata = locked_metadata()
+        closures = linked_packages(metadata)
         library = standard_library()
         if args.write:
-            selected = write(graphs, library)
+            selected = write(metadata, closures, library)
         else:
-            selected, errors = check(graphs, library)
+            selected, errors = check(metadata, closures, library)
     except (ValueError, OSError, subprocess.CalledProcessError) as error:
         parser.exit(1, f"{error}\n")
     if errors:

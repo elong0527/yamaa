@@ -26,6 +26,26 @@ fn read_with(path: &std::path::Path, options: &Options) -> Result<PublicTable, o
     }
 }
 
+/// The condition a refusal of the source reports (ODM-1).
+fn condition(error: &odm_items::Error) -> &'static str {
+    yamaa_core::diagnostic::OdmReadFinding {
+        refusal: error,
+        path: "source.xml",
+        dataset: None,
+    }
+    .diagnostic()
+    .condition()
+}
+
+/// The one issue a refusal of `source`, named as given, reports.
+#[track_caller]
+fn issue(result: Result<PublicTable, Error>, source: &str) -> yamaa_core::diagnostic::Diagnostic {
+    let error = result.expect_err("the source must be refused");
+    error
+        .issue(source)
+        .unwrap_or_else(|| panic!("{error:?} reports no issue"))
+}
+
 fn read_document(document: &str) -> Result<PublicTable, odm_items::Error> {
     read_bytes("document.xml", document.as_bytes(), &Options::default())
 }
@@ -44,11 +64,12 @@ fn rows(document: &str) -> PublicTable {
     read_document(document).unwrap()
 }
 
-/// Assert a refusal's stable code and that its message contains `message`.
+/// Assert the condition a refusal reports and that its reason contains
+/// `message`.
 #[track_caller]
-fn refused(result: Result<PublicTable, odm_items::Error>, code: &str, message: &str) {
+fn refused(result: Result<PublicTable, odm_items::Error>, expected: &str, message: &str) {
     let error = result.expect_err("the input must be refused");
-    assert_eq!(error.code(), code, "{error}");
+    assert_eq!(condition(&error), expected, "{error}");
     let text = error.to_string();
     assert!(
         text.contains(message),
@@ -170,7 +191,7 @@ mod python_reader_suite {
                 r#"<ItemData ItemOID="I.NULL" IsNull="Yes"/>"#,
                 r#"<ItemData ItemOID="I.NULL" IsNull="Yes" Value="unexpected"/>"#,
             )),
-            "unsupported_value",
+            "source_odm_value_unsupported",
             "null and contains a value",
         );
     }
@@ -202,7 +223,7 @@ mod python_reader_suite {
                     r#"<ItemData ItemOID="I.TEST"><Value>PD-L1</Value></ItemData>"#,
                     &format!(r#"<ItemData ItemOID="I.TEST">{value}</ItemData>"#),
                 )),
-                "unsupported_value",
+                "source_odm_value_unsupported",
                 "Value contains child elements",
             );
         }
@@ -220,7 +241,7 @@ mod python_reader_suite {
                     r#"<ItemData ItemOID="I.TEST"><Value>PD-L1</Value></ItemData>"#,
                     &format!(r#"<ItemData ItemOID="I.TEST">{value}</ItemData>"#),
                 )),
-                "unsupported_value",
+                "source_odm_value_unsupported",
                 "Value child is in an unsupported namespace",
             );
         }
@@ -247,7 +268,7 @@ mod python_reader_suite {
         ] {
             refused(
                 read_document(&edit(document, original, replacement)),
-                "unsupported_value",
+                "source_odm_value_unsupported",
                 "contains text outside its value",
             );
         }
@@ -287,7 +308,7 @@ mod python_reader_suite {
             ] {
                 refused(
                     read_document(&edit(document, original, &replacement)),
-                    "unsupported_value",
+                    "source_odm_value_unsupported",
                     "contains text outside its value",
                 );
             }
@@ -324,7 +345,7 @@ mod python_reader_suite {
                 r#"<ItemData ItemOID="I.DATE" Value="2026-01-02"/>"#,
                 r#"<ItemData ItemOID="I.DATE" oc:Value="2026-01-02"/>"#,
             )),
-            "unsupported_value",
+            "source_odm_value_unsupported",
             "Value attribute is in an unsupported namespace",
         );
     }
@@ -365,7 +386,7 @@ mod python_reader_suite {
                     &format!(r#"ODMVersion="{base}""#),
                     &format!(r#"ODMVersion="{bad}""#),
                 )),
-                "unsupported_document",
+                "source_odm_document_unsupported",
                 "conflicts with namespace",
             );
         }
@@ -405,7 +426,7 @@ mod python_reader_suite {
         );
         refused(
             read_document(&document),
-            "unsupported_layout",
+            "source_odm_layout_unsupported",
             "nested ClinicalData is not supported",
         );
     }
@@ -423,7 +444,7 @@ mod python_reader_suite {
         );
         refused(
             read_document(&document),
-            "unsupported_layout",
+            "source_odm_layout_unsupported",
             "nested Study is not supported",
         );
     }
@@ -441,7 +462,7 @@ mod python_reader_suite {
         );
         refused(
             read_document(&document),
-            "unsupported_layout",
+            "source_odm_layout_unsupported",
             "nested MetaDataVersion is not supported",
         );
     }
@@ -454,7 +475,7 @@ mod python_reader_suite {
                 r#"<Study OID="S.13">"#,
                 r#"<Study OID="S.13"><ClinicalData StudyOID="S.13" MetaDataVersionOID="M.13"><Study OID="EVIL"></Study></ClinicalData>"#,
             )),
-            "unsupported_layout",
+            "source_odm_layout_unsupported",
             "nested Study is not supported",
         );
     }
@@ -467,7 +488,7 @@ mod python_reader_suite {
                 r#"<MetaDataVersion OID="M.13" Name="Metadata">"#,
                 r#"<MetaDataVersion OID="M.13" Name="Metadata"><ClinicalData StudyOID="S.13" MetaDataVersionOID="M.13"><MetaDataVersion OID="EVIL.M"></MetaDataVersion></ClinicalData>"#,
             )),
-            "unsupported_layout",
+            "source_odm_layout_unsupported",
             "nested MetaDataVersion is not supported",
         );
     }
@@ -514,7 +535,7 @@ mod python_reader_suite {
         );
         refused(
             read_document(&document),
-            "unsupported_layout",
+            "source_odm_layout_unsupported",
             "requires FormData plus one",
         );
     }
@@ -527,7 +548,7 @@ mod python_reader_suite {
                 r#"<ItemData ItemOID="I.DATE" Value="2026-01-02"/>"#,
                 r#"<ItemData ItemOID="I.DATE" Value="outer"><ItemData ItemOID="I.EMPTY" Value="inner"/></ItemData>"#,
             )),
-            "unsupported_layout",
+            "source_odm_layout_unsupported",
             "nested ItemData is not supported",
         );
     }
@@ -540,7 +561,7 @@ mod python_reader_suite {
                 r#"<ItemData ItemOID="I.DATE" Value="2026-01-02"/>"#,
                 r#"<ItemData ItemOID="I.DATE" Value="outer"><ItemGroupData ItemGroupOID="G.13"><ItemData ItemOID="I.EMPTY" Value="inner"/></ItemGroupData></ItemData>"#,
             )),
-            "unsupported_layout",
+            "source_odm_layout_unsupported",
             "nested ItemData is not supported",
         );
     }
@@ -566,7 +587,11 @@ mod python_reader_suite {
                 r#"<ItemData ItemOID="I.DATE" Value="2026-01-02"/>"#,
                 &format!(r#"<ItemData ItemOID="I.DATE" Value="2026-01-02">{container}</ItemData>"#),
             );
-            refused(read_document(&document), "unsupported_layout", message);
+            refused(
+                read_document(&document),
+                "source_odm_layout_unsupported",
+                message,
+            );
         }
     }
 
@@ -578,7 +603,7 @@ mod python_reader_suite {
                 r#"<SubjectData SubjectKey="SUBJECT-1""#,
                 r#"<ItemData ItemOID="I.DATE" Value="rogue"><SubjectData SubjectKey="ROGUE"/></ItemData><SubjectData SubjectKey="SUBJECT-1""#,
             )),
-            "unsupported_layout",
+            "source_odm_layout_unsupported",
             "SubjectData inside ItemData",
         );
     }
@@ -618,7 +643,7 @@ mod python_reader_suite {
         );
         refused(
             read_bytes("multiple.tar.gz", &archive, &Options::default()),
-            "archive_member",
+            "source_odm_archive_member",
             "exactly one XML member",
         );
         let options = Options {
@@ -665,7 +690,7 @@ mod python_reader_suite {
         };
         refused(
             read_bytes("too-many-members.tar", &tar.finish(), &options),
-            "limit",
+            "source_odm_limit_exceeded",
             "more than 3 members",
         );
     }
@@ -678,7 +703,7 @@ mod python_reader_suite {
         };
         refused(
             read_bytes("odm20.xml", ODM_20.as_bytes(), &options),
-            "invalid_option",
+            "value_not_permitted",
             "max_archive_members must be at least 1",
         );
     }
@@ -692,7 +717,7 @@ mod python_reader_suite {
         );
         refused(
             read_bytes("unsafe.tar.gz", &archive, &Options::default()),
-            "archive_member",
+            "source_odm_archive_member",
             "not a regular file",
         );
     }
@@ -703,7 +728,7 @@ mod python_reader_suite {
         for cut in [30, 250] {
             refused(
                 read_bytes("truncated.tar.gz", &archive[..cut], &Options::default()),
-                "invalid_archive",
+                "source_odm_archive_invalid",
                 "cannot read ODM archive",
             );
         }
@@ -713,7 +738,7 @@ mod python_reader_suite {
     fn malformed_xml_has_helper_error() {
         refused(
             read_document(r#"<ODM xmlns="http://www.cdisc.org/ns/odm/v1.3">"#),
-            "malformed_xml",
+            "source_odm_xml_malformed",
             "malformed ODM XML",
         );
     }
@@ -726,13 +751,273 @@ mod table {
     fn documents_without_items_produce_the_complete_schema() {
         let document = edit(
             ODM_13,
-            &ODM_13[ODM_13.find("  <ClinicalData").unwrap()..ODM_13.find("</ODM>").unwrap()],
+            &ODM_13[ODM_13.find("    <SubjectData").unwrap()
+                ..ODM_13.find("  </ClinicalData>").unwrap()],
             "",
         );
         let table = rows(&document);
         assert_eq!(table.rows(), 0);
         assert_eq!(table.columns().len(), 30);
         assert_eq!(table.batches().len(), 1);
+    }
+}
+
+/// The snapshot policy (ODM-1, P-ODMIN-1): a snapshot reads, transactional
+/// content and documents without clinical data are refused, and audit
+/// records, signatures, annotations, reference data and administrative data
+/// are skipped.
+mod snapshots {
+    use super::*;
+
+    /// The item rows of the 1.3 fixture, which every skipped element and
+    /// every present transaction type below leaves as they are.
+    fn items(document: &str) -> Vec<Option<String>> {
+        values(&rows(document))
+    }
+
+    #[test]
+    fn a_snapshot_or_a_document_without_a_file_type_reads() {
+        let expected = items(ODM_13);
+        let snapshot = edit(
+            ODM_13,
+            r#"ODMVersion="1.3""#,
+            r#"ODMVersion="1.3" FileType="Snapshot""#,
+        );
+        assert_eq!(items(&snapshot), expected);
+        let snapshot_20 = edit(
+            ODM_20,
+            r#"ODMVersion="2.0""#,
+            r#"ODMVersion="2.0" FileType="Snapshot""#,
+        );
+        assert_eq!(rows(&snapshot_20).rows(), 2);
+    }
+
+    /// A transactional root is refused when the root starts, so nothing after
+    /// it is read, not even a malformed element.
+    #[test]
+    fn a_transactional_file_is_refused_before_any_item() {
+        let transactional = edit(
+            ODM_13,
+            r#"ODMVersion="1.3""#,
+            r#"ODMVersion="1.3" FileType="Transactional""#,
+        );
+        refused(
+            read_document(&transactional),
+            "source_odm_transactional",
+            "ODM declares FileType Transactional, so the document is not a snapshot",
+        );
+        let broken = edit(&transactional, "</ClinicalData>", "</Clinical>");
+        refused(
+            read_document(&broken),
+            "source_odm_transactional",
+            "FileType Transactional",
+        );
+    }
+
+    #[test]
+    fn a_removal_on_any_element_read_is_refused() {
+        for element in ["SubjectData", "StudyEventData", "FormData"] {
+            let opening = format!("<{element} ");
+            let document = edit(
+                ODM_13,
+                &opening,
+                &format!("{opening}TransactionType=\"Remove\" "),
+            );
+            refused(
+                read_document(&document),
+                "source_odm_transactional",
+                &format!("{element} declares TransactionType Remove"),
+            );
+        }
+        // The fixture's item group declares Insert.
+        let group = edit(
+            ODM_13,
+            r#"TransactionType="Insert""#,
+            r#"TransactionType="Remove""#,
+        );
+        refused(
+            read_document(&group),
+            "source_odm_transactional",
+            "ItemGroupData declares TransactionType Remove",
+        );
+        let item = edit(
+            ODM_13,
+            r#"<ItemData ItemOID="I.EMPTY" Value=""/>"#,
+            r#"<ItemData ItemOID="I.EMPTY" Value="" TransactionType="Remove"/>"#,
+        );
+        refused(
+            read_document(&item),
+            "source_odm_transactional",
+            "ItemData declares TransactionType Remove",
+        );
+        let group_20 = edit(
+            ODM_20,
+            r#"<ItemGroupData ItemGroupOID="IG.20""#,
+            r#"<ItemGroupData TransactionType="Remove" ItemGroupOID="IG.20""#,
+        );
+        refused(
+            read_document(&group_20),
+            "source_odm_transactional",
+            "ItemGroupData declares TransactionType Remove",
+        );
+    }
+
+    /// Insert, Update, Upsert and Context read as the present value; the item
+    /// group's keeps its column.
+    #[test]
+    fn other_transaction_types_read_as_the_present_value() {
+        let expected = items(ODM_13);
+        for value in ["Insert", "Update", "Upsert", "Context"] {
+            let document = ODM_13
+                .replace(
+                    "<SubjectData ",
+                    &format!("<SubjectData TransactionType=\"{value}\" "),
+                )
+                .replace(
+                    r#"TransactionType="Insert""#,
+                    &format!("TransactionType=\"{value}\""),
+                )
+                .replace(
+                    r#"<ItemData ItemOID="I.DATE""#,
+                    &format!("<ItemData TransactionType=\"{value}\" ItemOID=\"I.DATE\""),
+                );
+            let table = rows(&document);
+            assert_eq!(values(&table), expected, "{value}");
+            assert_eq!(cell(&table, "TransactionType", 0).as_deref(), Some(value));
+        }
+    }
+
+    /// A value ODM does not define is not read as either: values compare
+    /// exactly, as XML attribute values do.
+    #[test]
+    fn undefined_file_and_transaction_types_are_invalid_attributes() {
+        let file_type = edit(
+            ODM_13,
+            r#"ODMVersion="1.3""#,
+            r#"ODMVersion="1.3" FileType="snapshot""#,
+        );
+        refused(
+            read_document(&file_type),
+            "source_odm_attribute_invalid",
+            "unsupported FileType value \"snapshot\" on ODM",
+        );
+        let transaction = edit(
+            ODM_13,
+            r#"TransactionType="Insert""#,
+            r#"TransactionType="remove""#,
+        );
+        refused(
+            read_document(&transaction),
+            "source_odm_attribute_invalid",
+            "unsupported TransactionType value \"remove\" on ItemGroupData",
+        );
+    }
+
+    /// Skipped elements give no row, and nothing inside them is checked as
+    /// ODM: not a removal, a nested clinical container or a typed item.
+    #[test]
+    fn skipped_elements_and_their_content_are_not_read() {
+        let expected = items(ODM_13);
+        let skipped = edit(
+            ODM_13,
+            r#"<ItemData ItemOID="I.EMPTY" Value=""/>"#,
+            concat!(
+                r#"<ItemData ItemOID="I.EMPTY" Value="">"#,
+                r#"<AuditRecord><UserRef UserOID="U"/><DateTimeStamp>2026-01-02T00:00:00</DateTimeStamp></AuditRecord>"#,
+                r#"<Signature><UserRef UserOID="U"/></Signature>"#,
+                r#"<Annotation SeqNum="1" TransactionType="Remove"><Comment>checked</Comment></Annotation>"#,
+                r#"</ItemData>"#,
+            ),
+        );
+        let skipped = edit(
+            &skipped,
+            "  <ClinicalData",
+            concat!(
+                r#"<AdminData><User OID="U"><ItemData ItemOID="X" TransactionType="Remove"/></User>"#,
+                r#"<ClinicalData StudyOID="S.13" MetaDataVersionOID="M.13"/></AdminData>"#,
+                r#"<ReferenceData StudyOID="S.13" MetaDataVersionOID="M.13">"#,
+                r#"<ItemGroupData ItemGroupOID="G.13" TransactionType="Remove">"#,
+                r#"<ItemDataString ItemOID="I.DATE">x</ItemDataString></ItemGroupData></ReferenceData>"#,
+                "\n  <ClinicalData",
+            ),
+        );
+        let table = rows(&skipped);
+        assert_eq!(values(&table), expected);
+        assert_eq!(ordinals(&table), [1, 2, 3]);
+    }
+
+    /// Skipped content is still read as XML, within the read limits.
+    #[test]
+    fn skipped_content_is_still_checked_as_xml() {
+        let malformed = edit(
+            ODM_13,
+            "  <ClinicalData",
+            "<AdminData><User OID=\"U\"></AdminData>\n  <ClinicalData",
+        );
+        refused(
+            read_document(&malformed),
+            "source_odm_xml_malformed",
+            "malformed ODM XML",
+        );
+        let deep = edit(
+            ODM_13,
+            "  <ClinicalData",
+            &format!(
+                "<AdminData>{}{}</AdminData>\n  <ClinicalData",
+                "<e>".repeat(8),
+                "</e>".repeat(8)
+            ),
+        );
+        refused(
+            read_bytes(
+                "deep.xml",
+                deep.as_bytes(),
+                &Options {
+                    max_xml_depth: 8,
+                    ..Options::default()
+                },
+            ),
+            "source_odm_limit_exceeded",
+            "XML depth exceeds 8",
+        );
+    }
+
+    /// A document without `ClinicalData`, such as a define.xml or a
+    /// metadata-only export, is refused once it has been read whole; one
+    /// inside a skipped element does not count.
+    #[test]
+    fn a_document_without_clinical_data_is_refused() {
+        let metadata = edit(
+            ODM_13,
+            &ODM_13[ODM_13.find("  <ClinicalData").unwrap()..ODM_13.find("</ODM>").unwrap()],
+            "",
+        );
+        refused(
+            read_document(&metadata),
+            "source_odm_no_clinical_data",
+            "the document has no ClinicalData",
+        );
+        refused(
+            read_document(r#"<ODM xmlns="http://www.cdisc.org/ns/odm/v2.0"/>"#),
+            "source_odm_no_clinical_data",
+            "no ClinicalData",
+        );
+        let hidden = edit(
+            &metadata,
+            "</ODM>",
+            r#"<AdminData><ClinicalData StudyOID="S.13" MetaDataVersionOID="M.13"/></AdminData></ODM>"#,
+        );
+        refused(
+            read_document(&hidden),
+            "source_odm_no_clinical_data",
+            "no ClinicalData",
+        );
+        // Whatever the document lacks, a malformed one is refused as XML.
+        refused(
+            read_document(&metadata.replace("</ODM>", "")),
+            "source_odm_xml_malformed",
+            "premature end of data",
+        );
     }
 
     #[test]
@@ -902,7 +1187,7 @@ mod metadata {
         ] {
             refused(
                 read_document(&edit(ODM_13, original, replacement)),
-                "metadata_conflict",
+                "source_odm_metadata_conflict",
                 &format!("conflicting {kind} definition for S.13/M.13/"),
             );
         }
@@ -1005,7 +1290,7 @@ mod metadata {
                 r#"oc:Status="Available""#,
                 r#"oc:Status="Available" xmlns:v="urn:vendor" v:Status="Removed""#,
             )),
-            "ambiguous_attribute",
+            "source_odm_attribute_ambiguous",
             r#"multiple namespaced attributes have local name "Status""#,
         );
         refused(
@@ -1014,7 +1299,7 @@ mod metadata {
                 r#"<ItemData ItemOID="I.DATE" Value="2026-01-02"/>"#,
                 r#"<ItemData ItemOID="I.DATE" Value="2026-01-02" oc:ItemName="a" xml:ItemName="b"/>"#,
             )),
-            "ambiguous_attribute",
+            "source_odm_attribute_ambiguous",
             "ItemName",
         );
     }
@@ -1027,7 +1312,7 @@ mod metadata {
                 "  <Study OID=\"S.13\">\n    <MetaDataVersion",
                 "  <MetaDataVersion OID=\"X\"/><Study OID=\"S.13\">\n    <MetaDataVersion",
             )),
-            "unsupported_layout",
+            "source_odm_layout_unsupported",
             "MetaDataVersion appears outside Study",
         );
         refused(
@@ -1036,7 +1321,7 @@ mod metadata {
                 "  <Study OID=\"S.13\">",
                 "  <ItemDef OID=\"X\"/><Study OID=\"S.13\">",
             )),
-            "unsupported_layout",
+            "source_odm_layout_unsupported",
             "ItemDef appears outside MetaDataVersion",
         );
     }
@@ -1076,7 +1361,7 @@ mod layout {
                     r#"IsNull="Yes""#,
                     &format!(r#"IsNull="{spelling}""#),
                 )),
-                "invalid_is_null",
+                "source_odm_attribute_invalid",
                 "unsupported IsNull value",
             );
         }
@@ -1105,7 +1390,7 @@ mod layout {
                     r#"<ItemData ItemOID="I.DATE" Value="2026-01-02"/>"#,
                     &format!(r#"<{element} ItemOID="I.DATE">2026-01-02</{element}>"#),
                 )),
-                "unsupported_layout",
+                "source_odm_layout_unsupported",
                 &format!("typed ItemData element {element} is not supported"),
             );
         }
@@ -1185,7 +1470,7 @@ mod layout {
                 "<SubjectData SubjectKey=\"SUBJECT-1\" oc:StudySubjectID=\"DISPLAY-1\"\n                 oc:Status=\"Available\">",
                 "<ItemGroupData ItemGroupOID=\"X\"><ItemGroupData ItemGroupOID=\"Y\"><ItemData ItemOID=\"I\" Value=\"v\"/></ItemGroupData></ItemGroupData><SubjectData SubjectKey=\"SUBJECT-1\">",
             )),
-            "unsupported_layout",
+            "source_odm_layout_unsupported",
             "ItemData requires subject and event context",
         );
     }
@@ -1236,7 +1521,7 @@ mod layout {
         ] {
             refused(
                 read_document(&edit(ODM_13, original, replacement)),
-                "missing_attribute",
+                "source_odm_attribute_missing",
                 message,
             );
         }
@@ -1246,17 +1531,17 @@ mod layout {
     fn root_namespace_and_nesting_are_checked() {
         refused(
             read_document(r#"<Study xmlns="http://www.cdisc.org/ns/odm/v1.3"/>"#),
-            "unsupported_document",
+            "source_odm_document_unsupported",
             "document root must be ODM",
         );
         refused(
             read_document("<ODM/>"),
-            "unsupported_document",
+            "source_odm_document_unsupported",
             "unsupported ODM namespace (none)",
         );
         refused(
             read_document(r#"<ODM xmlns="http://www.cdisc.org/ns/odm/v1.2"/>"#),
-            "unsupported_document",
+            "source_odm_document_unsupported",
             r#"unsupported ODM namespace "http://www.cdisc.org/ns/odm/v1.2""#,
         );
         refused(
@@ -1265,12 +1550,12 @@ mod layout {
                 "  <Study OID=\"S.13\">",
                 "  <ODM/><Study OID=\"S.13\">",
             )),
-            "unsupported_document",
+            "source_odm_document_unsupported",
             "document contains a nested ODM element",
         );
         refused(
             read_document(&edit(ODM_20, r#"ODMVersion="2.0""#, r#"ODMVersion="1.3""#)),
-            "unsupported_document",
+            "source_odm_document_unsupported",
             r#"ODMVersion "1.3" conflicts with namespace"#,
         );
     }
@@ -1279,15 +1564,19 @@ mod layout {
 mod xml_strictness {
     use super::*;
 
+    /// A 1.3 document holding `body`, then an empty `ClinicalData`, so a body
+    /// that is well formed reads as an empty table.
     fn wrap(body: &str) -> String {
-        format!(r#"<ODM xmlns="http://www.cdisc.org/ns/odm/v1.3">{body}</ODM>"#)
+        format!(
+            r#"<ODM xmlns="http://www.cdisc.org/ns/odm/v1.3">{body}<ClinicalData StudyOID="S" MetaDataVersionOID="M"/></ODM>"#
+        )
     }
 
     #[test]
     fn doctype_and_entities_are_refused() {
         refused(
             read_document(&format!("<!DOCTYPE ODM [<!ENTITY e \"x\">]>\n{}", wrap(""))),
-            "unsupported_xml",
+            "source_odm_xml_unsupported",
             "DOCTYPE declarations are not supported",
         );
         let scratch = Scratch::new("external");
@@ -1298,17 +1587,17 @@ mod xml_strictness {
                 secret.display(),
                 wrap("&e;")
             )),
-            "unsupported_xml",
+            "source_odm_xml_unsupported",
             "DOCTYPE",
         );
         refused(
             read_document(&wrap("&e;")),
-            "malformed_xml",
+            "source_odm_xml_malformed",
             "entity &e; is not defined",
         );
         refused(
             read_document(r#"<ODM xmlns="http://www.cdisc.org/ns/odm/v1.3" FileOID="&e;"/>"#),
-            "malformed_xml",
+            "source_odm_xml_malformed",
             "entity &e; is not defined",
         );
     }
@@ -1368,7 +1657,11 @@ mod xml_strictness {
                 "standalone must be yes or no",
             ),
         ] {
-            refused(read_document(&document), "malformed_xml", message);
+            refused(
+                read_document(&document),
+                "source_odm_xml_malformed",
+                message,
+            );
         }
     }
 
@@ -1415,7 +1708,11 @@ mod xml_strictness {
             ),
             (wrap("<xmlns:a/>"), "reserved prefix xmlns"),
         ] {
-            refused(read_document(&document), "malformed_xml", message);
+            refused(
+                read_document(&document),
+                "source_odm_xml_malformed",
+                message,
+            );
         }
         let declared = rows(&edit(
             ODM_13,
@@ -1460,7 +1757,7 @@ mod xml_strictness {
         assert!(read_document(&wrap(&format!("<x{}/>", declarations(4095)))).is_ok());
         refused(
             read_document(&wrap(&format!("<x{}/>", declarations(4096)))),
-            "limit",
+            "source_odm_limit_exceeded",
             "XML namespace declarations in scope exceed 4096",
         );
     }
@@ -1474,22 +1771,22 @@ mod xml_strictness {
         for (bytes, code, message) in [
             (
                 wrap("\u{1}").into_bytes(),
-                "malformed_xml",
+                "source_odm_xml_malformed",
                 "invalid XML character U+0001",
             ),
             (
                 wrap("\u{fffe}").into_bytes(),
-                "malformed_xml",
+                "source_odm_xml_malformed",
                 "invalid XML character U+FFFE",
             ),
             (
                 wrap("\u{ffff}").into_bytes(),
-                "malformed_xml",
+                "source_odm_xml_malformed",
                 "invalid XML character U+FFFF",
             ),
             (
                 wrap("\0").into_bytes(),
-                "malformed_xml",
+                "source_odm_xml_malformed",
                 "invalid XML character U+0000",
             ),
             (
@@ -1498,15 +1795,15 @@ mod xml_strictness {
                     wrap("")
                 )
                 .into_bytes(),
-                "unsupported_xml",
+                "source_odm_xml_unsupported",
                 "must be encoded as UTF-8, not ISO-8859-1",
             ),
             (
                 [&[0xFF, 0xFE][..], &utf16].concat(),
-                "unsupported_xml",
+                "source_odm_xml_unsupported",
                 "not UTF-16",
             ),
-            (utf16.clone(), "unsupported_xml", "not UTF-16"),
+            (utf16.clone(), "source_odm_xml_unsupported", "not UTF-16"),
         ] {
             refused(
                 read_bytes("chars.xml", &bytes, &Options::default()),
@@ -1519,7 +1816,7 @@ mod xml_strictness {
         invalid_utf8[position] = 0xFF;
         refused(
             read_bytes("utf8.xml", &invalid_utf8, &Options::default()),
-            "malformed_xml",
+            "source_odm_xml_malformed",
             "invalid UTF-8",
         );
         // An invalid byte in the first token is reported at its source
@@ -1528,7 +1825,7 @@ mod xml_strictness {
             let bytes = [prefix, b"<ODM\xff>"].concat();
             refused(
                 read_bytes("first.xml", &bytes, &Options::default()),
-                "malformed_xml",
+                "source_odm_xml_malformed",
                 &format!("invalid UTF-8 byte sequence at byte {at}"),
             );
         }
@@ -1568,7 +1865,7 @@ mod xml_strictness {
                 "<Value>PD-L1</Value>",
                 &format!("<Value>{over}</Value>"),
             )),
-            "limit",
+            "source_odm_limit_exceeded",
             "XML text node exceeds 9999999 bytes",
         );
         refused(
@@ -1581,7 +1878,7 @@ mod xml_strictness {
                     &over[..5_000_000]
                 ),
             )),
-            "limit",
+            "source_odm_limit_exceeded",
             "XML text node exceeds",
         );
         refused(
@@ -1590,17 +1887,17 @@ mod xml_strictness {
                 r#"Value="2026-01-02""#,
                 &format!(r#"Value="{over}""#),
             )),
-            "limit",
+            "source_odm_limit_exceeded",
             "XML attribute value exceeds 9999999 bytes",
         );
         refused(
             read_document(&wrap(&format!("<!--{over}-->"))),
-            "limit",
+            "source_odm_limit_exceeded",
             "XML comment exceeds",
         );
         refused(
             read_document(&wrap(&format!("<{}/>", "a".repeat(50_001)))),
-            "limit",
+            "source_odm_limit_exceeded",
             "XML name exceeds 50000 bytes",
         );
         assert!(read_document(&wrap(&format!("<{}/>", "a".repeat(50_000)))).is_ok());
@@ -1622,18 +1919,18 @@ mod xml_strictness {
         assert!(read_bytes("deep.xml", nested(8).as_bytes(), &options(8)).is_ok());
         refused(
             read_bytes("deep.xml", nested(9).as_bytes(), &options(8)),
-            "limit",
+            "source_odm_limit_exceeded",
             "XML depth exceeds 8",
         );
         assert!(read_bytes("deep.xml", nested(256).as_bytes(), &options(1000)).is_ok());
         refused(
             read_bytes("deep.xml", nested(257).as_bytes(), &options(1000)),
-            "limit",
+            "source_odm_limit_exceeded",
             "XML depth exceeds 256",
         );
         refused(
             read_bytes("deep.xml", ODM_13.as_bytes(), &options(7)),
-            "invalid_option",
+            "value_not_permitted",
             "max_xml_depth must be at least 8",
         );
     }
@@ -1642,52 +1939,63 @@ mod xml_strictness {
 mod inputs {
     use super::*;
 
+    /// The source is a caller's own path, so one that reaches no regular
+    /// file fails as any caller's path does, naming the path as given and
+    /// no spec path (FILE-7, FILE-11), before any option is checked.
     #[test]
-    fn missing_paths_and_directories_are_not_found() {
+    fn missing_paths_and_directories_fail_as_any_caller_path_does() {
         let scratch = Scratch::new("missing");
         let missing = scratch.path().join("absent.xml");
-        refused(
-            read_with(&missing, &Options::default()),
-            "not_found",
-            "absent.xml",
+        let shown = missing.display().to_string();
+        let refusal = issue(odm_xml::read(&missing, &Options::default()), &shown);
+        assert_eq!(
+            (refusal.condition(), refusal.rule()),
+            ("resource_path_missing", Some("FILE-7"))
         );
-        refused(
-            read_with(scratch.path(), &Options::default()),
-            "not_found",
-            "not a regular file",
+        assert!(refusal.spec_paths.is_empty());
+        assert_eq!(
+            refusal.context,
+            [(
+                "path".to_owned(),
+                yamaa_core::json::Value::String(shown.clone())
+            )]
+            .into()
         );
-        refused(
-            read_with(
-                &missing,
-                &Options {
-                    max_expanded_bytes: 0,
-                    ..Options::default()
-                },
-            ),
-            "not_found",
-            "absent.xml",
-        );
+        let folder = scratch.path().display().to_string();
+        let refusal = issue(odm_xml::read(scratch.path(), &Options::default()), &folder);
+        assert_eq!(refusal.condition(), "resource_path_not_regular_file");
+        let unsatisfiable = Options {
+            max_expanded_bytes: 0,
+            ..Options::default()
+        };
+        let refusal = issue(odm_xml::read(&missing, &unsatisfiable), &shown);
+        assert_eq!(refusal.condition(), "resource_path_missing");
     }
 
     /// The file is a caller path read through the local file resolver: a
-    /// link in its place is refused like a directory (FILE-8).
+    /// link in its place is refused as a symbolic link (FILE-8).
     #[cfg(unix)]
     #[test]
-    fn a_linked_source_is_not_found() {
+    fn a_linked_source_fails_as_a_symbolic_link() {
         let scratch = Scratch::new("linked");
         let target = scratch.write("odm13.xml", ODM_13);
         let link = scratch.path().join("linked.xml");
         std::os::unix::fs::symlink(&target, &link).unwrap();
-        refused(
-            read_with(&link, &Options::default()),
-            "not_found",
-            "linked.xml",
+        let shown = link.display().to_string();
+        let refusal = issue(odm_xml::read(&link, &Options::default()), &shown);
+        assert_eq!(
+            (refusal.condition(), refusal.rule()),
+            ("resource_path_symlink", Some("FILE-8"))
+        );
+        assert_eq!(
+            refusal.context["path"],
+            yamaa_core::json::Value::String(shown)
         );
         assert_eq!(read_with(&target, &Options::default()).unwrap().rows(), 3);
     }
 
     /// A caller's resolver serves the source under its own name; what it
-    /// reports instead of a regular file is not found.
+    /// reports instead of a regular file fails as FILE-7 says.
     #[test]
     fn a_resolver_serves_the_source_once_under_its_name() {
         use std::sync::Arc;
@@ -1695,18 +2003,21 @@ mod inputs {
         let resolver = Arc::new(MemoryResolver::default());
         resolver.insert("/", "edc/odm.xml", "odm:1", Arc::from(ODM_13.as_bytes()));
         resolver.insert_kind("/", "edc/folder.xml", ResourceKind::Directory);
-        let read = |source: &str| match odm_xml::read_with_resolver(
-            resolver.clone(),
-            source,
-            &Options::default(),
-        ) {
-            Ok(table) => Ok(table),
-            Err(Error::Read(error)) => Err(error),
-            Err(error) => panic!("unexpected adapter failure: {error:?}"),
+        let read = |source: &str| {
+            odm_xml::read_with_resolver(resolver.clone(), source, &Options::default())
         };
         assert_eq!(read("edc/odm.xml").unwrap().rows(), 3);
-        refused(read("edc/folder.xml"), "not_found", "edc/folder.xml");
-        refused(read("edc/absent.xml"), "not_found", "edc/absent.xml");
+        for (source, expected) in [
+            ("edc/folder.xml", "resource_path_not_regular_file"),
+            ("edc/absent.xml", "resource_path_missing"),
+        ] {
+            let refusal = issue(read(source), source);
+            assert_eq!(refusal.condition(), expected, "{source}");
+            assert_eq!(
+                refusal.context["path"],
+                yamaa_core::json::Value::String(source.into())
+            );
+        }
     }
 
     #[test]
@@ -1717,7 +2028,7 @@ mod inputs {
         };
         refused(
             read_bytes("odm13.xml", ODM_13.as_bytes(), &options),
-            "archive_member",
+            "source_odm_archive_member",
             "archive_member requires a TAR input",
         );
         let size = ODM_13.len() as u64;
@@ -1737,7 +2048,7 @@ mod inputs {
         };
         refused(
             read_bytes("odm13.xml", ODM_13.as_bytes(), &small),
-            "limit",
+            "source_odm_limit_exceeded",
             &format!("ODM XML exceeds {} bytes", size - 1),
         );
         refused(
@@ -1749,7 +2060,7 @@ mod inputs {
                     ..Options::default()
                 },
             ),
-            "invalid_option",
+            "value_not_permitted",
             "max_expanded_bytes must be at least 1",
         );
     }
@@ -1767,7 +2078,7 @@ mod inputs {
         };
         refused(
             read_bytes("odm13.xml", b"<not xml", &invalid),
-            "invalid_option",
+            "value_not_permitted",
             "max_xml_depth must be at least 8",
         );
         // A sparse file over the ten-gigabyte source bound is never read.
@@ -1783,7 +2094,7 @@ mod inputs {
                 .unwrap();
             refused(
                 read_with(&path, &invalid),
-                "invalid_option",
+                "value_not_permitted",
                 "max_xml_depth must be at least 8",
             );
         }
@@ -1800,7 +2111,7 @@ mod inputs {
         let Err(Error::Read(error)) = result else {
             panic!("invalid options were not refused: {result:?}");
         };
-        assert_eq!(error.code(), "invalid_option");
+        assert_eq!(condition(&error), "value_not_permitted");
         assert_eq!(*resolver.0.lock().unwrap(), 0);
     }
 
@@ -1830,7 +2141,7 @@ mod inputs {
             let Err(Error::Read(error)) = result else {
                 panic!("an oversized source was not refused: {result:?}");
             };
-            assert_eq!(error.code(), "limit", "{error}");
+            assert_eq!(condition(&error), "source_odm_limit_exceeded", "{error}");
             assert_eq!(
                 error.to_string(),
                 format!(
@@ -1854,7 +2165,7 @@ mod inputs {
                 .unwrap();
             refused(
                 read_with(&path, &Options::default()),
-                "limit",
+                "source_odm_limit_exceeded",
                 &format!(
                     "ODM XML exceeds {} bytes",
                     Options::DEFAULT_MAX_EXPANDED_BYTES
@@ -1884,14 +2195,14 @@ mod inputs {
         for name in ["odm.tar", "ODM.TAR.GZ", "odm.tgz"] {
             refused(
                 read_bytes(name, ODM_13.as_bytes(), &Options::default()),
-                "invalid_archive",
+                "source_odm_archive_invalid",
                 "not a TAR archive",
             );
         }
         let gzipped_xml = gzip(ODM_13.as_bytes());
         refused(
             read_bytes("odm.xml.gz", &gzipped_xml, &Options::default()),
-            "malformed_xml",
+            "source_odm_xml_malformed",
             "invalid XML character U+001F",
         );
     }
@@ -1905,7 +2216,7 @@ mod inputs {
         ] {
             refused(
                 read_bytes("odm.tar.compressed", magic, &Options::default()),
-                "unsupported_compression",
+                "source_odm_compression_unsupported",
                 &format!(
                     "uses {format} compression; only plain and gzip TAR archives are supported"
                 ),
@@ -1966,12 +2277,12 @@ mod archives {
         let none = Tar::new().file("notes.txt", b"x").finish();
         refused(
             read_tar(&none, &Options::default()),
-            "archive_member",
+            "source_odm_archive_member",
             "exactly one XML member",
         );
         refused(
             read_tar(&none, &member("odm.xml")),
-            "archive_member",
+            "source_odm_archive_member",
             r#"TAR input contains 0 entries named "odm.xml""#,
         );
         let twice = Tar::new()
@@ -1980,20 +2291,20 @@ mod archives {
             .finish();
         refused(
             read_tar(&twice, &member("odm.xml")),
-            "archive_member",
+            "source_odm_archive_member",
             r#"TAR input contains 2 entries named "odm.xml""#,
         );
         let upper = Tar::new().file("STUDY/ODM.XML", ODM_13.as_bytes()).finish();
         assert_eq!(read_tar(&upper, &Options::default()).unwrap().rows(), 3);
         refused(
             read_tar(&upper, &member("study/odm.xml")),
-            "archive_member",
+            "source_odm_archive_member",
             "0 entries",
         );
         let empty = vec![0_u8; 1024];
         refused(
             read_tar(&empty, &Options::default()),
-            "archive_member",
+            "source_odm_archive_member",
             "exactly one XML member",
         );
     }
@@ -2004,7 +2315,7 @@ mod archives {
             let archive = Tar::new().file(name, ODM_13.as_bytes()).finish();
             refused(
                 read_tar(&archive, &Options::default()),
-                "archive_member",
+                "source_odm_archive_member",
                 &format!("unsafe TAR member path {name:?}"),
             );
         }
@@ -2017,7 +2328,7 @@ mod archives {
             let archive = Tar::new().special("odm.xml", typeflag, link).finish();
             refused(
                 read_tar(&archive, &Options::default()),
-                "archive_member",
+                "source_odm_archive_member",
                 r#"TAR member "odm.xml" is not a regular file"#,
             );
         }
@@ -2036,7 +2347,7 @@ mod archives {
         let v7_directory = Tar::new().special("odm.xml/", 0, "").finish();
         refused(
             read_tar(&v7_directory, &Options::default()),
-            "archive_member",
+            "source_odm_archive_member",
             "not a regular file",
         );
         let mut sparse = Header::new("odm.xml", b'S', ODM_13.len() as u64);
@@ -2044,7 +2355,7 @@ mod archives {
         let archive = Tar::new().entry(&sparse, ODM_13.as_bytes()).finish();
         refused(
             read_tar(&archive, &Options::default()),
-            "archive_member",
+            "source_odm_archive_member",
             "sparse file",
         );
         let pax_sparse = Tar::new()
@@ -2056,7 +2367,7 @@ mod archives {
             .finish();
         refused(
             read_tar(&pax_sparse, &Options::default()),
-            "archive_member",
+            "source_odm_archive_member",
             "sparse file",
         );
         let mut extended = Header::new("skipped.bin", b'S', 4);
@@ -2091,7 +2402,7 @@ mod archives {
         };
         refused(
             read_tar(&archive, &small),
-            "limit",
+            "source_odm_limit_exceeded",
             &format!("TAR member exceeds {} bytes", size - 1),
         );
         let compressed = gzip(&archive);
@@ -2101,7 +2412,7 @@ mod archives {
         };
         refused(
             read_bytes("odm.tar.gz", &compressed, &expansion),
-            "limit",
+            "source_odm_limit_exceeded",
             "compressed TAR input expands beyond 100000 bytes",
         );
         let roomy = Options {
@@ -2160,17 +2471,17 @@ mod archives {
         checksum[second + 148] ^= 1;
         refused(
             read_tar(&checksum, &Options::default()),
-            "invalid_archive",
+            "source_odm_archive_invalid",
             "invalid TAR header",
         );
         refused(
             read_tar(&valid[..second + 100], &Options::default()),
-            "invalid_archive",
+            "source_odm_archive_invalid",
             "truncated TAR header",
         );
         refused(
             read_tar(&valid[..700], &Options::default()),
-            "invalid_archive",
+            "source_odm_archive_invalid",
             "truncated TAR member data",
         );
         // A size within one block of u64::MAX cannot be padded to whole blocks.
@@ -2180,13 +2491,13 @@ mod archives {
             .finish();
         refused(
             read_tar(&oversized, &Options::default()),
-            "invalid_archive",
+            "source_odm_archive_invalid",
             "invalid TAR member size",
         );
         let selected_short = Tar::new().file("odm.xml", ODM_13.as_bytes()).unterminated();
         refused(
             read_tar(&selected_short[..900], &Options::default()),
-            "invalid_archive",
+            "source_odm_archive_invalid",
             "truncated TAR member data",
         );
         let dangling = Tar::new()
@@ -2195,7 +2506,7 @@ mod archives {
             .finish();
         refused(
             read_tar(&dangling, &Options::default()),
-            "invalid_archive",
+            "source_odm_archive_invalid",
             "extension header has no member",
         );
         // An unknown compression method in the gzip header.
@@ -2203,7 +2514,7 @@ mod archives {
         corrupt[2] = 7;
         refused(
             read_bytes("odm.tar.gz", &corrupt, &Options::default()),
-            "invalid_archive",
+            "source_odm_archive_invalid",
             "cannot read ODM archive",
         );
         // Without an end-of-archive block the stream is read to its gzip
@@ -2214,7 +2525,7 @@ mod archives {
         crc[end - 8] ^= 0xFF;
         refused(
             read_bytes("odm.tar.gz", &crc, &Options::default()),
-            "invalid_archive",
+            "source_odm_archive_invalid",
             "cannot read ODM archive",
         );
     }

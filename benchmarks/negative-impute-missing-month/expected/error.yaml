@@ -1,7 +1,0 @@
-phase: validation
-condition: month_required
-spec_paths:
-  - columns.ASTDT.derivation.impute.month
-rule: TIME-10
-context:
-  minimum_source_precision: year

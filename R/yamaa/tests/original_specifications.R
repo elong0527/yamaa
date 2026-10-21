@@ -593,7 +593,7 @@ local({
       identical(rawfile(file.path(case,output)),rawfile(file.path(case,"expected",output))))
   }
   failures <- read.delim(file.path(root,"temporal-imputation-diagnostics.tsv"),quote="",colClasses="character",check.names=FALSE)
-  stopifnot(nrow(failures)==10L)
+  stopifnot(nrow(failures)==8L)
   for(index in seq_len(nrow(failures))) {
     finding <- failures[index,]
     stopifnot(file.copy(file.path(root,"cases",finding$case),directory,recursive=TRUE))
@@ -609,7 +609,7 @@ local({
       failed_save(result),length(list.files(case,pattern="[.]csv$"))==0L)
     if(static) stopifnot(identical(checked,actual)) else stopifnot(nrow(checked)==0L)
   }
-  cat("public temporal imputation preserves two original outputs and ten complete failures without Python passed\n")
+  cat("public temporal imputation preserves two original outputs and eight complete failures without Python passed\n")
 })
 
 local({

@@ -1,0 +1,7 @@
+phase: validation
+condition: prohibited_construct
+spec_paths:
+  - columns[4].copy.dataset
+rule: SPEC-9
+context:
+  dataset: ADSL

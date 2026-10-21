@@ -111,7 +111,11 @@ root as the Python and R records keep them (#3312). For the command line, the
 plan excludes each benchmark whose project supplies project functions: the
 binary has no project-function implementation, so a specification that calls
 one fails before it reads data (#3030 section 2.3). Each excluded case still
-gets a record that names the reason.
+gets a record that names the reason. The runner reports each case as
+`excluded`, `observed` or `error`. A case is observed when each of its runs
+exits with status 0 or 1 and prints one JSON document; any other run, such as
+one that exits 2 because the command line could not run it as asked
+(#3030 D68), makes its record an error.
 
 The comparator judges command-line records by the criteria the hosts' records
 meet, with what the command line has: it holds no typed host view, and runs
@@ -120,9 +124,9 @@ domain build of a Define benchmark, exits 0 with the status `succeeded`,
 reports no issue and saves its declared report, then its output, at the
 declared paths; CSV bytes compare exactly and Parquet logically. Each run of
 a negative exits 1, its first issue must match `expected/error.yaml`, and it
-saves no more than the report a failed run writes (PROJECT-12). A call the
-binary refuses as not implemented yet fails its benchmark, and the gate
-requires every benchmark that the command line runs.
+saves no more than the report a failed run writes (PROJECT-12). An error
+record fails its benchmark, and the gate requires every benchmark that the
+command line runs.
 
 The binary dispatches on the type a PATH declares in its `type:` header and
 reads only 1.x files (#3030 D122, D125), so until the corpus moves to 1.0
@@ -138,6 +142,10 @@ benchmark that the command line runs passes:
 python -m tools.commands.cli_conformance --binary rust/target/debug/yamaa --output /tmp/public-cli
 ```
 
-Each `native-cli-install` job runs it with the unpacked binary of its archive
-(`docs/release.md`), and the cohort comparison reads the output beside its
+With `--prepare-only` in place of `--binary`, it writes the copies and the
+plan and stops. Each `native-cli-install` job prepares them while the
+network is up, then runs the runner over them with the unpacked binary of
+its archive, with the network disabled, and judges the records with
+`python -m tools.conformance.public_conformance compare`
+(`docs/release.md`). The cohort comparison reads the output beside its
 platform's owners.

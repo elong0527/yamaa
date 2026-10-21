@@ -99,7 +99,7 @@ derived by that row template. The grouped `filter` is not a derivation: it adds
 no graph edge between columns and runs only after all columns have completed.
 
 Fails: `phase_boundary`.
-Evidence: `negative-row-phase-flag`, `rust/crates/yamaa-core/tests/project_specification.rs::row_reads_of_nonlocal_columns_return_complete_phase_findings_before_lowering`.
+Evidence: `negative-row-phase-flag`, `rust/crates/yamaa-core/tests/project_specification.rs::row_reads_of_nonlocal_columns_return_complete_phase_findings_before_lowering`, `rust/crates/yamaa-adapters/tests/check_row_phase_boundaries.rs::an_aggregate_in_a_case_result_is_not_row_local_in_either_spelling`.
 
 A row dependency on a later-phase value fails as `phase_boundary`.
 

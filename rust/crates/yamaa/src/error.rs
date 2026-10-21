@@ -2,8 +2,9 @@
 //!
 //! Internal error enums (per-module failures, decode failures, resource
 //! errors) never appear in a facade signature; they convert into these types
-//! at the boundary. `ResolverFailure`, `FunctionError`, `TableError` and
-//! `OdmError` carry a stable code and a message.
+//! at the boundary. `ResolverFailure`, `FunctionError` and `TableError` carry
+//! a stable code and a message; a refusal that a registered issue explains,
+//! such as a `read_odm` refusal, is [`Error::Rejected`].
 
 use std::any::Any;
 use std::sync::Arc;
@@ -23,8 +24,6 @@ pub enum Error {
     Host(FunctionError),
     /// Arrow/IPC representation failed.
     Table(TableError),
-    /// An ODM XML input was refused.
-    Odm(OdmError),
     /// A format feature is not compiled in.
     Unavailable { feature: &'static str },
     /// The cancellation token was cancelled.
@@ -59,14 +58,6 @@ impl std::fmt::Display for Error {
                 write!(
                     f,
                     "table failure ({}): {}",
-                    failure.code(),
-                    failure.message()
-                )
-            }
-            Self::Odm(failure) => {
-                write!(
-                    f,
-                    "ODM read failure ({}): {}",
                     failure.code(),
                     failure.message()
                 )
@@ -493,52 +484,9 @@ impl TableError {
     }
 }
 
-/// An ODM XML read refusal, carrying its stable code and message.
-#[non_exhaustive]
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct OdmError {
-    code: &'static str,
-    message: String,
-}
-
-impl OdmError {
-    /// Return the stable refusal code, such as `malformed_xml` or `limit`.
-    pub fn code(&self) -> &'static str {
-        self.code
-    }
-
-    /// Return the refusal message.
-    pub fn message(&self) -> &str {
-        &self.message
-    }
-
-    pub(crate) fn from_core(error: &yamaa_core::odm_items::Error) -> Self {
-        Self {
-            code: error.code(),
-            message: error.to_string(),
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn odm_refusals_carry_stable_codes_and_messages() {
-        use yamaa_core::odm_items::{Error as Odm, Layout};
-        let refusal = OdmError::from_core(&Odm::Layout(Layout::ItemContext));
-        assert_eq!(refusal.code(), "unsupported_layout");
-        assert_eq!(
-            refusal.message(),
-            "ItemData requires subject and event context"
-        );
-        let text = format!("{}", Error::Odm(refusal));
-        assert_eq!(
-            text,
-            "ODM read failure (unsupported_layout): ItemData requires subject and event context"
-        );
-    }
 
     #[test]
     fn resolver_failures_carry_stable_codes_and_messages() {

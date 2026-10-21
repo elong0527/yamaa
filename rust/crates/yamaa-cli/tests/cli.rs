@@ -1,6 +1,6 @@
 //! The `yamaa` binary as a user runs it: what it prints, on which stream, and
 //! its exit status (#3030 section 2.8, D12, D41, D68, D97 to D99, D103, D119,
-//! D122, D125, D134, D149).
+//! D122, D125, D134, D149, D169).
 //!
 //! What the command line composes is written out here: the summary and
 //! member lines, the order of the lines, the written paths, the JSON keys and
@@ -365,7 +365,8 @@ fn schema_prints_the_json_schema_of_each_file_type() {
 /// file types, so any other text is its refusal, `unexpected_file_type`
 /// (SCHEMA-2): D39's error text and exit status 1, as the hosts raise it and
 /// as an unknown section is refused (D98, D149). Its JSON holds the command,
-/// the status and the issue, whose context names TYPE as given.
+/// the status `failed` and the issue, and echoes TYPE as given as `type`, as
+/// a refused `resolve` echoes its `path` and `spec` (D169).
 #[test]
 fn schema_of_a_type_naming_no_file_type_is_refused_with_exit_status_1() {
     for file_type in ["specs", "Spec", ""] {
@@ -395,7 +396,8 @@ fn schema_of_a_type_naming_no_file_type_is_refused_with_exit_status_1() {
             printed(
                 1,
                 format!(
-                    "{{\"command\":\"schema\",\"issues\":{},\"status\":\"failed\"}}\n",
+                    "{{\"command\":\"schema\",\"issues\":{},\"status\":\"failed\",\
+                     \"type\":\"{file_type}\"}}\n",
                     json(&refused.diagnostics)
                 )
             ),
@@ -1661,19 +1663,21 @@ fn read_odm_saves_parquet_and_both_files_hold_what_a_run_saves() {
 
 /// A refused read names SOURCE as given, and a refused save names OUT as
 /// given (D39, D134): either prints D39's error text on standard output,
-/// writes nothing and exits 1, as the hosts raise it.
+/// writes nothing and exits 1, as the hosts raise it. The JSON `status`
+/// follows the read, as a run's follows the run (D169).
 ///
 /// - The save refuses an extension outside OUTPUT-5's closed mapping, or
 ///   none, before it writes anything, and a target that cannot be written,
 ///   as a run's save refuses it (D99): a missing directory or a directory.
-///   The items were read, so the JSON `rows` counts them.
+///   The items were read, so the JSON `status` is `succeeded`, its `rows`
+///   counts them, and its `issues` hold the save's refusal.
 /// - The reader refuses a file that does not exist, a bound below its
 ///   minimum or one the document exceeds, and an archive member of a plain
 ///   XML file. Each message names the option or its value, so each flag is
-///   seen to reach its own option. Until P1-15 registers the `source_odm_*`
-///   conditions, such a refusal carries the reader's code and no issue, as
-///   the hosts' does. The read comes first, so a SOURCE it refuses is the
-///   refusal whatever OUT names.
+///   seen to reach its own option. Nothing was read, so the JSON `status` is
+///   `failed` and its `rows` null. Each refusal carries its registered issue
+///   (D158), as the hosts' does. The read comes first, so a SOURCE it refuses
+///   is the refusal whatever OUT names.
 #[test]
 fn a_refused_read_or_save_prints_its_error_text_and_exits_1() {
     let study = odm_study();
@@ -1718,7 +1722,7 @@ fn a_refused_read_or_save_prints_its_error_text_and_exits_1() {
                 1,
                 format!(
                     "{{\"command\":\"read-odm\",\"issues\":{},\"path\":\"{source}\",\
-                     \"paths\":[],\"rows\":3,\"status\":\"failed\"}}\n",
+                     \"paths\":[],\"rows\":3,\"status\":\"succeeded\"}}\n",
                     json(&refused.diagnostics)
                 )
             ),
@@ -1732,53 +1736,140 @@ fn a_refused_read_or_save_prints_its_error_text_and_exits_1() {
         let error = engine.read_odm(read, options).unwrap_err();
         yamaa::Failure::from_error(yamaa::Action::Read(read), &error)
     };
-    let cases: [(&str, &[&str], OdmOptions, &str); 6] = [
-        (&absent, &[], OdmOptions::new(), "not_found"),
+    struct ExpectedIssue<'a> {
+        condition: &'a str,
+        phase: &'a str,
+        rule: &'a str,
+        spec_path: Option<&'a str>,
+        context: ContextValue,
+        message: String,
+    }
+    let text = |value: &str| ContextValue::Text(value.to_owned());
+    let context = |values: &[(&str, ContextValue)]| {
+        ContextValue::Map(
+            values
+                .iter()
+                .map(|(key, value)| ((*key).to_owned(), value.clone()))
+                .collect(),
+        )
+    };
+    let option_issue = |name: &'static str, minimum| ExpectedIssue {
+        condition: "value_not_permitted",
+        phase: "validation",
+        rule: "ODM-1",
+        spec_path: Some(name),
+        context: context(&[("minimum", ContextValue::Int(minimum))]),
+        message: format!("{name} has a value that is not permitted"),
+    };
+    let cases: [(&str, &[&str], OdmOptions, ExpectedIssue); 6] = [
+        (
+            &absent,
+            &[],
+            OdmOptions::new(),
+            ExpectedIssue {
+                condition: "resource_path_missing",
+                phase: "validation",
+                rule: "FILE-7",
+                spec_path: None,
+                context: context(&[("path", text(&absent))]),
+                message: format!("{absent} does not exist"),
+            },
+        ),
         (
             &source,
             &["--max-expanded-bytes", "0"],
             OdmOptions::new().with_max_expanded_bytes(0),
-            "invalid_option",
+            option_issue("max_expanded_bytes", 1),
         ),
         (
             &source,
             &["--max-archive-members", "0"],
             OdmOptions::new().with_max_archive_members(0),
-            "invalid_option",
+            option_issue("max_archive_members", 1),
         ),
         (
             &source,
             &["--max-xml-depth", "7"],
             OdmOptions::new().with_max_xml_depth(7),
-            "invalid_option",
+            option_issue("max_xml_depth", 8),
         ),
         (
             &source,
             &["--archive-member", "odm13.xml"],
             OdmOptions::new().with_archive_member("odm13.xml"),
-            "archive_member",
+            ExpectedIssue {
+                condition: "source_odm_archive_member",
+                phase: "ingest",
+                rule: "ODM-1",
+                spec_path: None,
+                context: context(&[
+                    ("path", text(&source)),
+                    ("reason", text("archive_member requires a TAR input")),
+                ]),
+                message: format!(
+                    "no member of {source} can be read: archive_member requires a TAR input"
+                ),
+            },
         ),
         (
             &source,
             &["--max-expanded-bytes", "100"],
             OdmOptions::new().with_max_expanded_bytes(100),
-            "limit",
+            ExpectedIssue {
+                condition: "source_odm_limit_exceeded",
+                phase: "ingest",
+                rule: "ODM-1",
+                spec_path: None,
+                context: context(&[
+                    ("path", text(&source)),
+                    ("reason", text("ODM XML exceeds 100 bytes")),
+                ]),
+                message: format!("{source} exceeds a read limit: ODM XML exceeds 100 bytes"),
+            },
         ),
     ];
-    for (read, flags, options, code) in cases {
+    for (read, flags, options, expected) in cases {
         let refused = refusal(read, &options);
-        assert!(
-            refused
-                .message
-                .starts_with(&format!("cannot read {read}: ODM read failure ({code}): ")),
-            "{}",
-            refused.message
+        let ExpectedIssue {
+            condition,
+            phase,
+            rule,
+            spec_path,
+            context,
+            message,
+        } = expected;
+        let expected_message = format!("cannot read {read}: {message} [{condition}, {rule}]");
+        assert_eq!(refused.message, expected_message);
+        let expected_issue = ContextValue::Map(
+            [
+                ("column", ContextValue::Null),
+                ("condition", text(condition)),
+                ("context", context),
+                ("file", ContextValue::Null),
+                ("line", ContextValue::Null),
+                ("message", text(&message)),
+                ("operand_route", ContextValue::Null),
+                ("phase", text(phase)),
+                ("rule", text(rule)),
+                ("severity", text("error")),
+                ("source_span", ContextValue::Null),
+                (
+                    "spec_paths",
+                    ContextValue::List(spec_path.into_iter().map(text).collect()),
+                ),
+            ]
+            .into_iter()
+            .map(|(key, value)| (key.to_owned(), value))
+            .collect(),
         );
-        assert!(refused.diagnostics.is_empty());
+        let [issue] = refused.diagnostics.as_slice() else {
+            panic!("one issue: {:?}", refused.diagnostics);
+        };
+        assert_eq!(issue.to_value(), expected_issue);
         let arguments = [&["read-odm", read, &out][..], flags].concat();
         assert_eq!(
             outcome(&yamaa(&arguments)),
-            printed(1, format!("{}\n", refused.message)),
+            printed(1, format!("{expected_message}\n")),
             "{arguments:?}"
         );
         assert_eq!(
@@ -1786,8 +1877,9 @@ fn a_refused_read_or_save_prints_its_error_text_and_exits_1() {
             printed(
                 1,
                 format!(
-                    "{{\"command\":\"read-odm\",\"issues\":[],\"path\":\"{read}\",\"paths\":[],\
-                     \"rows\":null,\"status\":\"failed\"}}\n"
+                    "{{\"command\":\"read-odm\",\"issues\":[{}],\"path\":\"{read}\",\"paths\":[],\
+                     \"rows\":null,\"status\":\"failed\"}}\n",
+                    expected_issue.to_json()
                 )
             ),
             "{arguments:?}"

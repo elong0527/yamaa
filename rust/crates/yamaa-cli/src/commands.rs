@@ -14,21 +14,28 @@
 //!   then its summary line; `resolve` prints the resolved specification as
 //!   canonical JSON, and `schema` the JSON Schema of a file type as the
 //!   facade gives it; `read-odm` prints only the file it saved, as an
-//!   absolute path. `selftest` prints the facade's report as the hosts print
-//!   it (D119): its summary line, `first failure:` when a case failed, `not
-//!   covered:` when an adapter is not covered, then the engine, language,
-//!   host and platform.
+//!   absolute path, or, when the save is refused, D39's error text and the
+//!   lines of the other issues, as a refusal does. `selftest` prints the
+//!   facade's report as the hosts print it (D119): its summary line, `first
+//!   failure:` when a case failed, `not covered:` when an adapter is not
+//!   covered, then the engine, language, host and platform.
 //! - **JSON** (`--format json`). One canonical JSON document (RFC 8785) on
 //!   one line, with the keys the draft `rust/interface/bindings-1.0.yaml`
 //!   lists in `cli.commands[].json_keys`: the command and its arguments, the
 //!   `status`, the issues as objects whose `context` is an object, and the
 //!   written `paths`. `resolve` prints the resolved specification itself,
-//!   and `schema` the JSON Schema itself (D149). A submission's `created` is
+//!   and `schema` the JSON Schema itself (D149); a refusal of either prints
+//!   the command's document, which echoes its arguments: `resolve`'s `path`
+//!   and `spec`, and `schema`'s `type` (D169). A submission's `created` is
 //!   the time its documents carry (D129); a refused submission has none, so
 //!   its `created` is `--created` as given, or null. `read-odm` names SOURCE
-//!   as its `path` and counts the items read in `rows`. `selftest` gives its
-//!   `cases` and the engine `info` as `--version` prints it; the adapters no
-//!   case covers are named on its printed line alone (D119).
+//!   as its `path` and counts the items read in `rows`. Its `status` follows
+//!   the read, as a run's follows the run: a read that completed is
+//!   `succeeded` even when the save of OUT is then refused, which shows as
+//!   the save's issues and exit status 1, and only a refused read is `failed`
+//!   (D169). `selftest` gives its `cases` and the engine `info` as
+//!   `--version` prints it; the adapters no case covers are named on its
+//!   printed line alone (D119).
 //! - **Exit status.** 0 when the result succeeded and its save wrote
 //!   everything, when `read-odm` saved OUT, when `resolve` or `schema`
 //!   printed, when no lint finding remains, and when no selftest case failed;
@@ -240,10 +247,18 @@ fn result(
 /// every issue prints once, then the files written before it. Its JSON is
 /// the command's document with the status `failed`, every issue and, for a
 /// command that writes, the paths.
-fn refusal(mut document: Document, failure: Failure) -> Printed {
+fn refusal(document: Document, failure: Failure) -> Printed {
+    refusal_with(document, Status::Failed, failure)
+}
+
+/// A refusal printed as [`refusal`] prints it, with exit status 1, whose
+/// JSON `status` is `status`: `failed` when the call itself is refused, or
+/// the status of the result whose save was refused, since `status`
+/// describes the result, not the save (D36, D169).
+fn refusal_with(mut document: Document, status: Status, failure: Failure) -> Printed {
     let mut lines = vec![failure.message];
     lines.extend(failure.diagnostics.iter().skip(1).map(Diagnostic::text));
-    document.insert("status".into(), text(Status::Failed.as_str()));
+    document.insert("status".into(), text(status.as_str()));
     document.insert("issues".into(), issues(&failure.diagnostics));
     if document.contains_key("paths") {
         document.insert("paths".into(), texts(&failure.paths));
@@ -553,7 +568,10 @@ fn verbatim(json: String) -> Printed {
 /// selects the csv or parquet profile (D134). It prints the one path the save
 /// wrote. A refused read names SOURCE and a refused save names OUT, each as
 /// given (D39); a refused save writes nothing. The JSON `rows` counts the
-/// items read, so it is null only when the read is refused.
+/// items read, so it is null only when the read is refused, and the `status`
+/// follows the read: `succeeded` once the items are read, even when the save
+/// is then refused, which its issues and exit status 1 report, and `failed`
+/// only for a refused read (D169).
 fn read_odm(call: &Call) -> Result<Printed, Execution> {
     let source = utf8(call, "SOURCE", &call.arguments[0])?;
     let out = utf8(call, "OUT", &call.arguments[1])?;
@@ -603,7 +621,10 @@ fn read_odm(call: &Call) -> Result<Printed, Execution> {
                 status: SUCCEEDED,
             }
         }
-        Err(failure) => refusal(document, failure),
+        // The read completed, so its result succeeded: the refused save
+        // prints D39's error text and exits 1, and its issues are the JSON
+        // `issues` (D169).
+        Err(failure) => refusal_with(document, Status::Succeeded, failure),
     })
 }
 
@@ -652,12 +673,14 @@ fn lint(call: &Call) -> Result<Printed, Execution> {
 /// as the canonical JSON text the facade gives, printed as it is in both
 /// formats (D149). TYPE goes to the facade as given: one that names none of
 /// the four file types is the facade's refusal, `unexpected_file_type`
-/// (SCHEMA-2), whose JSON holds the command, the status and the issue.
+/// (SCHEMA-2). Its JSON holds the command, the status and the issue, and
+/// echoes TYPE as given as `type`, as a refused `resolve` echoes its `path`
+/// and `spec` (D169).
 fn schema(call: &Call) -> Result<Printed, Execution> {
     let file_type = utf8(call, "TYPE", &call.arguments[0])?;
     Ok(match yamaa::schema(file_type) {
         Ok(json) => verbatim(json),
-        Err(failure) => refusal(document("schema", []), failure),
+        Err(failure) => refusal(document("schema", [("type", text(file_type))]), failure),
     })
 }
 

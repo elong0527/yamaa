@@ -339,10 +339,10 @@ impl Build {
   and a missing name as `resource_path_missing`. `MemoryResolver::insert_kind`
   models these.
 - `read_odm` through a resolver captures the source once and holds it whole,
-  under the 10 GiB per-file source bound (code `limit`, `ODM source exceeds
-  10737418240 bytes`), before `max_expanded_bytes` applies: the resolver
-  protocol has no streaming read. Without a resolver, a local archive is
-  streamed and never held whole, and a local plain XML file over
+  under the 10 GiB per-file source bound (`source_odm_limit_exceeded`, `ODM
+  source exceeds 10737418240 bytes`), before `max_expanded_bytes` applies:
+  the resolver protocol has no streaming read. Without a resolver, a local
+  archive is streamed and never held whole, and a local plain XML file over
   `max_expanded_bytes` is refused before it is read; one within that bound
   is held whole.
 - `file_type` captures a file once and interprets only its `yamaa` and
@@ -427,9 +427,12 @@ that constraint, exactly as the current host crates do.
 ### Results
 
 `Table` is the facade form of `public_table::PublicTable`: owned Arrow
-`RecordBatch`es with their schema, plus `columns()`, `rows()`, `ipc()` and
-`stream()`. Stream export follows the ownership rules in "Arrow host handoff"
-above unchanged. The Arrow type of each public column type is part of the
+`RecordBatch`es with their schema, plus `columns()`, `rows()`, `ipc()`,
+`stream()` and `preview()`. Stream export follows the ownership rules in
+"Arrow host handoff" above unchanged. `preview()` renders the printed preview
+(D43, #3030 D167): the header `yamaa.Table: <r> rows x <c> columns`, then
+names, types and at most 10 rows of the first 8 columns, so every host prints
+a table in the same words. The Arrow type of each public column type is part of the
 committed API inventory: strings are `Utf8`, integers `Int64`, floats
 `Float64`, dates `Date32` (days) and zone-free datetimes `TimestampSecond`.
 There is no boolean column type in the public schema vocabulary, so no

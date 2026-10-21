@@ -11,11 +11,9 @@ use crate::ast::{
     WindowFunction,
 };
 use crate::diagnostic::ConditionCode;
-use crate::schema::{Document, DocumentNode as N, SchemaContext as C, SchemaDiagnostic};
+use crate::schema::{SchemaContext as C, SchemaDiagnostic};
 use crate::specification::UnsupportedFeature;
 
-/// A copy entry (P-COPY-1), refused until P1-12 builds it.
-pub const COPY: &str = "copy";
 /// More than one origin on a column or a value-level entry (P-ORIGIN-1),
 /// refused until P1-13 builds them.
 pub const MULTIPLE_ORIGINS: &str = "multiple_origins";
@@ -33,24 +31,6 @@ fn unsupported(operation: &str, path: String) -> UnsupportedFeature {
         operation: operation.into(),
         path,
     }
-}
-
-/// The copy entries one admitted 1.x layer writes, each at `columns[i]`, in
-/// written order. Composition cannot key a copy entry yet, so a layer that
-/// writes one is refused before its layers compose (P1-12).
-pub fn copy_entries(layer: &Document) -> Vec<UnsupportedFeature> {
-    let Some(N::Sequence(columns)) = layer
-        .field(layer.root(), "columns")
-        .map(|node| &layer.nodes()[node])
-    else {
-        return Vec::new();
-    };
-    columns
-        .iter()
-        .enumerate()
-        .filter(|&(_, &column)| layer.field(column, COPY).is_some())
-        .map(|(index, _)| unsupported(COPY, format!("columns[{index}]")))
-        .collect()
 }
 
 /// What a lowered 1.0 specification writes that the engine does not build

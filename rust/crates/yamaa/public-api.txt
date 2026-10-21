@@ -76,7 +76,6 @@ yamaa::LockReason: pub use yamaa::error::LockReason
 yamaa::LockSyntaxError: pub use yamaa::error::LockSyntaxError
 yamaa::MemoryResolver: pub use yamaa::resolver::MemoryResolver
 yamaa::ODM_COLUMNS: pub use yamaa::odm::ODM_COLUMNS
-yamaa::OdmError: pub use yamaa::error::OdmError
 yamaa::OdmOptions: pub use yamaa::odm::OdmOptions
 yamaa::Outcome: pub use yamaa::observe::Outcome
 yamaa::PHASES: pub use yamaa::diagnostic::PHASES
@@ -315,7 +314,6 @@ yamaa::error::Error: pub enum Error [derive(Clone, Debug)] [non_exhaustive]
 yamaa::error::Error::Cancelled: Cancelled
 yamaa::error::Error::Host: Host(FunctionError)
 yamaa::error::Error::Internal: Internal { code: &'static str }
-yamaa::error::Error::Odm: Odm(OdmError)
 yamaa::error::Error::Rejected: Rejected(Report)
 yamaa::error::Error::Resolver: Resolver(ResolverFailure)
 yamaa::error::Error::Table: Table(TableError)
@@ -365,10 +363,6 @@ yamaa::error::LockSyntaxError::Document: Document { resource_refusal: bool, }
 yamaa::error::LockSyntaxError::Json: Json { line: usize, column: usize, }
 yamaa::error::LockSyntaxError::Limit: Limit { resource: &'static str, limit: usize, actual: Option<usize>, }
 yamaa::error::LockSyntaxError::Shape: Shape { field: &'static str, }
-yamaa::error::OdmError: impl OdmError
-yamaa::error::OdmError: pub struct OdmError [derive(Clone, Debug, Eq, PartialEq)] [non_exhaustive]
-yamaa::error::OdmError::code: pub fn code(&self) -> &'static str
-yamaa::error::OdmError::message: pub fn message(&self) -> &str
 yamaa::error::ResolverFailure: impl ResolverFailure
 yamaa::error::ResolverFailure: pub struct ResolverFailure [derive(Clone, Debug, Eq, PartialEq)] [non_exhaustive]
 yamaa::error::ResolverFailure::code: pub fn code(&self) -> &'static str
@@ -695,6 +689,7 @@ yamaa::table::Table: pub struct Table [derive(Clone, Debug)] [non_exhaustive]
 yamaa::table::Table::batches: pub fn batches(&self) -> &[RecordBatch]
 yamaa::table::Table::columns: pub fn columns(&self) -> &Fields
 yamaa::table::Table::ipc: pub fn ipc(&self) -> Result<Vec<u8>, TableError>
+yamaa::table::Table::preview: pub fn preview(&self) -> String
 yamaa::table::Table::rows: pub fn rows(&self) -> usize
 yamaa::table::Table::schema: pub fn schema(&self) -> &SchemaRef
 yamaa::table::Table::stream: pub fn stream(&self) -> FFI_ArrowArrayStream
