@@ -230,17 +230,14 @@ mod tests {
         .unwrap();
         let table = PublicTable::from_batches(schema, vec![batch]).unwrap();
         assert_eq!(encode(&table, "csv").unwrap(), b"ID\na\n");
-        match encode(&table, "parquet") {
-            Ok(bytes) => {
-                assert!(cfg!(feature = "parquet"));
-                assert!(bytes.starts_with(b"PAR1") && bytes.ends_with(b"PAR1"));
-            }
-            Err(issues) => {
-                assert!(!cfg!(feature = "parquet"), "{issues:?}");
-                let [refused] = issues.try_into().unwrap();
-                assert_eq!(refused.context["stage"], text("output"));
-                assert_eq!(refused.context["code"], text("parquet_codec_unavailable"));
-            }
+        let parquet = encode(&table, "parquet");
+        if cfg!(feature = "parquet") {
+            let bytes = parquet.unwrap();
+            assert!(bytes.starts_with(b"PAR1") && bytes.ends_with(b"PAR1"));
+        } else {
+            let [refused] = parquet.unwrap_err().try_into().unwrap();
+            assert_eq!(refused.context["stage"], text("output"));
+            assert_eq!(refused.context["code"], text("parquet_codec_unavailable"));
         }
     }
 
