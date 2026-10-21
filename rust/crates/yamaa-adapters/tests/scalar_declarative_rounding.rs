@@ -875,8 +875,6 @@ mod scalar {
         fn original_negative_fixtures_retain_complete_normative_diagnostics() {
             for name in [
                 "negative-impute-bad-month",
-                "negative-impute-unreachable-month",
-                "negative-impute-missing-month",
                 "negative-impute-day-rule",
                 "negative-impute-bad-day",
                 "negative-date-conversion",

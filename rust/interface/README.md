@@ -15,8 +15,8 @@ native qualification lane compare the generated files with this definition
 negotiation below is the design contract, not an implemented handshake; it and
 the boundary compatibility tests
 ([#2692](https://github.com/elong0527/yamaa/issues/2692)) wait for an engine
-that loads separately from the host facade, planned for 0.5.0
-([#2785](https://github.com/elong0527/yamaa/issues/2785)).
+that loads separately from the host facade, which is future work
+([#2870](https://github.com/elong0527/yamaa/issues/2870)).
 
 ## Boundary choice and source ownership
 
@@ -230,11 +230,11 @@ public type projection, function, class, member and argument with its
 position, default and result, the refusal, each exported name and S3 method,
 and each command, flag, exit status and JSON key. It leaves out the private
 native sections, documentation and implementation details such as `holds` and
-`calls`. The stability check of
-[the stability contract](../../docs/design/interface-1.0/stability.md)
-compares these lines with the latest release tag: a removed or changed line is
-a candidate break, and an added line an addition. A stale manifest fails the
-read-only comparison like any other generated file.
+`calls`. The interface check of
+[the stability contract](../../docs/release.md#stability-contract) compares
+these lines with the newest final release of the same major: a removed or
+changed line is a break, and an added line an addition. A stale manifest fails
+the read-only comparison like any other generated file.
 
 ## Version and feature handshake
 

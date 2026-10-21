@@ -21,6 +21,8 @@ and tests the installed package:
 - native-offline-source and native-offline-toolchain: both source archives,
   built with the network disabled. Their R is R-release, and native.py does
   not declare their CPython, so they qualify the Python source archive alone;
+- native-offline-wheel: each wheel, installed from local files with the
+  network disabled, with each CPython that it declares;
 - native-r-binary-install: each R binary package, with its R series;
 - native-cli-install: each command-line binary, for its Rust target.
 
@@ -67,6 +69,7 @@ QUALIFYING = frozenset(
         "cran",
         "offline_source",
         "offline_toolchain",
+        "offline_wheel",
         "r_binary",
         "cli",
     }
@@ -356,6 +359,10 @@ def lanes(coverage=None):
                     add(job, runner, R_SOURCE, "series", release)
                 else:
                     raise ValueError(f"{job}: {MODULE} does not know the host {host}")
+    for runner in coverage["offline_wheel"]["os"]:
+        for python in coverage["offline_wheel"]["python"]:
+            job = f"native-offline-wheel ({runner}, {python})"
+            add(job, runner, WHEEL, "series", python)
     for runner in coverage["r_binary"]["os"]:
         for r in coverage["r_binary"]["r"]:
             add(

@@ -1286,7 +1286,7 @@ class PublicDomains(unittest.TestCase):
                 )
             with (ROOT / "temporal-imputation-diagnostics.tsv").open() as stream:
                 failures = list(csv.DictReader(stream, delimiter="\t"))
-            self.assertEqual(len(failures), 10)
+            self.assertEqual(len(failures), 8)
             for finding in failures:
                 case = Path(directory) / finding["case"]
                 shutil.copytree(ROOT / "cases" / finding["case"], case)

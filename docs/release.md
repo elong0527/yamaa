@@ -97,6 +97,23 @@ network: the job's log keeps the report as installation qualification
 evidence, and the job fails unless the selftest reports `succeeded`. The
 package then runs the conformance corpus, also without a network.
 
+The native run also installs each wheel that a release publishes as a
+restricted machine installs
+[files carried in](articles/restricted-environments.md#from-files-carried-in):
+its `native-offline-wheel` jobs, on every platform with CPython 3.12 and
+3.15. The wheels are abi3, so the oldest and the newest supported CPython
+bound the supported interpreters that each wheel serves. While the network
+is up, pip downloads the wheel's runtime dependencies, at the versions that
+`python/uv.lock` pins and as wheels alone, into one directory with the
+wheel. Then, with the network disabled, pip installs the wheel from that
+directory alone, with `--no-index --find-links`, into a new virtual
+environment, which builds nothing. The installed package must import with
+the wheel's version, and it then runs its selftest: the job's log keeps the
+report, and the job fails unless it reports `succeeded`. On Linux the
+installation and the selftest run in containers without a network, from the
+manylinux_2_28 image with its CPython of the lane's version, and on macOS
+and Windows behind the same refusing proxy.
+
 The native run also proves the offline toolchain route (#3030 D54) on Linux
 x86_64 and aarch64: its `native-offline-toolchain` jobs. While the network is
 up, each downloads the standalone installer archive of the minimum Rust for
@@ -182,12 +199,14 @@ refuses connections and runs two Cargo jobs.
 - In R-hub v2's `gcc16` container, CRAN's r-devel-linux-x86_64-fedora-gcc
   configuration (R-devel built with GCC 16 on Fedora 44, with CRAN's check
   settings), the build uses the Cargo and rustc that Fedora packages, as
-  CRAN's Linux check servers use their distribution's. Development PRs do not run the release lanes, so before a
-release also dispatch R-CMD-check, Dependency graphs and Release compatibility
-on the candidate. Release compatibility checks the minimum toolchain, the R
-source package built with it, minimal format builds, Python 3.15 and minimum
-Python saved artifact readers; dispatch CI for its minimum R saved artifact
-reader checks.
+  CRAN's Linux check servers use their distribution's.
+
+Development PRs do not run the release lanes, so before a release also
+dispatch R-CMD-check, Dependency graphs and Release compatibility on the
+candidate. Release compatibility checks the minimum toolchain, the R source
+package built with it, minimal format builds, Python 3.15 and minimum Python
+saved artifact readers; dispatch CI for its minimum R saved artifact reader
+checks.
 
 A release has one identity, written once in `tools/packaging/release.toml`:
 the final version X.Y.Z and, for a release candidate, its number N. Each
@@ -203,12 +222,125 @@ link of `python/README.md` that names a release tag to name its tag:
 
 An R version cannot mark a candidate, so the R package keeps the final version
 through the candidates (#3030 D53), and R does not offer the final release as
-an update to a candidate. The previous Python release is the `yamaa-py-0.3.0`
-tag.
+an update to a candidate.
 
 The commit that changes the identity also re-pins the tag links of
 `python/README.md`, the wheels' PyPI description: the check fails until they
 name the new tag, and they return 404 on GitHub until that tag is pushed.
+
+## Stability contract
+
+From yamaa 1.0.0, every 1.x release keeps the 1.0 interface. A project, a
+program or a script that works with 1.0.0 works the same way with every later
+1.x release, with the same results and the same saved bytes. Only a 2.0
+release may break the interface, and its release notes say what breaks
+(#3030 D20). Release candidates are not part of the contract: the freeze
+starts at 1.0.0 (#3030 D1).
+
+**What is frozen.** Each surface is named by the files that hold it.
+
+- Files: the four file types, `project`, `spec`, `codelists` and `function`,
+  as the committed JSON Schemas in `yaml/v1/json/` give them: every field's
+  name, kind, type, default and meaning, and the verbs and verifications with
+  their parameters. Also the closed grammars in `yaml/grammar/`, and the
+  closed vocabularies, such as column types, profiles and the CDISC lists in
+  `yaml/vocabulary/cdisc.yaml`. Each release's JSON Schema for a file type is
+  that committed file at the release's tag; for `spec` in 1.0.0 it is
+  `https://raw.githubusercontent.com/elong0527/yamaa/yamaa-v1.0.0/yaml/v1/json/spec.schema.json`.
+  From 1.0.0 the files keep their path, and they carry no `$id`
+  (#3030 D161).
+- Diagnostics: the condition names in `yaml/conditions.yaml` and the phases
+  each may report; the condition and the rule that an existing failure
+  reports; a `context` key that a benchmark's expected `error.yaml` pins,
+  with its value (#3030 D156); and the twelve columns of `issues` and the
+  fourteen of the run report, in order.
+- Host functions and the command line: the frozen sections of
+  `rust/interface/bindings.yaml`, as `rust/interface/manifest.txt` lists
+  them. They hold the Python, R and command-line names; the arguments, with
+  their names, order and defaults; result members; the values of `status`;
+  return types; each host's type mapping; and the command line's commands,
+  flags, exit statuses and `--format json` keys.
+- The Rust facade: the public items of the `yamaa` crate, as
+  `rust/crates/yamaa/public-api.txt` lists them. The internal crates
+  `yamaa-core` and `yamaa-adapters` are not covered.
+- Saved artifacts: the bytes each profile writes (CSV, Parquet, SAS Transport
+  version 5, Dataset-JSON 1.1, Define-XML 2.1 and the run report) for an
+  admitted project and its inputs, on every supported platform. The Parquet
+  profile asks only that a file read back the same
+  ([PARQUET-4](../rules/reference/parquet.md#parquet-4)); yamaa's releases
+  keep its bytes too, including the writer that its footer names in
+  `created_by`, which is `parquet-rs version 55.2.0` in every 1.x release
+  (#3030 D160).
+- Printed text: the labels, order and separators of every summary line (a
+  run's, a project run's, a submission's and a check's; a selftest's, with
+  its `first failure:` and information lines; and that of a spec or project
+  that has read nothing), the layout of the `first issue:` line and of a
+  project run's member lines, and the `yamaa.Table:` header.
+
+**What a minor release may add.** A minor release may add optional fields
+whose absence keeps the 1.0 meaning; file types, verbs, verifications and
+grammar functions; enumeration values; conditions, for new features only;
+`context` keys, since a benchmark's expected context need only be contained
+in the issue's (#3030 D156); host functions, members, and optional arguments
+after the existing ones; commands, flags and JSON keys; and table columns
+after the frozen ones. A file that uses a feature added in 1.N declares
+`yamaa: "1.N"`, and an older engine refuses it as
+`unsupported_language_version`, naming the version that it needs
+([SCHEMA-2](../rules/reference/schema-language.md#schema-2)). A minor
+release may also raise a platform floor, such as the minimum Python, R or
+Rust, and its release notes announce it; a patch release never does.
+
+**What a patch release may change.** Defect fixes, documentation, packaging
+and platform support, and message text. A change that a repository such as
+CRAN asks for after a release moves every host to the same patch version
+(#3030 D51).
+
+**What no 1.x release may do.** Rename, remove or retype a field, argument,
+member, command, flag, column, condition, phase or enumeration value; drop a
+pinned `context` key or change its value; add a required field or argument;
+change a default; report a different condition or rule for an existing
+failure; change the results or bytes of an admitted file; or refuse a file
+that an earlier 1.x release admitted.
+
+**Messages are not frozen.** Every `message` column, error text, the message
+in a printed summary and the cells of a table preview may change in any
+release. Programs match `condition` and `rule`, never `message`, and read
+`context` as JSON, by key, since a release may add keys.
+
+**Defect fixes.** Behavior that contradicts a rule is a defect, and fixing it
+is not a break, even when bytes change. Each fix names the rule it restores,
+adds a benchmark that pins the corrected bytes, and is listed in the release
+notes. When a fix must change a frozen element, or a file of a benchmark that
+the previous release had, it adds an entry for each to the interface check's
+one exception file, `tools/validation/interface_exceptions.yaml` (#3442),
+naming the rule it restores and the issue that records the owner's decision;
+nothing else is exempt. When a rule itself is wrong, changing its statement
+changes the language: the change waits for 2.0, or arrives in 1.x as a new
+optional field.
+
+**Enforcement.** The interface check,
+`tools.validation.check_interface_stability`, runs in
+`make check-repository`, and so in CI's repository job. It compares the
+frozen surfaces with the newest final release of the same major, the tag
+`yamaa-vM.m.p` with no candidate suffix, and refuses a break in the
+conditions and their phases in `yaml/conditions.yaml`, the lines of
+`rust/interface/manifest.txt` and those of
+`rust/crates/yamaa/public-api.txt` (#3442).
+
+The remaining comparisons are tracked separately:
+
+- the four file types' JSON Schemas and the grammars in `yaml/grammar/`
+  (#3444);
+- each existing failure's phase, condition and rule, the rule card IDs, and
+  every benchmark present at that tag, whose specification, input and
+  expected files stay byte for byte (#3445).
+
+It enforces nothing while the major is 0. For the first release of a new
+major, its candidates included, it lists every break against the newest final
+release of the previous major, for that release's notes, and passes. Since
+those benchmarks keep their expected files and CI compares each result with
+them, a 1.x release reproduces 1.0's results and saved bytes. CI compares a
+Parquet file by what it reads back as; #3475 adds a control for its bytes.
 
 ## Saved artifact readers
 
@@ -378,22 +510,25 @@ Before pushing the release tag, confirm on the final commit:
 
 1. Its complete native qualification passed.
 2. Its Dependency graphs run passed, including the three advisory checks.
-3. Every ignored advisory in `rust/deny.toml` and `osv-scanner.toml` still
+3. It passes the [interface check](#stability-contract) against the previous
+   final release. For 1.0.0 the check lists the breaks against
+   `yamaa-v0.5.0`, which the 1.0.0 notes summarize (#3462).
+4. Every ignored advisory in `rust/deny.toml` and `osv-scanner.toml` still
    matches a locked package, and its reason still holds. Remove any ignore
    that fails either test.
-4. Every [component outside the advisory scanners](#components-outside-the-advisory-scanners)
+5. Every [component outside the advisory scanners](#components-outside-the-advisory-scanners)
    was compared with its upstream releases and security advisories since the
    previous release, and each fix that applies is taken or has an issue.
-5. The vendored ReadStat was compared with upstream `dev` commit by commit.
+6. The vendored ReadStat was compared with upstream `dev` commit by commit.
    Each commit after the review baseline that its
    [README](../rust/crates/yamaa-adapters/vendor/readstat/README.md#upstream-changes-after-119)
    records, and that changes a vendored file, is ported or listed there as not
    ported with its reason, and the README records the new baseline. In a
    ReadStat checkout, `git log <baseline>..origin/dev -- <vendored files>`
    lists them, with each vendored file named by its path under `src/`.
-6. A [release rehearsal](#publication) passed against a native run of that
+7. A [release rehearsal](#publication) passed against a native run of that
    commit; the tag names that run.
-7. For a release candidate, `docs/releases/X.Y.Z-rc.N.md` says what changed
+8. For a release candidate, `docs/releases/X.Y.Z-rc.N.md` says what changed
    since the previous candidate, and the rehearsal shows the release body
    that the tag will publish.
 
@@ -429,9 +564,9 @@ run of the same commit cannot replace the run the release was reviewed against.
 The named run must be a completed successful native run of the peeled tag
 commit: a scheduled main run, a main dispatch, or a same-repository
 `qualification/issue-*` push. It requires all installed lanes, the offline
-source installs, the offline toolchain route, the R binary installs and the
-unpacked command-line archives among them, the R binary and command-line
-builds, shared Rust/math, complete cohort comparisons, strict R package
+wheel and source installs, the offline toolchain route, the R binary
+installs and the unpacked command-line archives among them, the R binary and
+command-line builds, shared Rust/math, complete cohort comparisons, strict R package
 checks and CRAN's incoming checks to have passed. Branch dispatches cannot release. A tag other than the one the release
 identity names fails before any request: a candidate tag on a final release, a
 final release tag on a candidate, or another version or candidate number. So
@@ -801,16 +936,21 @@ offers, and reproduces the license, copyright and NOTICE texts that the crate
 ships for it (#3364). The Python packages' copy covers the Python binding's
 crates, the R package's copy the R binding's, all of which the R source package
 bundles, and the command line's copy, `rust/crates/yamaa-cli/LICENSE-THIRD-PARTY.txt`,
-the crates of `yamaa-cli`. It also gives the standard library's licensing from
-the notice that the Rust project ships with the pinned toolchain,
-`share/doc/rust/COPYRIGHT-library.html`, because the native code links that
-library: the licensing statement, the in-tree licenses and copyright holders,
-and of the notice's out-of-tree crates those that the standard library links
-on the supported targets. No package notice names a GNU license; the only GPL
-wording that remains is the clause of the LLVM exception to Apache-2.0, a
-permissive license, which names GPLv2. The command line keeps only that file
-and its component inventory beside its crate; its archives carry the Python
-packages' copies of the other notices. `LICENSE-READSTAT.txt`,
+the crates of `yamaa-cli`. It also gives the standard library's licensing,
+because the native code links that library: from the notice that the Rust
+project ships with the pinned toolchain, `share/doc/rust/COPYRIGHT-library.html`,
+the licensing statement and the in-tree licenses and copyright holders; and
+from the toolchain's `rust-src` component, which that notice does not fully
+cover, the third-party crates that the standard library links on the supported
+targets, such as `addr2line` and `object`, each with its one license and the
+texts that its package ships (#3369). No package notice names a GNU license;
+the only GPL wording that remains is the clause of the LLVM exception to
+Apache-2.0, a permissive license, which names GPLv2. The command line keeps
+only that file, its component inventory and `LICENSE-MUSL.txt` beside its
+crate; its archives carry the Python packages' copies of the other notices.
+The archives for the musl targets, whose executables link the musl C library
+statically, also carry `LICENSE-MUSL.txt`: musl's `COPYRIGHT` file, relied on
+under MIT. `LICENSE-READSTAT.txt`,
 `LICENSE-UNICODE.txt` and `LICENSE-YAML.txt` cover the vendored ReadStat
 sources, the Unicode data in yamaa's own tables and the vendored YAML parser.
 The R package keeps its `MIT + file LICENSE` declaration, and its `Copyright`
@@ -821,12 +961,14 @@ relied on under MIT, with Unicode-3.0 for the Unicode tables in `core`.
 
 `tools.packaging.generate_third_party_notices` generates each host's crate
 notices from `rust/Cargo.lock` and the standard library section from the
-toolchain that `rust/rust-toolchain.toml` pins, and it derives that
+toolchain that `rust/rust-toolchain.toml` pins, its notice and its `rust-src`
+component, which the repository checks add to it, and it derives that
 expression from the Python binding's linked crates. The repository check
 fails when a host gains or loses a linked crate without a matching notice
 entry in its host's copy, when `rustc` in `rust/` is not the pinned toolchain,
-when the committed section differs from that toolchain's notice, and when a
-notice would name a GNU license. Staging the R source package fails while its
+when the committed section differs from that toolchain's notice and sources,
+when the musl notice was reviewed for another toolchain, and when a notice
+would name a GNU license. Staging the R source package fails while its
 notices name a crate that it does not bundle. Native qualification and the
 release selector require every wheel, source package, R binary package and
 command-line archive to carry its own host's notices unchanged, and refuse a

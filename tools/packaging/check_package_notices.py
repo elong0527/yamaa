@@ -12,7 +12,9 @@ COMPONENTS.tsv, which list each host's own crates and components:
 tools/packaging/generate_third_party_notices.py and
 tools/packaging/generate_component_inventory.py write them. The command line
 keeps only those two beside its crate, and its archives carry the Python
-packages' copies of the others. The Python source archive's COMPONENTS.tsv is
+packages' copies of the others. It also keeps LICENSE-MUSL.txt there, musl's
+notice, which only the archives for the musl targets carry, because only
+their executables link musl. The Python source archive's COMPONENTS.tsv is
 the wheels' without its rust-std row, the Rust standard library that the
 wheels link (source_inventory in the latter). An R binary package's is the R
 source package's followed by the one rust-std row that the package's
@@ -115,9 +117,14 @@ def notice_members(name, identity, notices):
     for a release candidate. An R binary package's name adds the R series that
     it was built for, as in yamaa_1.0.0-4.6.zip, and a command-line archive's
     the target of its executable, as in yamaa-1.0.0-aarch64-apple-darwin.zip.
+    The archive for a musl target also carries musl's notice.
     """
     python, r, cargo = identity.python, identity.r, identity.cargo
-    archives = {f"yamaa-{cargo}-{target}.zip" for target in native.CLI_TARGETS.values()}
+    archives = {
+        f"yamaa-{cargo}-{target}.zip": target for target in native.CLI_TARGETS.values()
+    }
+    if archives.get(name) in third_party.MUSL_TARGETS:
+        notices = (*notices, third_party.MUSL_NOTICE)
     if name.startswith(f"yamaa-{python}-") and name.endswith(".whl"):
         form, directory = "wheel", f"yamaa-{python}.dist-info/licenses"
     elif name == f"yamaa-{python}.tar.gz":
@@ -141,7 +148,7 @@ def checkout_copy(form, notice):
     `notice`: its host's copy, or for a command-line archive the Python
     packages' copy of a notice that the hosts share."""
     host = HOSTS[form]
-    if host == "cli" and notice not in third_party.HOST_NOTICES:
+    if host == "cli" and notice not in third_party.CLI_NOTICES:
         host = "python"
     directory = third_party.copies()[host].relative_to(third_party.ROOT)
     return f"{directory.as_posix()}/{notice}"

@@ -1,8 +1,11 @@
 #![cfg(feature = "yaml")]
 //! `check` reports the group-scope and driver-scope refusals and a row
-//! filter's phase boundaries as `domain` does (#3229, #2844 decision 3).
-//! Every case lists the same issues in both routes and hosts, and names the
-//! condition and rule of its first issue.
+//! filter's phase boundaries as `domain` does (#3229, #2844 decision 3), and
+//! the refusals of what the rows read that the declarations decide (#3309):
+//! `require_match` and `between` on a read that is no implicit join, a flag's
+//! read of a lookup, a template placeholder that is no `str`, and a read of a
+//! 1.0 row driver as a lookup. Every case lists the same issues in both
+//! routes and hosts, and names the condition and rule of its first issue.
 use std::{
     fs,
     path::PathBuf,
@@ -220,6 +223,22 @@ fn assert_cases(cases: &[(String, &str)]) {
                 checked
                     .first()
                     .is_some_and(|issue| issue.starts_with(first)),
+                "{specification}\n({host:?}): {checked:?}"
+            );
+        }
+    }
+}
+
+/// Check each specification in both routes and hosts: neither reports an
+/// issue.
+fn assert_clean(specifications: &[String]) {
+    for specification in specifications {
+        let fixture = Fixture::new(specification);
+        for host in [Language::Python, Language::R] {
+            let (checked, built) = fixture.issues(host);
+            assert_eq!(checked, built, "{specification}\n({host:?})");
+            assert!(
+                checked.is_empty(),
                 "{specification}\n({host:?}): {checked:?}"
             );
         }
@@ -509,4 +528,354 @@ fn check_reports_each_row_filter_phase_boundary_as_domain_does() {
             row_filter,
         ),
     ]);
+}
+
+#[test]
+fn check_reports_each_join_option_refusal_as_domain_does() {
+    let row = |derivation| ungrouped(Case { derivation, ..CASE });
+    let range = "prohibited_construct Some(\"LOOKUP-9\")";
+    let required = "prohibited_construct Some(\"LOOKUP-24\")";
+    let filtered = "unknown_field Some(\"LOOKUP-8\")";
+    assert_cases(&[
+        // A row template's read of its driver's field, of a column or of a
+        // lookup; with both options, `require_match` is refused first.
+        (
+            row("X: {source: {variable: VS.SYSBP, between: {value: VS.VSDY, lower: VSDY, upper: VSDY}}}"),
+            range,
+        ),
+        (row("X: {source: {variable: VS.SYSBP, require_match: true}}"), required),
+        (
+            row("X: {source: {variable: VS.SYSBP, require_match: true, between: {value: VS.VSDY, lower: VSDY, upper: VSDY}}}"),
+            required,
+        ),
+        (
+            row("X: {source: {variable: AVAL, between: {value: VS.VSDY, lower: VSDY, upper: VSDY}}}"),
+            range,
+        ),
+        (
+            ungrouped(Case {
+                intermediates: PLANNED,
+                derivation: "X: {source: {variable: PLANNED.PLANDOSE, require_match: true}}",
+                ..CASE
+            }),
+            required,
+        ),
+        // A grouped template's group key, which is one value of the row.
+        (
+            grouped(Case {
+                derivation: "C: {source: {variable: VS.STUDYID, require_match: true}}",
+                ..CASE
+            }),
+            required,
+        ),
+        // A source of `first_available`, of a mapping and of a `case` result.
+        (
+            row("X: {first_available: {sources: [{variable: VS.SYSBP, require_match: true}, VS.DIABP]}}"),
+            required,
+        ),
+        (
+            row("C: {mapping: {source: {variable: VS.VSTESTCD, between: {value: VS.VSDY, lower: VSDY, upper: VSDY}}, dict: {\"1\": one}}}"),
+            range,
+        ),
+        (
+            row("X: {case: [{when: \"AVAL > 1\", then: {source: {variable: VS.SYSBP, require_match: true}}}, {otherwise: {literal: 2.0}}]}"),
+            required,
+        ),
+        // The column phase, for one driver, and for the driver of one of
+        // two templates, whose join the other keeps.
+        (
+            ungrouped(Case {
+                x: "{source: {variable: VS.SYSBP, require_match: true}}",
+                ..CASE
+            }),
+            required,
+        ),
+        (
+            two(
+                Case {
+                    x: "{source: {variable: HOME.SYSBP, require_match: true}}",
+                    ..CASE
+                },
+                "",
+            ),
+            required,
+        ),
+        // Without row templates: the base's field, a lookup's field, a
+        // column, and a source of `first_available`, at the root or in a
+        // `case` result, which binds as a row template's does.
+        (
+            implicit(
+                "",
+                "{source: {variable: VS.SYSBP, require_match: true, between: {value: VS.VSDY, lower: VSDY, upper: VSDY}}}",
+                "",
+            ),
+            required,
+        ),
+        (
+            implicit(
+                PLANNED,
+                "{source: {variable: PLANNED.PLANDOSE, require_match: true}}",
+                "",
+            ),
+            required,
+        ),
+        (
+            implicit(
+                "",
+                "{source: {variable: VSDY, between: {value: VS.VSDY, lower: VSDY, upper: VSDY}}}",
+                "",
+            ),
+            range,
+        ),
+        (
+            implicit(
+                "",
+                "{first_available: {sources: [{variable: VS.SYSBP, require_match: true}, VS.DIABP]}}",
+                "",
+            ),
+            required,
+        ),
+        (
+            implicit(
+                "",
+                "{case: [{when: \"VSDY > 1\", then: {first_available: {sources: [{variable: VS.SYSBP, require_match: true}]}}}, {otherwise: {literal: 1.0}}]}",
+                "",
+            ),
+            required,
+        ),
+        // Without row templates a refused filter still leaves the read
+        // bound; in a row template it binds nothing more.
+        (
+            implicit(
+                "",
+                "{source: {variable: VS.SYSBP, require_match: true, filter: \"PLAN.FIRST > 1\"}}",
+                "",
+            ),
+            filtered,
+        ),
+        (
+            row("X: {source: {variable: VS.SYSBP, require_match: true, filter: \"HOME.VSDY > 1\"}}"),
+            filtered,
+        ),
+        // A read that fails first binds nothing to refuse.
+        (
+            grouped(Case {
+                derivation: "X: {source: {variable: VS.SYSBP, require_match: true}}",
+                ..CASE
+            }),
+            "ungrouped_driver_field Some(\"ROW-5\")",
+        ),
+    ]);
+    // Another input's field joins, and both options apply to the join.
+    assert_clean(&[
+        row("X: {source: {variable: HOME.SYSBP, require_match: true, between: {value: VS.VSDY, upper: VSDY}}}"),
+        ungrouped(Case {
+            x: "{source: {variable: HOME.SYSBP, require_match: true}}",
+            ..CASE
+        }),
+    ]);
+}
+
+#[test]
+fn check_reports_a_flag_read_binding_cannot_resolve_as_domain_does() {
+    let unknown = "unknown_field Some(\"FORMULA-9\")";
+    assert_cases(&[
+        // A lookup's field in a row template's flag and in the column phase,
+        // once for the bindings of two templates, and a name nothing
+        // declares.
+        (
+            ungrouped(Case {
+                intermediates: PLANNED,
+                derivation: "C: {flag: \"PLANNED.PLANDOSE > 1\"}",
+                ..CASE
+            }),
+            unknown,
+        ),
+        (
+            ungrouped(Case {
+                intermediates: PLANNED,
+                c: "{flag: \"PLANNED.PLANDOSE > 1\"}",
+                ..CASE
+            }),
+            unknown,
+        ),
+        (
+            two(
+                Case {
+                    intermediates: PLANNED,
+                    c: "{flag: \"PLANNED.PLANDOSE > 1\"}",
+                    ..CASE
+                },
+                "",
+            ),
+            unknown,
+        ),
+        (
+            ungrouped(Case {
+                derivation: "C: {flag: \"XYZ.SYSBP > 1\"}",
+                ..CASE
+            }),
+            unknown,
+        ),
+    ]);
+}
+
+#[test]
+fn check_reports_each_template_placeholder_type_as_domain_does() {
+    let text = "incompatible_input_type Some(\"TEXT-1\")";
+    assert_cases(&[
+        // A column-phase placeholder of an integer window.
+        (
+            ungrouped(Case {
+                c: "{str_template: \"{SEQ}\"}",
+                ..CASE
+            }),
+            text,
+        ),
+        // In a row template: a float column and a field typed int, each,
+        // and another input's field, read through its join.
+        (
+            ungrouped(Case {
+                derivation: "C: {str_template: \"{AVAL}-{VS.VSDY}\"}",
+                ..CASE
+            }),
+            text,
+        ),
+        (
+            ungrouped(Case {
+                derivation: "C: {str_template: \"{HOME.VSDY}\"}",
+                ..CASE
+            }),
+            text,
+        ),
+        // The column phase binds for the drivers of two templates; each
+        // placeholder fails once.
+        (
+            two(
+                Case {
+                    c: "{str_template: \"{VS.VSDY}-{SEQ}\"}",
+                    ..CASE
+                },
+                "",
+            ),
+            text,
+        ),
+    ]);
+    // A `str` column, and a field its input leaves untyped.
+    assert_clean(&[ungrouped(Case {
+        derivation: "C: {str_template: \"{PARAMCD}-{VS.VSTESTCD}\"}",
+        ..CASE
+    })]);
+}
+
+/// A 1.0 specification whose lookup DOSES drives the template `dose` and so
+/// declares no key (ROW-2). The template `vs` reads `vs` besides its own
+/// fields and takes `filter`; `dose` derives `dose` besides its own; X and C
+/// default to `x` and `c`.
+fn keyless(vs: &str, filter: &str, dose: &str, x: &str, c: &str) -> String {
+    format!(
+        "yamaa: \"1.0\"\ntype: spec\ndomain: ADVS\nkeys: [STUDYID, USUBJID, PARAMCD]\n\
+         input:\n\
+         \x20 VS: {{path: vs.csv, types: {{VSDTC: date, VSDY: int, SYSBP: float, DIABP: float}}}}\n\
+         \x20 PLAN: {{path: plan.csv, types: {{DOSENUM: int, PLANDOSE: float, FIRST: int, LAST: int, REF: int}}}}\n\
+         intermediates:\n  - {{id: DOSES, dataset: PLAN, filter: \"PLAN.DOSENUM > 0\"}}\n\
+         output: {{path: out.csv, columns: [STUDYID, USUBJID, PARAMCD, AVAL, X, C]}}\n\
+         columns:\n\
+         \x20 - {{name: STUDYID, type: str}}\n\
+         \x20 - {{name: USUBJID, type: str}}\n\
+         \x20 - {{name: PARAMCD, type: str}}\n\
+         \x20 - {{name: AVAL, type: float}}\n\
+         \x20 - {{name: X, type: float, derivation: {x}}}\n\
+         \x20 - {{name: C, type: str, derivation: {c}}}\n\
+         rows:\n\
+         \x20 - id: vs\n    dataset: VS\n{filter}    derivations:\n\
+         \x20     STUDYID: VS.STUDYID\n      USUBJID: VS.USUBJID\n      PARAMCD: VS.VSTESTCD\n{vs}\
+         \x20 - id: dose\n    dataset: DOSES\n    derivations:\n\
+         \x20     STUDYID: DOSES.STUDYID\n      USUBJID: DOSES.USUBJID\n      PARAMCD: \"'DOSE'\"\n      AVAL: DOSES.PLANDOSE\n{dose}"
+    )
+}
+
+#[test]
+fn check_reports_each_read_of_a_keyless_row_driver_as_domain_does() {
+    let key = "missing_required_field Some(\"LOOKUP-3\")";
+    let own = "      X: 0.0\n      C: \"'D'\"\n";
+    let plain = "      AVAL: VS.SYSBP\n";
+    assert_cases(&[
+        // Each read, in a derivation, in a formula after it, and in the
+        // filter after the formula.
+        (keyless("      AVAL: DOSES.PLANDOSE\n      X: DOSES.PLANDOSE\n", "", own, "0.0", "\"'A'\""), key),
+        (
+            keyless(
+                "      AVAL: DOSES.PLANDOSE\n      X: \"DOSES.PLANDOSE + 1\"\n",
+                "",
+                own,
+                "0.0",
+                "\"'A'\"",
+            ),
+            key,
+        ),
+        (
+            keyless(
+                "      AVAL: \"DOSES.PLANDOSE + 1\"\n",
+                "    filter: \"DOSES.PLANDOSE > 1\"\n",
+                own,
+                "0.0",
+                "\"'A'\"",
+            ),
+            key,
+        ),
+        // A structured source binds nothing to refuse, and a `case`
+        // predicate reads it as a lookup too.
+        (
+            keyless(
+                &format!("{plain}      X: {{source: {{variable: DOSES.PLANDOSE, require_match: true}}}}\n"),
+                "",
+                own,
+                "0.0",
+                "\"'A'\"",
+            ),
+            key,
+        ),
+        (
+            keyless(
+                &format!("{plain}      X: {{case: [{{when: \"DOSES.PLANDOSE > 1\", then: 1.0}}, {{otherwise: 2.0}}]}}\n"),
+                "",
+                own,
+                "0.0",
+                "\"'A'\"",
+            ),
+            key,
+        ),
+        // The column phase reads it for `vs`'s rows and as their driver for
+        // `dose`'s; a placeholder reads it too.
+        (keyless(plain, "", "", "DOSES.PLANDOSE", "\"'A'\""), key),
+        (
+            keyless(plain, "", "      X: 0.0\n", "0.0", "{str_template: \"{DOSES.USUBJID}\"}"),
+            key,
+        ),
+        // A flag reads no lookup at all, also in the column phase for the
+        // rows it does not drive.
+        (
+            keyless(
+                &format!("{plain}      C: {{flag: \"DOSES.PLANDOSE > 1\"}}\n"),
+                "",
+                own,
+                "0.0",
+                "\"'A'\"",
+            ),
+            "unknown_field Some(\"FORMULA-9\")",
+        ),
+        (
+            keyless(
+                plain,
+                "",
+                "      X: 0.0\n",
+                "0.0",
+                "{flag: \"DOSES.PLANDOSE > 1\"}",
+            ),
+            "unknown_field Some(\"FORMULA-9\")",
+        ),
+    ]);
+    // Its own template reads it as its driver.
+    assert_clean(&[keyless(plain, "", own, "0.0", "\"'A'\"")]);
 }

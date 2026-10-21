@@ -1,0 +1,18 @@
+# Reviewed defect fixes that change a frozen interface element (#3030
+# section 2.11, D20). tools/validation/check_interface_stability.py skips
+# exactly the breaks listed here, and nothing else is exempt: an intentional
+# break waits for the next major release.
+#
+# Each entry names one element of one manifest, exactly as the check prints
+# them, the rule card the fix restores and the issue that records the owner's
+# decision. Quote an element that holds a colon:
+#
+#   - manifest: rust/interface/manifest.txt
+#     element: "public.functions.lint.args[1]"
+#     rule: <the card ID>
+#     issue: <the issue number>
+#
+# Each entry is reviewed like a golden change and listed in the release
+# notes. Remove an entry once the newest release tag carries its fix; the
+# check then reports it as unused.
+exceptions: []

@@ -12,20 +12,18 @@
 //!   printed its text;
 //! - 1 when the command completed with findings: a `failed` or `skipped`
 //!   status, remaining lint findings, a failed selftest case, or a refusal,
-//!   such as an unknown section (D98) or a PATH whose type cannot be read
-//!   (D125), which the facade explains with its issues;
+//!   such as an unknown section (D98) or `schema` TYPE (D149), or a PATH
+//!   whose type cannot be read (D125), which the facade explains with its
+//!   issues;
 //! - 2 when the command could not run as asked (D68): a usage error, an
 //!   argument the facade cannot take, a PATH whose type the command does not
-//!   take, or a failed write to standard output, and, for now, a command not
-//!   implemented yet (D96).
+//!   take, or a failed write to standard output.
 //!
 //! No configuration file, environment variable or colour changes what it
 //! does. Ctrl+C ends the process by the signal and publishes nothing (D46).
 //!
 //! What each command prints, and how it dispatches on its PATH's `type:`
-//! header (D122), is in [`commands`]. `schema` checks its arguments and then
-//! refuses as not implemented yet; see [`commands`] for why. It drops the
-//! refusal when it lands.
+//! header (D122), is in [`commands`].
 #![forbid(unsafe_code)]
 
 mod arguments;
@@ -70,7 +68,6 @@ fn run(arguments: &[OsString], stdout: &mut dyn Write, stderr: &mut dyn Write) -
                 failed => failed,
             },
             Execution::Refused(usage) => refuse(stderr, &usage),
-            Execution::NotImplemented(what) => not_implemented(stderr, &what),
         },
         Err(usage) => refuse(stderr, &usage),
     }
@@ -97,13 +94,6 @@ fn print(stdout: &mut dyn Write, stderr: &mut dyn Write, text: &str) -> u8 {
             NOT_RUN
         }
     }
-}
-
-/// Refuse what the command line does not do yet, naming it. Temporary: see
-/// the crate documentation.
-fn not_implemented(stderr: &mut dyn Write, what: &str) -> u8 {
-    let _ = writeln!(stderr, "yamaa: {what} is not implemented yet");
-    NOT_RUN
 }
 
 /// `yamaa --version`: the engine information (D41, P-INFO-1). As text, one
@@ -141,9 +131,9 @@ fn help() -> String {
         "\nPATH names a spec or a project, as its type: header declares; --spec,\n\
          --section and submission take a project. read-odm saves the clinical\n\
          items of SOURCE, an ODM XML file or a TAR archive that holds one, to\n\
-         OUT, a .csv or .parquet file. selftest runs the cases the binary carries\n\
-         and compares each with its expected files. schema is not implemented\n\
-         yet: it checks its arguments, then exits with status 2.\n\n\
+         OUT, a .csv or .parquet file. schema prints the JSON Schema of the file\n\
+         type TYPE: spec, project, codelists or function. selftest runs the\n\
+         cases the binary carries and compares each with its expected files.\n\n\
          exit status: 0 succeeded, 1 completed with findings, 2 could not run as asked\n",
     );
     text
