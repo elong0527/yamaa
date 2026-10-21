@@ -72,8 +72,15 @@ class StagingTests(unittest.TestCase):
                 sorted(engine_bundle.members("r")),
             )
             # No crate tests, nor the benchmark files that they compile in,
-            # and no toolchain file anywhere (#3030 D55).
+            # and no toolchain file anywhere (#3030 D55). The facade carries the
+            # selftest cases that it embeds, with the bytes of benchmarks/
+            # (#3030 D108).
             self.assertEqual(list(embedded.rglob("tests")), [])
+            for relative, source in engine_bundle.selftest_cases.case_files():
+                self.assertEqual(
+                    (embedded / "crates/yamaa/selftest" / relative).read_bytes(),
+                    source.read_bytes(),
+                )
             self.assertEqual(
                 {path.name for path in (destination / "src").iterdir()},
                 {path.name for path in (staging.REPOSITORY / "R/yamaa/src").iterdir()}
