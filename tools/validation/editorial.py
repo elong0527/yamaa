@@ -227,6 +227,8 @@ UNICODE_DATA_AND_NOTICES = {
     "R/yamaa/inst/LICENSE-THIRD-PARTY.txt",
     "python/LICENSE-THIRD-PARTY.txt",
     "rust/crates/yamaa-cli/LICENSE-THIRD-PARTY.txt",
+    # musl's COPYRIGHT file, verbatim, for the musl command-line archives.
+    "rust/crates/yamaa-cli/LICENSE-MUSL.txt",
 }
 
 

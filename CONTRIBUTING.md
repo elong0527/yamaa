@@ -78,8 +78,9 @@ stages the R bundle under `src/rust`, with its crates compressed
 `make test-r` runs). Given built archives, `tools.packaging.check_cargo_lock`
 checks their bundles against the checkout and refuses a toolchain file
 anywhere in them. The toolchain file names only what a build needs; add
-Clippy and rustfmt for repository checks with `rustup component add clippy rustfmt`
-from `rust/`, as `python -m tools.ci.toolchain --install` does in CI.
+Clippy, rustfmt and the standard library's sources for repository checks with
+`rustup component add clippy rustfmt rust-src` from `rust/`, as
+`python -m tools.ci.toolchain --install` does in CI.
 The [source packaging guidance](docs/release.md#source-package-contents) links
 the vendored licenses and patch provenance.
 
@@ -87,27 +88,38 @@ Every package ships the third-party notices of its host's crate,
 `python/LICENSE-THIRD-PARTY.txt` for the Python packages,
 `R/yamaa/inst/LICENSE-THIRD-PARTY.txt` for the R package and
 `rust/crates/yamaa-cli/LICENSE-THIRD-PARTY.txt` for the command-line archives,
-generated from `rust/Cargo.lock` and from the standard library notice of the
-toolchain that `rust/rust-toolchain.toml` pins. They list only the crates that
-the host links on the supported targets, each with the one license that yamaa
-relies on, and no notice names a GNU license (#3364). After changing the lock
-or the pinned toolchain, regenerate them and commit the results. The generator
-runs `rustc` in `rust/`, where rustup selects the pinned toolchain:
+generated from `rust/Cargo.lock` and from the standard library notice and the
+`rust-src` component of the toolchain that `rust/rust-toolchain.toml` pins.
+They list only the crates that the host links on the supported targets, each
+with the one license that yamaa relies on, and no notice names a GNU license
+(#3364). The standard library's own crates come from `rust-src`: those that
+`library/std/Cargo.toml` declares for the supported targets, at the versions
+that `library/Cargo.lock` locks, with the license files of their packages in
+`library/vendor` (#3369). The archives for the musl targets also carry
+`rust/crates/yamaa-cli/LICENSE-MUSL.txt`, the notice of the musl C library that
+their executables link. After changing the lock or the pinned toolchain,
+regenerate the notices and commit the results. The generator runs `rustc` in
+`rust/`, where rustup selects the pinned toolchain:
 
 ```sh
 uv run --project python --no-sync python -m tools.packaging.generate_third_party_notices --write
 ```
 
+Where rustup cannot add `rust-src`, set `YAMAA_RUST_SRC_LIBRARY` to the
+`lib/rustlib/src/rust/library` directory of the pinned release's unpacked
+`rust-src` archive from static.rust-lang.org.
+
 `make check-repository` fails while a linked crate has no matching notice entry
 or the Python License-Expression misses a license that a linked crate is relied
-on under. The generator reads only the crate packages Cargo has unpacked. It
-stops instead of guessing when a crate needs a license outside its reviewed
-list, ships an unclassified license file, or would bring in a text that names a
-GNU license; review the crate and extend the tables in
-`tools/packaging/generate_third_party_notices.py`. A toolchain update also
-needs `LIBRARY_LINKED` there reviewed: the standard library crates that the
-supported targets link, from `library/std/Cargo.toml` and `library/Cargo.lock`
-of that toolchain's `rust-src` component.
+on under. The generator reads only the crate packages Cargo has unpacked and
+the toolchain's own files. It stops instead of guessing when a crate needs a
+license outside its reviewed list, ships an unclassified license file, or would
+bring in a text that names a GNU license; review the crate and extend the
+tables in `tools/packaging/generate_third_party_notices.py`. A toolchain update
+also needs `MUSL` there reviewed, and the check stops until it is: the musl
+release that the toolchain bundles for its `*-linux-musl` targets, as
+`src/ci/docker/scripts/musl.sh` of the Rust repository names it at the
+release's tag, with `LICENSE-MUSL.txt` holding that release's `COPYRIGHT` file.
 
 Every crate of each host's trimmed lock has a purpose in
 `tools/packaging/crate_purposes.toml`: the source archives ship them all,
