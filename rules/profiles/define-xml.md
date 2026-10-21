@@ -764,7 +764,7 @@ a `def:WhereClauseRef`; one `def:WhereClauseDef` per entry with one
 the column's metadata merged with the entry's. The column's own `ItemDef`
 carries the `def:ValueListRef`.
 
-Evidence: `sdtm-lb-metadata`, `adam-adlb-metadata`, `sdtm-suppdm-metadata`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::fixed_time_xml_has_one_column_list_two_ordered_item_and_where_references`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::several_values_are_a_membership_and_several_columns_one_range_check_each`, `rust/crates/yamaa-adapters/tests/file_resources.rs::lb_value_metadata_uses_original_published_bytes_and_family_valid_completion`.
+Evidence: `sdtm-lb-metadata`, `adam-adlb-metadata`, `sdtm-suppdm-metadata`, `schema-value-level-not-equal`, `schema-value-level-not-in`, `rust/crates/yamaa/tests/language_header.rs::a_value_level_entry_selects_the_rows_that_hold_none_of_its_values`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::fixed_time_xml_has_one_column_list_two_ordered_item_and_where_references`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::several_values_are_a_membership_and_several_columns_one_range_check_each`, `rust/crates/yamaa-adapters/tests/file_resources.rs::lb_value_metadata_uses_original_published_bytes_and_family_valid_completion`.
 
 The mapping to Define-XML is fixed:
 
@@ -776,9 +776,10 @@ The mapping to Define-XML is fixed:
   `def:ValueListRef` after its `def:Origin` elements;
 - each `def:WhereClauseDef` carries one `RangeCheck` per where column, in the
   clause's written order: `Comparator="EQ"` when the column lists one value
-  and `"IN"` when it lists several, `SoftHard="Soft"`, `def:ItemOID` the where
-  column's `ItemDef` identifier, and one `CheckValue` per listed value in
-  written order; and
+  and `"IN"` when it lists several, or the comparator the column writes,
+  `"NE"` or `"NOTIN"` ([SUB-12](submission.md#sub-12)), `SoftHard="Soft"`,
+  `def:ItemOID` the where column's `ItemDef` identifier, and one `CheckValue`
+  per listed value in written order; and
 - each per-value `ItemDef` maps the merged metadata as
   [DEFINE-19](#define-19) does, with the entry's `label` as its
   `Description` when declared and its `Length` from

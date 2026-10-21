@@ -8,8 +8,9 @@ that planned dose is (`PLANDOSE`).
 
 **Input:** one `spec.yaml` over exposure records (`input/ex.csv`: one per
 administration, with the study day and the dose given) and each subject's
-planned dose (`input/plan.csv`). The `project.yaml` links each host's
-environment, whose routine returns the dose it is given.
+planned dose (`input/plan.csv`). The `project.yaml` lists the function
+file `functions/project_value.yaml`, whose routine returns the dose it is
+given.
 
 **Variables:**
 

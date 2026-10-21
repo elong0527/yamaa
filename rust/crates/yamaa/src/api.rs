@@ -903,6 +903,36 @@ impl Engine {
         }
     }
 
+    /// The names of the listed specifications in run order, producer first,
+    /// as a project run of every section orders them (D45): the names that
+    /// [`ProjectRun::names`] of such a run gives, read from the project file
+    /// and the specifications' metadata alone, so no input data is read. A
+    /// listing that could not be read has no name and is left out, as a run
+    /// leaves it out.
+    ///
+    /// Every refusal names the call as `cannot read <project>` (D39): a
+    /// project that cannot be read, or one that lists a name twice, whose
+    /// issue names both listings.
+    pub fn project_names(&self, project: &str) -> Result<Vec<String>, Failure> {
+        let action = Action::Read(project);
+        let read = crate::internal::read_project(self.shared(), project).map_err(
+            |(issues, locator)| Failure::new(action, &Report::located(&issues, &locator)),
+        )?;
+        let duplicates = read.duplicates();
+        if !duplicates.is_empty() {
+            return Err(Failure::new(
+                action,
+                &Report::located(&duplicates, read.locator()),
+            ));
+        }
+        Ok(read
+            .plan(None)
+            .steps()
+            .iter()
+            .filter_map(|step| read.listed()[step.listed()].name().map(str::to_owned))
+            .collect())
+    }
+
     /// Static check of every listed specification with the project's codelists
     /// and functions, plus the project findings: shared names, inputs that
     /// read a listed artifact without a `schema` link, and colliding files.
@@ -1243,10 +1273,15 @@ mod tests {
 
     #[test]
     fn statuses_are_the_statuses_in_order() {
-        assert_eq!(
-            [Status::Succeeded, Status::Failed, Status::Skipped].map(Status::as_str),
-            STATUSES
-        );
+        let statuses = [Status::Succeeded, Status::Failed, Status::Skipped];
+        for status in statuses {
+            // Exhaustive: a new status fails to compile here until it is
+            // listed above, and so in STATUSES.
+            match status {
+                Status::Succeeded | Status::Failed | Status::Skipped => {}
+            }
+        }
+        assert_eq!(statuses.map(Status::as_str), STATUSES);
     }
 
     /// Resolved facts the engine cannot represent are refused as the

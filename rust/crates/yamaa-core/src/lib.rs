@@ -48,6 +48,7 @@ pub mod specification_submission_document;
 pub mod submission_composition;
 pub mod submission_inventory;
 mod submission_origin;
+pub mod submission_staleness;
 pub mod submission_transport;
 mod submission_values;
 pub mod temporal;

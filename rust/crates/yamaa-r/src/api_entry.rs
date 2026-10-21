@@ -227,6 +227,14 @@ macro_rules! registry {
 
 registry!(RUNS, RunHandle, store, run, yamaa::Run, "run");
 registry!(
+    CHECKS,
+    CheckHandle,
+    store_check,
+    check_of,
+    yamaa::Check,
+    "check"
+);
+registry!(
     PROJECT_RUNS,
     ProjectRunHandle,
     store_project_run,
@@ -266,6 +274,11 @@ fn table(table: Option<&yamaa::Table>) -> std::result::Result<Robj, Refusal> {
     }
 }
 
+/// A result's printed lines (D37), which `format()` returns.
+fn summary_lines(summary: &yamaa::Summary) -> Robj {
+    Strings::from_values(summary.lines().collect::<Vec<_>>()).into_robj()
+}
+
 #[extendr]
 fn spec_check(specification: Raw, project: Robj, version: Raw) -> List {
     reply(|| {
@@ -278,8 +291,48 @@ fn spec_check(specification: Raw, project: Robj, version: Raw) -> List {
             interrupt.token(),
         );
         let check = interrupt.settle(checked, Action::Read(&specification))?;
+        store_check(check)
+    })
+}
+
+#[extendr]
+fn check_status(handle: Robj) -> List {
+    reply(|| {
+        let check = check_of(&handle)?;
+        let check = check.try_borrow().map_err(|_| "check handle in use")?;
+        Ok(r!(check.status().as_str()))
+    })
+}
+
+#[extendr]
+fn check_issues(handle: Robj) -> List {
+    reply(|| {
+        let check = check_of(&handle)?;
+        let check = check.try_borrow().map_err(|_| "check handle in use")?;
         Ok(crate::public_table::frame(&check.issues())?)
     })
+}
+
+#[extendr]
+fn check_summary(handle: Robj) -> List {
+    reply(|| {
+        let check = check_of(&handle)?;
+        let check = check.try_borrow().map_err(|_| "check handle in use")?;
+        Ok(summary_lines(&check.summary()))
+    })
+}
+
+/// The printed line of a lazy specification object, which has read nothing
+/// (D37): `yamaa spec <path>`, with the path as given.
+#[extendr]
+fn spec_summary(specification: Raw) -> List {
+    reply(|| Ok(summary_lines(&yamaa::Summary::spec(&text(&specification)?))))
+}
+
+/// The printed line of a lazy project object: `yamaa project <path>`.
+#[extendr]
+fn project_summary(project: Raw) -> List {
+    reply(|| Ok(summary_lines(&yamaa::Summary::project(&text(&project)?))))
 }
 
 /// The holder for the compiled plans one lazy object keeps between its runs
@@ -410,6 +463,15 @@ fn schema(file_type: Raw) -> List {
 }
 
 #[extendr]
+fn run_status(handle: Robj) -> List {
+    reply(|| {
+        let run = run(&handle)?;
+        let run = run.try_borrow().map_err(|_| "run handle in use")?;
+        Ok(r!(run.status().as_str()))
+    })
+}
+
+#[extendr]
 fn run_output(handle: Robj) -> List {
     reply(|| {
         let run = run(&handle)?;
@@ -449,6 +511,15 @@ fn run_save(handle: Robj) -> List {
     })
 }
 
+#[extendr]
+fn run_summary(handle: Robj) -> List {
+    reply(|| {
+        let run = run(&handle)?;
+        let run = run.try_borrow().map_err(|_| "run handle in use")?;
+        Ok(summary_lines(&run.summary()))
+    })
+}
+
 /// Private installed-run evidence for qualification suites.
 #[extendr]
 fn run_observations(handle: Robj, include_measurements: bool) -> List {
@@ -471,6 +542,17 @@ fn project_spec(project: Raw, name: Raw, version: Raw) -> List {
     })
 }
 
+/// The listed specifications' names in run order, read without data (D45).
+#[extendr]
+fn project_names(project: Raw, version: Raw) -> List {
+    reply(|| {
+        let names = engine(&version, None, &Interrupt::new())?
+            .project_names(&text(&project)?)
+            .map_err(Refusal::Failure)?;
+        Ok(Strings::from_values(names).into_robj())
+    })
+}
+
 #[extendr]
 fn project_check(project: Raw, version: Raw) -> List {
     reply(|| {
@@ -479,7 +561,7 @@ fn project_check(project: Raw, version: Raw) -> List {
         let checked =
             engine(&version, None, &interrupt)?.project_check(&project, interrupt.token());
         let check = interrupt.settle(checked, Action::Read(&project))?;
-        Ok(crate::public_table::frame(&check.issues())?)
+        store_check(check)
     })
 }
 
@@ -505,11 +587,30 @@ fn project_run(project: Raw, section: Robj, version: Raw, capabilities: List, pl
 }
 
 #[extendr]
+fn project_run_status(handle: Robj) -> List {
+    reply(|| {
+        let runs = project_run_of(&handle)?;
+        let runs = runs.try_borrow().map_err(|_| "project run handle in use")?;
+        Ok(r!(runs.status().as_str()))
+    })
+}
+
+#[extendr]
 fn project_run_names(handle: Robj) -> List {
     reply(|| {
         let runs = project_run_of(&handle)?;
         let runs = runs.try_borrow().map_err(|_| "project run handle in use")?;
         Ok(Strings::from_values(runs.names()).into_robj())
+    })
+}
+
+#[extendr]
+fn project_run_member_status(handle: Robj, name: Raw) -> List {
+    reply(|| {
+        let runs = project_run_of(&handle)?;
+        let runs = runs.try_borrow().map_err(|_| "project run handle in use")?;
+        let run = runs.member(&text(&name)?).map_err(Refusal::Failure)?;
+        Ok(r!(run.status().as_str()))
     })
 }
 
@@ -540,6 +641,17 @@ fn project_run_member_report(handle: Robj, name: Raw) -> List {
         let runs = runs.try_borrow().map_err(|_| "project run handle in use")?;
         let run = runs.member(&text(&name)?).map_err(Refusal::Failure)?;
         table(run.report())
+    })
+}
+
+/// One member's printed lines, its run's under its name (D37).
+#[extendr]
+fn project_run_member_summary(handle: Robj, name: Raw) -> List {
+    reply(|| {
+        let runs = project_run_of(&handle)?;
+        let runs = runs.try_borrow().map_err(|_| "project run handle in use")?;
+        let run = runs.member(&text(&name)?).map_err(Refusal::Failure)?;
+        Ok(summary_lines(&run.summary()))
     })
 }
 
@@ -576,6 +688,16 @@ fn project_run_save(handle: Robj) -> List {
     })
 }
 
+/// The printed lines, with one line per member (D37).
+#[extendr]
+fn project_run_summary(handle: Robj) -> List {
+    reply(|| {
+        let runs = project_run_of(&handle)?;
+        let runs = runs.try_borrow().map_err(|_| "project run handle in use")?;
+        Ok(summary_lines(&runs.summary()))
+    })
+}
+
 #[extendr]
 fn project_submission(project: Raw, section: Robj, created: Robj, version: Raw) -> List {
     reply(|| {
@@ -593,6 +715,29 @@ fn project_submission(project: Raw, section: Robj, created: Robj, version: Raw) 
         let action = Action::Select(section.as_deref().unwrap_or_default());
         let submission = interrupt.settle(composed, action)?;
         store_submission(submission)
+    })
+}
+
+#[extendr]
+fn submission_status(handle: Robj) -> List {
+    reply(|| {
+        let submission = submission_of(&handle)?;
+        let submission = submission
+            .try_borrow()
+            .map_err(|_| "submission handle in use")?;
+        Ok(r!(submission.status().as_str()))
+    })
+}
+
+/// The creation time the documents carry (D69, D129).
+#[extendr]
+fn submission_created(handle: Robj) -> List {
+    reply(|| {
+        let submission = submission_of(&handle)?;
+        let submission = submission
+            .try_borrow()
+            .map_err(|_| "submission handle in use")?;
+        Ok(r!(submission.created()))
     })
 }
 
@@ -619,6 +764,17 @@ fn submission_save(handle: Robj) -> List {
             .save(interrupt.token())
             .map_err(|failure| interrupt.refused(failure))?;
         Ok(Strings::from_values(paths).into_robj())
+    })
+}
+
+#[extendr]
+fn submission_summary(handle: Robj) -> List {
+    reply(|| {
+        let submission = submission_of(&handle)?;
+        let submission = submission
+            .try_borrow()
+            .map_err(|_| "submission handle in use")?;
+        Ok(summary_lines(&submission.summary()))
     })
 }
 
@@ -651,8 +807,7 @@ fn selftest_cases(handle: Robj) -> List {
     })
 }
 
-/// The engine information as a named list in the facade's field order, with
-/// `host_version` `NULL` when the facade has none.
+/// The engine information that ran the cases, as `yamaa_info()` gives it.
 #[extendr]
 fn selftest_info(handle: Robj) -> List {
     reply(|| {
@@ -660,20 +815,38 @@ fn selftest_info(handle: Robj) -> List {
         let selftest = selftest
             .try_borrow()
             .map_err(|_| "selftest handle in use")?;
-        let info = selftest.info();
-        let host_version = info
-            .host_version
-            .as_deref()
-            .map_or_else(|| NULL.into_robj(), |version| r!(version));
-        Ok(list!(
-            version = info.version,
-            language_versions = Strings::from_values(&info.language_versions),
-            features = Strings::from_values(info.features.clone()),
-            host = info.host.as_str(),
-            host_version = host_version,
-            platform = info.platform.as_str()
-        )
-        .into_robj())
+        Ok(info_list(selftest.info()))
+    })
+}
+
+/// The engine information as a named list in the facade's field order, with
+/// `host_version` `NULL` when the facade has none: the one construction that
+/// `yamaa_info()` and a selftest's `info` share (D41).
+fn info_list(info: &yamaa::Info) -> Robj {
+    let host_version = info
+        .host_version
+        .as_deref()
+        .map_or_else(|| NULL.into_robj(), |version| r!(version));
+    list!(
+        version = info.version,
+        language_versions = Strings::from_values(&info.language_versions),
+        features = Strings::from_values(info.features.clone()),
+        host = info.host.as_str(),
+        host_version = host_version,
+        platform = info.platform.as_str()
+    )
+    .into_robj()
+}
+
+/// What this engine is and where it runs, as the R host with R's `version`,
+/// such as `4.6.1` (D41, P-INFO-1).
+#[extendr]
+fn info(version: Raw) -> List {
+    reply(|| {
+        Ok(info_list(&yamaa::info(
+            yamaa::Host::R,
+            Some(&text(&version)?),
+        )))
     })
 }
 
@@ -685,8 +858,7 @@ fn selftest_summary(handle: Robj) -> List {
         let selftest = selftest
             .try_borrow()
             .map_err(|_| "selftest handle in use")?;
-        let summary = selftest.summary();
-        Ok(Strings::from_values(summary.lines().collect::<Vec<_>>()).into_robj())
+        Ok(summary_lines(&selftest.summary()))
     })
 }
 

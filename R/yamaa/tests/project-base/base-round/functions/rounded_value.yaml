@@ -1,0 +1,16 @@
+yamaa: "1.0"
+type: function
+name: rounded_value
+description: Round to the declared number of significant digits.
+params:
+  - {name: x, type: float}
+  - {name: digits, type: int, required: false, default: 3}
+returns: float
+implementations:
+  r: base::signif
+tests:
+  - {id: ordinary, covers: [normal, numeric-comparison], args: {x: 2.375, digits: 3}, result: 2.38}
+  - {id: boundary, covers: [boundary, numeric-comparison], args: {x: 0.0, digits: 3}, result: 0.0}
+  - {id: default, covers: ['default:digits', numeric-comparison], args: {x: 2.375}, result: 2.38}
+  - {id: missing-x, covers: ['short-circuit-missing:x'], args: {x: null, digits: 3}, result: null}
+  - {id: missing-digits, covers: ['short-circuit-missing:digits'], args: {x: 2.375, digits: null}, result: null}

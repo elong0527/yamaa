@@ -36,6 +36,7 @@ yamaa::EncodedScalar: pub use yamaa::scalar::EncodedScalar
 yamaa::Engine: pub use yamaa::engine::Engine
 yamaa::EngineOptions: pub use yamaa::engine::EngineOptions
 yamaa::Error: pub use yamaa::error::Error
+yamaa::FEATURES: pub use yamaa::info::FEATURES
 yamaa::FFI_ArrowArrayStream: pub use yamaa::table::FFI_ArrowArrayStream
 yamaa::FILE_TYPES: pub use yamaa::file_type::FILE_TYPES
 yamaa::Failure: pub use yamaa::api::Failure
@@ -46,6 +47,7 @@ yamaa::Float64Array: pub use yamaa::table::Float64Array
 yamaa::FunctionError: pub use yamaa::error::FunctionError
 yamaa::FunctionHandle: pub use yamaa::functions::FunctionHandle
 yamaa::FunctionIdentity: pub use yamaa::functions::FunctionIdentity
+yamaa::HOSTS: pub use yamaa::info::HOSTS
 yamaa::Host: pub use yamaa::info::Host
 yamaa::HostLanguage: pub use yamaa::functions::HostLanguage
 yamaa::HostPayload: pub use yamaa::error::HostPayload
@@ -121,6 +123,7 @@ yamaa::api::Check::summary: pub fn summary(&self) -> Summary
 yamaa::api::Engine: impl Engine
 yamaa::api::Engine: impl Engine
 yamaa::api::Engine::project_check: pub fn project_check(&self, project: &str, token: &CancellationToken) -> Result<Check, Error>
+yamaa::api::Engine::project_names: pub fn project_names(&self, project: &str) -> Result<Vec<String>, Failure>
 yamaa::api::Engine::project_run: pub fn project_run(&self, project: &str, section: Option<&str>, token: &CancellationToken) -> Result<ProjectRun, Error>
 yamaa::api::Engine::project_run_reusing: pub fn project_run_reusing(&self, project: &str, section: Option<&str>, plans: &Plans, token: &CancellationToken) -> Result<ProjectRun, Error>
 yamaa::api::Engine::project_spec: pub fn project_spec(&self, project: &str, name: &str) -> Result<String, Failure>
@@ -409,6 +412,8 @@ yamaa::functions::Signature::returns: pub returns: ColumnType
 yamaa::functions::decode_renv_lock: pub fn decode_renv_lock(bytes: &[u8]) -> Result<RenvLock, LockSyntaxError>
 yamaa::functions::verify_uv_lock: pub fn verify_uv_lock(lock: &[u8], functions: &[FunctionIdentity], installed: &dyn InstalledDistributions) -> Result<(), FunctionError>
 yamaa::info: pub use yamaa::info::info
+yamaa::info::FEATURES: pub const FEATURES: [&str; 4]
+yamaa::info::HOSTS: pub const HOSTS: [&str; 3]
 yamaa::info::Host: impl Host
 yamaa::info::Host: pub enum Host [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
 yamaa::info::Host::Cli: Cli

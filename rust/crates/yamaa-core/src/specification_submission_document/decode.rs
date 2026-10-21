@@ -535,13 +535,22 @@ impl<'a> Parser<'a> {
                 true,
             )?;
             // A resolved 1.0 specification holds its where condition in the
-            // long form, `{values: [...]}`; a comparator is refused before
-            // composition reads it (#3030 D76, P1-14).
-            let list = match &self.input.nodes()[value] {
-                N::Mapping(_) if self.input.field(value, "comparator").is_none() => {
-                    self.input.field(value, "values").unwrap_or(value)
-                }
-                _ => value,
+            // long form, `{values: [...]}`, with an `NE` or `NOTIN`
+            // comparator when one is written (P-VLM-1).
+            let (comparator, list) = match &self.input.nodes()[value] {
+                N::Mapping(_) => (
+                    match self
+                        .input
+                        .field(value, "comparator")
+                        .map(|id| &self.input.nodes()[id])
+                    {
+                        Some(N::Text(written)) if written == "NE" => crate::ast::Comparator::Ne,
+                        Some(_) => crate::ast::Comparator::NotIn,
+                        None => crate::ast::Comparator::In,
+                    },
+                    self.input.field(value, "values").unwrap_or(value),
+                ),
+                _ => (crate::ast::Comparator::In, value),
             };
             let occurrence = Origin {
                 container: if list == value { node } else { value },
@@ -571,7 +580,11 @@ impl<'a> Parser<'a> {
                 }
             }
             match column {
-                Some(column) => terms.push(WhereTerm { column, values }),
+                Some(column) => terms.push(WhereTerm {
+                    column,
+                    comparator,
+                    values,
+                }),
                 None => complete = false,
             }
         }

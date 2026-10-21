@@ -48,14 +48,14 @@ class SasSources(unittest.TestCase):
         return root, spec, source
 
     def assert_types(self, output, fields):
-        self.assertEqual(output.columns, [field["name"] for field in fields])
+        self.assertEqual(output.column_names, [field["name"] for field in fields])
         expected = {
             "int": pl.Int64,
             "float": pl.Float64,
             "str": pl.String,
             "date": pl.Date,
         }
-        for dtype, field in zip(output.dtypes, fields, strict=True):
+        for dtype, field in zip(output.to_polars().dtypes, fields, strict=True):
             if field["type"] == "datetime":
                 self.assertIsInstance(dtype, pl.Datetime)
                 self.assertIsNone(dtype.time_zone)
@@ -77,11 +77,11 @@ class SasSources(unittest.TestCase):
                 scalar(value, field["type"])
                 for value, field in zip(row, fields, strict=True)
             ]
-            for row in output.rows()
+            for row in output.to_polars().rows()
         ]
 
     def assert_output(self, result, case):
-        self.assertTrue(result.issues.is_empty(), result.issues)
+        self.assertEqual(result.issues.num_rows, 0, result.issues)
         self.assertIsNotNone(result.output)
         self.assert_types(result.output, case["fields"])
         rows = self.rows(result.output, case["fields"])
@@ -96,7 +96,7 @@ class SasSources(unittest.TestCase):
             )
 
     def assert_failed(self, result, case, root):
-        before = result.issues.to_dicts()
+        before = result.issues.to_pylist()
         self.assertEqual([row["condition"] for row in before], [case["condition"]])
         self.assertEqual(before[0]["phase"], case.get("phase", "validation"))
         if "context_fields" in case:
@@ -113,14 +113,14 @@ class SasSources(unittest.TestCase):
         for _ in range(2):
             with self.assertRaises(yamaa.Error):
                 result.save()
-            self.assertEqual(result.issues.to_dicts(), before)
+            self.assertEqual(result.issues.to_pylist(), before)
             self.assertFalse((root / "result.csv").exists())
 
     def test_default_types_narrowing_epochs_missing_and_exact_csv(self):
         for case in TRUTH["accepted"]:
             with self.subTest(case=case["id"]):
                 root, spec, _ = self.stage(case)
-                self.assertTrue(yamaa.spec(spec).check().issues.is_empty())
+                self.assertEqual(yamaa.spec(spec).check().issues.num_rows, 0)
                 self.assertFalse((root / "result.csv").exists())
                 result = yamaa.spec(spec).run()
                 self.assert_output(result, case)
@@ -185,7 +185,7 @@ class SasSources(unittest.TestCase):
                     "rows": expected,
                 }
                 root, spec, _ = self.stage(case)
-                self.assertTrue(yamaa.spec(spec).check().issues.is_empty())
+                self.assertEqual(yamaa.spec(spec).check().issues.num_rows, 0)
                 result = yamaa.spec(spec).run()
                 self.assert_output(result, case)
                 result.save()
@@ -197,14 +197,14 @@ class SasSources(unittest.TestCase):
                 root, spec, _ = self.stage(case)
                 checked = yamaa.spec(spec).check()
                 result = yamaa.spec(spec).run()
-                self.assertEqual(checked.issues.to_dicts(), result.issues.to_dicts())
+                self.assertEqual(checked.issues.to_pylist(), result.issues.to_pylist())
                 self.assert_failed(result, case, root)
 
     def test_bad_sources_are_not_read_by_check_and_failed_saves_have_no_output(self):
         for case in TRUTH["refusals"]:
             with self.subTest(case=case["id"]):
                 root, spec, _ = self.stage(case)
-                self.assertTrue(yamaa.spec(spec).check().issues.is_empty())
+                self.assertEqual(yamaa.spec(spec).check().issues.num_rows, 0)
                 self.assertFalse((root / "result.csv").exists())
                 self.assert_failed(yamaa.spec(spec).run(), case, root)
 
@@ -237,7 +237,7 @@ class SasSources(unittest.TestCase):
             self.assertEqual(
                 (root / "result.csv").read_bytes(), case["csv"].encode("utf-8")
             )
-            self.assertTrue(result.output.equals(held))
+            self.assertTrue(result.output.to_polars().equals(held.to_polars()))
         del result
         gc.collect()
         self.assertEqual(self.rows(held, case["fields"]), case["rows"])

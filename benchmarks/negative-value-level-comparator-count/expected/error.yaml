@@ -1,0 +1,11 @@
+phase: validation
+condition: value_level_where_invalid
+spec_paths:
+  - columns.AVAL.submission.value_level.OBSERVED.where.DTYPE
+rule: SUB-12
+context:
+  column: AVAL
+  entry: OBSERVED
+  where_column: DTYPE
+  reason: value_count
+  comparator: NOTIN

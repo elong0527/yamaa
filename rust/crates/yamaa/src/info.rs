@@ -8,6 +8,15 @@
 //! compiled engine, and none is a build time, commit or toolchain, so the same
 //! source gives the same facts.
 
+/// The hosts as written, one for each [`Host`] in declaration order: the
+/// closed vocabulary of [`Info::host`].
+pub const HOSTS: [&str; 3] = ["python", "r", "cli"];
+
+/// The optional features as written, sorted, by their Cargo names: the
+/// closed vocabulary of [`Info::features`]. Every shipped package and binary
+/// compiles all four.
+pub const FEATURES: [&str; 4] = ["odm", "parquet", "readstat", "yaml"];
+
 /// The host a caller runs in, as [`Info::host`] names it.
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -21,7 +30,7 @@ pub enum Host {
 }
 
 impl Host {
-    /// The host as written: `python`, `r` or `cli`.
+    /// The host as written: `python`, `r` or `cli`, one of [`HOSTS`].
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Python => "python",
@@ -42,7 +51,7 @@ pub struct Info {
     /// up to the newest it implements (SCHEMA-2).
     pub language_versions: Vec<String>,
     /// The optional features compiled into the engine, sorted, by their
-    /// Cargo names: `odm`, `parquet`, `readstat` and `yaml`.
+    /// Cargo names: those of [`FEATURES`] that this build compiles.
     pub features: Vec<&'static str>,
     /// The host that asked.
     pub host: Host,
@@ -55,12 +64,12 @@ pub struct Info {
     pub platform: String,
 }
 
-/// The optional features, sorted, each with whether this build compiles it.
-const FEATURES: [(&str, bool); 4] = [
-    ("odm", cfg!(feature = "odm")),
-    ("parquet", cfg!(feature = "parquet")),
-    ("readstat", cfg!(feature = "readstat")),
-    ("yaml", cfg!(feature = "yaml")),
+/// Whether this build compiles each of [`FEATURES`], in its order.
+const COMPILED: [bool; 4] = [
+    cfg!(feature = "odm"),
+    cfg!(feature = "parquet"),
+    cfg!(feature = "readstat"),
+    cfg!(feature = "yaml"),
 ];
 
 /// The engine information `host` reports, with `host_version` the Python or
@@ -82,12 +91,37 @@ pub fn info(host: Host, host_version: Option<&str>) -> Info {
         version: crate::VERSION,
         language_versions: language_versions(Some(LANGUAGE_VERSION)),
         features: FEATURES
-            .iter()
-            .filter(|(_, compiled)| *compiled)
-            .map(|(name, _)| *name)
+            .into_iter()
+            .zip(COMPILED)
+            .filter_map(|(name, compiled)| compiled.then_some(name))
             .collect(),
         host,
         host_version: host_version.map(str::to_owned),
         platform: format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn hosts_are_the_hosts_in_order() {
+        let hosts = [Host::Python, Host::R, Host::Cli];
+        for host in hosts {
+            // Exhaustive: a new host fails to compile here until it is listed
+            // above, and so in HOSTS.
+            match host {
+                Host::Python | Host::R | Host::Cli => {}
+            }
+        }
+        assert_eq!(hosts.map(Host::as_str), HOSTS);
+    }
+
+    #[test]
+    fn features_are_sorted_and_name_what_a_build_may_compile() {
+        assert!(FEATURES.windows(2).all(|pair| pair[0] < pair[1]));
+        let compiled = info(Host::Cli, None).features;
+        assert!(compiled.iter().all(|feature| FEATURES.contains(feature)));
     }
 }

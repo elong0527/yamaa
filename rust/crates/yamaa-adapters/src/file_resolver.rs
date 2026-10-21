@@ -85,14 +85,14 @@ impl FileResolver {
         if !path.is_dir() {
             return Err(Error::InvalidBase);
         }
-        let base = directory_segments(&path).ok_or(Error::InvalidBase)?;
+        let base = canonical_directory_identity(&path).ok_or(Error::InvalidBase)?;
         Ok((
             Self {
                 roots: RwLock::new(roots),
                 local_paths: false,
                 callers: RwLock::new(Vec::new()),
             },
-            directory_identity(&base),
+            base,
         ))
     }
     /// The project file a caller passes is a caller path like the entry
@@ -922,6 +922,13 @@ pub(crate) fn file_identity(parent: &Path, name: &str) -> Option<String> {
     let mut segments = directory_segments(parent)?;
     segments.push(name.to_owned());
     Some(path_text(&segments))
+}
+/// The identity of the canonical directory `path`, from which undeclared
+/// requests resolve: its rooted segments in the engine's spelling with a
+/// trailing separator, so it starts the identity a walk gives every file
+/// beneath it. Opens nothing.
+pub(crate) fn canonical_directory_identity(path: &Path) -> Option<String> {
+    directory_segments(path).map(|segments| directory_identity(&segments))
 }
 
 #[cfg(test)]

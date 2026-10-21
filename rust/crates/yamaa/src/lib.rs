@@ -83,7 +83,7 @@ pub use functions::{
     FunctionHandle, FunctionIdentity, HostLanguage, InstalledDistributions, InstalledVersion,
     LockContext, LockKind, Parameter, ProjectFunctions, RenvLock, Signature,
 };
-pub use info::{info, Host, Info};
+pub use info::{info, Host, Info, FEATURES, HOSTS};
 pub use lint::{lint, Lint, LintFinding, LINT_COLUMNS, LINT_FINDINGS};
 pub use odm::{OdmOptions, ODM_COLUMNS};
 pub use resolver::{

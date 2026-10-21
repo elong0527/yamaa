@@ -2,6 +2,8 @@
 \alias{yamaa_selftest}
 \alias{print.yamaa_selftest}
 \alias{format.yamaa_selftest}
+\alias{names.yamaa_selftest}
+\alias{length.yamaa_selftest}
 \title{Run the bundled selftest cases through the installed engine}
 \description{
 Runs the selftest cases that the package carries, benchmarks with their
@@ -16,6 +18,10 @@ yamaa_selftest()
 \method{print}{yamaa_selftest}(x, ...)
 
 \method{format}{yamaa_selftest}(x, ...)
+
+\method{names}{yamaa_selftest}(x)
+
+\method{length}{yamaa_selftest}(x)
 }
 \arguments{
   \item{x}{A selftest result.}
@@ -40,7 +46,8 @@ An object with three read-only fields:
 them and returns the result invisibly. The first line reads
 \code{yamaa selftest: <status>, <p> of <c> cases passed}. The first failed
 case and the adapters that no case covered follow, then the engine version,
-the language versions, the host and the platform.
+the language versions, the host and the platform. \code{names()} lists the
+three fields in that order, and \code{length()} counts them.
 }
 \examples{
 result <- yamaa_selftest()

@@ -109,7 +109,8 @@ obey the Arrow ABI; forged pointers are outside this memory-safety contract.
 
 The zero-copy promise covers retained public Arrow buffers through standard
 stream import/export, including sliced and chunked arrays. Build result
-materialization, Polars conversion and R data-frame conversion can copy.
+materialization, a Python table's `to_pylist()`, its Polars and pandas
+conversions and R data-frame conversion can copy.
 Public dates project Date32 days and zone-free datetimes project whole
 TimestampSecond values, preserving existing public semantics; collected
 precision remains private to execution. Import accepts UTF-8 (including large

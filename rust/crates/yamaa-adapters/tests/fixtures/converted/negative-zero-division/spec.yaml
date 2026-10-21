@@ -1,0 +1,44 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADLB
+keys: [STUDYID, USUBJID, PARAMCD]
+input:
+  LB: input/lb.csv
+
+output:
+  path: adlb.csv
+  columns: [STUDYID, USUBJID, PARAMCD, AVAL, BASE, PCHG]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: LB.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: LB.USUBJID
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+    derivation: LB.LBTESTCD
+
+  - name: AVAL
+    type: float
+    label: Analysis Value
+    derivation: LB.LBSTRESN
+
+  - name: BASE
+    type: float
+    label: Baseline Value
+    derivation: LB.LBBLRESN
+
+  - name: PCHG
+    type: float
+    label: Percent Change from Baseline
+    # Missing when AVAL or BASE is missing. A zero BASE stops the run with
+    # a division by zero, since no rule says what the result should be.
+    derivation: "100 * (AVAL - BASE) / BASE"

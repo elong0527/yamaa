@@ -13,23 +13,28 @@ with their members, the refusal error and the type tokens. From it
 - the ``public`` lines of the normalized manifest.
 
 Generated code only delegates. The handwritten rest stays where it was:
-Python's Polars table conversion, path conversion, lazy-object pickling and
-version lookup in ``python/src/yamaa/_support.py``; R's reply and argument
-conversions, host-function capabilities, interrupt signaling and
-locked-object helpers in ``R/yamaa/R/api.R``; and every native body in the binding crates.
+Python's path conversion, lazy-object pickling and version lookup in
+``python/src/yamaa/_support.py``; R's reply and argument
+conversions, host-function capabilities, interrupt signaling and locked-object
+helpers in ``R/yamaa/R/api.R``; and every native body in the binding crates.
+
+A class with ``hosts: [python]`` is a native class of ``yamaa._native`` that
+the public module exports as it is: today only ``yamaa.Table``, which every
+call returns for a table, as the native call does. Each of its members is a
+method of that class, which ``host_only`` names, and the generator writes no
+code for it beyond the export.
 
 Delegation is declared, never written as code. A class ``holds`` an ordered
 set of values, each named by what it fills: ``handle``, the native handle the
-object wraps; the name of one of its ``field`` members; or the name of a
-native argument, which the value fills in the object's native calls. A class
-that holds neither a handle nor a field is lazy: it holds paths, and it keeps
-a plans handle when a native call it makes takes ``plans``. A member or a
-function ``calls`` an operation of the ``operations`` table, and each native
-argument of that operation's Python and R exports is bound by name: to the
-member's own arguments, to a held value, to the plans handle, or in R to the
-host's ``version`` and ``capabilities``. A member that returns a class makes
-it from the call's result and the values it holds. README.md lists the member
-kinds and these rules.
+object wraps, or the name of a native argument, which the value fills in the
+object's native calls. A class that holds no handle is lazy: it holds paths,
+and it keeps a plans handle when a native call it makes takes ``plans``. A
+member or a function ``calls`` an operation of the ``operations`` table, and
+each native argument of that operation's Python and R exports is bound by
+name: to the member's own arguments, to a held value, to the plans handle, or
+in R to the host's ``version`` and ``capabilities``. A member that returns a
+class makes it from the call's result and the values it holds. README.md lists
+the member kinds and these rules.
 """
 
 import re
@@ -37,7 +42,7 @@ import re
 _PY_WIDTH = 88
 _R_WIDTH = 100
 
-_PUBLIC_KEYS = {"python", "types", "functions", "classes", "errors"}
+_PUBLIC_KEYS = {"python", "types", "value_types", "functions", "classes", "errors"}
 # Python annotation of each type token in generated code; None leaves the
 # argument unannotated.
 _PY_ANNOTATION = {
@@ -51,13 +56,26 @@ _PY_ANNOTATION = {
     "paths_written": "list[str]",
     "tree": "dict",
     "json_text": "str",
-    "table": "_pl.DataFrame",
-    "optional_table": "_pl.DataFrame | None",
+    # A table is the native yamaa.Table that the native call returns.
+    "table": "Table",
+    "optional_table": "Table | None",
     "status": "str",
     "file_type": "str",
     "info": "dict",
     "nothing": "None",
+    # Tokens with only a Python projection, which only the members of a
+    # Python-only class use; the generator writes no annotation with them.
+    "rows": "list[dict[str, object]]",
+    "arrow_capsule": "object",
+    "schema_request": "object | None",
+    "arrow_table": "object",
+    "polars_frame": "object",
+    "pandas_frame": "object",
 }
+# The language's column types, each projected into both hosts by
+# public.value_types; a table column's type is one of them, possibly inside
+# list<T> or optional<T>.
+_VALUE_TYPES = ("str", "int", "float", "date", "datetime", "list")
 # Tokens whose value is one of the `records`; a member returning one names it.
 _RECORD_TOKENS = {"info"}
 # Tokens whose value is text from the vocabulary of the same name in
@@ -71,14 +89,15 @@ _ARGUMENT_TOKENS = {
     "count",
     "flag",
     "file_type",
+    "schema_request",
 }
 _DEFAULTS = {
     "optional_text": {"None"},
+    "schema_request": {"None"},
     "flag": {"false", "true"},
     "count": None,  # a nonnegative integer
 }
 # Handwritten conversions the generated code calls.
-_PY_RESULT = {"table": "_table", "optional_table": "_optional_table"}
 _PY_ARGUMENT = {"path": "_fspath", "path_list": "_fspaths"}
 _R_ARGUMENT = {
     "path": ".text",
@@ -90,8 +109,17 @@ _R_ARGUMENT = {
 _NATIVE_PY = {"text": "str", "bool": "bool", "index": "int", "i32": "int"}
 _PY_DEFAULT = {"None": "None", "false": "False", "true": "True"}
 _R_DEFAULT = {"None": "NULL", "false": "FALSE", "true": "TRUE"}
-_KINDS = {"property", "method", "field", "index", "protocol", "private", "printing"}
-_PROTOCOLS = {"__contains__", "__iter__"}
+_KINDS = {"property", "method", "index", "protocol", "private", "printing"}
+_PROTOCOLS = {"__contains__", "__iter__", "__len__"}
+# R's names() and length() of a result (D44): a container's names are the
+# keys its `names` member gives; any other result names these members.
+_R_LISTED = {"property", "method"}
+# The R generics every result has, listing and counting its names (D44).
+_R_NAMES = ("names", "length")
+# The member kinds of a Python-only class: a property is a native getter, a
+# protocol or printing member a native special method spelled by `python`.
+_NATIVE_KINDS = {"property", "method", "protocol", "printing"}
+_MODULE = re.compile(r"[a-z][a-z0-9_]*")
 # How a printing member is spelled: Python's repr() and str() return the text
 # its operation renders, and R's format() returns those lines and print()
 # writes them, returning the object invisibly (D37).
@@ -212,7 +240,8 @@ class Public:
         for token, projection in types.items():
             if token not in _PY_ANNOTATION:
                 raise ValueError(f"public.types declares an unknown token: {token!r}")
-            entry = _keys(projection, f"public.types.{token}", {"python", "r"})
+            # A token without an R projection is Python-only.
+            entry = _keys(projection, f"public.types.{token}", {"python"}, {"r"})
             for host, text in entry.items():
                 if not isinstance(text, str) or not text.strip():
                     raise ValueError(f"public.types.{token}.{host} must be text")
@@ -222,13 +251,22 @@ class Public:
                     )
             if token in _VOCABULARY_TOKENS and token not in self.definition["values"]:
                 raise ValueError(f"public.types.{token} names an undeclared vocabulary")
+        self._validate_value_types()
         self._validate_errors()
         if not isinstance(self.classes, dict) or not self.classes:
             raise ValueError("public.classes must be a nonempty mapping")
         defined = set()
         for name, cls in self.classes.items():
-            self._validate_class(name, cls, defined)
+            if self.python_only(name):
+                self._validate_native_class(name, cls)
+            else:
+                self._validate_class(name, cls, defined)
             defined.add(name)
+        # The table tokens annotate the class that every table is.
+        if "Table" not in self.classes or not self.python_only("Table"):
+            raise ValueError(
+                "public.classes.Table, the class every table is, is missing"
+            )
         if not isinstance(self.functions, list) or not self.functions:
             raise ValueError("public.functions must be a nonempty list")
         names = set()
@@ -245,17 +283,44 @@ class Public:
         self.render_python([])
         self.render_r([])
 
-    def _token(self, token, what):
+    def _token(self, token, what, python_only=False):
         if token not in self.public["types"]:
             raise ValueError(f"{what} uses an undeclared type token: {token!r}")
+        if not python_only and "r" not in self.public["types"][token]:
+            raise ValueError(f"{what} uses the Python-only type token {token!r}")
         return token
 
     def _returns(self, value, what, defined):
         if value in self.classes:
             if value not in defined:
                 raise ValueError(f"{what} returns {value}, which is defined later")
+            if self.python_only(value):
+                raise ValueError(f"{what} returns the Python-only class {value}")
             return value
         return self._token(value, what)
+
+    def _validate_value_types(self):
+        """Both hosts' projection of each column type, covering every table."""
+        value_types = self.public["value_types"]
+        if not isinstance(value_types, dict) or list(value_types) != list(_VALUE_TYPES):
+            raise ValueError(
+                f"public.value_types must project {', '.join(_VALUE_TYPES)}, in order"
+            )
+        for kind, projection in value_types.items():
+            entry = _keys(projection, f"public.value_types.{kind}", {"python", "r"})
+            for host, text in entry.items():
+                if not isinstance(text, str) or not text.strip():
+                    raise ValueError(f"public.value_types.{kind}.{host} must be text")
+        for table, entry in self.definition["tables"].items():
+            for column in entry["columns"]:
+                kind = column["type"]
+                while kind.startswith(("optional<", "list<")) and kind.endswith(">"):
+                    kind = kind.partition("<")[2][:-1]
+                if kind not in value_types:
+                    raise ValueError(
+                        f"tables.{table}.{column['name']} has a type that "
+                        "public.value_types does not project"
+                    )
 
     def _validate_errors(self):
         if not isinstance(self.errors, dict) or set(self.errors) != {"refusal"}:
@@ -298,7 +363,7 @@ class Public:
             raise ValueError("the R refusal's fields must be a nonempty mapping")
         for field, kind in r["fields"].items():
             if not _NAME.fullmatch(field) or (
-                kind != "NULL" and kind not in self.public["types"]
+                kind != "NULL" and "r" not in self.public["types"].get(kind, {})
             ):
                 raise ValueError(f"invalid R refusal field: {field}: {kind}")
         if "table" in error and error["table"] not in self.definition["tables"]:
@@ -308,7 +373,7 @@ class Public:
         if len(self.py_exceptions) != 1:
             raise ValueError("the refusal needs exactly one native Python exception")
 
-    def _validate_signature(self, entry, what):
+    def _validate_signature(self, entry, what, python_only=False):
         args = entry.get("args", {})
         if not isinstance(args, dict):
             raise ValueError(f"{what}.args must be a mapping")
@@ -317,7 +382,7 @@ class Public:
             if not _NAME.fullmatch(argument):
                 raise ValueError(f"{what} has an invalid argument name: {argument!r}")
             token, default = _argument(spec, f"{what}.{argument}")
-            self._token(token, f"{what}.{argument}")
+            self._token(token, f"{what}.{argument}", python_only)
             if default is None and defaults:
                 raise ValueError(
                     f"{what}.{argument} without a default follows one with"
@@ -357,7 +422,7 @@ class Public:
             function,
             what,
             {"name", "python", "r", "returns"},
-            {"args", "keyword_only", "table", "raises", "calls", "doc"},
+            {"args", "keyword_only", "table", "record", "raises", "calls", "doc"},
         )
         name = function["name"]
         if not isinstance(name, str) or not _NAME.fullmatch(name):
@@ -411,9 +476,6 @@ class Public:
             if member["name"] in names:
                 raise ValueError(f"{what} declares {member['name']} twice")
             names.add(member["name"])
-        fields = {m["name"] for m in members if m["kind"] == "field"}
-        if {role for role in roles if role in fields} != fields:
-            raise ValueError(f"{what}.holds must fill each field")
         for member in members:
             self._validate_member(
                 name, cls, member, f"{what}.{member['name']}", defined
@@ -460,8 +522,8 @@ class Public:
                     f"{what} must be spelled __repr__ and [print, format] and call "
                     "the operation that renders its text"
                 )
-            if "handle" not in cls["holds"].values():
-                raise ValueError(f"{what} reaches a handle, which {class_name} lacks")
+            # A result's text comes from its handle and a lazy object's from
+            # the paths it holds; the call's binding is checked as it renders.
             if member["calls"] not in self.operations:
                 raise ValueError(
                     f"{what} calls an unknown operation: {member['calls']!r}"
@@ -491,29 +553,127 @@ class Public:
             )
         if kind in {"index", "private"} and "handle" not in cls["holds"].values():
             raise ValueError(f"{what} reaches a handle, which {class_name} lacks")
-        if kind == "field":
-            if "calls" in member or member.get("args"):
-                raise ValueError(f"{what} is held, so it calls nothing")
-        elif "calls" not in member:
+        if "calls" not in member:
             raise ValueError(f"{what} must name the operation it calls")
         if kind == "property" and member.get("args"):
             raise ValueError(f"{what} is a property and takes no arguments")
         if "calls" in member:
             self._python_target(member["calls"], class_name, what)
 
+    def _validate_native_class(self, name, cls):
+        """A Python-only class: a native class the public module exports, each
+        member one of its methods, which host_only names."""
+        what = f"public.classes.{name}"
+        _keys(cls, what, {"python", "hosts", "members"})
+        if not _CLASS.fullmatch(name) or cls["python"] != f"yamaa.{name}":
+            raise ValueError(f"{what}.python must be yamaa.{name}")
+        if name not in self.py_classes:
+            raise ValueError(f"{what} is no class of yamaa._native")
+        native = self.py_classes[name]
+        members = cls["members"]
+        if not isinstance(members, list) or not members:
+            raise ValueError(f"{what}.members must be a nonempty list")
+        names, methods = set(), set()
+        for member in members:
+            mwhat = (
+                f"{what}.{member.get('name') if isinstance(member, dict) else member}"
+            )
+            _keys(
+                member,
+                mwhat,
+                {"name", "kind"},
+                {"python", "args", "returns", "imports"},
+            )
+            if not isinstance(member["name"], str) or not _NAME.fullmatch(
+                member["name"]
+            ):
+                raise ValueError(f"invalid member name in {what}: {member['name']!r}")
+            if member["name"] in names:
+                raise ValueError(f"{what} declares {member['name']} twice")
+            names.add(member["name"])
+            kind = member["kind"]
+            if kind not in _NATIVE_KINDS:
+                raise ValueError(f"{mwhat} has an unknown kind: {kind!r}")
+            if kind in {"protocol", "printing"}:
+                method = member.get("python")
+                if not isinstance(method, str) or not re.fullmatch(
+                    r"__[a-z][a-z0-9_]*__", method
+                ):
+                    raise ValueError(f"{mwhat} must spell its special method")
+                if kind == "printing" and (method != "__repr__" or "returns" in member):
+                    raise ValueError(
+                        f"{mwhat} must be __repr__, which returns its text"
+                    )
+            elif "python" in member:
+                raise ValueError(
+                    f"{mwhat} spells a host name, which only protocol and printing do"
+                )
+            else:
+                method = member["name"]
+            if method not in native:
+                raise ValueError(f"{mwhat} is no method of yamaa._native.{name}")
+            if method in methods:
+                raise ValueError(f"{what} declares the native {method} twice")
+            methods.add(method)
+            if (kind == "property") != (native[method].get("kind") == "getter"):
+                raise ValueError(
+                    f"{mwhat} is a property exactly when its native method is a getter"
+                )
+            if kind != "printing":
+                if "returns" not in member:
+                    raise ValueError(f"{mwhat} must declare what it returns")
+                self._token(member["returns"], mwhat, python_only=True)
+            self._validate_signature(member, mwhat, python_only=True)
+            if list(member.get("args", {})) != list(native[method]["args"]):
+                raise ValueError(f"{mwhat} must take its native method's arguments")
+            imports = member.get("imports")
+            if imports is not None and (
+                kind != "method"
+                or not isinstance(imports, list)
+                or not imports
+                or len(set(imports)) != len(imports)
+                or not all(
+                    isinstance(module, str) and _MODULE.fullmatch(module)
+                    for module in imports
+                )
+            ):
+                raise ValueError(
+                    f"{mwhat}.imports must list the modules a method imports"
+                )
+        if methods != set(native):
+            raise ValueError(
+                f"{what} must declare every native method: "
+                f"{', '.join(sorted(set(native) - methods))}"
+            )
+        transport = set(self.definition["host_only"]["python"])
+        missing = sorted(f"{name}.{method}" for method in native)
+        missing = [method for method in missing if method not in transport]
+        if missing:
+            raise ValueError(f"{what} needs host_only entries: {', '.join(missing)}")
+
     # --- Classes and native targets ------------------------------------------------
+
+    def python_only(self, name):
+        """Whether `name` is a Python-only class, a native class exported as is."""
+        return self.classes[name].get("hosts") == ["python"]
+
+    def delegating_classes(self):
+        """The classes the generator writes in both hosts, each delegating to
+        its native calls, by name in definition order."""
+        return {
+            name: cls
+            for name, cls in self.classes.items()
+            if not self.python_only(name)
+        }
 
     def holds(self, name):
         return list(self.classes[name]["holds"].items())
 
     def kind(self, name):
-        roles = set(self.classes[name]["holds"].values())
-        if "handle" in roles:
-            return "handle"
-        fields = {
-            m["name"] for m in self.classes[name]["members"] if m["kind"] == "field"
-        }
-        return "value" if roles & fields else "lazy"
+        """A native class, a result wrapping a handle, or a lazy object."""
+        if self.python_only(name):
+            return "native"
+        return "handle" if "handle" in self.classes[name]["holds"].values() else "lazy"
 
     def _handle(self, name):
         for hold, role in self.holds(name):
@@ -664,8 +824,7 @@ class Public:
             ] != self._native_class(returns):
                 raise ValueError(f"{what} returns {native['returns']}, not {returns}")
             return self._py_construct(returns, call, class_name, args, what)
-        helper = _PY_RESULT.get(returns)
-        return _Call(helper, [call]) if helper else call
+        return call
 
     def _py_signature(self, entry, first=None):
         parts = [first] if first else []
@@ -687,7 +846,6 @@ class Public:
 
     def _py_init(self, name):
         kind = self.kind(name)
-        members = {m["name"]: m for m in self.classes[name]["members"]}
         params, body = [], []
         for index, (hold, role) in enumerate(self.holds(name)):
             if kind == "lazy" and index > 0:
@@ -696,11 +854,7 @@ class Public:
                 params.append(f"{hold}: {self._held_annotation(name, role)}")
             else:
                 params.append(hold)
-            if role in members and members[role]["kind"] == "field":
-                helper = _PY_RESULT.get(members[role]["returns"])
-                value = f"{helper}({hold})" if helper else hold
-                body.append(f"self.{role} = {value}")
-            elif kind == "lazy" and index == 0:
+            if kind == "lazy" and index == 0:
                 body.append(f"self._{hold} = _fspath({hold})")
             else:
                 body.append(f"self._{hold} = {hold}")
@@ -735,6 +889,9 @@ class Public:
             if member["python"] == "__contains__":
                 header = _py_def("__contains__", "self, name: object", "bool", "    ")
                 return header + doc + [f"        return name in {names}"]
+            if member["python"] == "__len__":
+                header = _py_def("__len__", "self", "int", "    ")
+                return header + doc + [f"        return len({names})"]
             return (
                 _py_def("__iter__", "self", None, "    ")
                 + doc
@@ -784,7 +941,7 @@ class Public:
             lines += [f'    """{cls["doc"]}"""', ""]
         lines += self._py_init(name)
         for member in cls["members"]:
-            if member["kind"] in {"field", "private"}:
+            if member["kind"] == "private":
                 continue
             lines += ["", *self._py_member(name, member)]
         return lines
@@ -808,8 +965,12 @@ class Public:
 
     def python_names(self):
         refusal = self.errors["refusal"]["python"]["class"].removeprefix("yamaa.")
-        names = [refusal, self.public["python"]["version"]]
+        names = [refusal, self.public["python"]["version"], *self._native_exports()]
         return sorted(names + [function["name"] for function in self.functions])
+
+    def _native_exports(self):
+        """The Python-only classes, which the public module imports as they are."""
+        return [name for name in self.classes if self.python_only(name)]
 
     def render_python(self, header):
         error = self.errors["refusal"]
@@ -825,11 +986,7 @@ class Public:
         body += _py_def("__init__", signature, None, "    ")
         body.append("        super().__init__(message)")
         body += [f"        self.{name} = {name}" for name in attributes]
-        mapped = []
-        for name, token in attributes.items():
-            value = f'getattr(error, "{name}")'
-            helper = _PY_RESULT.get(token)
-            mapped.append(_Call(helper, [value]) if helper else value)
+        mapped = [f'getattr(error, "{name}")' for name in attributes]
         body += [
             "",
             "",
@@ -846,7 +1003,7 @@ class Public:
                 " from None",
             ),
         ]
-        for name in self.classes:
+        for name in self.delegating_classes():
             body += ["", "", *self._py_class(name)]
         for function in self.functions:
             body += ["", "", *self._py_function(function)]
@@ -854,14 +1011,7 @@ class Public:
         # Import exactly the handwritten helpers the generated code uses.
         helpers = [
             name
-            for name in (
-                "_fspath",
-                "_fspaths",
-                "_Lazy",
-                "_optional_table",
-                "_pl",
-                "_table",
-            )
+            for name in ("_fspath", "_fspaths", "_Lazy")
             if re.search(rf"(?<![\w.]){name}\b", text)
         ]
         imported = ["__version__", *helpers]
@@ -883,13 +1033,17 @@ class Public:
             exports = "\n".join(
                 ["__all__ = [", *(f"    {name}," for name in quoted), "]"]
             )
+        native = self._native_exports()
+        imports = ["from yamaa import _native"]
+        if native:
+            imports.append(f"from yamaa._native import {', '.join(native)}")
         lines = [
             *header,
             f'"""{doc[0]}',
             *doc[1:],
             '"""',
             "",
-            "from yamaa import _native",
+            *imports,
             single,
             "",
             exports,
@@ -998,6 +1152,83 @@ class Public:
             )
         return ", ".join(parts)
 
+    def _r_bound(self, entry, class_name):
+        """The held values that the R call of `entry` takes."""
+        _, reference = self._operation(entry["calls"], class_name)
+        args = entry.get("args", {})
+        bound = set()
+        for native in self.r_functions[reference]["args"]:
+            if native in args or native in {"version", "capabilities", "plans"}:
+                continue
+            bound.update(
+                hold for hold, role in self.holds(class_name) if role == native
+            )
+        return bound
+
+    def _r_binding(self, name, hold):
+        """The hidden binding that keeps `hold`: `.handle` for the handle."""
+        return ".handle" if hold == self._handle(name) else f".{hold}"
+
+    def _r_hidden(self, name):
+        """The held values that an S3 method or a private accessor reaches,
+        in hold order; the object keeps each in its hidden binding."""
+        reached = set()
+        for member in self.classes[name]["members"]:
+            if member["kind"] in {"index", "private", "printing"}:
+                reached |= self._r_bound(member, name)
+        if self.kind(name) == "handle" and self._r_listed(name) is None:
+            reached |= self._r_bound(self._names_member(name), name)
+        return [hold for hold, _ in self.holds(name) if hold in reached]
+
+    def _names_member(self, name):
+        return next(m for m in self.classes[name]["members"] if m["name"] == "names")
+
+    def _r_listed(self, name):
+        """The public members that R's names() of a result lists, in
+        declaration order; None for a container, one with an `index` member,
+        whose names() are the keys its `names` member gives (D44)."""
+        members = self.classes[name]["members"]
+        if any(member["kind"] == "index" for member in members):
+            return None
+        return [member["name"] for member in members if member["kind"] in _R_LISTED]
+
+    def _r_names(self, name):
+        """R's names() and length() of a result: S3 methods that list its
+        public members, or a container's keys, and count them."""
+        cls = self.classes[name]
+        listed = self._r_listed(name)
+        if listed is None:
+            member = self._names_member(name)
+            what = f"public.classes.{name}.names"
+            call, _ = self._r_call(member, name, what, handle=self._handle(name))
+            return [
+                "",
+                f"names.{cls['r']} <- function(x) {{",
+                *self._r_reads(name, member, "x"),
+                *_r_lines(call, "  "),
+                "}",
+                "",
+                f"length.{cls['r']} <- function(x) length(names(x))",
+            ]
+        names = _Call("c", [f'"{member}"' for member in listed])
+        return [
+            "",
+            *_r_closure(f"names.{cls['r']} <- ", "x", names, ""),
+            "",
+            f"length.{cls['r']} <- function(x) {len(listed)}L",
+        ]
+
+    def _r_reads(self, name, entry, envir):
+        """Lines reading each held value the call of `entry` takes from its
+        hidden binding in `envir`, as a variable named for the value."""
+        bound = self._r_bound(entry, name)
+        return [
+            f'  {hold} <- get("{self._r_binding(name, hold)}", envir = {envir}, '
+            "inherits = FALSE)"
+            for hold, _ in self.holds(name)
+            if hold in bound
+        ]
+
     def _r_constructor(self, name):
         cls = self.classes[name]
         holds = [hold for hold, _ in self.holds(name)]
@@ -1007,9 +1238,10 @@ class Public:
         if self.plans(name):
             lines.append("  plans <- NULL")
         lines.append("  object <- new.env(parent = emptyenv())")
-        kinds = {member["kind"] for member in cls["members"]}
-        if handle and kinds & {"index", "private", "printing"}:
-            lines.append(f"  object$.handle <- {handle}")
+        lines += [
+            f"  object${self._r_binding(name, hold)} <- {hold}"
+            for hold in self._r_hidden(name)
+        ]
         for member in cls["members"]:
             lines += self._r_member(name, member, handle)
         lines += [f'  .object(object, "{cls["r"]}")', "}"]
@@ -1018,9 +1250,6 @@ class Public:
     def _r_member(self, name, member, handle):
         what = f"public.classes.{name}.{member['name']}"
         kind = member["kind"]
-        if kind == "field":
-            held = next(h for h, role in self.holds(name) if role == member["name"])
-            return [f"  object${member['name']} <- {held}"]
         if kind not in {"property", "method"}:
             return []
         call, plans = self._r_call(member, name, what, handle=handle)
@@ -1043,7 +1272,7 @@ class Public:
     def _r_extras(self, name):
         """S3 methods and private accessors that reach an object's handle."""
         cls = self.classes[name]
-        lines = []
+        lines = self._r_names(name) if self.kind(name) == "handle" else []
         for member in cls["members"]:
             what = f"public.classes.{name}.{member['name']}"
             if member["kind"] == "index":
@@ -1082,9 +1311,10 @@ class Public:
                     "}",
                 ]
             elif member["kind"] == "printing":
-                # format() returns the lines Rust renders; print() writes them,
+                # format() returns the lines Rust renders, from the handle of
+                # a result or the path of a lazy object; print() writes them,
                 # each ended by a line feed, and returns the object invisibly.
-                call, _ = self._r_call(member, name, what, handle="native")
+                call, _ = self._r_call(member, name, what, handle=self._handle(name))
                 lines += [
                     "",
                     f"print.{cls['r']} <- function(x, ...) {{",
@@ -1093,7 +1323,7 @@ class Public:
                     "}",
                     "",
                     f"format.{cls['r']} <- function(x, ...) {{",
-                    '  native <- get(".handle", envir = x, inherits = FALSE)',
+                    *self._r_reads(name, member, "x"),
                     *_r_lines(call, "  "),
                     "}",
                 ]
@@ -1113,7 +1343,7 @@ class Public:
 
     def render_r(self, header):
         lines = list(header)
-        for name in self.classes:
+        for name in self.delegating_classes():
             lines += ["", *self._r_constructor(name), *self._r_extras(name)]
         for function in self.functions:
             lines += ["", *self._r_function(function)]
@@ -1122,7 +1352,9 @@ class Public:
     def render_namespace(self, header):
         lines = [*header, f"useDynLib({self.package}, .registration = TRUE)"]
         lines += [f"export({function['r']})" for function in self.functions]
-        for cls in self.classes.values():
+        for name, cls in self.delegating_classes().items():
+            if self.kind(name) == "handle":
+                lines += [f"S3method({generic}, {cls['r']})" for generic in _R_NAMES]
             for member in cls["members"]:
                 if member["kind"] == "index":
                     lines.append(f'S3method("{member["r"]}", {cls["r"]})')
@@ -1142,6 +1374,8 @@ class Public:
             facts.append(f"record {entry['record']}")
         if "raises" in entry:
             facts.append(f"raises {entry['raises']}")
+        if "imports" in entry:
+            facts.append(f"imports {', '.join(entry['imports'])}")
         return facts
 
     def _argument_lines(self, prefix, entry):
@@ -1156,8 +1390,14 @@ class Public:
         """The frozen elements of the public surface, one per line."""
         lines = []
         for token, projection in self.public["types"].items():
+            facts = [f"python {projection['python']}"]
+            if "r" in projection:
+                facts.append(f"r {projection['r']}")
+            lines.append(f"public.types.{token}: {'; '.join(facts)}")
+        for kind, projection in self.public["value_types"].items():
             lines.append(
-                f"public.types.{token}: python {projection['python']}; r {projection['r']}"
+                f"public.value_types.{kind}: python {projection['python']}; "
+                f"r {projection['r']}"
             )
         for function in self.functions:
             prefix = f"public.functions.{function['name']}"
@@ -1166,7 +1406,10 @@ class Public:
             lines += self._argument_lines(prefix, function)
         for name, cls in self.classes.items():
             prefix = f"public.classes.{name}"
-            lines.append(f"{prefix}: python {cls['python']}; r {cls['r']}")
+            if self.python_only(name):
+                lines.append(f"{prefix}: python {cls['python']}")
+            else:
+                lines.append(f"{prefix}: python {cls['python']}; r {cls['r']}")
             for member in cls["members"]:
                 if member["kind"] == "private":
                     continue
@@ -1193,7 +1436,14 @@ class Public:
         )
         lines += [f"public.python.exports.{name}" for name in self.python_names()]
         lines += [f"public.r.exports.{function['r']}" for function in self.functions]
-        for cls in self.classes.values():
+        for name, cls in self.delegating_classes().items():
+            if self.kind(name) == "handle":
+                listed = self._r_listed(name)
+                facts = "keys of names" if listed is None else ", ".join(listed)
+                lines += [
+                    f"public.r.s3methods.{cls['r']}.names: {facts}",
+                    f"public.r.s3methods.{cls['r']}.length",
+                ]
             for member in cls["members"]:
                 if member["kind"] == "index":
                     lines.append(f"public.r.s3methods.{cls['r']}.{member['r']}")

@@ -54,7 +54,13 @@ mod execution {
             let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
             let case = root.join("benchmarks/schema-window-functions");
             let schema = schema(&root.join("yaml"));
-            let original = std::fs::read_to_string(case.join("spec.yaml")).unwrap();
+            // The benchmark as 0.5 wrote it: in 1.0 the schema refuses an
+            // ordered baseline window before WINDOW-5 compiles it. Its input
+            // is the benchmark's own.
+            let original = std::fs::read_to_string(
+                crate::support::benchmarks::legacy("schema-window-functions").join("spec.yaml"),
+            )
+            .unwrap();
             let cases: Vec<Json> = yamaa_adapters::json_wire::decode_array(include_str!(
                 "fixtures/specs/window-failures.json"
             ))
@@ -200,12 +206,15 @@ mod execution {
             }
             let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
             let case = root.join("benchmarks/schema-inheritance");
+            // The 0.5 inheritance lifecycle reads the layers as 0.5 wrote
+            // them; the inputs and the expected output are the benchmark's.
+            let layers = crate::support::benchmarks::legacy("schema-inheritance");
             let schema = schema(&root.join("yaml"));
-            let raw = decode_yaml(&std::fs::read(case.join("spec_study.yaml")).unwrap())
+            let raw = decode_yaml(&std::fs::read(layers.join("spec_study.yaml")).unwrap())
                 .unwrap()
                 .document;
             let mut host = Host {
-                root: case.clone(),
+                root: layers.clone(),
                 reads: vec![],
                 resolutions: vec![],
                 paths: vec![],
@@ -339,7 +348,7 @@ mod execution {
                 .prepare_inherited(
                     Source {
                         identity: "spec_study.yaml".into(),
-                        bytes: std::fs::read(case.join("spec_study.yaml")).unwrap(),
+                        bytes: std::fs::read(layers.join("spec_study.yaml")).unwrap(),
                     },
                     "spec_study.yaml".into(),
                     &mut host,
@@ -350,7 +359,7 @@ mod execution {
             for parent in captured.parents() {
                 assert_eq!(
                     parent.source().bytes,
-                    std::fs::read(case.join(&parent.source().identity)).unwrap()
+                    std::fs::read(layers.join(&parent.source().identity)).unwrap()
                 );
                 assert!(!parent.raw().locations.is_empty());
             }

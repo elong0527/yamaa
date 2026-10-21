@@ -30,12 +30,14 @@ from tools.paths import ROOT
 # every interpreter; the others split at CPython 3.15.
 EARLIER_FLOORS = {
     "lxml": "6.1.3",
+    "pandas": "2.3.3",
     "polars": "1.35.2",
     "pyarrow": "23.0.1",
     "pydantic": "2.12.4",
 }
 PYTHON_315_FLOORS = {
     "lxml": "6.1.3",
+    "pandas": "3.0.6",
     "polars": "2.0.0",
     "pyarrow": "26.0.0",
     "pydantic": "2.14.0",
