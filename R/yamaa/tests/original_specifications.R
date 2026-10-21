@@ -412,11 +412,22 @@ cases <- list(
 )
 unsupported_types <- c(uint64="uint64",float32="float",binary="binary",
   milliseconds="timestamp[ms]",timezone="timestamp[us, tz=UTC]",list="list<element: int64>",
-  "fixed-list"="fixed_size_list<element: int64>[2]",struct="struct<item: int64>",decimal="decimal128(10, 2)")
+  "fixed-list"="fixed_size_list<element: int64>[2]",struct="struct<item: int64>",decimal="decimal128(10, 2)",
+  # Types that the pinned Arrow and Parquet releases do not know (#3155).
+  decimal32="decimal32(9, 2)",decimal64="decimal64(18, 2)","list-view"="list_view<element: int64>",
+  "large-list-view"="large_list_view<element: int64>",geometry="binary",geography="binary",
+  variant="struct<metadata: binary not null, value: binary not null>")
 for(name in names(unsupported_types)) cases[[length(cases)+1L]] <- c(
   paste0("unsupported-",name),"source_field_type_unsupported","PARQUET-7",
   paste0('"dataset":"SRC","field":"FIELD","path":"input.parquet","stored_type":"',unsupported_types[[name]],'"'))
-for (test in cases) {
+# The same specification on the 1.0 surface, as the converter writes it: each
+# refusal keeps its condition, rule, path and context.
+surfaces <- c(source, paste0('yamaa: "1.0"\ntype: spec\ndomain: TEST\nbase: SRC\n',
+  'input: {SRC: input.parquet}\nkeys: [ID]\n',
+  'columns:\n  - {name: ID, type: int, derivation: "1"}\n',
+  'output: {path: output.csv, columns: [ID]}\n'))
+for (surface in surfaces) for (test in cases) {
+  writeBin(charToRaw(surface),entry)
   stopifnot(file.copy(file.path(root,"pq",paste0(test[[1L]],".parquet")),file.path(directory,"input.parquet"),overwrite=TRUE))
   result <- run_spec(entry)
   finding <- paste0('{"condition":"',test[[2L]],'","context":{',test[[4L]],'},"phase":"ingest","rule":"',test[[3L]],'","spec_paths":["input.SRC.path"]}')
