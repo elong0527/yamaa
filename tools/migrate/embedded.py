@@ -119,7 +119,8 @@ def convert_embedded(paths, base=None, table=None):
     for path in paths:
         for file in files_under(path):
             label = str(relative(file, base))
-            text = file.read_text(encoding="utf-8")
+            with file.open(encoding="utf-8", newline="") as handle:
+                text = handle.read()
             reader = READERS[file.suffix.lower()]
             converted = Source(label, text, table, result, reader).run()
             result.stats["source files read"] += 1

@@ -18,7 +18,7 @@ from unittest import mock
 
 import yaml
 from tools.migrate import convert as convert_files
-from tools.migrate import embedded, fixtures, sources
+from tools.migrate import embedded, fixtures, sources, write
 from tools.migrate import table as table_module
 from tools.migrate.text import compose, value_of
 from tools.paths import ROOT
@@ -179,6 +179,25 @@ class RustTests(unittest.TestCase):
 
 
 class GuardTests(unittest.TestCase):
+    def test_source_line_endings_survive_conversion_and_write_back(self):
+        for ending in ("\r\n", "\r"):
+            source = ending.join(
+                ["fn t() {", f"    let spec = {rust_string(SPEC)};", "}", ""]
+            )
+            expected = source.replace(rust_string(SPEC), rust_string(CONVERTED))
+            with (
+                self.subTest(ending=repr(ending)),
+                tempfile.TemporaryDirectory() as directory,
+            ):
+                root = Path(directory)
+                path = root / "t.rs"
+                path.write_bytes(source.encode("utf-8"))
+                result = embedded.convert_embedded([path], base=root)
+                write(result, root / "out", [path])
+                self.assertEqual(
+                    (root / "out/t.rs").read_bytes(), expected.encode("utf-8")
+                )
+
     def test_an_unsupported_source_reports_a_cli_error(self):
         from tools.migrate.__main__ import main
 
