@@ -52,10 +52,12 @@ enum Bound {
 
 /// Under row templates: whether each column-phase derivation bound, and for
 /// each row template the derivations that bound, in the order they
-/// complete, and whether its filter bound.
+/// complete, and whether its filter bound; and each template's derivations
+/// that bound in written order, a cycle's among them.
 struct TemplatesBound {
     columns: Vec<bool>,
     templates: Vec<(Vec<ExprId>, bool)>,
+    derived: Vec<Vec<ExprId>>,
 }
 
 struct Checks<'a> {
@@ -113,7 +115,7 @@ pub(in crate::specification) fn findings(
         rows::Rows::Implicit(_) => Bound::Implicit(checks.base(&mut findings)?),
         rows::Rows::Templates(rows) => Bound::Templates(checks.rows(rows, &mut findings)?),
     };
-    checks.ranges(&mut findings)?;
+    checks.ranges(&bound, &mut findings)?;
     checks.scopes(&bound, &mut findings);
     Ok(findings)
 }
@@ -564,6 +566,7 @@ impl Checks<'_> {
                 spec,
                 self.prepared,
                 scope.drivers,
+                true,
                 &[],
                 &self.refused,
             )
@@ -1769,8 +1772,9 @@ impl Checks<'_> {
     /// supplies through an implicit join also depends on the columns that
     /// join matches on: in 1.0 the input's declared key (LOOKUP-1); in 0.5
     /// the output keys that input stores, which only its captured schema
-    /// decides.
-    fn edges(&self, root: ExprId, driver: &str) -> Vec<usize> {
+    /// decides. `record` names the dataset whose record the rows read
+    /// directly; with `None` every input joins.
+    fn edges(&self, root: ExprId, record: Option<&str>) -> Vec<usize> {
         let spec = self.spec;
         let output = |name: &str| {
             spec.columns
@@ -1787,7 +1791,7 @@ impl Checks<'_> {
         for read in spec.reads(root, ast::Scope::Row) {
             let name = read.name.as_str();
             let lookup = read.name.owner().is_some_and(|owner| {
-                owner != driver && self.prepared.intermediates.contains(owner)
+                Some(owner) != record && self.prepared.intermediates.contains(owner)
             });
             match read.scope {
                 ast::Scope::Row if windowed.contains(&read.at) => edges.extend(output(name)),
@@ -1802,7 +1806,7 @@ impl Checks<'_> {
                 ast::Scope::Row => {
                     edges.extend(output(name));
                     let joined = read.name.owner().filter(|&owner| {
-                        owner != driver && !spec.header.surface.infers_join_keys()
+                        Some(owner) != record && !spec.header.surface.infers_join_keys()
                     });
                     if let Some(input) = joined {
                         edges.extend(
@@ -2272,7 +2276,7 @@ impl Checks<'_> {
                     findings,
                 );
             }
-            dependencies.push(Some(self.edges(root, driver[0])));
+            dependencies.push(Some(self.edges(root, Some(driver[0]))));
             self.predicate_types(root, findings)?;
             bound.push(findings.len() == start);
             if findings.len() == start && derivation.unconvertible.is_none() {
@@ -2318,6 +2322,7 @@ impl Checks<'_> {
         let mut bound = TemplatesBound {
             columns: Vec::new(),
             templates: Vec::new(),
+            derived: Vec::new(),
         };
         let mut graphs = Vec::new();
         for (index, template) in phases.iter().enumerate() {
@@ -2346,6 +2351,15 @@ impl Checks<'_> {
                 let read = reads.bound();
                 clean.push(read && findings.len() == start);
             }
+            bound.derived.push(
+                template
+                    .derivations
+                    .iter()
+                    .zip(&clean)
+                    .filter(|&(_, &clean)| clean)
+                    .map(|(derivation, _)| derivation.expr)
+                    .collect(),
+            );
             // The derivations that bound, in the order they complete.
             let (graph, paths) = self.template_graph(template);
             let order = crate::dependency_analysis::analyze(&graph)
@@ -2371,12 +2385,19 @@ impl Checks<'_> {
             ));
             graphs.push((graph, paths));
         }
+        // A column that holds an aggregate binds once over the whole dataset
+        // through the primary input, whose record its rows share only when
+        // every row template is driven by it (`rows::Templates::bind`).
+        let shared = phases.iter().all(|template| template.driver == primary);
+        let owner = |binding: &rows::ColumnPhaseBinding<'_>| {
+            matches!(binding.scope, crate::dataset::ColumnScope::Template) || shared
+        };
         for derivation in &columns {
             let root = derivation.expr;
-            let drivers = rows
+            let bindings = rows
                 .column_bindings(derivation.column, lookups::aggregates(spec, root), primary)
                 .into_iter()
-                .map(|binding| binding.driver)
+                .map(|binding| (binding.driver, owner(&binding)))
                 .collect::<Vec<_>>();
             let start = findings.len();
             self.defects(root, findings)?;
@@ -2384,7 +2405,7 @@ impl Checks<'_> {
             // binding after another, and a failure several bindings share is
             // reported once.
             let mut read = true;
-            for driver in &drivers {
+            for (driver, owned) in &bindings {
                 let drivers = std::slice::from_ref(driver);
                 let scope = Scope {
                     drivers,
@@ -2398,13 +2419,14 @@ impl Checks<'_> {
                     spec,
                     self.prepared,
                     drivers,
+                    *owned,
                     &column_groups,
                     refused,
                 );
                 self.walk(&reads, scope, root, findings)?;
                 read &= reads.bound();
             }
-            if drivers.len() > 1 {
+            if bindings.len() > 1 {
                 rows::distinct_findings(findings, start, self.prepared.source());
             }
             bound.columns.push(read && findings.len() == start);
@@ -2470,7 +2492,8 @@ impl Checks<'_> {
             for binding in
                 rows.column_bindings(derivation.column, lookups::aggregates(spec, root), primary)
             {
-                for edge in self.edges(root, binding.driver) {
+                let record = owner(&binding).then_some(binding.driver);
+                for edge in self.edges(root, record) {
                     if !edges.contains(&edge) {
                         edges.push(edge);
                     }
@@ -2491,7 +2514,7 @@ impl Checks<'_> {
         let mut paths = vec![String::new(); width];
         for derivation in &template.derivations {
             graph[derivation.column] = self
-                .edges(derivation.expr, template.driver)
+                .edges(derivation.expr, Some(template.driver))
                 .into_iter()
                 .filter(|&column| template.derivations.iter().any(|d| d.column == column))
                 .collect();
@@ -2651,9 +2674,10 @@ impl Checks<'_> {
     /// LOOKUP-9 from the declarations alone: a range value qualified by an
     /// input that does not drive every row reading the lookup fails, whether
     /// or not the input stores the field. Each context pairs what its rows
-    /// evaluate with the inputs driving them, in binding's order; each
+    /// evaluate with the inputs driving them, in binding's order, over the
+    /// derivations and filters that bound (`lookup_range::admit`); each
     /// refused range is reported once.
-    fn ranges(&self, findings: &mut Vec<BindFinding>) -> Result<(), BindError> {
+    fn ranges(&self, bound: &Bound, findings: &mut Vec<BindFinding>) -> Result<(), BindError> {
         let named = &self.prepared.intermediates;
         let inputs = &self.prepared.sources;
         let refused = |value: &str, drivers: &[&str]| {
@@ -2663,7 +2687,7 @@ impl Checks<'_> {
             })
         };
         let mut seen = BTreeSet::new();
-        for (evaluated, drivers) in self.range_contexts()? {
+        for (evaluated, drivers) in self.range_contexts(bound)? {
             for evaluated in evaluated {
                 let (ranges, names) = match evaluated {
                     Evaluated::Expression(root, own) => self.lookups(root, own),
@@ -2704,16 +2728,20 @@ impl Checks<'_> {
         Ok(())
     }
 
-    /// The contexts whose rows read lookup ranges. Without row templates the
-    /// base drives every row, and its qualifier reads the row's own record. A
-    /// dataset verification reads its lookups for every row, as a column
-    /// does. With row templates, the column phase, whose derivations and
-    /// dataset verifications evaluate for the rows of every template that
-    /// leaves them to it, then each template, whose derivations and filter
-    /// evaluate for its rows only; a row's driver is the input behind its
-    /// template, named directly or through a named intermediate.
+    /// The contexts whose rows read lookup ranges, over what `bound` says
+    /// bound. Without row templates the base drives every row, and its
+    /// qualifier reads the row's own record. A dataset verification reads its
+    /// lookups for every row, as a column does. With row templates, the
+    /// column phase, whose derivations and dataset verifications evaluate for
+    /// the rows of every template that leaves them to it, then each template,
+    /// whose derivations and filter evaluate for its rows only; a row's driver
+    /// is the input behind its template, named directly or through a named
+    /// intermediate.
     #[allow(clippy::type_complexity)]
-    fn range_contexts(&self) -> Result<Vec<(Vec<Evaluated<'_>>, Vec<&str>)>, BindError> {
+    fn range_contexts(
+        &self,
+        bound: &Bound,
+    ) -> Result<Vec<(Vec<Evaluated<'_>>, Vec<&str>)>, BindError> {
         let spec = self.spec;
         let prepared = self.prepared;
         let verified = relation_predicates::verification_predicates(&prepared.verifications.checks)
@@ -2725,12 +2753,18 @@ impl Checks<'_> {
                 )
             })
             .map(|binding| Evaluated::Name(&binding.name));
-        let rows::Rows::Templates(rows) = &prepared.rows else {
+        let (rows::Rows::Templates(rows), Bound::Templates(bound)) = (&prepared.rows, bound) else {
             let base = prepared.source().name.as_str();
+            let columns = match bound {
+                Bound::Implicit(columns) => columns.as_slice(),
+                Bound::Templates(_) => &[],
+            };
             let evaluated = spec
                 .columns
                 .iter()
-                .filter_map(|column| column.derivation.as_ref())
+                .zip(columns)
+                .filter(|&(_, &bound)| bound)
+                .filter_map(|(column, _)| column.derivation.as_ref())
                 .map(|derivation| Evaluated::Expression(derivation.expr, Some(base)))
                 .chain(verified)
                 .collect();
@@ -2765,7 +2799,12 @@ impl Checks<'_> {
         // for its own rows. A column holding an aggregate binds once against
         // the whole dataset, where every input joins unless every row template
         // is driven by the input behind the first.
-        for derivation in rows.column_phase() {
+        for (derivation, _) in rows
+            .column_phase()
+            .into_iter()
+            .zip(&bound.columns)
+            .filter(|&(_, &bound)| bound)
+        {
             let root = root(derivation.expr)?;
             let leaving = phases.iter().zip(&drivers).filter(|(template, _)| {
                 !template
@@ -2796,7 +2835,11 @@ impl Checks<'_> {
         contexts.push((verified.collect(), drivers.clone()));
         for ((index, template), &driver) in phases.iter().enumerate().zip(&drivers) {
             let mut evaluated = Vec::new();
-            for derivation in &template.derivations {
+            for derivation in template
+                .derivations
+                .iter()
+                .filter(|derivation| bound.derived[index].contains(&derivation.expr))
+            {
                 evaluated.push(Evaluated::Expression(
                     root(derivation.expr)?,
                     Some(template.driver),
@@ -2810,6 +2853,7 @@ impl Checks<'_> {
                 .templates
                 .get(index)
                 .and_then(|declared| declared.filter)
+                .filter(|_| bound.templates[index].1)
                 .map(|filter| &spec.expr(filter).kind)
             {
                 evaluated.extend(filter.identifiers().map(Evaluated::Name));

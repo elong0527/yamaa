@@ -6,7 +6,11 @@
 //! issues in both routes and hosts, in binding's order, which binds each
 //! row template before the column phase and the column phase once for each
 //! driver's rows; and a column a `copy` entry copies from such an input is
-//! such a read (D164).
+//! such a read (D164). A column that holds an aggregate binds once over the
+//! whole dataset, where rows of templates with other drivers share no record
+//! and the primary input is read through its join too (#3533). A refused
+//! read keeps its derivation from binding, so the range it would match on is
+//! not admitted.
 use std::{
     fs,
     path::PathBuf,
@@ -679,4 +683,165 @@ fn check_reports_a_copy_from_a_keyless_input_as_domain_does() {
     ]);
     let key = ", key: [STUDYID, USUBJID]";
     assert_clean(&[copied(key, false), copied(key, true)]);
+}
+
+/// Row templates over VS, grouped as `group` gives, and over `second`: HOME,
+/// or VS again so that every row shares VS's record. VS declares `vs` as its
+/// key and HOME `[USUBJID]`; X and C default to `x` and `c`, each of which
+/// holds an aggregate, so it binds once over the whole dataset.
+fn whole(vs: &str, second: &str, group: &str, x: &str, c: &str) -> String {
+    format!(
+        "yamaa: \"1.0\"\ntype: spec\ndomain: ADVS\nkeys: [STUDYID, USUBJID, PARAMCD]\n{}\
+         output: {{path: out.csv, columns: [STUDYID, USUBJID, PARAMCD, X, C]}}\n\
+         columns:\n\
+         \x20 - {{name: STUDYID, type: str}}\n\
+         \x20 - {{name: USUBJID, type: str}}\n\
+         \x20 - {{name: PARAMCD, type: str}}\n\
+         \x20 - {{name: X, type: float, derivation: {x}}}\n\
+         \x20 - {{name: C, type: str, derivation: {c}}}\n\
+         rows:\n\
+         \x20 - id: clinic\n    dataset: VS\n{group}    derivations:\n\
+         \x20     STUDYID: VS.STUDYID\n      USUBJID: VS.USUBJID\n      PARAMCD: \"'CLINIC'\"\n\
+         \x20 - id: home\n    dataset: {second}\n    derivations:\n\
+         \x20     STUDYID: {second}.STUDYID\n      USUBJID: {second}.USUBJID\n      PARAMCD: \"'HOME'\"\n",
+        inputs(vs, KEY, "")
+    )
+}
+
+/// A column that holds an aggregate binds once over the whole dataset
+/// through the primary input VS. HOME drives the other template, so those
+/// rows have no VS record: every read of VS there, a name, a `case`
+/// predicate, a flag, an operand or a structured source, goes through VS's
+/// implicit join, which needs its `key` (#3533). A group check of a range
+/// value follows a join that binds, and a missing key comes first.
+#[test]
+fn check_reads_the_primary_through_its_join_where_the_rows_share_no_record() {
+    let x = "{case: [{when: \"PARAMCD = 'CLINIC'\", then: VS.SYSBP}, \
+             {otherwise: {aggregate: \"MAX(HOME.SYSBP)\"}}]}";
+    let c = "\"'A'\"";
+    let aggregate = |then: &str| {
+        format!(
+            "{{case: [{{when: \"PARAMCD = 'CLINIC'\", then: {then}}}, \
+             {{otherwise: {{aggregate: \"MAX(HOME.SYSBP)\"}}}}]}}"
+        )
+    };
+    let predicate = "{case: [{when: \"VS.SYSBP > 100\", then: 1.0}, \
+                     {otherwise: {aggregate: \"MAX(HOME.SYSBP)\"}}]}";
+    let flag = "{case: [{when: \"PARAMCD = 'CLINIC'\", then: {flag: \"VS.SYSBP > 100\"}}, \
+                {otherwise: {aggregate: \"MAX(HOME.VSTESTCD)\"}}]}";
+    let range = aggregate("{source: {variable: VS.SYSBP, between: {value: VS.VSDY, lower: VSDY}}}");
+    let grouped = "    group_by: [VS.STUDYID, VS.USUBJID]\n";
+    let dosed_x = "{case: [{when: \"PARAMCD = 'DOSE'\", then: PLAN.PLANDOSE}, \
+                   {otherwise: {aggregate: {expr: \"MAX(PLAN.PLANDOSE)\", key: [USUBJID]}}}]}";
+    assert_cases(&[
+        // The review's example: X reads VS in one arm and aggregates HOME in
+        // the other.
+        read(
+            whole("", "HOME", "", x, c),
+            &["columns.X.derivation.case[0].then.source"],
+            "VS",
+        ),
+        read(
+            whole("", "HOME", "", predicate, c),
+            &["columns.X.derivation.case[0].when"],
+            "VS",
+        ),
+        read(
+            whole("", "HOME", "", "0.0", flag),
+            &["columns.C.derivation.case[0].then.flag.condition"],
+            "VS",
+        ),
+        read(
+            whole(
+                "",
+                "HOME",
+                "",
+                &aggregate("{greatest: {sources: [VS.SYSBP, HOME.SYSBP]}}"),
+                c,
+            ),
+            &["columns.X.derivation.case[0].then.greatest.sources[0]"],
+            "VS",
+        ),
+        // Under a grouped template over VS the missing key comes first, and
+        // a structured source's range is then neither grouped nor admitted.
+        read(
+            whole("", "HOME", grouped, x, c),
+            &["columns.X.derivation.case[0].then.source"],
+            "VS",
+        ),
+        read(
+            whole("", "HOME", grouped, &range, c),
+            &["columns.X.derivation.case[0].then.source"],
+            "VS",
+        ),
+        // Once the join binds, a range value naming VS is one value of a
+        // group's record (NAME-4).
+        (
+            whole(KEY, "HOME", grouped, &range, c),
+            &["columns.X.derivation.case[0].then.source.between.value"],
+            "ungrouped_driver_field Some(\"NAME-4\")".into(),
+        ),
+        // A template driven by a lookup of PLAN shares no record of PLAN.
+        read(
+            dosed("", "", dosed_x),
+            &["columns.X.derivation.case[0].then.source"],
+            "PLAN",
+        ),
+    ]);
+    assert_clean(&[
+        // VS declares its key: each read joins, keeps its join options and
+        // is no driver field a group must hold.
+        whole(KEY, "HOME", "", x, c),
+        whole(KEY, "HOME", "", predicate, flag),
+        whole(KEY, "HOME", grouped, x, flag),
+        whole(KEY, "HOME", grouped, predicate, c),
+        whole(
+            KEY,
+            "HOME",
+            "",
+            &aggregate("{source: {variable: VS.SYSBP, require_match: true}}"),
+            c,
+        ),
+        dosed(KEY, "", dosed_x),
+        // Both templates over VS share its record.
+        whole("", "VS", "", x, c),
+        whole("", "VS", "", predicate, flag),
+    ]);
+}
+
+/// A read that binding refuses keeps its derivation from binding, so the
+/// range of the join it would make is not admitted (LOOKUP-9), without row
+/// templates and in the column phase.
+#[test]
+fn check_admits_no_range_of_a_derivation_that_does_not_bind() {
+    let (c, n) = ("\"'A'\"", "0");
+    let range = "{source: {variable: HOME.SYSBP, between: {value: DM.AGE, lower: VSDY}}}";
+    let column = |home: &str| {
+        record(KEY, "", "", range, c, n).replace(
+            "HOME: {path: home.csv, types",
+            &format!("HOME: {{path: home.csv, {home}types"),
+        )
+    };
+    let implicit = |home: &str| {
+        implicit(KEY, "", range, c, n).replace(
+            "HOME: {path: home.csv, types",
+            &format!("HOME: {{path: home.csv, {home}types"),
+        )
+    };
+    assert_cases(&[
+        read(implicit(""), &["columns.X.derivation.source"], "HOME"),
+        read(column(""), &["columns.X.derivation.source"], "HOME"),
+        // Once the join binds, DM's record, which no row's driver is, gives
+        // no range value.
+        (
+            implicit(KEY),
+            &["columns.X.derivation.source.between.value"],
+            "unknown_field Some(\"LOOKUP-9\")".into(),
+        ),
+        (
+            column(KEY),
+            &["columns.X.derivation.source.between.value"],
+            "unknown_field Some(\"LOOKUP-9\")".into(),
+        ),
+    ]);
 }

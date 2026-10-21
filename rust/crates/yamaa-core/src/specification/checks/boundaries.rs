@@ -17,7 +17,10 @@
 //!   and a read of a 1.0 row driver, which declares no key, as a lookup of
 //!   rows it does not drive (LOOKUP-3);
 //! - a read of another 1.0 input that declares no `key` through its implicit
-//!   join, which has nothing to match on (LOOKUP-5, D111);
+//!   join, which has nothing to match on (LOOKUP-5, D111). A column that
+//!   holds an aggregate binds once over the whole dataset, and when a row
+//!   template's driver differs from the primary input those rows share no
+//!   record, so the primary is read through its join too;
 //! - `require_match` or `between` on a structured source that reads anything
 //!   but another input through its implicit join (LOOKUP-24, LOOKUP-9);
 //! - a row filter's read of a column its template does not derive, a
@@ -41,8 +44,15 @@ pub(super) struct Reads<'a> {
     spec: &'a Spec,
     prepared: &'a PreparedSpecification,
     /// The driver of each binding the derivation gets: a row template's own,
-    /// or in the column phase each binding's.
+    /// or in the column phase each binding's. Its groups, lookups and nested
+    /// scopes follow it.
     drivers: &'a [&'a str],
+    /// Whether each binding's rows read their driver's record directly. A
+    /// column-phase binding over the whole dataset has no record owner when
+    /// a row template's driver differs from the primary input
+    /// (`rows::Templates::bind`): it reads the primary through its implicit
+    /// join too.
+    owned: bool,
     phase: Phase<'a>,
     /// A row template's id and the columns it derives in the row phase,
     /// which its row-phase reads may read.
@@ -70,6 +80,7 @@ impl<'a> Reads<'a> {
             spec,
             prepared,
             drivers: std::slice::from_ref(&template.driver),
+            owned: true,
             phase: scope.phase,
             row: Some((template.id, scope.available.unwrap_or_default())),
             refused,
@@ -78,11 +89,13 @@ impl<'a> Reads<'a> {
     }
 
     /// The column phase, for bindings over `drivers`, with every grouped
-    /// template's driver and `group_by`.
+    /// template's driver and `group_by`; `owned` when their rows read their
+    /// driver's record directly.
     pub(super) fn column(
         spec: &'a Spec,
         prepared: &'a PreparedSpecification,
         drivers: &'a [&'a str],
+        owned: bool,
         groups: &'a [(&'a str, &'a [&'a str])],
         refused: &'a BTreeSet<usize>,
     ) -> Self {
@@ -90,6 +103,7 @@ impl<'a> Reads<'a> {
             spec,
             prepared,
             drivers,
+            owned,
             phase: Phase::Column { groups },
             row: None,
             refused,
@@ -145,10 +159,16 @@ impl<'a> Reads<'a> {
             .any(|source| source.name == owner)
     }
 
+    /// Whether a read qualified by `owner` reads the row's own record: the
+    /// driver's, when the rows read it directly.
+    fn record(&self, owner: &str) -> bool {
+        self.owned && self.drivers.contains(&owner)
+    }
+
     /// Whether `owner` is another input, which joins the rows on its implicit
     /// join's key.
     fn joined(&self, owner: &str) -> bool {
-        self.input(owner) && !self.drivers.contains(&owner)
+        self.input(owner) && !self.record(owner)
     }
 
     /// A read at `path` of the input `owner` through its implicit join. On a
@@ -168,7 +188,8 @@ impl<'a> Reads<'a> {
     /// through its selector, the driver's record, or another input's
     /// through its implicit join ([`Self::join`]). In the column phase a
     /// lookup or an input that drives the rows of some bindings is a lookup
-    /// or a join for the others, each binding in turn. True when the read
+    /// or a join for the others, each binding in turn, and without a record
+    /// owner the driver is read through its join too. True when the read
     /// binds, as far as the declarations decide.
     pub(super) fn read(&self, path: &str, name: &str, findings: &mut Vec<BindFinding>) -> bool {
         let Some((owner, _)) = name.split_once('.') else {
@@ -177,7 +198,7 @@ impl<'a> Reads<'a> {
         if let Some(index) = self.lookup(owner) {
             return self.lookup_read(index, path, findings);
         }
-        if !self.drivers.contains(&owner) {
+        if !self.record(owner) {
             return !self.input(owner) || self.join(path, owner, findings);
         }
         let named = self.named(owner);
@@ -330,7 +351,7 @@ impl<'a> Reads<'a> {
         }
     }
 
-    /// A project call's argument: a field of the driver's record must be a
+    /// A project call's argument: a field of the row's own record must be a
     /// group key (ROW-5, NAME-4), and another input's field is read through
     /// its implicit join ([`Self::join`]). Preparation refuses a column
     /// outside the row phase.
@@ -338,7 +359,7 @@ impl<'a> Reads<'a> {
         let Some((owner, _)) = name.split_once('.') else {
             return;
         };
-        if self.drivers.contains(&owner) {
+        if self.record(owner) {
             self.group(path, name, findings);
         } else if self.joined(owner) {
             self.join(path, owner, findings);
