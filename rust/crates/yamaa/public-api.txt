@@ -298,7 +298,8 @@ yamaa::engine::Engine::resolve_specification: pub fn resolve_specification(&self
 yamaa::engine::EngineOptions: impl EngineOptions
 yamaa::engine::EngineOptions: pub struct EngineOptions [derive(Default)] [non_exhaustive]
 yamaa::engine::EngineOptions::functions: pub functions: Option<Arc<dyn ProjectFunctions>>
-yamaa::engine::EngineOptions::host_language: pub host_language: HostLanguage
+yamaa::engine::EngineOptions::host_language: pub host_language: Option<HostLanguage>
+yamaa::engine::EngineOptions::neutral: pub fn neutral(runtime_name: String, runtime_version: String) -> Self
 yamaa::engine::EngineOptions::new: pub fn new(host_language: HostLanguage, runtime_name: String, runtime_version: String) -> Self
 yamaa::engine::EngineOptions::observer: pub observer: Option<Arc<dyn Progress>>
 yamaa::engine::EngineOptions::resolver: pub resolver: Option<Arc<dyn ResourceResolver>>

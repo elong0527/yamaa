@@ -45,7 +45,7 @@ pub fn extended_alias_reached() -> BTreeSet<ConditionCode> {
     }
     .root()];
     draft.language = Some(Language::Python);
-    let findings = project_environment::validate(Language::Python, &draft);
+    let findings = project_environment::validate(Some(Language::Python), &draft);
     let projected = project_environment_diagnostics::diagnostics(&draft, &findings).unwrap();
     assert_eq!(projected.len(), 1, "{projected:?}");
     let finding = &projected[0];
@@ -105,7 +105,7 @@ pub fn format_name_reached() -> BTreeSet<ConditionCode> {
         ],
     }
     .root()];
-    let findings = project_environment::validate(Language::Python, &draft);
+    let findings = project_environment::validate(Some(Language::Python), &draft);
     let projected = project_environment_diagnostics::diagnostics(&draft, &findings).unwrap();
     assert_eq!(projected.len(), 2, "{projected:?}");
     for (finding, (index, codelist, value, data_type)) in projected.iter().zip([
@@ -164,7 +164,7 @@ pub fn function_file_reached() -> BTreeSet<ConditionCode> {
         ]),
         codelists: vec![],
     };
-    let findings = project_environment::validate(Language::Python, &draft);
+    let findings = project_environment::validate(Some(Language::Python), &draft);
     let projected = project_environment_diagnostics::diagnostics(&draft, &findings).unwrap();
     let expected = [
         (
@@ -312,7 +312,7 @@ pub fn draft() -> Draft {
 }
 pub fn reached() -> BTreeSet<ConditionCode> {
     let d = draft();
-    let findings = project_environment::validate(Language::Python, &d);
+    let findings = project_environment::validate(Some(Language::Python), &d);
     let projected = project_environment_diagnostics::diagnostics(&d, &findings).unwrap();
     let expected = [
         (
@@ -420,7 +420,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         kind: LockKind::Renv,
     });
     lock_mismatch.codelists.clear();
-    let findings = project_environment::validate(Language::Python, &lock_mismatch);
+    let findings = project_environment::validate(Some(Language::Python), &lock_mismatch);
     let projected =
         project_environment_diagnostics::diagnostics(&lock_mismatch, &findings).unwrap();
     assert_eq!(projected.len(), 1);

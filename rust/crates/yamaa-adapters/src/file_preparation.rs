@@ -104,9 +104,9 @@ impl FileSpecification {
     pub fn prepare(mut resources: Resources, written: &str) -> Result<Self, Error> {
         let document = prepare_document(&mut resources, written, None)?;
         let links = capture_links(&mut resources, &document, None, &mut None)?;
-        let environment = crate::project_source::OwnedEnvironment::without_environment(
+        let environment = crate::project_source::OwnedEnvironment::without_environment(Some(
             yamaa_core::project_function::Language::Python,
-        );
+        ));
         Self::compile(resources, written.into(), document, links, environment).map_err(|rejected| {
             Error::Compile(crate::specification_run::Error::Prepare(
                 rejected.run.rejection.error,
@@ -466,9 +466,9 @@ mod profile_inspection_tests {
             let Err(rejected) = PreparedRun::prepare_with_profile_inspection(
                 document,
                 &[],
-                crate::project_source::OwnedEnvironment::without_environment(
+                crate::project_source::OwnedEnvironment::without_environment(Some(
                     yamaa_core::project_function::Language::Python,
-                ),
+                )),
                 |document, dataset, path| {
                     crate::source_profile_inspection::inspect(document, &resources, dataset, path)
                 },

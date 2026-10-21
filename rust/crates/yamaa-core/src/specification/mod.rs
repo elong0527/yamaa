@@ -680,7 +680,7 @@ impl PreparedSpecification {
             environment.map(|e| e.catalogue()),
             links,
             environment.map(|e| e.inventory()),
-            environment.and_then(|e| e.undeclared_language()),
+            environment.and_then(|e| e.undeclared()),
         )
     }
     /// Prepare a 1.x specification its front end lowered into `tree`, whose
@@ -710,7 +710,7 @@ impl PreparedSpecification {
             environment.map(|e| e.catalogue()),
             links,
             environment.map(|e| e.inventory()),
-            environment.and_then(|e| e.undeclared_language()),
+            environment.and_then(|e| e.undeclared()),
         )
     }
     fn prepare_implementation(
@@ -719,7 +719,7 @@ impl PreparedSpecification {
         catalogue: Option<&crate::project_terminology::Catalogue>,
         links: crate::producer_contract::Links<'_>,
         inventory: Option<&crate::submission_inventory::Inventory>,
-        undeclared: Option<crate::project_function::Language>,
+        undeclared: Option<crate::project_environment::Undeclared>,
     ) -> Result<Self, PrepareError> {
         // The one typed tree of the admitted document, which preparation and
         // binding read.
@@ -743,7 +743,7 @@ impl PreparedSpecification {
         catalogue: Option<&crate::project_terminology::Catalogue>,
         links: crate::producer_contract::Links<'_>,
         inventory: Option<&crate::submission_inventory::Inventory>,
-        undeclared: Option<crate::project_function::Language>,
+        undeclared: Option<crate::project_environment::Undeclared>,
     ) -> Result<Self, PrepareError> {
         checks::root::limits(&tree)?;
         // Link admission precedes every other declaration finding: a refused
@@ -771,7 +771,7 @@ impl PreparedSpecification {
         functions: Option<&[crate::project_function::Function]>,
         catalogue: Option<&crate::project_terminology::Catalogue>,
         inventory: Option<&crate::submission_inventory::Inventory>,
-        undeclared: Option<crate::project_function::Language>,
+        undeclared: Option<crate::project_environment::Undeclared>,
     ) -> Result<Self, PrepareError> {
         let spec = &tree;
         match_values::declaration_admission(spec)?;

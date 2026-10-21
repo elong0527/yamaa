@@ -38,13 +38,17 @@ pub struct AttemptFailure {
 }
 
 /// Engine configuration. Options and request types are `#[non_exhaustive]`
-/// structs, so the `new` plus `with_*` constructors below are the only way
-/// to build them, keeping additive field changes non-breaking.
+/// structs, so the `new`, `neutral` and `with_*` constructors below are the
+/// only way to build them, keeping additive field changes non-breaking. The
+/// default options are neutral, with an empty runtime identity.
 #[non_exhaustive]
 #[derive(Default)]
 pub struct EngineOptions {
     pub resolver: Option<Arc<dyn ResourceResolver>>,
-    pub host_language: HostLanguage,
+    /// The host language whose project functions the engine runs, or none
+    /// for an engine that claims no host language (see
+    /// [`EngineOptions::neutral`]).
+    pub host_language: Option<HostLanguage>,
     pub runtime_name: String,
     pub runtime_version: String,
     pub functions: Option<Arc<dyn ProjectFunctions>>,
@@ -57,8 +61,28 @@ impl EngineOptions {
     /// language name, as today) alongside the runtime version.
     pub fn new(host_language: HostLanguage, runtime_name: String, runtime_version: String) -> Self {
         Self {
+            host_language: Some(host_language),
+            ..Self::neutral(runtime_name, runtime_version)
+        }
+    }
+
+    /// Configure one engine that claims no host language, such as the
+    /// command line's or a bare Rust embedder's (#3030 section 2.10, D123). It
+    /// reads no project's `environments.<host>` entry, so it verifies no
+    /// lock and activates nothing, and it runs no project function: a build
+    /// that calls one is refused before any input is read, as
+    /// `unsupported_operation` with operation `environment` (D110), and
+    /// functions given to [`EngineOptions::with_functions`] are never called.
+    /// Every function file a 1.0 project lists is still read and admitted,
+    /// so a check or resolve of a specification that calls one runs as a
+    /// host's does; a 0.5 project's functions are declared in the environment
+    /// files such an engine does not read, so each call to one is refused
+    /// while the specification compiles. Every build that calls no project
+    /// function runs as a host runs it, with or without a project.
+    pub fn neutral(runtime_name: String, runtime_version: String) -> Self {
+        Self {
             resolver: None,
-            host_language,
+            host_language: None,
             runtime_name,
             runtime_version,
             functions: None,
@@ -75,7 +99,8 @@ impl EngineOptions {
     /// Activate project functions through a caller-supplied capability.
     /// Without one, a build that calls a project function reports
     /// unsupported before it reads data; every other build runs, with or
-    /// without a project.
+    /// without a project. An engine that claims no host language never calls
+    /// them.
     pub fn with_functions(mut self, functions: Arc<dyn ProjectFunctions>) -> Self {
         self.functions = Some(functions);
         self

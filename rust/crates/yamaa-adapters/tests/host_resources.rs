@@ -375,7 +375,7 @@ fn a_parent_on_another_share_is_refused_rather_than_read_from_the_entry_root() {
         let resolver = Arc::new(parent_elsewhere(entry, PARENT));
         let Err(error) = yamaa_adapters::file_workflow::select_with_resolver(
             request(),
-            Language::Python,
+            Some(Language::Python),
             resolver.clone(),
         ) else {
             panic!("a parent at {PARENT} was rebased onto the root of {entry}");
@@ -398,7 +398,7 @@ fn a_parent_on_another_share_is_refused_rather_than_read_from_the_entry_root() {
         // A check, a resolve and a direct preparation report the same.
         refused(
             &yamaa_adapters::file_application::check_with_resolver(
-                Language::Python,
+                Some(Language::Python),
                 request(),
                 yamaa_adapters::specification_report::Identity {
                     runtime: "rust",
@@ -415,7 +415,7 @@ fn a_parent_on_another_share_is_refused_rather_than_read_from_the_entry_root() {
         let Err(issues) = yamaa_adapters::resolved_artifact::resolve(
             "child.yaml",
             None,
-            Language::Python,
+            Some(Language::Python),
             Some(Arc::new(parent_elsewhere(entry, PARENT))),
         ) else {
             panic!("{entry}: resolved a parent on another share");
@@ -508,7 +508,8 @@ fn a_malformed_parent_spelling_is_refused_as_written_on_every_route() {
             specification: child,
             environment: None,
         };
-        let Err(error) = yamaa_adapters::file_workflow::select_request(request(), Language::Python)
+        let Err(error) =
+            yamaa_adapters::file_workflow::select_request(request(), Some(Language::Python))
         else {
             panic!("{parent}: a malformed parent was selected");
         };
@@ -521,7 +522,7 @@ fn a_malformed_parent_spelling_is_refused_as_written_on_every_route() {
             "check",
         );
         let Err(issues) =
-            yamaa_adapters::resolved_artifact::resolve(child, None, Language::Python, None)
+            yamaa_adapters::resolved_artifact::resolve(child, None, Some(Language::Python), None)
         else {
             panic!("{parent}: resolved a malformed parent");
         };
@@ -556,7 +557,7 @@ fn a_malformed_parent_spelling_is_refused_as_written_on_every_route() {
         let resolver = served();
         let Err(error) = yamaa_adapters::file_workflow::select_with_resolver(
             request_named("child.yaml"),
-            Language::Python,
+            Some(Language::Python),
             resolver.clone(),
         ) else {
             panic!("{parent}: a caller's resolver selected a malformed parent");
@@ -577,7 +578,7 @@ fn a_malformed_parent_spelling_is_refused_as_written_on_every_route() {
         );
         refused(
             &yamaa_adapters::file_application::check_with_resolver(
-                Language::Python,
+                Some(Language::Python),
                 request_named("child.yaml"),
                 identity(),
                 Some(served()),
@@ -587,7 +588,7 @@ fn a_malformed_parent_spelling_is_refused_as_written_on_every_route() {
         let Err(issues) = yamaa_adapters::resolved_artifact::resolve(
             "child.yaml",
             None,
-            Language::Python,
+            Some(Language::Python),
             Some(served()),
         ) else {
             panic!("{parent}: resolved a malformed parent through a resolver");
@@ -679,9 +680,10 @@ fn a_linked_parent_is_refused_at_parent_on_every_route() {
                     specification: child,
                     environment: None,
                 };
-                let Err(error) =
-                    yamaa_adapters::file_workflow::select_request(request(), Language::Python)
-                else {
+                let Err(error) = yamaa_adapters::file_workflow::select_request(
+                    request(),
+                    Some(Language::Python),
+                ) else {
                     panic!("{surface} {parent}: a linked parent was selected");
                 };
                 refused(
@@ -698,9 +700,12 @@ fn a_linked_parent_is_refused_at_parent_on_every_route() {
                     parent,
                     &route("check"),
                 );
-                let Err(issues) =
-                    yamaa_adapters::resolved_artifact::resolve(child, None, Language::Python, None)
-                else {
+                let Err(issues) = yamaa_adapters::resolved_artifact::resolve(
+                    child,
+                    None,
+                    Some(Language::Python),
+                    None,
+                ) else {
                     panic!("{surface} {parent}: resolved a linked parent");
                 };
                 refused(&issues, parent, &route("resolve"));
@@ -736,7 +741,7 @@ fn a_linked_parent_is_refused_at_parent_on_every_route() {
             };
             let Err(error) = yamaa_adapters::file_workflow::select_with_resolver(
                 request_named("child.yaml"),
-                Language::Python,
+                Some(Language::Python),
                 served(),
             ) else {
                 panic!("{surface} {kind:?}: a caller's resolver selected a linked parent");
@@ -748,7 +753,7 @@ fn a_linked_parent_is_refused_at_parent_on_every_route() {
             );
             refused(
                 &yamaa_adapters::file_application::check_with_resolver(
-                    Language::Python,
+                    Some(Language::Python),
                     request_named("child.yaml"),
                     identity(),
                     Some(served()),
@@ -759,7 +764,7 @@ fn a_linked_parent_is_refused_at_parent_on_every_route() {
             let Err(issues) = yamaa_adapters::resolved_artifact::resolve(
                 "child.yaml",
                 None,
-                Language::Python,
+                Some(Language::Python),
                 Some(served()),
             ) else {
                 panic!("{surface} {kind:?}: resolved a linked parent through a resolver");

@@ -144,7 +144,7 @@ impl Project {
     /// reports.
     pub fn read(
         project: &str,
-        host: Language,
+        host: Option<Language>,
         resolver: Option<Arc<dyn crate::host_resources::Resolver>>,
     ) -> Result<Self, Vec<Diagnostic>> {
         let crate::file_workflow::CapturedProject {

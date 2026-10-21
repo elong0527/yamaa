@@ -8,7 +8,7 @@ mod preparation {
         use yamaa_core::project_preparation::*;
         use yamaa_core::{
             limits::Limits,
-            project_environment::{Finding, LockKind},
+            project_environment::{Finding, LockKind, Undeclared},
             project_function::Language,
             project_function_document::Kind as ScalarKind,
             schema::{Document, DocumentNode as N},
@@ -276,7 +276,7 @@ mod preparation {
                     mut port,
                     ..
                 } = self;
-                prepare(&mut decoder, source, host, &mut port)
+                prepare(&mut decoder, source, Some(host), &mut port)
             }
         }
         fn effects(log: &EventLog) -> Vec<String> {
@@ -387,7 +387,7 @@ mod preparation {
                 let cases = draft.functions.as_ref().unwrap()[0].tests.as_ptr();
                 let execution = prepared.environment.into_execution();
                 assert_eq!(execution.language(), Some(Language::Python));
-                assert_eq!(execution.undeclared_language(), None);
+                assert_eq!(execution.undeclared(), None);
                 assert_eq!(execution.functions()[0].definition().tests.as_ptr(), cases);
                 assert_eq!(
                     execution
@@ -857,7 +857,7 @@ mod preparation {
             expected[1] = "capture r/environment.yaml".into();
             expected[2] = "decode Environment /held/r/environment.yaml".into();
             assert_eq!(effects(&log), expected);
-            assert_eq!(rejected.host, Language::R);
+            assert_eq!(rejected.host, Some(Language::R));
             assert_eq!(
                 rejected.environment_file.as_ref().unwrap().source.identity,
                 "/held/r/environment.yaml"
@@ -898,7 +898,7 @@ mod preparation {
                 outcome: Ok(Tree::map(vec![]).document()),
             });
             let mut port = ScriptedMetadata::<Opaque>::new(log.clone());
-            let prepared = prepare(&mut decoder, root, Language::Python, &mut port).unwrap();
+            let prepared = prepare(&mut decoder, root, Some(Language::Python), &mut port).unwrap();
             assert_eq!(effects(&log), ["decode Project empty.yaml"]);
             assert!(prepared.environment_file.is_none());
             assert_eq!(prepared.environment.draft().language, None);
@@ -906,8 +906,8 @@ mod preparation {
             assert!(prepared.captures.is_empty());
             assert!(prepared.lock.is_none());
             assert_eq!(
-                prepared.environment.into_execution().undeclared_language(),
-                Some(Language::Python)
+                prepared.environment.into_execution().undeclared(),
+                Some(Undeclared::Language(Language::Python))
             );
         }
 
@@ -933,7 +933,7 @@ mod preparation {
                     .document()),
                 });
                 let mut port = ScriptedMetadata::<Opaque>::new(log.clone());
-                let prepared = prepare(&mut decoder, root, host, &mut port).unwrap();
+                let prepared = prepare(&mut decoder, root, Some(host), &mut port).unwrap();
                 assert_eq!(effects(&log), ["decode Project project.yaml"]);
                 assert!(prepared.environment_file.is_none());
                 assert!(prepared.captures.is_empty() && prepared.lock.is_none());
@@ -943,8 +943,8 @@ mod preparation {
                 assert_eq!(draft.codelists.len(), 1);
                 assert_eq!(prepared.origins.codelists, [0]);
                 let execution = prepared.environment.into_execution();
-                assert_eq!(execution.host(), host);
-                assert_eq!(execution.undeclared_language(), Some(host));
+                assert_eq!(execution.host(), Some(host));
+                assert_eq!(execution.undeclared(), Some(Undeclared::Language(host)));
                 assert!(execution.catalogue().get("SEX").is_some());
             }
         }
@@ -976,7 +976,7 @@ mod preparation {
                 written: "environment.yaml".into(),
                 outcome: Ok(Reply::Document(linked)),
             });
-            let prepared = prepare(&mut decoder, root, Language::Python, &mut port).unwrap();
+            let prepared = prepare(&mut decoder, root, Some(Language::Python), &mut port).unwrap();
             assert_eq!(
                 effects(&log),
                 [
@@ -993,7 +993,7 @@ mod preparation {
             assert!(prepared.lock.is_none());
             let execution = prepared.environment.into_execution();
             assert!(execution.functions_present());
-            assert_eq!(execution.undeclared_language(), None);
+            assert_eq!(execution.undeclared(), None);
         }
 
         #[test]
@@ -1175,7 +1175,7 @@ mod preparation {
                     target: DecodeTarget::CodelistFile,
                     outcome: Ok(codelist_file().document()),
                 });
-                let prepared = prepare(&mut decoder, root, host, &mut port).unwrap();
+                let prepared = prepare(&mut decoder, root, Some(host), &mut port).unwrap();
                 assert_eq!(
                     effects(&log),
                     [
@@ -1213,17 +1213,142 @@ mod preparation {
                 // A function file that names no callable for the host is
                 // admitted; a call of it fails before any data is read.
                 let execution = prepared.environment.into_execution();
-                assert_eq!(execution.undeclared_language(), None);
+                assert_eq!(execution.undeclared(), None);
                 assert_eq!(
                     execution
                         .functions()
                         .iter()
-                        .map(|function| (function.name(), function.implemented()))
+                        .map(|function| (function.name(), function.missing_implementation()))
                         .collect::<Vec<_>>(),
-                    [("only_python", host == Language::Python), ("both", true)]
+                    [
+                        ("only_python", (host == Language::R).then_some(Language::R)),
+                        ("both", None)
+                    ]
                 );
                 assert!(execution.catalogue().get("SEX").is_some());
             }
+        }
+
+        /// An engine that claims no host language, such as the command
+        /// line's, reads no `environments` entry: no 1.0 lock and no 0.5
+        /// environment file. A 1.0 project's function files and codelists are
+        /// still read and admitted; its functions name no callable for such an
+        /// engine and miss none (#3030 section 2.10).
+        #[test]
+        fn an_engine_without_a_host_language_reads_no_environments_entry() {
+            let held = |written: &str| format!("/held/{written}");
+            let log = EventLog::default();
+            let root = source("/author/project.yaml", b"held 1.0 project");
+            let mut decoder = ScriptedMetadataDecoder::<Opaque>::new(log.clone());
+            decoder.steps.push_back(MetadataDecodeStep {
+                source: root.clone(),
+                target: DecodeTarget::Project,
+                outcome: Ok(project_v1().document()),
+            });
+            let mut port = ScriptedMetadata::<Opaque>::new(log.clone());
+            for (written, file) in [
+                (
+                    "functions/python.yaml",
+                    function_file("only_python", &[("python", "project.constant")], "7"),
+                ),
+                (
+                    "functions/both.yaml",
+                    function_file(
+                        "both",
+                        &[("python", "project.constant"), ("r", "project::constant")],
+                        "7",
+                    ),
+                ),
+            ] {
+                let captured = source(&held(written), written.as_bytes());
+                port.steps.push_back(MetadataCaptureStep {
+                    kind: Kind::Function,
+                    declaring_source: "/author/project.yaml".into(),
+                    written: written.into(),
+                    outcome: Ok(Reply::Document(captured.clone())),
+                });
+                decoder.steps.push_back(MetadataDecodeStep {
+                    source: captured,
+                    target: DecodeTarget::FunctionFile,
+                    outcome: Ok(file.document()),
+                });
+            }
+            let terminology = source(&held("ct.yaml"), b"held codelists");
+            port.steps.push_back(MetadataCaptureStep {
+                kind: Kind::Codelist,
+                declaring_source: "/author/project.yaml".into(),
+                written: "ct.yaml".into(),
+                outcome: Ok(Reply::Document(terminology.clone())),
+            });
+            decoder.steps.push_back(MetadataDecodeStep {
+                source: terminology,
+                target: DecodeTarget::CodelistFile,
+                outcome: Ok(codelist_file().document()),
+            });
+            let prepared = prepare(&mut decoder, root, None, &mut port).unwrap();
+            assert_eq!(
+                effects(&log),
+                [
+                    "decode Project /author/project.yaml",
+                    "capture functions/python.yaml",
+                    "decode FunctionFile /held/functions/python.yaml",
+                    "capture functions/both.yaml",
+                    "decode FunctionFile /held/functions/both.yaml",
+                    "capture ct.yaml",
+                    "decode CodelistFile /held/ct.yaml",
+                ]
+            );
+            assert!(prepared.lock.is_none() && prepared.environment_file.is_none());
+            assert_eq!(prepared.origins.functions, ["only_python", "both"]);
+            let draft = prepared.environment.draft();
+            assert_eq!(draft.language, None);
+            assert!(draft.lock.is_none());
+            let execution = prepared.environment.into_execution();
+            assert_eq!(execution.host(), None);
+            assert_eq!(execution.undeclared(), None);
+            assert!(execution.lock().is_none());
+            assert_eq!(
+                execution
+                    .functions()
+                    .iter()
+                    .map(|function| (
+                        function.name(),
+                        function.missing_implementation(),
+                        function.call()
+                    ))
+                    .collect::<Vec<_>>(),
+                [("only_python", None, ""), ("both", None, "")]
+            );
+            assert!(execution.catalogue().get("SEX").is_some());
+
+            // A 0.5 project's environment files stay unread, so it declares no
+            // function for such an engine.
+            let log = EventLog::default();
+            let root = source("project.yaml", b"held project");
+            let mut decoder = ScriptedMetadataDecoder::<Opaque>::new(log.clone());
+            decoder.steps.push_back(MetadataDecodeStep {
+                source: root.clone(),
+                target: DecodeTarget::Project,
+                outcome: Ok(Tree::map(vec![(
+                    "environments",
+                    Tree::map(vec![
+                        ("python", Tree::text("python/environment.yaml")),
+                        ("r", Tree::text("r/environment.yaml")),
+                    ]),
+                )])
+                .document()),
+            });
+            let mut port = ScriptedMetadata::<Opaque>::new(log.clone());
+            let prepared = prepare(&mut decoder, root, None, &mut port).unwrap();
+            assert_eq!(effects(&log), ["decode Project project.yaml"]);
+            assert!(prepared.environment_file.is_none());
+            assert!(prepared.captures.is_empty() && prepared.lock.is_none());
+            let draft = prepared.environment.draft();
+            assert_eq!(draft.language, None);
+            assert!(draft.functions.is_none());
+            let execution = prepared.environment.into_execution();
+            assert_eq!(execution.host(), None);
+            assert_eq!(execution.undeclared(), Some(Undeclared::NoHostLanguage));
         }
 
         #[test]
@@ -1264,7 +1389,7 @@ mod preparation {
                 .document()),
             });
             let Err(Failure::Rejected(rejected)) =
-                prepare(&mut decoder, root, Language::Python, &mut port)
+                prepare(&mut decoder, root, Some(Language::Python), &mut port)
             else {
                 panic!("both listed function files fail")
             };

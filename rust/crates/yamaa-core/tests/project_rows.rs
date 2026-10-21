@@ -160,7 +160,7 @@ mod project {
             ast,
             project_environment::{
                 validate, Draft, Environment, ExecutionEnvironment, Finding, LockKind,
-                LockReference,
+                LockReference, Undeclared,
             },
             project_function::Language,
             value::{ColumnType, Value},
@@ -195,32 +195,42 @@ mod project {
         #[test]
         fn a_project_without_an_environment_for_the_host_needs_no_code_or_lock() {
             for host in [Language::Python, Language::R] {
-                let admitted = Environment::admit(host, draft()).unwrap();
+                let admitted = Environment::admit(Some(host), draft()).unwrap();
                 assert_eq!(admitted.draft(), &draft());
                 // The supplied project names no environment file for this host.
                 let execution = admitted.into_execution();
                 assert_eq!(execution.language(), None);
-                assert_eq!(execution.undeclared_language(), Some(host));
+                assert_eq!(execution.undeclared(), Some(Undeclared::Language(host)));
                 // A build without any project has no environment to name.
-                let plain = ExecutionEnvironment::without_project(host);
-                assert_eq!(plain.host(), host);
+                let plain = ExecutionEnvironment::without_project(Some(host));
+                assert_eq!(plain.host(), Some(host));
                 assert_eq!(plain.language(), None);
-                assert_eq!(plain.undeclared_language(), None);
+                assert_eq!(plain.undeclared(), None);
                 assert!(!plain.functions_present() && plain.lock().is_none());
                 assert!(plain.catalogue().sources().is_empty());
             }
+            // An engine that claims no host language reads no environment file,
+            // so a 0.5 project declares no function for it (#3030 section 2.10).
+            let neutral = Environment::admit(None, draft()).unwrap().into_execution();
+            assert_eq!(neutral.host(), None);
+            assert_eq!(neutral.language(), None);
+            assert_eq!(neutral.undeclared(), Some(Undeclared::NoHostLanguage));
+            let mut d = draft();
+            d.surface = yamaa_core::ast::Surface::V1 { minor: 0 };
+            let neutral = Environment::admit(None, d).unwrap().into_execution();
+            assert_eq!(neutral.undeclared(), None);
         }
         #[test]
         fn present_functions_even_empty_need_no_lock() {
             let mut d = draft();
             d.language = Some(Language::Python);
             d.functions = Some(vec![]);
-            assert!(validate(Language::Python, &d).is_empty());
+            assert!(validate(Some(Language::Python), &d).is_empty());
             d.functions = Some(vec![definition()]);
-            let execution = Environment::admit(Language::Python, d)
+            let execution = Environment::admit(Some(Language::Python), d)
                 .unwrap()
                 .into_execution();
-            assert_eq!(execution.undeclared_language(), None);
+            assert_eq!(execution.undeclared(), None);
             assert!(execution.lock().is_none());
         }
         #[test]
@@ -236,11 +246,11 @@ mod project {
                     kind: actual,
                 });
                 assert_eq!(
-                    validate(language, &d),
+                    validate(Some(language), &d),
                     vec![Finding::LockKindMismatch { language, actual }]
                 );
                 d.lock.as_mut().unwrap().kind = kind;
-                assert!(validate(language, &d).is_empty());
+                assert!(validate(Some(language), &d).is_empty());
             }
         }
         #[test]
@@ -249,7 +259,7 @@ mod project {
             d.language = Some(Language::Python);
             d.functions = Some(vec![definition(), definition()]);
             assert_eq!(
-                validate(Language::Python, &d),
+                validate(Some(Language::Python), &d),
                 vec![Finding::DuplicateFunction { function: 1 }]
             );
             d.lock = Some(LockReference {
@@ -258,18 +268,18 @@ mod project {
             });
             d.functions.as_mut().unwrap().pop();
             let expected = d.clone();
-            let admitted = Environment::admit(Language::Python, d).unwrap();
+            let admitted = Environment::admit(Some(Language::Python), d).unwrap();
             assert_eq!(admitted.draft(), &expected);
         }
 
         #[test]
         fn execution_conversion_moves_exact_definitions_and_preserves_absent_or_empty_functions() {
-            let empty = Environment::admit(Language::R, draft())
+            let empty = Environment::admit(Some(Language::R), draft())
                 .unwrap()
                 .into_execution();
-            assert_eq!(empty.host(), Language::R);
+            assert_eq!(empty.host(), Some(Language::R));
             assert_eq!(empty.language(), None);
-            assert_eq!(empty.undeclared_language(), Some(Language::R));
+            assert_eq!(empty.undeclared(), Some(Undeclared::Language(Language::R)));
             assert!(!empty.functions_present());
             assert!(empty.functions().is_empty());
             assert!(empty.lock().is_none());
@@ -280,7 +290,7 @@ mod project {
                 kind: LockKind::Uv,
             });
             d.functions = Some(vec![]);
-            let empty = Environment::admit(Language::Python, d.clone())
+            let empty = Environment::admit(Some(Language::Python), d.clone())
                 .unwrap()
                 .into_execution();
             assert!(empty.functions_present());
@@ -289,7 +299,7 @@ mod project {
             let expected = d.clone();
             let original_name = d.functions.as_ref().unwrap()[0].name.name.as_ptr();
             let original_cases = d.functions.as_ref().unwrap()[0].tests.as_ptr();
-            let execution = Environment::admit(Language::Python, d)
+            let execution = Environment::admit(Some(Language::Python), d)
                 .unwrap()
                 .into_execution();
             assert_eq!(execution.language(), Some(Language::Python));
@@ -306,8 +316,8 @@ mod project {
                 execution.functions()[0].definition().tests.as_ptr(),
                 original_cases
             );
-            assert_eq!(execution.functions()[0].language(), Language::Python);
-            assert_eq!(execution.undeclared_language(), None);
+            assert_eq!(execution.functions()[0].language(), Some(Language::Python));
+            assert_eq!(execution.undeclared(), None);
             assert!(execution.catalogue().sources().is_empty());
         }
 
@@ -323,7 +333,7 @@ mod project {
             let expected = input.clone();
             let functions = input.functions.as_ref().unwrap().as_ptr();
             let cases = input.functions.as_ref().unwrap()[0].tests.as_ptr();
-            let rejected = Environment::admit_retained(Language::Python, input).unwrap_err();
+            let rejected = Environment::admit_retained(Some(Language::Python), input).unwrap_err();
             assert_eq!(*rejected.draft, expected);
             assert_eq!(
                 rejected.draft.functions.as_ref().unwrap().as_ptr(),
@@ -382,7 +392,7 @@ mod project {
             let draft = support::draft();
             let projected = diagnostics(
                 &draft,
-                &project_environment::validate(Language::Python, &draft),
+                &project_environment::validate(Some(Language::Python), &draft),
             )
             .unwrap();
             // The linked language has no finding of its own; only codelists fail.
@@ -653,16 +663,16 @@ mod project {
             let mut d = draft();
             d.lock = None;
             d.functions = Some(vec![]);
-            assert!(Environment::admit_retained(Language::Python, d).is_ok());
+            assert!(Environment::admit_retained(Some(Language::Python), d).is_ok());
             let mut d = draft();
             d.language = None;
             d.lock = None;
             d.functions = None;
-            assert!(Environment::admit_retained(Language::Python, d).is_ok());
+            assert!(Environment::admit_retained(Some(Language::Python), d).is_ok());
             let mut d = draft();
             d.functions = None;
             d.language = Some(Language::R);
-            let rejection = Environment::admit_retained(Language::R, d).unwrap_err();
+            let rejection = Environment::admit_retained(Some(Language::R), d).unwrap_err();
             let projected = diagnostics(&rejection.draft, &rejection.error).unwrap();
             assert_eq!(projected.len(), 1);
             assert_eq!(projected[0].spec_paths, ["lock"]);
@@ -949,7 +959,7 @@ mod project {
             assert_eq!(support::reached().len(), 8);
             let draft = support::draft();
             let project = project_root(&[false], Some(&[]));
-            let findings = project_environment::validate(Language::Python, &draft);
+            let findings = project_environment::validate(Some(Language::Python), &draft);
             let origins = [0];
             let result = p::admit_admission(
                 Admission {
@@ -1388,7 +1398,7 @@ mod project {
             let mut draft = draft();
             draft.functions = None;
             draft.lock.as_mut().unwrap().kind = LockKind::Renv;
-            let findings = project_environment::validate(Language::Python, &draft);
+            let findings = project_environment::validate(Some(Language::Python), &draft);
             assert_eq!(
                 findings,
                 [Finding::LockKindMismatch {
@@ -1667,7 +1677,7 @@ mod project {
                         .collect::<Vec<_>>(),
                 ),
             );
-            let findings = project_environment::validate(Language::Python, &draft);
+            let findings = project_environment::validate(Some(Language::Python), &draft);
             assert_eq!(findings.len(), 600);
             let report = p::admit_admission(
                 Admission {
@@ -1829,7 +1839,7 @@ mod project {
         fn complete_definitions_are_owned_and_versionless() {
             for def in [integer(), nullable_float()] {
                 assert_eq!(
-                    validate(Language::Python, &def.clone().root(Language::Python)),
+                    validate(Some(Language::Python), &def.clone().root(Language::Python)),
                     vec![]
                 );
                 let expected = def.clone();
@@ -1847,7 +1857,7 @@ mod project {
             let mut def = nullable_float();
             def.tests.clear();
             assert_eq!(
-                validate(Language::Python, &def.clone().root(Language::Python)),
+                validate(Some(Language::Python), &def.clone().root(Language::Python)),
                 vec![
                     Finding::MissingObligation("accepted-missing:choice".into()),
                     Finding::MissingObligation("boolean-false:choice".into()),
@@ -1883,7 +1893,7 @@ mod project {
                 ],
                 Value::Missing,
             )];
-            let f = validate(Language::Python, &def.clone().root(Language::Python));
+            let f = validate(Some(Language::Python), &def.clone().root(Language::Python));
             assert_eq!(
                 &f[..4],
                 &[
@@ -1935,7 +1945,7 @@ mod project {
                 def.params[0].required = false;
                 def.params[0].default = default;
                 def.params[0].accepts_missing = accepting;
-                let f = validate(Language::Python, &def.clone().root(Language::Python));
+                let f = validate(Some(Language::Python), &def.clone().root(Language::Python));
                 assert_eq!(
                     f.iter()
                         .find(|x| matches!(
@@ -1949,7 +1959,7 @@ mod project {
             let mut def = integer();
             def.params[0].default = Some(Value::Int(9));
             assert_eq!(
-                validate(Language::Python, &def.clone().root(Language::Python))[0],
+                validate(Some(Language::Python), &def.clone().root(Language::Python))[0],
                 Finding::RequiredDefault { parameter: 0 }
             );
         }
@@ -1970,7 +1980,7 @@ mod project {
                 Value::Missing,
             )];
             assert_eq!(
-                &validate(Language::Python, &def.clone().root(Language::Python))[..5],
+                &validate(Some(Language::Python), &def.clone().root(Language::Python))[..5],
                 &[
                     Finding::UnsupportedEvidence { case: 0, tag: 0 },
                     Finding::UnsupportedEvidence { case: 0, tag: 1 },
@@ -1981,7 +1991,7 @@ mod project {
             );
             let mut def = integer();
             def.tests[2].result = Value::Int(0);
-            let f = validate(Language::Python, &def.clone().root(Language::Python));
+            let f = validate(Some(Language::Python), &def.clone().root(Language::Python));
             assert!(f.contains(&Finding::InvalidResult { case: 2 }));
             assert!(f.contains(&Finding::UnsupportedEvidence { case: 2, tag: 0 }));
             assert!(f.contains(&Finding::MissingObligation(
@@ -2001,7 +2011,7 @@ mod project {
             def.tests[1].id = "ordinary".into();
             def.tests[2].id = "Bad_ID".into();
             def.tests[2].covers.clear();
-            let f = validate(Language::Python, &def.clone().root(Language::Python));
+            let f = validate(Some(Language::Python), &def.clone().root(Language::Python));
             assert_eq!(
                 &f[..6],
                 &[
@@ -2030,7 +2040,7 @@ mod project {
                 let mut def = integer();
                 def.function = call.into();
                 assert!(
-                    validate(Language::Python, &def.clone().root(Language::Python))
+                    validate(Some(Language::Python), &def.clone().root(Language::Python))
                         .contains(&Finding::InvalidCallable),
                     "{call}"
                 );
@@ -2046,7 +2056,7 @@ mod project {
                 let mut def = integer();
                 def.function = call.into();
                 assert!(
-                    validate(Language::R, &def.clone().root(Language::R))
+                    validate(Some(Language::R), &def.clone().root(Language::R))
                         .contains(&Finding::InvalidCallable),
                     "{call}"
                 );
@@ -2060,7 +2070,7 @@ mod project {
             ] {
                 let mut def = integer();
                 def.params[0].name = name.into();
-                assert!(validate(language, &def.clone().root(language))
+                assert!(validate(Some(language), &def.clone().root(language))
                     .contains(&Finding::InvalidParameterName { parameter: 0 }));
             }
         }
@@ -2075,7 +2085,7 @@ mod project {
             def.params.push(def.params[0].clone());
             def.tests[0].args.clear();
             def.tests[0].result = Value::Bool(true);
-            let f = validate(Language::Python, &def.clone().root(Language::Python));
+            let f = validate(Some(Language::Python), &def.clone().root(Language::Python));
             assert_eq!(
                 &f[..8],
                 &[
@@ -2104,7 +2114,7 @@ mod project {
                 let mut def = integer();
                 def.tests[0].result = value;
                 assert!(
-                    validate(Language::Python, &def.clone().root(Language::Python))
+                    validate(Some(Language::Python), &def.clone().root(Language::Python))
                         .contains(&Finding::InvalidResult { case: 0 })
                 );
             }
