@@ -16,8 +16,9 @@ originals:
 
 A benchmark whose expected files a decided item changes is excepted
 (`tools/migrate/excepted.py`) and listed with its reason. CI runs the gate on
-Python for pull requests that reach the 1.0 front end, the converter or the
-1.0 schemas, and on both hosts weekly; `--hosts python,r` runs both here.
+Python for every pull request that is not documentation only, as it runs the
+equivalence gate (D124), and on both hosts weekly; `--hosts python,r` runs
+both here.
 """
 
 import argparse
