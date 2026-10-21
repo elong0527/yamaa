@@ -330,15 +330,14 @@ frozen surfaces with the newest final release of the same major, the tag
 `yamaa-vM.m.p` with no candidate suffix, and refuses a break in the
 conditions and their phases in `yaml/conditions.yaml`, the lines of
 `rust/interface/manifest.txt` and those of
-`rust/crates/yamaa/public-api.txt` (#3442).
+`rust/crates/yamaa/public-api.txt` (#3442). It also refuses a (phase,
+condition, rule) triple removed from the core diagnostic registry, a
+removed rule card ID, and any change to the specification, input or
+expected files of a benchmark present at that tag, an added file included;
+its README and `benchmark.yaml` may change (#3445).
 
-The remaining comparisons are tracked separately:
-
-- the four file types' JSON Schemas and the grammars in `yaml/grammar/`
-  (#3444);
-- each existing failure's phase, condition and rule, the rule card IDs, and
-  every benchmark present at that tag, whose specification, input and
-  expected files stay byte for byte (#3445).
+The remaining comparison, of the four file types' JSON Schemas and the
+grammars in `yaml/grammar/`, is tracked separately (#3444).
 
 It enforces nothing while the major is 0. For the first release of a new
 major, its candidates included, it lists every break against the newest final
