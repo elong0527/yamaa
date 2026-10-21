@@ -36,6 +36,17 @@ The revision must equal the reviewed checkout and both installed owners' actual
 source revision. Comparator unit fixtures are deliberately marked unqualified;
 their successful mutation controls never establish installed release evidence.
 
+`--cli-evidence` names a command-line conformance run, the output directory of
+`tools.commands.cli_conformance` (see [Command-line conformance](#command-line-conformance)),
+whose saved outputs then join the comparison under `cli/` in the output
+directory. The run must name the same revision and Actions run as both
+owners, its binary must print their core version, and its own inventory must
+have passed. For each cohort case, its outcome and saved files must equal both
+owners' complete reports, CSV byte for byte and Parquet logically. Its issues
+are not compared there: it ran the cases written as 1.0, whose spec paths are
+not the authored truth's, and its inventory compared them with
+`expected/error.yaml`.
+
 ## Benchmark conformance
 
 `tools.conformance.public_conformance` discovers benchmark specifications and explicit
@@ -100,17 +111,33 @@ root as the Python and R records keep them (#3312). For the command line, the
 plan excludes each benchmark whose project supplies project functions: the
 binary has no project-function implementation, so a specification that calls
 one fails before it reads data (#3030 section 2.3). Each excluded case still
-gets a record that names the reason. The comparator does not judge
-command-line records yet.
+gets a record that names the reason.
+
+The comparator judges command-line records by the criteria the hosts' records
+meet, with what the command line has: it holds no typed host view, and runs
+each call once, with no metamorphic variant. Each run of a positive, and each
+domain build of a Define benchmark, exits 0 with the status `succeeded`,
+reports no issue and saves its declared report, then its output, at the
+declared paths; CSV bytes compare exactly and Parquet logically. Each run of
+a negative exits 1, its first issue must match `expected/error.yaml`, and it
+saves no more than the report a failed run writes (PROJECT-12). A call the
+binary refuses as not implemented yet fails its benchmark, and the gate
+requires every benchmark that the command line runs.
 
 The binary dispatches on the type a PATH declares in its `type:` header and
 reads only 1.x files (#3030 D122, D125), so until the corpus moves to 1.0
 (P2-5 to P2-8) the runner runs converted copies.
 `tools.commands.cli_conformance` writes every benchmark as 1.0, as the
 conversion gate does, excludes each benchmark the gate excepts, plans the
-converted corpus and runs the runner over it, keeping the copies, the plan
-and the records under its output directory:
+converted corpus, runs the runner over it and judges the records against the
+converted expected files into `inventory.json`, keeping the copies, the plan
+and the records under its output directory. It exits 1 unless every
+benchmark that the command line runs passes:
 
 ```sh
 python -m tools.commands.cli_conformance --binary rust/target/debug/yamaa --output /tmp/public-cli
 ```
+
+Each `native-cli-install` job runs it with the unpacked binary of its archive
+(`docs/release.md`), and the cohort comparison reads the output beside its
+platform's owners.

@@ -24,8 +24,9 @@ the corpus moves to 1.0 the runner runs converted copies, which
 `python -m tools.commands.cli_conformance` writes and plans before it runs
 this runner over them. A call the binary refuses as not implemented yet
 (D96) is recorded as `not_implemented`; any other run must exit with status 0
-or 1 and print one JSON document, or its record is an error. The comparator
-judges no command-line record yet.
+or 1 and print one JSON document, or its record is an error. The comparator,
+`python -m tools.conformance.public_conformance compare`, judges the records
+against the expected files.
 """
 
 from __future__ import annotations
@@ -160,6 +161,7 @@ def main(argv=None):
     parser.add_argument("--binary", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--source-revision", required=True)
+    parser.add_argument("--evidence")
     args = parser.parse_args(argv)
     fixtures, output = args.fixtures.resolve(), args.output.resolve()
     binary = args.binary.resolve()
@@ -180,6 +182,7 @@ def main(argv=None):
             "runtime": "cli",
             "version": version["stdout"],
             "source_revision": args.source_revision,
+            "evidence": args.evidence,
         },
     )
     counts = dict.fromkeys(("excluded", "not_implemented", "observed", "error"), 0)

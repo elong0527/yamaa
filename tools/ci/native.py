@@ -69,7 +69,7 @@ R_BINARY_VERSIONS = (R_RELEASE, R_OLDREL)
 # of its own platform, statically with musl on Linux and with the static C
 # runtime on Windows, and archived with its notices. Each archive is then
 # unpacked on a fresh runner of its platform, where the binary runs its
-# selftest.
+# selftest and then the conformance corpus, written as 1.0 (D122).
 CLI_TARGETS = {
     "ubuntu-24.04": "x86_64-unknown-linux-musl",
     "macos-15": "aarch64-apple-darwin",
@@ -136,18 +136,22 @@ def compare_cohorts(coverage, root, revision):
     Each Python lane is compared beside the R source installation of its
     platform. Each R binary installation is compared beside the wheel lane of
     its platform with the build Python: on Windows the binary links through
-    Rtools' GNU toolchain, where the wheel uses MSVC.
+    Rtools' GNU toolchain, where the wheel uses MSVC. Each command-line
+    archive's saved outputs join the comparison of that wheel lane, beside
+    its R reports.
     """
     matrix = coverage["qualify"]
     binaries = list(
         itertools.product(coverage["r_binary"]["os"], coverage["r_binary"]["r"])
     )
+    targets = {lane["os"]: lane["target"] for lane in coverage["cli"]["include"]}
     # The pinned download action flattens a single match, including a pattern.
     python_artifacts = len(matrix["include"])
     r_artifacts = len(
         {R_EVIDENCE.get(row["os"], row["os"]) for row in matrix["include"]}
         & set(R_PLATFORMS)
     )
+    cli_artifacts = len(targets)
     downloaded = Path("cohort-input")
 
     def evidence(name, count):
@@ -165,15 +169,26 @@ def compare_cohorts(coverage, root, revision):
             / form
         )
         output = Path("public-cohort") / platform / version / form
-        r_evidence = []
+        beside = []
         r_platform = R_EVIDENCE.get(platform, platform)
         if r_platform in R_PLATFORMS:
             r_directory = evidence(f"native-r-qualification-{r_platform}", r_artifacts)
-            r_evidence = [
+            beside = [
                 "--r-evidence",
                 str(r_directory / "r-source"),
             ]
-        comparisons.append((python_evidence, r_evidence, output))
+            if (version, form) == (BUILD_PYTHON, "wheel") and platform in targets:
+                target = targets.pop(platform)
+                beside += [
+                    "--cli-evidence",
+                    str(evidence(f"public-conformance-cli-{target}", cli_artifacts)),
+                ]
+        comparisons.append((python_evidence, beside, output))
+    if targets:
+        raise ValueError(
+            "no wheel lane with the build Python and R reports beside it runs on "
+            "the platform of command-line targets: " + ", ".join(sorted(targets))
+        )
     for platform, version in binaries:
         python_evidence = (
             evidence(
@@ -189,7 +204,7 @@ def compare_cohorts(coverage, root, revision):
         comparisons.append(
             (python_evidence, ["--r-evidence", str(r_directory / "r-binary")], output)
         )
-    for python_evidence, r_evidence, output in comparisons:
+    for python_evidence, beside, output in comparisons:
         subprocess.run(
             [
                 sys.executable,
@@ -201,7 +216,7 @@ def compare_cohorts(coverage, root, revision):
                 str(root / "benchmarks"),
                 "--python-evidence",
                 str(python_evidence),
-                *r_evidence,
+                *beside,
                 "--output",
                 str(output),
                 "--source-revision",
