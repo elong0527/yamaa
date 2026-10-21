@@ -28,9 +28,7 @@ runner: `ubuntu-24.04` is Linux x86_64, `ubuntu-24.04-arm` Linux aarch64,
 | R binary package, from the release assets | R-release or R-oldrel, today R 4.6 or R 4.5, on Windows x64 or on macOS arm64 from macOS 11; no Rust or Rtools | `native-r-binary-install (<os>, R <version>)` on Windows x64 and macOS arm64 with R 4.6.1 and R 4.5.3 |
 | [Offline Rust toolchain route](#the-offline-rust-toolchain-route), for either source archive on Linux | Linux x86_64 or aarch64, Rust's standalone installer carried in, and what the source archive needs besides Rust | `native-offline-toolchain (<os>, python)` and `native-offline-toolchain (<os>, r)` on both Linux architectures, with Rust 1.82.0 |
 | R from CRAN or a CRAN mirror, from 1.0.0 | R 4.4.0 or later; on Windows and macOS, CRAN's binary package for R-release or R-oldrel; elsewhere, what the R source package needs | CRAN's binary builders, from the release's R source package, on which `native-cran` runs CRAN's incoming checks |
-
-The command-line binary (#3060) is not published yet, so it has no row here;
-it joins this table with the job that qualifies it.
+| Command-line binary, from the release assets | Linux x86_64 or aarch64, whatever its C library, since the binary is static; Windows x64; or macOS arm64 from macOS 11; no Python, R or Rust | `native-cli-install (<os>, <target>)` on every platform, which unpacks the archive that `native-cli (<os>, <target>)` built and runs `yamaa selftest` from it |
 
 The floors are CPython 3.12 (#3030 D56, confirming D13) and R 4.4.0. A source
 build needs Rust 1.82, the minimum that the Rust workspace declares; a
@@ -78,9 +76,11 @@ add them to a local repository that the mirror hosts, or carry them in.
 
 When no mirror has the version you need, the assets of its
 [GitHub release](https://github.com/elong0527/yamaa/releases) are the
-fallback: the wheels, the Python source archive, the R source package and the
-R binary packages. They are the files that PyPI serves, and a final release's
-R source package is the file that CRAN receives. Download them on a connected
+fallback: the wheels, the Python source archive, the R source package, the R
+binary packages and the command-line archives. The wheels and the Python
+source archive are the files that PyPI serves, a final release's R source
+package is the file that CRAN receives, and the R binary packages and the
+command-line archives are published only there. Download them on a connected
 machine and carry them in; installing them needs no network.
 
 A wheel needs its dependencies beside it. On a connected machine with the same
@@ -101,6 +101,13 @@ which ends its file name:
 install.packages("yamaa_<version>-4.6.zip", repos = NULL)  # Windows x64, R 4.6
 install.packages("yamaa_<version>-4.6.tgz", repos = NULL)  # macOS arm64, R 4.6
 ```
+
+A command-line archive needs no other file and no installer. Unpack the one
+for your platform, whose name ends with its Rust target, such as
+`yamaa-<version>-x86_64-unknown-linux-musl.zip`, and run the `yamaa`
+executable in the directory that it holds, `yamaa.exe` on Windows. The
+binaries are unsigned: [Command-line binaries](../release.md#command-line-binaries)
+says what macOS and Windows show the first time, and how to go on.
 
 A source archive carries every Rust crate that it builds, and Cargo reads no
 other, so the build needs a Rust toolchain but no network. The R source
@@ -210,8 +217,9 @@ network. Keep its printed report as the installation and operational
 qualification record of that machine. The `native-offline-source`,
 `native-offline-toolchain` and `native-r-binary-install` jobs run the same
 selftest after installing with no network, and fail unless it reports
-`succeeded`. [Check an installation](api.md#check-an-installation) describes
-the result.
+`succeeded`; the `native-cli-install` jobs run `yamaa selftest` from each
+unpacked command-line archive, and fail unless it succeeds.
+[Check an installation](api.md#check-an-installation) describes the result.
 
 === "R"
 
@@ -224,6 +232,12 @@ the result.
     ```python
     import yamaa
     print(yamaa.selftest())
+    ```
+
+=== "Command line"
+
+    ```sh
+    yamaa selftest
     ```
 
 ## Proxies

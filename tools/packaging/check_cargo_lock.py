@@ -2,11 +2,14 @@
 
 Without archives, it checks that the canonical rust/Cargo.lock is current and
 that each host's bundle trims it to a lock that verifies crate by crate against
-it, as `make check-repository` runs it, and that the R package's build strips
-nothing. With archives, it checks the engine bundle (#3030 D55) of each Python
-source archive and R source package against the checkout, that the archive
-holds no Rust toolchain file anywhere, and that an R source package's build
-strips nothing.
+it, as `make check-repository` runs it, and that the R package's Makevars and
+Cargo profile strip nothing. With archives, it checks the engine bundle (#3030
+D55) of each Python source archive and R source package against the checkout,
+that the archive holds no Rust toolchain file anywhere, and that an R source
+package's Makevars and Cargo profile strip nothing. On Windows, R's own
+toolchain links every package DLL with `-s`, a link flag of R's that the
+package does not override, so the R package's Windows DLL carries no symbol
+table (#3030 D140).
 """
 
 import argparse
@@ -44,14 +47,20 @@ LAYOUTS = {
     # build's Cargo home (tools/staging/stage_r_package.py).
     "r": Layout("src/rust/", "src/rust/vendor-config.toml", "src/rust/vendor.tar.xz"),
 }
-# The R package's shared object keeps its symbols: CRAN's Repository Policy asks
-# a package not to remove diagnostic information such as symbols in shared
-# objects. Its Makevars build with the release profile; the Python wheels strip
-# theirs with the dist profile (rust/Cargo.toml), which the R bundle's manifest
-# leaves out (tools/staging/engine_bundle.py).
+# The R package strips nothing itself: CRAN's Repository Policy asks a package
+# not to remove diagnostic information such as symbols in shared objects. Its
+# Makevars build with the release profile and override none of R's link flags,
+# while the Python wheels strip their symbols with the dist profile
+# (rust/Cargo.toml), which the R bundle's manifest leaves out
+# (tools/staging/engine_bundle.py). The R package's shared object thus keeps its
+# symbols on Linux and macOS. On Windows, R's own toolchain links every package
+# DLL with -s, so the DLL carries no symbol table there (#3030 D140).
 R_PACKAGE = ROOT / "R/yamaa"
 R_MAKEVARS = ("src/Makevars.in", "src/Makevars.win.in")
-KEEPS_SYMBOLS = "the R package keeps its symbols, as CRAN's Repository Policy asks"
+STRIPS_NOTHING = (
+    "the R package strips nothing itself, as CRAN's Repository Policy asks "
+    "(on Windows, R's own link flags strip every package DLL)"
+)
 # R's linker, not rustc, links the engine's static library into the shared
 # object, so Cargo's strip never reaches it: R's link step is the one that
 # could strip it. These linker options remove symbols or debug information,
@@ -195,7 +204,7 @@ def refuse_strip(label, line, recipe):
             if recipe
             else f"{shown} strips the shared object at R's link step"
         )
-        raise ValueError(f"{label}: {problem}; {KEEPS_SYMBOLS}")
+        raise ValueError(f"{label}: {problem}; {STRIPS_NOTHING}")
     if not recipe:
         return
     # Each shell command is named by its first word, as in @objcopy or
@@ -211,7 +220,7 @@ def refuse_strip(label, line, recipe):
         for key, strips in TOOL_STRIP.items():
             if name.endswith(key) and (found := strips.intersection(options)):
                 raise ValueError(
-                    f"{label}: a recipe runs {tool} {min(found)}; {KEEPS_SYMBOLS}"
+                    f"{label}: a recipe runs {tool} {min(found)}; {STRIPS_NOTHING}"
                 )
 
 
@@ -298,7 +307,7 @@ def check_r_symbols(label, manifest, config, makevars):
                     )
                     raise ValueError(
                         f"{label}: {where} sets strip in the {profile} profile, "
-                        f"{use}; {KEEPS_SYMBOLS}"
+                        f"{use}; {STRIPS_NOTHING}"
                     )
             profile = next(
                 (

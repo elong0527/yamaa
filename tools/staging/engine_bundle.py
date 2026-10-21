@@ -13,7 +13,10 @@ carries the selftest cases in its `selftest` directory, the files of the
 benchmarks that benchmarks/selftest.yaml names, which its build embeds (#3030
 D108), so a build from the bundle reads nothing outside it. It holds no tests,
 examples, other benchmark fixtures or public-api.txt, and no Rust toolchain
-file anywhere, the vendored crates included.
+file anywhere, the vendored crates included. The command line has no source
+archive: its bundle, with the yamaa-cli crate, is the workspace that its
+binaries build from, whose trimmed lock its component inventory lists
+(tools/packaging/generate_component_inventory.py).
 
     python -m tools.staging.engine_bundle sdist <directory>
 
@@ -22,7 +25,7 @@ bundle, staged beside the Python package files, so that pip builds it with
 Cargo's `--locked` and no network. It runs the `maturin` on the PATH, which
 must be the release that python/pyproject.toml requires.
 
-    python -m tools.staging.engine_bundle bundle {python,r} <new directory>
+    python -m tools.staging.engine_bundle bundle {cli,python,r} <new directory>
 
 writes a host's bundle alone: the workspace in rust/, the vendored crates in
 vendor/ and the configuration in .cargo/config.toml.
@@ -45,7 +48,7 @@ from tools.staging import vendor_crates
 ENGINE = ("yamaa-core", "yamaa-adapters", "yamaa")
 # The facade crate, which embeds the selftest cases.
 FACADE = "yamaa"
-BINDINGS = {"python": "yamaa-python", "r": "yamaa-r"}
+BINDINGS = {"python": "yamaa-python", "r": "yamaa-r", "cli": "yamaa-cli"}
 MANIFEST, LOCK = "Cargo.toml", "Cargo.lock"
 # Cargo reads its configuration from the directory it runs in and its parents.
 # pip builds a Python source archive from its root, so the archive carries this
@@ -53,11 +56,12 @@ MANIFEST, LOCK = "Cargo.toml", "Cargo.lock"
 # command in the archive from reaching the network.
 CARGO_CONFIG = vendor_crates.CONFIG + "\n[net]\noffline = true\n"
 PYTHON_MANIFEST_PATH = "crates/yamaa-python/Cargo.toml"
-# The profile that only the Python wheels build with, which python/pyproject.toml
-# selects: release without the symbol table. The R bundle's manifest leaves it
-# out, so that the R source package names no stripping. Its Makevars build with
-# release, and CRAN's Repository Policy asks a package to keep the symbols of
-# its shared objects (tools/packaging/check_cargo_lock.py).
+# The profile that the Python wheels, as python/pyproject.toml selects, and the
+# command-line binaries build with: release without the symbol table. The R
+# bundle's manifest leaves it out, so that the R source package names no
+# stripping. Its Makevars build with release, and CRAN's Repository Policy asks
+# a package to keep the symbols of its shared objects
+# (tools/packaging/check_cargo_lock.py).
 WHEEL_PROFILE = "dist"
 
 
