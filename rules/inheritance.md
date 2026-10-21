@@ -354,12 +354,24 @@ file that omits `output` is not itself an error.
 
 <a id="layer-13"></a>
 
-### LAYER-13. Resolved columns follow dependency order with a stable tie-break
+### LAYER-13. A layered specification's resolved columns follow dependency order with a stable tie-break
 
-After pruning, each column is ordered after every column its derivation
-reads. When more than one column can come next, the one with the earliest
-contribution position comes first, which keeps an ancestor's independent
-columns before its descendants'. `output.columns` is never reordered.
+When a specification declares a `parent`, each resolved column comes after
+every column its derivation reads, after pruning; when more than one column
+can come next, the one with the earliest contribution position comes first,
+which keeps an ancestor's independent columns before its descendants'. A
+specification without a `parent` keeps its declaration order, which
+[COLUMN-5](columns.md#column-5) requires to be a dependency order.
+`output.columns` is never reordered.
+
+Evidence: `schema-inheritance`, `rust/crates/yamaa-core/tests/schema_references.rs::declared_order_and_unordered_input_are_kept`, `rust/crates/yamaa-core/tests/schema_references.rs::prunes_dead_sources_follows_count_and_stably_orders_without_changing_output`, `rust/crates/yamaa-core/src/specification/declared_keys.rs::ordering_reads_a_row_template_s_own_driver_without_a_join`.
+
+The columns a derivation reads are those [COLUMN-3](columns.md#column-3)
+collects from it, the columns of an input's declared `key` included for each
+implicit join and each qualified aggregate without `key` that reads that
+input. A row template's qualified read of its own driver reads the row's own
+record ([LOOKUP-1](lookup.md#lookup-1)), so it adds no read of the driver's
+key columns.
 
 A derivation that reads an undeclared column, or that reads itself directly or
 through other columns, fails under the

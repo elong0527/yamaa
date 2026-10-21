@@ -85,6 +85,18 @@ Enforced by [CSV-3](reference/csv.md#csv-3),
 [OUTPUT-8](output.md#output-8) and
 [DEFINE-23](profiles/define-xml.md#define-23).
 
+**P11. A package is consistent and traceable.** The datasets, transport files,
+run reports and Define-XML documents a project publishes come from one set of
+resolved specifications and agree on every fact they share. Every published
+fact names its source: an identifier derives from declared identifiers,
+metadata from the specification that built the data, and an origin is
+declared, never inferred. Enforced by
+[JSON-5](profiles/dataset-json.md#json-5),
+[JSON-6](profiles/dataset-json.md#json-6),
+[DEFINE-9](profiles/define-xml.md#define-9),
+[SUB-19](profiles/submission.md#sub-19) and
+[INPUT-11](inputs.md#input-11).
+
 ## Rule files
 
 Language rules live in `rules/*.md`, format and file-handling rules in
@@ -105,7 +117,7 @@ the conditions that path still raises.
 | [Values](values.md) | VALUE | Define column types, missing values, numbers, text, dates and datetimes, conversion, and order. |
 | [Inputs](inputs.md) | INPUT | Select input profiles, keep stored record order, and type source fields without inferring values. |
 | [Row construction](rows.md) | ROW | Construct output rows from declared input records or groups, or from the distinct keys of the base records. |
-| [Column derivation](columns.md) | COLUMN | Sequence a run, order column dependencies, complete each value's lifecycle, and handle conditions at their site. |
+| [Column derivation](columns.md) | COLUMN | Sequence a run, order column dependencies, complete each value's lifecycle, handle conditions at their site, and name the phase and rule each condition reports. |
 | [Expressions](expressions.md) | EXPR | Register and dispatch expressions, give each one result type, restrict nesting, and copy, select and classify values. |
 | [Formulas](formulas.md) | FORMULA | Read the one closed expression language in its predicate, aggregate and expression fields, and evaluate it exactly as written. |
 | [Lookup and joins](lookup.md) | LOOKUP | Match declared keys, narrow and select records, answer absence, and scope aggregates to one relation. |

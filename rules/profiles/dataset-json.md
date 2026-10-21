@@ -404,6 +404,11 @@ primary artifact and its report file. A failed publication fails under
 
 ### JSON-15. A Dataset-JSON file is never read as a source
 
-This container is not a source. The extension mapping of
-[Inputs](../inputs.md) stays closed at `.csv` and
-`.parquet`, and a `dataset_class.path` ending in `.json` names no profile.
+Dataset-JSON is a transport profile that only a project submission writes
+([JSON-1](#json-1)). `.json` names no source profile under
+[INPUT-1](../inputs.md#input-1), so an input whose `path` ends in `.json`
+fails as `source_profile_unknown` during validation, as any other unmapped
+extension does.
+
+Fails: `source_profile_unknown`.
+Evidence: `negative-source-unknown-format`.

@@ -279,7 +279,7 @@ the field's width: a month `3` writes `03` and a year `2025` writes `2025`. A
 part the text reads that is not its field's digits at the field's width, such
 as a month `3` or `MAR` held as text, or that lies outside its range, such as a
 day `30` in February of the year and month read, fails with
-`invalid_date_text` on the `impute` stage, reporting the operation, the part,
+`invalid_date_text` in the `impute` phase, reporting the operation, the part,
 its source and its value, unless `invalid` declares a literal substitute; a
 declared handler is counted only when reached. A part of another type is an
 incompatible input under [TIME-1](#time-1).
@@ -394,8 +394,8 @@ naming `day`: a source missing its month also misses its day, so the `month`
 could never complete a date. A `month` outside the calendar range fails with
 `month_out_of_range` and a numeric `day` outside it with
 `value_not_permitted`. A completed value that is not a real calendar date, such
-as a numeric `day` of 31 in April, fails with `invalid_calendar_date` on the
-`impute` stage. A `day` token that is neither a number nor a declared position
+as a numeric `day` of 31 in April, fails with `invalid_calendar_date` in the
+`impute` phase. A `day` token that is neither a number nor a declared position
 fails with `value_not_permitted`. The `time` rule follows the declared type
 ([TIME-1](#time-1)).
 
@@ -426,9 +426,9 @@ Evidence: `schema-impute-fallback`, `negative-impute-bad-source`, `negative-prec
 Both counts are reported like handler counts under
 [COLUMN-14](columns.md#column-14), zero included. The fallback is read only
 when the source is missing, never for a source below the minimum precision or
-invalid text. A source that is a temporal value is never invalid. The stage of
-the invalid-text failure is `impute` under [Column derivation](columns.md),
-and one handler stage serves both operations; `invalid` fires only when the
+invalid text. A source that is a temporal value is never invalid. The phase of
+the invalid-text failure is `impute` ([COLUMN-16](columns.md#column-16)),
+and that one phase serves both operations; `invalid` fires only when the
 source is present ([COLUMN-11](columns.md#column-11)). A fallback value is
 whole: the bounds of [TIME-9](#time-9) do not move it, and
 [TIME-18](#time-18) reports it as wholly supplied.
@@ -473,7 +473,7 @@ adjustment occurs.
 A missing source, day count or amount returns missing. A source or count of
 another type, or a non-integer day count, fails validation as
 `incompatible_input_type`. A result outside years 0001 through 9999 fails at
-build as `conversion_failed` on the `convert` stage; no local handler answers
+build as `conversion_failed` in the `convert` phase; no local handler answers
 the arithmetic overflow.
 
 <a id="time-17"></a>
@@ -509,7 +509,7 @@ finite is invalid.
 
 Invalid text returns the literal `invalid` handler, and
 `invalid: {literal: null}` gives missing; without the handler, the condition
-`invalid_duration_text` is fatal on the `impute` stage. A declared handler is
+`invalid_duration_text` is fatal in the `impute` phase. A declared handler is
 counted only when reached.
 
 ## Imputation flags
