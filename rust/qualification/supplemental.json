@@ -76,54 +76,6 @@
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/odm-vendor.parquet",
-      "family": "odm",
-      "level": "component",
-      "consumers": [
-        "rust/crates/yamaa-adapters/tests/table_arrow_table.rs"
-      ]
-    },
-    {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/odm-vendor-malformed.parquet",
-      "family": "odm",
-      "level": "component",
-      "consumers": [
-        "rust/crates/yamaa-adapters/tests/table_arrow_table.rs"
-      ]
-    },
-    {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/odm-missing.parquet",
-      "family": "odm",
-      "level": "component",
-      "consumers": [
-        "rust/crates/yamaa-adapters/tests/table_arrow_table.rs"
-      ]
-    },
-    {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/odm-wrong-type.parquet",
-      "family": "odm",
-      "level": "component",
-      "consumers": [
-        "rust/crates/yamaa-adapters/tests/table_arrow_table.rs"
-      ]
-    },
-    {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/odm-ambiguous.parquet",
-      "family": "odm",
-      "level": "component",
-      "consumers": [
-        "rust/crates/yamaa-adapters/tests/table_arrow_table.rs"
-      ]
-    },
-    {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/odm-empty.parquet",
-      "family": "odm",
-      "level": "component",
-      "consumers": [
-        "rust/crates/yamaa-adapters/tests/table_arrow_table.rs"
-      ]
-    },
-    {
       "path": "rust/crates/yamaa-adapters/tests/fixtures/odm/odm13.xml",
       "family": "odm",
       "level": "component",

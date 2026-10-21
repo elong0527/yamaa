@@ -31,6 +31,10 @@ mod schema;
 mod shape;
 #[cfg(feature = "parquet")]
 mod table;
+/// The Parquet inputs that the integration tests write at test time.
+#[cfg(all(test, feature = "parquet"))]
+#[path = "../../tests/support/parquet_files.rs"]
+mod test_files;
 #[cfg(feature = "parquet")]
 mod type_name;
 #[cfg(feature = "parquet")]
@@ -278,7 +282,7 @@ mod tests {
     /// the signature reports it absent, and the reader refuses the column.
     #[test]
     fn a_later_annotation_is_absent_from_the_signature_and_refused() {
-        let geometry = include_bytes!("../../tests/fixtures/pq/unsupported-geometry.parquet");
+        let geometry = &super::test_files::file("unsupported-geometry")[..];
         let [column] = signature(geometry).unwrap().try_into().unwrap();
         assert_eq!(column.path, "FIELD");
         assert_eq!(column.physical_type, "BYTE_ARRAY");

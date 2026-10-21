@@ -1588,10 +1588,11 @@ mod table {
     }
     #[cfg(feature = "parquet")]
     mod parquet_source {
-        //! Independently authored PyArrow containers exercise the held-byte input codec.
+        //! Parquet inputs written at test time exercise the held-byte input codec.
         mod unknown_fields {
-            //! Independent Compact wire extensions of the authored PyArrow fixture.
+            //! Independent Compact wire extensions of the uncompressed V1 input.
             //! No candidate writer supplies either the extension bytes or expected cells.
+            use std::sync::LazyLock;
             use yamaa_adapters::parquet_source::{parse, Error};
             use yamaa_core::{
                 table::{TableAccess, ValueRef},
@@ -1599,7 +1600,8 @@ mod table {
                 value::ColumnType,
             };
 
-            const SOURCE: &[u8] = include_bytes!("fixtures/pq/none-1-0.parquet");
+            static SOURCE: LazyLock<Vec<u8>> =
+                LazyLock::new(|| crate::support::parquet_files::file("none-1-0"));
 
             fn extended(kind: u8, payload: &[u8]) -> Vec<u8> {
                 // A known field follows the unknown value: the footer's last
@@ -1648,11 +1650,16 @@ mod table {
                     list.extend([1, 2]);
                 }
                 let bytes = extended_with_suffix(9, &list, &[]);
-                assert_eq!(bytes.len(), 67_625);
-                assert_eq!(
-                    u32::from_le_bytes(bytes[bytes.len() - 8..bytes.len() - 4].try_into().unwrap()),
-                    66_951
-                );
+                // The reported footer: the source's, with an unknown field of
+                // 65,536 booleans before its STOP, eight header bytes and
+                // one byte for each boolean.
+                let footer = |bytes: &[u8]| {
+                    let end = bytes.len() - 8;
+                    u32::from_le_bytes(bytes[end..end + 4].try_into().unwrap()) as usize
+                };
+                assert_eq!(bytes.len(), SOURCE.len() + 65_544);
+                assert_eq!(footer(&bytes), footer(&SOURCE) + 65_544);
+                assert!(footer(&bytes) > 65_536);
                 exact_cells(&bytes);
             }
 
@@ -1751,20 +1758,21 @@ mod table {
                 exact_cells(&extended(11, &[1, 0x9b, 0x21, 2, 1, 1, 0x31, 0xff, 2]));
 
                 // Append an unknown bool list inside the known root SchemaElement, before
-                // the next schema element. Check the authored wire prefix before editing.
+                // the next schema element. Check the written wire prefix before editing:
+                // version 1, six schema elements, the root's name, five children, STOP.
                 let end = SOURCE.len() - 8;
                 let length = u32::from_le_bytes(SOURCE[end..end + 4].try_into().unwrap());
                 let start = end - length as usize;
                 assert_eq!(
-                    &SOURCE[start..start + 17],
+                    &SOURCE[start..start + 15],
                     &[
-                        0x15, 4, 0x19, 0x6c, 0x35, 0, 0x18, 6, b's', b'c', b'h', b'e', b'm', b'a',
-                        0x15, 10, 0
+                        0x15, 2, 0x19, 0x6c, 0x48, 6, b's', b'c', b'h', b'e', b'm', b'a', 0x15, 10,
+                        0
                     ]
                 );
-                let mut bytes = SOURCE[..start + 16].to_vec();
+                let mut bytes = SOURCE[..start + 14].to_vec();
                 bytes.extend([9, 0xe0, 0xd4, 3, 0x21, 1, 2]);
-                bytes.extend(&SOURCE[start + 16..end]);
+                bytes.extend(&SOURCE[start + 14..end]);
                 bytes.extend((length + 7).to_le_bytes());
                 bytes.extend(b"PAR1");
                 exact_cells(&bytes);
@@ -1799,7 +1807,7 @@ mod table {
 
                 let valid = extended(9, &[0x21, 1, 2]);
                 let mut impossible_page = valid.clone();
-                // Authored first DATA_PAGE has a ten-byte body: extend both size claims
+                // The first DATA_PAGE has a ten-byte body: extend both size claims
                 // without changing its held chunk boundary or the valid unknown field.
                 assert_eq!(&impossible_page[4..10], &[0x15, 0, 0x15, 20, 0x15, 20]);
                 impossible_page[7] = 126;
@@ -1835,22 +1843,13 @@ mod table {
                 }
             }
         }
-        use std::path::Path;
+        use crate::support::parquet_files::file as content;
         use yamaa_adapters::parquet_source::{parse, Error};
         use yamaa_core::{
             table::{TableAccess, ValueRef},
             temporal::Precision,
             value::ColumnType,
         };
-
-        fn content(name: &str) -> Vec<u8> {
-            std::fs::read(
-                Path::new(env!("CARGO_MANIFEST_DIR"))
-                    .join("tests/fixtures/pq")
-                    .join(format!("{name}.parquet")),
-            )
-            .unwrap()
-        }
 
         #[test]
         fn odm_metadata_admission_ignores_vendor_types_but_checks_every_physical_chunk() {
@@ -2205,7 +2204,7 @@ mod table {
         mod later_logical_types {
             //! The variant, geometry and geography logical types, which
             //! parquet 57 read and the pinned parquet 55 does not know, in the
-            //! shapes beyond the pyarrow fixtures' one column (#3155). No
+            //! shapes beyond the one column of each `unsupported-*` input (#3155). No
             //! writer the tests can call writes them, so these files are
             //! authored here one Compact Protocol field at a time. Each field
             //! is refused as `source_field_type_unsupported` with the stored

@@ -1,0 +1,805 @@
+//! PEP 440 versions and the version specifiers that marker comparisons build,
+//! as Python's `packaging` 26 parses, orders, prints and matches them.
+use std::cmp::Ordering;
+use std::fmt;
+
+/// A non-negative integer of any length, held as ASCII digits without leading
+/// zeros, so that numbers compare by value and none overflows.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct Number(String);
+
+impl Number {
+    fn new(digits: &str) -> Self {
+        let digits = digits.trim_start_matches('0');
+        Self(if digits.is_empty() { "0" } else { digits }.to_owned())
+    }
+
+    fn zero() -> Self {
+        Self("0".to_owned())
+    }
+
+    fn is_zero(&self) -> bool {
+        self.0 == "0"
+    }
+
+    /// The next integer.
+    fn successor(&self) -> Self {
+        let mut digits = self.0.clone().into_bytes();
+        let mut index = digits.len();
+        loop {
+            if index == 0 {
+                digits.insert(0, b'1');
+                break;
+            }
+            index -= 1;
+            if digits[index] == b'9' {
+                digits[index] = b'0';
+            } else {
+                digits[index] += 1;
+                break;
+            }
+        }
+        Self(String::from_utf8(digits).expect("ASCII digits"))
+    }
+}
+
+impl Ord for Number {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.0
+            .len()
+            .cmp(&other.0.len())
+            .then_with(|| self.0.cmp(&other.0))
+    }
+}
+
+impl PartialOrd for Number {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+/// A pre-release phase, in its order: alpha, beta, release candidate.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+enum Phase {
+    Alpha,
+    Beta,
+    Candidate,
+}
+
+impl Phase {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Alpha => "a",
+            Self::Beta => "b",
+            Self::Candidate => "rc",
+        }
+    }
+}
+
+/// One part of a local version label. Text sorts before a number, text
+/// compares lexically and numbers by value.
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum Local {
+    Text(String),
+    Number(Number),
+}
+
+impl Ord for Local {
+    fn cmp(&self, other: &Self) -> Ordering {
+        match (self, other) {
+            (Self::Text(left), Self::Text(right)) => left.cmp(right),
+            (Self::Number(left), Self::Number(right)) => left.cmp(right),
+            (Self::Text(_), Self::Number(_)) => Ordering::Less,
+            (Self::Number(_), Self::Text(_)) => Ordering::Greater,
+        }
+    }
+}
+
+impl PartialOrd for Local {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+/// A parsed PEP 440 version. Two versions are equal when they denote the same
+/// version, as `1.0` and `1.0.0` do; [`fmt::Display`] prints the normalized
+/// form of the text it was parsed from, trailing zeros kept.
+#[derive(Clone, Debug)]
+pub(crate) struct Version {
+    epoch: Number,
+    release: Vec<Number>,
+    pre: Option<(Phase, Number)>,
+    post: Option<Number>,
+    dev: Option<Number>,
+    local: Option<Vec<Local>>,
+}
+
+/// The release without its trailing zeros, the part that ordering compares.
+fn significant(release: &[Number]) -> &[Number] {
+    let end = release
+        .iter()
+        .rposition(|number| !number.is_zero())
+        .map_or(0, |index| index + 1);
+    &release[..end]
+}
+
+impl Version {
+    fn release(epoch: Number, release: Vec<Number>) -> Self {
+        Self {
+            epoch,
+            release,
+            pre: None,
+            post: None,
+            dev: None,
+            local: None,
+        }
+    }
+
+    /// The pre-release, post-release and development key: a development
+    /// release with neither of the others sorts before every pre-release, a
+    /// final release after them, a post-release after its final release and
+    /// a development release before the release it develops. An absent
+    /// number compares only with another absent one.
+    #[allow(clippy::type_complexity)]
+    fn suffix(
+        &self,
+    ) -> (
+        i8,
+        Option<&Number>,
+        u8,
+        Option<&Number>,
+        u8,
+        Option<&Number>,
+    ) {
+        let (phase, number) = match (&self.pre, &self.post, &self.dev) {
+            (Some((phase, number)), _, _) => (*phase as i8, Some(number)),
+            (None, None, Some(_)) => (-1, None),
+            (None, _, _) => (3, None),
+        };
+        (
+            phase,
+            number,
+            u8::from(self.post.is_some()),
+            self.post.as_ref(),
+            u8::from(self.dev.is_none()),
+            self.dev.as_ref(),
+        )
+    }
+
+    pub(crate) fn is_prerelease(&self) -> bool {
+        self.pre.is_some() || self.dev.is_some()
+    }
+
+    /// Whether `other` is this version or one of its local variants: the same
+    /// public version, with any local label.
+    fn same_public(&self, other: &Self) -> bool {
+        self.same_base(other)
+            && self.pre == other.pre
+            && self.post == other.post
+            && self.dev == other.dev
+    }
+
+    /// Whether `other` has this version's epoch and release.
+    fn same_base(&self, other: &Self) -> bool {
+        self.epoch == other.epoch && significant(&self.release) == significant(&other.release)
+    }
+
+    /// This version with only the given development release after its
+    /// pre-release and post-release.
+    fn with_development(&self, dev: Number) -> Self {
+        Self {
+            dev: Some(dev),
+            local: None,
+            ..self.clone()
+        }
+    }
+
+    /// The first development release of the next release at this version's
+    /// last release number: `1.2` gives `1.3.dev0`.
+    fn next_prefix(epoch: &Number, release: &[Number]) -> Self {
+        let mut release = release.to_vec();
+        if let Some(last) = release.last_mut() {
+            *last = last.successor();
+        }
+        Self::release(epoch.clone(), release).with_development(Number::zero())
+    }
+}
+
+impl Ord for Version {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.epoch
+            .cmp(&other.epoch)
+            .then_with(|| significant(&self.release).cmp(significant(&other.release)))
+            .then_with(|| self.suffix().cmp(&other.suffix()))
+            .then_with(|| self.local.cmp(&other.local))
+    }
+}
+
+impl PartialOrd for Version {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl PartialEq for Version {
+    fn eq(&self, other: &Self) -> bool {
+        self.cmp(other) == Ordering::Equal
+    }
+}
+
+impl Eq for Version {}
+
+impl fmt::Display for Version {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if !self.epoch.is_zero() {
+            write!(f, "{}!", self.epoch.0)?;
+        }
+        for (index, number) in self.release.iter().enumerate() {
+            if index > 0 {
+                f.write_str(".")?;
+            }
+            f.write_str(&number.0)?;
+        }
+        if let Some((phase, number)) = &self.pre {
+            write!(f, "{}{}", phase.label(), number.0)?;
+        }
+        if let Some(number) = &self.post {
+            write!(f, ".post{}", number.0)?;
+        }
+        if let Some(number) = &self.dev {
+            write!(f, ".dev{}", number.0)?;
+        }
+        if let Some(parts) = &self.local {
+            for (index, part) in parts.iter().enumerate() {
+                f.write_str(if index == 0 { "+" } else { "." })?;
+                match part {
+                    Local::Text(text) => f.write_str(text)?,
+                    Local::Number(number) => f.write_str(&number.0)?,
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+/// Whether Python's `str.isspace` holds for `c`, which is what `\s` matches
+/// and `str.strip` removes: Unicode white space and the four information
+/// separators.
+pub(crate) fn is_python_space(c: char) -> bool {
+    c.is_whitespace() || ('\u{1c}'..='\u{1f}').contains(&c)
+}
+
+/// What a version text may hold besides the release: everything, as in a
+/// version; or what each specifier operator allows.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Grammar {
+    Version,
+    /// `==` and `!=`: a version with a local label, or a release with `.*`.
+    Equality,
+    /// `~=`: no local label, and at least two release numbers.
+    Compatible,
+    /// `<`, `<=`, `>` and `>=`: no local label.
+    Ordered,
+}
+
+struct Cursor<'a> {
+    text: &'a str,
+    at: usize,
+}
+
+impl<'a> Cursor<'a> {
+    fn rest(&self) -> &'a str {
+        &self.text[self.at..]
+    }
+
+    fn eat(&mut self, c: char) -> bool {
+        if self.rest().starts_with(c) {
+            self.at += c.len_utf8();
+            true
+        } else {
+            false
+        }
+    }
+
+    fn separator(&mut self) {
+        let _ = self.eat('.') || self.eat('_') || self.eat('-');
+    }
+
+    fn digits(&mut self) -> Option<&'a str> {
+        let length = self.rest().bytes().take_while(u8::is_ascii_digit).count();
+        (length > 0).then(|| {
+            let digits = &self.rest()[..length];
+            self.at += length;
+            digits
+        })
+    }
+
+    fn alphanumerics(&mut self) -> Option<&'a str> {
+        let length = self
+            .rest()
+            .bytes()
+            .take_while(u8::is_ascii_alphanumeric)
+            .count();
+        (length > 0).then(|| {
+            let part = &self.rest()[..length];
+            self.at += length;
+            part
+        })
+    }
+
+    /// The first of `words` that the text continues with, ignoring ASCII case.
+    fn word<T: Copy>(&mut self, words: &[(&str, T)]) -> Option<T> {
+        let rest = self.rest().as_bytes();
+        let (word, value) = words.iter().find(|(word, _)| {
+            rest.len() >= word.len() && rest[..word.len()].eq_ignore_ascii_case(word.as_bytes())
+        })?;
+        self.at += word.len();
+        Some(*value)
+    }
+
+    fn number(&mut self) -> Number {
+        self.digits().map_or_else(Number::zero, Number::new)
+    }
+}
+
+/// Parse `text` as a version that `grammar` admits, after Python white space
+/// at either end. Returns the version and whether it ended in `.*`. Each
+/// optional part is taken whole or not at all, as `packaging`'s possessive
+/// pattern takes it.
+fn parse(text: &str, grammar: Grammar) -> Option<(Version, bool)> {
+    let text = text.trim_matches(is_python_space);
+    let mut cursor = Cursor { text, at: 0 };
+    cursor.word(&[("v", ())]);
+    let mut epoch = Number::zero();
+    let start = cursor.at;
+    if let Some(digits) = cursor.digits() {
+        if cursor.eat('!') {
+            epoch = Number::new(digits);
+        } else {
+            cursor.at = start;
+        }
+    }
+    let mut release = vec![Number::new(cursor.digits()?)];
+    loop {
+        let at = cursor.at;
+        if cursor.eat('.') {
+            if let Some(digits) = cursor.digits() {
+                release.push(Number::new(digits));
+                continue;
+            }
+        }
+        cursor.at = at;
+        break;
+    }
+    let mut version = Version::release(epoch, release);
+    if grammar == Grammar::Equality && cursor.rest() == ".*" {
+        return Some((version, true));
+    }
+    if grammar == Grammar::Compatible && version.release.len() < 2 {
+        return None;
+    }
+    let at = cursor.at;
+    cursor.separator();
+    let phase = cursor.word(&[
+        ("alpha", Phase::Alpha),
+        ("a", Phase::Alpha),
+        ("beta", Phase::Beta),
+        ("b", Phase::Beta),
+        ("preview", Phase::Candidate),
+        ("pre", Phase::Candidate),
+        ("c", Phase::Candidate),
+        ("rc", Phase::Candidate),
+    ]);
+    match phase {
+        Some(phase) => {
+            cursor.separator();
+            version.pre = Some((phase, cursor.number()));
+        }
+        None => cursor.at = at,
+    }
+    let at = cursor.at;
+    if cursor.eat('-') {
+        version.post = cursor.digits().map(Number::new);
+    }
+    if version.post.is_none() {
+        cursor.at = at;
+        cursor.separator();
+        if cursor
+            .word(&[("post", ()), ("rev", ()), ("r", ())])
+            .is_some()
+        {
+            cursor.separator();
+            version.post = Some(cursor.number());
+        } else {
+            cursor.at = at;
+        }
+    }
+    let at = cursor.at;
+    cursor.separator();
+    if cursor.word(&[("dev", ())]).is_some() {
+        cursor.separator();
+        version.dev = Some(cursor.number());
+    } else {
+        cursor.at = at;
+    }
+    if matches!(grammar, Grammar::Version | Grammar::Equality) {
+        let at = cursor.at;
+        if cursor.eat('+') {
+            let mut parts = Vec::new();
+            while let Some(part) = cursor.alphanumerics() {
+                parts.push(if part.bytes().all(|byte| byte.is_ascii_digit()) {
+                    Local::Number(Number::new(part))
+                } else {
+                    Local::Text(part.to_ascii_lowercase())
+                });
+                let next = cursor.at;
+                cursor.separator();
+                // A separator continues the label only before another part.
+                if !cursor
+                    .rest()
+                    .starts_with(|c: char| c.is_ascii_alphanumeric())
+                {
+                    cursor.at = next;
+                    break;
+                }
+            }
+            if parts.is_empty() {
+                cursor.at = at;
+            } else {
+                version.local = Some(parts);
+            }
+        }
+    }
+    cursor.rest().is_empty().then_some((version, false))
+}
+
+/// Parse a PEP 440 version, as `packaging.version.Version` does.
+pub(crate) fn version(text: &str) -> Option<Version> {
+    parse(text, Grammar::Version).map(|(version, _)| version)
+}
+
+/// The smallest version there is, `0.dev0`.
+fn minimum() -> Version {
+    Version::release(Number::zero(), vec![Number::zero()]).with_development(Number::zero())
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Operator {
+    Compatible,
+    Equal,
+    NotEqual,
+    LessEqual,
+    GreaterEqual,
+    Less,
+    Greater,
+    Arbitrary,
+}
+
+/// One version specifier: what `packaging.specifiers.Specifier` accepts.
+#[derive(Debug)]
+pub(crate) struct Specifier {
+    operator: Operator,
+    /// The version text after the operator, without surrounding white space.
+    text: String,
+    /// The parsed version, absent for `===`.
+    version: Option<Version>,
+    wildcard: bool,
+}
+
+/// Parse a specifier, an operator directly followed by a version text, as
+/// `packaging.specifiers.Specifier` does. `None` when it is no specifier.
+pub(crate) fn specifier(text: &str) -> Option<Specifier> {
+    let text = text.trim_matches(is_python_space);
+    let operators = [
+        ("===", Operator::Arbitrary),
+        ("~=", Operator::Compatible),
+        ("==", Operator::Equal),
+        ("!=", Operator::NotEqual),
+        ("<=", Operator::LessEqual),
+        (">=", Operator::GreaterEqual),
+        ("<", Operator::Less),
+        (">", Operator::Greater),
+    ];
+    let (spelling, operator) = operators
+        .iter()
+        .find(|(spelling, _)| text.starts_with(spelling))?;
+    let rest = text[spelling.len()..].trim_matches(is_python_space);
+    if *operator == Operator::Arbitrary {
+        // Any text without white space, a semicolon or a closing parenthesis.
+        return (!rest.contains(|c: char| is_python_space(c) || c == ';' || c == ')')).then(|| {
+            Specifier {
+                operator: *operator,
+                text: rest.to_owned(),
+                version: None,
+                wildcard: false,
+            }
+        });
+    }
+    let grammar = match operator {
+        Operator::Equal | Operator::NotEqual => Grammar::Equality,
+        Operator::Compatible => Grammar::Compatible,
+        _ => Grammar::Ordered,
+    };
+    let (version, wildcard) = parse(rest, grammar)?;
+    Some(Specifier {
+        operator: *operator,
+        text: rest.to_owned(),
+        version: Some(version),
+        wildcard,
+    })
+}
+
+impl Specifier {
+    /// Whether the specifier contains `candidate`, pre-releases included, as
+    /// `Specifier.contains(candidate, prereleases=True)` answers. A candidate
+    /// that is no version is contained only by an `===` that spells it.
+    pub(crate) fn contains(&self, candidate: &str) -> bool {
+        let Some(version) = &self.version else {
+            return candidate.to_lowercase() == self.text.to_lowercase();
+        };
+        let Some(candidate) = self::version(candidate) else {
+            return false;
+        };
+        let candidate = &candidate;
+        match self.operator {
+            Operator::Equal | Operator::NotEqual if self.wildcard => {
+                let lower = Version::release(version.epoch.clone(), version.release.clone())
+                    .with_development(Number::zero());
+                let upper = Version::next_prefix(&version.epoch, &version.release);
+                let within = &lower <= candidate && candidate < &upper;
+                within == (self.operator == Operator::Equal)
+            }
+            Operator::Equal | Operator::NotEqual => {
+                // Without its own local label, a version matches each of its
+                // local variants.
+                let equal = if self.text.contains('+') {
+                    candidate == version
+                } else {
+                    version.same_public(candidate)
+                };
+                equal == (self.operator == Operator::Equal)
+            }
+            Operator::GreaterEqual => candidate >= version,
+            Operator::LessEqual => candidate <= version || version.same_public(candidate),
+            Operator::Greater => {
+                if let Some(dev) = &version.dev {
+                    candidate >= &version.with_development(dev.successor())
+                } else if let Some(post) = &version.post {
+                    let next = Version {
+                        post: Some(post.successor()),
+                        ..version.clone()
+                    };
+                    candidate >= &next.with_development(Number::zero())
+                } else {
+                    // Neither this version's local variants nor its
+                    // post-releases are greater than it.
+                    candidate > version
+                        && !(version.same_base(candidate) && candidate.pre == version.pre)
+                }
+            }
+            Operator::Less => {
+                // Unless this version is a pre-release, its pre-releases are
+                // not less than it.
+                let bound = if version.is_prerelease() {
+                    version.clone()
+                } else {
+                    version.with_development(Number::zero())
+                };
+                bound > minimum() && candidate < &bound
+            }
+            Operator::Compatible => {
+                let prefix = &version.release[..version.release.len() - 1];
+                candidate >= version && candidate < &Version::next_prefix(&version.epoch, prefix)
+            }
+            Operator::Arbitrary => unreachable!("an arbitrary specifier holds no version"),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn normalized(text: &str) -> Option<String> {
+        version(text).map(|version| version.to_string())
+    }
+
+    #[test]
+    fn versions_parse_and_print_their_normalized_form() {
+        for (text, expected) in [
+            ("1.0", "1.0"),
+            ("1.0.0", "1.0.0"),
+            ("01.002.0", "1.2.0"),
+            ("v1.0", "1.0"),
+            ("V1.0", "1.0"),
+            ("  1.0\t", "1.0"),
+            ("\u{1f}1.0\u{a0}", "1.0"),
+            ("1!2.0", "1!2.0"),
+            ("0!2.0", "2.0"),
+            ("1.0a", "1.0a0"),
+            ("1.0alpha1", "1.0a1"),
+            ("1.0-A.1", "1.0a1"),
+            ("1.0b2", "1.0b2"),
+            ("1.0beta", "1.0b0"),
+            ("1.0c1", "1.0rc1"),
+            ("1.0pre1", "1.0rc1"),
+            ("1.0preview_2", "1.0rc2"),
+            ("1.0RC1", "1.0rc1"),
+            ("1.0-1", "1.0.post1"),
+            ("1.0.post", "1.0.post0"),
+            ("1.0-r-3", "1.0.post3"),
+            ("1.0rev4", "1.0.post4"),
+            ("1.0.post.", "1.0.post0"),
+            ("1.0a.post1", "1.0a0.post1"),
+            ("1.0-dev1", "1.0.dev1"),
+            ("1.0.dev", "1.0.dev0"),
+            ("1.0a1.post2.dev3", "1.0a1.post2.dev3"),
+            ("1.0+Local.07-x_y", "1.0+local.7.x.y"),
+            ("1.0+abc.", ""),
+            ("1.0+", ""),
+            ("1.0.", ""),
+            (".1", ""),
+            ("1..2", ""),
+            ("", ""),
+            ("1.0 a1", ""),
+            ("1.0prev", ""),
+            ("1.0+a+b", ""),
+            ("1.0-", ""),
+            ("x1.0", ""),
+            ("1.0.x", ""),
+            ("1.0a1a1", ""),
+            ("1.0\u{2160}", ""),
+            ("99999999999999999999999.1", "99999999999999999999999.1"),
+        ] {
+            let expected = (!expected.is_empty()).then(|| expected.to_owned());
+            assert_eq!(normalized(text), expected, "{text:?}");
+        }
+    }
+
+    #[test]
+    fn versions_order_as_pep_440_orders_them() {
+        let ordered = [
+            "0.dev0",
+            "1.0.dev1",
+            "1.0a1.dev1",
+            "1.0a1",
+            "1.0a1.post1.dev1",
+            "1.0a1.post1",
+            "1.0b1",
+            "1.0rc1",
+            "1.0",
+            "1.0+abc",
+            "1.0+abc.1",
+            "1.0+1",
+            "1.0+2",
+            "1.0+10",
+            "1.0.post1.dev1",
+            "1.0.post1",
+            "1.0.post2",
+            "1.0.1",
+            "1.1.dev1",
+            "1.1",
+            "2!0.1",
+        ];
+        for (index, left) in ordered.iter().enumerate() {
+            for (other, right) in ordered.iter().enumerate() {
+                let (left, right) = (version(left).unwrap(), version(right).unwrap());
+                assert_eq!(left.cmp(&right), index.cmp(&other), "{left} {right}");
+            }
+        }
+        assert_eq!(version("1.0").unwrap(), version("1.0.0.0").unwrap());
+        assert_eq!(version("1.0+A").unwrap(), version("1.0+a").unwrap());
+        assert_eq!(version("1.0+01").unwrap(), version("1.0+1").unwrap());
+        assert_ne!(version("1.0+1").unwrap(), version("1.0").unwrap());
+        assert_eq!(
+            version("123456789012345678901").unwrap(),
+            version("0123456789012345678901.0").unwrap()
+        );
+    }
+
+    #[test]
+    fn numbers_count_on_without_a_bound() {
+        for (number, next) in [("0", "1"), ("8", "9"), ("9", "10"), ("1999", "2000")] {
+            assert_eq!(Number::new(number).successor(), Number::new(next));
+        }
+    }
+
+    fn contains(specifier_text: &str, candidate: &str) -> Option<bool> {
+        specifier(specifier_text).map(|specifier| specifier.contains(candidate))
+    }
+
+    #[test]
+    fn specifiers_accept_what_each_operator_admits() {
+        for valid in [
+            "==1.0",
+            "== 1.0 ",
+            "==1.0.*",
+            "==1.0+local",
+            "!=1.0.*",
+            "~=1.0",
+            "~=1.0a1",
+            ">=1.0.post1",
+            "<1!2",
+            "===anything",
+            "===",
+            "=== spaced ",
+        ] {
+            assert!(specifier(valid).is_some(), "{valid:?}");
+        }
+        for invalid in [
+            "~=1",
+            "~=1.0+local",
+            "~=1.0.*",
+            "<1.0+local",
+            ">=1.0.*",
+            "==1.0.*.1",
+            "==1.0a1.*",
+            "==1.0 .*",
+            "=1.0",
+            "in1.0",
+            "===a b",
+            "===a;",
+            "===a)",
+            "==",
+            "<",
+        ] {
+            assert!(specifier(invalid).is_none(), "{invalid:?}");
+        }
+    }
+
+    #[test]
+    fn specifiers_contain_as_packaging_matches_with_pre_releases() {
+        for (specifier_text, candidate, expected) in [
+            ("==3.12.*", "3.12.8", true),
+            ("==3.12.*", "3.12", true),
+            ("==3.12.*", "3.12.0rc1", true),
+            ("==3.12.*", "3.13.0", false),
+            ("==3.12.*", "3.12.1+local", true),
+            ("!=3.12.*", "3.13.0", true),
+            ("!=3.12.*", "3.12.4", false),
+            ("==1.0", "1.0.0", true),
+            ("==1.0", "1.0+local", true),
+            ("==1.0+local", "1.0", false),
+            ("==1.0+local", "1.0+LOCAL", true),
+            ("!=1.0", "1.0+local", false),
+            ("!=1.0", "1.0.post1", true),
+            (">=3.13", "3.13.0", true),
+            (">=3.13", "3.13.0rc1", false),
+            (">=3.13", "3.12.9", false),
+            ("<3.13", "3.12.9", true),
+            ("<3.13", "3.13.0rc1", false),
+            ("<3.13", "3.13.0.dev1", false),
+            ("<3.13rc1", "3.13.0b1", true),
+            ("<3.13.post1", "3.13", true),
+            ("<3.13.post1", "3.13a1", true),
+            ("<0", "0.dev0", false),
+            ("<0.0.dev0", "0.dev0", false),
+            ("<=3.13", "3.13+local", true),
+            ("<=3.13", "3.13.post1", false),
+            (">3.13", "3.13.post1", false),
+            (">3.13", "3.13+local", false),
+            (">3.13", "3.13.1", true),
+            (">3.13", "3.14.0a1", true),
+            (">3.13.post1", "3.13.post1+local", false),
+            (">3.13.post1", "3.13.post2.dev0", true),
+            (">3.13.dev1", "3.13.dev2", true),
+            (">3.13.dev1", "3.13.dev1+local", false),
+            ("~=2.2", "2.9", true),
+            ("~=2.2", "3.0", false),
+            ("~=2.2", "2.2a1", false),
+            ("~=2.2.0", "2.3", false),
+            ("~=1.4.5a4", "1.4.5", true),
+            ("===3.12", "3.12", true),
+            ("===3.12", "3.12.0", false),
+            ("===ABC", "abc", true),
+            ("==3.12", "not a version", false),
+            ("===", "", true),
+        ] {
+            assert_eq!(
+                contains(specifier_text, candidate),
+                Some(expected),
+                "{specifier_text} {candidate}"
+            );
+        }
+    }
+}

@@ -12,14 +12,16 @@ file's contents.
 ### INPUT-1. The input path's extension selects the profile that reads it, and nothing is sniffed
 
 `dataset_class.path` names the file a specification reads, and its
-case-insensitive extension selects the source profile that reads it:
-`.csv`, `.parquet`, `.sas7bdat` or `.xpt`, including for an input linked to
-its producing specification. No reader inspects a file's contents to choose a
-profile, a delimiter or a quote character, and no unknown extension falls back
-to a default: it fails during validation, before any byte is read.
+case-insensitive extension selects the source profile that reads it,
+including for an input linked to its producing specification: `.csv`,
+`.parquet`, `.sas7bdat`, `.xpt`, or `.xml` for an ODM 1.3 or 2.0 document
+read into the item table of [NAME-8](names.md#name-8). No reader inspects a
+file's contents to choose a profile, a delimiter or a quote character, and no
+unknown extension falls back to a default: it fails during validation, before
+any byte is read.
 
 Fails: `source_profile_unknown`.
-Evidence: `negative-source-unknown-format`, `schema-parquet`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs`.
+Evidence: `negative-source-unknown-format`, `schema-parquet`, `sdtm-dm-odm-snapshot`, `negative-odm-transactional`, `negative-odm-no-clinical-data`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs`, `rust/crates/yamaa/tests/odm_input.rs::nothing_is_sniffed_so_an_archive_named_xml_is_refused_as_xml`, `rust/crates/yamaa/tests/odm_input.rs::a_0_5_file_keeps_refusing_an_xml_input`.
 
 The extension selects the profile under
 [OUTPUT-5](output.md#output-5); a study that stores `DM.CSV`
@@ -31,12 +33,19 @@ names the same container as one that stores `dm.csv`.
 | `.parquet` | `parquet` | Apache Parquet | [Parquet profile](reference/parquet.md) |
 | `.sas7bdat` | `sas7bdat` | SAS dataset (read-only) | [SAS source profiles](reference/sas.md) |
 | `.xpt` | `xpt` | SAS Transport v5/v8 (read-only) | [SAS source profiles](reference/sas.md) |
+| `.xml` | `odm` | ODM 1.3 or 2.0 XML (read-only) | [ODM source profile](reference/odm.md) |
 
 A source profile follows the artifact profile: a file
 [Output](output.md) writes and these rules read has
 one profile name in both directions. The read-only SAS and Transport profiles
-of [SAS-1](reference/sas.md#sas-1) are the exceptions; no artifact
-publication profile corresponds to them.
+of [SAS-1](reference/sas.md#sas-1) and the read-only ODM profile of
+[ODM-1](reference/odm.md#odm-1) are the exceptions; no artifact publication
+profile corresponds to them.
+
+An `.xml` input is one ODM document, never an archive: its bytes are read as
+XML whatever they hold. A `.tar`, `.tar.gz` or `.tgz` path selects no profile,
+so an archive's ODM member is extracted first, or read with the host function
+`read_odm`, which reads archives.
 
 A specification that reads an artifact another specification produced reads
 it like any other input: the extension of its own `path` selects the profile.
@@ -79,13 +88,13 @@ result.
 ### INPUT-3. An input may declare a generated field holding each record's one-based stored position
 
 `dataset_class.ordinal` optionally names a generated `int` field of a CSV,
-Parquet, SAS or Transport input dataset, appended after the stored fields,
-whose names, order and types are unchanged. Its value is the one-based
+Parquet, SAS, Transport or ODM XML input dataset, appended after the stored
+fields, whose names, order and types are unchanged. Its value is the one-based
 position of the data record in stored record order, assigned before any
 filter, join, grouping or window reads the input dataset; filtering keeps the
 original positions. Without the declaration, ingestion adds no field.
 
-Evidence: `schema-source-ordinal`, `rust/crates/yamaa-adapters/tests/execution_declarative_case_predicates.rs::source_ordinals_precede_filtering_and_count_multiline_records_once`, `rust/crates/yamaa-adapters/tests/file_producer_links.rs::a_linked_ordinal_is_local_to_the_consumer_and_never_part_of_the_contract`.
+Evidence: `schema-source-ordinal`, `rust/crates/yamaa-adapters/tests/execution_declarative_case_predicates.rs::source_ordinals_precede_filtering_and_count_multiline_records_once`, `rust/crates/yamaa-adapters/tests/file_producer_links.rs::a_linked_ordinal_is_local_to_the_consumer_and_never_part_of_the_contract`, `rust/crates/yamaa/tests/odm_input.rs::an_xml_input_no_odm_read_names_may_declare_an_ordinal`.
 
 ```yaml
 input:
@@ -151,9 +160,10 @@ the type comes from depends on the container:
 - A **SAS or Transport source** supplies character or numeric storage, with
   defaults and explicit numeric narrowing under
   [SAS source profiles](reference/sas.md).
-- A **self-describing source** supplies it. An ODM `ItemDef` data type, a
-  Parquet schema and an artifact's producing specification are each the
-  field's type authority; the consuming specification never restates the type.
+- A **self-describing source** supplies it. The fixed item table of the ODM
+  source profile ([ODM-1](reference/odm.md#odm-1)), a Parquet schema and an
+  artifact's producing specification are each the field's type authority;
+  the consuming specification never restates the type.
 - A **typeless container**, such as a delimited text file, supplies none.
 
 `dataset_class.types` declares each named field's type in a typeless
@@ -189,12 +199,15 @@ exception is explicit SAS numeric narrowing under
 is present, even when an entry agrees with the producer.
 
 Fails: `unknown_field`, `redundant_field_type`.
-Evidence: `negative-types-unknown-field`, `negative-redefined-date`, `rust/crates/yamaa-core/tests/support/diagnostic/producer.rs`.
+Evidence: `negative-types-unknown-field`, `negative-redefined-date`, `rust/crates/yamaa-core/tests/support/diagnostic/producer.rs`, `rust/crates/yamaa/tests/odm_input.rs::an_xml_input_declares_no_types`.
 
 An unknown field fails with `unknown_field`, and a field whose type the source
 already supplies fails with `redundant_field_type`. The producing
 specification remains the only type authority of a linked input
 ([INPUT-10](#input-10)); `types` may be present only for a typeless source.
+A Parquet input and an ODM XML input ([ODM-1](reference/odm.md#odm-1)) supply
+the type of every field, so each of their `types` entries fails with
+`redundant_field_type` during validation, before any byte is read.
 
 <a id="input-7"></a>
 
