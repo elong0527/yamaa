@@ -32,8 +32,8 @@ from tools.migrate.excepted import EXCEPTED
 from tools.validation import check_vocabulary_coverage
 
 # Dashboards the conversion changes by decision, beside the excepted
-# benchmarks, whose conversion changes their meaning until P2-4, P2-7 and
-# P1-11 land (tools/migrate/excepted.py).
+# benchmarks, whose conversion changes their meaning until P2-7 lands
+# (tools/migrate/excepted.py).
 DASHBOARD_DIFFERENCES = {
     # P-CLR-1: a 0.5 child layer writes a cleared field as a column entry
     # holding null, which the sheet lists as a row; the 1.0 child lists the

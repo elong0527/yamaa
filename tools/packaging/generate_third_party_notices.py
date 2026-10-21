@@ -16,10 +16,21 @@ for it. The inventory comes from `cargo metadata --locked` for rust/Cargo.lock
 and the texts from the crate packages Cargo unpacks.
 
 The native code also links the Rust standard library of the toolchain that
-rust/rust-toolchain.toml pins. Its notices come from the notice that the
-Rust project ships with that toolchain, share/doc/rust/COPYRIGHT-library.html,
-and the license texts beside it, of whose out-of-tree crates they keep those
-that LIBRARY_LINKED names. No license text is looked up anywhere else.
+rust/rust-toolchain.toml pins. Its licensing statement and the licenses of its
+own files come from the notice that the Rust project ships with that
+toolchain, share/doc/rust/COPYRIGHT-library.html, and the license texts beside
+it. That notice leaves out some of the third-party crates that the standard
+library links, so those crates come from the toolchain's rust-src component
+instead (#3369): the crates that std links on each of the TARGETS, as
+library/std/Cargo.toml declares them for the features that LIBRARY_FEATURES
+names and library/Cargo.lock locks them, each with the texts that its package
+in library/vendor ships, chosen as for a locked crate. The repository checks
+add rust-src to the pinned toolchain (tools/ci/toolchain.py); where it cannot
+be added, the environment variable that LIBRARY_SOURCES_VARIABLE names gives
+the library directory of an unpacked copy of the same component. The
+command-line binaries for the musl targets also link musl, whose notice the
+command line keeps beside its crate as MUSL_NOTICE for their archives alone.
+No license text is looked up anywhere else.
 
 No notice names a GNU license: generation stops when a reproduced text would
 (gnu_licenses), apart from the clause of the LLVM exception, an accepted
@@ -34,6 +45,7 @@ regenerates the notices and the license copies.
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import textwrap
@@ -42,7 +54,7 @@ from dataclasses import dataclass
 from html.parser import HTMLParser
 from pathlib import Path
 
-from tools.ci import toolchain
+from tools.ci import native, toolchain
 from tools.packaging import check_minimum_rust
 from tools.paths import ROOT, WORKSPACE
 from tools.staging import engine_bundle
@@ -55,10 +67,25 @@ INVENTORY = "COMPONENTS.tsv"
 # The package notices whose hosts' copies differ, because each lists the
 # components of its own host; the hosts share the other package notices.
 HOST_NOTICES = (NOTICES, INVENTORY)
+# musl, the C library that the Rust toolchain bundles for its *-linux-musl
+# targets, which the command-line binaries for MUSL_TARGETS link statically
+# (#3369). Only their archives carry its notice: a two-line header naming the
+# musl release and its home, then musl's COPYRIGHT file verbatim. MUSL pairs
+# the toolchain release whose bundled musl was reviewed with that musl
+# release, which src/ci/docker/scripts/musl.sh of the Rust repository names
+# at the toolchain's tag; another pinned toolchain stops the check until the
+# pair and the notice are reviewed.
+MUSL_NOTICE = "LICENSE-MUSL.txt"
+MUSL = ("1.99.1", "1.2.5")
+MUSL_HOME = "https://musl.libc.org/"
+MUSL_TARGETS = tuple(
+    target for target in native.CLI_TARGETS.values() if target.endswith("-linux-musl")
+)
 # The Python project lists the package notices; the R package installs its
-# copies from inst/. The command line keeps only its HOST_NOTICES beside its
+# copies from inst/. The command line keeps only its CLI_NOTICES beside its
 # crate: its archives carry the Python packages' copies of the other notices
 # (tools/packaging/cli_archive.py).
+CLI_NOTICES = (*HOST_NOTICES, MUSL_NOTICE)
 PYTHON = ROOT / "python"
 R_INST = ROOT / "R/yamaa/inst"
 CLI = ROOT / "rust/crates/yamaa-cli"
@@ -213,7 +240,9 @@ LIBRARY_DOCUMENTS = "share/doc/rust"
 LIBRARY_NOTICE = "COPYRIGHT-library.html"
 LIBRARY_LICENSES = "licenses"
 # The notice's sections, by HTML id, in order; the table of contents has none.
-# Another shape stops generation.
+# Another shape stops generation. Only the statement and the in-tree entries
+# are read: the out-of-tree section misses crates that std links, such as
+# addr2line and object, which the crates of LIBRARY_SOURCES stand for.
 LIBRARY_SECTIONS = (
     None,
     "short-version",
@@ -221,24 +250,24 @@ LIBRARY_SECTIONS = (
     "in-tree-files",
     "out-of-tree-dependencies",
 )
-# The out-of-tree crates of the standard library notice that the standard
-# library links on TARGETS, by name and version. The notice also names the
-# crates of the compiler's tools, of the test harness and of other targets,
-# such as r-efi for UEFI, which the packages never link. Review this table
-# with every toolchain update, against the dependencies that
-# library/std/Cargo.toml in the rust-src component declares for TARGETS, at
-# the versions that library/Cargo.lock locks. The standard library of Rust
-# 1.99.1 also links addr2line, adler2, miniz_oxide, object and memchr 2.8.3,
-# which its notice does not name; memchr 2.8.0, which it names, stands for
-# the last.
-LIBRARY_LINKED = (
-    ("cfg-if", "1.0.4"),
-    ("gimli", "0.34.0"),
-    ("hashbrown", "0.17.1"),
-    ("libc", "0.2.189"),
-    ("memchr", "2.8.0"),
-    ("rustc-demangle", "0.1.28"),
-)
+# The library directory of a toolchain's rust-src component, below the
+# sysroot, and the environment variable that names an unpacked copy of it
+# instead, for a toolchain that rustup cannot add the component to. The
+# directory holds the standard library's workspace: library/Cargo.lock, the
+# manifests of std and the other in-tree crates, and in vendor/ the package of
+# each out-of-tree crate, as `cargo vendor --versioned-dirs` writes it.
+LIBRARY_SOURCES = "lib/rustlib/src/rust/library"
+LIBRARY_SOURCES_VARIABLE = "YAMAA_RUST_SRC_LIBRARY"
+# The features of std that the Rust project builds the distributed standard
+# library with: panic-unwind, which library/sysroot/Cargo.toml enables by
+# default, and backtrace, which the Rust project's build system adds by
+# default (its rust.backtrace setting) and which links the crates that
+# symbolize backtraces.
+LIBRARY_FEATURES = ("backtrace", "panic-unwind")
+# A cfg option that `rustc --print cfg` prints: a name, or a name and a value.
+CFG_OPTION = re.compile(r'([A-Za-z_][A-Za-z0-9_]*)(?:="([^"\\]*)")?')
+# The tokens of a cfg() expression that selects a manifest's target table.
+CFG_TOKEN = re.compile(r'\s*(?:([A-Za-z_][A-Za-z0-9_]*)|"([^"\\]*)"|([(),=]))')
 
 
 class LicenseReview(ValueError):
@@ -266,22 +295,38 @@ class LibraryFiles:
 
 
 @dataclass(frozen=True)
-class LibraryCrate:
-    """An out-of-tree crate of the standard library, with its published notices."""
-
-    name: str
-    version: str
-    declared: str
-    texts: tuple[tuple[str, str], ...]
-
-
-@dataclass(frozen=True)
 class StandardLibrary:
+    """The standard library of a toolchain: its notice's statement, in-tree
+    entries and license texts, and the notices of the crates that it links."""
+
     release: str
     statement: tuple[str, ...]
     files: tuple[LibraryFiles, ...]
     licenses: tuple[tuple[str, str], ...]
-    crates: tuple[LibraryCrate, ...]
+    crates: tuple[Notice, ...]
+
+
+@dataclass(frozen=True)
+class Platform:
+    """A target and the cfg options that rustc sets for it: names, such as
+    unix, and (name, value) pairs, such as ("target_os", "linux")."""
+
+    target: str
+    options: frozenset
+
+
+@dataclass(frozen=True)
+class LibraryUnit:
+    """A package of the standard library's workspace: its lock entry, its
+    directory and its manifest."""
+
+    locked: dict
+    directory: Path
+    manifest: dict
+
+    @property
+    def label(self):
+        return f"{self.locked['name']} {self.locked['version']}"
 
 
 def locked_metadata(target=None):
@@ -611,19 +656,20 @@ def canonical_text(license):
 
 
 class LibraryNotice(HTMLParser):
-    """Read the Rust project's standard library notice into its parts.
+    """Read the statement and the in-tree entries of the Rust project's
+    standard library notice.
 
     The notice is the HTML that the Rust project's generate-copyright tool
     renders: the licensing statement, nested in-tree entries, and one heading
-    per out-of-tree crate with its notice texts in <pre> blocks. A line outside
-    that shape stops generation instead of being skipped.
+    per out-of-tree crate, a section that is not read (LIBRARY_SECTIONS). A
+    paragraph outside that shape stops generation instead of being skipped.
     """
 
     def __init__(self):
         super().__init__(convert_charrefs=True)
-        self.sections, self.statement, self.files, self.crates = [], [], [], []
+        self.sections, self.statement, self.files = [], [], []
         self.open = []  # in-tree entries being read, outermost first
-        self.text = self.pre = self.name = None
+        self.text = None
 
     @property
     def section(self):
@@ -632,42 +678,25 @@ class LibraryNotice(HTMLParser):
     def handle_starttag(self, tag, attrs):
         if tag == "h2":
             self.sections.append(dict(attrs).get("id"))
+        elif self.section == "out-of-tree-dependencies":
+            return
         elif tag == "div" and self.section == "in-tree-files":
             entry = {"path": None, "license": None, "copyrights": [], "exceptions": []}
             (self.open[-1]["exceptions"] if self.open else self.files).append(entry)
             self.open.append(entry)
-        elif tag in ("h3", "p", "summary"):
+        elif tag == "p":
             self.text = []
-        elif tag == "details":
-            # The paragraph that names the notices encloses them.
-            self.paragraph()
-        elif tag == "pre":
-            self.pre = []
 
     def handle_endtag(self, tag):
+        if self.section == "out-of-tree-dependencies":
+            return
         if tag == "div" and self.section == "in-tree-files":
             self.open.pop()
-        elif tag == "h3":
-            title, self.text = " ".join("".join(self.text).split()), None
-            self.crates.append(
-                {"title": title, "url": None, "license": None, "texts": []}
-            )
         elif tag == "p":
             self.paragraph()
-        elif tag == "summary":
-            self.name, self.text = "".join(self.text).strip(), None
-        elif tag == "pre":
-            # The template wraps each text in a newline and an indented line.
-            match = re.fullmatch(r"\n(.*)\n *", "".join(self.pre), re.DOTALL)
-            if match is None or self.name is None or not self.crates:
-                raise ValueError("the standard library notice has an unexpected text")
-            self.crates[-1]["texts"].append((self.name, normalized(match[1])))
-            self.pre = self.name = None
 
     def handle_data(self, data):
-        if self.pre is not None:
-            self.pre.append(data)
-        elif self.text is not None:
+        if self.text is not None:
             self.text.append(data)
 
     def paragraph(self):
@@ -687,11 +716,6 @@ class LibraryNotice(HTMLParser):
             elif label == "Copyright":
                 entry["copyrights"].append(value)
             elif label != "Exceptions" or value:
-                raise ValueError(f"the standard library notice has {text!r}")
-        elif self.section == "out-of-tree-dependencies" and self.crates:
-            if label in ("URL", "License"):
-                self.crates[-1][label.lower()] = value
-            elif label not in ("Authors", "Notices"):
                 raise ValueError(f"the standard library notice has {text!r}")
 
 
@@ -720,8 +744,9 @@ def identifiers(node):
     return set().union(*(identifiers(part) for part in value))
 
 
-def read_standard_library(documents, release):
-    """Read a toolchain's standard library notice and the license texts it names."""
+def read_library_notice(documents):
+    """Read a toolchain's standard library notice and the license texts that
+    it names; return its statement, its in-tree entries and those texts."""
     reader = LibraryNotice()
     reader.feed(read_text(documents / LIBRARY_NOTICE))
     reader.close()
@@ -731,23 +756,9 @@ def read_standard_library(documents, release):
             f"{LIBRARY_NOTICE}: expected a table of contents and the sections "
             f"{expected}; review the reader before relying on this notice"
         )
-    if not (reader.statement and reader.files and reader.crates):
-        raise ValueError(f"{LIBRARY_NOTICE}: names no statement, files or crates")
+    if not (reader.statement and reader.files):
+        raise ValueError(f"{LIBRARY_NOTICE}: names no statement or files")
     files = tuple(library_files(entry) for entry in reader.files)
-    crates = []
-    for crate in reader.crates:
-        match = re.fullmatch(
-            r"https://crates\.io/crates/([^/\s]+)/([^/\s]+)", crate["url"] or ""
-        )
-        if (
-            match is None
-            or crate["title"] != f"\N{PACKAGE} {match[1]}-{match[2]}"
-            or not crate["license"]
-        ):
-            raise ValueError(f"{LIBRARY_NOTICE}: unexpected crate {crate['title']!r}")
-        crates.append(
-            LibraryCrate(match[1], match[2], crate["license"], tuple(crate["texts"]))
-        )
     named = set().union(
         *(identifiers(parse_expression(entry.license)) for entry in walk(files))
     )
@@ -755,22 +766,278 @@ def read_standard_library(documents, release):
         (license, read_text(documents / LIBRARY_LICENSES / f"{license}.txt"))
         for license in sorted(named)
     )
-    return StandardLibrary(
-        release=release,
-        statement=tuple(reader.statement),
-        files=files,
-        licenses=licenses,
-        crates=tuple(
-            sorted(crates, key=lambda crate: (crate.name, version_key(crate.version)))
-        ),
+    return tuple(reader.statement), files, licenses
+
+
+def target_platform(target):
+    """The cfg options that the pinned toolchain's rustc sets for a target."""
+    printed = subprocess.check_output(
+        ["rustc", "--print", "cfg", "--target", target], cwd=WORKSPACE, text=True
     )
+    options = set()
+    for line in printed.splitlines():
+        match = CFG_OPTION.fullmatch(line)
+        if match is None:
+            raise ValueError(f"rustc printed the cfg option {line!r} for {target}")
+        options.add(match[1] if match[2] is None else (match[1], match[2]))
+    return Platform(target, frozenset(options))
+
+
+def applies(specification, platform):
+    """Whether a manifest's [target.<specification>] table applies to a
+    platform: the specification is a target name or a cfg() expression."""
+    if not specification.startswith("cfg("):
+        return specification == platform.target
+    tokens, position = [], 0
+    while position < len(specification.rstrip()):
+        match = CFG_TOKEN.match(specification, position)
+        if match is None:
+            raise ValueError(f"malformed cfg expression: {specification!r}")
+        tokens.append(match.groups())
+        position = match.end()
+    index = 0
+
+    def take(kind, value=None):
+        """Consume the next token, which must be a name (kind 0), a string
+        (1) or the punctuation (2) `value`."""
+        nonlocal index
+        token = tokens[index] if index < len(tokens) else (None, None, None)
+        if token[kind] is None or value not in (None, token[kind]):
+            raise ValueError(f"malformed cfg expression: {specification!r}")
+        index += 1
+        return token[kind]
+
+    def next_is(punctuation):
+        return index < len(tokens) and tokens[index][2] == punctuation
+
+    def predicate():
+        name = take(0)
+        if name in ("all", "any", "not") and next_is("("):
+            take(2, "(")
+            values = []
+            while not next_is(")"):
+                values.append(predicate())
+                if not next_is(")"):
+                    take(2, ",")
+            take(2, ")")
+            if name == "all":
+                return all(values)
+            if name == "any":
+                return any(values)
+            if len(values) != 1:
+                raise ValueError(f"malformed cfg expression: {specification!r}")
+            return not values[0]
+        if next_is("="):
+            take(2, "=")
+            return (name, take(1)) in platform.options
+        return name in platform.options
+
+    take(0, "cfg")
+    take(2, "(")
+    matched = predicate()
+    take(2, ")")
+    if index != len(tokens):
+        raise ValueError(f"malformed cfg expression: {specification!r}")
+    return matched
+
+
+def declared(manifest, platform=None):
+    """Yield the key and table of each normal dependency that a manifest
+    declares for a platform or, without one, for any platform."""
+    tables = [manifest.get("dependencies", {})]
+    for specification, table in manifest.get("target", {}).items():
+        if platform is None or applies(specification, platform):
+            tables.append(table.get("dependencies", {}))
+    for table in tables:
+        for key, value in table.items():
+            yield key, value if isinstance(value, dict) else {"version": value}
+
+
+def enabled_features(unit, wanted):
+    """Expand the features that a package of the standard library is built
+    with, as Cargo does. Return the features, the optional dependencies that
+    they enable, and the features that they ask of each dependency, those of
+    weak `dependency?/feature` items apart, which apply only to a dependency
+    that is enabled anyway."""
+    table = unit.manifest.get("features", {})
+    optional = {key for key, spec in declared(unit.manifest) if spec.get("optional")}
+    explicit = {
+        item.removeprefix("dep:")
+        for items in table.values()
+        for item in items
+        if item.startswith("dep:")
+    }
+    features, dependencies, asked, weak = set(), set(), {}, {}
+    pending = list(wanted)
+    while pending:
+        feature = pending.pop()
+        if feature in features:
+            continue
+        features.add(feature)
+        if feature not in table:
+            # An optional dependency is a feature of its own unless a `dep:`
+            # item names it; a package without a default feature has none.
+            if feature in optional and feature not in explicit:
+                dependencies.add(feature)
+            elif feature != "default":
+                raise ValueError(f"{unit.label}: declares no feature {feature}")
+            continue
+        for item in table[feature]:
+            key, slash, child = item.partition("/")
+            if item.startswith("dep:"):
+                dependencies.add(item.removeprefix("dep:"))
+            elif not slash:
+                pending.append(item)
+            elif key.endswith("?"):
+                weak.setdefault(key.removesuffix("?"), set()).add(child)
+            else:
+                asked.setdefault(key, set()).add(child)
+                if key in optional:
+                    dependencies.add(key)
+    return features, dependencies, asked, weak
+
+
+def library_crates(sources, platforms):
+    """The notices of the out-of-tree crates that std links on the platforms,
+    from the standard library's sources, a rust-src component's library
+    directory, chosen like a locked crate's from the package in vendor/.
+
+    library/Cargo.lock covers every platform and every feature of the
+    workspace, so the crates follow the manifests: from std, built with
+    LIBRARY_FEATURES, each normal dependency declared for a platform, an
+    optional one only when a feature enables it. Features unify across
+    platforms, as under the workspace's version 1 resolver. Each dependency is
+    the package that the lock locks for its dependent; anything else that the
+    sources do not settle stops generation.
+    """
+    lock = tomllib.loads(read_text(sources / "Cargo.lock"))
+    workspace = tomllib.loads(read_text(sources / "Cargo.toml"))
+    patches = workspace.get("patch", {}).get("crates-io", {})
+    locked = {}
+    for package in lock.get("package", []):
+        locked.setdefault(package["name"], []).append(package)
+    units = {}
+
+    def unit(package, directory):
+        identity = (package["name"], package["version"])
+        if identity not in units:
+            manifest = tomllib.loads(read_text(directory / "Cargo.toml"))
+            named = manifest.get("package", {})
+            if (named.get("name"), named.get("version")) != identity:
+                raise ValueError(
+                    f"{directory.relative_to(sources).as_posix()}: does not hold "
+                    f"{identity[0]} {identity[1]}, which library/Cargo.lock locks"
+                )
+            units[identity] = LibraryUnit(package, directory, manifest)
+        return identity
+
+    def dependency(parent, key, table):
+        """The package that a dependency of a package resolves to."""
+        name = table.get("package", key)
+        # The lock names a dependency alone, or with its version when it locks
+        # several packages of that name.
+        versions = [
+            (entry.split(" ") + [None])[1]
+            for entry in parent.locked.get("dependencies", [])
+            if entry.split(" ")[0] == name
+        ]
+        candidates = [
+            package
+            for package in locked.get(name, [])
+            if len(versions) == 1 and versions[0] in (None, package["version"])
+        ]
+        if len(candidates) != 1:
+            raise ValueError(
+                f"{parent.label}: library/Cargo.lock locks no one {name} for it"
+            )
+        package = candidates[0]
+        if "source" in package:
+            if package["source"] != CRATES_IO:
+                raise ValueError(f"{name}: unsupported source {package['source']}")
+            directory = sources / "vendor" / f"{name}-{package['version']}"
+        elif "path" in table:
+            directory = Path(os.path.normpath(parent.directory / table["path"]))
+        elif "path" in patches.get(name, {}):
+            directory = Path(os.path.normpath(sources / patches[name]["path"]))
+        else:
+            raise ValueError(f"{parent.label}: names no directory for {name}")
+        return unit(package, directory)
+
+    roots = [package for package in locked.get("std", []) if "source" not in package]
+    if len(roots) != 1:
+        raise ValueError("library/Cargo.lock must lock the in-tree std once")
+    root = unit(roots[0], sources / "std")
+    # The features of each package, unified across platforms, and the optional
+    # dependencies that they enable.
+    features, enabled = {}, {}
+    pending = [(root, frozenset(LIBRARY_FEATURES))]
+    while pending:
+        identity, wanted = pending.pop()
+        if identity in features and wanted <= features[identity]:
+            continue
+        current = units[identity]
+        names, dependencies, asked, weak = enabled_features(
+            current, features.get(identity, set()) | wanted
+        )
+        features[identity], enabled[identity] = names, dependencies
+        for key, table in declared(current.manifest):
+            if table.get("optional") and key not in dependencies:
+                continue
+            requested = set(table.get("features", ()))
+            if table.get("default-features", table.get("default_features", True)):
+                requested.add("default")
+            requested |= asked.get(key, set()) | weak.get(key, set())
+            pending.append((dependency(current, key, table), frozenset(requested)))
+    linked = set()
+    for platform in platforms:
+        seen, pending = set(), [root]
+        while pending:
+            identity = pending.pop()
+            if identity in seen:
+                continue
+            seen.add(identity)
+            current = units[identity]
+            for key, table in declared(current.manifest, platform):
+                if not table.get("optional") or key in enabled[identity]:
+                    pending.append(dependency(current, key, table))
+        linked |= {identity for identity in seen if "source" in units[identity].locked}
+    notices = []
+    for name, version in sorted(
+        linked, key=lambda identity: (identity[0], version_key(identity[1]))
+    ):
+        current = units[(name, version)]
+        package = {
+            "name": name,
+            "version": version,
+            "license": current.manifest["package"].get("license"),
+            "manifest_path": str(current.directory / "Cargo.toml"),
+            "source": CRATES_IO,
+        }
+        try:
+            notices.append(crate_notice(package))
+        except ValueError as error:
+            raise ValueError(
+                f"{error} (the standard library's {LIBRARY_SOURCES})"
+            ) from error
+    return tuple(notices)
+
+
+def read_standard_library(documents, sources, release, platforms):
+    """Read a toolchain's standard library: the statement, in-tree entries and
+    license texts of its notice below `documents`, and the crates that std
+    links on the platforms, from its sources."""
+    statement, files, licenses = read_library_notice(documents)
+    crates = library_crates(sources, platforms)
+    return StandardLibrary(release, statement, files, licenses, crates)
 
 
 def standard_library():
-    """Read the standard library notice of the toolchain that builds the packages.
+    """Read the standard library of the toolchain that builds the packages.
 
     Release builds link the standard library of the channel that
-    rust/rust-toolchain.toml pins, which rustup selects inside rust/.
+    rust/rust-toolchain.toml pins, which rustup selects inside rust/. Its
+    sources are its rust-src component, below the sysroot unless the variable
+    that LIBRARY_SOURCES_VARIABLE names gives an unpacked copy's.
     """
     channel = toolchain.channel()
     described = subprocess.check_output(["rustc", "-vV"], cwd=WORKSPACE, text=True)
@@ -781,35 +1048,24 @@ def standard_library():
             f"rust/: rustc is {found}, but the notices need Rust {channel}, which "
             "rust/rust-toolchain.toml pins for the released packages"
         )
-    sysroot = subprocess.check_output(
-        ["rustc", "--print", "sysroot"], cwd=WORKSPACE, text=True
-    ).strip()
-    return read_standard_library(Path(sysroot) / LIBRARY_DOCUMENTS, channel)
-
-
-def library_notices(library):
-    """The notices of the standard library's out-of-tree crates that TARGETS
-    link, as LIBRARY_LINKED names them, with the texts that the Rust project's
-    notice reproduces for each, chosen like a locked crate's."""
-    published = {(crate.name, crate.version): crate for crate in library.crates}
-    selected = []
-    for name, version in LIBRARY_LINKED:
-        crate = published.get((name, version))
-        label = f"{name} {version} of the Rust {library.release} standard library"
-        if crate is None:
-            raise ValueError(
-                f"{label}: its notice does not name it; review LIBRARY_LINKED"
-            )
-        files = [(text, classify(text, label)) for text, _ in crate.texts]
-        selected.append(
-            Notice(
-                name,
-                version,
-                None,
-                *relied_texts(label, crate.declared, files, dict(crate.texts)),
-            )
+    sysroot = Path(
+        subprocess.check_output(
+            ["rustc", "--print", "sysroot"], cwd=WORKSPACE, text=True
+        ).strip()
+    )
+    named = os.environ.get(LIBRARY_SOURCES_VARIABLE)
+    sources = Path(named) if named else sysroot / LIBRARY_SOURCES
+    if not (sources / "Cargo.lock").is_file():
+        raise ValueError(
+            f"{sources}: holds no standard library sources; add the rust-src "
+            f"component to Rust {channel} (`rustup component add rust-src` in "
+            f"rust/), or set {LIBRARY_SOURCES_VARIABLE} to the {LIBRARY_SOURCES} "
+            "directory of an unpacked copy of it"
         )
-    return selected
+    platforms = [target_platform(target) for target in TARGETS]
+    return read_standard_library(
+        sysroot / LIBRARY_DOCUMENTS, sources, channel, platforms
+    )
 
 
 def wrapped(prefix, units, indent=""):
@@ -890,21 +1146,32 @@ def render(notices, library, host):
         for license, text in library.licenses
     ]
     standard += wrapped("License texts:", references) + [""]
-    for crate in library_notices(library):
-        standard += entry(crate, "the Rust project's notice reproduces none")
+    standard += paragraph(
+        f"From the rust-src component of Rust {release}, {LIBRARY_SOURCES}, "
+        "the crates that the standard library links:"
+    )
+    for crate in library.crates:
+        standard += entry(crate, "the crate package ships none")
 
     subject, destination = LINKED_BY[host]
+    linked, notices_of = "third-party Rust crates and the Rust standard library", ""
+    if host == "cli":
+        # Only the archives for the musl targets carry musl's notice.
+        linked += ", and on the musl targets the musl C library,"
+        notices_of = (
+            f" The archives for the musl targets also carry {MUSL_NOTICE}, the "
+            "notice of musl."
+        )
     lines = ["yamaa third-party notices", "=" * 25, ""]
     lines += paragraph(
-        f"{subject} third-party Rust crates and the Rust standard library into "
-        f"{destination}. "
+        f"{subject} {linked} into {destination}. "
         "This file lists those crates with the license that yamaa relies on and "
         "the license, copyright and NOTICE texts that each crate ships for it, "
-        "and the standard library's licensing from the Rust project's notice. "
+        "and the standard library's licensing and the crates that it links. "
         f"The project's own license is in {PROJECT_LICENSE}; LICENSE-READSTAT.txt, "
         "LICENSE-UNICODE.txt and LICENSE-YAML.txt carry the notices for the "
         "vendored ReadStat sources, the Unicode data in yamaa's own tables and "
-        "the vendored saphyr-parser crate."
+        f"the vendored saphyr-parser crate.{notices_of}"
     )
     lines += paragraph(
         "The list covers the third-party crates that the shipped crate "
@@ -938,11 +1205,13 @@ def render(notices, library, host):
         "library's own files, with the license texts that the toolchain ships in "
         f"{LIBRARY_DOCUMENTS}/{LIBRARY_LICENSES}, from the notice that Rust "
         f"{release}, the toolchain that builds the released packages, ships as "
-        f"{notice}. That notice also names every out-of-tree crate used to build "
-        "the standard library, for every target and for the tools that build it. "
-        "This section lists those that the standard library links on the targets "
-        "above, with the texts that the Rust project reproduces for each, chosen "
-        "like a crate's."
+        f"{notice}. It then lists the third-party crates that the standard "
+        "library links on the targets above, from the toolchain's rust-src "
+        "component: those that library/std/Cargo.toml declares for the targets "
+        "and for the features that the Rust project builds std with, and their "
+        "dependencies, at the versions that library/Cargo.lock locks, each with "
+        "the texts that its package in library/vendor ships, chosen like a "
+        "crate's."
     )
     lines += paragraph(
         "This file is generated by tools/packaging/generate_third_party_notices.py "
@@ -951,6 +1220,21 @@ def render(notices, library, host):
     )
     lines += ["Crates", "-" * 6, ""] + entries
     lines += ["Rust standard library", "-" * 21, ""] + standard
+    if host == "cli":
+        lines += ["musl C library", "-" * 14, ""]
+        lines += paragraph(
+            f"The yamaa executables for {' and '.join(MUSL_TARGETS)} link musl, "
+            f"the C library that Rust {release} bundles for those targets, "
+            f"statically. Their archives carry its notice as {MUSL_NOTICE}: "
+            "musl's COPYRIGHT file, verbatim, after a header that names the "
+            "release."
+        )
+        lines += [
+            f"Library: musl {musl_release(release)}",
+            "    License: MIT",
+            f"    Text: {MUSL_NOTICE}",
+            "",
+        ]
     lines += ["Texts", "-" * 5, ""]
     for key, block in blocks.items():
         if isinstance(key, tuple):
@@ -1047,7 +1331,8 @@ def check_copies(project):
     """Require the package copies of the project license and notices to agree.
 
     The hosts' copies of HOST_NOTICES differ; their generators check them. The
-    command line keeps no copy of the other notices.
+    command line keeps no copy of the other notices, only its musl notice
+    (check_musl_notice).
     """
     errors = []
     names = project["license-files"]
@@ -1074,10 +1359,10 @@ def check_copies(project):
     # The command-line archives carry the Python packages' copies of the
     # shared notices, so a copy beside the crate would go unused.
     for path in sorted(CLI.glob("LICENSE*")):
-        if path.name not in HOST_NOTICES:
+        if path.name not in CLI_NOTICES:
             errors.append(
                 f"{CLI.relative_to(ROOT).as_posix()}/{path.name}: the command "
-                f"line keeps only its own {NOTICES} and {INVENTORY}"
+                f"line keeps only its own {NOTICES}, {INVENTORY} and {MUSL_NOTICE}"
             )
     project_license = (ROOT / "LICENSE").read_bytes()
     for directory, relative in ((PYTHON, "python"), (R_INST, "R/yamaa/inst")):
@@ -1085,6 +1370,36 @@ def check_copies(project):
         if path.is_file() and path.read_bytes() != project_license:
             errors.append(f"{relative}/{PROJECT_LICENSE}: must be a copy of LICENSE")
     return errors
+
+
+def musl_release(release):
+    """The musl release that the musl targets of Rust `release` bundle; stop
+    unless MUSL was reviewed for that toolchain."""
+    reviewed, musl = MUSL
+    if release != reviewed:
+        raise ValueError(
+            f"the musl notice was reviewed for Rust {reviewed}, not {release}: set "
+            f"MUSL to the musl release that Rust {release} bundles for "
+            f"{' and '.join(MUSL_TARGETS)}, and {MUSL_NOTICE} to its COPYRIGHT file"
+        )
+    return musl
+
+
+def check_musl_notice(release):
+    """Require the command line's musl notice to name the musl release that
+    Rust `release` bundles and to hold the MIT license, and no GNU license."""
+    path = CLI / MUSL_NOTICE
+    relative = path.relative_to(ROOT).as_posix()
+    if not path.is_file():
+        return [f"{relative}: missing; the archives for the musl targets carry it"]
+    text = read_text(path)
+    header = f"musl {musl_release(release)}\n{MUSL_HOME}\n\n"
+    if not text.startswith(header):
+        return [f"{relative}: must start with the header {header!r}"]
+    if "MIT" not in detect(text):
+        return [f"{relative}: lacks musl's MIT license"]
+    found = gnu_licenses(text)
+    return [f"{relative}: names a GNU license ({found[0]})"] if found else []
 
 
 def check(graphs, library):
@@ -1118,6 +1433,7 @@ def check(graphs, library):
             )
     project = python_project()
     errors += check_copies(project)
+    errors += check_musl_notice(library.release)
     expression = license_expression(graphs, selected["python"])
     if project["license"] != expression:
         errors.append(

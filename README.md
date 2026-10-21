@@ -14,7 +14,8 @@ A yamaa specification transforms ODM XML data, extracted from an EDC system,
 into SDTM and ADaM datasets following CDISC standards. The engine can also
 generate define.xml.
 yamaa's rules fix what every item means, so the same specification with the same
-inputs always produces the same datasets through both the R and Python packages.
+inputs always produces the same datasets, whether the R package, the Python
+package or the `yamaa` command line runs it.
 
 The one principle behind everything:
 
@@ -34,7 +35,7 @@ engine, and benchmark.
 | --- | --- | --- |
 | Schema | Declares the vocabulary of the specification. | [Repository](https://github.com/elong0527/yamaa/tree/main/yaml) / [Introduction](https://elong0527.github.io/yamaa/articles/schema-intro/) |
 | Rules | Defines the meaning of each specification. | [Repository](https://github.com/elong0527/yamaa/tree/main/rules) / [Rules](https://elong0527.github.io/yamaa/articles/rules/) |
-| Engine | Executes specifications in Rust for Python and R. | [Rust](https://github.com/elong0527/yamaa/tree/main/rust) / [Python](https://github.com/elong0527/yamaa/tree/main/python) / [R](https://github.com/elong0527/yamaa/tree/main/R/yamaa) |
+| Engine | Executes specifications in Rust for Python, R and the command line. | [Rust](https://github.com/elong0527/yamaa/tree/main/rust) / [Python](https://github.com/elong0527/yamaa/tree/main/python) / [R](https://github.com/elong0527/yamaa/tree/main/R/yamaa) |
 | Benchmark | Provides runnable specification examples. | [Repository](https://github.com/elong0527/yamaa/tree/main/benchmarks) / [Dashboards](https://elong0527.github.io/yamaa/benchmark/) |
 
 ## From ODM XML to SDTM and ADaM
@@ -56,14 +57,18 @@ deterministic, validated builds while preserving metadata lineage.
 
 ## Example
 
-A complete specification in 24 lines:
+A complete specification in 33 lines:
 
 ```yaml
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADSL
 keys: [STUDYID, USUBJID]        # one row per subject
 input:
-  DM: {path: input/dm.csv, types: {AGE: int}}   # CSV fields are text; cut needs a numeric source
+  # CSV fields are text, and cut needs a numeric source.
+  DM: {path: input/dm.csv, types: {AGE: int}}
+
 output:
   path: adsl.csv
   columns: [STUDYID, USUBJID, AGEGR1]
@@ -71,12 +76,17 @@ output:
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation: DM.STUDYID
+
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation: DM.USUBJID
+
   - name: AGEGR1
     type: str
+    label: Pooled Age Group 1
     derivation:
       cut:
         source: DM.AGE
@@ -85,33 +95,57 @@ columns:
         missing: UNKNOWN
 ```
 
-Read it top to bottom: one input, one driver, two keys, three columns. The
-derivation verbs (`source`, `cut`, `mapping`, `compute`, ...) come from a
-closed registry (see [Schema introduction](https://elong0527.github.io/yamaa/articles/schema-intro/)).
+Read it top to bottom. The first line names the oldest language version the
+file needs, the second says the file is a specification, and `model` names
+its CDISC model. Then come two keys, one input that drives the rows, and three
+columns. A derivation is an expression or a verb from a closed registry, such
+as `cut`, `mapping` or `case` (see [Schema introduction](https://elong0527.github.io/yamaa/articles/schema-intro/)).
+In an expression, a bare name such as `DM.STUDYID` reads a column, text is
+quoted, as in `derivation: "'Y'"`, and YAML `null` is the missing value. A
+verb's value fields, such as `labels` and `missing` above, hold only
+constants, so `UNKNOWN` there is text.
 
 ## Installation
 
 Python engine:
 
-Download the wheel for your platform from the selected
-[GitHub release](https://github.com/elong0527/yamaa/releases), then install it:
+Install yamaa from [PyPI](https://pypi.org/project/yamaa/). A release
+candidate is a pre-release there, so name it and add `--pre`:
 
 ```sh
-python -m pip install ./yamaa-0.4.0-<wheel-tags>.whl
+python -m pip install yamaa                     # the newest release
+python -m pip install --pre yamaa==<candidate>  # a candidate, such as 1.0.0rc1
 ```
 
-The release also provides a standalone Python source archive. See the
+The wheels and a standalone Python source archive are also assets of each
+[GitHub release](https://github.com/elong0527/yamaa/releases). See the
 [Python package README](https://github.com/elong0527/yamaa/blob/main/python/README.md)
 for source prerequisites, development setup and supported platforms.
 
 R engine:
 
-R is distributed as a standalone source tarball attached to its
-[GitHub release](https://github.com/elong0527/yamaa/releases). After downloading
-`yamaa_0.4.0.tar.gz` from the selected qualified release:
+Each [GitHub release](https://github.com/elong0527/yamaa/releases) carries the
+R source package and, from the 1.0.0 release candidates on, binary packages
+for Windows x64 and macOS arm64 built for R-release and R-oldrel, today R 4.6
+and R 4.5. A binary package installs without Rust, Rtools or a network, and
+works only with the R series that ends its file name. Download the package for
+your platform and R from the selected release, and install it:
 
 ```r
-install.packages("yamaa_0.4.0.tar.gz", repos = NULL, type = "source")
+# Windows x64
+install.packages("yamaa_<version>-4.6.zip", repos = NULL)  # R 4.6
+install.packages("yamaa_<version>-4.5.zip", repos = NULL)  # R 4.5
+# macOS arm64
+install.packages("yamaa_<version>-4.6.tgz", repos = NULL)  # R 4.6
+install.packages("yamaa_<version>-4.5.tgz", repos = NULL)  # R 4.5
+# Linux, or any other R series: the source package
+install.packages("yamaa_<version>.tar.gz", repos = NULL, type = "source")
+```
+
+Once CRAN accepts 1.0.0, `install.packages("yamaa")` installs it from there
+too. Then load the package and run the example above:
+
+```r
 library(yamaa)
 spec <- yamaa_spec("spec.yaml")
 spec$check()$issues    # check the specification without reading data
@@ -121,7 +155,7 @@ run$save()             # write adsl.csv
 ```
 
 Source installation requires R 4.4.0 or later, Rust 1.82 or later with Cargo, and platform build tools; it needs no network.
-To build a checkout candidate, follow
+To build the package from a checkout, follow
 [the R package guide](https://github.com/elong0527/yamaa/blob/main/R/yamaa/README.md).
 The **Release checks** badge shows the latest release package checks on `main`,
 which run weekly and before each release: Python and R installation, benchmark
@@ -129,11 +163,15 @@ conformance, and numerical consistency across Linux, macOS, and Windows, and
 CRAN's incoming checks of the R source package (`R CMD check --as-cran` with
 R-devel, R-release and R 4.4 and the minimum Rust, once more with R-devel on
 Linux and none of the suggested packages, and in a CRAN-like Fedora
-container). Release assets come from that workflow. CRAN and r-universe
-publication are later distribution work.
+container). Release assets come from that workflow.
 
-Packages from 1.0.0 on carry a self-test, which the 0.4.0 packages above do
-not. After installing one, run `yamaa.selftest()` in Python or
+On a machine without internet access, install from an internal mirror or from
+files carried in, as
+[Installing in a restricted environment](https://elong0527.github.io/yamaa/articles/restricted-environments/)
+describes.
+
+Packages from 1.0.0 on carry a self-test, which earlier packages do not.
+After installing one, run `yamaa.selftest()` in Python or
 `yamaa_selftest()` in R. It runs the cases that the package carries,
 benchmarks with independently authored expected files, through the installed
 engine and compares each result with its expected files, writing no file and
@@ -173,6 +211,7 @@ download mark first with `Unblock-File` in PowerShell.
 
 - New here? [Introduction](https://elong0527.github.io/yamaa/articles/intro/) explains the model in five minutes.
 - Running specifications? [R and Python API](https://elong0527.github.io/yamaa/articles/api/) shows every call in both languages.
+- Building on yamaa? The draft [stability contract](https://elong0527.github.io/yamaa/design/interface-1.0/stability/) lists what every 1.x release keeps from 1.0.0.
 - Coming from Excel specs? [Excel to yamaa](https://elong0527.github.io/yamaa/articles/excel/) translates what you already know.
 - Looking for worked examples? [Benchmarks](https://elong0527.github.io/yamaa/benchmark/) illustrate the ideas.
 - Developing the engine? [Contributing](CONTRIBUTING.md) describes the shared architecture and checks; [release guidance](docs/release.md) records supported platforms and migration notes.

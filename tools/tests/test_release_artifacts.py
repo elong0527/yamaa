@@ -250,12 +250,13 @@ def downloads(root, identity=IDENTITY):
         },
     )
     # A command-line archive carries the command line's own notices and
-    # inventory, and the Python packages' copies of the shared notices.
+    # inventory, and the Python packages' copies of the shared notices; one
+    # for a musl target also carries the command line's notice of musl.
     cli_licenses = dict(
         licenses,
         **{
             name: (ROOT / "rust/crates/yamaa-cli" / name).read_bytes()
-            for name in ("LICENSE-THIRD-PARTY.txt", inventory.NAME)
+            for name in ("LICENSE-THIRD-PARTY.txt", inventory.NAME, "LICENSE-MUSL.txt")
         },
     )
     python, r = identity.python, identity.r

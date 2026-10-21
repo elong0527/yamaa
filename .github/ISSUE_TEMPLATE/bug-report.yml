@@ -9,7 +9,7 @@ body:
         Checking yamaa against a private study? Follow
         [Reporting findings from private studies](https://github.com/elong0527/yamaa/blob/main/CONTRIBUTING.md#reporting-findings-from-private-studies)
         first. Title it `<area>: <what breaks>`, where the area is rules,
-        schema, engine, python, R, benchmark, harbor or docs.
+        schema, engine, python, R, cli, benchmark, harbor or docs.
 
   - type: textarea
     id: what
@@ -28,17 +28,20 @@ body:
       placeholder: |
         Crash example:
         ```yaml
-        schema_version: "1.0"
+        yamaa: "1.0"
+        type: spec
         domain: ADSL
         keys: [USUBJID]
         input:
           DM: {path: dm.csv, types: {AGE: int}}
+
         output: {path: adsl.csv, columns: [USUBJID, AGE]}
+
         columns:
           - {name: USUBJID, type: str, label: Subject, derivation: DM.USUBJID}
           - {name: AGE, type: int, label: Age, derivation: DM.AGE}
         ```
-        dm.csv: two rows with USUBJID "DUP". Run: yamaa.spec("spec.yaml").run()
+        dm.csv: two rows with USUBJID "DUP". Run: yamaa.spec("spec.yaml").run(), or yamaa run spec.yaml
 
         Inconsistency example:
         rules/specification.md names the condition `foo_bar`,
@@ -64,12 +67,16 @@ body:
     validations:
       required: true
 
-  - type: input
+  - type: textarea
     id: version
     attributes:
       label: "Version, host and OS"
-      description: 'Run `yamaa.__version__` in Python or `packageVersion("yamaa")` in R, or give the commit you built. Skip for a rules or docs issue.'
-      placeholder: "0.4.0, Python 3.12, macOS 15"
+      description: 'Paste what `yamaa --version` prints, or the report that `print(yamaa.selftest())` (Python) or `yamaa_selftest()` (R) prints. 0.5.0 has no selftest: give `yamaa.__version__` or `packageVersion("yamaa")`, your host and your OS. Name the commit if you built from a checkout. Skip for a rules or docs issue.'
+      render: text
+      placeholder: |
+        yamaa selftest: succeeded, 4 of 4 cases passed
+        not covered: odm
+        engine 1.0.0, language 1.0, python 3.12.4, linux-x86_64
 
   - type: textarea
     id: references

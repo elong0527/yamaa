@@ -18,11 +18,11 @@ holding `younger`.
 ## How to fix
 
 Decide the exact text the group carries, then write that single value. When
-the older group reads as one word, state the word:
+the older group reads as one word, state the word as quoted text:
 
 ```yaml
 - when: "AGE >= 65"
-  then: {literal: elderly}
+  then: "'elderly'"
 ```
 
 When the value genuinely has parts, each part needs its own result column

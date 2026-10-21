@@ -9,14 +9,16 @@ yamaa is an R package to build SDTM and ADaM datasets from yamaa
 specifications, check those specifications, and render Define-XML. The package
 is designed with these principles:
 
-- One engine: R and Python run the same Rust engine, so the same specification
-  and inputs produce the same datasets, and no Python runtime is needed.
+- One engine: R, Python and the `yamaa` command line run the same Rust engine,
+  so the same specification and inputs produce the same datasets, and no
+  Python runtime is needed.
 - Explicit publication: runs build in memory, and files are written only when
-  you call `save()`.
+  you call `save()`, which returns the paths it wrote.
 - Plain values: data frames hold doubles, character, `Date` and UTC `POSIXct`
   columns, and a value R cannot hold exactly raises an error instead of
   changing.
-- One issues table: every finding is one row of the `issues` data frame.
+- One issues table: every finding is one row of the `issues` data frame, with
+  its severity, condition, rule, spec path and message.
 
 ```r
 library(yamaa)
@@ -24,9 +26,12 @@ library(yamaa)
 project <- yamaa_project("project.yaml")
 run <- project$spec("DM")$run()      # one dataset, built in memory
 run$output; run$issues; run$report
-run$save()                           # write the dataset and its run report
+paths <- run$save()                  # write the dataset and its run report
 project$run("adam")$save()           # every ADaM dataset
 ```
+
+`save()` returns, invisibly, the absolute paths of the files it wrote, in the
+order it wrote them.
 
 The [R and Python API](https://elong0527.github.io/yamaa/articles/api/) page
 describes every call, the
