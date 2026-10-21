@@ -12,7 +12,7 @@ mod transport {
         sync::atomic::{AtomicU64, Ordering},
     };
     use yamaa_adapters::file_define::{Define, PublicationState};
-    use yamaa_core::{json::Value, project_function::Language};
+    use yamaa_core::{json::Value, project_function::Language, project_scope};
 
     static NEXT: AtomicU64 = AtomicU64::new(0);
 
@@ -113,7 +113,7 @@ mod transport {
                 .join(define["environment"].as_str().unwrap())
                 .to_str()
                 .unwrap(),
-            define["standard"].as_str().unwrap(),
+            project_scope::section(define["standard"].as_str().unwrap()).unwrap(),
             Some(define["created"].as_str().unwrap()),
             "0.0.0",
             Some(Language::Python),
@@ -188,7 +188,7 @@ mod transport {
                         .join(define["environment"].as_str().unwrap())
                         .to_str()
                         .unwrap(),
-                    define["standard"].as_str().unwrap(),
+                    project_scope::section(define["standard"].as_str().unwrap()).unwrap(),
                     Some(define["created"].as_str().unwrap()),
                     "0.0.0",
                     Some(host),

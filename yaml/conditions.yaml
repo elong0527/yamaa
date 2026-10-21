@@ -75,7 +75,7 @@ conditions:
     message: "{spec_path} gives a value that does not convert to its declared type, or leaves the range of its type"
   core_mandatory_conflict:
     phases: [validation]
-    message: "the core designation at {spec_path} does not fit its family or its mandatory setting"
+    message: "the core designation at {spec_path} does not fit its model or its mandatory setting"
   correlated_derivation_with_unique_verification:
     phases: [validation]
     message: "intermediate {intermediate} declares verifications, so its derivations cannot read the current input record"
@@ -349,7 +349,7 @@ conditions:
     message: "{spec_path} declares no origin"
   origin_source_not_admitted:
     phases: [validation]
-    message: "the origin source of column {detail} is not admitted for its origin type"
+    message: "the origin type and source at {spec_path} are not an admitted pair"
   parent_not_found:
     phases: [validation]
     message: "parent {path} does not exist"
@@ -553,9 +553,13 @@ conditions:
   sqrt_of_negative:
     phases: [derivation]
     message: "{expr} takes the square root of a negative value"
+  # SUB-3 on a 1.0 project: the 1.0 name of unknown_standard_family (D58)
+  standard_model_mismatch:
+    phases: [validation]
+    message: "{value} is outside the {model} model of section {section}"
   submission_data_type_not_admitted:
     phases: [validation]
-    message: "{spec_path} declares a data type that the column's type does not admit"
+    message: "{spec_path} declares a data type its column cannot be submitted as"
   submission_length_invalid:
     phases: [validation]
     message: "{spec_path} declares a length or significant_digits that is not a positive integer"

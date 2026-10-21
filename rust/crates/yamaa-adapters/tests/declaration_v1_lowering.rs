@@ -234,7 +234,7 @@ fn a_function_argument_is_one_leaf_and_any_other_text_fails() {
 }
 
 #[test]
-fn model_keys_and_profiles_are_stored_for_the_pull_requests_that_check_them() {
+fn model_keys_and_profiles_lower_as_declared() {
     let spec = lowered(
         &spec(&[
             r#"{name: DOSE, type: float, derivation: {aggregate: "SUM(EX.DOSE)"}}"#,
@@ -482,6 +482,8 @@ fn origins_a_standard_and_a_value_level_comparator_lower_for_the_checks_that_fol
         "submission: {label: Test, class: FINDINGS, structure: One record per test, \
          repeating: true, standard: SDTMIG}\n",
     );
+    // Submission metadata names its model (SUB-3).
+    let text = text.replace("type: spec\n", "type: spec\nmodel: SDTM\n");
     let spec = lowered(&text);
     let standard = spec.submission.as_ref().unwrap().standard.as_ref().unwrap();
     assert_eq!(

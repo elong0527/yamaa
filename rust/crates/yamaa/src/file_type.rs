@@ -2,10 +2,16 @@
 //! `project`, `codelists` or `function`. The command line reads it with
 //! [`Engine::file_type`] to choose what a command runs (#3030 D122); the
 //! hosts do not call it, since each of their calls names the type it reads.
+//! [`crate::schema`] takes a type, as written, and gives its JSON Schema.
 
 use crate::api::Failure;
 use crate::engine::Engine;
 use crate::text::Action;
+
+/// The file types as written, one for each [`FileType`] in declaration order:
+/// the closed vocabulary of the `type` header and of the type
+/// [`crate::schema`] takes.
+pub const FILE_TYPES: [&str; 4] = ["spec", "project", "codelists", "function"];
 
 /// The type a yamaa file declares in `type` (SCHEMA-2).
 #[non_exhaustive]
@@ -23,7 +29,7 @@ pub enum FileType {
 
 impl FileType {
     /// The type as a file writes it: `spec`, `project`, `codelists` or
-    /// `function`.
+    /// `function`, one of [`FILE_TYPES`].
     pub fn as_str(self) -> &'static str {
         self.into_core().name()
     }
@@ -44,7 +50,7 @@ impl FileType {
         }
     }
 
-    fn into_core(self) -> yamaa_core::language::FileType {
+    pub(crate) fn into_core(self) -> yamaa_core::language::FileType {
         use yamaa_core::language::FileType as Core;
         match self {
             Self::Spec => Core::Spec,
@@ -137,5 +143,23 @@ mod tests {
         for text in ["", "Spec", "codelist", "environment", " spec"] {
             assert_eq!(FileType::parse(text), None, "{text:?}");
         }
+    }
+
+    #[test]
+    fn file_types_are_the_types_in_order() {
+        assert_eq!(
+            [
+                FileType::Spec,
+                FileType::Project,
+                FileType::Codelists,
+                FileType::Function
+            ]
+            .map(FileType::as_str),
+            FILE_TYPES
+        );
+        assert_eq!(
+            yamaa_core::language::FileType::ALL.map(|kind| FileType::from_core(kind).as_str()),
+            FILE_TYPES
+        );
     }
 }

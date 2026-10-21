@@ -20,7 +20,16 @@ from yamaa._support import (
     _table,
 )
 
-__all__ = ["Error", "__version__", "lint", "project", "read_odm", "selftest", "spec"]
+__all__ = [
+    "Error",
+    "__version__",
+    "lint",
+    "project",
+    "read_odm",
+    "schema",
+    "selftest",
+    "spec",
+]
 
 
 class Error(Exception):
@@ -253,6 +262,11 @@ def read_odm(
 def lint(paths, fix: bool = False) -> _pl.DataFrame:
     """Lint specification files, first applying the proved layout fixes when fix is true."""
     return _table(_call(_native._lint, _fspaths(paths), fix))
+
+
+def schema(file_type: str) -> str:
+    """The JSON Schema of a file type, spec, project, codelists or function, as canonical JSON text."""
+    return _call(_native._schema, file_type)
 
 
 def selftest() -> SelfTest:

@@ -433,6 +433,104 @@ class PackageNotices(unittest.TestCase):
         ):
             packages.check_archive(cli, self.root)
 
+    def test_an_r_binary_package_may_carry_the_namespace_loader_that_r_writes(self):
+        # #3393, D136: R CMD INSTALL writes R/yamaa from R's own
+        # share/R/nspackloader.R, whose header names R's GPL. R 4.5 and 4.6
+        # write these bytes on macOS and on Windows.
+        loader = (
+            b"#  File share/R/nspackloader.R\n"
+            b"#  Part of the R package, https://www.R-project.org\n"
+            b"#\n"
+            b"#  Copyright (C) 1995-2012 The R Core Team\n"
+            b"#\n"
+            b"#  This program is free software; you can redistribute it and/or modify\n"
+            b"#  it under the terms of the GNU General Public License as published by\n"
+            b"#  the Free Software Foundation; either version 2 of the License, or\n"
+            b"#  (at your option) any later version.\n"
+            b"#\n"
+            b"#  This program is distributed in the hope that it will be useful,\n"
+            b"#  but WITHOUT ANY WARRANTY; without even the implied warranty of\n"
+            b"#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the\n"
+            b"#  GNU General Public License for more details.\n"
+            b"#\n"
+            b"#  A copy of the GNU General Public License is available at\n"
+            b"#  https://www.r-project.org/Licenses/\n"
+            b"\n"
+            b"local({\n"
+            b"    info <- loadingNamespaceInfo()\n"
+            b"    pkg <- info$pkgname\n"
+            b"    ns <- .getNamespace(as.name(pkg))\n"
+            b"    if (is.null(ns))\n"
+            b'        stop("cannot find namespace environment for ", pkg, domain = NA);\n'
+            b'    dbbase <- file.path(info$libname, pkg, "R", pkg)\n'
+            b'    lazyLoad(dbbase, ns, filter = function(n) n != ".__NAMESPACE__.")\n'
+            b"})\n"
+        )
+        members = {
+            f"yamaa/{name}": data for name, data in self.r_binary_notices.items()
+        }
+        for name in ("yamaa_0.4.0-4.6.zip", "yamaa_0.4.0-4.5.tgz"):
+            binary = self.r_binary(name, dict(members, **{"yamaa/R/yamaa": loader}))
+            with self.subTest(archive=name):
+                self.assertEqual(len(packages.check_archive(binary, self.root)), 3)
+        # The same text at another path, or in the R source package, is read
+        # as any other text is.
+        for name, member in (
+            ("yamaa_0.4.0-4.6.zip", "yamaa/R/yamaa.R"),
+            ("yamaa_0.4.0-4.5.tgz", "yamaa/doc/yamaa"),
+        ):
+            binary = self.r_binary(name, dict(members, **{member: loader}))
+            with (
+                self.subTest(member=member),
+                self.assertRaisesRegex(ValueError, f"{member} names a GNU license"),
+            ):
+                packages.check_archive(binary, self.root)
+        r_source = self.tar(
+            "yamaa_0.4.0.tar.gz",
+            {
+                **{f"yamaa/inst/{name}": data for name, data in self.r_notices.items()},
+                "yamaa/R/yamaa": loader,
+            },
+        )
+        with self.assertRaisesRegex(ValueError, "yamaa/R/yamaa names a GNU license"):
+            packages.check_archive(r_source, self.root)
+        # Any other text at the loader's path must name none: R's header
+        # without the loader's body, the body with more, or another file.
+        header = loader.split(b"\n\n")[0] + b"\n"
+        for case, payload in (
+            ("a license text", b"GNU GENERAL PUBLIC LICENSE\nVersion 2, June 1991\n"),
+            ("the header alone", header),
+            ("another body", header + b'\nsource("yamaa.R")\n'),
+            ("more code", loader + b'source("yamaa.R")\n'),
+            ("a comment after the body", loader + b"# See the LGPL.\n"),
+            ("another file", loader.replace(b"nspackloader.R", b"packloader.R")),
+        ):
+            binary = self.r_binary(
+                "yamaa_0.4.0-4.6.zip", dict(members, **{"yamaa/R/yamaa": payload})
+            )
+            with (
+                self.subTest(case=case),
+                self.assertRaisesRegex(ValueError, "yamaa/R/yamaa names a GNU license"),
+            ):
+                packages.check_archive(binary, self.root)
+        # Text of yamaa's own that names a GNU license still fails beside it.
+        binary = self.r_binary(
+            "yamaa_0.4.0-4.5.tgz",
+            dict(
+                members,
+                **{
+                    "yamaa/R/yamaa": loader,
+                    "yamaa/DESCRIPTION": b"Package: yamaa\nLicense: GPL-3\n",
+                },
+            ),
+        )
+        with self.assertRaises(ValueError) as raised:
+            packages.check_archive(binary, self.root)
+        self.assertEqual(
+            str(raised.exception),
+            "yamaa_0.4.0-4.5.tgz: yamaa/DESCRIPTION names a GNU license (GPL)",
+        )
+
     def test_a_candidate_names_python_packages_and_the_r_archive_differently(self):
         # #3030 D53: the R package keeps the final version through candidates.
         (self.root / "tools/packaging/release.toml").write_text(

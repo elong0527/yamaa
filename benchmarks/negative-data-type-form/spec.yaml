@@ -30,6 +30,7 @@ columns:
       data_type: date
       origin:
         type: Collected
+        source: Investigator
 
 submission:
   label: Demographics
