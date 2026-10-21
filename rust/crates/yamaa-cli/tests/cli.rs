@@ -408,17 +408,18 @@ fn schema_of_a_type_naming_no_file_type_is_refused_with_exit_status_1() {
 
 /// `yamaa selftest` runs the cases the binary carries and prints the facade's
 /// report, the hosts' words with the host `cli` (D119). A shipped build
-/// compiles every feature, so every case passes, and the one adapter no case
-/// covers yet is named. With `--format json` it prints the status, each case
-/// in list order and the engine information as `--version` prints it, with no
-/// key for the uncovered adapter. No case failed, so it exits 0; it writes no
-/// file (D108).
+/// compiles every feature, so every case passes, and a case covers every
+/// adapter, so no `not covered:` line is printed. With `--format json` it
+/// prints the status, each case in list order and the engine information as
+/// `--version` prints it; the JSON has no key for uncovered adapters, which
+/// only the printed report names. No case failed, so it exits 0; it writes
+/// no file (D108).
 #[test]
 fn selftest_prints_the_report_and_exits_0_when_no_case_failed() {
     let study = Study::empty();
     let platform = format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH);
     let report = format!(
-        "yamaa selftest: succeeded, 4 of 4 cases passed\nnot covered: odm\n\
+        "yamaa selftest: succeeded, 5 of 5 cases passed\n\
          engine {}, language 1.0, cli, {platform}\n",
         yamaa::VERSION
     );
@@ -434,6 +435,7 @@ fn selftest_prints_the_report_and_exits_0_when_no_case_failed() {
         "adam-adsl-xpt",
         "negative-transport-empty-string",
         "schema-source-xpt",
+        "sdtm-dm-odm-snapshot",
     ]
     .map(|case| format!("{{\"case\":\"{case}\",\"message\":null,\"status\":\"succeeded\"}}"))
     .join(",");

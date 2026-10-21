@@ -465,8 +465,7 @@ evidence of the installation:
     ```
 
 ```text
-yamaa selftest: succeeded, 4 of 4 cases passed
-not covered: odm
+yamaa selftest: succeeded, 5 of 5 cases passed
 engine 1.0.0, language 1.0, python 3.12.4, linux-x86_64
 ```
 
