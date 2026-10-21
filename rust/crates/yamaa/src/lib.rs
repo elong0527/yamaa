@@ -47,6 +47,7 @@ pub mod cancel;
 pub mod diagnostic;
 pub mod engine;
 pub mod error;
+pub mod file_type;
 pub mod functions;
 pub mod info;
 pub mod lint;
@@ -76,6 +77,7 @@ pub use error::{
     Error, FunctionError, HostPayload, LockFinding, LockReason, LockSyntaxError, OdmError,
     ResolverFailure, TableError,
 };
+pub use file_type::FileType;
 pub use functions::{
     decode_renv_lock, Argument, BatchArgument, CallError, ColumnType, FunctionHandle,
     FunctionIdentity, HostLanguage, LockContext, LockKind, Parameter, ProjectFunctions, RenvLock,
