@@ -1,8 +1,9 @@
 //! Package-owned schema closures; no directory search or caller-provided schema.
 //! The package ships the 0.5 closures the engine reads and, beside them, the
 //! 1.0 closure of each file type (`yaml/v1/`), which a document's header
-//! selects (SCHEMA-2). Shared schema admission checks the entry and each
-//! parent's declared version before preparing an executable model.
+//! selects (SCHEMA-2), and that type's JSON Schema ([`json_schema`]). Shared
+//! schema admission checks the entry and each parent's declared version
+//! before preparing an executable model.
 //!
 //! Each closure is fixed when the package is built, so the process admits it
 //! once, on first use, and every later check, compilation and run shares that
@@ -12,6 +13,8 @@ use crate::specification_source::{
 };
 use std::sync::{Arc, OnceLock};
 mod data;
+mod json;
+pub use json::json_schema;
 
 /// Admit the exact generated closure retained inside both native packages.
 pub fn capture() -> Result<Arc<CapturedSchema>, Error> {

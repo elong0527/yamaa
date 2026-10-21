@@ -15,6 +15,7 @@ yamaa: pub mod odm
 yamaa: pub mod plan
 yamaa: pub mod resolver
 yamaa: pub mod scalar
+yamaa: pub mod schema
 yamaa: pub mod selftest
 yamaa: pub mod table
 yamaa: pub mod text
@@ -46,6 +47,7 @@ yamaa::EngineOptions: pub use yamaa::engine::EngineOptions
 yamaa::Error: pub use yamaa::error::Error
 yamaa::Event: pub use yamaa::observe::Event
 yamaa::FFI_ArrowArrayStream: pub use yamaa::table::FFI_ArrowArrayStream
+yamaa::FILE_TYPES: pub use yamaa::file_type::FILE_TYPES
 yamaa::Failure: pub use yamaa::api::Failure
 yamaa::Field: pub use yamaa::table::Field
 yamaa::Fields: pub use yamaa::table::Fields
@@ -400,6 +402,7 @@ yamaa::error::TableError::code: pub fn code(&self) -> &'static str
 yamaa::error::TableError::message: pub fn message(&self) -> &str
 yamaa::file_type::Engine: impl Engine
 yamaa::file_type::Engine::file_type: pub fn file_type(&self, path: &str) -> Result<FileType, Failure>
+yamaa::file_type::FILE_TYPES: pub const FILE_TYPES: [&str; 4]
 yamaa::file_type::FileType: impl FileType
 yamaa::file_type::FileType: pub enum FileType [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
 yamaa::file_type::FileType::Codelists: Codelists
@@ -660,6 +663,8 @@ yamaa::scalar::ScalarRef::Int: Int(i64)
 yamaa::scalar::ScalarRef::Missing: Missing
 yamaa::scalar::ScalarRef::Str: Str(&'a str)
 yamaa::scalar::ScalarRef::from_owned: pub fn from_owned(value: &'a Scalar) -> Self
+yamaa::schema: pub use yamaa::schema::schema
+yamaa::schema::schema: pub fn schema(file_type: &str) -> Result<String, Failure>
 yamaa::selftest: pub use yamaa::selftest::selftest
 yamaa::selftest::SELFTEST_COLUMNS: pub const SELFTEST_COLUMNS: [&str; 3]
 yamaa::selftest::SelfTest: impl SelfTest
