@@ -1,7 +1,7 @@
 //! Native half of the host API: specification operations, their results and
 //! one error type. The Python facade keeps paths in lazy objects and calls
 //! these functions; behavior, validation and messages stay in Rust.
-use pyo3::{exceptions::PyException, prelude::*};
+use pyo3::{exceptions::PyException, prelude::*, types::PyDict};
 use std::sync::{Arc, Mutex};
 use yamaa::{Action, CancellationToken, Engine, EngineOptions, Error, Failure, HostLanguage};
 
@@ -190,6 +190,56 @@ pub fn _lint(py: Python<'_>, paths: Vec<String>, fix: bool) -> PyResult<ArrowTab
     yamaa::lint(&paths, fix)
         .map(|lint| ArrowTable::from(&lint.table()))
         .map_err(|failure| raise(py, failure))
+}
+
+/// The installation self-test (#3030 D28, D119): the facade's result, whose
+/// status, cases, engine information and printed report the public class
+/// returns as they are.
+#[pyclass(frozen, module = "yamaa._native", name = "_SelfTest")]
+pub struct SelfTest {
+    inner: yamaa::SelfTest,
+}
+
+#[pymethods]
+impl SelfTest {
+    fn status(&self) -> &'static str {
+        self.inner.status().as_str()
+    }
+    fn cases(&self) -> ArrowTable {
+        ArrowTable::from(&self.inner.table())
+    }
+    /// The engine information, keyed in the facade's field order.
+    fn info<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let info = self.inner.info();
+        let fields = PyDict::new(py);
+        fields.set_item("version", info.version)?;
+        fields.set_item("language_versions", &info.language_versions)?;
+        fields.set_item("features", &info.features)?;
+        fields.set_item("host", info.host.as_str())?;
+        fields.set_item("host_version", info.host_version.as_deref())?;
+        fields.set_item("platform", &info.platform)?;
+        Ok(fields)
+    }
+    fn summary(&self) -> String {
+        self.inner.summary().to_string()
+    }
+}
+
+/// Run every selftest case through this engine as the Python host, with the
+/// running interpreter's version, such as `3.12.4`.
+#[pyfunction]
+pub fn _selftest(py: Python<'_>) -> SelfTest {
+    let version = py.version_info();
+    let version = format!(
+        "{}.{}.{}{}",
+        version.major,
+        version.minor,
+        version.patch,
+        version.suffix.unwrap_or_default()
+    );
+    SelfTest {
+        inner: yamaa::selftest(yamaa::Host::Python, Some(&version)),
+    }
 }
 
 fn project_poisoned() -> PyErr {

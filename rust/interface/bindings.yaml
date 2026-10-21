@@ -51,6 +51,11 @@ handshake:
 # constant that owns it, and the generator refuses any difference from that
 # constant, order included.
 values:
+  # The status of every result (D36, P-STATUS-1). A selftest case that this
+  # build cannot run is `skipped`: not covered (D119).
+  status:
+    rust: yamaa::STATUSES
+    values: [succeeded, failed, skipped]
   # The phases of the registered conditions (yaml/conditions.yaml), in run
   # order.
   phase:
@@ -190,9 +195,33 @@ tables:
       - {name: ValuePresent, type: str, meaning: "`true` or `false`"}
       - {name: IsNull, type: str, meaning: "`true` or `false`"}
       - {name: SourceOrdinal, type: int, meaning: "the item's position in source order, from one"}
+  # D119: one row per selftest case, the bundled benchmarks that
+  # benchmarks/selftest.yaml names.
+  selftest_cases:
+    rust: yamaa::SELFTEST_COLUMNS
+    order: the cases in the order benchmarks/selftest.yaml lists them
+    columns:
+      - {name: case, type: str, meaning: the benchmark the case runs}
+      - {name: status, type: str, values: status}
+      - name: message
+        type: optional<str>
+        meaning: why the case failed or is not covered, missing when it passed; not frozen
 
-# Named records a host returns as a dict or named list. None today.
-records: {}
+# Named records a host returns as a dict or named list.
+records:
+  # D41 (P-INFO-1): what the engine is and where it runs, in the order of the
+  # facade's yamaa::Info.
+  info:
+    owner: "section 2.8 (D41); yamaa::Info"
+    fields:
+      - {name: version, type: str, meaning: "the engine version, yamaa::VERSION, the same in every host"}
+      - name: language_versions
+        type: list<str>
+        meaning: "every `yamaa:` language version the engine reads, oldest first"
+      - {name: features, type: list<str>, meaning: "the optional features compiled in, sorted"}
+      - {name: host, type: str, meaning: "`python`, `r` or `cli`"}
+      - {name: host_version, type: optional<str>, meaning: "the Python or R version; missing for cli"}
+      - {name: platform, type: str, meaning: "`<os>-<arch>` of the compiled engine, such as linux-x86_64"}
 
 # The user-facing surface of each host: names, arguments with their order and
 # defaults, members and result types. The generator writes the Python public
@@ -226,6 +255,8 @@ public:
     tree: {python: dict, r: named list}
     table: {python: polars.DataFrame, r: data.frame}
     optional_table: {python: "polars.DataFrame | None", r: data.frame or NULL}
+    status: {python: "str, one of values.status", r: "character(1), one of values.status"}
+    info: {python: "dict, keys in records.info order", r: "named list, names in records.info order"}
     nothing: {python: None, r: "NULL, invisibly"}
 
   functions:
@@ -265,6 +296,12 @@ public:
       raises: refusal
       calls: lint
       doc: Lint specification files, first applying the proved layout fixes when fix is true.
+    - name: selftest
+      python: yamaa.selftest
+      r: yamaa_selftest
+      returns: SelfTest
+      calls: selftest
+      doc: Run the bundled selftest cases through this installation's engine, comparing each with its expected files.
 
   # Result and lazy classes, in definition order: a class is defined before
   # any class that returns it.
@@ -423,6 +460,33 @@ public:
           returns: Submission
           raises: refusal
           calls: project_submission
+    # The installation self-test (D28, D119). Its printed text is the report:
+    # the summary line, the first failure, the adapters no case covered and
+    # the information line, rendered in Rust.
+    SelfTest:
+      python: yamaa.SelfTest
+      r: yamaa_selftest
+      holds: {native: handle}
+      doc: The selftest cases run through this installation's engine; printing it gives the report.
+      members:
+        - name: status
+          kind: property
+          returns: status
+          calls: selftest_status
+          doc: "`failed` when a case failed, and `succeeded` otherwise."
+        - name: cases
+          kind: property
+          returns: table
+          table: selftest_cases
+          calls: selftest_cases
+          doc: One row per case, in the order the cases are listed.
+        - name: info
+          kind: property
+          returns: info
+          record: info
+          calls: selftest_info
+          doc: The engine, language versions, features, host and platform that ran the cases.
+        - {name: summary, kind: printing, python: __repr__, r: [print, format], calls: selftest_summary}
 
   errors:
     refusal:
@@ -499,6 +563,15 @@ python:
         - {name: issues, args: {}, returns: _ArrowTable}
         - {name: save, args: {}, returns: "list<text>"}
     - kind: class
+      name: _SelfTest
+      rust: api_entry::SelfTest
+      constructible: false
+      methods:
+        - {name: status, args: {}, returns: text}
+        - {name: cases, args: {}, returns: _ArrowTable}
+        - {name: info, args: {}, returns: context_object}
+        - {name: summary, args: {}, returns: text}
+    - kind: class
       name: _Plans
       rust: api_entry::Plans
       constructible: false
@@ -558,6 +631,11 @@ python:
       rust: api_entry::_lint
       args: {paths: "list<text>", fix: "bool = false"}
       returns: _ArrowTable
+    - kind: function
+      name: _selftest
+      rust: api_entry::_selftest
+      args: {}
+      returns: _SelfTest
 
 r:
   module: yamaa
@@ -606,6 +684,11 @@ r:
         - {name: submission_issues, args: {handle: robj}, returns: r_reply}
         - {name: submission_save, args: {handle: robj}, returns: r_reply}
         - {name: lint, args: {paths: robj, fix: bool}, returns: r_reply}
+        - {name: selftest, args: {version: raw}, returns: r_reply}
+        - {name: selftest_status, args: {handle: robj}, returns: r_reply}
+        - {name: selftest_cases, args: {handle: robj}, returns: r_reply}
+        - {name: selftest_info, args: {handle: robj}, returns: r_reply}
+        - {name: selftest_summary, args: {handle: robj}, returns: r_reply}
 
 # Every Python export and every R export names its counterpart here; the
 # generator refuses an export missing from both this table and host_only.
@@ -635,6 +718,11 @@ operations:
   submission_issues: {python: [_Submission.issues], r: [submission_issues]}
   submission_save: {python: [_Submission.save], r: [submission_save]}
   lint: {python: [_lint], r: [lint]}
+  selftest: {python: [_selftest], r: [selftest]}
+  selftest_status: {python: [_SelfTest.status], r: [selftest_status]}
+  selftest_cases: {python: [_SelfTest.cases], r: [selftest_cases]}
+  selftest_info: {python: [_SelfTest.info], r: [selftest_info]}
+  selftest_summary: {python: [_SelfTest.summary], r: [selftest_summary]}
 # Host transport: Python checks interrupts inside the native calls, R through
 # these two helpers; the Arrow capsule is Python-only.
 host_only:

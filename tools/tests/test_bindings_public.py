@@ -23,7 +23,15 @@ class RenderingTests(unittest.TestCase):
         self.public = public.Public(self.definition)
 
     def test_python_exports_the_declared_names(self):
-        names = ["Error", "__version__", "lint", "project", "read_odm", "spec"]
+        names = [
+            "Error",
+            "__version__",
+            "lint",
+            "project",
+            "read_odm",
+            "selftest",
+            "spec",
+        ]
         self.assertEqual(self.public.python_names(), names)
         module = ast.parse(self.public.render_python([]))
         exported = next(
@@ -36,7 +44,7 @@ class RenderingTests(unittest.TestCase):
         self.assertEqual(
             classes,
             ["Error", "Check", "Run", "MemberRun", "ProjectRun", "Submission"]
-            + ["Spec", "Project"],
+            + ["Spec", "Project", "SelfTest"],
         )
 
     def test_python_delegates_each_member_to_its_operation(self):
@@ -68,7 +76,10 @@ class RenderingTests(unittest.TestCase):
                 "export(yamaa_project)",
                 "export(yamaa_read_odm)",
                 "export(yamaa_lint)",
+                "export(yamaa_selftest)",
                 'S3method("[[", yamaa_project_run)',
+                "S3method(print, yamaa_selftest)",
+                "S3method(format, yamaa_selftest)",
             ],
         )
         text = self.public.render_r([])
@@ -83,7 +94,52 @@ class RenderingTests(unittest.TestCase):
             with self.subTest(expected=expected):
                 self.assertIn(expected, text)
         # Only objects an S3 method or a private accessor reaches keep a handle.
-        self.assertEqual(text.count("object$.handle <- native"), 2)
+        self.assertEqual(text.count("object$.handle <- native"), 3)
+
+    def test_a_printing_member_returns_the_text_rust_renders(self):
+        python = self.public.render_python([])
+        self.assertIn(
+            "    def __repr__(self) -> str:\n        return self._native.summary()\n",
+            python,
+        )
+        r = self.public.render_r([])
+        self.assertIn(
+            "print.yamaa_selftest <- function(x, ...) {\n"
+            '  cat(format(x), sep = "\\n")\n'
+            "  invisible(x)\n"
+            "}\n",
+            r,
+        )
+        self.assertIn(
+            "format.yamaa_selftest <- function(x, ...) {\n"
+            '  native <- get(".handle", envir = x, inherits = FALSE)\n'
+            "  .reply(.native_selftest_summary(native))\n"
+            "}\n",
+            r,
+        )
+
+    def test_selftest_delegates_to_its_native_result(self):
+        python = self.public.render_python([])
+        for expected in (
+            "def selftest() -> SelfTest:",
+            "    return SelfTest(_native._selftest())",
+            "    def status(self) -> str:\n        "
+            '"""`failed` when a case failed, and `succeeded` otherwise."""\n'
+            "        return self._native.status()",
+            "        return _table(self._native.cases())",
+            "    def info(self) -> dict:",
+        ):
+            with self.subTest(expected=expected):
+                self.assertIn(expected, python)
+        r = self.public.render_r([])
+        for expected in (
+            "yamaa_selftest <- function() .self_test(.reply(.native_selftest(.version())))",
+            '  .read_only(object, "status", '
+            "function() .reply(.native_selftest_status(native)))",
+            '  .read_only(object, "info", function() .reply(.native_selftest_info(native)))',
+        ):
+            with self.subTest(expected=expected):
+                self.assertIn(expected, r)
 
     def test_a_path_list_converts_each_path_in_both_hosts(self):
         python = self.public.render_python([])
@@ -166,8 +222,48 @@ class ValidationTests(unittest.TestCase):
                 lambda d: member(d, "ProjectRun", "member").update(r="["),
             ),
             (
-                "only index does",
+                "only index and printing do",
                 lambda d: member(d, "Run", "save").update(python="publish"),
+            ),
+            (
+                "names a record exactly when it returns one",
+                lambda d: member(d, "SelfTest", "info").pop("record"),
+            ),
+            (
+                "names a record exactly when it returns one",
+                lambda d: member(d, "SelfTest", "status").update(record="info"),
+            ),
+            (
+                "undeclared record",
+                lambda d: member(d, "SelfTest", "info").update(record="engine"),
+            ),
+            (
+                "must be spelled __repr__ and \\[print, format\\]",
+                lambda d: member(d, "SelfTest", "summary").update(r=["print"]),
+            ),
+            (
+                "must be spelled __repr__ and \\[print, format\\]",
+                lambda d: member(d, "SelfTest", "summary").update(python="__str__"),
+            ),
+            (
+                "must be spelled __repr__ and \\[print, format\\]",
+                lambda d: member(d, "SelfTest", "summary").update(returns="text"),
+            ),
+            (
+                "must be spelled __repr__ and \\[print, format\\]",
+                lambda d: member(d, "SelfTest", "summary").pop("calls"),
+            ),
+            (
+                "unknown operation",
+                lambda d: member(d, "SelfTest", "summary").update(
+                    calls="selftest_report"
+                ),
+            ),
+            (
+                "Spec.summary reaches a handle",
+                lambda d: classes(d)["Spec"]["members"].append(
+                    copy.deepcopy(member(d, "SelfTest", "summary"))
+                ),
             ),
             (
                 "keyword_only",
@@ -287,6 +383,10 @@ class ManifestTests(unittest.TestCase):
             "public.python.exports.__version__",
             "public.r.exports.yamaa_read_odm",
             "public.r.s3methods.yamaa_project_run.[[",
+            "public.classes.SelfTest.info: property; returns info; record info",
+            "public.classes.SelfTest.summary: printing; python __repr__; r print, format",
+            "public.r.s3methods.yamaa_selftest.print",
+            "public.r.s3methods.yamaa_selftest.format",
         ):
             with self.subTest(expected=expected):
                 self.assertIn(expected, lines)
