@@ -236,7 +236,10 @@ def main():
     for error in errors:
         print(error)
     if errors:
-        print("Run: python -m tools.packaging.generate_json_schema --write")
+        print(
+            "Run: python -m tools.packaging.generate_json_schema --write, then "
+            "python -m tools.packaging.generate_shipped_schema --write"
+        )
         return 1
     print("PASS: the 1.0 JSON Schemas match the schema files in yaml/v1/")
     return 0

@@ -134,6 +134,14 @@ any more. From `rust/`,
 `cargo tree --locked --offline --workspace --target all -i <crate>` shows what
 pulls a crate in.
 
+The same file's `[unconditional.<engine crate>]` tables say why an engine crate
+(`yamaa-core`, `yamaa-adapters` or `yamaa`) depends, without a feature, on a
+crate that #3030 section 2.9 scopes to the features and adapters that need it:
+an Arrow crate, `flatbuffers`, `serde_json` or `toml`. The same check reads the
+engine crates' manifests and fails while such a dependency has no reason, or a
+reason names a dependency that is optional or gone, so the change that moves a
+crate behind a feature also removes its reason.
+
 Every package also ships `COMPONENTS.tsv` beside the notices: an inventory,
 without digests, of the components that its host's packages are built from.
 `tools.packaging.generate_component_inventory` writes `python/COMPONENTS.tsv`,
@@ -167,17 +175,19 @@ such as sccache, and a Cargo build directory that the environment or a parent
 After Rust changes, rerun `make setup`: it rebuilds the Python extension whenever
 a file listed under `tool.uv.cache-keys` in `python/pyproject.toml` changes.
 
-Before a push, run `make quick` and the tests nearest the change. It runs lint
-and the repository checks, which leave the R binding's Clippy to `make test-r`,
-and no test suite, so it needs no R. Pull request CI runs the complete
-`make check`; when a job fails, reproduce it with that job's own target below.
-Run `make setup` again after changing `rust/` or `python/src/` before Python
-tests, which import the installed package.
+Before a push, run the tests nearest the change and, after a Rust change,
+`cargo fmt` and Clippy on the touched crates. Run `make quick` only for a
+change to generated files, rule cards, schemas, docs generators or Python
+(D148 on #3030). It runs lint and the repository checks, which leave the R
+binding's Clippy to `make test-r`, and no test suite, so it needs no R. Pull
+request CI runs the complete `make check`; when a job fails, reproduce it with
+that job's own target below. Run `make setup` again after changing `rust/` or
+`python/src/` before Python tests, which import the installed package.
 
 | Command | Purpose |
 | --- | --- |
 | `make setup` | Install the locked development environment. |
-| `make quick` | Run lint and the repository checks, before a push. |
+| `make quick` | Run lint and the repository checks. |
 | `make check` | Run the checks required by ordinary CI. |
 | `make check-lint` | Check formatting and lint across Python and Rust, except the R binding. |
 | `make check-repository` | Check authored specifications, layout, rules, references and the site. |
@@ -242,12 +252,14 @@ Passing static repository validation does not establish engine release
 qualification.
 
 A change to the executor, such as rewrite 1 (#2785), must leave every result
-unchanged. Each such PR passes ordinary CI and `make check-equivalence` on its
-exact head, and says so in the PR. CI's `equivalence` job runs the gate on a
-pull request unless its diff is confined to root `README.md`,
+unchanged. Each such PR passes ordinary CI and the `equivalence` and
+`conversion` jobs below on its exact head. Those jobs are the proof: run
+`make check-equivalence` or `make check-conversion` locally only to debug a
+CI failure of that gate (D148 on #3030). CI runs the gate on a pull request
+unless its diff is confined to root `README.md`,
 `CONTRIBUTING.md`, `AGENTS.md` and Markdown files under `docs/`. Such a
 documentation-only pull request passes with a notice without running the
-gate; the command stays the local route. All other paths, including new
+gate. All other paths, including new
 build configuration, package metadata, checkout attributes and repository
 tools, trigger it. The gate builds the Python and R packages from the exact
 pull-request head and installs both outside the checkout. On each host it
@@ -259,6 +271,11 @@ object a second time and requires it to reuse what the first run compiled,
 with the same issues, tables and saved bytes. On the same installs it then
 runs the installed Python suites and `R CMD check`, which carry the
 cross-host diagnostic parity truth and the host-fixture families.
+`HOSTS=python` runs the Python half alone: its build, its conformance and the
+installed suites; `HOSTS=r` runs the R half: its build, its conformance and
+`R CMD check`. CI runs the two halves in parallel, as the jobs
+`equivalence (python)` and `equivalence (r)`, and its `equivalence` job passes
+only when both pass; that one check is the gate's result.
 While the 0.5 and 1.0 surfaces coexist (#3030 P1-9 to P2-13), `make
 check-conversion` proves the 1.0 front end against the same truth. The
 converter (`tools/migrate`) writes every benchmark as 1.0 into a temporary
@@ -270,7 +287,7 @@ originals, and composes each Define benchmark's documents at its fixed time.
 `HOSTS=python,r` adds the R host. A benchmark whose expected files a decided
 item changes is excepted in `tools/migrate/excepted.py`, with its reason, and
 the gate lists each one. CI's `conversion` job runs the gate on Python on
-every pull request that the `equivalence` job runs on, by the same rule
+every pull request that the equivalence gate runs on, by the same rule
 (#3030 D124), and a documentation-only pull request passes it with a notice;
 a weekly schedule and a dispatch run it on both hosts.
 The repository tools that read benchmarks read each file by its own header,
@@ -302,9 +319,10 @@ Pin external actions to complete commit IDs with exact release comments.
 PRs and the main schedule run four development jobs: repository checks
 (including lint), the Rust workspace, and the Python and R hosts on Linux.
 These four checks are required to merge into main.
-The additional `equivalence` and `conversion` jobs run their gates on the pull
-requests described above and on dispatch, and `conversion` also weekly; a
-documentation-only pull request passes both with a skip notice.
+The additional `equivalence` and `conversion` checks run their gates on the
+pull requests described above and on dispatch, `equivalence` as one job per
+host, and `conversion` also weekly; a documentation-only pull request passes
+both with a skip notice.
 
 The `Release compatibility` workflow checks the minimum Rust toolchain, the R
 source package built with it, minimal format builds, Python 3.15 and minimum
@@ -483,8 +501,8 @@ release publishes and installs each with no Rust, Rtools or network (its
 incoming checks on the R source archive that a release publishes (its
 `native-cran` jobs). It also builds the command-line binaries that a release
 publishes, statically on Linux and Windows, and runs each archive's
-`yamaa selftest` on a fresh runner of its platform (its `native-cli` and
-`native-cli-install` jobs). Passing ordinary CI does not qualify a release. The final
+`yamaa selftest` and then the conformance corpus on a fresh runner of its
+platform (its `native-cli` and `native-cli-install` jobs). Passing ordinary CI does not qualify a release. The final
 merged revision needs complete native evidence, including the R package
 checks below. A release tag publishes the native run that its
 `Qualified-Run` trailer names, and the `Release rehearsal` workflow, dispatched

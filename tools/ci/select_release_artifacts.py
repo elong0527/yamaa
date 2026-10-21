@@ -343,7 +343,7 @@ def required_jobs(coverage):
             )
     # Each command-line archive that a release publishes, built on a runner
     # of its target's platform, then unpacked on a fresh one, where the binary
-    # prints its version and passes its selftest.
+    # prints its version, passes its selftest and runs the conformance corpus.
     for lane in coverage["cli"]["include"]:
         label = f"({lane['os']}, {lane['target']})"
         jobs[f"native-cli {label}"] = (
@@ -354,6 +354,7 @@ def required_jobs(coverage):
         jobs[f"native-cli-install {label}"] = (
             "Unpack the command-line archive",
             "Run the command-line selftest",
+            "Report command-line public benchmark conformance",
         )
     return jobs
 

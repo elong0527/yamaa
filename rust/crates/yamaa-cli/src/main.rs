@@ -23,9 +23,9 @@
 //! does. Ctrl+C ends the process by the signal and publishes nothing (D46).
 //!
 //! What each command prints, and how it dispatches on its PATH's `type:`
-//! header (D122), is in [`commands`]. `read-odm` and `schema` check their
-//! arguments and then refuse as not implemented yet; see [`commands`] for
-//! why. Each drops the refusal when it lands.
+//! header (D122), is in [`commands`]. `schema` checks its arguments and then
+//! refuses as not implemented yet; see [`commands`] for why. It drops the
+//! refusal when it lands.
 #![forbid(unsafe_code)]
 
 mod arguments;
@@ -139,10 +139,11 @@ fn help() -> String {
     }
     text.push_str(
         "\nPATH names a spec or a project, as its type: header declares; --spec,\n\
-         --section and submission take a project. selftest runs the cases the\n\
-         binary carries and compares each with its expected files. read-odm and\n\
-         schema are not implemented yet: each checks its arguments, then exits\n\
-         with status 2.\n\n\
+         --section and submission take a project. read-odm saves the clinical\n\
+         items of SOURCE, an ODM XML file or a TAR archive that holds one, to\n\
+         OUT, a .csv or .parquet file. selftest runs the cases the binary carries\n\
+         and compares each with its expected files. schema is not implemented\n\
+         yet: it checks its arguments, then exits with status 2.\n\n\
          exit status: 0 succeeded, 1 completed with findings, 2 could not run as asked\n",
     );
     text

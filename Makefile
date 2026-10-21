@@ -40,8 +40,11 @@ test-r:
 	$(TOOLS) tools.commands.repository lint-r-binding
 	$(TOOLS) tools.commands.r_tests
 
+# The executor equivalence gate on fresh installs of both hosts. HOSTS=python
+# or HOSTS=r runs one host's half, as each of CI's equivalence jobs does.
+check-equivalence: HOSTS = python,r
 check-equivalence:
-	$(TOOLS) tools.commands.equivalence --uv "$(UV)"
+	$(TOOLS) tools.commands.equivalence --uv "$(UV)" --hosts "$(HOSTS)"
 
 # The 1.0 conversion gate: every benchmark converted to 1.0 and run on fresh
 # installs. HOSTS=python,r runs both hosts, as the weekly CI run does.

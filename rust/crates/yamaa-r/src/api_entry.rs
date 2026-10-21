@@ -355,6 +355,17 @@ fn lint(paths: Robj, fix: bool) -> List {
     })
 }
 
+/// The JSON Schema of a file type as canonical JSON text, one character
+/// string (#3030 D149); a type the facade does not know refuses with its
+/// issue.
+#[extendr]
+fn schema(file_type: Raw) -> List {
+    reply(|| {
+        let schema = yamaa::schema(&text(&file_type)?).map_err(Refusal::Failure)?;
+        Ok(r!(schema))
+    })
+}
+
 #[extendr]
 fn run_output(handle: Robj) -> List {
     reply(|| {
