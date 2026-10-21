@@ -173,6 +173,36 @@ pub fn decode_referenced(
     }
 }
 
+/// Read the type `source` declares, expecting none, by an engine whose newest
+/// language version is `reads`: what the command line dispatches on before
+/// any call reads the file (#3030 D122). The document is decoded once and
+/// its header read as [`language::read_declared_header`] reads it. A
+/// document that declares `schema_version` declares no type, and a refused
+/// header is a finding in the document, at its own field, as [`decode`]
+/// reports one.
+pub fn file_type(source: Source, reads: LanguageVersion) -> Result<FileType, Error> {
+    let raw = decode_yaml(&source.bytes).map_err(|error| Error::Decode {
+        identity: source.identity.clone(),
+        error,
+    })?;
+    match language::read_declared_header(&raw.document, reads) {
+        Ok(header) => Ok(header.file_type),
+        Err(fault) => {
+            // A header finding names no descriptor, so any closure resolves
+            // it: the one the declared type selects, or a specification's.
+            let closure = crate::shipped_schema::capture_versioned(
+                language::declared_type(&raw.document).unwrap_or(FileType::Spec),
+            )?;
+            Err(findings(
+                &closure,
+                source,
+                raw.document,
+                vec![fault.finding()],
+            ))
+        }
+    }
+}
+
 fn findings(
     schema: &Arc<CapturedSchema>,
     source: Source,

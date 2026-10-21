@@ -149,20 +149,21 @@ fn shape(path: &str, code: ConditionCode, context: Vec<(&'static str, C)>) -> He
 }
 
 /// The value of one header field, or the finding its absence or kind gives.
+/// `class` is the root class of the type the reader expects, which a missing
+/// field's finding names; a reader that expects no type names none.
 fn header_field<'a>(
     document: &'a Document,
     name: &'static str,
     expected: &str,
-    class: &str,
+    class: Option<&str>,
 ) -> Result<(usize, &'a str), HeaderFault> {
     let Some(node) = document.field(document.root(), name) else {
+        let mut context = vec![("field", C::Text(name.into()))];
+        context.extend(class.map(|class| ("class", C::Text(class.into()))));
         return Err(shape(
             name,
             ConditionCode::SchemaMissingRequiredField,
-            vec![
-                ("field", C::Text(name.into())),
-                ("class", C::Text(class.into())),
-            ],
+            context,
         ));
     };
     match &document.nodes()[node] {
@@ -176,6 +177,37 @@ fn header_field<'a>(
             ],
         )),
     }
+}
+
+/// The root must be a non-empty mapping before its header is read; the
+/// finding names `class`, the root class of the type the reader expects, as
+/// the expected value, when the reader expects one.
+fn root_mapping(document: &Document, class: Option<&str>) -> Result<(), HeaderFault> {
+    let root = &document.nodes()[document.root()];
+    if matches!(root, N::Mapping(entries) if !entries.is_empty()) {
+        return Ok(());
+    }
+    let mut context = Vec::new();
+    context.extend(class.map(|class| ("expected", C::Text(class.into()))));
+    context.push(("actual", C::ValueKind(root.kind())));
+    Err(shape("$", ConditionCode::SchemaInvalidFieldType, context))
+}
+
+/// The version `yamaa` declares, when it names one an engine whose newest is
+/// `reads` reads.
+fn read_version(
+    document: &Document,
+    reads: Option<LanguageVersion>,
+    class: Option<&str>,
+) -> Result<LanguageVersion, HeaderFault> {
+    let (node, written) = header_field(document, "yamaa", "language_version", class)?;
+    LanguageVersion::parse(written)
+        .filter(|version| reads.is_some_and(|newest| *version <= newest))
+        .ok_or_else(|| HeaderFault::Version {
+            node,
+            version: written.into(),
+            reads: language_versions(reads),
+        })
 }
 
 /// Read the header of a 1.x document before its schema closure is chosen.
@@ -198,17 +230,7 @@ pub fn read_header(
     expected: FileType,
 ) -> Result<Header, HeaderFault> {
     let class = expected.root_class();
-    let root = &document.nodes()[document.root()];
-    if !matches!(root, N::Mapping(entries) if !entries.is_empty()) {
-        return Err(shape(
-            "$",
-            ConditionCode::SchemaInvalidFieldType,
-            vec![
-                ("expected", C::Text(class.into())),
-                ("actual", C::ValueKind(root.kind())),
-            ],
-        ));
-    }
+    root_mapping(document, Some(class))?;
     if !declares_header(document) && document.field(document.root(), "yamaa").is_some() {
         return Err(shape(
             "yamaa",
@@ -219,15 +241,8 @@ pub fn read_header(
             ],
         ));
     }
-    let (node, written) = header_field(document, "yamaa", "language_version", class)?;
-    let version = LanguageVersion::parse(written)
-        .filter(|version| reads.is_some_and(|newest| *version <= newest))
-        .ok_or_else(|| HeaderFault::Version {
-            node,
-            version: written.into(),
-            reads: language_versions(reads),
-        })?;
-    let (node, written) = header_field(document, "type", "str", class)?;
+    let version = read_version(document, reads, Some(class))?;
+    let (node, written) = header_field(document, "type", "str", Some(class))?;
     let file_type = FileType::parse(written)
         .filter(|declared| *declared == expected)
         .ok_or_else(|| HeaderFault::FileType {
@@ -262,6 +277,100 @@ impl HeaderFault {
             },
         }
     }
+}
+
+/// The language a document that declares `schema_version` is written in: the
+/// language at the `yamaa-v0.5.0` tag (#3030 D75), which declares no type.
+const LEGACY_LANGUAGE_VERSION: &str = "0.5";
+
+/// The type a document's root declares in `type`, when that is text naming
+/// one of the four file types.
+pub fn declared_type(document: &Document) -> Option<FileType> {
+    match &document.nodes()[document.field(document.root(), "type")?] {
+        N::Text(text) => FileType::parse(text),
+        _ => None,
+    }
+}
+
+/// Why the type a document declares is not read (#3030 D122).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum TypeFault {
+    /// The root declares `schema_version`: a 0.5 document, which declares no
+    /// type and which a read of the 1.x header does not read.
+    Legacy {
+        /// The versions the engine reads, oldest first.
+        reads: Vec<String>,
+    },
+    /// The header is refused as [`read_header`] refuses it.
+    Header(HeaderFault),
+    /// `type` is text naming none of the four file types.
+    Unknown {
+        /// The `type` value occurrence in the document.
+        node: usize,
+        file_type: String,
+    },
+}
+
+impl TypeFault {
+    /// The finding in the document, at its own `schema_version`, `yamaa` or
+    /// `type` (SCHEMA-2). Context values address that document.
+    pub fn finding(&self) -> SchemaDiagnostic {
+        match self {
+            Self::Legacy { reads } => SchemaDiagnostic {
+                path: "schema_version".into(),
+                code: ConditionCode::HeaderLanguageVersion,
+                context: vec![
+                    ("version", C::Text(LEGACY_LANGUAGE_VERSION.into())),
+                    ("language_versions", C::TextList(reads.clone())),
+                ],
+            },
+            Self::Header(fault) => fault.finding(),
+            Self::Unknown { node, .. } => SchemaDiagnostic {
+                path: "type".into(),
+                code: ConditionCode::HeaderFileType,
+                context: vec![
+                    ("type", C::InputValue(*node)),
+                    (
+                        "expected",
+                        C::TextList(FileType::ALL.map(|kind| kind.name().into()).into()),
+                    ),
+                ],
+            },
+        }
+    }
+}
+
+/// Read the type a document declares, expecting none, by an engine whose
+/// newest version is `reads`: what the command line dispatches on before any
+/// call reads the file (#3030 D122).
+///
+/// A root that declares `schema_version`, with `yamaa` or without, is a 0.5
+/// document and declares no type: it fails as `unsupported_language_version`
+/// at `schema_version`, naming version 0.5. A root that declares one of the
+/// four types is read as [`read_header`] reads that type, so it fails as a
+/// call that reads that type fails. Any other root is read in the same order,
+/// `yamaa` first, then `type`, with findings that name no class, since no
+/// closure is chosen; a `type` naming none of the four types fails as
+/// `unexpected_file_type`, expecting any of them (SCHEMA-2).
+pub fn read_declared_header(
+    document: &Document,
+    reads: LanguageVersion,
+) -> Result<Header, TypeFault> {
+    if document.field(document.root(), "schema_version").is_some() {
+        return Err(TypeFault::Legacy {
+            reads: language_versions(Some(reads)),
+        });
+    }
+    if let Some(declared) = declared_type(document) {
+        return read_header(document, Some(reads), declared).map_err(TypeFault::Header);
+    }
+    root_mapping(document, None).map_err(TypeFault::Header)?;
+    read_version(document, Some(reads), None).map_err(TypeFault::Header)?;
+    let (node, written) = header_field(document, "type", "str", None).map_err(TypeFault::Header)?;
+    Err(TypeFault::Unknown {
+        node,
+        file_type: written.into(),
+    })
 }
 
 fn text(value: &str) -> JsonValue {
@@ -744,6 +853,177 @@ mod tests {
             (finding.path.as_str(), finding.code),
             ("yamaa", ConditionCode::SchemaMissingRequiredField)
         );
+    }
+
+    #[test]
+    fn a_1_x_document_declares_its_type_and_a_0_5_document_none() {
+        use crate::schema::DocumentKind as K;
+        let file = |version: T, kind: T| T::map(vec![("yamaa", version), ("type", kind)]);
+        let read = |tree: T| {
+            let document = document(tree);
+            (read_declared_header(&document, LANGUAGE_VERSION), document)
+        };
+        // Each type a 1.0 document declares is read without expecting it.
+        for kind in FileType::ALL {
+            let (header, document) = read(file(T::text("1.0"), T::text(kind.name())));
+            assert_eq!(declared_type(&document), Some(kind));
+            assert_eq!(
+                header,
+                Ok(Header {
+                    version: LanguageVersion::new(0),
+                    file_type: kind,
+                })
+            );
+        }
+        // A document that declares `schema_version`, beside `yamaa` or not,
+        // declares no type: language version 0.5, at `schema_version`.
+        for tree in [
+            T::map(vec![
+                ("schema_version", T::text("1.0")),
+                ("domain", T::text("DM")),
+            ]),
+            T::map(vec![
+                ("schema_version", T::text("1.0")),
+                ("yamaa", T::text("1.0")),
+                ("type", T::text("spec")),
+            ]),
+        ] {
+            let (header, _) = read(tree);
+            let fault = header.unwrap_err();
+            assert_eq!(
+                fault,
+                TypeFault::Legacy {
+                    reads: vec!["1.0".into()]
+                }
+            );
+            let finding = fault.finding();
+            assert_eq!(
+                (finding.path.as_str(), finding.code),
+                ("schema_version", ConditionCode::HeaderLanguageVersion)
+            );
+            assert_eq!(
+                finding.context,
+                [
+                    ("version", C::Text("0.5".into())),
+                    ("language_versions", C::TextList(vec!["1.0".into()])),
+                ]
+            );
+        }
+        // A document that declares a type it knows is read as a call that
+        // reads that type reads it: the version first, then the type, and a
+        // finding names that type's class.
+        for tree in [
+            file(T::text("1.1"), T::text("project")),
+            file(T::float(1.0), T::text("function")),
+            T::map(vec![("type", T::text("codelists"))]),
+        ] {
+            let document = document(tree);
+            let kind = declared_type(&document).unwrap();
+            assert_eq!(
+                read_declared_header(&document, LANGUAGE_VERSION).unwrap_err(),
+                TypeFault::Header(
+                    read_header(&document, Some(LANGUAGE_VERSION), kind).unwrap_err()
+                )
+            );
+        }
+        let (header, _) = read(T::map(vec![("type", T::text("project"))]));
+        assert_eq!(
+            header.unwrap_err().finding().context,
+            [
+                ("field", C::Text("yamaa".into())),
+                ("class", C::Text("project_class".into())),
+            ]
+        );
+        // A type naming none of the four is unexpected where any is expected,
+        // once the version is read.
+        let (header, document) = read(file(T::text("1.0"), T::text("environment")));
+        let node = document.field(document.root(), "type").unwrap();
+        let fault = header.unwrap_err();
+        assert_eq!(
+            fault,
+            TypeFault::Unknown {
+                node,
+                file_type: "environment".into(),
+            }
+        );
+        let finding = fault.finding();
+        assert_eq!(
+            (finding.path.as_str(), finding.code),
+            ("type", ConditionCode::HeaderFileType)
+        );
+        assert_eq!(
+            finding.context,
+            [
+                ("type", C::InputValue(node)),
+                (
+                    "expected",
+                    C::TextList(vec![
+                        "spec".into(),
+                        "project".into(),
+                        "codelists".into(),
+                        "function".into(),
+                    ])
+                ),
+            ]
+        );
+        let (header, _) = read(file(T::text("1.4"), T::text("codelist")));
+        assert!(matches!(
+            header,
+            Err(TypeFault::Header(HeaderFault::Version { .. }))
+        ));
+        // Without a type it knows, a malformed header's finding names no class.
+        let shapes = [
+            (
+                T::list(vec![]),
+                "$",
+                ConditionCode::SchemaInvalidFieldType,
+                vec![("actual", C::ValueKind(K::Sequence))],
+            ),
+            (
+                T::map(vec![]),
+                "$",
+                ConditionCode::SchemaInvalidFieldType,
+                vec![("actual", C::ValueKind(K::Mapping))],
+            ),
+            (
+                T::map(vec![("domain", T::text("DM"))]),
+                "yamaa",
+                ConditionCode::SchemaMissingRequiredField,
+                vec![("field", C::Text("yamaa".into()))],
+            ),
+            (
+                file(T::float(1.0), T::text("specification")),
+                "yamaa",
+                ConditionCode::SchemaInvalidFieldType,
+                vec![
+                    ("expected", C::Text("language_version".into())),
+                    ("actual", C::ValueKind(K::Float)),
+                ],
+            ),
+            (
+                T::map(vec![("yamaa", T::text("1.0"))]),
+                "type",
+                ConditionCode::SchemaMissingRequiredField,
+                vec![("field", C::Text("type".into()))],
+            ),
+            (
+                file(T::text("1.0"), T::list(vec![])),
+                "type",
+                ConditionCode::SchemaInvalidFieldType,
+                vec![
+                    ("expected", C::Text("str".into())),
+                    ("actual", C::ValueKind(K::Sequence)),
+                ],
+            ),
+        ];
+        for (tree, path, code, context) in shapes {
+            let (header, _) = read(tree);
+            let Err(TypeFault::Header(HeaderFault::Shape(finding))) = header else {
+                panic!("{path}: a malformed header");
+            };
+            assert_eq!((finding.path.as_str(), finding.code), (path, code));
+            assert_eq!(finding.context, context, "{path}");
+        }
     }
 
     #[test]
