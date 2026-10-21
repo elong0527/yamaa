@@ -597,7 +597,7 @@ cli:
     - name: selftest
       synopsis: yamaa selftest
       operations: [selftest]
-      text: the selftest summary, then one line per failed case
+      text: "the facade's report, as the hosts print it (D119): the summary line, `first failure: <case>: <message>` when a case failed, `not covered: <adapters>` when an adapter is not covered, then the engine, language, host and platform"
       json_keys: [command, status, info, cases]
   json:
     issue_keys: [severity, phase, condition, rule, spec_paths, file, line, column, message, context, source_span, operand_route]

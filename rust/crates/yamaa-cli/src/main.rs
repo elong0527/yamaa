@@ -9,9 +9,9 @@
 //! - 0 when the command completed and succeeded, or `--help` or `--version`
 //!   printed its text;
 //! - 1 when the command completed with findings: a `failed` or `skipped`
-//!   status, remaining lint findings, or a refusal, such as an unknown
-//!   section (D98) or a PATH whose type cannot be read (D125), which the
-//!   facade explains with its issues;
+//!   status, remaining lint findings, a failed selftest case, or a refusal,
+//!   such as an unknown section (D98) or a PATH whose type cannot be read
+//!   (D125), which the facade explains with its issues;
 //! - 2 when the command could not run as asked (D68): a usage error, an
 //!   argument the facade cannot take, a PATH whose type the command does not
 //!   take, or a failed write to standard output, and, for now, a command not
@@ -21,9 +21,9 @@
 //! does. Ctrl+C ends the process by the signal and publishes nothing (D46).
 //!
 //! What each command prints, and how it dispatches on its PATH's `type:`
-//! header (D122), is in [`commands`]. `read-odm`, `schema` and `selftest`
-//! check their arguments and then refuse as not implemented yet; see
-//! [`commands`] for why. Each drops the refusal when it lands.
+//! header (D122), is in [`commands`]. `read-odm` and `schema` check their
+//! arguments and then refuse as not implemented yet; see [`commands`] for
+//! why. Each drops the refusal when it lands.
 #![forbid(unsafe_code)]
 
 mod arguments;
@@ -35,7 +35,6 @@ use std::process::ExitCode;
 
 use arguments::{Format, Invocation, Usage, COMMANDS};
 use commands::Execution;
-use yamaa::ContextValue;
 
 /// Exit status 0: the command completed and succeeded.
 const SUCCEEDED: u8 = 0;
@@ -120,37 +119,7 @@ fn version(format: Format) -> String {
             info.host.as_str(),
             info.platform,
         ),
-        Format::Json => {
-            let text = |value: &str| ContextValue::Text(value.to_owned());
-            let texts = |values: &[&str]| {
-                ContextValue::List(values.iter().map(|value| text(value)).collect())
-            };
-            let languages = info
-                .language_versions
-                .iter()
-                .map(String::as_str)
-                .collect::<Vec<_>>();
-            let document = [
-                ("version", text(info.version)),
-                ("language_versions", texts(&languages)),
-                ("features", texts(&info.features)),
-                ("host", text(info.host.as_str())),
-                (
-                    "host_version",
-                    info.host_version
-                        .as_deref()
-                        .map_or(ContextValue::Null, text),
-                ),
-                ("platform", text(&info.platform)),
-            ];
-            let document = ContextValue::Map(
-                document
-                    .into_iter()
-                    .map(|(key, value)| (key.to_owned(), value))
-                    .collect(),
-            );
-            format!("{}\n", document.to_json())
-        }
+        Format::Json => format!("{}\n", commands::info(&info).to_json()),
     }
 }
 
@@ -168,8 +137,10 @@ fn help() -> String {
     }
     text.push_str(
         "\nPATH names a spec or a project, as its type: header declares; --spec,\n\
-         --section and submission take a project. Not implemented yet: read-odm,\n\
-         schema and selftest. Each checks its arguments, then exits with status 2.\n\n\
+         --section and submission take a project. selftest runs the cases the\n\
+         binary carries and compares each with its expected files. read-odm and\n\
+         schema are not implemented yet: each checks its arguments, then exits\n\
+         with status 2.\n\n\
          exit status: 0 succeeded, 1 completed with findings, 2 could not run as asked\n",
     );
     text
