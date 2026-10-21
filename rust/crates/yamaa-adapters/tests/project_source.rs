@@ -993,7 +993,7 @@ mod project {
 
             #[cfg(feature = "parquet")]
             {
-                let bytes = include_bytes!("fixtures/pq/text.parquet");
+                let bytes = &crate::support::parquet_files::file("text")[..];
                 for present in [false, true] {
                     let source = SourceDeclaration {
                         name: "SRC".into(),

@@ -7,11 +7,13 @@ host builds with (the R bundle's leaves out the wheels' dist profile), a lock
 trimmed from the canonical rust/Cargo.lock and
 verified crate by crate against it, the vendored YAML parser and ReadStat
 sources, and the crates.io crates of that lock as `cargo vendor` writes them,
-apart from the files that tools/staging/vendor_crates.py leaves out, with the
-Cargo configuration that reads them instead of the network. The facade crate
-carries the selftest cases in its `selftest` directory, the files of the
-benchmarks that benchmarks/selftest.yaml names, which its build embeds (#3030
-D108), so a build from the bundle reads nothing outside it. It holds no tests,
+apart from the files that tools/staging/vendor_crates.py leaves out (a crate
+that no supported target compiles, check_minimum_rust.TARGETS, keeps only its
+manifest), with the Cargo configuration that reads them instead of the
+network. The facade crate carries the selftest cases in its `selftest`
+directory, the files of the benchmarks that benchmarks/selftest.yaml names,
+which its build embeds (#3030 D108), so a build from the bundle reads nothing
+outside it. It holds no tests,
 examples, other benchmark fixtures or public-api.txt, and no Rust toolchain
 file anywhere, the vendored crates included. The command line has no source
 archive: its bundle, with the yamaa-cli crate, is the workspace that its
@@ -42,6 +44,7 @@ import tempfile
 import tomllib
 from pathlib import Path
 
+from tools.packaging import check_minimum_rust
 from tools.paths import ROOT, WORKSPACE
 from tools.staging import vendor_crates
 
@@ -384,7 +387,9 @@ def stage(host, destination: Path, workspace=WORKSPACE):
     # Cargo would read the source replacement while vendoring, so it is
     # written last.
     crates = vendor_crates.vendor(
-        destination / "rust", destination / vendor_crates.DIRECTORY
+        destination / "rust",
+        destination / vendor_crates.DIRECTORY,
+        check_minimum_rust.TARGETS,
     )
     (destination / ".cargo").mkdir()
     (destination / ".cargo/config.toml").write_bytes(CARGO_CONFIG.encode("utf-8"))
@@ -467,7 +472,11 @@ def main():
         print(python_archive(arguments.directory))
     else:
         crates = stage(arguments.host, arguments.destination.resolve())
-        print(f"{arguments.destination}: {len(crates)} vendored crates")
+        stubs = sum(not whole for *_, whole in crates)
+        print(
+            f"{arguments.destination}: {len(crates)} vendored crates, {stubs} "
+            "of them manifests alone"
+        )
 
 
 if __name__ == "__main__":

@@ -6,14 +6,18 @@ crates to be bundled with `cargo vendor` and tarred with xz compression, and
 its Repository Policy prefers "a vendor.tar.xz file" to a download at
 installation and admits no binary executable code in a source package.
 
-    python3 vendor_crates.py <workspace> <archive>
+    python3 vendor_crates.py <workspace> <archive> --target <triple> [...]
 
-runs `cargo vendor --locked --versioned-dirs` in the workspace, leaves out the
-reviewed prebuilt binaries that PREBUILT lists and every Rust toolchain file,
-refuses any other binary, and writes the crates as a reproducible
-xz-compressed tar whose one top-level directory is `vendor/`. A build unpacks
-the archive beside a Cargo home whose config.toml holds CONFIG, so Cargo reads
-every crate from it and never from the network.
+runs `cargo vendor --locked --versioned-dirs` in the workspace. A crate that a
+build for one of the targets compiles (compiled) keeps its files, apart from
+every Rust toolchain file and the license texts in ALTERNATIVE_LICENSES, and
+must hold no binary. Any other crate keeps only its manifest, which Cargo reads
+to resolve the lock, with an empty src/lib.rs where Cargo needs one to read it
+(stub). The script checks that Cargo still resolves the lock offline from what
+remains, and writes the crates as a reproducible xz-compressed tar whose one
+top-level directory is `vendor/`. A build unpacks the archive beside a Cargo
+home whose config.toml holds CONFIG, so Cargo reads every crate from it and
+never from the network.
 
 The script uses only the Python standard library, so the R source package
 carries it unchanged as tools/vendor_crates.py, the script that wrote its
@@ -43,26 +47,23 @@ replace-with = "vendored-sources"
 directory = "{DIRECTORY}"
 """
 CHECKSUMS = ".cargo-checksum.json"
+MANIFEST = "Cargo.toml"
+# The library root that Cargo looks for when a manifest names no library path.
+LIBRARY = "src/lib.rs"
 # A fixed time, owner and mode make the archive's bytes depend only on the
 # crates, on any operating system.
 MTIME = 946684800  # 2000-01-01T00:00:00Z
 PRESET = 9 | lzma.PRESET_EXTREME
 
-# Prebuilt binaries that a crate ships, by crate name and path in the crate.
-# CRAN's policy admits no binary executable code in a source package, so they
-# are left out. Each crate listed here builds only for targets that the
-# packages never build, so no build reads the files; any other binary stops
-# vendoring until it is reviewed and listed.
-PREBUILT = {
-    # The component-model runtime for wasm32 targets, which getrandom reaches
-    # through wasip2: WebAssembly objects and an archive of them.
-    "wit-bindgen": (
-        "src/rt/libwit_bindgen_cabi.a",
-        "src/rt/wit_bindgen_cabi.o",
-        "src/rt/wit_bindgen_cabi_realloc.o",
-        "src/rt/wit_bindgen_cabi_wasip3.o",
-        "wasi-cli@0.2.0.wasm",
-    ),
+# License texts that a crate ships for an alternative to the license that
+# yamaa relies on, by crate name and path in the crate. The packages carry
+# only the license information that they need (#3030 D136), so these are left
+# out; a listed text that the crate no longer ships stops vendoring until this
+# table is reviewed.
+ALTERNATIVE_LICENSES = {
+    # zstd is offered under BSD-3-Clause, whose text zstd/LICENSE keeps and
+    # which yamaa relies on, or under the license whose text is COPYING.
+    "zstd-sys": ("zstd/COPYING",),
 }
 # rustup reads a toolchain file in the directory that a command runs in and
 # in its parents, and Cargo runs a crate's build script in that crate's
@@ -111,31 +112,123 @@ def is_binary(path):
     return False
 
 
+def manifest(crate):
+    """Return a vendored crate's parsed manifest."""
+    return tomllib.loads((crate / MANIFEST).read_text(encoding="utf-8"))
+
+
 def package(crate):
     """Return the name and version that a vendored crate's manifest declares."""
-    manifest = tomllib.loads((crate / "Cargo.toml").read_text(encoding="utf-8"))
-    return manifest["package"]["name"], manifest["package"]["version"]
+    declared = manifest(crate)["package"]
+    return declared["name"], declared["version"]
 
 
-def prebuilt(crate, name, label):
-    """Return a crate's reviewed prebuilt binaries; refuse any other binary."""
-    listed = set(PREBUILT.get(name, ()))
-    found = []
+def cargo(workspace, directory, *arguments):
+    """Run a Cargo command in the workspace, offline and with the locked
+    versions, reading the crates.io crates from the vendor directory, and
+    return its output."""
+    location = json.dumps(str(Path(directory).absolute()), ensure_ascii=False)
+    command = ["cargo", *arguments, "--locked", "--offline"]
+    for setting in (
+        'source.crates-io.replace-with="vendored-sources"',
+        f"source.vendored-sources.directory={location}",
+    ):
+        command += ["--config", setting]
+    return subprocess.run(
+        command, cwd=workspace, stdout=subprocess.PIPE, text=True, check=True
+    ).stdout
+
+
+def compiled(workspace, directory, targets):
+    """The (name, version) of each package that a build for one of `targets`
+    compiles, the workspace members included.
+
+    `cargo tree` gives the packages that each target links, as Cargo's feature
+    resolver selects them; `cargo metadata` would also list the optional
+    dependencies that only a weak feature or another platform's dependency
+    enables, which no build compiles. A build also compiles, for the machine
+    that runs it, those packages' procedural macros and their build scripts'
+    dependencies. A source package is built on a machine of the target that it
+    is installed for, so every package that those reach through the
+    dependencies that `cargo metadata` resolves for the target counts too, and
+    the result does not depend on the machine that vendors the crates.
+    """
+    found = set()
+    for target in targets:
+        output = cargo(
+            workspace,
+            directory,
+            *("tree", "--workspace", "--all-features", "--target", target),
+            *("--edges", "normal,no-proc-macro", "--prefix", "none"),
+            *("--format", "{p}"),
+        )
+        linked = {
+            (line.split()[0], line.split()[1].removeprefix("v"))
+            for line in output.splitlines()
+            if line.strip()
+        }
+        resolved = json.loads(
+            cargo(
+                workspace,
+                directory,
+                *("metadata", "--all-features", "--format-version", "1"),
+                *("--filter-platform", target),
+            )
+        )
+        packages = {package["id"]: package for package in resolved["packages"]}
+        nodes = {node["id"]: node["deps"] for node in resolved["resolve"]["nodes"]}
+
+        def key(identifier):
+            return packages[identifier]["name"], packages[identifier]["version"]
+
+        def build_time(dependency):
+            """Whether a build compiles the dependency for the machine that
+            runs it: a build dependency or a procedural macro."""
+            kinds = {kind["kind"] for kind in dependency["dep_kinds"]}
+            package = packages[dependency["pkg"]]
+            macro = any("proc-macro" in item["kind"] for item in package["targets"])
+            return "build" in kinds or macro
+
+        pending = [
+            dependency["pkg"]
+            for identifier, dependencies in nodes.items()
+            if key(identifier) in linked
+            for dependency in dependencies
+            if build_time(dependency)
+        ]
+        reached = set()
+        while pending:
+            identifier = pending.pop()
+            if identifier not in reached:
+                reached.add(identifier)
+                pending.extend(dependency["pkg"] for dependency in nodes[identifier])
+        found |= linked | {key(identifier) for identifier in reached}
+    return found
+
+
+def binaries(crate, label):
+    """Refuse any binary in a crate that a target compiles: CRAN's policy
+    admits no binary executable code in a source package."""
     for path in sorted(crate.rglob("*")):
         if path.is_file() and is_binary(path):
             relative = path.relative_to(crate).as_posix()
-            if relative not in listed:
-                raise ValueError(
-                    f"{label} ships the prebuilt binary {relative}; review it "
-                    "and list it in PREBUILT"
-                )
-            found.append(relative)
-    missing = sorted(listed - set(found))
-    if missing:
-        raise ValueError(
-            f"{label} no longer ships the listed binary {missing[0]}; review PREBUILT"
-        )
-    return found
+            raise ValueError(
+                f"{label} ships the prebuilt binary {relative}, which a source "
+                "package may not carry; review the crate"
+            )
+
+
+def alternative_licenses(crate, name, label):
+    """Return the license texts of ALTERNATIVE_LICENSES that a crate ships;
+    refuse a listed text that it no longer ships."""
+    listed = sorted(ALTERNATIVE_LICENSES.get(name, ()))
+    for relative in listed:
+        if not (crate / relative).is_file():
+            raise ValueError(
+                f"{label} no longer ships the listed license text {relative}; "
+                "review ALTERNATIVE_LICENSES"
+            )
+    return listed
 
 
 def toolchain_files(crate):
@@ -148,7 +241,8 @@ def toolchain_files(crate):
 
 
 def leave_out(crate, paths, label):
-    """Remove files from a crate, with their entries in its checksum record.
+    """Remove files from a crate, with their entries in its checksum record,
+    and the directories that the removal empties.
 
     Cargo checks every file that the record lists when it builds the crate,
     so the remaining entries stay complete. The package checksum, which Cargo
@@ -164,6 +258,9 @@ def leave_out(crate, paths, label):
     for relative in paths:
         (crate / relative).unlink()
         del record["files"][relative]
+    for path in sorted(crate.rglob("*"), reverse=True):
+        if path.is_dir() and not any(path.iterdir()):
+            path.rmdir()
     # Cargo writes this record as compact JSON with sorted keys.
     checksums.write_text(
         json.dumps(record, separators=(",", ":"), sort_keys=True),
@@ -171,10 +268,41 @@ def leave_out(crate, paths, label):
     )
 
 
-def vendor(workspace, directory):
+def stub(crate, label):
+    """Reduce a crate that no target compiles to its manifest, which Cargo
+    reads to resolve the lock, and return the paths left out.
+
+    Cargo checks the files that a checksum record lists only when it compiles
+    the crate, so the record keeps the manifest's entry alone. A manifest that
+    names no library path leaves the library to Cargo's discovery of LIBRARY,
+    without which Cargo cannot read the manifest: an empty LIBRARY, which the
+    record does not list, takes the place of the crate's, so that the package
+    carries none of the crate's code.
+    """
+    declared = manifest(crate)
+    left_out = sorted(
+        relative
+        for relative in (
+            path.relative_to(crate).as_posix()
+            for path in crate.rglob("*")
+            if path.is_file()
+        )
+        if relative not in {MANIFEST, CHECKSUMS}
+    )
+    leave_out(crate, left_out, label)
+    if "path" not in declared.get("lib", {}):
+        (crate / LIBRARY).parent.mkdir(parents=True, exist_ok=True)
+        (crate / LIBRARY).write_bytes(b"")
+    return left_out
+
+
+def vendor(workspace, directory, targets):
     """Vendor the workspace's locked registry crates into a new directory.
 
-    Returns (name, version, left-out paths) for each crate, in name order.
+    A crate that one of `targets` compiles keeps its files but the left-out
+    ones; any other keeps only its manifest (stub). Returns (name, version,
+    left-out paths, whether the crate is kept whole) for each crate, in name
+    order.
     """
     directory = Path(directory)
     if directory.exists():
@@ -185,6 +313,7 @@ def vendor(workspace, directory):
         stdout=subprocess.DEVNULL,
         check=True,
     )
+    selected = compiled(workspace, directory, targets)
     crates = []
     for crate in sorted(directory.iterdir()):
         if crate.is_symlink() or not crate.is_dir():
@@ -196,12 +325,24 @@ def vendor(workspace, directory):
         name, version = package(crate)
         if crate.name != f"{name}-{version}":
             raise ValueError(f"vendored crate {crate.name} declares {name} {version}")
-        left_out = sorted(prebuilt(crate, name, crate.name) + toolchain_files(crate))
-        leave_out(crate, left_out, crate.name)
-        crates.append((name, version, left_out))
-    unused = set(PREBUILT) - {name for name, _, _ in crates}
+        whole = (name, version) in selected
+        if whole:
+            left_out = sorted(
+                toolchain_files(crate) + alternative_licenses(crate, name, crate.name)
+            )
+            leave_out(crate, left_out, crate.name)
+            binaries(crate, crate.name)
+        else:
+            left_out = stub(crate, crate.name)
+        crates.append((name, version, left_out, whole))
+    unused = set(ALTERNATIVE_LICENSES) - {name for name, *_ in crates}
     if unused:
-        raise ValueError(f"PREBUILT lists {sorted(unused)[0]}, which is not vendored")
+        raise ValueError(
+            f"ALTERNATIVE_LICENSES lists {sorted(unused)[0]}, which is not vendored"
+        )
+    # Cargo reads every vendored manifest before it builds anything, so the
+    # lock must still resolve from what remains.
+    cargo(workspace, directory, "metadata", "--format-version", "1")
     return sorted(crates, key=lambda crate: (crate[0], crate[1]))
 
 
@@ -239,12 +380,20 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("workspace", type=Path, help="directory of Cargo.lock")
     parser.add_argument("archive", type=Path, help="the new .tar.xz archive")
+    parser.add_argument(
+        "--target",
+        action="append",
+        required=True,
+        dest="targets",
+        help="a target that the package builds for; repeat it for each target",
+    )
     arguments = parser.parse_args()
     with tempfile.TemporaryDirectory(prefix="vendor-crates-") as scratch:
         directory = Path(scratch) / DIRECTORY
-        crates = vendor(arguments.workspace.resolve(), directory)
+        crates = vendor(arguments.workspace.resolve(), directory, arguments.targets)
         write_archive(directory, arguments.archive)
-    print(f"{arguments.archive}: {len(crates)} crates")
+    stubs = sum(not whole for *_, whole in crates)
+    print(f"{arguments.archive}: {len(crates)} crates, {stubs} of them manifests alone")
 
 
 if __name__ == "__main__":

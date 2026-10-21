@@ -9,13 +9,13 @@ def test_runtime_without_optional_python_readers(tmp_path):
     script = textwrap.dedent(
         '''
         import importlib.abc
+        import json
+        import re
         import sys
-        from importlib.metadata import requires
+        from importlib.metadata import requires, version
         from pathlib import Path
 
-        from packaging.requirements import Requirement
-
-        blocked = {"yaml", "yaml12", "pyarrow", "lxml", "pydantic"}
+        blocked = {"yaml", "yaml12", "pyarrow", "lxml", "pydantic", "packaging"}
 
         class OptionalReaders:
             def find_spec(self, fullname, path=None, target=None):
@@ -31,11 +31,12 @@ def test_runtime_without_optional_python_readers(tmp_path):
         import yamaa
         from yamaa import _locked_functions
 
-        dependencies = [Requirement(value) for value in requires("yamaa")]
+        # A runtime requirement is one that no extra selects.
         assert {
-            value.name for value in dependencies
-            if value.marker is None or value.marker.evaluate({"extra": ""})
-        } == {"polars", "packaging"}
+            re.match(r"[A-Za-z0-9._-]+", value).group().lower()
+            for value in requires("yamaa")
+            if "extra" not in value.partition(";")[2]
+        } == {"polars"}
 
         root = Path(sys.argv[1])
         source = "ID,VALUE\\na,-9223372036854775808\\nb,9223372036854775807\\nc,\\n"
@@ -75,6 +76,40 @@ def test_runtime_without_optional_python_readers(tmp_path):
         assert roundtrip.output.to_dicts() == expected
         roundtrip.save()
         assert (root / "roundtrip.csv").read_text() == source
+
+        # The engine verifies a function's uv lock: the host imports no
+        # packaging library to report the installed versions.
+        (root / "dedent.yaml").write_text(
+            'yamaa: "1.0"\\ntype: function\\nname: dedent\\n'
+            "description: Text without its common leading white space.\\n"
+            "params: [{name: text, type: str}]\\nreturns: str\\n"
+            "implementations: {python: textwrap.dedent}\\ntests:\\n"
+            "  - {id: normal, covers: [normal, boundary], args: {text: x}, result: x}\\n"
+            "  - {id: missing, covers: ['short-circuit-missing:text'],"
+            " args: {text: null}, result: null}\\n"
+        )
+        (root / "uv.lock").write_text(
+            'version = 1\\n[[package]]\\nname = "yamaa"\\n'
+            f'version = "{version("yamaa")}"\\n'
+            f"resolution-markers = [\\"sys_platform == '{sys.platform}'\\"]\\n"
+        )
+        (root / "project.yaml").write_text(
+            'yamaa: "1.0"\\ntype: project\\nfunctions: [dedent.yaml]\\n'
+            "environments:\\n  python: {lock: uv.lock}\\n"
+            "adam:\\n  specs: [called.yaml]\\n"
+        )
+        (root / "called.yaml").write_text(
+            specification.replace("derivation: SRC.ID}", "derivation: SRC.ID}\\n"
+            "  - {name: TEXT, type: str, derivation: "
+            "{function: {name: dedent, args: {text: SRC.ID}}}}", 1)
+            .replace("columns: [ID, VALUE]", "columns: [ID, TEXT]")
+            .replace("path: output.parquet", "path: called.csv")
+        )
+        called = yamaa.project(root / "project.yaml").spec("TEST").run()
+        assert called.issues.is_empty(), called.issues
+        assert called.output["TEXT"].to_list() == ["a", "b", "c"]
+        activation = json.loads(called._native.observations())["activation"]
+        assert activation["lock"] == "verified"
         assert not any(name.split(".")[0] in blocked for name in sys.modules)
         '''
     )
