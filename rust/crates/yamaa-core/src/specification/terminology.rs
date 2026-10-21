@@ -7,6 +7,62 @@ use crate::{
     project_terminology::Catalogue,
 };
 
+/// What a 1.x specification checked or run without a project file binds that
+/// only a project supplies, in column order: the column's codelist and
+/// inventory vocabulary, then each of its value-level entries'. Each fails
+/// validation as `project_binding_missing` at the field that binds it, with
+/// the column and, for a codelist, the codelist (CT-13).
+pub(super) fn unbound(spec: &ast::Spec) -> Vec<PreflightFinding> {
+    use crate::diagnostic::{ConditionCode, Context, Diagnostic};
+    use crate::json::Value;
+    let missing = |path: String, binding: &str, column: &str, codelist: Option<&str>| {
+        let mut context = Context::new();
+        context.insert("binding".into(), Value::String(binding.into()));
+        context.insert("column".into(), Value::String(column.into()));
+        if let Some(codelist) = codelist {
+            context.insert("codelist".into(), Value::String(codelist.into()));
+        }
+        PreflightFinding::Scalar(Diagnostic {
+            code: ConditionCode::ProjectBindingMissing,
+            spec_paths: vec![path],
+            context,
+            source_span: None,
+            operand_route: None,
+        })
+    };
+    let mut findings = Vec::new();
+    for column in &spec.columns {
+        let Some(submission) = &column.submission else {
+            continue;
+        };
+        let declarations = std::iter::once((&submission.metadata, submission.meta)).chain(
+            submission
+                .value_level
+                .iter()
+                .map(|entry| (&entry.metadata, entry.meta)),
+        );
+        for (metadata, meta) in declarations {
+            if let Some(codelist) = &metadata.codelist {
+                findings.push(missing(
+                    spec.cite(codelist.meta),
+                    "codelist",
+                    &column.name.name,
+                    Some(&codelist.name),
+                ));
+            }
+            if metadata.inventory_vocabulary == Some(true) {
+                findings.push(missing(
+                    format!("{}.inventory_vocabulary", spec.cite(meta)),
+                    "inventory_vocabulary",
+                    &column.name.name,
+                    None,
+                ));
+            }
+        }
+    }
+    findings
+}
+
 /// One binding: the column's own, or an entry's over the rows its where
 /// clause selects.
 struct Declaration<'a> {

@@ -502,6 +502,7 @@ conditions! {
     DefineTransportCollision => ("validation", "transport_path_collision", Some("JSON-2")),
     DefineCreatedInvalid => ("validation", "value_not_permitted", Some("DEFINE-3")),
     CodelistUnknownBinding => ("validation", "unknown_codelist", Some("CT-1")),
+    ProjectBindingMissing => ("validation", "project_binding_missing", Some("CT-13")),
     CodelistBindingTypeMismatch => ("validation", "codelist_type_mismatch", Some("CT-8")),
     CodelistAllowedValuesRedundant => ("validation", "redundant_declaration", Some("CT-9")),
     VerificationCodelistFailed => ("verification", "allowed_values_failed", Some("CT-7")),

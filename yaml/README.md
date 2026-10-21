@@ -105,11 +105,13 @@ specification file may be one layer of an inheritance chain, so the spec JSON
 Schema checks what one layer may write
 ([LAYER-4](../rules/inheritance.md#layer-4)), and its `$defs/root_class`
 checks a complete specification. After changing a file in `v1/`, regenerate
-them and the copy of `v1/` the engine embeds, which `make quick` also compares:
+them, the copy of `v1/` the engine embeds and the field orders the lint reads
+from the specification classes, which `make quick` also compares:
 
 ```sh
 uv run --project python --no-sync python -m tools.packaging.generate_json_schema --write
 uv run --project python --no-sync python -m tools.packaging.generate_shipped_schema --write
+uv run --project python --no-sync python -m tools.packaging.generate_style_orders --write
 ```
 
 ## Execution overview

@@ -1,6 +1,6 @@
 //! The run report's optional file declaration and its static findings,
 //! without file authority.
-use super::output_profile;
+use super::{artifact_profile, unknown_artifact_profile};
 use crate::json::Value as JsonValue;
 use crate::{
     ast,
@@ -44,7 +44,7 @@ pub(super) fn prepare(
         findings.push(ReportFinding::Missing { warnings });
     }
     if let Some(path) = report.as_deref() {
-        if output_profile(path).is_none() {
+        if artifact_profile(path).is_none() {
             findings.push(ReportFinding::UnknownProfile { path: path.into() });
         }
         if path == output.path.text {
@@ -67,18 +67,9 @@ impl ReportFinding {
                 )]
                 .into(),
             ),
-            Self::UnknownProfile { path } => (
-                ConditionCode::OutputUnknownProfile,
-                vec!["output.report".into()],
-                [
-                    ("path".into(), text(path)),
-                    (
-                        "permitted".into(),
-                        JsonValue::Array([".csv", ".parquet"].into_iter().map(text).collect()),
-                    ),
-                ]
-                .into(),
-            ),
+            Self::UnknownProfile { path } => {
+                return unknown_artifact_profile(path, vec!["output.report".into()])
+            }
             Self::Collision { path } => (
                 ConditionCode::ReportPathCollision,
                 vec!["output.path".into(), "output.report".into()],

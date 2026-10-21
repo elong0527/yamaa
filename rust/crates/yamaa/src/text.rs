@@ -94,7 +94,8 @@ impl fmt::Display for Summary {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Action<'a> {
     /// `save()` of the result whose summary names this subject: a run's
-    /// dataset name, or a project path with its section.
+    /// dataset name, or a project path with its section; or
+    /// [`crate::Engine::save_table`] to this path, as given.
     Save(&'a str),
     /// `resolve()` of the specification at this path, as given.
     Resolve(&'a str),

@@ -36,6 +36,7 @@ mod types;
 pub use lookup_diagnostics::LookupFinding;
 use lookup_diagnostics::ReferenceCause;
 mod output_diagnostics;
+pub use output_diagnostics::unknown_artifact_profile;
 mod phases;
 mod preflight_diagnostics;
 mod root_filter;
@@ -698,15 +699,8 @@ impl PreparedSpecification {
         environment: Option<&crate::project_environment::ExecutionEnvironment>,
         links: crate::producer_contract::Links<'_>,
     ) -> Result<Self, PrepareError> {
-        // A 1.0 specification compiled without its project fails validation
-        // when it binds a codelist or calls a project function (D32); until
-        // P1-11 builds that, each such binding is refused (D76).
-        if environment.is_none() {
-            let bindings = crate::front_end::v1::spec::checks::project_bindings(&tree);
-            if !bindings.is_empty() {
-                return Err(PrepareError::Unsupported(bindings));
-            }
-        }
+        // Without an environment, each binding only a project supplies fails
+        // validation (CT-13), with the specification's other findings.
         Self::prepare_lowered(
             tree,
             document,
@@ -778,6 +772,16 @@ impl PreparedSpecification {
         undeclared: Option<crate::project_environment::Undeclared>,
     ) -> Result<Self, PrepareError> {
         let spec = &tree;
+        // A 1.x specification prepared without a project file, which is when
+        // `prepare_tree_linked` gives none of a project's functions, codelists
+        // or inventory, binds nothing a project supplies: each codelist,
+        // inventory vocabulary and project function it names fails validation
+        // as `project_binding_missing` (CT-13). A 0.5 specification keeps its
+        // 0.5.0 meaning (#3030 D75).
+        let projectless = matches!(spec.header.surface, ast::Surface::V1 { .. })
+            && functions.is_none()
+            && catalogue.is_none()
+            && inventory.is_none();
         match_values::declaration_admission(spec)?;
         let mut findings = checks::root::findings(spec);
         findings.extend(checks::odm::context_findings(spec)?);
@@ -803,7 +807,7 @@ impl PreparedSpecification {
         // environment document, and unknown calls retain ordinary static causes.
         // A project without an environment for the host names that cause instead.
         let functions = functions.unwrap_or(&[]);
-        let project = match functions::prepare(spec, functions, undeclared) {
+        let project = match functions::prepare(spec, functions, undeclared, projectless) {
             Ok(project) => Some(project),
             Err(PrepareError::Invalid(errors)) => {
                 findings.extend(errors);
@@ -812,8 +816,14 @@ impl PreparedSpecification {
             Err(error) => return Err(error),
         };
         let inventory = inventory.map_or(&[][..], |inventory| inventory.names());
-        let column_verifications =
-            verifications::prepare_columns(spec, &output, catalogue, inventory, &mut findings)?;
+        let column_verifications = verifications::prepare_columns(
+            spec,
+            &output,
+            catalogue,
+            inventory,
+            projectless,
+            &mut findings,
+        )?;
         // Operand types before capture: each link's producer types its input.
         let declared = types::DeclaredTypes::new(
             spec,
@@ -1127,7 +1137,7 @@ impl PreparedSpecification {
         }
     }
     pub fn output_profile(&self) -> Option<&'static str> {
-        output_profile(&self.output_path)
+        artifact_profile(&self.output_path)
     }
     /// Canonical arbitrary-width declaration, never a runtime signed-i64 value.
     pub fn output_decimals(&self) -> Option<&str> {
@@ -1142,7 +1152,7 @@ impl PreparedSpecification {
     /// Invoke only after derivation, output-key checks, and verification succeed.
     pub fn output_findings(&self) -> Vec<OutputFinding> {
         let mut findings = Vec::new();
-        if output_profile(&self.output_path).is_none() {
+        if artifact_profile(&self.output_path).is_none() {
             findings.push(OutputFinding::UnknownProfile {
                 path: self.output_path.clone(),
             });
@@ -1287,7 +1297,12 @@ fn output_basename(path: &str) -> &str {
         .rfind(|part| !part.is_empty() && *part != ".")
         .unwrap_or("")
 }
-fn output_profile(path: &str) -> Option<&'static str> {
+/// The profile OUTPUT-5's closed mapping gives `path`: `csv` or `parquet`, by
+/// the case-insensitive extension of its last segment, or `None` for any
+/// other extension or none. `path` separates its segments with `/`, as a
+/// written path does; a name that is only an extension, such as `.csv`, has
+/// none.
+pub fn artifact_profile(path: &str) -> Option<&'static str> {
     let (stem, suffix) = output_basename(path).rsplit_once('.')?;
     if stem.is_empty() {
         return None;

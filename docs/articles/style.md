@@ -90,12 +90,20 @@ columns:
     derivation: DM.STUDYID
 ```
 
+A specification that declares `yamaa` is written in the order of the 1.0
+schema: its root opens with the header, `yamaa`, `type` and `model`, and writes
+`clear` between `parent` and `domain`. A file that declares `schema_version`
+keeps the order of the 0.5 schema. This guide fixes no field order or root
+spacing yet for a 1.0 project, codelists or function file.
+
 ## Blank lines
 
 One blank line precedes every root field from `output` on. The fields before
 `output` (`schema_version`, `parent`, `domain`, `keys`, `input`, `base` and
-`filter`) may stand together. A comment written directly above a field belongs
-to that field, and the blank line precedes the comment. A missing blank line is
+`filter`) may stand together; in a specification that declares `yamaa` they
+are `yamaa`, `type`, `model`, `parent`, `clear`, `domain`, `keys`, `input`,
+`base` and `filter`. A comment written directly above a field belongs to that
+field, and the blank line precedes the comment. A missing blank line is
 reported as `root_spacing`.
 
 Within `intermediates`, `columns` and `rows`, one blank line separates two

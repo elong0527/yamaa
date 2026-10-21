@@ -26,7 +26,7 @@ from pathlib import Path
 
 from tools.benchmark import directories as benchmark_directories
 from tools.benchmark import entries as benchmark_entries
-from tools.benchmark import load_metadata
+from tools.benchmark import layered_field, load_metadata
 from tools.paths import ROOT
 from tools.surface import declares_header, expression
 
@@ -98,12 +98,12 @@ def supplies_functions(case, entries):
 
 
 def spec_name(path):
-    """The name a project gives a specification, its `domain`, or None."""
+    """The name a project gives a specification, its `domain`, which a layer
+    may inherit from its parent, or None."""
     try:
-        document = load_yaml(path)
+        name = layered_field(path, "domain")
     except Exception:  # noqa: BLE001 -- such a call has no command line
         return None
-    name = document.get("domain") if isinstance(document, dict) else None
     return name if isinstance(name, str) else None
 
 

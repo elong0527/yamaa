@@ -76,7 +76,6 @@ class CorpusTests(unittest.TestCase):
             ("benchmarks/negative-literal-structure/expected/error.yaml", "negative"),
             ("benchmarks/negative-lookup-unknown-key/spec.yaml", "keys"),
             ("benchmarks/AGENTS.md", "D8"),
-            ("benchmarks/sdtm-lb-metadata/spec.yaml", "project"),
             ("benchmarks/schema-inheritance-clear/spec_study.yaml", "comment"),
         ):
             with self.subTest(note=item):
@@ -84,6 +83,9 @@ class CorpusTests(unittest.TestCase):
         kinds = Counter(note.kind for note in self.result.notes)
         self.assertNotIn("internal", kinds)
         self.assertNotIn("yaml", kinds)
+        # Every benchmark that binds a codelist, an inventory vocabulary or a
+        # project function runs with its project (CT-13).
+        self.assertNotIn("project", kinds)
         self.assertEqual(kinds["residue"], 1)
 
     def test_a_second_run_changes_nothing(self):
