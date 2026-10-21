@@ -34,9 +34,11 @@ def _installed_providers(roots: Sequence[str]) -> Mapping[str, list[str]]:
     PEP 660 path-based editables can omit top_level.txt. Their installed direct
     URL plus recorded .pth paths identify the owning distribution mechanically.
     Never evaluate .pth import lines or import a package to infer its owner.
+    A distribution that two path entries reach, as `lib` and `lib64` are on
+    RHEL-family systems, is one provider.
     """
     mapping = {
-        root: list(names)
+        root: list(dict.fromkeys(names))
         for root, names in metadata.packages_distributions().items()
         if root in roots
     }
@@ -114,6 +116,15 @@ def installed_version(distribution: str) -> object:
     Every other exception, and an interrupt, keeps its identity.
     """
     return metadata.version(distribution)
+
+
+def integer_digits() -> int:
+    """The interpreter's limit on the digits of an integer read from text, 0 when off.
+
+    packaging converted every number of a version with `int()`, under this limit,
+    so the engine applies it to the versions it compares.
+    """
+    return sys.get_int_max_str_digits()
 
 
 def marker_environment() -> dict[str, str]:

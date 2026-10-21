@@ -565,9 +565,9 @@ mod tests {
     }
 
     #[test]
-    fn define_names_a_1_0_section_s_guide_by_its_place_in_standards() {
-        // The guide composition binds is the first of `standards` (D16); one
-        // outside the section's model is reported there (SUB-3).
+    fn define_names_a_1_0_section_s_guides_by_their_place_in_standards() {
+        // Every guide of `standards` belongs to the section's model (D16,
+        // DEFINE-6); one outside it is reported at its own entry.
         let tree = with_header(
             "project",
             vec![
@@ -586,11 +586,18 @@ mod tests {
                         ("specs", Tree::list(vec![Tree::text("dm.yaml")])),
                         (
                             "standards",
-                            Tree::list(vec![Tree::map(vec![
-                                ("name", Tree::text("ADaMIG")),
-                                ("version", Tree::text("1.3")),
-                                ("status", Tree::text("Final")),
-                            ])]),
+                            Tree::list(vec![
+                                Tree::map(vec![
+                                    ("name", Tree::text("SDTMIG")),
+                                    ("version", Tree::text("3.4")),
+                                    ("status", Tree::text("Final")),
+                                ]),
+                                Tree::map(vec![
+                                    ("name", Tree::text("ADaMIG")),
+                                    ("version", Tree::text("1.3")),
+                                    ("status", Tree::text("Final")),
+                                ]),
+                            ]),
                         ),
                         ("define", Tree::text("out/define.xml")),
                     ]),
@@ -617,13 +624,19 @@ mod tests {
         };
         // A 1.0 section reports it as `standard_model_mismatch` (D58), naming
         // the guide, the section and the section's model.
+        assert!(
+            findings
+                .iter()
+                .all(|finding| finding.path != "sdtm.standards[0].name"),
+            "{findings:?}"
+        );
         let finding = findings
             .iter()
-            .find(|finding| finding.path == "sdtm.standards[0].name")
+            .find(|finding| finding.path == "sdtm.standards[1].name")
             .unwrap_or_else(|| panic!("{findings:?}"));
         assert_eq!(
             finding.code,
-            crate::diagnostic::ConditionCode::SubmissionModelMismatch
+            crate::diagnostic::ConditionCode::SectionStandardModel
         );
         let text = |value: &str| crate::json::Value::String(value.into());
         assert_eq!(

@@ -50,10 +50,17 @@ refused <- function(result, condition, rule, reason) {
     identical(result$issues$rule, rule),
     !has_jsonlite || identical(reasons(result$issues), reason))
   failure <- tryCatch(result$save(), error = identity)
-  # D39: the run names its dataset, then its one issue.
+  # D39: the run names its dataset, then its one issue, which starts with its
+  # location (P-ISSUE-1), relative to the working directory when the file is
+  # beneath it.
+  here <- paste0(normalizePath(getwd(), winslash = "/"), "/")
+  file <- result$issues$file
+  location <- if (is.na(file)) "" else sprintf("%s:%d:%d: ",
+    if (startsWith(file, here)) substring(file, nchar(here) + 1L) else file,
+    as.integer(result$issues$line), as.integer(result$issues$column))
   stopifnot(inherits(failure, "yamaa_error"),
     identical(conditionMessage(failure),
-      sprintf("cannot save TEST: %s [%s, %s]", result$issues$message, condition, rule)),
+      sprintf("cannot save TEST: %s%s [%s, %s]", location, result$issues$message, condition, rule)),
     identical(failure$issues, result$issues))
 }
 # The project's one specification, run with the project's functions.

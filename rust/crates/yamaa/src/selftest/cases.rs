@@ -81,8 +81,22 @@ pub(super) const CASES: &[Case] = &[
             ("adsl.csv", case_file!("schema-source-xpt/expected/adsl.csv")),
         ],
     },
+    Case {
+        name: "sdtm-dm-odm-snapshot",
+        features: &["odm", "yaml"],
+        adapters: &["csv", "odm"],
+        entries: &[Entry { specification: "spec.yaml", project: None }],
+        define: None,
+        files: &[
+            ("input/odm.xml", case_file!("sdtm-dm-odm-snapshot/input/odm.xml")),
+            ("spec.yaml", case_file!("sdtm-dm-odm-snapshot/spec.yaml")),
+        ],
+        expected: &[
+            ("dm.csv", case_file!("sdtm-dm-odm-snapshot/expected/dm.csv")),
+        ],
+    },
 ];
 
 /// The adapters that no listed case covers (benchmarks/selftest.yaml).
 #[rustfmt::skip]
-pub(super) const UNCOVERED: &[&str] = &["odm"];
+pub(super) const UNCOVERED: &[&str] = &[];

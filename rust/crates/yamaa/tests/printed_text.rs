@@ -1,9 +1,10 @@
 //! Printed summaries, error text and issue JSON through the public engine
 //! (D28, D37, D39, P-PRINT-1). Every expected line here was written from
 //! `docs/design/interface-1.0/api.md` ("Printed text" and "The command line")
-//! and the message templates of `yaml/conditions.yaml` before the engine ran;
-//! issue locations are not recorded yet (#3262), so each issue line has no
-//! location.
+//! and the message templates of `yaml/conditions.yaml` before the engine ran.
+//! Each issue line starts with its location (P-ISSUE-1), counted by hand in
+//! the study's files below: the studies sit outside the current directory, so
+//! a location names its file by its absolute path.
 #![cfg(feature = "yaml")]
 
 use std::path::{Path, PathBuf};
@@ -89,9 +90,30 @@ fn study() -> Study {
     study
 }
 
-const FORWARD: &str =
-    "column ASTDY reads TRTSDT, which is declared after it [forward_reference, COLUMN-5]";
-const SKIPPED: &str = "this specification did not run because the producer of its input ADAE did not complete [producer_not_completed, PROJECT-11]";
+/// A file of the study as a location names it: absolute, with forward
+/// slashes.
+fn located(study: &Study, name: &str) -> String {
+    study.path(name).replace('\\', "/")
+}
+
+/// ADAE's issue, at `columns.ASTDY.derivation.compute`: the `compute` key of
+/// line 7, after `  - {name: ASTDY, type: int, label: Study Day, derivation: {`
+/// (60 characters).
+fn forward(study: &Study) -> String {
+    format!(
+        "{}:7:61: column ASTDY reads TRTSDT, which is declared after it [forward_reference, COLUMN-5]",
+        located(study, "adam/adae.yaml")
+    )
+}
+
+/// ADTTE's issue, at `input.ADAE.schema`: the `schema` key of line 4, after
+/// `input: {ADAE: {path: ../out/adae.csv, ` (38 characters).
+fn skipped(study: &Study) -> String {
+    format!(
+        "{}:4:39: this specification did not run because the producer of its input ADAE did not complete [producer_not_completed, PROJECT-11]",
+        located(study, "adam/adtte.yaml")
+    )
+}
 
 #[test]
 fn a_run_prints_its_dataset_name_size_and_issue_count() {
@@ -112,7 +134,10 @@ fn a_run_prints_its_dataset_name_size_and_issue_count() {
         .unwrap();
     assert_eq!(
         run.summary().to_string(),
-        format!("yamaa run of ADAE: failed, no output, 1 issue\nfirst issue: {FORWARD}")
+        format!(
+            "yamaa run of ADAE: failed, no output, 1 issue\nfirst issue: {}",
+            forward(&study)
+        )
     );
 }
 
@@ -144,7 +169,10 @@ fn a_check_prints_the_path_as_given_and_no_size() {
     assert_eq!(check.status(), Status::Failed);
     assert_eq!(
         check.summary().to_string(),
-        format!("yamaa check of {given}: failed, 1 issue\nfirst issue: {FORWARD}")
+        format!(
+            "yamaa check of {given}: failed, 1 issue\nfirst issue: {}",
+            forward(&study)
+        )
     );
     let check = engine()
         .spec_check(&study.path("adam/adsl.yaml"), None, &token)
@@ -160,7 +188,10 @@ fn a_check_prints_the_path_as_given_and_no_size() {
     let check = engine().project_check(&project, &token).unwrap();
     assert_eq!(
         check.summary().to_string(),
-        format!("yamaa check of {project}: failed, 1 issue\nfirst issue: {FORWARD}")
+        format!(
+            "yamaa check of {project}: failed, 1 issue\nfirst issue: {}",
+            forward(&study)
+        )
     );
 }
 
@@ -181,7 +212,8 @@ fn a_project_run_lists_its_members_between_the_two_lines() {
              \x20 ADSL   succeeded  2 rows x 2 columns, 0 issues\n\
              \x20 ADAE   failed     no output, 1 issue\n\
              \x20 ADTTE  skipped    no output, 1 issue\n\
-             first issue: {FORWARD}"
+             first issue: {}",
+            forward(&study)
         )
     );
     assert_eq!(summary.members.len(), 3);
@@ -191,7 +223,10 @@ fn a_project_run_lists_its_members_between_the_two_lines() {
     assert_eq!(member.status(), Status::Skipped);
     assert_eq!(
         member.summary().to_string(),
-        format!("yamaa run of ADTTE: skipped, no output, 1 issue\nfirst issue: {SKIPPED}")
+        format!(
+            "yamaa run of ADTTE: skipped, no output, 1 issue\nfirst issue: {}",
+            skipped(&study)
+        )
     );
     assert_eq!(
         runs.member("ADSL").unwrap().summary().to_string(),
@@ -203,7 +238,7 @@ fn a_project_run_lists_its_members_between_the_two_lines() {
         .iter()
         .map(yamaa::Diagnostic::text)
         .collect::<Vec<_>>();
-    assert_eq!(lines, [FORWARD, SKIPPED]);
+    assert_eq!(lines, [forward(&study), skipped(&study)]);
 }
 
 /// A listing that could not be read has no name, so the run names its member
@@ -279,7 +314,7 @@ fn a_project_run_without_a_section_names_only_the_path() {
 }
 
 /// D39: the call that refused, the first issue's line and the count of the
-/// others; the `api.md` example, without its location.
+/// others; the `api.md` example, with this study's location.
 #[test]
 fn error_text_carries_the_first_issue_and_the_count_of_the_others() {
     let study = study();
@@ -308,7 +343,7 @@ fn error_text_carries_the_first_issue_and_the_count_of_the_others() {
     let failure = run.save().unwrap_err();
     assert_eq!(
         failure.message,
-        format!("cannot save ADAE: {FORWARD} (and 2 more issues)")
+        format!("cannot save ADAE: {} (and 2 more issues)", forward(&study))
     );
     assert_eq!(failure.diagnostics.len(), 3);
     assert_eq!(failure.issues.rows(), 3);
@@ -434,7 +469,8 @@ fn an_issue_as_json_has_the_twelve_keys_and_an_object_context() {
     assert_eq!(
         value.to_json(),
         format!(
-            r#"{{"column":null,"condition":"forward_reference","context":{{"column":"ASTDY","dependency":"TRTSDT"}},"file":null,"line":null,"message":"column ASTDY reads TRTSDT, which is declared after it","operand_route":{},"phase":"validation","rule":"COLUMN-5","severity":"error","source_span":{},"spec_paths":["columns.ASTDY.derivation.compute"]}}"#,
+            r#"{{"column":61,"condition":"forward_reference","context":{{"column":"ASTDY","dependency":"TRTSDT"}},"file":{},"line":7,"message":"column ASTDY reads TRTSDT, which is declared after it","operand_route":{},"phase":"validation","rule":"COLUMN-5","severity":"error","source_span":{},"spec_paths":["columns.ASTDY.derivation.compute"]}}"#,
+            ContextValue::Text(located(&study, "adam/adae.yaml")).to_json(),
             members["operand_route"].to_json(),
             members["source_span"].to_json(),
         )
@@ -543,8 +579,8 @@ str          int  float     date        datetime             str                
 }
 
 /// The issues table types its list columns `list<str>` and `list<int>`, and a
-/// list prints its items in brackets. Issue locations are not recorded yet
-/// (#3262), so `file`, `line` and `column` print `null`.
+/// list prints its items in brackets. `file` holds the issue's absolute path,
+/// which the preview cuts at 20 characters: the 17 it keeps, then `...`.
 #[test]
 fn an_issues_table_prints_its_list_columns() {
     let study = study();
@@ -552,13 +588,23 @@ fn an_issues_table_prints_its_list_columns() {
     let run = engine()
         .spec_run(&study.path("adam/adae.yaml"), None, &token)
         .unwrap();
+    let path = located(&study, "adam/adae.yaml");
+    let file = if path.chars().count() > 20 {
+        format!("{}...", path.chars().take(17).collect::<String>())
+    } else {
+        path
+    };
+    let width = file.len().max("file".len());
     assert_eq!(
         run.issues().preview(),
-        "\
+        format!(
+            "\
 yamaa.Table: 1 row x 12 columns
-severity  phase       condition          rule      spec_paths            file  line  column  ...
-str       str         str                str       list<str>             str   int   int     ...
-error     validation  forward_reference  COLUMN-5  [columns.ASTDY.de...  null  null  null    ..."
+severity  phase       condition          rule      spec_paths            {:<width$}  line  column  ...
+str       str         str                str       list<str>             {:<width$}  int   int     ...
+error     validation  forward_reference  COLUMN-5  [columns.ASTDY.de...  {file:<width$}  7     61      ...",
+            "file", "str"
+        )
     );
     // A table without rows prints its names and types.
     let run = engine()

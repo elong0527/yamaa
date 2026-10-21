@@ -1,25 +1,28 @@
-//! The specification lint (D40, P-LINT-1, P-LINT-2): how a file departs from
+//! The yamaa file lint (D40, P-LINT-1, P-LINT-2): how a file departs from
 //! the written form the style guide fixes, as one table.
 //!
 //! [`lint`] reads each file it names once, through the local file resolver,
 //! and returns the findings that remain as a [`Lint`], whose table has the
 //! [`LINT_COLUMNS`]: the file's absolute path with forward slashes, the
 //! one-based line and column where the departure starts, the finding (one of
-//! [`LINT_FINDINGS`]), its spec path (`$` for the root) and a message. Rows
-//! come in argument order of the files, a directory's specification files in
-//! sorted path order, then by line, column and finding. The result also
-//! counts the files linted and names the files a fix rewrote, for the command
-//! line's summary line, `N lint findings in M of K files`.
+//! [`LINT_FINDINGS`]), its spec path (`$` for the root, in a 1.x file in the
+//! notation of the issues table) and a message. Rows come in argument order
+//! of the files, a directory's yamaa files of every file type in sorted path
+//! order, then by line, column and finding. The result also counts the files
+//! linted and names the files a fix rewrote, for the command line's summary
+//! line, `N lint findings in M of K files`.
 //!
 //! A comment `# yamaa-lint: allow <finding>, ... -- <reason>` directly above a
 //! field or an entry suppresses the named findings within it (P-LINT-1); a
 //! suppression that names no finding, names one the lint does not report or
 //! gives no reason is itself reported as `invalid_suppression`.
 //!
-//! With `fix`, each file is first rewritten by the proved layout fixes: it is
+//! With `fix`, each file is first rewritten by the proved fixes: it is
 //! replaced, atomically, only when the fixed text reads as the same values
-//! with the same comments and a second pass changes nothing, and the table
-//! lists what remains. These named files are the only writes outside a
+//! with the same comments, or for a canonical rewrite of a 1.x file
+//! (`restated_default`, `scalar_as_text`, `redundant_long_form`) as those
+//! values with exactly that rewrite, and a second pass changes nothing; the
+//! table lists what remains. These named files are the only writes outside a
 //! specification's declared outputs. A file that cannot be read or admitted
 //! as YAML, or a directory that cannot be listed, refuses the whole call with
 //! the issue that says why, before any file is written.
@@ -33,7 +36,7 @@ use crate::text::{self, Action};
 pub const LINT_COLUMNS: [&str; 6] = ["file", "line", "column", "finding", "spec_path", "message"];
 
 /// Every value of the lint table's `finding` column.
-pub const LINT_FINDINGS: [&str; 9] = yamaa_adapters::lint::FINDINGS;
+pub const LINT_FINDINGS: [&str; 14] = yamaa_adapters::lint::FINDINGS;
 
 /// What [`lint`] found: the findings that remain, in table order, with the
 /// number of files it read and the files a fix rewrote. The hosts return its
@@ -230,8 +233,7 @@ impl Lint {
     }
 }
 
-/// Lint the specification files `paths` names, fixing them first when `fix`
-/// is true.
+/// Lint the yamaa files `paths` names, fixing them first when `fix` is true.
 ///
 /// # Example
 ///

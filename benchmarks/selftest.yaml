@@ -12,7 +12,8 @@ cases:
   - adam-adsl-xpt
   - negative-transport-empty-string
   - schema-source-xpt
+  - sdtm-dm-odm-snapshot
 # Adapters no listed case covers yet, by their names in `info()`'s features,
-# each with the reason. The selftest report names them.
-uncovered:
-  odm: no benchmark reads an ODM XML input until P1-15 admits one
+# each with the reason. The selftest report names them. Every adapter has a
+# case, so none is named here.
+uncovered: {}
