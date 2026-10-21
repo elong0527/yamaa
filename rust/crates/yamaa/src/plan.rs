@@ -167,7 +167,10 @@ impl Plan {
         } else {
             "refused"
         });
-        let build = self.run_observed(resolver, true, &measurements, progress);
+        let build = self.run_observed(resolver, true, &measurements, progress, token);
+        if build.interrupted() || token.is_cancelled() {
+            return Err(Error::Cancelled);
+        }
         measurements.complete(build.accepted());
         let subject = self.name().unwrap_or(&self.compiled.specification);
         Ok(build.with_subject(subject))
@@ -184,13 +187,15 @@ impl Plan {
         self.compiled.state.name()
     }
 
-    /// One run; with `verify` it first verifies the compiled metadata.
+    /// One run, polling `token`; with `verify` it first verifies the
+    /// compiled metadata.
     pub(crate) fn run_observed(
         &self,
         resolver: Option<Arc<dyn yamaa_adapters::host_resources::Resolver>>,
         verify: bool,
         measurements: &Arc<Measurements>,
         progress: Option<&dyn Progress>,
+        token: &CancellationToken,
     ) -> Build {
         crate::internal::run(
             &self.shared,
@@ -200,6 +205,7 @@ impl Plan {
             None,
             verify,
             &ObserverBridge::new(measurements, progress),
+            token,
         )
     }
 
@@ -233,12 +239,14 @@ impl Plan {
     /// engine's project functions, observer and runtime identity, so a host
     /// call keeps its own capabilities. The caller has just verified the held
     /// files, or compiled them. A project run offers its `held` artifacts.
+    /// The run polls `token`.
     pub(crate) fn run_through(
         &self,
         shared: &EngineShared,
         held: Option<Arc<yamaa_adapters::file_resources::HeldArtifacts>>,
         measurements: &Arc<Measurements>,
         progress: Option<&dyn Progress>,
+        token: &CancellationToken,
     ) -> Build {
         crate::internal::run(
             shared,
@@ -248,6 +256,7 @@ impl Plan {
             held,
             false,
             &ObserverBridge::new(measurements, progress),
+            token,
         )
     }
 }

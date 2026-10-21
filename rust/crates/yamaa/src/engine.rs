@@ -361,7 +361,10 @@ impl Engine {
             "refused"
         });
         // The compilation above has just verified the metadata it captured.
-        let build = plan.run_observed(None, false, &measurements, progress);
+        let build = plan.run_observed(None, false, &measurements, progress, token);
+        if build.interrupted() || token.is_cancelled() {
+            return Err(Error::Cancelled);
+        }
         measurements.complete(build.accepted());
         let subject = plan.name().unwrap_or(request.specification);
         Ok(build.with_subject(subject))
@@ -376,6 +379,11 @@ impl Engine {
     /// project functions and observer. In a project run, an input whose
     /// `schema` link names a producer the run already built reads that `held`
     /// artifact; every other input reads its saved file.
+    ///
+    /// The run polls `token`, and so does this call once the member is
+    /// built: a cancelled build, or one whose project function raised the
+    /// host's interrupt (as [`ProjectFunctions::is_interrupt`] classifies
+    /// it), fails the call with [`Error::Cancelled`] and is dropped.
     pub(crate) fn build_reusing(
         &self,
         plans: &crate::api::Plans,
@@ -384,9 +392,6 @@ impl Engine {
         held: Option<Arc<yamaa_adapters::file_resources::HeldArtifacts>>,
         token: &CancellationToken,
     ) -> Result<Build, Error> {
-        if token.is_cancelled() {
-            return Err(Error::Cancelled);
-        }
         let measurements = Arc::new(Measurements::new());
         let progress = self.shared.observer.as_deref();
         // The run-start check runs outside the holder's lock.
@@ -397,7 +402,7 @@ impl Engine {
         let (build, name) = match kept {
             Some(plan) => {
                 measurements.plan("reused");
-                let build = plan.run_through(&self.shared, held, &measurements, progress);
+                let build = plan.run_through(&self.shared, held, &measurements, progress, token);
                 (build, plan.name().map(str::to_owned))
             }
             None => {
@@ -408,7 +413,7 @@ impl Engine {
                     "refused"
                 });
                 // The compilation has just captured the files it holds.
-                let build = plan.run_through(&self.shared, held, &measurements, progress);
+                let build = plan.run_through(&self.shared, held, &measurements, progress, token);
                 if let Some(identity) = identity {
                     // Keep the plan only for the identity it was compiled
                     // from: a path that resolved elsewhere meanwhile keeps
@@ -420,6 +425,9 @@ impl Engine {
                 (build, plan.name().map(str::to_owned))
             }
         };
+        if build.interrupted() || token.is_cancelled() {
+            return Err(Error::Cancelled);
+        }
         measurements.complete(build.accepted());
         let subject = name.as_deref().unwrap_or(request.specification);
         Ok(build.with_subject(subject))
@@ -717,7 +725,7 @@ impl Build {
     /// one save every result shares: the declared report file, then the
     /// output, returning the paths written (D38). A failed build writes only
     /// its report file and fails with its issues. See [`crate::Run::save`].
-    pub fn save(&mut self) -> Result<Vec<String>, Failure> {
+    pub fn save(&mut self, token: &CancellationToken) -> Result<Vec<String>, Failure> {
         let subject = self.subject.clone();
         crate::outcome::save(
             &[],
@@ -727,6 +735,7 @@ impl Build {
             }],
             crate::outcome::Operation::Run,
             &subject,
+            token,
         )
     }
 
@@ -755,6 +764,12 @@ impl Build {
     /// Hosts propagate the original payload from this record.
     pub fn interrupt(&self) -> Option<&FunctionError> {
         self.interrupt.as_ref()
+    }
+
+    /// Whether a project function raised the host's interrupt, which cancels
+    /// the call that built this (D46).
+    pub(crate) fn interrupted(&self) -> bool {
+        self.interrupt.is_some()
     }
 }
 
@@ -890,7 +905,7 @@ mod tests {
         let mut run = engine
             .spec_run(missing.to_str().unwrap(), None, &token)
             .unwrap();
-        let failure = run.save().unwrap_err();
+        let failure = run.save(&CancellationToken::new()).unwrap_err();
         // D39: a run whose file was not read names the path as given.
         assert_eq!(
             failure.message,
@@ -976,7 +991,7 @@ mod plain_build_tests {
             .unwrap();
         let root = yamaa_adapters::canonical_path::canonicalize(&study.0).unwrap();
         let path = root.join("out.csv").to_str().unwrap().replace('\\', "/");
-        assert_eq!(run.save().unwrap(), [path]);
+        assert_eq!(run.save(&CancellationToken::new()).unwrap(), [path]);
         let written = std::fs::read(study.0.join("out.csv")).unwrap();
         assert!(written.starts_with(b"ID,VALUE\n1,"));
     }

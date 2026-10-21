@@ -118,7 +118,10 @@ fn every_specification_call_reads_a_1_0_specification() {
     let mut run = engine.spec_run(&spec, None, &token).unwrap();
     assert_eq!(rows(&run.issues()), []);
     assert_eq!(run.output().unwrap().rows(), 2);
-    assert_eq!(run.save().unwrap(), [study.path("dm.csv")]);
+    assert_eq!(
+        run.save(&CancellationToken::new()).unwrap(),
+        [study.path("dm.csv")]
+    );
     let written = study.read("dm.csv");
     assert_eq!(written, b"USUBJID,SITE\nP1,S01\nP2,S01\n");
     // The resolved artifact records the language version, never
@@ -144,7 +147,7 @@ fn every_specification_call_reads_a_1_0_specification() {
     study.write("spec.yaml", LEGACY);
     let mut run = engine.spec_run(&spec, None, &token).unwrap();
     assert_eq!(rows(&run.issues()), []);
-    run.save().unwrap();
+    run.save(&CancellationToken::new()).unwrap();
     assert_eq!(study.read("dm.csv"), written);
 }
 
@@ -231,7 +234,7 @@ fn absent_answers_a_variable_the_input_does_not_hold_only_in_0_5() {
     study.write("spec.yaml", &spec("schema_version: '1.0'\n"));
     let mut run = engine.spec_run(&path, None, &token).unwrap();
     assert_eq!(rows(&run.issues()), []);
-    run.save().unwrap();
+    run.save(&CancellationToken::new()).unwrap();
     assert_eq!(study.read("dm.csv"), b"USUBJID,V\nP1,7\n");
     study.write("spec.yaml", &spec("yamaa: \"1.0\"\ntype: spec\n"));
     let issues = rows(&engine.spec_run(&path, None, &token).unwrap().issues());
@@ -367,7 +370,10 @@ fn a_1_0_project_composes_its_submission() {
     };
     let mut submission = submit();
     assert_eq!(rows(&submission.issues()), []);
-    assert_eq!(submission.save().unwrap(), [study.path("define.xml")]);
+    assert_eq!(
+        submission.save(&CancellationToken::new()).unwrap(),
+        [study.path("define.xml")]
+    );
     let define = String::from_utf8(study.read("define.xml")).unwrap();
     assert!(define.contains("Name=\"DM\""), "{define}");
     assert!(define.contains("Origin Type=\"Protocol\""), "{define}");

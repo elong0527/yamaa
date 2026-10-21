@@ -85,7 +85,11 @@ impl Run {
         Ok(guard.report().map(ArrowTable::from))
     }
     fn save(&self, py: Python<'_>) -> PyResult<Vec<String>> {
-        let saved = self.inner.try_lock().map_err(|_| poisoned())?.save();
+        let saved = self
+            .inner
+            .try_lock()
+            .map_err(|_| poisoned())?
+            .save(&CancellationToken::new());
         saved.map_err(|failure| raise(py, failure))
     }
     /// Private installed-run evidence for qualification suites.
@@ -295,7 +299,7 @@ impl ProjectRun {
             .inner
             .try_lock()
             .map_err(|_| project_poisoned())?
-            .save();
+            .save(&CancellationToken::new());
         saved.map_err(|failure| raise(py, failure))
     }
 }
@@ -316,7 +320,7 @@ impl Submission {
             .inner
             .try_lock()
             .map_err(|_| project_poisoned())?
-            .save();
+            .save(&CancellationToken::new());
         saved.map_err(|failure| raise(py, failure))
     }
 }

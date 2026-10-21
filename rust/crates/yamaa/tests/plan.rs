@@ -127,7 +127,7 @@ mod runs {
             .unwrap();
         assert!(build.report().is_empty(), "{:?}", build.report());
         assert!(build.output().is_some());
-        build.save().unwrap();
+        build.save(&CancellationToken::new()).unwrap();
         resolver.published(SAVED).unwrap().to_vec()
     }
 
@@ -171,7 +171,7 @@ mod runs {
             first.context.to_json(),
             r#"{"dataset":"SRC","path":"input.csv"}"#
         );
-        assert!(failed.save().is_err());
+        assert!(failed.save(&CancellationToken::new()).is_err());
         assert!(empty.published(SAVED).is_none());
         assert_eq!(run_and_save(&plan, study("study:b", STUDY_B)), STUDY_B);
     }
@@ -185,7 +185,7 @@ mod runs {
         let mut first = plan
             .run(&RunRequest::new(), &CancellationToken::new())
             .unwrap();
-        first.save().unwrap();
+        first.save(&CancellationToken::new()).unwrap();
         assert_eq!(resolver.published(SAVED).as_deref(), Some(STUDY_A));
         // A new object version behind the same path: had the second run kept
         // the first run's snapshot, its capture would be refused as changed.
@@ -194,7 +194,7 @@ mod runs {
             .run(&RunRequest::new(), &CancellationToken::new())
             .unwrap();
         assert!(second.report().is_empty(), "{:?}", second.report());
-        second.save().unwrap();
+        second.save(&CancellationToken::new()).unwrap();
         assert_eq!(resolver.published(SAVED).as_deref(), Some(STUDY_B));
     }
 
@@ -233,7 +233,7 @@ mod runs {
             .unwrap()
         };
         assert_eq!(build.output().unwrap().rows(), 2);
-        build.save().unwrap();
+        build.save(&CancellationToken::new()).unwrap();
         assert_eq!(resolver.published(SAVED).as_deref(), Some(STUDY_A));
     }
 
@@ -300,7 +300,7 @@ mod runs {
             assert_eq!(run.report(), plan.report());
             assert!(run.output().is_none());
             assert_eq!(run.preparation_sources(), built.preparation_sources());
-            assert!(run.save().is_err());
+            assert!(run.save(&CancellationToken::new()).is_err());
         }
         assert!(recording.requests.lock().unwrap().is_empty());
         // The refused build's events are the compile's, then a bare finish.

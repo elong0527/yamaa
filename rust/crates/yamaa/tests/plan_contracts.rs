@@ -213,7 +213,7 @@ fn run(plan: &Plan) -> (yamaa::Build, Arc<Recording>) {
 fn saved(plan: &Plan) -> Vec<u8> {
     let (mut build, study) = run(plan);
     assert!(build.report().is_empty(), "{:?}", build.report());
-    build.save().unwrap();
+    build.save(&CancellationToken::new()).unwrap();
     study.inner.published(SAVED).unwrap().to_vec()
 }
 
@@ -241,7 +241,7 @@ fn assert_refused(plan: &Plan, condition: &str, field: &str, path: &str) {
         Some(&ContextValue::Text(path.into()))
     );
     assert!(study.requests().is_empty());
-    assert!(build.save().is_err());
+    assert!(build.save(&CancellationToken::new()).is_err());
     assert!(study.inner.published(SAVED).is_none());
 }
 
@@ -416,7 +416,7 @@ fn a_redefined_host_function_is_refused_at_activation_until_restored() {
     );
     // Activation precedes every study request.
     assert!(study.requests().is_empty());
-    assert!(refused.save().is_err());
+    assert!(refused.save(&CancellationToken::new()).is_err());
     project.installed.redefine(&["x"]);
     assert_eq!(saved(&plan), OUTPUT);
     assert_eq!(project.installed.binds(), 3);

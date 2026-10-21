@@ -398,7 +398,9 @@ fn run_save(handle: Robj) -> List {
     reply(|| {
         let run = run(&handle)?;
         let mut run = run.try_borrow_mut().map_err(|_| "run handle in use")?;
-        let paths = run.save().map_err(Refusal::Failure)?;
+        let paths = run
+            .save(&CancellationToken::new())
+            .map_err(Refusal::Failure)?;
         Ok(Strings::from_values(paths).into_robj())
     })
 }
@@ -535,7 +537,9 @@ fn project_run_save(handle: Robj) -> List {
         let mut runs = runs
             .try_borrow_mut()
             .map_err(|_| "project run handle in use")?;
-        let paths = runs.save().map_err(Refusal::Failure)?;
+        let paths = runs
+            .save(&CancellationToken::new())
+            .map_err(Refusal::Failure)?;
         Ok(Strings::from_values(paths).into_robj())
     })
 }
@@ -598,7 +602,9 @@ fn submission_save(handle: Robj) -> List {
         let mut submission = submission
             .try_borrow_mut()
             .map_err(|_| "submission handle in use")?;
-        let paths = submission.save().map_err(Refusal::Failure)?;
+        let paths = submission
+            .save(&CancellationToken::new())
+            .map_err(Refusal::Failure)?;
         Ok(Strings::from_values(paths).into_robj())
     })
 }
