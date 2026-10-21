@@ -1447,10 +1447,26 @@ S1,002,2024-06
                     continue;
                 }
                 let case = root.join(name);
-                let spec = case.join("spec.yaml").to_str().unwrap().to_owned();
+                let metadata = expected(&case.join("benchmark.yaml"));
+                let specification = |runtime: &str| {
+                    // The primary entry is last in each host's declared list.
+                    let filename = if metadata["entries"].is_null() {
+                        "spec.yaml"
+                    } else {
+                        metadata["entries"][runtime]
+                            .as_array()
+                            .and_then(|entries| entries.last())
+                            .expect("benchmark entries must name a primary specification")
+                            ["specification"]
+                            .as_str()
+                            .expect("the primary specification must be a filename")
+                    };
+                    case.join(filename).to_str().unwrap().to_owned()
+                };
                 let oracle = expected(&case.join("expected/error.yaml"));
                 if phase != "validation" {
                     for runtime in ["python", "r"] {
+                        let spec = specification(runtime);
                         let checked = file_application::check(
                             crate::host(runtime),
                             Request {
@@ -1469,6 +1485,7 @@ S1,002,2024-06
                 }
                 let missed = NOT_REPORTED_BY_CHECK.iter().find(|(n, _)| n == name);
                 for runtime in ["python", "r"] {
+                    let spec = specification(runtime);
                     if let Some((_, reason)) = missed {
                         let checked = file_application::check(
                             crate::host(runtime),
