@@ -1,7 +1,0 @@
-phase: validation
-condition: month_not_permitted
-spec_paths:
-  - columns.ASTDT.derivation.impute.month
-rule: TIME-10
-context:
-  month: 6

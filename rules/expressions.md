@@ -178,7 +178,7 @@ is a literal. A forgotten quote therefore fails validation as an unknown
 name. A value field holds a constant, and its bare text is text.
 
 Fails: `unknown_field`, `bare_derivation_scalar`, `redundant_long_form`.
-Evidence: `rust/crates/yamaa-adapters/tests/declaration_v1_lowering.rs::text_holding_one_literal_lowers_to_it_and_other_text_to_a_formula`, `rust/crates/yamaa-adapters/tests/front_end_comparison.rs`, `negative-derivation-call-form`, `schema-shorthand`, `schema-expressions`, `rust/crates/yamaa-core/tests/schema_references.rs::bare_derivation_strings_are_source_references_never_calls`, `rust/crates/yamaa-core/tests/schema_references.rs::registry_and_bare_derivation_diagnostics_preserve_paths_and_context`.
+Evidence: `rust/crates/yamaa-adapters/tests/declaration_v1_lowering.rs::text_holding_one_literal_lowers_to_it_and_other_text_to_a_formula`, `rust/crates/yamaa-adapters/tests/front_end_comparison.rs`, `schema-shorthand`, `schema-expressions`, `rust/crates/yamaa-core/tests/schema_references.rs::bare_derivation_strings_are_source_references_never_calls`, `rust/crates/yamaa-core/tests/schema_references.rs::registry_and_bare_derivation_diagnostics_preserve_paths_and_context`.
 
 Text in an expression field is one expression in the derivation context of
 [FORMULA-27](formulas.md#formula-27): text that holds only a name is a

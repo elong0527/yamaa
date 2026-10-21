@@ -1,4 +1,5 @@
-//! Native capture, file geometry, codecs and publication for the engine Define service.
+//! Native capture, file geometry, codecs, encoders and publication for the
+//! engine Define service.
 use crate::{
     file_configuration, file_preparation, file_project, file_publication,
     file_resources::{self, Resources},
@@ -8,8 +9,12 @@ use crate::{
 };
 use std::path::Path;
 use yamaa_core::{
-    diagnostic::Diagnostic, project_environment::Submission, project_function::Language,
-    submission_composition::Finding,
+    ast::Transport,
+    diagnostic::Diagnostic,
+    project_environment::Submission,
+    project_function::Language,
+    submission_composition::{Dataset, Finding, Study},
+    table::TableAccess,
 };
 
 use yamaa_core::define::{self as service, Ports};
@@ -432,19 +437,45 @@ impl Ports for NativePorts {
     fn decode_parquet(&mut self, bytes: &[u8]) -> Result<Self::Parquet, Self::ParquetError> {
         read_parquet(bytes)
     }
-    fn render_dataset_json<T: yamaa_core::table::TableAccess>(
-        &mut self,
-        document: &yamaa_core::submission_json::DatasetJsonDocument,
-        table: &T,
-    ) -> Result<Vec<u8>, yamaa_core::submission_composition::Finding> {
-        crate::submission_json::render(document, table)
+    fn render_define(&mut self, study: &Study) -> Result<Vec<u8>, Finding> {
+        crate::submission_xml::render(study)
     }
-    fn render_xpt<T: yamaa_core::table::TableAccess>(
+    fn admit_transport<T: TableAccess>(
         &mut self,
-        document: &yamaa_core::submission_xpt::XptDocument,
+        transport: Transport,
+        study: &Study,
+        dataset: &Dataset,
         table: &T,
-    ) -> Result<Vec<u8>, yamaa_core::submission_composition::Finding> {
-        crate::submission_xpt::render(document, table)
+    ) -> Result<(), Finding> {
+        match transport {
+            Transport::Xpt => crate::submission_xpt::admit(
+                &crate::submission_xpt::document(study, dataset),
+                dataset,
+                table,
+            ),
+            // Dataset-JSON refuses no file as a whole; its writer bounds the
+            // output bytes as it encodes.
+            Transport::DatasetJson => Ok(()),
+        }
+    }
+    fn render_transport<T: TableAccess>(
+        &mut self,
+        transport: Transport,
+        study: &Study,
+        dataset: &Dataset,
+        table: &T,
+        define: &str,
+    ) -> Result<Vec<u8>, Finding> {
+        match transport {
+            Transport::Xpt => crate::submission_xpt::render(
+                &crate::submission_xpt::document(study, dataset),
+                table,
+            ),
+            Transport::DatasetJson => crate::submission_json::render(
+                &crate::submission_json::document(study, dataset, define),
+                table,
+            ),
+        }
     }
     fn target(&self, path: &str, declaring: &str, written: &str) -> Result<Self::Target, Failure> {
         self.resources()
