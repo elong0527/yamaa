@@ -86,6 +86,19 @@ def read_yaml(path):
     return yaml12.parse_yaml(path.read_text(encoding="utf-8"))
 
 
+def domain_of(path):
+    """The `domain` a project names a listed specification by: that of the
+    layer nearest `path` that writes one, following each `parent`."""
+    seen = set()
+    while path.resolve() not in seen:
+        seen.add(path.resolve())
+        document = read_yaml(path)
+        if "domain" in document:
+            return document["domain"]
+        path = path.parent / document["parent"]
+    raise ValueError(f"{path}: cyclic parent")
+
+
 def project_for(case, project, entry, specification):
     """The project file that lists `specification`, relative to the case.
 
@@ -273,8 +286,9 @@ def main(argv=None):
             spec = yamaa.spec(case / specification)
         else:
             stage_lock(case, project, args.python_lock)
-            # A project names a specification by its entry's own `domain`.
-            name = read_yaml(case / entry["specification"])["domain"]
+            # A project names a specification by its entry's `domain`, which
+            # a layer may inherit from its parent.
+            name = domain_of(case / entry["specification"])
             listing = project_for(case, project, entry["specification"], specification)
             try:
                 spec = yamaa.project(case / listing).spec(name)
