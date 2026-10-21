@@ -706,16 +706,20 @@ fn a_type_naming_no_file_type_is_refused_with_exit_status_1() {
 #[test]
 fn a_path_that_cannot_be_read_is_refused_with_exit_status_1() {
     let study = Study::new();
-    let mut cases = vec![
+    let cases = vec![
         (study.path("missing.yaml"), "resource_path_missing"),
         (study.path("sdtm"), "resource_path_not_regular_file"),
     ];
     #[cfg(unix)]
-    {
+    let cases = {
         std::os::unix::fs::symlink(study.0.join("project.yaml"), study.0.join("link.yaml"))
             .unwrap();
-        cases.push((study.path("link.yaml"), "resource_path_symlink"));
-    }
+        [
+            cases,
+            vec![(study.path("link.yaml"), "resource_path_symlink")],
+        ]
+        .concat()
+    };
     for (path, condition) in cases {
         let refused = unread(&path, condition);
         for arguments in [
