@@ -2064,12 +2064,15 @@ columns:
                     result.issues.select([*FIELDS, *GEOMETRY]).rows(), expected_rows
                 )
                 self.assertEqual(result.issues.schema, issue_schema())
-                # Every issue is an error with a message, and no location is
-                # recorded yet (#3262).
+                # Every issue is an error with a message, located in a file the
+                # case read or, when no file holds its first spec path, not at
+                # all (P-ISSUE-1).
                 for row in result.issues.to_dicts():
                     self.assertEqual(row["severity"], "error")
+                    located = row["file"] is not None
                     self.assertEqual(
-                        (row["file"], row["line"], row["column"]), (None,) * 3
+                        (located, row["line"] is not None, row["column"] is not None),
+                        (located,) * 3,
                     )
                     self.assertTrue(row["message"])
                 # The run report records the same outcome as the complete truth.

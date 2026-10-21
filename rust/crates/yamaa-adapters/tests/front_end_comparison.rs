@@ -39,8 +39,9 @@
 //! with the reason, and the test fails when the list is wrong in either
 //! direction. Each 1.0 tree is also checked to be total and located. A
 //! benchmark already written in 1.0 has no 0.5 tree to compare: the
-//! converter copies it unchanged, and only its 1.0 tree is checked. The
-//! corpus moves to 1.0 one prefix at a time (P2-5 to P2-8), so every
+//! converter copies it unchanged, and only its 1.0 tree is checked. Only a
+//! negative benchmark, with its `expected/error.yaml`, may be refused; any
+//! other refusal fails the test. The corpus moves to 1.0 one prefix at a time (P2-5 to P2-8), so every
 //! specification checked, in either surface, counts toward the floor, and a
 //! listed specification whose benchmark is written in 1.0 is settled by its
 //! move (#3422). The converter runs through `uv` in the locked tooling
@@ -1068,6 +1069,7 @@ fn every_converted_benchmark_lowers_to_its_original_tree() {
     let mut checked = 0;
     let mut written_1_0 = BTreeSet::new();
     let mut refused = Vec::new();
+    let mut unexplained = Vec::new();
     let mut differing = BTreeMap::new();
     let mut tally = BTreeMap::<Normalized, usize>::new();
     let mut joins = BTreeMap::<String, Declared>::new();
@@ -1084,7 +1086,11 @@ fn every_converted_benchmark_lowers_to_its_original_tree() {
                         checked += 1;
                         check_tree(&label, &new, &mut failures);
                     }
-                    Err(new) => refused.push(format!("{label}: only 1.0, {new}")),
+                    // Only a negative benchmark's specification is refused.
+                    Err(new) if case.join("expected/error.yaml").is_file() => {
+                        refused.push(format!("{label}: only 1.0, {new}"))
+                    }
+                    Err(new) => unexplained.push(format!("{label}: {new}")),
                 }
                 continue;
             }
@@ -1158,6 +1164,12 @@ fn every_converted_benchmark_lowers_to_its_original_tree() {
         failures.is_empty(),
         "1.0 trees that are not total or not located:\n{}",
         failures.join("\n")
+    );
+    assert!(
+        unexplained.is_empty(),
+        "specifications written in 1.0 that the 1.0 front end refuses, though their \
+         benchmark is no negative:\n{}",
+        unexplained.join("\n")
     );
     let expected = EXPECTED
         .iter()

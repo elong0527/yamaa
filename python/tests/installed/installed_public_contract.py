@@ -70,15 +70,33 @@ def public_names(value):
     return sorted(name for name in dir(value) if not name.startswith("_"))
 
 
-def error_text(key, path=None):
-    """D39's error text the fixture authors under `key`, naming `path`."""
+def error_text(key, path=None, file=None):
+    """D39's error text the fixture authors under `key`, naming `path`, and
+    `file`, the file its first issue is located in."""
     text = MESSAGES[key]
+    if file is not None:
+        text = text.replace("{file}", file)
     return text if path is None else text.replace("{path}", os.fspath(path))
 
 
+def located(rows, directory):
+    """Truth rows with each `file`, written relative to the directory a case
+    was written in, as a location names it: the absolute path of that file,
+    resolved, with forward slashes (P-ISSUE-1)."""
+    return [
+        {
+            **row,
+            "file": None
+            if row["file"] is None
+            else (directory / row["file"]).as_posix(),
+        }
+        for row in rows
+    ]
+
+
 def issue_row(message, **fields):
-    """One issue row with the twelve columns of D28 (#3030): an error with
-    no location yet (#3262)."""
+    """One issue row with the twelve columns of D28 (#3030): an error without
+    a spec path, so without a location (P-ISSUE-1)."""
     return {
         "severity": "error",
         "phase": fields["phase"],
@@ -446,7 +464,10 @@ class PublicContract(unittest.TestCase):
         # back unchanged and the stale output is never touched.
         for _ in range(2):
             error = self.refusal(result.save)
-            self.assertEqual(str(error), error_text("failed_run_save"))
+            self.assertEqual(
+                str(error),
+                error_text("failed_run_save", file=self.spec.resolve().as_posix()),
+            )
             self.assertEqual(error.paths, paths_of(self.root / "checks.csv"))
             self.assertEqual(error.issues.to_dicts(), issues)
             self.assertEqual(result.issues.to_dicts(), issues)
@@ -912,7 +933,10 @@ class PublicContract(unittest.TestCase):
                         fixture_bytes(case["input_csv"])
                     )
                 call = getattr(yamaa.spec(spec), case["call"])
-                self.assertEqual(self.issues(call()).to_dicts(), case["issues"])
+                self.assertEqual(
+                    self.issues(call()).to_dicts(),
+                    located(case["issues"], spec.parent.resolve()),
+                )
 
 
 def fixture_bytes(value):
