@@ -495,7 +495,6 @@ conditions! {
     SubmissionXmlInvalid => ("validation", "value_not_permitted", Some("DEFINE-25")),
     SubmissionJsonInvalid => ("validation", "value_not_permitted", Some("JSON-4")),
     SubmissionInventoryFailed => ("verification", "allowed_values_failed", Some("CT-11")),
-    DefineStandardName => ("validation", "value_not_permitted", Some("DEFINE-6")),
     DefineRequiredDeclaration => ("validation", "missing_required_field", Some("DEFINE-28")),
     DefineArtifactOutsidePackage => ("validation", "artifact_outside_document", Some("DEFINE-16")),
     DefineArtifactCollision => ("validation", "artifact_path_collision", Some("JSON-2")),

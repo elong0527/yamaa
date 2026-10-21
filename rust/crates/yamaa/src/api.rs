@@ -23,9 +23,9 @@ use yamaa_core::project_environment::Submission as Section;
 
 use crate::cancel::CancellationToken;
 use crate::diagnostic::{context_value_from_core, ContextValue, Report};
-use crate::engine::{Build, DefineRequest, Engine, Request};
+use crate::engine::{Build, Engine, Request};
 use crate::error::Error;
-use crate::outcome::{fails, Member, Outcome, Work};
+use crate::outcome::{fails, DefineBuild, Member, Outcome, Work};
 use crate::plan::Plan;
 use crate::table::Table;
 use crate::text::{self, Action, Head, MemberLine, Summary};
@@ -1004,15 +1004,14 @@ impl Engine {
         };
         let mut members = Vec::with_capacity(sections.len());
         for section in sections {
-            let mut request =
-                DefineRequest::new(project, yamaa_core::project_scope::key(section), installed);
-            if let Some(created) = created {
-                request = request.with_created(created);
+            if token.is_cancelled() {
+                return Err(Error::Cancelled);
             }
+            let define = DefineBuild::compose(self.shared(), project, section, created, installed);
             members.push(Member {
                 name: Some(yamaa_core::project_scope::key(section).to_owned()),
                 identity: None,
-                work: Work::Composed(Box::new(self.define(&request, token)?)),
+                work: Work::Composed(Box::new(define)),
             });
         }
         Ok(Outcome {

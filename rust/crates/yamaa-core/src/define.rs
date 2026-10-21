@@ -8,6 +8,7 @@ use crate::{
     ast::{self, Transport},
     diagnostic::{ConditionCode, Diagnostic},
     limits::Limits,
+    project_environment::Submission,
     project_terminology::Catalogue,
     resource::WrittenPath,
     schema::{Document, DocumentNode},
@@ -254,7 +255,9 @@ struct Artifact<T> {
 }
 pub struct Request<'a> {
     pub environment: &'a str,
-    pub standard: &'a str,
+    /// The section to compose, one the caller found the project declares
+    /// (PROJECT-14).
+    pub section: Submission,
     pub created: Option<&'a str>,
     pub installed: &'a str,
 }
@@ -281,7 +284,7 @@ impl<P: Ports> Application<P> {
         let outcome = application.prepare_inner(
             ports,
             request.environment,
-            request.standard,
+            request.section,
             request.created,
             request.installed,
         );
@@ -297,12 +300,12 @@ impl<P: Ports> Application<P> {
         &mut self,
         ports: &mut P,
         environment: &str,
-        standard: &str,
+        family: Submission,
         created: Option<&str>,
         installed: &str,
     ) -> Result<(), Failure<P::Error, P::PublicationError>> {
-        let family = crate::define_diagnostics::standard_name(standard)
-            .map_err(|finding| Failure::Metadata(vec![finding]))?;
+        // The section's project key, which begins every path reported below.
+        let standard = composition::family_name(family);
         let created = created_time(created, || ports.utc_seconds())
             .map_err(|finding| Failure::Metadata(vec![finding]))?;
         self.environment = Some(
@@ -318,16 +321,29 @@ impl<P: Ports> Application<P> {
                 "invalid closed project submission declarations",
             )])
         })?;
-        // A run needs only a section's specifications. Submission composition
-        // additionally requires the study, the selected section and its guide
-        // and target, and reports every one that is missing together.
-        let required = composition::Required::admit(
-            declarations.study.as_ref(),
-            declarations
+        // The caller selected a section the project declares. A project file
+        // that no longer declares it when read here is refused as any
+        // undeclared section is (PROJECT-14).
+        let Some(declared) = declarations
+            .sections
+            .iter()
+            .find(|section| section.family == family)
+        else {
+            let sections: Vec<_> = declarations
                 .sections
                 .iter()
-                .find(|section| section.family == family),
-            family,
+                .map(|section| composition::family_name(section.family))
+                .collect();
+            return Err(Failure::Diagnostic(vec![
+                crate::project_scope::unknown_section(standard, &sections),
+            ]));
+        };
+        // A run needs only a section's specifications. Submission composition
+        // additionally requires the study and the section's guide and target,
+        // and reports every one that is missing together.
+        let required = composition::Required::admit(
+            declarations.study.as_ref(),
+            declared,
             environment.project.header.surface,
         )
         .map_err(Failure::Metadata)?;

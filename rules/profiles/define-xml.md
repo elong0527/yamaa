@@ -19,7 +19,7 @@ implementation guide, supporting documents, an ordered `specs` list and one
 `define` target. Each section produces exactly one Define-XML document. The
 selected project section is the only place the composition is declared.
 
-Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-adapters/tests/file_resources.rs::explicit_section_selector_datetime_and_missing_published_artifact_are_refused`, `python/tests/installed/installed_public_define.py::test_defaults_selection_bound_lists_and_required_acrf_aliases`.
+Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa/tests/project_operations.rs::a_submission_composes_the_selected_section`, `python/tests/installed/installed_public_define.py::test_defaults_selection_bound_lists_and_required_acrf_aliases`.
 
 An implementation must not assemble a document from whatever specifications a
 directory holds: which datasets one submission represents is a study decision,
@@ -155,7 +155,6 @@ belong to the selected section's family. The `sdtm`, `adam` and `send` sections 
 documents, and each document carries the controlled-terminology standards cited
 by its bound codelists' sources.
 
-Fails: `value_not_permitted`.
 Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/src/front_end/v1/project.rs::define_names_a_1_0_section_s_guide_by_its_place_in_standards`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionStandardFamily`, `rust/crates/yamaa-core/tests/schema_submission.rs::every_shipped_guide_spelling_is_closed_metadata_not_family_composition`.
 
 [SUB-3](submission.md#sub-3) reads each dataset's family from the bound
@@ -773,15 +772,15 @@ entry; it never quietly omits a per-value definition.
 
 ### DEFINE-28. Define-XML requires the project's `study` and the section's `standards` and `define`, which a run does not
 
-A Define-XML generation whose project declares no `study`, no section for the
-selected model, or a selected section without `standards` or `define` fails
-with `missing_required_field` before any specification is captured. It reports
+A Define-XML generation whose project declares no `study`, or whose selected
+section declares no `standards` or `define`, fails with
+`missing_required_field` before any specification is captured. It reports
 every missing field at once, each at its project path such as `study`,
 `sdtm.standards` or `sdtm.define`. A run of the same project needs none of them
 and does not report them.
 
 Fails: `missing_required_field`.
-Evidence: `rust/crates/yamaa-adapters/tests/file_resources.rs::define_reports_every_missing_study_section_guide_and_target_before_reading_specifications`, `rust/crates/yamaa-core/src/front_end/v1/project.rs::define_requires_a_1_0_section_s_standards_by_their_1_0_name`.
+Evidence: `rust/crates/yamaa-adapters/tests/file_resources.rs::define_reports_every_missing_study_guide_and_target_before_reading_specifications`, `rust/crates/yamaa-core/src/front_end/v1/project.rs::define_requires_a_1_0_section_s_standards_by_their_1_0_name`.
 
 A project can therefore list its specifications and run them before its
 submission metadata is ready ([PROJECT-3](project.md#project-3)). An empty

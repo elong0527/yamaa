@@ -400,7 +400,7 @@ mod project {
                 .unwrap();
                 let define = Define::prepare(
                     project.to_str().unwrap(),
-                    "sdtm",
+                    yamaa_core::project_environment::Submission::Sdtm,
                     Some("2026-09-11T00:00:00"),
                     "0.0.0",
                     Some(yamaa_core::project_function::Language::Python),

@@ -549,8 +549,7 @@ mod tests {
             let declarations = project.submission.as_ref().unwrap();
             let Err(findings) = crate::submission_composition::Required::admit(
                 declarations.study.as_ref(),
-                declarations.sections.first(),
-                crate::project_environment::Submission::Adam,
+                &declarations.sections[0],
                 project.header.surface,
             ) else {
                 panic!("a section without a guide")
@@ -602,8 +601,7 @@ mod tests {
         let declarations = project.submission.as_ref().unwrap();
         let required = crate::submission_composition::Required::admit(
             declarations.study.as_ref(),
-            declarations.sections.first(),
-            crate::project_environment::Submission::Sdtm,
+            &declarations.sections[0],
             project.header.surface,
         )
         .unwrap();
