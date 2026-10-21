@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
@@ -28,10 +30,11 @@ columns:
     type: str
     label: Age Group
     derivation:
-      # The first branch's fixed value is a mapping, not a single value, so
-      # the specification is rejected before any data is read. A missing AGE
-      # would reach otherwise and get younger.
+      # The first branch's fixed value is written as a mapping, not as one
+      # literal value. A mapping in a case result names an operation, and no
+      # operation is called group, so the specification is rejected before
+      # any data is read. A missing AGE would reach otherwise and get younger.
       case:
         - when: "AGE >= 65"
-          then: {literal: {group: elderly}}
-        - otherwise: {literal: younger}
+          then: {group: elderly}
+        - otherwise: "'younger'"

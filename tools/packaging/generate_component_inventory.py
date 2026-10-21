@@ -54,9 +54,16 @@ configure step appends follows them), with these columns:
 No column holds a digest: a component is named by its name, version, license,
 source and purpose (AGENTS.md, no content hashing).
 
+A purpose also says whether the host's binaries link the crate: the purposes
+of the crates that they do not link start with one of UNLINKED. Each host's
+LICENSE-THIRD-PARTY.txt lists the third-party crates that its binding links,
+so it must list exactly the crates that the host's inventory marks as linked
+(notice_problems).
+
 By default this checks the committed inventories against the trimmed locks,
 the purposes, the locked crates' manifests, the provenance of the vendored
-sources and the pinned toolchain, and that the Python project lists
+sources and the pinned toolchain, each host's notices against the crates
+that its inventory marks as linked, and that the Python project lists
 COMPONENTS.tsv among its license files. `--write` regenerates the committed
 inventories. `--host <host>` writes the inventory of any host that
 tools/staging/engine_bundle.py stages to standard output instead, for a
@@ -116,6 +123,19 @@ READSTAT_RELEASE = re.compile(
 )
 # A zstd-sys version names the zstd release it bundles as build metadata.
 BUNDLED_ZSTD = re.compile(r"[^+]+\+zstd\.([0-9]+(?:\.[0-9]+)+)")
+# The beginnings of the purposes of the crates that no host's binaries link,
+# as tools/packaging/crate_purposes.toml states them: the crates that only
+# build scripts and procedural macros use, which run while compiling, and the
+# crates that no supported target compiles. A crate whose purpose begins
+# otherwise is linked.
+UNLINKED = ("build script:", "procedural macro:", "not compiled:")
+NOTICE_HINT = (
+    "Each LICENSE-THIRD-PARTY.txt lists the crates that its host's binding links: "
+    "regenerate the notices with `python -m "
+    "tools.packaging.generate_third_party_notices --write`, or begin the purpose "
+    f"of a crate that no binary links in {purposes.LABEL} with "
+    f"{', '.join(UNLINKED[:-1])} or {UNLINKED[-1]}"
+)
 
 
 @dataclass(frozen=True)
@@ -315,9 +335,9 @@ def render(rows):
     return notices.refuse_gnu(text, f"the {NAME} rows")
 
 
-def generate(hosts):
-    """The inventory text of each host, by host."""
-    metadata = notices.locked_metadata()
+def generate(hosts, metadata):
+    """The inventory text of each host, by host; `metadata` is the canonical
+    lock's `cargo metadata` (generate_third_party_notices.locked_metadata)."""
     crate_purposes = purposes.read()
     pinned = toolchain.channel()
     inventories = {}
@@ -426,6 +446,60 @@ def check(generated, paths, project):
     return errors
 
 
+def linked_crates(text, metadata):
+    """The (name, version) of each third-party crate that an inventory's text
+    marks as linked: each row of a locked package outside the workspace whose
+    purpose begins with none of UNLINKED. `metadata` is the canonical lock's
+    `cargo metadata`."""
+    members = set(metadata["workspace_members"])
+    third_party = {
+        (package["name"], package["version"])
+        for package in metadata["packages"]
+        if package["id"] not in members
+    }
+    linked = set()
+    for line in text.splitlines()[1:]:
+        name, version, _, _, purpose = line.split("\t")
+        if (name, version) in third_party and not purpose.startswith(UNLINKED):
+            linked.add((name, version))
+    return linked
+
+
+def notice_problems(generated, metadata):
+    """Messages for each host whose LICENSE-THIRD-PARTY.txt lists other crates
+    than its inventory marks as linked (#3470).
+
+    `generated` maps each host to its inventory and `metadata` is the
+    canonical lock's `cargo metadata`. An inventory states one purpose for
+    each crate name, whatever the releases of that name that it lists, so the
+    notices must list a release of each name that it marks as linked, and
+    each release that they list must be a row that it marks as linked. A
+    missing notice is generate_third_party_notices's to report.
+    """
+    errors = []
+    for host, directory in notices.copies().items():
+        path = directory / notices.NOTICES
+        if not path.is_file():
+            continue
+        relative = path.relative_to(notices.ROOT).as_posix()
+        inventory = (directory / NAME).relative_to(notices.ROOT).as_posix()
+        listed = notices.committed_entries(path.read_bytes().decode("utf-8"))
+        linked = linked_crates(generated[host], metadata)
+        named = {name for name, _ in listed}
+        for name, version in sorted(listed - linked):
+            errors.append(
+                f"{relative}: lists {name} {version}, which {inventory} does not "
+                "mark as linked"
+            )
+        for name, version in sorted(linked):
+            if name not in named:
+                errors.append(
+                    f"{relative}: no entry for {name} {version}, which {inventory} "
+                    "marks as linked"
+                )
+    return errors
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     actions = parser.add_mutually_exclusive_group()
@@ -438,27 +512,32 @@ def main():
         help="write this host's inventory to standard output instead",
     )
     args = parser.parse_args()
-    errors = []
+    errors, unlisted = [], []
     try:
+        metadata = notices.locked_metadata()
         if args.host:
-            inventory = generate([args.host])[args.host]
+            inventory = generate([args.host], metadata)[args.host]
             sys.stdout.buffer.write(inventory.encode("utf-8"))
             return
         paths = committed()
-        generated = generate(paths)
+        generated = generate(paths, metadata)
         if args.write:
             for host, path in paths.items():
                 path.write_bytes(generated[host].encode("utf-8"))
         else:
             errors = check(generated, paths, notices.python_project())
+            unlisted = notice_problems(generated, metadata)
     except (ValueError, OSError, subprocess.CalledProcessError) as error:
         parser.exit(1, f"{error}\n")
-    if errors:
-        parser.exit(
-            1,
-            "\n".join(errors)
-            + "\nRun: python -m tools.packaging.generate_component_inventory --write\n",
-        )
+    if errors or unlisted:
+        hints = []
+        if errors:
+            hints.append(
+                "Run: python -m tools.packaging.generate_component_inventory --write"
+            )
+        if unlisted:
+            hints.append(NOTICE_HINT)
+        parser.exit(1, "\n".join(errors + unlisted + hints) + "\n")
     for host, path in paths.items():
         count = len(listed(generated[host]))
         print(

@@ -36,6 +36,20 @@
 //!   ambiguous values are refused; `ItemData` outside `ClinicalData` is
 //!   ignored. A container inside a foreign element is closed normally, even
 //!   when that element's local name is `ItemData`.
+//! - Snapshots (ODM-1). A `FileType` other than `Snapshot` on the root, or a
+//!   `TransactionType` of `Remove` on any element read, is refused as not a
+//!   snapshot, and a `FileType` or `TransactionType` value ODM does not
+//!   define as an invalid attribute; `Insert`, `Update`, `Upsert` and
+//!   `Context` read as the present value. `AuditRecord`, `Signature`,
+//!   `Annotation`, `ReferenceData` and `AdminData` are skipped with all
+//!   their content, which is checked only as XML and against the limits. A
+//!   document without `ClinicalData` is refused once it has been read.
+//!
+//! Every refusal reports one issue ([`Error::issue`]): a `source_odm_*`
+//! condition for the source, FILE-7's and FILE-8's conditions for a path
+//! that reaches no regular file, `value_not_permitted` for an option below
+//! its minimum, and the opaque resource refusal for a file the host cannot
+//! read (#3030 D73, D158).
 #[cfg(feature = "odm")]
 mod archive;
 #[cfg(feature = "odm")]
@@ -47,14 +61,17 @@ mod xml;
 
 use crate::{host_resources::Resolver, ipc_table::TableError, public_table::PublicTable};
 use std::{path::Path, sync::Arc};
-use yamaa_core::odm_items::Options;
+use yamaa_core::{diagnostic::Diagnostic, odm_items::Options};
 
 /// Adapter failures around the core-owned read refusals.
 #[derive(Debug)]
 pub enum Error {
     /// This build omits the optional ODM XML reader.
     Unavailable,
-    /// The input cannot be represented by the clinical-item table.
+    /// The source path reaches no regular file, or the resolver cannot
+    /// serve it, before the reader reads anything.
+    Resource(crate::file_resources::Error),
+    /// The source or an option is refused (ODM-1).
     Read(yamaa_core::odm_items::Error),
     /// The finished table could not be represented.
     Table(TableError),
@@ -63,6 +80,30 @@ pub enum Error {
 impl From<yamaa_core::odm_items::Error> for Error {
     fn from(error: yamaa_core::odm_items::Error) -> Self {
         Self::Read(error)
+    }
+}
+
+impl Error {
+    /// The issue a refusal of the source `source`, named as the caller gave
+    /// it, reports; `None` for a build without the reader and for a table
+    /// that cannot be represented, which carry no issue. A path that reaches
+    /// no regular file fails as any caller's own path does (FILE-7, FILE-8,
+    /// FILE-11), and a refusal of the source or an option as ODM-1 says.
+    pub fn issue(&self, source: &str) -> Option<Diagnostic> {
+        match self {
+            Self::Unavailable | Self::Table(_) => None,
+            Self::Resource(error) => {
+                Some(crate::file_application::caller_read_failure(source, error))
+            }
+            Self::Read(refusal) => Some(
+                yamaa_core::diagnostic::OdmReadFinding {
+                    refusal,
+                    path: source,
+                    dataset: None,
+                }
+                .diagnostic(),
+            ),
+        }
     }
 }
 
@@ -102,13 +143,10 @@ impl Fault {
         std::io::Error::other(self)
     }
 
-    fn into_error(self, path: &str) -> yamaa_core::odm_items::Error {
+    fn into_error(self) -> yamaa_core::odm_items::Error {
         use yamaa_core::odm_items::Error;
         match self {
-            Self::Archive(reason) => Error::Archive {
-                path: path.into(),
-                reason,
-            },
+            Self::Archive(reason) => Error::Archive { reason },
             Self::Limit(limit) => Error::Limit(limit),
             Self::Character { position, value } => Error::Malformed {
                 position,
@@ -120,15 +158,15 @@ impl Fault {
         }
     }
 
-    /// Recover a refusal from an I/O error, or report the I/O failure itself.
-    fn from_io(error: &std::io::Error, path: &str) -> yamaa_core::odm_items::Error {
+    /// Recover a refusal from an I/O error, or report the host's failure to
+    /// read the source itself.
+    fn from_io(error: &std::io::Error) -> yamaa_core::odm_items::Error {
         match error
             .get_ref()
             .and_then(|inner| inner.downcast_ref::<Self>())
         {
-            Some(fault) => fault.clone().into_error(path),
+            Some(fault) => fault.clone().into_error(),
             None => yamaa_core::odm_items::Error::Io {
-                path: path.into(),
                 reason: error.to_string(),
             },
         }
@@ -138,7 +176,7 @@ impl Fault {
 #[cfg(feature = "odm")]
 impl std::fmt::Display for Fault {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.clone().into_error("ODM input"))
+        write!(f, "{}", self.clone().into_error())
     }
 }
 

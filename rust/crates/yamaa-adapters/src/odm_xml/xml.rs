@@ -182,12 +182,11 @@ pub(super) struct Xml<R> {
     first: bool,
     run: usize,
     depth_limit: usize,
-    path: String,
 }
 
 impl<R: Read> Xml<R> {
     /// `limit` bounds the bytes read from `input`; `depth_limit` the nesting.
-    pub(super) fn new(input: R, limit: Option<u64>, depth_limit: usize, path: String) -> Self {
+    pub(super) fn new(input: R, limit: Option<u64>, depth_limit: usize) -> Self {
         let mut reader = quick_xml::Reader::from_reader(CheckedXml::new(input, limit));
         let config = reader.config_mut();
         config.expand_empty_elements = true;
@@ -208,7 +207,6 @@ impl<R: Read> Xml<R> {
             first: true,
             run: 0,
             depth_limit: depth_limit.min(MAX_DEPTH),
-            path,
         }
     }
 
@@ -241,7 +239,7 @@ impl<R: Read> Xml<R> {
                     }
                     _ => position,
                 };
-                return Err(token_error(error, at, &self.path));
+                return Err(token_error(error, at));
             }
         };
         let first = std::mem::replace(&mut self.first, false);
@@ -450,9 +448,9 @@ impl From<&str> for TagError {
 }
 
 /// Map a tokenizer failure, recovering refusals raised by the byte sources.
-fn token_error(error: quick_xml::Error, position: u64, path: &str) -> Error {
+fn token_error(error: quick_xml::Error, position: u64) -> Error {
     match error {
-        quick_xml::Error::Io(error) => Fault::from_io(&error, path),
+        quick_xml::Error::Io(error) => Fault::from_io(&error),
         quick_xml::Error::Encoding(_) => malformed(position, "invalid UTF-8 byte sequence"),
         error => malformed(position, error.to_string()),
     }

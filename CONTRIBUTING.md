@@ -91,16 +91,19 @@ Every package ships the third-party notices of its host's crate,
 `rust/crates/yamaa-cli/LICENSE-THIRD-PARTY.txt` for the command-line archives,
 generated from `rust/Cargo.lock` and from the standard library notice and the
 `rust-src` component of the toolchain that `rust/rust-toolchain.toml` pins.
-They list only the crates that the host links on the supported targets, each
-with the one license that yamaa relies on, and no notice names a GNU license
-(#3364). The standard library's own crates come from `rust-src`: those that
+They list only the crates that the host links on the supported targets, with
+the features that its release build enables, as `cargo tree` resolves them
+(`BUILD_FEATURES` in the generator, #3470), each with the one license that
+yamaa relies on, and no notice names a GNU license (#3364). The standard
+library's own crates come from `rust-src`: those that
 `library/std/Cargo.toml` declares for the supported targets, at the versions
 that `library/Cargo.lock` locks, with the license files of their packages in
 `library/vendor` (#3369). The archives for the musl targets also carry
 `rust/crates/yamaa-cli/LICENSE-MUSL.txt`, the notice of the musl C library that
-their executables link. After changing the lock or the pinned toolchain,
-regenerate the notices and commit the results. The generator runs `rustc` in
-`rust/`, where rustup selects the pinned toolchain:
+their executables link. After changing the lock, the pinned toolchain or a
+host's build features (`BUILD_FEATURES`, which a tools test holds to the
+builds), regenerate the notices and commit the results. The generator runs
+`rustc` and `cargo tree` in `rust/`, where rustup selects the pinned toolchain:
 
 ```sh
 uv run --project python --no-sync python -m tools.packaging.generate_third_party_notices --write
@@ -156,8 +159,11 @@ the Python source archive carries the Python one without that row. The R one
 names none: the R package's
 `configure` appends the row of the `rustc` that builds the installation to
 the copy that R installs. `make check-repository` fails while one differs
-from what they give. After changing the lock, a purpose, a vendored
-component or the pinned toolchain, regenerate them and commit the results:
+from what they give, and while a host's `LICENSE-THIRD-PARTY.txt` lists other
+crates than its inventory marks as linked: a crate whose purpose starts with
+`build script:`, `procedural macro:` or `not compiled:` is not linked. After
+changing the lock, a purpose, a vendored component or the pinned toolchain,
+regenerate them and commit the results:
 
 ```sh
 uv run --project python --no-sync python -m tools.packaging.generate_component_inventory --write
@@ -254,8 +260,8 @@ Passing static repository validation does not establish engine release
 qualification.
 
 A change to the executor, such as rewrite 1 (#2785), must leave every result
-unchanged. Each such PR passes ordinary CI and the `equivalence` and
-`conversion` jobs below on its exact head. Those jobs are the proof: run
+unchanged. Each such PR passes ordinary CI, the `equivalence` job's two legs
+and the `conversion` job below on its exact head. Those jobs are the proof: run
 `make check-equivalence` or `make check-conversion` locally only to debug a
 CI failure of that gate (D148 on #3030). CI runs the gate on a pull request
 unless its diff is confined to root `README.md`,
@@ -275,9 +281,9 @@ runs the installed Python suites and `R CMD check`, which carry the
 cross-host diagnostic parity truth and the host-fixture families.
 `HOSTS=python` runs the Python half alone: its build, its conformance and the
 installed suites; `HOSTS=r` runs the R half: its build, its conformance and
-`R CMD check`. CI runs the two halves in parallel, as the jobs
-`equivalence (python)` and `equivalence (r)`, and its `equivalence` job passes
-only when both pass; that one check is the gate's result.
+`R CMD check`. CI's `equivalence` job runs the two halves in parallel as its
+two legs, `equivalence (python)` and `equivalence (r)`, and those two checks
+are the gate's result: the gate passes only when both pass.
 While the 0.5 and 1.0 surfaces coexist (#3030 P1-9 to P2-13), `make
 check-conversion` proves the 1.0 front end against the same truth. The
 converter (`tools/migrate`) writes every benchmark as 1.0 into a temporary
@@ -321,10 +327,10 @@ Pin external actions to complete commit IDs with exact release comments.
 PRs and the main schedule run four development jobs: repository checks
 (including lint), the Rust workspace, and the Python and R hosts on Linux.
 These four checks are required to merge into main.
-The additional `equivalence` and `conversion` checks run their gates on the
-pull requests described above and on dispatch, `equivalence` as one job per
-host, and `conversion` also weekly; a documentation-only pull request passes
-both with a skip notice.
+The additional checks run the gates on the pull requests described above and
+on dispatch: the `equivalence` job's two legs, `equivalence (python)` and
+`equivalence (r)`, and `conversion`, which also runs weekly. A
+documentation-only pull request passes all three with a skip notice.
 
 The `Release compatibility` workflow checks the minimum Rust toolchain, the R
 source package built with it, minimal format builds, Python 3.15 and minimum
@@ -505,8 +511,9 @@ release publishes and installs each with no Rust, Rtools or network (its
 incoming checks on the R source archive that a release publishes (its
 `native-cran` jobs). It also builds the command-line binaries that a release
 publishes, statically on Linux and Windows, and runs each archive's
-`yamaa selftest` and then the conformance corpus on a fresh runner of its
-platform (its `native-cli` and `native-cli-install` jobs). Passing ordinary CI does not qualify a release. The final
+`yamaa selftest` and then the conformance corpus with the network disabled
+on a fresh runner of its platform (its `native-cli` and `native-cli-install`
+jobs). Passing ordinary CI does not qualify a release. The final
 merged revision needs complete native evidence, including the R package
 checks below. A release tag publishes the native run that its
 `Qualified-Run` trailer names, and the `Release rehearsal` workflow, dispatched

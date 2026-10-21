@@ -1,6 +1,7 @@
 //! The fixed clinical-item table read from CDISC ODM XML: its columns, the
 //! reader options and the typed refusals. Reading files is an adapter
-//! boundary; this module performs no I/O.
+//! boundary; this module performs no I/O. Each refusal reports the issue
+//! [`crate::diagnostic::OdmReadFinding`] gives it (ODM-1).
 //!
 //! Every column uses a language column type, so ordinary engine inputs can
 //! read the table. `SourceOrdinal` is an integer counting the emitted rows
@@ -140,21 +141,25 @@ impl Default for Options {
     }
 }
 
-/// A read refusal. [`Error::code`] is stable; the message names the cause.
+/// A read refusal: an option no document could satisfy, a source the host
+/// cannot read, or a source that is not an ODM snapshot the table can hold.
+/// The message names the cause, and [`crate::diagnostic::OdmReadFinding`]
+/// gives the issue each refusal reports: the source as given and its
+/// registered condition (ODM-1). The source path itself is not part of a
+/// refusal.
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum Error {
     #[error("{option} must be at least {minimum}")]
     Option { option: &'static str, minimum: u64 },
-    #[error("ODM source is not a regular file: {path}")]
-    NotFound { path: String },
-    #[error("cannot read ODM source {path}: {reason}")]
-    Io { path: String, reason: String },
-    #[error("cannot read ODM archive {path}: {reason}")]
-    Archive { path: String, reason: &'static str },
+    /// The host failed to read the opened source; `reason` is its text.
+    #[error("cannot read ODM source: {reason}")]
+    Io { reason: String },
+    #[error("cannot read ODM archive: {reason}")]
+    Archive { reason: &'static str },
     #[error(
-        "ODM archive {path} uses {format} compression; only plain and gzip TAR archives are supported"
+        "ODM archive uses {format} compression; only plain and gzip TAR archives are supported"
     )]
-    Compression { path: String, format: &'static str },
+    Compression { format: &'static str },
     #[error("{0}")]
     Member(Member),
     #[error("{0}")]
@@ -176,6 +181,14 @@ pub enum Error {
     },
     #[error("multiple namespaced attributes have local name {name:?}")]
     AmbiguousAttribute { name: &'static str },
+    /// An enumerated attribute holds a value outside its closed list:
+    /// `IsNull`, the root's `FileType` or an element's `TransactionType`.
+    #[error("unsupported {attribute} value {value:?} on {element}")]
+    InvalidAttribute {
+        element: String,
+        attribute: &'static str,
+        value: String,
+    },
     #[error("conflicting {} definition for {study}/{version}/{oid}", kind.as_str())]
     MetadataConflict {
         kind: Definition,
@@ -185,31 +198,69 @@ pub enum Error {
     },
     #[error("ItemData {item:?} {refusal}")]
     Value { item: String, refusal: ValueRefusal },
-    #[error("unsupported IsNull value {value:?}")]
-    IsNull { value: String },
+    /// The document is not a snapshot: a `FileType` of `Transactional` on the
+    /// root, or a `TransactionType` of `Remove` on an element.
+    #[error("{element} declares {attribute} {value}, so the document is not a snapshot")]
+    Transactional {
+        element: String,
+        attribute: &'static str,
+        value: String,
+    },
+    /// The document holds no `ClinicalData` element, as a define.xml or a
+    /// metadata-only export does.
+    #[error("the document has no ClinicalData")]
+    NoClinicalData,
 }
 
-impl Error {
-    /// The stable machine-readable code of this refusal.
-    pub fn code(&self) -> &'static str {
-        match self {
-            Self::Option { .. } => "invalid_option",
-            Self::NotFound { .. } => "not_found",
-            Self::Io { .. } => "io",
-            Self::Archive { .. } => "invalid_archive",
-            Self::Compression { .. } => "unsupported_compression",
-            Self::Member(_) => "archive_member",
-            Self::Limit(_) => "limit",
-            Self::Malformed { .. } => "malformed_xml",
-            Self::Doctype | Self::Encoding { .. } => "unsupported_xml",
-            Self::Document(_) => "unsupported_document",
-            Self::Layout(_) => "unsupported_layout",
-            Self::MissingAttribute { .. } => "missing_attribute",
-            Self::AmbiguousAttribute { .. } => "ambiguous_attribute",
-            Self::MetadataConflict { .. } => "metadata_conflict",
-            Self::Value { .. } => "unsupported_value",
-            Self::IsNull { .. } => "invalid_is_null",
-        }
+/// The `TransactionType` values ODM defines. Every one but `Remove` reads as
+/// the present value.
+pub const TRANSACTION_TYPES: [&str; 5] = ["Insert", "Update", "Remove", "Upsert", "Context"];
+
+/// The elements a read skips with everything inside them: their content
+/// gives no row and is not checked beyond XML itself and the read limits.
+pub const SKIPPED_ELEMENTS: [&str; 5] = [
+    "AuditRecord",
+    "Signature",
+    "Annotation",
+    "ReferenceData",
+    "AdminData",
+];
+
+/// Admit the root's `FileType`: absent or `Snapshot` reads, `Transactional`
+/// is not a snapshot, and any other value is not one ODM defines.
+pub fn admit_file_type(value: Option<&str>) -> Result<(), Error> {
+    match value {
+        None | Some("Snapshot") => Ok(()),
+        Some(value) if value == "Transactional" => Err(Error::Transactional {
+            element: "ODM".into(),
+            attribute: "FileType",
+            value: value.into(),
+        }),
+        Some(value) => Err(Error::InvalidAttribute {
+            element: "ODM".into(),
+            attribute: "FileType",
+            value: value.into(),
+        }),
+    }
+}
+
+/// Admit the `TransactionType` of `element`: absent or any defined value
+/// but `Remove` reads; `Remove` is not a snapshot, and any other value is
+/// not one ODM defines. Values compare exactly, as XML names do.
+pub fn admit_transaction_type(element: &str, value: Option<&str>) -> Result<(), Error> {
+    match value {
+        None => Ok(()),
+        Some("Remove") => Err(Error::Transactional {
+            element: element.into(),
+            attribute: "TransactionType",
+            value: "Remove".into(),
+        }),
+        Some(value) if TRANSACTION_TYPES.contains(&value) => Ok(()),
+        Some(value) => Err(Error::InvalidAttribute {
+            element: element.into(),
+            attribute: "TransactionType",
+            value: value.into(),
+        }),
     }
 }
 
@@ -334,8 +385,8 @@ impl Definition {
     }
 }
 
-/// Decode `IsNull`: `yes`, `true` or `1` and `no`, `false` or `0`, compared
-/// ASCII case-insensitively; an absent attribute is false.
+/// Decode an `ItemData`'s `IsNull`: `yes`, `true` or `1` and `no`, `false`
+/// or `0`, compared ASCII case-insensitively; an absent attribute is false.
 pub fn parse_is_null(value: Option<&str>) -> Result<bool, Error> {
     let Some(value) = value else {
         return Ok(false);
@@ -351,7 +402,9 @@ pub fn parse_is_null(value: Option<&str>) -> Result<bool, Error> {
     {
         Ok(false)
     } else {
-        Err(Error::IsNull {
+        Err(Error::InvalidAttribute {
+            element: "ItemData".into(),
+            attribute: "IsNull",
             value: value.into(),
         })
     }
@@ -428,7 +481,13 @@ mod tests {
             ..Options::default()
         };
         let error = all_invalid.validate().unwrap_err();
-        assert_eq!(error.code(), "invalid_option");
+        assert_eq!(
+            error,
+            Error::Option {
+                option: "max_expanded_bytes",
+                minimum: 1
+            }
+        );
         assert_eq!(error.to_string(), "max_expanded_bytes must be at least 1");
         let members = Options {
             max_archive_members: 0,
@@ -475,12 +534,74 @@ mod tests {
             "\u{ff39}es",
         ] {
             let error = parse_is_null(Some(value)).unwrap_err();
-            assert_eq!(error.code(), "invalid_is_null");
+            assert_eq!(
+                error,
+                Error::InvalidAttribute {
+                    element: "ItemData".into(),
+                    attribute: "IsNull",
+                    value: value.into(),
+                }
+            );
             assert_eq!(
                 error.to_string(),
-                format!("unsupported IsNull value {value:?}")
+                format!("unsupported IsNull value {value:?} on ItemData")
             );
         }
+    }
+
+    #[test]
+    fn a_snapshot_reads_and_transactional_or_unknown_types_are_refused() {
+        assert_eq!(admit_file_type(None), Ok(()));
+        assert_eq!(admit_file_type(Some("Snapshot")), Ok(()));
+        assert_eq!(
+            admit_file_type(Some("Transactional")),
+            Err(Error::Transactional {
+                element: "ODM".into(),
+                attribute: "FileType",
+                value: "Transactional".into(),
+            })
+        );
+        // Values compare exactly, as XML attribute values do.
+        for value in ["snapshot", "Archive", ""] {
+            assert_eq!(
+                admit_file_type(Some(value)),
+                Err(Error::InvalidAttribute {
+                    element: "ODM".into(),
+                    attribute: "FileType",
+                    value: value.into(),
+                }),
+                "{value:?}"
+            );
+        }
+        for value in [None, Some("Insert"), Some("Update"), Some("Upsert")] {
+            assert_eq!(admit_transaction_type("FormData", value), Ok(()));
+        }
+        assert_eq!(admit_transaction_type("ItemData", Some("Context")), Ok(()));
+        let removed = admit_transaction_type("ItemGroupData", Some("Remove")).unwrap_err();
+        assert_eq!(
+            removed,
+            Error::Transactional {
+                element: "ItemGroupData".into(),
+                attribute: "TransactionType",
+                value: "Remove".into(),
+            }
+        );
+        assert_eq!(
+            removed.to_string(),
+            "ItemGroupData declares TransactionType Remove, so the document is not a snapshot"
+        );
+        for value in ["remove", "Delete", ""] {
+            assert_eq!(
+                admit_transaction_type("SubjectData", Some(value)),
+                Err(Error::InvalidAttribute {
+                    element: "SubjectData".into(),
+                    attribute: "TransactionType",
+                    value: value.into(),
+                }),
+                "{value:?}"
+            );
+        }
+        assert!(TRANSACTION_TYPES.contains(&"Remove"));
     }
 
     #[test]
@@ -513,63 +634,66 @@ mod tests {
     }
 
     #[test]
-    fn every_refusal_carries_a_stable_code_and_message() {
+    fn every_refusal_names_its_cause() {
         let cases = [
             (
-                Error::NotFound {
-                    path: "a.xml".into(),
-                },
-                "not_found",
-            ),
-            (
                 Error::Io {
-                    path: "a.xml".into(),
                     reason: "denied".into(),
                 },
-                "io",
+                "cannot read ODM source: denied",
             ),
             (
                 Error::Archive {
-                    path: "a.tar".into(),
                     reason: "truncated TAR header",
                 },
-                "invalid_archive",
+                "cannot read ODM archive: truncated TAR header",
             ),
             (
-                Error::Compression {
-                    path: "a.tar.xz".into(),
-                    format: "xz",
-                },
-                "unsupported_compression",
+                Error::Compression { format: "xz" },
+                "ODM archive uses xz compression; only plain and gzip TAR archives are supported",
             ),
-            (Error::Member(Member::RequiresArchive), "archive_member"),
-            (Error::Limit(Limit::Depth(64)), "limit"),
+            (
+                Error::Member(Member::RequiresArchive),
+                "archive_member requires a TAR input",
+            ),
+            (Error::Limit(Limit::Depth(64)), "XML depth exceeds 64"),
             (
                 Error::Malformed {
                     position: 3,
                     reason: "unclosed element".into(),
                 },
-                "malformed_xml",
+                "malformed ODM XML: unclosed element at byte 3",
             ),
-            (Error::Doctype, "unsupported_xml"),
+            (Error::Doctype, "DOCTYPE declarations are not supported"),
             (
                 Error::Encoding {
                     encoding: "UTF-16".into(),
                 },
-                "unsupported_xml",
+                "ODM XML must be encoded as UTF-8, not UTF-16",
             ),
-            (Error::Document(Document::Root), "unsupported_document"),
-            (Error::Layout(Layout::ItemContext), "unsupported_layout"),
+            (Error::Document(Document::Root), "document root must be ODM"),
+            (
+                Error::Layout(Layout::ItemContext),
+                "ItemData requires subject and event context",
+            ),
             (
                 Error::MissingAttribute {
                     element: "ItemData",
                     attribute: "ItemOID",
                 },
-                "missing_attribute",
+                "ItemData requires non-empty @ItemOID",
             ),
             (
                 Error::AmbiguousAttribute { name: "ItemName" },
-                "ambiguous_attribute",
+                "multiple namespaced attributes have local name \"ItemName\"",
+            ),
+            (
+                Error::InvalidAttribute {
+                    element: "ODM".into(),
+                    attribute: "FileType",
+                    value: "x".into(),
+                },
+                "unsupported FileType value \"x\" on ODM",
             ),
             (
                 Error::MetadataConflict {
@@ -578,20 +702,27 @@ mod tests {
                     version: "M".into(),
                     oid: "I".into(),
                 },
-                "metadata_conflict",
+                "conflicting item definition for S/M/I",
             ),
             (
                 Error::Value {
                     item: "I".into(),
                     refusal: ValueRefusal::NullWithValue,
                 },
-                "unsupported_value",
+                "ItemData \"I\" is null and contains a value",
             ),
-            (Error::IsNull { value: "x".into() }, "invalid_is_null"),
+            (
+                Error::Transactional {
+                    element: "ODM".into(),
+                    attribute: "FileType",
+                    value: "Transactional".into(),
+                },
+                "ODM declares FileType Transactional, so the document is not a snapshot",
+            ),
+            (Error::NoClinicalData, "the document has no ClinicalData"),
         ];
-        for (error, code) in cases {
-            assert_eq!(error.code(), code);
-            assert!(!error.to_string().is_empty());
+        for (error, message) in cases {
+            assert_eq!(error.to_string(), message);
         }
         assert_eq!(
             Error::MetadataConflict {

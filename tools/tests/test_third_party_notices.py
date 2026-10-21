@@ -3,11 +3,14 @@
 import dataclasses
 import os
 import re
+import subprocess
 import tempfile
+import tomllib
 import unittest
 from pathlib import Path
 from unittest import mock
 
+import yaml
 from tools.packaging import generate_third_party_notices as notices
 from tools.staging import engine_bundle
 
@@ -375,7 +378,8 @@ unwinding = {{ version = "0.2", default-features = false }}
 
 
 class Graph:
-    """Build `cargo metadata` output over crate directories in a temporary root."""
+    """Build `cargo metadata` output over crate directories in a temporary
+    root, and the `cargo tree` output of each build of a shipped crate."""
 
     def __init__(self, root):
         self.root = root
@@ -410,31 +414,56 @@ class Graph:
             {"pkg": child, "dep_kinds": [{"kind": kind, "targets": targets}]}
         )
 
-    def metadata(self, target=None):
-        """The graph, or as `cargo metadata --filter-platform target` gives it."""
-        nodes = []
-        for node in self.nodes.values():
-            deps = []
-            for dependency in node["deps"]:
-                kinds = [
-                    {"kind": kind["kind"], "target": None}
-                    for kind in dependency["dep_kinds"]
-                    if target is None
-                    or kind["targets"] is None
-                    or target in kind["targets"]
-                ]
-                if kinds:
-                    deps.append({"pkg": dependency["pkg"], "dep_kinds": kinds})
-            nodes.append({"id": node["id"], "deps": deps})
+    def metadata(self):
+        """The packages and the workspace members, as `cargo metadata` gives
+        them."""
         return {
             "packages": list(self.packages.values()),
             "workspace_members": list(self.members),
-            "resolve": {"nodes": nodes},
         }
 
-    def graphs(self, targets=(LINUX, WINDOWS)):
-        """The graph of each target, by target."""
-        return {target: self.metadata(target) for target in targets}
+    def printed(self, command, **options):
+        """What `cargo tree` prints for the package and target of a command:
+        that member's normal dependency closure on that target, without
+        procedural macros, a repeated package marked (*)."""
+        crate = command[command.index("--package") + 1]
+        target = command[command.index("--target") + 1]
+        roots = [
+            identity
+            for identity in self.members
+            if self.packages[identity]["name"] == crate
+        ]
+        if not roots:
+            raise subprocess.CalledProcessError(101, command)
+        seen, pending, lines = set(), roots, []
+        while pending:
+            identity = pending.pop()
+            package = self.packages[identity]
+            line = f"{package['name']} v{package['version']}"
+            if package["source"] != notices.CRATES_IO:
+                line += f" ({Path(package['manifest_path']).parent})"
+            if identity in seen:
+                lines.append(f"{line} (*)")
+                continue
+            seen.add(identity)
+            lines.append(line)
+            for dependency in self.nodes[identity]["deps"]:
+                child = self.packages[dependency["pkg"]]
+                if any(
+                    kind["kind"] is None
+                    and (kind["targets"] is None or target in kind["targets"])
+                    for kind in dependency["dep_kinds"]
+                ) and child["targets"][0]["kind"] != ["proc-macro"]:
+                    pending.append(dependency["pkg"])
+        return "\n".join(lines) + "\n"
+
+    def closures(self):
+        """The IDs of the packages that each host's shipped crate links, as
+        linked_packages reads them from what `cargo tree` prints."""
+        with mock.patch.object(
+            notices.subprocess, "check_output", side_effect=self.printed
+        ):
+            return notices.linked_packages(self.metadata())
 
 
 def shipped_graph(root):
@@ -944,40 +973,178 @@ class LockedClosure(unittest.TestCase):
     def names(self, identities):
         return {self.graph.packages[identity]["name"] for identity in identities}
 
+    def built(self):
+        """The graph's metadata and each host's closure, which check() and
+        write() take."""
+        return self.graph.metadata(), self.graph.closures()
+
     def test_the_notices_list_the_crates_linked_on_any_target(self):
-        graphs = self.graph.graphs()
+        metadata, closures = self.graph.metadata(), self.graph.closures()
         # Neither binding links a build script's crate, a procedural macro or
         # the crates it uses, a dev-dependency, or r-efi, which only UEFI
         # links; windows-sys is linked on Windows alone.
-        for crate, own in (
-            ("yamaa-python", ["pyo3", "windows-sys"]),
-            ("yamaa-r", ["extendr-api"]),
-            ("yamaa-cli", []),
+        for host, own in (
+            ("python", ["pyo3", "windows-sys"]),
+            ("r", ["extendr-api"]),
+            ("cli", []),
         ):
-            with self.subTest(crate=crate):
+            with self.subTest(host=host):
                 self.assertEqual(
-                    [package["name"] for package in notices.third_party(graphs, crate)],
+                    [
+                        package["name"]
+                        for package in notices.third_party(metadata, closures[host])
+                    ],
                     sorted(["arrow", "flatbuffers", "yamaa-saphyr-parser"] + own),
                 )
-        linux = notices.dependency_closure(graphs[LINUX], "yamaa-python")
+        # The members that a binding links are in its closure, not its notices.
         self.assertEqual(
-            self.names(linux),
+            self.names(closures["python"]),
             {"yamaa-python", "yamaa-core", "arrow", "flatbuffers", "pyo3"}
-            | {"yamaa-saphyr-parser"},
+            | {"yamaa-saphyr-parser", "windows-sys"},
         )
+        with mock.patch.object(
+            notices.subprocess, "check_output", side_effect=self.graph.printed
+        ):
+            linux = notices.build_closure("yamaa-python", (), LINUX)
         self.assertEqual(
-            self.names(notices.linked_closure(graphs, "yamaa-python"))
-            - self.names(linux),
+            self.names(closures["python"]) - {name for name, _ in linux},
             {"windows-sys"},
         )
-        with self.assertRaisesRegex(ValueError, "the shipped crate yamaa-wasm once"):
-            notices.dependency_closure(graphs[LINUX], "yamaa-wasm")
+
+    def test_each_closure_is_what_cargo_tree_prints_for_the_build(self):
+        printed = (
+            "yamaa-python v0.4.0 (/checkout/rust/crates/yamaa-python)\n"
+            "pyo3 v0.27.2\n"
+            "yamaa-saphyr-parser v0.2.1 (C:\\a (x86)\\rust\\vendor\\saphyr-parser)\n"
+            "zstd-sys v2.1.2+zstd.1.5.7\n"
+            "pyo3 v0.27.2 (*)\n"
+        )
+        with mock.patch.object(
+            notices.subprocess, "check_output", return_value=printed
+        ) as run:
+            found = notices.build_closure("yamaa-python", ("extension-module",), LINUX)
+        self.assertEqual(
+            found,
+            {
+                ("yamaa-python", "0.4.0"),
+                ("pyo3", "0.27.2"),
+                ("yamaa-saphyr-parser", "0.2.1"),
+                ("zstd-sys", "2.1.2+zstd.1.5.7"),
+            },
+        )
+        # The package's own build, its features, one target and the normal
+        # edges, which leave out dev-dependencies, build scripts' dependencies
+        # and procedural macros.
+        run.assert_called_once_with(
+            [
+                "cargo",
+                "tree",
+                "--locked",
+                "--package",
+                "yamaa-python",
+                "--features",
+                "extension-module",
+                "--target",
+                LINUX,
+                "--edges",
+                "normal,no-proc-macro",
+                "--prefix",
+                "none",
+                "--format",
+                "{p}",
+            ],
+            cwd=notices.WORKSPACE,
+            encoding="utf-8",
+        )
+        # A build without features beyond the defaults names none.
+        with mock.patch.object(
+            notices.subprocess, "check_output", return_value="yamaa-r v0.4.0 (/r)\n"
+        ) as run:
+            self.assertEqual(
+                notices.build_closure("yamaa-r", (), WINDOWS), {("yamaa-r", "0.4.0")}
+            )
+        self.assertNotIn("--features", run.call_args.args[0])
+        # A line with a tree prefix is not a package.
+        with mock.patch.object(
+            notices.subprocess, "check_output", return_value="|-- pyo3 v0.27.2\n"
+        ):
+            with self.assertRaisesRegex(
+                ValueError,
+                re.escape(
+                    f"cargo tree printed '|-- pyo3 v0.27.2' for yamaa-r on {LINUX}, "
+                    "not a package"
+                ),
+            ):
+                notices.build_closure("yamaa-r", (), LINUX)
+
+    def test_each_host_links_the_closure_of_its_release_build(self):
+        builds = []
+
+        def printed(command, **options):
+            builds.append(command)
+            return self.graph.printed(command, **options)
+
+        with mock.patch.object(notices.subprocess, "check_output", side_effect=printed):
+            closures = notices.linked_packages(self.graph.metadata())
+        self.assertEqual(set(closures), {"python", "r", "cli"})
+        # Each host's crate, with its build's features, on each target.
+        self.assertEqual(
+            [
+                (
+                    command[command.index("--package") + 1],
+                    command[command.index("--target") + 1],
+                    "--features" in command
+                    and command[command.index("--features") + 1],
+                )
+                for command in builds
+            ],
+            [
+                (crate, target, features)
+                for crate, features in (
+                    ("yamaa-python", "extension-module"),
+                    ("yamaa-r", False),
+                    ("yamaa-cli", False),
+                )
+                for target in (LINUX, WINDOWS)
+            ],
+        )
+        self.assertEqual(
+            self.names(closures["r"]),
+            {"yamaa-r", "yamaa-core", "arrow", "flatbuffers", "extendr-api"}
+            | {"yamaa-saphyr-parser"},
+        )
+        # A printed package that the locked graph does not hold once, and a
+        # closure without the crate itself, stop generation.
+        python = self.graph.printed(["--package", "yamaa-python", "--target", LINUX])
+        for output, message in (
+            (
+                python + "rogue v1.0.0\n",
+                f"yamaa-python links rogue 1.0.0 on {LINUX}, which the locked graph "
+                "holds 0 times, not once",
+            ),
+            ("arrow v57.3.0\n", f"cargo tree printed no yamaa-python for {LINUX}"),
+        ):
+            with (
+                self.subTest(message=message),
+                mock.patch.object(
+                    notices.subprocess, "check_output", return_value=output
+                ),
+                self.assertRaisesRegex(ValueError, re.escape(message)),
+            ):
+                notices.linked_packages(self.graph.metadata())
+        metadata = self.graph.metadata()
+        metadata["packages"].append(dict(self.graph.packages["arrow@57.3.0"], id="x"))
+        with self.assertRaisesRegex(ValueError, "arrow 57.3.0 on .* holds 2 times"):
+            with mock.patch.object(
+                notices.subprocess, "check_output", side_effect=self.graph.printed
+            ):
+                notices.linked_packages(metadata)
 
     def test_texts_follow_the_relied_license_and_fall_back_to_spdx(self):
-        graphs = self.graph.graphs()
+        metadata, closures = self.graph.metadata(), self.graph.closures()
         selected = {
             notice.name: notice
-            for notice in notices.notices_for(graphs, "yamaa-python")
+            for notice in notices.notices_for(metadata, closures["python"])
         }
         pyo3 = selected["pyo3"]
         self.assertEqual(pyo3.relied, ("MIT",))
@@ -996,7 +1163,7 @@ class LockedClosure(unittest.TestCase):
         )
         # The R binding's BSD-3-Clause crate is not linked into the wheels.
         self.assertEqual(
-            notices.license_expression(graphs, selected.values()),
+            notices.license_expression(metadata, closures["python"], selected.values()),
             "MIT AND Apache-2.0 AND Unicode-3.0",
         )
         rendered = notices.render(list(selected.values()), LIBRARY, "python")
@@ -1038,10 +1205,10 @@ class LockedClosure(unittest.TestCase):
     def test_a_linked_text_that_names_a_gnu_license_stops_generation(self):
         # A crate that the bindings link would bring r-efi's LGPL notice in.
         self.graph.depend("yamaa-core@0.4.0", "r-efi@5.3.0")
-        graphs = self.graph.graphs()
+        metadata, closures = self.graph.metadata(), self.graph.closures()
         (efi,) = [
             notice
-            for notice in notices.notices_for(graphs, "yamaa-r")
+            for notice in notices.notices_for(metadata, closures["r"])
             if notice.name == "r-efi"
         ]
         self.assertEqual(efi.relied, ("MIT",))
@@ -1051,7 +1218,7 @@ class LockedClosure(unittest.TestCase):
         ):
             notices.render([efi], LIBRARY, "r")
         with self.assertRaisesRegex(ValueError, "names a GNU license"):
-            notices.write(graphs, LIBRARY)
+            notices.write(metadata, closures, LIBRARY)
 
     def test_zstd_sys_carries_the_bundled_library_text_it_is_relied_on_under(self):
         # zstd-sys compiles the bundled zstd library, offered under BSD-3-Clause
@@ -1060,6 +1227,7 @@ class LockedClosure(unittest.TestCase):
         graph = Graph(self.root / "zstd")
         python = graph.crate("yamaa-python", "0.4.0", "MIT", member=True)
         graph.crate("yamaa-r", "0.4.0", "MIT", member=True)
+        graph.crate("yamaa-cli", "0.4.0", "MIT", member=True)
         library = BSD.replace("Example, Inc.", "Meta Platforms, Inc.")
         zstd = graph.crate(
             "zstd-sys",
@@ -1071,7 +1239,7 @@ class LockedClosure(unittest.TestCase):
             },
         )
         graph.depend(python, zstd)
-        (notice,) = notices.notices_for(graph.graphs(), "yamaa-python")
+        (notice,) = notices.notices_for(graph.metadata(), graph.closures()["python"])
         self.assertEqual(notice.relied, ("BSD-3-Clause",))
         self.assertEqual([name for name, _ in notice.texts], ["zstd/LICENSE"])
         rendered = notices.render([notice], LIBRARY, "python")
@@ -1119,6 +1287,7 @@ class LockedClosure(unittest.TestCase):
         graph = Graph(self.root / "shared")
         python = graph.crate("yamaa-python", "0.4.0", "MIT", member=True)
         graph.crate("yamaa-r", "0.4.0", "MIT", member=True)
+        graph.crate("yamaa-cli", "0.4.0", "MIT", member=True)
         repository = "https://github.com/dropbox/rust-alloc-no-stdlib"
         lending = graph.crate(
             "alloc-no-stdlib",
@@ -1132,9 +1301,10 @@ class LockedClosure(unittest.TestCase):
         )
         graph.depend(python, lending)
         graph.depend(python, borrowing)
+        linked = graph.closures()["python"]
         selected = {
             notice.name: notice
-            for notice in notices.notices_for(graph.graphs(), "yamaa-python")
+            for notice in notices.notices_for(graph.metadata(), linked)
         }
         self.assertEqual(
             selected["alloc-stdlib"].texts,
@@ -1151,15 +1321,17 @@ class LockedClosure(unittest.TestCase):
         self.assertNotIn("<owner>", rendered)
         graph.packages[borrowing]["repository"] = "https://github.com/example/other"
         with self.assertRaisesRegex(ValueError, "must ship once, from the same"):
-            notices.notices_for(graph.graphs(), "yamaa-python")
+            notices.notices_for(graph.metadata(), linked)
         graph.packages[borrowing]["repository"] = repository
         directory = Path(graph.packages[borrowing]["manifest_path"]).parent
         (directory / "LICENSE").write_text(BSD)
         with self.assertRaisesRegex(ValueError, "drop it from SHARED_TEXTS"):
-            notices.notices_for(graph.graphs(), "yamaa-python")
+            notices.notices_for(graph.metadata(), linked)
 
     def test_the_standard_library_section_lists_the_crates_it_links(self):
-        notice = notices.notices_for(self.graph.graphs(), "yamaa-python")
+        notice = notices.notices_for(
+            self.graph.metadata(), self.graph.closures()["python"]
+        )
         rendered = notices.render(notice, LIBRARY, "python")
         crates, _, rest = rendered.partition(
             "\nRust standard library\n---------------------\n"
@@ -1204,8 +1376,10 @@ class LockedClosure(unittest.TestCase):
         self.assertIn("canonical MIT text; the crate package ships none", rendered)
 
     def test_the_command_line_notices_name_musl_for_the_musl_targets(self):
-        graphs = self.graph.graphs()
-        cli = notices.render(notices.notices_for(graphs, "yamaa-cli"), LIBRARY, "cli")
+        metadata, closures = self.built()
+        cli = notices.render(
+            notices.notices_for(metadata, closures["cli"]), LIBRARY, "cli"
+        )
         section = cli.partition("\nmusl C library\n--------------\n")[2]
         section = section.partition("\nTexts\n-----\n")[0]
         self.assertIn(
@@ -1226,9 +1400,8 @@ class LockedClosure(unittest.TestCase):
             " ".join(cli.split()),
         )
         for host in ("python", "r"):
-            crate = engine_bundle.BINDINGS[host]
-            rendered = notices.render(notices.notices_for(graphs, crate), LIBRARY, host)
-            self.assertNotIn("musl", rendered)
+            selected = notices.notices_for(metadata, closures[host])
+            self.assertNotIn("musl", notices.render(selected, LIBRARY, host))
         # Another toolchain's musl needs reviewing first.
         newer = dataclasses.replace(LIBRARY, release="1.100.0")
         with self.assertRaisesRegex(
@@ -1237,12 +1410,12 @@ class LockedClosure(unittest.TestCase):
             "the musl release that Rust 1.100.0 bundles for x86_64-unknown-linux-musl "
             "and aarch64-unknown-linux-musl, and LICENSE-MUSL.txt to its COPYRIGHT",
         ):
-            notices.render(notices.notices_for(graphs, "yamaa-cli"), newer, "cli")
+            notices.render(notices.notices_for(metadata, closures["cli"]), newer, "cli")
 
     def test_the_command_line_keeps_the_notice_of_musl(self):
-        graphs = self.graph.graphs()
-        notices.write(graphs, LIBRARY)
-        self.assertEqual(notices.check(graphs, LIBRARY)[1], [])
+        built = self.built()
+        notices.write(*built, LIBRARY)
+        self.assertEqual(notices.check(*built, LIBRARY)[1], [])
         path = notices.CLI / notices.MUSL_NOTICE
         relative = "rust/crates/yamaa-cli/LICENSE-MUSL.txt"
         header = f"musl {notices.MUSL[1]}\n{notices.MUSL_HOME}\n\n"
@@ -1262,17 +1435,17 @@ class LockedClosure(unittest.TestCase):
         ):
             path.write_text(text)
             with self.subTest(error=error):
-                self.assertEqual(notices.check(graphs, LIBRARY)[1], [error])
+                self.assertEqual(notices.check(*built, LIBRARY)[1], [error])
         path.unlink()
         self.assertEqual(
-            notices.check(graphs, LIBRARY)[1],
+            notices.check(*built, LIBRARY)[1],
             [f"{relative}: missing; the archives for the musl targets carry it"],
         )
 
     def test_check_fails_when_the_closure_gains_or_loses_a_crate(self):
-        graphs = self.graph.graphs()
-        notices.write(graphs, LIBRARY)
-        self.assertEqual(notices.check(graphs, LIBRARY)[1], [])
+        built = self.built()
+        notices.write(*built, LIBRARY)
+        self.assertEqual(notices.check(*built, LIBRARY)[1], [])
         self.assertEqual((notices.PYTHON / "LICENSE.txt").read_bytes(), PROJECT_LICENSE)
         # The command-line archives carry the Python packages' license copy.
         self.assertFalse((notices.CLI / "LICENSE.txt").exists())
@@ -1286,7 +1459,7 @@ class LockedClosure(unittest.TestCase):
             LIBRARY, statement=("Copyrights are retained by their contributors.",)
         )
         self.assertEqual(
-            notices.check(graphs, changed)[1],
+            notices.check(*built, changed)[1],
             [
                 f"{relative}/LICENSE-THIRD-PARTY.txt: differs from the notices "
                 f"generated for {crate} from rust/Cargo.lock and the Rust 1.99.1 "
@@ -1296,7 +1469,7 @@ class LockedClosure(unittest.TestCase):
         )
         gained = self.graph.crate("snap", "1.1.2", "BSD-3-Clause", {"COPYING": BSD})
         self.graph.depend("yamaa-core@0.4.0", gained)
-        errors = notices.check(self.graph.graphs(), LIBRARY)[1]
+        errors = notices.check(*self.built(), LIBRARY)[1]
         for relative, crate in hosts:
             self.assertIn(
                 f"{relative}/LICENSE-THIRD-PARTY.txt: no entry for snap 1.1.2, which "
@@ -1314,7 +1487,7 @@ class LockedClosure(unittest.TestCase):
             for dependency in self.graph.nodes["yamaa-core@0.4.0"]["deps"]
             if dependency["pkg"] not in {gained, "arrow@57.3.0"}
         ]
-        errors = notices.check(self.graph.graphs(), LIBRARY)[1]
+        errors = notices.check(*self.built(), LIBRARY)[1]
         self.assertIn(
             "R/yamaa/inst/LICENSE-THIRD-PARTY.txt: lists arrow 57.3.0, which "
             "yamaa-r does not link",
@@ -1328,8 +1501,8 @@ class LockedClosure(unittest.TestCase):
         )
 
     def test_each_host_lists_only_the_crates_of_its_binding(self):
-        graphs = self.graph.graphs()
-        selected = notices.write(graphs, LIBRARY)
+        built = self.built()
+        selected = notices.write(*built, LIBRARY)
         python = (notices.PYTHON / "LICENSE-THIRD-PARTY.txt").read_text()
         r = (notices.R_INST / "LICENSE-THIRD-PARTY.txt").read_text()
         cli = (notices.CLI / "LICENSE-THIRD-PARTY.txt").read_text()
@@ -1348,18 +1521,20 @@ class LockedClosure(unittest.TestCase):
             {host: len(found) for host, found in selected.items()},
             {"python": 5, "r": 4, "cli": 3},
         )
-        for text, packages, linked, crate in (
+        for text, packages, linked, crate, features in (
             (
                 python,
                 "The yamaa Python wheels link",
                 " into their native extension.",
                 "yamaa-python",
+                "its default features and the feature extension-module",
             ),
             (
                 r,
                 "The installed yamaa R package links",
                 " into its native extension.",
                 "yamaa-r",
+                "its default features",
             ),
             (
                 cli,
@@ -1368,15 +1543,21 @@ class LockedClosure(unittest.TestCase):
                 ", and on the musl targets the musl C library, into the yamaa "
                 "executable.",
                 "yamaa-cli",
+                "its default features",
             ),
         ):
             flat = " ".join(text.split())
             self.assertIn(f"{packages} third-party Rust crates", flat)
             self.assertIn(f"the Rust standard library{linked}", flat)
+            # The list follows the features that the host's release build
+            # enables.
             self.assertIn(
                 f"crates that the shipped crate {crate} links, as locked in "
-                "rust/Cargo.lock: its normal dependency closure on each of the "
-                f"targets {LINUX}, {WINDOWS}, without procedural macros.",
+                f"rust/Cargo.lock and built with {features}: its normal dependency "
+                f"closure on each of the targets {LINUX}, {WINDOWS}, without "
+                "procedural macros. Crates that only build scripts or procedural "
+                "macros use, and crates that only other features or other "
+                "platforms select, are not linked",
                 flat,
             )
             # Every host links the standard library and lists its linked crates.
@@ -1391,7 +1572,7 @@ class LockedClosure(unittest.TestCase):
             "not link"
         )
         self.assertEqual(
-            notices.check(graphs, LIBRARY)[1],
+            notices.check(*built, LIBRARY)[1],
             [
                 "R/yamaa/inst/LICENSE-THIRD-PARTY.txt: no entry for extendr-api "
                 "0.9.0, which yamaa-r links",
@@ -1404,8 +1585,8 @@ class LockedClosure(unittest.TestCase):
         )
 
     def test_package_copies_must_match_their_sources(self):
-        graphs = self.graph.graphs()
-        notices.write(graphs, LIBRARY)
+        built = self.built()
+        notices.write(*built, LIBRARY)
         (notices.R_INST / "LICENSE-YAML.txt").write_text("changed\n")
         (notices.R_INST / "LICENSE-WINDOWS.txt").write_text("stale\n")
         (notices.PYTHON / "LICENSE.txt").write_text("edited\n")
@@ -1415,7 +1596,7 @@ class LockedClosure(unittest.TestCase):
             license="MIT AND Apache-2.0 AND Unicode-3.0",
             files=("LICENSE.txt", "LICENSE-YAML.txt"),
         )
-        errors = notices.check(graphs, LIBRARY)[1]
+        errors = notices.check(*built, LIBRARY)[1]
         for expected in (
             "python/pyproject.toml: license-files must list LICENSE-THIRD-PARTY.txt",
             "R/yamaa/inst/LICENSE-YAML.txt: must be identical to python/LICENSE-YAML.txt",
@@ -1432,8 +1613,8 @@ class LockedClosure(unittest.TestCase):
         # Each host's packages carry the notices and the inventory of their own
         # crates; tools.packaging.generate_component_inventory checks the
         # inventories.
-        graphs = self.graph.graphs()
-        notices.write(graphs, LIBRARY)
+        built = self.built()
+        notices.write(*built, LIBRARY)
         self.assertNotEqual(
             (notices.PYTHON / "LICENSE-THIRD-PARTY.txt").read_bytes(),
             (notices.R_INST / "LICENSE-THIRD-PARTY.txt").read_bytes(),
@@ -1448,19 +1629,100 @@ class LockedClosure(unittest.TestCase):
             ),
         )
         self.assertEqual(
-            notices.check(graphs, LIBRARY)[1],
+            notices.check(*built, LIBRARY)[1],
             ["python/COMPONENTS.tsv: listed in license-files but missing"],
         )
         (notices.PYTHON / notices.INVENTORY).write_text("name\npyo3\n")
         (notices.R_INST / notices.INVENTORY).write_text("name\nextendr-api\n")
-        self.assertEqual(notices.check(graphs, LIBRARY)[1], [])
+        self.assertEqual(notices.check(*built, LIBRARY)[1], [])
         (notices.R_INST / "LICENSE-YAML.txt").write_text("changed\n")
         self.assertEqual(
-            notices.check(graphs, LIBRARY)[1],
+            notices.check(*built, LIBRARY)[1],
             [
                 "R/yamaa/inst/LICENSE-YAML.txt: must be identical to "
                 "python/LICENSE-YAML.txt"
             ],
+        )
+
+
+def cargo_build(command):
+    """The package, the features and the other feature options of a cargo
+    build command."""
+    words = command.split()
+    package, features, options = None, [], []
+    for index, word in enumerate(words):
+        following = words[index + 1] if index + 1 < len(words) else None
+        if word in ("-p", "--package"):
+            package = following
+        elif word.startswith("--package="):
+            package = word.removeprefix("--package=")
+        elif word in ("-F", "--features"):
+            features += following.split(",")
+        elif word.startswith("--features="):
+            features += word.removeprefix("--features=").split(",")
+        elif word in ("--no-default-features", "--all-features"):
+            options.append(word)
+    return package, tuple(features), options
+
+
+class ReleaseBuilds(unittest.TestCase):
+    """Each host's notices follow the features of its release build."""
+
+    def test_the_build_features_are_those_of_each_release_build(self):
+        # The wheels: the features that maturin builds the binding with.
+        project = tomllib.loads(
+            (notices.PYTHON / "pyproject.toml").read_text(encoding="utf-8")
+        )
+        maturin = project["tool"]["maturin"]
+        self.assertTrue(
+            maturin["manifest-path"].endswith(
+                f"/crates/{engine_bundle.BINDINGS['python']}/Cargo.toml"
+            )
+        )
+        self.assertEqual(
+            tuple(maturin.get("features", ())), notices.BUILD_FEATURES["python"]
+        )
+        for option in ("no-default-features", "all-features"):
+            self.assertFalse(maturin.get(option, False), option)
+        # The R package: the one cargo build of each Makevars template.
+        for name in ("Makevars.in", "Makevars.win.in"):
+            text = (notices.ROOT / "R/yamaa/src" / name).read_text(encoding="utf-8")
+            (command,) = [
+                line
+                for line in text.replace("\\\n", " ").splitlines()
+                if '"$(CARGO)" build ' in line
+            ]
+            with self.subTest(makevars=name):
+                self.assertEqual(
+                    cargo_build(command),
+                    (engine_bundle.BINDINGS["r"], notices.BUILD_FEATURES["r"], []),
+                )
+        # The command-line binaries: the native-cli lane's cargo build.
+        workflow = yaml.safe_load(
+            (notices.ROOT / ".github/workflows/native.yml").read_text(encoding="utf-8")
+        )
+        steps = {step.get("name"): step for step in workflow["jobs"]["cli"]["steps"]}
+        (command,) = [
+            line
+            for line in steps["Build the command-line binary"]["run"].splitlines()
+            if "cargo build" in line
+        ]
+        self.assertEqual(
+            cargo_build(command),
+            (engine_bundle.BINDINGS["cli"], notices.BUILD_FEATURES["cli"], []),
+        )
+
+    def test_a_build_command_names_its_package_and_feature_options(self):
+        self.assertEqual(
+            cargo_build(
+                "cargo build --locked -p yamaa-r --features a,b -F c "
+                "--features=d --no-default-features"
+            ),
+            ("yamaa-r", ("a", "b", "c", "d"), ["--no-default-features"]),
+        )
+        self.assertEqual(
+            cargo_build("cargo build --package=yamaa-cli --all-features"),
+            ("yamaa-cli", (), ["--all-features"]),
         )
 
 

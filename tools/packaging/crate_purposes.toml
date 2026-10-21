@@ -40,6 +40,16 @@
 # COMPONENTS.tsv; after changing one, regenerate the inventories with
 # `python -m tools.packaging.generate_component_inventory --write`. The
 # inventories do not carry the reasons of the [unconditional] tables.
+#
+# A purpose that starts "build script:", "procedural macro:" or "not
+# compiled:" marks a crate that the native code does not link; any other
+# purpose marks a linked one. Each host's LICENSE-THIRD-PARTY.txt lists the
+# crates that its binding links, as its release build's features select
+# them, and the inventory check fails while a notice lists a crate that its
+# host's inventory does not mark as linked, or no release of a name that the
+# inventory marks as linked. One purpose covers every release of a name: a
+# name with a linked release keeps a linked purpose, whose text says which
+# other release is not compiled.
 
 [crates]
 adler2 = "transitive dependency of miniz_oxide: Adler-32 checksums of zlib streams"

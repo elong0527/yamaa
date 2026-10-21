@@ -34,7 +34,7 @@ the held bytes.
 | public-contract | Shared YAML, issue and report columns, argument/member/read-only view names and defaults, shared messages (D39's error text, written from `docs/design/interface-1.0/api.md` and the templates of `yaml/conditions.yaml`; `{path}` stands for the specification or project path the test gave), typed plain values and the failed run's report bytes; distinct host i64 vectors |
 | public-grammar | Shared condition families; existing `grammar-original/cases.tsv` decisions |
 | diagnostic-parity | Refusal cases with their complete expected issue rows |
-| read-odm | The two reader documents (the adapters' `odm` fixtures), all 30 columns and cells, archive member selection and refusal codes |
+| read-odm | The two reader documents (the adapters' `odm` fixtures), all 30 columns and cells, archive member selection, and each refusal's one issue row and error text (`{source}` stands for the source path the test gave) |
 | parquet-containment | A Parquet file that makes the native decoder panic, its issue row, and a readable file with its saved CSV |
 | plan-reuse | One specification run A, B, A on one object with exact output CSV and issue rows; a changed specification's output; a changed function default's output |
 | lint | One specification with layout, authoring and suppression findings: its exact `lint()` rows, the text the proved fixes write, the rows that remain, and two refusals |
@@ -76,8 +76,9 @@ are the reader suite's own `odm13.xml` and `odm20.xml`, staged from
 `rust/crates/yamaa-adapters/tests/fixtures/odm` as `host-fixtures/odm`; the
 expected cells were read from the documents by hand. `SourceOrdinal` is
 decimal text in the truth (an integer in Python, a double in R) and every
-other cell is text or null. Each refusal names the reader code that the
-yamaa.Error / yamaa_error message carries.
+other cell is text or null. Each refusal holds the one issue row that
+`yamaa.Error` or `yamaa_error` carries, and its error text is D39's prefix
+and that issue; `{source}` stands for the source path the test gave.
 
 `parquet-containment` pairs the installed Python and R containment suites.
 Both files were authored field by field. In the first, the column chunk of an

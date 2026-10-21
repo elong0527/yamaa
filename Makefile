@@ -14,8 +14,9 @@ help:
 setup:
 	python -m tools.commands.setup --uv "$(UV)"
 
-# Before a push: the lint and repository checks, which need no R. Pull request
-# CI runs the complete check, including every test suite.
+# The lint and repository checks, which need no R. Pull request CI runs the
+# complete check, so before a push run them only for a change to generated
+# files, rule cards, schemas, docs generators or Python (D148 on #3030).
 quick:
 	$(TOOLS) tools.commands.repository lint
 	$(TOOLS) tools.commands.repository check

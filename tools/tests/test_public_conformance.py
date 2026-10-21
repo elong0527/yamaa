@@ -1148,6 +1148,80 @@ class PublicConformance(unittest.TestCase):
         _, output = judge.declarations(self.case / "entry.yaml")
         self.assertEqual(judge.declared_paths("entry.yaml", output), ["result.csv"])
 
+    def test_a_copy_entry_declares_the_types_its_producer_declares(self):
+        """A 1.x copy entry declares each column it lists with its producer's
+        type, read through the input's `schema` link from the layer that
+        declares it, and from a producer that copies in turn (SPEC-9)."""
+        (self.case / "producers").mkdir()
+        (self.case / "producers/dm.yaml").write_text(
+            'yamaa: "1.0"\ntype: spec\ndomain: DM\nkeys: [ID]\n'
+            "output: {path: dm.csv, columns: [ID, AGE]}\n"
+            "columns:\n  - {name: ID, type: int}\n  - {name: AGE, type: float}\n"
+        )
+        (self.case / "producers/adsl.yaml").write_text(
+            'yamaa: "1.0"\ntype: spec\ndomain: ADSL\nkeys: [ID]\n'
+            "input: {DM: {path: dm.csv, schema: dm.yaml}}\n"
+            "output: {path: adsl.csv, columns: [ID, AGE]}\n"
+            "columns:\n  - copy: {dataset: DM, columns: [ID, AGE]}\n"
+        )
+        (self.case / "base.yaml").write_text(
+            'yamaa: "1.0"\ntype: spec\ndomain: ADAE\nkeys: [ID]\n'
+            "input: {ADSL: {path: adsl.csv, schema: producers/adsl.yaml}}\n"
+            "output: {path: adae.csv, columns: [ID, AGE, SEQ]}\n"
+            "columns:\n  - copy: {dataset: ADSL, columns: [ID, AGE]}\n"
+        )
+        (self.case / "entry.yaml").write_text(
+            'yamaa: "1.0"\ntype: spec\nparent: base.yaml\n'
+            "columns:\n  - {name: SEQ, type: int}\n"
+        )
+        types, _ = judge.declarations(self.case / "entry.yaml")
+        self.assertEqual(types, {"ID": "int", "AGE": "float", "SEQ": "int"})
+
+    def test_an_inherited_copy_reads_the_link_the_resolved_chain_keeps(self):
+        """A parent's copy entry takes its types from the producer that the
+        input's final `schema` link names, from the base its final
+        `relative_to` selects, whichever layer writes them (SPEC-9)."""
+        producer = (
+            'yamaa: "1.0"\ntype: spec\ndomain: ADSL\nkeys: [ID]\n'
+            "output: {{path: adsl.csv, columns: [ID, AGE]}}\n"
+            "columns:\n  - {{name: ID, type: int}}\n  - {{name: AGE, type: {age}}}\n"
+        )
+        (self.case / "layers/producers").mkdir(parents=True)
+        (self.case / "producers").mkdir()
+        (self.case / "old.yaml").write_text(producer.format(age="int"))
+        (self.case / "new.yaml").write_text(producer.format(age="float"))
+        (self.case / "layers/producers/adsl.yaml").write_text(
+            producer.format(age="int")
+        )
+        (self.case / "producers/adsl.yaml").write_text(producer.format(age="float"))
+        base = (
+            'yamaa: "1.0"\ntype: spec\ndomain: ADAE\nkeys: [ID]\n'
+            "input: {{ADSL: {link}}}\n"
+            "output: {{path: adae.csv, columns: [ID, AGE]}}\n"
+            "columns:\n  - {{name: ID, type: int}}\n"
+            "  - copy: {{dataset: ADSL, columns: [AGE]}}\n"
+        )
+        child = 'yamaa: "1.0"\ntype: spec\nparent: {parent}\ninput: {{ADSL: {link}}}\n'
+        for parent, inherited, written in (
+            # The child replaces the inherited link.
+            ("base.yaml", "{path: adsl.csv, schema: old.yaml}", "{schema: new.yaml}"),
+            # Only the child links the input.
+            ("base.yaml", "{path: adsl.csv}", "{schema: new.yaml}"),
+            # The child resolves the inherited link from the entry.
+            (
+                "layers/base.yaml",
+                "{path: adsl.csv, schema: producers/adsl.yaml}",
+                "{relative_to: entry}",
+            ),
+        ):
+            with self.subTest(parent=parent, written=written):
+                (self.case / parent).write_text(base.format(link=inherited))
+                (self.case / "entry.yaml").write_text(
+                    child.format(parent=parent, link=written)
+                )
+                types, _ = judge.declarations(self.case / "entry.yaml")
+                self.assertEqual(types, {"ID": "int", "AGE": "float"})
+
     def test_metamorphic_key_order_permutation_compares_against_control(self):
         fixtures = self.root / "fixtures2"
         case = fixtures / "ordered"
@@ -1363,7 +1437,6 @@ class CommandLineJudgement(unittest.TestCase):
             "arguments": ["run", "spec.yaml"],
             "exit_status": 0,
             "stderr": "",
-            "not_implemented": False,
             "document": {"status": "succeeded", "issues": [], "paths": ["result.csv"]},
         }
         self.record = {
@@ -1497,8 +1570,6 @@ class CommandLineJudgement(unittest.TestCase):
         self.call["arguments"] = ["run", "other.yaml"]
         self.fails("observed calls do not match the runner plan", "error")
         self.call["arguments"] = ["run", "spec.yaml"]
-        self.call.update(not_implemented=True, exit_status=2, document=None)
-        self.fails({"not_implemented": [["run", "spec.yaml"]]}, "error")
         self.record.update(error="ValueError: yamaa printed no single JSON line")
         self.fails("ValueError: yamaa printed no single JSON line", "error")
         self.record.update(error=None, excluded="a reason the plan does not give")

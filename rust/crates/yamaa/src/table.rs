@@ -80,6 +80,32 @@ impl Table {
     pub fn stream(&self) -> FFI_ArrowArrayStream {
         self.inner.stream()
     }
+
+    /// The table's printed preview (D43, P-PRINT-1, #3030 D167), the same
+    /// text in every host: what Python's `repr()` of a `yamaa.Table` returns.
+    ///
+    /// The first line is `yamaa.Table: <r> rows x <c> columns`, with the
+    /// singular noun for 1. A table with columns adds a row of column names,
+    /// a row of type names (`str`, `int`, `float`, `date`, `datetime` or
+    /// `list<T>`) and its value rows: every row of a table of at most 10,
+    /// otherwise the first 5, a `...` line and the last 5. Only the first 8
+    /// columns print; a table with more ends each of those rows with a `...`
+    /// column.
+    ///
+    /// A missing value prints `null`, a float its canonical text (VALUE-8), a
+    /// date or datetime its canonical text (VALUE-17), and a list its items
+    /// joined by `, ` in brackets. Every cell, names and types included,
+    /// prints in ASCII with the escapes of [`crate::text`]; one that would
+    /// print more than 20 characters prints its first 17 and `...`. Each
+    /// column is as wide as its widest cell, cells are padded with spaces on
+    /// the right, columns are two spaces apart, and no line ends in a space.
+    /// The lines are joined with LF, with no final LF.
+    ///
+    /// The header freezes at 1.0.0; the rows below it may improve in any
+    /// release.
+    pub fn preview(&self) -> String {
+        crate::text::preview(self)
+    }
 }
 
 impl Engine {

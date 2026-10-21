@@ -165,20 +165,25 @@ declares, and every library that the binary loads must be the system's.
 Each job archives its binary with the command line's notices and checks the
 archive with `tools/packaging/cli_archive.py` and
 `tools.packaging.check_package_notices`. Its `native-cli-install` jobs then
-unpack each archive on a fresh runner of its platform and, before setting up
-anything else, run `yamaa --version`, whose first line must name the
-archive's version, and `yamaa selftest`, which must succeed; the log keeps
-both reports. Each job then checks out the repository and sets up Python,
-but no Rust, and runs the conformance corpus through the unpacked binary
-with `tools.commands.cli_conformance`. The binary reads only 1.x files, so
-the converter writes every benchmark as 1.0 (#3030 D122), leaving out those
-that the 1.0 conversion gate excepts and those whose project supplies
-project functions, which the binary cannot call. The comparator judges each
-run against the expected files, and the job fails on any difference. The
-cohort comparison reads each archive's saved outputs beside its platform's
-wheel with the build Python and the R reports beside that wheel: for each
-case of the complete-report cohort, the command line's outcome and saved
-files must equal both installed hosts' reports, CSV byte for byte.
+unpack and run each archive on a fresh runner of its platform with the
+network disabled. While the network is up, each job checks out the
+repository and sets up Python, but no Rust, and
+`tools.commands.cli_conformance` prepares the conformance corpus. The binary
+reads only 1.x files, so the converter writes every benchmark as 1.0 (#3030
+D122), leaving out those that the 1.0 conversion gate excepts and those
+whose project supplies project functions, which the binary cannot call.
+Then the job unpacks the archive and runs `yamaa --version`, whose first
+line must name the archive's version, and `yamaa selftest`, which must
+succeed; the log keeps both reports. It then runs the corpus through the
+unpacked binary, and the comparator judges each run against the expected
+files: the job fails on any difference. The unpacking and every run of the
+binary have no network: on Linux they run in containers without a network,
+from the manylinux_2_28 image, whose Python runs the conformance runner, and
+on macOS and Windows behind the refusing proxy. The cohort comparison reads
+each archive's saved outputs beside its platform's wheel with the build
+Python and the R reports beside that wheel: for each case of the
+complete-report cohort, the command line's outcome and saved files must
+equal both installed hosts' reports, CSV byte for byte.
 
 The native run also runs CRAN's incoming checks on the R source archive that a
 release publishes, the bytes of its `native-r-ubuntu-24.04` artifact: its
@@ -325,15 +330,14 @@ frozen surfaces with the newest final release of the same major, the tag
 `yamaa-vM.m.p` with no candidate suffix, and refuses a break in the
 conditions and their phases in `yaml/conditions.yaml`, the lines of
 `rust/interface/manifest.txt` and those of
-`rust/crates/yamaa/public-api.txt` (#3442).
+`rust/crates/yamaa/public-api.txt` (#3442). It also refuses a (phase,
+condition, rule) triple removed from the core diagnostic registry, a
+removed rule card ID, and any change to the specification, input or
+expected files of a benchmark present at that tag, an added file included;
+its README and `benchmark.yaml` may change (#3445).
 
-The remaining comparisons are tracked separately:
-
-- the four file types' JSON Schemas and the grammars in `yaml/grammar/`
-  (#3444);
-- each existing failure's phase, condition and rule, the rule card IDs, and
-  every benchmark present at that tag, whose specification, input and
-  expected files stay byte for byte (#3445).
+The remaining comparison, of the four file types' JSON Schemas and the
+grammars in `yaml/grammar/`, is tracked separately (#3444).
 
 It enforces nothing while the major is 0. For the first release of a new
 major, its candidates included, it lists every break against the newest final
@@ -940,14 +944,16 @@ root, the R source package in `inst/`, which R installs at the package
 root, each R binary package at that root, and each command-line archive
 beside the executable. `LICENSE.txt` is the project's MIT license.
 `LICENSE-THIRD-PARTY.txt` lists the third-party crates that its host's crate
-links: its normal dependency closure on each supported target, without
-procedural macros. Crates that only build scripts or procedural macros use,
-and crates of other platforms, are not linked and are not listed; the source
-packages carry the license files of those that a supported target compiles
-with their vendored sources, and only the manifests of the others. Each entry
-names the one license that yamaa relies on, never the choice that the crate
-offers, and reproduces the license, copyright and NOTICE texts that the crate
-ships for it (#3364). The Python packages' copy covers the Python binding's
+links: its normal dependency closure on each supported target, with the
+features that the host's release build enables, without procedural macros.
+Crates that only build scripts or procedural macros use, and crates that only
+other features or other platforms select, are not linked and are not listed;
+the source packages carry the license files of those that a supported target
+compiles with their vendored sources, and only the manifests of the others.
+Each entry names the one license that yamaa relies on, never the choice that
+the crate offers, and reproduces the license, copyright and NOTICE texts that
+the crate ships for it (#3364).
+The Python packages' copy covers the Python binding's
 crates, the R package's copy the R binding's, all of which the R source package
 bundles, and the command line's copy, `rust/crates/yamaa-cli/LICENSE-THIRD-PARTY.txt`,
 the crates of `yamaa-cli`. It also gives the standard library's licensing,
@@ -974,7 +980,11 @@ project, the crates linked into the wheels and the standard library, which is
 relied on under MIT, with Unicode-3.0 for the Unicode tables in `core`.
 
 `tools.packaging.generate_third_party_notices` generates each host's crate
-notices from `rust/Cargo.lock` and the standard library section from the
+notices from `rust/Cargo.lock`, with the crates that `cargo tree` resolves
+for the host's release build (#3470): the wheels build with the features
+that `python/pyproject.toml` gives maturin, and the R package and the
+command-line binaries with their bindings' default features. It generates the
+standard library section from the
 toolchain that `rust/rust-toolchain.toml` pins, its notice and its `rust-src`
 component, which the repository checks add to it, and it derives that
 expression from the Python binding's linked crates. The repository check
@@ -1032,7 +1042,10 @@ vendored sources' provenance and the pinned toolchain give. The package
 notice checks require each package to carry its own host's inventory
 unchanged, apart from the standard library row: the Python source archive's
 leaves it out, and an R binary package's adds exactly the one that
-`configure` appends for the pinned toolchain.
+`configure` appends for the pinned toolchain. The repository check also
+fails while a host's notices list other crates than its inventory marks as
+linked: a crate whose purpose starts with `build script:`,
+`procedural macro:` or `not compiled:` is one that no build links (#3470).
 
 Native qualification exercises the static source bridge on every supported
 platform and compares both installed hosts with independently authored binary

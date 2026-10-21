@@ -16,9 +16,10 @@
 //!   grouped template;
 //!
 //! and is closed over what its row-local defaults read. A default is row
-//! local unless it is an aggregate, a window, reads a SELF lookup or reads
-//! a column that is not row local (SPEC-6); a template cannot replace a
-//! default that is not row local.
+//! local unless it holds an aggregate or a window, as the whole expression
+//! or as a `case` result, reads a SELF lookup or reads a column that is not
+//! row local (SPEC-6); a template cannot replace a default that is not row
+//! local.
 //!
 //! What a derivation reads comes from [`Spec::reads`]: the columns it reads
 //! in the row's scope, and the columns each lookup it reads matches the row
@@ -33,7 +34,7 @@ use std::collections::{BTreeMap, BTreeSet};
 enum NotRowLocal {
     Aggregate,
     Window,
-    NamedIntermediate,
+    SelfIntermediate,
 }
 
 impl NotRowLocal {
@@ -41,7 +42,7 @@ impl NotRowLocal {
         match self {
             Self::Aggregate => "aggregate",
             Self::Window => "window",
-            Self::NamedIntermediate => "named_intermediate",
+            Self::SelfIntermediate => "self_intermediate",
         }
     }
 }
@@ -302,28 +303,31 @@ impl<'a> Phases<'a> {
         needs
     }
 
-    /// Why the default `root` is not row local, before what it reads.
+    /// Why the default `root` is not row local, before what it reads: it
+    /// holds an aggregate, which reduces its relation, or a window, which
+    /// spans the complete constructed dataset, or it reads a SELF lookup.
     fn not_row_local(&self, root: ExprId) -> Option<NotRowLocal> {
-        if matches!(self.spec.expr(root).kind, ExprKind::Aggregate(_)) {
+        if self.holds(root, |kind| matches!(kind, ExprKind::Aggregate(_))) {
             return Some(NotRowLocal::Aggregate);
         }
-        if self.windowed(root) {
+        if self.holds(root, |kind| matches!(kind, ExprKind::Window(_))) {
             return Some(NotRowLocal::Window);
         }
         self.all_reads(root, Scope::Row)
             .iter()
             .any(|read| read.name.owner().is_some_and(|owner| self.is_self(owner)))
-            .then_some(NotRowLocal::NamedIntermediate)
+            .then_some(NotRowLocal::SelfIntermediate)
     }
 
-    /// Whether a window is at `e` or at a case result below it: a column
-    /// window spans the complete constructed dataset.
-    fn windowed(&self, e: ExprId) -> bool {
-        match &self.spec.expr(e).kind {
-            ExprKind::Window(_) => true,
-            ExprKind::Case(arms) => arms.iter().any(|arm| self.windowed(arm.result)),
-            _ => false,
-        }
+    /// Whether `e`, or a case result below it, is an operation that
+    /// `operation` accepts. Outside an aggregate's own key values, a case
+    /// result is the only place where one operation nests in another
+    /// (EXPR-3), so this finds the operation anywhere in a derivation.
+    fn holds(&self, e: ExprId, operation: fn(&ExprKind) -> bool) -> bool {
+        let kind = &self.spec.expr(e).kind;
+        operation(kind)
+            || matches!(kind, ExprKind::Case(arms)
+                if arms.iter().any(|arm| self.holds(arm.result, operation)))
     }
 
     /// The columns every template's row phase starts from: the donor fields
@@ -625,57 +629,169 @@ mod tests {
         assert_eq!(sets, [vec![0, 1, 2, 3], vec![0, 4]]);
     }
 
-    #[test]
-    fn a_template_cannot_replace_a_default_that_is_not_row_local() {
-        let window = derivation(op(
+    /// A `row_number` over the whole constructed dataset, ordered by `ID`.
+    fn window() -> Tree {
+        op(
             "row_number",
             Tree::map(vec![(
                 "window",
                 Tree::map(vec![("order_by", Tree::list(vec![Tree::text("ID")]))]),
             )]),
-        ));
-        let rows = Tree::list(vec![row(
-            "only",
-            vec![
-                ("ID", source("SRC.ID")),
-                ("TOTAL", literal("1")),
-                ("NEXT", literal("2")),
-            ],
-            vec![],
-        )]);
-        let Err(PrepareError::Invalid(findings)) = phases(
-            vec![
-                column(
-                    "TOTAL",
-                    "int",
-                    derivation(op("aggregate", Tree::text("SUM(SRC.ID)"))),
-                ),
-                column("NUMBER", "int", window),
-                // Not row local because it reads a window.
-                column("NEXT", "int", compute("NUMBER + 1")),
-            ],
-            vec![("rows", rows)],
-        ) else {
-            panic!("refused");
-        };
-        let refused = findings
+        )
+    }
+    /// An aggregate over SRC, matched on the output keys.
+    fn sum() -> Tree {
+        op("aggregate", Tree::text("SUM(SRC.ID)"))
+    }
+    /// A `literal` operation, as a `case` result holds it.
+    fn constant(value: &str) -> Tree {
+        op("literal", Tree::text(value))
+    }
+    /// A `case` that gives `result` when `ID > 0`, and `fallback` otherwise.
+    fn positive(result: Tree, fallback: Tree) -> Tree {
+        op(
+            "case",
+            Tree::list(vec![
+                Tree::map(vec![("when", Tree::text("ID > 0")), ("then", result)]),
+                Tree::map(vec![("otherwise", fallback)]),
+            ]),
+        )
+    }
+    /// Each refused default: its column, the templates that name it and why
+    /// it is not row local.
+    fn refused(findings: &[PreflightFinding]) -> Vec<(&str, Vec<&str>, &str)> {
+        findings
             .iter()
             .map(|finding| match finding {
                 PreflightFinding::DuplicateRowDefault {
                     column,
                     rows,
                     not_row_local,
-                } => (column.as_str(), rows.clone(), not_row_local.as_str()),
+                } => (
+                    column.as_str(),
+                    rows.iter().map(String::as_str).collect(),
+                    not_row_local.as_str(),
+                ),
                 _ => panic!("{finding:?}"),
             })
-            .collect::<Vec<_>>();
+            .collect()
+    }
+
+    #[test]
+    fn a_template_cannot_replace_a_default_that_is_not_row_local() {
+        let prior = Tree::map(vec![
+            ("id", Tree::text("PRIOR")),
+            ("dataset", Tree::text("SELF")),
+            ("key", Tree::list(vec![Tree::text("ID")])),
+        ]);
+        let rows = Tree::list(vec![row(
+            "only",
+            vec![
+                ("ID", source("SRC.ID")),
+                ("TOTAL", literal("1")),
+                ("NEXT", literal("2")),
+                ("EARLIER", literal("3")),
+            ],
+            vec![],
+        )]);
+        let Err(PrepareError::Invalid(findings)) = phases(
+            vec![
+                column("TOTAL", "int", derivation(sum())),
+                column("NUMBER", "int", derivation(window())),
+                // Not row local because it reads a window.
+                column("NEXT", "int", compute("NUMBER + 1")),
+                column("EARLIER", "int", source("PRIOR.ID")),
+            ],
+            vec![("intermediates", Tree::list(vec![prior])), ("rows", rows)],
+        ) else {
+            panic!("refused");
+        };
         assert_eq!(
-            refused,
+            refused(&findings),
             [
-                ("TOTAL", vec!["only".to_string()], "aggregate"),
-                ("NEXT", vec!["only".to_string()], "window"),
+                ("TOTAL", vec!["only"], "aggregate"),
+                ("NEXT", vec!["only"], "window"),
+                ("EARLIER", vec!["only"], "self_intermediate"),
             ]
         );
+    }
+
+    #[test]
+    fn an_aggregate_in_a_case_result_is_not_row_local() {
+        let rows = Tree::list(vec![
+            row(
+                "first",
+                vec![
+                    ("ID", source("SRC.ID")),
+                    ("TOTAL", literal("1")),
+                    ("NESTED", literal("2")),
+                ],
+                vec![],
+            ),
+            row(
+                "second",
+                vec![
+                    ("ID", source("SRC.ID")),
+                    ("TOTAL", literal("1")),
+                    ("NEXT", literal("3")),
+                    ("BOTH", literal("4")),
+                ],
+                vec![],
+            ),
+        ]);
+        let Err(PrepareError::Invalid(findings)) = phases(
+            vec![
+                column("TOTAL", "int", derivation(positive(sum(), constant("0")))),
+                column("NESTED", "int", derivation(otherwise(otherwise(sum())))),
+                // Not row local because it reads TOTAL.
+                column("NEXT", "int", compute("TOTAL + 1")),
+                column("BOTH", "int", derivation(positive(window(), sum()))),
+            ],
+            vec![("rows", rows)],
+        ) else {
+            panic!("refused");
+        };
+        // An aggregate makes its default not row local wherever a `case`
+        // result holds it, as a window does (SPEC-6), and the aggregate is
+        // named first when a default holds both.
+        assert_eq!(
+            refused(&findings),
+            [
+                ("TOTAL", vec!["first", "second"], "aggregate"),
+                ("NESTED", vec!["first"], "aggregate"),
+                ("NEXT", vec!["second"], "aggregate"),
+                ("BOTH", vec!["second"], "aggregate"),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_row_phase_leaves_an_aggregate_in_a_case_result_to_the_column_phase() {
+        // `reads` reads TOTAL and PLAIN in its own derivation of SHARE.
+        let rows = Tree::list(vec![row(
+            "reads",
+            vec![
+                ("ID", source("SRC.ID")),
+                ("SHARE", compute("PLAIN + TOTAL")),
+            ],
+            vec![],
+        )]);
+        let sets = phases(
+            vec![
+                column("TOTAL", "int", derivation(positive(sum(), constant("0")))),
+                column(
+                    "PLAIN",
+                    "int",
+                    derivation(positive(constant("1"), constant("0"))),
+                ),
+                declared("SHARE"),
+            ],
+            vec![("rows", rows)],
+        )
+        .unwrap();
+        // PLAIN completes in the row phase, while TOTAL is left to the column
+        // phase: the template's read of it is a phase boundary (COLUMN-4).
+        assert_eq!(sets, [vec![0, 2, 3]]);
     }
 
     #[test]
@@ -817,13 +933,6 @@ mod tests {
 
     #[test]
     fn a_structured_source_whose_range_value_reads_a_window_is_not_row_local() {
-        let window = derivation(op(
-            "row_number",
-            Tree::map(vec![(
-                "window",
-                Tree::map(vec![("order_by", Tree::list(vec![Tree::text("ID")]))]),
-            )]),
-        ));
         let rows = Tree::list(vec![row(
             "only",
             vec![
@@ -835,7 +944,7 @@ mod tests {
         )]);
         let Err(PrepareError::Invalid(findings)) = phases(
             vec![
-                column("NUMBER", "int", window),
+                column("NUMBER", "int", derivation(window())),
                 column("OWN", "int", derivation(structured("NUMBER"))),
                 column("NESTED", "int", derivation(otherwise(structured("NUMBER")))),
             ],
@@ -843,19 +952,14 @@ mod tests {
         ) else {
             panic!("refused");
         };
-        let refused = findings
-            .iter()
-            .map(|finding| match finding {
-                PreflightFinding::DuplicateRowDefault {
-                    column,
-                    not_row_local,
-                    ..
-                } => (column.as_str(), not_row_local.as_str()),
-                _ => panic!("{finding:?}"),
-            })
-            .collect::<Vec<_>>();
         // Each default reads the window through its range value, so neither
         // is row local, and the template replaces neither (SPEC-6).
-        assert_eq!(refused, [("OWN", "window"), ("NESTED", "window")]);
+        assert_eq!(
+            refused(&findings),
+            [
+                ("OWN", vec!["only"], "window"),
+                ("NESTED", vec!["only"], "window"),
+            ]
+        );
     }
 }

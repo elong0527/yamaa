@@ -1,8 +1,8 @@
 phase: validation
-condition: invalid_field_type
+condition: unknown_operation
 spec_paths:
-  - columns.AGEGRP.derivation.case[0].then.literal
-rule: SCHEMA-12
+  - columns.AGEGRP.derivation.case[0].then.group
+rule: SCHEMA-7
 context:
-  expected: literal_value
-  actual: mapping
+  operation: group
+  registry: expressions

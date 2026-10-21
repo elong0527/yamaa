@@ -433,6 +433,7 @@ mod diagnostics {
             reached.extend(intermediate_ranges::reached());
             reached.extend(intermediate_ranges::match_phase_reached());
             reached.extend(producer::reached());
+            reached.extend(copy_entry::reached());
             reached.extend(preflight::output_reached());
             reached.extend(grammar::reached());
             reached.extend(inheritance::reached());
@@ -716,6 +717,7 @@ mod diagnostics {
             reached.extend(csv::typing_reached());
             reached.extend(parquet::reached());
             reached.extend(sas::reached());
+            reached.extend(odm_read::reached());
             reached.extend(result_types::reached());
             let check = yamaa_core::dataset::Check::Codelist {
                 id: "SEX".into(),

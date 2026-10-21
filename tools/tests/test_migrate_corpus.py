@@ -62,19 +62,6 @@ class CorpusTests(unittest.TestCase):
     def test_the_follow_up_list_names_what_the_conversion_leaves_to_people(self):
         notes = {(note.file, note.kind) for note in self.result.notes}
         for item in (
-            ("benchmarks/negative-version-mismatch/expected/error.yaml", "negative"),
-            ("benchmarks/negative-lookup-unknown-key/expected/error.yaml", "negative"),
-            (
-                "benchmarks/negative-impute-missing-month/expected/error.yaml",
-                "negative",
-            ),
-            (
-                "benchmarks/negative-impute-unreachable-month/expected/error.yaml",
-                "negative",
-            ),
-            ("benchmarks/negative-literal-structure/spec.yaml", "residue"),
-            ("benchmarks/negative-literal-structure/expected/error.yaml", "negative"),
-            ("benchmarks/negative-lookup-unknown-key/spec.yaml", "keys"),
             ("benchmarks/AGENTS.md", "D8"),
             ("benchmarks/schema-inheritance-clear/spec_study.yaml", "comment"),
         ):
@@ -86,7 +73,11 @@ class CorpusTests(unittest.TestCase):
         # Every benchmark that binds a codelist, an inventory vocabulary or a
         # project function runs with its project (CT-13).
         self.assertNotIn("project", kinds)
-        self.assertEqual(kinds["residue"], 1)
+        # The negatives whose fault a decided item changes are written in 1.0
+        # or retired (P2-4: D60, D61, D137), so none is left for re-authoring
+        # and no 0.5 spelling is left unconverted.
+        self.assertNotIn("negative", kinds)
+        self.assertNotIn("residue", kinds)
 
     def test_a_second_run_changes_nothing(self):
         again = convert([self.target / "benchmarks"])
