@@ -37,10 +37,10 @@ their prerequisites. Local targets and CI share the owned scripts under
   or diagnostic identity follows a decision recorded on #3030 or an owner
   decision on its own issue. It gets a one-line entry in the next release's
   notes under `docs/releases/` and no step-by-step migration text. Internal
-  interfaces, including the unpublished Rust crates, may change freely.
-  Remove obsolete interfaces and callers together instead of adding
-  compatibility aliases. From 1.0.0, the stability contract of #3030
-  section 2.11 applies.
+  interfaces, including the unpublished Rust crates, may change freely,
+  except the `yamaa` facade's public items, frozen from 1.0.0. Remove
+  obsolete interfaces and callers together instead of adding compatibility
+  aliases. From 1.0.0, the stability contract in `docs/release.md` applies.
 - **Complete review before merging.** On the exact final PR head, require
   CodeRabbit's explicit completed review, or complete bounded reviews proved
   by the review gate, and resolve every actionable finding. Pending, missing,

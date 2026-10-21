@@ -203,6 +203,8 @@ mod tests {
         List(Box<Ipc>),
         ListView(Box<Ipc>),
         LargeListView(Box<Ipc>),
+        /// A list of this many values in every row.
+        FixedSizeList(Box<Ipc>, i32),
         Struct(Vec<Ipc>),
         /// A map from text keys to values of this type.
         Map(Box<Ipc>),
@@ -226,6 +228,7 @@ mod tests {
             Ipc::List(child)
             | Ipc::ListView(child)
             | Ipc::LargeListView(child)
+            | Ipc::FixedSizeList(child, _)
             | Ipc::Union(child) => {
                 vec![ipc_field(builder, "item", child)]
             }
@@ -275,6 +278,11 @@ mod tests {
             Ipc::LargeListView(_) => {
                 let view = arrow_ipc::LargeListView::create(builder, &Default::default());
                 (Type::LargeListView, view.as_union_value())
+            }
+            Ipc::FixedSizeList(_, size) => {
+                let args = arrow_ipc::FixedSizeListArgs { listSize: *size };
+                let list = arrow_ipc::FixedSizeList::create(builder, &args);
+                (Type::FixedSizeList, list.as_union_value())
             }
             Ipc::Map(_) => {
                 let map = arrow_ipc::Map::create(builder, &Default::default());
@@ -595,6 +603,127 @@ mod tests {
             let table = parse(&hinted(vec![("X", column)], &[("X", ipc)])).unwrap();
             assert_eq!(table.schema().columns()[0].kind, ColumnType::Int);
             assert_eq!(table.row_count(), 2);
+        }
+    }
+
+    /// A null fixed-size list has no size to check, so its field reaches the
+    /// closed mapping and is refused with its stored type, as it is with no
+    /// null: of integers or of a later decimal, held in a list, or in a
+    /// struct that is null itself (PARQUET-7, #3366). An ODM input leaves it
+    /// out as a vendor field (NAME-8). A list row of another size, an empty
+    /// one too, is not valid Parquet (PARQUET-5). pyarrow 26 reads and
+    /// refuses the same rows. Values are named `element`, as pyarrow names
+    /// them.
+    #[test]
+    fn a_null_fixed_size_list_row_has_no_size_and_another_size_is_invalid() {
+        use super::super::{parse, parse_odm, Error as Parsed};
+        use arrow_array::{
+            Array, ArrayRef, Decimal128Array, FixedSizeListArray, Int64Array, ListArray,
+            RecordBatch, StringArray, StructArray,
+        };
+        use arrow_buffer::{NullBuffer, OffsetBuffer};
+        use arrow_schema::{DataType, Field};
+        use parquet::arrow::ArrowWriter;
+        use std::sync::Arc;
+        use yamaa_core::{odm_source::FIELDS, table::TableAccess};
+        let element = |kind| Arc::new(Field::new("element", kind, true));
+        // Two rows of two values; a null row keeps its two slots.
+        let pairs = |values: ArrayRef, second: bool| -> ArrayRef {
+            let field = element(values.data_type().clone());
+            let nulls = NullBuffer::from(vec![true, second]);
+            Arc::new(FixedSizeListArray::new(field, 2, values, Some(nulls)))
+        };
+        let integers = |second| pairs(Arc::new(Int64Array::from(vec![1, 2, 3, 4])), second);
+        let decimals = Decimal128Array::from(vec![125, 250, 0, 0])
+            .with_precision_and_scale(9, 2)
+            .unwrap();
+        let decimals = pairs(Arc::new(decimals), false);
+        let pair = |ipc| Ipc::FixedSizeList(Box::new(ipc), 2);
+        let kind = integers(true).data_type().clone();
+        // A list whose first row holds a null fixed-size list, and a struct
+        // of one; both are null in their second row.
+        let outer: ArrayRef = Arc::new(ListArray::new(
+            element(kind.clone()),
+            OffsetBuffer::from_lengths([2, 0]),
+            integers(false),
+            Some(NullBuffer::from(vec![true, false])),
+        ));
+        let structure: ArrayRef = Arc::new(StructArray::new(
+            vec![Field::new("c0", kind, true)].into(),
+            vec![integers(true)],
+            Some(NullBuffer::from(vec![true, false])),
+        ));
+        let refused: [(ArrayRef, Ipc, &str); 4] = [
+            (
+                integers(false),
+                pair(Ipc::Int64),
+                "fixed_size_list<element: int64>[2]",
+            ),
+            (
+                decimals,
+                pair(Ipc::Decimal(64)),
+                "fixed_size_list<element: decimal64(9, 2)>[2]",
+            ),
+            (
+                outer,
+                Ipc::List(Box::new(pair(Ipc::Int64))),
+                "list<element: fixed_size_list<element: int64>[2]>",
+            ),
+            (
+                structure,
+                Ipc::Struct(vec![pair(Ipc::Int64)]),
+                "struct<c0: fixed_size_list<element: int64>[2]>",
+            ),
+        ];
+        for (column, ipc, stored_type) in refused {
+            let result = parse(&hinted(vec![("F", column)], &[("F", ipc)]));
+            assert!(
+                matches!(&result, Err(Parsed::Unsupported { field, stored_type: t })
+                    if field == "F" && t == stored_type),
+                "{stored_type}: {:?}",
+                result.err()
+            );
+        }
+        // The eleven ODM fields and the fixed-size list, with the writer's
+        // own embedded schema.
+        let text = || Arc::new(StringArray::from(vec!["a", "b"])) as ArrayRef;
+        let fields = FIELDS.iter().map(|field| (*field, text(), true));
+        let odm = fields.chain([("F", integers(false), true)]);
+        let batch = RecordBatch::try_from_iter_with_nullable(odm).unwrap();
+        let mut bytes = Vec::new();
+        let mut writer = ArrowWriter::try_new(&mut bytes, batch.schema(), None).unwrap();
+        writer.write(&batch).unwrap();
+        writer.close().unwrap();
+        let table = parse_odm(&bytes).unwrap();
+        assert_eq!(table.schema().columns().len(), FIELDS.len());
+        assert_eq!(table.row_count(), 2);
+        // A list column whose embedded schema says that each row holds two
+        // values: a null second row is refused by type, and an empty, short
+        // or long one is invalid.
+        let rows = |lengths: [usize; 2], second: bool| -> ArrayRef {
+            let count = i64::try_from(lengths.iter().sum::<usize>()).unwrap();
+            Arc::new(ListArray::new(
+                element(DataType::Int64),
+                OffsetBuffer::from_lengths(lengths),
+                Arc::new(Int64Array::from_iter_values(1..=count)),
+                Some(NullBuffer::from(vec![true, second])),
+            ))
+        };
+        let hint = [("F", pair(Ipc::Int64))];
+        let null = parse(&hinted(vec![("F", rows([2, 0], false))], &hint));
+        assert!(
+            matches!(&null, Err(Parsed::Unsupported { stored_type, .. })
+                if stored_type == "fixed_size_list<element: int64>[2]"),
+            "{:?}",
+            null.err()
+        );
+        for lengths in [[2, 0], [2, 1], [2, 3]] {
+            let result = parse(&hinted(vec![("F", rows(lengths, true))], &hint));
+            assert!(
+                matches!(&result, Err(Parsed::Malformed)),
+                "{lengths:?}: {:?}",
+                result.err()
+            );
         }
     }
 }
