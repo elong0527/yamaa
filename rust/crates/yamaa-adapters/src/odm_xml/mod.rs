@@ -11,7 +11,9 @@
 //!   after gzip decompression) is a TAR archive; a `.tar`, `.tar.gz` or
 //!   `.tgz` name that is not one is refused. bzip2, xz and zstd archives are
 //!   refused. A plain XML file refuses `archive_member` and must fit
-//!   `max_expanded_bytes`.
+//!   `max_expanded_bytes`. A specification's `.xml` input is a plain XML
+//!   file by its extension: its captured bytes are read as XML under the
+//!   default options, and nothing selects an archive (INPUT-1).
 //! - TAR selection. Every member counts toward `max_archive_members`.
 //!   Without `archive_member` the candidates are names ending in `.xml`
 //!   (ASCII case-insensitive) outside `._*` files and `__MACOSX` folders, and
@@ -59,7 +61,10 @@ mod source;
 #[cfg(feature = "odm")]
 mod xml;
 
-use crate::{host_resources::Resolver, ipc_table::TableError, public_table::PublicTable};
+use crate::{
+    arrow_table::ArrowTable, host_resources::Resolver, ipc_table::TableError,
+    public_table::PublicTable,
+};
 use std::{path::Path, sync::Arc};
 use yamaa_core::{diagnostic::Diagnostic, odm_items::Options};
 
@@ -84,6 +89,15 @@ impl From<yamaa_core::odm_items::Error> for Error {
 }
 
 impl Error {
+    /// Whether the document itself is refused, as one of ODM-1's
+    /// `source_odm_*` conditions: not a build without the reader, a path or
+    /// an option refused before the read, a source the host cannot read, or
+    /// a table that cannot be represented.
+    pub fn refuses_document(&self) -> bool {
+        use yamaa_core::odm_items::Error as R;
+        matches!(self, Self::Read(refusal) if !matches!(refusal, R::Option { .. } | R::Io { .. }))
+    }
+
     /// The issue a refusal of the source `source`, named as the caller gave
     /// it, reports; `None` for a build without the reader and for a table
     /// that cannot be represented, which carry no issue. A path that reaches
@@ -124,6 +138,15 @@ pub fn read_with_resolver(
     options: &Options,
 ) -> Result<PublicTable, Error> {
     source::read_with_resolver(resolver, source, options)
+}
+
+/// Read every clinical item of a specification input's captured `.xml`
+/// file into the clinical-item table, under `read_odm`'s default options.
+/// The bytes are the document itself: nothing is sniffed, so an archive is
+/// read as XML and refused as such (INPUT-1, ODM-1).
+#[cfg(feature = "odm")]
+pub fn read_input(bytes: &[u8]) -> Result<ArrowTable, Error> {
+    source::read_input(bytes)
 }
 
 /// A refusal raised inside a byte source while the XML tokenizer pulls from
@@ -197,5 +220,12 @@ pub fn read_with_resolver(
     _source: &str,
     _options: &Options,
 ) -> Result<PublicTable, Error> {
+    Err(Error::Unavailable)
+}
+
+/// A specification's `.xml` input is unavailable when the `odm` feature is
+/// disabled, as every other format a build does not compile.
+#[cfg(not(feature = "odm"))]
+pub fn read_input(_bytes: &[u8]) -> Result<ArrowTable, Error> {
     Err(Error::Unavailable)
 }

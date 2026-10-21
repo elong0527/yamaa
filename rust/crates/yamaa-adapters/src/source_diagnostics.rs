@@ -50,6 +50,7 @@ fn semantic(error: &Error) -> bool {
         Error::SasSource(error) => error.finding("", "").is_some(),
         Error::Ordinal(error) => error.finding("", "").is_some(),
         Error::OdmFields(_) | Error::OdmValues(_) | Error::ProducerMetadata(_) => true,
+        Error::OdmSource(error) => error.refuses_document(),
         _ => false,
     }
 }
@@ -89,6 +90,16 @@ fn append(
             }
             .diagnostic()
         })),
+        // Reported at the input's path, naming the path as declared and the
+        // dataset (ODM-1). Only a refusal of the document gets here.
+        Error::OdmSource(crate::odm_xml::Error::Read(refusal)) => diagnostics.push(
+            yamaa_core::diagnostic::OdmReadFinding {
+                refusal,
+                path: &source.path,
+                dataset: Some(&source.name),
+            }
+            .diagnostic(),
+        ),
         _ => diagnostics.push(
             finding(error, source)
                 .ok_or(SourceProjectionError::InvalidContext)?
