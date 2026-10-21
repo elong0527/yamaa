@@ -99,6 +99,17 @@ fn refused(path: &str, identifier: &str) -> Result<String, Vec<Value>> {
     })])
 }
 
+/// SPEC-6 refuses an override of a column default that holds an aggregate.
+fn overridden(row: &str) -> Result<String, Vec<Value>> {
+    Err(vec![yamaa_adapters::json!({
+        "phase": "validation",
+        "condition": "duplicate_derivation",
+        "rule": "SPEC-6",
+        "spec_paths": ["columns.NCAL.derivation"],
+        "context": {"column": "NCAL", "not_row_local": "aggregate", "rows": [row]}
+    })])
+}
+
 /// One `unsupported_operation` finding at `path`.
 fn unsupported(operation: &str, path: &str) -> Vec<Value> {
     vec![yamaa_adapters::json!({
@@ -143,8 +154,7 @@ fn an_aggregate_key_reads_the_driver_of_every_row_that_evaluates_it() {
         }
         text
     };
-    // The count as a column derivation, or nested in a `case` that a row
-    // template may derive itself instead.
+    // The count as a column derivation, or nested in a `case`.
     let column = |key: &str| {
         format!(
             "  - name: NCAL\n    type: int\n    derivation:\n      aggregate:\n        \
@@ -183,32 +193,35 @@ fn an_aggregate_key_reads_the_driver_of_every_row_that_evaluates_it() {
             "CLINIC.DEVICE"
         )
     );
-    // When only clinic rows evaluate the count, the clinic record names one
-    // device: with no home template, or when the home template derives NCAL
-    // itself. A column every template derives serves both templates.
+    // With no home template, every row can read the clinic record's device.
+    // SPEC-6 does not let a template override a column default that holds an
+    // aggregate, including one nested in a case result (D132).
     let counted = "ID,ORIGIN,NCAL\na,CLINIC,2\nb,CLINIC,1\n";
     assert_eq!(
         run(specification(&column("CLINIC.DEVICE"), "", None)),
         Ok(counted.into())
     );
     assert_eq!(
+        run(specification(&nested("CLINIC.DEVICE"), "", None)),
+        Ok(counted.into())
+    );
+    assert_eq!(
         run(specification(&nested("CLINIC.DEVICE"), "", Some(own))),
-        Ok(format!("{counted}a,HOME,0\n"))
+        overridden("home")
     );
     assert_eq!(
         run(specification(&column("DEVICE"), "", Some(""))),
         Ok(format!("{counted}a,HOME,\n"))
     );
-    // Where only home rows evaluate the count, the home record names its
-    // device, as a variable or inside an expression: home subject a used D2,
-    // calibrated once.
+    // A home-record key, directly or inside an expression, also cannot make
+    // a nested aggregate default eligible for a clinic-template override.
     for key in [
         "HOME.DEVICE",
         "{str_case: {source: HOME.DEVICE, to: upper}}",
     ] {
         assert_eq!(
             run(specification(&nested(key), own, Some(""))),
-            Ok("ID,ORIGIN,NCAL\na,CLINIC,0\nb,CLINIC,0\na,HOME,1\n".into()),
+            overridden("clinic"),
             "{key}"
         );
     }
@@ -251,10 +264,10 @@ fn an_aggregate_over_the_first_input_serves_rows_another_input_builds() {
         output: {path: out.csv, columns: [ID, ORIGIN, NCAL]}\n\
         columns:\n  - {name: ID, type: str}\n  - {name: ORIGIN, type: str}\n\
         \x20 - name: NCAL\n    type: int\n    derivation:\n      case:\n        \
-        - when: ID IS NOT NULL\n          then:\n            aggregate:\n              \
-        expr: 'COUNT(CLINIC.DEVICE)'\n              key: {ID: ID}\n\
+        - when: ORIGIN = 'HOME'\n          then:\n            aggregate:\n              \
+        expr: 'COUNT(CLINIC.DEVICE)'\n              key: {ID: ID}\n        - otherwise: {literal: 0}\n\
         rows:\n  - id: clinic\n    dataset: CLINIC\n    derivations:\n      \
-        ID: CLINIC.ID\n      ORIGIN: {literal: CLINIC}\n      NCAL: {literal: 0}\n\
+        ID: CLINIC.ID\n      ORIGIN: {literal: CLINIC}\n\
         \x20 - id: home\n    dataset: HOME\n    derivations:\n      ID: HOME.ID\n      \
         ORIGIN: {literal: HOME}\n";
     assert_eq!(
