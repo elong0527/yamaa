@@ -182,12 +182,14 @@ refuses connections and runs two Cargo jobs.
 - In R-hub v2's `gcc16` container, CRAN's r-devel-linux-x86_64-fedora-gcc
   configuration (R-devel built with GCC 16 on Fedora 44, with CRAN's check
   settings), the build uses the Cargo and rustc that Fedora packages, as
-  CRAN's Linux check servers use their distribution's. Development PRs do not run the release lanes, so before a
-release also dispatch R-CMD-check, Dependency graphs and Release compatibility
-on the candidate. Release compatibility checks the minimum toolchain, the R
-source package built with it, minimal format builds, Python 3.15 and minimum
-Python saved artifact readers; dispatch CI for its minimum R saved artifact
-reader checks.
+  CRAN's Linux check servers use their distribution's.
+
+Development PRs do not run the release lanes, so before a release also
+dispatch R-CMD-check, Dependency graphs and Release compatibility on the
+candidate. Release compatibility checks the minimum toolchain, the R source
+package built with it, minimal format builds, Python 3.15 and minimum Python
+saved artifact readers; dispatch CI for its minimum R saved artifact reader
+checks.
 
 A release has one identity, written once in `tools/packaging/release.toml`:
 the final version X.Y.Z and, for a release candidate, its number N. Each
@@ -203,8 +205,7 @@ link of `python/README.md` that names a release tag to name its tag:
 
 An R version cannot mark a candidate, so the R package keeps the final version
 through the candidates (#3030 D53), and R does not offer the final release as
-an update to a candidate. The previous Python release is the `yamaa-py-0.3.0`
-tag.
+an update to a candidate.
 
 The commit that changes the identity also re-pins the tag links of
 `python/README.md`, the wheels' PyPI description: the check fails until they
