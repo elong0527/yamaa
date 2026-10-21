@@ -284,8 +284,8 @@ first issue: adam/adtte.yaml:9:5: this specification did not run because the pro
 
 `yamaa_spec()`, `yamaa.spec()` and the project functions read nothing, so
 their objects print only the path you gave, such as `yamaa spec
-sdtm/dm.yaml`. A check prints `yamaa check of <path>`, its status and its
-issue count, and a submission its define.xml and transport files.
+sdtm/dm.yaml`. A check prints `yamaa check of <path>` with its status and
+issue count, and a submission counts its define.xml and transport files.
 
 In R, every result also has S3 methods: `print()` writes the lines and
 returns the result invisibly, `format()` returns them, `names()` lists the
@@ -294,10 +294,11 @@ result's fields and methods, starting with `status`, as `names(run)` gives
 project run's `names()` are its specifications, as `$names` gives them. In
 Python, `repr()` and `str()` return the printed text.
 
-The labels of each printed line, their order and separators, the
-`first issue:` line and a project run's member lines are frozen from 1.0.0.
-The messages are not: a release may improve them, so a program reads
-`status`, and an issue's `condition` and `rule`, never the printed text.
+The labels of each printed line, their order and separators, the layout of
+the `first issue:` line and of a project run's member lines, and a table
+preview's `yamaa.Table:` header are frozen from 1.0.0. The messages are not: a
+release may improve them, so a program reads `status`, and an issue's
+`condition` and `rule`, never the printed text.
 
 ## Errors
 
@@ -498,11 +499,11 @@ columns:
   and label, and with a Predecessor origin that names `DM`'s column
   ([SDTM to ADaM](sdtm-to-adam.md)). The link reads only what `dm.yaml`
   declares; it never runs DM.
-* `base: DM` builds one row from each DM record. A read of another input,
-  such as `VS.WEIGHT`, is a join on that input's declared `key`, each column
-  matched against the current row's column of the same name; yamaa never
-  infers a join from the columns two datasets happen to share
-  ([Declared join keys](derive.md#reading-another-dataset-declared-join-keys)).
+* `DM` is the `base` that builds the rows, so a read of `DM` needs no join. A
+  read of another input, such as `VS.WEIGHT`, is a join on that input's
+  declared `key`, each column matched against the current row's column of the
+  same name; yamaa never infers a join from the columns two datasets happen to
+  share ([Declared join keys](derive.md#reading-another-dataset-declared-join-keys)).
 * `function` calls a project function with its arguments by name. A
   specification that calls one, or binds a codelist, runs with its project:
   open it with the project's `spec(name)`.
@@ -629,16 +630,17 @@ once and gave every section.
 
 ## Interrupts
 
-Press Ctrl+C while a call runs, and it stops at the next step where the
-engine looks for an interrupt: before each dataset of a project and between
-the steps that build one, before each batch of project function calls, and
-once in a save, after it has prepared every file and before it writes the
-first. The call publishes nothing and returns no result. Python raises the
+Press Ctrl+C while a call runs, and it stops at the next point where the
+engine looks for an interrupt: as it starts, before each specification of a
+project and between the steps that build a dataset, before each batch of
+project function calls, before each section of a submission, and once in a
+save, after it has prepared every file and before it writes the first. The
+call returns no result and keeps nothing it built. Python raises the
 `KeyboardInterrupt` itself, and R signals its interrupt condition, as any
-interrupted R code does. A save stopped this way writes no file and leaves
-the result unsaved, so you can call `save()` again. A project function that
-raises `KeyboardInterrupt` or `SystemExit` in Python ends the whole call the
-same way.
+interrupted R code does. A save writes every file it planned or none: one
+stopped this way writes nothing and leaves the result unsaved, so you can
+call `save()` again. A project function that raises `KeyboardInterrupt` or
+`SystemExit` in Python ends the whole call the same way.
 
 ## Read ODM XML
 
