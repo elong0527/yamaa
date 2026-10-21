@@ -2024,6 +2024,18 @@ mod table {
                 ("fixed-list", "fixed_size_list<element: int64>[2]"),
                 ("struct", "struct<item: int64>"),
                 ("decimal", "decimal128(10, 2)"),
+                // Types that the pinned Arrow and Parquet releases do not
+                // know, spelled as pyarrow 26 reads them (#3155).
+                ("decimal32", "decimal32(9, 2)"),
+                ("decimal64", "decimal64(18, 2)"),
+                ("list-view", "list_view<element: int64>"),
+                ("large-list-view", "large_list_view<element: int64>"),
+                ("geometry", "binary"),
+                ("geography", "binary"),
+                (
+                    "variant",
+                    "struct<metadata: binary not null, value: binary not null>",
+                ),
             ] {
                 assert!(
                     matches!(parse(&content(&format!("unsupported-{name}"))),
@@ -2186,6 +2198,280 @@ mod table {
                 pub(super) fn end(mut self) -> Vec<u8> {
                     self.bytes.push(0);
                     self.bytes
+                }
+            }
+        }
+
+        mod later_logical_types {
+            //! The variant, geometry and geography logical types, which
+            //! parquet 57 read and the pinned parquet 55 does not know, in the
+            //! shapes beyond the pyarrow fixtures' one column (#3155). No
+            //! writer the tests can call writes them, so these files are
+            //! authored here one Compact Protocol field at a time. Each field
+            //! is refused as `source_field_type_unsupported` with the stored
+            //! type that parquet 57 and pyarrow 26 give it, and each
+            //! annotation that parquet 57 refused leaves the file invalid.
+            use super::authored::{zigzag, Fields};
+            use yamaa_adapters::parquet_source::{parse, Error};
+
+            /// One REQUIRED leaf column of an authored file: its path, its
+            /// physical type and the PLAIN bytes of its two values.
+            struct Leaf {
+                path: &'static [&'static str],
+                physical: i64,
+                body: Vec<u8>,
+            }
+
+            /// An INT64 leaf holding 1 and 2.
+            fn int64(path: &'static [&'static str]) -> Leaf {
+                let body = [1i64, 2].iter().flat_map(|v| v.to_le_bytes()).collect();
+                Leaf {
+                    path,
+                    physical: 2,
+                    body,
+                }
+            }
+
+            /// A BYTE_ARRAY leaf holding the well-known binary of the point
+            /// (1 2) twice.
+            fn points(path: &'static [&'static str]) -> Leaf {
+                let point = b"\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\xf0?\x00\x00\x00\x00\x00\x00\x00@";
+                let mut body = Vec::new();
+                for _ in 0..2 {
+                    body.extend((point.len() as u32).to_le_bytes());
+                    body.extend(point);
+                }
+                Leaf {
+                    path,
+                    physical: 6,
+                    body,
+                }
+            }
+
+            /// A file of one row group of two rows of `leaves`, each in one
+            /// uncompressed PLAIN V1 page, under the schema elements
+            /// `schema`, the root first.
+            fn container(schema: &[Vec<u8>], leaves: &[Leaf]) -> Vec<u8> {
+                let mut bytes = b"PAR1".to_vec();
+                let mut chunks = Vec::new();
+                for leaf in leaves {
+                    // Two values; PLAIN; RLE definition and repetition levels.
+                    let data = Fields::default().integer(1, 5, 2).integer(2, 5, 0);
+                    let data = data.integer(3, 5, 3).integer(4, 5, 3);
+                    // DATA_PAGE; uncompressed and compressed sizes.
+                    let size = leaf.body.len() as i64;
+                    let page = Fields::default().integer(1, 5, 0).integer(2, 5, size);
+                    let page = page.integer(3, 5, size).strct(5, data).end();
+                    let offset = bytes.len() as i64;
+                    let length = (page.len() + leaf.body.len()) as i64;
+                    bytes.extend(page);
+                    bytes.extend(&leaf.body);
+                    let path: Vec<Vec<u8>> = leaf
+                        .path
+                        .iter()
+                        .map(|name| [&[name.len() as u8][..], name.as_bytes()].concat())
+                        .collect();
+                    let meta = Fields::default()
+                        .integer(1, 5, leaf.physical)
+                        .list(2, 5, &[zigzag(0), zigzag(3)]) // PLAIN, RLE
+                        .list(3, 8, &path)
+                        .integer(4, 5, 0) // UNCOMPRESSED
+                        .integer(5, 6, 2)
+                        .integer(6, 6, length)
+                        .integer(7, 6, length)
+                        .integer(9, 6, offset);
+                    let chunk = Fields::default().integer(2, 6, offset).strct(3, meta);
+                    chunks.push(chunk.end());
+                }
+                let size = bytes.len() as i64 - 4;
+                let group = Fields::default().list(1, 12, &chunks);
+                let group = group.integer(2, 6, size).integer(3, 6, 2).end();
+                let footer = Fields::default().integer(1, 5, 1).list(2, 12, schema);
+                let footer = footer.integer(3, 6, 2).list(4, 12, &[group]).end();
+                bytes.extend(&footer);
+                bytes.extend((footer.len() as u32).to_le_bytes());
+                bytes.extend(b"PAR1");
+                bytes
+            }
+
+            fn root(children: i64) -> Vec<u8> {
+                Fields::default()
+                    .binary(4, b"schema")
+                    .integer(5, 5, children)
+                    .end()
+            }
+
+            /// A REQUIRED leaf element.
+            fn leaf(name: &str, physical: i64) -> Fields {
+                let leaf = Fields::default().integer(1, 5, physical).integer(3, 5, 0);
+                leaf.binary(4, name.as_bytes())
+            }
+
+            /// A REQUIRED group element of `children` children.
+            fn group(name: &str, children: i64) -> Fields {
+                let group = Fields::default().integer(3, 5, 0);
+                group.binary(4, name.as_bytes()).integer(5, 5, children)
+            }
+
+            /// A logical type union holding `variant`: 16 for VARIANT, 17 for
+            /// GEOMETRY and 18 for GEOGRAPHY.
+            fn logical(variant: i16, value: Fields) -> Fields {
+                Fields::default().strct(variant, value)
+            }
+
+            fn geometry() -> Fields {
+                logical(17, Fields::default().binary(1, b"OGC:CRS84"))
+            }
+
+            fn variant() -> Fields {
+                logical(16, Fields::default().raw(1, 3, &[1]))
+            }
+
+            fn refused(bytes: &[u8]) -> (String, String) {
+                match parse(bytes) {
+                    Err(Error::Unsupported { field, stored_type }) => (field, stored_type),
+                    other => panic!("{:?}", other.err()),
+                }
+            }
+
+            #[test]
+            fn each_annotated_field_is_refused_with_the_type_parquet_57_gave_it() {
+                let metadata = || leaf("metadata", 6).end();
+                let value = || leaf("value", 6).end();
+                type Case = (
+                    &'static str,
+                    Vec<Vec<u8>>,
+                    Vec<Leaf>,
+                    &'static str,
+                    &'static str,
+                );
+                let cases: [Case; 5] = [
+                    (
+                        "a geometry in a struct",
+                        vec![
+                            root(2),
+                            leaf("V", 2).end(),
+                            group("S", 1).end(),
+                            leaf("g", 6).strct(10, geometry()).end(),
+                        ],
+                        vec![int64(&["V"]), points(&["S", "g"])],
+                        "S",
+                        "struct<g: binary not null>",
+                    ),
+                    (
+                        "a geography",
+                        vec![
+                            root(2),
+                            leaf("V", 2).end(),
+                            leaf("G", 6)
+                                .strct(10, logical(18, Fields::default().integer(2, 5, 0)))
+                                .end(),
+                        ],
+                        vec![int64(&["V"]), points(&["G"])],
+                        "G",
+                        "binary",
+                    ),
+                    (
+                        "a shredded variant",
+                        vec![
+                            root(2),
+                            leaf("V", 2).end(),
+                            group("X", 3).strct(10, variant()).end(),
+                            metadata(),
+                            value(),
+                            leaf("typed_value", 2).end(),
+                        ],
+                        vec![
+                            int64(&["V"]),
+                            points(&["X", "metadata"]),
+                            points(&["X", "value"]),
+                            int64(&["X", "typed_value"]),
+                        ],
+                        "X",
+                        "struct<metadata: binary not null, value: binary not null, \
+                         typed_value: int64 not null>",
+                    ),
+                    // Parquet 57 checked nothing of a group's annotation.
+                    (
+                        "a geometry on a group",
+                        vec![
+                            root(1),
+                            group("S", 1).strct(10, geometry()).end(),
+                            leaf("g", 6).end(),
+                        ],
+                        vec![points(&["S", "g"])],
+                        "S",
+                        "struct<g: binary not null>",
+                    ),
+                    // The first field the closed mapping refuses is reported.
+                    (
+                        "a geometry before an unsigned field",
+                        vec![
+                            root(2),
+                            leaf("G", 6).strct(10, geometry()).end(),
+                            leaf("U", 2).integer(6, 5, 14).end(), // UINT_64
+                        ],
+                        vec![points(&["G"]), int64(&["U"])],
+                        "G",
+                        "binary",
+                    ),
+                ];
+                for (name, schema, leaves, field, stored_type) in cases {
+                    let bytes = container(&schema, &leaves);
+                    assert_eq!(
+                        refused(&bytes),
+                        (field.into(), stored_type.into()),
+                        "{name}"
+                    );
+                }
+                // An earlier field's own finding still comes first.
+                let schema = [
+                    root(2),
+                    leaf("", 2).end(),
+                    leaf("G", 6).strct(10, geometry()).end(),
+                ];
+                let bytes = container(&schema, &[int64(&[""]), points(&["G"])]);
+                assert!(matches!(parse(&bytes), Err(Error::EmptyName { field: 1 })));
+            }
+
+            #[test]
+            fn an_annotation_parquet_57_refused_leaves_the_file_invalid() {
+                type Invalid = (&'static str, Vec<Vec<u8>>, Vec<Leaf>);
+                let cases: [Invalid; 4] = [
+                    (
+                        "a variant on a leaf",
+                        vec![root(1), leaf("X", 6).strct(10, variant()).end()],
+                        vec![points(&["X"])],
+                    ),
+                    (
+                        "a geometry on an INT64",
+                        vec![root(1), leaf("G", 2).strct(10, geometry()).end()],
+                        vec![int64(&["G"])],
+                    ),
+                    (
+                        "a geometry with a converted type",
+                        vec![
+                            root(1),
+                            leaf("G", 6).integer(6, 5, 0).strct(10, geometry()).end(),
+                        ],
+                        vec![points(&["G"])],
+                    ),
+                    // A variant group whose converted type makes it a list
+                    // that its two children cannot form.
+                    (
+                        "a variant marked as a list",
+                        vec![
+                            root(1),
+                            group("X", 2).integer(6, 5, 3).strct(10, variant()).end(),
+                            leaf("metadata", 6).end(),
+                            leaf("value", 6).end(),
+                        ],
+                        vec![points(&["X", "metadata"]), points(&["X", "value"])],
+                    ),
+                ];
+                for (name, schema, leaves) in cases {
+                    let bytes = container(&schema, &leaves);
+                    assert!(matches!(parse(&bytes), Err(Error::Malformed)), "{name}");
                 }
             }
         }

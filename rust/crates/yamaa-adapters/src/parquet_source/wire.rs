@@ -36,11 +36,33 @@
 //! `FileMetaData` and `ColumnChunk`, a column chunk's path and key-value
 //! metadata, and each data page header's statistics. The table also keeps the
 //! later fields that parquet 57 reads: the variant, geometry and geography
-//! logical types, which 55 refuses, and geospatial statistics, which it
-//! skips. Checking their types refuses only files that no writer produces.
+//! logical types and the IEEE 754 total order, which 55 refuses, and
+//! geospatial statistics, which it skips. Checking their types refuses only
+//! files that no writer produces.
+//!
+//! The walk also finds what the native decoder must be shown differently
+//! from the held bytes (`Presentation`), because parquet 55 refuses some
+//! files that the rules read or refuse otherwise:
+//!
+//! - It reads a skipped binary as UTF-8 text, and refuses one that is not.
+//!   Such a binary holds only metadata (PARQUET-10), so it is shown as zero
+//!   bytes, in a footer and in a page header alike.
+//! - It knows no column order but the type-defined one. Column orders bear
+//!   only on statistics, which the engine never reads (PARQUET-10), so any
+//!   other order, such as the IEEE 754 total order, is shown as the
+//!   type-defined one.
+//! - It knows none of the variant, geometry and geography logical types,
+//!   which PARQUET-7 refuses as `source_field_type_unsupported` (#3155). A
+//!   schema element annotated with one as parquet 57 admitted it is shown
+//!   without the annotation, so the footer decodes to the types parquet 57
+//!   gave such a field, and the walk reports the element (`Checked`), whose
+//!   leaf the closed mapping then refuses. An annotation parquet 57 refused,
+//!   such as a geometry that is not a `BYTE_ARRAY`, stays for the native
+//!   decoder to refuse, as an invalid file (PARQUET-5).
 
-use super::compact::{Cursor, Error, Value};
+use super::compact::{self, Cursor, Error, Value};
 use crate::storage_api::ENCODING_STATS;
+use std::{borrow::Cow, ops::Range};
 use yamaa_core::limits::Limits;
 
 /// The most key-value metadata entries a footer, or a column chunk's
@@ -220,7 +242,8 @@ impl Shape {
             (GeospatialStatistics, 2) => List(&I32),
             (BoundingBox, 1..=8) => Double,
             (KeyValue, 1 | 2) => Binary,
-            (ColumnOrder, 1) => Wire::Struct(Empty),
+            // TYPE_ORDER, then IEEE_754_TOTAL_ORDER, both empty structs.
+            (ColumnOrder, 1 | 2) => Wire::Struct(Empty),
             (EncryptionAlgorithm, 1 | 2) => Wire::Struct(AesGcm),
             (AesGcm, 1 | 2) => Binary,
             (AesGcm, 3) => Bool,
@@ -266,9 +289,9 @@ impl Shape {
             // The required key.
             KeyValue => (3, 3),
             // Exactly one variant, whose value can take no byte, as an unknown
-            // boolean variant does. The decoder refuses any variant but the
-            // empty TYPE_ORDER struct, a byte longer, and reserves nothing for
-            // the list, whose elements then hold nothing.
+            // boolean variant does. The decoder is shown any variant but
+            // TYPE_ORDER as that empty struct, a byte longer (`Presentation`),
+            // and reserves nothing for the list, whose elements hold nothing.
             ColumnOrder => (2, 2),
             // The required file offset. Framing refuses a chunk without the
             // metadata it locates pages by before the decoder sees the list.
@@ -324,26 +347,123 @@ impl Lists {
     }
 }
 
+/// The bytes the native decoder reads in place of a held struct, where they
+/// differ from it. Offsets count from the start of the struct.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub(super) struct Presentation {
+    /// Each skipped binary whose bytes are not UTF-8: shown as zero bytes.
+    pub opaque: Vec<Range<usize>>,
+    /// Each range shown as other bytes, in order: a column order shown as
+    /// the type-defined one, and a later logical type removed from its schema
+    /// element. Only a footer holds them, so a page header keeps its length.
+    pub splices: Vec<(Range<usize>, Vec<u8>)>,
+}
+
+impl Presentation {
+    /// Show the native decoder `native`, the compact presentation of the held
+    /// struct (`compact::native_metadata`), with these edits.
+    pub(super) fn apply<'a>(&self, mut native: Cow<'a, [u8]>) -> Cow<'a, [u8]> {
+        for range in &self.opaque {
+            native.to_mut()[range.clone()].fill(0);
+        }
+        if self.splices.is_empty() {
+            return native;
+        }
+        let mut shown = Vec::with_capacity(native.len());
+        let mut copied = 0;
+        for (range, bytes) in &self.splices {
+            shown.extend_from_slice(&native[copied..range.start]);
+            shown.extend_from_slice(bytes);
+            copied = range.end;
+        }
+        shown.extend_from_slice(&native[copied..]);
+        Cow::Owned(shown)
+    }
+}
+
+/// What checking one held struct found.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub(super) struct Checked {
+    /// The declared lengths of the lists that framing bounds by the schema.
+    pub lists: Lists,
+    /// How the native decoder is shown the struct.
+    pub presentation: Presentation,
+    /// Each schema element, by its position in the footer's schema list,
+    /// whose variant, geometry or geography annotation the presentation
+    /// removes.
+    pub annotated: Vec<usize>,
+}
+
+/// What the walk has found so far, and how many schema elements it has met.
+struct Walk {
+    found: Checked,
+    elements: usize,
+}
+
+/// One struct the walk read: how many fields it holds and the id of the
+/// first, which together name a union's variant.
+struct Walked {
+    fields: usize,
+    first: Option<i16>,
+}
+
+/// A `ColumnOrder` union holding TYPE_ORDER, the type-defined order.
+const TYPE_ORDER: [u8; 3] = [0x1c, 0, 0];
+
 /// Refuse a known field of the admitted struct `value`, read as `shape`,
 /// whose held wire type is not the one the native decoder reads it with, a
 /// repeated known field, and a known list too short for the elements it
-/// declares or longer than its limit, at every depth the decoder reaches.
-/// Each byte is read once.
-pub(super) fn check(value: Value<'_>, shape: Shape) -> Result<Lists, Error> {
-    let mut lists = Lists::default();
-    walk(&mut Cursor::new(value), shape, &mut lists)?;
-    Ok(lists)
+/// declares or longer than its limit, at every depth the decoder reaches;
+/// and find how the native decoder must be shown the struct. Each byte is
+/// read once, but for the rare schema element that a later logical type
+/// annotates.
+pub(super) fn check(value: Value<'_>, shape: Shape) -> Result<Checked, Error> {
+    let mut state = Walk {
+        found: Checked::default(),
+        elements: 0,
+    };
+    walk(&mut Cursor::new(value), shape, &mut state)?;
+    Ok(state.found)
 }
 
-fn walk(cursor: &mut Cursor<'_>, shape: Shape, lists: &mut Lists) -> Result<(), Error> {
+fn walk(cursor: &mut Cursor<'_>, shape: Shape, state: &mut Walk) -> Result<Walked, Error> {
+    let start = cursor.position();
+    // Schema elements are met only in the footer's schema list, in order.
+    let element = matches!(shape, Shape::SchemaElement).then(|| {
+        state.elements += 1;
+        state.elements - 1
+    });
+    let mut walked = Walked {
+        fields: 0,
+        first: None,
+    };
     let mut previous = 0;
     // One bit for each known field already read: every known id is between
     // 1 and 18.
     let mut read = 0u32;
-    while let Some((id, kind)) = cursor.field(previous)? {
+    // Where a field holding a later logical type begins, and the variant,
+    // until the next header shows how to remove the field; then the removal.
+    let mut later: Option<(usize, i16)> = None;
+    let mut removal: Option<(Range<usize>, Vec<u8>, i16)> = None;
+    loop {
+        let header = cursor.position();
+        let next = cursor.field(previous)?;
+        if let Some((from, variant)) = later.take() {
+            removal = Some(match next {
+                // The field that follows names its id afresh, in the long
+                // form, which does not depend on the removed field's id.
+                Some((id, kind)) => (from..cursor.position(), long_header(id, kind), variant),
+                None => (from..header, Vec::new(), variant),
+            });
+        }
+        let Some((id, kind)) = next else {
+            break;
+        };
+        walked.fields += 1;
+        walked.first.get_or_insert(id);
         previous = id;
         let Some(wire) = shape.field(id) else {
-            cursor.skip_value(kind)?;
+            skip_unknown(cursor, kind, &mut state.found.presentation.opaque)?;
             continue;
         };
         let bit = 1u32 << id;
@@ -352,14 +472,21 @@ fn walk(cursor: &mut Cursor<'_>, shape: Shape, lists: &mut Lists) -> Result<(), 
         }
         read |= bit;
         match wire {
-            Wire::Struct(shape) => walk(cursor, shape, lists)?,
+            Wire::Struct(inner) => {
+                let union = walk(cursor, inner, state)?;
+                if matches!(shape, Shape::SchemaElement) && id == 10 && union.fields == 1 {
+                    if let Some(variant @ 16..=18) = union.first {
+                        later = Some((header, variant));
+                    }
+                }
+            }
             Wire::List(element) => {
                 let (held, count) = cursor.collection()?;
                 // The native decoder reads no element of an empty list.
                 if count != 0 && !element.admits(held) {
                     return Err(Error::Malformed);
                 }
-                lists.declare(shape, id, count)?;
+                state.found.lists.declare(shape, id, count)?;
                 // It reserves room for every element before it reads one.
                 // Refuse a count that the struct's remaining bytes, and then
                 // the list's own bytes, cannot hold.
@@ -369,7 +496,9 @@ fn walk(cursor: &mut Cursor<'_>, shape: Shape, lists: &mut Lists) -> Result<(), 
                 }
                 for _ in 0..count {
                     match *element {
-                        Wire::Struct(shape) => walk(cursor, shape, lists)?,
+                        Wire::Struct(inner) => {
+                            walk(cursor, inner, state)?;
+                        }
                         _ => cursor.skip_element(held)?,
                     }
                 }
@@ -380,13 +509,113 @@ fn walk(cursor: &mut Cursor<'_>, shape: Shape, lists: &mut Lists) -> Result<(), 
             _ => cursor.skip_value(kind)?,
         }
     }
+    let presentation = &mut state.found.presentation;
+    match shape {
+        Shape::SchemaElement => {
+            if let Some((range, bytes, variant)) = removal {
+                if accepted(cursor.held(start..cursor.position()), variant)? {
+                    presentation.splices.push((range, bytes));
+                    state.found.annotated.extend(element);
+                }
+            }
+        }
+        // A union of one variant the native decoder does not know.
+        Shape::ColumnOrder if walked.fields == 1 && walked.first != Some(1) => {
+            let order = start..cursor.position();
+            presentation.splices.push((order, TYPE_ORDER.to_vec()));
+        }
+        _ => {}
+    }
+    Ok(walked)
+}
+
+/// Skip the value, of wire type `kind`, of a field the native decoder does
+/// not know, and note each binary in it whose bytes are not UTF-8 (in
+/// `opaque`): the native decoder's skip reads each binary as text. A map or
+/// UUID is shown to it as one opaque binary already
+/// (`compact::native_metadata`), so nothing inside one is noted.
+fn skip_unknown(
+    cursor: &mut Cursor<'_>,
+    kind: u8,
+    opaque: &mut Vec<Range<usize>>,
+) -> Result<(), Error> {
+    match kind {
+        8 => {
+            let bytes = cursor.binary()?;
+            if std::str::from_utf8(cursor.held(bytes.clone())).is_err() {
+                opaque.push(bytes);
+            }
+        }
+        9 | 10 => {
+            let (element, count) = cursor.collection()?;
+            for _ in 0..count {
+                match element {
+                    8..=10 | 12 => skip_unknown(cursor, element, opaque)?,
+                    _ => cursor.skip_element(element)?,
+                }
+            }
+        }
+        12 => {
+            let mut previous = 0;
+            while let Some((id, kind)) = cursor.field(previous)? {
+                previous = id;
+                skip_unknown(cursor, kind, opaque)?;
+            }
+        }
+        _ => cursor.skip_value(kind)?,
+    }
     Ok(())
+}
+
+/// A field header in the long form: the wire type the native decoder skips
+/// the field's value by (`compact::native_opaque`), then the id itself.
+fn long_header(id: i16, kind: u8) -> Vec<u8> {
+    let mut header = vec![compact::native_opaque(kind)];
+    let mut value = ((i64::from(id) << 1) ^ (i64::from(id) >> 63)) as u64;
+    while value >= 0x80 {
+        header.push(value as u8 | 0x80);
+        value >>= 7;
+    }
+    header.push(value as u8);
+    header
+}
+
+/// Whether parquet 57 admitted the logical type `variant` (16, 17 or 18) of
+/// the schema element held in `bytes`, so that a presentation without it
+/// decodes to the type parquet 57 gave the element. Parquet 57 read the CRS of
+/// a geometry or geography as text. On a primitive it admitted a geometry or
+/// geography only on a `BYTE_ARRAY` without a converted type, and a variant
+/// never; on a group it admitted each, and checked nothing.
+fn accepted(bytes: &[u8], variant: i16) -> Result<bool, Error> {
+    let (element, _) = compact::parse(bytes)?;
+    let annotation = match element.field(10)? {
+        Some(union) => union.field(variant)?,
+        None => None,
+    };
+    if variant != 16 {
+        let crs = match annotation {
+            Some(annotation) => annotation.field(1)?,
+            None => None,
+        };
+        if let Some(Value::Binary(crs)) = crs {
+            if std::str::from_utf8(crs).is_err() {
+                return Ok(false);
+            }
+        }
+    }
+    let leaf = matches!(element.field(5)?, None | Some(Value::Integer(0)));
+    let physical = element.field(1)?;
+    if !leaf || physical.is_none() {
+        return Ok(true);
+    }
+    Ok(variant != 16 && physical == Some(Value::Integer(6)) && element.field(6)?.is_none())
 }
 
 #[cfg(test)]
 mod tests {
     use super::super::{framing, reader};
     use arrow_array::{Int64Array, TimestampMicrosecondArray};
+    use parquet::file::metadata::ParquetMetaData;
 
     fn varint(mut value: u64, output: &mut Vec<u8>) {
         while value >= 0x80 {
@@ -593,7 +822,7 @@ mod tests {
     #[test]
     fn a_mistyped_known_field_of_each_struct_is_malformed() {
         type Case = (&'static str, At, fn(Fields, bool) -> Fields);
-        let cases: [Case; 37] = [
+        let cases: [Case; 38] = [
             // created_by as a UUID, which the native copy presents as a binary.
             ("FileMetaData", At::File, |f, wrong| {
                 f.pick(wrong, |f| f.uuid(6), |f| f.binary(6, b"yamaa test"))
@@ -753,6 +982,15 @@ mod tests {
                 );
                 f.list(7, 12, &[order.end()])
             }),
+            // IEEE_754_TOTAL_ORDER as an i32 zero.
+            ("ColumnOrder", At::File, |f, wrong| {
+                let order = Fields::default().pick(
+                    wrong,
+                    |o| o.i32(2, 0),
+                    |o| o.strct(2, Fields::default()),
+                );
+                f.list(7, 12, &[order.end()])
+            }),
             ("PageHeader", At::Page, |f, wrong| {
                 f.pick(wrong, |p| p.binary(4, b"crc"), |p| p.i32(4, 0))
             }),
@@ -812,7 +1050,7 @@ mod tests {
     #[test]
     fn a_repeated_known_field_of_each_struct_is_malformed() {
         type Case = (&'static str, At, fn(Fields, bool) -> Fields);
-        let cases: [Case; 31] = [
+        let cases: [Case; 32] = [
             ("FileMetaData", At::File, |f, repeat| {
                 f.twice(repeat, |f| f.binary(6, b"yamaa test"))
             }),
@@ -915,6 +1153,10 @@ mod tests {
             }),
             ("ColumnOrder", At::File, |f, repeat| {
                 let order = Fields::default().twice(repeat, |o| o.strct(1, Fields::default()));
+                f.list(7, 12, &[order.end()])
+            }),
+            ("ColumnOrder", At::File, |f, repeat| {
+                let order = Fields::default().twice(repeat, |o| o.strct(2, Fields::default()));
                 f.list(7, 12, &[order.end()])
             }),
             ("PageHeader", At::Page, |f, repeat| {
@@ -1283,46 +1525,300 @@ mod tests {
         }
     }
 
-    /// Admission checks the types of the column orders and logical types
-    /// that later format versions add, but the native decoder reads only the
-    /// ones its own version names: it refuses a file that holds another.
+    /// The values of the authored file's column `V`, read whole.
+    fn read_values(bytes: &[u8]) -> Result<Vec<i64>, reader::Error> {
+        let decoded = reader::read(bytes)?;
+        let column = decoded.batches[0].column(0);
+        let values = column.as_any().downcast_ref::<Int64Array>().unwrap();
+        Ok(values.values().to_vec())
+    }
+
+    /// Column orders bear only on statistics, which the engine never reads,
+    /// so the native decoder is shown each order it does not know as the
+    /// type-defined one: a file recording the IEEE 754 total order reads, as
+    /// do later orders (PARQUET-10). A union that holds no variant, or two,
+    /// is still refused, by the native decoder, and the IEEE 754 total order
+    /// is an empty struct, as the format defines it.
     #[test]
-    fn a_column_order_or_logical_type_the_decoder_does_not_know_is_malformed() {
-        // TYPE_ORDER, then the IEEE 754 total order, also an empty struct.
-        for (variant, readable) in [(1, true), (2, false)] {
-            let bytes = file(&[7], At::File, move |f| {
-                f.list(
-                    7,
-                    12,
-                    &[Fields::default().strct(variant, Fields::default()).end()],
-                )
-            });
-            framing::admit(&bytes).unwrap();
-            assert_eq!(reader::read(&bytes).is_ok(), readable, "order {variant}");
+    fn every_column_order_reads_as_the_type_defined_one() {
+        let order = |fields: Fields| fields.end();
+        let empty = Fields::default;
+        type Order = (&'static str, Vec<u8>, bool);
+        let orders: [Order; 6] = [
+            ("TYPE_ORDER", order(empty().strct(1, empty())), false),
+            (
+                "IEEE_754_TOTAL_ORDER",
+                order(empty().strct(2, empty())),
+                true,
+            ),
+            // The same, its header in the long form.
+            ("long IEEE_754_TOTAL_ORDER", vec![0x0c, 0x04, 0, 0], true),
+            ("later empty struct", order(empty().strct(3, empty())), true),
+            ("later integer", order(empty().i32(3, 7)), true),
+            (
+                "later struct holding a binary that is not text",
+                order(empty().strct(3, empty().binary(1, &[0xff]))),
+                true,
+            ),
+        ];
+        for (name, element, shown) in orders {
+            // A later footer field still reads after the edited list.
+            let add = move |f: Fields| {
+                f.list(7, 12, std::slice::from_ref(&element))
+                    .binary(90, b"later")
+            };
+            let bytes = file(&[7, -1], At::File, add);
+            let frame = framing::admit(&bytes).unwrap();
+            assert_eq!(frame.footer.splices.len(), usize::from(shown), "{name}");
+            assert_eq!(read_values(&bytes), Ok(vec![7, -1]), "{name}");
         }
-        // VARIANT, GEOMETRY and GEOGRAPHY annotations of the INT64 leaf.
-        for variant in [16, 17, 18] {
-            let bytes = file(&[7], At::Leaf, move |f| {
-                f.strct(10, Fields::default().strct(variant, Fields::default()))
-            });
-            framing::admit(&bytes).unwrap();
-            let error = reader::read(&bytes).unwrap_err();
-            assert_eq!(error, reader::Error::Malformed, "logical type {variant}");
+        // Two variants pass admission, and the native decoder refuses them.
+        let two = order(empty().strct(1, empty()).strct(2, empty()));
+        let bytes = file(&[7], At::File, move |f| {
+            f.list(7, 12, std::slice::from_ref(&two))
+        });
+        assert!(framing::admit(&bytes).unwrap().footer.splices.is_empty());
+        assert_eq!(read_values(&bytes), Err(reader::Error::Malformed));
+        // No variant is shorter than any order the decoder reads (`minimum`).
+        assert!(malformed(&file(&[7], At::File, |f| f.list(
+            7,
+            12,
+            &[vec![0]]
+        ))));
+        let mistyped = file(&[7], At::File, |f| {
+            f.list(7, 12, &[order(empty().i32(2, 0))])
+        });
+        assert!(malformed(&mistyped));
+    }
+
+    /// The native decoder reads a skipped binary as UTF-8 text and refuses
+    /// one that is not. Such a binary holds only metadata, so the decoder is
+    /// shown zero bytes in its place wherever it skips it, in the footer and
+    /// in a page header alike (PARQUET-10). A known string that is not UTF-8
+    /// still refuses the file.
+    #[test]
+    fn every_skipped_binary_that_is_not_text_reads() {
+        let cases: [Addition; 12] = [
+            (At::File, |f| f.binary(90, &[0xff])),
+            (At::Page, |f| f.binary(90, &[0xff])),
+            (At::Meta, |f| f.binary(90, &[0xff])),
+            (At::Leaf, |f| f.binary(90, &[0xff])),
+            (At::Group, |f| f.binary(90, &[0xc3])),
+            // In an unknown struct, list, set and list of structs.
+            (At::File, |f| {
+                f.strct(90, Fields::default().binary(1, &[0xff]))
+            }),
+            (At::File, |f| f.list(90, 8, &[vec![1, b'a'], vec![1, 0xff]])),
+            (At::Page, |f| {
+                f.collection(90, 10, 8, &[vec![2, 0xe2, 0x82]])
+            }),
+            (At::File, |f| {
+                f.list(90, 12, &[Fields::default().binary(1, &[0xff]).end()])
+            }),
+            // In structs whose every field the decoder skips: TYPE_ORDER and
+            // an index page header.
+            (At::File, |f| {
+                let order = Fields::default().strct(1, Fields::default().binary(1, &[0xff]));
+                f.list(7, 12, &[order.end()])
+            }),
+            (At::Page, |f| {
+                f.strct(6, Fields::default().binary(1, &[0xff]))
+            }),
+            // An unknown field of a known struct in a known list.
+            (At::File, |f| {
+                let pair = Fields::default().binary(1, b"k").binary(2, b"v");
+                f.list(5, 12, &[pair.binary(3, &[0xff]).end()])
+            }),
+        ];
+        for (index, (at, add)) in cases.into_iter().enumerate() {
+            let bytes = file(&[7, -1], at, add);
+            assert_eq!(read_values(&bytes), Ok(vec![7, -1]), "case {index}");
+        }
+        // The decoder is shown zeros exactly where the binary's bytes lie.
+        let bytes = file(&[7], At::Page, |f| f.binary(90, &[0xff, 0xfe]));
+        let frame = framing::admit(&bytes).unwrap();
+        let [opaque] = frame.opaque.as_slice() else {
+            panic!("{:?}", frame.opaque);
+        };
+        assert_eq!(bytes[opaque.clone()], [0xff, 0xfe]);
+        let bytes = file(&[7], At::File, |f| {
+            f.binary(90, b"text").binary(91, &[0xff])
+        });
+        let frame = framing::admit(&bytes).unwrap();
+        assert_eq!(frame.footer.opaque.len(), 1);
+        assert_eq!(frame.metadata[frame.footer.opaque[0].clone()], [0xff]);
+        // Known strings: the writer, and a key-value entry's value.
+        for add in [
+            (|f: Fields| f.binary(6, &[0xff])) as fn(Fields) -> Fields,
+            |f| {
+                let pair = Fields::default().binary(1, b"k").binary(2, &[0xff]);
+                f.list(5, 12, &[pair.end()])
+            },
+        ] {
+            let bytes = file(&[7], At::File, add);
+            assert_eq!(read_values(&bytes), Err(reader::Error::Malformed));
         }
     }
 
-    /// The native decoder reads a skipped binary as UTF-8 text, so an
-    /// unknown binary field that is not UTF-8 refuses the file, in the footer
-    /// and in a page header alike.
+    /// A footer with no row group and no row: version 1 and the schema
+    /// elements `schema`, the root first.
+    fn schema_footer(schema: &[Vec<u8>]) -> Vec<u8> {
+        let footer = Fields::default().i32(1, 1).list(2, 12, schema).i64(3, 0);
+        footer.list(4, 12, &[]).end()
+    }
+
+    /// Check `footer` as admission does, then decode it as the native decoder
+    /// is shown it.
+    fn shown(footer: &[u8]) -> (super::Checked, Result<ParquetMetaData, reader::Error>) {
+        let (root, _) = super::super::compact::parse(footer).unwrap();
+        let checked = super::check(root, super::Shape::FileMetaData).unwrap();
+        let decoded = super::super::row_groups::decode(footer, &checked.presentation);
+        (checked, decoded)
+    }
+
+    /// Parquet 55 knows none of the variant, geometry and geography logical
+    /// types. Where parquet 57 read one, the native decoder is shown the
+    /// schema element without it, so the footer decodes to the type parquet
+    /// 57 gave the element, and the check reports the element; any field
+    /// that follows the removed one names its id afresh. Where parquet 57
+    /// refused one, the decoder is shown it and refuses the footer too.
     #[test]
-    fn an_unknown_binary_that_is_not_utf8_is_malformed() {
-        for at in [At::File, At::Page] {
-            for (bytes, readable) in [(&b"text"[..], true), (&[0xff][..], false)] {
-                let held = file(&[7], at, move |f| f.binary(90, bytes));
-                framing::admit(&held).unwrap();
-                assert_eq!(reader::read(&held).is_ok(), readable, "{at:?} {bytes:?}");
-            }
+    fn a_later_logical_type_is_removed_where_parquet_57_read_it() {
+        use parquet::basic::{ConvertedType, Type as Physical};
+        let empty = Fields::default;
+        let root = |children| empty().binary(4, b"schema").i32(5, children).end();
+        let geometry = || empty().strct(17, empty().binary(1, b"OGC:CRS84"));
+        let geography = || empty().strct(18, empty().i32(2, 0));
+        let variant = || empty().strct(16, empty().raw(1, 3, &[1]));
+        // A REQUIRED leaf G of physical type `physical`.
+        let leaf = |physical| empty().i32(1, physical).i32(3, 0).binary(4, b"G");
+        let binary = |logical: Fields| leaf(6).strct(10, logical).end();
+        type Element = (&'static str, Vec<u8>);
+        let leaves: [Element; 9] = [
+            ("geometry", binary(geometry())),
+            ("geography", binary(geography())),
+            (
+                "an unknown edge algorithm",
+                binary(empty().strct(18, empty().i32(2, 99))),
+            ),
+            (
+                "an unknown field that is not text",
+                binary(empty().strct(17, empty().binary(5, &[0xff]))),
+            ),
+            // A known field after the logical type, then a later field, and a
+            // later field that is a set; and the logical type first.
+            (
+                "a name after it",
+                empty()
+                    .i32(1, 6)
+                    .i32(3, 0)
+                    .strct(10, geometry())
+                    .binary(4, b"G")
+                    .end(),
+            ),
+            (
+                "a later field after it",
+                leaf(6).strct(10, geometry()).i32(11, 5).end(),
+            ),
+            (
+                "a later set after it",
+                leaf(6)
+                    .strct(10, geometry())
+                    .collection(11, 10, 5, &[vec![2]])
+                    .end(),
+            ),
+            (
+                "the logical type first",
+                empty()
+                    .strct(10, geometry())
+                    .i32(1, 6)
+                    .i32(3, 0)
+                    .binary(4, b"G")
+                    .end(),
+            ),
+            (
+                "a long field id",
+                leaf(6).strct(10, geometry()).raw(300, 5, &[2]).end(),
+            ),
+        ];
+        for (name, element) in leaves {
+            let (checked, decoded) = shown(&schema_footer(&[root(1), element]));
+            assert_eq!(checked.annotated, [1], "{name}");
+            let decoded = decoded.unwrap_or_else(|error| panic!("{name}: {error:?}"));
+            let column = decoded.file_metadata().schema_descr().column(0);
+            assert_eq!(column.name(), "G", "{name}");
+            assert_eq!(column.physical_type(), Physical::BYTE_ARRAY, "{name}");
+            assert_eq!(column.logical_type(), None, "{name}");
+            assert_eq!(column.converted_type(), ConvertedType::NONE, "{name}");
         }
+        // On groups parquet 57 checked nothing: a variant, as the format
+        // places it, and a geometry.
+        let child = |name: &[u8]| empty().i32(1, 6).i32(3, 0).binary(4, name).end();
+        for (name, logical) in [("variant", variant()), ("geometry", geometry())] {
+            let group = empty()
+                .i32(3, 0)
+                .binary(4, b"X")
+                .i32(5, 2)
+                .strct(10, logical);
+            let schema = [root(1), group.end(), child(b"metadata"), child(b"value")];
+            let (checked, decoded) = shown(&schema_footer(&schema));
+            assert_eq!(checked.annotated, [1], "{name}");
+            let decoded = decoded.unwrap_or_else(|error| panic!("{name}: {error:?}"));
+            let schema = decoded.file_metadata().schema_descr();
+            let group = &schema.root_schema().get_fields()[0];
+            assert_eq!(group.get_basic_info().logical_type(), None, "{name}");
+            assert_eq!(schema.num_columns(), 2, "{name}");
+        }
+        // Parquet 57 refused these, and so does the native decoder.
+        let refused: [Element; 6] = [
+            ("variant on a leaf", binary(variant())),
+            ("geometry on an INT64", leaf(2).strct(10, geometry()).end()),
+            (
+                "geography on an INT32",
+                leaf(1).strct(10, geography()).end(),
+            ),
+            (
+                "geometry with a converted type",
+                leaf(6).i32(6, 0).strct(10, geometry()).end(),
+            ),
+            (
+                "a CRS that is not text",
+                binary(empty().strct(17, empty().binary(1, &[0xff]))),
+            ),
+            ("two variants", binary(geometry().strct(1, empty()))),
+        ];
+        for (name, element) in refused {
+            let (checked, decoded) = shown(&schema_footer(&[root(1), element]));
+            assert!(checked.annotated.is_empty(), "{name}");
+            assert!(checked.presentation.splices.is_empty(), "{name}");
+            assert_eq!(decoded.unwrap_err(), reader::Error::Malformed, "{name}");
+        }
+    }
+
+    /// The check counts schema elements across the whole list, so the
+    /// element it reports is the annotated one, and framing names its leaf.
+    #[test]
+    fn the_annotated_element_and_its_leaf_are_reported_by_position() {
+        let empty = Fields::default;
+        let int64 = |name: &[u8]| empty().i32(1, 2).i32(3, 0).binary(4, name).end();
+        let geometry = empty().strct(17, empty());
+        let annotated = empty()
+            .i32(1, 6)
+            .i32(3, 0)
+            .binary(4, b"G")
+            .strct(10, geometry);
+        let group = empty().i32(3, 0).binary(4, b"S").i32(5, 1).end();
+        let root = empty().binary(4, b"schema").i32(5, 3).end();
+        let schema = [root, int64(b"A"), group, int64(b"B"), annotated.end()];
+        let footer = schema_footer(&schema);
+        let (checked, decoded) = shown(&footer);
+        assert_eq!(checked.annotated, [4]);
+        decoded.unwrap();
+        let mut bytes = b"PAR1".to_vec();
+        bytes.extend(&footer);
+        bytes.extend((footer.len() as u32).to_le_bytes());
+        bytes.extend(b"PAR1");
+        assert_eq!(framing::admit(&bytes).unwrap().annotated, [2]);
     }
 
     #[test]
@@ -1439,12 +1935,12 @@ mod tests {
                 columnless(&groups, |f| f.raw(4, 9, &[0x0c])),
             ),
             // One column order per leaf. An unknown boolean variant takes no
-            // byte past its header.
+            // byte past its header; the IEEE 754 total order (2) is known.
             (
                 "column_orders",
                 columnless(&leaves(N), |f| f.raw(4, 9, &[0x0c]).raw(7, 9, &empty(N))),
                 columnless(&leaves(N), |f| {
-                    f.raw(4, 9, &[0x0c]).raw(7, 9, &list(N, &[0x21, 0]))
+                    f.raw(4, 9, &[0x0c]).raw(7, 9, &list(N, &[0x31, 0]))
                 }),
             ),
             // Framing reads only the columns and row count of each row

@@ -5,14 +5,15 @@
 //! lists more row groups than an `i16` ordinal numbers, as Polars writes after
 //! 32,768 row groups, therefore reads whole like any other. Admission refuses
 //! a repeated row-group list (`wire`), so the footer holds one.
-use super::compact;
 use super::reader::Error;
+use super::{compact, wire};
 use crate::storage_api::contain_decode;
 use parquet::file::metadata::{ParquetMetaData, ParquetMetaDataReader};
 
-/// Decode the admitted footer `held` through its native presentation.
-pub(super) fn decode(held: &[u8]) -> Result<ParquetMetaData, Error> {
-    let native = compact::native_metadata(held)?;
+/// Decode the admitted footer `held` through its native presentation, with
+/// the edits that admission found it needs (`wire::Presentation`).
+pub(super) fn decode(held: &[u8], shown: &wire::Presentation) -> Result<ParquetMetaData, Error> {
+    let native = shown.apply(compact::native_metadata(held)?);
     contain_decode(|| ParquetMetaDataReader::decode_metadata(&native))
         .ok_or(Error::Malformed)?
         .map_err(|_| Error::Malformed)
@@ -197,7 +198,7 @@ mod tests {
     #[test]
     fn every_row_group_reads_in_file_order_with_its_own_chunks() {
         for ordinals in [0, 3, 8] {
-            let metadata = decode(&footer(8, ordinals, 1)).unwrap();
+            let metadata = decode(&footer(8, ordinals, 1), &Default::default()).unwrap();
             assert_eq!(metadata.file_metadata().num_rows(), 8);
             assert_own_chunks(metadata.row_groups(), 8);
             // Each row group keeps the ordinal it holds, or none.
@@ -214,7 +215,7 @@ mod tests {
         // No ordinal, as pyarrow writes; the first 32,768 ordinals, as Polars
         // writes them; and every ordinal, wrapping after 32,767.
         for ordinals in [0, 1 << 15, count] {
-            let metadata = decode(&footer(count, ordinals, 1)).unwrap();
+            let metadata = decode(&footer(count, ordinals, 1), &Default::default()).unwrap();
             assert_eq!(metadata.file_metadata().num_rows(), count as i64);
             assert_own_chunks(metadata.row_groups(), count);
             let last = &metadata.row_groups()[1 << 15];
@@ -226,7 +227,15 @@ mod tests {
     #[test]
     fn a_footer_without_a_row_group_list_does_not_decode() {
         // The decoder requires the list; admission refuses a repeated one.
-        assert_eq!(decode(&footer(5, 0, 0)).unwrap_err(), Error::Malformed);
-        assert_eq!(decode(&footer(5, 0, 1)).unwrap().num_row_groups(), 5);
+        assert_eq!(
+            decode(&footer(5, 0, 0), &Default::default()).unwrap_err(),
+            Error::Malformed
+        );
+        assert_eq!(
+            decode(&footer(5, 0, 1), &Default::default())
+                .unwrap()
+                .num_row_groups(),
+            5
+        );
     }
 }
