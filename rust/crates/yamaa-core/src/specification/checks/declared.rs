@@ -3,11 +3,14 @@
 //! [`DeclaredTypes`]. `run()` reports the same findings from binding, in
 //! binding's order, and this pass reports them in that order too: the root
 //! filter, the intermediates in the order they are derived, then each column
-//! (or the column phase and each row template's filter and derivations),
-//! column order, the lookup ranges each row reads, and the scopes of the
-//! lookups and aggregate keys the rows read ([`super::scopes`]). Under row
-//! templates each derivation is checked node by node in binding's order,
-//! with what binding decides of each read ([`super::boundaries`]).
+//! (or each row template's filter and derivations and then the column
+//! phase), column order, the lookup ranges each row reads, and the scopes of
+//! the lookups and aggregate keys the rows read ([`super::scopes`]). Under
+//! row templates each derivation is checked node by node in binding's order,
+//! with what binding decides of each read ([`super::boundaries`]). A read of
+//! another 1.0 input that declares no `key`, through its implicit join or by
+//! a qualified aggregate without `key`, fails at the read in either
+//! construction, whatever the input stores (D111).
 //!
 //! Binding also decides from the declarations alone whether a key reads
 //! other records than its own ([`key_record`]); it calls the same check.
@@ -364,11 +367,13 @@ impl Checks<'_> {
         Ok(())
     }
 
-    /// The record selections at the positions below `root`: each source
-    /// binding's declaration and filter, a mapping or cut's source type, each
-    /// window's, each aggregate's header and filter, and each ODM read's
-    /// filter. `output` types a column window's baseline operands, which only
-    /// a spec without row templates does here.
+    /// The record selections at the positions below `root`, in binding's
+    /// order: each source binding's declaration and filter, a mapping or
+    /// cut's source type, each window's, each aggregate's header and filter,
+    /// and each ODM read's filter. Without row templates (`scope`), also each
+    /// read of another input through its implicit join ([`Self::join`]), a
+    /// `case` predicate's before its result. `output` types a column window's
+    /// baseline operands, which only a spec without row templates does here.
     fn selections(
         &self,
         root: ExprId,
@@ -376,46 +381,152 @@ impl Checks<'_> {
         output: bool,
         findings: &mut Vec<BindFinding>,
     ) -> Result<(), BindError> {
+        self.select(root, scope, output, false, findings)
+    }
+
+    /// [`Self::selections`] at the position `e`, a `case` result when
+    /// `branch`.
+    fn select(
+        &self,
+        e: ExprId,
+        scope: Option<Scope<'_>>,
+        output: bool,
+        branch: bool,
+        findings: &mut Vec<BindFinding>,
+    ) -> Result<(), BindError> {
         let spec = self.spec;
-        for e in positions(spec, root) {
-            match &spec.expr(e).kind {
-                ExprKind::Source(_) => self.selection(e, scope, false, findings)?,
-                ExprKind::FirstAvailable { sources, .. } => {
-                    for &source in sources {
-                        self.selection(source, scope, e != root, findings)?;
+        match &spec.expr(e).kind {
+            ExprKind::Case(arms) => {
+                for arm in arms {
+                    if let (Some(scope), Some(condition)) = (scope, arm.condition) {
+                        self.predicate_joins(scope, condition, findings);
+                    }
+                    self.select(arm.result, scope, output, true, findings)?;
+                }
+            }
+            ExprKind::Ref(read) => {
+                if let Some(scope) = scope {
+                    self.join(scope, &path(spec, e), read.as_str(), findings);
+                }
+            }
+            ExprKind::Source(_) => self.selection(e, scope, false, findings)?,
+            ExprKind::FirstAvailable { sources, .. } => {
+                for &source in sources {
+                    self.selection(source, scope, branch, findings)?;
+                }
+            }
+            ExprKind::Scalar {
+                op: ScalarOp::Mapping { .. } | ScalarOp::Cut { .. },
+                operands,
+                ..
+            } => {
+                for operand in operands {
+                    let start = findings.len();
+                    self.selection(operand.expr, scope, false, findings)?;
+                    if findings.len() == start && scope.is_some() {
+                        self.mapping_type(e, operand.expr, findings)?;
                     }
                 }
-                ExprKind::Scalar {
-                    op: ScalarOp::Mapping { .. } | ScalarOp::Cut { .. },
-                    operands,
-                    ..
-                } => {
+            }
+            // Each operand reads a name in written order; a placeholder is
+            // read at the template's text.
+            ExprKind::Scalar { op, operands, .. } => {
+                if let Some(scope) = scope {
+                    let template = matches!(op, ScalarOp::StrTemplate { .. })
+                        .then(|| format!("{}.template", path(spec, e)));
                     for operand in operands {
-                        let start = findings.len();
-                        self.selection(operand.expr, scope, false, findings)?;
-                        if findings.len() == start && scope.is_some() {
-                            self.mapping_type(e, operand.expr, findings)?;
+                        if let Some(read) = name(spec, operand.expr) {
+                            let at = template.clone().unwrap_or_else(|| path(spec, operand.expr));
+                            self.join(scope, &at, read, findings);
                         }
                     }
                 }
-                ExprKind::Window(window) => {
-                    self.window(e, window, scope, findings)?;
-                    if output {
-                        self.baseline_types(e, window, findings);
-                    }
-                }
-                ExprKind::Aggregate(aggregate) => {
-                    self.reduction(e, aggregate, scope, findings)?;
-                }
-                ExprKind::Odm(read) => {
-                    if let Some(filter) = read.filter {
-                        self.grammar(filter, findings)?;
-                    }
-                }
-                _ => {}
             }
+            ExprKind::Flag { condition, .. } => {
+                if let Some(scope) = scope {
+                    self.predicate_joins(scope, *condition, findings);
+                }
+            }
+            ExprKind::Window(window) => {
+                self.window(e, window, scope, findings)?;
+                if output {
+                    self.baseline_types(e, window, findings);
+                }
+            }
+            ExprKind::Aggregate(aggregate) => {
+                self.reduction(e, aggregate, scope, findings)?;
+            }
+            ExprKind::Odm(read) => {
+                if let Some(filter) = read.filter {
+                    self.grammar(filter, findings)?;
+                }
+            }
+            ExprKind::Call { args, .. } => {
+                if let Some(scope) = scope {
+                    for &(_, value) in args {
+                        if let Some(read) = name(spec, value) {
+                            self.join(scope, &path(spec, value), read, findings);
+                        }
+                    }
+                }
+            }
+            ExprKind::Literal(_) | ExprKind::Formula(_) | ExprKind::Unsupported(_) => {}
         }
         Ok(())
+    }
+
+    /// Without row templates, a read at `path` of another input through its
+    /// implicit join, which on a 1.0 tree matches on the input's declared
+    /// `key`: an input that declares none fails at the read, whatever it
+    /// stores (LOOKUP-5, D111). True when the read binds, as far as this
+    /// decides.
+    fn join(
+        &self,
+        scope: Scope<'_>,
+        path: &str,
+        name: &str,
+        findings: &mut Vec<BindFinding>,
+    ) -> bool {
+        let Some((owner, _)) = name.split_once('.') else {
+            return true;
+        };
+        if scope.drivers.contains(&owner)
+            || !self
+                .prepared
+                .sources
+                .iter()
+                .any(|input| input.name == owner)
+            || !keyless(self.spec, owner)
+        {
+            return true;
+        }
+        findings.push(undeclared_key(path, owner));
+        false
+    }
+
+    /// Without row templates, each name a flag's or `case` predicate's
+    /// condition reads, once: a read of another input through its implicit
+    /// join that fails ([`Self::join`]) leaves the name unknown to the
+    /// predicate too (FORMULA-9), as binding reports a refused join read
+    /// there.
+    fn predicate_joins(
+        &self,
+        scope: Scope<'_>,
+        condition: ExprId,
+        findings: &mut Vec<BindFinding>,
+    ) {
+        for (at, read) in names(self.spec, condition) {
+            if !self.join(scope, &at, read, findings) {
+                findings.push(BindFinding::Predicate(Diagnostic {
+                    code: C::PredicateUnknownField,
+                    spec_paths: vec![at],
+                    context: [("identifier".into(), crate::json::Value::String(read.into()))]
+                        .into(),
+                    source_span: None,
+                    operand_route: None,
+                }));
+            }
+        }
     }
 
     /// A source operand's record selection ([`Self::source`]); then, without
@@ -423,7 +534,8 @@ impl Checks<'_> {
     /// is no implicit join ([`join_options`]). Whatever its filter reports,
     /// the implicit template binds a field of the base, a column, or a field
     /// of a lookup whose key types do not fail, and on the 0.5 surface a
-    /// bare name its absence answers (D67). A `first_available` source of a
+    /// bare name its absence answers (D67), and reads another input through
+    /// its implicit join ([`Self::join`]). A `first_available` source of a
     /// `case` result (`branch`) binds as a row template's does, only with no
     /// finding of its own.
     fn selection(
@@ -435,6 +547,11 @@ impl Checks<'_> {
     ) -> Result<(), BindError> {
         let spec = self.spec;
         let start = findings.len();
+        // A name, in either rules, reads another input through its join.
+        if let (ExprKind::Ref(read), Some(scope)) = (&spec.expr(e).kind, scope) {
+            self.join(scope, &path(spec, e), read.as_str(), findings);
+            return Ok(());
+        }
         let (false, Some(scope), ExprKind::Source(source)) =
             (self.source(e, scope, findings)?, scope, &spec.expr(e).kind)
         else {
@@ -452,6 +569,9 @@ impl Checks<'_> {
             return Ok(());
         }
         let variable = name(spec, source.variable).unwrap_or_default();
+        if !self.join(scope, &path(spec, e), variable, findings) {
+            return Ok(());
+        }
         let binds = match variable.split_once('.') {
             Some((owner, _)) => match spec
                 .intermediates
@@ -476,9 +596,10 @@ impl Checks<'_> {
     }
 
     /// An aggregate's expression grammar and header, then its filter's
-    /// grammar and its derive bindings. Binding binds nothing more of a
-    /// column or row aggregate whose expression or header fails, and binds
-    /// its derive steps only when nothing else of it failed.
+    /// grammar, the key a column aggregate matches on, and its derive
+    /// bindings. Binding binds nothing more of a column or row aggregate
+    /// whose expression or header fails, and binds its derive steps only when
+    /// nothing else of it failed.
     fn reduction(
         &self,
         e: ExprId,
@@ -503,11 +624,35 @@ impl Checks<'_> {
             }
         }
         let start = findings.len();
-        if scope.is_some() && !(compiled && self.aggregate(e, aggregate, scope, findings)?) {
-            return Ok(());
-        }
+        let relation = match scope {
+            Some(_) if compiled => match self.aggregate(e, aggregate, scope, findings)? {
+                Some(relation) => relation,
+                None => return Ok(()),
+            },
+            Some(_) => return Ok(()),
+            None => None,
+        };
         if let Some(filter) = aggregate.filter {
             self.grammar(filter, findings)?;
+        }
+        // Without `key` of its own a column aggregate matches the relation it
+        // reduces on that input's declared `key` (D63), which a 1.0 input
+        // that declares none does not give (LOOKUP-5, D111).
+        if let (Some(scope), Some(relation), Some(JoinKey::FromInput)) =
+            (scope, relation, &aggregate.key)
+        {
+            if !matches!(scope.phase, Some(Phase::Row { .. }))
+                && self
+                    .prepared
+                    .sources
+                    .iter()
+                    .any(|input| input.name == relation)
+                && keyless(spec, relation)
+            {
+                findings.push(BindFinding::AggregateDiagnostic(
+                    lookup::undeclared_input_key(&path(spec, e), relation, true),
+                ));
+            }
         }
         if scope.is_some() && findings.len() != start {
             return Ok(());
@@ -533,16 +678,7 @@ impl Checks<'_> {
         findings: &mut Vec<BindFinding>,
     ) -> Result<(), BindError> {
         let spec = self.spec;
-        // The names a compiled text reads outside any reduction, each once.
-        let names = |text: ExprId| match &spec.expr(text).kind {
-            ExprKind::Formula(formula) if formula.compiled.is_ok() => formula
-                .names
-                .iter()
-                .filter(|&&(role, _)| role == ast::Role::Operand)
-                .filter_map(|&(_, read)| Some((path(spec, read), name(spec, read)?)))
-                .collect(),
-            _ => Vec::new(),
-        };
+        let names = |text: ExprId| names(spec, text);
         // A source operand: a structured binding unless its declaration or
         // selection stops binding before its variable, or a name. True when
         // it binds.
@@ -691,15 +827,16 @@ impl Checks<'_> {
     /// and an undeclared relation; then, at column level, each name outside
     /// a reduction that is no group key (FORMULA-22), a group that is no key
     /// (LOOKUP-19) and its operands' types (FORMULA-23). A row template's
-    /// groups are fields of its driver, which binding reads first. False
-    /// when binding binds nothing more of the aggregate.
+    /// groups are fields of its driver, which binding reads first. `None`
+    /// when binding binds nothing more of the aggregate; otherwise the
+    /// relation it reduces, when it names one.
     fn aggregate(
         &self,
         e: ExprId,
         aggregate: &ast::Aggregate,
         scope: Option<Scope<'_>>,
         findings: &mut Vec<BindFinding>,
-    ) -> Result<bool, BindError> {
+    ) -> Result<Option<Option<&str>>, BindError> {
         use crate::diagnostic::{AggregateContextCause as Cause, AggregateFinding as Finding};
         let spec = self.spec;
         let (
@@ -711,7 +848,7 @@ impl Checks<'_> {
             }),
         ) = (scope, &spec.expr(aggregate.expr).kind)
         else {
-            return Ok(true);
+            return Ok(Some(None));
         };
         let path = path(spec, e);
         let (at, expression) = (render(spec, text.meta), text.text.as_str());
@@ -725,16 +862,14 @@ impl Checks<'_> {
         let driver = scope.drivers.first().copied().unwrap_or_default();
         let mut relations = compiled
             .identifiers()
-            .filter_map(|name| {
-                name.split_once('.')
-                    .map(|(relation, _)| relation.to_owned())
-            })
-            .chain(compiled.record_relations().map(String::from))
+            .filter_map(|name| name.split_once('.').map(|(relation, _)| relation))
+            .chain(compiled.record_relations())
             .collect::<Vec<_>>();
         relations.sort_unstable();
         relations.dedup();
         let bare = compiled.identifiers().any(|name| !name.contains('.'));
         if relations.len() > 1 || (!relations.is_empty() && bare) {
+            let mut relations = relations.into_iter().map(String::from).collect::<Vec<_>>();
             if bare {
                 relations.push("<output>".into());
             }
@@ -746,7 +881,7 @@ impl Checks<'_> {
                 },
                 findings,
             )?;
-            return Ok(false);
+            return Ok(None);
         }
         // A derive step reads exactly one relation, which preparation admits.
         let named = &self.prepared.intermediates;
@@ -769,7 +904,7 @@ impl Checks<'_> {
             })
             .collect::<Vec<_>>();
         let relation = if aggregate.bindings.is_empty() {
-            relations.first().map(String::as_str)
+            relations.first().copied()
         } else {
             let mut owners = derived
                 .iter()
@@ -780,7 +915,7 @@ impl Checks<'_> {
             owners.dedup();
             // Preparation found exactly one; the tree's reads name it.
             let [owner] = owners.as_slice() else {
-                return Ok(true);
+                return Ok(Some(None));
             };
             Some(*owner)
         };
@@ -809,7 +944,7 @@ impl Checks<'_> {
                 findings.push(BindFinding::AggregateDiagnostic(finding.diagnostic()));
             }
             if findings.len() != start {
-                return Ok(false);
+                return Ok(None);
             }
         }
         let groups = aggregate
@@ -827,7 +962,7 @@ impl Checks<'_> {
                     expression: expression.into(),
                     relation: relation.into(),
                 });
-                return Ok(false);
+                return Ok(None);
             }
         }
         let keyed = matches!(
@@ -843,7 +978,7 @@ impl Checks<'_> {
                     relation: relation.map(String::from),
                     driver: driver.into(),
                 });
-                return Ok(false);
+                return Ok(None);
             }
             Phase::Row { .. } if aggregate.between.is_some() => {
                 Some((Cause::RowNoRightSide, format!("{path}.between")))
@@ -874,7 +1009,7 @@ impl Checks<'_> {
                 },
                 findings,
             )?;
-            return Ok(false);
+            return Ok(None);
         }
         // The relation is the rows' driver or another declared input; a
         // relation no binding's driver is either fails in every binding.
@@ -898,7 +1033,7 @@ impl Checks<'_> {
                 path: at,
                 name: reference.map_or_else(|| format!("{relation}.*"), String::from),
             });
-            return Ok(false);
+            return Ok(None);
         }
         if row {
             // A grouped row's aggregate reads, outside its reductions, only
@@ -921,7 +1056,7 @@ impl Checks<'_> {
                     }
                 }
             }
-            return Ok(true);
+            return Ok(Some(relation));
         }
         for identifier in compiled.ungrouped_identifiers() {
             if !groups.contains(&identifier) {
@@ -974,7 +1109,7 @@ impl Checks<'_> {
                     },
                     findings,
                 )?;
-                return Ok(false);
+                return Ok(None);
             }
         }
         // A derive binding has its declared type, an output column of the
@@ -1000,7 +1135,7 @@ impl Checks<'_> {
                 .into_iter()
                 .map(BindFinding::AggregateDiagnostic),
         );
-        Ok(true)
+        Ok(Some(relation))
     }
 
     /// One derivation's authored defects, then its record selections.
@@ -1841,11 +1976,12 @@ impl Checks<'_> {
     }
 
     /// Without row templates, each column in declaration order: a key that
-    /// reads other records, the derivation's defects and selections, its
-    /// formula's qualified names (FORMULA-9), its static types and its
-    /// conversion (VALUE-24); then column order over what every derivation
-    /// reads (COLUMN-5, COLUMN-6, COLUMN-7). Returns whether each column's
-    /// derivation binds: a conversion finding keeps it bound.
+    /// reads other records, the derivation's defects and selections with its
+    /// reads of other inputs' joins, its formula's qualified names
+    /// (FORMULA-9), its static types and its conversion (VALUE-24); then
+    /// column order over what every derivation reads (COLUMN-5, COLUMN-6,
+    /// COLUMN-7). Returns whether each column's derivation binds: a
+    /// conversion finding keeps it bound.
     fn base(&self, findings: &mut Vec<BindFinding>) -> Result<Vec<bool>, BindError> {
         let spec = self.spec;
         let prepared = self.prepared;
@@ -1906,13 +2042,15 @@ impl Checks<'_> {
         Ok(bound)
     }
 
-    /// With row templates: each column-phase derivation, then each
-    /// template's filter and row-phase derivations, each derivation's
-    /// defects and then its nodes in binding's order, scoped to the rows it
-    /// evaluates on ([`Self::walk`]); a template's filter reads after its
-    /// derivations. Then the static types and conversions in binding's
-    /// order, each template's derivations first; then each template's
-    /// cycles and the column phase's order. Returns what bound.
+    /// With row templates: each template's filter and row-phase derivations,
+    /// then each column-phase derivation for the rows of each of its
+    /// bindings in turn, as binding binds them (`rows::Templates::bind`):
+    /// each derivation's defects and then its nodes in binding's order,
+    /// scoped to the rows it evaluates on ([`Self::walk`]); a template's
+    /// filter reads after its derivations. Then the static types and
+    /// conversions in binding's order, each template's derivations first;
+    /// then each template's cycles and the column phase's order. Returns
+    /// what bound.
     fn rows(
         &self,
         rows: &rows::Templates,
@@ -1935,39 +2073,6 @@ impl Checks<'_> {
             columns: Vec::new(),
             templates: Vec::new(),
         };
-        for derivation in &columns {
-            let root = derivation.expr;
-            let drivers = rows
-                .column_bindings(derivation.column, lookups::aggregates(spec, root), primary)
-                .into_iter()
-                .map(|binding| binding.driver)
-                .collect::<Vec<_>>();
-            let scope = Scope {
-                drivers: &drivers,
-                row: None,
-                phase: Some(Phase::Column {
-                    groups: &column_groups,
-                }),
-                available: None,
-            };
-            let reads = super::boundaries::Reads::column(
-                spec,
-                self.prepared,
-                &drivers,
-                &column_groups,
-                refused,
-            );
-            let start = findings.len();
-            self.defects(root, findings)?;
-            self.walk(&reads, scope, root, findings)?;
-            // Every driver binds the column for its own rows, and a failure
-            // several bindings share is reported once.
-            if drivers.len() > 1 {
-                rows::distinct_findings(findings, start, self.prepared.source());
-            }
-            let read = reads.bound();
-            bound.columns.push(read && findings.len() == start);
-        }
         let mut graphs = Vec::new();
         for (index, template) in phases.iter().enumerate() {
             let declared = &spec.rows.templates[index];
@@ -2019,6 +2124,44 @@ impl Checks<'_> {
                 filtered,
             ));
             graphs.push((graph, paths));
+        }
+        for derivation in &columns {
+            let root = derivation.expr;
+            let drivers = rows
+                .column_bindings(derivation.column, lookups::aggregates(spec, root), primary)
+                .into_iter()
+                .map(|binding| binding.driver)
+                .collect::<Vec<_>>();
+            let start = findings.len();
+            self.defects(root, findings)?;
+            // Every driver binds the whole derivation for its own rows, one
+            // binding after another, and a failure several bindings share is
+            // reported once.
+            let mut read = true;
+            for driver in &drivers {
+                let drivers = std::slice::from_ref(driver);
+                let scope = Scope {
+                    drivers,
+                    row: None,
+                    phase: Some(Phase::Column {
+                        groups: &column_groups,
+                    }),
+                    available: None,
+                };
+                let reads = super::boundaries::Reads::column(
+                    spec,
+                    self.prepared,
+                    drivers,
+                    &column_groups,
+                    refused,
+                );
+                self.walk(&reads, scope, root, findings)?;
+                read &= reads.bound();
+            }
+            if drivers.len() > 1 {
+                rows::distinct_findings(findings, start, self.prepared.source());
+            }
+            bound.columns.push(read && findings.len() == start);
         }
         for derivation in phases
             .iter()
@@ -2502,6 +2645,20 @@ impl Checks<'_> {
 enum Evaluated<'a> {
     Expression(ExprId, Option<&'a str>),
     Name(&'a str),
+}
+
+/// The names a compiled text reads outside any reduction, each once, with
+/// the path binding cites each at.
+fn names(spec: &Spec, text: ExprId) -> Vec<(String, &str)> {
+    match &spec.expr(text).kind {
+        ExprKind::Formula(formula) if formula.compiled.is_ok() => formula
+            .names
+            .iter()
+            .filter(|&&(role, _)| role == ast::Role::Operand)
+            .filter_map(|&(_, read)| Some((path(spec, read), name(spec, read)?)))
+            .collect(),
+        _ => Vec::new(),
+    }
 }
 
 /// A window's reads in authored order, each with the path that names it:

@@ -171,6 +171,24 @@ pub(super) fn template_driver<'a>(spec: &'a Spec, template: &'a ast::Template) -
     }
 }
 
+/// Whether the input `owner` declares no `key` on a 1.0 tree, where an
+/// implicit join of it, and a qualified aggregate over it without `key` of
+/// its own, match on that declared key (D23, D63): such a read has nothing to
+/// match on, whatever the input stores (D111). A 0.5 join infers its keys
+/// from the captured schemas.
+pub(super) fn keyless(spec: &Spec, owner: &str) -> bool {
+    !spec.header.surface.infers_join_keys() && spec.input_key(owner).is_none_or(<[_]>::is_empty)
+}
+
+/// The refusal at `path` of a read of the keyless 1.0 input `dataset` through
+/// its implicit join (`no_applicable_keys`, LOOKUP-5, D111), as binding
+/// reports it ([`crate::reference_binding::JoinedFinding::key_diagnostic`]).
+pub(super) fn undeclared_key(path: &str, dataset: &str) -> BindFinding {
+    BindFinding::Source(source_expressions::SourceFinding::from_diagnostic(
+        crate::diagnostic::lookup::undeclared_input_key(path, dataset, false),
+    ))
+}
+
 /// The name a reference reads.
 pub(super) fn name(spec: &Spec, e: ExprId) -> Option<&str> {
     match &spec.expr(e).kind {
