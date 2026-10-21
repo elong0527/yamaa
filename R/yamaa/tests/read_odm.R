@@ -9,6 +9,7 @@ if (!requireNamespace("jsonlite", quietly = TRUE)) {
 }
 host_fixture_root <- normalizePath("host-fixtures",winslash="/",mustWork=TRUE)
 source(file.path(host_fixture_root,"reader.R"),local=TRUE)
+source(file.path(host_fixture_root,"context.R"),local=TRUE)
 truth <- read_host_fixture(host_fixture_root, "read-odm")
 issue_columns <- fixture_strings(read_host_fixture(host_fixture_root, "public-contract")[["issue_columns"]])
 columns <- fixture_strings(truth[["columns"]])
@@ -67,13 +68,23 @@ for (refusal in truth[["refusals"]]) {
   names(options) <- names(refusal[["options"]])
   source <- source_path(refusal[["document"]])
   error <- tryCatch(do.call(yamaa_read_odm, c(list(source), options)), yamaa_error = identity)
-  # D39: the call names the source as given; a reader failure carries no
-  # issue, so its own text follows.
-  prefix <- paste0("cannot read ", source, ": ODM read failure (", refusal[["code"]], "): ")
-  # A reader failure is not a specification finding.
-  stopifnot(inherits(error, "yamaa_error"), startsWith(conditionMessage(error), prefix),
+  # `{source}` stands for the source as given (#3030 D73, D158).
+  given <- function(value) if (is.character(value)) gsub("{source}", source, value, fixed = TRUE) else value
+  expected <- refusal[["issue"]]
+  message <- given(expected[["message"]])
+  # D39: the call names the source as given, then the issue.
+  text <- paste0("cannot read ", source, ": ", message, " [", expected[["condition"]], ", ",
+    expected[["rule"]], "]")
+  stopifnot(inherits(error, "yamaa_error"), identical(conditionMessage(error), text),
     is.data.frame(error$issues), identical(names(error$issues), issue_columns),
-    nrow(error$issues) == 0L)
+    nrow(error$issues) == 1L)
+  row <- error$issues
+  stopifnot(identical(row$severity, "error"), identical(row$phase, expected[["phase"]]),
+    identical(row$condition, expected[["condition"]]), identical(row$rule, expected[["rule"]]),
+    identical(row$spec_paths[[1L]], as.character(unlist(expected[["spec_paths"]]))),
+    identical(row$message, message),
+    context_equal(jsonlite::fromJSON(row$context, simplifyVector = FALSE),
+      lapply(expected[["context"]], given)))
 }
-cat("refusals signal yamaa_error naming the reader code\n")
+cat("refusals signal yamaa_error carrying their issue\n")
 unlink(work, recursive = TRUE)

@@ -1,11 +1,12 @@
 """Exercise the workflow's gate jobs: their path decisions against real Git
-histories, and the check that reports the equivalence gate's host jobs.
+histories, and the equivalence gate's host jobs.
 
 The equivalence host jobs and the conversion job decide by the same diff
 whether a pull request runs their gate: every change but documentation runs
 both (D124 on #3030). Each job holds its own copy of the step, so every case
-runs on both. The equivalence gate runs one job per host, in parallel, and
-the `equivalence` job passes only when both pass (#3386).
+runs on both. The equivalence gate runs one job per host, in parallel
+(#3386), and those two jobs are its checks: no job reports them as one
+(#3492).
 """
 
 import os
@@ -260,13 +261,15 @@ class EquivalenceWorkflowTests(PathDecision, unittest.TestCase):
 
 
 class EquivalenceCheckTests(unittest.TestCase):
-    """The equivalence gate runs its Python and R halves as parallel jobs,
-    and the `equivalence` job reports them as the one check that branch
-    protection and the merge tooling read (#3386)."""
+    """The equivalence gate runs its Python and R halves as parallel jobs
+    (#3386), the legs `equivalence (python)` and `equivalence (r)`, and those
+    two checks are the gate (#3492)."""
 
     def test_each_host_runs_its_half_in_its_own_job(self):
         job = workflow()["jobs"]["equivalence-host"]
-        self.assertEqual(job["name"], "equivalence (${{ matrix.host }})")
+        # No matrix expression: GitHub appends each leg's host to the name,
+        # and a run that skips the job shows the plain name.
+        self.assertEqual(job["name"], "equivalence")
         self.assertEqual(
             job["strategy"], {"fail-fast": False, "matrix": {"host": ["python", "r"]}}
         )
@@ -295,37 +298,16 @@ class EquivalenceCheckTests(unittest.TestCase):
             programs["if"], "steps.paths.outputs.run == 'true' && matrix.host == 'r'"
         )
 
-    def test_the_check_runs_wherever_its_host_jobs_run(self):
-        """It waits for both host jobs, runs even when one fails or is
-        cancelled, and is left out on the events that leave them out."""
-        jobs = workflow()["jobs"]
-        check = jobs["equivalence"]
-        self.assertNotIn("name", check)
-        self.assertEqual(check["needs"], "equivalence-host")
-        self.assertEqual(check["if"], f"always() && ({EVENTS})")
-        self.assertEqual(jobs["equivalence-host"]["if"], EVENTS)
-
-    def test_the_check_passes_only_when_every_host_job_passes(self):
-        [step] = workflow()["jobs"]["equivalence"]["steps"]
-        self.assertEqual(
-            step["env"], {"RESULT": "${{ needs.equivalence-host.result }}"}
-        )
-        for result, passes in (
-            ("success", True),
-            ("skipped", True),
-            ("failure", False),
-            ("cancelled", False),
-        ):
-            with self.subTest(result=result):
-                completed = subprocess.run(
-                    ["bash", "--noprofile", "--norc", "-e", "-o", "pipefail"]
-                    + ["-c", step["run"]],
-                    env=os.environ | {"RESULT": result},
-                    capture_output=True,
-                    text=True,
+    def test_no_job_waits_for_the_legs(self):
+        """A job that reported the legs as one check would wait for a runner
+        after both passed, and hold up a merge that they already prove
+        (#3492)."""
+        for name, job in workflow()["jobs"].items():
+            needs = job.get("needs", [])
+            with self.subTest(job=name):
+                self.assertNotIn(
+                    "equivalence-host", [needs] if isinstance(needs, str) else needs
                 )
-                self.assertEqual(completed.returncode == 0, passes)
-                self.assertEqual("::error::" in completed.stdout, not passes)
 
 
 class ConversionWorkflowTests(PathDecision, unittest.TestCase):
@@ -356,9 +338,7 @@ class ConversionWorkflowTests(PathDecision, unittest.TestCase):
             "github.event.schedule == '23 4 * * 1'",
             parsed["jobs"]["conversion"]["if"],
         )
-        for job in ("equivalence-host", "equivalence"):
-            with self.subTest(job=job):
-                self.assertNotIn("schedule", parsed["jobs"][job]["if"])
+        self.assertNotIn("schedule", parsed["jobs"]["equivalence-host"]["if"])
 
 
 if __name__ == "__main__":

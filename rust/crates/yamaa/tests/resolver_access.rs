@@ -361,12 +361,20 @@ fn read_odm_captures_its_source_once_and_its_table_saves_through_the_resolver() 
                 yamaa::ODM_COLUMNS.join(",")
             )
         );
-        let Err(yamaa::Error::Odm(refusal)) =
+        let Err(yamaa::Error::Rejected(report)) =
             case.engine().read_odm("odm/absent.xml", &OdmOptions::new())
         else {
-            panic!("a source the resolver lacks is not found");
+            panic!("a source the resolver lacks is refused with its issue");
         };
-        assert_eq!(refusal.code(), "not_found");
+        // The caller's own path, named as given (FILE-7).
+        let [issue] = report.diagnostics.as_slice() else {
+            panic!("one issue: {report:?}");
+        };
+        assert_eq!(issue.code, "resource_path_missing");
+        assert_eq!(
+            issue.context.get("path"),
+            Some(&yamaa::ContextValue::Text("odm/absent.xml".into()))
+        );
         assert_eq!(case.requests(), once("/odm/absent.xml"));
     } else {
         assert!(matches!(

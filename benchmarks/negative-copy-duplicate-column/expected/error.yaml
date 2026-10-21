@@ -1,0 +1,7 @@
+phase: validation
+condition: duplicate_identifier
+spec_paths:
+  - columns[4].copy.columns[0]
+rule: SPEC-9
+context:
+  identifier: USUBJID

@@ -113,10 +113,8 @@ class HostBindings(unittest.TestCase):
         )
         installs = {
             "r": ["check"],
-            # The equivalence gate checks R in its R host job only, and the
-            # job that reports both host jobs sets nothing up.
+            # The equivalence gate checks R in its R host job only.
             "equivalence-host": ["${{ matrix.host == 'r' && 'check' || 'none' }}"],
-            "equivalence": [],
             # The conversion gate checks R only when it runs both hosts.
             "conversion": [
                 "${{ steps.paths.outputs.hosts == 'python' && 'none' || 'check' }}"

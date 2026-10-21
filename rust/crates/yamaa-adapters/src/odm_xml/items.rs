@@ -68,6 +68,9 @@ pub(super) fn read<R: Read>(mut xml: Xml<R>) -> Result<PublicTable, Error> {
     if machine.root.is_none() {
         return Err(Refusal::Document(Document::Root).into());
     }
+    if !machine.clinical_seen {
+        return Err(Refusal::NoClinicalData.into());
+    }
     machine.sink.finish()
 }
 
@@ -129,10 +132,12 @@ struct Item {
     text_outside: bool,
 }
 
-/// The open element stack, keeping what each end needs.
+/// The open element stack, keeping what each end needs. `Skipped` is a
+/// skipped element or anything inside one (ODM-1).
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Frame {
     Foreign,
+    Skipped,
     Root,
     Other,
     Study,
@@ -221,6 +226,8 @@ impl Names {
 #[derive(Default)]
 struct Machine {
     root: Option<Root>,
+    /// Whether a `ClinicalData` element has started.
+    clinical_seen: bool,
     names: Names,
     metadata_study: Option<String>,
     metadata_version: Option<String>,
@@ -300,6 +307,9 @@ impl Machine {
                 version: version.into(),
             }));
         }
+        // Only a snapshot is read, and that is decided before any item.
+        odm_items::admit_file_type(tag.plain("FileType"))?;
+        odm_items::admit_transaction_type("ODM", tag.plain("TransactionType"))?;
         self.root = Some(Root {
             namespace: tag.namespace().unwrap_or_default().into(),
             version: version.into(),
@@ -313,6 +323,11 @@ impl Machine {
         let Some(root) = &self.root else {
             return Ok(self.start_root(tag)?);
         };
+        // Nothing inside a skipped element is read (ODM-1).
+        if self.frames.last() == Some(&Frame::Skipped) {
+            self.frames.push(Frame::Skipped);
+            return Ok(());
+        }
         let core = tag.namespace() == Some(root.namespace.as_str());
         let local = tag.local();
         let mut value_child = None;
@@ -338,6 +353,12 @@ impl Machine {
             self.frames.push(Frame::Foreign);
             return Ok(());
         }
+        if odm_items::SKIPPED_ELEMENTS.contains(&local) {
+            self.frames.push(Frame::Skipped);
+            return Ok(());
+        }
+        // A removal on any element read makes the document transactional.
+        odm_items::admit_transaction_type(local, tag.plain("TransactionType"))?;
         let clinical = self.clinical.is_some();
         let frame = match local {
             "ODM" => return Err(Refusal::Document(Document::NestedOdm).into()),
@@ -381,6 +402,7 @@ impl Machine {
                     study: required(tag, "ClinicalData", "StudyOID")?,
                     version: required(tag, "ClinicalData", "MetaDataVersionOID")?,
                 });
+                self.clinical_seen = true;
                 Frame::Container(Container::Clinical)
             }
             "SubjectData" if clinical => {

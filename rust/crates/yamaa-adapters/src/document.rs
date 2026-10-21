@@ -376,11 +376,36 @@ pub enum SpecificationError<E> {
     },
     /// The host could not respell a layer's path from the entry (LAYER-10).
     Path(SourceFailure<E>),
+    /// A copy entry names a dataset that is not an input linked through
+    /// `schema`, or a column its producer does not output: findings in the
+    /// layer that writes it (SPEC-9).
+    Copy {
+        source: graph::Source,
+        document: Document,
+        findings: Vec<SchemaDiagnostic>,
+    },
+    /// The producing specification a copy entry copies from could not be
+    /// read (SPEC-9).
+    Producer(ProducerFailure<E>),
     /// The specification writes a 1.0 feature the engine does not build yet,
-    /// refused as `unsupported_operation` (COLUMN-15, #3030 D76): a copy entry
-    /// before the layers compose, and, on the public route, the others on the
-    /// lowered specification (`front_end::checks::unbuilt`).
+    /// refused as `unsupported_operation` (COLUMN-15, #3030 D76), on the
+    /// public route on the lowered specification (`front_end::checks::unbuilt`).
     Unsupported(Vec<UnsupportedFeature>),
+}
+
+/// Why the producing specification a copy entry copies from was not read
+/// (SPEC-9), as a `schema` link reports it (INPUT-10).
+#[derive(Debug)]
+pub enum ProducerFailure<E> {
+    /// Findings at the link, `input.<dataset>.schema`: a file the port
+    /// classified, an invalid output contract, a link to the consuming
+    /// specification, or copies that lead back to a specification being
+    /// resolved.
+    Findings(Vec<yamaa_core::diagnostic::Diagnostic>),
+    /// The producer did not prepare: its own findings.
+    Preparation(Box<crate::specification_source::InheritanceError<E>>),
+    /// The port failed with an opaque host error.
+    Host(E),
 }
 
 /// A 1.x specification prepared with the files it was read from: the entry
@@ -454,6 +479,18 @@ impl VersionedDocument {
         display_path: String,
         port: &mut P,
     ) -> Result<PreparedSources, SpecificationError<P::Error>> {
+        self.prepare_sources_within(display_path, port, &[])
+    }
+
+    /// [`VersionedDocument::prepare_sources`] for a producer a copy entry of
+    /// each specification `resolving` names, entry first, copies from: a
+    /// copy that leads back to one of them fails (SPEC-9).
+    pub(crate) fn prepare_sources_within<P: InheritancePort>(
+        self,
+        display_path: String,
+        port: &mut P,
+        resolving: &[String],
+    ) -> Result<PreparedSources, SpecificationError<P::Error>> {
         if self.header.file_type != FileType::Spec {
             let finding =
                 language::read_header(&self.raw.document, Some(self.reads), FileType::Spec)
@@ -471,9 +508,13 @@ impl VersionedDocument {
             display_path,
         };
         let schema = self.schema.structure();
+        let mut resolving = resolving.to_vec();
+        resolving.push(self.source.identity.clone());
         let mut parents = Parents {
             port,
             captured: Vec::new(),
+            resolving,
+            producer: None,
         };
         let chain = graph::traverse_versioned(
             schema,
@@ -483,17 +524,6 @@ impl VersionedDocument {
             &mut parents,
         )
         .map_err(SpecificationError::Traversal)?;
-        // Composition cannot key a copy entry until P1-12, so the latest
-        // layer that writes one is refused before the layers compose (D76).
-        if let Some(copies) = chain
-            .layers
-            .iter()
-            .rev()
-            .map(|layer| front_end::checks::copy_entries(&layer.document))
-            .find(|copies| !copies.is_empty())
-        {
-            return Err(SpecificationError::Unsupported(copies));
-        }
         let resolved = match lifecycle::prepare_versioned(schema, &chain, &mut parents) {
             Ok(resolved) => resolved,
             Err(VersionedError::Clear { layer, findings }) => {
@@ -503,6 +533,21 @@ impl VersionedDocument {
                     document: layer.document.clone(),
                     findings,
                 });
+            }
+            Err(VersionedError::Copy { layer, findings }) => {
+                let layer = &chain.layers[layer];
+                return Err(SpecificationError::Copy {
+                    source: layer.source.clone(),
+                    document: layer.document.clone(),
+                    findings,
+                });
+            }
+            Err(VersionedError::Producer { .. }) => {
+                let failure = parents
+                    .producer
+                    .take()
+                    .expect("a producer the port could not read keeps why");
+                return Err(SpecificationError::Producer(failure));
             }
             Err(VersionedError::Path(error)) => return Err(SpecificationError::Path(error)),
             Err(VersionedError::Normalize(context)) => {
@@ -617,10 +662,100 @@ fn positions<'a, 'b>(
 
 /// Parent capture through the caller's port, decoded with the shared YAML
 /// reader, keeping each parent as captured and decoded, in first-capture
-/// order. Opaque host failures keep their payload.
-struct Parents<'a, P> {
+/// order. Opaque host failures keep their payload. A copy entry's producer
+/// is read through the same port (SPEC-9).
+struct Parents<'a, P: InheritancePort> {
     port: &'a mut P,
     captured: Vec<CapturedParent>,
+    /// The specifications whose copies are being resolved, entry first,
+    /// ending with this one.
+    resolving: Vec<String>,
+    /// Why the last producer the port could not read was not read.
+    producer: Option<ProducerFailure<P::Error>>,
+}
+
+impl<P: InheritancePort> Parents<'_, P> {
+    /// The output contract of the producer that input `dataset`'s link,
+    /// `written` in `declaring`, names, read and resolved as a specification
+    /// of either language (INPUT-10, D115). A producer that copies from its
+    /// own producers reads them in turn; a link back to a specification
+    /// being resolved fails.
+    fn read_producer(
+        &mut self,
+        declaring: &graph::Source,
+        written: &str,
+        dataset: &str,
+    ) -> Result<yamaa_core::producer_contract::Contract, ProducerFailure<P::Error>> {
+        use yamaa_core::producer_contract::{self as contract, Error as Invalid};
+        use yamaa_core::resource::ResourceFailure;
+        let field = format!("input.{dataset}.schema");
+        let failed = |port: &P, error: graph::SourceError<P::Error>| match error {
+            graph::SourceError::Raised(error) => match port.resource_failure(&error) {
+                Some(failure) => {
+                    ProducerFailure::Findings(vec![failure.field_diagnostic(&field, written)])
+                }
+                None => ProducerFailure::Host(error),
+            },
+            graph::SourceError::Unavailable => ProducerFailure::Findings(vec![
+                ResourceFailure::Missing.field_diagnostic(&field, written),
+            ]),
+        };
+        let source = self
+            .port
+            .canonicalize_resource(&declaring.identity, written)
+            .map_err(|error| failed(self.port, error))?;
+        if let Some(entered) = self.resolving.iter().position(|id| *id == source.identity) {
+            return Err(ProducerFailure::Findings(vec![
+                if entered + 1 == self.resolving.len() {
+                    contract::self_reference(dataset)
+                } else {
+                    let mut cycle = self.resolving[entered..]
+                        .iter()
+                        .map(String::as_str)
+                        .collect::<Vec<_>>();
+                    cycle.push(&source.identity);
+                    yamaa_core::copy_expansion::producer_cycle(dataset, &cycle)
+                },
+            ]));
+        }
+        let bytes = self
+            .port
+            .capture_resource(&source)
+            .map_err(|error| failed(self.port, error))?;
+        let captured = Source {
+            identity: source.identity,
+            bytes,
+        };
+        let versioned = decode_yaml(&captured.bytes)
+            .is_ok_and(|decoded| language::declares_header(&decoded.document));
+        let prepared = if versioned {
+            crate::specification_source::prepare_versioned_within(
+                captured,
+                written.into(),
+                &mut *self.port,
+                &self.resolving,
+            )
+        } else {
+            shipped_schema::prepare(captured, written.into(), &mut *self.port)
+        }
+        .map_err(|error| ProducerFailure::Preparation(Box::new(error)))?;
+        contract::prepare_document(prepared.document()).map_err(|error| match error {
+            Invalid::Invalid(causes) => ProducerFailure::Findings(
+                causes
+                    .iter()
+                    .map(|cause| cause.diagnostic(dataset))
+                    .collect(),
+            ),
+            Invalid::Limit(limit) => ProducerFailure::Preparation(Box::new(
+                crate::specification_source::InheritanceError::Entry(Error::Limit(limit)),
+            )),
+            Invalid::Boundary => ProducerFailure::Preparation(Box::new(
+                crate::specification_source::InheritanceError::Entry(Error::Validation(
+                    yamaa_core::schema::ValidationError::InvalidDescriptor,
+                )),
+            )),
+        })
+    }
 }
 
 fn host<E>(error: graph::SourceError<E>) -> graph::SourceError<SourceFailure<E>> {
@@ -640,6 +775,16 @@ impl<P: InheritancePort> lifecycle::PathPort for Parents<'_, P> {
         self.port
             .rebase(layer, entry, written)
             .map_err(SourceFailure::Host)
+    }
+    fn producer(
+        &mut self,
+        declaring: &graph::Source,
+        written: &str,
+        dataset: &str,
+    ) -> Option<yamaa_core::producer_contract::Contract> {
+        self.read_producer(declaring, written, dataset)
+            .map_err(|failure| self.producer = Some(failure))
+            .ok()
     }
 }
 

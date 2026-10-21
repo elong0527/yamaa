@@ -815,23 +815,24 @@ the derivation that refutes it.
 
 <a id="sub-20"></a>
 
-### SUB-20. A Predecessor column is a bare `source` copy of the column its description names
+### SUB-20. A Predecessor column is a bare copy of the column its description names
 
-A column whose `origin.type` is `Predecessor` copies its values unchanged from
-the predecessor dataset and column `origin.description` names, so its
-derivation must be a bare `source` of that dataset and column, declaring a
-`filter` when the description writes a where clause. When the column's name
-equals the predecessor column's name and a specification some submission
-section of the project file lists declares that column, their labels must
-be equal; a renamed column keeps its own label.
+A column with a `Predecessor` origin copies its values unchanged from the
+predecessor dataset and column the origin's `description` names, so its
+derivation must read that dataset and column as a bare reference, or as a
+structured `source` declaring a `filter` when the description writes a where
+clause; a `copy` entry declares such columns. When the column's name equals
+the predecessor column's name and a specification some submission section of
+the project file lists declares that column, their labels must be equal; a
+renamed column keeps its own label.
 
 Fails: `origin_contradicts_derivation`, `refuted_value_origin`, `predecessor_label_mismatch`.
-Evidence: `negative-mandatory-arm-missing`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::predecessor_columns_copy_the_column_their_description_names`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::pivots_and_plain_lookups_are_bare_reads_that_admit_collected`, `rust/crates/yamaa-adapters/tests/file_resources.rs::predecessor_labels_and_the_dataset_inventory_span_every_section`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionPredecessorLabel`.
+Evidence: `negative-mandatory-arm-missing`, `schema-copy-producer-columns`, `rust/crates/yamaa/tests/copy_entry.rs::each_copy_refusal_names_what_it_refuses`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::predecessor_columns_copy_the_column_their_description_names`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::pivots_and_plain_lookups_are_bare_reads_that_admit_collected`, `rust/crates/yamaa-adapters/tests/file_resources.rs::predecessor_labels_and_the_dataset_inventory_span_every_section`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionPredecessorLabel`.
 
-The `source` reads the predecessor through the input dataset declared under the
-predecessor's name: `origin.description: DM.AGE` requires `source: DM.AGE`, and
-`SUPPDM.QVAL where QNAM = 'RACEOTH'` requires a structured `source` of
-`SUPPDM.QVAL` that declares a `filter`. No rule compares the filter with the
+The derivation reads the predecessor through the input dataset declared under
+the predecessor's name: a `description` of `DM.AGE` requires the bare reference
+`DM.AGE`, and `SUPPDM.QVAL where QNAM = 'RACEOTH'` requires a structured
+`source` of `SUPPDM.QVAL` that declares a `filter`. No rule compares the filter with the
 written condition. Any other derivation computes rather than copies, and the
 refutation of [SUB-19](#sub-19) already rejects a computed column that claims
 otherwise. An `ONLY` pivot and a read through a plain lookup are bare reads
@@ -842,6 +843,13 @@ with `origin_contradicts_derivation`, reporting the column, the predecessor and
 the reason. A value-level `Predecessor` entry is checked against the
 derivations that can produce the rows it selects and fails with
 `refuted_value_origin`, as [SUB-13](#sub-13) states.
+
+A `copy` entry ([SPEC-9](../specification.md#spec-9)) gives each copied column
+an origin whose `description` names the producer's `domain`, and a derivation
+that reads through the input the entry names. A copy through an input whose
+name is not its producer's `domain` therefore reads another dataset than its
+description names, and fails with `origin_contradicts_derivation`: the input
+is named after the producer's domain instead.
 
 The copy is checked when the specification is validated on its own. The
 labels are compared when a document composes the specification: composition

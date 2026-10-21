@@ -27,7 +27,7 @@ body:
     attributes:
       label: "What the rule says today"
       description: "Quote or link the rule, REQ ID or docs that bear on this, and say where they are silent or ambiguous."
-      placeholder: "SPEC-6 makes a column-level derivation row-local unless it is an aggregate, holds a window operation, or reads a SELF intermediate or a column that is not row-local, but does not mention odm bindings."
+      placeholder: "SPEC-6 makes a column-level derivation row-local unless it holds an aggregate or a window operation, reads a SELF intermediate, or reads a column that is not row-local, but does not mention odm bindings."
 
   - type: textarea
     id: why

@@ -365,30 +365,63 @@ def declarations(path, active=()):
 
     A 1.x child layer removes an inherited output field by listing its path
     in `clear` (LAYER-9), where a 0.5 child writes the field as YAML null.
+    A 1.x copy entry declares each column it lists with the type its
+    producer declares: the specification that the input's `schema` link, as
+    the resolved specification keeps it, names from the base its
+    `relative_to` selects, whichever layer writes them (SPEC-9).
     """
+    layers = chain(path, active)
+    output, links = {}, {}
+    # Every layer's input links and bases compose before any copy is typed.
+    for layer, data in layers:
+        if declares_header(data):
+            for cleared in data.get("clear") or []:
+                head, _, field = str(cleared).partition(".")
+                if head == "output":
+                    output.pop(field, None)
+                elif head == "input":
+                    name, _, rest = field.partition(".")
+                    links.get(name, {}).pop(rest, None)
+        for name, declaration in (data.get("input") or {}).items():
+            if isinstance(declaration, dict):
+                link = links.setdefault(name, {})
+                if "schema" in declaration:
+                    link["schema"] = (layer.parent, declaration["schema"])
+                if "relative_to" in declaration:
+                    link["relative_to"] = declaration["relative_to"]
+        output.update(data.get("output", {}))
+    resolving = (*active, *(layer.resolve() for layer, _ in layers))
+    types = {}
+    for _, data in layers:
+        for column in data.get("columns", []):
+            if "type" in column:
+                types[column["name"]] = column["type"]
+            copy = column.get("copy")
+            link = links.get(copy.get("dataset")) if isinstance(copy, dict) else None
+            if not link or "schema" not in link:
+                continue
+            base, written = link["schema"]
+            if link.get("relative_to") == "entry":
+                base = path.parent
+            copied, _ = declarations(base / written, resolving)
+            for name in copy.get("columns") or []:
+                if name in copied:
+                    types[name] = copied[name]
+    return types, output
+
+
+def chain(path, active=()):
+    """The layers of the chain whose entry is `path`, each as its path and
+    data, root ancestor first."""
     if path.resolve() in active:
         raise ValueError("cyclic declarations")
     data = load_yaml(path)
     if not isinstance(data, dict):
         raise TypeError("specification declarations are not a mapping")
-    types, output = {}, {}
     parent = data.get("parent")
-    if parent is not None:
-        inherited_types, inherited_output = declarations(
-            path.parent / parent, (*active, path.resolve())
-        )
-        types.update(inherited_types)
-        output.update(inherited_output)
-    if declares_header(data):
-        for cleared in data.get("clear") or []:
-            head, _, field = str(cleared).partition(".")
-            if head == "output":
-                output.pop(field, None)
-    for column in data.get("columns", []):
-        if "type" in column:
-            types[column["name"]] = column["type"]
-    output.update(data.get("output", {}))
-    return types, output
+    if parent is None:
+        return [(path, data)]
+    return [*chain(path.parent / parent, (*active, path.resolve())), (path, data)]
 
 
 def scalar(value, kind):
@@ -1187,10 +1220,6 @@ def compare_cli_example(example, record, fixtures, observed):
         map(identity, planned["calls"])
     ):
         result["findings"].append("observed calls do not match the runner plan")
-        return result
-    refused = [call["arguments"] for call in calls if call["not_implemented"]]
-    if refused:
-        result["findings"].append({"not_implemented": refused})
         return result
     issues = [issue for call in calls for issue in call["document"]["issues"]]
     if any(issue["phase"] == "engine" for issue in issues):

@@ -97,12 +97,29 @@ MODULE_ITEM = re.compile(rf"\bmod\s+({RUST_NAME})\s*([;{{])")
 VISIBILITY = re.compile(r"\bpub(?:\s*\([^)]*\))?\s*\Z")
 
 
-def cause_pattern(rules) -> re.Pattern:
-    """One registry cause; its rule is a card ID, or None."""
+def cause_pattern(identifier: re.Pattern) -> re.Pattern:
+    """One registry cause; its rule is an ID that `identifier` matches, or None."""
     return re.compile(
         r'\s*(\w+) => \("([a-z_]+)", "([a-z_]+)", '
-        rf'(Some\("(?:{rules.identifier.pattern})"\)|None)\),\s*'
+        rf'(Some\("(?:{identifier.pattern})"\)|None)\),\s*'
     )
+
+
+def registry_lines(source: str) -> list[str] | None:
+    """The lines of the core registry's `conditions!` block that are neither
+    blank nor comments, each one cause unless malformed; None without a block.
+
+    With `cause_pattern`, the interface stability check reads the registry of
+    a release tag too (tools/validation/interface_sources.py).
+    """
+    block = re.search(r"^conditions! \{\n(.*?)^\}", source, re.MULTILINE | re.DOTALL)
+    if block is None:
+        return None
+    return [
+        line
+        for line in block[1].splitlines()
+        if line.strip() and not line.lstrip().startswith("//")
+    ]
 
 
 def rule_condition_references(source: str) -> list[tuple[int, str]]:
@@ -1274,15 +1291,13 @@ def registry_errors(
         source = path.read_text(encoding="utf-8")
     except (OSError, UnicodeError) as error:
         return [f"{path.relative_to(root)}: unavailable core registry: {error}"]
-    block = re.search(r"^conditions! \{\n(.*?)^\}", source, re.MULTILINE | re.DOTALL)
-    if block is None:
+    lines = registry_lines(source)
+    if lines is None:
         return ["core diagnostic registry: no conditions found"]
     errors = []
     count = 0
     used_nulls = set()
-    for line in block[1].splitlines():
-        if not line.strip() or line.lstrip().startswith("//"):
-            continue
+    for line in lines:
         cause = cause_line.fullmatch(line)
         if cause is None:
             errors.append(
@@ -1342,7 +1357,9 @@ def violations(root: Path) -> list[str]:
     nullable, null_errors = null_conditions(root, registered)
     errors.extend(null_errors)
     errors.extend(
-        registry_errors(root, registered, nullable, cause_pattern(rules), rules)
+        registry_errors(
+            root, registered, nullable, cause_pattern(rules.identifier), rules
+        )
     )
     errors.extend(rule_vocabulary_errors(root, registered))
     rule = rules.identifier
