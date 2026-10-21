@@ -321,6 +321,15 @@ pub trait InstalledDistributions {
     /// The marker environment that a lock's `resolution-markers` select by:
     /// the values PEP 508 names, read from `sys`, `platform` and `os`.
     fn environment(&self) -> Result<BTreeMap<String, String>, FunctionError>;
+
+    /// The interpreter's limit on the digits of an integer converted from
+    /// text (`sys.get_int_max_str_digits()`), `None` when it is turned off.
+    /// Verification asks only when a version it reads has a number of more
+    /// than 640 digits, below which CPython converts whatever its limit.
+    /// The provided method reports CPython's default, 4,300 digits.
+    fn integer_digits(&self) -> Result<Option<usize>, FunctionError> {
+        Ok(Some(yamaa_adapters::project_lock::VERSION_DIGITS))
+    }
 }
 
 /// An installed distribution's version, as its metadata records it.
@@ -349,13 +358,11 @@ pub enum InstalledVersion {
 /// `installed` propagates unchanged. No functions means no lock read and no
 /// observation.
 ///
-/// A version that the comparison reads with a number of more than 4,300
-/// digits, the limit CPython puts by default on converting text to an
-/// integer, fails with [`LockSyntaxError::Limit`], wherever it is written:
-/// in the lock, in a resolution marker or in the installed metadata.
-/// `packaging` refused such a version with that default; Python lets the
-/// limit be raised, lowered or turned off, and the engine does not observe
-/// that setting.
+/// A version that the comparison reads with a number longer than the
+/// interpreter's integer limit allows (`installed.integer_digits()`, 4,300
+/// digits by default) fails with [`LockSyntaxError::Limit`], wherever it is
+/// written: in the lock, in a resolution marker or in the installed
+/// metadata, as `packaging` refused to convert it.
 pub fn verify_uv_lock(
     lock: &[u8],
     functions: &[FunctionIdentity],
@@ -394,6 +401,10 @@ pub fn verify_uv_lock(
         fn environment(&mut self) -> Result<BTreeMap<String, String>, FunctionError> {
             self.0.environment()
         }
+
+        fn integer_digits(&mut self) -> Result<Option<usize>, FunctionError> {
+            self.0.integer_digits()
+        }
     }
 
     let calls = functions
@@ -409,13 +420,15 @@ pub fn verify_uv_lock(
             Err(FunctionError::LockSyntax(LockSyntaxError::Shape { field }))
         }
         Err(UvFailure::Distribution) => Err(FunctionError::Protocol),
-        Err(UvFailure::Digits { origin, digits }) => {
-            Err(FunctionError::LockSyntax(LockSyntaxError::Limit {
-                resource: origin,
-                limit: yamaa_adapters::project_lock::VERSION_DIGITS,
-                actual: Some(digits),
-            }))
-        }
+        Err(UvFailure::Digits {
+            origin,
+            digits,
+            limit,
+        }) => Err(FunctionError::LockSyntax(LockSyntaxError::Limit {
+            resource: origin,
+            limit,
+            actual: Some(digits),
+        })),
         Err(UvFailure::Host(error)) => Err(error),
     }
 }
@@ -585,6 +598,34 @@ mod tests {
         }
     }
 
+    /// An installation whose interpreter has its integer limit turned off.
+    struct Unlimited(Installation);
+
+    impl InstalledDistributions for Unlimited {
+        fn providers(
+            &self,
+            modules: &[String],
+        ) -> Result<BTreeMap<String, Vec<String>>, FunctionError> {
+            self.0.providers(modules)
+        }
+
+        fn standard_library(&self, module: &str) -> Result<bool, FunctionError> {
+            self.0.standard_library(module)
+        }
+
+        fn version(&self, distribution: &str) -> Result<InstalledVersion, FunctionError> {
+            self.0.version(distribution)
+        }
+
+        fn environment(&self) -> Result<BTreeMap<String, String>, FunctionError> {
+            self.0.environment()
+        }
+
+        fn integer_digits(&self) -> Result<Option<usize>, FunctionError> {
+            Ok(None)
+        }
+    }
+
     #[test]
     fn uv_locks_verify_against_the_host_installation() {
         let lock = b"version = 1\n[[package]]\nname = \"yamaa\"\nversion = \"1.0\"\n";
@@ -635,8 +676,8 @@ mod tests {
         let untouched = Installation::new(&[]);
         assert!(verify_uv_lock(b"not a lock", &[], &untouched).is_ok());
         assert!(untouched.observed.lock().unwrap().is_empty());
-        // A version number that CPython would not convert by default refuses
-        // with its length, wherever the version is written.
+        // Under CPython's default limit, which the provided method reports, a
+        // number of 4,301 digits refuses with its length and the limit.
         let past: &'static str = Box::leak("1".repeat(4301).into_boxed_str());
         let huge: &'static [(&'static str, &'static str)] = Box::leak(Box::new([("yamaa", past)]));
         assert!(matches!(
@@ -647,6 +688,20 @@ mod tests {
                 actual: Some(4301)
             }))
         ));
+        // An interpreter that converts any length reads the version, which
+        // the lock does not hold.
+        match verify_uv_lock(lock, &calls, &Unlimited(Installation::new(huge))) {
+            Err(FunctionError::Lock(findings)) => assert_eq!(
+                findings,
+                [LockFinding::new(
+                    "yamaa".into(),
+                    LockReason::VersionMismatch,
+                    vec!["1.0".into()],
+                    Some(past.into()),
+                )]
+            ),
+            other => panic!("{other:?}"),
+        }
     }
 
     #[cfg(feature = "yaml")]

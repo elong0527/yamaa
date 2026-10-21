@@ -13,6 +13,8 @@ struct Host {
     versions: BTreeMap<String, Installed>,
     environment: BTreeMap<String, String>,
     failure: Option<&'static str>,
+    /// The interpreter's integer limit, `None` when it is turned off.
+    digits: Option<usize>,
     trace: Vec<String>,
 }
 
@@ -39,6 +41,7 @@ impl Host {
                 .collect(),
             environment: environment("linux"),
             failure: None,
+            digits: Some(VERSION_DIGITS),
             trace: Vec::new(),
         }
     }
@@ -98,6 +101,11 @@ impl PythonInstallation for Host {
     fn environment(&mut self) -> Result<BTreeMap<String, String>, Self::Error> {
         self.trace.push("environment".to_owned());
         Ok(self.environment.clone())
+    }
+
+    fn integer_digits(&mut self) -> Result<Option<usize>, Self::Error> {
+        self.trace.push("integer digits".to_owned());
+        Ok(self.digits)
     }
 }
 
@@ -539,11 +547,22 @@ fn every_record_names_a_package_and_every_provider_is_a_distribution_name() {
     );
 }
 
-/// CPython refuses by default to convert text of more than 4,300 digits to
-/// an integer, so `packaging` refused a version with a longer number, at
-/// each place where verification reads one.
+/// CPython converts text of more than 640 digits to an integer only within
+/// the interpreter's limit, 4,300 by default, so `packaging` refused a
+/// version with a longer number, at each place where verification reads one.
+/// The host is asked for the limit only when a number of more than 640
+/// digits needs it.
 fn numbers() -> (String, String) {
     ("1".repeat(VERSION_DIGITS), "1".repeat(VERSION_DIGITS + 1))
+}
+
+/// The refusal of a number of 4,301 digits at `origin` under the default.
+fn refused(origin: &'static str) -> Result<Vec<Finding>, UvFailure<&'static str>> {
+    Err(UvFailure::Digits {
+        origin,
+        digits: VERSION_DIGITS + 1,
+        limit: VERSION_DIGITS,
+    })
 }
 
 #[test]
@@ -554,16 +573,13 @@ fn a_locked_version_past_the_integer_limit_refuses_before_its_installed_version_
         verify_uv(&lock(&[("yamaa", &at, None)]), &["math.sqrt"], &mut host),
         Ok(Vec::new())
     );
-    assert_eq!(host.trace, ["providers", "version yamaa"]);
+    assert_eq!(host.trace, ["providers", "integer digits", "version yamaa"]);
     let mut host = Host::new(&[("yamaa", past.as_str())], &[]);
     assert_eq!(
         verify_uv(&lock(&[("yamaa", &past, None)]), &["math.sqrt"], &mut host),
-        Err(UvFailure::Digits {
-            origin: "uv package version",
-            digits: VERSION_DIGITS + 1
-        })
+        refused("uv package version")
     );
-    assert_eq!(host.trace, ["providers"]);
+    assert_eq!(host.trace, ["providers", "integer digits"]);
 }
 
 #[test]
@@ -580,16 +596,13 @@ fn an_installed_version_past_the_integer_limit_refuses_after_it_is_asked() {
             Some(&at)
         )])
     );
-    assert_eq!(host.trace, ["providers", "version yamaa"]);
+    assert_eq!(host.trace, ["providers", "version yamaa", "integer digits"]);
     let mut host = Host::new(&[("yamaa", past.as_str())], &[]);
     assert_eq!(
         verify_uv(&raw, &["math.sqrt"], &mut host),
-        Err(UvFailure::Digits {
-            origin: "installed version",
-            digits: VERSION_DIGITS + 1
-        })
+        refused("installed version")
     );
-    assert_eq!(host.trace, ["providers", "version yamaa"]);
+    assert_eq!(host.trace, ["providers", "version yamaa", "integer digits"]);
 }
 
 #[test]
@@ -598,7 +611,10 @@ fn a_marker_bound_past_the_integer_limit_refuses_when_its_comparison_reads_it() 
     let within = format!("python_version == '{at}'");
     let beyond = format!("python_version == '{past}'");
     let unread = format!("sys_platform == '{past}'");
-    for marker in [&within, &unread] {
+    for (marker, trace) in [
+        (&within, &["providers", "environment", "integer digits"][..]),
+        (&unread, &["providers", "environment"][..]),
+    ] {
         let mut host = Host::new(&[("yamaa", "0.2.0")], &[]);
         assert_eq!(
             verify_uv(
@@ -608,7 +624,7 @@ fn a_marker_bound_past_the_integer_limit_refuses_when_its_comparison_reads_it() 
             ),
             Ok(vec![finding("yamaa", Reason::VersionNotLocked, &[], None)])
         );
-        assert_eq!(host.trace, ["providers", "environment"]);
+        assert_eq!(host.trace, trace);
     }
     let mut host = Host::new(&[("yamaa", "0.2.0")], &[]);
     assert_eq!(
@@ -617,10 +633,76 @@ fn a_marker_bound_past_the_integer_limit_refuses_when_its_comparison_reads_it() 
             &["math.sqrt"],
             &mut host
         ),
-        Err(UvFailure::Digits {
-            origin: "uv resolution-markers",
-            digits: VERSION_DIGITS + 1
-        })
+        refused("uv resolution-markers")
     );
-    assert_eq!(host.trace, ["providers", "environment"]);
+    assert_eq!(host.trace, ["providers", "environment", "integer digits"]);
+}
+
+#[test]
+fn the_interpreter_s_own_limit_decides_at_every_origin() {
+    let past = "1".repeat(VERSION_DIGITS + 1);
+    let beyond = "1".repeat(641);
+    let marker = |number: &str| format!("python_version == '{number}'");
+    // Raised or turned off, a limit lets packaging read 4,301 digits: the
+    // locked version verifies, the installed one mismatches and the marker
+    // comparison is false.
+    for digits in [None, Some(10_000)] {
+        let mut host = Host::new(&[("yamaa", past.as_str())], &[]);
+        host.digits = digits;
+        assert_eq!(
+            verify_uv(&lock(&[("yamaa", &past, None)]), &["math.sqrt"], &mut host),
+            Ok(Vec::new()),
+            "{digits:?}"
+        );
+        assert_eq!(
+            verify_uv(&lock(&[("yamaa", "1.0", None)]), &["math.sqrt"], &mut host),
+            Ok(vec![finding(
+                "yamaa",
+                Reason::VersionMismatch,
+                &["1.0"],
+                Some(&past)
+            )])
+        );
+        let bound = marker(&past);
+        assert_eq!(
+            verify_uv(
+                &lock(&[("yamaa", "1.0", Some(&[bound.as_str()]))]),
+                &["math.sqrt"],
+                &mut host
+            ),
+            Ok(vec![finding("yamaa", Reason::VersionNotLocked, &[], None)])
+        );
+    }
+    // Lowered to 640, the smallest limit CPython takes, it refuses 641
+    // digits at each origin.
+    let lowered = |origin| {
+        Err(UvFailure::Digits {
+            origin,
+            digits: 641,
+            limit: 640,
+        })
+    };
+    let mut host = Host::new(&[("yamaa", beyond.as_str())], &[]);
+    host.digits = Some(640);
+    assert_eq!(
+        verify_uv(
+            &lock(&[("yamaa", &beyond, None)]),
+            &["math.sqrt"],
+            &mut host
+        ),
+        lowered("uv package version")
+    );
+    assert_eq!(
+        verify_uv(&lock(&[("yamaa", "1.0", None)]), &["math.sqrt"], &mut host),
+        lowered("installed version")
+    );
+    let bound = marker(&beyond);
+    assert_eq!(
+        verify_uv(
+            &lock(&[("yamaa", "1.0", Some(&[bound.as_str()]))]),
+            &["math.sqrt"],
+            &mut host
+        ),
+        lowered("uv resolution-markers")
+    );
 }

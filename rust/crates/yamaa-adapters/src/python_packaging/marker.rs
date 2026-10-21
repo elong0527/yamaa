@@ -1,6 +1,6 @@
 //! PEP 508 environment markers, as Python's `packaging` 26 parses them and
 //! evaluates a uv lock's `resolution-markers` (its "lock_file" context).
-use super::version::specifier;
+use super::version::{specifier, Limit, Refusal};
 use std::collections::BTreeMap;
 
 /// A marker that cannot be parsed or evaluated. Every such marker refuses its
@@ -14,9 +14,12 @@ pub(crate) enum Failure {
     /// A comparison that cannot be evaluated: of an undefined variable, of a
     /// set on its left, or of text with `~=` or `===`.
     Invalid,
-    /// A version comparison read a number of this many digits, more than
-    /// `version::DIGITS`, which `packaging` refused to convert.
-    Digits(usize),
+    /// A version comparison read a number of `digits` digits, more than the
+    /// interpreter's integer `limit`, which `packaging` refused to convert.
+    Digits { digits: usize, limit: usize },
+    /// A version comparison read a number that needs the interpreter's
+    /// integer limit, which is unread.
+    Unread,
 }
 
 impl From<Invalid> for Failure {
@@ -302,15 +305,24 @@ pub(crate) fn parse(source: &str) -> Result<Marker, Invalid> {
 }
 
 impl Marker {
-    /// Evaluate the marker in `environment`. Every comparison is evaluated,
-    /// so one that cannot be fails the marker whatever the others give;
-    /// `and` binds more tightly than `or`.
-    pub(crate) fn evaluate(&self, environment: &Environment) -> Result<bool, Failure> {
-        evaluate(&self.0, environment)
+    /// Evaluate the marker in `environment`, under the interpreter's integer
+    /// limit `limit`. Every comparison is evaluated, so one that cannot be
+    /// fails the marker whatever the others give; `and` binds more tightly
+    /// than `or`.
+    pub(crate) fn evaluate(
+        &self,
+        environment: &Environment,
+        limit: Limit,
+    ) -> Result<bool, Failure> {
+        evaluate(&self.0, environment, limit)
     }
 }
 
-fn evaluate(elements: &[Element], environment: &Environment) -> Result<bool, Failure> {
+fn evaluate(
+    elements: &[Element],
+    environment: &Environment,
+    limit: Limit,
+) -> Result<bool, Failure> {
     let mut groups = vec![true];
     for element in elements {
         let value = match element {
@@ -319,8 +331,8 @@ fn evaluate(elements: &[Element], environment: &Environment) -> Result<bool, Fai
                 continue;
             }
             Element::And => continue,
-            Element::Group(inner) => evaluate(inner, environment)?,
-            Element::Comparison(comparison) => comparison.evaluate(environment)?,
+            Element::Group(inner) => evaluate(inner, environment, limit)?,
+            Element::Comparison(comparison) => comparison.evaluate(environment, limit)?,
         };
         let group = groups.last_mut().expect("one group at least");
         *group = *group && value;
@@ -329,7 +341,7 @@ fn evaluate(elements: &[Element], environment: &Environment) -> Result<bool, Fai
 }
 
 impl Comparison {
-    fn evaluate(&self, environment: &Environment) -> Result<bool, Failure> {
+    fn evaluate(&self, environment: &Environment, limit: Limit) -> Result<bool, Failure> {
         // The variable on the left, or else the right side, names the value
         // that the environment supplies.
         let (name, left, right) = match &self.left {
@@ -350,7 +362,13 @@ impl Comparison {
         if VERSIONS.contains(&name) {
             if let Value::Text(right) = right {
                 if let Some(specifier) = specifier(&format!("{}{right}", self.operator)) {
-                    return specifier.contains(left).map_err(Failure::Digits);
+                    return specifier
+                        .contains(left, limit)
+                        .map_err(|refusal| match refusal {
+                            Refusal::Digits { digits, limit } => Failure::Digits { digits, limit },
+                            Refusal::Unread => Failure::Unread,
+                            Refusal::Invalid => Failure::Invalid,
+                        });
                 }
             }
         }
@@ -395,8 +413,10 @@ mod tests {
         )
     }
 
+    /// Evaluate under CPython's default integer limit.
     fn evaluated(source: &str, environment: &Environment) -> Result<bool, Failure> {
-        parse(source)?.evaluate(environment)
+        let limit = Limit::Read(Some(crate::python_packaging::version::DIGITS));
+        parse(source)?.evaluate(environment, limit)
     }
 
     #[test]
@@ -537,7 +557,10 @@ mod tests {
         ] {
             assert_eq!(
                 evaluated(&source, &environment),
-                Err(Failure::Digits(DIGITS + 1)),
+                Err(Failure::Digits {
+                    digits: DIGITS + 1,
+                    limit: DIGITS
+                }),
                 "{}",
                 &source[..24]
             );
@@ -558,5 +581,30 @@ mod tests {
                 &source[..24]
             );
         }
+    }
+
+    #[test]
+    fn a_version_comparison_needs_the_interpreter_s_limit_only_past_the_threshold() {
+        use crate::python_packaging::version::THRESHOLD;
+        let environment = linux();
+        let within = parse(&format!("python_version == '{}'", "1".repeat(THRESHOLD))).unwrap();
+        let beyond = parse(&format!(
+            "python_version == '{}'",
+            "1".repeat(THRESHOLD + 1)
+        ))
+        .unwrap();
+        assert_eq!(within.evaluate(&environment, Limit::Unread), Ok(false));
+        assert_eq!(
+            beyond.evaluate(&environment, Limit::Unread),
+            Err(Failure::Unread)
+        );
+        assert_eq!(beyond.evaluate(&environment, Limit::Read(None)), Ok(false));
+        assert_eq!(
+            beyond.evaluate(&environment, Limit::Read(Some(THRESHOLD))),
+            Err(Failure::Digits {
+                digits: THRESHOLD + 1,
+                limit: THRESHOLD
+            })
+        );
     }
 }

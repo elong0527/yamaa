@@ -116,6 +116,15 @@ def installed_version(distribution: str) -> object:
     return metadata.version(distribution)
 
 
+def integer_digits() -> int:
+    """The interpreter's limit on the digits of an integer read from text, 0 when off.
+
+    packaging converted every number of a version with `int()`, under this limit,
+    so the engine applies it to the versions it compares.
+    """
+    return sys.get_int_max_str_digits()
+
+
 def marker_environment() -> dict[str, str]:
     """The values that PEP 508 markers name, read as Python's packaging reads them.
 

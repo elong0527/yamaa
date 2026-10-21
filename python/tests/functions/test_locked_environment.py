@@ -45,6 +45,21 @@ def test_marker_environment_is_the_one_packaging_evaluated_markers_in():
     assert m.marker_environment() == default_environment()
 
 
+@pytest.fixture
+def integer_limit():
+    """Set the interpreter's integer-string limit for a test, then restore it."""
+    original = sys.get_int_max_str_digits()
+    yield sys.set_int_max_str_digits
+    sys.set_int_max_str_digits(original)
+
+
+def test_integer_digits_is_the_interpreter_s_own_limit(integer_limit):
+    assert m.integer_digits() == sys.get_int_max_str_digits()
+    for limit in (0, 640, 10_000):
+        integer_limit(limit)
+        assert m.integer_digits() == limit
+
+
 FUNCTION = """\
 description: Text without its common leading white space.
 params: [{name: text, type: str}]
@@ -217,7 +232,7 @@ def test_a_lock_the_engine_cannot_read_refuses_the_run_before_any_version(
 def test_a_version_number_past_the_integer_limit_refuses_the_run(study, monkeypatch):
     """CPython converts at most 4,300 digits of text to an integer by default,
     so packaging refused a version with a longer number: locked, installed or
-    read by a marker's version comparison. The engine keeps that default."""
+    read by a marker's version comparison."""
     at, past = "1" * 4300, "1" * 4301
     refused = [("engine_rejected", {"stage": "build", "code": "opaque_host"})]
     lock(study, (past, None))
@@ -230,6 +245,32 @@ def test_a_version_number_past_the_integer_limit_refuses_the_run(study, monkeypa
     monkeypatch.setattr(m, "installed_version", lambda name: at)
     assert problems(run(study)) == [mismatch("version_mismatch", ["1.0"], at)]
     monkeypatch.setattr(m, "installed_version", lambda name: past)
+    assert problems(run(study)) == refused
+
+
+def test_the_interpreter_s_own_integer_limit_decides(study, monkeypatch, integer_limit):
+    """Python lets the limit be raised, lowered or turned off, and the engine
+    reads the interpreter's own when a number of more than 640 digits needs
+    it."""
+    past, beyond = "1" * 4301, "1" * 641
+    refused = [("engine_rejected", {"stage": "build", "code": "opaque_host"})]
+    for limit in (0, 10_000):
+        integer_limit(limit)
+        monkeypatch.setattr(m, "installed_version", lambda name: past)
+        lock(study, (past, None))
+        assert problems(run(study)) == []
+        lock(study, ("1.0", None))
+        assert problems(run(study)) == [mismatch("version_mismatch", ["1.0"], past)]
+        monkeypatch.undo()
+        lock(study, (INSTALLED, [f"python_version == '{past}'"]))
+        assert problems(run(study)) == [mismatch("version_not_locked", [], None)]
+    integer_limit(640)
+    lock(study, (beyond, None))
+    assert problems(run(study)) == refused
+    lock(study, (INSTALLED, [f"python_version == '{beyond}'"]))
+    assert problems(run(study)) == refused
+    lock(study, ("1.0", None))
+    monkeypatch.setattr(m, "installed_version", lambda name: beyond)
     assert problems(run(study)) == refused
 
 
