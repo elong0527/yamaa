@@ -100,6 +100,26 @@
   .object(object, "yamaa_project")
 }
 
+.self_test <- function(native) {
+  force(native)
+  object <- new.env(parent = emptyenv())
+  object$.handle <- native
+  .read_only(object, "status", function() .reply(.native_selftest_status(native)))
+  .read_only(object, "cases", function() .reply(.native_selftest_cases(native)))
+  .read_only(object, "info", function() .reply(.native_selftest_info(native)))
+  .object(object, "yamaa_selftest")
+}
+
+print.yamaa_selftest <- function(x, ...) {
+  cat(format(x), sep = "\n")
+  invisible(x)
+}
+
+format.yamaa_selftest <- function(x, ...) {
+  native <- get(".handle", envir = x, inherits = FALSE)
+  .reply(.native_selftest_summary(native))
+}
+
 yamaa_spec <- function(path) .spec(.text(path, "path"), NULL)
 
 yamaa_project <- function(path) .project(.text(path, "path"))
@@ -116,3 +136,5 @@ yamaa_read_odm <- function(source, archive_member = NULL, max_archive_members = 
 }
 
 yamaa_lint <- function(paths, fix = FALSE) .reply(.native_lint(.texts(paths, "paths"), fix))
+
+yamaa_selftest <- function() .self_test(.reply(.native_selftest(.version())))

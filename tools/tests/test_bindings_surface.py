@@ -182,7 +182,7 @@ class GrammarTests(unittest.TestCase):
             ),
             (
                 "undeclared vocabulary",
-                lambda t: t["report"]["columns"][1].update(values="status"),
+                lambda t: t["report"]["columns"][1].update(values="statuses"),
             ),
             ("unknown keys", lambda t: t["report"]["columns"][1].update(since="1.0.0")),
             ("missing", lambda t: t["odm_items"].pop("columns")),

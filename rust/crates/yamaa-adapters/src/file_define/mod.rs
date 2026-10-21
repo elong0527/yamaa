@@ -198,6 +198,22 @@ impl Define {
         }
     }
 }
+/// The current UTC time as a composition records it when `created` is
+/// omitted (DEFINE-3), so that one submission can give every section the
+/// same time; `None` when the system clock gives no time the calendar
+/// admits, before 1970 or after the year 9999.
+pub fn current_time() -> Option<String> {
+    utc_seconds().and_then(yamaa_core::define::utc_time)
+}
+
+/// Whole seconds since the UTC epoch, from the system clock.
+fn utc_seconds() -> Option<u64> {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .ok()
+        .map(|duration| duration.as_secs())
+}
+
 fn native_failure(failure: service::Failure<Failure, file_publication::Error>) -> Failure {
     match failure {
         service::Failure::Port(failure) => failure,
@@ -267,10 +283,7 @@ impl Ports for NativePorts {
     type Target = crate::publication::AnchoredTarget;
     type Publisher = crate::publication::Publisher;
     fn utc_seconds(&mut self) -> Option<u64> {
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .ok()
-            .map(|duration| duration.as_secs())
+        utc_seconds()
     }
     fn capture_environment(&mut self, written: &str) -> Result<Self::Environment, Failure> {
         let (resources, entry) = match &self.resolver {

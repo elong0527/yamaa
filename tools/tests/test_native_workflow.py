@@ -20,6 +20,13 @@ from tools.paths import ROOT
 from tools.validation._repository_yaml import UniqueKeyLoader
 
 EXPRESSION = re.compile(r"\$\{\{(.*?)\}\}")
+# The commands that stage an engine bundle, to build a source archive from it,
+# to compare an archive with it or to read the crates of its trimmed lock.
+STAGING = re.compile(
+    r"python -m tools\.(?:staging\.(?:engine_bundle|stage_r_package)|packaging\."
+    r"(?:check_cargo_lock|check_crate_purposes|generate_component_inventory))\b"
+)
+PYYAML = re.compile(r"python -m pip install .*\bpyyaml==(\S+)")
 
 
 def evaluate(expression, context):
@@ -265,6 +272,29 @@ class NativeWorkflowContract(unittest.TestCase):
                     '    maturin build --profile dist --locked --out "${RUNNER_TEMP}/native-dist"\n',
                     build["run"],
                 )
+
+    def test_each_job_installs_pyyaml_before_it_stages_an_engine_bundle(self):
+        # Staging reads the selftest list, benchmarks/selftest.yaml, with
+        # PyYAML. Where PyYAML is missing, `import yaml` finds the repository's
+        # yaml/ directory, so each job installs it in an unconditional step
+        # before its first staging command (#3347), and every job pins the
+        # same release.
+        pins, staging = set(), set()
+        for job, details in self.jobs.items():
+            installed = False
+            for step in details["definitions"]:
+                for line in step.get("run", "").splitlines():
+                    pin = PYYAML.search(line)
+                    if pin:
+                        pins.add(pin.group(1))
+                        installed = installed or "if" not in step
+                    if STAGING.search(line):
+                        staging.add(job)
+                        with self.subTest(job=job, command=line.strip()):
+                            self.assertTrue(installed)
+        self.assertEqual(len(pins), 1, pins)
+        for lane in self.coverage["build"]["include"]:
+            self.assertIn("native-dist ({os}, {python})".format(**lane), staging)
 
     def test_each_linux_wheel_is_qualified_on_glibc_2_28(self):
         linux = {

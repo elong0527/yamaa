@@ -202,6 +202,14 @@ registry!(
     yamaa::Plans,
     "plans"
 );
+registry!(
+    SELFTESTS,
+    SelfTestHandle,
+    store_selftest,
+    selftest_of,
+    yamaa::SelfTest,
+    "selftest"
+);
 
 /// The original interrupt condition a project function raised, or `None`.
 fn interrupt(build: &yamaa::Build) -> Option<Robj> {
@@ -581,6 +589,74 @@ fn submission_save(handle: Robj) -> List {
             .map_err(|_| "submission handle in use")?;
         let paths = submission.save().map_err(Refusal::Failure)?;
         Ok(Strings::from_values(paths).into_robj())
+    })
+}
+
+/// Run every selftest case through this engine as the R host, with R's
+/// `version`, such as `4.6.1` (#3030 D28, D119).
+#[extendr]
+fn selftest(version: Raw) -> List {
+    reply(|| store_selftest(yamaa::selftest(yamaa::Host::R, Some(&text(&version)?))))
+}
+
+#[extendr]
+fn selftest_status(handle: Robj) -> List {
+    reply(|| {
+        let selftest = selftest_of(&handle)?;
+        let selftest = selftest
+            .try_borrow()
+            .map_err(|_| "selftest handle in use")?;
+        Ok(r!(selftest.status().as_str()))
+    })
+}
+
+#[extendr]
+fn selftest_cases(handle: Robj) -> List {
+    reply(|| {
+        let selftest = selftest_of(&handle)?;
+        let selftest = selftest
+            .try_borrow()
+            .map_err(|_| "selftest handle in use")?;
+        Ok(crate::public_table::frame(&selftest.table())?)
+    })
+}
+
+/// The engine information as a named list in the facade's field order, with
+/// `host_version` `NULL` when the facade has none.
+#[extendr]
+fn selftest_info(handle: Robj) -> List {
+    reply(|| {
+        let selftest = selftest_of(&handle)?;
+        let selftest = selftest
+            .try_borrow()
+            .map_err(|_| "selftest handle in use")?;
+        let info = selftest.info();
+        let host_version = info
+            .host_version
+            .as_deref()
+            .map_or_else(|| NULL.into_robj(), |version| r!(version));
+        Ok(list!(
+            version = info.version,
+            language_versions = Strings::from_values(&info.language_versions),
+            features = Strings::from_values(info.features.clone()),
+            host = info.host.as_str(),
+            host_version = host_version,
+            platform = info.platform.as_str()
+        )
+        .into_robj())
+    })
+}
+
+/// The printed report's lines (D37, D119), which `format()` returns.
+#[extendr]
+fn selftest_summary(handle: Robj) -> List {
+    reply(|| {
+        let selftest = selftest_of(&handle)?;
+        let selftest = selftest
+            .try_borrow()
+            .map_err(|_| "selftest handle in use")?;
+        let summary = selftest.summary();
+        Ok(Strings::from_values(summary.lines().collect::<Vec<_>>()).into_robj())
     })
 }
 

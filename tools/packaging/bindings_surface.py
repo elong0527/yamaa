@@ -15,8 +15,9 @@ in order. A value or column added in Rust therefore fails generation until it
 is declared, and a declared one that Rust lacks fails too. The constant must be reachable
 at the facade's crate root, where an embedder finds it.
 
-``records`` and ``cli`` are validated against their grammar alone: no record
-is declared today, and ``cli`` stays empty until the command line's commands
+``records`` and ``cli`` are validated against their grammar alone: a record's
+fields are what a host builds, as the selftest's ``info`` does from the
+facade's ``Info``, and ``cli`` stays empty until the command line's commands
 are implemented (#3060).
 """
 

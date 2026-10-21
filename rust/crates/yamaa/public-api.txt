@@ -107,6 +107,7 @@ yamaa::Run: pub use yamaa::api::Run
 yamaa::RunRequest: pub use yamaa::plan::RunRequest
 yamaa::SELFTEST_COLUMNS: pub use yamaa::selftest::SELFTEST_COLUMNS
 yamaa::SEVERITIES: pub use yamaa::diagnostic::SEVERITIES
+yamaa::STATUSES: pub use yamaa::api::STATUSES
 yamaa::Scalar: pub use yamaa::scalar::Scalar
 yamaa::ScalarDecodeError: pub use yamaa::scalar::ScalarDecodeError
 yamaa::ScalarRef: pub use yamaa::scalar::ScalarRef
@@ -163,6 +164,7 @@ yamaa::api::ProjectRun::diagnostics: pub fn diagnostics(&self) -> Vec<yamaa::dia
 yamaa::api::ProjectRun::get: pub fn get(&self, name: &str) -> Option<&Run>
 yamaa::api::ProjectRun::issues: pub fn issues(&self) -> Table
 yamaa::api::ProjectRun::member: pub fn member(&self, name: &str) -> Result<&Run, Failure>
+yamaa::api::ProjectRun::members: pub fn members(&self) -> Vec<(&str, &Run)>
 yamaa::api::ProjectRun::names: pub fn names(&self) -> Vec<String>
 yamaa::api::ProjectRun::report: pub fn report(&self) -> Table
 yamaa::api::ProjectRun::save: pub fn save(&mut self) -> Result<Vec<String>, Failure>
@@ -178,6 +180,7 @@ yamaa::api::Run::report: pub fn report(&self) -> Option<&Table>
 yamaa::api::Run::save: pub fn save(&mut self) -> Result<Vec<String>, Failure>
 yamaa::api::Run::status: pub fn status(&self) -> Status
 yamaa::api::Run::summary: pub fn summary(&self) -> Summary
+yamaa::api::STATUSES: pub const STATUSES: [&str; 3]
 yamaa::api::Status: impl Status
 yamaa::api::Status: pub enum Status [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
 yamaa::api::Status::Failed: Failed
@@ -186,6 +189,7 @@ yamaa::api::Status::Succeeded: Succeeded
 yamaa::api::Status::as_str: pub fn as_str(self) -> &'static str
 yamaa::api::Submission: impl Submission
 yamaa::api::Submission: pub struct Submission
+yamaa::api::Submission::created: pub fn created(&self) -> &str
 yamaa::api::Submission::diagnostics: pub fn diagnostics(&self) -> Vec<yamaa::diagnostic::Diagnostic>
 yamaa::api::Submission::issues: pub fn issues(&self) -> Table
 yamaa::api::Submission::save: pub fn save(&mut self) -> Result<Vec<String>, Failure>

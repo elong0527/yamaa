@@ -39,7 +39,6 @@ import tempfile
 import tomllib
 from pathlib import Path
 
-from tools.packaging import generate_selftest_cases as selftest_cases
 from tools.paths import ROOT, WORKSPACE
 from tools.staging import vendor_crates
 
@@ -162,6 +161,11 @@ def sources(host, workspace=WORKSPACE):
     embeds from the selftest cases of the checkout that holds `workspace`.
     The YAML parser keeps its provenance, patch and licenses but not its tests.
     """
+    # Imported here because only staging reads the selftest list, a YAML file,
+    # with PyYAML: the package checks that import this module, such as the
+    # release selector's, run without PyYAML (#3347).
+    from tools.packaging import generate_selftest_cases as selftest_cases
+
     for member in members(host):
         root = workspace / "crates" / member
         for path in member_sources(root):
