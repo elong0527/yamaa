@@ -456,7 +456,7 @@ fn a_parent_alias_refusal_keeps_the_trailing_separator() {
     let cwd =
         yamaa_adapters::canonical_path::canonicalize(std::env::current_dir().unwrap()).unwrap();
     let study = scratch::Scratch::under(&cwd, "lint-alias-refusal");
-    let aliases = scratch::Scratch::new("lint-alias-missing");
+    let aliases = scratch::Scratch::new("lint-alias-missing-quoted-\"");
     let alias = aliases.path().join("study");
     std::os::unix::fs::symlink(study.path(), &alias).unwrap();
     let written = format!("{}/missing.yaml/", alias.display());
@@ -464,6 +464,8 @@ fn a_parent_alias_refusal_keeps_the_trailing_separator() {
         "{}/missing.yaml/",
         study.path().file_name().unwrap().to_str().unwrap()
     );
+    let written_json = yamaa::ContextValue::Text(written.clone()).to_json();
+    let message_json = yamaa::ContextValue::Text(format!("{written} does not exist")).to_json();
     for fix in [false, true] {
         let failure = lint(std::slice::from_ref(&written), fix).unwrap_err();
         let actual = (
@@ -485,7 +487,7 @@ fn a_parent_alias_refusal_keeps_the_trailing_separator() {
                 "cannot lint {relative}: {written} does not exist [resource_path_missing, FILE-7]"
             ),
             vec![format!(
-                r#"{{"column":null,"condition":"resource_path_missing","context":{{"path":"{written}"}},"file":null,"line":null,"message":"{written} does not exist","operand_route":null,"phase":"validation","rule":"FILE-7","severity":"error","source_span":null,"spec_paths":[]}}"#
+                r#"{{"column":null,"condition":"resource_path_missing","context":{{"path":{written_json}}},"file":null,"line":null,"message":{message_json},"operand_route":null,"phase":"validation","rule":"FILE-7","severity":"error","source_span":null,"spec_paths":[]}}"#
             )],
             1,
             vec![],
