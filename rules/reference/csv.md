@@ -186,18 +186,41 @@ A routine that sends an exact tie to the even digit reports `0.12` for
 
 <a id="csv-10"></a>
 
-### CSV-10. A csv source is UTF-8 without a byte-order mark
+### CSV-10. A csv source is UTF-8, with a byte-order mark only where its input declares one
 
 A delimited source is UTF-8. Ill-formed encoded bytes fail under
 [Values](../values.md) rather than being replaced, skipped or decoded
-under a machine default. A byte-order mark is rejected rather than skipped.
+under a machine default. A byte-order mark is rejected rather than skipped,
+unless the input declares `byte_order_mark: true`: then the source must begin
+with one mark, which is skipped.
 
-Fails: `invalid_text`, `source_byte_order_mark`.
-Evidence: `negative-source-bad-encoding`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::defects_have_exact_priority_and_coordinates`, `rust/crates/yamaa-adapters/tests/fixtures/csv_profile_diagnostics.json::bom`.
+Fails: `invalid_text`, `source_byte_order_mark`, `value_not_permitted`.
+Evidence: `negative-source-bad-encoding`, `schema-source-byte-order-mark`, `negative-source-undeclared-byte-order-mark`, `negative-source-missing-byte-order-mark`, `negative-source-byte-order-mark-parquet`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::defects_have_exact_priority_and_coordinates`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::a_declared_mark_is_skipped_once_and_any_other_mark_fails`, `rust/crates/yamaa-adapters/tests/fixtures/csv_profile_diagnostics.json::bom`, `rust/crates/yamaa/tests/csv_byte_order_mark.rs`.
 
 Ill-formed encoded bytes fail with [Values](../values.md)'s
-`invalid_text`, reporting the record and field the reader had reached. A
-byte-order mark fails with `source_byte_order_mark`.
+`invalid_text`, reporting the record and field the reader had reached.
+Decoding precedes every other finding, a byte-order mark included.
+
+A byte-order mark is the three bytes `EF BB BF`, which encode `U+FEFF`.
+`byte_order_mark` is an optional Boolean of an input that the csv profile
+reads. When it is true, the source must begin with one mark, which the reader
+skips, and the first record starts after it. A source that does not begin with
+a mark fails with `source_byte_order_mark`, and so does a second mark after the
+declared one, since only one is skipped: the declaration decides, never the
+file. When it is false or omitted, a mark that begins the source fails with
+`source_byte_order_mark`. Either way the failure names record 1 and field 1,
+and its context records `declared`, whether the input declares a mark. A
+`U+FEFF` after the first character of the source is a character of its field.
+
+On an input that another profile reads, `byte_order_mark` fails with
+`value_not_permitted` at `input.<dataset>.byte_order_mark`, whatever its value,
+before any input is read; on an input whose path selects no profile,
+[INPUT-1](../inputs.md#input-1) fails instead. The artifacts of
+[CSV-1](#csv-1) never carry a mark.
+
+A file that declares `schema_version` is read under the rules at the
+`yamaa-v0.5.0` tag, where an input declares no `byte_order_mark`, so a
+byte-order mark that begins a source always fails.
 
 <a id="csv-11"></a>
 
@@ -216,8 +239,8 @@ A writer controls its bytes and emits one spelling, while a reader receives a
 study file as stored. The admitted spellings are a record terminated by
 `U+000D U+000A` rather than `U+000A`, and a final record with no terminator at
 all. Every other difference is refused rather than silently repaired: a
-byte-order mark ([CSV-10](#csv-10)), a `U+000D` anywhere else, and every reader
-option [CSV-15](#csv-15) excludes.
+byte-order mark the input does not declare ([CSV-10](#csv-10)), a `U+000D`
+anywhere else, and every reader option [CSV-15](#csv-15) excludes.
 
 <a id="csv-12"></a>
 
@@ -304,7 +327,7 @@ Evidence: `negative-source-unterminated-quote`, `negative-source-unnamed-field`,
 | Condition | Rejects |
 |---|---|
 | `source_profile_unknown` | an extension the [Source ingestion](../inputs.md#input-1) mapping does not name |
-| `source_byte_order_mark` | a byte-order mark |
+| `source_byte_order_mark` | a byte-order mark the input does not declare, a declared one that is absent, or a second leading mark ([CSV-10](#csv-10)) |
 | `source_header_absent` | a file with no header record |
 | `source_field_name_empty` | an empty header name |
 | `source_field_name_duplicate` | one name twice in the header |

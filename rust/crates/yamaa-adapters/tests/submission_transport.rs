@@ -280,6 +280,7 @@ mod transport {
                     .map(|(column, kind)| ((*column).into(), *kind))
                     .collect(),
                 encoding: Some("ascii".into()),
+                byte_order_mark: false,
                 empty_string_present: false,
                 ordinal: None,
             };
@@ -352,6 +353,7 @@ mod transport {
                 .map(|(column, kind)| ((*column).into(), *kind))
                 .collect(),
             encoding: Some("ascii".into()),
+            byte_order_mark: false,
             empty_string_present: false,
             ordinal: None,
         };
