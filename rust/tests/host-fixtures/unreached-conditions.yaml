@@ -43,7 +43,6 @@ not_covered:
     - driver_unavailable
     - duplicate_dataset_entry
     - duplicate_derivation
-    - duplicate_specification_name
     - empty_string_present_unsupported
     - function_conformance_failed
     - function_file_invalid
@@ -54,12 +53,9 @@ not_covered:
     - invalid_size
     - method_missing
     - minimum_length
-    - missing_derivation
-    - missing_report
     - mixed_relations
     - model_contract_mismatch
     - nested_reduction
-    - non_ascii_source
     - origin_contradicts_derivation
     - origin_description_missing
     - origin_document_missing
@@ -95,7 +91,6 @@ not_covered:
     - unknown_project_function
     - unknown_reference
     - unknown_section
-    - unknown_specification_name
     - unknown_standard_family
     - unlinked_producer
     - xpt_display_format_invalid
