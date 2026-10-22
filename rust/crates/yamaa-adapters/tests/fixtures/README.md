@@ -5,6 +5,16 @@ former per-fixture notes in #2416. Fixtures converted from hex-encoded TSV are
 now plain JSON with the same rows; staging re-encodes the legacy TSV bytes for
 the installed hosts, so staged output is unchanged.
 
+The documents of `binding_diagnostics.tsv`, `grammar_diagnostics.tsv`,
+`output_declarations.tsv`, `predicate_diagnostics.tsv`,
+`predicate_context_diagnostics.tsv`, `preflight.tsv` and
+`window_diagnostics.tsv` are written in 1.0 (#3437). Their reports keep every
+recorded value except the paths 1.0 spells differently: a formula reports at
+its `derivation`, a bare reference at `derivation.source`, and a row template
+by its `id`, such as `rows.first` where 0.5 wrote `rows[0]`. The forbidden
+baseline-flag order case of `window_diagnostics.tsv` stays in 0.5: the
+condition it pins, `window_order_by_forbidden`, retires with 0.5 (D101).
+
 ## binding_diagnostics
 # Original-document binding findings
 

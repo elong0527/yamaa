@@ -901,13 +901,13 @@ mod table {
             specification_source::Source,
         };
         use yamaa_core::application_observer::Scope;
-        use yamaa_core::specification::{PreparedSpecification, SourceDeclaration};
+        use yamaa_core::specification::SourceDeclaration;
         use yamaa_core::value::Value;
         use yamaa_core::{
             specification_output::SaveError, specification_run::SpecificationSourcePort,
         };
 
-        const SPEC: &str = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {VALUE: float}}}\noutput: {path: output.csv, columns: [ID, VALUE, DOUBLE], decimals: PRECISION}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: float, derivation: SRC.VALUE}\n  - {name: DOUBLE, type: float, derivation: {compute: {expr: 'VALUE + VALUE'}}}\n";
+        const SPEC: &str = "yamaa: '1.0'\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {VALUE: float}}}\noutput: {path: output.csv, columns: [ID, VALUE, DOUBLE], decimals: PRECISION}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: float, derivation: SRC.VALUE}\n  - {name: DOUBLE, type: float, derivation: 'VALUE + VALUE'}\n";
         fn prepared(precision: &str, path: &str, expression: &str) -> PreparedRun {
             let schema = yamaa_adapters::shipped_schema::capture().unwrap();
             let bytes = SPEC
@@ -915,10 +915,14 @@ mod table {
                 .edit("output.csv", path)
                 .edit("VALUE + VALUE", expression);
             let document = schema
-                .prepare_standalone(Source {
-                    identity: "spec.yaml".into(),
-                    bytes: bytes.into_bytes(),
-                })
+                .prepare_document(
+                    Source {
+                        identity: "spec.yaml".into(),
+                        bytes: bytes.into_bytes(),
+                    },
+                    "spec.yaml".into(),
+                    &mut crate::support::inheritance::Files,
+                )
                 .unwrap();
             PreparedRun::prepare(document).unwrap()
         }
@@ -1076,13 +1080,17 @@ mod table {
             let schema = yamaa_adapters::shipped_schema::capture().unwrap();
             let precision = "9".repeat(1000);
             let document = schema
-                .prepare_standalone(Source {
-                    identity: "spec.yaml".into(),
-                    bytes: SPEC.edit("PRECISION", &precision).into_bytes(),
-                })
+                .prepare_document(
+                    Source {
+                        identity: "spec.yaml".into(),
+                        bytes: SPEC.edit("PRECISION", &precision).into_bytes(),
+                    },
+                    "spec.yaml".into(),
+                    &mut crate::support::inheritance::Files,
+                )
                 .unwrap();
-            let compiled = PreparedSpecification::prepare(document.model()).unwrap();
-            assert_eq!(compiled.output_decimals(), Some(precision.as_str()));
+            let run = PreparedRun::prepare(document).unwrap();
+            assert_eq!(run.compiled().output_decimals(), Some(precision.as_str()));
         }
     }
     mod csv_source {
@@ -3321,10 +3329,14 @@ mod table {
                 let fields = row.split('\t').collect::<Vec<_>>();
                 assert_eq!(fields.len(), 3);
                 let prepared = schema
-                    .prepare_standalone(Source {
-                        identity: "spec.yaml".into(),
-                        bytes: fields[1].as_bytes().to_vec(),
-                    })
+                    .prepare_document(
+                        Source {
+                            identity: "spec.yaml".into(),
+                            bytes: fields[1].as_bytes().to_vec(),
+                        },
+                        "spec.yaml".into(),
+                        &mut crate::support::inheritance::Files,
+                    )
                     .unwrap();
                 let run = PreparedRun::prepare(prepared).unwrap();
                 let mut port = Port { captures: 0 };

@@ -67,9 +67,11 @@ impl Fixture {
     }
 }
 
+/// The inputs; HOME declares its key, the output keys it stores, for the
+/// reads that join it (D23).
 const INPUTS: &str = "input:\n\
     \x20 VS: {path: vs.csv, types: {VSDTC: date, VSDY: int, SYSBP: float, DIABP: float}}\n\
-    \x20 HOME: {path: home.csv, types: {VSDTC: date, VSDY: int, SYSBP: float, DIABP: float}}\n\
+    \x20 HOME: {path: home.csv, key: [STUDYID, USUBJID], types: {VSDTC: date, VSDY: int, SYSBP: float, DIABP: float}}\n\
     \x20 PLAN: {path: plan.csv, types: {DOSENUM: int, PLANDOSE: float, FIRST: int, LAST: int, REF: int}}\n\
     \x20 DM: {path: dm.csv, types: {RFSTDTC: date}}\n";
 
@@ -88,8 +90,8 @@ fn columns(x: &str, c: &str) -> String {
          \x20 - {{name: AVAL, type: float}}\n\
          \x20 - {{name: X, type: float, derivation: {x}}}\n\
          \x20 - {{name: C, type: str, derivation: {c}}}\n\
-         \x20 - {{name: N, type: int, derivation: {{literal: 0}}}}\n\
-         \x20 - {{name: M, type: int, derivation: {{literal: 0}}}}\n"
+         \x20 - {{name: N, type: int, derivation: 0}}\n\
+         \x20 - {{name: M, type: int, derivation: 0}}\n"
     )
 }
 
@@ -109,13 +111,13 @@ const CASE: Case = Case {
     intermediates: "",
     derivation: "",
     extra: "",
-    x: "{literal: 0.0}",
-    c: "{literal: none}",
+    x: "0.0",
+    c: "\"'none'\"",
 };
 
 fn header(keys: &str, case: Case) -> String {
     format!(
-        "schema_version: \"1.0\"\ndomain: ADVS\nkeys: [{keys}]\n{INPUTS}{}{}",
+        "yamaa: \"1.0\"\ntype: spec\ndomain: ADVS\nkeys: [{keys}]\n{INPUTS}{}{}",
         case.intermediates,
         columns(case.x, case.c)
     )
@@ -132,7 +134,7 @@ fn extra_derivation(case: Case) -> String {
 /// One template over VS, grouped by subject.
 fn grouped(case: Case) -> String {
     format!(
-        "{}rows:\n  - id: subject\n    dataset: VS\n    group_by: [VS.STUDYID, VS.USUBJID]\n{}    derivations:\n      PARAMCD: {{literal: MAXBP}}\n      AVAL: {{aggregate: \"MAX(VS.SYSBP)\"}}\n{}",
+        "{}rows:\n  - id: subject\n    dataset: VS\n    group_by: [VS.STUDYID, VS.USUBJID]\n{}    derivations:\n      PARAMCD: \"'MAXBP'\"\n      AVAL: {{aggregate: \"MAX(VS.SYSBP)\"}}\n{}",
         header("STUDYID, USUBJID, PARAMCD", case),
         case.extra,
         extra_derivation(case)
@@ -142,7 +144,7 @@ fn grouped(case: Case) -> String {
 /// One template over VS, a row per record.
 fn ungrouped(case: Case) -> String {
     format!(
-        "{}rows:\n  - id: record\n    dataset: VS\n{}    derivations:\n      PARAMCD: {{literal: SYSBP}}\n      AVAL: VS.SYSBP\n{}",
+        "{}rows:\n  - id: record\n    dataset: VS\n{}    derivations:\n      PARAMCD: \"'SYSBP'\"\n      AVAL: VS.SYSBP\n{}",
         header("STUDYID, USUBJID, PARAMCD, SEQ", case),
         case.extra,
         extra_derivation(case)
@@ -161,8 +163,8 @@ fn two(case: Case, home: &str) -> String {
     };
     format!(
         "{header}rows:\n\
-         \x20 - id: clinic\n    dataset: VS\n{}    derivations:\n      STUDYID: VS.STUDYID\n      USUBJID: VS.USUBJID\n      PARAMCD: {{literal: CLINIC}}\n      AVAL: VS.SYSBP\n{}\
-         \x20 - id: home\n    dataset: HOME\n    derivations:\n      STUDYID: HOME.STUDYID\n      USUBJID: HOME.USUBJID\n      PARAMCD: {{literal: HOME}}\n      AVAL: HOME.SYSBP\n{home}",
+         \x20 - id: clinic\n    dataset: VS\n{}    derivations:\n      STUDYID: VS.STUDYID\n      USUBJID: VS.USUBJID\n      PARAMCD: \"'CLINIC'\"\n      AVAL: VS.SYSBP\n{}\
+         \x20 - id: home\n    dataset: HOME\n    derivations:\n      STUDYID: HOME.STUDYID\n      USUBJID: HOME.USUBJID\n      PARAMCD: \"'HOME'\"\n      AVAL: HOME.SYSBP\n{home}",
         case.extra,
         extra_derivation(case)
     )
@@ -171,7 +173,7 @@ fn two(case: Case, home: &str) -> String {
 /// No rows: VS is the base; X derives `column`.
 fn implicit(intermediates: &str, column: &str, verification: &str) -> String {
     format!(
-        "schema_version: \"1.0\"\ndomain: ADVS\nkeys: [STUDYID, USUBJID, VSDY]\n{INPUTS}base: VS\n{intermediates}\
+        "yamaa: \"1.0\"\ntype: spec\ndomain: ADVS\nkeys: [STUDYID, USUBJID, VSDY]\n{INPUTS}base: VS\n{intermediates}\
          output: {{path: out.csv, columns: [STUDYID, USUBJID, VSDY, X]}}\n\
          columns:\n\
          \x20 - {{name: STUDYID, type: str, derivation: VS.STUDYID}}\n\
@@ -182,13 +184,12 @@ fn implicit(intermediates: &str, column: &str, verification: &str) -> String {
     )
 }
 
-const PLANNED: &str =
-    "intermediates:\n  - {id: PLANNED, dataset: PLAN, key: {DOSENUM: VS.VSDY}, no_match: null}\n";
-const PERIOD: &str = "intermediates:\n  - {id: PERIOD, dataset: PLAN, key: [STUDYID], between: {value: VS.VSDY, lower: FIRST, upper: LAST}, no_match: null}\n";
-const WINDOWED: &str = "intermediates:\n  - {id: WIN, dataset: PLAN, key: [USUBJID], filter: \"PLAN.FIRST <= PLAN.D\", no_match: null, derivations: {D: VS.VSDY}}\n";
-const FILTERED: &str = "intermediates:\n  - {id: WIN, dataset: PLAN, key: [USUBJID], filter: \"PLAN.FIRST <= VS.VSDY\", no_match: null}\n";
+const PLANNED: &str = "intermediates:\n  - {id: PLANNED, dataset: PLAN, key: {DOSENUM: VS.VSDY}}\n";
+const PERIOD: &str = "intermediates:\n  - {id: PERIOD, dataset: PLAN, key: [STUDYID], between: {value: VS.VSDY, lower: FIRST, upper: LAST}}\n";
+const WINDOWED: &str = "intermediates:\n  - {id: WIN, dataset: PLAN, key: [USUBJID], filter: \"PLAN.FIRST <= PLAN.D\", derivations: {D: VS.VSDY}}\n";
+const FILTERED: &str = "intermediates:\n  - {id: WIN, dataset: PLAN, key: [USUBJID], filter: \"PLAN.FIRST <= VS.VSDY\"}\n";
 const DEVICE: &str =
-    "intermediates:\n  - {id: DEVICE, dataset: PLAN, key: {DEVICEID: VS.DEVICEID}, no_match: null}\n";
+    "intermediates:\n  - {id: DEVICE, dataset: PLAN, key: {DEVICEID: VS.DEVICEID}}\n";
 
 /// Check each specification in both routes and hosts: the same issues, the
 /// first of them the expected condition and rule.
@@ -231,14 +232,14 @@ fn check_reports_each_group_scope_refusal_as_domain_does() {
     assert_cases(&[
         // A driver field read in each kind of row derivation.
         (row("X: VS.SYSBP"), ungrouped_driver),
-        (row("X: {compute: {expr: \"VS.SYSBP + 1\"}}"), ungrouped_driver),
+        (row("X: \"VS.SYSBP + 1\""), ungrouped_driver),
         (row("C: {flag: \"VS.SYSBP > 100\"}"), ungrouped_driver),
         (
-            row("X: {case: [{when: \"VS.SYSBP > 1\", then: {literal: 1.0}}, {otherwise: {literal: 2.0}}]}"),
+            row("X: {case: [{when: \"VS.SYSBP > 1\", then: 1.0}, {otherwise: 2.0}]}"),
             ungrouped_driver,
         ),
         (
-            row("X: {case: [{when: \"AVAL > 1\", then: VS.SYSBP}, {otherwise: {literal: 2.0}}]}"),
+            row("X: {case: [{when: \"AVAL > 1\", then: VS.SYSBP}, {otherwise: 2.0}]}"),
             ungrouped_driver,
         ),
         (row("X: {round_half_away_from_zero: {source: VS.SYSBP, digits: 0}}"), ungrouped_driver),
@@ -256,7 +257,7 @@ fn check_reports_each_group_scope_refusal_as_domain_does() {
             ungrouped_driver,
         ),
         // A read of the row's own column comes before the window's grouping.
-        (row("X: {compute: {expr: \"SEQ + VS.SYSBP\"}}"), "phase_boundary Some(\"COLUMN-4\")"),
+        (row("X: \"SEQ + VS.SYSBP\""), "phase_boundary Some(\"COLUMN-4\")"),
         // A window's grouping, then its defects, then its reads.
         (
             row("X: {row_value: {source: SEQ, offset: 0, window: {order_by: [VS.VSDY]}}}"),
@@ -328,7 +329,7 @@ fn check_reports_each_group_scope_refusal_as_domain_does() {
         (
             grouped(Case {
                 intermediates: PLANNED,
-                x: "{case: [{when: \"VS.SYSBP > 1 AND PLANNED.PLANDOSE > 1\", then: {literal: 1.0}}, {otherwise: {literal: 2.0}}]}",
+                x: "{case: [{when: \"VS.SYSBP > 1 AND PLANNED.PLANDOSE > 1\", then: 1.0}, {otherwise: 2.0}]}",
                 ..CASE
             }),
             "ungrouped_driver_field Some(\"NAME-4\")",
@@ -381,7 +382,7 @@ fn check_reports_each_driver_scope_refusal_as_domain_does() {
         // reads matches on another input's record.
         (
             implicit(
-                "intermediates:\n  - {id: SUBJ, dataset: PLAN, key: {USUBJID: DM.USUBJID}, no_match: null}\n",
+                "intermediates:\n  - {id: SUBJ, dataset: PLAN, key: {USUBJID: DM.USUBJID}}\n",
                 "SUBJ.PLANDOSE",
                 "",
             ),
@@ -389,7 +390,7 @@ fn check_reports_each_driver_scope_refusal_as_domain_does() {
         ),
         (
             implicit(
-                "intermediates:\n  - {id: SUBJ, dataset: PLAN, key: [USUBJID], filter: \"PLAN.REF IS NOT NULL AND DM.RFSTDTC IS NOT NULL\", no_match: null}\n",
+                "intermediates:\n  - {id: SUBJ, dataset: PLAN, key: [USUBJID], filter: \"PLAN.REF IS NOT NULL AND DM.RFSTDTC IS NOT NULL\"}\n",
                 "SUBJ.PLANDOSE",
                 "",
             ),
@@ -397,7 +398,7 @@ fn check_reports_each_driver_scope_refusal_as_domain_does() {
         ),
         (
             implicit(
-                "intermediates:\n  - {id: SUBJ, dataset: PLAN, key: [USUBJID], filter: \"PLAN.USUBJID = PLAN.D\", no_match: null, derivations: {D: DM.USUBJID}}\n",
+                "intermediates:\n  - {id: SUBJ, dataset: PLAN, key: [USUBJID], filter: \"PLAN.USUBJID = PLAN.D\", derivations: {D: DM.USUBJID}}\n",
                 "SUBJ.PLANDOSE",
                 "",
             ),
@@ -405,8 +406,8 @@ fn check_reports_each_driver_scope_refusal_as_domain_does() {
         ),
         (
             implicit(
-                "intermediates:\n  - {id: SUBJ, dataset: PLAN, key: {USUBJID: DM.USUBJID}, no_match: null}\n",
-                "{literal: 1.0}",
+                "intermediates:\n  - {id: SUBJ, dataset: PLAN, key: {USUBJID: DM.USUBJID}}\n",
+                "1.0",
                 "verifications:\n  - assert: {id: has-plan, require: \"SUBJ.PLANDOSE IS NOT NULL\"}\n",
             ),
             lookup_key,
@@ -415,7 +416,7 @@ fn check_reports_each_driver_scope_refusal_as_domain_does() {
         // record, and a column formula no qualified name but a lookup's.
         (
             ungrouped(Case {
-                derivation: "X: {compute: {expr: \"HOME.SYSBP + 1\"}}",
+                derivation: "X: \"HOME.SYSBP + 1\"",
                 ..CASE
             }),
             source_scope,
@@ -429,13 +430,13 @@ fn check_reports_each_driver_scope_refusal_as_domain_does() {
         ),
         (
             grouped(Case {
-                derivation: "X: {case: [{when: \"HOME.SYSBP > 1\", then: {literal: 1.0}}, {otherwise: {literal: 2.0}}]}",
+                derivation: "X: {case: [{when: \"HOME.SYSBP > 1\", then: 1.0}, {otherwise: 2.0}]}",
                 ..CASE
             }),
             source_scope,
         ),
         (
-            two(Case { x: "{compute: {expr: \"VS.SYSBP + 1\"}}", ..CASE }, ""),
+            two(Case { x: "\"VS.SYSBP + 1\"", ..CASE }, ""),
             "qualified_identifier Some(\"FORMULA-9\")",
         ),
     ]);
@@ -460,12 +461,16 @@ fn check_reports_each_row_filter_phase_boundary_as_domain_does() {
         // lookup's match.
         (filter("", window, "    filter: \"N > 1\"\n"), row_filter),
         (
-            filter("", "N: {row_number: {window: {order_by: [VS.VSDY]}}}\n      M: N", "    filter: \"M > 1\"\n"),
+            filter(
+                "",
+                "N: {row_number: {window: {order_by: [VS.VSDY]}}}\n      M: N",
+                "    filter: \"M > 1\"\n",
+            ),
             row_filter,
         ),
         (
             filter(
-                "intermediates:\n  - {id: BYN, dataset: PLAN, key: {DOSENUM: N}, no_match: null}\n",
+                "intermediates:\n  - {id: BYN, dataset: PLAN, key: {DOSENUM: N}}\n",
                 window,
                 "    filter: \"BYN.PLANDOSE IS NULL\"\n",
             ),
@@ -475,7 +480,7 @@ fn check_reports_each_row_filter_phase_boundary_as_domain_does() {
         // column phase (LOOKUP-2), or on another input's record (LOOKUP-5).
         (
             filter(
-                "intermediates:\n  - {id: BYSEQ, dataset: PLAN, key: {DOSENUM: SEQ}, no_match: null}\n",
+                "intermediates:\n  - {id: BYSEQ, dataset: PLAN, key: {DOSENUM: SEQ}}\n",
                 "",
                 "    filter: \"BYSEQ.PLANDOSE IS NULL\"\n",
             ),
@@ -483,7 +488,7 @@ fn check_reports_each_row_filter_phase_boundary_as_domain_does() {
         ),
         (
             filter(
-                "intermediates:\n  - {id: SUBJ, dataset: PLAN, key: {USUBJID: DM.USUBJID}, no_match: null}\n",
+                "intermediates:\n  - {id: SUBJ, dataset: PLAN, key: {USUBJID: DM.USUBJID}}\n",
                 "",
                 "    filter: \"SUBJ.PLANDOSE IS NOT NULL\"\n",
             ),
@@ -494,7 +499,7 @@ fn check_reports_each_row_filter_phase_boundary_as_domain_does() {
         (
             grouped(Case {
                 extra: "    filter: \"VS.SYSBP > 1 AND SEQ > 1 AND HOME.SYSBP > 1\"\n",
-                derivation: "X: {compute: {expr: \"SEQ + 1.0\"}}",
+                derivation: "X: \"SEQ + 1.0\"",
                 ..CASE
             }),
             row_filter,
@@ -557,7 +562,7 @@ fn check_reports_each_join_option_refusal_as_domain_does() {
             range,
         ),
         (
-            row("X: {case: [{when: \"AVAL > 1\", then: {source: {variable: VS.SYSBP, require_match: true}}}, {otherwise: {literal: 2.0}}]}"),
+            row("X: {case: [{when: \"AVAL > 1\", then: {source: {variable: VS.SYSBP, require_match: true}}}, {otherwise: 2.0}]}"),
             required,
         ),
         // The column phase, for one driver, and for the driver of one of
@@ -617,7 +622,7 @@ fn check_reports_each_join_option_refusal_as_domain_does() {
         (
             implicit(
                 "",
-                "{case: [{when: \"VSDY > 1\", then: {first_available: {sources: [{variable: VS.SYSBP, require_match: true}]}}}, {otherwise: {literal: 1.0}}]}",
+                "{case: [{when: \"VSDY > 1\", then: {first_available: {sources: [{variable: VS.SYSBP, require_match: true}]}}}, {otherwise: 1.0}]}",
                 "",
             ),
             required,
