@@ -1,14 +1,29 @@
 # yamaa agent guide
 
 This file is the single entry point for agents. It maps the repository,
-states the hard rules, and says what to run before a push. Area guides (linked below) add detail; none of them overrides
-this file. Release docs are not needed for normal changes: read
-`docs/release.md` only for a release, a supported-platform change, or a
-migration decision.
+states the hard rules, and says what to run before a push. Area guides
+(linked below) add detail; none of them overrides this file. Release docs
+are not needed for normal changes: read `docs/release.md` only for a
+release, a supported-platform change, or a migration decision.
 
 Run `make help` at the repository root for the supported checks and
 their prerequisites. Local targets and CI share the owned scripts under
 `tools/commands/`.
+
+## Start here
+
+The whole of this guide is the contract; this list is the order of work.
+
+1. Read the issue, its "Order" line and its latest comments. Assign
+   yourself to it, or link your pull request on it; that is the claim.
+2. Create a worktree from `origin/main` (below) and point it at the
+   machine's shared Cargo target.
+3. Build the change, with the tests nearest it, and nothing else.
+4. Run the local checks of [Before a push](#before-a-push) once, then push
+   once, with the explicit refspec. Open the pull request ready for review.
+5. Get CI green on the exact head, answer its reviews, and stop. The
+   owner's maintenance session merges.
+6. Record a decision only where [Decisions](#decisions) says to.
 
 ## Repo map
 
@@ -42,17 +57,13 @@ their prerequisites. Local targets and CI share the owned scripts under
   obsolete interfaces and callers together instead of adding compatibility
   aliases. From 1.0.0, the stability contract in `docs/release.md` applies.
 - **Complete review before merging.** The owner's maintenance session
-  reviews and merges every pull request (D175 on #3030). It merges only
-  once CI is green on the exact head, by the merge steps in
-  `CONTRIBUTING.md` (D176). On that head, require CodeRabbit's explicit
-  completed review, or complete bounded reviews proved by the review gate,
-  and resolve every actionable finding. Pending, missing, skipped alone or
-  older-head reviews do not count. When environment policy blocks GitHub
-  CLI reads, approved authenticated connector reads must prove the same
-  predicates on fresh exact-head evidence. The author never reviews its own
-  PR (D148), and a review that another agent records is welcome as a
-  review record. When CodeRabbit cannot review a PR, `CONTRIBUTING.md`
-  says what replaces its review.
+  reviews and merges every pull request (D175 on #3030), only once CI is
+  green on the exact head (D176) and one completed review of that head is
+  on the pull request: CodeRabbit's, Codex's, or the maintenance session's
+  own, recorded as `## Review of <full sha>`. Every actionable finding is
+  resolved first. A pending, skipped or older-head review does not count.
+  The author never reviews its own pull request (D148). `CONTRIBUTING.md`
+  holds the gate's mechanics and what replaces an unavailable reviewer.
 - **Expected data is truth.** Files under `benchmarks/**/expected/` are
   independently authored and define what an implementation must
   reproduce. Never regenerate them from the implementation, and never
@@ -86,12 +97,26 @@ their prerequisites. Local targets and CI share the owned scripts under
 
 ## Pull requests
 
-- One theme per pull request (D171 on #3030). Group related issues into
-  one pull request of about 1,500 to 3,000 changed lines and under 300
-  files, with one `Closes #N` line for each issue it completes; the issues
-  stay as the specifications. Branch from and target `main`;
-  `release/1.0.0` is cut only to qualify release candidates. The planning
-  issue is #3030, for 1.0.0; #2848 tracks the 0.5.0 GitHub release.
+- **One theme per pull request**, as small as its theme allows (D171 on
+  #3030, amended by D207). One issue is the usual size; group issues only
+  when they share files or a theme. The limits are an upper bound: under
+  300 changed files, so an automated review covers the diff, and about
+  3,000 changed lines. Write one `Closes #N` line for each issue the pull
+  request completes; the issues stay as the specifications.
+- **Closing keywords close.** GitHub reads `Closes #N` inside a negation
+  too; "does not close #N" once closed the planning issue. Write a
+  closing keyword only for an issue the pull request completes, and name
+  every other issue without one.
+- Branch from and target `main`; `release/1.0.0` is cut only to qualify
+  release candidates. The planning issue is #3030, for 1.0.0; #2848 tracks
+  the 0.5.0 GitHub release.
+- **Open ready for review**, not as a draft, once it builds and its nearest
+  tests pass (D148). The one exception is a pull request that cannot merge
+  until another one merges: it stays a draft, with `[hold: after #N]` at
+  the start of its title.
+- **Push once, validated.** Half of the pull request CI runs of October
+  2026 were cancelled by a follow-up push. Run the local checks, then push;
+  hold style and wording fixes for the next push that CI must run anyway.
 - Before merging, bring the branch up to date with its base and wait for
   green CI on that exact head. A pull request that is green against an older
   base can still fail to compile against the current one.
@@ -104,52 +129,56 @@ their prerequisites. Local targets and CI share the owned scripts under
 ## Parallel sessions
 
 Several agent sessions work the 1.0 plan at once, each on its own batch
-of issues.
-These rules keep them from colliding; `CONTRIBUTING.md` owns the merge
-steps and the review gate.
+of issues. These rules keep them from colliding; `CONTRIBUTING.md` owns the
+merge steps and the review gate.
 
-- **Claim before you start.** Assign yourself to each issue of the
-  batch, or comment "Claimed by <session>" when you cannot assign, before
-  creating a branch, and leave an issue another session has claimed. A
-  follow-up found in review goes to the session that owns the chain it
-  belongs to.
-- **One worktree per pull request, with its own Cargo target.** Create the
-  branch with `git worktree add --no-track -b <branch> .worktrees/<name>
-  origin/main` and push with an explicit refspec,
+- **Claim by assignment.** Assign yourself to each issue before creating a
+  branch, or link the pull request on the issue when you cannot assign.
+  Leave an issue another session holds. A follow-up found in review goes to
+  the session that owns the chain it belongs to.
+- **One worktree per pull request, one Cargo target per machine.** Create
+  the branch with `git worktree add --no-track -b <branch>
+  .worktrees/<name> origin/main` and push with an explicit refspec,
   `git push -u origin HEAD:refs/heads/<branch>`: a branch that tracks
-  `origin/main` otherwise pushes to main. Never share `rust/target` or
-  `CARGO_TARGET_DIR` between worktrees. Each target grows to 35 to 45 GB,
-  so keep to about five Rust worktrees on one machine, and remove a
-  worktree, or its target, when its pull request merges.
-- **Closing keywords close.** GitHub reads `Closes #N` inside a negation
-  too; "does not close #N" once closed the planning issue. Write a
-  closing keyword only for an issue the pull request completes, and name
-  every other issue without one.
-- **Open pull requests ready for review.** A pull request opens ready for
-  review, not as a draft, once it builds and its nearest tests pass (D148
-  on #3030). The one exception is a pull request that cannot merge until
-  another one merges: it stays a draft, with `[hold: after #N]` at the
-  start of its title (owner decision of 2026-10-20, recorded on #3030).
-- **Prove engine changes on the exact head.** CI's `python` and `r` lanes
-  run equivalence on their fresh installations for engine/build changes.
-  Both lanes must be green on the exact head, with their equivalence checks
-  run. That is the proof for every session; no session needs to run the gate locally
-  (D148 on #3030, with the owner-approved CI layout of #3658).
-- **Get CI green on the exact head, then stop.** Once its pull request is
-  open, the author gets CI green on its exact head and stops there. It
-  neither reviews nor merges the pull request: the owner's maintenance
-  session does both, as the hard rules say (D175 on #3030).
-- **Decide under the owner's standing instruction, and record it.** A
-  routine decision follows the recorded plan and is written on #3030 as
-  the next D-number, so the owner can see and reverse it. D-numbers come
-  from one shared counter, so parallel sessions never take the same
-  number; a session that cannot reach the counter posts "D-next" on the
-  planning issue for the 1.0 session to assign. Ask the owner only about
-  a new user-facing concept, a reversal of a D-decision, or a golden
-  change that no D-decision covers.
+  `origin/main` otherwise pushes to main. Point every worktree at one
+  shared target, `CARGO_TARGET_DIR=<machine>/yamaa-target`: Cargo
+  serialises builds with its own lock, the locked dependencies are built
+  once for every branch, and only the workspace crates rebuild per
+  worktree. Give a worktree its own target only when two builds must run
+  at the same time. Set `CARGO_INCREMENTAL=0` for a one-off check (Clippy,
+  the full suite); incremental artifacts pay only for the edit-build loop
+  on one crate. Remove a worktree when its pull request merges.
 - **Sequence shared files.** Read the issue's "Order" line and its
   sequencing comments before starting. An issue that edits a file an open
   pull request reshapes waits for that pull request.
+- **Prove engine changes on the exact head.** CI's `python` and `r` lanes
+  run equivalence on their fresh installations for engine/build changes.
+  Both lanes must be green on the exact head, with their equivalence checks
+  run. That is the proof for every session; no session needs to run the gate
+  locally (D148 on #3030, with the owner-approved CI layout of #3658).
+- **Get CI green on the exact head, then stop.** Once its pull request is
+  open, the author gets CI green on its exact head, answers its reviews,
+  and stops there. It neither reviews nor merges the pull request: the
+  owner's maintenance session does both (D175 on #3030).
+
+## Decisions
+
+The planning issue #3030 holds the owner's decisions as D-numbers. Three
+kinds of choice reach it; everything else is recorded where the work is.
+
+- **Ask the owner** before building a new user-facing concept, reversing a
+  D-decision, or changing a golden file no D-decision covers.
+- **Record on #3030, as the next D-number**, a routine decision that
+  changes what a user sees: a condition, context key, spelling, saved byte,
+  printed text or host surface settled under the owner's standing
+  instruction. One short paragraph: what, why, and the pull request. A
+  session that cannot reach the counter writes "D-next" and the 1.0
+  session numbers it.
+- **Record in the pull request body** everything else: how an internal
+  behaviour was built, which option an issue's question took, what a
+  refactor left out. The pull request is the record; a comment on #3030 is
+  not needed and the log stays readable. The 1.0 session folds a decision
+  into the log only when a later issue cites it.
 
 ## Before a push
 
@@ -172,7 +201,7 @@ Linux, so a change to paths, file handling, `cfg`-gated code or
 packaging also gets one native qualification run on its branch before
 merge: `gh workflow run native.yml --ref <branch>`.
 
-While developing, run only the tests nearest the change:
+The tests nearest the change:
 
 - **Rust** (`rust/`): from `rust/`, `cargo test --locked -p <crate>`
   for each crate touched. Portable-math controls live in
@@ -204,10 +233,13 @@ A test proves one authored expectation of one behaviour through the
 surface its crate or package owns. `CONTRIBUTING.md#writing-tests` has
 the patterns and helpers of each language; these are the rules.
 
-- **Author the expectation; never capture it.** An expected value is
-  written by hand or read from authored truth: `rust/tests/host-fixtures/`,
-  a crate's `tests/fixtures/`, or what a benchmark itself states. Never
-  paste what the implementation printed, and never add a snapshot library.
+- **Author or derive the expectation; never capture it.** An expected
+  value is written by hand, read from authored truth
+  (`rust/tests/host-fixtures/`, a crate's `tests/fixtures/`, or what a
+  benchmark itself states), or derived from a rule card, the condition
+  registry, a grammar file or the engine's documented geometry, with the
+  derivation stated in the pull request. Never paste what the
+  implementation printed, and never add a snapshot library.
 - **Name the behaviour.** A test's name is the one sentence it proves,
   such as `case_otherwise_reports_inside_the_otherwise_member`, under
   the modules or classes that give it a path; a test a rule card cites
