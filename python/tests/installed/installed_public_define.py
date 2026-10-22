@@ -848,16 +848,16 @@ class PublicDefine(unittest.TestCase):
         define_sentinel.write_bytes(b"original Define sentinel")
         names = sorted(path.name for path in directory.iterdir())
         result = self.call(directory)
-        self.assertEqual(result.issues.to_polars()["phase"].to_list(), ["validation"])
-        self.assertEqual(
-            result.issues.to_polars()["condition"].to_list(),
-            ["transport_path_collision"],
-        )
-        self.assertEqual(result.issues.to_polars()["rule"].to_list(), ["JSON-2"])
-        self.assertEqual(
-            result.issues.to_polars()["spec_paths"].to_list(), [["sdtm.specs[1]"]]
-        )
-        self.assertIn("dm.json", result.issues.to_polars()["context"][0])
+        # The shared truth's row, which R compares too. Its context names the
+        # two files by their absolute paths, so it is compared by the file
+        # name both writers would write.
+        expected = dict(TRUTH["transport_name_collision_issue"])
+        names = expected.pop("context_names")
+        expected["file"] = (directory.resolve() / expected["file"]).as_posix()
+        [row] = result.issues.to_pylist()
+        context = row.pop("context")
+        self.assertEqual(row, expected)
+        self.assertIn(names, context)
         self.refused(result)
         self.assertEqual(sentinel.read_bytes(), b"original publication sentinel")
         self.assertEqual(define_sentinel.read_bytes(), b"original Define sentinel")

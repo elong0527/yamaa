@@ -382,8 +382,19 @@ define_sentinel <- file.path(root, "define.xml")
 writeBin(charToRaw("original Define sentinel"), define_sentinel)
 previous_names <- sort(list.files(root, all.files = TRUE, no.. = TRUE))
 result <- submission(root)
-stopifnot(identical(result$issues$phase, "validation"), identical(result$issues$condition, "transport_path_collision"), identical(result$issues$rule, "JSON-2"),
-  identical(result$issues$spec_paths[[1L]], "sdtm.specs[1]"), grepl("dm.json", result$issues$context, fixed = TRUE), refused(result),
+# The shared truth's row, which Python compares too. Its context names the two
+# files by their absolute paths, so it is compared by the file name both
+# writers would write.
+truth <- host_truth[["transport_name_collision_issue"]]
+issue <- result$issues
+stopifnot(nrow(issue) == 1L,
+  identical(list(issue$severity, issue$phase, issue$condition, issue$rule, issue$spec_paths,
+    issue$file, issue$line, issue$column, issue$message, issue$source_span, issue$operand_route),
+    list(truth$severity, truth$phase, truth$condition, truth$rule,
+      list(as.character(unlist(truth$spec_paths))),
+      normalizePath(file.path(root, truth$file), winslash = "/", mustWork = TRUE),
+      as.double(truth$line), as.double(truth$column), truth$message, list(NULL), list(NULL))),
+  grepl(truth$context_names, issue$context, fixed = TRUE), refused(result),
   identical(rawfile(sentinel), charToRaw("original publication sentinel")),
   identical(rawfile(define_sentinel), charToRaw("original Define sentinel")),
   identical(sort(list.files(root, all.files = TRUE, no.. = TRUE)), previous_names))

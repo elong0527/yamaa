@@ -4624,7 +4624,21 @@
             "<def:title>third\nfourth</def:title>"
           ]
         }
-      ]
+      ],
+      "transport_name_collision_issue": {
+        "severity": "error",
+        "phase": "validation",
+        "condition": "transport_path_collision",
+        "rule": "JSON-2",
+        "spec_paths": ["sdtm.specs[1]"],
+        "file": "project.yaml",
+        "line": 54,
+        "column": 5,
+        "message": "sdtm.specs[1] would write a transport file that another writer also writes",
+        "context_names": "dm.json",
+        "source_span": null,
+        "operand_route": null
+      }
     },
     "public-contract": {
       "specification_yaml": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: SRC.VALUE}\noutput: {path: output.csv, columns: [ID, VALUE]}\n",
