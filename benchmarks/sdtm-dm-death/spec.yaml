@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: SDTM
 domain: DM
 keys: [STUDYID, USUBJID]
 input:
@@ -16,23 +18,23 @@ intermediates:
   # adverse event. An undated record cannot supply a death date.
   - id: DTHDS
     dataset: DS
+    key: [STUDYID, USUBJID]
     filter: "DS.DSDECOD = 'DEATH' AND DS.DSSTDTC IS NOT NULL"
     order_by: [DS.DSSTDTC]
     keep: last
-    no_match: {literal: null}
 
   - id: DTHAE
     dataset: AE
+    key: [STUDYID, USUBJID]
     filter: "AE.AEOUT = 'FATAL' AND AE.AEENDTC IS NOT NULL"
     order_by: [AE.AEENDTC]
     keep: last
-    no_match: {literal: null}
 
 columns:
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
-    derivation: {literal: DM}
+    derivation: "'DM'"
 
   - name: STUDYID
     type: str

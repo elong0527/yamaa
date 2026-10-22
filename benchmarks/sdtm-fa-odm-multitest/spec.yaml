@@ -1,4 +1,6 @@
-schema_version: '1.0'
+yamaa: "1.0"
+type: spec
+model: SDTM
 domain: FA
 keys:
   - STUDYID
@@ -68,7 +70,7 @@ columns:
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
-    derivation: {literal: FA}
+    derivation: "'FA'"
 
   - name: STUDYID
     type: str
@@ -96,12 +98,12 @@ columns:
     label: Object of the Observation
     derivation: SIBLING_FAOBJ.Value
     verifications:
-      - not_missing: {}
+      - not_missing
 
   - name: FACAT
     type: str
     label: Category for Findings About
-    derivation: {literal: REACTOGENICITY}
+    derivation: "'REACTOGENICITY'"
 
   - name: FAORRES
     type: str
@@ -114,7 +116,7 @@ columns:
     derivation:
       case:
         - when: FATESTCD = 'LDIAM'
-          then: {literal: mm}
+          then: "'mm'"
 
   - name: FASTRESC
     type: str
@@ -128,7 +130,7 @@ columns:
     derivation:
       case:
         - when: FAORRES IS NULL
-          then: {literal: NOT DONE}
+          then: "'NOT DONE'"
 
   - name: FATPT
     type: str

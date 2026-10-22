@@ -3,7 +3,9 @@
 # SDTM SUB-15 instead requires Vendor/Sponsor for Assigned. This positive
 # witness explicitly selects Sponsor, while tests retain the original
 # rejection.
-schema_version: '1.0'
+yamaa: "1.0"
+type: spec
+model: SDTM
 parent: spec.yaml
 
 columns:
@@ -11,58 +13,58 @@ columns:
     submission:
       core: Req
       length: 2
-      origin: {type: Assigned, source: Sponsor}
+      origins: [{type: Assigned, source: Sponsor}]
 
   - name: STUDYID
     submission:
       core: Req
       length: 20
-      origin: {type: Collected, source: Vendor}
+      origins: [{type: Collected, source: Vendor}]
 
   - name: USUBJID
     submission:
       core: Req
       length: 20
-      origin: {type: Collected, source: Vendor}
+      origins: [{type: Collected, source: Vendor}]
 
   - name: LBSEQ
     submission:
       core: Req
       length: 8
-      origin: {type: Derived, source: Sponsor}
+      origins: [{type: Derived, source: Sponsor}]
       method: Sequence within each subject by collection date and test code
 
   - name: LBTESTCD
     submission:
       core: Req
       length: 8
-      origin: {type: Assigned, source: Sponsor}
+      origins: [{type: Assigned, source: Sponsor}]
 
   - name: LBTEST
     submission:
       core: Req
       length: 40
-      origin: {type: Assigned, source: Sponsor}
+      origins: [{type: Assigned, source: Sponsor}]
 
   - name: LBORRES
     submission:
       core: Exp
       length: 20
-      origin: {type: Collected, source: Vendor}
+      origins: [{type: Collected, source: Vendor}]
 
   - name: LBORRESU
     submission:
       core: Exp
       length: 8
-      origin: {type: Assigned, source: Sponsor}
+      origins: [{type: Assigned, source: Sponsor}]
       value_level:
         - id: GLUC
           where: {LBTESTCD: [GLUC]}
-          origin: {type: Assigned, source: Vendor}
+          origins: [{type: Assigned, source: Vendor}]
           codelist: CL_GLUCOSE
         - id: CREAT
           where: {LBTESTCD: [CREAT]}
-          origin: {type: Assigned, source: Sponsor}
+          origins: [{type: Assigned, source: Sponsor}]
           codelist: CL_CREATININE
 
   - name: LBSTRESN
@@ -70,19 +72,19 @@ columns:
       core: Exp
       length: 8
       significant_digits: 2
-      origin: {type: Derived, source: Sponsor}
+      origins: [{type: Derived, source: Sponsor}]
       method: Convert the original result to the declared numeric type
 
   - name: LBSTRESU
     submission:
       core: Exp
       length: 8
-      origin: {type: Assigned, source: Sponsor}
+      origins: [{type: Assigned, source: Sponsor}]
 
   - name: LBDTC
     submission:
       core: Exp
-      origin: {type: Collected, source: Vendor}
+      origins: [{type: Collected, source: Vendor}]
 
 submission:
   label: Laboratory Tests

@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: SDTM
 domain: MH
 keys: [STUDYID, USUBJID, MHSEQ]
 input:
@@ -31,7 +33,7 @@ columns:
     label: Reported Term for the Medical History Condition
     derivation: MH_FORM.MHTERM
     verifications:
-      - not_missing: {}
+      - not_missing
 
   # The collected start year alone, or year and month joined with a hyphen.
   # A month with no year, or no year at all, leaves the start empty.
@@ -57,9 +59,9 @@ columns:
     derivation:
       case:
         - when: "MH_FORM.MHONGO = 'Y'"
-          then: {literal: ONGOING}
+          then: "'ONGOING'"
         - when: "MHENDTC < MH_FORM.SCRFDTC"
-          then: {literal: BEFORE}
+          then: "'BEFORE'"
     verifications:
       - allowed_values:
           values: [ONGOING, BEFORE]
@@ -70,7 +72,7 @@ columns:
     derivation:
       case:
         - when: "MHENRTPT IS NOT NULL"
-          then: {literal: SCREENING}
+          then: "'SCREENING'"
 
 verifications:
   - row_count:

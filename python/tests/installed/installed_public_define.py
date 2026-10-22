@@ -1,9 +1,9 @@
 """Installed project submissions with independent XML/JSON oracles and no reference imports.
 
 `project.submission(section, created=...)` composes Define-XML (and the
-Dataset-JSON or SAS Transport files where the section sets `datasets: json` or
-`datasets: xpt`) when called; nothing is written until `save()`, which
-publishes the composed bytes.
+Dataset-JSON or SAS Transport files where the section sets
+`transport: dataset_json` or `transport: xpt`) when called; nothing is written
+until `save()`, which publishes the composed bytes.
 """
 
 import builtins
@@ -57,7 +57,7 @@ class PublicDefine(unittest.TestCase):
 
     def metadata_only(self, directory):
         """Compose Define-XML alone: the section no longer asks for Dataset-JSON."""
-        self.edit_project(directory, lambda document: document["sdtm"].pop("datasets"))
+        self.edit_project(directory, lambda document: document["sdtm"].pop("transport"))
 
     def call(self, directory, created=TRUTH["created"], section="sdtm"):
         original = builtins.__import__
@@ -353,7 +353,7 @@ class PublicDefine(unittest.TestCase):
                         {
                             "id": "CHEM",
                             "where": {"LBTESTCD": ["GLUC", "CREAT"]},
-                            "origin": {"type": "Assigned", "source": "Vendor"},
+                            "origins": [{"type": "Assigned", "source": "Vendor"}],
                         }
                     ]
                 elif case == "unknown":
@@ -367,7 +367,7 @@ class PublicDefine(unittest.TestCase):
                     creatinine["id"] = "GLUC"
                 elif case == "origin":
                     # A literal unit reads no input, so it refutes Derived.
-                    glucose["origin"]["type"] = "Derived"
+                    glucose["origins"][0]["type"] = "Derived"
                 if case != "valid":
                     (directory / "spec.yaml").write_text(
                         yaml.safe_dump(spec, sort_keys=False)
@@ -585,7 +585,7 @@ class PublicDefine(unittest.TestCase):
         project.write_text(project.read_text().replace("name: SDTMIG", "name: ADaMIG"))
         result = self.call(directory)
         self.assertIn(
-            "unknown_standard_family", result.issues.to_polars()["condition"].to_list()
+            "standard_model_mismatch", result.issues.to_polars()["condition"].to_list()
         )
         self.refused(result)
         self.assertFalse((directory / "define.xml").exists())
@@ -668,7 +668,7 @@ class PublicDefine(unittest.TestCase):
             section = document["sdtm"]
             del section["file_oid"], section["metadata_version"]
             document["adam"] = {
-                "standard": {"name": "ADaMIG", "version": "1.3", "status": "Final"},
+                "standards": [{"name": "ADaMIG", "version": "1.3", "status": "Final"}],
                 "specs": ["missing-other-section.yaml"],
                 "define": "adam.xml",
             }
@@ -747,7 +747,7 @@ class PublicDefine(unittest.TestCase):
         )
         (directory / "parents/base.yaml").write_text(spec)
         (directory / "children/spec.yaml").write_text(
-            "schema_version: '1.0'\nparent: ../parents/base.yaml\n"
+            'yamaa: "1.0"\ntype: spec\nparent: ../parents/base.yaml\n'
         )
         project = directory / "project.yaml"
         project.write_text(
@@ -832,7 +832,7 @@ class PublicDefine(unittest.TestCase):
         project.write_text(
             project.read_text()
             .replace("  - spec.yaml", "  - spec.yaml\n  - second.yaml")
-            .replace("context: Submission", "context: Other")
+            .replace("sdtm:\n", "sdtm:\n  context: Other\n")
         )
         (directory / "second.yaml").write_text(
             (directory / "spec.yaml")
@@ -871,7 +871,7 @@ class PublicDefine(unittest.TestCase):
         )
         project = directory / "project.yaml"
         project.write_text(
-            project.read_text().replace("sdtm:\n", TRUTH["numeric_codelist_yaml"])
+            project.read_text().replace("study:\n", TRUTH["numeric_codelist_yaml"])
         )
         result = self.call(directory)
         self.assertEqual(result.issues.num_rows, 0, result.issues)
@@ -898,7 +898,7 @@ class PublicDefine(unittest.TestCase):
                 if case["inherit_specification"]:
                     (directory / "spec.yaml").rename(directory / "base.yaml")
                     (directory / "spec.yaml").write_text(
-                        "schema_version: '1.0'\nparent: base.yaml\n"
+                        'yamaa: "1.0"\ntype: spec\nparent: base.yaml\n'
                     )
                 result = self.call(directory)
                 rows = result.issues.to_pylist()

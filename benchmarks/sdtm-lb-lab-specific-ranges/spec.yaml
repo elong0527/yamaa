@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: SDTM
 domain: LB
 keys: [STUDYID, USUBJID, LBSEQ]
 
@@ -79,13 +81,12 @@ intermediates:
     filter: >-
       LBRANGE.EFFSTDT <= ODM.Value
       AND (LBRANGE.EFFENDT IS NULL OR ODM.Value <= LBRANGE.EFFENDT)
-    no_match: {literal: null}
 
 columns:
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
-    derivation: {literal: LB}
+    derivation: "'LB'"
 
   - name: STUDYID
     type: str
@@ -164,18 +165,17 @@ columns:
     derivation:
       case:
         - when: "LBSTRESN IS NULL OR LBSTNRLO IS NULL OR LBSTNRHI IS NULL"
-          then: {literal: null}
+          then: null
         - when: "LBSTRESN < LBSTNRLO"
-          then: {literal: LOW}
+          then: "'LOW'"
         - when: "LBSTRESN > LBSTNRHI"
-          then: {literal: HIGH}
-        - otherwise: {literal: NORMAL}
+          then: "'HIGH'"
+        - otherwise: "'NORMAL'"
 
 rows:
   - id: result
     dataset: ODM
     filter: "ODM.ItemOID = 'IT.LB.LBDTC'"
-    derivations: {}
 
 verifications:
   - row_count:

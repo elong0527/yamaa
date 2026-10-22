@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: SDTM
 domain: RS
 keys: [STUDYID, USUBJID, AVISIT]
 input:
@@ -46,12 +48,12 @@ columns:
   - name: RSTESTCD
     type: str
     label: Response Test Short Name
-    derivation: {literal: TRGRESP}
+    derivation: "'TRGRESP'"
 
   - name: RSTEST
     type: str
     label: Response Test Name
-    derivation: {literal: Timepoint Response}
+    derivation: "'Timepoint Response'"
 
   # SUMV, NMEAS, NTARGET and NTR are matched to the record by subject and,
   # except NTARGET, by visit. With no matching record a count is missing
@@ -64,8 +66,8 @@ columns:
         filter: >-
           ODM.ItemGroupOID = 'IG.TRTARGET' AND ODM.ItemOID = 'IT.TR.LDIAM'
         key: {SubjectKey: ODM.SubjectKey, StudyEventOID: ODM.StudyEventOID}
-        derive:
-          - name: D
+        derivations:
+          D:
             type: float
             derivation: ODM.Value
         expr: "SUM(D)"
@@ -79,8 +81,8 @@ columns:
         filter: >-
           ODM.ItemGroupOID = 'IG.TRTARGET' AND ODM.ItemOID = 'IT.TR.LDIAM'
         key: {SubjectKey: ODM.SubjectKey, StudyEventOID: ODM.StudyEventOID}
-        derive:
-          - name: D
+        derivations:
+          D:
             type: float
             derivation: ODM.Value
         expr: "COUNT(D)"
@@ -120,8 +122,8 @@ columns:
           ODM.StudyEventOID = 'BASELINE' AND ODM.ItemGroupOID = 'IG.TRTARGET'
           AND ODM.ItemOID = 'IT.TR.LDIAM'
         key: {SubjectKey: ODM.SubjectKey}
-        derive:
-          - name: D
+        derivations:
+          D:
             type: float
             derivation: ODM.Value
         expr: "SUM(D)"
@@ -129,9 +131,7 @@ columns:
   - name: PCHG
     type: float
     label: Percent Change from Baseline
-    derivation:
-      compute:
-        expr: "100 * (SUMV - BASE) / NULLIF(BASE, 0)"
+    derivation: "100 * (SUMV - BASE) / NULLIF(BASE, 0)"
 
   - name: RSSTAT
     type: str
@@ -139,7 +139,7 @@ columns:
     derivation:
       case:
         - when: "NTR IS NULL OR NTR = 0"
-          then: {literal: NOT DONE}
+          then: "'NOT DONE'"
 
   # The first branch that holds wins: not done; then NE at baseline, with
   # no target lesion chosen, with a chosen lesion not measured, or with no
@@ -151,22 +151,22 @@ columns:
     derivation:
       case:
         - when: "RSSTAT = 'NOT DONE'"
-          then: {literal: null}
+          then: null
         - when: "AVISIT = 'BASELINE'"
-          then: {literal: NE}
+          then: "'NE'"
         - when: "NTARGET IS NULL OR NTARGET = 0"
-          then: {literal: NE}
+          then: "'NE'"
         - when: "NMEAS IS NULL OR NMEAS < NTARGET"
-          then: {literal: NE}
+          then: "'NE'"
         - when: "PCHG IS NULL"
-          then: {literal: NE}
+          then: "'NE'"
         - when: "SUMV = 0"
-          then: {literal: CR}
+          then: "'CR'"
         - when: "PCHG <= -30"
-          then: {literal: PR}
+          then: "'PR'"
         - when: "PCHG >= 20"
-          then: {literal: PD}
-        - otherwise: {literal: SD}
+          then: "'PD'"
+        - otherwise: "'SD'"
     verifications:
       - allowed_values:
           values: [CR, PR, SD, PD, NE]

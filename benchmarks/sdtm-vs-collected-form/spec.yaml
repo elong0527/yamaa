@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: SDTM
 domain: VS
 keys: [STUDYID, USUBJID, VSSEQ]
 input:
@@ -27,7 +29,7 @@ columns:
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
-    derivation: {literal: VS}
+    derivation: "'VS'"
 
   - name: STUDYID
     type: str
@@ -119,8 +121,8 @@ columns:
     type: float
     label: Numeric Result/Finding in Standard Units
     derivation:
-      value: {source: VSORRES}
-      unconvertible: {literal: null}
+      value: VSORRES
+      unconvertible: null
 
   - name: VSSTRESC
     type: str
@@ -158,7 +160,7 @@ columns:
     derivation:
       case:
         - when: "HAS_NOTDONE = 1 AND BPNOTDONE = 'Y'"
-          then: {literal: NOT DONE}
+          then: "'NOT DONE'"
 
   - name: VSREASND
     type: str
@@ -188,7 +190,7 @@ rows:
     group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID,
       ODM.StudyEventRepeatKey, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
     derivations:
-      VSTESTCD: {literal: SYSBP}
+      VSTESTCD: "'SYSBP'"
       VSORRES: {odm: ODM.IT.VS.SYSBP}
       VSORRESU: {odm: ODM.IT.VS.SYSBPU}
 
@@ -197,7 +199,7 @@ rows:
     group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID,
       ODM.StudyEventRepeatKey, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
     derivations:
-      VSTESTCD: {literal: DIABP}
+      VSTESTCD: "'DIABP'"
       VSORRES: {odm: ODM.IT.VS.DIABP}
       VSORRESU: {odm: ODM.IT.VS.DIABPU}
 
@@ -206,7 +208,7 @@ rows:
     group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID,
       ODM.StudyEventRepeatKey, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
     derivations:
-      VSTESTCD: {literal: PULSE}
+      VSTESTCD: "'PULSE'"
       VSORRES: {odm: ODM.IT.VS.PULSE}
       VSORRESU: {odm: ODM.IT.VS.PULSEU}
 
@@ -215,7 +217,7 @@ rows:
     group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID,
       ODM.StudyEventRepeatKey, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
     derivations:
-      VSTESTCD: {literal: RESP}
+      VSTESTCD: "'RESP'"
       VSORRES: {odm: ODM.IT.VS.RESP}
       VSORRESU: {odm: ODM.IT.VS.RESPU}
 
@@ -224,7 +226,7 @@ rows:
     group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID,
       ODM.StudyEventRepeatKey, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
     derivations:
-      VSTESTCD: {literal: TEMP}
+      VSTESTCD: "'TEMP'"
       VSORRES: {odm: ODM.IT.VS.TEMP}
       VSORRESU: {odm: ODM.IT.VS.TEMPU}
 
@@ -233,7 +235,7 @@ rows:
     group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID,
       ODM.StudyEventRepeatKey, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
     derivations:
-      VSTESTCD: {literal: WEIGHT}
+      VSTESTCD: "'WEIGHT'"
       VSORRES: {odm: ODM.IT.VS.WEIGHT}
       VSORRESU: {odm: ODM.IT.VS.WEIGHTU}
 
