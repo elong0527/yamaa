@@ -11,10 +11,9 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use yamaa::{
-    Argument, CallError, CancellationToken, Engine, EngineOptions, FunctionError, FunctionHandle,
-    FunctionIdentity, HostLanguage, LockContext, MemoryResolver, OdmOptions, ProjectFunctions,
+    CancellationToken, Engine, EngineOptions, HostLanguage, MemoryResolver, OdmOptions,
     ResolverFailure, ResolverKind, ResolverOperation, ResolverReply, ResolverRequest,
-    ResourceResolver, Scalar, Signature,
+    ResourceResolver,
 };
 
 const CREATED: &str = "2026-09-11T00:00:00";
@@ -189,22 +188,7 @@ impl Case {
     }
 }
 
-struct NoFunctions;
-impl ProjectFunctions for NoFunctions {
-    fn verify_lock(
-        &self,
-        _: &LockContext<'_>,
-        _: &[FunctionIdentity],
-    ) -> Result<(), FunctionError> {
-        Ok(())
-    }
-    fn bind(&self, _: &FunctionIdentity, _: &Signature) -> Result<FunctionHandle, FunctionError> {
-        unreachable!("the case calls no project function")
-    }
-    fn invoke(&self, _: &FunctionHandle, _: &[Argument<'_>]) -> Result<Scalar, CallError> {
-        unreachable!("the case calls no project function")
-    }
-}
+use crate::support::NoFunctions;
 
 fn set(accesses: &[(&'static str, &str)]) -> BTreeSet<Access> {
     accesses

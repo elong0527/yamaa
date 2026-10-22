@@ -13,30 +13,12 @@ mod support;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use yamaa::{
-    Argument, CallError, CancellationToken, Engine, EngineOptions, FunctionError, FunctionHandle,
-    FunctionIdentity, HostLanguage, LockContext, Plans, ProjectFunctions, Run, Scalar, Signature,
-};
+use yamaa::{CancellationToken, Engine, EngineOptions, HostLanguage, Plans, Run};
 
 const PLAIN: &str = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int}}}\noutput: {path: out.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: SRC.ID}\n";
 const PROJECT: &str = "schema_version: '1.0'\nsdtm:\n  specs: [dm.yaml]\n";
 
-struct NoFunctions;
-impl ProjectFunctions for NoFunctions {
-    fn verify_lock(
-        &self,
-        _: &LockContext<'_>,
-        _: &[FunctionIdentity],
-    ) -> Result<(), FunctionError> {
-        Ok(())
-    }
-    fn bind(&self, _: &FunctionIdentity, _: &Signature) -> Result<FunctionHandle, FunctionError> {
-        unreachable!("these specifications call no project function")
-    }
-    fn invoke(&self, _: &FunctionHandle, _: &[Argument<'_>]) -> Result<Scalar, CallError> {
-        unreachable!("these specifications call no project function")
-    }
-}
+use support::NoFunctions;
 
 /// How the run got its plan, from its private measurements.
 fn plan_of(run: &Run) -> &'static str {

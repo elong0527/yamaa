@@ -12,27 +12,11 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
 use yamaa::{
-    Action, Argument, CallError, CancellationToken, ContextValue, Engine, EngineOptions, Error,
-    Failure, FunctionError, FunctionHandle, FunctionIdentity, HostLanguage, LockContext,
-    ProjectFunctions, Scalar, Signature, Status, Summary,
+    Action, CancellationToken, ContextValue, Engine, EngineOptions, Error, Failure, HostLanguage,
+    Status, Summary,
 };
 
-struct NoFunctions;
-impl ProjectFunctions for NoFunctions {
-    fn verify_lock(
-        &self,
-        _: &LockContext<'_>,
-        _: &[FunctionIdentity],
-    ) -> Result<(), FunctionError> {
-        Ok(())
-    }
-    fn bind(&self, _: &FunctionIdentity, _: &Signature) -> Result<FunctionHandle, FunctionError> {
-        unreachable!("these specifications call no project function")
-    }
-    fn invoke(&self, _: &FunctionHandle, _: &[Argument<'_>]) -> Result<Scalar, CallError> {
-        unreachable!("these specifications call no project function")
-    }
-}
+use crate::support::NoFunctions;
 
 fn engine() -> Engine {
     Engine::new(
