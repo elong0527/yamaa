@@ -7,6 +7,7 @@
 //! absence answer of D67, several origins, a dataset's standard, a
 //! value-level comparator, and a month rule without a day rule (TIME-10).
 
+use crate::support::Edit as _;
 use std::fs;
 use std::path::Path;
 use yamaa_adapters::document::{
@@ -227,8 +228,8 @@ fn model_keys_and_profiles_lower_as_declared() {
             r#"{name: DOSE, type: float, derivation: {aggregate: "SUM(EX.DOSE)"}}"#,
             "{name: TERM, type: str, derivation: NAMES.TERM}",
         ])
-        .replace("type: spec\n", "type: spec\nmodel: ADaM\n")
-        .replace(
+        .edit("type: spec\n", "type: spec\nmodel: ADaM\n")
+        .edit(
             "input: {SRC: src.csv, EX: ex.csv}",
             "input: {SRC: src.csv, EX: {path: ex.csv, key: [ID]}, ODM: odm.xml}\n\
              intermediates:\n  - {id: NAMES, dataset: ODM, key: [ID]}",
@@ -263,7 +264,7 @@ fn model_keys_and_profiles_lower_as_declared() {
 /// at its `key`, as the schema records a missing required field (D23, D63).
 #[test]
 fn an_intermediate_without_key_is_refused_unless_it_drives_rows() {
-    let text = spec(&["{name: TERM, type: str, derivation: NAMES.TERM}"]).replace(
+    let text = spec(&["{name: TERM, type: str, derivation: NAMES.TERM}"]).edit(
         "base: SRC\n",
         "base: SRC\nintermediates:\n  - {id: NAMES, dataset: EX, filter: \"EX.N > 0\"}\n",
     );
@@ -290,11 +291,11 @@ fn an_intermediate_without_key_is_refused_unless_it_drives_rows() {
     );
     // A row template's driver declares none.
     let driver = text
-        .replace(
+        .edit(
             "  - {name: TERM, type: str, derivation: NAMES.TERM}\n",
             "  - {name: TERM, type: str}\n",
         )
-        .replace("base: SRC\n", "")
+        .edit("base: SRC\n", "")
         + "rows:\n  - {id: named, dataset: NAMES, derivations: {ID: NAMES.ID, TERM: NAMES.TERM}}\n";
     let study = Study::new(&[("spec.yaml", &driver)]);
     let spec = prepare(&study, "spec.yaml")
@@ -470,7 +471,7 @@ fn origins_a_standard_and_a_value_level_comparator_lower_for_the_checks_that_fol
          repeating: true, standard: SDTMIG}\n",
     );
     // Submission metadata names its model (SUB-3).
-    let text = text.replace("type: spec\n", "type: spec\nmodel: SDTM\n");
+    let text = text.edit("type: spec\n", "type: spec\nmodel: SDTM\n");
     let spec = lowered(&text);
     let standard = spec.submission.as_ref().unwrap().standard.as_ref().unwrap();
     assert_eq!(

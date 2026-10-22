@@ -14,6 +14,7 @@
 //! of the shared driver that a grouped row template does not group by
 //! (NAME-4), and a field of a dataset whose records build none of the rows,
 //! in any window (NAME-3).
+use crate::support::Edit as _;
 use std::fs;
 use yamaa_adapters::{file_application, specification_report::Identity};
 use yamaa_core::diagnostic::Diagnostic;
@@ -33,14 +34,7 @@ impl Fixture {
         self.0.join("spec.yaml").to_str().unwrap().to_owned()
     }
     fn identity(specification: &str) -> Identity<'_> {
-        Identity {
-            runtime: "test",
-            runtime_version: "test",
-            engine_version: yamaa_core::VERSION,
-            example: "column-window-drivers",
-            specification,
-            base_directory: ".",
-        }
+        crate::support::study::identity("column-window-drivers", specification)
     }
     fn request(specification: &str) -> Request<'_> {
         Request {
@@ -118,13 +112,7 @@ impl Fixture {
 }
 
 fn row(issue: &Diagnostic) -> Value {
-    yamaa_adapters::json!({
-        "phase": issue.phase(),
-        "condition": issue.condition(),
-        "rule": issue.rule(),
-        "spec_paths": issue.spec_paths,
-        "context": issue.context.clone()
-    })
+    crate::support::study::issue_row(issue)
 }
 
 /// A column-level read of `dataset`'s field outside a grouped row template's
@@ -227,7 +215,7 @@ fn a_window_reading_a_driver_another_template_lacks_is_refused() {
     // Each driver is named once, in construction order.
     numbered(
         "",
-        &[EVENTS, SUBJECTS, &EVENTS.replace("id: events", "id: again")],
+        &[EVENTS, SUBJECTS, &EVENTS.edit("id: events", "id: again")],
         "AE.AESEQ",
     )
     .refused(&[(ORDER, "AE.AESEQ", &["AE", "DM"], "row_number")]);
@@ -375,8 +363,8 @@ fn named_intermediate_drivers_and_the_input_they_read() {
 fn a_window_whose_templates_share_the_driver_builds_unchanged() {
     // Ties keep row-template order, then record order.
     let again = SUBJECTS
-        .replace("id: subjects", "id: again")
-        .replace("literal: DM}", "literal: DM2}");
+        .edit("id: subjects", "id: again")
+        .edit("literal: DM}", "literal: DM2}");
     numbered("", &[SUBJECTS, &again], "DM.AGE").saved(
         "USUBJID,SRC,SEQ,ORD\nS1,DM,0,3\nS2,DM,0,1\nS3,DM,0,5\nS1,DM2,0,4\nS2,DM2,0,2\nS3,DM2,0,6\n",
     );
@@ -388,8 +376,8 @@ fn a_window_whose_templates_share_the_driver_builds_unchanged() {
     // Two templates over one named intermediate: the serious events S1 1,
     // S2 1 and S1 3, latest sequence number first.
     let again = SERIOUS
-        .replace("id: serious", "id: again")
-        .replace("literal: SER}", "literal: SER2}");
+        .edit("id: serious", "id: again")
+        .edit("literal: SER}", "literal: SER2}");
     numbered(
         INTERMEDIATES,
         &[SERIOUS, &again],
@@ -459,8 +447,8 @@ fn a_read_of_a_dataset_no_row_is_built_from_is_refused_before_any_data_is_read()
     // The input a shared named intermediate driver reads: the rows are built
     // from SER, so AE is another dataset for them.
     let again = SERIOUS
-        .replace("id: serious", "id: again")
-        .replace("literal: SER}", "literal: SER2}");
+        .edit("id: serious", "id: again")
+        .edit("literal: SER}", "literal: SER2}");
     numbered(INTERMEDIATES, &[SERIOUS, &again], "AE.AESEQ").reports(&[unknown(ORDER, "AE.AESEQ")]);
     // The operands first, then each name of the filter once, in sorted order.
     let filter = "columns.ORD.derivation.row_number.window.filter";
