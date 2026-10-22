@@ -27,10 +27,9 @@ if (!has_arrow) message("Skipped the Parquet sources of column_ceilings.R: arrow
 # the project route uses the whole-project operations, whose issues name the
 # listed specification as their entry and source.
 project_of <- function(spec) {
-  directory <- dirname(spec)
-  writeLines("schema_version: '1.0'", file.path(directory, "environment.yaml"))
-  project <- file.path(directory, "project.yaml")
-  writeLines(c("schema_version: '1.0'", "environments: {r: environment.yaml}",
+  # The project calls no project function, so it names no environment (D110).
+  project <- file.path(dirname(spec), "project.yaml")
+  writeLines(c('yamaa: "1.0"', "type: project",
                paste0("adam: {specs: [", basename(spec), "]}")), project)
   yamaa_project(project)
 }
@@ -87,11 +86,13 @@ write_case <- function(root, columns = 1L, fields = 1L, typed = FALSE,
   }
   column_lines <- c(
     "  - {name: ID, type: str, label: ID, derivation: SRC.ID}",
-    sprintf("  - {name: %s, type: str, label: Column, derivation: {literal: x}}", names[-1L])
+    sprintf("  - {name: %s, type: str, label: Column, derivation: \"'x'\"}", names[-1L])
   )
   if (is.null(selected)) selected <- names
+  # A section lists only specifications of its model (SUB-3), so each case
+  # declares one for the project route.
   spec <- c(
-    "schema_version: '1.0'", "domain: TEST", "keys: [ID]",
+    'yamaa: "1.0"', "type: spec", "model: ADaM", "domain: TEST", "keys: [ID]",
     sprintf("input: {SRC: %s}", source), "columns:", column_lines,
     sprintf("output: {path: out.csv, columns: [%s]}", paste(selected, collapse = ", "))
   )
@@ -146,22 +147,29 @@ assert_layered_cases <- function(root, width, layered) {
   dir.create(root, recursive = TRUE)
   writeBin(fixture_bytes(layered$input_csv), file.path(root, "input.csv"))
   names <- c("ID", sprintf(layered$column_name, seq_len(width - 1L)))
-  case_column <- function(index) c(
-    sprintf("  - name: %s", sprintf(layered$column_name, index)), "    type: str", "    derivation:", "      case:",
-    sprintf("        - when: \"SRC.A = 'x' AND SRC.B = '%d'\"", index %% 3L),
-    "          then: {literal: P}", "        - when: \"SRC.A IS NULL\"",
-    "          then: {literal: Q}", "        - otherwise: SRC.A")
-  document <- c(
-    "schema_version: '1.0'", "domain: TEST", "keys: [ID]", "input: {SRC: input.csv}",
+  # The wide specification; a 0.5 file writes its header as `schema_version`
+  # and a text constant as a `literal` (D18).
+  case_column <- function(index, legacy) {
+    text <- function(value) if (legacy) sprintf("{literal: %s}", value) else sprintf("\"'%s'\"", value)
+    c(sprintf("  - name: %s", sprintf(layered$column_name, index)), "    type: str", "    derivation:", "      case:",
+      sprintf("        - when: \"SRC.A = 'x' AND SRC.B = '%d'\"", index %% 3L),
+      paste0("          then: ", text("P")), "        - when: \"SRC.A IS NULL\"",
+      paste0("          then: ", text("Q")), "        - otherwise: SRC.A")
+  }
+  document <- function(legacy) c(
+    if (legacy) "schema_version: '1.0'" else c('yamaa: "1.0"', "type: spec"),
+    "domain: TEST", "keys: [ID]", "input: {SRC: input.csv}",
     "columns:", "  - {name: ID, type: str, derivation: SRC.ID}",
-    unlist(lapply(seq_len(width - 1L), case_column), use.names = FALSE),
+    unlist(lapply(seq_len(width - 1L), case_column, legacy = legacy), use.names = FALSE),
     sprintf("output: {path: out.csv, columns: [%s]}", paste(names, collapse = ", ")))
-  writeLines(document, file.path(root, "parent.yaml"))
-  # A null parent names no parent: the entry stays standalone.
-  writeLines(c(document, "parent: null"), file.path(root, "explicit.yaml"))
-  writeLines(c("schema_version: '1.0'", "parent: parent.yaml"),
+  writeLines(document(FALSE), file.path(root, "parent.yaml"))
+  # 0.5 only, until #3447 deletes the 0.5 path: a null parent names no
+  # parent, so the entry stays standalone. A 1.0 file admits YAML null only
+  # in value and expression fields (P-NULL-1).
+  writeLines(c(document(TRUE), "parent: null"), file.path(root, "explicit.yaml"))
+  writeLines(c('yamaa: "1.0"', "type: spec", "parent: parent.yaml"),
              file.path(root, "child.yaml"))
-  writeLines(c("schema_version: '1.0'", "parent: child.yaml"),
+  writeLines(c('yamaa: "1.0"', "type: spec", "parent: child.yaml"),
              file.path(root, "grandchild.yaml"))
   rows <- lapply(layered$rows, function(row) {
     cells <- fixture_strings(row$cells_by_index_mod_3)
@@ -189,7 +197,7 @@ assert_layered_cases <- function(root, width, layered) {
 linked_consumer <- function(producer) {
   consumer <- file.path(dirname(producer), "consumer.yaml")
   writeLines(c(
-    "schema_version: '1.0'", "domain: TEST", "keys: [ID]",
+    'yamaa: "1.0"', "type: spec", "domain: TEST", "keys: [ID]",
     "input: {SRC: {path: out.csv, schema: spec.yaml}}", "columns:",
     "  - {name: ID, type: str, label: ID, derivation: SRC.ID}",
     "output: {path: consumer.csv, columns: [ID]}"
@@ -261,7 +269,7 @@ run_column_ceilings <- function() {
   for (project in c(FALSE, TRUE)) {
     base <- write_case(path(paste0("long-parent-chain-", if (project) "project" else "spec")))
     for (index in 0:bound) {
-      writeLines(c("schema_version: '1.0'", sprintf("parent: layer-%d.yaml", index + 1L)),
+      writeLines(c('yamaa: "1.0"', "type: spec", sprintf("parent: layer-%d.yaml", index + 1L)),
                  file.path(dirname(base), sprintf("layer-%d.yaml", index)))
     }
     file.copy(base, file.path(dirname(base), sprintf("layer-%d.yaml", bound + 1L)))
@@ -285,7 +293,7 @@ run_column_ceilings <- function() {
   spec <- write_case(case_root, columns = incomplete$columns)
   lines <- readLines(spec)
   lines[grepl("name: C0001,", lines, fixed = TRUE)] <-
-    "  - {name: C0001, type: int, derivation: {literal: 1}}"
+    "  - {name: C0001, type: int, derivation: 1}"
   lines[grepl("name: C0002,", lines, fixed = TRUE)] <-
     "  - {name: C0002, type: str, derivation: {str_case: {source: C0001, to: upper}}}"
   for (project in c(FALSE, TRUE)) {
@@ -359,10 +367,10 @@ run_column_ceilings <- function() {
     layers <- depth$layers_between_entry_and_base
     for (index in seq_len(layers) - 1L) {
       parent <- if (index < layers - 1L) sprintf("layer-%s.yaml", index + 1L) else "base.yaml"
-      writeLines(c("schema_version: '1.0'", sprintf("parent: %s", parent)),
+      writeLines(c('yamaa: "1.0"', "type: spec", sprintf("parent: %s", parent)),
                  file.path(case_root, sprintf("layer-%s.yaml", index)))
     }
-    writeLines(c("schema_version: '1.0'", "parent: layer-0.yaml"), spec)
+    writeLines(c('yamaa: "1.0"', "type: spec", "parent: layer-0.yaml"), spec)
     built <- assert_build(spec, project = project)
     stopifnot_case(paste(layers, "layers on the", route_name(project)), "the build saves" = returns_paths(built$save()))
     expect_identical(rawfile(file.path(case_root, "out.csv")), fixture_bytes(depth$output_csv),

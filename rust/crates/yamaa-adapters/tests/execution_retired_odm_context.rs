@@ -1944,7 +1944,7 @@ rows:
                             .find(|issue| issue.condition() == condition)
                             .unwrap();
                         assert_eq!(issue.rule(), Some("LOOKUP-9"));
-                        assert_eq!(issue.spec_paths, ["intermediates[0].key"]);
+                        assert_eq!(issue.spec_paths, ["intermediates.QSV.key"]);
                     }
                 } else {
                     assert!(issues.is_empty(), "{name}: {issues:?}");
@@ -2010,10 +2010,10 @@ rows:
         .unwrap()
         .edit(
             "intermediates:\n",
-            "intermediates:\n  - id: DEEP\n    dataset: VS\n    key: {USUBJID: VS.USUBJID}\n    derivations:\n      PICK: {type: int, derivation: {literal: bad}, unconvertible: 2}\n    order_by: [VS.VSSEQ]\n    keep: first\n  - id: MIDDLE\n    dataset: VS\n    key: {USUBJID: VS.USUBJID}\n    derivations:\n      PICK: DEEP.PICK\n    order_by: [VS.VSSEQ]\n    keep: first\n",
+            "intermediates:\n  - id: DEEP\n    dataset: VS\n    key: {USUBJID: VS.USUBJID}\n    derivations:\n      PICK: {type: int, derivation: \"'bad'\", unconvertible: 2}\n    order_by: [VS.VSSEQ]\n    keep: first\n  - id: MIDDLE\n    dataset: VS\n    key: {USUBJID: VS.USUBJID}\n    derivations:\n      PICK: DEEP.PICK\n    order_by: [VS.VSSEQ]\n    keep: first\n",
         )
         .edit(
-            "  - id: FIRST\n    dataset: VS\n    key: {USUBJID: QS.USUBJID}\n    derivations:\n      PICK: {type: int, derivation: {literal: bad}, unconvertible: 2}",
+            "  - id: FIRST\n    dataset: VS\n    key: {USUBJID: QS.USUBJID}\n    derivations:\n      PICK: {type: int, derivation: \"'bad'\", unconvertible: 2}",
             "  - id: FIRST\n    dataset: VS\n    key: {USUBJID: QS.USUBJID}\n    derivations:\n      PICK: {type: int, derivation: MIDDLE.PICK, unconvertible: 2}",
         );
             for (replacement, expected_count) in [("2", 3), ("bad-replacement", 1)] {
@@ -2050,7 +2050,7 @@ rows:
                             .iter()
                             .any(|issue| issue.condition() == "conversion_failed"
                                 && issue.spec_paths
-                                    == ["intermediates[0].derivations.PICK.unconvertible"]),
+                                    == ["intermediates.DEEP.derivations.PICK.unconvertible"]),
                         "{:?}",
                         domain.issues()
                     );
@@ -2061,7 +2061,7 @@ rows:
                     counts
                         .iter()
                         .find(|entry| entry["spec_path"]
-                            == "intermediates[0].derivations.PICK.unconvertible")
+                            == "intermediates.DEEP.derivations.PICK.unconvertible")
                         .unwrap()["count"],
                     expected_count,
                 );
@@ -2069,7 +2069,7 @@ rows:
                     counts
                         .iter()
                         .find(|entry| entry["spec_path"]
-                            == "intermediates[3].derivations.QSVISITN.unconvertible")
+                            == "intermediates.QSV.derivations.QSVISITN.unconvertible")
                         .unwrap()["count"],
                     1,
                 );

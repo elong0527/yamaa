@@ -91,7 +91,7 @@ qualify_changed_specification <- function() {
     "the next run reuses the changed plan" = !compiled(run_study(spec, changed)))
   # A specification the engine refuses keeps nothing: the run reports the
   # refusal, and once it is fixed the next run compiles it.
-  write_text(spec_path, "schema_version: '1.0'\ndomain: TEST\n")
+  write_text(spec_path, 'yamaa: "1.0"\ntype: spec\ndomain: TEST\n')
   failed <- spec$run()
   stopifnot("a refused specification has no output" = is.null(failed$output),
     "a refused specification reports issues" = nrow(failed$issues) > 0L)
@@ -139,13 +139,14 @@ qualify_changed_function_contract()
 
 qualify_project <- function() {
   study <- file.path(root, "project-study")
-  dm <- paste0("schema_version: '1.0'\ndomain: DM\nkeys: [USUBJID]\n",
+  # A section lists only specifications of its model (SUB-3).
+  dm <- paste0('yamaa: "1.0"\ntype: spec\nmodel: SDTM\ndomain: DM\nkeys: [USUBJID]\n',
     "input: {RAW: {path: ../raw/dm.csv, types: {AGE: int}}}\n",
     "columns:\n",
     "  - {name: USUBJID, type: str, label: Subject, derivation: RAW.USUBJID}\n",
     "  - {name: AGE, type: int, label: Age, derivation: RAW.AGE}\n",
     "output: {path: ../out/dm.csv, columns: [USUBJID, AGE]}\n")
-  adsl <- paste0("schema_version: '1.0'\ndomain: ADSL\nkeys: [USUBJID]\n",
+  adsl <- paste0('yamaa: "1.0"\ntype: spec\nmodel: ADaM\ndomain: ADSL\nkeys: [USUBJID]\n',
     "input: {DM: {path: ../out/dm.csv, schema: ../sdtm/dm.yaml}}\n",
     "columns:\n",
     "  - {name: USUBJID, type: str, label: Subject, derivation: DM.USUBJID}\n",
@@ -154,7 +155,7 @@ qualify_project <- function() {
   write_text(file.path(study, "raw", "dm.csv"), "USUBJID,AGE\nS1,30\nS2,41\n")
   write_text(file.path(study, "sdtm", "dm.yaml"), dm)
   write_text(file.path(study, "adam", "adsl.yaml"), adsl)
-  write_text(file.path(study, "project.yaml"), paste0("schema_version: '1.0'\n",
+  write_text(file.path(study, "project.yaml"), paste0('yamaa: "1.0"\ntype: project\n',
     "sdtm:\n  specs: [sdtm/dm.yaml]\nadam:\n  specs: [adam/adsl.yaml]\n"))
   dir.create(file.path(study, "out"))
   project <- yamaa_project(file.path(study, "project.yaml"))
@@ -183,18 +184,19 @@ qualify_project <- function() {
 }
 qualify_project()
 
-plain <- paste0("schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\n",
+plain <- paste0('yamaa: "1.0"\ntype: spec\ndomain: TEST\nkeys: [ID]\n',
   "input: {SRC: {path: input.csv, types: {ID: int}}}\n",
   "output: {path: out.csv, columns: [ID]}\n",
   "columns:\n  - {name: ID, type: int, label: Identifier, derivation: SRC.ID}\n")
-# Studies A and B with the same file names; B has one more row.
+# Studies A and B with the same file names; B has one more row. A section
+# lists only specifications of its model (SUB-3).
 studies <- function(where) {
   for (name in c("a", "b")) {
     rows <- if (name == "a") "ID\n1\n2\n" else "ID\n1\n2\n3\n"
     write_text(file.path(where, name, "spec.yaml"), plain)
     write_text(file.path(where, name, "dm.yaml"),
-      sub("out.csv", "dm.csv", sub("domain: TEST", "domain: DM", plain, fixed = TRUE), fixed = TRUE))
-    write_text(file.path(where, name, "project.yaml"), "schema_version: '1.0'\nsdtm:\n  specs: [dm.yaml]\n")
+      sub("out.csv", "dm.csv", sub("domain: TEST", "model: SDTM\ndomain: DM", plain, fixed = TRUE), fixed = TRUE))
+    write_text(file.path(where, name, "project.yaml"), 'yamaa: "1.0"\ntype: project\nsdtm:\n  specs: [dm.yaml]\n')
     write_text(file.path(where, name, "input.csv"), rows)
   }
 }
@@ -266,8 +268,8 @@ qualify_serialization <- function() {
   write_text(file.path(where, "spec.yaml"), plain)
   write_text(file.path(where, "input.csv"), "ID\n1\n")
   write_text(file.path(where, "dm.yaml"),
-    sub("out.csv", "dm.csv", sub("domain: TEST", "domain: DM", plain, fixed = TRUE), fixed = TRUE))
-  write_text(file.path(where, "project.yaml"), "schema_version: '1.0'\nsdtm:\n  specs: [dm.yaml]\n")
+    sub("out.csv", "dm.csv", sub("domain: TEST", "model: SDTM\ndomain: DM", plain, fixed = TRUE), fixed = TRUE))
+  write_text(file.path(where, "project.yaml"), 'yamaa: "1.0"\ntype: project\nsdtm:\n  specs: [dm.yaml]\n')
   spec <- yamaa_spec(file.path(where, "spec.yaml"))
   project <- yamaa_project(file.path(where, "project.yaml"))
   stopifnot("the first run compiles" = identical(plan_of(spec$run()), "compiled"))

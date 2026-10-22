@@ -38,7 +38,7 @@ csv_preservation <- function() {
   on.exit(unlink(root, recursive = TRUE))
   writeBin(charToRaw('SUBJECT,SITE,BARE,QUOTED\n001,007,,""\n002,008,,""\n'),
     file.path(root, "input.csv"))
-  spec <- paste0("schema_version: '1.0'\ndomain: CSV\nkeys: [SUBJECT]\n",
+  spec <- paste0('yamaa: "1.0"\ntype: spec\ndomain: CSV\nkeys: [SUBJECT]\n',
     "input: {SRC: input.csv}\ncolumns:\n",
     "  - {name: SUBJECT, type: str, derivation: SRC.SUBJECT}\n",
     "  - {name: SITE, type: str, derivation: SRC.SITE}\n",
