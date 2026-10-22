@@ -1,28 +1,44 @@
 yamaa: "1.0"
 type: spec
-model: ADaM
-# A second version of the dataset, named with a hyphen.
-domain: ADSL-V2
-keys: [STUDYID, USUBJID]
+model: SDTM
+# The questionnaire records of one instrument, split into a dataset of their
+# own and named with a hyphen.
+domain: QS-PHQ9
+keys: [STUDYID, USUBJID, QSSEQ]
 input:
-  DM: input/dm.csv
+  QS: {path: input/qs.csv, types: {QSSEQ: int}}
 
 output:
-  path: adsl.csv
-  columns: [STUDYID, USUBJID, AGE]
+  path: qsph.csv
+  columns: [DOMAIN, STUDYID, USUBJID, QSSEQ, QSTESTCD, QSORRES]
 
 columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'QS'"
+
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation: DM.STUDYID
+    derivation: QS.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation: DM.USUBJID
+    derivation: QS.USUBJID
 
-  - name: AGE
+  - name: QSSEQ
     type: int
-    label: Age
-    derivation: DM.AGE
+    label: Sequence Number
+    derivation: QS.QSSEQ
+
+  - name: QSTESTCD
+    type: str
+    label: Question Short Name
+    derivation: QS.QSTESTCD
+
+  - name: QSORRES
+    type: str
+    label: Finding in Original Units
+    derivation: QS.QSORRES

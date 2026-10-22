@@ -4,5 +4,5 @@ spec_paths:
   - domain
 rule: SCHEMA-12
 context:
-  value: ADSL-V2
+  value: QS-PHQ9
   pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
