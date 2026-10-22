@@ -355,7 +355,7 @@ test.
 Integration tests live in `tests/<family>.rs`, each a module of the
 crate's one test binary, `tests/main.rs`; the file and its nested `mod`
 blocks give a test its path, so a failure reads as
-`schema_references::schema::schema_validation::case_otherwise_reports_inside_the_otherwise_member`.
+`schema_validation::schema::schema_validation::case_otherwise_reports_inside_the_otherwise_member`.
 Families share one process, so a temporary name carries its family's own
 prefix. Each crate's `tests/support/` is its one helper tree, declared once
 in `tests/main.rs` and reached as `crate::support`. Reach for its factories

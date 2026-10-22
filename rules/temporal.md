@@ -357,7 +357,7 @@ ignored. Otherwise the result is `min(max(completed, not_before), not_after)`,
 so crossed bounds give `not_after`, and each crossing is counted. A source that
 needed no completion is never moved, and bounds never make a result missing.
 
-Evidence: `adam-adae-partial-dates`, `adam-adcm-end-date-bound`, `schema-impute-crossed-bounds`, `rust/crates/yamaa-core/tests/scalar_aggregate_reduction.rs::datetime_bounds_move_only_supplied_time_fields`.
+Evidence: `adam-adae-partial-dates`, `adam-adcm-end-date-bound`, `schema-impute-crossed-bounds`, `rust/crates/yamaa-core/tests/scalar_declarative_temporal.rs::datetime_bounds_move_only_supplied_time_fields`.
 
 For example, `2025-03` completed to `2025-03-31` under a `not_after` of
 `2025-03-12` gives `2025-03-12`. Under a `not_after` of `2025-02-10`, a day
