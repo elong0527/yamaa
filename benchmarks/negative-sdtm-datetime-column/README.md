@@ -29,8 +29,8 @@ the minute or a coarser precision is a partial date-time:
   submission:
     core: Exp
     data_type: partialDatetime
-    origin:
-      type: Collected
+    origins:
+      - type: Collected
 ```
 
 A comparison or lookup that needs a moment completes the text into an

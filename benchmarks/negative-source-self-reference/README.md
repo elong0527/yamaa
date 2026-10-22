@@ -43,6 +43,7 @@ longer exists, so change where it reads from as well:
 intermediates:
   - id: ADLB_LOOKUP
     dataset: ADLB_RAW
+    key: [STUDYID, USUBJID, ADT, PARAMCD]
 ```
 
 The read then uses a completed dataset by its own name, which is an ordinary

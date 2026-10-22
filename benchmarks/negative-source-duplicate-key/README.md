@@ -26,6 +26,7 @@ choice, such as an effective timestamp, and select by it explicitly:
 intermediates:
   - id: ADSL_LOOKUP
     dataset: ADSL_RAW
+    key: [STUDYID, USUBJID]
     order_by: [ADSL_RAW.EFFECTIVEDTC]
     keep: last
 ```
