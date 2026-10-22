@@ -519,7 +519,7 @@ Pin external actions to complete commit IDs with exact release comments.
 PRs and the main schedule run five development jobs: repository checks
 (including lint), the Rust workspace, the Python and R hosts on Linux, and
 `rust (minimum toolchain)`, which lints the workspace with the minimum Rust
-(below). The first four checks are required to merge into main.
+(below). All five checks are required to merge into main.
 The additional checks run the gates on the pull requests described above and
 on dispatch: the `equivalence` job's two legs, `equivalence (python)` and
 `equivalence (r)`, and `conversion`, which also runs weekly. A
