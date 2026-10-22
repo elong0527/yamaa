@@ -1,0 +1,5 @@
+phase: validation
+condition: reference_data_repeating_conflict
+spec_paths:
+  - submission
+rule: SUB-4

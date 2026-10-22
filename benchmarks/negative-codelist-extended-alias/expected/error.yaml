@@ -1,0 +1,9 @@
+phase: validation
+condition: codelist_extended_alias
+spec_paths:
+  - codelists[0].codelists[0].items[2].alias
+rule: CT-6
+context:
+  codelist: EPOCH
+  value: EXTENSION
+  alias: C101526

@@ -20,7 +20,7 @@ use yamaa_adapters::{
 };
 use yamaa_core::{domain_entry::Request, project_function::Language};
 
-const SPEC: &str = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: ../data/src.csv, types: {ID: int}}}\noutput: {path: out/result.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
+const SPEC: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: ../data/src.csv, types: {ID: int}}}\noutput: {path: out/result.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
 
 /// A temporary study and its spelling through the drive's administrative
 /// share.
@@ -109,7 +109,7 @@ fn a_project_file_on_a_network_share_is_a_caller_path() {
     };
     fs::write(
         study.local.join(r"study\project.yaml"),
-        "schema_version: '1.0'\nsdtm:\n  specs: [spec.yaml]\n",
+        "yamaa: \"1.0\"\ntype: project\nsdtm:\n  specs: [spec.yaml]\n",
     )
     .unwrap();
     let specification = study.share(r"study\spec.yaml");

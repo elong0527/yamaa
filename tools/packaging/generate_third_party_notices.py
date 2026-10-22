@@ -45,8 +45,9 @@ license, that names GPLv2.
 By default this checks the committed copies against the locked graph and the
 pinned toolchain, the package copies of the project license and notices
 against their sources, and the Python License-Expression against the licenses
-that the crates linked into the Python binding are relied on under. `--write`
-regenerates the notices and the license copies.
+that the crates linked into the Python binding, and those that the standard
+library links, are relied on under (#3030 D185). `--write` regenerates the
+notices and the license copies.
 """
 
 import argparse
@@ -1404,10 +1405,13 @@ def committed_entries(text):
     }
 
 
-def license_expression(metadata, linked, notices):
+def license_expression(metadata, linked, notices, library):
     """Combine the licenses of the members that the Python binding links with
-    those its linked crates rely on; `linked` holds the IDs of the packages
-    that the Python binding links and `notices` are the Python host's."""
+    those its linked crates and the crates that the standard library links
+    rely on; `linked` holds the IDs of the packages that the Python binding
+    links, `notices` are the Python host's and `library` is the standard
+    library that the wheels link, whose compiler_builtins brings Apache-2.0
+    WITH LLVM-exception (#3030 D185)."""
     packages = {package["id"]: package for package in metadata["packages"]}
     members = set(metadata["workspace_members"])
     licenses = set()
@@ -1418,6 +1422,8 @@ def license_expression(metadata, linked, notices):
     for identity in linked - members:
         package = packages[identity]
         licenses |= set(relied[(package["name"], package["version"])])
+    for crate in library.crates:
+        licenses |= set(crate.relied)
     return " AND ".join(ordered(licenses))
 
 
@@ -1535,7 +1541,9 @@ def check(metadata, closures, library):
     project = python_project()
     errors += check_copies(project)
     errors += check_musl_notice(library.release)
-    expression = license_expression(metadata, closures["python"], selected["python"])
+    expression = license_expression(
+        metadata, closures["python"], selected["python"], library
+    )
     if project["license"] != expression:
         errors.append(
             f"python/pyproject.toml: license must be {expression!r} to cover the "

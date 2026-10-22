@@ -1000,6 +1000,63 @@ mod declaration {
             );
         }
 
+        /// LAYER-2 and SCHEMA-12: a layer names at most one parent, so a list
+        /// written at `parent` fails as `invalid_field_type` in its layer,
+        /// with the hint an undeclared `parents` key carries (SCHEMA-13).
+        #[test]
+        fn a_list_of_parents_carries_the_one_parent_hint() {
+            let study = Study::new();
+            study.write("base.yaml", BASE);
+            let entry = study.path("spec.yaml");
+            let hint = "write at most one parent per file; replace parents: [organization.yaml, compound.yaml] with parent: compound.yaml in the entry and parent: organization.yaml in compound.yaml; organization.yaml has no parent";
+            for (written, condition, rule, path, context) in [
+                (
+                    "parent: [base.yaml, fragment.yaml]",
+                    "invalid_field_type",
+                    "SCHEMA-12",
+                    "parent",
+                    json!({"expected": "path", "actual": "sequence", "hint": hint, "source": entry, "entry": entry}),
+                ),
+                (
+                    "parents: [base.yaml, fragment.yaml]",
+                    "unknown_field",
+                    "SCHEMA-13",
+                    "parents",
+                    json!({"field": "parents", "class": "root_class", "hint": hint, "source": entry, "entry": entry}),
+                ),
+            ] {
+                study.write("spec.yaml", &CHILD.edit("parent: base.yaml", written));
+                let issues: Vec<_> = study
+                    .check("spec.yaml", None)
+                    .into_iter()
+                    .map(|issue| {
+                        (
+                            issue.phase(),
+                            issue.condition(),
+                            issue.rule(),
+                            issue.spec_paths,
+                            Value::Object(issue.context),
+                            issue.source_span,
+                            issue.operand_route,
+                        )
+                    })
+                    .collect();
+                assert_eq!(
+                    issues,
+                    [(
+                        "validation",
+                        condition,
+                        Some(rule),
+                        vec![path.to_string()],
+                        context,
+                        None,
+                        None
+                    )],
+                    "{written}"
+                );
+            }
+        }
+
         /// The diagnostic at a referencing field whose file is refused.
         fn reference_refusal(
             error: ReferenceError<std::io::Error>,

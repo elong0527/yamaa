@@ -1,0 +1,91 @@
+yamaa: "1.0"
+type: spec
+model: SDTM
+domain: AE
+keys: [STUDYID, USUBJID, AESEQ]
+input:
+  RAW: {path: input/ae_raw.csv, types: {AESEQ: int}}
+
+output:
+  path: ae.csv
+  columns: [DOMAIN, STUDYID, USUBJID, AESEQ, AETERM, AEDECOD]
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'AE'"
+    submission:
+      core: Req
+      role: Identifier
+      length: 2
+      origins:
+        - type: Assigned
+          source: Sponsor
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: RAW.STUDYID
+    submission:
+      core: Req
+      role: Identifier
+      length: 8
+      origins:
+        - type: Protocol
+          source: Sponsor
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: RAW.USUBJID
+    submission:
+      core: Req
+      role: Identifier
+      length: 12
+      origins:
+        - type: Assigned
+          source: Sponsor
+
+  - name: AESEQ
+    type: int
+    label: Sequence Number
+    derivation: RAW.AESEQ
+    submission:
+      core: Req
+      role: Identifier
+      length: 8
+      origins:
+        - type: Assigned
+          source: Sponsor
+
+  - name: AETERM
+    type: str
+    label: Reported Term for the Adverse Event
+    derivation: RAW.AETERM
+    submission:
+      core: Req
+      role: Topic
+      length: 12
+      origins:
+        - type: Collected
+          source: Investigator
+
+  - name: AEDECOD
+    type: str
+    label: Dictionary-Derived Term
+    derivation: RAW.AEDECOD
+    submission:
+      core: Req
+      role: Synonym Qualifier
+      length: 8
+      codelist: MEDDRA
+      origins:
+        - type: Assigned
+          source: Sponsor
+
+submission:
+  label: Adverse Events
+  class: EVENTS
+  structure: One record per adverse event per subject
+  repeating: true
