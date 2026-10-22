@@ -59,6 +59,17 @@ impl Scratch {
     pub fn path(&self) -> &Path {
         &self.0
     }
+
+    /// The identity the engine gives the file `name` in the directory, as a
+    /// finding's `source` and `entry` name it: the directory canonical, with
+    /// forward slashes and no Windows verbatim prefix, derived by the engine's
+    /// own `directory_identity`. It differs from the path as created where the
+    /// temporary directory's spelling is not canonical: macOS's `/var` alias
+    /// of `/private/var`, or a Windows 8.3 short name such as `RUNNER~1`.
+    pub fn identity(&self, name: &str) -> String {
+        let directory = yamaa_adapters::file_configuration::directory_identity(&self.0).unwrap();
+        format!("{directory}{name}")
+    }
 }
 
 impl Deref for Scratch {

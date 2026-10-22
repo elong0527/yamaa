@@ -921,13 +921,14 @@ S1,002,2024-06
         }
 
         /// The schema finding of a 1.x specification names the file the run
-        /// loaded, as `source` and `entry` (`support::benchmarks::without_layer`).
+        /// loaded, as `source` and `entry` (`support::benchmarks::without_layer`),
+        /// by its identity rather than the path the run was given.
         fn finding(fixture: &Fixture, path: &str, expected: &str) -> Value {
-            let specification = fixture.specification();
+            let loaded = fixture.0.identity("spec.yaml");
             yamaa_adapters::json!({
                 "phase": "validation", "condition": "invalid_field_type", "rule": "EXPR-7",
                 "spec_paths": [path],
-                "context": {"expected": expected, "source": specification, "entry": specification}
+                "context": {"expected": expected, "source": loaded, "entry": loaded}
             })
         }
 
