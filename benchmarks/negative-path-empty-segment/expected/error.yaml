@@ -1,0 +1,7 @@
+phase: validation
+condition: resource_path_not_normalized
+spec_paths:
+  - input.LB.path
+rule: FILE-5
+context:
+  path: input//lb.csv

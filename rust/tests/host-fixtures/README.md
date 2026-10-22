@@ -49,6 +49,7 @@ the held bytes.
 | info | The engine information's fields in order, the host vocabulary, and a shipped build's language versions and features |
 | printing | A study's files, and the status and printed lines of each result: a check, a failed check, a project check, a run, a failed run, a project run and each of its members, a submission, and a lazy specification and project; `{path}` stands for the path the test gave and `{root}` for its study directory, with forward slashes |
 | issue-locations | One case for each rule of P-ISSUE-1 (`docs/design/interface-1.0/api.md`, "Issue locations"): the files a case writes, its call, and its first issue's condition, first spec path, file, line and column, counted by hand in those files |
+| project-parity | Project cases with their complete expected issue rows: the files a case writes, its call (a member of a project run, or a specification the project names) and every issue row; rows and files that depend on the host language are given by language, `{root}` stands for the case's directory and `{version}` for the installed yamaa version |
 | compact-yaml | A specification with a block and a flow input, the block, compact, flow and explicit-key verification forms with their one output and saved CSV, failed row-count bounds, malformed closers, and raw NULs with their `invalid_yaml` context (#2196, #3125) |
 | longitudinal-capacity | The 50,000-row, 100-column profile: its column names, its value rule (the row index for the key, then an offset plus the row and column index modulo a prime), the size its CSV must exceed, and its source and output formats |
 | column-ceilings | The 1,024 admitted and 1,025 refused widths of each boundary, the compiler-limit, parent-occurrence and wide-integer issue rows (`{digits}` stands for the wide integer), the repaired capacity's remaining error, the inheritance depth that builds and the wide inherited cases' rows by column index modulo 3 |
@@ -85,12 +86,30 @@ specification, because spans come only from expression nodes; the adapter
 record tests own it. Spans are integer pairs, doubles in R, and both geometry
 fields are null (`None`, `NULL`) when nothing was recorded.
 
-An issue row's `file`, here and in `plan-reuse`, `parquet-containment` and
-`issue-locations`, names the file relative to the directory the test writes
-the case in, and `line` and `column` were counted by hand in that file (the
-issue locations of P-ISSUE-1). Each host compares `file` with that file's
-absolute path, resolved as the engine resolves a local path, with forward
-slashes; a row without a location holds null in all three.
+An issue row's `file`, here and in `plan-reuse`, `parquet-containment`,
+`project-parity` and `issue-locations`, names the file relative to the
+directory the test writes the case in, and `line` and `column` were counted
+by hand in that file (the issue locations of P-ISSUE-1). Each host compares
+`file` with that file's absolute path, resolved as the engine resolves a
+local path, with forward slashes; a row without a location holds null in all
+three.
+
+`project-parity` pairs the installed Python and R project parity suites,
+which compare whole issue rows as `diagnostic-parity` does, for calls that
+need a project: a member of a project run, whose `unlinked_producer` and
+`producer_not_completed` findings name the listed specification they belong
+to and the document they come from (PROJECT-7), and the run of a
+specification the project names. A case whose files or rows depend on the
+host language gives them by language: a function file that implements only
+the other host refuses the call with the running host's language (FUNC-1),
+and each host verifies only its own lock (FUNC-3). The function files name
+standard-library callables (`operator.pos`, `base::identity`), which no lock
+pins and which the R check environment has, so neither host installs a
+project package for these cases. `{root}` stands for the case's directory,
+resolved, with forward slashes, and `{version}` for the installed yamaa
+version. The rows were written from those cards, the message templates of
+`yaml/conditions.yaml` and the issue locations of P-ISSUE-1 before the
+engine ran.
 
 `read-odm` pairs the installed Python and R `read_odm` suites. Its documents
 are the reader suite's own `odm13.xml` and `odm20.xml`, staged from

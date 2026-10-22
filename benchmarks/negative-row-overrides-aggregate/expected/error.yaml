@@ -1,0 +1,9 @@
+phase: validation
+condition: duplicate_derivation
+spec_paths:
+  - columns.AVAL.derivation
+rule: SPEC-6
+context:
+  column: AVAL
+  rows: [administration]
+  not_row_local: aggregate

@@ -1010,6 +1010,8 @@
         "R/yamaa/tests/info.R",
         "python/tests/installed/installed_issue_locations.py",
         "R/yamaa/tests/issue_locations.R",
+        "python/tests/installed/installed_project_parity.py",
+        "R/yamaa/tests/project_parity.R",
         "R/yamaa/tests/run_report.R",
         "python/tests/installed/installed_compact_yaml.py",
         "R/yamaa/tests/compact_yaml.R",

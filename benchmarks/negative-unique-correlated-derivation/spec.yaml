@@ -1,0 +1,53 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  DM: {path: input/dm.csv, types: {TRTEDY: int}}
+  DS: {path: input/ds.csv, types: {DSSEQ: int, DSSTDY: int}}
+base: DM
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, TRTEDY, EOSSTT, EOSPDY]
+
+intermediates:
+  # Each subject's disposition event, checked to be one per subject, with
+  # the days from the last dose to the event. Those days read the subject
+  # record being built, so the event's fields differ from subject to
+  # subject.
+  - id: DISP
+    dataset: DS
+    key: [STUDYID, USUBJID]
+    filter: "DS.DSCAT = 'DISPOSITION EVENT'"
+    derivations:
+      DAYSPOST: "DSSTDY - DM.TRTEDY"
+    verifications:
+      - unique: [STUDYID, USUBJID]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM.USUBJID
+
+  - name: TRTEDY
+    type: int
+    label: Last Dose Study Day
+    derivation: DM.TRTEDY
+
+  - name: EOSSTT
+    type: str
+    label: End of Study Status
+    derivation: DISP.DSDECOD
+
+  - name: EOSPDY
+    type: int
+    label: Days From Last Dose to End of Study
+    derivation: DISP.DAYSPOST

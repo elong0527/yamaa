@@ -1,0 +1,34 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADSL
+keys: [STUDYID, USUBJID]
+# Two inputs, and neither is named as the one whose records build the rows.
+input:
+  DM: input/dm.csv
+  TRT: {path: input/trt.csv, key: [STUDYID, USUBJID]}
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, AGE, ARM]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM.USUBJID
+
+  - name: AGE
+    type: int
+    label: Age
+    derivation: DM.AGE
+
+  - name: ARM
+    type: str
+    label: Description of Planned Arm
+    derivation: TRT.ARM
