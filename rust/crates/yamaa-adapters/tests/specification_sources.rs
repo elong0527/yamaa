@@ -1245,41 +1245,13 @@ output: {{path: output.csv, columns: [I, S]}}
 
         #[test]
         fn verification_declarations_preserve_completed_prefix_and_phase_precedence() {
+            use crate::support::ports::Sources;
             use yamaa_adapters::json;
             use yamaa_adapters::{
                 specification_report::{self, Identity},
-                specification_run::{PreparedRun, SpecificationSourcePort},
+                specification_run::PreparedRun,
             };
             use yamaa_core::json::Value as Json;
-            use yamaa_core::specification::SourceDeclaration;
-            struct Host {
-                bytes: Arc<[u8]>,
-                reads: usize,
-            }
-            impl SpecificationSourcePort for Host {
-                fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
-                    Ok(())
-                }
-                fn resource_failure(
-                    &self,
-                    _error: &Self::Error,
-                ) -> Option<yamaa_core::resource::ResourceFailure> {
-                    None
-                }
-                type Error = ();
-                fn capture_reads(&self) -> usize {
-                    self.reads
-                }
-                fn capture(
-                    &mut self,
-                    _: &SourceDeclaration,
-                    origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
-                ) -> Result<Arc<[u8]>, ()> {
-                    *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
-                    self.reads += 1;
-                    Ok(self.bytes.clone())
-                }
-            }
             let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
             let schema = schema(&root.join("yaml"));
             let case = root.join("benchmarks/adam-adlb-ordered-sum");
@@ -1346,17 +1318,14 @@ output: {{path: output.csv, columns: [I, S]}}
                 for minimum in [0, 18] {
                     let written = format!("{prefix}verifications:\n  - row_count: {{id: \"a'b\", min: {minimum}}}\n  - {declaration}\n  - row_count: {{min: 0}}\n");
                     let run = PreparedRun::prepare(prepare(&schema, written.as_bytes())).unwrap();
-                    let mut host = Host {
-                        bytes: bytes.clone().into(),
-                        reads: 0,
-                    };
+                    let mut host = Sources::any(&bytes);
                     let attempt = run.execute(&mut host, Scope::default());
                     let result =
                         specification_report::build_result(&run, &attempt, id(), &[]).unwrap();
                     // An invalid verification has no file to save.
                     assert!(result.files().is_empty());
                     let actual = result.saved_observations().unwrap();
-                    assert_eq!(host.reads, 1);
+                    assert_eq!(host.reads(), 1);
                     assert_eq!(actual["outcome"], "failure");
                     assert_eq!(actual["artifacts"], json!([]));
                     assert_eq!(actual["tables"].as_array().unwrap().len(), 1);
@@ -1381,10 +1350,7 @@ output: {{path: output.csv, columns: [I, S]}}
             // Derivation grammar is deferred until ingestion but is still before checks.
             let invalid_formula = written.edit("SUM(LB.LBSTRESN)", "SUM(");
             let run = PreparedRun::prepare(prepare(&schema, invalid_formula.as_bytes())).unwrap();
-            let mut host = Host {
-                bytes: bytes.clone().into(),
-                reads: 0,
-            };
+            let mut host = Sources::any(&bytes);
             let attempt = run.execute(&mut host, Scope::default());
             let actual = specification_report::build_result(&run, &attempt, id(), &[])
                 .unwrap()
@@ -1504,41 +1470,13 @@ output: {{path: output.csv, columns: [I, S]}}
 
         #[test]
         fn original_sum_reports_nonnumeric_values_but_publishes_all_missing_groups() {
+            use crate::support::ports::Sources;
             use yamaa_adapters::json;
             use yamaa_adapters::{
                 specification_report::{self, Identity},
-                specification_run::{PreparedRun, SpecificationSourcePort},
+                specification_run::PreparedRun,
             };
             use yamaa_core::json::Value as Json;
-            use yamaa_core::specification::SourceDeclaration;
-            struct Host {
-                bytes: Arc<[u8]>,
-                reads: usize,
-            }
-            impl SpecificationSourcePort for Host {
-                fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
-                    Ok(())
-                }
-                fn resource_failure(
-                    &self,
-                    _error: &Self::Error,
-                ) -> Option<yamaa_core::resource::ResourceFailure> {
-                    None
-                }
-                type Error = ();
-                fn capture_reads(&self) -> usize {
-                    self.reads
-                }
-                fn capture(
-                    &mut self,
-                    _: &SourceDeclaration,
-                    origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
-                ) -> Result<Arc<[u8]>, ()> {
-                    *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
-                    self.reads += 1;
-                    Ok(self.bytes.clone())
-                }
-            }
             let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
             let schema = schema(&root.join("yaml"));
             let case = root.join("benchmarks/adam-adlb-ordered-sum");
@@ -1577,10 +1515,7 @@ output: {{path: output.csv, columns: [I, S]}}
                         json!({"type":"str","value":value})
                     };
                 }
-                let mut host = Host {
-                    bytes: source.into_bytes().into(),
-                    reads: 0,
-                };
+                let mut host = Sources::any(source.as_bytes());
                 let run = PreparedRun::prepare(prepare(&schema, raw.as_bytes())).unwrap();
                 let attempt = run.execute(&mut host, Scope::default());
                 let result = specification_report::build_result(&run, &attempt, id(), &[]).unwrap();
@@ -1618,48 +1553,20 @@ output: {{path: output.csv, columns: [I, S]}}
                     expected["nodes"][0]["diagnostics"] = expected["diagnostics"].clone();
                     assert!(result.files().is_empty());
                 }
-                assert_eq!(host.reads, 1);
+                assert_eq!(host.reads(), 1);
                 assert_eq!(actual, expected);
             }
         }
 
         #[test]
         fn row_defaults_are_inherited_per_template_and_coverage_errors_precede_io() {
+            use crate::support::ports::Sources;
             use yamaa_adapters::json;
             use yamaa_adapters::{
                 specification_report::{self, Identity},
-                specification_run::{PreparedRun, SpecificationSourcePort},
+                specification_run::PreparedRun,
             };
             use yamaa_core::json::Value as Json;
-            use yamaa_core::specification::SourceDeclaration;
-            struct Host {
-                bytes: Arc<[u8]>,
-                reads: usize,
-            }
-            impl SpecificationSourcePort for Host {
-                fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
-                    Ok(())
-                }
-                fn resource_failure(
-                    &self,
-                    _error: &Self::Error,
-                ) -> Option<yamaa_core::resource::ResourceFailure> {
-                    None
-                }
-                type Error = ();
-                fn capture_reads(&self) -> usize {
-                    self.reads
-                }
-                fn capture(
-                    &mut self,
-                    _: &SourceDeclaration,
-                    origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
-                ) -> Result<Arc<[u8]>, ()> {
-                    *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
-                    self.reads += 1;
-                    Ok(self.bytes.clone())
-                }
-            }
             let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
             let schema = schema(&root.join("yaml"));
             let case = root.join("benchmarks/adam-adlb-ordered-sum");
@@ -1677,10 +1584,8 @@ output: {{path: output.csv, columns: [I, S]}}
                     "label: Derivation Type\n    derivation: null\n",
                 )
                 .edit("      DTYPE: null\n", "");
-            let mut host = Host {
-                bytes: std::fs::read(case.join("input/lb.csv")).unwrap().into(),
-                reads: 0,
-            };
+            let bytes = std::fs::read(case.join("input/lb.csv")).unwrap();
+            let mut host = Sources::any(&bytes);
             let run = PreparedRun::prepare(prepare(&schema, written.as_bytes())).unwrap();
             let attempt = run.execute(&mut host, Scope::default());
             let result = specification_report::build_result(
@@ -1703,14 +1608,14 @@ output: {{path: output.csv, columns: [I, S]}}
             ))
             .unwrap();
             assert_eq!(actual, expected);
-            assert_eq!(host.reads, 1);
+            assert_eq!(host.reads(), 1);
             let artifact = std::fs::read(case.join("expected/adlb.csv")).unwrap();
             assert_eq!(result.files(), [("adlb.csv", &artifact[..])]);
             // The inherited declaration retains its column path, although it executes
             // at row construction for the template without an override.
             let bad = written.edit("derivation: LB.LBTEST", "derivation: LB.ABSENT");
             let run = PreparedRun::prepare(prepare(&schema, bad.as_bytes())).unwrap();
-            let error = run.execute_csv(&host.bytes).err().unwrap();
+            let error = run.execute_csv(&bytes).err().unwrap();
             assert_eq!(
                 spec_findings(&error, Some(run.source())).unwrap(),
                 vec![

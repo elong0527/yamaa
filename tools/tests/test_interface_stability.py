@@ -180,7 +180,7 @@ class Baseline(Temporary):
             ],
         )
 
-    def test_a_shallow_clone_fails_until_the_ci_step_fetches_the_tags(self):
+    def test_a_shallow_clone_requires_release_tags_to_check_compatibility(self):
         origin = Repository(self.directory / "origin")
         origin.tag("yamaa-v1.0.0")
         origin.edit(LINES.CONDITIONS, "  beta_failed:", "  gamma_failed:")
@@ -201,16 +201,9 @@ class Baseline(Temporary):
             "release tags into this shallow clone with git fetch",
             output,
         )
-        # CI's repository job fetches the tags before it runs the check.
-        steps = support.workflow("ci.yml")["jobs"]["repository"]["steps"]
-        names = [step.get("name") or step.get("run") or step["uses"] for step in steps]
-        fetch = steps[names.index("Fetch the release tags")]
-        self.assertLess(
-            names.index("Fetch the release tags"), names.index("make check-repository")
-        )
-        subprocess.run(
-            ["bash", "-c", fetch["run"]], cwd=clone, check=True, capture_output=True
-        )
+        # test_equivalence_workflow covers CI's full-history checkout.
+        # The checker also works when a shallow clone fetches only the tags.
+        git(clone, "fetch", "--tags", "origin")
         self.assertEqual(git(clone, "rev-parse", "--is-shallow-repository"), "true")
         status, output = run_check(clone)
         self.assertEqual(status, 1, output)

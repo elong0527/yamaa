@@ -4,6 +4,7 @@
 mod file {
     mod diagnostic_origins {
         //! Native index paths resolve only through the exact held composed member IDs.
+        use crate::support::issues::assert_issues;
         use std::fs;
         use yamaa_adapters::{file_resources::Resources, file_workflow, shipped_schema};
         use yamaa_core::project_function::Language;
@@ -80,14 +81,12 @@ mod file {
                     Some(parent.as_str())
                 );
                 let issues = yamaa_adapters::specification_check::issues(prepared.run());
-                assert_eq!(issues.len(), 1);
-                assert_eq!(issues[0].phase(), "validation");
-                assert_eq!(issues[0].condition(), "invalid_expression");
-                assert_eq!(issues[0].rule(), Some("FORMULA-1"));
-                assert_eq!(issues[0].spec_paths, ["rows[1].filter"]);
-                assert_eq!(
-                    yamaa_core::json::Value::Object(issues[0].context.clone()),
-                    yamaa_adapters::json!({"predicate": "ID >", "position": 4})
+                assert_issues(
+                    &issues,
+                    &[
+                        yamaa_adapters::json!({"phase":"validation","condition":"invalid_expression","rule":"FORMULA-1","spec_paths":["rows[1].filter"],"context":{"predicate":"ID >","position":4}}),
+                    ],
+                    "the parent's invalid filter",
                 );
                 assert_eq!(
                     yamaa_adapters::project_application::check(
@@ -158,6 +157,7 @@ mod file {
         }
     }
     mod file_application {
+        use crate::support::issues::assert_issues;
         use crate::support::Edit as _;
         use std::fs;
         #[cfg(unix)]
@@ -276,15 +276,13 @@ mod file {
             );
             // The project file is read first: the caller's own path, named
             // as given (FILE-7, #3321).
-            assert_eq!(issues.len(), 1);
-            assert_eq!(issues[0].phase(), "validation");
-            assert_eq!(issues[0].condition(), "resource_path_missing");
-            assert_eq!(
-                yamaa_core::json::Value::Object(issues[0].context.clone()),
-                yamaa_adapters::json!({"path": project})
+            assert_issues(
+                &issues,
+                &[
+                    yamaa_adapters::json!({"phase":"validation","condition":"resource_path_missing","rule":"FILE-7","spec_paths":[],"context":{"path":project}}),
+                ],
+                "the missing project file",
             );
-            assert!(issues[0].spec_paths.is_empty());
-            assert_eq!(issues[0].rule(), Some("FILE-7"));
             fs::write(
                 study.0.join("spec.yaml"),
                 VALID.edit("input: {SRC: input.csv}", "input: {SRC: input.unknown}"),
@@ -301,14 +299,12 @@ mod file {
             )
             .err()
             .unwrap();
-            assert_eq!(issues.len(), 1);
-            assert_eq!(issues[0].condition(), "source_profile_unknown");
-            assert_eq!(issues[0].phase(), "validation");
-            assert_eq!(issues[0].rule(), Some("INPUT-1"));
-            assert_eq!(issues[0].spec_paths, ["input.SRC.path"]);
-            assert_eq!(
-                yamaa_adapters::json_wire::encode_object(&issues[0].context),
-                "{\"dataset\":\"SRC\",\"path\":\"input.unknown\"}"
+            assert_issues(
+                &issues,
+                &[
+                    yamaa_adapters::json!({"phase":"validation","condition":"source_profile_unknown","rule":"INPUT-1","spec_paths":["input.SRC.path"],"context":{"dataset":"SRC","path":"input.unknown"}}),
+                ],
+                "an input whose extension selects no profile",
             );
             assert!(!study.0.join("input.csv").exists());
             assert!(!study.0.join("input.unknown").exists());
@@ -354,13 +350,12 @@ mod file {
             )
             .err()
             .unwrap();
-            assert_eq!(issues.len(), 1);
-            assert_eq!(issues[0].condition(), "resource_path_not_regular_file");
-            assert_eq!(issues[0].rule(), Some("FILE-7"));
-            assert_eq!(issues[0].spec_paths, ["input.SRC.path"]);
-            assert_eq!(
-                yamaa_adapters::json_wire::encode_object(&issues[0].context),
-                "{\"dataset\":\"SRC\",\"path\":\"input.unknown\"}"
+            assert_issues(
+                &issues,
+                &[
+                    yamaa_adapters::json!({"phase":"validation","condition":"resource_path_not_regular_file","rule":"FILE-7","spec_paths":["input.SRC.path"],"context":{"dataset":"SRC","path":"input.unknown"}}),
+                ],
+                "an input path that is a directory",
             );
             fs::remove_dir(study.0.join("input.unknown")).unwrap();
             fs::write(study.0.join("input.unknown"), b"ID\n1\n").unwrap();
@@ -881,14 +876,12 @@ mod file {
                     .err()
                     .unwrap(),
                 ] {
-                    assert_eq!(issues.len(), 1);
-                    assert_eq!(issues[0].phase(), "validation");
-                    assert_eq!(issues[0].condition(), "invalid_field_type");
-                    assert_eq!(issues[0].rule(), Some("ROW-4"));
-                    assert_eq!(issues[0].spec_paths, ["rows.r.group_by"]);
-                    assert_eq!(
-                        yamaa_core::json::Value::Object(issues[0].context.clone()),
-                        json!({"row":"r", "group_by":vec!["ID"; Limits::KEYS]}),
+                    assert_issues(
+                        &issues,
+                        &[
+                            json!({"phase":"validation","condition":"invalid_field_type","rule":"ROW-4","spec_paths":["rows.r.group_by"],"context":{"row":"r","group_by":vec!["ID"; Limits::KEYS]}}),
+                        ],
+                        "a group_by at the key limit, on both routes",
                     );
                 }
             }
@@ -951,34 +944,6 @@ mod file {
             // Native::project deliberately has no installed host. Exercise the
             // environment build through the public project service and a host
             // port that proves this functionless specification never activates.
-            struct NoFunctions;
-            impl yamaa_core::project_activation::ActivationPort for NoFunctions {
-                type Handle = ();
-                type Error = ();
-                fn verify_lock(
-                    &mut self,
-                    _: yamaa_core::project_function::Language,
-                    _: &yamaa_core::project_environment::LockReference,
-                    _: &[yamaa_core::function_signature::ProjectFunctionIdentity],
-                ) -> Result<(), ()> {
-                    panic!("functionless row build must not verify a lock")
-                }
-                fn bind(
-                    &mut self,
-                    _: &yamaa_core::function_signature::ProjectFunctionIdentity,
-                    _: &yamaa_core::function_signature::LogicalSignature,
-                ) -> Result<(), ()> {
-                    panic!("functionless row build must not bind")
-                }
-                fn invoke(
-                    &mut self,
-                    _: &(),
-                    _: &[yamaa_core::function_invocation::Argument<'_>],
-                ) -> Result<yamaa_core::value::Value, yamaa_core::function_invocation::HostError<()>>
-                {
-                    panic!("functionless row build must not invoke")
-                }
-            }
             let project = yamaa_adapters::project_application::prepare(
                 &spec,
                 &project_file,
@@ -987,7 +952,7 @@ mod file {
             .unwrap();
             let attempt = project.build(
                 &mut project.run_scope(None),
-                &mut NoFunctions,
+                &mut crate::support::ports::NoActivation,
                 Scope::default(),
             );
             assert!(attempt.boundary.is_ok());
@@ -1120,18 +1085,12 @@ mod file {
             let result = study.build();
             assert!(result.output().is_none());
             let findings = result.issues();
-            assert_eq!(findings.len(), 1);
-            assert_eq!(findings[0].phase(), "verification");
-            assert_eq!(findings[0].condition(), "matches_failed");
-            assert_eq!(findings[0].rule(), Some("CHECK-9"));
-            assert_eq!(
-                findings[0].spec_paths,
-                ["columns.TERM.verifications[0].matches"]
-            );
-            let context = yamaa_core::json::Value::Object(findings[0].context.clone());
-            assert_eq!(
-                context,
-                yamaa_adapters::json!({"column":"TERM","failure_count":1,"keys":[{"ID":1}]})
+            assert_issues(
+                &findings,
+                &[
+                    yamaa_adapters::json!({"phase":"verification","condition":"matches_failed","rule":"CHECK-9","spec_paths":["columns.TERM.verifications[0].matches"],"context":{"column":"TERM","failure_count":1,"keys":[{"ID":1}]}}),
+                ],
+                "a catastrophic pattern that fails to match",
             );
             assert!(!study.0.join("output.csv").exists());
         }

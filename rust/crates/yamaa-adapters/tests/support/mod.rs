@@ -9,12 +9,14 @@ pub mod aggregate_syntax;
 pub mod benchmarks;
 pub mod inheritance;
 pub mod ipc_snapshot;
+pub mod issues;
 pub mod numeric_syntax;
 pub mod odm_declaration;
 #[cfg(feature = "odm")]
 pub mod odm_files;
 #[cfg(feature = "parquet")]
 pub mod parquet_files;
+pub mod ports;
 pub mod predicate_syntax;
 pub mod project_call_compiler;
 pub mod project_codelist_compiler;

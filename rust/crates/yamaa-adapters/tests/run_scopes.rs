@@ -9,6 +9,7 @@
 //! saved CSV is its input text.
 use std::sync::Arc;
 
+use crate::support::ports::NoActivation;
 use yamaa_adapters::{
     file_application::{self, Domain},
     file_preparation::FileSpecification,
@@ -18,16 +19,7 @@ use yamaa_adapters::{
     specification_report::Identity,
 };
 use yamaa_core::diagnostic::Diagnostic;
-use yamaa_core::{
-    application_observer::Scope,
-    build::Request,
-    function_invocation::{Argument, HostError},
-    function_signature::{LogicalSignature, ProjectFunctionIdentity},
-    project_activation::ActivationPort,
-    project_environment::LockReference,
-    project_function::Language,
-    value::Value,
-};
+use yamaa_core::{application_observer::Scope, build::Request, project_function::Language};
 
 const PLAIN: &[u8] = b"yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {RAW: {path: raw.csv, types: {ID: int}}}\ncolumns:\n  - {name: ID, type: int, derivation: RAW.ID}\n  - {name: NAME, type: str, derivation: RAW.NAME}\noutput: {path: out.csv, columns: [ID, NAME]}\n";
 const ENVIRONMENT: &[u8] = b"yamaa: \"1.0\"\ntype: project\n";
@@ -139,27 +131,6 @@ impl Outcome {
             Outcome::Domain(domain) => domain.save().unwrap(),
             Outcome::Refused(_) => panic!("a refused run cannot save"),
         }
-    }
-}
-
-/// No study here calls a project function; activation never reaches the host.
-struct NoActivation;
-impl ActivationPort for NoActivation {
-    type Handle = ();
-    type Error = String;
-    fn verify_lock(
-        &mut self,
-        _: Language,
-        _: &LockReference,
-        _: &[ProjectFunctionIdentity],
-    ) -> Result<(), String> {
-        panic!("no lock is declared")
-    }
-    fn bind(&mut self, _: &ProjectFunctionIdentity, _: &LogicalSignature) -> Result<(), String> {
-        panic!("no function is declared")
-    }
-    fn invoke(&mut self, _: &(), _: &[Argument<'_>]) -> Result<Value, HostError<String>> {
-        panic!("no function is called")
     }
 }
 
