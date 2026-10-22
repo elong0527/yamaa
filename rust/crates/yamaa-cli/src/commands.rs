@@ -89,11 +89,11 @@ pub(crate) enum Execution {
 }
 
 /// Run `call` and render what it prints in `format`.
-pub(crate) fn execute(call: &Call, format: Format) -> Execution {
+pub(crate) fn execute(call: &Call, format: Format, token: &CancellationToken) -> Execution {
     let printed = match call.name {
-        "check" => check(call),
-        "run" => run(call),
-        "submission" => submission(call),
+        "check" => check(call, token),
+        "run" => run(call, token),
+        "submission" => submission(call, token),
         "resolve" => resolve(call),
         "read-odm" => read_odm(call),
         "lint" => lint(call),
@@ -321,7 +321,7 @@ fn engine() -> Engine {
 
 /// `yamaa check PATH`: `s.check()` of a spec, `p.check()` of a project, or,
 /// with `--spec NAME`, `p.spec(name).check()`.
-fn check(call: &Call) -> Result<Printed, Execution> {
+fn check(call: &Call, token: &CancellationToken) -> Result<Printed, Execution> {
     let path = path(call)?;
     let name = flag(call, "--spec")?;
     let document = document("check", [("path", text(path)), ("spec", optional(name))]);
@@ -330,14 +330,13 @@ fn check(call: &Call) -> Result<Printed, Execution> {
         Ok(file_type) => file_type,
         Err(failure) => return Ok(refusal(document, failure)),
     };
-    let token = CancellationToken::new();
     // The path a refusal of the check names: the specification checked, or
     // the project.
     let (checked, subject) = match (file_type, name) {
-        (FileType::Spec, None) => (engine.spec_check(path, None, &token), path.to_owned()),
-        (FileType::Project, None) => (engine.project_check(path, &token), path.to_owned()),
+        (FileType::Spec, None) => (engine.spec_check(path, None, token), path.to_owned()),
+        (FileType::Project, None) => (engine.project_check(path, token), path.to_owned()),
         (FileType::Project, Some(name)) => match engine.project_spec(path, name) {
-            Ok(spec) => (engine.spec_check(&spec, Some(path), &token), spec),
+            Ok(spec) => (engine.spec_check(&spec, Some(path), token), spec),
             Err(failure) => return Ok(refusal(document, failure)),
         },
         (FileType::Spec, Some(_)) => {
@@ -363,7 +362,7 @@ fn check(call: &Call) -> Result<Printed, Execution> {
 /// `yamaa run PATH`: `s.run()` of a spec, `p.run()` of a project, or, with
 /// `--spec NAME` or `--section SECTION`, `p.spec(name).run()` or
 /// `p.run(section)`; then `save()`.
-fn run(call: &Call) -> Result<Printed, Execution> {
+fn run(call: &Call, token: &CancellationToken) -> Result<Printed, Execution> {
     let path = path(call)?;
     let name = flag(call, "--spec")?;
     let section = flag(call, "--section")?;
@@ -382,26 +381,25 @@ fn run(call: &Call) -> Result<Printed, Execution> {
         Ok(file_type) => file_type,
         Err(failure) => return Ok(refusal(document, failure)),
     };
-    let token = CancellationToken::new();
     // The arguments give `--spec` or `--section`, not both.
     Ok(match (file_type, name, section) {
         (FileType::Spec, None, None) => {
-            saved(document, engine.spec_run(path, None, &token), path, &token)
+            saved(document, engine.spec_run(path, None, token), path, token)
         }
         (FileType::Project, Some(name), _) => match engine.project_spec(path, name) {
             Ok(spec) => saved(
                 document,
-                engine.spec_run(&spec, Some(path), &token),
+                engine.spec_run(&spec, Some(path), token),
                 &spec,
-                &token,
+                token,
             ),
             Err(failure) => refusal(document, failure),
         },
         // Every section, or the one named; an unknown section refuses the
         // run (D98).
-        (FileType::Project, None, section) => match engine.project_run(path, section, &token) {
+        (FileType::Project, None, section) => match engine.project_run(path, section, token) {
             Ok(mut runs) => {
-                let saved = runs.save(&token);
+                let saved = runs.save(token);
                 document.insert("members".into(), members(&runs));
                 result(
                     document,
@@ -478,7 +476,7 @@ fn members(runs: &ProjectRun) -> ContextValue {
 /// `p.submission(section, created)`, then `save()`. Without `--created`,
 /// the submission reads the clock once for every section, and prints the
 /// time it read after its summary line (D129).
-fn submission(call: &Call) -> Result<Printed, Execution> {
+fn submission(call: &Call, token: &CancellationToken) -> Result<Printed, Execution> {
     let path = path(call)?;
     let section = flag(call, "--section")?;
     let created = flag(call, "--created")?;
@@ -497,11 +495,10 @@ fn submission(call: &Call) -> Result<Printed, Execution> {
         Ok(other) => return Err(not_taken(call, path, other, None)),
         Err(failure) => return Ok(refusal(document, failure)),
     }
-    let token = CancellationToken::new();
-    let composed = engine.project_submission(path, section, created, yamaa::VERSION, &token);
+    let composed = engine.project_submission(path, section, created, yamaa::VERSION, token);
     Ok(match composed {
         Ok(mut submission) => {
-            let saved = submission.save(&token);
+            let saved = submission.save(token);
             let used = submission.created().to_owned();
             document.insert("created".into(), text(&used));
             let summary = submission.summary();
