@@ -286,6 +286,18 @@ with no checkout fallback. The R suites find them in their working directory:
 the copy of the package's tests directory that `R CMD check` runs them in, or
 the directory where native qualification stages them. R does not install them.
 
+The ordinary lanes run every suite that reads this truth, so a parity
+regression fails CI's `python` and `r` jobs on the exact head, not only the
+`equivalence` job. `make test-python` stages every
+`python/tests/installed/installed_*.py` with these files, runs each in its own
+process beside pytest, and prints each suite's name and result
+(`== installed_<suite>.py`). `make test-r` runs `R CMD check` on the staged
+package, whose `tests/` holds every `R/yamaa/tests/*.R` and this directory,
+and its log names each suite as it runs (`Running '<suite>.R'`). Every family
+of `cases.json` has a suite in each host, and the equivalence gate runs the
+same suites on fresh installs. A suite decodes `cases.json` once, however many
+families it reads.
+
 The R codec uses jsonlite from the package's `Suggests`. The native
 workflow installs it before supplemental R tests; production R does not import
 it. A suggested package may be missing where the package is checked, so each
