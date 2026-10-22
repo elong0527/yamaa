@@ -6,6 +6,7 @@ rust-version.workspace = true
 license = "MIT AND Unicode-3.0"
 authors.workspace = true
 publish.workspace = true
+autotests = false
 
 [dependencies]
 thiserror = "2.0.21"
@@ -24,3 +25,9 @@ regex = { version = "1.13.1", default-features = false, features = ["std", "perf
 
 [lints]
 workspace = true
+
+# The integration tests are one binary: tests/main.rs declares each family
+# file under tests/ as a module and checks that none is left out (#3556).
+[[test]]
+name = "main"
+path = "tests/main.rs"

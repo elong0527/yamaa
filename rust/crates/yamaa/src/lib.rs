@@ -103,6 +103,10 @@ pub use text::{Action, Summary};
 /// Version of the shared core compiled into a native installation.
 pub const VERSION: &str = yamaa_core::VERSION;
 
+#[cfg(all(test, unix))]
+#[path = "../tests/support/scratch.rs"]
+mod test_scratch;
+
 #[cfg(test)]
 mod tests {
     #[test]

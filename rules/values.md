@@ -170,7 +170,7 @@ each numeric operation, and when a project binding returns a scalar. No
 consumer observes a non-finite float, and no artifact or canonical value
 spells one.
 
-Evidence: `schema-non-finite`, `rust/crates/yamaa/tests/memory_route/main.rs`.
+Evidence: `schema-non-finite`, `rust/crates/yamaa/tests/memory_route/mod.rs`.
 
 The boundaries are exactly these:
 

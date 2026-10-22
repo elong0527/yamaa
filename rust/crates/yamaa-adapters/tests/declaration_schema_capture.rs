@@ -1,7 +1,5 @@
 #![cfg(feature = "yaml")]
 //! Declaration contracts.
-#[allow(dead_code)]
-mod support;
 mod declaration {
     mod schema_capture {
         use yamaa_adapters::json;
