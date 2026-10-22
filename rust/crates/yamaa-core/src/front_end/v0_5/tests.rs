@@ -3,7 +3,8 @@
 //! as a host admits it, is checked with the shipped schema in
 //! `yamaa-adapters/tests/ast_lowering.rs`.
 use super::*;
-use crate::ast::{ExprKind, ScalarOp};
+use crate::ast::{ExprId, ExprKind, FileRef, ScalarOp, Span, Spec};
+use crate::schema::DocumentNode as N;
 use crate::test_document::Tree;
 
 pub(crate) fn op(name: &str, payload: Tree) -> Tree {

@@ -222,6 +222,10 @@ so an integer column with a missing value keeps its exact integers.
 `check()` reports problems in a specification without reading study data or
 running project code. It does not open the input datasets, so some problems,
 such as a column name that no input has, appear only when you call `run()`.
+The pattern of a `str_extract` or `str_replace` is one of them when only the
+data gives its source's type, such as a field of a Parquet, SAS or ODM input
+that `types` does not declare: `run()` then reports either the source's type
+or the pattern.
 
 Each problem is one row of `issues`: its `severity`, `phase` and
 `condition`, the `rule` it breaks, the `spec_paths` it concerns, a `message`

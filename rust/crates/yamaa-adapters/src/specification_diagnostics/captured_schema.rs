@@ -23,12 +23,14 @@ fn value(value: V<'_>) -> Value {
         V::TextList(values) => json!(values),
     }
 }
+/// The findings of `captured`, naming the file they are in when it is one a
+/// referencing field names.
 pub(super) fn findings(captured: &CapturedFindings) -> Result<Vec<Diagnostic>, Error> {
     schema_findings(
         captured.schema().structure(),
         captured.document(),
         captured.findings(),
-        &[],
+        &captured.source_context(),
     )
 }
 /// Each finding keeps its registered cause; its context resolves against the

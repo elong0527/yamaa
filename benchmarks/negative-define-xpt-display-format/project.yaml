@@ -1,0 +1,18 @@
+# Fixed creation time is supplied by the submission call in benchmark.yaml.
+yamaa: "1.0"
+type: project
+study:
+  id: PAR01
+  name: PAR01
+  description: Example study submitting its demographics
+  protocol_name: PAR-01
+
+sdtm:
+  specs:
+    - spec.yaml
+  standards:
+    - name: SDTMIG
+      version: "3.4"
+      status: Final
+  define: define.xml
+  transport: xpt

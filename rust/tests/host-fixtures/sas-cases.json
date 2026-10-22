@@ -5,7 +5,8 @@
       "id": "xpt-v5-default",
       "file": "v5.xpt",
       "specification": {
-        "schema_version": "1.0",
+        "yamaa": "1.0",
+        "type": "spec",
         "domain": "TEST",
         "base": "SRC",
         "keys": [
@@ -127,7 +128,8 @@
       "id": "xpt-v8-default",
       "file": "v8.xpt",
       "specification": {
-        "schema_version": "1.0",
+        "yamaa": "1.0",
+        "type": "spec",
         "domain": "TEST",
         "base": "SRC",
         "keys": [
@@ -250,7 +252,8 @@
       "id": "xpt-utf8",
       "file": "utf8.xpt",
       "specification": {
-        "schema_version": "1.0",
+        "yamaa": "1.0",
+        "type": "spec",
         "domain": "TEST",
         "base": "SRC",
         "keys": [
@@ -372,7 +375,8 @@
       "id": "xpt-v5-narrowed",
       "file": "v5.xpt",
       "specification": {
-        "schema_version": "1.0",
+        "yamaa": "1.0",
+        "type": "spec",
         "domain": "TEST",
         "base": "SRC",
         "keys": [
@@ -500,7 +504,8 @@
       "id": "xpt-v8-narrowed",
       "file": "v8.xpt",
       "specification": {
-        "schema_version": "1.0",
+        "yamaa": "1.0",
+        "type": "spec",
         "domain": "TEST",
         "base": "SRC",
         "keys": [
@@ -628,7 +633,8 @@
       "id": "exact-signed-integers",
       "file": "integer-bounds.xpt",
       "specification": {
-        "schema_version": "1.0",
+        "yamaa": "1.0",
+        "type": "spec",
         "domain": "TEST",
         "base": "SRC",
         "keys": [
@@ -701,7 +707,8 @@
       "id": "all-numeric-missing-float",
       "file": "missing.xpt",
       "specification": {
-        "schema_version": "1.0",
+        "yamaa": "1.0",
+        "type": "spec",
         "domain": "TEST",
         "base": "SRC",
         "keys": [
@@ -867,7 +874,8 @@
       "id": "all-numeric-missing-int",
       "file": "missing.xpt",
       "specification": {
-        "schema_version": "1.0",
+        "yamaa": "1.0",
+        "type": "spec",
         "domain": "TEST",
         "base": "SRC",
         "keys": [
@@ -1036,7 +1044,8 @@
       "id": "sas-display-formats-do-not-infer",
       "file": "datetime.sas7bdat",
       "specification": {
-        "schema_version": "1.0",
+        "yamaa": "1.0",
+        "type": "spec",
         "domain": "TEST",
         "base": "SRC",
         "keys": [
@@ -1139,7 +1148,8 @@
       "id": "sas-explicit-temporal-types",
       "file": "datetime.sas7bdat",
       "specification": {
-        "schema_version": "1.0",
+        "yamaa": "1.0",
+        "type": "spec",
         "domain": "TEST",
         "base": "SRC",
         "keys": [
@@ -1249,7 +1259,8 @@
       "id": "default-float-keeps-rounded-ibm-number",
       "file": "precision.xpt",
       "specification": {
-        "schema_version": "1.0",
+        "yamaa": "1.0",
+        "type": "spec",
         "domain": "TEST",
         "base": "SRC",
         "keys": [
@@ -1307,7 +1318,8 @@
       "id": "ordinary-decimal-float",
       "file": "decimal.xpt",
       "specification": {
-        "schema_version": "1.0",
+        "yamaa": "1.0",
+        "type": "spec",
         "domain": "TEST",
         "base": "SRC",
         "keys": [
@@ -1365,7 +1377,8 @@
       "id": "transport-member-marker-is-ordinary-text",
       "file": "member-text.xpt",
       "specification": {
-        "schema_version": "1.0",
+        "yamaa": "1.0",
+        "type": "spec",
         "domain": "TEST",
         "base": "SRC",
         "keys": [
@@ -1435,7 +1448,8 @@
       "id": "right-nul-padding-preserves-text",
       "file": "v5.xpt",
       "specification": {
-        "schema_version": "1.0",
+        "yamaa": "1.0",
+        "type": "spec",
         "domain": "TEST",
         "base": "SRC",
         "keys": [
@@ -1563,7 +1577,8 @@
       "id": "deleted-rows-flag-over-zero-bitmap",
       "file": "datetime.sas7bdat",
       "specification": {
-        "schema_version": "1.0",
+        "yamaa": "1.0",
+        "type": "spec",
         "domain": "TEST",
         "base": "SRC",
         "keys": [
@@ -1639,7 +1654,8 @@
       "id": "deleted-record-skipped",
       "file": "datetime.sas7bdat",
       "specification": {
-        "schema_version": "1.0",
+        "yamaa": "1.0",
+        "type": "spec",
         "domain": "TEST",
         "base": "SRC",
         "keys": [
@@ -1723,7 +1739,8 @@
       "id": "fractional.xpt-int",
       "file": "fractional.xpt",
       "specification": {
-        "schema_version": "1.0",
+        "yamaa": "1.0",
+        "type": "spec",
         "domain": "TEST",
         "base": "SRC",
         "keys": [
@@ -1787,7 +1804,8 @@
       "id": "fractional.xpt-date",
       "file": "fractional.xpt",
       "specification": {
-        "schema_version": "1.0",
+        "yamaa": "1.0",
+        "type": "spec",
         "domain": "TEST",
         "base": "SRC",
         "keys": [
@@ -1851,7 +1869,8 @@
       "id": "fractional.xpt-datetime",
       "file": "fractional.xpt",
       "specification": {
-        "schema_version": "1.0",
+        "yamaa": "1.0",
+        "type": "spec",
         "domain": "TEST",
         "base": "SRC",
         "keys": [
@@ -1915,7 +1934,8 @@
       "id": "precision.xpt-int",
       "file": "precision.xpt",
       "specification": {
-        "schema_version": "1.0",
+        "yamaa": "1.0",
+        "type": "spec",
         "domain": "TEST",
         "base": "SRC",
         "keys": [
@@ -1979,7 +1999,8 @@
       "id": "precision.xpt-date",
       "file": "precision.xpt",
       "specification": {
-        "schema_version": "1.0",
+        "yamaa": "1.0",
+        "type": "spec",
         "domain": "TEST",
         "base": "SRC",
         "keys": [
@@ -2043,7 +2064,8 @@
       "id": "precision.xpt-datetime",
       "file": "precision.xpt",
       "specification": {
-        "schema_version": "1.0",
+        "yamaa": "1.0",
+        "type": "spec",
         "domain": "TEST",
         "base": "SRC",
         "keys": [
@@ -2107,7 +2129,8 @@
       "id": "signed-integer-overflow",
       "file": "integer-overflow.xpt",
       "specification": {
-        "schema_version": "1.0",
+        "yamaa": "1.0",
+        "type": "spec",
         "domain": "TEST",
         "base": "SRC",
         "keys": [
@@ -2171,7 +2194,8 @@
       "id": "multiple-v5-members",
       "file": "multi-v5.xpt",
       "specification": {
-        "schema_version": "1.0",
+        "yamaa": "1.0",
+        "type": "spec",
         "domain": "TEST",
         "base": "SRC",
         "keys": [
@@ -2227,7 +2251,8 @@
       "id": "multiple-v8-members",
       "file": "multi-v8.xpt",
       "specification": {
-        "schema_version": "1.0",
+        "yamaa": "1.0",
+        "type": "spec",
         "domain": "TEST",
         "base": "SRC",
         "keys": [
@@ -2283,7 +2308,8 @@
       "id": "cp1252-is-not-utf8",
       "file": "v5.xpt",
       "specification": {
-        "schema_version": "1.0",
+        "yamaa": "1.0",
+        "type": "spec",
         "domain": "TEST",
         "base": "SRC",
         "keys": [
@@ -2339,7 +2365,8 @@
       "id": "cp1252-is-not-ascii",
       "file": "v5.xpt",
       "specification": {
-        "schema_version": "1.0",
+        "yamaa": "1.0",
+        "type": "spec",
         "domain": "TEST",
         "base": "SRC",
         "keys": [
@@ -2395,7 +2422,8 @@
       "id": "undefined-cp1252",
       "file": "v5.xpt",
       "specification": {
-        "schema_version": "1.0",
+        "yamaa": "1.0",
+        "type": "spec",
         "domain": "TEST",
         "base": "SRC",
         "keys": [
@@ -2457,7 +2485,8 @@
       "id": "invalid-utf8",
       "file": "utf8.xpt",
       "specification": {
-        "schema_version": "1.0",
+        "yamaa": "1.0",
+        "type": "spec",
         "domain": "TEST",
         "base": "SRC",
         "keys": [
@@ -2519,7 +2548,8 @@
       "id": "empty-transport",
       "file": "v5.xpt",
       "specification": {
-        "schema_version": "1.0",
+        "yamaa": "1.0",
+        "type": "spec",
         "domain": "TEST",
         "base": "SRC",
         "keys": [
@@ -2578,7 +2608,8 @@
       "id": "partial-transport-record",
       "file": "v5.xpt",
       "specification": {
-        "schema_version": "1.0",
+        "yamaa": "1.0",
+        "type": "spec",
         "domain": "TEST",
         "base": "SRC",
         "keys": [
@@ -2637,7 +2668,8 @@
       "id": "malformed-sas",
       "file": "datetime.sas7bdat",
       "specification": {
-        "schema_version": "1.0",
+        "yamaa": "1.0",
+        "type": "spec",
         "domain": "TEST",
         "base": "SRC",
         "keys": [
@@ -2696,7 +2728,8 @@
       "id": "truncated-sas-header",
       "file": "datetime.sas7bdat",
       "specification": {
-        "schema_version": "1.0",
+        "yamaa": "1.0",
+        "type": "spec",
         "domain": "TEST",
         "base": "SRC",
         "keys": [
@@ -2756,7 +2789,8 @@
       "id": "truncated-sas-page",
       "file": "datetime.sas7bdat",
       "specification": {
-        "schema_version": "1.0",
+        "yamaa": "1.0",
+        "type": "spec",
         "domain": "TEST",
         "base": "SRC",
         "keys": [
@@ -2816,7 +2850,8 @@
       "id": "unsupported-compression",
       "file": "unsupported-compression.sas7bdat",
       "specification": {
-        "schema_version": "1.0",
+        "yamaa": "1.0",
+        "type": "spec",
         "domain": "TEST",
         "base": "SRC",
         "keys": [
@@ -2872,7 +2907,8 @@
       "id": "corrupt-rle",
       "file": "rle.sas7bdat",
       "specification": {
-        "schema_version": "1.0",
+        "yamaa": "1.0",
+        "type": "spec",
         "domain": "TEST",
         "base": "SRC",
         "keys": [
@@ -2934,7 +2970,8 @@
       "id": "corrupt-rdc",
       "file": "rdc.sas7bdat",
       "specification": {
-        "schema_version": "1.0",
+        "yamaa": "1.0",
+        "type": "spec",
         "domain": "TEST",
         "base": "SRC",
         "keys": [
@@ -2996,7 +3033,8 @@
       "id": "deleted-records-count",
       "file": "datetime.sas7bdat",
       "specification": {
-        "schema_version": "1.0",
+        "yamaa": "1.0",
+        "type": "spec",
         "domain": "TEST",
         "base": "SRC",
         "keys": [
@@ -3064,7 +3102,8 @@
       "id": "character-cannot-be-int",
       "file": "v5.xpt",
       "specification": {
-        "schema_version": "1.0",
+        "yamaa": "1.0",
+        "type": "spec",
         "domain": "TEST",
         "base": "SRC",
         "keys": [
@@ -3123,7 +3162,8 @@
       "id": "numeric-cannot-be-str",
       "file": "v5.xpt",
       "specification": {
-        "schema_version": "1.0",
+        "yamaa": "1.0",
+        "type": "spec",
         "domain": "TEST",
         "base": "SRC",
         "keys": [
@@ -3182,7 +3222,8 @@
       "id": "unknown-authored-field",
       "file": "v5.xpt",
       "specification": {
-        "schema_version": "1.0",
+        "yamaa": "1.0",
+        "type": "spec",
         "domain": "TEST",
         "base": "SRC",
         "keys": [
@@ -3245,7 +3286,8 @@
       "id": "embedded-nul-is-refused",
       "file": "v5.xpt",
       "specification": {
-        "schema_version": "1.0",
+        "yamaa": "1.0",
+        "type": "spec",
         "domain": "TEST",
         "base": "SRC",
         "keys": [
@@ -3309,7 +3351,8 @@
       "id": "encoding-required",
       "file": "v5.xpt",
       "specification": {
-        "schema_version": "1.0",
+        "yamaa": "1.0",
+        "type": "spec",
         "domain": "TEST",
         "base": "SRC",
         "keys": [
@@ -3360,7 +3403,8 @@
       "id": "unsupported-encoding-token",
       "file": "v5.xpt",
       "specification": {
-        "schema_version": "1.0",
+        "yamaa": "1.0",
+        "type": "spec",
         "domain": "TEST",
         "base": "SRC",
         "keys": [
@@ -3412,7 +3456,8 @@
       "id": "encoding-on-csv",
       "file": "v5.xpt",
       "specification": {
-        "schema_version": "1.0",
+        "yamaa": "1.0",
+        "type": "spec",
         "domain": "TEST",
         "base": "SRC",
         "keys": [

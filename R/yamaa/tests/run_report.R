@@ -131,7 +131,7 @@ cat("failed run report, original issues and repeated explicit failed Save passed
 # A violated check lists every offending key, beyond the issue sample, and
 # its declared id; a refused save writes nothing and a retry writes it all.
 entry <- file.path(case,"spec.yaml")
-source <- paste0("schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\n",
+source <- paste0('yamaa: "1.0"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\n',
   "output: {path: absent/out.csv, columns: [ID], report: checks.csv}\n",
   "columns:\n  - name: ID\n    type: int\n    derivation: SRC.ID\n    verifications:\n",
   "      - range: {max: 0, severity: warning, id: '\\u00e9'}\n")

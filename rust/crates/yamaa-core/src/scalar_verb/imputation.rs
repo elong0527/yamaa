@@ -219,7 +219,7 @@ mod tests {
         let mut nodes = Vec::new();
         let root = tree.append(&mut nodes);
         let document = Document::new(nodes, root).unwrap();
-        let spec = crate::front_end::v0_5::lower_surface(&document, None, surface).into_spec();
+        let spec = crate::front_end::lowering::lower_surface(&document, None, surface).into_spec();
         let e = spec.columns[1].derivation.as_ref().unwrap().expr;
         match imputation(&spec, e)?.kind() {
             ImputationKind::Impute(completion) => Ok(completion),

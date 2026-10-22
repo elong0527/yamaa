@@ -424,11 +424,16 @@ define_sentinel <- file.path(root, "define.xml")
 writeBin(charToRaw("original Define sentinel"), define_sentinel)
 previous_names <- sort(list.files(root, all.files = TRUE, no.. = TRUE))
 result <- submission(root)
-expect_identical(as.list(result$issues[c("phase", "condition", "rule", "spec_paths")]),
-  list(phase = "validation", condition = "transport_path_collision", rule = "JSON-2",
-    spec_paths = list("sdtm.specs[1]")),
+# The shared truth's row, which Python compares too. Its context names the two
+# files by their absolute paths, so it is compared by the file name both
+# writers would write.
+truth <- host_truth[["transport_name_collision_issue"]]
+columns <- issue_columns_of(result$issues)
+located <- setdiff(names(columns), "context")
+expect_identical(columns[located],
+  issue_truth(list(truth), normalizePath(root, winslash = "/", mustWork = TRUE))[located],
   "two datasets named dm in any case")
-stopifnot("the finding names the colliding file" = grepl("dm.json", result$issues$context, fixed = TRUE),
+stopifnot("the finding names the colliding file" = grepl(truth$context_names, result$issues$context, fixed = TRUE),
   "its save is refused" = refused(result))
 expect_identical(rawfile(sentinel), charToRaw("original publication sentinel"), "a collision leaves the Dataset-JSON")
 expect_identical(rawfile(define_sentinel), charToRaw("original Define sentinel"), "a collision leaves the Define-XML")
@@ -493,7 +498,10 @@ for (case in manifest$cases) {
       list(want$phase, want$condition, want$rule, fixture_strings(want$spec_paths)),
       paste(case$name, "fails with the expected first issue"))
     context <- jsonlite::fromJSON(result$issues$context[[1L]], simplifyVector = FALSE)
-    expect_identical(context[names(want$context)], want$context, paste(case$name, "states the expected context"))
+    # A partial error.yaml may leave the context out; it states only the keys
+    # it compares, as Python's suite reads it too.
+    if (!is.null(want$context))
+      expect_identical(context[names(want$context)], want$context, paste(case$name, "states the expected context"))
     stopifnot_case(case$name, "its save is refused" = refused(result),
       "no Define-XML is written" = !file.exists(file.path(root, "define.xml")))
   } else {

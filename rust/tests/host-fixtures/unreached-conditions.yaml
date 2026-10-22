@@ -59,6 +59,11 @@ unreachable:
     a host compiles a spec or project object again once a file it holds has
     changed (#3069), so no case can change a file mid-call; the facade's
     plan tests reach it (rust/crates/yamaa/tests/plan_contracts.rs)
+  source_system_incomplete: >-
+    no host reaches it: the schema refuses an empty source_system_version
+    first (minimum_length, SCHEMA-12), and every host passes its own nonempty
+    version as the installed one (DEFINE-12); the core's submission tests
+    reach it with an empty installed version
   unknown_standard_family: >-
     only the 0.5 path raises it, until P2-13 removes that path: a guide a 1.0
     section lists outside its model fails as standard_model_mismatch (DEFINE-6,
@@ -68,36 +73,4 @@ unreachable:
     published dataset of at least 25 million 200-byte values (SUB-24 measures a
     character variable by its longest value) or 625 million numbers; no parity
     case can carry one, so XPT-10's encoder test owns it
-not_covered:
-  "#3423":
-    - artifact_outside_document
-    - codelist_duplicate_value
-    - codelist_extended_alias
-    - codelist_extension_not_admitted
-    - codelist_partial_item_field
-    - codelist_shape_invalid
-    - codelist_type_mismatch
-    - core_mandatory_conflict
-    - declared_length_conflict
-    - duplicate_dataset_entry
-    - method_missing
-    - origin_contradicts_derivation
-    - origin_description_missing
-    - origin_document_missing
-    - origin_missing
-    - origin_source_not_admitted
-    - predecessor_label_mismatch
-    - reference_data_repeating_conflict
-    - refuted_value_origin
-    - reserved_metadata_key
-    - source_system_incomplete
-    - submission_data_type_not_admitted
-    - submission_length_invalid
-    - submission_length_missing
-    - submission_length_not_applicable
-    - submission_metadata_missing
-    - submission_not_output_column
-    - transport_path_collision
-    - unknown_codelist
-    - unknown_document
-    - xpt_display_format_invalid
+not_covered: {}

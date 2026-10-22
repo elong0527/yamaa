@@ -1,7 +1,7 @@
 [
   {
     "case": "three_contexts",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, G, R, Q, M]}\ncolumns:\n  - {name: ID, type: str, label: ID}\n  - {name: G, type: str, label: G}\n  - {name: R, type: int, label: R}\n  - {name: Q, type: int, label: Q, derivation: {aggregate: 'COUNT(SRC.*)'}}\n  - {name: M, type: float, label: M, derivation: {aggregate: {expr: 'MEAN(R)', group_by: [G]}}}\nrows:\n  - id: total\n    group_by: [SRC.ID, SRC.G]\n    derivations:\n      ID: SRC.ID\n      G: SRC.G\n      R: {aggregate: 'SUM(SRC.V * 2) + MAX(SRC.V)'}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, key: [ID], types: {V: int}}}\noutput: {path: result.csv, columns: [ID, G, R, Q, M]}\ncolumns:\n  - {name: ID, type: str, label: ID}\n  - {name: G, type: str, label: G}\n  - {name: R, type: int, label: R}\n  - {name: Q, type: int, label: Q, derivation: {aggregate: 'COUNT(SRC.*)'}}\n  - {name: M, type: float, label: M, derivation: {aggregate: {expr: 'MEAN(R)', group_by: [G]}}}\nrows:\n  - id: total\n    group_by: [SRC.ID, SRC.G]\n    derivations:\n      ID: SRC.ID\n      G: SRC.G\n      R: {aggregate: 'SUM(SRC.V * 2) + MAX(SRC.V)'}\n",
     "input": "ID,G,V\na,g,2\na,g,3\nb,g,4\nc,h,\n",
     "expected": {
       "artifacts": [
@@ -231,7 +231,7 @@
   },
   {
     "case": "exact_extreme",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, G, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: G, type: str, label: G, derivation: SRC.G}\n  - name: V\n    type: int\n    label: V\n    derivation: {aggregate: 'MAX(SRC.V)'}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, key: [ID], types: {V: int}}}\noutput: {path: result.csv, columns: [ID, G, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: G, type: str, label: G, derivation: SRC.G}\n  - name: V\n    type: int\n    label: V\n    derivation: {aggregate: 'MAX(SRC.V)'}\n",
     "input": "ID,G,V\na,g,9007199254740992\na,g,9007199254740993\n",
     "expected": {
       "artifacts": [
@@ -371,7 +371,7 @@
   },
   {
     "case": "all_missing_count",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, G, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: G, type: str, label: G, derivation: SRC.G}\n  - name: V\n    type: int\n    label: V\n    derivation: {aggregate: 'COUNT(SRC.V)'}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, key: [ID], types: {V: int}}}\noutput: {path: result.csv, columns: [ID, G, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: G, type: str, label: G, derivation: SRC.G}\n  - name: V\n    type: int\n    label: V\n    derivation: {aggregate: 'COUNT(SRC.V)'}\n",
     "input": "ID,G,V\na,g,\na,g,\n",
     "expected": {
       "artifacts": [
@@ -511,7 +511,7 @@
   },
   {
     "case": "mixed_relations",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, G, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: G, type: str, label: G, derivation: SRC.G}\n  - name: V\n    type: int\n    label: V\n    derivation: {aggregate: 'SUM(SRC.V) + ID'}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, G, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: G, type: str, label: G, derivation: SRC.G}\n  - name: V\n    type: int\n    label: V\n    derivation: {aggregate: 'SUM(SRC.V) + ID'}\n",
     "input": "ID,G,V\na,g,2\na,g,3\n",
     "expected": {
       "artifacts": [],
@@ -630,7 +630,7 @@
   },
   {
     "case": "ungrouped_identifier",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, G, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: G, type: str, label: G, derivation: SRC.G}\n  - name: V\n    type: int\n    label: V\n    derivation: {aggregate: 'SRC.V + SUM(SRC.V)'}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, key: [ID], types: {V: int}}}\noutput: {path: result.csv, columns: [ID, G, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: G, type: str, label: G, derivation: SRC.G}\n  - name: V\n    type: int\n    label: V\n    derivation: {aggregate: 'SRC.V + SUM(SRC.V)'}\n",
     "input": "ID,G,V\na,g,2\na,g,3\n",
     "expected": {
       "artifacts": [],
@@ -745,7 +745,7 @@
   },
   {
     "case": "output_requires_groups",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, G, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: G, type: str, label: G, derivation: SRC.G}\n  - name: V\n    type: int\n    label: V\n    derivation: {aggregate: 'SUM(V)'}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, G, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: G, type: str, label: G, derivation: SRC.G}\n  - name: V\n    type: int\n    label: V\n    derivation: {aggregate: 'SUM(V)'}\n",
     "input": "ID,G,V\na,g,2\na,g,3\n",
     "expected": {
       "artifacts": [],
@@ -858,7 +858,7 @@
   },
   {
     "case": "qualified_group_scope",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, G, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: G, type: str, label: G, derivation: SRC.G}\n  - name: V\n    type: int\n    label: V\n    derivation: {aggregate: {expr: 'SUM(SRC.V)', group_by: [G]}}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, G, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: G, type: str, label: G, derivation: SRC.G}\n  - name: V\n    type: int\n    label: V\n    derivation: {aggregate: {expr: 'SUM(SRC.V)', group_by: [G]}}\n",
     "input": "ID,G,V\na,g,2\na,g,3\n",
     "expected": {
       "artifacts": [],
@@ -971,7 +971,7 @@
   },
   {
     "case": "key_field_missing",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, G, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: G, type: str, label: G, derivation: SRC.G}\n  - name: V\n    type: int\n    label: V\n    derivation: {aggregate: {expr: 'SUM(SRC.V)', key: {ABSENT: ID}}}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, G, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: G, type: str, label: G, derivation: SRC.G}\n  - name: V\n    type: int\n    label: V\n    derivation: {aggregate: {expr: 'SUM(SRC.V)', key: {ABSENT: ID}}}\n",
     "input": "ID,G,V\na,g,2\na,g,3\n",
     "expected": {
       "artifacts": [],
@@ -986,7 +986,7 @@
           "phase": "validation",
           "rule": "LOOKUP-5",
           "spec_paths": [
-            "columns.V.derivation.aggregate.expr"
+            "columns.V.derivation.aggregate.key"
           ]
         }
       ],
@@ -1005,7 +1005,7 @@
               "phase": "validation",
               "rule": "LOOKUP-5",
               "spec_paths": [
-                "columns.V.derivation.aggregate.expr"
+                "columns.V.derivation.aggregate.key"
               ]
             }
           ],
@@ -1082,7 +1082,7 @@
   },
   {
     "case": "key_variable_missing",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, G, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: G, type: str, label: G, derivation: SRC.G}\n  - name: V\n    type: int\n    label: V\n    derivation: {aggregate: {expr: 'SUM(SRC.V)', key: {ID: ABSENT}}}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, G, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: G, type: str, label: G, derivation: SRC.G}\n  - name: V\n    type: int\n    label: V\n    derivation: {aggregate: {expr: 'SUM(SRC.V)', key: {ID: ABSENT}}}\n",
     "input": "ID,G,V\na,g,2\na,g,3\n",
     "expected": {
       "artifacts": [],
@@ -1097,7 +1097,7 @@
           "phase": "validation",
           "rule": "LOOKUP-5",
           "spec_paths": [
-            "columns.V.derivation.aggregate.expr"
+            "columns.V.derivation.aggregate.key.ID"
           ]
         }
       ],
@@ -1116,7 +1116,7 @@
               "phase": "validation",
               "rule": "LOOKUP-5",
               "spec_paths": [
-                "columns.V.derivation.aggregate.expr"
+                "columns.V.derivation.aggregate.key.ID"
               ]
             }
           ],
@@ -1193,7 +1193,7 @@
   },
   {
     "case": "key_type",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, G, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: G, type: str, label: G, derivation: SRC.G}\n  - name: V\n    type: int\n    label: V\n    derivation: {aggregate: {expr: 'SUM(SRC.V)', key: {V: ID}}}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, G, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: G, type: str, label: G, derivation: SRC.G}\n  - name: V\n    type: int\n    label: V\n    derivation: {aggregate: {expr: 'SUM(SRC.V)', key: {V: ID}}}\n",
     "input": "ID,G,V\na,g,2\na,g,3\n",
     "expected": {
       "artifacts": [],
@@ -1210,7 +1210,7 @@
           "phase": "validation",
           "rule": "LOOKUP-9",
           "spec_paths": [
-            "columns.V.derivation.aggregate.expr"
+            "columns.V.derivation.aggregate.key"
           ]
         }
       ],
@@ -1231,7 +1231,7 @@
               "phase": "validation",
               "rule": "LOOKUP-9",
               "spec_paths": [
-                "columns.V.derivation.aggregate.expr"
+                "columns.V.derivation.aggregate.key"
               ]
             }
           ],
@@ -1308,7 +1308,7 @@
   },
   {
     "case": "empty_key_mapping",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, G, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: G, type: str, label: G, derivation: SRC.G}\n  - name: V\n    type: int\n    label: V\n    derivation: {aggregate: {expr: 'SUM(SRC.V)', key: {}}}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, G, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: G, type: str, label: G, derivation: SRC.G}\n  - name: V\n    type: int\n    label: V\n    derivation: {aggregate: {expr: 'SUM(SRC.V)', key: {}}}\n",
     "input": "ID,G,V\na,g,2\na,g,3\n",
     "expected": {
       "artifacts": [],
@@ -1421,7 +1421,7 @@
   },
   {
     "case": "empty_key_list",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, G, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: G, type: str, label: G, derivation: SRC.G}\n  - name: V\n    type: int\n    label: V\n    derivation: {aggregate: {expr: 'SUM(SRC.V)', key: []}}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, G, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: G, type: str, label: G, derivation: SRC.G}\n  - name: V\n    type: int\n    label: V\n    derivation: {aggregate: {expr: 'SUM(SRC.V)', key: []}}\n",
     "input": "ID,G,V\na,g,2\na,g,3\n",
     "expected": {
       "artifacts": [],
@@ -1534,7 +1534,7 @@
   },
   {
     "case": "single_column_key",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, G, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: G, type: str, label: G, derivation: SRC.G}\n  - name: V\n    type: int\n    label: V\n    derivation: {aggregate: {expr: 'SUM(SRC.V)', key: [ID]}}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, G, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: G, type: str, label: G, derivation: SRC.G}\n  - name: V\n    type: int\n    label: V\n    derivation: {aggregate: {expr: 'SUM(SRC.V)', key: [ID]}}\n",
     "input": "ID,G,V\na,g,2\na,g,3\n",
     "expected": {
       "artifacts": [
@@ -1674,7 +1674,7 @@
   },
   {
     "case": "list_key",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, G, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: G, type: str, label: G, derivation: SRC.G}\n  - name: V\n    type: int\n    label: V\n    derivation: {aggregate: {expr: 'SUM(SRC.V)', key: [ID, ID]}}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, G, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: G, type: str, label: G, derivation: SRC.G}\n  - name: V\n    type: int\n    label: V\n    derivation: {aggregate: {expr: 'SUM(SRC.V)', key: [ID, ID]}}\n",
     "input": "ID,G,V\na,g,2\na,g,3\n",
     "expected": {
       "artifacts": [
@@ -1814,7 +1814,7 @@
   },
   {
     "case": "eager_row_only",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, G, R, Q, M]}\ncolumns:\n  - {name: ID, type: str, label: ID}\n  - {name: G, type: str, label: G}\n  - {name: R, type: int, label: R}\n  - {name: Q, type: int, label: Q, derivation: {aggregate: 'COUNT(SRC.*)'}}\n  - {name: M, type: float, label: M, derivation: {aggregate: {expr: 'MEAN(R)', group_by: [G]}}}\nrows:\n  - id: total\n    group_by: [SRC.ID, SRC.G]\n    derivations:\n      ID: SRC.ID\n      G: SRC.G\n      R: {aggregate: 'NULL + ONLY(SRC.V)'}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, key: [ID], types: {V: int}}}\noutput: {path: result.csv, columns: [ID, G, R, Q, M]}\ncolumns:\n  - {name: ID, type: str, label: ID}\n  - {name: G, type: str, label: G}\n  - {name: R, type: int, label: R}\n  - {name: Q, type: int, label: Q, derivation: {aggregate: 'COUNT(SRC.*)'}}\n  - {name: M, type: float, label: M, derivation: {aggregate: {expr: 'MEAN(R)', group_by: [G]}}}\nrows:\n  - id: total\n    group_by: [SRC.ID, SRC.G]\n    derivations:\n      ID: SRC.ID\n      G: SRC.G\n      R: {aggregate: 'NULL + ONLY(SRC.V)'}\n",
     "input": "ID,G,V\na,g,2\na,g,3\n",
     "expected": {
       "artifacts": [],
@@ -1836,7 +1836,7 @@
           "phase": "row_construction",
           "rule": "FORMULA-20",
           "spec_paths": [
-            "rows[0].derivations.R.aggregate"
+            "rows.total.derivations.R.aggregate"
           ]
         }
       ],
@@ -1862,7 +1862,7 @@
               "phase": "row_construction",
               "rule": "FORMULA-20",
               "spec_paths": [
-                "rows[0].derivations.R.aggregate"
+                "rows.total.derivations.R.aggregate"
               ]
             }
           ],
@@ -1939,7 +1939,7 @@
   },
   {
     "case": "column_only_group_context",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, G, R, Q, M]}\ncolumns:\n  - {name: ID, type: str, label: ID}\n  - {name: G, type: str, label: G}\n  - {name: R, type: int, label: R}\n  - {name: Q, type: int, label: Q, derivation: {aggregate: 'ONLY(SRC.V)'}}\n  - {name: M, type: float, label: M, derivation: {aggregate: {expr: 'MEAN(R)', group_by: [G]}}}\nrows:\n  - id: total\n    group_by: [SRC.ID, SRC.G]\n    derivations:\n      ID: SRC.ID\n      G: SRC.G\n      R: {aggregate: 'SUM(SRC.V * 2) + MAX(SRC.V)'}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, key: [ID], types: {V: int}}}\noutput: {path: result.csv, columns: [ID, G, R, Q, M]}\ncolumns:\n  - {name: ID, type: str, label: ID}\n  - {name: G, type: str, label: G}\n  - {name: R, type: int, label: R}\n  - {name: Q, type: int, label: Q, derivation: {aggregate: 'ONLY(SRC.V)'}}\n  - {name: M, type: float, label: M, derivation: {aggregate: {expr: 'MEAN(R)', group_by: [G]}}}\nrows:\n  - id: total\n    group_by: [SRC.ID, SRC.G]\n    derivations:\n      ID: SRC.ID\n      G: SRC.G\n      R: {aggregate: 'SUM(SRC.V * 2) + MAX(SRC.V)'}\n",
     "input": "ID,G,V\na,g,2\na,g,3\n",
     "expected": {
       "artifacts": [],

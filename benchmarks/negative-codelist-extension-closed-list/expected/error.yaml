@@ -1,0 +1,7 @@
+phase: validation
+condition: codelist_extension_not_admitted
+spec_paths:
+  - codelists[0].codelists[0].items[2].extended
+rule: CT-6
+context:
+  codelist: NY

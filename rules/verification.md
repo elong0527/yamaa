@@ -23,7 +23,9 @@ Evidence: `schema-verification-log`, `negative-single-verification`, `rust/crate
 A column's `verifications` and the dataset's `verifications` are each a list
 of checks, and a single check is written as a one-item list. A check written
 on its own, not in a list, fails as `invalid_field_type` under
-[SCHEMA-12](reference/schema-language.md#schema-12).
+[SCHEMA-12](reference/schema-language.md#schema-12). A `not_missing` whose
+`when` reads other columns runs once those columns are complete too
+([CHECK-5](#check-5)).
 
 <a id="check-2"></a>
 
@@ -47,6 +49,11 @@ configurable but must not change pass or fail. Every evaluated check, a
 `warning` violation included, is a row of the run report under
 [CHECK-23](#check-23), which records every offending key under
 [CHECK-24](#check-24) rather than applying the reporting limit.
+
+An intermediate's `unique` declares `severity` only where
+[LOOKUP-17](lookup.md#lookup-17) allows it. A violated `warning` there changes
+no row either, and every read of the intermediate still selects one record by
+its `keep` and `order_by`.
 
 <a id="check-3"></a>
 
@@ -72,10 +79,10 @@ may be used in a different list.
 
 An unknown verification keyword or field is a schema failure. A `range` or
 `row_count` with no bound, or with `min` greater than `max`, fails, as does a
-`row_count` with `min_fraction` greater than `max_fraction` or a fraction bound
-outside 0 through 1. A verification applied to an incompatible column type
-fails, and so does an unknown column in `unique`, `all_or_none`, `assert`, or
-`row_count.group_by`.
+`row_count` with `min_fraction` greater than `max_fraction`, or a `row_count`
+or `not_missing` fraction bound outside 0 through 1. A verification applied to
+an incompatible column type fails, and so does an unknown column in `unique`,
+`all_or_none`, `assert`, `not_missing.when` or `row_count.group_by`.
 
 Fails: `invalid_declaration`, `unknown_field`.
 Evidence: `rust/crates/yamaa-adapters/tests/fixtures/static_verification_checks.json`, `rust/crates/yamaa-adapters/tests/fixtures/completed_lookup_assertions.json`.
@@ -84,21 +91,59 @@ Evidence: `rust/crates/yamaa-adapters/tests/fixtures/static_verification_checks.
 
 <a id="check-5"></a>
 
-### CHECK-5. Only `not_missing` rejects a missing value, and declaring it on a key column is redundant
+### CHECK-5. Only `not_missing` rejects a missing value, on the rows its when selects and beyond any share its max_fraction allows, and declaring it on a key column is redundant
 
-`not_missing` passes only when every value is non-missing. Every other value
-check passes missing values; combine it with `not_missing` when absence is
-invalid. A key column is never missing under
-[OUTPUT-3](output.md#output-3), so a `not_missing` on a key column restates the
-keys and fails validation.
+`not_missing` checks every output row, or with `when` each row whose `when` is
+`TRUE`. Without `max_fraction` it passes only when no row it checks has a
+missing value; with `max_fraction`, while such rows are at most that share of
+the rows it checks, and when it checks no row. Every other value check passes
+missing values; combine it with `not_missing` when absence is invalid. A key
+column is never missing under [OUTPUT-3](output.md#output-3), so a
+`not_missing` on a key column restates the keys and fails validation.
 
 Fails: `not_missing_failed`, `redundant_declaration`.
 Evidence: `negative-not-missing-age`, `rust/crates/yamaa-adapters/tests/fixtures/original_not_missing.json`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::restated_facts_and_relaxed_keys_fail_validation_before_data`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::VerificationNotMissingRedundant`.
 
+`when` is a [Formulas](formulas.md) predicate over one constructed output row
+that selects rows as the `when` of `assert` does ([CHECK-12](#check-12)), not
+groups as that of `row_count` does ([CHECK-14](#check-14)): a row whose `when`
+is `FALSE` or `UNKNOWN` is not checked and passes. It reads completed values:
+the check runs once every column it reads is complete, and check rows keep
+column declaration order ([CHECK-23](#check-23)).
+
+`max_fraction` is a share from 0 through 1 ([CHECK-4](#check-4)). The checked
+rows whose value is missing, divided by the checked rows, is the share the
+check compares with `max_fraction`, as [CHECK-13](#check-13) compares a
+`row_count`'s; with no checked row the share is zero. Without `max_fraction`,
+one checked row whose value is missing fails the check.
+
+```yaml
+columns:
+  - name: AESTDTC
+    type: str
+    verifications:
+      - not_missing: {max_fraction: 0.05, severity: warning}
+  - name: AEDECOD
+    type: str
+    verifications:
+      - not_missing: {when: "AETERM IS NOT NULL"}
+```
+
+The first check warns when more than 5% of the rows lack `AESTDTC`; the
+second requires `AEDECOD` on every row that has `AETERM`.
+
+A failed check reports `not_missing_failed` with context `column`;
+`failure_count`, the checked rows whose value is missing; and `keys`,
+representative keys of those rows ([CHECK-2](#check-2)). Under `max_fraction`
+the context adds `denominator`, the rows it checked, and every checked row
+whose value is missing offends ([CHECK-24](#check-24)).
+
 The redundant finding reports the verification's path and, in `stated_by`,
-the key's position in `keys`. A column whose submission metadata resolves
-`mandatory` to true on every row is checked without a `not_missing` too, and
-[SUB-11](profiles/submission.md#sub-11) rejects one beside it.
+the key's position in `keys`, whatever fields the `not_missing` declares. A
+column whose submission metadata resolves `mandatory` to true on every row is
+checked without a `not_missing` too, and
+[SUB-11](profiles/submission.md#sub-11) rejects one beside it, whatever its
+fields.
 
 <a id="check-6"></a>
 
@@ -354,10 +399,11 @@ Fails: `missing_report`.
 Evidence: `schema-adsl-age-quality`, `schema-verification-log`, `rust/crates/yamaa-core/tests/support/diagnostic/preflight.rs`, `python/tests/installed/installed_run_report.py::test_fatal_check_saves_only_the_report_and_keeps_original_issues`, `rust/crates/yamaa-adapters/tests/specification_sources.rs::verification_declarations_preserve_completed_prefix_and_phase_precedence`.
 
 A specification declaring a `warning` without `output.report` fails validation
-with `missing_report`. A specification whose checks are all `error` may omit
-it; its run still builds the report and the host still returns it. In a
-project run each specification that runs builds its own report
-([PROJECT-8](profiles/project.md#project-8)).
+with `missing_report`, a `warning` on an intermediate's `unique`
+([LOOKUP-17](lookup.md#lookup-17)) included. A specification whose checks are
+all `error` may omit it; its run still builds the report and the host still
+returns it. In a project run each specification that runs builds its own
+report ([PROJECT-8](profiles/project.md#project-8)).
 
 A specification refused while it is prepared, before its run begins, has no
 report: its issues are the whole result. Once the run has begun, every
@@ -389,8 +435,8 @@ dataset in declaration order; one `rows` row per row template, or one for root
 `base` without row templates; one `handler` row per handler path in
 registration order, zero counts included; one `column` row per output column in
 `output.columns` order, for a successful run only; and one `check` row per
-evaluated column or dataset verification in execution order. An intermediate's
-verifications have no row, and a check a stopped run never reached has none.
+evaluated check in execution order. An intermediate's `error` checks have no
+row, and a check a stopped run never reached has none.
 
 Evidence: `schema-verification-log`, `schema-row-count-fractions`, `rust/crates/yamaa-adapters/tests/scalar_language.rs::failed_runs_report_the_prefix_they_reached_and_no_columns`, `rust/crates/yamaa-adapters/tests/scalar_language.rs::handler_rows_register_every_path_at_zero_in_one_order`, `rust/crates/yamaa-adapters/tests/scalar_language.rs::a_row_template_s_handler_rows_name_their_column_and_cite_their_surface_s_rule`.
 
@@ -414,10 +460,14 @@ intermediate derivations and the default substitutions counted like handlers
 included: a `partial` date ([TIME-2](temporal.md#time-2)), `crossed_bounds`
 ([TIME-9](temporal.md#time-9)) and a missing `impute` or `precision` source
 ([TIME-13](temporal.md#time-13)). A run that never reached execution registered
-none. Check rows keep execution order: column declaration
-order first, then dataset-verification order, each check that ran and held
-included. A failed stage contributes the checks it evaluated, at least one of
-them `violated` at `error` severity. A check that submission metadata adds, the
+none. Check rows keep execution order, each check that ran and held included:
+an intermediate's `warning` checks ([LOOKUP-17](lookup.md#lookup-17)) first,
+those of intermediates over an input before those of `SELF` intermediates and
+each in declaration order, then column declaration order, then
+dataset-verification order. A `SELF` intermediate's check runs after each
+completed row template, and its one row holds its last evaluation. A failed
+stage contributes the checks it evaluated, at least one of them `violated` at
+`error` severity. A check that submission metadata adds, the
 presence check of [SUB-11](profiles/submission.md#sub-11), a bound codelist
 check or a value-level check of [SUB-13](profiles/submission.md#sub-13), is a
 row like a declared verification, at the path of the declaration that adds it.
@@ -452,7 +502,8 @@ Evidence: `schema-verification-log`, `schema-parquet`, `schema-adsl-age-quality`
 | `KEYS` | `str` | violated check: every offending key or group as canonical JSON; else missing |
 | `DETAILS` | `str` | canonical JSON: the condition context of a violated check, the input's file facts, a `str` column's longest value, else `{}` |
 
-`NAME` of a check is its registered name under [CHECK-1](#check-1), and a
+`NAME` of a check is its registered name under [CHECK-1](#check-1), or `unique`
+for an intermediate's check ([LOOKUP-17](lookup.md#lookup-17)), and a
 column check's `TARGET` is the column it infers there; a handler's `TARGET` is
 the output column whose derivation declares it, missing for a named
 intermediate's own derivations and match keys. A check that submission
@@ -496,7 +547,8 @@ present value in Unicode scalar values (`0` when none is present).
 A check's `COUNT` and `TOTAL` count the unit the check itself counts:
 
 - output rows for a row-wise check;
-- distinct combinations for `unique`;
+- distinct combinations for `unique`, of the output rows for a dataset's and
+  of the donor records for an intermediate's;
 - groups for a check that partitions the artifact, where an ungrouped
   `row_count` is the one group [CHECK-13](#check-13) bounds;
 - the artifact as one unit for the check that a value-level entry matches a
@@ -511,6 +563,12 @@ carries `KEYS` with the complete ordered sequence of offending keys or groups
 rather than the bounded sample an error report may show, and `DETAILS` with
 that failure's remaining context.
 
+A `not_missing` is a row-wise check whatever its fields
+([CHECK-5](#check-5)): its `TOTAL` is every output row, the rows its `when`
+does not select included. Under `max_fraction` a violated check offends at
+every checked row whose value is missing, and its `DETAILS` is
+`{"column": "<column>", "denominator": <d>}`, `<d>` the rows it checked.
+
 A violated `row_count` without `group_by` has `KEYS` `[{}]` under
 [CHECK-25](#check-25) and `DETAILS` `{"count": <n>}`, with
 `"denominator": <d>` added when the check declares a fraction bound: `<n>` is
@@ -519,6 +577,13 @@ the rows its `filter` admits and `<d>` every row of the artifact, as
 its `DETAILS.counts` is the complete sequence of observed counts aligned with
 the offending groups in `KEYS`, and `DETAILS.denominators`, present under a
 fraction bound, holds the rows of each of those groups.
+
+A violated intermediate `unique` ([LOOKUP-17](lookup.md#lookup-17)) has
+`KEYS` with one object per repeated combination, the check's columns by name,
+in the donor order of each combination's first record, and `DETAILS`
+`{"columns": [<columns>], "dataset": "<dataset>", "intermediate": "<id>"}`:
+the context its failure reports, without `duplicate_count` and
+`verification_id`, which `COUNT` and `ID` hold.
 
 <a id="check-25"></a>
 
@@ -535,8 +600,9 @@ Evidence: `schema-verification-log`, `schema-adsl-age-quality`, `rust/crates/yam
 A scalar above `U+FFFF` is its JSON surrogate-pair escape. `KEYS` is an array
 holding one object per offending row, its output keys by name, or per
 offending group, its grouping columns by name; an ungrouped `row_count` and a
-value-level entry that matches no row have the one empty group `[{}]`. Empty
-remaining context is `{}`.
+value-level entry that matches no row have the one empty group `[{}]`, and an
+intermediate's `unique` one object per repeated combination, its columns by
+name ([CHECK-24](#check-24)). Empty remaining context is `{}`.
 
 <a id="check-26"></a>
 

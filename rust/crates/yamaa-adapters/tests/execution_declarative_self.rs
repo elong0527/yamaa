@@ -39,7 +39,8 @@ mod execution {
             }
         }
         use crate::support::study::issues;
-        const BODY: &str = r#"schema_version: "1.0"
+        const BODY: &str = r#"yamaa: "1.0"
+type: spec
 domain: TEST
 input:
   SRC: src.csv
@@ -52,14 +53,13 @@ intermediates:
     key: {K: K}
     order_by: [SELF.SEQ]
     keep: last
-    no_match: 0
+    absent: 0
   - id: F
     dataset: SELF
     key: [K]
     filter: "SECTION = 'first'"
     order_by: [SEQ]
     keep: last
-    no_match: {literal: null}
 columns:
   - {name: ID, type: str, derivation: SRC.ID}
   - {name: SECTION, type: str}
@@ -72,23 +72,23 @@ rows:
   - id: collected
     dataset: SRC
     derivations:
-      SECTION: {literal: first}
+      SECTION: "'first'"
   - id: grouped
     dataset: SRC
     group_by: [SRC.K]
     derivations:
-      ID: {literal: g}
-      SECTION: {literal: second}
-      SEQ: {literal: 4}
-      V: {compute: {expr: "P.V + 10"}}
+      ID: "'g'"
+      SECTION: "'second'"
+      SEQ: 4
+      V: "P.V + 10"
   - id: added
     dataset: OTHER
     derivations:
       ID: OTHER.ID
-      SECTION: {literal: third}
+      SECTION: "'third'"
       K: OTHER.K
-      SEQ: {literal: 9}
-      V: {compute: {expr: "P.V + 100"}}
+      SEQ: 9
+      V: "P.V + 100"
 "#;
         #[test]
         fn completed_templates_are_borrowed_and_republished_in_construction_order() {
@@ -102,14 +102,14 @@ rows:
             assert_eq!(
                 result.observations()["handler_counts"],
                 yamaa_adapters::json!([
-                    {"spec_path":"rows[1].derivations.V.compute.multiple_matches","handler":"multiple_matches","count":1},
-                    {"spec_path":"rows[1].derivations.V.compute.no_match","handler":"no_match","count":0},
-                    {"spec_path":"rows[2].derivations.V.compute.multiple_matches","handler":"multiple_matches","count":2},
-                    {"spec_path":"rows[2].derivations.V.compute.no_match","handler":"no_match","count":0},
+                    {"spec_path":"rows.grouped.derivations.V.multiple_matches","handler":"multiple_matches","count":1},
+                    {"spec_path":"rows.grouped.derivations.V.absent","handler":"absent","count":0},
+                    {"spec_path":"rows.added.derivations.V.multiple_matches","handler":"multiple_matches","count":2},
+                    {"spec_path":"rows.added.derivations.V.absent","handler":"absent","count":0},
                     {"spec_path":"columns.FINAL.derivation.source.multiple_matches","handler":"multiple_matches","count":5},
-                    {"spec_path":"columns.FINAL.derivation.source.no_match","handler":"no_match","count":0},
+                    {"spec_path":"columns.FINAL.derivation.source.absent","handler":"absent","count":0},
                     {"spec_path":"columns.FIRST.derivation.source.multiple_matches","handler":"multiple_matches","count":5},
-                    {"spec_path":"columns.FIRST.derivation.source.no_match","handler":"no_match","count":0},
+                    {"spec_path":"columns.FIRST.derivation.source.absent","handler":"absent","count":0},
                 ])
             );
             // The two third-template records both see completed value 15, never 115
@@ -118,12 +118,12 @@ rows:
         #[test]
         fn first_template_read_preserves_full_phase_context_before_study_access() {
             let fixture = Fixture::new();
-            let body = BODY.edit("SECTION: {literal: first}", "SECTION: P.K");
+            let body = BODY.edit("SECTION: \"'first'\"", "SECTION: P.K");
             assert_eq!(
                 issues(fixture.run(&body)),
                 vec![yamaa_adapters::json!({
                     "phase":"validation", "condition":"phase_boundary", "rule":"LOOKUP-7",
-                    "spec_paths":["rows[0].derivations.SECTION.source"],
+                    "spec_paths":["rows.collected.derivations.SECTION.source"],
                     "context":{"identifier":"P.K","available_phase":"completed_prior_row_template","required_phase":"row_construction"}
                 })]
             );
@@ -134,13 +134,13 @@ rows:
             let fixture = Fixture::new();
             fs::write(fixture.0.join("src.csv"), "ID,K,SEQ,V\na,x,2,5\n").unwrap();
             fs::write(fixture.0.join("other.csv"), "ID,K\nc,x\n").unwrap();
-            let body = BODY.edit("expr: \"P.V + 10\"", "expr: \"P.FINAL + 10\"");
+            let body = BODY.edit("V: \"P.V + 10\"", "V: \"P.FINAL + 10\"");
             let found = issues(fixture.run(&body));
             assert_eq!(
                 found,
                 vec![yamaa_adapters::json!({
                     "phase":"validation", "condition":"unknown_field", "rule":"LOOKUP-11",
-                    "spec_paths":["rows[1].derivations.V.compute.expr"], "context":{"identifier":"P.FINAL"}
+                    "spec_paths":["rows.grouped.derivations.V"], "context":{"identifier":"P.FINAL"}
                 })]
             );
         }
@@ -160,14 +160,14 @@ rows:
             assert_eq!(
                 result.observations()["handler_counts"],
                 yamaa_adapters::json!([
-                    {"spec_path":"rows[1].derivations.V.compute.multiple_matches","handler":"multiple_matches","count":0},
-                    {"spec_path":"rows[1].derivations.V.compute.no_match","handler":"no_match","count":1},
-                    {"spec_path":"rows[2].derivations.V.compute.multiple_matches","handler":"multiple_matches","count":0},
-                    {"spec_path":"rows[2].derivations.V.compute.no_match","handler":"no_match","count":0},
+                    {"spec_path":"rows.grouped.derivations.V.multiple_matches","handler":"multiple_matches","count":0},
+                    {"spec_path":"rows.grouped.derivations.V.absent","handler":"absent","count":1},
+                    {"spec_path":"rows.added.derivations.V.multiple_matches","handler":"multiple_matches","count":0},
+                    {"spec_path":"rows.added.derivations.V.absent","handler":"absent","count":0},
                     {"spec_path":"columns.FINAL.derivation.source.multiple_matches","handler":"multiple_matches","count":3},
-                    {"spec_path":"columns.FINAL.derivation.source.no_match","handler":"no_match","count":0},
+                    {"spec_path":"columns.FINAL.derivation.source.absent","handler":"absent","count":0},
                     {"spec_path":"columns.FIRST.derivation.source.multiple_matches","handler":"multiple_matches","count":0},
-                    {"spec_path":"columns.FIRST.derivation.source.no_match","handler":"no_match","count":3},
+                    {"spec_path":"columns.FIRST.derivation.source.absent","handler":"absent","count":3},
                 ])
             );
         }
@@ -179,8 +179,8 @@ rows:
             assert_eq!(
                 issues(fixture.run(&collision)),
                 vec![
-                    yamaa_adapters::json!({"phase":"validation", "condition":"duplicate_identifier", "rule":"LOOKUP-3", "spec_paths":["intermediates[0].dataset","input.SELF"], "context":{"identifier":"SELF"}}),
-                    yamaa_adapters::json!({"phase":"validation", "condition":"duplicate_identifier", "rule":"LOOKUP-3", "spec_paths":["intermediates[1].dataset","input.SELF"], "context":{"identifier":"SELF"}}),
+                    yamaa_adapters::json!({"phase":"validation", "condition":"duplicate_identifier", "rule":"LOOKUP-3", "spec_paths":["intermediates.P.dataset","input.SELF"], "context":{"identifier":"SELF"}}),
+                    yamaa_adapters::json!({"phase":"validation", "condition":"duplicate_identifier", "rule":"LOOKUP-3", "spec_paths":["intermediates.F.dataset","input.SELF"], "context":{"identifier":"SELF"}}),
                 ]
             );
             let missing_rows = BODY
@@ -190,13 +190,13 @@ rows:
                 .edit("domain: TEST", "domain: TEST\nbase: SRC")
                 .edit(
                     "  - {name: SECTION, type: str}",
-                    "  - {name: SECTION, type: str, derivation: {literal: first}}",
+                    "  - {name: SECTION, type: str, derivation: \"'first'\"}",
                 );
             assert_eq!(
                 issues(fixture.run(&missing_rows)),
                 vec![
-                    yamaa_adapters::json!({"phase":"validation", "condition":"unknown_field", "rule":"LOOKUP-7", "spec_paths":["intermediates[0].dataset"], "context":{"identifier":"SELF","intermediate":"P"}}),
-                    yamaa_adapters::json!({"phase":"validation", "condition":"unknown_field", "rule":"LOOKUP-7", "spec_paths":["intermediates[1].dataset"], "context":{"identifier":"SELF","intermediate":"F"}}),
+                    yamaa_adapters::json!({"phase":"validation", "condition":"unknown_field", "rule":"LOOKUP-7", "spec_paths":["intermediates.P.dataset"], "context":{"identifier":"SELF","intermediate":"P"}}),
+                    yamaa_adapters::json!({"phase":"validation", "condition":"unknown_field", "rule":"LOOKUP-7", "spec_paths":["intermediates.F.dataset"], "context":{"identifier":"SELF","intermediate":"F"}}),
                 ]
             );
             assert!(!fixture.0.join("src.csv").exists());
@@ -205,12 +205,12 @@ rows:
         #[test]
         fn hidden_first_template_alternative_preserves_its_authored_phase_path() {
             let fixture = Fixture::new();
-            let body = BODY.edit("SECTION: {literal: first}", "SECTION: {case: [{when: \"SRC.ID = 'absent'\", then: P.K}, {otherwise: {literal: first}}]}");
+            let body = BODY.edit("SECTION: \"'first'\"", "SECTION: {case: [{when: \"SRC.ID = 'absent'\", then: P.K}, {otherwise: \"'first'\"}]}");
             assert_eq!(
                 issues(fixture.run(&body)),
                 vec![yamaa_adapters::json!({
                     "phase":"validation", "condition":"phase_boundary", "rule":"LOOKUP-7",
-                    "spec_paths":["rows[0].derivations.SECTION.case[0].then.source"],
+                    "spec_paths":["rows.collected.derivations.SECTION.case[0].then.source"],
                     "context":{"identifier":"P.K","available_phase":"completed_prior_row_template","required_phase":"row_construction"}
                 })]
             );
@@ -220,14 +220,14 @@ rows:
         fn hidden_first_template_first_available_source_preserves_its_authored_phase_path() {
             let fixture = Fixture::new();
             let body = BODY.edit(
-                "SECTION: {literal: first}",
+                "SECTION: \"'first'\"",
                 "SECTION: {first_available: {sources: [P.K], missing: first}}",
             );
             assert_eq!(
                 issues(fixture.run(&body)),
                 vec![yamaa_adapters::json!({
                     "phase":"validation", "condition":"phase_boundary", "rule":"LOOKUP-7",
-                    "spec_paths":["rows[0].derivations.SECTION.first_available.sources[0]"],
+                    "spec_paths":["rows.collected.derivations.SECTION.first_available.sources[0]"],
                     "context":{"identifier":"P.K","available_phase":"completed_prior_row_template","required_phase":"row_construction"}
                 })]
             );
@@ -239,21 +239,21 @@ rows:
                 (
                     "SECTION: {aggregate: 'SUM(P.V)'}",
                     "P.V",
-                    "rows[0].derivations.SECTION.aggregate",
+                    "rows.collected.derivations.SECTION.aggregate",
                 ),
                 (
                     "SECTION: {aggregate: 'COUNT(P.*)'}",
                     "P.*",
-                    "rows[0].derivations.SECTION.aggregate",
+                    "rows.collected.derivations.SECTION.aggregate",
                 ),
                 (
                     "SECTION: {case: [{when: 'TRUE', then: {aggregate: 'COUNT(P.*)'}}]}",
                     "P.*",
-                    "rows[0].derivations.SECTION.case[0].then.aggregate",
+                    "rows.collected.derivations.SECTION.case[0].then.aggregate",
                 ),
             ] {
                 let fixture = Fixture::new();
-                let body = BODY.edit("SECTION: {literal: first}", replacement);
+                let body = BODY.edit("SECTION: \"'first'\"", replacement);
                 assert_eq!(
                     issues(fixture.run(&body)),
                     [yamaa_adapters::json!({
@@ -273,14 +273,15 @@ rows:
             fs::write(fixture.0.join("src.csv"), "ID\n99\n").unwrap();
             fs::write(fixture.0.join("alt.csv"), "ID\n1\n2\n").unwrap();
             fs::write(fixture.0.join("donor.csv"), "ID,V\n1,4\n1,7\n2,3\n").unwrap();
-            let body = r#"schema_version: '1.0'
+            let body = r#"yamaa: "1.0"
+type: spec
 domain: TEST
 base: SRC
 keys: [ID]
 input:
   SRC: {path: src.csv, types: {ID: int}}
   ALT: {path: alt.csv, types: {ID: int}}
-  D: {path: donor.csv, types: {ID: int, V: int}}
+  D: {path: donor.csv, key: [ID], types: {ID: int, V: int}}
 output: {path: result.csv, columns: [ID, TOTAL]}
 rows:
   - id: alternate
@@ -312,7 +313,7 @@ columns:
                 let fixture = Fixture::new();
                 fs::write(fixture.0.join("src.csv"), "ID,K,SEQ,V\na,x,2,5\nb,x,1,9\n").unwrap();
                 fs::write(fixture.0.join("other.csv"), "ID,K\nc,x\nd,x\n").unwrap();
-                let body = BODY.edit("compute: {expr: \"P.V + 10\"}", operation);
+                let body = BODY.edit("V: \"P.V + 10\"", &format!("V: {{{operation}}}"));
                 let mut result = fixture.run(&body).unwrap();
                 assert!(result.issues().is_empty(), "{:?}", result.issues());
                 assert!(result.save().unwrap());
@@ -331,7 +332,7 @@ columns:
                 "cut: {source: P.V, breaks: [10], labels: [first, later]}",
             ] {
                 let fixture = Fixture::new();
-                let body = BODY.edit("literal: first", operation);
+                let body = BODY.edit("SECTION: \"'first'\"", &format!("SECTION: {{{operation}}}"));
                 let operation_name = operation.split(':').next().unwrap();
                 let identifier = if operation_name == "mapping" {
                     "P.K"
@@ -342,7 +343,7 @@ columns:
                     issues(fixture.run(&body)),
                     vec![yamaa_adapters::json!({
                         "phase":"validation", "condition":"phase_boundary", "rule":"LOOKUP-7",
-                        "spec_paths":[format!("rows[0].derivations.SECTION.{operation_name}")],
+                        "spec_paths":[format!("rows.collected.derivations.SECTION.{operation_name}")],
                         "context":{"identifier":identifier,"available_phase":"completed_prior_row_template","required_phase":"row_construction"}
                     })],
                 );
@@ -352,7 +353,8 @@ columns:
 
         /// W's `between` value reads P, and W2's reads W, so reading either
         /// window reads the completed rows P selects from.
-        const WINDOWS: &str = r#"schema_version: "1.0"
+        const WINDOWS: &str = r#"yamaa: "1.0"
+type: spec
 domain: TEST
 input:
   SRC: {path: src.csv, types: {DAY: int}}
@@ -365,17 +367,14 @@ intermediates:
     key: [ID]
     order_by: [SELF.DAY]
     keep: last
-    no_match: null
   - id: W
     dataset: WIN
     key: [ID]
     between: {value: P.DAY, lower: LO, upper: HI}
-    no_match: null
   - id: W2
     dataset: WIN
     key: [ID]
     between: {value: W.HI, lower: LO, upper: HI}
-    no_match: null
 columns:
   - {name: ID, type: str, derivation: SRC.ID}
   - {name: SECTION, type: str}
@@ -384,10 +383,10 @@ columns:
 rows:
   - id: first
     dataset: SRC
-    derivations: {SECTION: {literal: first}, WINDOW: {literal: none}}
+    derivations: {SECTION: "'first'", WINDOW: "'none'"}
   - id: second
     dataset: SRC
-    derivations: {SECTION: {literal: second}, WINDOW: W2.NAME}
+    derivations: {SECTION: "'second'", WINDOW: W2.NAME}
 "#;
         #[test]
         fn first_template_reads_through_between_values_fail_before_study_access() {
@@ -395,28 +394,28 @@ rows:
                 (
                     "W.NAME",
                     vec![
-                        "rows[0].derivations.WINDOW.source",
-                        "intermediates[1].between.value",
+                        "rows.first.derivations.WINDOW.source",
+                        "intermediates.W.between.value",
                     ],
                 ),
                 (
                     "W2.NAME",
                     vec![
-                        "rows[0].derivations.WINDOW.source",
-                        "intermediates[2].between.value",
-                        "intermediates[1].between.value",
+                        "rows.first.derivations.WINDOW.source",
+                        "intermediates.W2.between.value",
+                        "intermediates.W.between.value",
                     ],
                 ),
                 (
-                    "{case: [{when: \"W.NAME = 'late'\", then: {literal: late}}, {otherwise: {literal: none}}]}",
+                    "{case: [{when: \"W.NAME = 'late'\", then: \"'late'\"}, {otherwise: \"'none'\"}]}",
                     vec![
-                        "rows[0].derivations.WINDOW.case[0].when",
-                        "intermediates[1].between.value",
+                        "rows.first.derivations.WINDOW.case[0].when",
+                        "intermediates.W.between.value",
                     ],
                 ),
             ] {
                 let fixture = Fixture::new();
-                let body = WINDOWS.edit("WINDOW: {literal: none}", &format!("WINDOW: {window}"));
+                let body = WINDOWS.edit("WINDOW: \"'none'\"", &format!("WINDOW: {window}"));
                 assert_eq!(
                     issues(fixture.run(&body)),
                     vec![yamaa_adapters::json!({
@@ -440,19 +439,19 @@ rows:
                 )
             };
             for (filter, identifier, paths) in [
-                ("P.DAY IS NULL", "P.DAY", vec!["rows[0].filter"]),
+                ("P.DAY IS NULL", "P.DAY", vec!["rows.first.filter"]),
                 (
                     "W.NAME IS NULL",
                     "P.DAY",
-                    vec!["rows[0].filter", "intermediates[1].between.value"],
+                    vec!["rows.first.filter", "intermediates.W.between.value"],
                 ),
                 (
                     "W2.NAME IS NULL AND DAY > 0",
                     "P.DAY",
                     vec![
-                        "rows[0].filter",
-                        "intermediates[2].between.value",
-                        "intermediates[1].between.value",
+                        "rows.first.filter",
+                        "intermediates.W2.between.value",
+                        "intermediates.W.between.value",
                     ],
                 ),
             ] {
@@ -481,7 +480,7 @@ rows:
                 issues(fixture.run(&grouped)),
                 vec![yamaa_adapters::json!({
                     "phase":"validation", "condition":"phase_boundary", "rule":"ROW-6",
-                    "spec_paths":["rows[0].filter"],
+                    "spec_paths":["rows.first.filter"],
                     "context":{"identifier":"P.DAY","row":"first","available_phase":"row_construction","required_phase":"grouped_row_filter"}
                 })]
             );
@@ -852,14 +851,9 @@ rows:
             copy_dir(&root.join(benchmark), &case);
             // The child is written in its parent's language, as every layer
             // of a chain is (LAYER-4).
-            let written = fs::read(case.join("spec.yaml")).unwrap();
             fs::write(
                 case.join("__child.yaml"),
-                if crate::support::benchmarks::declares_header(&written) {
-                    "yamaa: \"1.0\"\ntype: spec\nparent: spec.yaml\n"
-                } else {
-                    "schema_version: \"1.0\"\nparent: spec.yaml\n"
-                },
+                "yamaa: \"1.0\"\ntype: spec\nparent: spec.yaml\n",
             )
             .unwrap();
             let parent = first_issue(&case.join("spec.yaml"));
@@ -891,6 +885,17 @@ rows:
                 "validation | unknown_field | Some(\"LOOKUP-5\")",
             );
         }
+
+        /// The child orders its columns before binding (LAYER-13), and an
+        /// unbound reducer name of an aggregate with bindings is no column
+        /// that ordering could miss (#3593).
+        #[test]
+        fn empty_child_of_negative_aggregate_unbound_variable_reports_unknown_derive_variable() {
+            assert_empty_child_matches_parent(
+                "negative-aggregate-unbound-variable",
+                "validation | unknown_derive_variable | Some(\"LOOKUP-22\")",
+            );
+        }
     }
     mod inherited_aggregate_bindings {
         //! Aggregate derive bindings remain local when specifications are inherited.
@@ -919,7 +924,6 @@ rows:
                 .unwrap()
             }
         }
-        use yamaa_adapters::json;
         #[test]
         fn reducer_and_chained_binding_names_do_not_become_global_column_dependencies() {
             for (chained, collision) in [(false, false), (true, false), (false, true)] {
@@ -930,40 +934,48 @@ rows:
                     "ID,EXSTDTC\n1,2025-01-05\n1,2025-01-02\n2,2025-02-10\n",
                 )
                 .unwrap();
-                let mut bindings = vec![
-                    json!({"name":"STDT","type":"date","derivation":{"to_date":{"source":"EX.EXSTDTC"}}}),
-                ];
-                if chained {
-                    bindings.push(json!({"name":"DAYNUM","type":"int","derivation":{"to_epoch_day":{"source":"STDT"}}}));
-                }
-                let mut parent = json!({
-                    "schema_version":"1.0", "domain":"OUT", "keys":["ID"], "base":"DM",
-                    "input":{"DM":"dm.csv","EX":"ex.csv"}, "output":{"path":"result.csv","columns":["ID","RESULT"]},
-                    "columns":[
-                        {"name":"ID","type":"str","derivation":"DM.ID"},
-                        {"name":"RESULT","type":if chained {"int"} else {"date"},"derivation":{"aggregate":{
-                            "expr":if chained {"MIN(DAYNUM)"} else {"MIN(STDT)"}, "derive":bindings
-                        }}}
-                    ]
-                });
-                if collision {
-                    parent["columns"]
-                        .as_array_mut()
-                        .unwrap()
-                        .push(json!({"name":"STDT","type":"date","derivation":"RESULT"}));
-                    parent["output"]["columns"]
-                        .as_array_mut()
-                        .unwrap()
-                        .push(json!("STDT"));
-                }
-                fs::write(
-                    fixture.0.join("parent.yaml"),
-                    yamaa_adapters::json_wire::encode(&parent),
-                )
-                .unwrap();
+                // A chained binding reads the one written before it, so the
+                // bindings map is written as YAML, which keeps their order.
+                let (kind, expr, chain) = if chained {
+                    (
+                        "int",
+                        "MIN(DAYNUM)",
+                        "          DAYNUM: {type: int, derivation: {to_epoch_day: {source: STDT}}}\n",
+                    )
+                } else {
+                    ("date", "MIN(STDT)", "")
+                };
+                let (output, collided) = if collision {
+                    (
+                        ", STDT",
+                        "  - {name: STDT, type: date, derivation: RESULT}\n",
+                    )
+                } else {
+                    ("", "")
+                };
+                let parent = format!(
+                    "yamaa: \"1.0\"\n\
+                     type: spec\n\
+                     domain: OUT\n\
+                     keys: [ID]\n\
+                     base: DM\n\
+                     input: {{DM: dm.csv, EX: {{path: ex.csv, key: [ID]}}}}\n\
+                     output: {{path: result.csv, columns: [ID, RESULT{output}]}}\n\
+                     columns:\n\
+                     \x20 - {{name: ID, type: str, derivation: DM.ID}}\n\
+                     \x20 - name: RESULT\n\
+                     \x20   type: {kind}\n\
+                     \x20   derivation:\n\
+                     \x20     aggregate:\n\
+                     \x20       expr: {expr}\n\
+                     \x20       derivations:\n\
+                     \x20         STDT: {{type: date, derivation: {{to_date: {{source: EX.EXSTDTC}}}}}}\n\
+                     {chain}{collided}"
+                );
+                fs::write(fixture.0.join("parent.yaml"), parent).unwrap();
                 fs::write(
                     fixture.0.join("child.yaml"),
-                    "schema_version: '1.0'\nparent: parent.yaml\n",
+                    "yamaa: \"1.0\"\ntype: spec\nparent: parent.yaml\n",
                 )
                 .unwrap();
                 for entry in ["parent.yaml", "child.yaml"] {
@@ -1033,11 +1045,11 @@ rows:
                 let fixture = Fixture::new();
                 fs::write(fixture.0.join("obs.csv"), "ID\n1\n2\n").unwrap();
                 fs::write(fixture.0.join("ref.csv"), "ID,TRT\n1,DRUG A\n2,DRUG B\n").unwrap();
-                let parent = "schema_version: '1.0'\ndomain: OUT\nkeys: [ID]\nbase: OBS\ninput: {OBS: obs.csv, REF: ref.csv}\noutput: {path: result.csv, columns: [ID, TRT]}\ncolumns:\n  - {name: ID, type: str, derivation: OBS.ID}\n  - {name: TRT, type: str, derivation: REF.TRT}\n";
-                let lookup = "intermediates:\n  - {id: REF, dataset: REF, filter: \"REF.TRT = 'DRUG A'\", no_match: NONE}\n";
+                let parent = "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\nbase: OBS\ninput: {OBS: obs.csv, REF: ref.csv}\noutput: {path: result.csv, columns: [ID, TRT]}\ncolumns:\n  - {name: ID, type: str, derivation: OBS.ID}\n  - {name: TRT, type: str, derivation: REF.TRT}\n";
+                let lookup = "intermediates:\n  - {id: REF, dataset: REF, key: [ID], filter: \"REF.TRT = 'DRUG A'\", absent: NONE}\n";
                 fs::write(fixture.0.join("parent.yaml"), parent).unwrap();
                 let entry = if inherited {
-                    format!("schema_version: '1.0'\nparent: parent.yaml\n{lookup}")
+                    format!("yamaa: \"1.0\"\ntype: spec\nparent: parent.yaml\n{lookup}")
                 } else {
                     format!("{parent}{lookup}")
                 };
@@ -1055,7 +1067,7 @@ rows:
                 assert!(issue
                     .spec_paths
                     .iter()
-                    .any(|path| path == "intermediates[0].id"));
+                    .any(|path| path == "intermediates.REF.id"));
                 assert!(issue.spec_paths.iter().any(|path| path == "input.REF"));
                 assert!(!fixture.0.join("result.csv").exists());
             }
@@ -1095,7 +1107,7 @@ rows:
             }
         }
 
-        const PARENT_HEAD: &str = "schema_version: '1.0'\ndomain: PV\nkeys: [ID]\ninput: {OBS: obs.csv, REF: ref.csv}\nbase: OBS\nintermediates:\n  - id: REFCHK\n    dataset: REF\n    key: {CODE: CODE}\n    filter: \"REF.KIND = 'X'\"\n    verifications:\n      - unique: [CODE]\n";
+        const PARENT_HEAD: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: PV\nkeys: [ID]\ninput: {OBS: obs.csv, REF: ref.csv}\nbase: OBS\nintermediates:\n  - id: REFCHK\n    dataset: REF\n    key: {CODE: CODE}\n    filter: \"REF.KIND = 'X'\"\n    verifications:\n      - unique: [CODE]\n";
 
         #[test]
         fn assertion_only_intermediate_keeps_its_check_through_inheritance() {
@@ -1128,7 +1140,7 @@ rows:
             .unwrap();
                     fs::write(
                         fixture.0.join("child.yaml"),
-                        "schema_version: '1.0'\nparent: parent.yaml\n",
+                        "yamaa: \"1.0\"\ntype: spec\nparent: parent.yaml\n",
                     )
                     .unwrap();
                     let mut parent_issues = None;
@@ -1151,7 +1163,7 @@ rows:
                             assert_eq!(issue.rule(), Some("LOOKUP-17"), "read={read} {entry}");
                             assert_eq!(
                                 issue.spec_paths,
-                                ["intermediates[0].verifications[0].unique"],
+                                ["intermediates.REFCHK.verifications[0].unique"],
                                 "read={read} {entry}"
                             );
                             assert_eq!(
@@ -1228,13 +1240,13 @@ rows:
                 fs::write(
             fixture.0.join("parent.yaml"),
             format!(
-                "schema_version: '1.0'\ndomain: OUT\nkeys: [ID]\nbase: OBS\ninput: {{OBS: obs.csv, UNUSED: absent.csv}}\noutput: {{path: result.csv, columns: [ID]}}\nintermediates:\n  - id: UNREAD\n    dataset: UNUSED\n    require_match: true\n{verifications}columns:\n  - {{name: ID, type: str, derivation: OBS.ID}}\n"
+                "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\nbase: OBS\ninput: {{OBS: obs.csv, UNUSED: absent.csv}}\noutput: {{path: result.csv, columns: [ID]}}\nintermediates:\n  - id: UNREAD\n    dataset: UNUSED\n    require_match: true\n{verifications}columns:\n  - {{name: ID, type: str, derivation: OBS.ID}}\n"
             ),
         )
         .unwrap();
                 fs::write(
                     fixture.0.join("child.yaml"),
-                    "schema_version: '1.0'\nparent: parent.yaml\n",
+                    "yamaa: \"1.0\"\ntype: spec\nparent: parent.yaml\n",
                 )
                 .unwrap();
                 let mut result = fixture.build("child.yaml");
@@ -1306,11 +1318,11 @@ rows:
                     } else {
                         (format!("  - {{name: ID, type: str, derivation: OBS.ID}}\n  - {{name: CODE, type: str, derivation: OBS.CODE}}\n  - {{name: RESULT, type: {}, derivation: {derive}}}\n", if shape == "aggregate" {"int"} else {"str"}), String::new())
                     };
-                    let parent = format!("schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {{OBS: obs.csv, REF: ref.csv}}\nbase: OBS\noutput: {{path: result.csv, columns: [ID, RESULT]}}\n{}columns:\n{declarations}{rows}", if shape == "aggregate" {""} else {&lookup});
+                    let parent = format!("yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {{OBS: obs.csv, REF: ref.csv}}\nbase: OBS\noutput: {{path: result.csv, columns: [ID, RESULT]}}\n{}columns:\n{declarations}{rows}", if shape == "aggregate" {""} else {&lookup});
                     fs::write(fixture.0.join("parent.yaml"), parent).unwrap();
                     fs::write(
                         fixture.0.join("child.yaml"),
-                        "schema_version: '1.0'\nparent: parent.yaml\n",
+                        "yamaa: \"1.0\"\ntype: spec\nparent: parent.yaml\n",
                     )
                     .unwrap();
                     for entry in ["parent.yaml", "child.yaml"] {
@@ -1349,7 +1361,7 @@ rows:
             fn new(column: &str, extra: &str) -> Self {
                 let root = crate::support::Scratch::new("integer-literal");
                 fs::write(root.join("spec.yaml"), format!(
-            "schema_version: '1.0'\ndomain: ADSL\nkeys: [USUBJID]\ninput: {{DM: input.csv}}\noutput: {{path: out.csv, columns: [USUBJID, N]}}\ncolumns:\n  - {{name: USUBJID, type: str, derivation: DM.USUBJID}}\n{column}\n{extra}"
+            "yamaa: \"1.0\"\ntype: spec\ndomain: ADSL\nkeys: [USUBJID]\ninput: {{DM: input.csv}}\noutput: {{path: out.csv, columns: [USUBJID, N]}}\ncolumns:\n  - {{name: USUBJID, type: str, derivation: DM.USUBJID}}\n{column}\n{extra}"
         )).unwrap();
                 Self(root)
             }
@@ -1423,14 +1435,14 @@ rows:
                 (huge.as_str(), huge.as_str()),
             ] {
                 let cases = [
-            (format!("  - {{name: N, type: int, derivation: {{literal: {written}}}}}"), "columns.N.derivation.literal"),
-            (format!("  - {{name: N, type: float, derivation: {{literal: {written}}}}}"), "columns.N.derivation.literal"),
-            (format!("  - {{name: N, type: str, derivation: {{literal: {written}}}}}"), "columns.N.derivation.literal"),
+            (format!("  - {{name: N, type: int, derivation: {written}}}"), "columns.N.derivation"),
+            (format!("  - {{name: N, type: float, derivation: {written}}}"), "columns.N.derivation"),
+            (format!("  - {{name: N, type: str, derivation: {written}}}"), "columns.N.derivation"),
             (format!("  - {{name: N, type: int, derivation: DM.AGE, verifications: [{{allowed_values: {{values: [34, {written}]}}}}]}}"), "columns.N.verifications[0].allowed_values.values[1]"),
             (format!("  - {{name: N, type: int, derivation: DM.AGE, verifications: [{{range: {{min: {written}}}}}]}}"), "columns.N.verifications[0].range.min"),
             (format!("  - {{name: N, type: int, derivation: DM.AGE, verifications: [{{range: {{max: {written}}}}}]}}"), "columns.N.verifications[0].range.max"),
             (format!("  - {{name: N, type: str, derivation: DM.USUBJID, verifications: [{{max_length: {{max: {written}}}}}]}}"), "columns.N.verifications[0].max_length.max"),
-            (format!("  - {{name: N, type: int, derivation: {{value: {{source: DM.AGE}}, unconvertible: {written}}}}}"), "columns.N.derivation.unconvertible"),
+            (format!("  - {{name: N, type: int, derivation: {{value: DM.AGE, unconvertible: {written}}}}}"), "columns.N.derivation.unconvertible"),
         ];
                 for (column, path) in cases {
                     // No input.csv exists: preparation must report the literal, before IO.
@@ -1444,23 +1456,21 @@ rows:
             let wide = "9223372036854775808";
             let row = Fixture::new(
                 "  - {name: N, type: int}",
-                &format!(
-            "rows:\n  - {{id: record, dataset: DM, derivations: {{N: {{literal: {wide}}}}}}}\n"
-        ),
+                &format!("rows:\n  - {{id: record, dataset: DM, derivations: {{N: {wide}}}}}\n"),
             );
-            assert_overflow(&row, "rows[0].derivations.N.literal", wide);
+            assert_overflow(&row, "rows.record.derivations.N", wide);
             let case = Fixture::new(
-        &format!("  - {{name: N, type: int, derivation: {{case: [{{when: 'FALSE', then: {{literal: {wide}}}}}, {{otherwise: {{literal: 0}}}}]}}}}"),
+        &format!("  - {{name: N, type: int, derivation: {{case: [{{when: 'FALSE', then: {wide}}}, {{otherwise: 0}}]}}}}"),
         "",
     );
-            assert_overflow(&case, "columns.N.derivation.case[0].then.literal", wide);
+            assert_overflow(&case, "columns.N.derivation.case[0].then", wide);
             fs::rename(case.0.join("spec.yaml"), case.0.join("parent.yaml")).unwrap();
             fs::write(
                 case.0.join("spec.yaml"),
-                "schema_version: '1.0'\nparent: parent.yaml\n",
+                "yamaa: \"1.0\"\ntype: spec\nparent: parent.yaml\n",
             )
             .unwrap();
-            assert_overflow(&case, "columns.N.derivation.case[0].then.literal", wide);
+            assert_overflow(&case, "columns.N.derivation.case[0].then", wide);
         }
 
         #[test]
@@ -1469,11 +1479,11 @@ rows:
                 ("int", "-9223372036854775808", "-9223372036854775808"),
                 ("int", "9223372036854775807", "9223372036854775807"),
                 ("int", "0x7fffffffffffffff", "9223372036854775807"),
-                ("str", "'9223372036854775808'", "9223372036854775808"),
+                ("str", "\"'9223372036854775808'\"", "9223372036854775808"),
                 ("float", "9223372036854775808.0", "9223372036854776000"),
             ] {
                 let fixture = Fixture::new(
-                    &format!("  - {{name: N, type: {kind}, derivation: {{literal: {written}}}}}"),
+                    &format!("  - {{name: N, type: {kind}, derivation: {written}}}"),
                     "",
                 );
                 fixture.input();
@@ -1983,11 +1993,22 @@ rows:
                 .as_array()
                 .unwrap()
             {
-                let fixture = Fixture(crate::support::Scratch::new("namespace"));
+                let fixture = Fixture(crate::support::Scratch::canonical("namespace"));
                 let path = fixture.0.join("spec.yaml");
                 fs::write(&path, case["specification"].as_str().unwrap()).unwrap();
                 // Deliberately absent: an invalid namespace grants no source authority.
                 let path = path.to_str().unwrap();
+                // `{entry}` stands for the specification's absolute path as
+                // the engine resolves it, with forward slashes.
+                let expected = yamaa_adapters::json_wire::decode(
+                    &yamaa_adapters::json_wire::encode(&case["issues"]).replace(
+                        "\"{entry}\"",
+                        &yamaa_adapters::json_wire::encode(&yamaa_adapters::json!(
+                            path.replace('\\', "/")
+                        )),
+                    ),
+                )
+                .unwrap();
                 let request = || Request {
                     specification: path,
                     environment: None,
@@ -2017,7 +2038,7 @@ rows:
                     .collect::<Vec<_>>();
                 assert_eq!(
                     yamaa_adapters::json!(rows),
-                    case["issues"],
+                    expected,
                     "{}",
                     yamaa_adapters::json_wire::encode(&case["name"])
                 );
@@ -2063,7 +2084,8 @@ rows:
         fn nested_case_windows_use_the_full_completed_context() {
             let study = Study::new(
                 "I,G,O,V\n1,A,2,a2\n2,A,1,a1\n3,A,3,a3\n4,B,1,b1\n",
-                r#"schema_version: '1.0'
+                r#"yamaa: "1.0"
+type: spec
 domain: TEST
 keys: [I]
 input: {SRC: {path: input.csv, types: {I: int, O: int}}}
@@ -2075,14 +2097,14 @@ columns:
       case:
         - when: 'I > 1'
           then: {row_number: {window: {group_by: [SRC.G], order_by: [SRC.O]}}}
-        - otherwise: {literal: -1}
+        - otherwise: -1
   - name: P
     type: str
     derivation:
       case:
         - when: 'I = 3'
           then: {row_value: {source: SRC.V, offset: -1, window: {group_by: [SRC.G], order_by: [SRC.O]}}}
-        - otherwise: {literal: skip}
+        - otherwise: "'skip'"
   - name: C
     type: str
     derivation: {str_template: 'prior={P}'}
@@ -2098,7 +2120,8 @@ output: {path: out.csv, columns: [I, N, C]}
         fn nested_windows_remain_template_local_and_observe_pre_window_row_filtering() {
             let study = Study::new(
                 "I,O\n1,2\n2,1\n3,3\n",
-                r#"schema_version: '1.0'
+                r#"yamaa: "1.0"
+type: spec
 domain: TEST
 keys: [T, I]
 input: {SRC: {path: input.csv, types: {I: int, O: int}}}
@@ -2110,13 +2133,13 @@ rows:
   - id: first
     dataset: SRC
     derivations:
-      T: {literal: A}
+      T: "'A'"
       N: {case: [{when: 'I > 0', then: {row_number: {window: {order_by: [SRC.O]}}}}]}
   - id: second
     dataset: SRC
     filter: 'SRC.I > 1'
     derivations:
-      T: {literal: B}
+      T: "'B'"
       N: {case: [{when: 'I > 0', then: {row_number: {window: {order_by: [SRC.O]}}}}]}
 output: {path: out.csv, columns: [T, I, N]}
 "#,
@@ -2127,7 +2150,8 @@ output: {path: out.csv, columns: [T, I, N]}
         fn output_key_template_keeps_transitive_window_defaults_over_all_constructed_rows() {
             let study = Study::new(
                 "I\n1\n2\n3\n",
-                r#"schema_version: '1.0'
+                r#"yamaa: "1.0"
+type: spec
 domain: TEST
 keys: [T, K]
 input: {SRC: {path: input.csv, types: {I: int}}}
@@ -2142,11 +2166,11 @@ columns:
 rows:
   - id: first
     dataset: SRC
-    derivations: {T: {literal: A}}
+    derivations: {T: "'A'"}
   - id: second
     dataset: SRC
     filter: 'SRC.I > 1'
-    derivations: {T: {literal: B}}
+    derivations: {T: "'B'"}
 output: {path: out.csv, columns: [T, K, I, N]}
 "#,
             );
@@ -2157,7 +2181,8 @@ output: {path: out.csv, columns: [T, K, I, N]}
         }
         #[test]
         fn unreachable_window_branch_has_no_runtime_failure_but_reached_branch_retains_it() {
-            let specification = r#"schema_version: '1.0'
+            let specification = r#"yamaa: "1.0"
+type: spec
 domain: TEST
 keys: [I]
 input: {SRC: {path: input.csv, types: {I: int, D: date}}}
@@ -2169,8 +2194,8 @@ columns:
     derivation:
       case:
         - when: 'I < 0'
-          then: {baseline_flag: {date: D, reference_date: D, value: I}}
-        - otherwise: {literal: skipped}
+          then: {baseline_flag: {date: D, reference: D, source: I}}
+        - otherwise: "'skipped'"
 output: {path: out.csv, columns: [I, B]}
 "#;
             let input = "I,D\n1,2024-01-01\n2,2024-01-01\n";
@@ -2190,7 +2215,8 @@ output: {path: out.csv, columns: [I, B]}
         fn arbitrary_width_window_offsets_select_absent_neighbors_without_float_conversion() {
             let study = Study::new(
                 "I,V\n1,a\n2,b\n",
-                r#"schema_version: '1.0'
+                r#"yamaa: "1.0"
+type: spec
 domain: TEST
 keys: [I]
 input: {SRC: input.csv}
@@ -2213,7 +2239,8 @@ output: {path: out.csv, columns: [I, BEFORE, AFTER]}
         fn selected_window_partition_does_not_evaluate_unselected_partition_failures() {
             let study = Study::new(
                 "I,G,D\n1,A,2024-01-01\n2,B,2024-01-01\n3,B,2024-01-01\n",
-                r#"schema_version: '1.0'
+                r#"yamaa: "1.0"
+type: spec
 domain: TEST
 keys: [I]
 input: {SRC: {path: input.csv, types: {I: int, D: date}}}
@@ -2226,14 +2253,18 @@ columns:
     derivation:
       case:
         - when: "G = 'A'"
-          then: {baseline_flag: {date: D, reference_date: D, value: I, window: {group_by: [G]}}}
-        - otherwise: {literal: skipped}
+          then: {baseline_flag: {date: D, reference: D, source: I, window: {group_by: [G]}}}
+        - otherwise: "'skipped'"
 output: {path: out.csv, columns: [I, B]}
 "#,
             );
             assert_eq!(study.saved(), "I,B\n1,Y\n2,skipped\n3,skipped\n");
         }
 
+        /// A run without an environment file is a 0.5 notion (D8): a 1.0
+        /// specification run without its project fails the call as
+        /// `project_binding_missing` instead (D32, D146), so this test keeps its
+        /// 0.5 document until the 0.5 path goes (#3447).
         #[test]
         fn missing_environment_keeps_unknown_nested_function_static_before_input_capture() {
             let study = Study::new(
@@ -2336,7 +2367,7 @@ output: {path: out.csv, columns: [I, V]}
 
         fn document() -> Value {
             json!({
-                "schema_version":"1.0", "domain":"OUT", "base":"SRC", "keys":["ID"],
+                "yamaa":"1.0", "type":"spec", "domain":"OUT", "base":"SRC", "keys":["ID"],
                 "input":{"SRC":{"path":"input.csv","types":{"SEQ":"int","VAL":"int"}}},
                 "output":{"path":"out.csv","columns":["ID","PREV"]},
                 "windows":{"VISITS":{"group_by":["G"],"order_by":["SEQ"]}},
@@ -2385,7 +2416,7 @@ output: {path: out.csv, columns: [I, V]}
                 study.write(
             "spec.yaml",
             &json!({
-                "schema_version":"1.0", "parent":"parent.yaml",
+                "yamaa":"1.0", "type":"spec", "parent":"parent.yaml",
                 "columns":[{"name":"PREV","derivation":{"row_value":{"window":replacement}}}]
             }),
         );
@@ -2402,7 +2433,7 @@ output: {path: out.csv, columns: [I, V]}
             study.write("parent.yaml", &document());
             study.write(
                 "spec.yaml",
-                &json!({"schema_version":"1.0","parent":"parent.yaml","windows":null}),
+                &json!({"yamaa":"1.0","type":"spec","parent":"parent.yaml","clear":["windows"]}),
             );
             let issues = study.refused();
             assert_eq!(issues[0].condition(), "unknown_window");
@@ -2414,6 +2445,9 @@ output: {path: out.csv, columns: [I, V]}
             assert!(!study.0.join("input.csv").exists());
         }
 
+        /// A 0.5 file forbids a `baseline_flag` window order, and a 1.0 file
+        /// admits one that starts with its date (WINDOW-5), so this test keeps
+        /// its 0.5 documents until the 0.5 path goes (#3447).
         #[test]
         fn named_expansion_preserves_each_operations_window_restrictions() {
             for (operation, window, kind, condition) in [
@@ -2427,6 +2461,10 @@ output: {path: out.csv, columns: [I, V]}
             ] {
                 let study = Study::new();
                 let mut authored = document();
+                let header = authored.as_object_mut().unwrap();
+                header.remove("yamaa");
+                header.remove("type");
+                header.insert("schema_version".into(), "1.0".into());
                 authored["windows"]["VISITS"] = window;
                 let mut payload = json!({"window":"VISITS"});
                 if operation == "baseline_flag" {
@@ -2476,7 +2514,7 @@ output: {path: out.csv, columns: [I, V]}
                     json!("input.csv")
                 };
                 let document = json!({
-                    "schema_version":"1.0", "domain":"OUT", "base":"SRC",
+                    "yamaa":"1.0", "type":"spec", "domain":"OUT", "base":"SRC",
                     "keys":["STUDYID","USUBJID"],
                     "input":{"SRC":input_source},
                     "columns":columns, "verifications":checks,
@@ -2677,7 +2715,8 @@ output: {path: out.csv, columns: [I, V]}
 
         #[test]
         fn windows_and_presentation_sort_an_undeclared_missing_value_lowest() {
-            let specification = r#"schema_version: '1.0'
+            let specification = r#"yamaa: "1.0"
+type: spec
 domain: TEST
 keys: [I]
 input: {SRC: {path: input.csv, types: {I: int, D: int}}}
@@ -2719,7 +2758,8 @@ output: {path: out.csv, columns: [I, D, ASC, DESC, LAST, FIRST], order_by: [D]}
         fn source_and_lookup_selection_sort_an_undeclared_missing_value_lowest() {
             let study = Study::new(
                 "G,D,S\nA,3,a3\nA,,amiss\nA,1,a1\nB,2,b2\nB,,bmiss\n",
-                r#"schema_version: '1.0'
+                r#"yamaa: "1.0"
+type: spec
 domain: TEST
 keys: [G]
 input: {SRC: {path: input.csv, types: {D: int}}}
@@ -2727,6 +2767,7 @@ base: SRC
 intermediates:
   - id: LATEST
     dataset: SRC
+    key: [G]
     order_by: [{variable: SRC.D, direction: desc}]
     keep: last
 columns:
@@ -2755,6 +2796,9 @@ output: {path: out.csv, columns: [G, LOWEST, HIGHEST, DATED, TRAILING]}
     mod baseline_operands {
         //! baseline_flag binds its value and tie-break operands at their own
         //! paths, and still refuses window.order_by beside them.
+        //! `value` and `tie_break` are 0.5 spellings and
+        //! `window_order_by_forbidden` a 0.5 condition (WINDOW-5), so this
+        //! module keeps its 0.5 document until the 0.5 path goes (#3447).
         use std::fs;
         use yamaa_adapters::file_application;
         use yamaa_core::domain_entry::Request;

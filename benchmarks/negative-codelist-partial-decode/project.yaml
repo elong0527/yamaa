@@ -1,0 +1,18 @@
+yamaa: "1.0"
+type: project
+codelists:
+  - codelists:
+      # The unknown code was added later, without the text the other codes
+      # stand for.
+      - id: SEX
+        name: Sex
+        items:
+          - value: F
+            decode: Female
+          - value: M
+            decode: Male
+          - value: U
+
+sdtm:
+  specs:
+    - spec.yaml

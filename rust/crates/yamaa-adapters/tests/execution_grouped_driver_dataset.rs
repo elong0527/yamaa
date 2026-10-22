@@ -76,7 +76,8 @@ fn ungrouped_driver_field(rule: &str, path: &str, context: Value) -> Vec<Value> 
 /// the second template groups the home readings by subject and day.
 fn vitals(clinic: &str, home: &str, column: &str) -> String {
     format!(
-        "schema_version: \"1.0\"\n\
+        "yamaa: \"1.0\"\n\
+         type: spec\n\
          domain: VS\n\
          keys: [USUBJID, VSDY, VSCAT]\n\
          output: {{path: vs.csv, columns: [USUBJID, VSDY, VSCAT, VSSTRESN]}}\n\
@@ -86,11 +87,11 @@ fn vitals(clinic: &str, home: &str, column: &str) -> String {
          rows:\n\
          \x20 - id: clinic\n\
          \x20   dataset: CLINIC\n\
-         \x20   derivations: {{USUBJID: CLINIC.USUBJID, VSDY: CLINIC.VSDY, VSCAT: {{literal: CLINIC}}{clinic}}}\n\
+         \x20   derivations: {{USUBJID: CLINIC.USUBJID, VSDY: CLINIC.VSDY, VSCAT: \"'CLINIC'\"{clinic}}}\n\
          \x20 - id: home\n\
          \x20   dataset: HOME\n\
          \x20   group_by: [HOME.USUBJID, HOME.VSDY]\n\
-         \x20   derivations: {{USUBJID: HOME.USUBJID, VSDY: HOME.VSDY, VSCAT: {{literal: HOME}}{home}}}\n\
+         \x20   derivations: {{USUBJID: HOME.USUBJID, VSDY: HOME.VSDY, VSCAT: \"'HOME'\"{home}}}\n\
          columns:\n\
          \x20 - {{name: USUBJID, type: str}}\n\
          \x20 - {{name: VSDY, type: int}}\n\
@@ -106,11 +107,11 @@ fn later_grouped_template_names_its_own_input() {
     for (home, path) in [
         (
             ", VSSTRESN: HOME.SYSBP",
-            "rows[1].derivations.VSSTRESN.source",
+            "rows.home.derivations.VSSTRESN.source",
         ),
         (
             ", VSSTRESN: {row_number: {window: {order_by: [HOME.SYSBP]}}}",
-            "rows[1].derivations.VSSTRESN.row_number.window.order_by[0]",
+            "rows.home.derivations.VSSTRESN.row_number.window.order_by[0]",
         ),
     ] {
         let fixture = Fixture::new(&vitals(", VSSTRESN: CLINIC.SYSBP", home, ""));
@@ -190,7 +191,8 @@ fn column_window_over_a_template_grouped_by_another_driver_names_the_drivers() {
 /// intermediate selects from AE.
 fn serious(derivations: &str, column: &str) -> String {
     format!(
-        "schema_version: \"1.0\"\n\
+        "yamaa: \"1.0\"\n\
+         type: spec\n\
          domain: XX\n\
          keys: [USUBJID]\n\
          output: {{path: out.csv, columns: [USUBJID, R]}}\n\
@@ -215,7 +217,7 @@ fn grouped_intermediate_driver_is_named_rather_than_its_input() {
         Fixture::new(&serious(", R: SER.AETERM", "")).issues(),
         ungrouped_driver_field(
             "ROW-5",
-            "rows[0].derivations.R.source",
+            "rows.subjects.derivations.R.source",
             yamaa_adapters::json!({"identifier": "SER.AETERM", "row": "subjects", "dataset": "SER"}),
         )
     );

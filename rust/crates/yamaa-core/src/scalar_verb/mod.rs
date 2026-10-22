@@ -163,7 +163,9 @@ impl ScalarOp {
     pub(crate) fn check_typing(&self) -> CheckTyping {
         match self {
             Self::Mapping { .. } | Self::Cut { .. } => CheckTyping::Always,
-            Self::StrTemplate { .. } => CheckTyping::LeftToBinding,
+            Self::StrTemplate { .. } | Self::StrExtract { .. } | Self::StrReplace { .. } => {
+                CheckTyping::LeftToBinding
+            }
             _ => CheckTyping::Never,
         }
     }
@@ -270,8 +272,9 @@ pub(crate) enum Sites {
 pub(crate) enum CheckTyping {
     /// None: preflight types them, or only binding can.
     Never,
-    /// Those preflight leaves to binding: a template's placeholders in row
-    /// templates and in a lookup's own derivations.
+    /// Those preflight leaves to binding: a template's placeholders, and an
+    /// extraction's or a replacement's source, in row templates and in a
+    /// lookup's own derivations.
     LeftToBinding,
     /// Every operand it reads: a `mapping`'s or a `cut`'s source.
     Always,

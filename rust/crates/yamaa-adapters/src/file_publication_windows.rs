@@ -436,12 +436,6 @@ impl Drop for Pending {
         let _ = self.cleanup();
     }
 }
-impl yamaa_core::specification_output::ArtifactPort for Publisher {
-    type Error = Error;
-    fn publish(&mut self, path: &str, content: &[u8]) -> Result<(), Error> {
-        Publisher::publish(self, path, content)
-    }
-}
 
 #[cfg(test)]
 mod tests {

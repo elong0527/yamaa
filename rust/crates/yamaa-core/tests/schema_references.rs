@@ -813,6 +813,73 @@ mod schema {
         }
 
         #[test]
+        fn a_bare_reducer_name_reads_a_column_only_in_an_aggregate_without_bindings() {
+            // LOOKUP-22: the reducer of an aggregate that declares bindings
+            // names them, so a bare name that no binding names reads no
+            // column, not even a declared one, and binding refuses it as
+            // `unknown_derive_variable` whether or not the spec is layered.
+            // Without bindings a bare reducer name reads a column, so an
+            // undeclared one is an unknown dependency (COLUMN-5).
+            let derived = || {
+                aggregate(vec![
+                    (
+                        "derive",
+                        V::List(vec![binding("DOSE", source("EX.EXDOSE"))]),
+                    ),
+                    ("expr", text("SUM(DOSE_MG)")),
+                ])
+            };
+            let plain = || aggregate(vec![("expr", text("SUM(DOSE_MG)"))]);
+            let order = |names: &[&str]| -> Result<Vec<String>, E> {
+                Ok(names.iter().map(|name| name.to_string()).collect())
+            };
+            let unknown = || -> Result<Vec<String>, E> {
+                Err(E::Invalid(vec![I::Unknown {
+                    column: "TOTAL".into(),
+                    dependency: "DOSE_MG".into(),
+                }]))
+            };
+            for (label, expression, declared, expected) in [
+                (
+                    "bindings, no such column",
+                    derived(),
+                    false,
+                    order(&["TOTAL"]),
+                ),
+                (
+                    "bindings, a same-named column",
+                    derived(),
+                    true,
+                    order(&["TOTAL"]),
+                ),
+                (
+                    "no bindings, a declared column",
+                    plain(),
+                    true,
+                    order(&["DOSE_MG", "TOTAL"]),
+                ),
+                ("no bindings, no such column", plain(), false, unknown()),
+            ] {
+                let mut declarations = vec![column("TOTAL", expression)];
+                if declared {
+                    declarations.push(column("DOSE_MG", literal("1")));
+                }
+                let input = spec(
+                    &["TOTAL"],
+                    vec![
+                        ("input", V::map(vec![("EX", dataset("ex.csv"))])),
+                        ("columns", V::List(declarations)),
+                    ],
+                );
+                assert_eq!(
+                    prune(&input, Order::Dependencies).map(|result| columns(&result)),
+                    expected,
+                    "{label}"
+                );
+            }
+        }
+
+        #[test]
         fn odm_items_name_their_input_and_range_bounds_name_donor_fields() {
             let read = op("odm", V::map(vec![("item", text("RAW.IT.WEIGHT"))]));
             let ranged = op(

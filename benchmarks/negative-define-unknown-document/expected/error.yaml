@@ -1,0 +1,5 @@
+phase: validation
+condition: unknown_document
+spec_paths:
+  - sdtm.specs[0].columns.STUDYID.submission.origins[0].documents
+rule: DEFINE-8

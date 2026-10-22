@@ -32,11 +32,11 @@ the held bytes.
 
 | Paired family | Shared data and existing owners |
 | --- | --- |
-| original-specifications | Original case selection, lookup/ordering/casing inputs and exact CSV; existing independent TSV/JSON reports |
+| original-specifications | Original case selection, lookup/ordering/casing inputs and exact CSV; existing independent TSV/JSON reports; `{entry}` in a namespace case's context stands for the specification's absolute path as the engine resolves it, with forward slashes |
 | file-resources | Named lookup paths, issue columns, exact alias context and entry-relative programs that declare `output.report`; existing inspection/capture reports |
 | public-environment | Original case selection, schema link references, quota/version inputs, exact callback CSV and the project-relative inherited and codelist files |
 | verification-logs | `specification-original/schema-verification-log`, evaluated counts and fatal outcomes, now checked in the run report |
-| public-define | Existing Define input/XML/JSON owners, creation time, issue columns, column schemas, numeric metadata variants and spec/project text mutations |
+| public-define | Existing Define input/XML/JSON owners, creation time, issue columns, column schemas, numeric metadata variants, spec/project text mutations and the issue row of a lower-cased transport name collision (its context compared by the file name both writers would write) |
 | public-contract | Shared YAML, issue and report columns, argument/member/read-only view names and defaults, shared messages (D39's error text, written from `docs/design/interface-1.0/api.md` and the templates of `yaml/conditions.yaml`; `{path}` stands for the specification or project path the test gave, and `{file}` for the file the first issue is located in, as its location names it), typed plain values, the failed run's report bytes, the issue rows of a save with nothing to write, and the value-level check rows of a run whose entry selects no row (SUB-13); distinct host i64 vectors |
 | public-grammar | Shared condition families; existing `grammar-original/cases.tsv` decisions |
 | diagnostic-parity | Refusal cases with their complete expected issue rows; `{path}` in a row's message and context stands for the specification path the test gave |
@@ -49,7 +49,7 @@ the held bytes.
 | info | The engine information's fields in order, the host vocabulary, and a shipped build's language versions and features |
 | printing | A study's files, and the status and printed lines of each result: a check, a failed check, a project check, a run, a failed run, a project run and each of its members, a submission, and a lazy specification and project; `{path}` stands for the path the test gave and `{root}` for its study directory, with forward slashes |
 | issue-locations | One case for each rule of P-ISSUE-1 (`docs/design/interface-1.0/api.md`, "Issue locations"): the files a case writes, its call, and its first issue's condition, first spec path, file, line and column, counted by hand in those files |
-| project-parity | Project cases with their complete expected issue rows: the files a case writes, its call (a member of a project run, or a specification the project names) and every issue row; rows and files that depend on the host language are given by language, `{root}` stands for the case's directory and `{version}` for the installed yamaa version |
+| project-parity | Project cases with their complete expected issue rows: the files a case writes, its call (a member of a project run, a specification the project names, or a submission) and every issue row; rows and files that depend on the host language are given by language, `{root}` stands for the case's directory and `{version}` for the installed yamaa version |
 | compact-yaml | A specification with a block and a flow input, the block, compact, flow and explicit-key verification forms with their one output and saved CSV, failed row-count bounds, malformed closers, and raw NULs with their `invalid_yaml` context (#2196, #3125) |
 | longitudinal-capacity | The 50,000-row, 100-column profile: its column names, its value rule (the row index for the key, then an offset plus the row and column index modulo a prime), the size its CSV must exceed, and its source and output formats |
 | column-ceilings | The 1,024 admitted and 1,025 refused widths of each boundary, the compiler-limit, parent-occurrence and wide-integer issue rows (`{digits}` stands for the wide integer), the repaired capacity's remaining error, the inheritance depth that builds and the wide inherited cases' rows by column index modulo 3 |
@@ -98,11 +98,13 @@ three.
 which compare whole issue rows as `diagnostic-parity` does, for calls that
 need a project: a member of a project run, whose `unlinked_producer` and
 `producer_not_completed` findings name the listed specification they belong
-to and the document they come from (PROJECT-7), and the run of a
-specification the project names. A case whose files or rows depend on the
-host language gives them by language: a function file that implements only
-the other host refuses the call with the running host's language (FUNC-1),
-and each host verifies only its own lock (FUNC-3). The function files name
+to and the document they come from (PROJECT-7), the run of a specification
+the project names, and a submission, whose `duplicate_dataset_entry`
+refuses a section that lists two specifications of one saved artifact
+(DEFINE-5). A case whose files or rows depend on the host language gives
+them by language: a function file that implements only the other host
+refuses the call with the running host's language (FUNC-1), and each host
+verifies only its own lock (FUNC-3). The function files name
 standard-library callables (`operator.pos`, `base::identity`), which no lock
 pins and which the R check environment has, so neither host installs a
 project package for these cases. `{root}` stands for the case's directory,
@@ -206,9 +208,20 @@ The `original-specifications.temporal_arithmetic` vectors likewise share
 PK relative times, civil shifts, duration parsing, static refusals,
 range failures and reached `invalid` handler counts across Rust, Python and R.
 The `original-specifications.inheritance_nulls` cases share authored layers,
-missing-lookup CSV bytes, reached `no_match` counts and refusal conditions for
-`{literal: null}` handlers, nulls that leave a field absent, empty children and
-inherited clears in both hosts.
+missing-lookup CSV bytes, reached absence counts and refusal conditions for
+missing answers written as YAML null, empty children, `clear:` entries and
+rename-only intermediates in both hosts. Each case names the count it
+reaches: `absent_count` for a 1.x file and `no_match_count` for a 0.5 file,
+the handler each surface counts an intermediate's absence under (D202).
+
+Cases whose subject only the 0.5 surface has keep their 0.5 documents until
+the 0.5 path goes (#3447, #3448): the inheritance cases of a null parent and
+of nulls that leave a field absent, the row drivers whose lookup keys 0.5
+inferred, the baseline whose `window.order_by` 0.5 forbade, the wide
+`schema_version` probes of `column-ceilings`, the 0.5 halves of the
+`issue-locations` surface pairs, and `lookup_fallback_0_5_yaml`, the body of
+the structured-binding fallback probes, whose `absent` a 0.5 file reads as
+the answer to a variable the lookup does not hold (D67).
 
 ## Conditions no case reaches
 
