@@ -31,7 +31,7 @@ class PublicPortableMath(unittest.TestCase):
             columns.append(
                 {"name": name, "type": kinds[name], "derivation": "SRC." + name}
             )
-        derivation = {"compute": {"expr": expression}}
+        derivation = expression
         if handler:
             derivation = {"value": derivation, "unconvertible": 9}
         columns.append({"name": "VALUE", "type": target, "derivation": derivation})
@@ -39,7 +39,8 @@ class PublicPortableMath(unittest.TestCase):
             ",".join(kinds) + "\n" + ",".join(values) + "\n", encoding="ascii"
         )
         return {
-            "schema_version": "1.0",
+            "yamaa": "1.0",
+            "type": "spec",
             "domain": "MATH",
             "keys": ["ID"],
             "input": {"SRC": {"path": "input.csv", "types": kinds}},
@@ -83,7 +84,7 @@ class PublicPortableMath(unittest.TestCase):
                     )
                     self.assertEqual(
                         result.issues.to_polars()["spec_paths"].to_list(),
-                        [["columns.VALUE.derivation.compute"]],
+                        [["columns.VALUE.derivation"]],
                     )
                     context = json.loads(result.issues.to_polars()["context"][0])
                     self.assertEqual(context["expr"], expression)
@@ -136,11 +137,8 @@ class PublicPortableMath(unittest.TestCase):
                     "type": "int",
                     "derivation": {
                         "case": [
-                            {
-                                "when": "VALUE > 2.718281828459045",
-                                "then": {"literal": 1},
-                            },
-                            {"otherwise": {"literal": 0}},
+                            {"when": "VALUE > 2.718281828459045", "then": 1},
+                            {"otherwise": 0},
                         ]
                     },
                 },

@@ -1149,7 +1149,7 @@ class TestKeyColumnOrder(unittest.TestCase):
         example = Path(raw) / "benchmarks" / name
         (example / "expected").mkdir(parents=True)
         (example / "spec.yaml").write_text(
-            'schema_version: "1.0"\n'
+            'yamaa: "1.0"\ntype: spec\n'
             "domain: SE\n"
             "keys: [USUBJID]\n"
             "input: {}\n"
@@ -1157,7 +1157,7 @@ class TestKeyColumnOrder(unittest.TestCase):
             "columns:\n"
             + "".join(
                 f"  - name: {column}\n    type: str\n    label: {column}\n"
-                f"    derivation: {{literal: X}}\n"
+                "    derivation: \"'X'\"\n"
                 for column in declared
             )
         )

@@ -91,16 +91,6 @@ class TestVocabularyCoverage(unittest.TestCase):
                                 check(operation, ["negative-formula"]) == [],
                                 operation in covered,
                             )
-                # A 0.5 negative names the operation itself.
-                spec.write_text(
-                    'schema_version: "1.0"\ncolumns:\n'
-                    '  - {name: HIFL, derivation: "AVAL > ANRHI"}\n'
-                )
-                self.assertNotEqual(check("compute", ["negative-formula"]), [])
-                error.write_text(
-                    FORMULA_ERROR.format(path="columns.HIFL.derivation.compute.expr")
-                )
-                self.assertEqual(check("compute", ["negative-formula"]), [])
 
     def test_metadata_coverage_names_only_registered_operations_and_original_case_owners(
         self,

@@ -13,7 +13,8 @@ from tools.commands import lint
 from tools.paths import ROOT
 
 CANONICAL = """\
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
 domain: DM
 keys: [USUBJID]
 input:
@@ -55,7 +56,7 @@ class LintCommand(unittest.TestCase):
             absolute = os.path.abspath(packed).replace(os.sep, "/")
             self.assertEqual(
                 stdout,
-                f"{absolute}:6:1: root_spacing leave one blank line before `output`\n",
+                f"{absolute}:7:1: root_spacing leave one blank line before `output`\n",
             )
             status, _, stderr = self.run_command(packed, broken)
             self.assertEqual(status, 2)

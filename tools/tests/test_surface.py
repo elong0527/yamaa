@@ -10,19 +10,6 @@ class LanguageTests(unittest.TestCase):
         self.assertTrue(surface.declares_header({"yamaa": "1.0", "type": "spec"}))
         self.assertTrue(surface.declares_header({"yamaa": "1.0"}))
 
-    def test_any_other_root_is_read_as_0_5(self):
-        # As the engine routes a root (language.rs::declares_header).
-        for document in (
-            {"schema_version": "1.0"},
-            {"schema_version": "1.0", "yamaa": "1.0"},
-            {"domain": "DM"},
-            None,
-            [],
-            "yamaa",
-        ):
-            with self.subTest(document=document):
-                self.assertFalse(surface.declares_header(document), document)
-
 
 class ExpressionTests(unittest.TestCase):
     def test_a_bare_or_qualified_name_is_a_reference(self):

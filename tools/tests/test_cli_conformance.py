@@ -18,7 +18,8 @@ from tools.conformance import public_conformance as judge
 from tools.paths import ROOT
 
 RUNNER = ROOT / "rust/tests/public_conformance_cli.py"
-SPEC = """schema_version: "1.0"
+SPEC = """yamaa: "1.0"
+type: spec
 domain: TEST
 keys: [ID]
 input: {SRC: input.csv}
@@ -26,6 +27,7 @@ output: {path: result.csv, columns: [ID]}
 columns:
   - {name: ID, type: int, derivation: SRC.ID}
 """
+PROJECT = 'yamaa: "1.0"\ntype: project\nsdtm:\n  specs: [spec.yaml]\n'
 METADATA = "lifecycle: draft\nstandard: TEST\ndomain: TEST\n"
 # Prints one result document, here naming what it was asked and where, and
 # exits 1 as a run with findings does. Its save wrote, as absolute paths with
@@ -92,13 +94,11 @@ class CommandLineRunner(unittest.TestCase):
         (plain / "expected/result.csv").write_text("ID\n1\n")
         project = self.fixtures / "project"
         project.mkdir()
-        (project / "project.yaml").write_text(
-            'schema_version: "1.0"\nsdtm:\n  specs: [spec.yaml]\n'
-        )
+        (project / "project.yaml").write_text(PROJECT)
         functions = self.fixtures / "functions"
         functions.mkdir()
         (functions / "project.yaml").write_text(
-            'schema_version: "1.0"\nenvironments:\n  python: python/environment.yaml\n'
+            'yamaa: "1.0"\ntype: project\nfunctions: [functions/value.yaml]\n'
         )
         for case in (plain, project, functions):
             (case / "spec.yaml").write_text(SPEC)
@@ -251,9 +251,6 @@ class CommandLineRunner(unittest.TestCase):
         self.assertIn("output must be a fresh directory", result.stderr)
 
 
-# The benchmarks written as 1.0, which the binary reads (#3030 D122).
-SPEC_1_0 = 'yamaa: "1.0"\ntype: spec\n' + SPEC.split("\n", 1)[1]
-PROJECT_1_0 = 'yamaa: "1.0"\ntype: project\nsdtm:\n  specs: [spec.yaml]\n'
 # Runs every call, saves the specification's declared output, here the one
 # row `ROW`, and prints one result document naming what it was asked, the
 # file it read and the absolute path it saved, as a binary that reads 1.x
@@ -288,10 +285,10 @@ class ConvertedCorpus(unittest.TestCase):
         source = self.root / "source"
         for name in ("plain", "project", "excepted"):
             (source / name / "expected").mkdir(parents=True)
-            (source / name / "spec.yaml").write_text(SPEC_1_0)
+            (source / name / "spec.yaml").write_text(SPEC)
             (source / name / "benchmark.yaml").write_text(METADATA)
             (source / name / "expected/result.csv").write_text("ID\n1\n")
-        (source / "project/project.yaml").write_text(PROJECT_1_0)
+        (source / "project/project.yaml").write_text(PROJECT)
 
         def convert(target):
             fixtures = target / "benchmarks"
