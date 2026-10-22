@@ -5,25 +5,15 @@
 //! keeps its sign (VALUE-19); a result converts only when a row holds it
 //! (VALUE-3); a `unique` check counts missing values (CHECK-10); and SUM adds
 //! in record order (FORMULA-19).
-use std::{
-    fs,
-    path::PathBuf,
-    sync::atomic::{AtomicUsize, Ordering},
-};
+use std::fs;
 use yamaa_adapters::{file_application, specification_report::Identity};
 use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::{domain_entry::Request, json::Value};
 
-struct Fixture(PathBuf);
+struct Fixture(crate::support::Scratch);
 impl Fixture {
     fn new(specification: &str, files: &[(&str, &str)]) -> Self {
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        let root = std::env::temp_dir().join(format!(
-            "yamaa-value-semantics-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
-        fs::create_dir(&root).unwrap();
+        let root = crate::support::Scratch::new("value-semantics");
         fs::write(root.join("spec.yaml"), specification).unwrap();
         for (name, text) in files {
             fs::write(root.join(name), text).unwrap();
@@ -34,14 +24,7 @@ impl Fixture {
         self.0.join("spec.yaml").to_str().unwrap().to_owned()
     }
     fn identity(specification: &str) -> Identity<'_> {
-        Identity {
-            runtime: "test",
-            runtime_version: "test",
-            engine_version: yamaa_core::VERSION,
-            example: "value-semantics",
-            specification,
-            base_directory: ".",
-        }
+        crate::support::study::identity("value-semantics", specification)
     }
     /// The saved artifact, or the issues that kept anything from being saved.
     fn run(&self) -> Result<String, Vec<Value>> {
@@ -79,14 +62,9 @@ impl Fixture {
         .collect()
     }
 }
-impl Drop for Fixture {
-    fn drop(&mut self) {
-        fs::remove_dir_all(&self.0).unwrap();
-    }
-}
 
 fn issue(issue: &Diagnostic) -> Value {
-    yamaa_adapters::json!({"phase":issue.phase(),"condition":issue.condition(),"rule":issue.rule(),"spec_paths":issue.spec_paths,"context":issue.context.clone()})
+    crate::support::study::issue_row(issue)
 }
 
 /// One record per ID. Each column holds a high value on 1, a low value on 3

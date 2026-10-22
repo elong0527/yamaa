@@ -2,26 +2,16 @@
 //! A mapping source carries the same filter, selection, and absent value as
 //! a plain source binding, so a filtered raw column no longer needs a
 //! helper column that exists only to feed the dictionary lookup.
-use std::{
-    fs,
-    path::PathBuf,
-    sync::atomic::{AtomicUsize, Ordering},
-};
-use yamaa_adapters::{file_application, specification_report::Identity};
+use std::fs;
+use yamaa_adapters::file_application;
 use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::domain_entry::Request;
 use yamaa_core::json::Value;
 
-struct Fixture(PathBuf);
+struct Fixture(crate::support::Scratch);
 impl Fixture {
     fn new(specification: &str, files: &[(&str, &str)]) -> Self {
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        let root = std::env::temp_dir().join(format!(
-            "yamaa-filtered-mapping-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
-        fs::create_dir(&root).unwrap();
+        let root = crate::support::Scratch::new("filtered-mapping");
         fs::write(root.join("spec.yaml"), specification).unwrap();
         for (name, body) in files {
             fs::write(root.join(name), body).unwrap();
@@ -37,14 +27,7 @@ impl Fixture {
                 specification,
                 environment: None,
             },
-            Identity {
-                runtime: "test",
-                runtime_version: "test",
-                engine_version: yamaa_core::VERSION,
-                example: "filtered-mapping-source",
-                specification,
-                base_directory: ".",
-            },
+            crate::support::study::identity("filtered-mapping-source", specification),
         )
     }
     fn saved(&self, output: &str) -> String {
@@ -52,11 +35,6 @@ impl Fixture {
         assert!(domain.issues().is_empty(), "{:?}", domain.issues());
         assert!(domain.save().unwrap());
         fs::read_to_string(self.0.join(output)).unwrap()
-    }
-}
-impl Drop for Fixture {
-    fn drop(&mut self) {
-        fs::remove_dir_all(&self.0).unwrap();
     }
 }
 

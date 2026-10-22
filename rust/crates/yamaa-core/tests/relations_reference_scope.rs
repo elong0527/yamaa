@@ -1,4 +1,5 @@
-//! Relations contracts.
+//! Relations contracts: reference scope, relation ranges, relation shapes, row
+//! intermediate context, source ordinal and run report.
 mod relations {
     mod reference_scope {
         use yamaa_core::{

@@ -3,25 +3,15 @@
 //! (COLUMN-4). Each operand form that reads a column the template leaves to
 //! the column phase reports the same phase boundary at its own operand,
 //! naming the column and the row template, before any data is read.
-use std::{
-    fs,
-    path::PathBuf,
-    sync::atomic::{AtomicUsize, Ordering},
-};
-use yamaa_adapters::{file_application, specification_report::Identity};
+use std::fs;
+use yamaa_adapters::file_application;
 use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::domain_entry::Request;
 
-struct Fixture(PathBuf);
+struct Fixture(crate::support::Scratch);
 impl Fixture {
     fn new(specification: &str) -> Self {
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        let root = std::env::temp_dir().join(format!(
-            "yamaa-row-phase-reads-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
-        fs::create_dir(&root).unwrap();
+        let root = crate::support::Scratch::new("row-phase-reads");
         fs::write(root.join("spec.yaml"), specification).unwrap();
         fs::write(root.join("source.csv"), "ID,VAL\n1,3\n1,1\n2,5\n").unwrap();
         Self(root)
@@ -35,14 +25,7 @@ impl Fixture {
                 specification,
                 environment: None,
             },
-            Identity {
-                runtime: "test",
-                runtime_version: "test",
-                engine_version: yamaa_core::VERSION,
-                example: "row-phase-reads",
-                specification,
-                base_directory: ".",
-            },
+            crate::support::study::identity("row-phase-reads", specification),
         )
         .unwrap();
         let issues = domain.issues().to_vec();
@@ -59,14 +42,7 @@ impl Fixture {
                 specification,
                 environment: None,
             },
-            Identity {
-                runtime: "test",
-                runtime_version: "test",
-                engine_version: yamaa_core::VERSION,
-                example: "row-phase-reads",
-                specification,
-                base_directory: ".",
-            },
+            crate::support::study::identity("row-phase-reads", specification),
         )
         .unwrap();
         assert!(domain.issues().is_empty(), "{:?}", domain.issues());
@@ -74,14 +50,9 @@ impl Fixture {
         fs::read_to_string(self.0.join("out.csv")).unwrap()
     }
 }
-impl Drop for Fixture {
-    fn drop(&mut self) {
-        fs::remove_dir_all(&self.0).unwrap();
-    }
-}
 
 fn issue(issue: &Diagnostic) -> yamaa_core::json::Value {
-    yamaa_adapters::json!({"phase":issue.phase(),"condition":issue.condition(),"rule":issue.rule(),"spec_paths":issue.spec_paths,"context":issue.context.clone()})
+    crate::support::study::issue_row(issue)
 }
 
 #[test]

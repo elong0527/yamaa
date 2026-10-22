@@ -3,6 +3,7 @@
 mod execution {
     mod specification_run {
         use crate::support::specification_run::*;
+        use crate::support::Edit as _;
         use yamaa_core::application_observer::Scope;
 
         #[test]
@@ -278,7 +279,7 @@ output: {{path: output.csv, columns: [I, S]}}
             assert!(
                 matches!(&findings[0], yamaa_core::specification::PreflightFinding::Scalar(diagnostic) if diagnostic.code == yamaa_core::diagnostic::ConditionCode::SubmissionReservedMetadata && diagnostic.spec_paths == ["metadata.label"])
             );
-            let written = raw.replace("100 * (AVAL - BASE) / BASE", "LB.LBSTRESN + 1");
+            let written = raw.edit("100 * (AVAL - BASE) / BASE", "LB.LBSTRESN + 1");
             let captured = prepare(&schema, written.as_bytes());
             let prepared = compile(&captured).unwrap();
             let schema = TableSchema::new(vec![]).unwrap();
@@ -303,7 +304,7 @@ output: {{path: output.csv, columns: [I, S]}}
             for (expression, expected_suggestion) in
                 [("MISSING + 1", false), ("LBSTRESN + 1", true)]
             {
-                let written = raw.replace("100 * (AVAL - BASE) / BASE", expression);
+                let written = raw.edit("100 * (AVAL - BASE) / BASE", expression);
                 let captured = prepare(&schema, written.as_bytes());
                 let prepared = compile(&captured).unwrap();
                 let error = prepared.bind(table.schema()).unwrap_err();
@@ -322,7 +323,7 @@ output: {{path: output.csv, columns: [I, S]}}
                     }
                 );
             }
-            let written = raw.replace("100 * (AVAL - BASE) / BASE", "PCHG + 1");
+            let written = raw.edit("100 * (AVAL - BASE) / BASE", "PCHG + 1");
             let captured = prepare(&schema, written.as_bytes());
             assert!(matches!(
                 compile(&captured)
@@ -412,7 +413,7 @@ output: {{path: output.csv, columns: [I, S]}}
             // (#3422); its input is the benchmark's own.
             let raw = crate::support::benchmarks::converted("negative-zero-division");
             for (expression, qualified) in [("AVAL +", false), ("LB.LBSTRESN + 1", true)] {
-                let written = raw.replace("100 * (AVAL - BASE) / BASE", expression);
+                let written = raw.edit("100 * (AVAL - BASE) / BASE", expression);
                 let run = PreparedRun::prepare(prepare(&schema, written.as_bytes())).unwrap();
                 assert!(matches!(
                     run.execute_csv(b"A\n\"bad"),
@@ -485,7 +486,7 @@ output: {{path: output.csv, columns: [I, S]}}
                     json!({"identifier":"LBSTRESN","suggestion":"LB.LBSTRESN"}),
                 ),
             ] {
-                let written = raw.replace("100 * (AVAL - BASE) / BASE", expr);
+                let written = raw.edit("100 * (AVAL - BASE) / BASE", expr);
                 let run = PreparedRun::prepare(prepare(&schema, written.as_bytes())).unwrap();
                 let error = run.execute_csv(&data).err().unwrap();
                 assert_eq!(
@@ -495,7 +496,7 @@ output: {{path: output.csv, columns: [I, S]}}
                     ]
                 );
             }
-            let written = raw.replace("derivation: LB.LBSTRESN", "derivation: LB.BOGUS");
+            let written = raw.edit("derivation: LB.LBSTRESN", "derivation: LB.BOGUS");
             let run = PreparedRun::prepare(prepare(&schema, written.as_bytes())).unwrap();
             let error = run.execute_csv(&data).err().unwrap();
             assert_eq!(
@@ -504,7 +505,7 @@ output: {{path: output.csv, columns: [I, S]}}
                     json!({"phase":"validation","condition":"unknown_field","rule":"NAME-3","spec_paths":["columns.AVAL.derivation.source"],"context":{"identifier":"LB.BOGUS"}})
                 ]
             );
-            let written = raw.replace("100 * (AVAL - BASE) / BASE", "AVAL +");
+            let written = raw.edit("100 * (AVAL - BASE) / BASE", "AVAL +");
             let run = PreparedRun::prepare(prepare(&schema, written.as_bytes())).unwrap();
             let error = run.execute_csv(b"A\n\"bad").err().unwrap();
             assert_eq!(
@@ -516,7 +517,7 @@ output: {{path: output.csv, columns: [I, S]}}
             // BOGUS joins the projection as an undeclared column while PCHG
             // stays in it: pruning (LAYER-11) would otherwise discard PCHG
             // and its division before execution.
-            let written = raw.replace(
+            let written = raw.edit(
                 "columns: [STUDYID, USUBJID, PARAMCD, AVAL, BASE, PCHG]",
                 "columns: [STUDYID, USUBJID, PARAMCD, AVAL, BASE, PCHG, BOGUS]",
             );
@@ -539,12 +540,12 @@ output: {{path: output.csv, columns: [I, S]}}
             // (#3422).
             let raw = crate::support::benchmarks::converted("negative-zero-division");
             let written = raw
-                .replace("domain: ADLB", "domain: LB\nbase: BAD")
-                .replace(
+                .edit("domain: ADLB", "domain: LB\nbase: BAD")
+                .edit(
                     "keys: [STUDYID, USUBJID, PARAMCD]",
                     "keys: [STUDYID, USUBJID, PARAMCD, BOGUS]",
                 )
-                .replace("    derivation: \"100 * (AVAL - BASE) / BASE\"", "");
+                .edit("    derivation: \"100 * (AVAL - BASE) / BASE\"", "");
             let error = PreparedRun::prepare(prepare(&schema, written.as_bytes())).unwrap_err();
             assert_eq!(
                 spec_findings(&error, None).unwrap(),
@@ -665,8 +666,8 @@ output: {{path: output.csv, columns: [I, S]}}
             let unknown = json!({"phase":"validation","condition":"unknown_field","rule":"NAME-3","spec_paths":["columns.PCHG.derivation"],"context":{"identifier":"BOGUS"}});
             let cycle = json!({"phase":"validation","condition":"dependency_cycle","rule":"COLUMN-6","spec_paths":["columns.PCHG.derivation"],"context":{"cycle":["PCHG","PCHG"]}});
             let written = raw
-                .replace("derivation: LB.LBSTRESN", "derivation: LB.BOGUS")
-                .replace("100 * (AVAL - BASE) / BASE", "BOGUS + PCHG");
+                .edit("derivation: LB.LBSTRESN", "derivation: LB.BOGUS")
+                .edit("100 * (AVAL - BASE) / BASE", "BOGUS + PCHG");
             let run = PreparedRun::prepare(prepare(&schema, written.as_bytes())).unwrap();
             let error = run.execute_csv(&data).err().unwrap();
             assert_eq!(
@@ -678,7 +679,7 @@ output: {{path: output.csv, columns: [I, S]}}
                 ]
             );
             let expr = "LB.LBSTRESN + BOGUS + LB.LBBLRESN + PCHG";
-            let written = raw.replace("100 * (AVAL - BASE) / BASE", expr);
+            let written = raw.edit("100 * (AVAL - BASE) / BASE", expr);
             let run = PreparedRun::prepare(prepare(&schema, written.as_bytes())).unwrap();
             let error = run.execute_csv(&data).err().unwrap();
             assert_eq!(
@@ -764,7 +765,7 @@ output: {{path: output.csv, columns: [I, S]}}
                 ));
             }
             assert_eq!(port.requests, 2);
-            let invalid = raw.replace("100 * (AVAL - BASE) / BASE", "AVAL +");
+            let invalid = raw.edit("100 * (AVAL - BASE) / BASE", "AVAL +");
             let run = PreparedRun::prepare(prepare(&schema, invalid.as_bytes())).unwrap();
             let attempt = run.execute(&mut port, Scope::default());
             assert!(attempt.dataset.sources[0].table.is_some());
@@ -899,11 +900,11 @@ output: {{path: output.csv, columns: [I, S]}}
             let case = root.join("benchmarks/negative-zero-division");
             let raw = std::fs::read_to_string(case.join("spec.yaml")).unwrap();
             let written = raw
-                .replace(
+                .edit(
                     "LB: input/lb.csv",
                     "LB: {path: input/lb.csv, types: {LBSTRESN: int}}",
                 )
-                .replace("100 * (AVAL - BASE) / BASE", "AVAL +");
+                .edit("100 * (AVAL - BASE) / BASE", "AVAL +");
             assert_ne!(written, raw);
             let run = PreparedRun::prepare(prepare(&schema, written.as_bytes())).unwrap();
             assert_eq!(run.source().types.len(), 1);
@@ -917,7 +918,7 @@ output: {{path: output.csv, columns: [I, S]}}
                     json!({"phase":"ingest","condition":"field_parse_failed","rule":"INPUT-7","spec_paths":["input.LB.types.LBSTRESN"],"context":{"dataset":"LB","field":"LBSTRESN","type":"int","value":"42.5"}})
                 ]
             );
-            let written = written.replace("{LBSTRESN: int}", "{LBSTRESN: int, ZZ: float, AA: int}");
+            let written = written.edit("{LBSTRESN: int}", "{LBSTRESN: int, ZZ: float, AA: int}");
             let run = PreparedRun::prepare(prepare(&schema, written.as_bytes())).unwrap();
             let error = run
                 .execute_csv(b"STUDYID,USUBJID,LBTESTCD,LBSTRESN,LBBLRESN\nS,P,ALT,42.5,0")
@@ -1078,7 +1079,7 @@ output: {{path: output.csv, columns: [I, S]}}
             ] {
                 let run = PreparedRun::prepare(prepare(
                     &schema,
-                    raw.replace("SUM(LB.LBSTRESN)", expr).as_bytes(),
+                    raw.edit("SUM(LB.LBSTRESN)", expr).as_bytes(),
                 ))
                 .unwrap();
                 let error = run.execute_csv(&data).err().unwrap();
@@ -1171,15 +1172,8 @@ output: {{path: output.csv, columns: [I, S]}}
             let schema = schema(&root.join("yaml"));
             let case = root.join("benchmarks/adam-adlb-ordered-sum");
             let raw = std::fs::read_to_string(case.join("spec.yaml")).unwrap();
-            let directory = std::env::temp_dir().join(format!(
-                "yamaa-original-success-{}-{}",
-                std::process::id(),
-                std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
-                    .as_nanos()
-            ));
-            std::fs::create_dir(&directory).unwrap();
+            let scratch = crate::support::Scratch::new("original-success");
+            let directory = scratch.to_path_buf();
             let mut publisher = Publisher {
                 directory: directory.clone(),
                 calls: 0,
@@ -1220,7 +1214,7 @@ output: {{path: output.csv, columns: [I, S]}}
             publisher.fail = false;
             let run = PreparedRun::prepare(prepare(
                 &schema,
-                raw.replace("path: adlb.csv", "path: adlb.bad").as_bytes(),
+                raw.edit("path: adlb.csv", "path: adlb.bad").as_bytes(),
             ))
             .unwrap();
             let attempt = run.execute(&mut port, Scope::default());
@@ -1239,7 +1233,7 @@ output: {{path: output.csv, columns: [I, S]}}
 
             let run = PreparedRun::prepare(prepare(
                 &schema,
-                raw.replace("min: 17\n      max: 17", "min: 18\n      max: 18")
+                raw.edit("min: 17\n      max: 17", "min: 18\n      max: 18")
                     .as_bytes(),
             ))
             .unwrap();
@@ -1260,11 +1254,11 @@ output: {{path: output.csv, columns: [I, S]}}
             // remain later than verification and no derived/accepted artifact is exposed.
             // A `unique` over a non-key column comes first and fails on repeats.
             let written = raw
-                .replace(
+                .edit(
                     "verifications:\n",
                     "verifications:\n  - unique: [USUBJID]\n",
                 )
-                .replace("path: adlb.csv", "path: adlb.bad");
+                .edit("path: adlb.csv", "path: adlb.bad");
             let run = PreparedRun::prepare(prepare(&schema, written.as_bytes())).unwrap();
             let actual = specification_report::complete(
                 &run,
@@ -1299,7 +1293,6 @@ output: {{path: output.csv, columns: [I, S]}}
             expected["verifications"] = json!([unique, count]);
             assert_eq!(actual, expected);
             assert_eq!(publisher.calls, 2);
-            std::fs::remove_dir_all(directory).unwrap();
         }
 
         #[test]
@@ -1441,7 +1434,7 @@ output: {{path: output.csv, columns: [I, S]}}
             }
             let written = format!("{prefix}verifications:\n  - row_count: {{}}\n");
             // Derivation grammar is deferred until ingestion but is still before checks.
-            let invalid_formula = written.replace("SUM(LB.LBSTRESN)", "SUM(");
+            let invalid_formula = written.edit("SUM(LB.LBSTRESN)", "SUM(");
             let run = PreparedRun::prepare(prepare(&schema, invalid_formula.as_bytes())).unwrap();
             let mut host = Host {
                 bytes: bytes.clone().into(),
@@ -1463,7 +1456,7 @@ output: {{path: output.csv, columns: [I, S]}}
             let run = PreparedRun::prepare(prepare(
                 &schema,
                 written
-                    .replace("derivation: LB.STUDYID", "derivation: null")
+                    .edit("derivation: LB.STUDYID", "derivation: null")
                     .as_bytes(),
             ))
             .unwrap();
@@ -1518,7 +1511,7 @@ output: {{path: output.csv, columns: [I, S]}}
                     json!({"row":"total","identifier":"STUDYID","dataset":"LB"}),
                 ),
             ] {
-                let written = raw.replace(
+                let written = raw.edit(
                     "group_by: [LB.STUDYID, LB.USUBJID, LB.VISIT]",
                     &format!("group_by: {replacement}"),
                 );
@@ -1527,13 +1520,13 @@ output: {{path: output.csv, columns: [I, S]}}
                 assert_eq!(spec_findings(&error,None).unwrap(),json!([{"phase":"validation","condition":condition,"rule":rule,"spec_paths":["rows.total.group_by"],"context":context}]).as_array().unwrap().clone());
             }
             let written = raw
-                .replace("id: total", "id: total\n    dataset: ABSENT")
-                .replace("    group_by: [LB.STUDYID, LB.USUBJID, LB.VISIT]\n", "");
+                .edit("id: total", "id: total\n    dataset: ABSENT")
+                .edit("    group_by: [LB.STUDYID, LB.USUBJID, LB.VISIT]\n", "");
             let error = PreparedRun::prepare(prepare(&schema, written.as_bytes()))
                 .err()
                 .unwrap();
             assert_eq!(spec_findings(&error,None).unwrap(),json!([{"phase":"validation","condition":"driver_unavailable","rule":"ROW-1","spec_paths":["rows.total.dataset"],"context":{"row":"total","dataset":"ABSENT"}}]).as_array().unwrap().clone());
-            let written = raw.replace(
+            let written = raw.edit(
                 "group_by: [LB.STUDYID, LB.USUBJID, LB.VISIT]",
                 "group_by: [LB.STUDYID, LB.USUBJID, LB.VISIT, LB.ABSENT]",
             );
@@ -1547,13 +1540,13 @@ output: {{path: output.csv, columns: [I, S]}}
             );
             for (written, path, rule, context) in [
                 (
-                    raw.replace("PARAM: \"'Total of Components'\"", "PARAM: LB.LBTEST"),
+                    raw.edit("PARAM: \"'Total of Components'\"", "PARAM: LB.LBTEST"),
                     "rows.total.derivations.PARAM.source",
                     "ROW-5",
                     json!({"identifier":"LB.LBTEST","row":"total","dataset":"LB"}),
                 ),
                 (
-                    raw.replace("derivation: LB.VISIT", "derivation: LB.LBTEST"),
+                    raw.edit("derivation: LB.VISIT", "derivation: LB.LBTEST"),
                     "columns.AVISIT.derivation.source",
                     "ROW-5",
                     json!({"identifier":"LB.LBTEST","row":"total","dataset":"LB"}),
@@ -1620,7 +1613,7 @@ output: {{path: output.csv, columns: [I, S]}}
             // The benchmark as 1.0 writes it, since the test edits its text
             // (#3422); its input and expected output are the benchmark's own.
             let raw = crate::support::benchmarks::converted("adam-adlb-ordered-sum")
-                .replace("LBSTRESN: float", "LBSTRESN: str");
+                .edit("LBSTRESN: float", "LBSTRESN: str");
             let input = std::fs::read_to_string(case.join("input/lb.csv")).unwrap();
             let id = || Identity {
                 runtime: "python",
@@ -1752,16 +1745,16 @@ output: {{path: output.csv, columns: [I, S]}}
             // (#3422); its input is the benchmark's own.
             let raw = crate::support::benchmarks::converted("adam-adlb-ordered-sum");
             let written = raw
-                .replace(
+                .edit(
                     "label: Parameter\n",
                     "label: Parameter\n    derivation: LB.LBTEST\n",
                 )
-                .replace("      PARAM: LB.LBTEST\n", "")
-                .replace(
+                .edit("      PARAM: LB.LBTEST\n", "")
+                .edit(
                     "label: Derivation Type\n",
                     "label: Derivation Type\n    derivation: null\n",
                 )
-                .replace("      DTYPE: null\n", "");
+                .edit("      DTYPE: null\n", "");
             let mut host = Host {
                 bytes: std::fs::read(case.join("input/lb.csv")).unwrap().into(),
                 reads: 0,
@@ -1795,7 +1788,7 @@ output: {{path: output.csv, columns: [I, S]}}
             );
             // The inherited declaration retains its column path, although it executes
             // at row construction for the template without an override.
-            let bad = written.replace("derivation: LB.LBTEST", "derivation: LB.ABSENT");
+            let bad = written.edit("derivation: LB.LBTEST", "derivation: LB.ABSENT");
             let run = PreparedRun::prepare(prepare(&schema, bad.as_bytes())).unwrap();
             let error = run.execute_csv(&host.bytes).err().unwrap();
             assert_eq!(
@@ -1804,7 +1797,7 @@ output: {{path: output.csv, columns: [I, S]}}
                     json!({"phase":"validation","condition":"unknown_field","rule":"NAME-3","spec_paths":["columns.PARAM.derivation.source"],"context":{"identifier":"LB.ABSENT"}})
                 ]
             );
-            let bad = raw.replace(
+            let bad = raw.edit(
                 "label: Analysis Value\n",
                 "label: Analysis Value\n    derivation: {aggregate: 'SUM(LB.LBSTRESN)'}\n",
             );
@@ -1821,8 +1814,8 @@ output: {{path: output.csv, columns: [I, S]}}
             // names an undeclared column, so pruning (LAYER-11) discards it
             // with the dead declaration instead of reporting it.
             let bad = raw
-                .replace("domain: ADLB", "domain: ADLB\nfilter: 'TRUE'")
-                .replace("      PARAM: LB.LBTEST\n", "")
+                .edit("domain: ADLB", "domain: ADLB\nfilter: 'TRUE'")
+                .edit("      PARAM: LB.LBTEST\n", "")
                 .replacen(
                     "    derivations:\n",
                     "    derivations:\n      ABSENT: \"'ignored'\"\n",
@@ -1849,7 +1842,7 @@ output: {{path: output.csv, columns: [I, S]}}
             // Driver position never changes authored capture order or secondary indices.
             for raw in [
                 original.clone(),
-                original.replace(
+                original.edit(
                     "  DM: input/dm.csv\n  AE: input/ae.csv",
                     "  AE: input/ae.csv\n  DM: input/dm.csv",
                 ),
@@ -1914,14 +1907,14 @@ output: {{path: output.csv, columns: [I, S]}}
                                 "multiple_matches",
                                 1
                             ),
-                            ("columns.DTHDY.derivation.source.no_match", "no_match", 2),
+                            ("columns.DTHDY.derivation.source.absent", "absent", 2),
                             (
                                 "columns.DTHCAUS.derivation.source.multiple_matches",
                                 "multiple_matches",
                                 1
                             ),
-                            ("columns.DTHCAUS.derivation.source.no_match", "no_match", 2),
-                            ("columns.DTHPTERM.derivation.source.no_match", "no_match", 2),
+                            ("columns.DTHCAUS.derivation.source.absent", "absent", 2),
+                            ("columns.DTHPTERM.derivation.source.absent", "absent", 2),
                         ]
                     );
                 }
@@ -2156,7 +2149,7 @@ output: {{path: output.csv, columns: [I, S]}}
                 crate::support::benchmarks::legacy("schema-lookup").join("spec.yaml"),
             )
             .unwrap()
-            .replace(
+            .edit(
                 "order_by: [AE.AEDY]",
                 "order_by: [{variable: AE.AEDY, direction: desc, nulls: first}]",
             );

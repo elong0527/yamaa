@@ -11,27 +11,18 @@
 //! and the primary input is read through its join too (#3533). A refused
 //! read keeps its derivation from binding, so the range it would match on is
 //! not admitted.
-use std::{
-    fs,
-    path::PathBuf,
-    sync::atomic::{AtomicUsize, Ordering},
-};
-use yamaa_adapters::{file_application, specification_report::Identity};
+use crate::support::Edit as _;
+use std::fs;
+use yamaa_adapters::file_application;
 use yamaa_core::{diagnostic::Diagnostic, domain_entry::Request, project_function::Language};
 
 /// Rendered issues, each with its spec paths.
 type Issues = Vec<(String, Vec<String>)>;
 
-struct Fixture(PathBuf);
+struct Fixture(crate::support::Scratch);
 impl Fixture {
     fn new(specification: &str) -> Self {
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        let root = std::env::temp_dir().join(format!(
-            "yamaa-keyless-reads-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
-        fs::create_dir(&root).unwrap();
+        let root = crate::support::Scratch::new("keyless-reads");
         fs::write(root.join("spec.yaml"), specification).unwrap();
         for (name, content) in [
             (
@@ -79,14 +70,7 @@ impl Fixture {
             specification,
             environment: None,
         };
-        let identity = || Identity {
-            runtime: "test",
-            runtime_version: "test",
-            engine_version: yamaa_core::VERSION,
-            example: "keyless-reads",
-            specification,
-            base_directory: ".",
-        };
+        let identity = || crate::support::study::identity("keyless-reads", specification);
         let render = |issues: &[Diagnostic]| {
             issues
                 .iter()
@@ -110,11 +94,6 @@ impl Fixture {
             Err(issues) => render(&issues),
         };
         (checked, built)
-    }
-}
-impl Drop for Fixture {
-    fn drop(&mut self) {
-        fs::remove_dir_all(&self.0).unwrap();
     }
 }
 
@@ -456,7 +435,7 @@ fn check_reports_each_keyless_read_without_rows_as_domain_does() {
                 "{str_template: \"{DM.USUBJID}\"}",
                 "{case: [{when: \"VSDY > 1\", then: {aggregate: \"COUNT(DM.AGE)\"}}, {otherwise: 0}]}",
             )
-            .replace("derivation: VS.USUBJID", "derivation: DM.USUBJID"),
+            .edit("derivation: VS.USUBJID", "derivation: DM.USUBJID"),
             &[
                 "columns.USUBJID.derivation.source",
                 "columns.C.derivation.str_template.template",
@@ -820,13 +799,13 @@ fn check_admits_no_range_of_a_derivation_that_does_not_bind() {
     let (c, n) = ("\"'A'\"", "0");
     let range = "{source: {variable: HOME.SYSBP, between: {value: DM.AGE, lower: VSDY}}}";
     let column = |home: &str| {
-        record(KEY, "", "", range, c, n).replace(
+        record(KEY, "", "", range, c, n).edit(
             "HOME: {path: home.csv, types",
             &format!("HOME: {{path: home.csv, {home}types"),
         )
     };
     let implicit = |home: &str| {
-        implicit(KEY, "", range, c, n).replace(
+        implicit(KEY, "", range, c, n).edit(
             "HOME: {path: home.csv, types",
             &format!("HOME: {{path: home.csv, {home}types"),
         )
@@ -880,7 +859,7 @@ fn incomparable<'a>(
 
 /// DM's stored VSTESTCD typed `int`.
 fn typed(specification: String) -> String {
-    specification.replace(
+    specification.edit(
         "RFSTDTC: date, AGE: int}",
         "RFSTDTC: date, AGE: int, VSTESTCD: int}",
     )
@@ -1053,12 +1032,12 @@ fn check_reports_each_declared_key_column_under_row_templates_as_domain_does() {
     // int, VS as a str.
     let coded = |derivations: &str, x: &str| {
         typed(record("key: [VSTESTCD], ", "", derivations, x, c, n))
-            .replace(
+            .edit(
                 "\x20 - {name: AVAL, type: float}\n",
                 "\x20 - {name: AVAL, type: float}\n  - {name: VSTESTCD, type: int}\n",
             )
-            .replace("AVAL, X, C, N]", "AVAL, VSTESTCD, X, C, N]")
-            .replace(
+            .edit("AVAL, X, C, N]", "AVAL, VSTESTCD, X, C, N]")
+            .edit(
                 "      AVAL: VS.SYSBP\n",
                 "      AVAL: VS.SYSBP\n      VSTESTCD: 1\n",
             )

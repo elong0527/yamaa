@@ -5,25 +5,15 @@
 //! row construction, a range value or a derive binding that reads a window
 //! result before the stage split completes it, and an unqualified aggregate
 //! key, are not supported yet.
-use std::{
-    fs,
-    path::PathBuf,
-    sync::atomic::{AtomicUsize, Ordering},
-};
+use std::fs;
 use yamaa_adapters::{file_application, specification_report::Identity};
 use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::{domain_entry::Request, json::Value};
 
-struct Fixture(PathBuf);
+struct Fixture(crate::support::Scratch);
 impl Fixture {
     fn new(specification: &str, files: &[(&str, &str)]) -> Self {
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        let root = std::env::temp_dir().join(format!(
-            "yamaa-aggregate-key-reads-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
-        fs::create_dir(&root).unwrap();
+        let root = crate::support::Scratch::new("aggregate-key-reads");
         fs::write(root.join("spec.yaml"), specification).unwrap();
         for (name, text) in files {
             fs::write(root.join(name), text).unwrap();
@@ -31,14 +21,7 @@ impl Fixture {
         Self(root)
     }
     fn identity(specification: &str) -> Identity<'_> {
-        Identity {
-            runtime: "test",
-            runtime_version: "test",
-            engine_version: yamaa_core::VERSION,
-            example: "aggregate-key-reads",
-            specification,
-            base_directory: ".",
-        }
+        crate::support::study::identity("aggregate-key-reads", specification)
     }
     /// The saved artifact, or the issues that kept anything from being saved.
     fn run(&self) -> Result<String, Vec<Value>> {
@@ -78,14 +61,9 @@ impl Fixture {
         .collect()
     }
 }
-impl Drop for Fixture {
-    fn drop(&mut self) {
-        fs::remove_dir_all(&self.0).unwrap();
-    }
-}
 
 fn issue(issue: &Diagnostic) -> Value {
-    yamaa_adapters::json!({"phase":issue.phase(),"condition":issue.condition(),"rule":issue.rule(),"spec_paths":issue.spec_paths,"context":issue.context.clone()})
+    crate::support::study::issue_row(issue)
 }
 
 /// One `unknown_field` finding at a key pair that names `identifier` (LOOKUP-5).

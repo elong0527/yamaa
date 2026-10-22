@@ -1,27 +1,18 @@
 //! Independent resolution controls over original entry preparation and schema links.
 #![cfg(feature = "yaml")]
-use std::{
-    fs,
-    path::PathBuf,
-    sync::atomic::{AtomicUsize, Ordering},
-};
+use crate::support::Edit as _;
+use std::fs;
 use yamaa_adapters::resolved_artifact::model::{
     specification_value, Location, OriginKind, RelativeTo, ResolvedArtifact, ResourceRole,
 };
-use yamaa_adapters::{canonical_path, file_workflow, resolved_artifact};
+use yamaa_adapters::{file_workflow, resolved_artifact};
 use yamaa_core::{build::Request, json::Value, project_function::Language};
 
-static NEXT: AtomicUsize = AtomicUsize::new(0);
-struct Study(PathBuf);
+struct Study(crate::support::Scratch);
 impl Study {
     fn new() -> Self {
-        let root = std::env::temp_dir().join(format!(
-            "yamaa-resolved-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
-        fs::create_dir_all(&root).unwrap();
-        Self(canonical_path::canonicalize(root).unwrap())
+        let root = crate::support::Scratch::canonical("resolved");
+        Self(root)
     }
     fn path(&self, path: &str) -> String {
         self.0.join(path).to_str().unwrap().replace('\\', "/")
@@ -33,11 +24,6 @@ impl Study {
     }
     fn resolve(&self, path: &str) -> ResolvedArtifact {
         resolved_artifact::resolve(&self.path(path), None, Some(Language::Python), None).unwrap()
-    }
-}
-impl Drop for Study {
-    fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.0);
     }
 }
 
@@ -195,7 +181,7 @@ fn selector_only_overrides_and_atomic_output_keep_original_paths_and_selected_ro
 fn absolute_and_parent_relative_paths_are_facts_and_never_fallback_searches() {
     let study = Study::new();
     study.write("elsewhere/raw.csv", "ID\n1\n");
-    let source = PRODUCER.replace("input/raw.csv", &study.path("absent/raw.csv"));
+    let source = PRODUCER.edit("input/raw.csv", &study.path("absent/raw.csv"));
     study.write("study/spec.yaml", &source);
     let artifact = study.resolve("study/spec.yaml");
     let input = artifact.entries()[0]
@@ -212,7 +198,7 @@ fn absolute_and_parent_relative_paths_are_facts_and_never_fallback_searches() {
     );
     study.write(
         "study/spec.yaml",
-        &PRODUCER.replace("input/raw.csv", "../../parent/raw.csv"),
+        &PRODUCER.edit("input/raw.csv", "../../parent/raw.csv"),
     );
     let artifact = study.resolve("study/spec.yaml");
     let input = artifact.entries()[0]

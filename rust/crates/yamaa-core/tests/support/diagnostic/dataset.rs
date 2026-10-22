@@ -1,5 +1,6 @@
 #![allow(unused_imports)]
 use super::rendered;
+pub(crate) use super::text;
 pub(crate) use std::collections::BTreeSet;
 pub(crate) use yamaa_core::json::Value as V;
 pub(crate) use yamaa_core::{
@@ -8,9 +9,6 @@ pub(crate) use yamaa_core::{
     temporal::{Date, DateTime, Precision},
     value::{Value, ValueType},
 };
-pub(crate) fn text(value: &str) -> V {
-    V::String(value.into())
-}
 
 /// Independent normative assertions; engine tests reach the same causes from
 /// real attempted runs and pin their first-failure table effects.

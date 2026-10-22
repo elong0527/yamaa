@@ -2,14 +2,8 @@
 //! Project-scope contracts in the adapters: listed names, run-scope plans,
 //! held producer artifacts, report-only saves and the preflight of one save
 //! across results.
-use std::{
-    fs,
-    path::PathBuf,
-    sync::{
-        atomic::{AtomicUsize, Ordering},
-        Arc,
-    },
-};
+use crate::support::Edit as _;
+use std::{fs, sync::Arc};
 use yamaa_adapters::{
     file_application::{self, Domain},
     file_resources::HeldArtifacts,
@@ -25,18 +19,12 @@ use yamaa_core::{
     specification_run::SourceOrigin,
 };
 
-static NEXT: AtomicUsize = AtomicUsize::new(0);
-
-struct Study(PathBuf);
+struct Study(crate::support::Scratch);
 impl Study {
     fn new() -> Self {
-        let root = std::env::temp_dir().join(format!(
-            "yamaa-project-scope-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
+        let root = crate::support::Scratch::canonical("project-scope");
         fs::create_dir_all(root.join("out")).unwrap();
-        Self(yamaa_adapters::canonical_path::canonicalize(root).unwrap())
+        Self(root)
     }
     fn write(&self, name: &str, contents: impl AsRef<[u8]>) {
         let path = self.0.join(name);
@@ -48,21 +36,9 @@ impl Study {
         self.0.join(name).to_str().unwrap().replace('\\', "/")
     }
 }
-impl Drop for Study {
-    fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.0);
-    }
-}
 
 fn id() -> Identity<'static> {
-    Identity {
-        runtime: "test",
-        runtime_version: "test",
-        engine_version: yamaa_core::VERSION,
-        example: "project-scope",
-        specification: "spec.yaml",
-        base_directory: ".",
-    }
+    crate::support::study::identity("project-scope", "spec.yaml")
 }
 
 fn scope() -> yamaa_core::application_observer::Scope<'static> {
@@ -423,7 +399,7 @@ fn report_only_saves_write_the_report_file_and_no_primary_artifact() {
     // A specification without a report file has nothing to save alone.
     study.write(
         "sdtm/ae.yaml",
-        spec("AE", RAW, "../out/ae.csv").replace(", report: ../out/ae.csv.report.csv", ""),
+        spec("AE", RAW, "../out/ae.csv").edit(", report: ../out/ae.csv.report.csv", ""),
     );
     assert!(domain(&study, "sdtm/ae.yaml").save_report().is_err());
 }
@@ -461,7 +437,7 @@ fn the_preflight_refuses_two_results_that_write_one_file() {
     // A result whose report file is one already admitted is refused.
     study.write(
         "sdtm/ae.yaml",
-        spec("AE", RAW, "../out/ae.csv").replace(
+        spec("AE", RAW, "../out/ae.csv").edit(
             "report: ../out/ae.csv.report.csv",
             "report: ../out/adsl.csv.report.csv",
         ),

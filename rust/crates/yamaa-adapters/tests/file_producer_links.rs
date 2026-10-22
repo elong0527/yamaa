@@ -1,16 +1,13 @@
 #![cfg(feature = "yaml")]
-//! File contracts.
+//! File contracts: producer links.
 mod file {
     mod producer_links {
         //! A `schema` link types a stored artifact from its producing
         //! specification's output contract. The producer is never executed:
         //! callers build and save it first, and the consumer reads the file at
         //! its own `path` like any other input.
-        use std::{
-            fs,
-            path::PathBuf,
-            sync::atomic::{AtomicUsize, Ordering},
-        };
+        use crate::support::Edit as _;
+        use std::fs;
         use yamaa_adapters::{
             file_application::{self, Domain},
             specification_report::Identity,
@@ -18,17 +15,11 @@ mod file {
         use yamaa_core::diagnostic::Diagnostic;
         use yamaa_core::domain_entry::Request;
 
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        struct Study(PathBuf);
+        struct Study(crate::support::Scratch);
         impl Study {
             fn new() -> Self {
-                let root = std::env::temp_dir().join(format!(
-                    "yamaa-producer-links-{}-{}",
-                    std::process::id(),
-                    NEXT.fetch_add(1, Ordering::Relaxed)
-                ));
-                fs::create_dir(&root).unwrap();
-                Self(yamaa_adapters::canonical_path::canonicalize(root).unwrap())
+                let root = crate::support::Scratch::canonical("producer-links");
+                Self(root)
             }
             fn path(&self, written: &str) -> String {
                 let path = self.0.join(written).to_str().unwrap().to_owned();
@@ -68,22 +59,8 @@ mod file {
                 )
             }
         }
-        impl Drop for Study {
-            fn drop(&mut self) {
-                if self.0.exists() {
-                    fs::remove_dir_all(&self.0).unwrap();
-                }
-            }
-        }
         fn identity(specification: &str) -> Identity<'_> {
-            Identity {
-                runtime: "test",
-                runtime_version: "test",
-                engine_version: yamaa_core::VERSION,
-                example: "producer-links",
-                specification,
-                base_directory: ".",
-            }
+            crate::support::study::identity("producer-links", specification)
         }
         /// Seven authored records of one subject, counted into one record.
         const RAW: &str = "ID,VALUE\n1,1\n1,2\n1,3\n1,4\n1,5\n1,6\n1,7\n";
@@ -169,7 +146,7 @@ mod file {
             ] {
                 study.write(
                     "consumer/root.yaml",
-                    consumer("csv", "").replace("path: ../generated/root.csv", output),
+                    consumer("csv", "").edit("path: ../generated/root.csv", output),
                 );
                 // Refused while it is prepared, before any study read.
                 let path = study.path("consumer/root.yaml");
@@ -246,7 +223,7 @@ mod file {
             // Another specification stores VALUE as text at the linked path.
             study.write(
                 "producer/text.yaml",
-                producer("parquet", "{literal: '7'}").replace(
+                producer("parquet", "{literal: '7'}").edit(
                     "{name: VALUE, type: int, label: Count}",
                     "{name: VALUE, type: str, label: Count}",
                 ),

@@ -1,16 +1,14 @@
 #![cfg(feature = "yaml")]
-//! Scalar contracts.
+//! Scalar contracts: declarative rounding, declarative temporal, declarative
+//! temporal imputation, declarative text case, declarative text extract,
+//! declarative text pad, declarative text template and scalar bytes.
 mod scalar {
     mod declarative_rounding {
-        use std::{
-            fs,
-            path::PathBuf,
-            sync::atomic::{AtomicUsize, Ordering},
-        };
+        use crate::support::Edit as _;
+        use std::fs;
         use yamaa_adapters::json;
         use yamaa_adapters::{file_application, specification_report::Identity};
         use yamaa_core::domain_entry::Request;
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
         // The two benchmarks' specifications as 1.0 writes them, so that the
         // tests that edit their text edit one language, whichever language
         // the benchmarks are written in (#3422); the inputs and the expected
@@ -26,40 +24,23 @@ mod scalar {
         const NEGATIVE: &str = include_str!(
             "fixtures/converted/negative-round-half-away-from-zero-non-numeric-source/spec.yaml"
         );
-        struct Study(PathBuf);
+        struct Study(crate::support::Scratch);
         impl Study {
             fn new(source: &str, input: bool) -> Self {
-                let path = std::env::temp_dir().join(format!(
-                    "yamaa-rounding-{}-{}",
-                    std::process::id(),
-                    NEXT.fetch_add(1, Ordering::Relaxed)
-                ));
-                fs::create_dir(&path).unwrap();
+                let path = crate::support::Scratch::new("rounding");
                 fs::write(path.join("spec.yaml"), source).unwrap();
                 if input {
                     fs::create_dir(path.join("input")).unwrap();
                     fs::write(path.join("input/adsl.csv"), INPUT).unwrap();
                 }
-                Self(fs::canonicalize(path).unwrap())
+                Self(path.resolved(std::fs::canonicalize))
             }
             fn path(&self) -> String {
                 self.0.join("spec.yaml").to_str().unwrap().into()
             }
         }
-        impl Drop for Study {
-            fn drop(&mut self) {
-                fs::remove_dir_all(&self.0).unwrap();
-            }
-        }
         fn identity(path: &str) -> Identity<'_> {
-            Identity {
-                runtime: "test",
-                runtime_version: "test",
-                engine_version: yamaa_core::VERSION,
-                example: "test",
-                specification: path,
-                base_directory: ".",
-            }
+            crate::support::study::identity("test", path)
         }
         #[test]
         fn original_rounding_yaml_reaches_the_public_lifecycle_and_independent_csv_truth() {
@@ -135,8 +116,8 @@ mod scalar {
         #[test]
         fn malformed_digits_precede_unknown_source_and_missing_study_data() {
             let source = NEGATIVE
-                .replace("source: SEX", "source: ABSENT")
-                .replace("digits: 1", "digits: true");
+                .edit("source: SEX", "source: ABSENT")
+                .edit("digits: 1", "digits: true");
             let study = Study::new(&source, false);
             let path = study.path();
             let findings = file_application::check(
@@ -160,10 +141,7 @@ mod scalar {
 
         #[test]
         fn undeclared_rounding_relation_is_classified_with_actual_source_schema() {
-            let study = Study::new(
-                &POSITIVE.replace("source: VAL1", "source: OTHER.VAL1"),
-                true,
-            );
+            let study = Study::new(&POSITIVE.edit("source: VAL1", "source: OTHER.VAL1"), true);
             let path = study.path();
             let findings = file_application::domain(
                 yamaa_core::project_function::Language::Python,
@@ -268,26 +246,26 @@ mod scalar {
         fn admitted_driver_and_named_intermediate_operands_keep_independent_rounding_truth() {
             qualified(
                 &POSITIVE
-                    .replace(
+                    .edit(
                         "SOURCE: input/adsl.csv",
                         "SOURCE: {path: input/adsl.csv, types: {VAL1: float, VAL0: float}}",
                     )
-                    .replace("source: VAL1", "source: SOURCE.VAL1"),
+                    .edit("source: VAL1", "source: SOURCE.VAL1"),
                 false,
             );
-            let source = POSITIVE.replace("SOURCE: input/adsl.csv", "SOURCE: input/adsl.csv\n  LOOKUP: {path: input/lookup.csv, types: {VAL1: float}}\nbase: SOURCE\nintermediates:\n  - id: SELECTED\n    dataset: LOOKUP\n    key: [STUDYID, USUBJID]").replace("source: VAL1", "source: SELECTED.VAL1");
+            let source = POSITIVE.edit("SOURCE: input/adsl.csv", "SOURCE: input/adsl.csv\n  LOOKUP: {path: input/lookup.csv, types: {VAL1: float}}\nbase: SOURCE\nintermediates:\n  - id: SELECTED\n    dataset: LOOKUP\n    key: [STUDYID, USUBJID]").edit("source: VAL1", "source: SELECTED.VAL1");
             qualified(&source, true);
         }
         #[test]
         fn nested_case_and_row_template_rounding_keep_the_same_independent_expected_rows() {
-            let source = POSITIVE.replace("round_half_away_from_zero:\n        source: VAL1\n        digits: 1", "case:\n        - when: \"VAL1 IS NOT NULL\"\n          then: {round_half_away_from_zero: {source: VAL1, digits: 1}}\n        - otherwise: null");
+            let source = POSITIVE.edit("round_half_away_from_zero:\n        source: VAL1\n        digits: 1", "case:\n        - when: \"VAL1 IS NOT NULL\"\n          then: {round_half_away_from_zero: {source: VAL1, digits: 1}}\n        - otherwise: null");
             qualified(&source, false);
             let source = format!("{POSITIVE}\nrows:\n  - id: RECORDS\n    dataset: SOURCE\n    derivations:\n      RND1: {{round_half_away_from_zero: {{source: VAL1, digits: 1}}}}\n");
             qualified(&source, false);
         }
         #[test]
         fn unselected_case_uses_static_known_type_validation_before_study_capture() {
-            let source = NEGATIVE.replace("round_half_away_from_zero:\n        source: SEX\n        digits: 1", "case:\n        - when: \"SEX = 'NEVER'\"\n          then: {round_half_away_from_zero: {source: SEX, digits: 1}}\n        - otherwise: null");
+            let source = NEGATIVE.edit("round_half_away_from_zero:\n        source: SEX\n        digits: 1", "case:\n        - when: \"SEX = 'NEVER'\"\n          then: {round_half_away_from_zero: {source: SEX, digits: 1}}\n        - otherwise: null");
             let study = Study::new(&source, false);
             let path = study.path();
             let findings = file_application::check(
@@ -312,23 +290,14 @@ mod scalar {
         }
     }
     mod declarative_temporal {
-        use std::{
-            fs,
-            path::{Path, PathBuf},
-            sync::atomic::{AtomicUsize, Ordering},
-        };
+        use crate::support::Edit as _;
+        use std::{fs, path::Path};
         use yamaa_adapters::{file_application, specification_report::Identity};
         use yamaa_core::domain_entry::Request;
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        struct Study(PathBuf);
+        struct Study(crate::support::Scratch);
         impl Study {
             fn new(name: &str, input: bool) -> Self {
-                let path = std::env::temp_dir().join(format!(
-                    "yamaa-temporal-{}-{}",
-                    std::process::id(),
-                    NEXT.fetch_add(1, Ordering::Relaxed)
-                ));
-                fs::create_dir(&path).unwrap();
+                let path = crate::support::Scratch::new("temporal");
                 let original = Path::new(env!("CARGO_MANIFEST_DIR"))
                     .join("../../../benchmarks")
                     .join(name);
@@ -336,15 +305,10 @@ mod scalar {
                 if input {
                     copy_directory(&original.join("input"), &path.join("input"));
                 }
-                Self(fs::canonicalize(path).unwrap())
+                Self(path.resolved(std::fs::canonicalize))
             }
             fn path(&self) -> String {
                 self.0.join("spec.yaml").to_str().unwrap().into()
-            }
-        }
-        impl Drop for Study {
-            fn drop(&mut self) {
-                fs::remove_dir_all(&self.0).unwrap();
             }
         }
         fn copy_directory(source: &Path, target: &Path) {
@@ -360,14 +324,7 @@ mod scalar {
             }
         }
         fn identity(path: &str) -> Identity<'_> {
-            Identity {
-                runtime: "test",
-                runtime_version: "test",
-                engine_version: yamaa_core::VERSION,
-                example: "test",
-                specification: path,
-                base_directory: ".",
-            }
+            crate::support::study::identity("test", path)
         }
         #[test]
         fn original_temporal_documents_keep_independent_complete_csv_and_explicit_save() {
@@ -440,7 +397,7 @@ mod scalar {
                 );
                 assert_eq!(findings.len(), 1, "{name}: {findings:?}");
                 let finding = &findings[0];
-                let actual = yamaa_adapters::json!({"phase":finding.phase(), "condition":finding.condition(), "rule":finding.rule(), "spec_paths":finding.spec_paths, "context":finding.context.clone()});
+                let actual = crate::support::study::issue_row(finding);
                 assert_eq!(actual, expected, "{name}");
                 let failed = file_application::domain(
                     yamaa_core::project_function::Language::Python,
@@ -487,7 +444,7 @@ mod scalar {
             let source = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: input.csv, types: {ID: int, D: date, R: date}}\noutput: {path: result.csv, columns: [ID, SD, EPOCH]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - name: SD\n    type: int\n    derivation: {study_day: {date: SRC.D, reference: SRC.R}}\n  - name: EPOCH\n    type: int\n    derivation: {to_epoch_day: {source: SRC.D}}\n";
             let input = b"ID,D,R\n1,2023-12-31,2024-01-01\n2,2024-01-01,2024-01-01\n3,2024-01-02,2024-01-01\n4,,2024-01-01\n5,2024-01-01,\n";
             let expected = b"ID,SD,EPOCH\n1,-1,19722\n2,1,19723\n3,2,19724\n4,,\n5,,19723\n";
-            for source in [source.into(), source.replace("derivation: {study_day: {date: SRC.D, reference: SRC.R}}", "derivation: {case: [{when: 'ID > 0', then: {study_day: {date: SRC.D, reference: SRC.R}}}, {otherwise: {literal: null}}]}"), format!("{source}rows:\n  - id: records\n    dataset: SRC\n    derivations:\n      SD: {{study_day: {{date: SRC.D, reference: SRC.R}}}}\n")] {
+            for source in [source.into(), source.edit("derivation: {study_day: {date: SRC.D, reference: SRC.R}}", "derivation: {case: [{when: 'ID > 0', then: {study_day: {date: SRC.D, reference: SRC.R}}}, {otherwise: {literal: null}}]}"), format!("{source}rows:\n  - id: records\n    dataset: SRC\n    derivations:\n      SD: {{study_day: {{date: SRC.D, reference: SRC.R}}}}\n")] {
         let study = Study::new("adam-adsl-duration", false);
         fs::write(study.0.join("spec.yaml"), source).unwrap();
         fs::write(study.0.join("input.csv"), input).unwrap();
@@ -735,13 +692,7 @@ mod scalar {
                 };
                 let actual: Vec<_> = issues
                     .iter()
-                    .map(|finding| {
-                        yamaa_adapters::json!({
-                            "phase": finding.phase(), "condition": finding.condition(),
-                            "rule": finding.rule(), "spec_paths": finding.spec_paths,
-                            "context": finding.context.clone()
-                        })
-                    })
+                    .map(crate::support::study::issue_row)
                     .collect();
                 assert_eq!(yamaa_adapters::json!(actual), truth["findings"], "{name}");
                 assert!(!study.0.join("result.csv").exists(), "{name}");
@@ -770,26 +721,17 @@ mod scalar {
         }
     }
     mod declarative_temporal_imputation {
-        use std::{
-            fs,
-            path::{Path, PathBuf},
-            sync::atomic::{AtomicUsize, Ordering},
-        };
-        use yamaa_adapters::{file_application, specification_report::Identity};
+        use crate::support::Edit as _;
+        use std::{fs, path::Path};
+        use yamaa_adapters::file_application;
         use yamaa_core::domain_entry::Request;
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        struct Fixture(PathBuf);
+        struct Fixture(crate::support::Scratch);
         impl Fixture {
             fn new(name: &str) -> Self {
                 let source = Path::new(env!("CARGO_MANIFEST_DIR"))
                     .join("../../../benchmarks")
                     .join(name);
-                let path = std::env::temp_dir().join(format!(
-                    "yamaa-temporal-imputation-{}-{}",
-                    std::process::id(),
-                    NEXT.fetch_add(1, Ordering::Relaxed)
-                ));
-                fs::create_dir(&path).unwrap();
+                let path = crate::support::Scratch::new("temporal-imputation");
                 fn copy(source: &Path, target: &Path) {
                     for entry in fs::read_dir(source).unwrap() {
                         let entry = entry.unwrap();
@@ -807,14 +749,7 @@ mod scalar {
             }
             fn run(&self) -> file_application::Domain {
                 let specification = self.0.join("spec.yaml").to_str().unwrap().to_owned();
-                let identity = Identity {
-                    runtime: "test",
-                    runtime_version: "test",
-                    engine_version: yamaa_core::VERSION,
-                    example: "test",
-                    specification: &specification,
-                    base_directory: ".",
-                };
+                let identity = crate::support::study::identity("test", &specification);
                 file_application::domain(
                     yamaa_core::project_function::Language::Python,
                     Request {
@@ -824,11 +759,6 @@ mod scalar {
                     identity,
                 )
                 .unwrap_or_else(|issues| panic!("preparation {issues:?}"))
-            }
-        }
-        impl Drop for Fixture {
-            fn drop(&mut self) {
-                fs::remove_dir_all(&self.0).unwrap();
             }
         }
         fn golden(fixture: &Fixture) -> yamaa_core::json::Value {
@@ -883,14 +813,7 @@ mod scalar {
             ] {
                 let fixture = Fixture::new(name);
                 let specification = fixture.0.join("spec.yaml").to_str().unwrap().to_owned();
-                let identity = Identity {
-                    runtime: "test",
-                    runtime_version: "test",
-                    engine_version: yamaa_core::VERSION,
-                    example: name,
-                    specification: &specification,
-                    base_directory: ".",
-                };
+                let identity = crate::support::study::identity(name, &specification);
                 let issues = match file_application::domain(
                     yamaa_core::project_function::Language::Python,
                     Request {
@@ -945,7 +868,7 @@ mod scalar {
                 assert!(result.output().is_none());
                 assert_eq!(result.issues().len(), 1);
                 let issue = &result.issues()[0];
-                let actual = yamaa_adapters::json!({"phase":issue.phase(),"condition":issue.condition(),"rule":issue.rule(),"spec_paths":issue.spec_paths,"context":issue.context.clone()});
+                let actual = crate::support::study::issue_row(issue);
                 assert_eq!(actual, reference[name][0], "{name}");
                 let expected = golden(&fixture);
                 for field in ["phase", "condition", "rule", "spec_paths"] {
@@ -1043,14 +966,7 @@ columns:
         }
         fn issue_rows(fixture: &Fixture) -> yamaa_core::json::Value {
             let specification = fixture.0.join("spec.yaml").to_str().unwrap().to_owned();
-            let identity = Identity {
-                runtime: "test",
-                runtime_version: "test",
-                engine_version: yamaa_core::VERSION,
-                example: "test",
-                specification: &specification,
-                base_directory: ".",
-            };
+            let identity = crate::support::study::identity("test", &specification);
             let issues = match file_application::domain(
                 yamaa_core::project_function::Language::Python,
                 Request {
@@ -1067,15 +983,7 @@ columns:
             };
             issues
                 .iter()
-                .map(|issue| {
-                    yamaa_adapters::json!({
-                        "phase": issue.phase(),
-                        "condition": issue.condition(),
-                        "rule": issue.rule(),
-                        "spec_paths": issue.spec_paths,
-                        "context": issue.context.clone(),
-                    })
-                })
+                .map(crate::support::study::issue_row)
                 .collect()
         }
         #[test]
@@ -1277,7 +1185,7 @@ columns:
             // in one language, whichever language the benchmark is written
             // in (#3422); its inputs and expected error are its own.
             let unchanged = include_str!("fixtures/converted/negative-impute-bad-day/spec.yaml");
-            let handled = unchanged.replace(
+            let handled = unchanged.edit(
                 "        day: 31\n",
                 "        day: 31\n        invalid: null\n",
             );
@@ -1289,13 +1197,7 @@ columns:
                 result
                     .issues()
                     .iter()
-                    .map(|issue| yamaa_adapters::json!({
-                        "phase": issue.phase(),
-                        "condition": issue.condition(),
-                        "rule": issue.rule(),
-                        "spec_paths": issue.spec_paths,
-                        "context": issue.context.clone(),
-                    }))
+                    .map(crate::support::study::issue_row)
                     .collect::<Vec<_>>(),
                 [golden(&fixture)]
             );
@@ -1401,26 +1303,16 @@ columns:
         }
     }
     mod declarative_text_case {
-        use std::{
-            fs,
-            path::{Path, PathBuf},
-            sync::atomic::{AtomicUsize, Ordering},
-        };
-        use yamaa_adapters::{file_application, specification_report::Identity};
+        use std::{fs, path::Path};
+        use yamaa_adapters::file_application;
         use yamaa_core::domain_entry::Request;
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        struct Fixture(PathBuf);
+        struct Fixture(crate::support::Scratch);
         impl Fixture {
             fn new(name: &str) -> Self {
                 let source = Path::new(env!("CARGO_MANIFEST_DIR"))
                     .join("../../../benchmarks")
                     .join(name);
-                let path = std::env::temp_dir().join(format!(
-                    "yamaa-str-case-{}-{}",
-                    std::process::id(),
-                    NEXT.fetch_add(1, Ordering::Relaxed)
-                ));
-                fs::create_dir(&path).unwrap();
+                let path = crate::support::Scratch::new("str-case");
                 fn copy(source: &Path, target: &Path) {
                     for entry in fs::read_dir(source).unwrap() {
                         let entry = entry.unwrap();
@@ -1438,14 +1330,7 @@ columns:
             }
             fn run(&self) -> file_application::Domain {
                 let specification = self.0.join("spec.yaml").to_str().unwrap().to_owned();
-                let identity = Identity {
-                    runtime: "test",
-                    runtime_version: "test",
-                    engine_version: yamaa_core::VERSION,
-                    example: "test",
-                    specification: &specification,
-                    base_directory: ".",
-                };
+                let identity = crate::support::study::identity("test", &specification);
                 file_application::domain(
                     yamaa_core::project_function::Language::Python,
                     Request {
@@ -1455,11 +1340,6 @@ columns:
                     identity,
                 )
                 .unwrap_or_else(|issues| panic!("preparation {issues:?}"))
-            }
-        }
-        impl Drop for Fixture {
-            fn drop(&mut self) {
-                fs::remove_dir_all(&self.0).unwrap();
             }
         }
         fn golden(fixture: &Fixture) -> yamaa_core::json::Value {
@@ -1492,7 +1372,7 @@ columns:
         }
 
         fn issue_json(issue: &yamaa_core::diagnostic::Diagnostic) -> yamaa_core::json::Value {
-            yamaa_adapters::json!({"phase":issue.phase(),"condition":issue.condition(),"rule":issue.rule(),"spec_paths":issue.spec_paths,"context":issue.context.clone()})
+            crate::support::study::issue_row(issue)
         }
         #[test]
         fn original_sentence_fixture_matches_its_ordered_artifact() {
@@ -1511,14 +1391,7 @@ columns:
                 let fixture = Fixture::new(name);
                 fs::remove_dir_all(fixture.0.join("input")).unwrap();
                 let specification = fixture.0.join("spec.yaml").to_str().unwrap().to_owned();
-                let identity = Identity {
-                    runtime: "test",
-                    runtime_version: "test",
-                    engine_version: yamaa_core::VERSION,
-                    example: name,
-                    specification: &specification,
-                    base_directory: ".",
-                };
+                let identity = crate::support::study::identity(name, &specification);
                 let issues = match file_application::domain(
                     yamaa_core::project_function::Language::Python,
                     Request {
@@ -1686,14 +1559,7 @@ columns:
                 let fixture = bespoke(&source, b"ID,TEXT\nrow1,1\n");
                 fs::remove_file(fixture.0.join("input.csv")).unwrap();
                 let specification = fixture.0.join("spec.yaml").to_str().unwrap().to_owned();
-                let identity = Identity {
-                    runtime: "test",
-                    runtime_version: "test",
-                    engine_version: yamaa_core::VERSION,
-                    example: "test",
-                    specification: &specification,
-                    base_directory: ".",
-                };
+                let identity = crate::support::study::identity("test", &specification);
                 let issues = match file_application::domain(
                     yamaa_core::project_function::Language::Python,
                     Request {
@@ -1719,26 +1585,16 @@ columns:
         }
     }
     mod declarative_text_extract {
-        use std::{
-            fs,
-            path::{Path, PathBuf},
-            sync::atomic::{AtomicUsize, Ordering},
-        };
-        use yamaa_adapters::{file_application, specification_report::Identity};
+        use std::{fs, path::Path};
+        use yamaa_adapters::file_application;
         use yamaa_core::domain_entry::Request;
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        struct Fixture(PathBuf);
+        struct Fixture(crate::support::Scratch);
         impl Fixture {
             fn new(name: &str) -> Self {
                 let source = Path::new(env!("CARGO_MANIFEST_DIR"))
                     .join("../../../benchmarks")
                     .join(name);
-                let path = std::env::temp_dir().join(format!(
-                    "yamaa-str-extract-{}-{}",
-                    std::process::id(),
-                    NEXT.fetch_add(1, Ordering::Relaxed)
-                ));
-                fs::create_dir(&path).unwrap();
+                let path = crate::support::Scratch::new("str-extract");
                 fn copy(source: &Path, target: &Path) {
                     for entry in fs::read_dir(source).unwrap() {
                         let entry = entry.unwrap();
@@ -1756,14 +1612,7 @@ columns:
             }
             fn run(&self) -> file_application::Domain {
                 let specification = self.0.join("spec.yaml").to_str().unwrap().to_owned();
-                let identity = Identity {
-                    runtime: "test",
-                    runtime_version: "test",
-                    engine_version: yamaa_core::VERSION,
-                    example: "test",
-                    specification: &specification,
-                    base_directory: ".",
-                };
+                let identity = crate::support::study::identity("test", &specification);
                 file_application::domain(
                     yamaa_core::project_function::Language::Python,
                     Request {
@@ -1773,11 +1622,6 @@ columns:
                     identity,
                 )
                 .unwrap_or_else(|issues| panic!("preparation {issues:?}"))
-            }
-        }
-        impl Drop for Fixture {
-            fn drop(&mut self) {
-                fs::remove_dir_all(&self.0).unwrap();
             }
         }
         fn golden(fixture: &Fixture) -> yamaa_core::json::Value {
@@ -1810,7 +1654,7 @@ columns:
         }
 
         fn issue_json(issue: &yamaa_core::diagnostic::Diagnostic) -> yamaa_core::json::Value {
-            yamaa_adapters::json!({"phase":issue.phase(),"condition":issue.condition(),"rule":issue.rule(),"spec_paths":issue.spec_paths,"context":issue.context.clone()})
+            crate::support::study::issue_row(issue)
         }
         fn bespoke(source: &str, input: &[u8]) -> Fixture {
             let fixture = Fixture::new("adam-adae-text-cleanup");
@@ -1832,14 +1676,7 @@ columns:
                     specification: &specification,
                     environment: None,
                 },
-                Identity {
-                    runtime: "test",
-                    runtime_version: "test",
-                    engine_version: yamaa_core::VERSION,
-                    example: "test",
-                    specification: &specification,
-                    base_directory: ".",
-                },
+                crate::support::study::identity("test", &specification),
             )
         }
         #[test]
@@ -2018,26 +1855,16 @@ columns:
         }
     }
     mod declarative_text_pad {
-        use std::{
-            fs,
-            path::{Path, PathBuf},
-            sync::atomic::{AtomicUsize, Ordering},
-        };
-        use yamaa_adapters::{file_application, specification_report::Identity};
+        use std::{fs, path::Path};
+        use yamaa_adapters::file_application;
         use yamaa_core::domain_entry::Request;
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        struct Fixture(PathBuf);
+        struct Fixture(crate::support::Scratch);
         impl Fixture {
             fn new(name: &str) -> Self {
                 let source = Path::new(env!("CARGO_MANIFEST_DIR"))
                     .join("../../../benchmarks")
                     .join(name);
-                let path = std::env::temp_dir().join(format!(
-                    "yamaa-str-pad-{}-{}",
-                    std::process::id(),
-                    NEXT.fetch_add(1, Ordering::Relaxed)
-                ));
-                fs::create_dir(&path).unwrap();
+                let path = crate::support::Scratch::new("str-pad");
                 fn copy(source: &Path, target: &Path) {
                     for entry in fs::read_dir(source).unwrap() {
                         let entry = entry.unwrap();
@@ -2052,11 +1879,6 @@ columns:
                 }
                 copy(&source, &path);
                 Self(path)
-            }
-        }
-        impl Drop for Fixture {
-            fn drop(&mut self) {
-                fs::remove_dir_all(&self.0).unwrap();
             }
         }
         fn golden(fixture: &Fixture) -> yamaa_core::json::Value {
@@ -2089,7 +1911,7 @@ columns:
         }
 
         fn issue_json(issue: &yamaa_core::diagnostic::Diagnostic) -> yamaa_core::json::Value {
-            yamaa_adapters::json!({"phase":issue.phase(),"condition":issue.condition(),"rule":issue.rule(),"spec_paths":issue.spec_paths,"context":issue.context.clone()})
+            crate::support::study::issue_row(issue)
         }
         #[test]
         fn independent_reference_captures_match_full_output_and_reached_findings() {
@@ -2105,14 +1927,7 @@ columns:
                 .unwrap();
                 fs::write(fixture.0.join("input.csv"), case["input"].as_str().unwrap()).unwrap();
                 let specification = fixture.0.join("spec.yaml").to_str().unwrap().to_owned();
-                let identity = Identity {
-                    runtime: "test",
-                    runtime_version: "test",
-                    engine_version: yamaa_core::VERSION,
-                    example: name,
-                    specification: &specification,
-                    base_directory: ".",
-                };
+                let identity = crate::support::study::identity(name, &specification);
                 let mut result = match file_application::domain(
                     yamaa_core::project_function::Language::Python,
                     Request {
@@ -2168,14 +1983,8 @@ columns:
             let fixture = Fixture::new("negative-str-pad-width");
             fs::remove_dir_all(fixture.0.join("input")).unwrap();
             let specification = fixture.0.join("spec.yaml").to_str().unwrap().to_owned();
-            let identity = Identity {
-                runtime: "test",
-                runtime_version: "test",
-                engine_version: yamaa_core::VERSION,
-                example: "negative-str-pad-width",
-                specification: &specification,
-                base_directory: ".",
-            };
+            let identity =
+                crate::support::study::identity("negative-str-pad-width", &specification);
             let issues = match file_application::domain(
                 yamaa_core::project_function::Language::Python,
                 Request {
@@ -2219,14 +2028,7 @@ columns:
                         specification: &specification,
                         environment: None,
                     },
-                    Identity {
-                        runtime: "test",
-                        runtime_version: "test",
-                        engine_version: yamaa_core::VERSION,
-                        example: "test",
-                        specification: &specification,
-                        base_directory: ".",
-                    },
+                    crate::support::study::identity("test", &specification),
                 );
                 (fixture, result)
             };
@@ -2260,26 +2062,16 @@ columns:
         }
     }
     mod declarative_text_template {
-        use std::{
-            fs,
-            path::{Path, PathBuf},
-            sync::atomic::{AtomicUsize, Ordering},
-        };
-        use yamaa_adapters::{file_application, specification_report::Identity};
+        use std::{fs, path::Path};
+        use yamaa_adapters::file_application;
         use yamaa_core::domain_entry::Request;
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        struct Fixture(PathBuf);
+        struct Fixture(crate::support::Scratch);
         impl Fixture {
             fn new(name: &str) -> Self {
                 let source = Path::new(env!("CARGO_MANIFEST_DIR"))
                     .join("../../../benchmarks")
                     .join(name);
-                let path = std::env::temp_dir().join(format!(
-                    "yamaa-str-template-{}-{}",
-                    std::process::id(),
-                    NEXT.fetch_add(1, Ordering::Relaxed)
-                ));
-                fs::create_dir(&path).unwrap();
+                let path = crate::support::Scratch::new("str-template");
                 fn copy(source: &Path, target: &Path) {
                     for entry in fs::read_dir(source).unwrap() {
                         let entry = entry.unwrap();
@@ -2297,14 +2089,7 @@ columns:
             }
             fn run(&self) -> file_application::Domain {
                 let specification = self.0.join("spec.yaml").to_str().unwrap().to_owned();
-                let identity = Identity {
-                    runtime: "test",
-                    runtime_version: "test",
-                    engine_version: yamaa_core::VERSION,
-                    example: "test",
-                    specification: &specification,
-                    base_directory: ".",
-                };
+                let identity = crate::support::study::identity("test", &specification);
                 file_application::domain(
                     yamaa_core::project_function::Language::Python,
                     Request {
@@ -2314,11 +2099,6 @@ columns:
                     identity,
                 )
                 .unwrap_or_else(|issues| panic!("preparation {issues:?}"))
-            }
-        }
-        impl Drop for Fixture {
-            fn drop(&mut self) {
-                fs::remove_dir_all(&self.0).unwrap();
             }
         }
         fn golden(fixture: &Fixture) -> yamaa_core::json::Value {
@@ -2351,7 +2131,7 @@ columns:
         }
 
         fn issue_json(issue: &yamaa_core::diagnostic::Diagnostic) -> yamaa_core::json::Value {
-            yamaa_adapters::json!({"phase":issue.phase(),"condition":issue.condition(),"rule":issue.rule(),"spec_paths":issue.spec_paths,"context":issue.context.clone()})
+            crate::support::study::issue_row(issue)
         }
         fn bespoke(source: &str, input: &[u8]) -> Fixture {
             let fixture = Fixture::new("adam-adsl-site-parse");
@@ -2388,14 +2168,7 @@ columns:
                     specification: &specification,
                     environment: None,
                 },
-                Identity {
-                    runtime: "test",
-                    runtime_version: "test",
-                    engine_version: yamaa_core::VERSION,
-                    example: "test",
-                    specification: &specification,
-                    base_directory: ".",
-                },
+                crate::support::study::identity("test", &specification),
             )
         }
 

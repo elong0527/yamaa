@@ -81,7 +81,7 @@ UNREAD_BY_R_SUITES = (
     # JSON truth; the R suites read the generated R truth instead.
     "specification-original/*.json",
     "specification-original/row-cases/*/findings.json",
-    # R strings cannot hold NUL, so original_specifications.R skips this case.
+    # R strings cannot hold NUL, so original_specifications_text.R skips this case.
     "specification-original/text-template-cases/nul-value/**",
     # Staged for no installed suite.
     "specification-original/binding-diagnostics.tsv",

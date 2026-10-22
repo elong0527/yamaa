@@ -1,5 +1,7 @@
 #![cfg(feature = "yaml")]
-//! Declaration contracts.
+//! Declaration contracts: contract vectors, inheritance capture, ODM
+//! declaration fixture, original intermediate verifications and preparation
+//! dispatch.
 mod declaration {
     mod contract_vectors {
         //! Direct native checks of unchanged authored grammar, regex and rounding truth.
@@ -1440,19 +1442,12 @@ mod declaration {
             }
         }
         struct CaseFiles {
-            root: std::path::PathBuf,
+            root: crate::support::Scratch,
         }
         impl CaseFiles {
             fn new(case: &Value) -> Self {
-                static NEXT: std::sync::atomic::AtomicUsize =
-                    std::sync::atomic::AtomicUsize::new(0);
-                let root = std::env::temp_dir().join(format!(
-                    "yamaa-inheritance-{}-{}",
-                    std::process::id(),
-                    NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-                ));
-                std::fs::create_dir(&root).unwrap();
-                let root = root.canonicalize().unwrap();
+                let root =
+                    crate::support::Scratch::new("inheritance").resolved(std::fs::canonicalize);
                 for source in case["sources"].as_array().unwrap() {
                     let name = source["name"].as_str().unwrap();
                     assert_eq!(std::path::Path::new(name).components().count(), 1);
@@ -1460,11 +1455,6 @@ mod declaration {
                         .unwrap();
                 }
                 Self { root }
-            }
-        }
-        impl Drop for CaseFiles {
-            fn drop(&mut self) {
-                let _ = std::fs::remove_dir_all(&self.root);
             }
         }
         #[test]
@@ -2272,27 +2262,17 @@ mod declaration {
         //! Shipped-schema successors for specification/test_intermediate_verification.py
         //! retired in #2110. Original valid and invalid verification payloads are kept;
         //! private Python model instances are replaced by the native check boundary.
-        use std::{
-            fs,
-            path::PathBuf,
-            sync::atomic::{AtomicUsize, Ordering},
-        };
+        use std::fs;
+        use yamaa_adapters::file_application;
         use yamaa_adapters::json;
-        use yamaa_adapters::{file_application, specification_report::Identity};
         use yamaa_core::diagnostic::Diagnostic;
         use yamaa_core::domain_entry::Request;
         use yamaa_core::json::Value;
 
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        struct Study(PathBuf);
+        struct Study(crate::support::Scratch);
         impl Study {
             fn new() -> Self {
-                let path = std::env::temp_dir().join(format!(
-                    "yamaa-original-intermediate-verification-{}-{}",
-                    std::process::id(),
-                    NEXT.fetch_add(1, Ordering::Relaxed)
-                ));
-                fs::create_dir(&path).unwrap();
+                let path = crate::support::Scratch::new("original-intermediate-verification");
                 Self(path)
             }
             fn check(&self, intermediate: Value) -> Vec<Diagnostic> {
@@ -2320,23 +2300,11 @@ mod declaration {
                         specification: entry,
                         environment: None,
                     },
-                    Identity {
-                        runtime: "test",
-                        runtime_version: "test",
-                        engine_version: yamaa_core::VERSION,
-                        example: "original-intermediate-verification",
-                        specification: entry,
-                        base_directory: ".",
-                    },
+                    crate::support::study::identity("original-intermediate-verification", entry),
                 );
                 assert!(!self.0.join("never-read.csv").exists());
                 assert!(!self.0.join("out.csv").exists());
                 issues
-            }
-        }
-        impl Drop for Study {
-            fn drop(&mut self) {
-                fs::remove_dir_all(&self.0).unwrap();
             }
         }
 
@@ -2421,6 +2389,7 @@ mod declaration {
     }
     mod preparation_dispatch {
         //! Existing YAML representation and independent complete outcomes around engine delegation.
+        use crate::support::Edit as _;
         use std::sync::Arc;
         use yamaa_adapters::json;
         use yamaa_adapters::{
@@ -2480,7 +2449,7 @@ mod declaration {
 
         #[test]
         fn adapter_moves_source_allocations_and_retains_original_physical_locations_and_defaults() {
-            let text = VALID.replace("domain: X\n", "");
+            let text = VALID.edit("domain: X\n", "");
             let entry = source(&text);
             let bytes = entry.bytes.as_ptr();
             let identity = entry.identity.as_ptr();
@@ -2535,7 +2504,7 @@ mod declaration {
         #[test]
         fn both_semantic_passes_keep_source_identity_and_independent_complete_reports() {
             let schema = schema();
-            let text = VALID.replace("'1.0'", "92233720368547758081234567890");
+            let text = VALID.edit("'1.0'", "92233720368547758081234567890");
             let entry = source(&text);
             let bytes = entry.bytes.as_ptr();
             let identity = entry.identity.as_ptr();
@@ -2579,8 +2548,8 @@ mod declaration {
         #[test]
         fn final_model_findings_retain_no_pass_document_and_move_original_source() {
             let text = VALID
-                .replace("domain: X", "domain: 7")
-                .replace("{path: output.csv, columns: []}", "{}");
+                .edit("domain: X", "domain: 7")
+                .edit("{path: output.csv, columns: []}", "{}");
             let entry = source(&text);
             let pointer = entry.bytes.as_ptr();
             let error = schema().dispatch(entry).unwrap_err();
@@ -2644,7 +2613,7 @@ mod declaration {
                 vec![Source {
                     identity: "schema.yaml".into(),
                     bytes: SCHEMA
-                        .replace(
+                        .edit(
                             "type: [str, int], default: DEFAULT",
                             "type: str, default: 7",
                         )
@@ -2683,28 +2652,18 @@ mod declaration {
 
         mod native {
             use super::*;
-            use std::{
-                fs,
-                path::PathBuf,
-                sync::atomic::{AtomicUsize, Ordering},
-            };
+            use std::fs;
             use yamaa_adapters::{
                 file_preparation::{Error as NativeError, FileSpecification},
                 file_resources::Resources,
             };
-            static NEXT: AtomicUsize = AtomicUsize::new(0);
-            struct Study(PathBuf);
+            struct Study(crate::support::Scratch);
             impl Study {
                 fn new() -> Self {
-                    let path = std::env::temp_dir().join(format!(
-                        "yamaa-dispatch-{}-{}",
-                        std::process::id(),
-                        NEXT.fetch_add(1, Ordering::Relaxed)
-                    ));
-                    fs::create_dir(&path).unwrap();
+                    let path = crate::support::Scratch::canonical("dispatch");
                     fs::create_dir(path.join("entry")).unwrap();
                     fs::create_dir(path.join("parent")).unwrap();
-                    Self(yamaa_adapters::canonical_path::canonicalize(path).unwrap())
+                    Self(path)
                 }
                 fn identity(&self, name: &str) -> String {
                     let path = self.0.join(name).to_str().unwrap().to_string();
@@ -2730,11 +2689,6 @@ mod declaration {
                         panic!("native rejection")
                     };
                     crate::support::preparation_findings(error)
-                }
-            }
-            impl Drop for Study {
-                fn drop(&mut self) {
-                    fs::remove_dir_all(&self.0).unwrap();
                 }
             }
             const VALID:&str="schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: never-read.csv}\noutput: {path: never-written.csv, columns: [ID]}\ncolumns: [{name: ID, type: int, derivation: SRC.ID}]\n";
@@ -2765,7 +2719,7 @@ mod declaration {
                 assert_eq!(
                     study.report(&format!(
                         "{}parent: absent.yaml\n",
-                        VALID.replace("'1.0'", "'99.0'")
+                        VALID.edit("'1.0'", "'99.0'")
                     )),
                     json!([{
                         "phase":"validation","condition":"schema_version_mismatch","rule":"SCHEMA-2","spec_paths":["schema_version"],"context":{"expected":"1.0","actual":"99.0","source":root,"entry":root}

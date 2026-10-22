@@ -10,9 +10,7 @@ use yamaa_core::diagnostic::{ConditionCode, OdmReadFinding};
 use yamaa_core::json::Value as V;
 use yamaa_core::odm_items::{Definition, Document, Error, Layout, Limit, Member, ValueRefusal};
 
-fn text(value: &str) -> V {
-    V::String(value.into())
-}
+use super::text;
 
 /// One refusal, the condition it reports, the facts beside `path`, and its
 /// rendered message.

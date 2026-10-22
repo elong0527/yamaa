@@ -16,16 +16,12 @@
 //! (`yamaa-core/src/specification/lowering_audit.rs`); the Rust tests that
 //! prepare a specification run the same comparison.
 
-use std::{
-    collections::BTreeSet,
-    fs,
-    path::{Path, PathBuf},
-};
+use std::{collections::BTreeSet, fs, path::Path};
 use yamaa_adapters::{
     file_preparation::FileSpecification,
     file_resources::Resources,
     shipped_schema,
-    specification_source::{InheritancePort, PreparedDocument, Source},
+    specification_source::{PreparedDocument, Source},
     yaml_decode::{decode_yaml, SourcePosition},
 };
 use yamaa_core::{
@@ -35,13 +31,8 @@ use yamaa_core::{
         TemporalType, TimeUnit, WindowFunction,
     },
     front_end::v0_5::{lower, Positions},
-    inheritance::{Source as GraphSource, SourceError},
     schema::{Document, DocumentNode as N, SchemaSource},
 };
-
-fn benchmarks() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../benchmarks")
-}
 
 fn text(d: &Document, node: usize) -> Option<&str> {
     match &d.nodes()[node] {
@@ -104,36 +95,7 @@ fn expected_paths(case: &Path) -> Vec<String> {
         .unwrap_or_default()
 }
 
-/// Parents resolve beside their declaring file; input paths stay as written.
-struct Files;
-impl InheritancePort for Files {
-    type Error = std::io::Error;
-    fn canonicalize(
-        &mut self,
-        declaring: &str,
-        written: &str,
-    ) -> Result<GraphSource, SourceError<Self::Error>> {
-        let candidate = Path::new(declaring).parent().unwrap().join(written);
-        let identity = candidate
-            .canonicalize()
-            .map_err(|_| SourceError::Unavailable)?;
-        Ok(GraphSource {
-            identity: identity.to_str().unwrap().into(),
-            display_path: candidate.to_str().unwrap().into(),
-        })
-    }
-    fn capture(&mut self, source: &GraphSource) -> Result<Vec<u8>, SourceError<Self::Error>> {
-        fs::read(&source.identity).map_err(SourceError::Raised)
-    }
-    fn rebase(
-        &mut self,
-        _: &GraphSource,
-        _: &GraphSource,
-        written: &str,
-    ) -> Result<String, Self::Error> {
-        Ok(written.into())
-    }
-}
+use crate::support::inheritance::Files;
 
 fn span(file: usize, position: &SourcePosition) -> Span {
     Span {
@@ -258,12 +220,7 @@ const SPEC_ROOTS: [&str; 12] = [
 
 #[test]
 fn lowering_is_total_on_every_benchmark_specification() {
-    let mut cases = fs::read_dir(benchmarks())
-        .unwrap()
-        .filter_map(|entry| entry.ok().map(|entry| entry.path()))
-        .filter(|case| case.join("benchmark.yaml").is_file())
-        .collect::<Vec<_>>();
-    cases.sort();
+    let cases = crate::support::benchmarks::all();
     let (mut admitted, mut compiled, mut cited) = (0, 0, 0);
     let mut failures = Vec::new();
     for case in &cases {

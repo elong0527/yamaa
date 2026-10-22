@@ -287,7 +287,7 @@ mod tests {
             std::env::temp_dir().join(format!("yamaa-cli-write-{}.yaml", std::process::id()));
         std::fs::write(
             &spec,
-            "schema_version: '1.0'\ndomain: DM\noutput:\n  path: dm.csv\n",
+            "yamaa: \"1.0\"\ntype: spec\ndomain: DM\noutput:\n  path: dm.csv\n",
         )
         .unwrap();
         let spec = spec.to_str().unwrap().to_owned();

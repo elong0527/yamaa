@@ -13,7 +13,7 @@ use yamaa::{
     ResourceKind, Table,
 };
 
-const SPEC: &[u8] = b"schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input/src.csv, types: {ID: int}}}\noutput: {path: out.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
+const SPEC: &[u8] = b"yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input/src.csv, types: {ID: int}}}\noutput: {path: out.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
 
 /// The condition, specification paths and context of each issue.
 fn issues(table: &Table) -> Vec<(String, Vec<String>, String)> {

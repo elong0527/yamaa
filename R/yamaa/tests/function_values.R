@@ -4,29 +4,15 @@
 # never changed, and a result converts by its declared type. Inputs and truth
 # are authored here, independently of the engine.
 library(yamaa)
-# save() returns the absolute paths it wrote, invisibly, with forward slashes,
-# in publication order (D38); each one exists once written.
-returns_paths <- function(paths) is.character(paths) && length(paths) > 0L && !anyNA(paths) &&
-  all(grepl("^(/|[[:alpha:]]:/)", paths)) && !any(grepl("\\", paths, fixed = TRUE)) &&
-  all(file.exists(paths))
+host_fixture_root <- normalizePath("host-fixtures", winslash = "/", mustWork = TRUE)
+source(file.path(host_fixture_root, "assert.R"), local = TRUE)
 # jsonlite is a suggested package: where it is not installed, a refusal's
 # reason, which its JSON context holds, is not compared, and the rest is.
 has_jsonlite <- requireNamespace("jsonlite", quietly = TRUE)
 if (!has_jsonlite) message("Skipped the refusal reasons of function_values.R: jsonlite, a suggested package, is not installed")
 namespace <- asNamespace("yamaa")
 capabilities <- get(".yamaa_locked_host_capabilities", namespace)()
-with_resolve <- function(resolve, code) {
-  name <- ".yamaa_locked_host_capabilities"
-  original <- get(name, namespace)
-  replace <- function(value) {
-    unlockBinding(name, namespace)
-    assign(name, value, namespace)
-    lockBinding(name, namespace)
-  }
-  on.exit(replace(original))
-  replace(function() list(verify = capabilities$verify, resolve = resolve))
-  force(code)
-}
+with_resolve <- function(resolve, code) with_capabilities(capabilities$verify, resolve, code)
 # The installed binding, wrapped to record the plain arguments of every call
 # and to reply with `value` instead when `when` selects the argument `x`.
 wrapped <- function(record = function(arguments) NULL, when = function(x) FALSE, value = NULL) {
@@ -40,43 +26,24 @@ wrapped <- function(record = function(arguments) NULL, when = function(x) FALSE,
     })
   }
 }
-rawfile <- function(path) readBin(path, "raw", n = file.info(path)$size)
 reasons <- function(issues) vapply(issues$context, function(context)
   jsonlite::fromJSON(context, simplifyVector = FALSE)$reason, "", USE.NAMES = FALSE)
-# An issue's file as its printed line names it (P-ISSUE-1): relative to the
-# working directory when the file is beneath it, and absolute otherwise.
-# Beneath is a matter of directories, not spellings: the engine names the file
-# canonically, while the working directory may be spelled another way, such
-# as with Windows 8.3 short names. So each directory above the file is
-# compared with the working directory as normalizePath() spells both.
-printed_file <- function(file) {
-  here <- normalizePath(getwd(), winslash = "/")
-  parts <- strsplit(file, "/", fixed = TRUE)[[1L]]
-  for (depth in rev(seq_len(length(parts) - 1L))) {
-    # The first part is the root: "" for "/", or a drive such as "C:".
-    directory <- paste(parts[seq_len(depth)], collapse = "/")
-    if (depth == 1L) directory <- paste0(directory, "/")
-    if (identical(normalizePath(directory, winslash = "/", mustWork = FALSE), here))
-      return(paste(parts[-seq_len(depth)], collapse = "/"))
-  }
-  file
-}
+# The run of one refused call, named by its `reason`.
 refused <- function(result, condition, rule, reason) {
-  stopifnot(is.null(result$output), nrow(result$issues) == 1L,
-    identical(result$issues$phase, "derivation"),
-    identical(result$issues$condition, condition),
-    identical(result$issues$rule, rule),
-    !has_jsonlite || identical(reasons(result$issues), reason))
+  stopifnot_case(reason, "a refused call leaves no output" = is.null(result$output))
+  expect_identical(as.list(result$issues[c("phase", "condition", "rule")]),
+    list(phase = "derivation", condition = condition, rule = rule), paste(reason, "is the one issue"))
+  if (has_jsonlite) expect_identical(reasons(result$issues), reason, "the issue's reason")
   failure <- tryCatch(result$save(), error = identity)
   # D39: the run names its dataset, then its one issue, which starts with its
   # location (P-ISSUE-1).
   file <- result$issues$file
   location <- if (is.na(file)) "" else sprintf("%s:%d:%d: ", printed_file(file),
     as.integer(result$issues$line), as.integer(result$issues$column))
-  stopifnot(inherits(failure, "yamaa_error"),
-    identical(conditionMessage(failure),
-      sprintf("cannot save TEST: %s%s [%s, %s]", location, result$issues$message, condition, rule)),
-    identical(failure$issues, result$issues))
+  stopifnot_case(reason, "its save signals yamaa_error" = inherits(failure, "yamaa_error"))
+  expect_identical(conditionMessage(failure), sprintf("cannot save TEST: %s%s", location, issue_line(result$issues)),
+    paste(reason, "gives D39's text"))
+  expect_identical(failure$issues, result$issues, paste(reason, "carries the run's issues"))
 }
 # The project's one specification, run with the project's functions.
 run <- function() yamaa_project("project.yaml")$spec("TEST")$run()
@@ -125,7 +92,7 @@ identity_function("maybe_int", "int", c(
   "{id: boundary, covers: [boundary], args: {x: 0}, result: 0}",
   "{id: missing, covers: ['accepted-missing:x', nullable-output], args: {x: null}, result: null}"),
   "may_return_missing: true")
-stopifnot(file.copy(rounding, "functions"))
+stopifnot("the rounding function is copied" = file.copy(rounding, "functions"))
 function_file("bool_value", c(
   "description: Select an integer using a boolean argument.",
   "params:", "  - {name: test, type: bool}",
@@ -161,35 +128,31 @@ received <- function(arguments) any(vapply(seen, identical, logical(1), argument
 for (attempt in 1:2) {
   seen <- list()
   built <- with_resolve(wrapped(record), run())
-  stopifnot(nrow(built$issues) == 0L,
-    identical(built$output$ID, c(1, 2, 3)),
-    identical(built$output$I, c(7, 2^53, -2^53)),
-    identical(built$output$F, c(2.5, -0.5, NA)),
-    identical(built$output$S, c("\u00e9t\u00e9", "x", NA)),
-    identical(built$output$D, as.Date(c("2024-02-29", "0001-01-01", NA))),
-    identical(built$output$T, as.POSIXct(c("2024-02-29 12:30:45", "9999-12-31 23:59:59", NA), tz = "UTC")),
-    identical(built$output$M, c(5, NA, -2^53)),
-    identical(built$output$P, c(2.5, -0.5, NA)))
+  label <- sprintf("round trip %d", attempt)
+  stopifnot_case(label, "the build has no issues" = nrow(built$issues) == 0L)
+  expect_identical(as.list(built$output), list(ID = c(1, 2, 3), I = c(7, 2^53, -2^53), F = c(2.5, -0.5, NA),
+    S = c("\u00e9t\u00e9", "x", NA), D = as.Date(c("2024-02-29", "0001-01-01", NA)),
+    T = as.POSIXct(c("2024-02-29 12:30:45", "9999-12-31 23:59:59", NA), tz = "UTC"),
+    M = c(5, NA, -2^53), P = c(2.5, -0.5, NA)), paste(label, "converts every result by its type"))
   # Each argument arrives as its one plain R value: int as double, accepted
   # missing as logical NA and an omitted default by value.
-  stopifnot(received(list(x = 7)), received(list(x = 2^53)), received(list(x = -2^53)),
-    received(list(x = 2.5)), received(list(x = "\u00e9t\u00e9")), received(list(x = "")),
-    received(list(x = as.Date("2024-02-29"))), received(list(x = as.Date("0001-01-01"))),
-    received(list(x = as.POSIXct("2024-02-29 12:30:45", tz = "UTC"))),
-    received(list(x = as.POSIXct("9999-12-31 23:59:59", tz = "UTC"))),
-    received(list(x = 5)), received(list(x = NA)),
-    received(list(x = 2.5, digits = 3)),
-    received(list(x = 2.375, digits = 3)),
-    !received(list(x = NULL)))
+  for (arguments in list(list(x = 7), list(x = 2^53), list(x = -2^53), list(x = 2.5), list(x = "\u00e9t\u00e9"),
+    list(x = ""), list(x = as.Date("2024-02-29")), list(x = as.Date("0001-01-01")),
+    list(x = as.POSIXct("2024-02-29 12:30:45", tz = "UTC")), list(x = as.POSIXct("9999-12-31 23:59:59", tz = "UTC")),
+    list(x = 5), list(x = NA), list(x = 2.5, digits = 3), list(x = 2.375, digits = 3))) {
+    if (!received(arguments)) fail_expectation(paste(label, "receives each argument as its plain R value"), seen, arguments)
+  }
+  stopifnot_case(label, "no call receives NULL" = !received(list(x = NULL)))
   text <- Filter(function(arguments) identical(arguments, list(x = "\u00e9t\u00e9")), seen)[[1L]]$x
-  stopifnot(identical(Encoding(text), "UTF-8"),
-    identical(attributes(Filter(function(arguments) inherits(arguments$x, "POSIXct"), seen)[[1L]]$x),
-      list(class = c("POSIXct", "POSIXt"), tzone = "UTC")))
-  stopifnot(returns_paths(built$save()), identical(rawfile("output.csv"), charToRaw(enc2utf8(paste0(
+  expect_identical(Encoding(text), "UTF-8", paste(label, "marks text UTF-8"))
+  expect_identical(attributes(Filter(function(arguments) inherits(arguments$x, "POSIXct"), seen)[[1L]]$x),
+    list(class = c("POSIXct", "POSIXt"), tzone = "UTC"), paste(label, "passes a datetime in UTC"))
+  stopifnot_case(label, "the build saves" = returns_paths(built$save()))
+  expect_identical(rawfile("output.csv"), charToRaw(enc2utf8(paste0(
     "ID,I,F,S,D,T,M,P\n",
     "1,7,2.5,\u00e9t\u00e9,2024-02-29,2024-02-29T12:30:45,5,2.5\n",
     "2,9007199254740992,-0.5,x,0001-01-01,9999-12-31T23:59:59,,-0.5\n",
-    "3,-9007199254740992,,,,,-9007199254740992,\n")))))
+    "3,-9007199254740992,,,,,-9007199254740992,\n"))), paste(label, "saves the exact CSV"))
   unlink("output.csv")
 }
 cat("plain R function arguments and results round trip every type and repeat\n")
@@ -215,18 +178,21 @@ seen <- list()
 for (value in c("true", "false", "null")) {
   logicals <- column("int", "bool_value", list("1"), wrapped(record),
     parameter = "test", argument = value)
-  stopifnot(nrow(logicals$issues) == 0L,
-    identical(logicals$output$X, switch(value, true = 1, false = 0, null = NA_real_)))
+  stopifnot_case(paste("test:", value), "the build has no issues" = nrow(logicals$issues) == 0L)
+  expect_identical(logicals$output$X, switch(value, true = 1, false = 0, null = NA_real_), paste("test:", value))
 }
-stopifnot(received(list(test = TRUE, yes = 1, no = 0)),
-  received(list(test = FALSE, yes = 1, no = 0)),
-  !received(list(test = NA, yes = 1, no = 0)))
+stopifnot("TRUE arrives logical" = received(list(test = TRUE, yes = 1, no = 0)),
+  "FALSE arrives logical" = received(list(test = FALSE, yes = 1, no = 0)),
+  "a missing test short-circuits the call" = !received(list(test = NA, yes = 1, no = 0)))
 
 # Text beyond one MiB crosses both ways whole and saves exact bytes.
 large <- paste0(strrep("\u00e9", 524289L), "complete")
 long <- column("str", "text_value", list(large))
-stopifnot(nrow(long$issues) == 0L, identical(long$output$X, large), returns_paths(long$save()),
-  identical(rawfile("output.csv"), charToRaw(enc2utf8(paste0("ID,X\n1,", large, "\n")))))
+stopifnot("the large text build has no issues" = nrow(long$issues) == 0L,
+  "the callback returns the whole text" = identical(long$output$X, large),
+  "the large text build saves" = returns_paths(long$save()),
+  "the saved CSV holds the whole text" =
+    identical(rawfile("output.csv"), charToRaw(enc2utf8(paste0("ID,X\n1,", large, "\n")))))
 unlink("output.csv")
 
 # An argument R cannot hold exactly fails the call before project code runs.
@@ -235,8 +201,8 @@ for (value in c("9007199254740993", "-9007199254740993", "9223372036854775807"))
   refused(column("int", "int_value", list("7", value), wrapped(record)),
     "function_call_failed", "FUNC-8", paste0("argument x: integer ", value,
       " is beyond 2^53 and cannot be held exactly by an R double"))
-  stopifnot(received(list(x = 7)), !any(vapply(seen, function(arguments)
-    abs(arguments$x) > 2^53, logical(1))))
+  stopifnot_case(paste("argument", value), "the other row is called" = received(list(x = 7)),
+    "no call receives the unheld integer" = !any(vapply(seen, function(arguments) abs(arguments$x) > 2^53, logical(1))))
 }
 refused(column("str", "text_value", list(as.raw(c(0x61, 0x00, 0x62)))),
   "function_call_failed", "FUNC-8",
@@ -293,7 +259,9 @@ for (value in list(NULL, NA, NA_integer_, NA_real_, NA_character_, NaN, Inf, -In
 for (case in accepted) {
   result <- column(case[[1L]], case[[2L]], list(case[[3L]]),
     wrapped(when = trigger(case[[1L]], case[[3L]]), value = case[[4L]]))
-  stopifnot(nrow(result$issues) == 0L, identical(result$output$X, case[[5L]]))
+  label <- sprintf("%s result %s", case[[2L]], paste(deparse(case[[4L]]), collapse = ""))
+  stopifnot_case(label, "an accepted result has no issues" = nrow(result$issues) == 0L)
+  expect_identical(result$output$X, case[[5L]], paste(label, "converts to its plain value"))
 }
 cat("results convert by the declared type and every other value is refused\n")
 setwd(previous)

@@ -4,26 +4,19 @@
 //! with missing, each counted under `absent` at the read's path; a read made
 //! while a predicate is evaluated is not counted. `require_match: true` on the
 //! input fails every such read as `unmatched_key`, unless the read declares
-//! its own `absent` answer, and leaves a named intermediate's policy alone.
-use std::{
-    fs,
-    path::PathBuf,
-    sync::atomic::{AtomicUsize, Ordering},
-};
-use yamaa_adapters::{file_application, specification_report::Identity};
+//! its own `absent` answer, and leaves a named intermediate's policy alone. On
+//! a 1.0 file a named intermediate's absence is counted under `absent` too,
+//! at the same read paths, where a 0.5 file counts it under `no_match`.
+use crate::support::Edit as _;
+use std::fs;
+use yamaa_adapters::file_application;
 use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::{domain_entry::Request, json::Value};
 
-struct Fixture(PathBuf);
+struct Fixture(crate::support::Scratch);
 impl Fixture {
     fn new(specification: &str) -> Self {
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        let root = std::env::temp_dir().join(format!(
-            "yamaa-implicit-join-absence-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
-        fs::create_dir(&root).unwrap();
+        let root = crate::support::Scratch::new("implicit-join-absence");
         fs::write(root.join("spec.yaml"), specification).unwrap();
         fs::write(root.join("ae.csv"), AE).unwrap();
         fs::write(root.join("adsl.csv"), ADSL).unwrap();
@@ -38,14 +31,7 @@ impl Fixture {
                 specification,
                 environment: None,
             },
-            Identity {
-                runtime: "test",
-                runtime_version: "test",
-                engine_version: yamaa_core::VERSION,
-                example: "implicit-join-absence",
-                specification,
-                base_directory: ".",
-            },
+            crate::support::study::identity("implicit-join-absence", specification),
         )
     }
     /// The saved artifact and the run's handler counts as `(path, count)`.
@@ -64,11 +50,6 @@ impl Fixture {
         let issues = domain.issues();
         assert!(!issues.is_empty(), "the run succeeded");
         yamaa_adapters::report_storage::diagnostic_value(&issues[0])
-    }
-}
-impl Drop for Fixture {
-    fn drop(&mut self) {
-        fs::remove_dir_all(&self.0).unwrap();
     }
 }
 
@@ -265,6 +246,102 @@ fn an_input_requirement_leaves_a_named_intermediate_its_own_policy() {
     );
 }
 
+/// TRTSDT reads ADSL through its implicit join, ARM and ARMD read a lookup of
+/// ADSL's safety population, by default and with a declared answer, and AGE1
+/// adds one to the lookup's AGE. The 1.0 file declares ADSL's key and the
+/// lookups' own, which the 0.5 file infers.
+const NAMED_0_5: &str = "schema_version: \"1.0\"\n\
+    domain: ADAE\n\
+    keys: [STUDYID, USUBJID, AESEQ]\n\
+    input:\n\
+    \x20 AE: ae.csv\n\
+    \x20 ADSL: {path: adsl.csv, types: {AGE: int}}\n\
+    base: AE\n\
+    output:\n\
+    \x20 path: adae.csv\n\
+    \x20 columns: [STUDYID, USUBJID, AESEQ, TRTSDT, ARM, ARMD, AGE1]\n\
+    intermediates:\n\
+    \x20 - {id: SAFETY, dataset: ADSL, filter: \"ADSL.SAFFL = 'Y'\"}\n\
+    \x20 - {id: NAMED, dataset: ADSL, filter: \"ADSL.SAFFL = 'Y'\", no_match: NONE}\n\
+    columns:\n\
+    \x20 - {name: STUDYID, type: str, derivation: AE.STUDYID}\n\
+    \x20 - {name: USUBJID, type: str, derivation: AE.USUBJID}\n\
+    \x20 - {name: AESEQ, type: int, derivation: AE.AESEQ}\n\
+    \x20 - {name: TRTSDT, type: str, derivation: ADSL.TRTSDT}\n\
+    \x20 - {name: ARM, type: str, derivation: SAFETY.ARM}\n\
+    \x20 - {name: ARMD, type: str, derivation: NAMED.ARM}\n\
+    \x20 - {name: AGE1, type: int, derivation: {compute: {expr: \"SAFETY.AGE + 1\"}}}\n";
+const NAMED_1_0: &str = "yamaa: \"1.0\"\n\
+    type: spec\n\
+    domain: ADAE\n\
+    keys: [STUDYID, USUBJID, AESEQ]\n\
+    input:\n\
+    \x20 AE: ae.csv\n\
+    \x20 ADSL: {path: adsl.csv, key: [STUDYID, USUBJID], types: {AGE: int}}\n\
+    base: AE\n\
+    output:\n\
+    \x20 path: adae.csv\n\
+    \x20 columns: [STUDYID, USUBJID, AESEQ, TRTSDT, ARM, ARMD, AGE1]\n\
+    intermediates:\n\
+    \x20 - {id: SAFETY, dataset: ADSL, key: [STUDYID, USUBJID], filter: \"ADSL.SAFFL = 'Y'\"}\n\
+    \x20 - {id: NAMED, dataset: ADSL, key: [STUDYID, USUBJID], filter: \"ADSL.SAFFL = 'Y'\", absent: NONE}\n\
+    columns:\n\
+    \x20 - {name: STUDYID, type: str, derivation: AE.STUDYID}\n\
+    \x20 - {name: USUBJID, type: str, derivation: AE.USUBJID}\n\
+    \x20 - {name: AESEQ, type: int, derivation: AE.AESEQ}\n\
+    \x20 - {name: TRTSDT, type: str, derivation: ADSL.TRTSDT}\n\
+    \x20 - {name: ARM, type: str, derivation: SAFETY.ARM}\n\
+    \x20 - {name: ARMD, type: str, derivation: NAMED.ARM}\n\
+    \x20 - {name: AGE1, type: int, derivation: \"SAFETY.AGE + 1\"}\n";
+
+/// S-2 has no subject-level record, so each read answers it once. A 1.0 file
+/// counts a named intermediate's answer, declared or by default, under
+/// `absent` at the read's path, as it counts the implicit join's
+/// (LOOKUP-14, D202); a 0.5 file counts it under `no_match`, as 0.5.0 did
+/// (D75).
+#[test]
+fn a_named_intermediate_s_absence_counts_under_the_handler_its_surface_names() {
+    for (surface, specification, ledger) in [
+        (
+            "0.5",
+            NAMED_0_5,
+            yamaa_adapters::json!([
+                {"spec_path": "columns.TRTSDT.derivation.source.absent", "handler": "absent", "count": 1},
+                {"spec_path": "columns.ARM.derivation.source.no_match", "handler": "no_match", "count": 1},
+                {"spec_path": "columns.ARMD.derivation.source.no_match", "handler": "no_match", "count": 1},
+                {"spec_path": "columns.AGE1.derivation.compute.no_match", "handler": "no_match", "count": 1},
+            ]),
+        ),
+        (
+            "1.0",
+            NAMED_1_0,
+            yamaa_adapters::json!([
+                {"spec_path": "columns.TRTSDT.derivation.source.absent", "handler": "absent", "count": 1},
+                {"spec_path": "columns.ARM.derivation.source.absent", "handler": "absent", "count": 1},
+                {"spec_path": "columns.ARMD.derivation.source.absent", "handler": "absent", "count": 1},
+                {"spec_path": "columns.AGE1.derivation.absent", "handler": "absent", "count": 1},
+            ]),
+        ),
+    ] {
+        let fixture = Fixture::new(specification);
+        let mut domain = fixture.run().unwrap();
+        assert!(
+            domain.issues().is_empty(),
+            "{surface}: {:?}",
+            domain.issues()
+        );
+        assert!(domain.save().unwrap(), "{surface}");
+        assert_eq!(
+            fs::read_to_string(fixture.0.join("adae.csv")).unwrap(),
+            "STUDYID,USUBJID,AESEQ,TRTSDT,ARM,ARMD,AGE1\n\
+             S,S-1,1,2025-01-10,drug a,drug a,41\n\
+             S,S-2,1,,,NONE,\n",
+            "{surface}"
+        );
+        assert_eq!(domain.observations()["handler_counts"], ledger, "{surface}");
+    }
+}
+
 const ROWS: &str = "schema_version: \"1.0\"\n\
     domain: ADAE\n\
     keys: [STUDYID, USUBJID, AESEQ]\n\
@@ -290,7 +367,7 @@ const ROWS: &str = "schema_version: \"1.0\"\n\
 
 #[test]
 fn a_row_template_counts_an_operand_read_and_fails_it_when_required() {
-    let fixture = Fixture::new(&ROWS.replace("ADSL_DECLARATION", "adsl.csv"));
+    let fixture = Fixture::new(&ROWS.edit("ADSL_DECLARATION", "adsl.csv"));
     let (csv, counts) = fixture.saved();
     assert_eq!(
         csv,
@@ -303,7 +380,7 @@ fn a_row_template_counts_an_operand_read_and_fails_it_when_required() {
         assert!(counts.contains(&(path.into(), 1)), "{path}: {counts:?}");
     }
     let fixture =
-        Fixture::new(&ROWS.replace("ADSL_DECLARATION", "{path: adsl.csv, require_match: true}"));
+        Fixture::new(&ROWS.edit("ADSL_DECLARATION", "{path: adsl.csv, require_match: true}"));
     let failure = fixture.failure();
     assert_eq!(failure["condition"], "unmatched_key");
     assert_eq!(failure["rule"], "LOOKUP-24");

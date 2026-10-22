@@ -1,4 +1,6 @@
-//! Project contracts.
+//! Project contracts: project compiled rows, project environment, project
+//! environment diagnostics, project environment projection and project
+//! function.
 mod project {
     mod project_compiled_rows {
         //! Execute compiler-selected row/default calls without a host-authored plan.

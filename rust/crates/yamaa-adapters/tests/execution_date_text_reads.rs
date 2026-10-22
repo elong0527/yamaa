@@ -5,25 +5,15 @@
 //! run report, while a part the text reaches is read, counted and refused as
 //! before. `to_date` refuses an interval or duration as `impute` and
 //! `precision` do (TIME-2, TIME-13).
-use std::{
-    fs,
-    path::PathBuf,
-    sync::atomic::{AtomicUsize, Ordering},
-};
-use yamaa_adapters::{file_application, specification_report::Identity};
+use std::fs;
+use yamaa_adapters::file_application;
 use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::{domain_entry::Request, json::Value};
 
-struct Fixture(PathBuf);
+struct Fixture(crate::support::Scratch);
 impl Fixture {
     fn new(specification: &str, inputs: &[(&str, &str)]) -> Self {
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        let root = std::env::temp_dir().join(format!(
-            "yamaa-date-text-reads-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
-        fs::create_dir(&root).unwrap();
+        let root = crate::support::Scratch::new("date-text-reads");
         fs::write(root.join("spec.yaml"), specification).unwrap();
         for (name, content) in inputs {
             fs::write(root.join(name), content).unwrap();
@@ -39,14 +29,7 @@ impl Fixture {
                 specification,
                 environment: None,
             },
-            Identity {
-                runtime: "test",
-                runtime_version: "test",
-                engine_version: yamaa_core::VERSION,
-                example: "date-text-reads",
-                specification,
-                base_directory: ".",
-            },
+            crate::support::study::identity("date-text-reads", specification),
         )
     }
     /// The saved artifact and the run report's handler rows as
@@ -76,11 +59,6 @@ impl Fixture {
         };
         assert_eq!(issues.len(), 1, "{issues:?}");
         yamaa_adapters::report_storage::diagnostic_value(&issues[0])
-    }
-}
-impl Drop for Fixture {
-    fn drop(&mut self) {
-        fs::remove_dir_all(&self.0).unwrap();
     }
 }
 

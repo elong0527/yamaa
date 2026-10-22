@@ -1,4 +1,5 @@
-//! Table contracts.
+//! Table contracts: Arrow table, CSV artifact, CSV precision, CSV source,
+//! parquet artifact, parquet source, predicate diagnostics and public table.
 mod table {
     mod arrow_table {
         use crate::support::table_schema as logical_schema;
@@ -892,6 +893,7 @@ mod table {
     }
     #[cfg(feature = "yaml")]
     mod csv_precision {
+        use crate::support::Edit as _;
         use std::{convert::Infallible, sync::Arc};
         use yamaa_adapters::{
             specification_report::{self, Identity},
@@ -909,9 +911,9 @@ mod table {
         fn prepared(precision: &str, path: &str, expression: &str) -> PreparedRun {
             let schema = yamaa_adapters::shipped_schema::capture().unwrap();
             let bytes = SPEC
-                .replace("PRECISION", precision)
-                .replace("output.csv", path)
-                .replace("VALUE + VALUE", expression);
+                .edit("PRECISION", precision)
+                .edit("output.csv", path)
+                .edit("VALUE + VALUE", expression);
             let document = schema
                 .prepare_standalone(Source {
                     identity: "spec.yaml".into(),
@@ -1076,7 +1078,7 @@ mod table {
             let document = schema
                 .prepare_standalone(Source {
                     identity: "spec.yaml".into(),
-                    bytes: SPEC.replace("PRECISION", &precision).into_bytes(),
+                    bytes: SPEC.edit("PRECISION", &precision).into_bytes(),
                 })
                 .unwrap();
             let compiled = PreparedSpecification::prepare(document.model()).unwrap();
@@ -1126,8 +1128,6 @@ mod table {
             convert::Infallible,
             fs::{File, OpenOptions},
             io::Write,
-            path::PathBuf,
-            sync::atomic::{AtomicUsize, Ordering},
         };
         use yamaa_adapters::parquet_artifact::{render, Error};
         use yamaa_core::{
@@ -1175,31 +1175,23 @@ mod table {
                 rows,
             }
         }
-        struct Source(PathBuf);
+        /// A Parquet file in its own scratch directory.
+        struct Source(crate::support::Scratch);
         impl Source {
             fn new(bytes: &[u8]) -> Self {
-                static NEXT: AtomicUsize = AtomicUsize::new(0);
-                let path = std::env::temp_dir().join(format!(
-                    "yamaa-parquet-test-{}-{}",
-                    std::process::id(),
-                    NEXT.fetch_add(1, Ordering::Relaxed)
-                ));
+                let directory = crate::support::Scratch::new("parquet-test");
                 OpenOptions::new()
                     .write(true)
                     .create_new(true)
-                    .open(&path)
+                    .open(directory.join("source.parquet"))
                     .unwrap()
                     .write_all(bytes)
                     .unwrap();
-                Self(path)
+                Self(directory)
             }
             fn reader(&self) -> SerializedFileReader<File> {
-                SerializedFileReader::new(File::open(&self.0).unwrap()).unwrap()
-            }
-        }
-        impl Drop for Source {
-            fn drop(&mut self) {
-                let _ = std::fs::remove_file(&self.0);
+                SerializedFileReader::new(File::open(self.0.join("source.parquet")).unwrap())
+                    .unwrap()
             }
         }
 

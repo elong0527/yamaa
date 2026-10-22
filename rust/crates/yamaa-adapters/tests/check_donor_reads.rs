@@ -12,27 +12,18 @@
 //! (TEXT-1, EXPR-11, EXPR-13). Each lookup's derivations come before its key
 //! types, which come before its filter. Every case lists the same issues in
 //! both routes and hosts, in the same order.
-use std::{
-    fs,
-    path::PathBuf,
-    sync::atomic::{AtomicUsize, Ordering},
-};
-use yamaa_adapters::{file_application, specification_report::Identity};
+use crate::support::Edit as _;
+use std::fs;
+use yamaa_adapters::file_application;
 use yamaa_core::{diagnostic::Diagnostic, domain_entry::Request, project_function::Language};
 
 /// Rendered issues, each with its spec paths.
 type Issues = Vec<(String, Vec<String>)>;
 
-struct Fixture(PathBuf);
+struct Fixture(crate::support::Scratch);
 impl Fixture {
     fn new(specification: &str) -> Self {
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        let root = std::env::temp_dir().join(format!(
-            "yamaa-donor-reads-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
-        fs::create_dir(&root).unwrap();
+        let root = crate::support::Scratch::new("donor-reads");
         fs::write(root.join("spec.yaml"), specification).unwrap();
         for (name, content) in [
             (
@@ -57,14 +48,7 @@ impl Fixture {
             specification,
             environment: None,
         };
-        let identity = || Identity {
-            runtime: "test",
-            runtime_version: "test",
-            engine_version: yamaa_core::VERSION,
-            example: "donor-reads",
-            specification,
-            base_directory: ".",
-        };
+        let identity = || crate::support::study::identity("donor-reads", specification);
         let render = |issues: &[Diagnostic]| {
             issues
                 .iter()
@@ -89,11 +73,6 @@ impl Fixture {
             Err(issues) => render(&issues),
         };
         (checked, built)
-    }
-}
-impl Drop for Fixture {
-    fn drop(&mut self) {
-        fs::remove_dir_all(&self.0).unwrap();
     }
 }
 
@@ -234,8 +213,8 @@ fn check_reports_a_lookup_derivation_s_join_options_as_domain_does() {
         ),
         (
             read("D: {type: date, derivation: {source: {variable: PLAN.FIRST, require_match: true}}}")
-                .replace("{name: X, type: float, derivation: P.D}", "{name: X, type: float, derivation: 0.0}")
-                .replace("{name: N, type: int, derivation: 0}", "{name: N, type: int, derivation: P.D}"),
+                .edit("{name: X, type: float, derivation: P.D}", "{name: X, type: float, derivation: 0.0}")
+                .edit("{name: N, type: int, derivation: 0}", "{name: N, type: int, derivation: P.D}"),
             &[&required("derivation.source.require_match")],
             REQUIRED,
         ),
@@ -520,7 +499,7 @@ fn check_reports_a_lookup_derivation_s_read_of_a_lookup_it_cannot_match_as_domai
 fn check_lists_a_lookup_s_issues_in_binding_s_order() {
     let required = "intermediates.P.derivations.D.source.require_match";
     let lookup = |fields: &str| {
-        spec("", "", "P.D", "\"'A'\"", "0").replace(
+        spec("", "", "P.D", "\"'A'\"", "0").edit(
             "  - {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}\n",
             &format!("  - {{id: P, dataset: PLAN, {fields}}}\n"),
         )
@@ -540,7 +519,7 @@ fn check_lists_a_lookup_s_issues_in_binding_s_order() {
         ),
         (
             lookup("key: [USUBJID], filter: \"PLAN.FIRST > 'a'\", derivations: {D: {source: {variable: PLAN.FIRST, require_match: true}}}")
-                .replace("derivation: VS.VSDY}", "derivation: {source: {variable: VS.VSDY, require_match: true}}}"),
+                .edit("derivation: VS.VSDY}", "derivation: {source: {variable: VS.VSDY, require_match: true}}}"),
             &[required, "intermediates.P.filter", "columns.VSDY.derivation.source.require_match"],
             REQUIRED,
         ),
@@ -563,7 +542,7 @@ fn check_lists_a_lookup_s_issues_in_binding_s_order() {
 #[test]
 fn check_reports_what_binding_refuses_in_a_derive_binding_as_domain_does() {
     let aggregate = |derivations: &str| {
-        spec("", "A: PLAN.FIRST", "0.0", "\"'A'\"", "0").replace(
+        spec("", "A: PLAN.FIRST", "0.0", "\"'A'\"", "0").edit(
             "{name: N, type: int, derivation: 0}",
             &format!("{{name: N, type: int, derivation: {{aggregate: {{expr: \"COUNT(F)\", derivations: {{{derivations}}}}}}}}}"),
         )

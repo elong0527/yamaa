@@ -6,25 +6,15 @@
 //! same-date rows by its tie-break terms (WINDOW-9); and the table a window
 //! orders by a source field counts that field against the fixed column
 //! limit.
-use std::{
-    fs,
-    path::PathBuf,
-    sync::atomic::{AtomicUsize, Ordering},
-};
-use yamaa_adapters::{file_application, specification_report::Identity};
+use std::fs;
+use yamaa_adapters::file_application;
 use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::{domain_entry::Request, json::Value};
 
-struct Fixture(PathBuf);
+struct Fixture(crate::support::Scratch);
 impl Fixture {
     fn new(specification: &str, input: &str) -> Self {
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        let root = std::env::temp_dir().join(format!(
-            "yamaa-window-semantics-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
-        fs::create_dir(&root).unwrap();
+        let root = crate::support::Scratch::new("window-semantics");
         fs::write(root.join("spec.yaml"), specification).unwrap();
         fs::write(root.join("input.csv"), input).unwrap();
         Self(root)
@@ -38,14 +28,7 @@ impl Fixture {
                 specification,
                 environment: None,
             },
-            Identity {
-                runtime: "test",
-                runtime_version: "test",
-                engine_version: yamaa_core::VERSION,
-                example: "window-semantics",
-                specification,
-                base_directory: ".",
-            },
+            crate::support::study::identity("window-semantics", specification),
         )
     }
     /// The run reports nothing and saves the artifact this returns.
@@ -68,14 +51,7 @@ impl Fixture {
         assert!(!self.0.join("out.csv").exists());
         let [issue] =
             <[Diagnostic; 1]>::try_from(issues).unwrap_or_else(|issues| panic!("{issues:?}"));
-        yamaa_adapters::json!({"phase": issue.phase(), "condition": issue.condition(),
-            "rule": issue.rule(), "spec_paths": issue.spec_paths,
-            "context": issue.context.clone()})
-    }
-}
-impl Drop for Fixture {
-    fn drop(&mut self) {
-        fs::remove_dir_all(&self.0).unwrap();
+        crate::support::study::issue_row(&issue)
     }
 }
 

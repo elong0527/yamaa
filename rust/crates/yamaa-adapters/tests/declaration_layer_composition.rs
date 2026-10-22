@@ -10,14 +10,15 @@
 //! 0.5 sources do.
 mod declaration {
     mod layer_composition {
+        use crate::support::Edit as _;
         use std::fs;
         use std::path::{Component, Path, PathBuf};
-        use std::sync::atomic::{AtomicUsize, Ordering};
+
         use yamaa_adapters::document::{
             self, Closures, Decoded, PreparedSpecification, SpecificationError,
         };
         use yamaa_adapters::resolved_artifact::{self, model::specification_value};
-        use yamaa_adapters::specification_report::Identity;
+
         use yamaa_adapters::specification_source::{Error, InheritancePort, Source};
         use yamaa_core::diagnostic::ConditionCode;
         use yamaa_core::domain_entry::Request;
@@ -26,8 +27,6 @@ mod declaration {
         use yamaa_core::language::{FileType, LANGUAGE_VERSION};
         use yamaa_core::project_function::Language;
         use yamaa_core::schema::{NormalizationError, SchemaContext as C, SchemaDiagnostic};
-
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
 
         fn repository() -> PathBuf {
             Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..")
@@ -40,16 +39,11 @@ mod declaration {
             )
         }
 
-        struct Study(PathBuf);
+        struct Study(crate::support::Scratch);
         impl Study {
             fn new() -> Self {
-                let path = std::env::temp_dir().join(format!(
-                    "yamaa-layer-composition-{}-{}",
-                    std::process::id(),
-                    NEXT.fetch_add(1, Ordering::Relaxed)
-                ));
-                fs::create_dir_all(&path).unwrap();
-                Self(yamaa_adapters::canonical_path::canonicalize(path).unwrap())
+                let path = crate::support::Scratch::canonical("layer-composition");
+                Self(path)
             }
             fn write(&self, name: &str, text: &str) {
                 let path = self.0.join(name);
@@ -58,11 +52,6 @@ mod declaration {
             }
             fn path(&self, name: &str) -> String {
                 identity(&self.0.join(name))
-            }
-        }
-        impl Drop for Study {
-            fn drop(&mut self) {
-                let _ = fs::remove_dir_all(&self.0);
             }
         }
 
@@ -247,7 +236,7 @@ output: {path: out.csv, columns: [CODE, REASON]}
         fn entry(clear: &[&str], rest: &str) -> String {
             let mut text = ENTRY.to_string();
             if !clear.is_empty() {
-                text = text.replace(
+                text = text.edit(
                     "parent: base.yaml\n",
                     &format!(
                         "parent: base.yaml\nclear:\n{}",
@@ -330,13 +319,13 @@ output: {path: out.csv, columns: [CODE, REASON]}
             let study = Study::new();
             study.write(
                 "shared/base.yaml",
-                &BASE.replace(
+                &BASE.edit(
                     "DS: {path: ds.csv,",
                     "DS: {path: ds.csv, relative_to: entry,",
                 ),
             );
             let entry = |clear: &[&str]| {
-                entry(clear, "").replace("parent: base.yaml", "parent: ../shared/base.yaml")
+                entry(clear, "").edit("parent: base.yaml", "parent: ../shared/base.yaml")
             };
             // The inherited `relative_to: entry` reads the study's own file.
             study.write("study/spec.yaml", &entry(&[]));
@@ -461,7 +450,7 @@ output: {path: out.csv, columns: [CODE, REASON]}
             study.write(
                 "spec.yaml",
                 &entry(&["output.relative_to"], "")
-                    .replace("output: {path: out.csv, columns: [CODE, REASON]}\n", ""),
+                    .edit("output: {path: out.csv, columns: [CODE, REASON]}\n", ""),
             );
             let (_, found) = layer_findings(prepare(&study.path("spec.yaml")).unwrap_err());
             assert_eq!(found, [invalid_clear(0, "relative_to")]);
@@ -547,9 +536,9 @@ columns:
             // after pruning (LAYER-12), so an unread intermediate is pruned
             // with its fault, and a read one reports it.
             let incomplete = ROWS
-                .replace("dataset: SRC, key: [ID], other: 1", "key: [ID]")
+                .edit("dataset: SRC, key: [ID], other: 1", "key: [ID]")
                 .replace(", other: 1}", "}")
-                .replace(
+                .edit(
                     "derivation: SRC.ID}",
                     "derivation: {mapping: {dict: {A: B}}}}",
                 );
@@ -565,12 +554,10 @@ columns:
                 required(&incomplete),
                 ["columns.ID.derivation.mapping.source"]
             );
-            let read = incomplete
-                .replace("columns: [ID]}", "columns: [ID, V]}")
-                .replace(
-                    "columns:\n",
-                    "columns:\n  - {name: V, type: str, derivation: FIRST.CODE}\n",
-                );
+            let read = incomplete.edit("columns: [ID]}", "columns: [ID, V]}").edit(
+                "columns:\n",
+                "columns:\n  - {name: V, type: str, derivation: FIRST.CODE}\n",
+            );
             let paths = required(&read);
             assert!(
                 paths.contains(&"intermediates.FIRST.dataset".to_string()),
@@ -592,11 +579,11 @@ columns:
                 "shared/base.yaml",
                 &format!(
                     "{}output: {{path: out.csv, columns: [CODE, REASON]}}\n",
-                    BASE.replace(
+                    BASE.edit(
                         "DS: {path: ds.csv,",
                         "DS: {path: ds.csv, relative_to: entry,"
                     )
-                    .replace(
+                    .edit(
                         "dict: {AE: ADVERSE EVENT, PD: PROGRESSIVE DISEASE, 'NOT DONE': NOT DONE}",
                         "dict: codes.yaml",
                     )
@@ -720,14 +707,7 @@ columns:
                     specification: &source,
                     environment: None,
                 },
-                Identity {
-                    runtime: "test",
-                    runtime_version: "test",
-                    engine_version: yamaa_core::VERSION,
-                    example: "test",
-                    specification: &source,
-                    base_directory: ".",
-                },
+                crate::support::study::identity("test", &source),
             );
             let [legacy] = issues.as_slice() else {
                 panic!("one issue: {issues:?}");

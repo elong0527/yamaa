@@ -1,5 +1,7 @@
 """R CMD check --as-cran may report only the notes that cran-comments.md explains."""
 
+import contextlib
+import io
 import re
 import tempfile
 import unittest
@@ -254,6 +256,90 @@ class EnvironmentTests(unittest.TestCase):
         with tempfile.NamedTemporaryFile(suffix=".tar.gz") as archive:
             with self.assertRaisesRegex(ValueError, "outside the checkout"):
                 check_r.check(Path(archive.name), ROOT / "build/r-check")
+
+
+class FailingTestsTests(unittest.TestCase):
+    """Every test file runs, and a failing file's whole output is printed."""
+
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.root = Path(directory.name)
+        self.archive = self.root / "yamaa_0.5.0.tar.gz"
+        self.archive.write_bytes(b"archive")
+
+    def run_check(self, returncode, outputs):
+        """Run check() against a fake R CMD check that writes `outputs`."""
+        commands = []
+
+        def fake_run(command, cwd, env, check):
+            commands.append((command, check))
+            tests = Path(cwd) / "yamaa.Rcheck" / "tests"
+            tests.mkdir(parents=True)
+            for name, text in outputs.items():
+                (tests / name).write_text(text, encoding="utf-8")
+            (tests.parent / "00check.log").write_text(
+                log(HEAD, status="1 NOTE"), encoding="utf-8"
+            )
+            return check_r.subprocess.CompletedProcess(command, returncode)
+
+        printed = io.StringIO()
+        with (
+            mock.patch.object(check_r, "check_environment", return_value={}),
+            mock.patch.object(check_r, "has_checkbashisms", return_value=True),
+            mock.patch.object(
+                check_r.subprocess, "check_output", return_value="revision\n"
+            ),
+            mock.patch.object(check_r.subprocess, "run", side_effect=fake_run),
+            contextlib.redirect_stdout(printed),
+        ):
+            try:
+                check_r.check(self.archive, self.root / "check")
+                failure = None
+            except check_r.subprocess.CalledProcessError as error:
+                failure = error
+        return commands, printed.getvalue(), failure
+
+    def test_r_cmd_check_runs_every_test_file(self):
+        commands, _, failure = self.run_check(0, {"lint.Rout": "fine\n"})
+        self.assertEqual(
+            commands,
+            [
+                (
+                    [
+                        "R",
+                        "CMD",
+                        "check",
+                        "--as-cran",
+                        "--no-manual",
+                        "--no-stop-on-test-error",
+                        str(self.archive.resolve()),
+                    ],
+                    False,
+                )
+            ],
+        )
+        self.assertIsNone(failure)
+
+    def test_a_failing_check_prints_each_failing_test_file_whole(self):
+        _, printed, failure = self.run_check(
+            1,
+            {
+                "lint.Rout": "lint passed\n",
+                "schema.Rout.fail": "line 1\nError: the schema is one line\n",
+                "selftest.Rout.fail": "Error: every case passes\n",
+            },
+        )
+        self.assertEqual(
+            printed,
+            "===== schema.Rout.fail =====\n"
+            "line 1\nError: the schema is one line\n"
+            "===== end of schema.Rout.fail =====\n"
+            "===== selftest.Rout.fail =====\n"
+            "Error: every case passes\n"
+            "===== end of selftest.Rout.fail =====\n",
+        )
+        self.assertEqual(failure.returncode, 1)
 
 
 if __name__ == "__main__":

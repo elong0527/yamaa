@@ -2,25 +2,17 @@
 //! P-LINT-2 table, file order, fixes, the printed lines and refusals.
 #![cfg(feature = "yaml")]
 
-use std::path::PathBuf;
-
-#[cfg(unix)]
-#[path = "support/scratch.rs"]
-mod scratch;
+use crate::support::scratch;
 
 use yamaa::{lint, Array, DataType, Int64Array, StringArray, Table, LINT_COLUMNS, LINT_FINDINGS};
 
-const CANONICAL: &str = "schema_version: \"1.0\"\ndomain: DM\nkeys: [USUBJID]\ninput:\n  DM: input/dm.csv\n\noutput:\n  path: dm.csv\n  columns: [USUBJID]\n\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: DM.USUBJID\n";
+const CANONICAL: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: DM\nkeys: [USUBJID]\ninput:\n  DM: input/dm.csv\n\noutput:\n  path: dm.csv\n  columns: [USUBJID]\n\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: DM.USUBJID\n";
 
-struct Directory(PathBuf);
+struct Directory(scratch::Scratch);
 
 impl Directory {
     fn new(name: &str) -> Self {
-        let path =
-            std::env::temp_dir().join(format!("yamaa-facade-lint-{name}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&path);
-        std::fs::create_dir_all(&path).unwrap();
-        Self(path)
+        Self(scratch::Scratch::new(&format!("lint-{name}")))
     }
 
     fn write(&self, name: &str, text: &str) -> String {
@@ -35,12 +27,6 @@ impl Directory {
             .unwrap()
             .to_string_lossy()
             .replace('\\', "/")
-    }
-}
-
-impl Drop for Directory {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
     }
 }
 
@@ -119,7 +105,7 @@ fn findings_come_as_the_six_column_table() {
         rows(&table),
         [(
             directory.absolute("dm.yaml"),
-            6,
+            7,
             1,
             "root_spacing".to_owned(),
             "output".to_owned(),
@@ -158,7 +144,7 @@ fn rows_follow_the_files_then_line_column_and_finding() {
     let expected = |name: &str| {
         [
             (directory.absolute(name), 1, 1, "blank_lines".to_owned()),
-            (directory.absolute(name), 7, 1, "root_spacing".to_owned()),
+            (directory.absolute(name), 8, 1, "root_spacing".to_owned()),
         ]
     };
     assert_eq!(found, [expected("b.yaml"), expected("a.yaml")].concat());
@@ -210,10 +196,10 @@ fn fix_rewrites_the_file_and_lists_what_remains() {
     assert_eq!(
         found,
         [(
-            14,
+            15,
             80,
             "line_width".to_owned(),
-            "columns[0].label".to_owned()
+            "columns.USUBJID.label".to_owned()
         )]
     );
     // Two files linted, one holds the finding that remains, and the fix
@@ -251,7 +237,7 @@ fn findings_print_as_the_style_line_and_the_summary_line() {
         lines,
         [
             format!("{file}:1:1: blank_lines remove the leading blank line"),
-            format!("{file}:7:1: root_spacing leave one blank line before `output`"),
+            format!("{file}:8:1: root_spacing leave one blank line before `output`"),
         ]
     );
     assert_eq!(linted.summary(), "2 lint findings in 1 of 2 files");
@@ -265,7 +251,7 @@ fn findings_print_as_the_style_line_and_the_summary_line() {
     assert_eq!(
         linted.findings()[1].to_value().to_json(),
         format!(
-            r#"{{"column":1,"file":"{file}","finding":"root_spacing","line":7,"message":"leave one blank line before `output`","spec_path":"output"}}"#
+            r#"{{"column":1,"file":"{file}","finding":"root_spacing","line":8,"message":"leave one blank line before `output`","spec_path":"output"}}"#
         )
     );
 }
@@ -374,8 +360,8 @@ fn a_1_0_file_is_fixed_to_its_canonical_spellings() {
 #[cfg(unix)]
 #[test]
 fn parent_alias_findings_print_relative_while_fix_keeps_the_written_path() {
-    const WRITTEN: &str = "schema_version: \"1.0\"\ndomain: DM\noutput:\n  path: dm.csv\n";
-    const FIXED: &str = "schema_version: \"1.0\"\ndomain: DM\n\noutput:\n  path: dm.csv\n";
+    const WRITTEN: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: DM\noutput:\n  path: dm.csv\n";
+    const FIXED: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: DM\n\noutput:\n  path: dm.csv\n";
     let cwd =
         yamaa_adapters::canonical_path::canonicalize(std::env::current_dir().unwrap()).unwrap();
     let study = scratch::Scratch::under(&cwd, "lint-alias-study");
@@ -429,14 +415,14 @@ fn parent_alias_findings_print_relative_while_fix_keeps_the_written_path() {
                 (
                     vec![(
                         written.clone(),
-                        3,
+                        4,
                         1,
                         "root_spacing".to_owned(),
                         "output".to_owned(),
                         "leave one blank line before `output`".to_owned(),
                     )],
                     vec![format!(
-                        "{relative}:3:1: root_spacing leave one blank line before `output`"
+                        "{relative}:4:1: root_spacing leave one blank line before `output`"
                     )],
                     1,
                     "1 lint finding in 1 of 1 file".to_owned(),

@@ -294,14 +294,6 @@ impl Pointer {
             data: true,
         }
     }
-    /// A row compressed with RDC literals and runs.
-    pub fn rdc_row(row: &[u8]) -> Self {
-        Self::Stored {
-            bytes: rdc(row),
-            compression: 4,
-            data: true,
-        }
-    }
     /// Stored bytes with an explicit compression code.
     pub fn coded(bytes: Vec<u8>, compression: u8) -> Self {
         Self::Stored {

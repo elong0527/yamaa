@@ -1,5 +1,5 @@
 #![cfg(feature = "yaml")]
-//! Project contracts.
+//! Project contracts: project source and project source decoder.
 mod project {
     mod project_source {
         use crate::support::project_schemas::candidate_schemas;

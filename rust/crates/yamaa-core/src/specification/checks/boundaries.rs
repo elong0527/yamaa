@@ -30,7 +30,8 @@
 //!   but another input through its implicit join (LOOKUP-24, LOOKUP-9);
 //! - a row filter's read of a column its template does not derive, a
 //!   grouped filter's qualified read, and an ungrouped filter's read of a
-//!   window result, directly or through a lookup's match (ROW-6).
+//!   window result, directly or through a lookup's match (ROW-6); and an
+//!   ungrouped filter's field qualified by nothing declared (NAME-3).
 //!
 //! Binding keeps what the declarations alone cannot decide: a field an
 //! input no producer links does not store, a lookup whose keys are inferred
@@ -303,13 +304,14 @@ impl<'a> Reads<'a> {
     /// A name of a formula's text `expression`: in a row template another
     /// input's field, and in the column phase any qualified name but a
     /// lookup's, fail (FORMULA-9); any other name is read as an operand.
+    /// True when the name binds, as far as the declarations decide.
     pub(super) fn formula(
         &self,
         path: &str,
         expression: &str,
         name: &str,
         findings: &mut Vec<BindFinding>,
-    ) {
+    ) -> bool {
         if let Some((owner, _)) = name.split_once('.') {
             if self.prepared.intermediates.reference(name).is_none() {
                 match self.phase {
@@ -319,17 +321,17 @@ impl<'a> Reads<'a> {
                             expression: expression.into(),
                             identifier: name.into(),
                         });
-                        return;
+                        return false;
                     }
                     Phase::Row { .. } if self.joined(owner) => {
                         self.source_scope(path, name, findings);
-                        return;
+                        return false;
                     }
                     Phase::Row { .. } => {}
                 }
             }
         }
-        self.read(path, name, findings);
+        self.read(path, name, findings)
     }
 
     /// A name of a `case` predicate: in a row template another input's field
@@ -754,7 +756,9 @@ impl<'a> Reads<'a> {
     /// A row template's filter, after its derivations bind, each name once
     /// (ROW-6): a bare name its template does not derive fails, and an
     /// ungrouped filter reads a lookup, and another input through its
-    /// implicit join ([`Self::join`]), as a derivation does. Once nothing
+    /// implicit join ([`Self::join`]), as a derivation does, and a field
+    /// qualified by nothing declared is unknown (NAME-3,
+    /// `rows::bind_template_filter`). Once nothing
     /// refuses it, an ungrouped filter fails at each read of a window result,
     /// directly or through a lookup's match, which completes after the filter
     /// runs. `deferred` holds the template's columns that complete after its
@@ -785,6 +789,11 @@ impl<'a> Reads<'a> {
                         self.lookup_read(index, path, identifier, findings);
                     } else if self.joined(owner) {
                         self.join(path, owner, findings);
+                    } else if !self.drivers.contains(&owner) {
+                        findings.push(BindFinding::UnknownReference {
+                            path: path.into(),
+                            name: identifier.into(),
+                        });
                     }
                 }
                 None => {

@@ -9,10 +9,11 @@
 //! project prepares through them, on every public route (#3030 D76).
 mod declaration {
     mod project_files {
+        use crate::support::Edit as _;
         use std::fmt::Debug;
         use std::fs;
         use std::path::{Component, Path, PathBuf};
-        use std::sync::atomic::{AtomicUsize, Ordering};
+
         use yamaa_adapters::document::{self, AdmittedDocument, Closures, Decoded};
         use yamaa_adapters::project_source::{
             self, Failure, Kind, ProjectCapturePort, Reply, Request,
@@ -27,8 +28,6 @@ mod declaration {
         use yamaa_core::language::{FileType, LANGUAGE_VERSION};
         use yamaa_core::project_function::Language;
         use yamaa_core::schema::SchemaSource;
-
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
 
         fn repository(path: &str) -> PathBuf {
             PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -298,16 +297,11 @@ mod declaration {
         }
 
         /// A temporary study directory.
-        struct Study(PathBuf);
+        struct Study(crate::support::Scratch);
         impl Study {
             fn new() -> Self {
-                let path = std::env::temp_dir().join(format!(
-                    "yamaa-project-files-{}-{}",
-                    std::process::id(),
-                    NEXT.fetch_add(1, Ordering::Relaxed)
-                ));
-                fs::create_dir_all(&path).unwrap();
-                Self(yamaa_adapters::canonical_path::canonicalize(path).unwrap())
+                let path = crate::support::Scratch::canonical("project-files");
+                Self(path)
             }
             fn write(&self, name: &str, bytes: &[u8]) {
                 let path = self.0.join(name);
@@ -319,11 +313,6 @@ mod declaration {
             }
             fn source(&self, name: &str) -> Source {
                 source(&self.path(name))
-            }
-        }
-        impl Drop for Study {
-            fn drop(&mut self) {
-                let _ = fs::remove_dir_all(&self.0);
             }
         }
 
@@ -488,7 +477,7 @@ mod declaration {
         #[test]
         fn a_codelist_integer_outside_the_int_range_fails_as_any_literal_does() {
             let study = converted_study();
-            let wide = CODELISTS.replace("rank: 2", "rank: 99999999999999999999");
+            let wide = CODELISTS.edit("rank: 2", "rank: 99999999999999999999");
             // Written inline, in the project file itself.
             let project = fs::read_to_string(study.path("project.yaml")).unwrap();
             let inline = wide.replace('\n', "\n    ");
@@ -618,11 +607,11 @@ mod declaration {
             study.write(
                 "project.yaml",
                 project
-                    .replace(
+                    .edit(
                         "environments:\n  r:",
                         "environments:\n  python:\n    lock: r/renv.lock\n  r:",
                     )
-                    .replace(
+                    .edit(
                         "- functions/bmi.yaml",
                         "- functions/bmi.yaml\n- functions/copy.yaml",
                     )
@@ -690,7 +679,7 @@ mod declaration {
             // A Python spelling of the R callable.
             study.write(
                 "functions/bmi.yaml",
-                bmi.replace("yamaabenchmarks::bmi", "yamaabenchmarks.bmi")
+                bmi.edit("yamaabenchmarks::bmi", "yamaabenchmarks.bmi")
                     .as_bytes(),
             );
             let Err(Failure::Rejected(rejected)) =
@@ -726,7 +715,7 @@ mod declaration {
             // keeping the text it is written as (P-FN-1).
             study.write(
                 "functions/bmi.yaml",
-                bmi.replace("weight_kg\n  type: float", "weight_kg\n  type: date")
+                bmi.edit("weight_kg\n  type: float", "weight_kg\n  type: date")
                     .replacen("weight_kg: 70.0", "weight_kg: '2024-02-30'", 1)
                     .as_bytes(),
             );
@@ -761,9 +750,9 @@ mod declaration {
     /// activation findings are reported in that file, its lock's in the
     /// project file (FUNC-2, FUNC-3, FUNC-12).
     mod project_reads {
+        use crate::support::Edit as _;
         use std::fs;
-        use std::path::PathBuf;
-        use std::sync::atomic::{AtomicUsize, Ordering};
+
         use std::sync::Arc;
         use yamaa_adapters::{
             document::Closures,
@@ -790,8 +779,6 @@ mod declaration {
         use yamaa_core::project_function::Language;
         use yamaa_core::table::ValueRef;
 
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-
         const PROJECT: &str = "yamaa: \"1.0\"\ntype: project\nfunctions: [functions/id.yaml]\nenvironments:\n  python: {lock: uv.lock}\n  r: {lock: renv.lock}\ncodelists: [ct.yaml]\n";
         const FUNCTION: &str = "yamaa: \"1.0\"\ntype: function\nname: id\ndescription: Integer identity.\nparams: [{name: x, type: int, accepts_missing: true}]\nreturns: int\nmay_return_missing: true\nimplementations: {python: program.id, r: program::id}\ntests:\n  - {id: normal, covers: [normal, boundary], args: {x: 7}, result: 7}\n  - {id: missing, covers: ['accepted-missing:x', nullable-output], args: {x: null}, result: null}\n";
         const CODELISTS: &str = "yamaa: \"1.0\"\ntype: codelists\ncodelists: [{id: SEX, name: Sex, items: [{value: F}, {value: M}]}]\n";
@@ -809,16 +796,12 @@ mod declaration {
         /// A 1.0 project with one function file, a lock for each host and a
         /// codelist file, and a 0.5 specification in `entry/` that calls the
         /// function.
-        struct Study(PathBuf);
+        struct Study(crate::support::Scratch);
         impl Study {
             fn new() -> Self {
-                let path = std::env::temp_dir().join(format!(
-                    "yamaa-project-reads-{}-{}",
-                    std::process::id(),
-                    NEXT.fetch_add(1, Ordering::Relaxed)
-                ));
+                let path = crate::support::Scratch::canonical("project-reads");
                 fs::create_dir_all(path.join("entry")).unwrap();
-                let study = Self(yamaa_adapters::canonical_path::canonicalize(path).unwrap());
+                let study = Self(path);
                 study.write("project.yaml", PROJECT);
                 study.write("functions/id.yaml", FUNCTION);
                 study.write("uv.lock", "version = 1\npackage = []\n");
@@ -885,11 +868,6 @@ mod declaration {
                 };
                 assert_eq!(project_application::selection_failure(&selected), built);
                 built
-            }
-        }
-        impl Drop for Study {
-            fn drop(&mut self) {
-                let _ = fs::remove_dir_all(&self.0);
             }
         }
 
@@ -1053,7 +1031,7 @@ mod declaration {
                 let study = Study::new();
                 study.write(
                     "project.yaml",
-                    &PROJECT.replace("[functions/id.yaml]", &format!("['{written}']")),
+                    &PROJECT.edit("[functions/id.yaml]", &format!("['{written}']")),
                 );
                 let project = study.identity("project.yaml");
                 assert_eq!(
@@ -1152,18 +1130,18 @@ mod declaration {
             // another type, listed after an inline source.
             study.write(
                 "functions/id.yaml",
-                &FUNCTION.replace("yamaa: \"1.0\"", "yamaa: \"1.1\""),
+                &FUNCTION.edit("yamaa: \"1.0\"", "yamaa: \"1.1\""),
             );
             study.write(
                 "project.yaml",
-                &PROJECT.replace(
+                &PROJECT.edit(
                     "codelists: [ct.yaml]",
                     "codelists:\n  - codelists: [{id: AGE, name: Age, data_type: integer, items: [{value: 1}]}]\n  - ct.yaml",
                 ),
             );
             study.write(
                 "ct.yaml",
-                &CODELISTS.replace("type: codelists", "type: function"),
+                &CODELISTS.edit("type: codelists", "type: function"),
             );
             assert_eq!(
                 rows(&study.issues(Language::Python)),
@@ -1197,7 +1175,7 @@ mod declaration {
             // A file without the header is a finding in that file.
             study.write(
                 "functions/id.yaml",
-                &FUNCTION.replace("yamaa: \"1.0\"\ntype: function\n", ""),
+                &FUNCTION.edit("yamaa: \"1.0\"\ntype: function\n", ""),
             );
             let issues = study.issues(Language::Python);
             let [issue] = issues.as_slice() else {
@@ -1227,7 +1205,7 @@ mod declaration {
             let codelists = study.identity("ct.yaml");
             study.write(
                 "project.yaml",
-                &PROJECT.replace(
+                &PROJECT.edit(
                     "codelists: [ct.yaml]",
                     "codelists:\n  - codelists: [{id: SEX, name: Sex, format_name: SEXF, items: [{value: F}, {value: M}]}]\n  - ct.yaml",
                 ),

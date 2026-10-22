@@ -5,11 +5,8 @@
 //! built and saved by a real run first, so a report that matches is the one
 //! the engine wrote; each mismatch then changes one file after that save.
 mod staleness {
-    use std::{
-        fs,
-        path::PathBuf,
-        sync::atomic::{AtomicU64, Ordering},
-    };
+    use crate::support::Edit as _;
+    use std::fs;
     use yamaa_adapters::{file_application, file_define::Define, specification_report::Identity};
     use yamaa_core::{
         diagnostic::{ConditionCode, Diagnostic},
@@ -18,8 +15,6 @@ mod staleness {
         project_environment::Submission,
         project_function::Language,
     };
-
-    static NEXT: AtomicU64 = AtomicU64::new(0);
 
     const PROJECT: &str = r#"yamaa: "1.0"
 type: project
@@ -94,17 +89,12 @@ submission:
     const RAW: &str = "STUDYID,USUBJID\nCATH,CATH-0001\nCATH,CATH-0002\n";
     const DM: &str = "DOMAIN,STUDYID,USUBJID\nDM,CATH,CATH-0001\nDM,CATH,CATH-0002\n";
 
-    struct Study(PathBuf);
+    struct Study(crate::support::Scratch);
     impl Study {
         /// A study whose project lists `spec` as `dm.yaml`, over [`RAW`].
         fn new(spec: &str) -> Self {
-            let root = std::env::temp_dir().join(format!(
-                "yamaa-staleness-{}-{}",
-                std::process::id(),
-                NEXT.fetch_add(1, Ordering::Relaxed)
-            ));
-            fs::create_dir_all(&root).unwrap();
-            let study = Self(yamaa_adapters::canonical_path::canonicalize(root).unwrap());
+            let root = crate::support::Scratch::canonical("staleness");
+            let study = Self(root);
             study.write("project.yaml", PROJECT);
             study.write("dm.yaml", spec);
             study.write("raw.csv", RAW);
@@ -157,11 +147,6 @@ submission:
                 Some(Language::Python),
                 None,
             )
-        }
-    }
-    impl Drop for Study {
-        fn drop(&mut self) {
-            let _ = fs::remove_dir_all(&self.0);
         }
     }
 
@@ -247,7 +232,7 @@ submission:
         assert!(result.save().unwrap());
         study.write(
             "base/parent.yaml",
-            SPEC.replace("path: dm.csv", "path: dm2.csv"),
+            SPEC.edit("path: dm.csv", "path: dm2.csv"),
         );
         study.write("base/dm2.csv", DM);
         assert_eq!(
@@ -261,7 +246,7 @@ submission:
 
     #[test]
     fn a_specification_without_a_report_is_not_compared() {
-        let spec = SPEC.replace("  report: dm-report.csv\n", "");
+        let spec = SPEC.edit("  report: dm-report.csv\n", "");
         let study = Study::built(&spec);
         // Neither the artifact's rows nor the input are compared with
         // anything: the saved files compose as they stand.
@@ -275,7 +260,7 @@ submission:
     fn a_report_that_names_another_output_path_is_stale() {
         let study = Study::built(SPEC);
         // The output is renamed after the run; its report records dm.csv.
-        study.write("dm.yaml", SPEC.replace("path: dm.csv", "path: dm2.csv"));
+        study.write("dm.yaml", SPEC.edit("path: dm.csv", "path: dm2.csv"));
         study.write("dm2.csv", DM);
         assert_eq!(
             stale(&study.compose(), "artifact_path"),
@@ -313,7 +298,7 @@ submission:
     #[test]
     fn has_no_data_must_agree_with_the_rows_of_the_artifact() {
         // Declared without data, the run still saves rows.
-        let spec = SPEC.replace(
+        let spec = SPEC.edit(
             "  repeating: false\n",
             "  repeating: false\n  has_no_data: true\n  comment: No subject was enrolled.\n",
         );
@@ -417,8 +402,7 @@ submission:
     #[cfg(feature = "parquet")]
     #[test]
     fn a_parquet_report_is_read_back_as_it_was_written() {
-        let study =
-            Study::built(&SPEC.replace("report: dm-report.csv", "report: dm-report.parquet"));
+        let study = Study::built(&SPEC.edit("report: dm-report.csv", "report: dm-report.parquet"));
         let define = study.compose();
         assert!(define.issues().is_empty(), "{:?}", define.issues());
         study.write("dm.csv", format!("{DM}DM,CATH,CATH-0003\n"));
@@ -436,10 +420,10 @@ submission:
         let snapshot = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../../benchmarks/sdtm-dm-odm-snapshot/input/odm.xml");
         let spec = SPEC
-            .replace("  RAW: raw.csv\n", "  RAW: odm.xml\n")
-            .replace("RAW.STUDYID", "RAW.StudyOID")
-            .replace("RAW.USUBJID", "RAW.SubjectKey")
-            .replace("      length: 4\n", "      length: 7\n");
+            .edit("  RAW: raw.csv\n", "  RAW: odm.xml\n")
+            .edit("RAW.STUDYID", "RAW.StudyOID")
+            .edit("RAW.USUBJID", "RAW.SubjectKey")
+            .edit("      length: 4\n", "      length: 7\n");
         let study = Study::new(&spec);
         let xml = fs::read(snapshot).unwrap();
         study.write("odm.xml", &xml);

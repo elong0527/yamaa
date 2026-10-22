@@ -8,25 +8,16 @@
 //! read's own driver decide: a template grouped over another driver leaves
 //! the read scalar. A column-level window instead reads only a driver that
 //! every row template shares, grouped or not (WINDOW-11).
-use std::{
-    fs,
-    path::PathBuf,
-    sync::atomic::{AtomicUsize, Ordering},
-};
-use yamaa_adapters::{file_application, specification_report::Identity};
+use crate::support::Edit as _;
+use std::fs;
+use yamaa_adapters::file_application;
 use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::{domain_entry::Request, json::Value};
 
-struct Fixture(PathBuf);
+struct Fixture(crate::support::Scratch);
 impl Fixture {
     fn new(specification: &str) -> Self {
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        let root = std::env::temp_dir().join(format!(
-            "yamaa-grouped-driver-dataset-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
-        fs::create_dir(&root).unwrap();
+        let root = crate::support::Scratch::new("grouped-driver-dataset");
         fs::write(root.join("spec.yaml"), specification).unwrap();
         fs::write(root.join("clinic.csv"), CLINIC).unwrap();
         fs::write(root.join("home.csv"), HOME).unwrap();
@@ -42,14 +33,7 @@ impl Fixture {
                 specification,
                 environment: None,
             },
-            Identity {
-                runtime: "test",
-                runtime_version: "test",
-                engine_version: yamaa_core::VERSION,
-                example: "grouped-driver-dataset",
-                specification,
-                base_directory: ".",
-            },
+            crate::support::study::identity("grouped-driver-dataset", specification),
         )
     }
     /// `domain` reports nothing and saves exactly `expected` to `output`.
@@ -67,21 +51,8 @@ impl Fixture {
         };
         issues
             .iter()
-            .map(|issue| {
-                yamaa_adapters::json!({
-                    "phase": issue.phase(),
-                    "condition": issue.condition(),
-                    "rule": issue.rule(),
-                    "spec_paths": issue.spec_paths,
-                    "context": issue.context.clone()
-                })
-            })
+            .map(crate::support::study::issue_row)
             .collect()
-    }
-}
-impl Drop for Fixture {
-    fn drop(&mut self) {
-        fs::remove_dir_all(&self.0).unwrap();
     }
 }
 
@@ -198,7 +169,7 @@ fn column_window_over_a_template_grouped_by_another_driver_names_the_drivers() {
         "",
         ", derivation: {row_number: {window: {order_by: [CLINIC.SYSBP]}}}",
     )
-    .replace("type: float", "type: int");
+    .edit("type: float", "type: int");
     assert_eq!(
         Fixture::new(&specification).issues(),
         vec![yamaa_adapters::json!({

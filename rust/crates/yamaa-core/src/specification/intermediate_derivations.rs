@@ -731,15 +731,17 @@ fn outer_secondary(
         })
         .collect()
 }
+/// The slot of `item` in a donor plan that never reads it: its identifier,
+/// path and absence handler, and no matching work.
 fn unused_slot_placeholder(
-    identifier: &str,
-    path: &str,
+    item: &Intermediate,
     donor_name: &str,
     source: &TableSchema,
 ) -> Intermediate {
+    let path = &item.path;
     Intermediate {
-        identifier: identifier.into(),
-        path: path.into(),
+        identifier: item.identifier.clone(),
+        path: path.clone(),
         source: IntermediateSource::Primary {
             name: donor_name.into(),
             schema: source.clone(),
@@ -754,6 +756,7 @@ fn unused_slot_placeholder(
         range: None,
         columns: None,
         no_match: Some(Value::Missing),
+        absence: item.absence,
         require_match: false,
         unique: Vec::new(),
         derivations: None,
@@ -893,8 +896,7 @@ fn rebase(
         if !required.contains(&index) {
             // Donor plans keep original selector indices. An unused slot owns
             // no matching work, derivations or verifications in this context.
-            let placeholder =
-                unused_slot_placeholder(&item.identifier, &item.path, donor_name, source);
+            let placeholder = unused_slot_placeholder(item, donor_name, source);
             *item = placeholder;
             continue;
         }

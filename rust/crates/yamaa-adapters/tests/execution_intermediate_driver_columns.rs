@@ -9,25 +9,16 @@
 //! any input is addressable; a field it derives, or a driver read beside an
 //! aggregate, is refused before any data is read, by `check` and `domain`
 //! alike.
-use std::{
-    fs,
-    path::PathBuf,
-    sync::atomic::{AtomicUsize, Ordering},
-};
+use crate::support::Edit as _;
+use std::fs;
 use yamaa_adapters::{file_application, specification_report::Identity};
 use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::domain_entry::Request;
 
-struct Fixture(PathBuf);
+struct Fixture(crate::support::Scratch);
 impl Fixture {
     fn new(specification: &str) -> Self {
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        let root = std::env::temp_dir().join(format!(
-            "yamaa-intermediate-driver-columns-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
-        fs::create_dir(&root).unwrap();
+        let root = crate::support::Scratch::new("intermediate-driver-columns");
         fs::write(root.join("spec.yaml"), specification).unwrap();
         fs::write(root.join("ae.csv"), AE).unwrap();
         fs::write(root.join("dm.csv"), DM).unwrap();
@@ -37,14 +28,7 @@ impl Fixture {
         self.0.join("spec.yaml").to_str().unwrap().to_owned()
     }
     fn identity(specification: &str) -> Identity<'_> {
-        Identity {
-            runtime: "test",
-            runtime_version: "test",
-            engine_version: yamaa_core::VERSION,
-            example: "intermediate-driver-columns",
-            specification,
-            base_directory: ".",
-        }
+        crate::support::study::identity("intermediate-driver-columns", specification)
     }
     fn domain(&self) -> Result<file_application::Domain, Vec<Diagnostic>> {
         let specification = self.specification();
@@ -102,11 +86,6 @@ impl Fixture {
         assert_eq!(issue.spec_paths, [path]);
     }
 }
-impl Drop for Fixture {
-    fn drop(&mut self) {
-        fs::remove_dir_all(&self.0).unwrap();
-    }
-}
 
 // Three serious events build rows; S1's two serious events form one group
 // when a template groups by subject. The non-serious event builds no row.
@@ -146,7 +125,7 @@ fn records(head: &str, kind: &str, derivation: &str) -> String {
 
 /// The serious events with one more declaration beside their filter.
 fn serious(declaration: &str, kind: &str, derivation: &str) -> String {
-    records("", kind, derivation).replace(
+    records("", kind, derivation).edit(
         "filter: \"AE.AESER = 'Y'\"}",
         &format!("filter: \"AE.AESER = 'Y'\", {declaration}}}"),
     )
@@ -390,11 +369,11 @@ fn derived_field_read_in_the_template_feeds_a_column() {
             "str",
             "{case: [{when: \"TERM = 'rash'\", then: {literal: SKIN}}, {otherwise: TERM}]}",
         )
-        .replace(
+        .edit(
             "derivations: {USUBJID: SER.USUBJID, AESEQ: SER.AESEQ}",
             "derivations: {USUBJID: SER.USUBJID, AESEQ: SER.AESEQ, TERM: SER.LOWER}",
         )
-        .replace(
+        .edit(
             "\x20 - {name: R,",
             "\x20 - {name: TERM, type: str}\n\x20 - {name: R,",
         ),
@@ -410,8 +389,8 @@ fn derived_field_in_an_imputation_bound_is_refused() {
             "date",
             "{impute: {type: date, source: SER.AEDTC, day: 15, minimum_source_precision: month, not_before: SER.FLOOR}}",
         )
-        .replace("types: {AESEQ: int}", "types: {AESEQ: int, AESTDT: date}")
-        .replace(
+        .edit("types: {AESEQ: int}", "types: {AESEQ: int, AESTDT: date}")
+        .edit(
             "filter: \"AE.AESER = 'Y'\"}",
             "filter: \"AE.AESER = 'Y'\", derivations: {FLOOR: AE.AESTDT}}",
         ),
@@ -518,7 +497,7 @@ fn failed_driver_intermediate_reports_only_its_own_finding() {
     // The intermediate's filter names a field AE lacks. Its template is
     // skipped, and so is the column completed for that template's rows.
     let issue = Fixture::new(
-        &records("", "str", "{literal: X}").replace("AE.AESER = 'Y'", "AE.SERIOUS = 'Y'"),
+        &records("", "str", "{literal: X}").edit("AE.AESER = 'Y'", "AE.SERIOUS = 'Y'"),
     )
     .issue();
     assert_eq!(

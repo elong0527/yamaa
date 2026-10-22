@@ -8,25 +8,15 @@
 //! and compares calendar values and numbers exactly (LOOKUP-25, VALUE-19,
 //! VALUE-21). A pattern read from data is checked on every record or row its
 //! predicate is asked about (FORMULA-7).
-use std::{
-    fs,
-    path::PathBuf,
-    sync::atomic::{AtomicUsize, Ordering},
-};
-use yamaa_adapters::{file_application, json, specification_report::Identity};
+use std::fs;
+use yamaa_adapters::{file_application, json};
 use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::{domain_entry::Request, json::Value};
 
-struct Fixture(PathBuf);
+struct Fixture(crate::support::Scratch);
 impl Fixture {
     fn new(specification: &str, files: &[(&str, &str)]) -> Self {
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        let root = std::env::temp_dir().join(format!(
-            "yamaa-key-selection-semantics-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
-        fs::create_dir(&root).unwrap();
+        let root = crate::support::Scratch::new("key-selection-semantics");
         fs::write(root.join("spec.yaml"), specification).unwrap();
         for (name, text) in files {
             fs::write(root.join(name), text).unwrap();
@@ -45,14 +35,7 @@ impl Fixture {
                 specification,
                 environment: None,
             },
-            Identity {
-                runtime: "test",
-                runtime_version: "test",
-                engine_version: yamaa_core::VERSION,
-                example: "key-selection-semantics",
-                specification,
-                base_directory: ".",
-            },
+            crate::support::study::identity("key-selection-semantics", specification),
         )
         .map_err(|failure| failure.iter().map(issue).collect::<Vec<_>>())?;
         let issues = domain.issues().iter().map(issue).collect::<Vec<_>>();
@@ -81,14 +64,9 @@ impl Fixture {
             .collect()
     }
 }
-impl Drop for Fixture {
-    fn drop(&mut self) {
-        fs::remove_dir_all(&self.0).unwrap();
-    }
-}
 
 fn issue(issue: &Diagnostic) -> Value {
-    json!({"phase":issue.phase(),"condition":issue.condition(),"rule":issue.rule(),"spec_paths":issue.spec_paths,"context":issue.context.clone()})
+    crate::support::study::issue_row(issue)
 }
 
 /// The head of a specification without row templates whose one input SRC
