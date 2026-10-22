@@ -979,17 +979,12 @@ mod tests {
     #[test]
     fn a_changed_parquet_value_fails_its_case() {
         let case = edited("negative-transport-empty-string", |files, _| {
-            // The literal as the language the case is written in spells it:
-            // the benchmark moves to 1.0 in its own pull request (#3422).
-            let legacy = files.iter().any(|(file, bytes)| {
-                *file == "spec.yaml" && String::from_utf8_lossy(bytes).contains("{literal: DM}")
-            });
-            let (from, to) = if legacy {
-                ("derivation: {literal: DM}", "derivation: {literal: XX}")
-            } else {
-                ("derivation: \"'DM'\"", "derivation: \"'XX'\"")
-            };
-            replace(files, "spec.yaml", from, to);
+            replace(
+                files,
+                "spec.yaml",
+                "derivation: \"'DM'\"",
+                "derivation: \"'XX'\"",
+            );
         });
         if !compiled(&case) {
             return;

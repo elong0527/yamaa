@@ -69,13 +69,13 @@ impl Drop for Study {
     }
 }
 
-const ADSL: &str = "schema_version: '1.0'\ndomain: ADSL\nkeys: [USUBJID]\ninput: {DM: {path: ../raw/dm.csv, types: {AGE: int}}}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: DM.USUBJID}\n  - {name: AGE, type: int, label: Age, derivation: DM.AGE}\noutput: {path: ../out/adsl.csv, columns: [USUBJID, AGE]}\n";
+const ADSL: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: ADSL\nkeys: [USUBJID]\ninput: {DM: {path: ../raw/dm.csv, types: {AGE: int}}}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: DM.USUBJID}\n  - {name: AGE, type: int, label: Age, derivation: DM.AGE}\noutput: {path: ../out/adsl.csv, columns: [USUBJID, AGE]}\n";
 /// ASTDY reads TRTSDT, which is declared after it (COLUMN-5).
-const ADAE: &str = "schema_version: '1.0'\ndomain: ADAE\nkeys: [USUBJID]\ninput: {AE: {path: ../raw/ae.csv, types: {TRTSDT: int}}}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: AE.USUBJID}\n  - {name: ASTDY, type: int, label: Study Day, derivation: {compute: {expr: TRTSDT + 1}}}\n  - {name: TRTSDT, type: int, label: Start, derivation: AE.TRTSDT}\noutput: {path: ../out/adae.csv, columns: [USUBJID, ASTDY, TRTSDT]}\n";
+const ADAE: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: ADAE\nkeys: [USUBJID]\ninput: {AE: {path: ../raw/ae.csv, types: {TRTSDT: int}}}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: AE.USUBJID}\n  - {name: ASTDY, type: int, label: Study Day, derivation: TRTSDT + 1}\n  - {name: TRTSDT, type: int, label: Start, derivation: AE.TRTSDT}\noutput: {path: ../out/adae.csv, columns: [USUBJID, ASTDY, TRTSDT]}\n";
 /// Reads ADAE through its `schema` link, so it runs only after ADAE.
-const ADTTE: &str = "schema_version: '1.0'\ndomain: ADTTE\nkeys: [USUBJID]\ninput: {ADAE: {path: ../out/adae.csv, schema: adae.yaml}}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: ADAE.USUBJID}\noutput: {path: ../out/adtte.csv, columns: [USUBJID]}\n";
+const ADTTE: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: ADTTE\nkeys: [USUBJID]\ninput: {ADAE: {path: ../out/adae.csv, schema: adae.yaml}}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: ADAE.USUBJID}\noutput: {path: ../out/adtte.csv, columns: [USUBJID]}\n";
 const PROJECT: &str =
-    "schema_version: '1.0'\nadam:\n  specs: [adam/adsl.yaml, adam/adae.yaml, adam/adtte.yaml]\n";
+    "yamaa: \"1.0\"\ntype: project\nadam:\n  specs: [adam/adsl.yaml, adam/adae.yaml, adam/adtte.yaml]\n";
 
 /// ADSL builds; ADAE fails its own check; ADTTE reads ADAE.
 fn study() -> Study {
@@ -96,21 +96,21 @@ fn located(study: &Study, name: &str) -> String {
     study.path(name).replace('\\', "/")
 }
 
-/// ADAE's issue, at `columns.ASTDY.derivation.compute`: the `compute` key of
-/// line 7, after `  - {name: ASTDY, type: int, label: Study Day, derivation: {`
-/// (60 characters).
+/// ADAE's issue, at `columns.ASTDY.derivation`: the `derivation` key of
+/// line 8, after `  - {name: ASTDY, type: int, label: Study Day, `
+/// (47 characters).
 fn forward(study: &Study) -> String {
     format!(
-        "{}:7:61: column ASTDY reads TRTSDT, which is declared after it [forward_reference, COLUMN-5]",
+        "{}:8:48: column ASTDY reads TRTSDT, which is declared after it [forward_reference, COLUMN-5]",
         located(study, "adam/adae.yaml")
     )
 }
 
-/// ADTTE's issue, at `input.ADAE.schema`: the `schema` key of line 4, after
+/// ADTTE's issue, at `input.ADAE.schema`: the `schema` key of line 5, after
 /// `input: {ADAE: {path: ../out/adae.csv, ` (38 characters).
 fn skipped(study: &Study) -> String {
     format!(
-        "{}:4:39: this specification did not run because the producer of its input ADAE did not complete [producer_not_completed, PROJECT-11]",
+        "{}:5:39: this specification did not run because the producer of its input ADAE did not complete [producer_not_completed, PROJECT-11]",
         located(study, "adam/adtte.yaml")
     )
 }
@@ -251,7 +251,7 @@ fn a_member_whose_listing_was_not_read_is_named_by_the_path_listed() {
     // the listing itself cannot be located.
     study.write(
         "project.yaml",
-        "schema_version: '1.0'\nadam:\n  specs: [adam/adsl.yaml, adam/missing.yaml, adam//adae.yaml]\n",
+        "yamaa: \"1.0\"\ntype: project\nadam:\n  specs: [adam/adsl.yaml, adam/missing.yaml, adam//adae.yaml]\n",
     );
     let project = study.path("project.yaml");
     let runs = engine()
@@ -321,7 +321,7 @@ fn error_text_carries_the_first_issue_and_the_count_of_the_others() {
     let three = ADAE
         .replace(
             "  - {name: TRTSDT, type: int",
-            "  - {name: AENDY, type: int, label: End Day, derivation: {compute: {expr: TRTEDT + 1}}}\n  - {name: ADURN, type: int, label: Duration, derivation: {compute: {expr: TRTEDT - 1}}}\n  - {name: TRTSDT, type: int",
+            "  - {name: AENDY, type: int, label: End Day, derivation: TRTEDT + 1}\n  - {name: ADURN, type: int, label: Duration, derivation: TRTEDT - 1}\n  - {name: TRTSDT, type: int",
         )
         .replace(
             "derivation: AE.TRTSDT}\n",
@@ -469,7 +469,7 @@ fn an_issue_as_json_has_the_twelve_keys_and_an_object_context() {
     assert_eq!(
         value.to_json(),
         format!(
-            r#"{{"column":61,"condition":"forward_reference","context":{{"column":"ASTDY","dependency":"TRTSDT"}},"file":{},"line":7,"message":"column ASTDY reads TRTSDT, which is declared after it","operand_route":{},"phase":"validation","rule":"COLUMN-5","severity":"error","source_span":{},"spec_paths":["columns.ASTDY.derivation.compute"]}}"#,
+            r#"{{"column":48,"condition":"forward_reference","context":{{"column":"ASTDY","dependency":"TRTSDT"}},"file":{},"line":8,"message":"column ASTDY reads TRTSDT, which is declared after it","operand_route":{},"phase":"validation","rule":"COLUMN-5","severity":"error","source_span":{},"spec_paths":["columns.ASTDY.derivation"]}}"#,
             ContextValue::Text(located(&study, "adam/adae.yaml")).to_json(),
             members["operand_route"].to_json(),
             members["source_span"].to_json(),
@@ -602,7 +602,7 @@ fn an_issues_table_prints_its_list_columns() {
 yamaa.Table: 1 row x 12 columns
 severity  phase       condition          rule      spec_paths            {:<width$}  line  column  ...
 str       str         str                str       list<str>             {:<width$}  int   int     ...
-error     validation  forward_reference  COLUMN-5  [columns.ASTDY.de...  {file:<width$}  7     61      ...",
+error     validation  forward_reference  COLUMN-5  [columns.ASTDY.de...  {file:<width$}  8     48      ...",
             "file", "str"
         )
     );

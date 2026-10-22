@@ -15,8 +15,8 @@ use yamaa::{
     FunctionIdentity, HostLanguage, LockContext, Plans, ProjectFunctions, Run, Scalar, Signature,
 };
 
-const PLAIN: &str = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int}}}\noutput: {path: out.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: SRC.ID}\n";
-const PROJECT: &str = "schema_version: '1.0'\nsdtm:\n  specs: [dm.yaml]\n";
+const PLAIN: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int}}}\noutput: {path: out.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: SRC.ID}\n";
+const PROJECT: &str = "yamaa: \"1.0\"\ntype: project\nsdtm:\n  specs: [dm.yaml]\n";
 
 struct NoFunctions;
 impl ProjectFunctions for NoFunctions {
