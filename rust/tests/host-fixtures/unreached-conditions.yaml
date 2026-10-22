@@ -12,6 +12,9 @@
 # is done. Each list is sorted.
 
 unreachable:
+  bare_derivation_scalar: >-
+    only the 0.5 path raises it, until P2-13 removes that path: in 1.0 a YAML
+    number, Boolean or null derivation is a literal (EXPR-5)
   day_not_permitted: >-
     only the 0.5 path raises it, until P2-13 removes that path: 1.0 drops
     minimum_source_precision, and #3030 D61 retired its benchmarks
@@ -24,6 +27,14 @@ unreachable:
   month_required: >-
     only the 0.5 path raises it, until P2-13 removes that path: 1.0 drops
     minimum_source_precision, and #3030 D61 retired its benchmarks
+  project_environment_invalid: >-
+    only the 0.5 path raises it, until P2-13 removes that path: a 1.0 project
+    reports a listed file it cannot admit with function_file_invalid or
+    FILE-11's conditions (FUNC-2, FUNC-3, #3030 D107)
+  project_environment_missing: >-
+    only the 0.5 path raises it, until P2-13 removes that path: a 1.0 host
+    without an environments entry calls its functions without a lock
+    (PROJECT-2), the cause #3030 D188 kept
   publication_failed: >-
     only a host file system failure while a save stages or replaces a file
     raises it (OUTPUT-8): a target the walk cannot reach fails with FILE-7's
@@ -34,6 +45,14 @@ unreachable:
     a host compiles a spec or project object again once a file it holds has
     changed (#3069), so no case can change a file mid-call; the facade's
     plan tests reach it (rust/crates/yamaa/tests/plan_contracts.rs)
+  schema_version_mismatch: >-
+    only the 0.5 path raises it, until P2-13 removes that path: a 1.0 file
+    declares yamaa, and a version the engine does not read fails as
+    unsupported_language_version (SCHEMA-2, #3030 D125)
+  unknown_standard_family: >-
+    only the 0.5 path raises it, until P2-13 removes that path: a guide a 1.0
+    section lists outside its model fails as standard_model_mismatch (DEFINE-6,
+    #3030 D58)
   xpt_file_too_large: >-
     XPT-10 refuses a transport file past 5,000,000,000 bytes, which takes a
     published dataset of at least 25 million 200-byte values (SUB-24 measures a
@@ -43,7 +62,6 @@ not_covered:
   "#3423":
     - artifact_outside_document
     - artifact_path_collision
-    - bare_derivation_scalar
     - codelist_duplicate_value
     - codelist_extended_alias
     - codelist_extension_not_admitted
@@ -83,14 +101,11 @@ not_covered:
     - producer_contract_mismatch
     - producer_not_completed
     - producer_workflow_cycle
-    - project_environment_invalid
-    - project_environment_missing
     - reference_data_repeating_conflict
     - refuted_value_origin
     - reserved_metadata_key
     - resource_path_not_normalized
     - runtime_artifact_mismatch
-    - schema_version_mismatch
     - source_system_incomplete
     - submission_data_type_not_admitted
     - submission_length_invalid
@@ -106,6 +121,5 @@ not_covered:
     - unknown_project_function
     - unknown_reference
     - unknown_section
-    - unknown_standard_family
     - unlinked_producer
     - xpt_display_format_invalid
