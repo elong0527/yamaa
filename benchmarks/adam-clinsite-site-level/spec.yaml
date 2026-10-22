@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: CLINSITE
 keys: [STUDYID, SITEID]
 input:
@@ -36,13 +38,13 @@ columns:
         sources: [SAFPOP_RAW]
         missing: 0
     verifications:
-      - not_missing: {}
+      - not_missing
 
   - name: ENRLPOP
     type: int
     label: Number of Enrolled Subjects at the Site
     verifications:
-      - not_missing: {}
+      - not_missing
 
 rows:
   # One record per site named by at least one subject row; a site identifier

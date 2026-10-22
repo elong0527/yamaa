@@ -1,10 +1,6 @@
 # Shared Define fixture; fixed creation time is supplied by the public call.
-schema_version: '1.0'
-study:
-  id: STUDY01
-  name: STUDY01
-  description: Example study demonstrating the Define-XML metadata contract
-  protocol_name: STUDY-01
+yamaa: "1.0"
+type: project
 codelists:
 - standard:
     name: CDISC/NCI
@@ -19,14 +15,12 @@ codelists:
     - value: DM
       decode: Demographics
       alias: C49572
-    data_type: text
   - id: AGEU
     name: Age Unit
     alias: C66781
     items:
     - value: YEARS
       alias: C29848
-    data_type: text
   - id: SEX
     name: Sex
     alias: C66731
@@ -41,32 +35,26 @@ codelists:
     - value: U
       decode: Unknown
       alias: C17998
-    data_type: text
   - id: COUNTRY
     name: Country Codes
     external:
       dictionary: ISO 3166
       version: '2020'
       href: https://www.iso.org/iso-3166-country-codes.html
-    data_type: text
+study:
+  id: STUDY01
+  name: STUDY01
+  description: Example study demonstrating the Define-XML metadata contract
+  protocol_name: STUDY-01
+
 sdtm:
-  standard:
-    name: SDTMIG
-    version: '3.4'
-    status: Final
   specs:
   - spec.yaml
+  standards:
+  - name: SDTMIG
+    version: '3.4'
+    status: Final
   define: define.xml
-  datasets: json
-  context: Submission
-  xml_lang: en
-  file_oid: www.example.org/STUDY01/1/Define-XML_2.1
-  metadata_version:
-    id: STUDY01.1
-    name: Study STUDY01, Data Definitions
-    description: Tabulation data definitions for STUDY01
-  originator: Example Sponsor
-  source_system_version: '1.0'
   documents:
   - id: acrf
     kind: annotated_crf
@@ -76,3 +64,11 @@ sdtm:
     kind: supplemental
     link: csdrg.pdf
     title: Study Data Reviewer's Guide
+  transport: dataset_json
+  file_oid: www.example.org/STUDY01/1/Define-XML_2.1
+  metadata_version:
+    id: STUDY01.1
+    name: Study STUDY01, Data Definitions
+    description: Tabulation data definitions for STUDY01
+  originator: Example Sponsor
+  source_system_version: '1.0'

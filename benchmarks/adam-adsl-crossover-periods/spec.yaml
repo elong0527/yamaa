@@ -1,9 +1,11 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
   DM: input/dm.csv
-  EX: {path: input/ex.csv, types: {EXSEQ: int}}
+  EX: {path: input/ex.csv, types: {EXSEQ: int}, key: [STUDYID, USUBJID]}
 base: DM
 
 output:
@@ -96,7 +98,7 @@ columns:
         start: TR01EDT
         end: TR02SDT
         unit: day
-        bounds: between
+        closed: neither
     verifications:
       - range:
           min: 0

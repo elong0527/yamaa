@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
@@ -35,7 +37,6 @@ intermediates:
     dataset: TA
     key: {STUDYID: DM.STUDYID, ARMCD: DM.ARMCD}
     filter: "TA.TRTNUM = 1"
-    no_match: {literal: null}
     derivations:
       TRTNUM:
         row_number:
@@ -48,7 +49,6 @@ intermediates:
     dataset: TA
     key: {STUDYID: DM.STUDYID, ARMCD: DM.ARMCD}
     filter: "TA.TRTNUM = 2"
-    no_match: {literal: null}
     derivations:
       TRTNUM:
         row_number:
@@ -91,7 +91,7 @@ columns:
     derivation:
       str_template:
         template: "{TRT01P}/{TRT02P}"
-        missing: {literal: null}
+        missing: null
 
 verifications:
   - row_count:

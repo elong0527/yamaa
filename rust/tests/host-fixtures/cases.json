@@ -4448,7 +4448,7 @@
       ],
       "numeric_original_metadata": "core: Exp\n      role: Record Qualifier\n      length: 3",
       "numeric_completion_metadata": "core: Exp\n      role: Record Qualifier\n      length: 3\n      significant_digits: 3\n      codelist: AGE_VALUES",
-      "numeric_codelist_yaml": "- codelists:\n  - id: AGE_VALUES\n    name: Ages\n    data_type: float\n    items: [{value: 34}, {value: 67}, {value: 52}]\nsdtm:\n",
+      "numeric_codelist_yaml": "- codelists:\n  - id: AGE_VALUES\n    name: Ages\n    data_type: float\n    items: [{value: 34}, {value: 67}, {value: 52}]\nstudy:\n",
       "created": "2026-09-11T00:00:00",
       "xml_text_cases": [
         {
@@ -4461,8 +4461,8 @@
           ],
           "project_mutations": [
             [
-              "context: Submission",
-              "context: Other"
+              "sdtm:\n",
+              "sdtm:\n  context: Other\n"
             ]
           ],
           "inherit_specification": false,
@@ -4545,8 +4545,8 @@
           ],
           "project_mutations": [
             [
-              "context: Submission",
-              "context: Other"
+              "sdtm:\n",
+              "sdtm:\n  context: Other\n"
             ]
           ],
           "inherit_specification": true,
@@ -4579,8 +4579,8 @@
               "title: \"bad\\ttitle\""
             ],
             [
-              "context: Submission",
-              "context: Other"
+              "sdtm:\n",
+              "sdtm:\n  context: Other\n"
             ]
           ],
           "inherit_specification": false,
@@ -4613,8 +4613,8 @@
               "title: \"third\\nfourth\""
             ],
             [
-              "context: Submission",
-              "context: Other"
+              "sdtm:\n",
+              "sdtm:\n  context: Other\n"
             ]
           ],
           "inherit_specification": false,

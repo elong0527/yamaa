@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: SDTM
 domain: TA
 keys: [STUDYID, ARMCD, TAETORD]
 input:
@@ -12,14 +14,14 @@ columns:
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
-    derivation: {literal: TA}
+    derivation: "'TA'"
     submission:
       core: Req
       role: Identifier
       length: 2
-      origin:
-        type: Assigned
-        source: Sponsor
+      origins:
+        - type: Assigned
+          source: Sponsor
 
   - name: STUDYID
     type: str
@@ -29,9 +31,9 @@ columns:
       core: Req
       role: Identifier
       length: 12
-      origin:
-        type: Protocol
-        source: Sponsor
+      origins:
+        - type: Protocol
+          source: Sponsor
 
   - name: ARMCD
     type: str
@@ -41,9 +43,9 @@ columns:
       core: Req
       role: Topic
       length: 8
-      origin:
-        type: Protocol
-        source: Sponsor
+      origins:
+        - type: Protocol
+          source: Sponsor
 
   - name: ARM
     type: str
@@ -53,9 +55,9 @@ columns:
       core: Req
       role: Synonym Qualifier
       length: 40
-      origin:
-        type: Protocol
-        source: Sponsor
+      origins:
+        - type: Protocol
+          source: Sponsor
 
   - name: TAETORD
     type: int
@@ -65,9 +67,9 @@ columns:
       core: Req
       role: Timing
       length: 8
-      origin:
-        type: Protocol
-        source: Sponsor
+      origins:
+        - type: Protocol
+          source: Sponsor
 
   - name: ETCD
     type: str
@@ -77,9 +79,9 @@ columns:
       core: Req
       role: Record Qualifier
       length: 8
-      origin:
-        type: Protocol
-        source: Sponsor
+      origins:
+        - type: Protocol
+          source: Sponsor
 
   - name: ELEMENT
     type: str
@@ -89,9 +91,9 @@ columns:
       core: Perm
       role: Synonym Qualifier
       length: 40
-      origin:
-        type: Protocol
-        source: Sponsor
+      origins:
+        - type: Protocol
+          source: Sponsor
 
   # The open-label extension epoch is a sponsor addition to the published
   # epoch list, which the environment declares as an extended item.
@@ -104,9 +106,9 @@ columns:
       role: Timing
       length: 20
       codelist: EPOCH
-      origin:
-        type: Protocol
-        source: Sponsor
+      origins:
+        - type: Protocol
+          source: Sponsor
 
 submission:
   label: Trial Arms

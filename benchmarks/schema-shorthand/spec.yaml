@@ -1,11 +1,13 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADSL
 keys: [USUBJID]
 # A bare path names an input read as stored. The weight file is written
 # out in full because it also types two of its fields.
 input:
   DM: input/dm.csv
-  WT: {path: input/wt.csv, types: {WTSEQ: int, WT: float}}
+  WT: {path: input/wt.csv, types: {WTSEQ: int, WT: float}, key: [USUBJID]}
 base: DM
 
 output:
@@ -27,7 +29,7 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation: {literal: YAMAA-01}
+    derivation: "'YAMAA-01'"
 
   # A bare string reads the named column.
   - name: USUBJID
@@ -41,7 +43,7 @@ columns:
     label: Sex
     derivation: DM.SEX
     verifications:
-      - not_missing: {}
+      - not_missing
 
   # The collected text converts once, to the column's integer type.
   - name: AGE

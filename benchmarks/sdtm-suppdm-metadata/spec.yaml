@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: SDTM
 domain: SUPPDM
 keys: [STUDYID, USUBJID, QNAM]
 input:
@@ -17,20 +19,20 @@ columns:
     submission:
       core: Req
       length: 20
-      origin:
-        type: Protocol
-        source: Sponsor
+      origins:
+        - type: Protocol
+          source: Sponsor
 
   - name: RDOMAIN
     type: str
     label: Related Domain Abbreviation
-    derivation: {literal: DM}
+    derivation: "'DM'"
     submission:
       core: Req
       length: 2
-      origin:
-        type: Assigned
-        source: Sponsor
+      origins:
+        - type: Assigned
+          source: Sponsor
 
   - name: USUBJID
     type: str
@@ -39,31 +41,31 @@ columns:
     submission:
       core: Req
       length: 30
-      origin:
-        type: Assigned
-        source: Sponsor
+      origins:
+        - type: Assigned
+          source: Sponsor
 
   - name: IDVAR
     type: str
     label: Identifying Variable
-    derivation: {literal: null}
+    derivation: null
     submission:
       core: Exp
       length: 8
-      origin:
-        type: Assigned
-        source: Sponsor
+      origins:
+        - type: Assigned
+          source: Sponsor
 
   - name: IDVARVAL
     type: str
     label: Identifying Variable Value
-    derivation: {literal: null}
+    derivation: null
     submission:
       core: Exp
       length: 40
-      origin:
-        type: Assigned
-        source: Sponsor
+      origins:
+        - type: Assigned
+          source: Sponsor
 
   - name: QNAM
     type: str
@@ -71,9 +73,9 @@ columns:
     submission:
       core: Req
       length: 8
-      origin:
-        type: Assigned
-        source: Sponsor
+      origins:
+        - type: Assigned
+          source: Sponsor
 
   - name: QLABEL
     type: str
@@ -81,9 +83,9 @@ columns:
     submission:
       core: Req
       length: 40
-      origin:
-        type: Assigned
-        source: Sponsor
+      origins:
+        - type: Assigned
+          source: Sponsor
 
   # Each qualifier is described by its own definition: the races from the
   # race codelist, the other-race text on its own page of the form.
@@ -93,12 +95,12 @@ columns:
     submission:
       core: Req
       length: 200
-      origin:
-        type: Collected
-        source: Investigator
-        documents:
-          - document: acrf
-            pages: {type: PhysicalRef, refs: "2"}
+      origins:
+        - type: Collected
+          source: Investigator
+          documents:
+            - document: acrf
+              pages: {type: PhysicalRef, refs: "2"}
       value_level:
         - id: RACE
           where: {QNAM: [RACE1, RACE2]}
@@ -107,56 +109,56 @@ columns:
         - id: RACEOTH
           where: {QNAM: [RACEOTH]}
           label: Race, Other
-          origin:
-            type: Collected
-            source: Investigator
-            documents:
-              - document: acrf
-                pages: {type: PhysicalRef, refs: "3"}
+          origins:
+            - type: Collected
+              source: Investigator
+              documents:
+                - document: acrf
+                  pages: {type: PhysicalRef, refs: "3"}
 
   - name: QORIG
     type: str
     label: Origin
-    derivation: {literal: Collected}
+    derivation: "'Collected'"
     submission:
       core: Req
       length: 20
-      origin:
-        type: Assigned
-        source: Sponsor
+      origins:
+        - type: Assigned
+          source: Sponsor
 
   - name: QEVAL
     type: str
     label: Evaluator
-    derivation: {literal: null}
+    derivation: null
     submission:
       core: Exp
       length: 40
-      origin:
-        type: Assigned
-        source: Sponsor
+      origins:
+        - type: Assigned
+          source: Sponsor
 
 rows:
   # One qualifier record per subject and reported race or other-race text.
   - id: race1
     filter: "DM_RAW.RACE1 IS NOT NULL"
     derivations:
-      QNAM: {literal: RACE1}
-      QLABEL: {literal: Race 1}
+      QNAM: "'RACE1'"
+      QLABEL: "'Race 1'"
       QVAL: DM_RAW.RACE1
 
   - id: race2
     filter: "DM_RAW.RACE2 IS NOT NULL"
     derivations:
-      QNAM: {literal: RACE2}
-      QLABEL: {literal: Race 2}
+      QNAM: "'RACE2'"
+      QLABEL: "'Race 2'"
       QVAL: DM_RAW.RACE2
 
   - id: raceoth
     filter: "DM_RAW.RACEOTH IS NOT NULL"
     derivations:
-      QNAM: {literal: RACEOTH}
-      QLABEL: {literal: "Race, Other"}
+      QNAM: "'RACEOTH'"
+      QLABEL: "'Race, Other'"
       QVAL: DM_RAW.RACEOTH
 
 submission:

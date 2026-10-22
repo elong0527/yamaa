@@ -63,30 +63,38 @@ mod project {
                 }
             }
         }
-        const VALID: &str = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - name: VALUE\n    type: str\n    derivation: SRC.VALUE\n    submission: {length: 3, origin: {type: Assigned}}\n";
+        /// An SDTM column's submission metadata: a 1.0 specification that
+        /// declares it names its model (SUB-3), which requires the origin's
+        /// source (SUB-15).
+        const VALID: &str = "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - name: VALUE\n    type: str\n    derivation: SRC.VALUE\n    submission: {length: 3, origins: [{type: Assigned, source: Sponsor}]}\n";
+        /// Each benchmark runs as it declares, with the project file that
+        /// binds its codelists (CT-13): sdtm-lb-metadata's entry is its
+        /// SDTM-complete layer under its own project.
         #[test]
         fn submission_fields_do_not_change_any_original_domain_artifact() {
             let repository = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
-            for (example, artifact) in [
-                ("sdtm-ae-coding", "ae.csv"),
-                ("sdtm-dm-metadata", "dm.csv"),
-                ("sdtm-lb-metadata", "lb.csv"),
-                ("sdtm-vs-epoch-from-subject-elements", "vs.csv"),
+            for (example, entry, project, artifact) in [
+                ("sdtm-ae-coding", "spec.yaml", "project.yaml", "ae.csv"),
+                ("sdtm-dm-metadata", "spec.yaml", "project.yaml", "dm.csv"),
+                (
+                    "sdtm-lb-metadata",
+                    "submission-spec.yaml",
+                    "submission-project.yaml",
+                    "lb.csv",
+                ),
+                (
+                    "sdtm-vs-epoch-from-subject-elements",
+                    "spec.yaml",
+                    "project.yaml",
+                    "vs.csv",
+                ),
             ] {
                 let case = repository.join("benchmarks").join(example);
                 let study = Study::new();
                 copy(&case, &study.0);
-                let path = study.0.join("spec.yaml");
-                let path = path.to_str().unwrap();
-                let mut run = file_application::domain(
-                    yamaa_core::project_function::Language::Python,
-                    Request {
-                        specification: path,
-                        environment: None,
-                    },
-                    identity(path),
-                )
-                .unwrap_or_else(|issues| panic!("{example}: {issues:?}"));
+                let path = study.0.join(entry);
+                let project = study.0.join(project);
+                let mut run = project_domain(path.to_str().unwrap(), project.to_str().unwrap());
                 assert!(run.issues().is_empty(), "{example}: {:?}", run.issues());
                 run.save().unwrap();
                 assert_eq!(
@@ -97,7 +105,8 @@ mod project {
             }
         }
         /// Drop one YAML mapping entry: its header line and every following
-        /// line indented deeper than the header.
+        /// line indented deeper than the header, or written at its depth as
+        /// an entry of the header's block sequence.
         fn without_entry(text: &str, header: &str) -> String {
             let depth = |line: &str| line.len() - line.trim_start().len();
             let mut kept = String::new();
@@ -108,7 +117,11 @@ mod project {
                     (found, inside) = (true, true);
                     continue;
                 }
-                if inside && (line.trim().is_empty() || depth(line) > depth(header)) {
+                if inside
+                    && (line.trim().is_empty()
+                        || depth(line) > depth(header)
+                        || (depth(line) == depth(header) && line.trim_start().starts_with("- ")))
+                {
                     continue;
                 }
                 inside = false;
@@ -119,7 +132,7 @@ mod project {
         }
         /// Benchmarks pass a study-level case's root project, so its codelists
         /// apply. A run needs none of the project's study or the section's
-        /// standard and define, so a specs-only section changes nothing.
+        /// standards and define, so a specs-only section changes nothing.
         #[test]
         fn study_projects_with_or_without_submission_metadata_reproduce_each_domain_artifact() {
             let repository = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
@@ -135,7 +148,7 @@ mod project {
                     let project = study.0.join("project.yaml");
                     if specs_only {
                         let mut text = fs::read_to_string(&project).unwrap();
-                        for header in ["study:", "  standard:", "  define: define.xml"] {
+                        for header in ["study:", "  standards:", "  define: define.xml"] {
                             text = without_entry(&text, header);
                         }
                         fs::write(&project, text).unwrap();
@@ -177,8 +190,10 @@ mod project {
                 "{\"column\":\"VALUE\",\"length\":-99999999999999999999999999999}"
             );
             // A bare source admits Derived, which still needs its method.
-            let issues =
-                study.check(&VALID.replace("origin: {type: Assigned}", "origin: {type: Derived}"));
+            let issues = study.check(&VALID.replace(
+                "{type: Assigned, source: Sponsor}",
+                "{type: Derived, source: Sponsor}",
+            ));
             assert_eq!(
                 issues
                     .iter()
@@ -420,7 +435,7 @@ mod project {
                 fs::write(
                     study.0.join("project.yaml"),
                     format!(
-                        "schema_version: '1.0'\ncodelists:\n  - standard: {{name: {name}, \
+                        "yamaa: \"1.0\"\ntype: project\ncodelists:\n  - standard: {{name: {name}, \
                          publishing_set: SDTM, version: '2026-03-27'}}\n    codelists:\n      \
                          - {{id: SEX, name: Sex, items: [{{value: F}}, {{value: M}}]}}\nsdtm:\n  \
                          specs: [spec.yaml]\n"
@@ -508,7 +523,7 @@ mod project {
                 )
                 .unwrap()
             }
-            const SPEC: &str = "schema_version: '1.0'\ndomain: LB\nkeys: [ID, LBTESTCD]\ninput: {SRC: input.csv}\noutput: {path: output.csv, report: checks.csv, columns: [ID, LBTESTCD, LBDTC, LBORRES]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: LBTESTCD, type: str}\n  - {name: LBDTC, type: str, derivation: SRC.DTC, submission: {data_type: DTC_TYPE, origin: {type: Collected}}}\n  - {name: LBORRES, type: str, derivation: SRC.RES, submission: {length: 20, origin: {type: Collected}, value_level: [{id: ONSET, where: {LBTESTCD: [ONSET]}, data_type: date}]}}\nrows:\n  - id: glucose\n    derivations: {LBTESTCD: {literal: GLUC}}\n  - id: onset\n    derivations: {LBTESTCD: {literal: ONSET}}\n";
+            const SPEC: &str = "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: LB\nkeys: [ID, LBTESTCD]\ninput: {SRC: input.csv}\noutput: {path: output.csv, report: checks.csv, columns: [ID, LBTESTCD, LBDTC, LBORRES]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: LBTESTCD, type: str}\n  - {name: LBDTC, type: str, derivation: SRC.DTC, submission: {data_type: DTC_TYPE, origins: [{type: Collected, source: Investigator}]}}\n  - {name: LBORRES, type: str, derivation: SRC.RES, submission: {length: 20, origins: [{type: Collected, source: Investigator}], value_level: [{id: ONSET, where: {LBTESTCD: [ONSET]}, data_type: date}]}}\nrows:\n  - id: glucose\n    derivations: {LBTESTCD: \"'GLUC'\"}\n  - id: onset\n    derivations: {LBTESTCD: \"'ONSET'\"}\n";
             let study = Study::new();
             // The column's type checks every row: a space is not ISO 8601.
             let run = domain(
@@ -582,8 +597,8 @@ mod project {
                 &SPEC
                     .replace("DTC_TYPE", "partialDatetime")
                     .replace("{name: LBTESTCD, type: str}", "{name: LBTESTCD, type: int}")
-                    .replace("{literal: GLUC}", "{literal: '1'}")
-                    .replace("{literal: ONSET}", "{literal: '2'}"),
+                    .replace("\"'GLUC'\"", "\"'1'\"")
+                    .replace("\"'ONSET'\"", "\"'2'\""),
             );
             assert_eq!(issues.len(), 1, "{issues:?}");
             assert_eq!(
@@ -603,7 +618,7 @@ mod project {
         /// order alike: `check()` passes and the run succeeds.
         #[test]
         fn value_level_checks_wait_for_a_where_column_the_column_phase_completes() {
-            const SPEC: &str = "schema_version: '1.0'\ndomain: LB\nkeys: [ID, SEQ]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, SEQ, LBORRES, LBTESTCD]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: SEQ, type: int, derivation: SRC.SEQ}\n  - {name: LBORRES, type: str, derivation: SRC.RES, submission: {length: 20, origin: {type: Collected}, value_level: [{id: ONSET, where: {LBTESTCD: [ONSET]}, ENTRY}]}}\n  - {name: LBTESTCD, type: str, derivation: SRC.CODE}\nrows:\n  - id: onset\n    filter: \"SRC.CODE = 'ONSET'\"\n    derivations: {LBTESTCD: {literal: ONSET}}\n  - id: other\n    filter: \"SRC.CODE <> 'ONSET'\"\n    derivations: {}\n";
+            const SPEC: &str = "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: LB\nkeys: [ID, SEQ]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, SEQ, LBORRES, LBTESTCD]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: SEQ, type: int, derivation: SRC.SEQ}\n  - {name: LBORRES, type: str, derivation: SRC.RES, submission: {length: 20, origins: [{type: Collected, source: Investigator}], value_level: [{id: ONSET, where: {LBTESTCD: [ONSET]}, ENTRY}]}}\n  - {name: LBTESTCD, type: str, derivation: SRC.CODE}\nrows:\n  - id: onset\n    filter: \"SRC.CODE = 'ONSET'\"\n    derivations: {LBTESTCD: \"'ONSET'\"}\n  - id: other\n    filter: \"SRC.CODE <> 'ONSET'\"\n";
             for (entry, field, failing, context) in [
                 (
                     "mandatory: true",
@@ -658,7 +673,7 @@ mod project {
         /// without a class are not refused.
         #[test]
         fn tabulation_datasets_refuse_a_datetime_output_column() {
-            const SPEC: &str = "schema_version: '1.0'\ndomain: VS\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, OUTPUT]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VSDTM, type: datetime, derivation: SRC.DTC}\n  - {name: OUTPUT, type: str, derivation: SRC.DTC}\nsubmission: {label: Vital Signs, class: CLASS, structure: One record per reading, repeating: true}\n";
+            const SPEC: &str = "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: VS\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, OUTPUT]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VSDTM, type: datetime, derivation: SRC.DTC}\n  - {name: OUTPUT, type: str, derivation: SRC.DTC}\nsubmission: {label: Vital Signs, class: CLASS, structure: One record per reading, repeating: true}\n";
             let study = Study::new();
             let issues = study.check(
                 &SPEC
@@ -678,6 +693,7 @@ mod project {
             for spec in [
                 SPEC.replace("CLASS", "FINDINGS"),
                 SPEC.replace("OUTPUT]", "VSDTM]")
+                    .replace("model: SDTM", "model: ADaM")
                     .replace("CLASS", "BASIC DATA STRUCTURE"),
                 SPEC.replace("OUTPUT]", "VSDTM]").replace(
                     "submission: {label: Vital Signs, class: CLASS, structure: One record per reading, repeating: true}\n",
@@ -913,15 +929,17 @@ mod project {
             assert_eq!(issues.len(), 1, "{issues:?}");
             assert_eq!(issues[0].spec_paths, ["columns.VALUE.submission.core"]);
             // A 0.5 specification declares no model: its section decides
-            // these rules when a document composes it.
+            // these rules when a document composes it. This case goes with
+            // the 0.5 path.
+            let valid_0_5 = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - name: VALUE\n    type: str\n    derivation: SRC.VALUE\n    submission: {length: 3, origin: {type: Assigned}}\n";
             assert!(study
-                .check(&VALID.replace("submission: {", "submission: {core: Cond, "))
+                .check(&valid_0_5.replace("submission: {", "submission: {core: Cond, "))
                 .is_empty());
             assert!(!study.0.join("output.csv").exists());
         }
 
-        const ROW_CT: &str = "schema_version: '1.0'\ndomain: LB\nkeys: [ID, LBTESTCD]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, RESULT, LBTESTCD]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: RESULT, type: str, derivation: SRC.VALUE, submission: {origin: {type: Assigned}, codelist: DEFAULT, value_level: [{id: GLUC, where: {LBTESTCD: [GLUC]}, codelist: GLUCOSE}]}}\n  - {name: LBTESTCD, type: str}\nrows:\n  - id: glucose\n    derivations: {LBTESTCD: {literal: GLUC}}\n  - id: creatinine\n    derivations: {LBTESTCD: {literal: CREAT}}\n";
-        const CT_PROJECT: &str = "schema_version: '1.0'\ncodelists:\n  - codelists:\n      - {id: DEFAULT, name: Default values, items: [{value: D}]}\n      - {id: GLUCOSE, name: Glucose values, items: [{value: G}]}\n      - {id: EXT, name: Extended values, extensible: true, items: [{value: X}]}\n      - {id: DICT, name: Dictionary, external: {dictionary: MedDRA, version: '27.1'}}\n";
+        const ROW_CT: &str = "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: LB\nkeys: [ID, LBTESTCD]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, RESULT, LBTESTCD]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: RESULT, type: str, derivation: SRC.VALUE, submission: {origins: [{type: Assigned, source: Sponsor}], codelist: DEFAULT, value_level: [{id: GLUC, where: {LBTESTCD: [GLUC]}, codelist: GLUCOSE}]}}\n  - {name: LBTESTCD, type: str}\nrows:\n  - id: glucose\n    derivations: {LBTESTCD: \"'GLUC'\"}\n  - id: creatinine\n    derivations: {LBTESTCD: \"'CREAT'\"}\n";
+        const CT_PROJECT: &str = "yamaa: \"1.0\"\ntype: project\ncodelists:\n  - codelists:\n      - {id: DEFAULT, name: Default values, items: [{value: D}]}\n      - {id: GLUCOSE, name: Glucose values, items: [{value: G}]}\n      - {id: EXT, name: Extended values, extensible: true, items: [{value: X}]}\n      - {id: DICT, name: Dictionary, external: {dictionary: MedDRA, version: '27.1'}}\n";
         #[test]
         fn per_value_codelists_inherit_origins_and_check_completed_where_columns() {
             let study = Study::new();
@@ -1050,12 +1068,12 @@ mod project {
         /// admit fails validation at that where column, before any data is
         /// read. They are its own codelist and those its entries bind,
         /// extended items included; an external dictionary on any of its
-        /// rows, or no codelist of its own, admits every value, and a build
-        /// without a project reads no codelist.
+        /// rows, or no codelist of its own, admits every value, and a check
+        /// without a project refuses the binding (CT-13).
         #[test]
         fn where_values_outside_the_where_columns_codelists_fail_before_data() {
-            const SPEC: &str = "schema_version: '1.0'\ndomain: LB\nkeys: [ID, LBTESTCD]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, LBCAT, LBTESTCD, RESULT]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: LBCAT, type: str, derivation: SRC.CAT}\n  - {name: LBTESTCD, type: str, derivation: SRC.CODE, submission: {origin: {type: Assigned}<binding>}}\n  - {name: RESULT, type: str, derivation: SRC.VALUE, submission: {origin: {type: Assigned}, value_level: [{id: GLUC, where: {LBTESTCD: [GLUC, <code>]}, length: 4}]}}\n";
-            const PROJECT: &str = "schema_version: '1.0'\ncodelists:\n  - standard: {name: CDISC/NCI, publishing_set: SDTM, version: '2023-12-15'}\n    codelists:\n      - {id: TESTCD, name: Test codes, extensible: true, items: [{value: GLUC}, {value: CREAT}, {value: SPONSOR, extended: true}]}\n  - codelists:\n      - {id: URINE, name: Urine test codes, items: [{value: UGLUC}]}\n      - {id: DICT, name: Dictionary, external: {dictionary: LOINC, version: '2.77'}}\n";
+            const SPEC: &str = "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: LB\nkeys: [ID, LBTESTCD]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, LBCAT, LBTESTCD, RESULT]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: LBCAT, type: str, derivation: SRC.CAT}\n  - {name: LBTESTCD, type: str, derivation: SRC.CODE, submission: {origins: [{type: Assigned, source: Sponsor}]<binding>}}\n  - {name: RESULT, type: str, derivation: SRC.VALUE, submission: {origins: [{type: Assigned, source: Sponsor}], value_level: [{id: GLUC, where: {LBTESTCD: [GLUC, <code>]}, length: 4}]}}\n";
+            const PROJECT: &str = "yamaa: \"1.0\"\ntype: project\ncodelists:\n  - standard: {name: CDISC/NCI, publishing_set: SDTM, version: '2023-12-15'}\n    codelists:\n      - {id: TESTCD, name: Test codes, extensible: true, items: [{value: GLUC}, {value: CREAT}, {value: SPONSOR, extended: true}]}\n  - codelists:\n      - {id: URINE, name: Urine test codes, items: [{value: UGLUC}]}\n      - {id: DICT, name: Dictionary, external: {dictionary: LOINC, version: '2.77'}}\n";
             const OWN: &str = ", codelist: TESTCD";
             const URINE: &str =
                 ", value_level: [{id: URINE, where: {LBCAT: [URINALYSIS]}, codelist: URINE}]";
@@ -1112,7 +1130,23 @@ mod project {
             }
             let study = Study::new();
             let issues = study.check(&SPEC.replace("<binding>", OWN).replace("<code>", "GLUCOSE"));
-            assert!(issues.is_empty(), "{issues:?}");
+            assert_eq!(
+                issues
+                    .iter()
+                    .map(|issue| (
+                        issue.condition(),
+                        issue.rule(),
+                        issue.spec_paths.clone(),
+                        yamaa_core::json::Value::Object(issue.context.clone())
+                    ))
+                    .collect::<Vec<_>>(),
+                [(
+                    "project_binding_missing",
+                    Some("CT-13"),
+                    vec!["columns.LBTESTCD.submission.codelist".to_owned()],
+                    yamaa_adapters::json!({"binding": "codelist", "codelist": "TESTCD", "column": "LBTESTCD"})
+                )]
+            );
         }
         /// A float codelist's items compare with the column's values exactly
         /// (VALUE-19): 9007199254740992.0 equals no item, although it is the
@@ -1120,8 +1154,8 @@ mod project {
         /// -0.0 and 1.0 the item 1. Missing values pass (CT-7).
         #[test]
         fn float_codelist_items_compare_exactly_and_missing_values_pass() {
-            const SPEC: &str = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int, CODE: float}}}\noutput: {path: output.csv, columns: [ID, CODE]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: CODE, type: float, derivation: SRC.CODE, submission: {origin: {type: Collected}, codelist: CODES}}\n";
-            const PROJECT: &str = "schema_version: '1.0'\ncodelists:\n  - codelists:\n      - {id: CODES, name: Codes, data_type: float, items: [{value: 9007199254740993}, {value: -0.0}, {value: 1}]}\n";
+            const SPEC: &str = "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int, CODE: float}}}\noutput: {path: output.csv, columns: [ID, CODE]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: CODE, type: float, derivation: SRC.CODE, submission: {origins: [{type: Collected, source: Investigator}], codelist: CODES}}\n";
+            const PROJECT: &str = "yamaa: \"1.0\"\ntype: project\ncodelists:\n  - codelists:\n      - {id: CODES, name: Codes, data_type: float, items: [{value: 9007199254740993}, {value: -0.0}, {value: 1}]}\n";
             let study = Study::new();
             fs::write(study.0.join("spec.yaml"), SPEC).unwrap();
             fs::write(study.0.join("project.yaml"), PROJECT).unwrap();
@@ -1275,28 +1309,25 @@ mod project {
         fn inventory_spec() -> String {
             VALID.replace("length: 3", "inventory_vocabulary: true, length: 10")
         }
-        const INVENTORY_PROJECT: &str = "schema_version: '1.0'\nstudy: {id: STUDY, name: Study, description: Study dataset inventory, protocol_name: Protocol}\nsdtm:\n  standard: {name: SDTMIG, version: '3.4', status: Final}\n  specs: [catalog/renamed.yaml]\n  define: define.xml\n";
+        const INVENTORY_PROJECT: &str = "yamaa: \"1.0\"\ntype: project\nstudy: {id: STUDY, name: Study, description: Study dataset inventory, protocol_name: Protocol}\nsdtm:\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  specs: [catalog/renamed.yaml]\n  define: define.xml\n";
         /// A run admits a section that lists only its specs: the study and the
         /// section's standard and define are required only by Define.
         const SPECS_ONLY_PROJECT: &str =
-            "schema_version: '1.0'\nsdtm:\n  specs: [catalog/renamed.yaml]\n";
+            "yamaa: \"1.0\"\ntype: project\nsdtm:\n  specs: [catalog/renamed.yaml]\n";
+        /// A project that lists no dataset holds an empty inventory, which
+        /// admits only a missing value (CT-11). A 1.x specification binds its
+        /// inventory vocabulary only with a project file (CT-13).
+        const NO_DATASETS_PROJECT: &str = "yamaa: \"1.0\"\ntype: project\n";
         #[test]
         fn absent_study_inventory_checks_nonmissing_values_and_keeps_missing_values_admitted() {
             for input in ["ID,VALUE\n1,DM\n2,\n", "ID,VALUE\n1,\n"] {
                 let study = Study::new();
                 fs::write(study.0.join("spec.yaml"), inventory_spec()).unwrap();
+                fs::write(study.0.join("project.yaml"), NO_DATASETS_PROJECT).unwrap();
                 fs::write(study.0.join("input.csv"), input).unwrap();
                 let path = study.0.join("spec.yaml");
-                let path = path.to_str().unwrap();
-                let run = file_application::domain(
-                    yamaa_core::project_function::Language::Python,
-                    Request {
-                        specification: path,
-                        environment: None,
-                    },
-                    identity(path),
-                )
-                .unwrap();
+                let project = study.0.join("project.yaml");
+                let run = project_domain(path.to_str().unwrap(), project.to_str().unwrap());
                 if input.contains("DM") {
                     assert_eq!(run.issues().len(), 1);
                     assert_eq!(
@@ -1333,7 +1364,7 @@ mod project {
                 fs::write(study.0.join("project.yaml"), text).unwrap();
                 fs::write(
                     study.0.join("catalog/renamed.yaml"),
-                    "schema_version: '1.0'\nparent: parent.yaml\n",
+                    "yamaa: \"1.0\"\ntype: spec\nparent: parent.yaml\n",
                 )
                 .unwrap();
                 fs::write(
@@ -1390,18 +1421,11 @@ mod project {
                 .replace("codelist: DEFAULT", "inventory_vocabulary: true")
                 .replace("codelist: GLUCOSE", "inventory_vocabulary: false");
             fs::write(study.0.join("spec.yaml"), raw).unwrap();
+            fs::write(study.0.join("project.yaml"), NO_DATASETS_PROJECT).unwrap();
             fs::write(study.0.join("input.csv"), "ID,VALUE\n1,DM\n2,\n").unwrap();
             let path = study.0.join("spec.yaml");
-            let path = path.to_str().unwrap();
-            let run = file_application::domain(
-                yamaa_core::project_function::Language::Python,
-                Request {
-                    specification: path,
-                    environment: None,
-                },
-                identity(path),
-            )
-            .unwrap();
+            let project = study.0.join("project.yaml");
+            let run = project_domain(path.to_str().unwrap(), project.to_str().unwrap());
             assert_eq!(run.issues().len(), 1);
             assert_eq!(yamaa_adapters::json_wire::encode_object(&run.issues()[0].context),"{\"column\":\"RESULT\",\"failure_count\":1,\"keys\":[{\"ID\":1,\"LBTESTCD\":\"CREAT\"}],\"values\":[\"DM\"]}");
         }
@@ -1544,8 +1568,8 @@ mod project {
         fn entries_over_a_nontext_where_column_fail_before_data() {
             let integer = |raw: String| {
                 raw.replace("{name: LBTESTCD, type: str}", "{name: LBTESTCD, type: int}")
-                    .replace("{literal: GLUC}", "{literal: '1'}")
-                    .replace("{literal: CREAT}", "{literal: '2'}")
+                    .replace("\"'GLUC'\"", "\"'1'\"")
+                    .replace("\"'CREAT'\"", "\"'2'\"")
             };
             let refused = |issues: &[yamaa_core::diagnostic::Diagnostic]| {
                 assert_eq!(issues.len(), 1, "{issues:?}");
@@ -1565,7 +1589,7 @@ mod project {
             let study = Study::new();
             let origin_only = ROW_CT.replace("codelist: DEFAULT", "length: 3").replace(
                 "codelist: GLUCOSE",
-                "origin: {type: Collected, source: Vendor}",
+                "origins: [{type: Collected, source: Vendor}]",
             );
             for raw in [value_length_spec("5"), origin_only] {
                 refused(&study.check(&integer(raw)));
@@ -1727,22 +1751,29 @@ mod project {
                 assert!(run.save().is_err());
                 assert!(!study.0.join("output.csv").exists());
             }
-            // `core` derives nothing for an analysis class or without a declared
-            // class, so the same missing value is admitted.
-            for root in [
-                FINDINGS.replace("FINDINGS", "BASIC DATA STRUCTURE"),
-                String::new(),
+            // `core` derives nothing without a declared class, nor for an
+            // analysis class, whose ADaM columns declare `mandatory` (SUB-10),
+            // so the same missing value is admitted.
+            let adam = VALID
+                .replace("model: SDTM", "model: ADaM")
+                .replace("{type: Assigned, source: Sponsor}", "{type: Assigned}");
+            for raw in [
+                VALID.replace(
+                    "submission: {length: 3",
+                    "submission: {core: Req, length: 3",
+                ),
+                format!(
+                    "{}{}",
+                    adam.replace(
+                        "submission: {length: 3",
+                        "submission: {core: Req, mandatory: false, length: 3"
+                    ),
+                    FINDINGS.replace("FINDINGS", "BASIC DATA STRUCTURE")
+                ),
             ] {
                 let study = Study::new();
-                let raw = format!(
-                    "{}{root}",
-                    VALID.replace(
-                        "submission: {length: 3",
-                        "submission: {core: Req, length: 3"
-                    )
-                );
                 let mut run = domain(&study, &raw, missing);
-                assert!(run.issues().is_empty(), "{root}: {:?}", run.issues());
+                assert!(run.issues().is_empty(), "{raw}: {:?}", run.issues());
                 assert!(run.save().unwrap());
             }
         }
@@ -1788,7 +1819,7 @@ mod project {
         }
         /// Entries over two where columns: one by test code, one by specimen;
         /// nothing static rules out a glucose urine row.
-        const SELECTED: &str = "schema_version: '1.0'\ndomain: LB\nkeys: [ID, LBTESTCD]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, LBTESTCD, LBSPEC, RESULT], report: report.csv}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: LBTESTCD, type: str}\n  - {name: LBSPEC, type: str, derivation: SRC.SPEC}\n  - name: RESULT\n    type: str\n    derivation: SRC.VALUE\n    submission:\n      origin: {type: Assigned}\n      value_level:\n        - {id: GLUC, where: {LBTESTCD: [GLUC]}, mandatory: true}\n        - {id: URINE, where: {LBSPEC: [URINE]}, length: 2}\n        - {id: ALB, where: {LBTESTCD: [ALB], LBSPEC: [SERUM]}}\nrows:\n  - id: glucose\n    derivations: {LBTESTCD: {literal: GLUC}}\n  - id: creatinine\n    derivations: {LBTESTCD: {literal: CREAT}}\n";
+        const SELECTED: &str = "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: LB\nkeys: [ID, LBTESTCD]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, LBTESTCD, LBSPEC, RESULT], report: report.csv}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: LBTESTCD, type: str}\n  - {name: LBSPEC, type: str, derivation: SRC.SPEC}\n  - name: RESULT\n    type: str\n    derivation: SRC.VALUE\n    submission:\n      origins: [{type: Assigned, source: Sponsor}]\n      value_level:\n        - {id: GLUC, where: {LBTESTCD: [GLUC]}, mandatory: true}\n        - {id: URINE, where: {LBSPEC: [URINE]}, length: 2}\n        - {id: ALB, where: {LBTESTCD: [ALB], LBSPEC: [SERUM]}}\nrows:\n  - id: glucose\n    derivations: {LBTESTCD: \"'GLUC'\"}\n  - id: creatinine\n    derivations: {LBTESTCD: \"'CREAT'\"}\n";
         #[test]
         fn a_row_two_entries_select_fails_with_its_keys_and_both_entries() {
             let study = Study::new();
@@ -1925,16 +1956,16 @@ mod project {
         fn restated_facts_and_relaxed_keys_fail_validation_before_data() {
             let key_check = VALID.replace(
                 "{name: ID, type: int, derivation: SRC.ID}",
-                "{name: ID, type: int, derivation: SRC.ID, verifications: [{not_missing: {}}]}",
+                "{name: ID, type: int, derivation: SRC.ID, verifications: [not_missing]}",
             );
             let mandatory_check = VALID.replace(
                 "    submission: {length: 3",
-                "    verifications: [{not_missing: {}}]\n    submission: {mandatory: true, length: 3",
+                "    verifications: [not_missing]\n    submission: {mandatory: true, length: 3",
             );
             let key_unique = format!("{VALID}verifications: [{{unique: [ID]}}]\n");
             let relaxed_key = VALID.replace(
                 "{name: ID, type: int, derivation: SRC.ID}",
-                "{name: ID, type: int, derivation: SRC.ID, submission: {mandatory: false, length: 8, origin: {type: Assigned}}}",
+                "{name: ID, type: int, derivation: SRC.ID, submission: {mandatory: false, length: 8, origins: [{type: Assigned, source: Sponsor}]}}",
             );
             for (raw, condition, rule, path, context) in [
                 (
@@ -1985,8 +2016,8 @@ mod project {
             let study = Study::new();
             let relaxed = ROW_CT
                 .replace(
-                    "submission: {origin: {type: Assigned}, codelist: DEFAULT,",
-                    "verifications: [{not_missing: {}}], submission: {origin: {type: Assigned}, mandatory: true,",
+                    "submission: {origins: [{type: Assigned, source: Sponsor}], codelist: DEFAULT,",
+                    "verifications: [not_missing], submission: {origins: [{type: Assigned, source: Sponsor}], mandatory: true,",
                 )
                 .replace("codelist: GLUCOSE", "mandatory: false");
             assert!(study.check(&relaxed).is_empty());
@@ -2000,8 +2031,8 @@ mod project {
             let base = format!(
                 "{}{root}",
                 value_length_spec("3").replace(
-                    "origin: {type: Assigned}, length: 3",
-                    "core: Perm, origin: {type: Assigned}, length: 3"
+                    "origins: [{type: Assigned, source: Sponsor}], length: 3",
+                    "core: Perm, origins: [{type: Assigned, source: Sponsor}], length: 3"
                 )
             );
             let study = Study::new();
@@ -2039,9 +2070,12 @@ mod project {
             assert!(!study.0.join("input.csv").exists());
         }
 
-        /// SUB-19's recode, literal and stored-value rows, as an SDTM study
-        /// declares them: each origin below is admitted by its derivation.
-        const ORIGINS: &str = r#"schema_version: '1.0'
+        /// SUB-19's recode, literal and stored-value rows, as a SEND study
+        /// declares them, since SEND keeps the Not Available origin that SDTM
+        /// refuses (SUB-15): each origin below is admitted by its derivation.
+        const ORIGINS: &str = r#"yamaa: "1.0"
+type: spec
+model: SEND
 domain: DM
 keys: [ID]
 input: {SRC: {path: input.csv, types: {ID: int, AGE: int, EGFR: float, WEIGHT: float, HEIGHT: float}}}
@@ -2051,58 +2085,58 @@ columns:
   - name: SEX
     type: str
     derivation: {mapping: {source: SRC.SEX, dict: {Male: M, Female: F}}}
-    submission: {origin: {type: Collected, source: Investigator}}
+    submission: {origins: [{type: Collected, source: Investigator}]}
   - name: RACE
     type: str
     derivation:
       case:
-        - {when: "SRC.RACE = 'white'", then: {literal: WHITE}}
+        - {when: "SRC.RACE = 'white'", then: "'WHITE'"}
         - {otherwise: {str_case: {source: SRC.RACE, to: upper}}}
-    submission: {origin: {type: Collected, source: Investigator}}
+    submission: {origins: [{type: Collected, source: Investigator}]}
   - name: BRTHDTC
     type: str
     derivation: {str_template: "{SRC.BRTHYR}-{SRC.BRTHMO}-{SRC.BRTHDY}"}
-    submission: {origin: {type: Collected, source: Subject}}
+    submission: {origins: [{type: Collected, source: Subject}]}
   - name: RFICDT
     type: date
     derivation: {to_date: {source: SRC.RFICDTC}}
-    submission: {origin: {type: Collected, source: Investigator}}
+    submission: {origins: [{type: Collected, source: Investigator}]}
   - name: HEIGHTU
     type: str
-    derivation: {literal: cm}
-    submission: {origin: {type: Collected, source: Investigator}}
+    derivation: "'cm'"
+    submission: {origins: [{type: Collected, source: Investigator}]}
   - name: EGFR
     type: float
     derivation: SRC.EGFR
     submission:
-      origin: {type: Derived, source: Vendor}
+      origins: [{type: Derived, source: Vendor}]
       method: Estimated by the central laboratory from serum creatinine.
   - name: DTHDTC
     type: str
-    derivation: {literal: null}
-    submission: {origin: {type: Not Available, description: Death date was not collected.}}
+    derivation: null
+    submission: {origins: [{type: Not Available, description: Death date was not collected.}]}
   - {name: AGE, type: int, derivation: SRC.AGE}
   - {name: WEIGHT, type: float, derivation: SRC.WEIGHT}
   - {name: HEIGHT, type: float, derivation: SRC.HEIGHT}
   - name: BMI
     type: float
-    derivation: {compute: {expr: "WEIGHT / (HEIGHT * HEIGHT)"}}
+    derivation: "WEIGHT / (HEIGHT * HEIGHT)"
     submission:
-      origin: {type: Derived, source: Sponsor}
+      origins: [{type: Derived, source: Sponsor}]
       method: Weight in kilograms divided by the square of height in metres.
   - name: AGEGR1
     type: str
     derivation:
       case:
-        - {when: "AGE >= 65", then: {literal: '>=65'}}
-        - {otherwise: {literal: '<65'}}
+        - {when: "AGE >= 65", then: "'>=65'"}
+        - {otherwise: "'<65'"}
     submission:
-      origin: {type: Derived, source: Sponsor}
+      origins: [{type: Derived, source: Sponsor}]
       method: Age grouped at 65 years.
   - name: ARMCD
     type: str
     derivation: {mapping: {source: SRC.ARM, dict: {Placebo: PBO, Active: ACT}}}
-    submission: {origin: {type: Assigned, source: Sponsor}}
+    submission: {origins: [{type: Assigned, source: Sponsor}]}
 "#;
         #[test]
         fn recodes_literals_and_stored_values_admit_their_published_origins() {
@@ -2128,9 +2162,9 @@ columns:
         /// Replace one column's declared origin in [`ORIGINS`].
         fn replace_origin(raw: &str, column: &str, origin: &str) -> String {
             let start = raw.find(&format!("name: {column}\n")).unwrap();
-            let at = start + raw[start..].find("origin: {type: ").unwrap();
+            let at = start + raw[start..].find("origins: [{type: ").unwrap();
             let end = at + raw[at..].find('}').unwrap();
-            format!("{}origin: {{type: {origin}{}", &raw[..at], &raw[end..])
+            format!("{}origins: [{{type: {origin}{}", &raw[..at], &raw[end..])
         }
         #[test]
         fn computed_values_and_case_reads_of_derived_columns_refute_collected() {
@@ -2196,7 +2230,9 @@ columns:
 
         /// SUB-19's bare reads beyond a `source`: an `ONLY` pivot of long
         /// collected records and a plain lookup copy a stored value.
-        const READS: &str = r#"schema_version: '1.0'
+        const READS: &str = r#"yamaa: "1.0"
+type: spec
+model: SDTM
 domain: LB
 keys: [USUBJID, LBTESTCD]
 input: {ODM: input.csv, RANGES: ranges.csv}
@@ -2210,17 +2246,17 @@ columns:
   - {name: LBTESTCD, type: str}
   - name: LBORRES
     type: str
-    submission: {origin: {type: Collected, source: Investigator}}
+    submission: {origins: [{type: Collected, source: Investigator}]}
   - name: LBORNRLO
     type: str
     derivation: RANGE.LOW
-    submission: {origin: {type: Collected, source: Vendor}}
+    submission: {origins: [{type: Collected, source: Vendor}]}
 rows:
   - id: glucose
     dataset: ODM
     group_by: [ODM.SubjectKey]
     derivations:
-      LBTESTCD: {literal: GLUC}
+      LBTESTCD: "'GLUC'"
       LBORRES:
         aggregate:
           filter: "ODM.ItemOID = 'IT.LB.GLUC'"
@@ -2266,8 +2302,8 @@ rows:
             }
             // A plain lookup is a bare read, but it is no predecessor's dataset.
             let issues = study.check(&READS.replace(
-                "{origin: {type: Collected, source: Vendor}}",
-                "{origin: {type: Predecessor, description: RANGE.LOW}}",
+                "{origins: [{type: Collected, source: Vendor}]}",
+                "{origins: [{type: Predecessor, description: RANGE.LOW}]}",
             ));
             assert_eq!(issues.len(), 1, "{issues:?}");
             assert_eq!(issues[0].condition(), "origin_contradicts_derivation");
@@ -2275,10 +2311,12 @@ rows:
             assert!(!study.0.join("input.csv").exists());
         }
 
-        const PREDECESSORS: &str = r#"schema_version: '1.0'
+        const PREDECESSORS: &str = r#"yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADSL
 keys: [USUBJID]
-input: {DM: dm.csv, SUPPDM: suppdm.csv}
+input: {DM: dm.csv, SUPPDM: {path: suppdm.csv, key: [USUBJID]}}
 base: DM
 output: {path: adsl.csv, columns: [USUBJID, AGE, RACEOTH]}
 columns:
@@ -2287,12 +2325,12 @@ columns:
     type: str
     label: Age
     derivation: DM.AGE
-    submission: {origin: {type: Predecessor, description: DM.AGE}}
+    submission: {origins: [{type: Predecessor, description: DM.AGE}]}
   - name: RACEOTH
     type: str
     label: Race, Other
     derivation: {source: {variable: SUPPDM.QVAL, filter: "SUPPDM.QNAM = 'RACEOTH'"}}
-    submission: {origin: {type: Predecessor, description: "SUPPDM.QVAL where QNAM = 'RACEOTH'"}}
+    submission: {origins: [{type: Predecessor, description: "SUPPDM.QVAL where QNAM = 'RACEOTH'"}]}
 "#;
         #[test]
         fn predecessor_columns_copy_the_column_their_description_names() {
@@ -2343,7 +2381,7 @@ columns:
             );
             assert_eq!(
                 issues[0].spec_paths,
-                ["columns.AGE.submission.origin.description"]
+                ["columns.AGE.submission.origins[0].description"]
             );
             assert_eq!(issues[0].context["reason"], "predecessor_form");
             // A computed column cannot claim to be a copy.
@@ -2355,7 +2393,7 @@ columns:
             assert_eq!(issues[0].condition(), "origin_contradicts_derivation");
             // A value-level Predecessor is checked against the derivations
             // that can produce the rows its where clause selects.
-            let values = "schema_version: '1.0'\ndomain: LB\nkeys: [ID, LBTESTCD]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, LBTESTCD, LBORRES]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: LBTESTCD, type: str}\n  - {name: LBORRES, type: str, submission: {origin: {type: Assigned}, value_level: [{id: GLUC, where: {LBTESTCD: [GLUC]}, origin: {type: Predecessor, description: SRC.GLUC}}]}}\nrows:\n  - id: glucose\n    derivations: {LBTESTCD: {literal: GLUC}, LBORRES: SRC.GLUC}\n  - id: creatinine\n    derivations: {LBTESTCD: {literal: CREAT}, LBORRES: SRC.CREAT}\n";
+            let values = "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: LB\nkeys: [ID, LBTESTCD]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, LBTESTCD, LBORRES]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: LBTESTCD, type: str}\n  - {name: LBORRES, type: str, submission: {origins: [{type: Assigned, source: Sponsor}], value_level: [{id: GLUC, where: {LBTESTCD: [GLUC]}, origins: [{type: Predecessor, description: SRC.GLUC}]}]}}\nrows:\n  - id: glucose\n    derivations: {LBTESTCD: \"'GLUC'\", LBORRES: SRC.GLUC}\n  - id: creatinine\n    derivations: {LBTESTCD: \"'CREAT'\", LBORRES: SRC.CREAT}\n";
             assert!(study.check(values).is_empty());
             let issues =
                 study.check(&values.replacen("LBORRES: SRC.GLUC", "LBORRES: SRC.CREAT", 1));
@@ -2381,7 +2419,11 @@ columns:
             fs::create_dir(study.0.join("sdtm")).unwrap();
             fs::write(
                 study.0.join("spec.yaml"),
-                inventory_spec().replace("domain: TEST", "domain: ADAE"),
+                // ADaM derives an Assigned origin's source (SUB-15).
+                inventory_spec()
+                    .replace("domain: TEST", "domain: ADAE")
+                    .replace("model: SDTM", "model: ADaM")
+                    .replace("{type: Assigned, source: Sponsor}", "{type: Assigned}"),
             )
             .unwrap();
             fs::write(
@@ -2393,7 +2435,7 @@ columns:
             .unwrap();
             fs::write(
                 study.0.join("environment.yaml"),
-                "schema_version: '1.0'\nstudy: {id: STUDY, name: Study, description: Study dataset inventory, protocol_name: Protocol}\nsdtm:\n  standard: {name: SDTMIG, version: '3.4', status: Final}\n  specs: [sdtm/ae.yaml]\n  define: sdtm/define.xml\nadam:\n  standard: {name: ADaMIG, version: '1.3', status: Final}\n  specs: [spec.yaml]\n  define: define.xml\n",
+                "yamaa: \"1.0\"\ntype: project\nstudy: {id: STUDY, name: Study, description: Study dataset inventory, protocol_name: Protocol}\nsdtm:\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  specs: [sdtm/ae.yaml]\n  define: sdtm/define.xml\nadam:\n  standards: [{name: ADaMIG, version: '1.3', status: Final}]\n  specs: [spec.yaml]\n  define: define.xml\n",
             )
             .unwrap();
             fs::write(

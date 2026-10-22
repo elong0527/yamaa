@@ -1,9 +1,11 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADSL
 keys: [USUBJID]
 input:
   DM: input/dm.csv
-  EX: {path: input/ex.csv, types: {EXDOSE: float}}
+  EX: {path: input/ex.csv, types: {EXDOSE: float}, key: [USUBJID]}
 base: DM
 
 output:
@@ -81,7 +83,7 @@ columns:
         filter: "EX.EXTRT = 'PLACEBO'"
         expr: "SUM(EX.EXDOSE)"
 
-  # Qualified with a derive step: each record's dose is converted to
+  # Qualified with derivations: each record's dose is converted to
   # milligrams before the reduction. Bindings evaluate in order; the
   # second reads the value bound by the first.
   - name: TOTDOSE_MG
@@ -89,15 +91,13 @@ columns:
     label: Total Dose in Milligrams
     derivation:
       aggregate:
-        derive:
-          - name: DOSE
+        derivations:
+          DOSE:
             type: float
             derivation: EX.EXDOSE
-          - name: DOSEMG
+          DOSEMG:
             type: float
-            derivation:
-              compute:
-                expr: "DOSE * 1000"
+            derivation: "DOSE * 1000"
         expr: "SUM(DOSEMG)"
 
   # Unqualified: reduces the built rows within each treatment group and

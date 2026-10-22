@@ -1,9 +1,11 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADAE
 keys: [STUDYID, USUBJID, AESEQ]
 input:
   AE: {path: input/ae.csv, types: {ASTDT: date}}
-  DM: {path: input/dm.csv, types: {DTHDT: date}}
+  DM: {path: input/dm.csv, types: {DTHDT: date}, key: [STUDYID, USUBJID]}
 base: AE
 
 output:
@@ -17,7 +19,6 @@ intermediates:
     filter: "AE.AEOUT = 'FATAL'"
     order_by: [AE.ASTDT, AE.AESEQ]
     keep: last
-    no_match: {literal: null}
 
 columns:
   - name: STUDYID

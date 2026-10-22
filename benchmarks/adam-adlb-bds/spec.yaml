@@ -1,9 +1,11 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADLB
 keys: [STUDYID, USUBJID, PARAMCD, ADT, ASEQ]
 input:
   LB: {path: input/lb.csv, types: {LBSTRESN: float, LBDTC: date}}
-  ADSL: {path: input/adsl.csv, types: {TRTSDT: date}}
+  ADSL: {path: input/adsl.csv, types: {TRTSDT: date}, key: [STUDYID, USUBJID]}
 
 output:
   path: adlb.csv
@@ -62,8 +64,8 @@ columns:
         window:
           group_by: [STUDYID, USUBJID, PARAMCD]
         date: ADT
-        reference_date: TRTSDT
-        value: AVAL
+        reference: TRTSDT
+        source: AVAL
 
   - name: BASE
     type: float
@@ -77,17 +79,13 @@ columns:
   - name: CHG
     type: float
     label: Change from Baseline
-    derivation:
-      compute:
-        expr: "AVAL - BASE"
+    derivation: "AVAL - BASE"
 
   # NULLIF leaves the percentage empty when the baseline value is zero.
   - name: PCHG
     type: float
     label: Percent Change from Baseline
-    derivation:
-      compute:
-        expr: "100 * CHG / NULLIF(BASE, 0)"
+    derivation: "100 * CHG / NULLIF(BASE, 0)"
 
   - name: ASEQ
     type: int
@@ -105,8 +103,8 @@ rows:
     dataset: LB
     filter: "LB.LBTESTCD = 'ALT' AND LB.LBSTRESN IS NOT NULL"
     derivations:
-      PARAMCD: {literal: ALT}
-      PARAM: {literal: Alanine Aminotransferase}
+      PARAMCD: "'ALT'"
+      PARAM: "'Alanine Aminotransferase'"
       AVAL: LB.LBSTRESN
       AVALU: LB.LBSTRESU
 
@@ -114,19 +112,17 @@ rows:
     dataset: LB
     filter: "LB.LBTESTCD = 'ALT' AND LB.LBSTRESN IS NOT NULL"
     derivations:
-      PARAMCD: {literal: ALTSI}
-      PARAM: {literal: Alanine Aminotransferase (SI)}
-      AVAL:
-        compute:
-          expr: "LB.LBSTRESN * 0.0167"
-      AVALU: {literal: ukat/L}
+      PARAMCD: "'ALTSI'"
+      PARAM: "'Alanine Aminotransferase (SI)'"
+      AVAL: "LB.LBSTRESN * 0.0167"
+      AVALU: "'ukat/L'"
 
   - id: ast
     dataset: LB
     filter: "LB.LBTESTCD = 'AST' AND LB.LBSTRESN IS NOT NULL"
     derivations:
-      PARAMCD: {literal: AST}
-      PARAM: {literal: Aspartate Aminotransferase}
+      PARAMCD: "'AST'"
+      PARAM: "'Aspartate Aminotransferase'"
       AVAL: LB.LBSTRESN
       AVALU: LB.LBSTRESU
 

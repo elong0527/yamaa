@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: SDTM
 domain: AE
 keys: [STUDYID, USUBJID, AESEQ]
 input:
@@ -14,20 +16,20 @@ intermediates:
   - id: MEDDRA_CODING
     dataset: MEDDRA
     key: {LLTNAME: AE_RAW.AETERM}
-    no_match: NOT CODED
+    absent: NOT CODED
 
 columns:
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
-    derivation: {literal: AE}
+    derivation: "'AE'"
     submission:
       core: Req
       role: Identifier
       length: 2
-      origin:
-        type: Assigned
-        source: Sponsor
+      origins:
+        - type: Assigned
+          source: Sponsor
 
   - name: STUDYID
     type: str
@@ -37,9 +39,9 @@ columns:
       core: Req
       role: Identifier
       length: 20
-      origin:
-        type: Protocol
-        source: Sponsor
+      origins:
+        - type: Protocol
+          source: Sponsor
 
   - name: USUBJID
     type: str
@@ -49,9 +51,9 @@ columns:
       core: Req
       role: Identifier
       length: 30
-      origin:
-        type: Assigned
-        source: Sponsor
+      origins:
+        - type: Assigned
+          source: Sponsor
 
   - name: AESEQ
     type: int
@@ -61,9 +63,9 @@ columns:
       core: Req
       role: Identifier
       length: 8
-      origin:
-        type: Assigned
-        source: Sponsor
+      origins:
+        - type: Assigned
+          source: Sponsor
 
   # SDTMIG designates AETERM Req. This coding fixture keeps one blank reported
   # term to show the NOT CODED fallback, which a required term would refuse,
@@ -76,12 +78,12 @@ columns:
       core: Exp
       role: Topic
       length: 200
-      origin:
-        type: Collected
-        source: Investigator
-        documents:
-          - document: acrf
-            pages: {type: PhysicalRef, refs: "1"}
+      origins:
+        - type: Collected
+          source: Investigator
+          documents:
+            - document: acrf
+              pages: {type: PhysicalRef, refs: "1"}
 
   # Both coded terms come from the dictionary row whose lowest-level term
   # equals the reported term exactly, letter case included. No such row, or
@@ -95,9 +97,9 @@ columns:
       role: Synonym Qualifier
       length: 200
       codelist: MEDDRA
-      origin:
-        type: Assigned
-        source: Sponsor
+      origins:
+        - type: Assigned
+          source: Sponsor
       method: Take PTNAME from the MEDDRA record whose LLTNAME equals
         AE_RAW.AETERM, and no match yields "NOT CODED".
 
@@ -110,9 +112,9 @@ columns:
       role: Record Qualifier
       length: 200
       codelist: MEDDRA
-      origin:
-        type: Assigned
-        source: Sponsor
+      origins:
+        - type: Assigned
+          source: Sponsor
       method: Take SOCNAME from the MEDDRA record whose LLTNAME equals
         AE_RAW.AETERM, and no match yields "NOT CODED".
 
