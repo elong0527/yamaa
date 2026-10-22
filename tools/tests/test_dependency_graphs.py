@@ -25,6 +25,7 @@ from tools.ci.dependency_graphs import (
 )
 from tools.packaging import generate_third_party_notices as notice_generator
 from tools.paths import ROOT
+from tools.tests import support
 
 # Floors by interpreter in python/pyproject.toml. lxml's floor is the same on
 # every interpreter; the others split at CPython 3.15.
@@ -41,6 +42,23 @@ PYTHON_315_FLOORS = {
     "polars": "2.0.0",
     "pyarrow": "26.0.0",
     "pydantic": "2.14.0",
+}
+# The smallest checkout that a graph's preparation reads: a workspace with no
+# member to pin, a lock to drop and a Python project with no requirement.
+SCRATCH_CHECKOUT = {
+    "rust/Cargo.toml": (
+        '[workspace]\nmembers = []\n\n[workspace.package]\nrust-version = "1.82"\n'
+    ),
+    "rust/Cargo.lock": "version = 4\n",
+    "python/pyproject.toml": (
+        "[project]\ndependencies = []\n\n"
+        "[project.optional-dependencies]\ntest = []\n\n"
+        "[dependency-groups]\ntooling = []\n\n"
+        "[build-system]\nrequires = []\n"
+    ),
+    "benchmarks/negative-path-symlink/input/reference/lbref.csv": (
+        "LBTESTCD,SEX,ANRHI\nALT,F,33\n"
+    ),
 }
 
 
@@ -209,6 +227,30 @@ class DependencyGraphsTests(unittest.TestCase):
                     with self.subTest(python=python, package=name):
                         self.assertEqual(selected[name], [">=" + floor])
             self.assertFalse((stage / "rust/Cargo.lock").exists())
+
+    def test_the_copy_keeps_a_symbolic_link_a_link(self):
+        """A graph tests the checkout as Git holds it: a benchmark whose input
+        is a symbolic link, refused for it (FILE-8), keeps the link."""
+        with tempfile.TemporaryDirectory() as temporary:
+            checkout = support.Repository(Path(temporary) / "checkout")
+            for path, text in SCRATCH_CHECKOUT.items():
+                checkout.write(path, text)
+            linked = Path("benchmarks/negative-path-symlink/input/lbref.csv")
+            try:
+                (checkout.root / linked).symlink_to("reference/lbref.csv")
+            except OSError as error:
+                self.skipTest(f"symlinks are unavailable: {error}")
+            checkout.commit()
+            graph = Path(temporary) / "graph"
+            prepare(checkout.root, graph, "newest")
+            copied = graph / linked
+            self.assertEqual(
+                (
+                    copied.is_symlink(),
+                    os.readlink(copied) if copied.is_symlink() else None,
+                ),
+                (True, "reference/lbref.csv"),
+            )
 
     def test_destination_cannot_change_source_or_overwrite_existing(self):
         for destination in (ROOT, ROOT / "nested-graph"):
