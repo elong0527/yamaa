@@ -35,8 +35,15 @@ $(SHLIB): $(RUST_LIB) rust_exports
 # Rtools42's linker cannot read Rust's COFF auto-export exclusions. The DLL's
 # exports belong to yamaa-win.def, so remove the object directives before R
 # links, retaining the archive's code, data, symbols and debug information.
+# objcopy extracts members beside its input; use the temporary directory to
+# keep their paths below Windows' limit in R's deeply nested build directory.
 rust_exports: $(RUST_LIB)
-	$(OBJCOPY) --remove-section=.drectve "$(RUST_LIB)"
+	set -eu; \
+	exports_dir=$$(mktemp -d); \
+	trap 'rm -rf "$$exports_dir"' EXIT HUP INT TERM; \
+	cp "$(RUST_LIB)" "$$exports_dir/libyamaa_r.a"; \
+	$(OBJCOPY) --remove-section=.drectve "$$exports_dir/libyamaa_r.a"; \
+	cp "$$exports_dir/libyamaa_r.a" "$(RUST_LIB)"
 
 # Match upstream extendr's GNU/Rtools library discovery: the temporary
 # gcc_eh placeholder belongs to the build tree and is removed after linking.
