@@ -3,6 +3,6 @@ standard: ADaM
 domain: ADAE
 entries:
   python:
-    - specification: spec.yaml
+    - specification: spec_adae.yaml
   r:
-    - specification: spec.yaml
+    - specification: spec_adae.yaml

@@ -5,8 +5,8 @@ domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
   DM: input/dm.csv
-  EX: {path: input/ex.csv, types: {EXDOSE: float}, key: [STUDYID, USUBJID]}
-  VS: {path: input/vs.csv, types: {WEIGHT: float}, key: [STUDYID, USUBJID]}
+  EX: {path: input/ex.csv, types: {EXDOSE: float}}
+  VS: {path: input/vs.csv, types: {WEIGHT: float}}
 base: DM
 
 output:

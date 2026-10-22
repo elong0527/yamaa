@@ -6,6 +6,10 @@ keys: [STUDYID, USUBJID, EXSEQ]
 input:
   EX: {path: input/ex.csv, types: {EXSEQ: int, EXDOSE: float}}
 
+output:
+  path: adex.csv
+  columns: [STUDYID, USUBJID, EXSEQ, DOSEGRP]
+
 intermediates:
   # Administrations with a dose, each given a dose group. The high group is
   # written as the number 1 and the low group as the text 'low', so the
@@ -19,10 +23,6 @@ intermediates:
           - when: "EXDOSE >= 100"
             then: 1
           - otherwise: "'low'"
-
-output:
-  path: adex.csv
-  columns: [STUDYID, USUBJID, EXSEQ, DOSEGRP]
 
 columns:
   - name: STUDYID

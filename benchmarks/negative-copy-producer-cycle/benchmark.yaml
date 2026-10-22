@@ -3,6 +3,6 @@ standard: ADaM
 domain: ADSL
 entries:
   python:
-    - specification: spec.yaml
+    - specification: spec_adsl.yaml
   r:
-    - specification: spec.yaml
+    - specification: spec_adsl.yaml

@@ -1,8 +1,8 @@
 yamaa: "1.0"
 type: spec
+model: ADaM
 # Copied from a template whose shared file was never filled in.
 parent: ''
-model: ADaM
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:

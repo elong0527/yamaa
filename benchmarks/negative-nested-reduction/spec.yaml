@@ -8,7 +8,6 @@ input:
   EX:
     path: input/ex.csv
     types: {EXSEQ: int, EXSTDY: int, EXDOSE: float}
-    key: [STUDYID, USUBJID]
 base: DM
 
 output:

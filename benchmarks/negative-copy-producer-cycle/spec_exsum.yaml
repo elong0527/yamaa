@@ -6,10 +6,10 @@ keys: [STUDYID, USUBJID]
 input:
   EX: {path: input/ex_first.csv, types: {TRTSDT: date}}
   # The subject-level dataset, typed by the specification that produces it:
-  # spec.yaml, which itself copies from this summary.
+  # spec_adsl.yaml, which itself copies from this summary.
   ADSL:
     path: adsl.csv
-    schema: spec.yaml
+    schema: spec_adsl.yaml
     key: [STUDYID, USUBJID]
 base: EX
 

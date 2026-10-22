@@ -1,9 +1,9 @@
 yamaa: "1.0"
 type: spec
+model: ADaM
 # The study's shared identifier columns were never copied into this study's
 # folder, so the file this one builds on does not exist.
 parent: layers/study.yaml
-model: ADaM
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:

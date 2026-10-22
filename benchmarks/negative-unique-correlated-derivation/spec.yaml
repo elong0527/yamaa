@@ -8,6 +8,10 @@ input:
   DS: {path: input/ds.csv, types: {DSSEQ: int, DSSTDY: int}}
 base: DM
 
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, TRTEDY, EOSSTT, EOSPDY]
+
 intermediates:
   # Each subject's disposition event, checked to be one per subject, with
   # the days from the last dose to the event. Those days read the subject
@@ -21,10 +25,6 @@ intermediates:
       DAYSPOST: "DSSTDY - DM.TRTEDY"
     verifications:
       - unique: [STUDYID, USUBJID]
-
-output:
-  path: adsl.csv
-  columns: [STUDYID, USUBJID, TRTEDY, EOSSTT, EOSPDY]
 
 columns:
   - name: STUDYID

@@ -6,7 +6,7 @@ keys: [STUDYID, USUBJID]
 input:
   DM: input/dm.csv
   # The dose is stored as text.
-  EX: {path: input/ex.csv, key: [STUDYID, USUBJID]}
+  EX: input/ex.csv
 base: DM
 
 output:

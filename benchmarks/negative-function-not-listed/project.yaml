@@ -1,6 +1,7 @@
 yamaa: "1.0"
 type: project
-# The study's function file for bmi was never added to this list.
+
+# The study's function file for bmi was never added to the project.
 adam:
   specs:
   - spec.yaml

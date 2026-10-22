@@ -8,6 +8,10 @@ input:
   DS: {path: input/ds.csv, types: {DSSEQ: int, DSSTDY: int}}
 base: DM
 
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, TRTEDY, EOSSTT]
+
 intermediates:
   # Each subject's disposition event after the last dose day, checked to be
   # one per subject. The filter compares every event with the subject record
@@ -18,10 +22,6 @@ intermediates:
     filter: "DS.DSSTDY > DM.TRTEDY"
     verifications:
       - unique: [STUDYID, USUBJID]
-
-output:
-  path: adsl.csv
-  columns: [STUDYID, USUBJID, TRTEDY, EOSSTT]
 
 columns:
   - name: STUDYID
