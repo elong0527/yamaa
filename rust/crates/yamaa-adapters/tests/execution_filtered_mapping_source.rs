@@ -2,6 +2,7 @@
 //! A mapping source carries the same filter, selection, and absent value as
 //! a plain source binding, so a filtered raw column no longer needs a
 //! helper column that exists only to feed the dictionary lookup.
+use crate::support::Edit as _;
 use std::fs;
 use yamaa_adapters::file_application;
 use yamaa_core::diagnostic::Diagnostic;
@@ -64,7 +65,8 @@ const VISITS: &str = "STUDYID,USUBJID,SEQ,VISIT,SEX\n\
 
 fn adsl_specification(source: &str) -> String {
     format!(
-        "schema_version: '1.0'\n\
+        "yamaa: \"1.0\"\n\
+         type: spec\n\
          domain: ADSL\n\
          keys: [STUDYID, USUBJID]\n\
          input: {{DM: {{path: dm.csv, types: {{SEQ: int}}}}}}\n\
@@ -75,7 +77,7 @@ fn adsl_specification(source: &str) -> String {
          \x20 - {{name: SEX, type: str, derivation: {{mapping: {{source: {source}, \
          case_sensitive: false, \
          dict: {{M: Male, F: Female, Male: Male, Female: Female, Intersex: Intersex}}, \
-         missing: {{literal: null}}, unmapped: {{literal: null}}}}}}}}\n"
+         unmapped: null}}}}}}\n"
     )
 }
 
@@ -105,10 +107,19 @@ fn mapping_source_with_a_filter_alone_reads_the_selected_record() {
     );
 }
 
+/// The input has no SEX column. Only a 0.5 file answers such a read with
+/// `absent` (D67, D102); a 1.0 file fails it as `unknown_field`, so this
+/// test keeps its 0.5 document until the 0.5 path goes (#3447).
 #[test]
 fn mapping_source_absent_value_feeds_the_dictionary() {
+    let specification = adsl_specification("{variable: DM.SEX, absent: M}")
+        .edit("yamaa: \"1.0\"\ntype: spec\n", "schema_version: '1.0'\n")
+        .edit(
+            "unmapped: null",
+            "missing: {literal: null}, unmapped: {literal: null}",
+        );
     let fixture = Fixture::new(
-        &adsl_specification("{variable: DM.SEX, absent: M}"),
+        &specification,
         &[("dm.csv", "STUDYID,USUBJID,SEQ,VISIT\nS1,001,1,SCREENING\n")],
     );
     assert_eq!(
@@ -147,7 +158,8 @@ fn mapping_source_selection_without_its_pair_is_rejected() {
 #[test]
 fn cut_source_with_a_filter_reads_only_the_selected_records() {
     let fixture = Fixture::new(
-        "schema_version: '1.0'\n\
+        "yamaa: \"1.0\"\n\
+         type: spec\n\
          domain: OUT\n\
          keys: [ID]\n\
          input: {SRC: {path: src.csv, types: {AGE: int}}}\n\
@@ -168,7 +180,8 @@ fn cut_source_with_a_filter_reads_only_the_selected_records() {
 #[test]
 fn first_available_source_with_a_selection_reads_the_ordered_match() {
     let fixture = Fixture::new(
-        "schema_version: '1.0'\n\
+        "yamaa: \"1.0\"\n\
+         type: spec\n\
          domain: ADSL\n\
          keys: [STUDYID, USUBJID]\n\
          input: {DM: {path: dm.csv, types: {SEQ: int}}}\n\

@@ -76,7 +76,7 @@ fn a_grouped_row_template_reads_a_lookup_only_through_its_groups() {
     // `column`; `extra` declares the further columns the template derives.
     let grouped = |intermediate: &str, group: &str, column: &str, extra: &str| {
         format!(
-            "schema_version: '1.0'\ndomain: OUT\nkeys: [{group}]\n{INPUT}\
+            "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [{group}]\n{INPUT}\
              output: {{path: out.csv, columns: [{group}, VALUE]}}\n\
              intermediates:\n{intermediate}\
              columns:\n  - {{name: {group}, type: {kind}}}\n{extra}  - {{name: VALUE, type: str}}\n\
@@ -102,38 +102,37 @@ fn a_grouped_row_template_reads_a_lookup_only_through_its_groups() {
             }
         })])
     };
-    let keyed = "  - id: P\n    dataset: DONOR\n    key: {KEY: SRC.ID}\n    no_match: null\n";
+    let keyed = "  - id: P\n    dataset: DONOR\n    key: {KEY: SRC.ID}\n";
     assert_eq!(
         run(&grouped(keyed, "GRP", "P.X", "")),
-        ungrouped("intermediates[0].key", "SRC.ID", "P")
+        ungrouped("intermediates.P.key", "SRC.ID", "P")
     );
     let ranged = |value: &str| {
         format!(
-            "  - id: W\n    dataset: WIN\n    key: {{ID: {{literal: 1}}}}\n    \
-             between: {{value: {value}, lower: LO, upper: HI}}\n    no_match: null\n"
+            "  - id: W\n    dataset: WIN\n    key: {{ID: 1}}\n    \
+             between: {{value: {value}, lower: LO, upper: HI}}\n"
         )
     };
     assert_eq!(
         run(&grouped(&ranged("SRC.VAL"), "GRP", "W.NAME", "")),
-        ungrouped("intermediates[0].between.value", "SRC.VAL", "W")
+        ungrouped("intermediates.W.between.value", "SRC.VAL", "W")
     );
-    let derived = "  - id: W\n    dataset: WIN\n    key: {ID: {literal: 1}}\n    \
-                   filter: 'WIN.LO <= WIN.DAY AND WIN.DAY <= WIN.HI'\n    no_match: null\n    \
+    let derived = "  - id: W\n    dataset: WIN\n    key: {ID: 1}\n    \
+                   filter: 'WIN.LO <= WIN.DAY AND WIN.DAY <= WIN.HI'\n    \
                    derivations: {DAY: SRC.VAL}\n";
     assert_eq!(
         run(&grouped(derived, "GRP", "W.NAME", "")),
-        ungrouped("intermediates[0].derivations.DAY.source", "SRC.VAL", "W")
+        ungrouped("intermediates.W.derivations.DAY.source", "SRC.VAL", "W")
     );
     // A correlated filter field outside the groups keeps its 0.4.0 finding:
     // the field names no value of the filter's scope (LOOKUP-8).
-    let filtered = "  - id: W\n    dataset: WIN\n    key: {ID: {literal: 1}}\n    \
-                    filter: 'WIN.HI < SRC.VAL'\n    order_by: [WIN.LO]\n    keep: first\n    \
-                    no_match: null\n";
+    let filtered = "  - id: W\n    dataset: WIN\n    key: {ID: 1}\n    \
+                    filter: 'WIN.HI < SRC.VAL'\n    order_by: [WIN.LO]\n    keep: first\n";
     assert_eq!(
         run(&grouped(filtered, "GRP", "W.NAME", "")),
         Err(refused(
             "LOOKUP-7",
-            "intermediates[0].filter",
+            "intermediates.W.filter",
             "SRC.VAL",
             "W"
         ))
@@ -163,21 +162,21 @@ fn a_correlated_lookup_reads_only_the_driver_of_the_reading_template() {
     // source template's row filter.
     let templates = |intermediate: &str, filter: &str, source: &str, donor: &str| {
         format!(
-            "schema_version: '1.0'\ndomain: OUT\nkeys: [ID, ORIGIN]\n{INPUT}\
+            "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID, ORIGIN]\n{INPUT}\
              output: {{path: out.csv, columns: [ID, ORIGIN, VALUE]}}\n\
              intermediates:\n{intermediate}\
              columns:\n  - {{name: ID, type: int}}\n  - {{name: ORIGIN, type: str}}\n  \
              - {{name: VALUE, type: str}}\n\
              rows:\n  - id: source\n    dataset: SRC\n{filter}    derivations:\n      \
-             ID: SRC.ID\n      ORIGIN: {{literal: SOURCE}}\n      VALUE: {source}\n\n  \
+             ID: SRC.ID\n      ORIGIN: \"'SOURCE'\"\n      VALUE: {source}\n\n  \
              - id: donor\n    dataset: DONOR\n    derivations:\n      ID: DONOR.KEY\n      \
-             ORIGIN: {{literal: DONOR}}\n      VALUE: {donor}\n"
+             ORIGIN: \"'DONOR'\"\n      VALUE: {donor}\n"
         )
     };
     // A lookup derivation reads the source record, which the donor rows do
     // not have (LOOKUP-15).
-    let derived = "  - id: W\n    dataset: WIN\n    key: {ID: {literal: 1}}\n    \
-                   filter: 'WIN.LO <= WIN.DAY AND WIN.DAY <= WIN.HI'\n    no_match: null\n    \
+    let derived = "  - id: W\n    dataset: WIN\n    key: {ID: 1}\n    \
+                   filter: 'WIN.LO <= WIN.DAY AND WIN.DAY <= WIN.HI'\n    \
                    derivations: {DAY: SRC.VAL}\n";
     assert_eq!(
         run(&templates(derived, "", "W.NAME", "W.NAME")),
@@ -185,12 +184,12 @@ fn a_correlated_lookup_reads_only_the_driver_of_the_reading_template() {
             "phase": "validation",
             "condition": "unknown_field",
             "rule": "LOOKUP-15",
-            "spec_paths": ["intermediates[0].derivations.DAY.source"],
+            "spec_paths": ["intermediates.W.derivations.DAY.source"],
             "context": {"identifier": "SRC.VAL", "intermediate": "W"}
         })])
     );
     assert_eq!(
-        run(&templates(derived, "", "W.NAME", "{literal: NONE}")),
+        run(&templates(derived, "", "W.NAME", "\"'NONE'\"")),
         Ok(
             "ID,ORIGIN,VALUE\n1,SOURCE,LOW\n2,SOURCE,LOW\n3,SOURCE,HIGH\n\
             1,DONOR,NONE\n2,DONOR,NONE\n3,DONOR,NONE\n"
@@ -201,12 +200,12 @@ fn a_correlated_lookup_reads_only_the_driver_of_the_reading_template() {
     // source template, which has no donor record (LOOKUP-8).
     let filtered = |filter: &str| {
         format!(
-            "  - id: R\n    dataset: WIN\n    key: {{ID: {{literal: 1}}}}\n    \
-             filter: '{filter}'\n    order_by: [WIN.LO]\n    keep: first\n    no_match: null\n"
+            "  - id: R\n    dataset: WIN\n    key: {{ID: 1}}\n    \
+             filter: '{filter}'\n    order_by: [WIN.LO]\n    keep: first\n"
         )
     };
     let row_filter = "    filter: 'R.NAME IS NOT NULL'\n";
-    let literal = "{literal: NONE}";
+    let literal = "\"'NONE'\"";
     assert_eq!(
         run(&templates(
             &filtered("WIN.HI >= DONOR.X"),
@@ -216,7 +215,7 @@ fn a_correlated_lookup_reads_only_the_driver_of_the_reading_template() {
         )),
         Err(refused(
             "LOOKUP-7",
-            "intermediates[0].filter",
+            "intermediates.R.filter",
             "DONOR.X",
             "R"
         ))
@@ -234,15 +233,15 @@ fn a_correlated_lookup_reads_only_the_driver_of_the_reading_template() {
     );
     // A row filter's lookup takes its range value from that template's row
     // too, here a donor field the source rows do not have (LOOKUP-9).
-    let windowed = "  - id: R\n    dataset: WIN\n    key: {ID: {literal: 1}}\n    \
-                    between: {value: DONOR.X, lower: LO, upper: HI}\n    no_match: null\n";
+    let windowed = "  - id: R\n    dataset: WIN\n    key: {ID: 1}\n    \
+                    between: {value: DONOR.X, lower: LO, upper: HI}\n";
     assert_eq!(
         run(&templates(windowed, row_filter, literal, literal)),
         Err(vec![yamaa_adapters::json!({
             "phase": "validation",
             "condition": "unknown_field",
             "rule": "LOOKUP-9",
-            "spec_paths": ["intermediates[0].between.value"],
+            "spec_paths": ["intermediates.R.between.value"],
             "context": {"identifier": "DONOR.X", "intermediate": "R"}
         })])
     );
@@ -251,12 +250,12 @@ fn a_correlated_lookup_reads_only_the_driver_of_the_reading_template() {
     let keyed = |value: &str| {
         format!(
             "  - id: K\n    dataset: WIN\n    key: {{ID: {value}}}\n    order_by: [WIN.LO]\n    \
-             keep: first\n    no_match: null\n"
+             keep: first\n"
         )
     };
     assert_eq!(
         run(&templates(&keyed("SRC.ID"), "", "K.NAME", "K.NAME")),
-        Err(refused("LOOKUP-5", "intermediates[0].key", "SRC.ID", "K"))
+        Err(refused("LOOKUP-5", "intermediates.K.key", "SRC.ID", "K"))
     );
     assert_eq!(
         run(&templates(&keyed("SRC.ID"), "", "K.NAME", literal)),
@@ -276,7 +275,7 @@ fn a_correlated_lookup_reads_only_the_driver_of_the_reading_template() {
             "phase": "validation",
             "condition": "ungrouped_driver_field",
             "rule": "ROW-5",
-            "spec_paths": ["intermediates[0].key"],
+            "spec_paths": ["intermediates.K.key"],
             "context": {
                 "identifier": "DONOR.X",
                 "intermediate": "K",
@@ -291,10 +290,9 @@ fn a_correlated_lookup_reads_only_the_driver_of_the_reading_template() {
 fn a_dataset_verification_reads_a_lookup_as_a_column_does() {
     let verified = |intermediate: &str| {
         format!(
-            "schema_version: '1.0'\ndomain: OUT\nkeys: [ID]\n{INPUT}base: SRC\n\
+            "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\n{INPUT}base: SRC\n\
              output: {{path: out.csv, columns: [ID]}}\n\
-             intermediates:\n  - id: P\n    dataset: DONOR\n{intermediate}    \
-             no_match: null\n\
+             intermediates:\n  - id: P\n    dataset: DONOR\n{intermediate}\
              columns:\n  - {{name: ID, type: int, derivation: SRC.ID}}\n\
              verifications:\n  - assert:\n      id: positive\n      require: 'P.X > 0'\n"
         )
@@ -304,7 +302,7 @@ fn a_dataset_verification_reads_a_lookup_as_a_column_does() {
     // LOOKUP-9).
     assert_eq!(
         run(&verified("    key: {KEY: WIN.ID}\n")),
-        Err(refused("LOOKUP-5", "intermediates[0].key", "WIN.ID", "P"))
+        Err(refused("LOOKUP-5", "intermediates.P.key", "WIN.ID", "P"))
     );
     assert_eq!(
         run(&verified(
@@ -314,7 +312,7 @@ fn a_dataset_verification_reads_a_lookup_as_a_column_does() {
             "phase": "validation",
             "condition": "unknown_field",
             "rule": "LOOKUP-9",
-            "spec_paths": ["intermediates[0].between.value"],
+            "spec_paths": ["intermediates.P.between.value"],
             "context": {"identifier": "WIN.LO", "intermediate": "P"}
         })])
     );
@@ -330,17 +328,16 @@ fn a_lookup_read_by_several_row_templates_is_reported_once() {
     // derivation, so each template reads it the same way.
     let specification = |driver: &str, id: &str| {
         format!(
-            "schema_version: '1.0'\ndomain: OUT\nkeys: [ID, ORIGIN]\n{INPUT}\
+            "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID, ORIGIN]\n{INPUT}\
              output: {{path: out.csv, columns: [ID, ORIGIN, VALUE]}}\n\
-             intermediates:\n  - id: P\n    dataset: WIN\n    key: {{ID: {{literal: 1}}}}\n    \
-             filter: 'WIN.HI < SRC.VAL'\n    order_by: [WIN.LO]\n    keep: first\n    \
-             no_match: null\n\
+             intermediates:\n  - id: P\n    dataset: WIN\n    key: {{ID: 1}}\n    \
+             filter: 'WIN.HI < SRC.VAL'\n    order_by: [WIN.LO]\n    keep: first\n\
              columns:\n  - {{name: ID, type: int}}\n  - {{name: ORIGIN, type: str}}\n  \
              - {{name: VALUE, type: str, derivation: P.NAME}}\n\
              rows:\n  - id: first\n    dataset: {driver}\n    \
-             derivations: {{ID: {driver}.{id}, ORIGIN: {{literal: A}}}}\n\n  \
+             derivations: {{ID: {driver}.{id}, ORIGIN: \"'A'\"}}\n\n  \
              - id: second\n    dataset: {driver}\n    \
-             derivations: {{ID: {driver}.{id}, ORIGIN: {{literal: B}}}}\n"
+             derivations: {{ID: {driver}.{id}, ORIGIN: \"'B'\"}}\n"
         )
     };
     // Donor records build every row, so no row has a source record to
@@ -349,7 +346,7 @@ fn a_lookup_read_by_several_row_templates_is_reported_once() {
         run(&specification("DONOR", "KEY")),
         Err(refused(
             "LOOKUP-7",
-            "intermediates[0].filter",
+            "intermediates.P.filter",
             "SRC.VAL",
             "P"
         ))
