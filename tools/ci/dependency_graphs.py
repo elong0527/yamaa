@@ -140,9 +140,12 @@ def prepare(source, destination, graph):
         ["git", "-C", str(destination), "reset", "--mixed", "--quiet", "HEAD"],
         check=True,
     )
+    # Symbolic links are copied as links, as the checkout holds them: a
+    # negative benchmark that FILE-8 refuses for its link must keep it.
     shutil.copytree(
         source,
         destination,
+        symlinks=True,
         dirs_exist_ok=True,
         ignore=shutil.ignore_patterns(*IGNORED, "*.egg-info"),
     )
