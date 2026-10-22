@@ -1,0 +1,38 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  DM: input/dm.csv
+  # The saved exposure summary, typed by the specification that produces it.
+  EXSUM:
+    path: input/adexsum.csv
+    schema: spec_exsum.yaml
+    key: [STUDYID, USUBJID]
+base: DM
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, AGE, TRTSDT]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM.USUBJID
+
+  - name: AGE
+    type: int
+    label: Age
+    derivation: DM.AGE
+
+  # The first dose date as the exposure summary states it.
+  - copy:
+      dataset: EXSUM
+      columns: [TRTSDT]

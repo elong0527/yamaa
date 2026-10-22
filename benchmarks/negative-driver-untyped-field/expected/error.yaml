@@ -1,0 +1,8 @@
+phase: validation
+condition: unknown_intermediate_driver_type
+spec_paths:
+  - rows.administration.dataset
+rule: ROW-2
+context:
+  intermediate: DOSED
+  columns: [DOSEGRP]

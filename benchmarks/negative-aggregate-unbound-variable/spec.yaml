@@ -1,0 +1,39 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  DM: input/dm.csv
+  # The dose is stored as text.
+  EX: input/ex.csv
+base: DM
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, TOTDOSE]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM.USUBJID
+
+  # Each record's dose becomes a number as DOSEMG, but the sum reads
+  # DOSE_MG, a name nothing binds.
+  - name: TOTDOSE
+    type: float
+    label: Total Dose (mg)
+    derivation:
+      aggregate:
+        key: [STUDYID, USUBJID]
+        derivations:
+          DOSEMG:
+            type: float
+            derivation: EX.EXDOSE
+        expr: "SUM(DOSE_MG)"
