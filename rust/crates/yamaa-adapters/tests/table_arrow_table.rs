@@ -893,16 +893,14 @@ mod table {
     }
     #[cfg(feature = "yaml")]
     mod csv_precision {
+        use crate::support::ports::Sources;
         use crate::support::Edit as _;
-        use std::{convert::Infallible, sync::Arc};
         use yamaa_adapters::{
             specification_report::{self, Identity},
             specification_run::PreparedRun,
             specification_source::Source,
         };
         use yamaa_core::application_observer::Scope;
-        use yamaa_core::specification::SourceDeclaration;
-        use yamaa_core::specification_run::SpecificationSourcePort;
         use yamaa_core::value::Value;
 
         const SPEC: &str = "yamaa: '1.0'\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {VALUE: float}}}\noutput: {path: output.csv, columns: [ID, VALUE, DOUBLE], decimals: PRECISION}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: float, derivation: SRC.VALUE}\n  - {name: DOUBLE, type: float, derivation: 'VALUE + VALUE'}\n";
@@ -924,33 +922,12 @@ mod table {
                 .unwrap();
             PreparedRun::prepare(document).unwrap()
         }
-        struct Study(usize);
-        impl SpecificationSourcePort for Study {
-            fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
-                Ok(())
-            }
-            fn resource_failure(
-                &self,
-                _error: &Self::Error,
-            ) -> Option<yamaa_core::resource::ResourceFailure> {
-                None
-            }
-            type Error = Infallible;
-            fn capture_reads(&self) -> usize {
-                self.0
-            }
-            fn capture(
-                &mut self,
-                source: &SourceDeclaration,
-                origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
-            ) -> Result<Arc<[u8]>, Infallible> {
-                *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
-                assert_eq!(source.path, "input.csv");
-                self.0 += 1;
-                Ok(Arc::from(
-                    b"ID,VALUE\n1,0.125\n2,1.234\n3,2.345\n".as_slice(),
-                ))
-            }
+        /// The one CSV input of the csv-precision cases, served at `input.csv`.
+        fn study() -> Sources {
+            Sources::by_path([(
+                "input.csv",
+                b"ID,VALUE\n1,0.125\n2,1.234\n3,2.345\n".as_slice(),
+            )])
         }
         fn identity() -> Identity<'static> {
             Identity {
@@ -966,7 +943,7 @@ mod table {
         #[test]
         fn whole_result_keeps_unrounded_derivation_and_prepares_exact_saved_bytes_once() {
             let run = prepared("2", "output.csv", "VALUE + VALUE");
-            let mut study = Study(0);
+            let mut study = study();
             let attempt = run.execute(&mut study, Scope::default());
             // The attempt's own checked dataset keeps the unrounded
             // derivation; only the saved bytes round.
@@ -1004,7 +981,7 @@ mod table {
                     .as_bytes(),
                 expected
             );
-            assert_eq!(study.0, 1);
+            assert_eq!(study.reads(), 1);
         }
 
         #[test]
@@ -1028,7 +1005,7 @@ mod table {
                 ("19", "output.csv", "1 / 0", "division_by_zero"),
             ] {
                 let run = prepared(precision, path, expression);
-                let attempt = run.execute(&mut Study(0), Scope::default());
+                let attempt = run.execute(&mut study(), Scope::default());
                 let result =
                     specification_report::build_result(&run, &attempt, identity(), &[]).unwrap();
                 let report = result.observations();
@@ -1551,45 +1528,16 @@ mod table {
     #[cfg(feature = "yaml")]
     mod predicate_diagnostics {
         //! Complete original-document outcomes captured independently from Python.
-        use std::sync::Arc;
         use yamaa_adapters::{
             specification_report::{self, Identity},
-            specification_run::{PreparedRun, SpecificationSourcePort},
+            specification_run::PreparedRun,
             specification_source::Source,
         };
         use yamaa_core::application_observer::Scope;
-        use yamaa_core::specification::SourceDeclaration;
 
-        struct Port {
-            captures: usize,
-        }
-        impl SpecificationSourcePort for Port {
-            fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
-                Ok(())
-            }
-            fn resource_failure(
-                &self,
-                _error: &Self::Error,
-            ) -> Option<yamaa_core::resource::ResourceFailure> {
-                None
-            }
-            type Error = ();
-            fn capture_reads(&self) -> usize {
-                self.captures
-            }
-            fn capture(
-                &mut self,
-                source: &SourceDeclaration,
-                origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
-            ) -> Result<Arc<[u8]>, ()> {
-                *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
-                assert_eq!((&*source.name, &*source.path), ("SRC", "source.csv"));
-                self.captures += 1;
-                Ok(Arc::from(b"ID,V\n1,2\n".as_slice()))
-            }
-        }
         #[test]
         fn original_regex_and_temporal_reports_match_independently_captured_reference() {
+            use crate::support::ports::Sources;
             let schema = yamaa_adapters::shipped_schema::capture().unwrap();
             let mut count = 0;
             for row in include_str!("fixtures/predicate_context_diagnostics.tsv")
@@ -1609,7 +1557,7 @@ mod table {
                     )
                     .unwrap();
                 let run = PreparedRun::prepare(prepared).unwrap();
-                let mut port = Port { captures: 0 };
+                let mut port = Sources::by_path([("source.csv", b"ID,V\n1,2\n".as_slice())]);
                 let attempt = run.execute(&mut port, Scope::default());
                 let example = format!("predicate-context-{}", fields[0]);
                 let result = specification_report::build_result(
@@ -1635,7 +1583,7 @@ mod table {
                 // A failed predicate attempt has no file to save.
                 assert!(result.files().is_empty(), "{}", fields[0]);
                 assert_eq!(result.observations(), expected);
-                assert_eq!(port.captures, 1);
+                assert_eq!(port.captured(), ["SRC"]);
                 count += 1;
             }
             assert_eq!(count, 2);

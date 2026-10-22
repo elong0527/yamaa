@@ -1122,7 +1122,7 @@ absence policy apply as for any other read ([LOOKUP-25](#lookup-25)), once per
 donor record.
 
 Fails: `unknown_field`, `phase_boundary`, `dependency_cycle`.
-Evidence: `adam-adlb-end-of-treatment`, `adam-adsl-crossover-sequence`, `schema-lookup-donor-range`, `negative-lookup-donor-range-driver`, `rust/crates/yamaa-adapters/tests/execution_aggregate_record_operations.rs`, `rust/crates/yamaa-adapters/tests/check_variable_forms.rs`, `rust/crates/yamaa-adapters/tests/project_environment.rs::intermediate_callback_reads_a_kept_selection_beside_its_own_donor_field`.
+Evidence: `adam-adlb-end-of-treatment`, `adam-adsl-crossover-sequence`, `schema-lookup-donor-range`, `negative-lookup-donor-range-driver`, `rust/crates/yamaa-adapters/tests/execution_aggregate_record_operations.rs`, `rust/crates/yamaa-adapters/tests/check_variable_forms.rs`, `rust/crates/yamaa-adapters/tests/project_run.rs::intermediate_callback_reads_a_kept_selection_beside_its_own_donor_field`.
 
 Either form of a donor-record name names a stored field or a derivation
 declared before the reading one, and a name the donor record cannot supply

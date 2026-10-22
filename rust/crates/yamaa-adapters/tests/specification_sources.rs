@@ -9,38 +9,9 @@ mod execution {
         #[test]
         #[cfg(feature = "parquet")]
         fn parquet_input_policy_and_owned_source_observations_use_the_shared_build_path() {
-            use yamaa_adapters::specification_run::{PreparedRun, SpecificationSourcePort};
-            use yamaa_core::specification::SourceDeclaration;
+            use crate::support::ports::Sources;
+            use yamaa_adapters::specification_run::PreparedRun;
             use yamaa_core::table::ValueRef;
-            struct Port {
-                content: Arc<[u8]>,
-                calls: usize,
-            }
-            impl SpecificationSourcePort for Port {
-                fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
-                    Ok(())
-                }
-                fn resource_failure(
-                    &self,
-                    _error: &Self::Error,
-                ) -> Option<yamaa_core::resource::ResourceFailure> {
-                    None
-                }
-                type Error = std::convert::Infallible;
-                fn capture_reads(&self) -> usize {
-                    self.calls
-                }
-                fn capture(
-                    &mut self,
-                    source: &SourceDeclaration,
-                    origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
-                ) -> Result<Arc<[u8]>, Self::Error> {
-                    *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
-                    assert_eq!(source.path, "input.PARQUET");
-                    self.calls += 1;
-                    Ok(self.content.clone())
-                }
-            }
             let schema = yamaa_adapters::shipped_schema::capture().unwrap();
             for (policy, first) in [
                 ("missing", ValueRef::Missing),
@@ -60,12 +31,9 @@ output: {{path: output.csv, columns: [I, S]}}
                 );
                 let run = PreparedRun::prepare(prepare(&schema, raw.as_bytes())).unwrap();
                 let content = crate::support::parquet_files::file("text");
-                let mut port = Port {
-                    content: content.into(),
-                    calls: 0,
-                };
+                let mut port = Sources::by_path([("input.PARQUET", content.as_slice())]);
                 let attempt = run.execute(&mut port, Scope::default());
-                assert_eq!(port.calls, 1);
+                assert_eq!(port.reads(), 1);
                 drop(port);
                 drop(run);
                 let source = attempt.dataset.sources[0].table.as_ref().unwrap();

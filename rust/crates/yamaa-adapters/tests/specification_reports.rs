@@ -8,42 +8,13 @@ mod execution {
 
         #[test]
         fn original_window_failures_match_independent_diagnostics_and_completed_observations() {
+            use crate::support::ports::Sources;
             use yamaa_adapters::json;
             use yamaa_adapters::{
                 specification_report::{self, Identity},
-                specification_run::{PreparedRun, SpecificationSourcePort},
+                specification_run::PreparedRun,
             };
             use yamaa_core::json::Value as Json;
-            use yamaa_core::specification::SourceDeclaration;
-            struct Host {
-                bytes: Arc<[u8]>,
-                requests: Vec<String>,
-            }
-            impl SpecificationSourcePort for Host {
-                fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
-                    Ok(())
-                }
-                fn resource_failure(
-                    &self,
-                    _error: &Self::Error,
-                ) -> Option<yamaa_core::resource::ResourceFailure> {
-                    None
-                }
-                type Error = ();
-                fn capture_reads(&self) -> usize {
-                    self.requests.len()
-                }
-                fn capture(
-                    &mut self,
-                    source: &SourceDeclaration,
-                    origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
-                ) -> Result<Arc<[u8]>, ()> {
-                    *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
-                    self.requests.push(source.name.clone());
-                    assert_eq!(source.path, "input/vs.csv");
-                    Ok(self.bytes.clone())
-                }
-            }
             let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
             let case = root.join("benchmarks/schema-window-functions");
             let schema = schema(&root.join("yaml"));
@@ -69,10 +40,7 @@ mod execution {
                     content =
                         content.replace(input_before, variant["input_after"].as_str().unwrap());
                 }
-                let mut host = Host {
-                    bytes: Arc::from(content.into_bytes()),
-                    requests: vec![],
-                };
+                let mut host = Sources::by_path([("input/vs.csv", content.as_bytes())]);
                 let attempt = run.execute(&mut host, Scope::default());
                 let result = specification_report::build_result(
                     &run,
@@ -119,7 +87,7 @@ mod execution {
                     "{}",
                     yamaa_adapters::json_wire::encode(&variant["name"])
                 );
-                assert_eq!(host.requests, ["VS"]);
+                assert_eq!(host.captured(), ["VS"]);
             }
         }
 
@@ -934,40 +902,12 @@ mod execution {
 
         #[test]
         fn exact_wide_count_bounds_preserve_empty_counts_and_completed_check_prefix() {
+            use crate::support::ports::Sources;
             use yamaa_adapters::json;
             use yamaa_adapters::{
                 specification_report::{self, Identity},
-                specification_run::{PreparedRun, SpecificationSourcePort},
+                specification_run::PreparedRun,
             };
-            use yamaa_core::specification::SourceDeclaration;
-            struct Host {
-                bytes: Arc<[u8]>,
-                reads: usize,
-            }
-            impl SpecificationSourcePort for Host {
-                fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
-                    Ok(())
-                }
-                fn resource_failure(
-                    &self,
-                    _error: &Self::Error,
-                ) -> Option<yamaa_core::resource::ResourceFailure> {
-                    None
-                }
-                type Error = ();
-                fn capture_reads(&self) -> usize {
-                    self.reads
-                }
-                fn capture(
-                    &mut self,
-                    _: &SourceDeclaration,
-                    origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
-                ) -> Result<Arc<[u8]>, ()> {
-                    *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
-                    self.reads += 1;
-                    Ok(Arc::clone(&self.bytes))
-                }
-            }
             let schema = yamaa_adapters::shipped_schema::capture().unwrap();
             let prefix = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
             for input in [b"ID\n".as_slice(), b"ID\n1\n2\n".as_slice()] {
@@ -977,10 +917,7 @@ mod execution {
                 ] {
                     let source = format!("{prefix}verifications:\n  - row_count: {{id: first, min: -999999999999999999999999999999, max: 999999999999999999999999999999}}\n  - row_count: {{{bound}}}\n");
                     let run = PreparedRun::prepare(prepare(&schema, source.as_bytes())).unwrap();
-                    let mut host = Host {
-                        bytes: input.into(),
-                        reads: 0,
-                    };
+                    let mut host = Sources::any(input);
                     let attempt = run.execute(&mut host, Scope::default());
                     let result = specification_report::build_result(
                         &run,
@@ -997,7 +934,7 @@ mod execution {
                     )
                     .unwrap();
                     let report = result.observations();
-                    assert_eq!(host.reads, 1);
+                    assert_eq!(host.reads(), 1);
                     assert_eq!(report["outcome"], "failure");
                     assert_eq!(report["artifacts"], json!([]));
                     assert_eq!(report["verifications"].as_array().unwrap().len(), 2);
@@ -1156,44 +1093,12 @@ mod execution {
 
         #[test]
         fn original_source_bindings_match_complete_reports_and_exact_repeated_csv() {
+            use crate::support::ports::Sources;
             use std::collections::BTreeMap;
             use yamaa_adapters::{
                 specification_report::{self, Identity},
-                specification_run::{PreparedRun, SpecificationSourcePort},
+                specification_run::PreparedRun,
             };
-            use yamaa_core::specification::SourceDeclaration;
-            struct Port {
-                inputs: BTreeMap<String, Arc<[u8]>>,
-                calls: Vec<String>,
-                expected: Vec<u8>,
-            }
-            impl SpecificationSourcePort for Port {
-                fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
-                    Ok(())
-                }
-                fn resource_failure(
-                    &self,
-                    _error: &Self::Error,
-                ) -> Option<yamaa_core::resource::ResourceFailure> {
-                    None
-                }
-                type Error = ();
-                fn capture_reads(&self) -> usize {
-                    self.calls.len()
-                }
-                fn capture(
-                    &mut self,
-                    source: &SourceDeclaration,
-                    origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
-                ) -> Result<Arc<[u8]>, ()> {
-                    *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
-                    assert_eq!(source.path, format!("{}.csv", source.name.to_lowercase()));
-                    self.calls.push(source.name.clone());
-                    let input = &self.inputs[&source.name];
-
-                    Ok(Arc::clone(input))
-                }
-            }
             let schema = yamaa_adapters::shipped_schema::capture().unwrap();
             let mut count = 0;
             for row in fixture_rows(include_str!("fixtures/original_source_bindings.json")) {
@@ -1207,16 +1112,19 @@ mod execution {
                     .map(|(key, value)| (key.clone(), value.as_str().unwrap().to_owned()))
                     .collect();
                 let expected: yamaa_core::json::Value = row["expected"].clone();
+                // Each input is served at its written path, its lowercase name.
+                let paths: Vec<(String, &str)> = inputs
+                    .iter()
+                    .map(|(name, bytes)| (format!("{}.csv", name.to_lowercase()), bytes.as_str()))
+                    .collect();
+                let artifact = fixture_bytes(&row["artifact"]);
                 // A second attempt must neither inherit choices nor accumulate handler counts.
                 for _ in 0..2 {
-                    let mut port = Port {
-                        inputs: inputs
+                    let mut port = Sources::by_path(
+                        paths
                             .iter()
-                            .map(|(n, h)| (n.clone(), h.as_bytes().into()))
-                            .collect(),
-                        calls: vec![],
-                        expected: fixture_bytes(&row["artifact"]),
-                    };
+                            .map(|(path, bytes)| (path.as_str(), bytes.as_bytes())),
+                    );
                     let attempt = run.execute(&mut port, Scope::default());
                     let example = format!("source-binding-{}", case);
                     let result = specification_report::build_result(
@@ -1236,20 +1144,15 @@ mod execution {
                     let mut unsaved = expected.clone();
                     unsaved["artifacts"] = yamaa_adapters::json!([]);
                     assert_eq!(result.observations(), unsaved, "{}", case);
-                    if port.expected.is_empty() {
+                    if artifact.is_empty() {
                         assert!(result.output().is_none());
                         assert!(result.files().is_empty(), "{}", case);
                     } else {
-                        assert_eq!(
-                            result.files(),
-                            [("result.csv", &port.expected[..])],
-                            "{}",
-                            case
-                        );
+                        assert_eq!(result.files(), [("result.csv", &artifact[..])], "{}", case);
                         assert_eq!(result.saved_observations().unwrap(), expected, "{}", case);
                     }
                     assert_eq!(
-                        port.calls,
+                        port.captured(),
                         if inputs.contains_key("DONOR") {
                             vec!["SRC", "DONOR"]
                         } else {
@@ -1264,44 +1167,12 @@ mod execution {
 
         #[test]
         fn original_mapping_cut_match_complete_reports_and_exact_repeated_csv() {
+            use crate::support::ports::Sources;
             use std::collections::BTreeMap;
             use yamaa_adapters::{
                 specification_report::{self, Identity},
-                specification_run::{PreparedRun, SpecificationSourcePort},
+                specification_run::PreparedRun,
             };
-            use yamaa_core::specification::SourceDeclaration;
-            struct Port {
-                inputs: BTreeMap<String, Arc<[u8]>>,
-                calls: Vec<String>,
-                expected: Vec<u8>,
-            }
-            impl SpecificationSourcePort for Port {
-                fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
-                    Ok(())
-                }
-                fn resource_failure(
-                    &self,
-                    _error: &Self::Error,
-                ) -> Option<yamaa_core::resource::ResourceFailure> {
-                    None
-                }
-                type Error = ();
-                fn capture_reads(&self) -> usize {
-                    self.calls.len()
-                }
-                fn capture(
-                    &mut self,
-                    source: &SourceDeclaration,
-                    origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
-                ) -> Result<Arc<[u8]>, ()> {
-                    *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
-                    assert_eq!(source.path, format!("{}.csv", source.name.to_lowercase()));
-                    self.calls.push(source.name.clone());
-                    let input = &self.inputs[&source.name];
-
-                    Ok(Arc::clone(input))
-                }
-            }
             let schema = yamaa_adapters::shipped_schema::capture().unwrap();
             let mut count = 0;
             for row in fixture_rows(include_str!("fixtures/original_mapping_cut.json")) {
@@ -1320,16 +1191,19 @@ mod execution {
                     .map(|(key, value)| (key.clone(), value.as_str().unwrap().to_owned()))
                     .collect();
                 let expected: yamaa_core::json::Value = row["expected"].clone();
+                // Each input is served at its written path, its lowercase name.
+                let paths: Vec<(String, &str)> = inputs
+                    .iter()
+                    .map(|(name, bytes)| (format!("{}.csv", name.to_lowercase()), bytes.as_str()))
+                    .collect();
+                let artifact = fixture_bytes(&row["artifact"]);
                 // A second attempt must neither inherit choices nor accumulate handler counts.
                 for _ in 0..2 {
-                    let mut port = Port {
-                        inputs: inputs
+                    let mut port = Sources::by_path(
+                        paths
                             .iter()
-                            .map(|(n, h)| (n.clone(), h.as_bytes().into()))
-                            .collect(),
-                        calls: vec![],
-                        expected: fixture_bytes(&row["artifact"]),
-                    };
+                            .map(|(path, bytes)| (path.as_str(), bytes.as_bytes())),
+                    );
                     let attempt = run.execute(&mut port, Scope::default());
                     let example = format!("mapping-cut-{}", case);
                     let result = specification_report::build_result(
@@ -1349,20 +1223,15 @@ mod execution {
                     let mut unsaved = expected.clone();
                     unsaved["artifacts"] = yamaa_adapters::json!([]);
                     assert_eq!(result.observations(), unsaved, "{}", case);
-                    if port.expected.is_empty() {
+                    if artifact.is_empty() {
                         assert!(result.output().is_none());
                         assert!(result.files().is_empty(), "{}", case);
                     } else {
-                        assert_eq!(
-                            result.files(),
-                            [("result.csv", &port.expected[..])],
-                            "{}",
-                            case
-                        );
+                        assert_eq!(result.files(), [("result.csv", &artifact[..])], "{}", case);
                         assert_eq!(result.saved_observations().unwrap(), expected, "{}", case);
                     }
                     assert_eq!(
-                        port.calls,
+                        port.captured(),
                         if inputs.contains_key("DONOR") {
                             vec!["SRC", "DONOR"]
                         } else {
