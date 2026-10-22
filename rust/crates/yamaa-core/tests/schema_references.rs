@@ -3,12 +3,19 @@
 mod schema {
     mod resolution_pruning {
         //! LAYER-11 pruning and the LAYER-13 order on the AST (#3134), over
-        //! documents in the normalized form both lifecycles prune.
+        //! 1.0 documents in the normalized form, which the 1.0 front end
+        //! lowers.
         use yamaa_core::expression::{CompileError, Context};
-        use yamaa_core::resolution::{prune, Error as E, Issue as I, Order};
+        use yamaa_core::resolution::{prune_lowered, Error as E, Issue as I, Order};
         use yamaa_core::schema::{Document, DocumentNode as N, NormalizedDocument, SchemaSource};
 
         use crate::support::document::Tree as V;
+
+        /// Prune `document` as the 1.0 front end lowers it.
+        fn prune(document: &Document, order: Order) -> Result<NormalizedDocument, E> {
+            let spec = yamaa_core::front_end::v1::spec::lower(document, None).into_spec();
+            prune_lowered(document, &spec, order)
+        }
 
         fn text(s: &str) -> V {
             V::text(s)
@@ -19,17 +26,17 @@ mod schema {
         fn op(name: &str, payload: V) -> V {
             V::map(vec![(name, payload)])
         }
-        fn variable(name: &str) -> V {
-            V::map(vec![("variable", text(name))])
-        }
+        /// A read written as the name alone (D18).
         fn source(name: &str) -> V {
-            op("source", variable(name))
+            text(name)
         }
+        /// A formula, written as its text (D18).
         fn compute(expr: &str) -> V {
-            op("compute", V::map(vec![("expr", text(expr))]))
+            text(expr)
         }
+        /// Text, quoted in the expression (D18).
         fn literal(value: &str) -> V {
-            op("literal", text(value))
+            text(&format!("'{value}'"))
         }
         fn aggregate(fields: Vec<(&str, V)>) -> V {
             op("aggregate", V::map(fields))
@@ -47,12 +54,15 @@ mod schema {
         fn bare(name: &str) -> V {
             V::map(vec![("name", text(name)), ("type", text("str"))])
         }
-        fn binding(name: &str, expression: V) -> V {
-            V::map(vec![
-                ("name", text(name)),
-                ("type", text("float")),
-                ("derivation", derivation(expression)),
-            ])
+        /// One entry of an aggregate's `derivations` map (P-BIND-1).
+        fn binding(name: &str, expression: V) -> (&str, V) {
+            (
+                name,
+                V::map(vec![
+                    ("type", text("float")),
+                    ("derivation", derivation(expression)),
+                ]),
+            )
         }
         fn dataset(path: &str) -> V {
             V::map(vec![("path", text(path))])
@@ -60,7 +70,8 @@ mod schema {
         /// A spec whose output names `output`, with `fields` after it.
         fn tree(output: &[&str], fields: Vec<(&str, V)>) -> V {
             let mut all = vec![
-                ("schema_version", text("1.0")),
+                ("yamaa", text("1.0")),
+                ("type", text("spec")),
                 ("domain", text("TEST")),
                 (
                     "output",
@@ -162,7 +173,6 @@ mod schema {
                         V::List(vec![V::map(vec![
                             ("id", text("ROW")),
                             ("dataset", text("EX")),
-                            ("derivations", V::map(vec![])),
                         ])]),
                     ),
                 ],
@@ -215,7 +225,7 @@ mod schema {
             let mapping = op(
                 "mapping",
                 V::map(vec![
-                    ("source", variable("CODE")),
+                    ("source", text("CODE")),
                     ("dict", V::map(vec![("KEY", text("VALUE"))])),
                 ]),
             );
@@ -333,8 +343,9 @@ mod schema {
                 "flag",
                 V::map(vec![("condition", text(&format!("{deep} > 0")))]),
             );
+            // A derivation's text is read in the one expression grammar (D18).
             for (expression, context) in [
-                (compute(&deep), Context::Compute),
+                (compute(&deep), Context::Derivation),
                 (aggregate(vec![("expr", text(&deep))]), Context::Aggregate),
                 (flag, Context::Predicate),
             ] {
@@ -442,10 +453,8 @@ mod schema {
         #[test]
         fn rows_and_assertions_are_roots_and_lookup_matching_inputs_precede_users() {
             let mut asserted = bare("ASSERT");
-            asserted.set(
-                &["verifications"],
-                V::List(vec![op("not_missing", V::map(vec![]))]),
-            );
+            // A check that declares no field is its bare keyword (P-HND-4).
+            asserted.set(&["verifications"], V::List(vec![text("not_missing")]));
             let input = spec(
                 &["LIVE"],
                 vec![
@@ -481,9 +490,11 @@ mod schema {
                                 ("dataset", text("EX")),
                                 ("key", texts(&["KEY"])),
                             ]),
+                            // Every lookup declares its key (D23, D111).
                             V::map(vec![
                                 ("id", text("UNUSED_LOOKUP")),
                                 ("dataset", text("DEAD")),
+                                ("key", texts(&["KEY"])),
                                 ("require_match", V::boolean(true)),
                             ]),
                         ]),
@@ -502,7 +513,9 @@ mod schema {
                                     ]),
                                 ),
                             ]),
-                            V::map(vec![("id", text("R2")), ("derivations", V::map(vec![]))]),
+                            // A template that overrides nothing writes no
+                            // `derivations` (P-HND-4).
+                            V::map(vec![("id", text("R2"))]),
                         ]),
                     ),
                 ],
@@ -517,7 +530,7 @@ mod schema {
                 panic!()
             };
             assert_eq!(keys(d, d.field(rows[0], "derivations").unwrap()), ["LIVE"]);
-            assert!(keys(d, d.field(rows[1], "derivations").unwrap()).is_empty());
+            assert!(d.field(rows[1], "derivations").is_none());
             // A standalone spec keeps the same declarations in declaration order.
             let declared = prune(&input, Order::Declared).unwrap();
             assert_eq!(columns(&declared), ["LIVE", "KEY", "CHECK", "ASSERT"]);
@@ -769,8 +782,8 @@ mod schema {
             let total = aggregate(vec![
                 ("filter", text("A > 0")),
                 (
-                    "derive",
-                    V::List(vec![
+                    "derivations",
+                    V::map(vec![
                         binding("A", source("DM.X")),
                         binding("B", compute("A + OFFSET")),
                     ]),
@@ -800,8 +813,8 @@ mod schema {
             // A later binding is the aggregate's too.
             let forward = aggregate(vec![
                 (
-                    "derive",
-                    V::List(vec![
+                    "derivations",
+                    V::map(vec![
                         binding("A", source("B")),
                         binding("B", source("DM.X")),
                     ]),
@@ -823,8 +836,8 @@ mod schema {
             let derived = || {
                 aggregate(vec![
                     (
-                        "derive",
-                        V::List(vec![binding("DOSE", source("EX.EXDOSE"))]),
+                        "derivations",
+                        V::map(vec![binding("DOSE", source("EX.EXDOSE"))]),
                     ),
                     ("expr", text("SUM(DOSE_MG)")),
                 ])

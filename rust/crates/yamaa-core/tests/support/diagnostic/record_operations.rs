@@ -1,12 +1,13 @@
 //! Actual aggregate preparation and joined row binding reach their new causes.
 use super::rendered;
 use crate::support::document::Tree as T;
+use crate::support::specification::{header, prepare};
 use std::collections::BTreeSet;
 use yamaa_core::json::Value as JsonValue;
 use yamaa_core::{
     diagnostic::{ConditionCode, Diagnostic},
-    schema::{Document, SpecificationDocument},
-    specification::{BindError, PreflightFinding, PrepareError, PreparedSpecification},
+    schema::Document,
+    specification::{BindError, PreflightFinding, PrepareError},
     table::{Column, TableSchema},
     value::ColumnType,
 };
@@ -14,25 +15,29 @@ use yamaa_core::{
 fn value(operation: T) -> T {
     T::map(vec![("value", operation)])
 }
+/// A read written as the name alone (D18).
 fn source(name: &str) -> T {
-    T::map(vec![("source", T::map(vec![("variable", T::text(name))]))])
+    T::text(name)
 }
-fn binding(name: &str, operation: T) -> T {
-    T::map(vec![
-        ("name", T::text(name)),
-        ("type", T::text("int")),
-        ("derivation", value(operation)),
-    ])
+/// One entry of an aggregate's `derivations` map (P-BIND-1).
+fn binding(name: &str, operation: T) -> (&str, T) {
+    (
+        name,
+        T::map(vec![
+            ("type", T::text("int")),
+            ("derivation", value(operation)),
+        ]),
+    )
 }
-fn document(operation: T, grouped: Option<bool>, intermediate: bool) -> SpecificationDocument {
+fn document(operation: T, grouped: Option<bool>, intermediate: bool) -> Document {
     let mut columns = vec![T::map(vec![
         ("name", T::text("ID")),
         ("type", T::text("int")),
         ("derivation", value(source("SRC.ID"))),
     ])];
     let mut result = vec![("name", T::text("VALUE")), ("type", T::text("int"))];
-    let mut fields = vec![
-        ("schema_version", T::text("1.0")),
+    let mut fields = header();
+    fields.extend([
         ("domain", T::text("TEST")),
         ("base", T::text("SRC")),
         ("keys", T::List(vec![T::text("ID")])),
@@ -50,7 +55,7 @@ fn document(operation: T, grouped: Option<bool>, intermediate: bool) -> Specific
                 ("columns", T::List(vec![T::text("ID"), T::text("VALUE")])),
             ]),
         ),
-    ];
+    ]);
     if let Some(grouped) = grouped {
         let mut row = vec![
             ("id", T::text("first")),
@@ -71,25 +76,24 @@ fn document(operation: T, grouped: Option<bool>, intermediate: bool) -> Specific
         result.push(("derivation", value(operation)));
     }
     if intermediate {
+        // The lookup a derive binding reads declares the key 0.5 inferred
+        // (D23, D111).
         fields.push((
             "intermediates",
             T::List(vec![T::map(vec![
                 ("id", T::text("CAP")),
                 ("dataset", T::text("SRC")),
+                ("key", T::List(vec![T::text("ID")])),
                 ("require_match", T::boolean(true)),
             ])]),
         ));
     }
     columns.push(T::map(result));
     fields.push(("columns", T::List(columns)));
-    let mut nodes = vec![];
-    let root = T::map(fields).append(&mut nodes);
-    SpecificationDocument::admit(Document::new(nodes, root).unwrap())
-        .unwrap()
-        .unwrap()
+    T::map(fields).document()
 }
-fn findings(model: SpecificationDocument) -> Vec<Diagnostic> {
-    let prepared = match PreparedSpecification::prepare(&model) {
+fn findings(document: Document) -> Vec<Diagnostic> {
+    let prepared = match prepare(&document) {
         Ok(value) => value,
         Err(PrepareError::Invalid(findings)) => {
             return findings
@@ -126,11 +130,11 @@ fn findings(model: SpecificationDocument) -> Vec<Diagnostic> {
         .flat_map(|finding| finding.diagnostics(prepared.source()).unwrap())
         .collect()
 }
-fn driver_document(dataset: &str, extra: Vec<(&str, T)>) -> SpecificationDocument {
+fn driver_document(dataset: &str, extra: Vec<(&str, T)>) -> Document {
     let mut intermediate = vec![("id", T::text("CAP")), ("dataset", T::text(dataset))];
     intermediate.extend(extra);
-    let fields = T::map(vec![
-        ("schema_version", T::text("1.0")),
+    let mut fields = header();
+    fields.extend([
         ("domain", T::text("TEST")),
         ("keys", T::List(vec![T::text("ID")])),
         (
@@ -164,18 +168,15 @@ fn driver_document(dataset: &str, extra: Vec<(&str, T)>) -> SpecificationDocumen
             ]),
         ),
     ]);
-    let mut nodes = vec![];
-    let root = fields.append(&mut nodes);
-    SpecificationDocument::admit(Document::new(nodes, root).unwrap())
-        .unwrap()
-        .unwrap()
+    T::map(fields).document()
 }
 pub(crate) fn reached() -> BTreeSet<ConditionCode> {
     let mut reached = BTreeSet::new();
     for (dataset, extra, field) in [
         ("SELF", vec![], "dataset"),
         ("SRC", vec![("key", T::List(vec![T::text("ID")]))], "key"),
-        ("SRC", vec![("no_match", T::integer(0))], "no_match"),
+        // The absence answer is spelled `absent` (P-HND-1).
+        ("SRC", vec![("absent", T::integer(0))], "absent"),
         (
             "SRC",
             vec![("filter", T::text("SRC.V = SECOND.V"))],
@@ -189,7 +190,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             .unwrap();
         assert_eq!(d.definition().phase, "validation");
         assert_eq!(d.definition().rule, Some("ROW-2"));
-        assert_eq!(d.spec_paths, ["rows[0].dataset"]);
+        assert_eq!(d.spec_paths, ["rows.first.dataset"]);
         assert_eq!(d.context["intermediate"], JsonValue::String("CAP".into()));
         assert_eq!(
             d.context["fields"],
@@ -199,34 +200,28 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
     }
     for (derive, condition, rule, context, intermediate) in [
         (
-            T::List(vec![]),
+            vec![],
             "invalid_derive_step",
             "LOOKUP-22",
             vec![("reason", "a derive step is a non-empty binding list")],
             false,
         ),
         (
-            T::List(vec![binding("V", T::map(vec![("literal", T::integer(1))]))]),
+            vec![binding("V", T::integer(1))],
             "invalid_derive_step",
             "LOOKUP-22",
             vec![("reason", "a derive step names exactly one relation")],
             false,
         ),
         (
-            T::List(vec![binding(
-                "V",
-                T::map(vec![("compute", T::map(vec![("expr", T::text("W + 1"))]))]),
-            )]),
+            vec![binding("V", T::text("W + 1"))],
             "unknown_derive_variable",
             "LOOKUP-22",
             vec![("variable", "W"), ("binding", "V")],
             false,
         ),
         (
-            T::List(vec![
-                binding("V", source("SRC.V")),
-                binding("C", source("CAP.V")),
-            ]),
+            vec![binding("V", source("SRC.V")), binding("C", source("CAP.V"))],
             "invalid_derive_step",
             "LOOKUP-22",
             vec![
@@ -242,7 +237,10 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
         let ds = findings(document(
             T::map(vec![(
                 "aggregate",
-                T::map(vec![("derive", derive), ("expr", T::text("SUM(V)"))]),
+                T::map(vec![
+                    ("derivations", T::map(derive)),
+                    ("expr", T::text("SUM(V)")),
+                ]),
             )]),
             None,
             intermediate,
@@ -258,21 +256,14 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
         reached.insert(rendered(&d));
     }
     for (grouped, rule) in [(false, "FORMULA-9"), (true, "FORMULA-9")] {
-        let ds = findings(document(
-            T::map(vec![(
-                "compute",
-                T::map(vec![("expr", T::text("SECOND.V + 1"))]),
-            )]),
-            Some(grouped),
-            false,
-        ));
+        let ds = findings(document(T::text("SECOND.V + 1"), Some(grouped), false));
         let d = ds
             .into_iter()
             .find(|d| d.definition().rule == Some(rule))
             .unwrap();
         assert_eq!(d.definition().condition, "unknown_field");
         assert_eq!(d.definition().phase, "validation");
-        assert_eq!(d.spec_paths, ["rows[0].derivations.VALUE.compute.expr"]);
+        assert_eq!(d.spec_paths, ["rows.first.derivations.VALUE"]);
         assert_eq!(
             d.context["identifier"],
             JsonValue::String("SECOND.V".into())

@@ -1,30 +1,35 @@
 //! Owned causes reached by the compiler and eager donor uniqueness descriptor.
 use crate::support::document::Tree;
 use crate::support::resolved::intermediates;
+use crate::support::specification::{header, prepare};
 use std::collections::BTreeSet;
 use yamaa_core::json::Value as V;
 use yamaa_core::{
     diagnostic::{ConditionCode, Diagnostic},
-    schema::{Document, SpecificationDocument},
-    specification::{BindError, PreflightFinding, PrepareError, PreparedSpecification},
+    schema::Document,
+    specification::{BindError, PreflightFinding, PrepareError},
     table::{Column, TableSchema},
     value::ColumnType,
 };
 
+/// A read written as the name alone (D18).
 fn source(reference: &str) -> Tree {
-    Tree::map(vec![(
-        "value",
-        Tree::map(vec![(
-            "source",
-            Tree::map(vec![("variable", Tree::text(reference))]),
-        )]),
-    )])
+    Tree::map(vec![("value", Tree::text(reference))])
 }
-fn model(mut extra: Vec<(&str, Tree)>, driver: bool) -> SpecificationDocument {
+/// The key a lookup intermediate declares, which 0.5 inferred (D23, D111).
+fn key() -> (&'static str, Tree) {
+    ("key", Tree::List(vec![Tree::text("ID")]))
+}
+/// `P` reads `D`; a driver of row templates declares no key (ROW-2), and a
+/// lookup declares the key 0.5 inferred.
+fn model(mut extra: Vec<(&str, Tree)>, driver: bool) -> Document {
     let mut item = vec![("id", Tree::text("P")), ("dataset", Tree::text("D"))];
+    if !driver {
+        item.push(key());
+    }
     item.append(&mut extra);
-    let mut fields = vec![
-        ("schema_version", Tree::text("1.0")),
+    let mut fields = header();
+    fields.extend([
         ("domain", Tree::text("OUT")),
         ("base", Tree::text("SRC")),
         ("keys", Tree::List(vec![Tree::text("ID")])),
@@ -51,7 +56,7 @@ fn model(mut extra: Vec<(&str, Tree)>, driver: bool) -> SpecificationDocument {
                 ("derivation", source("SRC.ID")),
             ])]),
         ),
-    ];
+    ]);
     if driver {
         fields.push((
             "rows",
@@ -62,15 +67,11 @@ fn model(mut extra: Vec<(&str, Tree)>, driver: bool) -> SpecificationDocument {
             ])]),
         ));
     }
-    let mut nodes = Vec::new();
-    let root = Tree::map(fields).append(&mut nodes);
-    SpecificationDocument::admit(Document::new(nodes, root).unwrap())
-        .unwrap()
-        .unwrap()
+    Tree::map(fields).document()
 }
-fn read_model(self_target: bool) -> SpecificationDocument {
-    let mut fields = vec![
-        ("schema_version", Tree::text("1.0")),
+fn read_model(self_target: bool) -> Document {
+    let mut fields = header();
+    fields.extend([
         ("domain", Tree::text("OUT")),
         ("base", Tree::text("SRC")),
         ("keys", Tree::List(vec![Tree::text("ID")])),
@@ -101,6 +102,7 @@ fn read_model(self_target: bool) -> SpecificationDocument {
                 Tree::map(vec![
                     ("id", Tree::text("P")),
                     ("dataset", Tree::text("D")),
+                    key(),
                     (
                         "derivations",
                         Tree::map(vec![("NEXT", source("EARLIER.ID"))]),
@@ -123,7 +125,7 @@ fn read_model(self_target: bool) -> SpecificationDocument {
                 ("derivation", source("SRC.ID")),
             ])]),
         ),
-    ];
+    ]);
     if self_target {
         fields.push((
             "rows",
@@ -134,11 +136,7 @@ fn read_model(self_target: bool) -> SpecificationDocument {
             ])]),
         ));
     }
-    let mut nodes = Vec::new();
-    let root = Tree::map(fields).append(&mut nodes);
-    SpecificationDocument::admit(Document::new(nodes, root).unwrap())
-        .unwrap()
-        .unwrap()
+    Tree::map(fields).document()
 }
 use super::text;
 #[track_caller]
@@ -171,7 +169,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
     .unwrap();
     let mut extra_codes = BTreeSet::new();
     for self_target in [false, true] {
-        let prepared = PreparedSpecification::prepare(&read_model(self_target)).unwrap();
+        let prepared = prepare(&read_model(self_target)).unwrap();
         let Err(BindError::Invalid(findings)) = prepared.bind_sources(&[&src, &donor]) else {
             panic!("contextual reader finding");
         };
@@ -201,7 +199,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
                 "unknown_field"
             },
             "LOOKUP-16",
-            "intermediates[1].derivations.NEXT.source",
+            "intermediates.P.derivations.NEXT.source",
             context,
         ));
     }
@@ -220,13 +218,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             "derivations",
             Tree::map(vec![(
                 "NEXT",
-                Tree::map(vec![(
-                    "value",
-                    Tree::map(vec![(
-                        "compute",
-                        Tree::map(vec![("expr", Tree::text("X + SRC.ID"))]),
-                    )]),
-                )]),
+                Tree::map(vec![("value", Tree::text("X + SRC.ID"))]),
             )]),
         )
     };
@@ -236,7 +228,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             false,
             "dependency_cycle",
             "LOOKUP-16",
-            "intermediates[0].derivations.NEXT.source",
+            "intermediates.P.derivations.NEXT.source",
             vec![("cycle", V::Array(vec![text("P"), text("P")]))],
         ),
         (
@@ -244,7 +236,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             false,
             "unknown_field",
             "LOOKUP-15",
-            "intermediates[0].derivations.NEXT.source",
+            "intermediates.P.derivations.NEXT.source",
             vec![
                 ("intermediate", text("P")),
                 ("identifier", text("D.ABSENT")),
@@ -255,7 +247,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             false,
             "duplicate_derivation",
             "LOOKUP-15",
-            "intermediates[0].derivations.ID",
+            "intermediates.P.derivations.ID",
             vec![
                 ("intermediate", text("P")),
                 ("derivation", text("ID")),
@@ -285,7 +277,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             false,
             "unknown_field",
             "LOOKUP-16",
-            "intermediates[0].derivations.NEXT.row_number.window.group_by[0]",
+            "intermediates.P.derivations.NEXT.row_number.window.group_by[0]",
             vec![("intermediate", text("P")), ("identifier", text("P.ID"))],
         ),
         (
@@ -299,7 +291,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             false,
             "unknown_field",
             "LOOKUP-17",
-            "intermediates[0].verifications[0].unique.columns[0]",
+            "intermediates.P.verifications[0].unique.columns[0]",
             vec![
                 ("intermediate", text("P")),
                 ("identifier", text("D.ABSENT")),
@@ -310,7 +302,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             false,
             "correlated_filter_with_unique_verification",
             "LOOKUP-17",
-            "intermediates[0].verifications[0].unique",
+            "intermediates.P.verifications[0].unique",
             vec![("intermediate", text("P"))],
         ),
         (
@@ -318,7 +310,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             false,
             "correlated_derivation_with_unique_verification",
             "LOOKUP-17",
-            "intermediates[0].verifications[0].unique",
+            "intermediates.P.verifications[0].unique",
             vec![("intermediate", text("P"))],
         ),
         (
@@ -326,7 +318,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             true,
             "invalid_intermediate_driver",
             "ROW-2",
-            "rows[0].dataset",
+            "rows.selected.dataset",
             vec![
                 ("intermediate", text("P")),
                 ("fields", V::Array(vec![text("key")])),
@@ -347,12 +339,9 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
                                 Tree::List(vec![
                                     Tree::map(vec![
                                         ("when", Tree::text("X > 0")),
-                                        ("then", Tree::map(vec![("literal", Tree::integer(1))])),
+                                        ("then", Tree::integer(1)),
                                     ]),
-                                    Tree::map(vec![(
-                                        "otherwise",
-                                        Tree::map(vec![("literal", Tree::text("none"))]),
-                                    )]),
+                                    Tree::map(vec![("otherwise", Tree::text("'none'"))]),
                                 ]),
                             )]),
                         )]),
@@ -366,7 +355,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             true,
             "unknown_intermediate_driver_type",
             "ROW-2",
-            "rows[0].dataset",
+            "rows.selected.dataset",
             vec![
                 ("intermediate", text("P")),
                 ("columns", V::Array(vec![text("NEXT")])),
@@ -375,7 +364,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
     ];
     let mut reached = extra_codes;
     for (fields, driver, condition, rule, path, context) in cases {
-        let diagnostic = match PreparedSpecification::prepare(&model(fields, driver)) {
+        let diagnostic = match prepare(&model(fields, driver)) {
             Ok(prepared) => {
                 let BindError::Invalid(mut findings) =
                     prepared.bind_sources(&[&src, &donor]).unwrap_err()
@@ -412,14 +401,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
     // A driver is admitted whenever each field it exposes has one result type
     // (EXPR-14): a formula over integers is an integer, padding is text.
     for (name, value, kind) in [
-        (
-            "NEXT",
-            Tree::map(vec![(
-                "compute",
-                Tree::map(vec![("expr", Tree::text("X + 1"))]),
-            )]),
-            ColumnType::Int,
-        ),
+        ("NEXT", Tree::text("X + 1"), ColumnType::Int),
         (
             "PADDED",
             Tree::map(vec![(
@@ -445,7 +427,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             ],
             true,
         );
-        let plan = PreparedSpecification::prepare(&driven)
+        let plan = prepare(&driven)
             .unwrap()
             .bind_sources(&[&src, &donor])
             .unwrap_or_else(|error| panic!("{name}: {error:?}"));
@@ -457,7 +439,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             "{name}"
         );
     }
-    let prepared = PreparedSpecification::prepare(&model(vec![unique()], false)).unwrap();
+    let prepared = prepare(&model(vec![unique()], false)).unwrap();
     let plan = prepared.bind_sources(&[&src, &donor]).unwrap();
     let item = intermediates(&plan)[0];
     reached.insert(check(
@@ -465,7 +447,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
         "verification",
         "duplicate_intermediate_records",
         "LOOKUP-17",
-        "intermediates[0].verifications[0].unique",
+        "intermediates.P.verifications[0].unique",
         vec![
             ("intermediate", text("P")),
             ("dataset", text("D")),

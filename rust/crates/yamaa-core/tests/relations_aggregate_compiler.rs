@@ -424,11 +424,7 @@ mod relations {
             let f = diagnostics(vec![(
                 "A",
                 "str",
-                flag(
-                    "ABSENT = 1",
-                    Some(Tree::map(vec![("literal", Tree::Scalar(N::Null))])),
-                    None,
-                ),
+                flag("ABSENT = 1", Some(Tree::Scalar(N::Null)), None),
             )]);
             assert_eq!(f[0].code, C::FlagMissingValueRequired);
         }
@@ -442,10 +438,7 @@ mod relations {
                         ("when", Tree::text("UNKNOWN = 1")),
                         ("then", flag("ID >> 1", Some(Tree::text("N")), None)),
                     ]),
-                    Tree::map(vec![(
-                        "otherwise",
-                        Tree::map(vec![("literal", Tree::text("x"))]),
-                    )]),
+                    Tree::map(vec![("otherwise", Tree::text("'x'"))]),
                 ]),
             )]);
             assert_eq!(
@@ -512,18 +505,15 @@ mod relations {
                         flag(
                             "TRUE",
                             Some(Tree::text("x".repeat(10_000))),
-                            Some(Tree::map(vec![("literal", Tree::Scalar(N::Null))])),
+                            Some(Tree::Scalar(N::Null)),
                         ),
                     )
                 })
                 .collect();
+            // A row template that overrides nothing writes no `derivations`
+            // (P-HND-4).
             let rows = (0..16)
-                .map(|i| {
-                    Tree::Map(vec![
-                        ("id".into(), Tree::text(format!("r{i}"))),
-                        ("derivations".into(), Tree::map(vec![])),
-                    ])
-                })
+                .map(|i| Tree::Map(vec![("id".into(), Tree::text(format!("r{i}")))]))
                 .collect();
             let spec = specification_with_rows(columns, rows);
             let source = TableSchema::new(vec![Column {
@@ -531,10 +521,7 @@ mod relations {
                 kind: ColumnType::Int,
             }])
             .unwrap();
-            let plan = PreparedSpecification::prepare(&spec)
-                .unwrap()
-                .bind(&source)
-                .unwrap();
+            let plan = prepare(&spec).unwrap().bind(&source).unwrap();
             assert_eq!(resolved::templates(&plan).len(), 16);
             let flags = resolved::columns(&plan)
                 .into_iter()
@@ -560,7 +547,7 @@ mod relations {
                 ])]),
             )]);
             let spec = specification(vec![("F", "str", case)]);
-            let prepared = PreparedSpecification::prepare(&spec).unwrap();
+            let prepared = prepare(&spec).unwrap();
             let source = TableSchema::new(vec![Column {
                 name: "ID".into(),
                 kind: ColumnType::Int,
