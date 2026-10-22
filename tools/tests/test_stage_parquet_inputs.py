@@ -1,18 +1,29 @@
 """The host suites' Parquet inputs, written at staging time, read in pyarrow as
 the suites state them."""
 
+import base64
 import datetime
 import tempfile
 import unittest
 from decimal import Decimal
 from pathlib import Path
 
+import pyarrow as pa
 import pyarrow.parquet as pq
 
 from tools.staging import build_parquet_source_inputs as inputs
 
 POINT = bytes.fromhex("0101000000000000000000f03f0000000000000040")
 UTC = datetime.timezone.utc
+# Parquet has no list view: the file stores a list, and the Arrow schema that
+# it embeds names the view. pyarrow's Parquet reader restores the view from
+# 25.0.0; earlier releases, down to the minimum 23.0.1, read the stored list.
+# EMBEDDED states the view as every release reads it.
+LIST_VIEW, LARGE_LIST_VIEW = (
+    ("list_view<element: int64>", "large_list_view<element: int64>")
+    if int(pa.__version__.split(".")[0]) >= 25
+    else ("list<element: int64>", "list<element: int64>")
+)
 # Each input's fields as pyarrow reads them, and its rows where they decode.
 EXPECTED = {
     "text": ([("I", "int64"), ("S", "string")], [(1, ""), (2, "X")]),
@@ -65,17 +76,24 @@ EXPECTED = {
         [("FIELD", "decimal64(18, 2)")],
         [(Decimal("1.23"),)],
     ),
-    "unsupported-list-view": ([("FIELD", "list_view<element: int64>")], [([1],)]),
-    "unsupported-large-list-view": (
-        [("FIELD", "large_list_view<element: int64>")],
-        [([1],)],
-    ),
+    "unsupported-list-view": ([("FIELD", LIST_VIEW)], [([1],)]),
+    "unsupported-large-list-view": ([("FIELD", LARGE_LIST_VIEW)], [([1],)]),
     "unsupported-geometry": ([("FIELD", "binary")], [(POINT,)]),
     "unsupported-geography": ([("FIELD", "binary")], [(POINT,)]),
     "unsupported-variant": (
         [("FIELD", "struct<metadata: binary not null, value: binary not null>")],
         [({"metadata": b"\x01\x00\x00", "value": b"\x0c\x01"},)],
     ),
+}
+# The fields of the Arrow schema that an input embeds, as pyarrow reads it on
+# every release; the other inputs embed none. It holds the five types that a
+# Parquet schema cannot state, with a list's values in a field named `item`.
+EMBEDDED = {
+    "unsupported-decimal32": [("FIELD", "decimal32(9, 2)")],
+    "unsupported-decimal64": [("FIELD", "decimal64(18, 2)")],
+    "unsupported-fixed-list": [("FIELD", "fixed_size_list<item: int64>[2]")],
+    "unsupported-list-view": [("FIELD", "list_view<item: int64>")],
+    "unsupported-large-list-view": [("FIELD", "large_list_view<item: int64>")],
 }
 
 
@@ -106,6 +124,17 @@ class StagedParquetInputs(unittest.TestCase):
                     table = handle.read()
                     columns = [column.to_pylist() for column in table.columns]
                     self.assertEqual(list(zip(*columns)), rows)
+
+    def test_pyarrow_reads_each_embedded_arrow_schema_as_stated(self):
+        for path in sorted(self.root.iterdir()):
+            with self.subTest(name=path.stem):
+                metadata = pq.ParquetFile(path).metadata.metadata or {}
+                fields = None
+                if b"ARROW:schema" in metadata:
+                    message = base64.b64decode(metadata[b"ARROW:schema"])
+                    schema = pa.ipc.read_schema(pa.py_buffer(message))
+                    fields = [(field.name, str(field.type)) for field in schema]
+                self.assertEqual(fields, EMBEDDED.get(path.stem))
 
     def test_a_text_payload_that_is_not_utf8_follows_the_refused_field(self):
         for name in ("utf8", "utf8-bool", "utf8-time"):
