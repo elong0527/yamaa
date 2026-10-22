@@ -2,7 +2,6 @@
 //! P-LINT-2 table, file order, fixes, the printed lines and refusals.
 #![cfg(feature = "yaml")]
 
-#[cfg(unix)]
 use crate::support::scratch;
 
 use yamaa::{lint, Array, DataType, Int64Array, StringArray, Table, LINT_COLUMNS, LINT_FINDINGS};

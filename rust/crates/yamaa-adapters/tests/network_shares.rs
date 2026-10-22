@@ -14,7 +14,6 @@ use std::{
     fs,
     os::windows::process::CommandExt,
     path::{Path, PathBuf},
-    sync::atomic::{AtomicUsize, Ordering},
 };
 use yamaa_adapters::{
     file_application, file_configuration, file_resources::Error, specification_report::Identity,
@@ -22,8 +21,6 @@ use yamaa_adapters::{
 use yamaa_core::{domain_entry::Request, project_function::Language};
 
 const SPEC: &str = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: ../data/src.csv, types: {ID: int}}}\noutput: {path: out/result.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
-
-static NEXT: AtomicUsize = AtomicUsize::new(0);
 
 /// A temporary study and its spelling through the drive's administrative
 /// share.
@@ -39,7 +36,6 @@ impl Study {
         }
         fs::write(local.join("study/spec.yaml"), SPEC).unwrap();
         fs::write(local.join("data/src.csv"), "ID\n1\n2\n").unwrap();
-        let local = local;
         let text = local.to_str().unwrap();
         let (drive, rest) = text.split_once(":\\").unwrap();
         let share = PathBuf::from(format!(r"\\localhost\{drive}$\{rest}"));
