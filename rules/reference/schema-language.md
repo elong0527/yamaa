@@ -54,7 +54,7 @@ one. A file declaring a version the engine does not read fails as
 field does not expect fails as `unexpected_file_type`.
 
 Fails: `unsupported_language_version`, `unexpected_file_type`, `unknown_field`, `value_not_permitted`, `schema_version_mismatch`.
-Evidence: `negative-version-mismatch`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::the_calling_function_refuses_an_unread_version_or_another_type`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::each_referencing_field_checks_the_file_it_names`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::a_listed_file_whose_header_the_engine_does_not_read_fails_at_the_field_that_lists_it`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_1_0_schema_link_refuses_a_producer_it_does_not_read_at_the_link`, `rust/crates/yamaa/tests/issue_locations.rs::a_linked_producer_s_header_finding_locates_in_the_producer`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_1_0_project_refuses_a_listed_specification_it_does_not_read_at_its_listing`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_document_is_admitted_at_the_version_it_declares`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_yamaa_beside_schema_version_routes_to_the_0_5_path_wherever_it_is_read`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_public_check_reads_a_1_0_specification_and_refuses_a_newer_one`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_0_5_project_reads_its_files_under_the_0_5_rules`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_0_5_schema_link_reads_a_1_0_producer_by_its_header`, `rust/crates/yamaa/tests/language_header.rs`, `rust/crates/yamaa/tests/file_type.rs::a_file_that_declares_schema_version_has_no_type`, `rust/crates/yamaa/tests/file_type.rs::a_1_x_header_is_refused_as_a_call_reading_its_type_refuses_it`, `rust/crates/yamaa/tests/schema.rs::any_other_text_is_refused_as_an_unexpected_file_type`, `rust/crates/yamaa-core/src/language.rs::a_1_x_document_declares_its_type_and_a_0_5_document_none`, `rust/crates/yamaa-core/tests/schema_references.rs::version_precedes_field_findings_and_classes_keep_schema_then_input_order`, `rust/crates/yamaa-adapters/tests/file_diagnostic_origins.rs::entry_version_finding_precedes_parent_and_study_authority`.
+Evidence: `negative-version-mismatch`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::the_calling_function_refuses_an_unread_version_or_another_type`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::each_referencing_field_checks_the_file_it_names`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::a_listed_file_whose_header_the_engine_does_not_read_fails_at_the_field_that_lists_it`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_1_0_schema_link_refuses_a_producer_it_does_not_read_at_the_link`, `rust/crates/yamaa/tests/issue_locations.rs::a_linked_producer_s_header_finding_locates_in_the_producer`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_1_0_project_refuses_a_listed_specification_it_does_not_read_at_its_listing`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_document_is_admitted_at_the_version_it_declares`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_yamaa_beside_schema_version_routes_to_the_0_5_path_wherever_it_is_read`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_public_check_reads_a_1_0_specification_and_refuses_a_newer_one`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_0_5_project_reads_its_files_under_the_0_5_rules`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_0_5_schema_link_reads_a_1_0_producer_by_its_header`, `rust/crates/yamaa/tests/language_header.rs`, `rust/crates/yamaa/tests/file_type.rs::a_file_that_declares_schema_version_has_no_type`, `rust/crates/yamaa/tests/file_type.rs::a_1_x_header_is_refused_as_a_call_reading_its_type_refuses_it`, `rust/crates/yamaa/tests/schema.rs::any_other_text_is_refused_as_an_unexpected_file_type`, `rust/crates/yamaa-core/src/language.rs::a_1_x_document_declares_its_type_and_a_0_5_document_none`, `rust/crates/yamaa-core/tests/schema_validation.rs::version_precedes_field_findings_and_classes_keep_schema_then_input_order`, `rust/crates/yamaa-adapters/tests/file_diagnostic_origins.rs::entry_version_finding_precedes_parent_and_study_authority`.
 
 The header is read before the file is checked against any schema: `yamaa`
 first, then `type`. A version is written `1.N`, with `N` a decimal number
@@ -146,7 +146,7 @@ exactly the `registry` keyword, naming a schema registry, and cannot also
 declare `type` or descriptor constraints. Named-type references may cross
 module boundaries, and recursive types are allowed.
 
-Evidence: `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::complete_bundle_resolves_forward_names_and_preserves_reused_default_origin`, `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::registry_contributions_merge_after_complete_include_loading`, `rust/crates/yamaa-core/tests/schema_references.rs::union_selects_success_then_matching_outer_type_and_recursion_is_value_local`.
+Evidence: `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::complete_bundle_resolves_forward_names_and_preserves_reused_default_origin`, `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::registry_contributions_merge_after_complete_include_loading`, `rust/crates/yamaa-core/tests/schema_validation.rs::union_selects_success_then_matching_outer_type_and_recursion_is_value_local`.
 
 A specification value is finite and must eventually match a non-recursive
 type.
@@ -200,7 +200,7 @@ one-entry mapping whose key exists in the referenced registry and whose value
 matches that entry's payload shape.
 
 Fails: `invalid_operation_count`, `unknown_operation`, `model_contract_mismatch`.
-Evidence: `negative-literal-structure`, `rust/crates/yamaa-core/tests/schema_references.rs::registry_and_bare_derivation_diagnostics_preserve_paths_and_context`, `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::duplicate_registry_entries_and_closed_include_names_are_rejected`, `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::duplicate_reused_fields_and_unknown_types_preserve_stage_order`.
+Evidence: `negative-literal-structure`, `rust/crates/yamaa-core/tests/schema_validation.rs::registry_and_bare_derivation_diagnostics_preserve_paths_and_context`, `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::duplicate_registry_entries_and_closed_include_names_are_rejected`, `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::duplicate_reused_fields_and_unknown_types_preserve_stage_order`.
 
 ```yaml
 expressions:
@@ -249,7 +249,7 @@ are not integers. An `int` is accepted where `float` is expected, but a
 `float` is not accepted where `int` is expected. An invalid type expression or
 unresolved reference fails.
 
-Evidence: `rust/crates/yamaa-core/tests/schema_references.rs::builtins_and_unresolved_names_are_syntax_not_bundle_resolution`, `rust/crates/yamaa-core/tests/schema_references.rs::malformed_types_and_string_encoded_unions_are_rejected`, `rust/crates/yamaa-core/tests/schema_references.rs::constraints_keep_order_unicode_lengths_and_alias_requirements_after_type_success`.
+Evidence: `rust/crates/yamaa-core/tests/schema_references.rs::builtins_and_unresolved_names_are_syntax_not_bundle_resolution`, `rust/crates/yamaa-core/tests/schema_references.rs::malformed_types_and_string_encoded_unions_are_rejected`, `rust/crates/yamaa-core/tests/schema_validation.rs::constraints_keep_order_unicode_lengths_and_alias_requirements_after_type_success`.
 
 ```text
 type_expression := type_name
@@ -288,7 +288,7 @@ validating, after the written value matches its union member, and a validated
 document contains only the canonical class. A union of a type `T` and
 `list[T]` is a bundle error, and no other union is shorthand.
 
-Evidence: `schema-shorthand`, `rust/crates/yamaa-core/tests/schema_references.rs::single_or_list_unions_are_bundle_errors_and_lists_normalize_as_written`, `rust/crates/yamaa-core/tests/schema_references.rs::shorthand_checks_the_written_member_without_reinterpreting_generated_fields`.
+Evidence: `schema-shorthand`, `rust/crates/yamaa-core/tests/schema_validation.rs::single_or_list_unions_are_bundle_errors_and_lists_normalize_as_written`, `rust/crates/yamaa-core/tests/schema_validation.rs::shorthand_checks_the_written_member_without_reinterpreting_generated_fields`.
 
 The class is the canonical form. When a bare `V` expands, declared defaults
 are applied to the remaining fields of the class and other optional fields
@@ -361,7 +361,7 @@ Every other keyword is allowed only where the table below admits it. A
 `default` is allowed only when `required` is false or absent, and it must
 satisfy the same descriptor. An invalid descriptor keyword or default fails.
 
-Evidence: `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::findings_follow_keyword_type_required_description_constraint_order`, `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::invalid_types_and_required_flags_do_not_become_boolean_integer_coercions`, `rust/crates/yamaa-core/tests/schema_references.rs::invalid_default_preparation_never_bypasses_normalization_admission`, `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::a_named_type_declares_a_kind_and_a_class_field_the_version_that_introduced_it`, `tools/tests/test_schema_v1.py::test_only_a_named_value_type_declares_a_known_kind`, `tools/tests/test_schema_v1.py::test_a_class_field_declares_the_version_that_introduced_it`.
+Evidence: `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::findings_follow_keyword_type_required_description_constraint_order`, `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::invalid_types_and_required_flags_do_not_become_boolean_integer_coercions`, `rust/crates/yamaa-core/tests/schema_validation.rs::invalid_default_preparation_never_bypasses_normalization_admission`, `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::a_named_type_declares_a_kind_and_a_class_field_the_version_that_introduced_it`, `tools/tests/test_schema_v1.py::test_only_a_named_value_type_declares_a_known_kind`, `tools/tests/test_schema_v1.py::test_a_class_field_declares_the_version_that_introduced_it`.
 
 | Keyword | Allowed | Meaning |
 |---|---|---|
@@ -404,7 +404,7 @@ A value of a class carries every field its class declares required and no
 field the class does not declare. An undeclared or missing class field fails.
 
 Fails: `unknown_field`, `missing_required_field`, `model_contract_mismatch`.
-Evidence: `rust/crates/yamaa-adapters/tests/declaration_schema_capture.rs::custom_versionless_class_preserves_ordered_required_type_and_unknown_findings`, `rust/crates/yamaa-adapters/tests/declaration_schema_capture.rs::final_model_findings_retain_no_pass_document_and_move_original_source`, `rust/crates/yamaa-core/tests/schema_references.rs::version_precedes_field_findings_and_classes_keep_schema_then_input_order`.
+Evidence: `rust/crates/yamaa-adapters/tests/declaration_schema_capture.rs::custom_versionless_class_preserves_ordered_required_type_and_unknown_findings`, `rust/crates/yamaa-adapters/tests/declaration_schema_capture.rs::final_model_findings_retain_no_pass_document_and_move_original_source`, `rust/crates/yamaa-core/tests/schema_validation.rs::version_precedes_field_findings_and_classes_keep_schema_then_input_order`.
 
 Schema findings report an undeclared field as `unknown_field` and a missing
 required field as `missing_required_field`. Final normalized model admission
