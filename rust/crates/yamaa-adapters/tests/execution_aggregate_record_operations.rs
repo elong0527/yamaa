@@ -1321,10 +1321,6 @@ S1,002,2024-06
         /// report fails until it leaves this list.
         const NOT_REPORTED_BY_CHECK: &[(&str, &str)] = &[
             (
-                "negative-lookup-mismatched",
-                "the fields stored in the current input",
-            ),
-            (
                 "negative-odm-schema-ambiguous",
                 "the fields stored in the ODM input",
             ),
@@ -1540,6 +1536,7 @@ S1,002,2024-06
                 "negative-lookup-key-lookup-qualified",
                 "negative-lookup-key-other-template",
                 "negative-lookup-match-column-phase",
+                "negative-lookup-mismatched",
                 "negative-lookup-range-bare-field",
                 "negative-row-aggregate-keys",
                 "negative-row-filter-lookup-scope",
