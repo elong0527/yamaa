@@ -1,7 +1,7 @@
 [
   {
     "case": "wide_false",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{name: ID, type: str, label: ID}, {name: V, type: int, label: V}, {name: LATER, type: int, label: LATER, derivation: {literal: 2}}]\nrows:\n  - id: records0\n    filter: \"FALSE AND V = 9223372036854775808\"\n    derivations:\n      ID: SRC.ID\n      V: SRC.V\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{name: ID, type: str, label: ID}, {name: V, type: int, label: V}, {name: LATER, type: int, label: LATER, derivation: 2}]\nrows:\n  - id: records0\n    filter: \"FALSE AND V = 9223372036854775808\"\n    derivations:\n      ID: SRC.ID\n      V: SRC.V\n",
     "input": "ID,V\na,1\n",
     "expected": {
       "artifacts": [],
@@ -17,7 +17,7 @@
           "phase": "validation",
           "rule": "VALUE-5",
           "spec_paths": [
-            "rows[0].filter"
+            "rows.records0.filter"
           ]
         }
       ],
@@ -37,7 +37,7 @@
               "phase": "validation",
               "rule": "VALUE-5",
               "spec_paths": [
-                "rows[0].filter"
+                "rows.records0.filter"
               ]
             }
           ],
@@ -94,7 +94,7 @@
   },
   {
     "case": "wide_true",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{name: ID, type: str, label: ID}, {name: V, type: int, label: V}, {name: LATER, type: int, label: LATER, derivation: {literal: 2}}]\nrows:\n  - id: records0\n    filter: \"TRUE OR V = -9223372036854775809\"\n    derivations:\n      ID: SRC.ID\n      V: SRC.V\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{name: ID, type: str, label: ID}, {name: V, type: int, label: V}, {name: LATER, type: int, label: LATER, derivation: 2}]\nrows:\n  - id: records0\n    filter: \"TRUE OR V = -9223372036854775809\"\n    derivations:\n      ID: SRC.ID\n      V: SRC.V\n",
     "input": "ID,V\na,1\n",
     "expected": {
       "artifacts": [],
@@ -110,7 +110,7 @@
           "phase": "validation",
           "rule": "VALUE-5",
           "spec_paths": [
-            "rows[0].filter"
+            "rows.records0.filter"
           ]
         }
       ],
@@ -130,7 +130,7 @@
               "phase": "validation",
               "rule": "VALUE-5",
               "spec_paths": [
-                "rows[0].filter"
+                "rows.records0.filter"
               ]
             }
           ],

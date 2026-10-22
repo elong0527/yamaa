@@ -1,7 +1,7 @@
 [
   {
     "case": "held",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, W]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\n  - {name: W, type: int, label: W, derivation: SRC.W}\nverifications: [{\"all_or_none\": {\"id\": \"together\", \"columns\": [\"V\", \"W\"]}}, {\"row_count\": {\"min\": 0}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, W]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\n  - {name: W, type: int, label: W, derivation: SRC.W}\nverifications: [{\"all_or_none\": {\"id\": \"together\", \"columns\": [\"V\", \"W\"]}}, {\"row_count\": {\"min\": 0}}]\n",
     "input": "ID,V,W\na,10,11\nb,,\ne,0,0\n",
     "expected": {
       "artifacts": [
@@ -208,7 +208,7 @@
   },
   {
     "case": "failed",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, W]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\n  - {name: W, type: int, label: W, derivation: SRC.W}\nverifications: [{\"all_or_none\": {\"id\": \"together\", \"columns\": [\"V\", \"W\"]}}, {\"row_count\": {\"min\": 0}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, W]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\n  - {name: W, type: int, label: W, derivation: SRC.W}\nverifications: [{\"all_or_none\": {\"id\": \"together\", \"columns\": [\"V\", \"W\"]}}, {\"row_count\": {\"min\": 0}}]\n",
     "input": "ID,V,W\na,10,11\nb,,\nc,10,\nd,,20\ne,0,0\n",
     "expected": {
       "artifacts": [],
@@ -442,7 +442,7 @@
   },
   {
     "case": "repeated_columns",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, W]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\n  - {name: W, type: int, label: W, derivation: SRC.W}\nverifications: [{\"all_or_none\": {\"columns\": [\"V\", \"V\", \"W\"]}}, {\"row_count\": {\"min\": 0}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, W]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\n  - {name: W, type: int, label: W, derivation: SRC.W}\nverifications: [{\"all_or_none\": {\"columns\": [\"V\", \"V\", \"W\"]}}, {\"row_count\": {\"min\": 0}}]\n",
     "input": "ID,V,W\na,10,11\nb,,\nc,10,\nd,,20\ne,0,0\n",
     "expected": {
       "artifacts": [],
@@ -672,7 +672,7 @@
   },
   {
     "case": "many_offenders",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, W]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\n  - {name: W, type: int, label: W, derivation: SRC.W}\nverifications: [{\"all_or_none\": {\"columns\": [\"V\", \"W\"]}}, {\"row_count\": {\"min\": 0}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, W]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\n  - {name: W, type: int, label: W, derivation: SRC.W}\nverifications: [{\"all_or_none\": {\"columns\": [\"V\", \"W\"]}}, {\"row_count\": {\"min\": 0}}]\n",
     "input": "ID,V,W\na,10,\nb,10,\nc,10,\nd,10,\ne,10,\nf,10,\ng,10,\n",
     "expected": {
       "artifacts": [],
@@ -987,7 +987,7 @@
   },
   {
     "case": "empty",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, W]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\n  - {name: W, type: int, label: W, derivation: SRC.W}\nverifications: [{\"all_or_none\": {\"columns\": [\"V\", \"W\"]}}, {\"row_count\": {\"min\": 0}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, W]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\n  - {name: W, type: int, label: W, derivation: SRC.W}\nverifications: [{\"all_or_none\": {\"columns\": [\"V\", \"W\"]}}, {\"row_count\": {\"min\": 0}}]\n",
     "input": "ID,V,W\n",
     "expected": {
       "artifacts": [
@@ -1105,7 +1105,7 @@
   },
   {
     "case": "all_missing",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, W]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\n  - {name: W, type: int, label: W, derivation: SRC.W}\nverifications: [{\"all_or_none\": {\"columns\": [\"V\", \"W\"]}}, {\"row_count\": {\"min\": 0}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, W]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\n  - {name: W, type: int, label: W, derivation: SRC.W}\nverifications: [{\"all_or_none\": {\"columns\": [\"V\", \"W\"]}}, {\"row_count\": {\"min\": 0}}]\n",
     "input": "ID,V,W\nb,,\n",
     "expected": {
       "artifacts": [
@@ -1254,7 +1254,7 @@
   },
   {
     "case": "single",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, W]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\n  - {name: W, type: int, label: W, derivation: SRC.W}\nverifications: [{\"all_or_none\": {\"columns\": [\"V\"]}}, {\"row_count\": {\"min\": 0}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, W]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\n  - {name: W, type: int, label: W, derivation: SRC.W}\nverifications: [{\"all_or_none\": {\"columns\": [\"V\"]}}, {\"row_count\": {\"min\": 0}}]\n",
     "input": "ID,V,W\na,10,11\nb,,\nc,10,\nd,,20\ne,0,0\n",
     "expected": {
       "artifacts": [],
@@ -1407,7 +1407,7 @@
   },
   {
     "case": "duplicate",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, W]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\n  - {name: W, type: int, label: W, derivation: SRC.W}\nverifications: [{\"all_or_none\": {\"columns\": [\"V\", \"V\"]}}, {\"row_count\": {\"min\": 0}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, W]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\n  - {name: W, type: int, label: W, derivation: SRC.W}\nverifications: [{\"all_or_none\": {\"columns\": [\"V\", \"V\"]}}, {\"row_count\": {\"min\": 0}}]\n",
     "input": "ID,V,W\na,10,11\nb,,\nc,10,\nd,,20\ne,0,0\n",
     "expected": {
       "artifacts": [],
@@ -1560,7 +1560,7 @@
   },
   {
     "case": "empty_columns",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, W]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\n  - {name: W, type: int, label: W, derivation: SRC.W}\nverifications: [{\"all_or_none\": {\"columns\": []}}, {\"row_count\": {\"min\": 0}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, W]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\n  - {name: W, type: int, label: W, derivation: SRC.W}\nverifications: [{\"all_or_none\": {\"columns\": []}}, {\"row_count\": {\"min\": 0}}]\n",
     "input": "ID,V,W\na,10,11\nb,,\nc,10,\nd,,20\ne,0,0\n",
     "expected": {
       "artifacts": [],
@@ -1713,7 +1713,7 @@
   },
   {
     "case": "unknown_before_distinct",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, W]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\n  - {name: W, type: int, label: W, derivation: SRC.W}\nverifications: [{\"all_or_none\": {\"columns\": [\"NO\", \"NO\"]}}, {\"row_count\": {\"min\": 0}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, W]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\n  - {name: W, type: int, label: W, derivation: SRC.W}\nverifications: [{\"all_or_none\": {\"columns\": [\"NO\", \"NO\"]}}, {\"row_count\": {\"min\": 0}}]\n",
     "input": "ID,V,W\na,10,11\nb,,\nc,10,\nd,,20\ne,0,0\n",
     "expected": {
       "artifacts": [],
@@ -1866,7 +1866,7 @@
   },
   {
     "case": "duplicate_id",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, W]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\n  - {name: W, type: int, label: W, derivation: SRC.W}\nverifications: [{\"row_count\": {\"id\": \"prefix\", \"min\": 0}}, {\"all_or_none\": {\"id\": \"prefix\", \"columns\": [\"V\", \"W\"]}}, {\"row_count\": {\"min\": 0}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, W]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\n  - {name: W, type: int, label: W, derivation: SRC.W}\nverifications: [{\"row_count\": {\"id\": \"prefix\", \"min\": 0}}, {\"all_or_none\": {\"id\": \"prefix\", \"columns\": [\"V\", \"W\"]}}, {\"row_count\": {\"min\": 0}}]\n",
     "input": "ID,V,W\na,10,11\nb,,\nc,10,\nd,,20\ne,0,0\n",
     "expected": {
       "artifacts": [],

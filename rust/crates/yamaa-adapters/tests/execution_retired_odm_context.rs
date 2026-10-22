@@ -51,7 +51,7 @@ mod execution {
 
         fn specification(key: &str, kind: &str, expression: &str, input: &str) -> String {
             format!(
-        "schema_version: '1.0'\ndomain: OUT\nkeys: [{key}]\ninput: {{ODM: {input}}}\noutput: {{path: out.csv, columns: [{key}, VALUE]}}\ncolumns:\n  - {{name: {key}, type: str, derivation: ODM.{key}}}\n  - {{name: VALUE, type: {kind}, derivation: {expression}}}\n"
+        "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [{key}]\ninput: {{ODM: {input}}}\noutput: {{path: out.csv, columns: [{key}, VALUE]}}\ncolumns:\n  - {{name: {key}, type: str, derivation: ODM.{key}}}\n  - {{name: VALUE, type: {kind}, derivation: {expression}}}\n"
     )
         }
         fn issue_rows(issues: &[Diagnostic]) -> Value {
@@ -345,7 +345,7 @@ mod execution {
             ] {
                 let fixture = Fixture::new(
                     &format!(
-                        "schema_version: '1.0'\ndomain: OUT\nkeys: [ID, SEQ]\nbase: BASE\n\
+                        "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID, SEQ]\nbase: BASE\n\
                          input: {{BASE: base.csv, SRC: odm.csv}}\n\
                          output: {{path: out.csv, columns: [ID, SEQ, VAL]}}\n\
                          columns:\n\
@@ -356,7 +356,7 @@ mod execution {
                          \x20 - id: occurrence\n\
                          \x20   dataset: SRC\n\
                          \x20   filter: \"SRC.ItemOID = 'IT.ANCHOR'\"\n\
-                         \x20   derivations: {{ID: {{literal: one}}}}\n"
+                         \x20   derivations: {{ID: \"'one'\"}}\n"
                     ),
                     &format!(
                         "{HEADER}\nS,M,P,E,,F,,G,,IT.ANCHOR,anchor\nS,M,P,E,,F,,G,,IT.TEST.OID,Y\n"
@@ -532,7 +532,7 @@ mod execution {
         }
 
         fn specification(columns: &str, rows: &str, output: &str) -> String {
-            format!("schema_version: '1.0'\ndomain: TEST\nkeys: [ID, SECTION]\ninput: {{SRC: {{path: input.csv, types: {{I: int, D: date, R: date}}}}}}\noutput: {{path: output.csv, columns: {output}}}\ncolumns:\n  - {{name: ID, type: str, derivation: SRC.ID}}\n  - {{name: SECTION, type: str}}\n{columns}rows:\n{rows}")
+            format!("yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID, SECTION]\ninput: {{SRC: {{path: input.csv, types: {{I: int, D: date, R: date}}}}}}\noutput: {{path: output.csv, columns: {output}}}\ncolumns:\n  - {{name: ID, type: str, derivation: SRC.ID}}\n  - {{name: SECTION, type: str}}\n{columns}rows:\n{rows}")
         }
         fn saved(fixture: &Fixture) -> Vec<u8> {
             let mut result = fixture.run();
@@ -545,7 +545,7 @@ mod execution {
             let columns="  - {name: VALUE, type: int}\n  - {name: PICK, type: str}\n  - {name: DAY, type: int}\n  - {name: LABEL, type: str}\n  - {name: TEXT, type: str}\n";
             // Authored consumer-before-producer order proves that row-local reads use
             // the dependency graph, and that nested branches see converted values.
-            let rows="  - id: one\n    derivations:\n      SECTION: {literal: one}\n      TEXT: {str_template: '{LABEL}{PICK}'}\n      LABEL: {case: [{when: 'VALUE = 9', then: {literal: nine}}, {otherwise: {literal: other}}]}\n      DAY: {study_day: {date: SRC.D, reference: SRC.R}}\n      PICK: {first_available: {sources: [SRC.TEXT, ID], missing: none}}\n      VALUE: {case: [{when: 'SRC.I > 0', then: {compute: {expr: 'POWER(SRC.I, 2)'}}}, {otherwise: {literal: 0}}]}\n";
+            let rows="  - id: one\n    derivations:\n      SECTION: \"'one'\"\n      TEXT: {str_template: '{LABEL}{PICK}'}\n      LABEL: {case: [{when: 'VALUE = 9', then: \"'nine'\"}, {otherwise: \"'other'\"}]}\n      DAY: {study_day: {source: SRC.D, reference: SRC.R}}\n      PICK: {first_available: {sources: [SRC.TEXT, ID], missing: none}}\n      VALUE: {case: [{when: 'SRC.I > 0', then: 'POWER(SRC.I, 2)'}, {otherwise: 0}]}\n";
             let f = bespoke(
                 &specification(columns, rows, "[ID, SECTION, VALUE, PICK, DAY, TEXT]"),
                 b"ID,I,D,R,TEXT\na,3,2025-01-02,2025-01-01,x\nb,-2,2024-12-31,2025-01-01,\n",
@@ -558,8 +558,8 @@ mod execution {
         #[test]
         fn each_row_template_has_its_own_filtered_windows_and_chained_passes() {
             let columns="  - {name: VALUE, type: int, derivation: SRC.I}\n  - {name: SEQ, type: int}\n  - {name: NEXT, type: int}\n  - {name: DOUBLE, type: int}\n";
-            let derivations="      VALUE: SRC.I\n      SEQ: {row_number: {window: {order_by: [VALUE]}}}\n      DOUBLE: {compute: {expr: 'SEQ * 2'}}\n      NEXT: {row_value: {source: DOUBLE, offset: 1, window: {order_by: [SEQ]}}}\n";
-            let rows=format!("  - id: one\n    filter: VALUE > 0\n    derivations:\n      SECTION: {{literal: one}}\n{derivations}  - id: two\n    filter: VALUE > 1\n    derivations:\n      SECTION: {{literal: two}}\n{derivations}");
+            let derivations="      VALUE: SRC.I\n      SEQ: {row_number: {window: {order_by: [VALUE]}}}\n      DOUBLE: 'SEQ * 2'\n      NEXT: {row_value: {source: DOUBLE, offset: 1, window: {order_by: [SEQ]}}}\n";
+            let rows=format!("  - id: one\n    filter: VALUE > 0\n    derivations:\n      SECTION: \"'one'\"\n{derivations}  - id: two\n    filter: VALUE > 1\n    derivations:\n      SECTION: \"'two'\"\n{derivations}");
             let f = bespoke(
                 &specification(columns, &rows, "[ID, SECTION, VALUE, SEQ, DOUBLE, NEXT]"),
                 b"ID,I,D,R,TEXT\na,3,,,\nb,0,,,\nc,1,,,\nd,2,,,\n",
@@ -571,7 +571,7 @@ mod execution {
         #[test]
         fn first_available_reads_the_completed_template_window() {
             let columns = "  - {name: VALUE, type: int, derivation: SRC.I}\n  - {name: SEQ, type: int}\n  - {name: PICK, type: int}\n";
-            let rows = "  - id: one\n    derivations:\n      SECTION: {literal: one}\n      VALUE: SRC.I\n      SEQ: {row_number: {window: {order_by: [VALUE]}}}\n      PICK: {first_available: {sources: [SEQ], missing: 99}}\n";
+            let rows = "  - id: one\n    derivations:\n      SECTION: \"'one'\"\n      VALUE: SRC.I\n      SEQ: {row_number: {window: {order_by: [VALUE]}}}\n      PICK: {first_available: {sources: [SEQ], missing: 99}}\n";
             let f = bespoke(
                 &specification(columns, rows, "[ID, SECTION, VALUE, SEQ, PICK]"),
                 b"ID,I,D,R,TEXT\na,3,,,\nb,1,,,\nc,2,,,\n",
@@ -584,7 +584,7 @@ mod execution {
         #[test]
         fn grouped_row_case_reads_group_keys_and_converted_reductions() {
             let columns = "  - {name: TOTAL, type: int}\n  - {name: TEXT, type: str}\n";
-            let rows="  - id: grouped\n    group_by: [SRC.ID]\n    derivations:\n      SECTION: {literal: grouped}\n      TEXT: {case: [{when: 'TOTAL > 5', then: SRC.ID}, {otherwise: {literal: low}}]}\n      TOTAL: {aggregate: 'SUM(SRC.I)'}\n";
+            let rows="  - id: grouped\n    group_by: [SRC.ID]\n    derivations:\n      SECTION: \"'grouped'\"\n      TEXT: {case: [{when: 'TOTAL > 5', then: SRC.ID}, {otherwise: \"'low'\"}]}\n      TOTAL: {aggregate: 'SUM(SRC.I)'}\n";
             let f = bespoke(
                 &specification(columns, rows, "[ID, SECTION, TOTAL, TEXT]"),
                 b"ID,I,D,R,TEXT\na,3,,,\nb,1,,,\na,4,,,\n",
@@ -599,7 +599,7 @@ mod execution {
         fn grouped_numeric_reducers_skip_missing_arguments_and_still_reject_present_text() {
             for reducer in ["SUM", "MEAN"] {
                 let source = format!(
-            "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {{SRC: {{path: input.csv, types: {{V: str}}}}}}\noutput: {{path: output.csv, columns: [ID, VALUE]}}\ncolumns: [{{name: ID, type: str}}, {{name: VALUE, type: float}}]\nrows:\n  - id: groups\n    group_by: [SRC.ID]\n    derivations:\n      ID: SRC.ID\n      VALUE: {{aggregate: '{reducer}(SRC.V)'}}\n"
+            "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {{SRC: {{path: input.csv, types: {{V: str}}}}}}\noutput: {{path: output.csv, columns: [ID, VALUE]}}\ncolumns: [{{name: ID, type: str}}, {{name: VALUE, type: float}}]\nrows:\n  - id: groups\n    group_by: [SRC.ID]\n    derivations:\n      ID: SRC.ID\n      VALUE: {{aggregate: '{reducer}(SRC.V)'}}\n"
         );
                 for (input, expected) in [
                     (b"ID,V\na,\na,\n".as_slice(), b"ID,VALUE\na,\n".as_slice()),
@@ -621,7 +621,10 @@ mod execution {
                     assert_eq!(issue.phase(), "validation");
                     assert_eq!(issue.condition(), "incompatible_input_type");
                     assert_eq!(issue.rule(), Some("FORMULA-23"));
-                    assert_eq!(issue.spec_paths, ["rows[0].derivations.VALUE.aggregate"]);
+                    assert_eq!(
+                        issue.spec_paths,
+                        ["rows.groups.derivations.VALUE.aggregate"]
+                    );
                     assert_eq!(
                         yamaa_core::json::Value::Object(issue.context.clone()),
                         yamaa_adapters::json!({"expr": format!("{reducer}(SRC.V)"),
@@ -637,7 +640,7 @@ mod execution {
         #[test]
         fn invalid_grouped_case_source_and_window_filter_refuse_publication() {
             let columns = "  - {name: VALUE, type: int}\n";
-            let rows="  - id: grouped\n    group_by: [SRC.ID]\n    derivations:\n      SECTION: {literal: grouped}\n      VALUE: {case: [{when: 'SRC.I > 0', then: {literal: 1}}, {otherwise: {literal: 0}}]}\n";
+            let rows="  - id: grouped\n    group_by: [SRC.ID]\n    derivations:\n      SECTION: \"'grouped'\"\n      VALUE: {case: [{when: 'SRC.I > 0', then: 1}, {otherwise: 0}]}\n";
             let f = bespoke(
                 &specification(columns, rows, "[ID, SECTION, VALUE]"),
                 b"ID,I,D,R,TEXT\na,3,,,\n",
@@ -649,7 +652,7 @@ mod execution {
             assert_eq!(issues[0].condition(), "ungrouped_driver_field");
             assert!(!f.0.join("output.csv").exists());
             let columns="  - {name: VALUE, type: int, derivation: SRC.I}\n  - {name: SEQ, type: int}\n  - {name: AFTER, type: int}\n";
-            let rows="  - id: one\n    filter: AFTER > 0\n    derivations:\n      SECTION: {literal: one}\n      SEQ: {row_number: {window: {order_by: [VALUE]}}}\n      AFTER: {compute: {expr: 'SEQ + 1'}}\n";
+            let rows="  - id: one\n    filter: AFTER > 0\n    derivations:\n      SECTION: \"'one'\"\n      SEQ: {row_number: {window: {order_by: [VALUE]}}}\n      AFTER: 'SEQ + 1'\n";
             let f = bespoke(
                 &specification(columns, rows, "[ID, SECTION, SEQ]"),
                 b"ID,I,D,R,TEXT\na,3,,,\n",
@@ -666,14 +669,14 @@ mod execution {
         }
         #[test]
         fn intermediate_identity_keeps_column_key_windows_over_all_constructed_templates() {
-            let body = "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID, SEQ]\ninput:\n  SRC: {path: input.csv, types: {VALUE: int}}\n  D: donor.csv\nintermediates: [{id: P, dataset: D, key: [ID]}]\noutput: {path: output.csv, columns: [ID, SEQ, VALUE, PICK]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: SRC.VALUE}\n  - {name: SEQ, type: int, derivation: {row_number: {window: {group_by: [ID], order_by: [VALUE]}}}}\n  - {name: PICK, type: str, derivation: P.PICK}\nrows:\n  - {id: first, dataset: SRC, filter: \"SRC.KIND = 'A'\", derivations: {}}\n  - {id: second, dataset: SRC, filter: \"SRC.KIND = 'B'\", derivations: {}}\n";
+            let body = "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID, SEQ]\ninput:\n  SRC: {path: input.csv, types: {VALUE: int}}\n  D: donor.csv\nintermediates: [{id: P, dataset: D, key: [ID]}]\noutput: {path: output.csv, columns: [ID, SEQ, VALUE, PICK]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: SRC.VALUE}\n  - {name: SEQ, type: int, derivation: {row_number: {window: {group_by: [ID], order_by: [VALUE]}}}}\n  - {name: PICK, type: str, derivation: P.PICK}\nrows:\n  - {id: first, dataset: SRC, filter: \"SRC.KIND = 'A'\"}\n  - {id: second, dataset: SRC, filter: \"SRC.KIND = 'B'\"}\n";
             let f = bespoke(body, b"ID,KIND,VALUE\nx,A,4\nx,B,1\n");
             fs::write(f.0.join("donor.csv"), b"ID,PICK\nx,kept\n").unwrap();
             assert_eq!(saved(&f), b"ID,SEQ,VALUE,PICK\nx,2,4,kept\nx,1,1,kept\n");
         }
         #[test]
         fn grouped_row_column_defaults_use_the_shared_secondary_source_key_binding() {
-            let body = "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: input.csv, types: {VALUE: int}}\n  D: {path: donor.csv, types: {REFERENCE: int}}\noutput: {path: output.csv, columns: [ID, TOTAL, REFERENCE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: TOTAL, type: int}\n  - {name: REFERENCE, type: int, derivation: D.REFERENCE}\nrows:\n  - id: grouped\n    dataset: SRC\n    group_by: [SRC.ID]\n    derivations: {TOTAL: {aggregate: 'SUM(SRC.VALUE)'}}\n";
+            let body = "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: input.csv, types: {VALUE: int}}\n  D: {path: donor.csv, key: [ID], types: {REFERENCE: int}}\noutput: {path: output.csv, columns: [ID, TOTAL, REFERENCE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: TOTAL, type: int}\n  - {name: REFERENCE, type: int, derivation: D.REFERENCE}\nrows:\n  - id: grouped\n    dataset: SRC\n    group_by: [SRC.ID]\n    derivations: {TOTAL: {aggregate: 'SUM(SRC.VALUE)'}}\n";
             let f = bespoke(body, b"ID,VALUE\na,4\na,1\nb,2\n");
             fs::write(f.0.join("donor.csv"), b"ID,REFERENCE\na,10\nb,20\n").unwrap();
             assert_eq!(saved(&f), b"ID,TOTAL,REFERENCE\na,5,10\nb,2,20\n");
@@ -698,14 +701,15 @@ mod execution {
 
         #[test]
         fn column_and_case_scopes_use_the_shared_dispatch_with_distinct_nested_values() {
-            let source="schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, VALUE, TEXT]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {compute: {expr: 'EXP(0) + LN(1) + POWER(3, 2)'}}}\n  - {name: PICK, type: str, derivation: {first_available: {sources: [ID], missing: fallback}}}\n  - name: TEXT\n    type: str\n    derivation:\n      case:\n        - when: VALUE = 10\n          then: {str_template: 'prefix:{PICK}'}\n        - otherwise: {literal: wrong}\n";
+            let source="yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, VALUE, TEXT]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: 'EXP(0) + LN(1) + POWER(3, 2)'}\n  - {name: PICK, type: str, derivation: {first_available: {sources: [ID], missing: fallback}}}\n  - name: TEXT\n    type: str\n    derivation:\n      case:\n        - when: VALUE = 10\n          then: {str_template: 'prefix:{PICK}'}\n        - otherwise: \"'wrong'\"\n";
             let f = bespoke(source, b"ID\na\n");
             assert_eq!(saved(&f), b"ID,VALUE,TEXT\na,10,prefix:a\n");
         }
 
         #[test]
         fn distinct_stored_drivers_group_in_their_own_schemas_and_complete_global_windows() {
-            let source = r#"schema_version: '1.0'
+            let source = r#"yamaa: "1.0"
+type: spec
 domain: TEST
 keys: [ID, SECTION]
 input:
@@ -724,15 +728,15 @@ rows:
   filter: 'ID > 1'
   derivations:
     ID: ALPHA.ID
-    SECTION: {literal: A}
+    SECTION: "'A'"
     SEQ: {row_number: {window: {order_by: [{variable: ID, direction: desc}]}}}
-    TOTAL: {literal: 0}
+    TOTAL: 0
 - id: groups
   dataset: BETA
   group_by: [BETA.OTHER]
   derivations:
     ID: BETA.OTHER
-    SECTION: {literal: B}
+    SECTION: "'B'"
     SEQ: {row_number: {window: {order_by: [{variable: ID, direction: desc}]}}}
     TOTAL: {aggregate: 'SUM(BETA.AMOUNT)'}
 "#;
@@ -751,15 +755,16 @@ rows:
         #[test]
         fn record_filter_promotes_numeric_defaults_and_their_complete_dependencies() {
             let fixture = bespoke(
-                r#"schema_version: '1.0'
+                r#"yamaa: "1.0"
+type: spec
 domain: TEST
 keys: [ID, SECTION]
 input: {SRC: {path: input.csv, types: {I: int}}}
 output: {path: output.csv, columns: [ID, SECTION, VALUE]}
 columns:
 - {name: ID, type: int}
-- {name: SECTION, type: str, derivation: {literal: S}}
-- {name: VALUE, type: float, derivation: {compute: {expr: 'POWER(ID, 2)'}}}
+- {name: SECTION, type: str, derivation: "'S'"}
+- {name: VALUE, type: float, derivation: 'POWER(ID, 2)'}
 rows:
 - id: selected
   filter: 'VALUE > 4'
@@ -773,7 +778,8 @@ rows:
         #[test]
         fn grouped_filters_read_completed_candidate_windows() {
             let fixture = bespoke(
-                r#"schema_version: '1.0'
+                r#"yamaa: "1.0"
+type: spec
 domain: TEST
 keys: [ID]
 input: {SRC: {path: input.csv, types: {I: int, V: float}}}
@@ -800,6 +806,8 @@ rows:
     }
     mod row_filter_paths {
         //! Static and build diagnostics use declaration indices, never arbitrary row IDs.
+        //! That is the 0.5 path notation: a 1.0 file names a row by its id (P-CLR-2),
+        //! so this module keeps its 0.5 documents until the 0.5 path goes (#3447).
         use std::fs;
         use yamaa_adapters::json;
         use yamaa_adapters::{
@@ -954,9 +962,9 @@ rows:
             let declaration = if row_derivation {
                 format!("  - {{name: X, type: {kind}}}\nrows:\n  - id: pp_records\n    dataset: PP\n    derivations: {{X: {expression}}}\n")
             } else {
-                format!("  - {{name: X, type: {kind}, derivation: {expression}}}\nrows:\n  - id: pp_records\n    dataset: PP\n    derivations: {{}}\n")
+                format!("  - {{name: X, type: {kind}, derivation: {expression}}}\nrows:\n  - id: pp_records\n    dataset: PP\n")
             };
-            format!("schema_version: '1.0'\ndomain: ADPP\nkeys: [USUBJID]\ninput:\n  PP: {{path: pp.csv, types: {{DATE: date}}}}\n  EX: {{path: ex.csv, types: {{DATE: date, N: float}}}}\nintermediates:\n  - id: DOSE\n    dataset: EX\n    key: [USUBJID]\ncolumns:\n  - {{name: USUBJID, type: str, derivation: PP.USUBJID}}\n{declaration}output: {{path: output.csv, columns: [USUBJID, X]}}\n")
+            format!("yamaa: \"1.0\"\ntype: spec\ndomain: ADPP\nkeys: [USUBJID]\ninput:\n  PP: {{path: pp.csv, types: {{DATE: date}}}}\n  EX: {{path: ex.csv, types: {{DATE: date, N: float}}}}\nintermediates:\n  - id: DOSE\n    dataset: EX\n    key: [USUBJID]\ncolumns:\n  - {{name: USUBJID, type: str, derivation: PP.USUBJID}}\n{declaration}output: {{path: output.csv, columns: [USUBJID, X]}}\n")
         }
 
         #[test]
@@ -988,7 +996,7 @@ rows:
                     "S1,2030-01-01\nS2,2030-02-01\n",
                 ),
                 (
-                    "{impute: {type: datetime, source: DOSE.DTM, minimum_source_precision: day, time: first}}",
+                    "{impute: {type: datetime, source: DOSE.DTM, time: first}}",
                     "datetime",
                     "S1,2030-01-01T08:00:00\nS2,2030-02-01T09:00:00\n",
                 ),
@@ -1252,7 +1260,8 @@ rows:
                 "I,G,F,B\n1,A,Y,Y\n2,A,N,\n3,B,N,\n4,B,N,\n",
             )
             .unwrap();
-            fs::write(study.0.join("spec.yaml"),r#"schema_version: '1.0'
+            fs::write(study.0.join("spec.yaml"),r#"yamaa: "1.0"
+type: spec
 domain: TEST
 keys: [I]
 input: {SRC: input.csv}
@@ -1284,7 +1293,8 @@ verifications:
             .unwrap();
             fs::write(
                 study.0.join("spec.yaml"),
-                r#"schema_version: '1.0'
+                r#"yamaa: "1.0"
+type: spec
 domain: TEST
 keys: [I]
 input: {SRC: input.csv}
@@ -1364,11 +1374,15 @@ verifications:
                 .unwrap();
                 let keys = if grouped { "G" } else { "I" };
                 let (group, derivations, expected) = if grouped {
-                    ("    group_by: [DRV.G]\n", "      I: {literal: 0}\n      G: DRV.G\n      V: {aggregate: 'SUM(DRV.V)'}\n", "I,G,V\n0,B,50\n0,A,30\n")
+                    (
+                        "    group_by: [DRV.G]\n",
+                        "      I: 0\n      G: DRV.G\n      V: {aggregate: 'SUM(DRV.V)'}\n",
+                        "I,G,V\n0,B,50\n0,A,30\n",
+                    )
                 } else {
                     ("", "      I: DRV.I\n      G: {str_case: {source: DRV.G, to: lower}}\n      V: DRV.V\n", "I,G,V\n1,b,10\n3,a,30\n4,b,40\n")
                 };
-                fs::write(study.0.join("spec.yaml"), format!("schema_version: '1.0'\ndomain: TEST\nkeys: [{keys}]\ninput: {{SRC: {{path: input.csv, types: {{I: int, V: int}}}}}}\nintermediates:\n  - {{id: DRV, dataset: SRC, filter: \"SRC.K = 'Y'\"}}\ncolumns:\n  - {{name: I, type: int}}\n  - {{name: G, type: str}}\n  - {{name: V, type: int}}\nrows:\n  - id: selected\n    dataset: DRV\n{group}    derivations:\n{derivations}output: {{path: out.csv, columns: [I, G, V]}}\n")).unwrap();
+                fs::write(study.0.join("spec.yaml"), format!("yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [{keys}]\ninput: {{SRC: {{path: input.csv, types: {{I: int, V: int}}}}}}\nintermediates:\n  - {{id: DRV, dataset: SRC, filter: \"SRC.K = 'Y'\"}}\ncolumns:\n  - {{name: I, type: int}}\n  - {{name: G, type: str}}\n  - {{name: V, type: int}}\nrows:\n  - id: selected\n    dataset: DRV\n{group}    derivations:\n{derivations}output: {{path: out.csv, columns: [I, G, V]}}\n")).unwrap();
                 let mut result = study.build();
                 assert!(
                     result.issues().is_empty(),
@@ -1386,16 +1400,16 @@ verifications:
         #[test]
         fn named_driver_column_projection_rejects_hidden_scalar_and_grouping_fields() {
             for (group, derive, expected_path) in [
-                ("", "I: DRV.I", "rows[0].derivations.I.source"),
+                ("", "I: DRV.I", "rows.selected.derivations.I.source"),
                 (
                     "    group_by: [DRV.I]\n",
-                    "I: {literal: 1}",
-                    "rows[0].group_by[0]",
+                    "I: 1",
+                    "rows.selected.group_by[0]",
                 ),
             ] {
                 let study = Study::new();
                 fs::write(study.0.join("input.csv"), "I,V\n1,10\n").unwrap();
-                fs::write(study.0.join("spec.yaml"), format!("schema_version: '1.0'\ndomain: TEST\nkeys: [I]\ninput: {{SRC: {{path: input.csv, types: {{I: int, V: int}}}}}}\nintermediates:\n  - {{id: DRV, dataset: SRC, columns: [V]}}\ncolumns:\n  - {{name: I, type: int}}\nrows:\n  - id: selected\n    dataset: DRV\n{group}    derivations:\n      {derive}\noutput: {{path: out.csv, columns: [I]}}\n")).unwrap();
+                fs::write(study.0.join("spec.yaml"), format!("yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [I]\ninput: {{SRC: {{path: input.csv, types: {{I: int, V: int}}}}}}\nintermediates:\n  - {{id: DRV, dataset: SRC, columns: [V]}}\ncolumns:\n  - {{name: I, type: int}}\nrows:\n  - id: selected\n    dataset: DRV\n{group}    derivations:\n      {derive}\noutput: {{path: out.csv, columns: [I]}}\n")).unwrap();
                 let result = study.build();
                 assert!(result.output().is_none());
                 assert!(
@@ -1415,7 +1429,8 @@ verifications:
         // they do not restore the retired Python planner or its extension hooks.
         #[test]
         fn original_filtered_missing_targets_keep_their_value_in_every_arrival_order() {
-            let source = r#"schema_version: "1.0"
+            let source = r#"yamaa: "1.0"
+type: spec
 domain: EXAMPLE
 keys: [GROUP_ID]
 input:
@@ -1477,7 +1492,7 @@ columns:
 
         fn original_key_identity(source: &str, columns: &str, types: &str) -> String {
             format!(
-        "schema_version: '1.0'\ndomain: OUT\ninput: {{SRC: {{path: input.csv, types: {types}}}}}\nkeys: [B, A]\noutput: {{path: out.csv, columns: {columns}}}\ncolumns:\n{source}"
+        "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\ninput: {{SRC: {{path: input.csv, types: {types}}}}}\nkeys: [B, A]\noutput: {{path: out.csv, columns: {columns}}}\ncolumns:\n{source}"
     )
         }
 
@@ -1504,7 +1519,7 @@ columns:
             "A,B\nfirst,2\nnext,3\n",
         ),
         (
-            "  - {name: A, type: int, derivation: SRC.X}\n  - {name: B, type: int, derivation: {compute: {expr: 'A + 1'}}}\n",
+            "  - {name: A, type: int, derivation: SRC.X}\n  - {name: B, type: int, derivation: 'A + 1'}\n",
             "{X: int}",
             "X\n4\n2\n4\n",
             "A,B\n4,5\n2,3\n",
@@ -1580,7 +1595,7 @@ columns:
             window: &str,
         ) -> String {
             format!(
-        "schema_version: '1.0'\ndomain: OUT\nbase: SRC\ninput: {{SRC: {{path: input.csv, types: {{G: str, X: float, S: int}}}}}}\nkeys: [GRP, SEQ]\noutput: {{path: out.csv, columns: [GRP, SEQ, VAL, PREV]}}\ncolumns:\n  - {{name: GRP, type: str}}\n  - {{name: SEQ, type: int}}\n  - {{name: VAL, type: float}}\n  - {{name: PREV, type: float}}\n{extra_columns}rows:\n  - id: visits\n    derivations:\n      GRP: SRC.G\n      SEQ: SRC.S\n      VAL: SRC.X\n      PREV: {{row_value: {{source: VAL, offset: -1, window: {window}}}}}\n{extra_derivations}"
+        "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nbase: SRC\ninput: {{SRC: {{path: input.csv, types: {{G: str, X: float, S: int}}}}}}\nkeys: [GRP, SEQ]\noutput: {{path: out.csv, columns: [GRP, SEQ, VAL, PREV]}}\ncolumns:\n  - {{name: GRP, type: str}}\n  - {{name: SEQ, type: int}}\n  - {{name: VAL, type: float}}\n  - {{name: PREV, type: float}}\n{extra_columns}rows:\n  - id: visits\n    derivations:\n      GRP: SRC.G\n      SEQ: SRC.S\n      VAL: SRC.X\n      PREV: {{row_value: {{source: VAL, offset: -1, window: {window}}}}}\n{extra_derivations}"
     )
         }
 
@@ -1655,13 +1670,13 @@ columns:
         ),
         (
             "  - {name: CHG, type: float}\n  - {name: DOUBLED, type: float}\n",
-            "      DOUBLED: {compute: {expr: 'CHG * 2'}}\n      CHG: {compute: {expr: 'VAL - PREV'}}\n",
+            "      DOUBLED: 'CHG * 2'\n      CHG: 'VAL - PREV'\n",
             "DOUBLED",
             vec![None, Some(2.0), Some(2.0), None, Some(20.0)],
         ),
         (
             "  - {name: DOUBLED, type: float}\n  - {name: BAD, type: float}\n",
-            "      DOUBLED: {compute: {expr: 'PREV * 2'}}\n      BAD: {row_value: {source: DOUBLED, offset: -1, window: {group_by: [GRP], order_by: [SEQ]}}}\n",
+            "      DOUBLED: 'PREV * 2'\n      BAD: {row_value: {source: DOUBLED, offset: -1, window: {group_by: [GRP], order_by: [SEQ]}}}\n",
             "BAD",
             vec![None, None, Some(2.0), None, None],
         ),
@@ -1735,8 +1750,8 @@ columns:
             let (study, _) = Study::benchmark("schema-source-ordinal");
             let mut source = fs::read_to_string(study.0.join("spec.yaml")).unwrap();
             source.push_str(
-        "  - id: second\n    dataset: SOURCE\n    filter: SOURCE.SourceOrdinal = 1\n    derivations: {}\n",
-    );
+                "  - id: second\n    dataset: SOURCE\n    filter: SOURCE.SourceOrdinal = 1\n",
+            );
             fs::write(study.0.join("spec.yaml"), source).unwrap();
             let result = study.build();
             assert!(result.issues().is_empty(), "{:?}", result.issues());
@@ -1751,7 +1766,8 @@ columns:
             let (study, _) = Study::benchmark("schema-source-ordinal");
             fs::write(
                 study.0.join("spec.yaml"),
-                r#"schema_version: "1.0"
+                r#"yamaa: "1.0"
+type: spec
 domain: RECORDS
 keys: [GROUP_ID]
 input:

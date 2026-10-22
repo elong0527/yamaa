@@ -57,7 +57,7 @@ fn issue(issue: &Diagnostic) -> yamaa_core::json::Value {
     crate::support::study::issue_row(issue)
 }
 
-const HEAD: &str = "schema_version: '1.0'\ndomain: OUT\nkeys: [ID]\n\
+const HEAD: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\n\
     input: {SRC: {path: source.csv, types: {ID: int, VAL: int}}}\n\
     output: {path: out.csv, columns: [ID, LOW, SEQ]}\n";
 
@@ -82,7 +82,7 @@ fn grouped_windows_read_only_group_keys_of_the_driver() {
     for (specification, path, rule, row) in [
         (
             &row,
-            "rows[0].derivations.SEQ.row_number.window.order_by[0]",
+            "rows.grouped.derivations.SEQ.row_number.window.order_by[0]",
             "ROW-5",
             Some("grouped"),
         ),

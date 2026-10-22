@@ -1,7 +1,7 @@
 [
   {
     "case": "eligible",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      source:\n        variable: SRC.V\n        filter: \"SRC.F = 'Y'\"\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      source:\n        variable: SRC.V\n        filter: \"SRC.F = 'Y'\"\n",
     "input": "ID,V,F\na,10,Y\na,11,N\nb,,Y\nb,17,N\nc,7,\nc,7,\n",
     "expected": {
       "artifacts": [
@@ -211,7 +211,7 @@
   },
   {
     "case": "empty",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      source:\n        variable: SRC.V\n        filter: \"SRC.F = 'absent'\"\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      source:\n        variable: SRC.V\n        filter: \"SRC.F = 'absent'\"\n",
     "input": "ID,V,F\na,10,Y\na,11,N\nb,,Y\nb,17,N\nc,7,\nc,7,\n",
     "expected": {
       "artifacts": [
@@ -421,7 +421,7 @@
   },
   {
     "case": "null",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      source:\n        variable: SRC.V\n        filter: \"SRC.F IS NULL\"\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      source:\n        variable: SRC.V\n        filter: \"SRC.F IS NULL\"\n",
     "input": "ID,V,F\na,10,Y\na,11,N\nb,,Y\nb,17,N\nc,7,\nc,7,\n",
     "expected": {
       "artifacts": [
@@ -631,7 +631,7 @@
   },
   {
     "case": "bare",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      source:\n        variable: SRC.V\n        filter: \"ID = 'a'\"\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      source:\n        variable: SRC.V\n        filter: \"ID = 'a'\"\n",
     "input": "ID,V,F\na,10,Y\na,11,N\nb,,Y\nb,17,N\nc,7,\nc,7,\n",
     "expected": {
       "artifacts": [],
@@ -800,7 +800,7 @@
   },
   {
     "case": "other",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      source:\n        variable: SRC.V\n        filter: \"OTHER.F = 'Y'\"\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      source:\n        variable: SRC.V\n        filter: \"OTHER.F = 'Y'\"\n",
     "input": "ID,V,F\na,10,Y\na,11,N\nb,,Y\nb,17,N\nc,7,\nc,7,\n",
     "expected": {
       "artifacts": [],
@@ -969,7 +969,7 @@
   },
   {
     "case": "unknown",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      source:\n        variable: SRC.V\n        filter: \"SRC.ABSENT = 'Y'\"\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      source:\n        variable: SRC.V\n        filter: \"SRC.ABSENT = 'Y'\"\n",
     "input": "ID,V,F\na,10,Y\na,11,N\nb,,Y\nb,17,N\nc,7,\nc,7,\n",
     "expected": {
       "artifacts": [],
@@ -1136,7 +1136,7 @@
   },
   {
     "case": "grammar",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      source:\n        variable: SRC.V\n        filter: \"SRC.F =\"\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      source:\n        variable: SRC.V\n        filter: \"SRC.F =\"\n",
     "input": "ID,V,F\na,10,Y\na,11,N\nb,,Y\nb,17,N\nc,7,\nc,7,\n",
     "expected": {
       "artifacts": [],
@@ -1305,7 +1305,7 @@
   },
   {
     "case": "scalar",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      source:\n        variable: ID\n        filter: \"SRC.F = 'Y'\"\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      source:\n        variable: ID\n        filter: \"SRC.F = 'Y'\"\n",
     "input": "ID,V,F\na,10,Y\na,11,N\nb,,Y\nb,17,N\nc,7,\nc,7,\n",
     "expected": {
       "artifacts": [],
@@ -1472,7 +1472,7 @@
   },
   {
     "case": "scalar_bad_grammar",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      source:\n        variable: ID\n        filter: \"SRC.F =\"\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      source:\n        variable: ID\n        filter: \"SRC.F =\"\n",
     "input": "ID,V,F\na,10,Y\na,11,N\nb,,Y\nb,17,N\nc,7,\nc,7,\n",
     "expected": {
       "artifacts": [],
@@ -1639,7 +1639,7 @@
   },
   {
     "case": "repeat",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      source:\n        variable: SRC.V\n        filter: \"SRC.F = 'Y' OR SRC.F = 'Y'\"\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      source:\n        variable: SRC.V\n        filter: \"SRC.F = 'Y' OR SRC.F = 'Y'\"\n",
     "input": "ID,V,F\na,10,Y\na,11,N\nb,,Y\nb,17,N\nc,7,\nc,7,\n",
     "expected": {
       "artifacts": [
@@ -1849,7 +1849,7 @@
   },
   {
     "case": "between",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      source:\n        variable: SRC.V\n        filter: \"SRC.V BETWEEN '10' AND '10'\"\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      source:\n        variable: SRC.V\n        filter: \"SRC.V BETWEEN '10' AND '10'\"\n",
     "input": "ID,V,F\na,10,Y\na,11,N\nb,,Y\nb,17,N\nc,7,\nc,7,\n",
     "expected": {
       "artifacts": [
@@ -2059,7 +2059,7 @@
   },
   {
     "case": "unreachable",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      source:\n        variable: SRC.V\n        filter: \"TRUE OR SRC.ABSENT = 'Y'\"\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      source:\n        variable: SRC.V\n        filter: \"TRUE OR SRC.ABSENT = 'Y'\"\n",
     "input": "ID,V,F\na,10,Y\na,11,N\nb,,Y\nb,17,N\nc,7,\nc,7,\n",
     "expected": {
       "artifacts": [],
@@ -2226,7 +2226,7 @@
   },
   {
     "case": "duplicate_unknown",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      source:\n        variable: SRC.V\n        filter: \"SRC.ABSENT = 'Y' OR SRC.ABSENT = 'N'\"\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      source:\n        variable: SRC.V\n        filter: \"SRC.ABSENT = 'Y' OR SRC.ABSENT = 'N'\"\n",
     "input": "ID,V,F\na,10,Y\na,11,N\nb,,Y\nb,17,N\nc,7,\nc,7,\n",
     "expected": {
       "artifacts": [],
