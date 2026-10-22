@@ -6,9 +6,3 @@ entries:
     - specification: spec_adsl.yaml
   r:
     - specification: spec_adsl.yaml
-conformance:
-  metamorphic:
-    empty_child:
-      reason: 'the copy expansion counts the empty child but not the layer it
-        composes as being resolved, so the cycle closes at that layer''s own link'
-      issue: '#3594'

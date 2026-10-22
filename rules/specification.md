@@ -237,11 +237,13 @@ specification fails under [INPUT-10](inputs.md#input-10), and a producer whose
 own columns copy reads its producers in turn. A copy whose producers lead back
 to a specification being resolved fails as `producer_workflow_cycle` at the
 `input.<D>.schema` of the link that closes the cycle, its `cycle` naming the
-specifications from the first one entered back to itself. A copy from an input
-that does not drive the rows is an implicit join and needs the input's `key`
-([LOOKUP-1](lookup.md#lookup-1)), and a copy through an input whose name is not
-the producer's `domain` reads another dataset than its origin names, which
-SUB-20 refuses.
+specifications from the first one entered back to itself. While a producer is
+read, the entry and each layer up the chain to the last one with a copy entry
+that reads it count as being resolved, so an empty child reports the cycle its
+parent reports. A copy from an input that does not drive the rows is an
+implicit join and needs the input's `key` ([LOOKUP-1](lookup.md#lookup-1)),
+and a copy through an input whose name is not the producer's `domain` reads
+another dataset than its origin names, which SUB-20 refuses.
 
 An entry has no name, so a path names it by its position, `columns[<i>]`. A
 `dataset` that names no declared input fails as `unknown_field` with

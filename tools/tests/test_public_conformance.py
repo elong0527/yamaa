@@ -1374,7 +1374,7 @@ class PublicConformance(unittest.TestCase):
         # composes the empty child's columns in dependency order. So does the
         # link to its consuming specification, which from the empty child
         # names the parent, whose output file the child writes (OUTPUT-9).
-        # Two differences stay open under their issues.
+        # One difference stays open under its issue.
         permanent = {
             ("negative-forward-key-reference", "empty_child"),
             ("negative-forward-reference", "empty_child"),
@@ -1382,7 +1382,6 @@ class PublicConformance(unittest.TestCase):
         }
         tracked = {
             ("negative-aggregate-unbound-variable", "empty_child"): "#3593",
-            ("negative-copy-producer-cycle", "empty_child"): "#3594",
         }
         self.assertEqual(set(expectations), permanent | set(tracked))
         for key in permanent:
