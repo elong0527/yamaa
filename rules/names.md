@@ -60,7 +60,7 @@ Fails: `unknown_field`, `unresolvable_name`.
 Evidence: `schema-source-binding`, `negative-source-undeclared-field`, `rust/crates/yamaa-adapters/tests/fixtures/binding_diagnostics.tsv`.
 
 ```yaml
-source: DM.SEX
+derivation: DM.SEX
 ```
 
 [Lookup and joins](lookup.md) defines record lookup resolution. An
@@ -167,7 +167,7 @@ Evidence: `schema-handlers`, `rust/crates/yamaa-adapters/tests/fixtures/source_f
 ```yaml
 source:
   variable: ADSL.TRTSDT
-  absent: {literal: null}
+  absent: null
 ```
 
 [Lookup and joins](lookup.md) defines the join uniqueness the

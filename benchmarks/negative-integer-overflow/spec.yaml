@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADLB
 keys: [STUDYID, USUBJID]
 input:
@@ -36,6 +38,4 @@ columns:
   - name: CELLTOT
     type: int
     label: Total Cell Count
-    derivation:
-      compute:
-        expr: "CELLCNT * VOLUML"
+    derivation: "CELLCNT * VOLUML"

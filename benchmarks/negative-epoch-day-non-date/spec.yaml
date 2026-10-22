@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADEX
 keys: [STUDYID, USUBJID, EXSEQ]
 input:
@@ -38,4 +40,3 @@ columns:
 rows:
   - id: exposure
     filter: "EX.EXSEQ = 1"
-    derivations: {}

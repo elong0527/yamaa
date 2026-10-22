@@ -29,5 +29,4 @@ intermediates:
     key: [STUDYID, USUBJID]
     order_by: [EX.EXSTDTC]
     keep: first
-    no_match: null
 ```

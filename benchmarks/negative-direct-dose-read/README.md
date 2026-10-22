@@ -35,9 +35,7 @@ earliest administration:
 
 - name: DOSEDBL
   type: float
-  derivation:
-    compute:
-      expr: "DOSE * 2"
+  derivation: "DOSE * 2"
 ```
 
 Keep `DOSE` internal by omitting it from `output.columns`.

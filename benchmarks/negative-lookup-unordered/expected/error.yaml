@@ -1,7 +1,7 @@
 phase: validation
 condition: unpaired_fields
 spec_paths:
-  - intermediates[0]
+  - intermediates.DOSING
 rule: LOOKUP-10
 context:
   intermediate: DOSING

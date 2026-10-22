@@ -25,9 +25,9 @@ date:
 intermediates:
   - id: LASTDOSE
     dataset: EX
+    key: [STUDYID, USUBJID]
     order_by: [EX.EXENDTC]
     keep: last
-    no_match: null
 ```
 
 Add a tie-breaking field, such as a sequence number, when two

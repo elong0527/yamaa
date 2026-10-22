@@ -20,7 +20,7 @@
       "phase": "derivation",
       "rule": "VALUE-5",
       "spec_paths": [
-        "columns.CELLTOT.derivation.compute"
+        "columns.CELLTOT.derivation"
       ],
       "operand_route": [],
       "source_span": {
@@ -53,7 +53,7 @@
           "phase": "derivation",
           "rule": "VALUE-5",
           "spec_paths": [
-            "columns.CELLTOT.derivation.compute"
+            "columns.CELLTOT.derivation"
           ],
           "operand_route": [],
           "source_span": {

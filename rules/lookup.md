@@ -301,7 +301,7 @@ Evidence: `schema-lookup-absent-default`, `negative-source-require-match`, `nega
 ```yaml
 input:
   ADSL: {path: adsl.csv, require_match: true}
-  EX: ex.csv
+  EX: {path: ex.csv, key: [STUDYID, USUBJID]}
 intermediates:
   - id: REFRANGE
     dataset: LBRANGE
@@ -525,7 +525,7 @@ the key column's type under [VALUE-19](values.md#value-19), and the failure
 names that result type. `N + 1` over an `int` `N` is an `int`, a `mapping` to
 integer values an `int`, and `greatest` over an `int` and a `float` a number of
 either type, which compares with a numeric key column and with no text one.
-`{literal: null}` is always missing and compares with every column. The same
+`null` is always missing and compares with every column. The same
 holds for a named intermediate's and an aggregate's `key` alike.
 
 ## The implicit join
@@ -796,7 +796,7 @@ bare name there is the current row's column, not a donor field. Row templates
 reading one `SELF` intermediate can each supply a match value from their own
 derivations. Below, an expected-record template derives its window and reads
 `COVER` to find a completed row already in that window; another template
-deriving `AVISIT: {literal: WEEK 4}` reads the same intermediate for its own
+deriving `AVISIT: "'WEEK 4'"` reads the same intermediate for its own
 window.
 
 ```yaml
@@ -806,7 +806,6 @@ intermediates:
     key: {USUBJID: VS.USUBJID, PARAMCD: VS.VSTESTCD, AVISIT: AVISIT}
     order_by: [SELF.VSSEQ]
     keep: last
-    no_match: {literal: null}
 rows:
   # ...after the template that builds the collected rows
   - id: expected_week2
@@ -814,7 +813,7 @@ rows:
     group_by: [VS.USUBJID, VS.VSTESTCD]
     filter: "COVERED IS NULL"
     derivations:
-      AVISIT: {literal: WEEK 2}
+      AVISIT: "'WEEK 2'"
       COVERED: COVER.VSSEQ
 ```
 
@@ -878,8 +877,7 @@ behave there like stored fields.
 Fails: `unknown_field`, `duplicate_derivation`.
 Evidence: `schema-lookup-intermediate-derived-filter`, `schema-lookup-intermediate-correlated-derive`, `schema-lookup-intermediate-closest-datetime`, `schema-window-intermediate-rank`, `negative-lookup-derivation-scope`, `rust/crates/yamaa-adapters/tests/execution_lookup_read_contexts.rs`, `rust/crates/yamaa-adapters/tests/execution_lookup_matched_derivations.rs`.
 
-Each entry is either an untyped expression, including its
-`{value: <expression>}` wrapper, or a typed binding
+Each entry is either an untyped expression or a typed binding
 `{type: <column_type>, derivation: <expression>, unconvertible: <literal>?}`.
 An untyped entry cannot declare `unconvertible`, and an untyped handler
 wrapper fails schema validation. A typed entry converts each result under
@@ -896,7 +894,7 @@ derivations:
   VISITN:
     type: int
     derivation: {str_extract: {source: VISIT, pattern: '^WEEK ([0-9]+)$', group: 1}}
-    unconvertible: {literal: null}
+    unconvertible: null
 ```
 
 `WEEK 02` thus yields the integer `2` before numeric matching. `check` reports
@@ -953,10 +951,9 @@ excluded by a predicate.
 intermediates:
   - id: EOT
     dataset: DS
+    key: [STUDYID, USUBJID]
     derivations:
-      EOT_FALLBACK:
-        compute:
-          expr: "DSSTDY + DSSEQ / 1000"
+      EOT_FALLBACK: "DSSTDY + DSSEQ / 1000"
     filter: "DS.EOT_FALLBACK IS NOT NULL"
     order_by: [DS.EOT_FALLBACK]
     keep: first
@@ -972,17 +969,17 @@ intermediates:
     dataset: SRC
     key: [ID]
     derivations:
-      DIST: {compute: {expr: "ABS(DAY - BASE.REF)"}}
+      DIST: "ABS(DAY - BASE.REF)"
     filter: "SRC.DIST IS NOT NULL"
     order_by: [SRC.DIST]
     keep: first
     columns: [VALUE, DIST]
-    no_match: {literal: null}
 ```
 
 The `filter` drops every `SRC` record whose distance is missing. When the
 current input record's reference is missing, every distance is missing, no
-candidate survives, and the read takes `no_match` ([LOOKUP-24](#lookup-24)).
+candidate survives, and the read answers absence: missing, since `PICK`
+declares no `absent` ([LOOKUP-24](#lookup-24)).
 
 `ABS(DAY - BASE.REF)` is the number of days between two days only on a
 numbering without a gap. A study day (`--DY`, `ADY`) has no day 0
@@ -997,7 +994,7 @@ candidate's `ADT` and the reference's `BASE.REFDT`, with `diff`
 ```yaml
     derivations:
       GAP: {diff: {type: date, start: ADT, end: BASE.REFDT, unit: day}}
-      DIST: {compute: {expr: "ABS(GAP)"}}
+      DIST: "ABS(GAP)"
 ```
 
 To fall back to a candidate instead, leave the filter out and place missing
@@ -1038,9 +1035,9 @@ distance:
 
 ```yaml
     derivations:
-      ADTM: {impute: {type: datetime, source: DTC, minimum_source_precision: day, time: first}}
+      ADTM: {impute: {type: datetime, source: DTC, time: first}}
       GAP: {diff: {type: datetime, start: ADTM, end: BASE.REFDTM, unit: hour}}
-      DIST: {compute: {expr: "ABS(GAP)"}}
+      DIST: "ABS(GAP)"
 ```
 
 `diff` with `type: datetime` reads two `datetime` values
@@ -1052,23 +1049,24 @@ collected as text that may be partial or have no time, such as an SDTM
 reads the completed value:
 
 ```yaml
-      REFDTM: {impute: {type: datetime, source: BASE.REFDTC, minimum_source_precision: day, time: first}}
+      REFDTM: {impute: {type: datetime, source: BASE.REFDTC, time: first}}
       GAP: {diff: {type: datetime, start: ADTM, end: REFDTM, unit: hour}}
 ```
 
 `GAP`, and with it `DIST`, is missing when `ADTM` or the reference is missing,
-including a reference whose text is coarser than its minimum precision. A
+including a reference whose text is coarser than a day, since without a `day`
+rule `impute` supplies only the time ([TIME-8](temporal.md#time-8)). A
 candidate without a distance is dropped by the filter, or placed last by
 `nulls: last` when the filter is left out. For each candidate's `DTC`:
 
 - A missing `DTC` gives a missing `ADTM` without any handler
   ([TIME-13](temporal.md#time-13)).
 - Partial collected text such as `2024-03` is valid
-  ([TIME-7](temporal.md#time-7)), so `invalid` never answers it. Under
-  `minimum_source_precision: day` it gives a missing `ADTM` and has no
-  distance ([TIME-8](temporal.md#time-8)). A coarser minimum completes it
-  from the rules that minimum requires ([TIME-10](temporal.md#time-10)):
-  with `minimum_source_precision: month` and `day: first`, `2024-03` becomes
+  ([TIME-7](temporal.md#time-7)), so `invalid` never answers it. Without a
+  `day` rule it gives a missing `ADTM` and has no distance
+  ([TIME-8](temporal.md#time-8)). A declared `day` rule completes it, and a
+  `month` rule, which completes a year alone, needs one too
+  ([TIME-10](temporal.md#time-10)): with `day: first`, `2024-03` becomes
   `2024-03-01T00:00:00`, and the distance is measured from that imputed
   value. To measure in days instead, complete a `date` with `impute` of
   `type: date`, which takes no `time`, and take the day difference with
@@ -1079,7 +1077,7 @@ candidate without a distance is dropped by the filter, or placed last by
 - Text that is not collected date text, such as `2024-03-10 09:00`, fails as
   `invalid_date_text` at the derivation's path ([TIME-13](temporal.md#time-13)).
   One such record in `SRC` stops the run, even when no current input record
-  matches its key, unless `invalid: {literal: null}` answers it with a missing
+  matches its key, unless `invalid: null` answers it with a missing
   `ADTM` ([COLUMN-10](columns.md#column-10)).
 
 `time: first` is not neutral for a distance. Against a 09:00 reference, a
@@ -1090,7 +1088,7 @@ for a candidate or the reference, comes from the statistical analysis plan.
 When the imputed datetime is published, publish its imputation flags beside
 it: derive `ATMF: {imputation_flag: {source: ADTM, part: time}}` after `ADTM`
 ([TIME-18](temporal.md#time-18)), and a `part: date` flag as well when a
-coarser minimum supplies a day or month, and list them in `columns`. `ATMF`
+`day` or `month` rule supplies a date field, and list them in `columns`. `ATMF`
 is `H` for a date-only candidate, and `seconds_collected: false` keeps a study
 that collects times to the minute from flagging every timed candidate `S`.
 
@@ -1101,9 +1099,9 @@ those collected to the minute or the second:
 ```yaml
     derivations:
       PREC: {precision: {type: datetime, source: DTC}}
-      ADTM: {impute: {type: datetime, source: DTC, minimum_source_precision: day, time: first}}
+      ADTM: {impute: {type: datetime, source: DTC, time: first}}
       GAP: {diff: {type: datetime, start: ADTM, end: BASE.REFDTM, unit: hour}}
-      DIST: {compute: {expr: "ABS(GAP)"}}
+      DIST: "ABS(GAP)"
     filter: "SRC.DIST IS NOT NULL AND SRC.PREC IN ('minute', 'second')"
 ```
 
@@ -1210,6 +1208,7 @@ Evidence: `schema-lookup-intermediate-unique`, `negative-lookup-duplicate-interm
 ```yaml
 - id: DS_EOS
   dataset: DS
+  key: [STUDYID, USUBJID]
   filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.DSDECOD <> 'SCREEN FAILURE'"
   verifications:
     - unique: [STUDYID, USUBJID]
