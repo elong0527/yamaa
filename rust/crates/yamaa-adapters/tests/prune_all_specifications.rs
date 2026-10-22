@@ -67,11 +67,13 @@ impl Study {
         let dir = self.0.join(case);
         fs::create_dir_all(&dir).unwrap();
         fs::write(dir.join("flat.yaml"), body).unwrap();
-        // A null parent is absent, so this form takes the standalone route.
+        // A null parent is absent only in 0.5, so this form takes the 0.5
+        // standalone route; a 1.0 layer without a parent omits the field
+        // (LAYER-2). 0.5-only until #3447.
         fs::write(
             dir.join("null_parent.yaml"),
             body.replacen(
-                "schema_version: \"1.0\"\n",
+                "yamaa: \"1.0\"\ntype: spec\n",
                 "schema_version: \"1.0\"\nparent: null\n",
                 1,
             ),
@@ -79,7 +81,7 @@ impl Study {
         .unwrap();
         fs::write(
             dir.join("child.yaml"),
-            "schema_version: \"1.0\"\nparent: flat.yaml\n",
+            "yamaa: \"1.0\"\ntype: spec\nparent: flat.yaml\n",
         )
         .unwrap();
         let flat = self.build(case, "flat.yaml");
@@ -89,7 +91,7 @@ impl Study {
     }
 }
 
-const HEADER: &str = "schema_version: \"1.0\"\ndomain: XA\nkeys: [ID]\ninput:\n  OBS: {path: input/obs.csv, types: {AGE: int}}\noutput:\n  path: xa.csv\n  columns: [ID, AGE]\n";
+const HEADER: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: XA\nkeys: [ID]\ninput:\n  OBS: {path: input/obs.csv, types: {AGE: int}}\noutput:\n  path: xa.csv\n  columns: [ID, AGE]\n";
 const COLUMNS: &str = "columns:\n  - name: ID\n    type: str\n    derivation: OBS.ID\n  - name: AGE\n    type: int\n    derivation: OBS.AGE\n";
 
 #[test]

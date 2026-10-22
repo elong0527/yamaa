@@ -378,18 +378,18 @@ pub(super) fn preflight(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::front_end::v0_5::tests::{admit, column, derivation, document, op};
     use crate::json::Value as Json;
     use crate::test_document::Tree;
+    use crate::test_specification::{column, derivation, document, lower, op};
 
     /// TIME-5 refuses a datetime `diff` that counts both endpoints, naming
-    /// the field and the values its surface writes: 0.5's `bounds`, and 1.0's
-    /// `closed`, whose `both` lowers to the node 0.5's `inclusive` does
-    /// (P-ORD-2).
+    /// the field and the values its surface writes: 1.0's `closed`, whose
+    /// `both` lowers to the node 0.5's `inclusive` does (P-ORD-2), and 0.5's
+    /// `bounds`, until #3447 deletes the 0.5 front end.
     #[test]
     fn a_datetime_diff_s_endpoints_are_refused_as_its_surface_writes_them() {
-        let tree = document(
-            vec![column(
+        let days = |endpoints: (&str, &str)| {
+            column(
                 "DAYS",
                 "int",
                 derivation(op(
@@ -399,13 +399,11 @@ mod tests {
                         ("end", Tree::text("SRC.END")),
                         ("type", Tree::text("datetime")),
                         ("unit", Tree::text("day")),
-                        ("bounds", Tree::text("inclusive")),
+                        (endpoints.0, Tree::text(endpoints.1)),
                     ]),
                 )),
-            )],
-            vec![],
-        );
-        let mut spec = crate::front_end::v0_5::lower(&admit(tree), None).into_spec();
+            )
+        };
         let refusal = |spec: &ast::Spec| {
             let e = spec.columns[1].derivation.as_ref().unwrap().expr;
             let Ok(Err(findings)) = tree_kind(spec, e) else {
@@ -418,6 +416,23 @@ mod tests {
         };
         let permitted = |value: &str| Json::Array(vec![Json::String(value.into())]);
 
+        let spec = lower(document(vec![days(("closed", "both"))], vec![]));
+        let diagnostic = refusal(&spec);
+        assert_eq!(
+            diagnostic.code,
+            crate::diagnostic::ConditionCode::TemporalBounds
+        );
+        assert_eq!(
+            diagnostic.spec_paths,
+            ["columns.DAYS.derivation.diff.closed"]
+        );
+        assert_eq!(diagnostic.context["value"], Json::String("both".into()));
+        assert_eq!(diagnostic.context["permitted"], permitted("right"));
+
+        // The 0.5 spelling, 0.5-only until #3447.
+        use crate::front_end::v0_5::tests::{admit, document as legacy};
+        let tree = legacy(vec![days(("bounds", "inclusive"))], vec![]);
+        let spec = crate::front_end::v0_5::lower(&admit(tree), None).into_spec();
         let diagnostic = refusal(&spec);
         assert_eq!(
             diagnostic.code,
@@ -432,18 +447,5 @@ mod tests {
             Json::String("inclusive".into())
         );
         assert_eq!(diagnostic.context["permitted"], permitted("exclusive"));
-
-        spec.header.surface = ast::Surface::V1 { minor: 0 };
-        let diagnostic = refusal(&spec);
-        assert_eq!(
-            diagnostic.code,
-            crate::diagnostic::ConditionCode::TemporalBounds
-        );
-        assert_eq!(
-            diagnostic.spec_paths,
-            ["columns.DAYS.derivation.diff.closed"]
-        );
-        assert_eq!(diagnostic.context["value"], Json::String("both".into()));
-        assert_eq!(diagnostic.context["permitted"], permitted("right"));
     }
 }

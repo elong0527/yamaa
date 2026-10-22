@@ -1836,15 +1836,16 @@ mod tests {
         fn seq(&mut self, items: Vec<usize>) -> usize {
             self.push(N::Sequence(items))
         }
+        /// Quoted text, as an expression field writes a literal (D18).
+        fn literal(&mut self, value: &str) -> usize {
+            self.text(&format!("'{value}'"))
+        }
         fn literal_derivation(&mut self, value: &str) -> usize {
-            let payload = self.text(value);
-            let value = self.map(vec![("literal", payload)]);
+            let value = self.literal(value);
             self.map(vec![("value", value)])
         }
         fn source_derivation(&mut self, variable: &str) -> usize {
-            let variable = self.text(variable);
-            let payload = self.map(vec![("variable", variable)]);
-            let value = self.map(vec![("source", payload)]);
+            let value = self.text(variable);
             self.map(vec![("value", value)])
         }
         fn column(&mut self, name: &str, derivation: usize) -> usize {
@@ -1903,8 +1904,7 @@ mod tests {
         let mut arena = Arena::new();
         let id_default = arena.source_derivation("SRC.ID");
         let big_default = {
-            let payload = arena.text(&large);
-            let value = arena.map(vec![("literal", payload)]);
+            let value = arena.literal(&large);
             let handler = arena.text("unconvertible-big");
             arena.map(vec![("value", value), ("unconvertible", handler)])
         };
@@ -1958,7 +1958,11 @@ mod tests {
         let input = arena.map(vec![("SRC", src), ("ALT", alt)]);
         let key = arena.text("ID");
         let keys = arena.seq(vec![key]);
+        let version = arena.text("1.0");
+        let file_type = arena.text("spec");
         let root = arena.map(vec![
+            ("yamaa", version),
+            ("type", file_type),
             ("input", input),
             ("keys", keys),
             ("columns", columns),
@@ -1981,7 +1985,7 @@ mod tests {
         ])
         .unwrap();
         let intermediates = intermediates::Declarations::default();
-        let spec = crate::front_end::v0_5::lower_document(&document, None).into_spec();
+        let spec = crate::front_end::v1::spec::lower(&document, None).into_spec();
         let admission = derivations::Admission {
             project: None,
             intermediates: &intermediates,
@@ -2013,7 +2017,7 @@ mod tests {
         let a_big = declaration(&rows, 0, 1);
         let c_big = declaration(&rows, 2, 1);
         assert!(std::sync::Arc::ptr_eq(a_big, c_big));
-        assert_eq!(a_big.path, "columns.BIG.derivation.literal");
+        assert_eq!(a_big.path, "columns.BIG.derivation");
         assert!(std::ptr::eq(
             literal_payload(&spec, a_big),
             literal_payload(&spec, c_big)
@@ -2036,13 +2040,13 @@ mod tests {
         // Template 1 overrides BIG: its own declaration, path and payload.
         let b_big = declaration(&rows, 1, 1);
         assert!(!std::sync::Arc::ptr_eq(b_big, declaration(&rows, 0, 1)));
-        assert_eq!(b_big.path, "rows[1].derivations.BIG.literal");
+        assert_eq!(b_big.path, "rows.records-b.derivations.BIG");
         assert_eq!(literal_payload(&spec, b_big), "big-override");
         assert!(b_big.handler.is_none());
         // Template 0 overrides NOTE likewise.
         let a_note = declaration(&rows, 0, 2);
         assert!(!std::sync::Arc::ptr_eq(a_note, declaration(&rows, 1, 2)));
-        assert_eq!(a_note.path, "rows[0].derivations.NOTE.literal");
+        assert_eq!(a_note.path, "rows.records-a.derivations.NOTE");
         assert_eq!(literal_payload(&spec, a_note), "note-a");
         // Every template still carries every selected column exactly once.
         for template in &rows.templates {

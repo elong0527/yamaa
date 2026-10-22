@@ -2,19 +2,17 @@
 mod project {
     mod producer_contract {
         use yamaa_core::{
-            producer_contract::{prepare, Cause, Error},
-            schema::{Document, SpecificationDocument},
+            producer_contract::{prepare_document as prepare, Cause, Error},
+            schema::Document,
             value::ColumnType,
         };
 
         use crate::support::document::Tree;
 
-        fn document(
-            columns: &[(&str, &str, Option<&str>)],
-            output: &[&str],
-        ) -> SpecificationDocument {
+        fn document(columns: &[(&str, &str, Option<&str>)], output: &[&str]) -> Document {
             let tree = Tree::map(vec![
-                ("schema_version", Tree::text("1.0")),
+                ("yamaa", Tree::text("1.0")),
+                ("type", Tree::text("spec")),
                 ("domain", Tree::text("PRODUCER")),
                 (
                     "input",
@@ -35,13 +33,7 @@ mod project {
                                     ("type", Tree::text(kind)),
                                     (
                                         "derivation",
-                                        Tree::map(vec![(
-                                            "value",
-                                            Tree::map(vec![(
-                                                "source",
-                                                Tree::map(vec![("variable", Tree::text("SRC.ID"))]),
-                                            )]),
-                                        )]),
+                                        Tree::map(vec![("value", Tree::text("SRC.ID"))]),
                                     ),
                                 ];
                                 if let Some(label) = label {
@@ -63,11 +55,7 @@ mod project {
                     ]),
                 ),
             ]);
-            let mut nodes = Vec::new();
-            let root = tree.append(&mut nodes);
-            SpecificationDocument::admit(Document::new(nodes, root).unwrap())
-                .unwrap()
-                .unwrap()
+            tree.document()
         }
         const FIELDS: &[(&str, &str, Option<&str>)] = &[
             ("VALUE", "float", Some("Reported value")),

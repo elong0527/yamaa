@@ -14,20 +14,12 @@
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
-use std::sync::atomic::{AtomicUsize, Ordering};
 
 use yamaa::{CancellationToken, ContextValue, Diagnostic, Engine, EngineOptions, Host, OdmOptions};
 
-const HINT: &str = "run 'yamaa --help' for usage\n";
+use crate::support::{yamaa_in, Scratch};
 
-/// Run the binary with `arguments` in `directory`.
-fn yamaa_in(directory: &Path, arguments: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_yamaa"))
-        .args(arguments)
-        .current_dir(directory)
-        .output()
-        .expect("the yamaa binary starts")
-}
+const HINT: &str = "run 'yamaa --help' for usage\n";
 
 /// Run the binary with `arguments` in this test's own directory, where the
 /// facade calls of the test run too.
@@ -76,12 +68,9 @@ fn json(issues: &[Diagnostic]) -> String {
     format!("[{}]", objects.join(","))
 }
 
-static NEXT: AtomicUsize = AtomicUsize::new(0);
-
-/// A fresh directory of this test's own, canonical and without a Windows
-/// verbatim prefix, so its files are spelled as the engine spells the files
-/// it writes (D38).
-struct Study(PathBuf);
+/// A scratch directory of this test's own, which `new` fills with the study
+/// below.
+struct Study(Scratch);
 
 /// DM builds; ADAE fails its own check: ASTDY reads TRTSDT, which is
 /// declared after it (COLUMN-5); ADTTE reads ADAE through its `schema` link,
@@ -93,16 +82,7 @@ const PROJECT: &str = "yamaa: \"1.0\"\ntype: project\nsdtm:\n  specs: [sdtm/dm.y
 
 impl Study {
     fn empty() -> Self {
-        let directory = std::env::temp_dir().join(format!(
-            "yamaa-cli-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
-        let _ = std::fs::remove_dir_all(&directory);
-        std::fs::create_dir_all(&directory).unwrap();
-        let canonical = std::fs::canonicalize(&directory).unwrap();
-        let text = canonical.to_str().unwrap();
-        Self(PathBuf::from(text.strip_prefix(r"\\?\").unwrap_or(text)))
+        Self(Scratch::new("cli"))
     }
 
     fn new() -> Self {
@@ -118,15 +98,13 @@ impl Study {
     }
 
     fn write(&self, name: &str, contents: impl AsRef<[u8]>) {
-        let path = self.0.join(name);
-        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-        std::fs::write(path, contents).unwrap();
+        self.0.write(name, contents);
     }
 
     /// A file of the study as the engine spells it: absolute, with forward
     /// slashes.
     fn path(&self, name: &str) -> String {
-        format!("{}/{name}", self.0.to_str().unwrap().replace('\\', "/"))
+        format!("{}/{name}", self.0.spelled(""))
     }
 
     fn exists(&self, name: &str) -> bool {
@@ -141,12 +119,6 @@ impl Study {
             .collect::<Vec<_>>();
         names.sort();
         names
-    }
-}
-
-impl Drop for Study {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
     }
 }
 
