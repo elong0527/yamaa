@@ -1,0 +1,10 @@
+phase: validation
+condition: submission_data_type_not_admitted
+spec_paths:
+  - columns.TRTSDT.submission
+rule: SUB-6
+context:
+  column: TRTSDT
+  declared_type: date
+  data_type: date
+  model: ADaM

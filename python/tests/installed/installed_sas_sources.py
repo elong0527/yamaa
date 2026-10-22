@@ -157,7 +157,8 @@ class SasSources(unittest.TestCase):
         for file in owner["files"]:
             with self.subTest(file=file):
                 document = {
-                    "schema_version": "1.0",
+                    "yamaa": "1.0",
+                    "type": "spec",
                     "domain": "TEST",
                     "base": "SRC",
                     "keys": ["RECORD"],

@@ -44,6 +44,9 @@ pub struct CapturedFindings {
     source: Source,
     document: Option<yamaa_core::schema::Document>,
     findings: Vec<SchemaDiagnostic>,
+    /// Whether the findings are those of a file a referencing field names,
+    /// which each names as its `source` and `entry` ([`Self::name_file`]).
+    named: bool,
 }
 impl CapturedFindings {
     /// Findings of one pass over `document`, read from `source`, whose context
@@ -59,6 +62,26 @@ impl CapturedFindings {
             source,
             document,
             findings,
+            named: false,
+        }
+    }
+    /// Read the findings as those of the file a referencing field names,
+    /// prepared as the entry of its own preparation: each names that file as
+    /// its `source` and `entry`, as every finding further into it does, so
+    /// that it is located there (SCHEMA-2, P-ISSUE-1).
+    pub(crate) fn name_file(&mut self) {
+        self.named = true;
+    }
+    /// The provenance each finding names: the named file as `source` and
+    /// `entry`, or none for the call's own file.
+    pub(crate) fn source_context(&self) -> Vec<(&'static str, &str)> {
+        if self.named {
+            vec![
+                ("source", self.source.identity.as_str()),
+                ("entry", self.source.identity.as_str()),
+            ]
+        } else {
+            Vec::new()
         }
     }
     pub fn schema(&self) -> &CapturedSchema {
@@ -279,12 +302,12 @@ impl CapturedSchema {
             StructuralError::Normalize(error) => Error::Normalize(error),
             StructuralError::Findings(failure) => {
                 let (source, document, findings) = failure.into_parts();
-                Error::Findings(Box::new(CapturedFindings {
-                    schema: Arc::clone(self),
+                Error::Findings(Box::new(CapturedFindings::new(
+                    Arc::clone(self),
                     source,
-                    document: Some(document),
+                    Some(document),
                     findings,
-                }))
+                )))
             }
         })?;
         let (source, document, locations, class_name, normalized) = prepared.into_parts();
@@ -328,26 +351,21 @@ impl CapturedSchema {
             Err(StandaloneError::Normalize(failure)) => {
                 let standalone_preparation::FailureContext { error, input } = *failure;
                 return Err(match error {
-                    NormalizationError::Invalid(findings) => {
-                        Error::Findings(Box::new(CapturedFindings {
-                            schema: Arc::clone(self),
-                            source,
-                            document: input,
-                            findings,
-                        }))
-                    }
+                    NormalizationError::Invalid(findings) => Error::Findings(Box::new(
+                        CapturedFindings::new(Arc::clone(self), source, input, findings),
+                    )),
                     error => Error::Normalize(error),
                 });
             }
             Err(StandaloneError::Validation(error)) => return Err(Error::Validation(error)),
             Err(StandaloneError::Dependencies(error)) => return Err(Error::Dependencies(*error)),
             Err(StandaloneError::Model(findings)) => {
-                return Err(Error::Findings(Box::new(CapturedFindings {
-                    schema: Arc::clone(self),
+                return Err(Error::Findings(Box::new(CapturedFindings::new(
+                    Arc::clone(self),
                     source,
-                    document: None,
+                    None,
                     findings,
-                })));
+                ))));
             }
         };
         let (document, model, origins, windows) = prepared.into_parts();
@@ -478,22 +496,19 @@ fn standalone_dispatch_error(
     match error {
         Failure::InheritanceRequired => Error::InheritanceRequired,
         Failure::Normalize(failure) => match failure.error {
-            NormalizationError::Invalid(findings) => Error::Findings(Box::new(CapturedFindings {
-                schema: Arc::clone(schema),
-                source,
-                document: failure.input,
-                findings,
-            })),
+            NormalizationError::Invalid(findings) => Error::Findings(Box::new(
+                CapturedFindings::new(Arc::clone(schema), source, failure.input, findings),
+            )),
             error => Error::Normalize(error),
         },
         Failure::Validation(error) => Error::Validation(error),
         Failure::Dependencies(error) => Error::Dependencies(*error),
-        Failure::Model(findings) => Error::Findings(Box::new(CapturedFindings {
-            schema: Arc::clone(schema),
+        Failure::Model(findings) => Error::Findings(Box::new(CapturedFindings::new(
+            Arc::clone(schema),
             source,
-            document: None,
+            None,
             findings,
-        })),
+        ))),
     }
 }
 

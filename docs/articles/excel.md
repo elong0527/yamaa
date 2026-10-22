@@ -131,8 +131,61 @@ and must not carry a governed key such as `core`, `codelist`, `length`, or
 | Sort Order (submission sort) | `output.order_by` | A presentation order applied after every check |
 | Input datasets (usually only in a Comment) | `input:` | Every input is declared and named; an input read by a join declares the columns it joins on in `key` |
 | Structure: "one record per subject per visit" | `base` plus `rows` templates | Row count comes from these, not from a sentence |
-| Copy the corporate template and edit | `parent:`, and `clear:` | Real layering; a change to the parent flows down, and a layer removes an inherited value only by listing its path in `clear` (Specification composition) |
+| Copy the corporate template and edit | `parent:`, and `clear:` | Real layering; a change to the parent flows down, and a layer removes an inherited value only by listing its path in `clear` (Specification composition). A layer names one parent; for a fragment several templates share, see [below](#a-fragment-shared-by-several-templates) |
 | Dataset-level review checks | `verifications:` | `unique`, `row_count`, `all_or_none`, `assert` |
+
+### A fragment shared by several templates
+
+A study often builds a dataset from a template plus small reusable
+fragments, each adding or changing a few variables: an adverse-event
+duration, a treatment-period assignment. Each file names at most one
+`parent`, so the template, its fragments and the study's file form one
+chain. The fragment names the template as its parent, and the study's file
+names the fragment:
+
+```yaml
+# ae-duration-on-adae.yaml: the duration fragment, on the ADAE template
+yamaa: "1.0"
+type: spec
+parent: adae-template.yaml
+
+columns:
+  - name: ADURN
+    type: int
+    label: Analysis Duration (N)
+    derivation:
+      diff: {type: date, start: ASTDT, end: AENDT, unit: day, closed: both}
+```
+
+```yaml
+# adae.yaml: the study's ADAE, on the duration fragment
+yamaa: "1.0"
+type: spec
+parent: ae-duration-on-adae.yaml
+
+output:
+  path: adae.csv
+  columns: [USUBJID, AESEQ, ASTDT, AENDT, ADURN]
+```
+
+A fragment used on several templates is one file per template, because its
+`parent` names only one of them. The same duration on an ADCE template is a
+second file, `ae-duration-on-adce.yaml`, that differs only in its `parent`, so
+a fragment used on N templates becomes N files. Generate those files from one
+source for the fragment, one chain for each combination of template and
+fragments a study selects, so that the copies never change separately.
+
+Renaming a 0.4.0 `parents:` list to `parent:` and writing it as a chain keeps
+what the list composed, but not the reuse: a fragment file composes only on
+the template its `parent` names. The `hint` that a `parents:` key or a list
+written at `parent` reports shows how to write the chain; it does not make
+one fragment file serve several templates.
+
+A separate `include:` key that would apply shared fragments on top of the
+`parent` chain is proposed in
+[#3615](https://github.com/elong0527/yamaa/issues/3615) as the planned
+answer. Until it is decided and released, one generated chain per
+combination is the supported route.
 
 ### 2.2 Variable level
 

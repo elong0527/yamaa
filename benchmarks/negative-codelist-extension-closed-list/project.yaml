@@ -1,0 +1,21 @@
+yamaa: "1.0"
+type: project
+codelists:
+  - standard:
+      name: CDISC/NCI
+      publishing_set: SDTM
+      version: "2023-12-15"
+    codelists:
+      # The published no-yes list admits no additions, yet an unknown answer
+      # was added to it as a sponsor extension.
+      - id: NY
+        name: No Yes Response
+        items:
+          - value: N
+          - value: Y
+          - value: U
+            extended: true
+
+sdtm:
+  specs:
+    - spec.yaml

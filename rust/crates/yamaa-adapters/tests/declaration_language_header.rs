@@ -346,9 +346,11 @@ mod declaration {
         /// (SCHEMA-2): a version the engine does not read, or another type,
         /// is refused at `input.<name>.schema`, naming the producer as
         /// `source`, by the check and the run of each host. A malformed
-        /// header stays a finding in the producer; a producer that declares
-        /// `schema_version` is read by that header, and a 0.5 specification
-        /// reads its links under the 0.5 rules (D75).
+        /// header stays a finding in the producer, which names the producer
+        /// as `source` and `entry`, as a finding further into it does
+        /// (#3581); a producer that declares `schema_version` is read by that
+        /// header and keeps its findings as at the `yamaa-v0.5.0` tag, and a
+        /// 0.5 specification reads its links under the 0.5 rules (D75).
         #[test]
         fn a_1_0_schema_link_refuses_a_producer_it_does_not_read_at_the_link() {
             let study = Study::new();
@@ -383,13 +385,71 @@ mod declaration {
                 }
             }
             // A malformed header is a finding in the producer, at its own
-            // `yamaa`.
-            study.write("producer.yaml", "yamaa: 1.0\ntype: spec\n");
-            let issue = only(&study.check("spec.yaml", None)).clone();
-            assert_eq!(
-                (issue.condition(), issue.spec_paths.as_slice()),
-                ("invalid_field_type", ["yamaa".to_string()].as_slice())
-            );
+            // `yamaa` or at the field it lacks, naming the producer.
+            let named = |mut context: Value| {
+                context["source"] = Value::String(producer.clone());
+                context["entry"] = Value::String(producer.clone());
+                context
+            };
+            let legacy = LEGACY.replace("input: {SRC: input.csv}", link);
+            study.write("legacy.yaml", &legacy);
+            for (consumer, text, expected) in [
+                (
+                    "spec.yaml",
+                    "yamaa: 1.0\ntype: spec\n",
+                    (
+                        "validation",
+                        "invalid_field_type",
+                        Some("SCHEMA-12"),
+                        vec!["yamaa".to_string()],
+                        named(json!({"actual": "float", "expected": "language_version"})),
+                    ),
+                ),
+                (
+                    "spec.yaml",
+                    "yamaa: \"1.0\"\n",
+                    (
+                        "validation",
+                        "missing_required_field",
+                        Some("SCHEMA-13"),
+                        vec!["type".to_string()],
+                        named(json!({"class": "root_class", "field": "type"})),
+                    ),
+                ),
+                // A 0.5 consumer reads its producer's header as that file's
+                // own.
+                (
+                    "legacy.yaml",
+                    "yamaa: \"1.4\"\ntype: spec\n",
+                    header_row(
+                        "unsupported_language_version",
+                        "yamaa",
+                        named(json!({"version": "1.4", "language_versions": ["1.0"]})),
+                    ),
+                ),
+                // A producer that declares `schema_version` keeps its own
+                // findings as at the `yamaa-v0.5.0` tag (D75).
+                (
+                    "spec.yaml",
+                    &format!("{LEGACY}bogus: 1\n"),
+                    (
+                        "validation",
+                        "unknown_field",
+                        Some("SCHEMA-13"),
+                        vec!["bogus".to_string()],
+                        json!({"class": "root_class", "field": "bogus"}),
+                    ),
+                ),
+            ] {
+                study.write("producer.yaml", text);
+                for host in [Language::Python, Language::R] {
+                    assert_eq!(
+                        study.routes(host, consumer).map(|issues| rows(&issues)),
+                        [vec![expected.clone()], vec![expected.clone()]],
+                        "{host:?}, {consumer}: {text}"
+                    );
+                }
+            }
             // A producer that declares `schema_version` supplies its contract.
             study.write(
                 "producer.yaml",
@@ -401,20 +461,6 @@ mod declaration {
                     ),
             );
             assert_eq!(study.check("spec.yaml", None), []);
-            // A 0.5 consumer reads its producer's header as that file's own.
-            study.write("producer.yaml", "yamaa: \"1.4\"\ntype: spec\n");
-            study.write(
-                "legacy.yaml",
-                &LEGACY.replace("input: {SRC: input.csv}", link),
-            );
-            let issue = only(&study.check("legacy.yaml", None)).clone();
-            assert_eq!(
-                (issue.condition(), issue.spec_paths.as_slice()),
-                (
-                    "unsupported_language_version",
-                    ["yamaa".to_string()].as_slice()
-                )
-            );
         }
 
         /// A 1.0 project reads the header of each specification it lists at
@@ -998,6 +1044,63 @@ mod declaration {
                 Value::Object(issue.context.clone()),
                 json!({"minimum": 1, "source": entry, "entry": entry})
             );
+        }
+
+        /// LAYER-2 and SCHEMA-12: a layer names at most one parent, so a list
+        /// written at `parent` fails as `invalid_field_type` in its layer,
+        /// with the hint an undeclared `parents` key carries (SCHEMA-13).
+        #[test]
+        fn a_list_of_parents_carries_the_one_parent_hint() {
+            let study = Study::new();
+            study.write("base.yaml", BASE);
+            let entry = study.path("spec.yaml");
+            let hint = "write at most one parent per file; replace parents: [organization.yaml, compound.yaml] with parent: compound.yaml in the entry and parent: organization.yaml in compound.yaml; organization.yaml has no parent";
+            for (written, condition, rule, path, context) in [
+                (
+                    "parent: [base.yaml, fragment.yaml]",
+                    "invalid_field_type",
+                    "SCHEMA-12",
+                    "parent",
+                    json!({"expected": "path", "actual": "sequence", "hint": hint, "source": entry, "entry": entry}),
+                ),
+                (
+                    "parents: [base.yaml, fragment.yaml]",
+                    "unknown_field",
+                    "SCHEMA-13",
+                    "parents",
+                    json!({"field": "parents", "class": "root_class", "hint": hint, "source": entry, "entry": entry}),
+                ),
+            ] {
+                study.write("spec.yaml", &CHILD.edit("parent: base.yaml", written));
+                let issues: Vec<_> = study
+                    .check("spec.yaml", None)
+                    .into_iter()
+                    .map(|issue| {
+                        (
+                            issue.phase(),
+                            issue.condition(),
+                            issue.rule(),
+                            issue.spec_paths,
+                            Value::Object(issue.context),
+                            issue.source_span,
+                            issue.operand_route,
+                        )
+                    })
+                    .collect();
+                assert_eq!(
+                    issues,
+                    [(
+                        "validation",
+                        condition,
+                        Some(rule),
+                        vec![path.to_string()],
+                        context,
+                        None,
+                        None
+                    )],
+                    "{written}"
+                );
+            }
         }
 
         /// The diagnostic at a referencing field whose file is refused.

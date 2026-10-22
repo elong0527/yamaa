@@ -73,7 +73,8 @@ const ADSL: &str = "STUDYID,USUBJID,TRTSDT,ARM,AGE,SAFFL\nS,S-1,2025-01-10,drug 
 
 fn specification(adsl: &str, columns: &str, extra: &str) -> String {
     format!(
-        "schema_version: \"1.0\"\n\
+        "yamaa: \"1.0\"\n\
+         type: spec\n\
          domain: ADAE\n\
          keys: [STUDYID, USUBJID, AESEQ]\n\
          input:\n\
@@ -104,7 +105,7 @@ fn every_value_read_counts_its_missing_record_and_a_predicate_read_does_not() {
     let fixture = Fixture::new(&format!(
         "{}{READS}",
         specification(
-            "{path: adsl.csv, types: {AGE: int}}",
+            "{path: adsl.csv, key: [STUDYID, USUBJID], types: {AGE: int}}",
             ", TRTSDT, ARMU, SAFE",
             ""
         )
@@ -147,7 +148,11 @@ fn every_value_read_counts_its_missing_record_and_a_predicate_read_does_not() {
 fn an_input_requiring_a_match_fails_a_concise_read_as_unmatched_key() {
     let fixture = Fixture::new(&format!(
         "{}  - {{name: TRTSDT, type: str, derivation: ADSL.TRTSDT}}\n",
-        specification("{path: adsl.csv, require_match: true}", ", TRTSDT", "")
+        specification(
+            "{path: adsl.csv, key: [STUDYID, USUBJID], require_match: true}",
+            ", TRTSDT",
+            "",
+        )
     ));
     let failure = fixture.failure();
     assert_eq!(failure["phase"], "join");
@@ -182,7 +187,7 @@ fn an_input_requiring_a_match_fails_operand_and_predicate_reads_at_their_paths()
         let fixture = Fixture::new(&format!(
             "{}  - {{name: {column}, type: str, derivation: {derivation}}}\n",
             specification(
-                "{path: adsl.csv, types: {AGE: int}, require_match: true}",
+                "{path: adsl.csv, key: [STUDYID, USUBJID], types: {AGE: int}, require_match: true}",
                 &format!(", {column}"),
                 ""
             )
@@ -201,7 +206,11 @@ fn a_declared_absent_answers_before_the_input_requirement() {
          \x20   type: str\n\
          \x20   derivation:\n\
          \x20     source: {{variable: ADSL.TRTSDT, absent: NONE}}\n",
-        specification("{path: adsl.csv, require_match: true}", ", TRTSDT", "")
+        specification(
+            "{path: adsl.csv, key: [STUDYID, USUBJID], require_match: true}",
+            ", TRTSDT",
+            "",
+        )
     ));
     let (csv, counts) = fixture.saved();
     assert_eq!(
@@ -235,6 +244,7 @@ fn an_input_requirement_leaves_a_named_intermediate_its_own_policy() {
             "intermediates:\n\
              \x20 - id: SUBJECT\n\
              \x20   dataset: ADSL\n\
+             \x20   key: [STUDYID, USUBJID]\n\
              \x20   filter: \"ADSL.SAFFL = 'Y'\"\n"
         )
     ));
@@ -242,7 +252,7 @@ fn an_input_requirement_leaves_a_named_intermediate_its_own_policy() {
     assert_eq!(csv, "STUDYID,USUBJID,AESEQ,ARM\nS,S-1,1,drug a\nS,S-2,1,\n");
     assert_eq!(
         counts,
-        [("columns.ARM.derivation.source.no_match".to_owned(), 1)]
+        [("columns.ARM.derivation.source.absent".to_owned(), 1)]
     );
 }
 
@@ -342,7 +352,8 @@ fn a_named_intermediate_s_absence_counts_under_the_handler_its_surface_names() {
     }
 }
 
-const ROWS: &str = "schema_version: \"1.0\"\n\
+const ROWS: &str = "yamaa: \"1.0\"\n\
+    type: spec\n\
     domain: ADAE\n\
     keys: [STUDYID, USUBJID, AESEQ]\n\
     input:\n\
@@ -367,25 +378,30 @@ const ROWS: &str = "schema_version: \"1.0\"\n\
 
 #[test]
 fn a_row_template_counts_an_operand_read_and_fails_it_when_required() {
-    let fixture = Fixture::new(&ROWS.edit("ADSL_DECLARATION", "adsl.csv"));
+    let fixture = Fixture::new(&ROWS.edit(
+        "ADSL_DECLARATION",
+        "{path: adsl.csv, key: [STUDYID, USUBJID]}",
+    ));
     let (csv, counts) = fixture.saved();
     assert_eq!(
         csv,
         "STUDYID,USUBJID,AESEQ,ARMU\nS,S-1,1,DRUG A\nS,S-2,1,\n"
     );
     for path in [
-        "rows[0].derivations.ARMU.str_case.source.absent",
-        "rows[0].derivations.ARMU.str_case.missing",
+        "rows.event.derivations.ARMU.str_case.source.absent",
+        "rows.event.derivations.ARMU.str_case.missing",
     ] {
         assert!(counts.contains(&(path.into(), 1)), "{path}: {counts:?}");
     }
-    let fixture =
-        Fixture::new(&ROWS.edit("ADSL_DECLARATION", "{path: adsl.csv, require_match: true}"));
+    let fixture = Fixture::new(&ROWS.edit(
+        "ADSL_DECLARATION",
+        "{path: adsl.csv, key: [STUDYID, USUBJID], require_match: true}",
+    ));
     let failure = fixture.failure();
     assert_eq!(failure["condition"], "unmatched_key");
     assert_eq!(failure["rule"], "LOOKUP-24");
     assert_eq!(
         failure["spec_paths"],
-        yamaa_adapters::json!(["rows[0].derivations.ARMU.str_case.source"])
+        yamaa_adapters::json!(["rows.event.derivations.ARMU.str_case.source"])
     );
 }

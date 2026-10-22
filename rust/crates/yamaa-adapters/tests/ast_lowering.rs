@@ -30,7 +30,7 @@ use yamaa_core::{
         KeyDecl, Literal, Name, Notation, Precision, ScalarOp, Slot, Span, Spec, Step,
         TemporalType, TimeUnit, WindowFunction,
     },
-    front_end::v0_5::{lower, Positions},
+    front_end::{lowering::Positions, v0_5::lower},
     schema::{Document, DocumentNode as N, SchemaSource},
 };
 
@@ -307,7 +307,7 @@ fn lowering_is_total_on_every_benchmark_specification() {
 
 /// One standalone spec, admitted by the shipped schema as a host admits it,
 /// then lowered.
-fn lowered(yaml: &str) -> yamaa_core::front_end::v0_5::Lowered {
+fn lowered(yaml: &str) -> yamaa_core::front_end::lowering::Lowered {
     let document = shipped_schema::capture()
         .unwrap()
         .prepare_standalone(Source {

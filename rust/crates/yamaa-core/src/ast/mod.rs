@@ -1,11 +1,11 @@
 //! The typed specification tree that every front end lowers into, and the
 //! roots of a project's own files ([`project`]).
 //!
-//! Each surface has its own front end under [`crate::front_end`] (today's
-//! in `v0_5`; the 1.0 front end comes with #3030 Phase 1). Each lowers into
-//! these nodes, and every analysis reads them through the one traversal in
-//! [`traversal`] and types them with the one result-type table,
-//! [`result_type`]. There is no IO here and there are no YAML types:
+//! Each surface has its own front end under [`crate::front_end`], and both
+//! lower into these nodes through the construct lowering they share
+//! ([`crate::front_end::lowering`]). Every analysis reads them through the
+//! one traversal in [`traversal`] and types them with the one result-type
+//! table, [`result_type`]. There is no IO here and there are no YAML types:
 //! positions arrive as plain numbers.
 //!
 //! Every node carries a [`Meta`]: its structured spec path, which one

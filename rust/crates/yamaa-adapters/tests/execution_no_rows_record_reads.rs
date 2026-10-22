@@ -79,7 +79,7 @@ S1,MDV.1,002,V1,1,FO.DM,1,IG.DM,1,IT.DM.SEX,M\n";
 /// VALUE reads that one record.
 fn windowed(value: &str) -> String {
     format!(
-        "schema_version: '1.0'\ndomain: OUT\nkeys: [ID, SEQ]\n\
+        "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID, SEQ]\n\
          input: {{SRC: {{path: source.csv, types: {{ID: int, VAL: int}}}}}}\n\
          output: {{path: out.csv, columns: [ID, SEQ, VALUE]}}\n\
          columns:\n  - {{name: ID, type: int, derivation: SRC.ID}}\n\
@@ -101,7 +101,7 @@ fn a_window_key_gives_every_column_its_row_record() {
             "ID,SEQ,VALUE\n1,1,some\n1,2,none\n2,1,some\n",
         ),
         (
-            "{case: [{when: 'ID = 1', then: {flag: 'SRC.VAL > 3'}}, {otherwise: {literal: other}}]}",
+            "{case: [{when: 'ID = 1', then: {flag: 'SRC.VAL > 3'}}, {otherwise: \"'other'\"}]}",
             "ID,SEQ,VALUE\n1,1,\n1,2,Y\n2,1,other\n",
         ),
         (
@@ -109,7 +109,7 @@ fn a_window_key_gives_every_column_its_row_record() {
             "ID,SEQ,VALUE\n1,1,a\n1,2,\n2,1,c\n",
         ),
         (
-            "{case: [{when: 'ID = 2', then: {first_available: {sources: [SRC.X]}}}, {otherwise: {literal: other}}]}",
+            "{case: [{when: 'ID = 2', then: {first_available: {sources: [SRC.X]}}}, {otherwise: \"'other'\"}]}",
             "ID,SEQ,VALUE\n1,1,other\n1,2,other\n2,1,c\n",
         ),
     ] {
@@ -120,7 +120,7 @@ fn a_window_key_gives_every_column_its_row_record() {
     // record's own item group, and the key may read one too.
     let odm = |keys: &str| {
         format!(
-            "schema_version: '1.0'\ndomain: OUT\nkeys: [{keys}]\ninput: {{ODM: odm.csv}}\n\
+            "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [{keys}]\ninput: {{ODM: odm.csv}}\n\
              output: {{path: out.csv, columns: [USUBJID, SEQ, SEX]}}\n\
              columns:\n  - {{name: USUBJID, type: str, derivation: ODM.SubjectKey}}\n\
              \x20 - name: SEQ\n    type: int\n    derivation:\n      row_number:\n        \
@@ -142,10 +142,10 @@ fn a_window_key_gives_every_column_its_row_record() {
 fn a_key_reads_a_named_intermediate_for_its_record() {
     let keyed = |value: &str, kind: &str| {
         format!(
-            "schema_version: '1.0'\ndomain: OUT\nkeys: [ID, GROUP]\nbase: SRC\n\
+            "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID, GROUP]\nbase: SRC\n\
              input:\n  SRC: {{path: source.csv, types: {{ID: int, VAL: int}}}}\n  \
              DONOR: {{path: donor.csv, types: {{ID: int, N: int}}}}\n\
-             intermediates:\n  - id: SUBJ\n    dataset: DONOR\n    key: [ID]\n    no_match: null\n\
+             intermediates:\n  - id: SUBJ\n    dataset: DONOR\n    key: [ID]\n\
              output: {{path: out.csv, columns: [ID, GROUP]}}\n\
              columns:\n  - {{name: ID, type: int, derivation: SRC.ID}}\n\
              \x20 - name: GROUP\n    type: {kind}\n    derivation: {value}\n"
@@ -157,13 +157,9 @@ fn a_key_reads_a_named_intermediate_for_its_record() {
             "str",
             "ID,GROUP\n1,Y\n2,N\n",
         ),
+        ("'SUBJ.N + 1'", "int", "ID,GROUP\n1,11\n2,21\n"),
         (
-            "{compute: {expr: 'SUBJ.N + 1'}}",
-            "int",
-            "ID,GROUP\n1,11\n2,21\n",
-        ),
-        (
-            "{case: [{when: \"SUBJ.ARM = 'A'\", then: {literal: Y}}, {otherwise: {literal: N}}]}",
+            "{case: [{when: \"SUBJ.ARM = 'A'\", then: \"'Y'\"}, {otherwise: \"'N'\"}]}",
             "str",
             "ID,GROUP\n1,Y\n2,N\n",
         ),
@@ -189,8 +185,8 @@ fn a_key_that_reads_other_records_fails_before_data() {
     };
     // An aggregate reduces the records of a key combination that does not
     // exist yet.
-    let aggregate = "schema_version: '1.0'\ndomain: OUT\nkeys: [ID, TOP]\n\
-                     input: {SRC: {path: source.csv, types: {ID: int, VAL: int}}}\n\
+    let aggregate = "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID, TOP]\n\
+                     input: {SRC: {path: source.csv, key: [ID], types: {ID: int, VAL: int}}}\n\
                      output: {path: out.csv, columns: [ID, TOP]}\n\
                      columns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  \
                      - {name: TOP, type: int, derivation: {aggregate: 'MAX(SRC.VAL)'}}\n";
@@ -200,7 +196,7 @@ fn a_key_that_reads_other_records_fails_before_data() {
     // An odm read reads the items of the key combination, also inside a case.
     let odm = |derivation: &str, path: &str| {
         format!(
-            "schema_version: '1.0'\ndomain: OUT\nkeys: [USUBJID, SEX]\ninput: {{ODM: odm.csv}}\n\
+            "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [USUBJID, SEX]\ninput: {{ODM: odm.csv}}\n\
              output: {{path: out.csv, columns: [USUBJID, SEX]}}\n\
              columns:\n  - {{name: USUBJID, type: str, derivation: ODM.SubjectKey}}\n\
              \x20 - {{name: SEX, type: str, derivation: {derivation}}}\n{path}"
@@ -211,7 +207,7 @@ fn a_key_that_reads_other_records_fails_before_data() {
     assert_eq!(fixture.check(), refused("SEX", "odm"));
     let fixture = Fixture::new(
         &odm(
-            "{case: [{when: \"USUBJID = '001'\", then: {odm: ODM.IT.DM.SEX}}, {otherwise: {literal: U}}]}",
+            "{case: [{when: \"USUBJID = '001'\", then: {odm: ODM.IT.DM.SEX}}, {otherwise: \"'U'\"}]}",
             "",
         ),
         &[("odm.csv", ODM)],
@@ -229,7 +225,7 @@ fn a_key_that_reads_other_records_fails_before_data() {
     // As an ordinary column, the case reads the subject's item.
     let fixture = Fixture::new(
         &odm(
-            "{case: [{when: \"USUBJID = '001'\", then: {odm: ODM.IT.DM.SEX}}, {otherwise: {literal: U}}]}",
+            "{case: [{when: \"USUBJID = '001'\", then: {odm: ODM.IT.DM.SEX}}, {otherwise: \"'U'\"}]}",
             "",
         )
         .edit("keys: [USUBJID, SEX]", "keys: [USUBJID]"),

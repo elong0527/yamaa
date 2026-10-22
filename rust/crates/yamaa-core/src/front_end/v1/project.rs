@@ -23,11 +23,11 @@ use crate::ast::{
     Codelists, Function, FunctionDeclaration, FunctionSource, Header, HostEnvironment,
     Implementation, Meta, Named, Paths, Project, SubmissionRefused, Surface, Text,
 };
-use crate::front_end::v0_5::project::{
+use crate::front_end::lowering::project::{
     cases, codelist_declarations, codelist_source, column_kind, comparison_decimals, parameters,
     text_field, text_of, Metas, Values,
 };
-use crate::front_end::v0_5::{sections, Positions};
+use crate::front_end::lowering::{sections, Positions};
 use crate::language::LanguageVersion;
 use crate::project_function::Language;
 use crate::project_function_document::{Finding, Kind, Reader};
@@ -288,11 +288,11 @@ pub fn codelists(
 }
 
 #[cfg(test)]
-mod tests {
+pub(in crate::front_end) mod tests {
     use super::*;
-    use crate::ast::{CodelistSource, DefineContext, GuideStatus, Notation, Parameter, Transport};
+    use crate::ast::{CodelistSource, DefineContext, GuideStatus, Notation, Transport};
     use crate::test_document::Tree;
-    use crate::value::{ColumnType, Value, ValueType};
+    use crate::value::Value;
 
     fn header(file_type: &str) -> Vec<(&'static str, Tree)> {
         vec![
@@ -301,11 +301,14 @@ mod tests {
         ]
     }
 
-    fn with_header(file_type: &str, fields: Vec<(&'static str, Tree)>) -> Tree {
+    pub(in crate::front_end) fn with_header(
+        file_type: &str,
+        fields: Vec<(&'static str, Tree)>,
+    ) -> Tree {
         Tree::map(header(file_type).into_iter().chain(fields).collect())
     }
 
-    fn codelist_source() -> Vec<(&'static str, Tree)> {
+    pub(in crate::front_end) fn codelist_source() -> Vec<(&'static str, Tree)> {
         vec![
             (
                 "standard",
@@ -335,7 +338,11 @@ mod tests {
     }
 
     /// A definition's body, which both surfaces write alike.
-    fn body(default: Tree, argument: Tree, result: Tree) -> Vec<(&'static str, Tree)> {
+    pub(in crate::front_end) fn body(
+        default: Tree,
+        argument: Tree,
+        result: Tree,
+    ) -> Vec<(&'static str, Tree)> {
         vec![
             ("description", Tree::text("Days from a date")),
             (
@@ -368,7 +375,7 @@ mod tests {
         .collect()
     }
 
-    fn function_file(default: Tree, argument: Tree, result: Tree) -> Tree {
+    pub(in crate::front_end) fn function_file(default: Tree, argument: Tree, result: Tree) -> Tree {
         let mut fields = vec![("name", Tree::text("shift"))];
         fields.extend(body(default, argument, result));
         // `implementations` is written before `tests`, as the converter does.
@@ -738,97 +745,6 @@ mod tests {
         );
     }
 
-    /// What a definition declares, without its positions.
-    #[allow(clippy::type_complexity)]
-    fn declared(
-        function: &Function,
-    ) -> (
-        &str,
-        &str,
-        Vec<(&str, ValueType, bool, Option<&Value>, bool)>,
-        ColumnType,
-        bool,
-        i64,
-        Vec<(&str, Vec<&str>, Vec<(&str, &Value)>, &Value)>,
-    ) {
-        (
-            &function.name.name,
-            &function.description.text,
-            function
-                .params
-                .iter()
-                .map(|parameter: &Parameter| {
-                    (
-                        parameter.name.name.as_str(),
-                        parameter.kind,
-                        parameter.required,
-                        parameter.default.as_ref(),
-                        parameter.accepts_missing,
-                    )
-                })
-                .collect(),
-            function.returns,
-            function.may_return_missing,
-            function.comparison_decimals,
-            function
-                .tests
-                .iter()
-                .map(|case| {
-                    (
-                        case.id.text.as_str(),
-                        case.covers.iter().map(|tag| tag.text.as_str()).collect(),
-                        case.args
-                            .iter()
-                            .map(|(name, value)| (name.name.as_str(), value))
-                            .collect(),
-                        &case.result,
-                    )
-                })
-                .collect(),
-        )
-    }
-
-    #[test]
-    fn a_function_file_lowers_to_the_definition_its_0_5_spelling_does() {
-        let tagged = |text: &str| Tree::map(vec![("date", Tree::text(text))]);
-        let mut legacy = vec![("function", Tree::text("shift.shift"))];
-        legacy.extend(body(
-            tagged("2024-01-01"),
-            tagged("2024-02-29"),
-            tagged("2024-03-01"),
-        ));
-        let legacy = crate::front_end::v0_5::project::function(
-            &Tree::map(legacy).document(),
-            None,
-            "shift",
-            Language::Python,
-        )
-        .unwrap();
-        let converted = function(
-            &function_file(
-                Tree::text("2024-01-01"),
-                Tree::text("2024-02-29"),
-                Tree::text("2024-03-01"),
-            )
-            .document(),
-            None,
-        )
-        .unwrap();
-        assert_eq!(declared(&converted), declared(&legacy));
-        // The 0.5 definition binds the one callable of its environment file's
-        // language; the function file names both.
-        assert_eq!(
-            converted
-                .implementation(Language::Python)
-                .map(|i| &i.callable.text),
-            legacy
-                .implementation(Language::Python)
-                .map(|i| &i.callable.text)
-        );
-        assert_eq!(legacy.implementation(Language::R), None);
-        assert_eq!(legacy.header, None);
-    }
-
     #[test]
     fn a_codelist_file_holds_one_source_under_its_own_header() {
         let file = codelists(
@@ -838,22 +754,13 @@ mod tests {
         .unwrap();
         let header = file.header.as_ref().unwrap();
         assert_eq!(file.paths.render(header.meta.path, Notation::V0_5), "yamaa");
-        let legacy = crate::front_end::v0_5::project::codelists(
-            &Tree::map(codelist_source()).document(),
-            None,
-        )
-        .unwrap();
-        assert_eq!(legacy.header, None);
         assert_eq!(
             file.standard
                 .as_ref()
-                .map(|standard| &standard.version.text),
-            legacy
-                .standard
-                .as_ref()
-                .map(|standard| &standard.version.text)
+                .map(|standard| standard.version.text.as_str()),
+            Some("2024-03-29")
         );
-        assert_eq!(file.codelists.len(), legacy.codelists.len());
+        assert_eq!(file.codelists.len(), 1);
         let item = &file.codelists[0].items.as_ref().unwrap()[0];
         assert_eq!(item.value, Value::Str("F".into()));
         assert_eq!(

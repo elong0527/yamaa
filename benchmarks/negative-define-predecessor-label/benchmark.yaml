@@ -1,0 +1,12 @@
+lifecycle: draft
+standard: ADaM
+domain: ADSL
+entries:
+  python:
+    - specification: spec_adsl.yaml
+  r:
+    - specification: spec_adsl.yaml
+define:
+  environment: project.yaml
+  standard: adam
+  created: '2026-09-11T00:00:00'

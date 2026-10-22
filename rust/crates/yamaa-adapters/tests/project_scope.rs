@@ -47,7 +47,7 @@ fn scope() -> yamaa_core::application_observer::Scope<'static> {
 
 fn spec(domain: &str, input: &str, output: &str) -> String {
     format!(
-        "schema_version: '1.0'\ndomain: {domain}\nkeys: [ID]\ninput: {{SRC: {input}}}\ncolumns:\n  - {{name: ID, type: int, label: Identifier, derivation: SRC.ID}}\noutput: {{path: {output}, columns: [ID], report: {output}.report.csv}}\n"
+        "yamaa: \"1.0\"\ntype: spec\ndomain: {domain}\nkeys: [ID]\ninput: {{SRC: {input}}}\ncolumns:\n  - {{name: ID, type: int, label: Identifier, derivation: SRC.ID}}\noutput: {{path: {output}, columns: [ID], report: {output}.report.csv}}\n"
     )
 }
 
@@ -77,7 +77,7 @@ fn study() -> Study {
     );
     study.write(
         "project.yaml",
-        "schema_version: '1.0'\nadam:\n  specs: [adam/adae.yaml, adam/adsl.yaml]\nsdtm:\n  specs: [sdtm/dm.yaml]\n",
+        "yamaa: \"1.0\"\ntype: project\nadam:\n  specs: [adam/adae.yaml, adam/adsl.yaml]\nsdtm:\n  specs: [sdtm/dm.yaml]\n",
     );
     study
 }
@@ -129,7 +129,7 @@ fn listings_follow_section_run_order_and_names_are_their_domains() {
     // The same file listed twice shares its name with itself.
     study.write(
         "project.yaml",
-        "schema_version: '1.0'\nsdtm:\n  specs: [sdtm/dm.yaml]\nsend:\n  specs: [sdtm/../sdtm/dm.yaml]\n",
+        "yamaa: \"1.0\"\ntype: project\nsdtm:\n  specs: [sdtm/dm.yaml]\nsend:\n  specs: [sdtm/../sdtm/dm.yaml]\n",
     );
     let duplicates = read(&study).duplicates();
     assert_eq!(condition(&duplicates), ["duplicate_specification_name"]);
@@ -229,7 +229,7 @@ fn unlinked_inputs_cycles_and_collisions_are_project_findings() {
     );
     study.write(
         "project.yaml",
-        "schema_version: '1.0'\nsdtm:\n  specs: [sdtm/dm.yaml]\nadam:\n  specs: [adam/adsl.yaml, adam/adae.yaml, adam/adxx.yaml]\n",
+        "yamaa: \"1.0\"\ntype: project\nsdtm:\n  specs: [sdtm/dm.yaml]\nadam:\n  specs: [adam/adsl.yaml, adam/adae.yaml, adam/adxx.yaml]\n",
     );
     let project = read(&study);
     let plan = project.plan(None);

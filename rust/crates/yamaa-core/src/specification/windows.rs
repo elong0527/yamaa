@@ -468,19 +468,25 @@ impl Declaration {
             edges.push(column);
             Ok(column)
         };
+        // Each read binds at the path its tree writes, in the order of
+        // `operands`: a 1.0 tree names baseline_flag's operands `reference`
+        // and `source` and writes its tie-break terms in `window.order_by`
+        // (P-OP-2, P-OP-3, P-ORD-1).
+        let mut paths = self.operands().into_iter().map(|(_, path)| path);
+        let mut path = || paths.next().ok_or(BindError::Internal);
         let kind = match &self.kind {
             Kind::RowNumber => WindowKind::RowNumber,
             Kind::Competition => WindowKind::Competition,
             Kind::Dense => WindowKind::Dense,
             Kind::RowValue { source, offset } => WindowKind::RowValue {
-                column: resolve(source, format!("{}.source", self.path))?,
+                column: resolve(source, path()?)?,
                 offset: *offset,
             },
             Kind::Locf {
                 source,
                 include_current,
             } => WindowKind::Locf {
-                column: resolve(source, format!("{}.source", self.path))?,
+                column: resolve(source, path()?)?,
                 include_current: *include_current,
             },
             Kind::BaselineFlag {
@@ -490,9 +496,9 @@ impl Declaration {
                 inclusive,
                 ..
             } => WindowKind::BaselineFlag {
-                date: resolve(date, format!("{}.date", self.path))?,
-                reference_date: resolve(reference_date, format!("{}.reference_date", self.path))?,
-                value: resolve(value, format!("{}.value", self.path))?,
+                date: resolve(date, path()?)?,
+                reference_date: resolve(reference_date, path()?)?,
+                value: resolve(value, path()?)?,
                 inclusive: *inclusive,
             },
         };
@@ -503,25 +509,22 @@ impl Declaration {
             tie_break: terms, ..
         } = &self.kind
         {
-            for (index, (name, descending, nulls_first)) in terms.iter().enumerate() {
+            for (name, descending, nulls_first) in terms {
                 tie_break.push(OrderTerm {
-                    column: resolve(name, format!("{}.tie_break[{index}]", self.path))?,
+                    column: resolve(name, path()?)?,
                     descending: *descending,
                     nulls_first: *nulls_first,
                 });
             }
         }
         let mut group_by = Vec::new();
-        for (index, name) in self.groups.iter().enumerate() {
-            group_by.push(resolve(
-                name,
-                format!("{}.window.group_by[{index}]", self.path),
-            )?);
+        for name in &self.groups {
+            group_by.push(resolve(name, path()?)?);
         }
         let mut order_by = Vec::new();
-        for (index, (name, descending, nulls_first)) in self.order.iter().enumerate() {
+        for (name, descending, nulls_first) in &self.order {
             order_by.push(OrderTerm {
-                column: resolve(name, format!("{}.window.order_by[{index}]", self.path))?,
+                column: resolve(name, path()?)?,
                 descending: *descending,
                 nulls_first: *nulls_first,
             });

@@ -1,7 +1,7 @@
 [
   {
     "case": "held",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"not_missing\": {\"id\": \"v-present\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"not_missing\": {\"id\": \"v-present\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": 2}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
     "input": "ID,V\na,10\nb,20\n",
     "expected": {
       "artifacts": [
@@ -158,7 +158,7 @@
   },
   {
     "case": "namespace_scope",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"not_missing\": {\"id\": \"id-present\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}, \"verifications\": [{\"not_missing\": {\"id\": \"id-present\"}}]}]\nverifications: [{\"row_count\": {\"min\": 0, \"id\": \"id-present\"}}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"not_missing\": {\"id\": \"id-present\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": 2, \"verifications\": [{\"not_missing\": {\"id\": \"id-present\"}}]}]\nverifications: [{\"row_count\": {\"min\": 0, \"id\": \"id-present\"}}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
     "input": "ID,V\na,10\nb,20\n",
     "expected": {
       "artifacts": [
@@ -337,7 +337,7 @@
   },
   {
     "case": "key_declared_later",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"not_missing\": {\"id\": \"v-present\"}}]}, {\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"not_missing\": {\"id\": \"v-present\"}}]}, {\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": 2}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
     "input": "ID,V\na,10\nb,20\n",
     "expected": {
       "artifacts": [
@@ -494,7 +494,7 @@
   },
   {
     "case": "failed",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"not_missing\": {\"id\": \"v-present\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"not_missing\": {\"id\": \"v-present\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": 2}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
     "input": "ID,V\na,10\nb,\n",
     "expected": {
       "artifacts": [],
@@ -654,7 +654,7 @@
   },
   {
     "case": "empty",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"not_missing\": {\"id\": \"v-present\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"not_missing\": {\"id\": \"v-present\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": 2}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
     "input": "ID,V\n",
     "expected": {
       "artifacts": [
@@ -759,7 +759,7 @@
   },
   {
     "case": "failed_before_later_conversion",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"not_missing\": {\"id\": \"v-present\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": \"bad\"}}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"not_missing\": {\"id\": \"v-present\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": \"'bad'\"}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
     "input": "ID,V\na,10\nb,\n",
     "expected": {
       "artifacts": [],
@@ -919,7 +919,7 @@
   },
   {
     "case": "held_before_later_conversion",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"not_missing\": {\"id\": \"v-present\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": \"bad\"}}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"not_missing\": {\"id\": \"v-present\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": \"'bad'\"}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
     "input": "ID,V\na,10\nb,20\n",
     "expected": {
       "artifacts": [],
@@ -1046,7 +1046,7 @@
   },
   {
     "case": "duplicate_id",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"not_missing\": {\"id\": \"same\"}}, {\"not_missing\": {\"id\": \"same\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"not_missing\": {\"id\": \"same\"}}, {\"not_missing\": {\"id\": \"same\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": 2}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
     "input": "ID,V\na,10\nb,\n",
     "expected": {
       "artifacts": [],
@@ -1192,7 +1192,7 @@
   },
   {
     "case": "both_checks_failed",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"not_missing\": {\"id\": \"one\"}}, {\"not_missing\": {\"id\": \"two\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"not_missing\": {\"id\": \"one\"}}, {\"not_missing\": {\"id\": \"two\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": 2}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
     "input": "ID,V\na,10\nb,\n",
     "expected": {
       "artifacts": [],
@@ -1432,7 +1432,7 @@
   },
   {
     "case": "values_allowed_held",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"allowed_values\": {\"values\": [\"10\", 20], \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"allowed_values\": {\"values\": [\"10\", 20], \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": 2}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
     "input": "ID,V\na,10\nb,20\n",
     "expected": {
       "artifacts": [
@@ -1589,7 +1589,7 @@
   },
   {
     "case": "values_allowed_missing",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"allowed_values\": {\"values\": [10], \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"allowed_values\": {\"values\": [10], \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": 2}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
     "input": "ID,V\na,10\nb,\n",
     "expected": {
       "artifacts": [
@@ -1746,7 +1746,7 @@
   },
   {
     "case": "values_allowed_failed",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"allowed_values\": {\"values\": [10], \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"allowed_values\": {\"values\": [10], \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": 2}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
     "input": "ID,V\na,10\nb,20\n",
     "expected": {
       "artifacts": [],
@@ -1906,7 +1906,7 @@
   },
   {
     "case": "values_allowed_empty_list",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"allowed_values\": {\"values\": [], \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"allowed_values\": {\"values\": [], \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": 2}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
     "input": "ID,V\n",
     "expected": {
       "artifacts": [],
@@ -1986,7 +1986,7 @@
   },
   {
     "case": "values_allowed_missing_literal",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"allowed_values\": {\"values\": [null], \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"allowed_values\": {\"values\": [null], \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": 2}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
     "input": "ID,V\na,10\nb,20\n",
     "expected": {
       "artifacts": [],
@@ -2087,7 +2087,7 @@
   },
   {
     "case": "values_allowed_bad_literal",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"allowed_values\": {\"values\": [\"bad\"], \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"allowed_values\": {\"values\": [\"bad\"], \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": 2}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
     "input": "ID,V\na,10\nb,20\n",
     "expected": {
       "artifacts": [],
@@ -2188,7 +2188,7 @@
   },
   {
     "case": "values_conversion_before_allowed_declaration",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"allowed_values\": {\"values\": [], \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"allowed_values\": {\"values\": [], \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": 2}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
     "input": "ID,V\na,bad\n",
     "expected": {
       "artifacts": [],
@@ -2293,7 +2293,7 @@
   },
   {
     "case": "values_allowed_held_before_conversion",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"allowed_values\": {\"values\": [10, 20], \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": \"bad\"}}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"allowed_values\": {\"values\": [10, 20], \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": \"'bad'\"}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
     "input": "ID,V\na,10\nb,20\n",
     "expected": {
       "artifacts": [],
@@ -2420,7 +2420,7 @@
   },
   {
     "case": "values_range_held",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"range\": {\"min\": 10, \"max\": 20, \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"range\": {\"min\": 10, \"max\": 20, \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": 2}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
     "input": "ID,V\na,10\nb,20\n",
     "expected": {
       "artifacts": [
@@ -2577,7 +2577,7 @@
   },
   {
     "case": "values_range_failed",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"range\": {\"min\": 10, \"max\": 20, \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"range\": {\"min\": 10, \"max\": 20, \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": 2}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
     "input": "ID,V\na,9\nb,21\n",
     "expected": {
       "artifacts": [],
@@ -2752,7 +2752,7 @@
   },
   {
     "case": "values_range_missing",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"range\": {\"min\": 10, \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"range\": {\"min\": 10, \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": 2}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
     "input": "ID,V\na,10\nb,\n",
     "expected": {
       "artifacts": [
@@ -2909,7 +2909,7 @@
   },
   {
     "case": "values_range_fractional",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"range\": {\"min\": 10.5, \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"range\": {\"min\": 10.5, \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": 2}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
     "input": "ID,V\na,10\nb,20\n",
     "expected": {
       "artifacts": [],
@@ -3069,7 +3069,7 @@
   },
   {
     "case": "values_range_empty_bounds",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"range\": {\"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"range\": {\"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": 2}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
     "input": "ID,V\n",
     "expected": {
       "artifacts": [],
@@ -3149,7 +3149,7 @@
   },
   {
     "case": "values_range_reverse_bounds",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"range\": {\"min\": 20, \"max\": 10, \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"range\": {\"min\": 20, \"max\": 10, \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": 2}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
     "input": "ID,V\n",
     "expected": {
       "artifacts": [],
@@ -3229,7 +3229,7 @@
   },
   {
     "case": "values_range_wrong_type",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"range\": {\"min\": 10, \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"range\": {\"min\": 10, \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": 2}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
     "input": "ID,V\n",
     "expected": {
       "artifacts": [],
@@ -3309,7 +3309,7 @@
   },
   {
     "case": "values_length_held",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"max_length\": {\"max\": 2, \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"max_length\": {\"max\": 2, \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": 2}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
     "input": "ID,V\na,é🙂\nb,a\n",
     "expected": {
       "artifacts": [
@@ -3466,7 +3466,7 @@
   },
   {
     "case": "values_length_failed",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"max_length\": {\"max\": 2, \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"max_length\": {\"max\": 2, \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": 2}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
     "input": "ID,V\na,é🙂x\nb,abcd\n",
     "expected": {
       "artifacts": [],
@@ -3645,7 +3645,7 @@
   },
   {
     "case": "values_length_missing",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"max_length\": {\"max\": 2, \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"max_length\": {\"max\": 2, \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": 2}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
     "input": "ID,V\na,é🙂\nb,\n",
     "expected": {
       "artifacts": [
@@ -3802,7 +3802,7 @@
   },
   {
     "case": "values_length_empty_zero",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"max_length\": {\"max\": 0, \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"max_length\": {\"max\": 0, \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": 2}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
     "input": "ID,V\n",
     "expected": {
       "artifacts": [],
@@ -3882,7 +3882,7 @@
   },
   {
     "case": "values_length_wrong_type",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"max_length\": {\"max\": 2, \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"max_length\": {\"max\": 2, \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": 2}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
     "input": "ID,V\n",
     "expected": {
       "artifacts": [],
@@ -3962,7 +3962,7 @@
   },
   {
     "case": "matches_search_held",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"matches\": {\"pattern\": \"b\", \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"matches\": {\"pattern\": \"b\", \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": 2}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
     "input": "ID,V\na,abc\nb,zbz\n",
     "expected": {
       "artifacts": [
@@ -4119,7 +4119,7 @@
   },
   {
     "case": "matches_search_failed",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"matches\": {\"pattern\": \"b\", \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"matches\": {\"pattern\": \"b\", \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": 2}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
     "input": "ID,V\na,abc\nb,xxx\n",
     "expected": {
       "artifacts": [],
@@ -4279,7 +4279,7 @@
   },
   {
     "case": "matches_missing_passes",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"matches\": {\"pattern\": \"b\", \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"matches\": {\"pattern\": \"b\", \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": 2}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
     "input": "ID,V\na,b\nb,\n",
     "expected": {
       "artifacts": [
@@ -4436,7 +4436,7 @@
   },
   {
     "case": "matches_empty_input",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"matches\": {\"pattern\": \"b\", \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"matches\": {\"pattern\": \"b\", \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": 2}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
     "input": "ID,V\n",
     "expected": {
       "artifacts": [
@@ -4541,7 +4541,7 @@
   },
   {
     "case": "matches_unicode_scalars",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"matches\": {\"pattern\": \"\\u00e9.\", \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"matches\": {\"pattern\": \"\\u00e9.\", \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": 2}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
     "input": "ID,V\na,é🙂\nb,xé🙂y\n",
     "expected": {
       "artifacts": [
@@ -4698,7 +4698,7 @@
   },
   {
     "case": "matches_lookahead",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"matches\": {\"pattern\": \"(?=b)b\", \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"matches\": {\"pattern\": \"(?=b)b\", \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": 2}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
     "input": "ID,V\na,ab\nb,b\n",
     "expected": {
       "artifacts": [],
@@ -4799,7 +4799,7 @@
   },
   {
     "case": "matches_backreference",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"matches\": {\"pattern\": \"(.)\\\\1\", \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"matches\": {\"pattern\": \"(.)\\\\1\", \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": 2}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
     "input": "ID,V\na,aa\nb,éé\n",
     "expected": {
       "artifacts": [],
@@ -4900,7 +4900,7 @@
   },
   {
     "case": "matches_bad_pattern",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"matches\": {\"pattern\": \"(\", \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"matches\": {\"pattern\": \"(\", \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": 2}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
     "input": "ID,V\na,b\n",
     "expected": {
       "artifacts": [],
@@ -4991,7 +4991,7 @@
   },
   {
     "case": "matches_python_named_group",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"matches\": {\"pattern\": \"(?P<code>b)\", \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"matches\": {\"pattern\": \"(?P<code>b)\", \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": 2}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
     "input": "ID,V\na,b\n",
     "expected": {
       "artifacts": [],
@@ -5082,7 +5082,7 @@
   },
   {
     "case": "matches_bad_pattern_empty",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"matches\": {\"pattern\": \"(\", \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"matches\": {\"pattern\": \"(\", \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": 2}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
     "input": "ID,V\n",
     "expected": {
       "artifacts": [],
@@ -5162,7 +5162,7 @@
   },
   {
     "case": "matches_wrong_type_empty",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"matches\": {\"pattern\": \"b\", \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"matches\": {\"pattern\": \"b\", \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": 2}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
     "input": "ID,V\n",
     "expected": {
       "artifacts": [],
@@ -5242,7 +5242,7 @@
   },
   {
     "case": "matches_wrong_type_bad_conversion",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"matches\": {\"pattern\": \"b\", \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"matches\": {\"pattern\": \"b\", \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": 2}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
     "input": "ID,V\na,bad\n",
     "expected": {
       "artifacts": [],
@@ -5347,7 +5347,7 @@
   },
   {
     "case": "matches_held_before_conversion",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"matches\": {\"pattern\": \"b\", \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": \"bad\"}}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"matches\": {\"pattern\": \"b\", \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": \"'bad'\"}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
     "input": "ID,V\na,b\n",
     "expected": {
       "artifacts": [],
@@ -5464,7 +5464,7 @@
   },
   {
     "case": "matches_bad_pattern_before_conversion",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"matches\": {\"pattern\": \"(\", \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"matches\": {\"pattern\": \"(\", \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": 2}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
     "input": "ID,V\na,bad\n",
     "expected": {
       "artifacts": [],
@@ -5569,7 +5569,7 @@
   },
   {
     "case": "matches_bad_before_later_limit",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"matches\": {\"pattern\": \"(\", \"id\": \"value-rule\"}}, {\"matches\": {\"pattern\": \"a{1000001}\", \"id\": \"later-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"matches\": {\"pattern\": \"(\", \"id\": \"value-rule\"}}, {\"matches\": {\"pattern\": \"a{1000001}\", \"id\": \"later-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": 2}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
     "input": "ID,V\na,b\n",
     "expected": {
       "artifacts": [],
@@ -5660,7 +5660,7 @@
   },
   {
     "case": "matches_duplicate_before_later_limit",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"matches\": {\"pattern\": \"b\", \"id\": \"same\"}}, {\"matches\": {\"pattern\": \"a{1000001}\", \"id\": \"same\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"matches\": {\"pattern\": \"b\", \"id\": \"same\"}}, {\"matches\": {\"pattern\": \"a{1000001}\", \"id\": \"same\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": 2}]\nrows: [{id: original, derivations: {ID: SRC.ID, V: SRC.V}}]\n",
     "input": "ID,V\na,b\n",
     "expected": {
       "artifacts": [],
@@ -5763,7 +5763,7 @@
   },
   {
     "case": "multiple_templates_held",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"not_missing\": {\"id\": \"v-present\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nrows: [{id: one, derivations: {ID: {literal: a}, V: {literal: 10}}}, {id: two, derivations: {ID: {literal: b}, V: {literal: 20}}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"not_missing\": {\"id\": \"v-present\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": 2}]\nrows: [{id: one, derivations: {ID: \"'a'\", V: 10}}, {id: two, derivations: {ID: \"'b'\", V: 20}}]\n",
     "input": "ID,V\na,10\n",
     "expected": {
       "artifacts": [
@@ -5910,7 +5910,7 @@
   },
   {
     "case": "multiple_templates_failed",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"not_missing\": {\"id\": \"v-present\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nrows: [{id: one, derivations: {ID: {literal: a}, V: {literal: 10}}}, {id: two, derivations: {ID: {literal: b}, V: {literal: null}}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"not_missing\": {\"id\": \"v-present\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": 2}]\nrows: [{id: one, derivations: {ID: \"'a'\", V: 10}}, {id: two, derivations: {ID: \"'b'\", V: null}}]\n",
     "input": "ID,V\na,10\n",
     "expected": {
       "artifacts": [],

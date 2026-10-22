@@ -913,7 +913,10 @@ impl Engine {
     /// [`ProjectRun::names`] of such a run gives, read from the project file
     /// and the specifications' metadata alone, so no input data is read. A
     /// listing that could not be read has no name and is left out, as a run
-    /// leaves it out.
+    /// leaves it out. A project whose run another project finding refuses,
+    /// such as two listings that write one file, still names its
+    /// specifications, each of which [`Engine::project_spec`] selects; the
+    /// refusal stays the run's, which names nothing (D180).
     ///
     /// Every refusal names the call as `cannot read <project>` (D39): a
     /// project that cannot be read, or one that lists a name twice, whose

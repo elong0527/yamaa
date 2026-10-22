@@ -1,7 +1,7 @@
 [
   {
     "case": "fold_collision",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: unread.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: str\n    label: V\n    derivation:\n      mapping: {source: SRC.UNKNOWN, dict: {Y: 1, y: 1}, case_sensitive: false}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: unread.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: str\n    label: V\n    derivation:\n      mapping: {source: SRC.UNKNOWN, dict: {Y: 1, y: 1}, case_sensitive: false}\n",
     "expected": {
       "outcome": {
         "diagnostics": [
@@ -28,7 +28,7 @@
   },
   {
     "case": "ordered_collisions",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: unread.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: str\n    label: V\n    derivation:\n      mapping: {source: SRC.X, dict: {Y: 1, y: 2, a: 3, A: 4}, case_sensitive: false}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: unread.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: str\n    label: V\n    derivation:\n      mapping: {source: SRC.X, dict: {Y: 1, y: 2, a: 3, A: 4}, case_sensitive: false}\n",
     "expected": {
       "outcome": {
         "diagnostics": [
@@ -55,7 +55,7 @@
   },
   {
     "case": "unselected_collision",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: unread.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: str\n    label: V\n    derivation:\n      case:\n        - when: 'FALSE'\n          then: {mapping: {source: SRC.X, dict: {Y: 1, y: 2}, case_sensitive: false}}\n        - otherwise: {literal: 1}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: unread.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: str\n    label: V\n    derivation:\n      case:\n        - when: 'FALSE'\n          then: {mapping: {source: SRC.X, dict: {Y: 1, y: 2}, case_sensitive: false}}\n        - otherwise: 1\n",
     "expected": {
       "outcome": {
         "diagnostics": [
@@ -82,7 +82,7 @@
   },
   {
     "case": "duplicate_breaks",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: unread.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: str\n    label: V\n    derivation:\n      cut: {source: SRC.N, breaks: [1, 1], labels: [a, b, c]}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: unread.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: str\n    label: V\n    derivation:\n      cut: {source: SRC.N, breaks: [1, 1], labels: [a, b, c]}\n",
     "expected": {
       "outcome": {
         "diagnostics": [
@@ -106,7 +106,7 @@
   },
   {
     "case": "label_count",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: unread.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: str\n    label: V\n    derivation:\n      cut: {source: SRC.N, breaks: [1], labels: [a]}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: unread.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: str\n    label: V\n    derivation:\n      cut: {source: SRC.N, breaks: [1], labels: [a]}\n",
     "expected": {
       "outcome": {
         "diagnostics": [

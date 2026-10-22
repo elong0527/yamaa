@@ -59,7 +59,7 @@ run_longitudinal_capacity <- function() {
     }
     entry <- file.path(root, "spec.yaml")
     writeLines(c(
-      "schema_version: '1.0'", "domain: WIDE", paste0("keys: [", truth$id_column, "]"), "input:",
+      'yamaa: "1.0"', "type: spec", "domain: WIDE", paste0("keys: [", truth$id_column, "]"), "input:",
       input, "columns:", columns,
       "output:", paste0("  path: output.", case$output),
       paste0("  columns: [", paste(names, collapse = ", "), "]")
@@ -81,7 +81,7 @@ run_longitudinal_capacity <- function() {
       stopifnot_case(label, "the producer saves" = returns_paths(built$save()))
       consumer <- file.path(root, "consumer.yaml")
       writeLines(c(
-        "schema_version: '1.0'", "domain: WIDE", paste0("keys: [", truth$id_column, "]"), "input:",
+        'yamaa: "1.0"', "type: spec", "domain: WIDE", paste0("keys: [", truth$id_column, "]"), "input:",
         "  SRC: {path: output.parquet, schema: spec.yaml}", "columns:", columns,
         "output:", "  path: consumer.csv",
         paste0("  columns: [", paste(names, collapse = ", "), "]")

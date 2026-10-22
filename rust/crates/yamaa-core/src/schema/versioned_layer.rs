@@ -3,8 +3,10 @@
 //! its normalization before it composes.
 
 use super::{
-    path_render, spec_path, spec_path::SpecPath, validation::unknown_field, Document,
-    DocumentNode as N, NormalizationError, NormalizedDocument, SchemaContext as C,
+    path_render, spec_path,
+    spec_path::SpecPath,
+    validation::{one_parent_hint, unknown_field},
+    Document, DocumentNode as N, NormalizationError, NormalizedDocument, SchemaContext as C,
     SchemaDiagnostic, SchemaOrigin, SchemaSource, SchemaStructure, SiteRole, ValidationError,
     WrittenSite,
 };
@@ -33,9 +35,11 @@ impl SchemaStructure {
     /// type admits it: a value or expression field (P-NULL-1). Two members of
     /// one keyed collection must not share an identifier (LAYER-4). Each
     /// `clear` entry is a spec path, and no entry covers another; a fault
-    /// fails as `invalid_clear` at `clear[i]` (LAYER-9). Known fields are
-    /// checked in schema order, then unknown fields in written order. Paths
-    /// are written in the spec path notation (P-CLR-2).
+    /// fails as `invalid_clear` at `clear[i]` (LAYER-9). A list written at
+    /// `parent` fails as `invalid_field_type` with the hint an undeclared
+    /// `parents` key carries (LAYER-2). Known fields are checked in schema
+    /// order, then unknown fields in written order. Paths are written in the
+    /// spec path notation (P-CLR-2).
     pub fn validate_layer(
         &self,
         input: &Document,
@@ -61,7 +65,7 @@ impl SchemaStructure {
                 continue;
             };
             let fragment = COLLECTIONS.contains(&field.name.as_str());
-            let found = self.validate_versioned_descriptor(
+            let mut found = self.validate_versioned_descriptor(
                 field.descriptor,
                 input,
                 value,
@@ -70,6 +74,13 @@ impl SchemaStructure {
             )?;
             if found.is_empty() && field.name == "clear" {
                 findings.extend(clear_entries(input, value));
+            }
+            if field.name == "parent" && matches!(input.nodes()[value], N::Sequence(_)) {
+                for finding in &mut found {
+                    if finding.code == ConditionCode::SchemaInvalidFieldType {
+                        finding.context.push(one_parent_hint());
+                    }
+                }
             }
             findings.extend(found);
         }

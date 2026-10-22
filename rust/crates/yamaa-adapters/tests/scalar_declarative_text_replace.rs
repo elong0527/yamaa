@@ -62,7 +62,8 @@ fn issues(fixture: &Fixture) -> Vec<Json> {
 /// One `TEXT` input column and one `RESULT` output column derived from it.
 fn specification(text_type: &str, result: Json) -> Json {
     json!({
-        "schema_version": "1.0",
+        "yamaa": "1.0",
+        "type": "spec",
         "domain": "TEST",
         "keys": ["ID"],
         "input": {"SRC": "input.csv"},
@@ -167,7 +168,7 @@ fn a_catastrophic_pattern_without_a_match_leaves_the_value_unchanged() {
     let fixture = Fixture::bespoke(
         &specification(
             "str",
-            json!({"str_replace": {"source": "TEXT", "pattern": "(a+)+$", "replacement": "-", "missing": {"literal": null}}}),
+            json!({"str_replace": {"source": "TEXT", "pattern": "(a+)+$", "replacement": "-"}}),
         ),
         &format!("ID,TEXT\nrow1,{subject}\n"),
     );
@@ -234,7 +235,7 @@ fn nested_case_branches_and_row_templates_bind_the_same_operation() {
         "str",
         json!({"case": [
             {"when": "ID = 'row1'", "then": {"str_replace": {"source": "TEXT", "pattern": "\\s+", "replacement": " "}}},
-            {"otherwise": {"str_replace": {"source": "TEXT", "pattern": "^\\s+|\\s+$", "replacement": "", "missing": {"literal": null}}}}
+            {"otherwise": {"str_replace": {"source": "TEXT", "pattern": "^\\s+|\\s+$", "replacement": ""}}}
         ]}),
     );
     let fixture = Fixture::bespoke(&nested, "ID,TEXT\nrow1,\"a  b\"\nrow2,\" c \"\nrow3,\n");
@@ -266,7 +267,7 @@ fn nested_case_branches_and_row_templates_bind_the_same_operation() {
     assert_eq!(
         handlers,
         json!([
-            {"spec_path":"rows[0].derivations.TEXT.str_replace.missing","handler":"missing","count":1},
+            {"spec_path":"rows.records.derivations.TEXT.str_replace.missing","handler":"missing","count":1},
             {"spec_path":"columns.RESULT.derivation.str_replace.missing","handler":"missing","count":0}
         ])
     );

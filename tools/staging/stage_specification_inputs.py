@@ -530,8 +530,8 @@ def stage_text_pad_truth(destination: Path):
             for index, finding in enumerate(case.get("findings", [])):
                 context = dict(finding["context"])
                 if name == "width-noninteger":
-                    # This existing native schema provenance gap remains explicit;
-                    # the complete unmodified loader evidence is copied above.
+                    # The capture names the file its loader read, and a run names
+                    # its own; the complete loader evidence is copied above.
                     for field in ("source", "entry"):
                         assert (
                             context.pop(field)

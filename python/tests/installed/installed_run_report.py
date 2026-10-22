@@ -247,7 +247,8 @@ class RunReport(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             entry = root / "spec.yaml"
-            raw = """schema_version: '1.0'
+            raw = """yamaa: "1.0"
+type: spec
 domain: TEST
 keys: [ID]
 input: {SRC: input.csv}
