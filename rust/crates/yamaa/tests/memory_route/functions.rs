@@ -7,7 +7,7 @@
 //! package, in Rust:
 //!
 //! - it verifies the lock as `.yamaa_verify_locked_versions` does: `yamaa` at
-//!   the engine's version and the package at the version ported here;
+//!   the R package's version and the package at the version ported here;
 //! - it binds a `package::function` call as `.yamaa_resolve_locked_function`
 //!   does, refusing a callable whose formals differ from the declared
 //!   parameters;
@@ -34,6 +34,15 @@ use yamaa::{
 /// implements (`rust/tests/project-programs/r/DESCRIPTION`).
 pub const PACKAGE: &str = "yamaabenchmarks";
 pub const PACKAGE_VERSION: &str = "1.0.0";
+
+/// The version of the yamaa R package, as `packageVersion()` gives it: the
+/// engine's without the release candidate suffix, which an R version cannot
+/// carry (#3030 D53).
+pub fn r_package_version() -> &'static str {
+    yamaa::VERSION
+        .split_once('-')
+        .map_or(yamaa::VERSION, |(release, _)| release)
+}
 
 /// A plain R value of length one, as a project function receives and
 /// returns it.
@@ -449,7 +458,7 @@ impl ProjectFunctions for Benchmarks {
                 continue;
             };
             let installed = match package {
-                "yamaa" => yamaa::VERSION,
+                "yamaa" => r_package_version(),
                 PACKAGE => PACKAGE_VERSION,
                 _ => {
                     findings.push(LockFinding::new(

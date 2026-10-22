@@ -280,9 +280,10 @@ starts at 1.0.0 (#3030 D1).
   (#3030 D160).
 - Printed text: the labels, order and separators of every summary line (a
   run's, a project run's, a submission's and a check's; a selftest's, with
-  its `first failure:` and information lines; and that of a spec or project
-  that has read nothing), the layout of the `first issue:` line and of a
-  project run's member lines, and the `yamaa.Table:` header.
+  its `first failure:` line, its `not covered:` line, which only a build that
+  leaves out a feature prints, and its information line; and that of a spec
+  or project that has read nothing), the layout of the `first issue:` line
+  and of a project run's member lines, and the `yamaa.Table:` header.
 
 **What a minor release may add.** A minor release may add optional fields
 whose absence keeps the 1.0 meaning; file types, verbs, verifications and
@@ -541,8 +542,8 @@ Before pushing the release tag, confirm on the final commit:
 7. A [release rehearsal](#publication) passed against a native run of that
    commit; the tag names that run.
 8. For a release candidate, `docs/releases/X.Y.Z-rc.N.md` says what changed
-   since the previous candidate, and the rehearsal shows the release body
-   that the tag will publish.
+   since the previous candidate, or for candidate 1 what the candidate is, and
+   the rehearsal shows the release body that the tag will publish.
 
 Record the outcome on the release's planning issue.
 
@@ -641,10 +642,11 @@ links the native run attempt and lists the selected artifacts. A release
 candidate is created as a GitHub pre-release. Its body first says that it is
 release candidate N of X.Y.Z and not the final release, where to report
 feedback, how to install it from PyPI, and that the R package keeps version
-X.Y.Z, so R users reinstall it when X.Y.Z is released. Then come the
-changes since the previous candidate, from the committed
-`docs/releases/X.Y.Z-rc.N.md`, with a link that compares the two tags, and then
-the notes of X.Y.Z so far and the native evidence. Candidate N follows
+X.Y.Z, so R users reinstall it when X.Y.Z is released. Then comes the
+committed `docs/releases/X.Y.Z-rc.N.md`: for candidate 1 under the heading
+"Release candidate 1", and for a later candidate as the changes since the
+previous candidate, with a link that compares the two tags. Then come the
+notes of X.Y.Z so far and the native evidence. Candidate N follows
 candidate N-1: that candidate's tag must exist and be an ancestor of the tag
 commit. A body longer than GitHub's limit of 125,000 characters fails before
 the downloads.
@@ -670,7 +672,7 @@ python -m tools.ci.select_release_artifacts --repository elong0527/yamaa \
 
 ### PyPI upload
 
-From the 1.0.0 candidates on, PyPI receives each release's Python packages:
+From 0.5.0 on, PyPI receives each release's Python packages (#3030 D177):
 the wheels and the Python source archive of the asset table above. No other
 asset goes to PyPI: the R source and binary packages stay GitHub release
 assets, and the source package goes to CRAN too for a final release, as
@@ -742,9 +744,11 @@ and its dependencies from PyPI, and its source job is skipped.
 A final release is then installed with `pip install yamaa`. A candidate's
 version is a PyPI pre-release, which a bare `pip install yamaa` does not
 install reliably, so its release body gives
-`pip install --pre yamaa==X.Y.ZrcN`. yamaa 0.4.0 and 0.5.0 were distributed as
-GitHub release assets only, with no PyPI upload (#2848). The GitHub release
-assets remain the standalone download route for every package.
+`pip install --pre yamaa==X.Y.ZrcN`. yamaa 0.4.0 was distributed as GitHub
+release assets only. 0.5.0 was published as GitHub release assets (#2848), and
+on 2026-10-20 its wheels and Python source archive were uploaded to PyPI from
+those assets unchanged (#3030 D177). The GitHub release assets remain the
+standalone download route for every package.
 
 ### Command-line binaries
 
@@ -988,9 +992,11 @@ under MIT. `LICENSE-READSTAT.txt`,
 sources, the Unicode data in yamaa's own tables and the vendored YAML parser.
 The R package keeps its `MIT + file LICENSE` declaration, and its `Copyright`
 field names these files. The Python License-Expression,
-`MIT AND Apache-2.0 AND BSD-3-Clause AND Unicode-3.0 AND Zlib`, covers the
-project, the crates linked into the wheels and the standard library, which is
-relied on under MIT, with Unicode-3.0 for the Unicode tables in `core`.
+`MIT AND Apache-2.0 AND BSD-3-Clause AND Unicode-3.0 AND Apache-2.0 WITH LLVM-exception AND Zlib`,
+covers the project, the crates linked into the wheels and the standard
+library, which is relied on under MIT, with Unicode-3.0 for the Unicode tables
+in `core`, and the crates that the standard library links, of which
+`compiler_builtins` adds Apache-2.0 WITH LLVM-exception (#3030 D185).
 
 `tools.packaging.generate_third_party_notices` generates each host's crate
 notices from `rust/Cargo.lock`, with the crates that `cargo tree` resolves
@@ -1000,7 +1006,8 @@ command-line binaries with their bindings' default features. It generates the
 standard library section from the
 toolchain that `rust/rust-toolchain.toml` pins, its notice and its `rust-src`
 component, which the repository checks add to it, and it derives that
-expression from the Python binding's linked crates. The repository check
+expression from the Python binding's linked crates and the crates that the
+standard library links. The repository check
 fails when a host gains or loses a linked crate without a matching notice
 entry in its host's copy, when `rustc` in `rust/` is not the pinned toolchain,
 when the committed section differs from that toolchain's notice and sources,
@@ -1153,9 +1160,11 @@ owns decoding behavior.
 - The `yamaa` facade crate is the only supported Rust surface;
   `yamaa-adapters` and `yamaa-core` are internal and may change in any
   release.
-- Distribute 0.4.0 and 0.5.0 as GitHub release assets only. From the 1.0.0
-  candidates, the owner also uploads each release's Python packages to PyPI
-  from its GitHub release assets (#3030 D13, D14, D57).
+- Distribute 0.4.0 as GitHub release assets only. 0.5.0 was published as
+  GitHub release assets, and its Python packages were uploaded to PyPI from
+  them on 2026-10-20 (#3030 D177). From the 1.0.0 candidates, the owner
+  uploads each release's Python packages to PyPI from its GitHub release
+  assets (#3030 D13, D14, D57).
 - Publish release candidates as GitHub pre-releases from `yamaa-vX.Y.Z-rc.N`
   tags, with Python version `X.Y.ZrcN` and Cargo version `X.Y.Z-rc.N`. The R
   package keeps `X.Y.Z` through the candidates, and each candidate's release

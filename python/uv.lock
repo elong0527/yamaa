@@ -1339,7 +1339,7 @@ wheels = [
 
 [[package]]
 name = "yamaa"
-version = "0.5.0"
+version = "1.0.0rc1"
 source = { editable = "." }
 
 [package.optional-dependencies]

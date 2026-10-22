@@ -23,9 +23,10 @@ error_text <- function(key, path = NULL, file = NULL) {
 }
 namespace <- asNamespace("yamaa")
 
-expect_identical(as.character(packageVersion("yamaa")), "0.5.0", "the package version")
-expect_identical(yamaa:::.core_version(), as.character(packageVersion("yamaa")),
-  "the engine's version is the package's")
+# An R version cannot mark a release candidate, so the package keeps the final
+# version, and the engine names the candidate in its Cargo spelling (#3030 D53).
+expect_identical(as.character(packageVersion("yamaa")), "1.0.0", "the package version")
+expect_identical(yamaa:::.core_version(), "1.0.0-rc.1", "the engine's version")
 expect_identical(sort(getNamespaceExports("yamaa")),
   c("yamaa_info", "yamaa_lint", "yamaa_project", "yamaa_read_odm", "yamaa_schema",
     "yamaa_selftest", "yamaa_spec"),
