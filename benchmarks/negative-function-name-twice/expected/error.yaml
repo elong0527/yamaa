@@ -1,0 +1,7 @@
+phase: validation
+condition: function_file_invalid
+spec_paths:
+  - name
+rule: FUNC-2
+context:
+  environment_path: functions[1]

@@ -1,0 +1,37 @@
+yamaa: "1.0"
+type: function
+name: project_value
+description: Return the supplied numeric value.
+params:
+- name: x
+  type: float
+returns: float
+implementations:
+  python: yamaa_benchmarks.project_value
+  r: yamaabenchmarks::project_value
+
+tests:
+# The expected result was typed with its decimal point one place too far
+# right: the routine returns its argument, 1.5.
+- id: ordinary
+  covers:
+  - normal
+  - numeric-comparison
+  args:
+    x: 1.5
+  result: 15.0
+
+- id: zero-boundary
+  covers:
+  - boundary
+  - numeric-comparison
+  args:
+    x: 0.0
+  result: 0.0
+
+- id: missing-short-circuits
+  covers:
+  - short-circuit-missing:x
+  args:
+    x: null
+  result: null

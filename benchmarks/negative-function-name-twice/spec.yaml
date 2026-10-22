@@ -1,0 +1,27 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: TEST
+keys: [ID]
+input:
+  SOURCE:
+    path: input/source.csv
+    types: {VALUE: float}
+
+output:
+  path: test.csv
+  columns: [ID, RESULT]
+
+columns:
+  - name: ID
+    type: str
+    label: Identifier
+    derivation: SOURCE.ID
+
+  - name: RESULT
+    type: float
+    label: Project Function Result
+    derivation:
+      function:
+        name: project_value
+        args: {x: SOURCE.VALUE}
