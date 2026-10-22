@@ -498,7 +498,10 @@ for (case in manifest$cases) {
       list(want$phase, want$condition, want$rule, fixture_strings(want$spec_paths)),
       paste(case$name, "fails with the expected first issue"))
     context <- jsonlite::fromJSON(result$issues$context[[1L]], simplifyVector = FALSE)
-    expect_identical(context[names(want$context)], want$context, paste(case$name, "states the expected context"))
+    # A partial error.yaml may leave the context out; it states only the keys
+    # it compares, as Python's suite reads it too.
+    if (!is.null(want$context))
+      expect_identical(context[names(want$context)], want$context, paste(case$name, "states the expected context"))
     stopifnot_case(case$name, "its save is refused" = refused(result),
       "no Define-XML is written" = !file.exists(file.path(root, "define.xml")))
   } else {
