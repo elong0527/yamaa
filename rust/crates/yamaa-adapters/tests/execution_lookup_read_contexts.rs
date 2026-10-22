@@ -5,25 +5,15 @@
 //! rows a dataset verification checks (LOOKUP-2, LOOKUP-5, LOOKUP-8,
 //! LOOKUP-9, LOOKUP-15). A read that names no such value fails once, before
 //! any data is read.
-use std::{
-    fs,
-    path::PathBuf,
-    sync::atomic::{AtomicUsize, Ordering},
-};
+use std::fs;
 use yamaa_adapters::{file_application, specification_report::Identity};
 use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::{domain_entry::Request, json::Value};
 
-struct Fixture(PathBuf);
+struct Fixture(crate::support::Scratch);
 impl Fixture {
     fn new(specification: &str) -> Self {
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        let root = std::env::temp_dir().join(format!(
-            "yamaa-lookup-read-contexts-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
-        fs::create_dir(&root).unwrap();
+        let root = crate::support::Scratch::new("lookup-read-contexts");
         fs::write(root.join("spec.yaml"), specification).unwrap();
         fs::write(root.join("source.csv"), "ID,GRP,VAL\n1,A,3\n2,A,4\n3,B,5\n").unwrap();
         fs::write(root.join("donor.csv"), "KEY,X\n1,10\n2,20\n3,30\n").unwrap();
@@ -62,11 +52,6 @@ impl Fixture {
         }
         assert!(domain.save().unwrap());
         Ok(fs::read_to_string(self.0.join("out.csv")).unwrap())
-    }
-}
-impl Drop for Fixture {
-    fn drop(&mut self) {
-        fs::remove_dir_all(&self.0).unwrap();
     }
 }
 

@@ -2,14 +2,7 @@
 //! Project-scope contracts in the adapters: listed names, run-scope plans,
 //! held producer artifacts, report-only saves and the preflight of one save
 //! across results.
-use std::{
-    fs,
-    path::PathBuf,
-    sync::{
-        atomic::{AtomicUsize, Ordering},
-        Arc,
-    },
-};
+use std::{fs, sync::Arc};
 use yamaa_adapters::{
     file_application::{self, Domain},
     file_resources::HeldArtifacts,
@@ -25,18 +18,12 @@ use yamaa_core::{
     specification_run::SourceOrigin,
 };
 
-static NEXT: AtomicUsize = AtomicUsize::new(0);
-
-struct Study(PathBuf);
+struct Study(crate::support::Scratch);
 impl Study {
     fn new() -> Self {
-        let root = std::env::temp_dir().join(format!(
-            "yamaa-project-scope-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
+        let root = crate::support::Scratch::canonical("project-scope");
         fs::create_dir_all(root.join("out")).unwrap();
-        Self(yamaa_adapters::canonical_path::canonicalize(root).unwrap())
+        Self(root)
     }
     fn write(&self, name: &str, contents: impl AsRef<[u8]>) {
         let path = self.0.join(name);
@@ -46,11 +33,6 @@ impl Study {
     /// A file's path as the engine reports it, with forward slashes.
     fn path(&self, name: &str) -> String {
         self.0.join(name).to_str().unwrap().replace('\\', "/")
-    }
-}
-impl Drop for Study {
-    fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.0);
     }
 }
 

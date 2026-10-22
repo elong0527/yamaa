@@ -702,10 +702,7 @@ class NativeWorkflowContract(unittest.TestCase):
     def test_r_checks_cover_the_declared_floor_and_latest_patch(self):
         description = (ROOT / "R/yamaa/DESCRIPTION").read_text(encoding="utf-8")
         floor = re.search(r"^Depends: R \(>= ([0-9.]+)\)$", description, re.M)[1]
-        workflow = yaml.load(
-            (ROOT / ".github/workflows/R-CMD-check.yaml").read_text(encoding="utf-8"),
-            Loader=UniqueKeyLoader,
-        )
+        workflow = support.workflow("R-CMD-check.yaml")
         regular = workflow["jobs"]["R-CMD-check"]["strategy"]["matrix"]["config"]
         self.assertEqual(
             {

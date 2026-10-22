@@ -239,7 +239,7 @@ impl Lint {
 ///
 /// ```
 /// let path = std::env::temp_dir().join(format!("yamaa-lint-{}.yaml", std::process::id()));
-/// std::fs::write(&path, "schema_version: '1.0'\ndomain: DM\noutput:\n  path: dm.csv\n").unwrap();
+/// std::fs::write(&path, "yamaa: \"1.0\"\ntype: spec\ndomain: DM\noutput:\n  path: dm.csv\n").unwrap();
 /// let paths = [path.to_string_lossy().into_owned()];
 /// let result = yamaa::lint(&paths, false);
 /// if cfg!(feature = "yaml") {

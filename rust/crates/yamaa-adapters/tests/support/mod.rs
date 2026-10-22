@@ -7,6 +7,7 @@ use yamaa_core::{
 
 pub mod aggregate_syntax;
 pub mod benchmarks;
+pub mod inheritance;
 pub mod ipc_snapshot;
 pub mod numeric_syntax;
 pub mod odm_declaration;
@@ -106,4 +107,17 @@ pub fn host(runtime: &str) -> yamaa_core::project_function::Language {
         "r" => yamaa_core::project_function::Language::R,
         other => panic!("no host for test runtime {other}"),
     }
+}
+
+pub use scratch::Scratch;
+
+/// Replace exactly one occurrence, so an edit can never silently miss.
+#[track_caller]
+pub fn edit(document: &str, original: &str, replacement: &str) -> String {
+    assert_eq!(
+        document.matches(original).count(),
+        1,
+        "expected exactly one {original:?}"
+    );
+    document.replacen(original, replacement, 1)
 }

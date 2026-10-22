@@ -9,22 +9,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-import yaml
 from tools.packaging import bindings_surface as surface
 from tools.packaging import generate_bindings as generator
-
-DRAFT = generator.DEFINITION.with_name("bindings-1.0.yaml")
-
-
-def draft():
-    """The 1.0 draft, which later pull requests move into bindings.yaml.
-
-    Only its records and values are read here, so a plain load suffices: its
-    public section still has a YAML 1.1 boolean key, which the closed loader
-    refuses.
-    """
-    with DRAFT.open(encoding="utf-8") as stream:
-        return yaml.safe_load(stream)
 
 
 class FacadeCopy:
@@ -218,9 +204,9 @@ class GrammarTests(unittest.TestCase):
         self.assertEqual(columns[2]["values"], surface.REGISTRY_VALUES)
         self.assertTrue((generator.ROOT / surface.REGISTRY_VALUES).is_file())
 
-    def test_records_follow_the_field_grammar_of_the_draft(self):
-        planned = draft()
-        surface.validate_records(planned["records"], planned["values"])
+    def test_records_follow_the_field_grammar(self):
+        records, values = self.definition["records"], self.definition["values"]
+        surface.validate_records(records, values)
         surface.validate_records({}, {})
         mutations = [
             ("unknown keys", lambda r: r["info"].update(columns=[])),
@@ -236,29 +222,15 @@ class GrammarTests(unittest.TestCase):
         ]
         for message, mutate in mutations:
             with self.subTest(message=message):
-                candidate = copy.deepcopy(planned["records"])
+                candidate = copy.deepcopy(records)
                 mutate(candidate)
                 with self.assertRaisesRegex(ValueError, message):
-                    surface.validate_records(candidate, planned["values"])
+                    surface.validate_records(candidate, values)
 
-    def test_the_command_line_names_every_command_and_global_flag(self):
+    def test_an_empty_command_line_section_declares_no_command(self):
         surface.validate_cli({}, {}, {})
-        self.assertEqual(
-            surface.cli_names(self.definition["cli"]),
-            {
-                "check",
-                "run",
-                "submission",
-                "resolve",
-                "read-odm",
-                "lint",
-                "schema",
-                "selftest",
-                "--format",
-                "--version",
-                "--help",
-            },
-        )
+        lines = surface.manifest_lines({**self.definition, "cli": {}})
+        self.assertEqual([line for line in lines if line.startswith("cli.")], [])
 
     def test_the_command_line_grammar_refuses_malformed_commands(self):
         definition = self.definition

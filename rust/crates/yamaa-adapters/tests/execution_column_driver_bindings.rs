@@ -7,25 +7,15 @@
 //! carries. The bindings run one driver after another, in the order of the
 //! first template each completes. A column holding a qualified aggregate
 //! keeps the whole-dataset scope (LOOKUP-18).
-use std::{
-    fs,
-    path::PathBuf,
-    sync::atomic::{AtomicUsize, Ordering},
-};
+use std::fs;
 use yamaa_adapters::{file_application, specification_report::Identity};
 use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::domain_entry::Request;
 
-struct Fixture(PathBuf);
+struct Fixture(crate::support::Scratch);
 impl Fixture {
     fn new(specification: &str) -> Self {
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        let root = std::env::temp_dir().join(format!(
-            "yamaa-column-driver-bindings-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
-        fs::create_dir(&root).unwrap();
+        let root = crate::support::Scratch::new("column-driver-bindings");
         fs::write(root.join("spec.yaml"), specification).unwrap();
         fs::write(root.join("ae.csv"), AE).unwrap();
         fs::write(root.join("dm.csv"), DM).unwrap();
@@ -88,11 +78,6 @@ impl Fixture {
         let [issue] =
             <[Diagnostic; 1]>::try_from(issues).unwrap_or_else(|issues| panic!("{issues:?}"));
         issue
-    }
-}
-impl Drop for Fixture {
-    fn drop(&mut self) {
-        fs::remove_dir_all(&self.0).unwrap();
     }
 }
 

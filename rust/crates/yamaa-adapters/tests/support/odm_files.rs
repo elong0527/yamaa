@@ -5,16 +5,6 @@ use arrow_array::{Array, Int64Array, StringArray};
 use std::io::Write;
 use yamaa_adapters::public_table::PublicTable;
 
-/// Replace exactly one occurrence, so an edit can never silently miss.
-pub fn edit(document: &str, original: &str, replacement: &str) -> String {
-    assert_eq!(
-        document.matches(original).count(),
-        1,
-        "expected exactly one {original:?}"
-    );
-    document.replacen(original, replacement, 1)
-}
-
 /// Compress bytes as one gzip member.
 pub fn gzip(bytes: &[u8]) -> Vec<u8> {
     let mut encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());

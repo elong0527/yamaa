@@ -1,7 +1,7 @@
 //! Project operation findings: names, sections, unlinked producers, blocked
 //! consumers, run-scope cycles, saves with nothing to write and stale
 //! artifacts, each with its independently authored mapping.
-use super::{rendered, Record};
+use super::Record;
 use std::collections::BTreeSet;
 use yamaa_core::{
     diagnostic::{ConditionCode, Diagnostic},
@@ -18,6 +18,7 @@ fn texts(values: &[&str]) -> Value {
     )
 }
 
+#[track_caller]
 fn check(
     finding: &Diagnostic,
     condition: &str,
@@ -28,6 +29,7 @@ fn check(
     check_at(finding, "validation", condition, rule, paths, context)
 }
 
+#[track_caller]
 fn check_at(
     finding: &Diagnostic,
     phase: &str,
@@ -36,25 +38,11 @@ fn check_at(
     paths: &[&str],
     context: &[(&str, Value)],
 ) -> ConditionCode {
-    assert_eq!(
-        (
-            finding.definition().phase,
-            finding.definition().condition,
-            finding.definition().rule
-        ),
-        (phase, condition, Some(rule))
-    );
-    assert_eq!(finding.spec_paths, paths);
-    assert_eq!(
-        finding.context,
-        context
-            .iter()
-            .map(|(key, value)| ((*key).to_owned(), value.clone()))
-            .collect()
-    );
-    assert_eq!(finding.source_span, None);
-    assert_eq!(finding.operand_route, None);
-    rendered(&finding)
+    let context = context
+        .iter()
+        .map(|(name, value)| (*name, value.clone()))
+        .collect();
+    super::expect(finding, phase, condition, Some(rule), paths, context)
 }
 
 pub fn reached() -> BTreeSet<ConditionCode> {
