@@ -429,10 +429,9 @@ fn a_redefined_host_function_is_refused_at_activation_until_restored() {
 fn every_changed_local_file_refuses_runs_under_its_declaring_field() {
     const BASE: &str = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {P: {path: produced.csv, schema: producer.yaml}}\noutput: {path: out.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: P.ID}\n  - {name: VALUE, type: int, label: Value, derivation: {function: {name: id, args: {x: P.ID}}}}\n";
     const PRODUCER: &str = "schema_version: '1.0'\ndomain: PRODUCER\nkeys: [ID]\ninput: {RAW: {path: raw.csv, types: {ID: int}}}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: RAW.ID}\noutput: {path: produced.csv, columns: [ID]}\n";
-    let root = std::env::temp_dir().join(format!("yamaa-plan-contracts-{}", std::process::id()));
+    // Named as the engine spells paths: no Windows verbatim prefix.
+    let root = crate::support::Scratch::new("plan-contracts");
     std::fs::create_dir_all(root.join("python")).unwrap();
-    // The engine's spelling: no Windows verbatim prefix.
-    let root = yamaa_adapters::canonical_path::canonicalize(&root).unwrap();
     let files: [(&str, &[u8]); 7] = [
         ("spec.yaml", b"schema_version: '1.0'\nparent: base.yaml\n"),
         ("base.yaml", BASE.as_bytes()),
@@ -512,7 +511,6 @@ fn every_changed_local_file_refuses_runs_under_its_declaring_field() {
         succeeds();
     }
     assert!(!root.join("out.csv").exists());
-    std::fs::remove_dir_all(root).unwrap();
 }
 
 /// A specification whose column admits only names of the study's datasets
@@ -524,12 +522,8 @@ fn a_changed_listed_specification_refuses_runs_under_its_listing() {
     const ADLB: &str = "schema_version: '1.0'\ndomain: ADLB\nkeys: [USUBJID, PARAMCD]\ninput: {LB: lb.csv}\noutput: {path: adlb.csv, columns: [USUBJID, PARAMCD, SRCDOM]}\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: LB.USUBJID\n    submission: {core: Req, mandatory: true, length: 20, origin: {type: Predecessor, description: LB.USUBJID}}\n  - name: PARAMCD\n    type: str\n    label: Parameter Code\n    derivation: LB.LBTESTCD\n    submission: {core: Req, mandatory: true, length: 8, origin: {type: Predecessor, description: LB.LBTESTCD}}\n  - name: SRCDOM\n    type: str\n    label: Source Data\n    derivation: {literal: LB}\n    submission: {core: Perm, mandatory: false, length: 8, inventory_vocabulary: true, origin: {type: Assigned}}\nsubmission: {label: Laboratory Analysis Dataset, class: BASIC DATA STRUCTURE, structure: One record per subject per parameter, repeating: true}\n";
     const PROJECT: &str =
         "schema_version: '1.0'\nadam:\n  specs: [adlb.yaml]\nsdtm:\n  specs: [sdtm/lb.yaml]\n";
-    let root = std::env::temp_dir().join(format!(
-        "yamaa-plan-contracts-inventory-{}",
-        std::process::id()
-    ));
+    let root = crate::support::Scratch::new("plan-contracts-inventory");
     std::fs::create_dir_all(root.join("sdtm")).unwrap();
-    let root = yamaa_adapters::canonical_path::canonicalize(&root).unwrap();
     for (name, text) in [
         ("sdtm/lb.yaml", LB),
         ("adlb.yaml", ADLB),
@@ -571,5 +565,4 @@ fn a_changed_listed_specification_refuses_runs_under_its_listing() {
     );
     std::fs::write(root.join("sdtm/lb.yaml"), LB).unwrap();
     assert!(run().report().is_empty());
-    std::fs::remove_dir_all(root).unwrap();
 }

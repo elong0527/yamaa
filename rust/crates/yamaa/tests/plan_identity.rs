@@ -7,7 +7,10 @@
 //! another study, so the run compiles that study instead of reusing the plan
 //! of the old one. This file holds one test because the working directory is
 //! shared by every thread of the process.
-use std::path::{Path, PathBuf};
+#[allow(dead_code)]
+mod support;
+
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use yamaa::{
@@ -46,13 +49,12 @@ fn plan_of(run: &Run) -> &'static str {
 
 /// Two studies with the same file names; B's input has one more row.
 struct Studies {
-    root: PathBuf,
+    root: support::Scratch,
     previous: PathBuf,
 }
 impl Studies {
     fn new() -> Self {
-        let root = std::env::temp_dir().join(format!("yamaa-plan-identity-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&root);
+        let root = support::Scratch::new("plan-identity");
         for (name, input) in [("a", "ID\n1\n2\n"), ("b", "ID\n1\n2\n3\n")] {
             let study = root.join(name);
             std::fs::create_dir_all(&study).unwrap();
@@ -68,7 +70,7 @@ impl Studies {
             std::fs::write(study.join("input.csv"), input).unwrap();
         }
         Self {
-            root: yamaa_adapters::canonical_path::canonicalize(root).unwrap(),
+            root,
             previous: std::env::current_dir().unwrap(),
         }
     }
@@ -78,8 +80,8 @@ impl Studies {
 }
 impl Drop for Studies {
     fn drop(&mut self) {
+        // The scratch field drops after this, once the process has left it.
         let _ = std::env::set_current_dir(&self.previous);
-        let _ = std::fs::remove_dir_all(Path::new(&self.root));
     }
 }
 

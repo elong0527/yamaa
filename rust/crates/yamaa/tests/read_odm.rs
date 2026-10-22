@@ -20,19 +20,19 @@ const DOCUMENT: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
 </ODM>
 "#;
 
-struct File(PathBuf);
+/// A file of its own scratch directory, removed with it.
+struct File {
+    path: PathBuf,
+    _directory: crate::support::Scratch,
+}
 
 impl File {
     fn new(name: &str, contents: &str) -> Self {
-        let path = std::env::temp_dir().join(format!("yamaa-facade-{}-{name}", std::process::id()));
-        std::fs::write(&path, contents).unwrap();
-        Self(path)
-    }
-}
-
-impl Drop for File {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_file(&self.0);
+        let directory = crate::support::Scratch::new("read-odm");
+        Self {
+            path: directory.write(name, contents),
+            _directory: directory,
+        }
     }
 }
 
@@ -40,7 +40,7 @@ impl Drop for File {
 #[test]
 fn clinical_items_read_into_the_fixed_table() {
     let file = File::new("items.xml", DOCUMENT);
-    let table = read_odm(&file.0, &OdmOptions::new()).unwrap();
+    let table = read_odm(&file.path, &OdmOptions::new()).unwrap();
     assert_eq!(table.rows(), 2);
     let names = table
         .columns()
@@ -89,9 +89,9 @@ fn refusals_carry_their_registered_issue() {
         "refused.xml",
         &DOCUMENT.replace("IsNull=\"Yes\"", "IsNull=\"maybe\""),
     );
-    let shown = file.0.display().to_string();
+    let shown = file.path.display().to_string();
     let text = |value: &str| ContextValue::Text(value.to_owned());
-    let invalid = refusal(read_odm(&file.0, &OdmOptions::new()));
+    let invalid = refusal(read_odm(&file.path, &OdmOptions::new()));
     assert_eq!(
         (
             invalid.phase.as_str(),
@@ -113,7 +113,7 @@ fn refusals_carry_their_registered_issue() {
     // An option below its minimum is refused at its name, before the source
     // is read.
     let options = OdmOptions::new().with_max_xml_depth(7);
-    let error = read_odm(&file.0, &options).unwrap_err();
+    let error = read_odm(&file.path, &options).unwrap_err();
     let failure = Failure::from_error(Action::Read("edc/odm.xml"), &error);
     assert_eq!(
         failure.message,
@@ -128,7 +128,7 @@ fn refusals_carry_their_registered_issue() {
     assert_eq!(option.context.get("minimum"), Some(&ContextValue::Int(8)));
 
     let options = OdmOptions::new().with_archive_member("odm.xml");
-    let member = refusal(read_odm(&file.0, &options));
+    let member = refusal(read_odm(&file.path, &options));
     assert_eq!(member.code, "source_odm_archive_member");
     assert_eq!(
         member.message,
@@ -148,13 +148,13 @@ fn only_a_snapshot_with_clinical_data_reads() {
             "ODMVersion=\"2.0\" FileType=\"Transactional\"",
         ),
     );
-    let issue = refusal(read_odm(&transactional.0, &OdmOptions::new()));
+    let issue = refusal(read_odm(&transactional.path, &OdmOptions::new()));
     assert_eq!(issue.code, "source_odm_transactional");
     assert_eq!(
         issue.message,
         format!(
             "{} is not a snapshot: ODM declares FileType Transactional",
-            transactional.0.display()
+            transactional.path.display()
         )
     );
     let start = DOCUMENT.find("  <ClinicalData").unwrap();
@@ -163,14 +163,14 @@ fn only_a_snapshot_with_clinical_data_reads() {
         "metadata.xml",
         &format!("{}{}", &DOCUMENT[..start], &DOCUMENT[end..]),
     );
-    let issue = refusal(read_odm(&metadata.0, &OdmOptions::new()));
+    let issue = refusal(read_odm(&metadata.path, &OdmOptions::new()));
     assert_eq!(
         (issue.phase.as_str(), issue.code.as_str()),
         ("ingest", "source_odm_no_clinical_data")
     );
     // A source path that reaches no file is a caller's path (FILE-7).
-    let absent =
-        std::env::temp_dir().join(format!("yamaa-facade-{}-absent.xml", std::process::id()));
+    let scratch = crate::support::Scratch::new("read-odm-absent");
+    let absent = scratch.join("absent.xml");
     let issue = refusal(read_odm(&absent, &OdmOptions::new()));
     assert_eq!(
         (issue.code.as_str(), issue.rule.as_deref()),
@@ -187,7 +187,7 @@ fn only_a_snapshot_with_clinical_data_reads() {
 fn builds_without_the_odm_feature_report_the_capability() {
     let file = File::new("unavailable.xml", DOCUMENT);
     assert!(matches!(
-        read_odm(&file.0, &OdmOptions::new()),
+        read_odm(&file.path, &OdmOptions::new()),
         Err(Error::Unavailable { feature: "odm" })
     ));
 }

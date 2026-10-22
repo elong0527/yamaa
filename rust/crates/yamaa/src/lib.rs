@@ -113,6 +113,7 @@ pub fn style_same_value(before: &[u8], after: &[u8]) -> bool {
 }
 
 #[cfg(all(test, unix))]
+#[allow(dead_code)]
 #[path = "../tests/support/scratch.rs"]
 mod test_scratch;
 

@@ -2,8 +2,6 @@
 //! P-LINT-2 table, file order, fixes, the printed lines and refusals.
 #![cfg(feature = "yaml")]
 
-use std::path::PathBuf;
-
 #[cfg(unix)]
 use crate::support::scratch;
 
@@ -11,15 +9,11 @@ use yamaa::{lint, Array, DataType, Int64Array, StringArray, Table, LINT_COLUMNS,
 
 const CANONICAL: &str = "schema_version: \"1.0\"\ndomain: DM\nkeys: [USUBJID]\ninput:\n  DM: input/dm.csv\n\noutput:\n  path: dm.csv\n  columns: [USUBJID]\n\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: DM.USUBJID\n";
 
-struct Directory(PathBuf);
+struct Directory(scratch::Scratch);
 
 impl Directory {
     fn new(name: &str) -> Self {
-        let path =
-            std::env::temp_dir().join(format!("yamaa-facade-lint-{name}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&path);
-        std::fs::create_dir_all(&path).unwrap();
-        Self(path)
+        Self(scratch::Scratch::new(&format!("lint-{name}")))
     }
 
     fn write(&self, name: &str, text: &str) -> String {
@@ -34,12 +28,6 @@ impl Directory {
             .unwrap()
             .to_string_lossy()
             .replace('\\', "/")
-    }
-}
-
-impl Drop for Directory {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
     }
 }
 
