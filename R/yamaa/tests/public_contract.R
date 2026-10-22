@@ -18,11 +18,31 @@ source(file.path(host_fixture_root,"reader.R"),local=TRUE)
 host_truth <- read_host_fixture(host_fixture_root,"public-contract")
 messages <- host_truth[["messages"]]
 # D39's error text the fixture authors under `key`, naming the path given
-# and `file`, the file its first issue is located in.
+# and `file`, the file its first issue is located in, as its location names
+# it (printed_file()).
 error_text <- function(key, path = NULL, file = NULL) {
   text <- messages[[key]]
   if (!is.null(file)) text <- sub("{file}", file, text, fixed = TRUE)
   if (is.null(path)) text else gsub("{path}", path, text, fixed = TRUE)
+}
+# An issue's file as its printed location names it (rule 3 of P-PRINT-1):
+# relative to the working directory when the file is beneath it, and absolute
+# otherwise. Beneath is a matter of directories, not spellings: the engine
+# names the file canonically, in its own spelling, while the working directory
+# or normalizePath() may spell a directory another way, such as with Windows
+# 8.3 short names. So each directory above the file is compared with the
+# working directory as normalizePath() spells both, as function_values.R does.
+printed_file <- function(file) {
+  here <- normalizePath(getwd(), winslash = "/")
+  parts <- strsplit(file, "/", fixed = TRUE)[[1L]]
+  for (depth in rev(seq_len(length(parts) - 1L))) {
+    # The first part is the root: "" for "/", or a drive such as "C:".
+    directory <- paste(parts[seq_len(depth)], collapse = "/")
+    if (depth == 1L) directory <- paste0(directory, "/")
+    if (identical(normalizePath(directory, winslash = "/", mustWork = FALSE), here))
+      return(paste(parts[-seq_len(depth)], collapse = "/"))
+  }
+  file
 }
 namespace <- asNamespace("yamaa")
 
@@ -191,6 +211,42 @@ qualify_signatures <- function() {
 }
 qualify_signatures()
 
+# printed_file() judges "beneath" by directory, not by spelling. The study
+# directory is spelled canonically, through `..`, and through a link on Unix
+# or with its 8.3 short names on Windows. Whichever spelling is the working
+# directory, a file below the study, spelled through any of them, prints
+# relative to it. A sibling whose name starts with the study's, and the
+# parent's own file, print whole.
+qualify_printed_file <- function() {
+  root <- tempfile("yamaa-printed-file-")
+  dir.create(file.path(root, "study", "adam"), recursive = TRUE)
+  dir.create(file.path(root, "studyx"))
+  home <- getwd()
+  on.exit({ setwd(home); unlink(root, recursive = TRUE) })
+  root <- normalizePath(root, winslash = "/")
+  study <- file.path(root, "study")
+  spellings <- c(study, file.path(study, "adam", ".."))
+  if (.Platform$OS.type == "windows") {
+    short <- utils::shortPathName(normalizePath(study, winslash = "\\"))
+    spellings <- c(spellings, gsub("\\", "/", short, fixed = TRUE))
+  } else if (file.symlink(study, file.path(root, "link"))) {
+    spellings <- c(spellings, file.path(root, "link"))
+  }
+  outside <- file.path(root, c("studyx/dm.yaml", "dm.yaml"))
+  for (working in spellings) {
+    setwd(working)
+    actual <- vapply(c(file.path(spellings, "adam/adae.yaml"), file.path(spellings, "dm.yaml"), outside),
+      printed_file, "", USE.NAMES = FALSE)
+    expected <- c(rep(c("adam/adae.yaml", "dm.yaml"), each = length(spellings)), outside)
+    if (!identical(actual, expected)) {
+      str(actual); str(expected)
+      stop("printed_file() does not judge files beneath the working directory by directory: ", working)
+    }
+  }
+  cat("an issue's file prints relative to the working directory however either is spelled\n")
+}
+qualify_printed_file()
+
 run_contract <- function() {
   root <- tempfile("yamaa-public-contract-"); dir.create(root)
   on.exit(unlink(root, recursive = TRUE))
@@ -285,8 +341,6 @@ run_contract <- function() {
   failed_spec <- sub("output: {", host_truth[["unreached_row_count_yaml"]], failed_spec, fixed = TRUE)
   failed_spec <- sub("columns: [ID, VALUE]}", host_truth[["report_output_yaml"]], failed_spec, fixed = TRUE)
   write("spec.yaml", failed_spec); write("input.csv", host_truth[["failed_input_csv"]])
-  # The file the failed run's issue is located in, as a location names it.
-  failed_file <- normalizePath(path("spec.yaml"), winslash = "/", mustWork = TRUE)
   for (name in c("output.csv", "checks.csv")) write(name, "sentinel")
   failed <- yamaa_spec(path("spec.yaml"))$run(); issues <- check_issues(failed$issues)
   report <- failed$report
@@ -294,12 +348,21 @@ run_contract <- function() {
   stopifnot(identical(issues$phase, "verification"), identical(issues$condition, "range_failed"),
     identical(issues$rule, "CHECK-7"),
     identical(issues$context, '{"column":"VALUE","failure_count":1,"keys":[{"ID":"b"}],"verification_id":"fatal"}'),
+    # The issue is located in the specification, and its file is that file's
+    # absolute path with forward slashes (P-ISSUE-1). The engine spells it
+    # canonically, and normalizePath() may spell it another way, so the two
+    # are compared as files.
+    grepl("^(/|[[:alpha:]]:/)", issues$file), !grepl("\\", issues$file, fixed = TRUE),
+    identical(normalizePath(issues$file, winslash = "/", mustWork = TRUE),
+      normalizePath(path("spec.yaml"), winslash = "/", mustWork = TRUE)),
     is.null(failed$output),
     identical(names(report), fixture_strings(host_truth[["report_columns"]])),
     identical(report$KIND, c("run", "input", "rows", "check", "check")),
     identical(checks$ID, c("warn", "fatal")), identical(checks$OUTCOME, c("violated", "violated")),
     identical(checks$COUNT, c(1, 1)), identical(checks$TOTAL, c(3, 3)),
     identical(checks$RULE, c("CHECK-7", "CHECK-7")))
+  # The file the failed run's issue is located in, as its location names it.
+  failed_file <- printed_file(issues$file)
   unlink(path(c("spec.yaml", "input.csv"))); invisible(gc())
   # Every save rewrites the report, then raises: a deleted report comes back
   # unchanged and the stale output is never touched.
