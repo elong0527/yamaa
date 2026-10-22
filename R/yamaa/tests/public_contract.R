@@ -419,7 +419,7 @@ qualify_callbacks <- function() {
       actual <- list(interrupt = inherits(seen, "interrupt"), calls = invoked,
         published = file.exists(file.path(case, "test.csv")))
       expected <- list(interrupt = TRUE, calls = as.integer(host_truth[["signal_interrupt_calls"]]), published = FALSE)
-      if (!identical(actual, expected)) stop(paste("SIGINT callback", entry_name, "did not stop without publishing"))
+      expect_identical(actual, expected, paste("a SIGINT in a callback of a", entry_name, "run stops it without publishing"))
     }
   } else {
     cat("SKIP: in-process SIGINT requires tools::pskill on Unix\n")
