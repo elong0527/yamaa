@@ -1,0 +1,8 @@
+phase: validation
+condition: unknown_field
+spec_paths:
+  - rows.epro.derivations.APERIOD.source.between.value
+rule: LOOKUP-9
+context:
+  identifier: CLINIC.QSDT
+  variable: PERIODS.APERIOD

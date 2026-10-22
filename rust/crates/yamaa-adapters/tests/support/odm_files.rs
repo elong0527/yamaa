@@ -1,47 +1,9 @@
-//! ODM test inputs written at test time: scratch files, TAR archives with
-//! ustar, GNU and PAX headers, gzip streams, and readers for the result
-//! table. No binary fixture is committed.
+//! ODM test inputs written at test time: TAR archives with ustar, GNU and
+//! PAX headers, gzip streams, and readers for the result table. No binary
+//! fixture is committed.
 use arrow_array::{Array, Int64Array, StringArray};
-use std::{
-    fs,
-    io::Write,
-    path::{Path, PathBuf},
-    sync::atomic::{AtomicUsize, Ordering},
-};
+use std::io::Write;
 use yamaa_adapters::public_table::PublicTable;
-
-/// A private directory removed when dropped.
-pub struct Scratch(PathBuf);
-
-impl Scratch {
-    pub fn new(label: &str) -> Self {
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        let root = std::env::temp_dir().join(format!(
-            "yamaa-odm-{label}-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
-        fs::create_dir(&root).unwrap();
-        Self(root)
-    }
-
-    /// Write `bytes` to `name` inside the directory and return its path.
-    pub fn write(&self, name: &str, bytes: impl AsRef<[u8]>) -> PathBuf {
-        let path = self.0.join(name);
-        fs::write(&path, bytes).unwrap();
-        path
-    }
-
-    pub fn path(&self) -> &Path {
-        &self.0
-    }
-}
-
-impl Drop for Scratch {
-    fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.0);
-    }
-}
 
 /// Replace exactly one occurrence, so an edit can never silently miss.
 pub fn edit(document: &str, original: &str, replacement: &str) -> String {

@@ -154,14 +154,14 @@ run$output
 run$save()             # write adsl.csv
 ```
 
-Source installation requires R 4.4.0 or later, Rust 1.82 or later with Cargo, and platform build tools; it needs no network.
+Source installation requires R 4.2.0 or later, Rust 1.82 or later with Cargo, and platform build tools; it needs no network.
 To build the package from a checkout, follow
 [the R package guide](https://github.com/elong0527/yamaa/blob/main/R/yamaa/README.md).
 The **Release checks** badge shows the latest release package checks on `main`,
 which run weekly and before each release: Python and R installation, benchmark
 conformance, and numerical consistency across Linux, macOS, and Windows, and
 CRAN's incoming checks of the R source package (`R CMD check --as-cran` with
-R-devel, R-release and R 4.4 and the minimum Rust, once more with R-devel on
+R-devel, R-release and R 4.2.0 and the minimum Rust, once more with R-devel on
 Linux and none of the suggested packages, and in a CRAN-like Fedora
 container). Release assets come from that workflow.
 

@@ -339,9 +339,15 @@ impl Implicit {
                 .map(|assignment| &assignment.expression)
                 .chain(&verification_reads)
                 .collect::<Vec<_>>(),
-            vec![0],
+            vec![lookup_range::RowDriver::BASE],
         )];
-        lookup_range::admit(contexts.iter().cloned(), &intermediates, &mut findings);
+        lookup_range::admit(
+            contexts.iter().cloned(),
+            &intermediates,
+            &prepared.intermediates,
+            prepared.tree.spec().header.surface.one_meaning_per_form(),
+            &mut findings,
+        );
         aggregates::admit_record_keys(&contexts, &mut findings);
         relation_predicates::admit_reads(
             assignments
@@ -1657,7 +1663,7 @@ impl Templates {
                     binding
                         .templates
                         .iter()
-                        .map(|&template| templates[template].mode.source_index())
+                        .map(|&template| lookup_range::RowDriver::of(&templates[template].mode))
                         .collect(),
                 )
             })
@@ -1665,7 +1671,7 @@ impl Templates {
                 verification_reads.iter().collect(),
                 templates
                     .iter()
-                    .map(|template| template.mode.source_index())
+                    .map(|template| lookup_range::RowDriver::of(&template.mode))
                     .collect(),
             )))
             .chain(
@@ -1680,12 +1686,18 @@ impl Templates {
                                 .map(|assignment| &assignment.expression)
                                 .chain(filter)
                                 .collect(),
-                            vec![template.mode.source_index()],
+                            vec![lookup_range::RowDriver::of(&template.mode)],
                         )
                     }),
             )
-            .collect::<Vec<(Vec<&Expression>, Vec<usize>)>>();
-        lookup_range::admit(contexts.iter().cloned(), &intermediates, &mut findings);
+            .collect::<Vec<(Vec<&Expression>, Vec<lookup_range::RowDriver>)>>();
+        lookup_range::admit(
+            contexts.iter().cloned(),
+            &intermediates,
+            named,
+            prepared.tree.spec().header.surface.one_meaning_per_form(),
+            &mut findings,
+        );
         aggregates::admit_record_keys(&contexts, &mut findings);
         let mut admitted = Vec::new();
         for (index, ((template, declaration), filter)) in templates

@@ -28,8 +28,9 @@ SOURCE_PLATFORM = "ubuntu-24.04"
 # CRAN's incoming checks of that R source archive: R CMD check --as-cran with
 # these R versions on each R platform, with the workspace's minimum Rust, and
 # in these R-hub containers, which carry CRAN's check configurations, with
-# their distribution's Rust.
-CRAN_R_VERSIONS = ("devel", "release", "4.4")
+# their distribution's Rust. Pin the oldest admitted R patch so the declared
+# floor is qualified, not only the last patch of that series.
+CRAN_R_VERSIONS = ("devel", "release", "4.2.0")
 CRAN_CONTAINERS = ("gcc16",)
 # The same check with none of the package's suggested packages installed,
 # as CRAN's noSuggests check runs it: R-devel on Linux, here with the minimum
