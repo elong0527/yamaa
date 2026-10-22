@@ -85,7 +85,7 @@ result is the exact concatenation of literal text and values, the empty string
 when the template is empty.
 
 Fails: `incompatible_input_type`, `missing_input`.
-Evidence: `schema-shorthand`, `sdtm-dm-race-ethnicity`, `schema-expressions`, `rust/crates/yamaa-adapters/tests/fixtures/text_template_reference.json`.
+Evidence: `schema-shorthand`, `sdtm-dm-race-ethnicity`, `schema-expressions`, `rust/crates/yamaa-adapters/tests/fixtures/text_template_reference.json`, `negative-str-template-missing-placeholder`.
 
 `str_template` accepts a bare template as
 [Schema language](reference/schema-language.md) shorthand. The shorthand

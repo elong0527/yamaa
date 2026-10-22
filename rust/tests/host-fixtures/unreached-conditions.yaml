@@ -99,12 +99,6 @@ not_covered:
     - unknown_standard_family
     - unlinked_producer
     - xpt_display_format_invalid
-  "#3428":
-    - function_call_failed
-    - invalid_function_result
-    - invalid_power
-    - missing_input
-    - unmatched_pattern
   "#3432":
     - engine_rejected
     - nothing_to_save

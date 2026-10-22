@@ -1,0 +1,44 @@
+yamaa: "1.0"
+type: spec
+model: SDTM
+domain: DM
+keys: [STUDYID, USUBJID]
+input:
+  # One subject's site was not recorded.
+  DM_RAW: input/dm_raw.csv
+
+output:
+  path: dm.csv
+  columns: [DOMAIN, STUDYID, USUBJID, SUBJID, SITEID, SEX]
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'DM'"
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DM_RAW.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation:
+      str_template: "{DM_RAW.STUDYID}-{DM_RAW.SITEID}-{DM_RAW.SUBJID}"
+
+  - name: SUBJID
+    type: str
+    label: Subject Identifier for the Study
+    derivation: DM_RAW.SUBJID
+
+  - name: SITEID
+    type: str
+    label: Study Site Identifier
+    derivation: DM_RAW.SITEID
+
+  - name: SEX
+    type: str
+    label: Sex
+    derivation: DM_RAW.SEX
