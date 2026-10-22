@@ -1,5 +1,6 @@
 #![allow(unused_imports)]
 use super::rendered;
+pub(crate) use super::text;
 pub(crate) use std::collections::BTreeSet;
 pub(crate) use yamaa_core::json::Value as V;
 pub(crate) use yamaa_core::{
@@ -7,9 +8,7 @@ pub(crate) use yamaa_core::{
     diagnostic::{ConditionCode, OdmDeclared, OdmFinding as F},
     value::{ColumnType, Value},
 };
-pub(crate) fn text(value: &str) -> V {
-    V::String(value.into())
-}
+#[track_caller]
 pub(crate) fn check(
     finding: F<'_>,
     phase: &str,
@@ -20,23 +19,14 @@ pub(crate) fn check(
     reached: &mut BTreeSet<ConditionCode>,
 ) {
     let diagnostic = finding.diagnostic();
-    assert_eq!(
-        (
-            diagnostic.definition().phase,
-            diagnostic.definition().condition,
-            diagnostic.definition().rule
-        ),
-        (phase, condition, Some(rule))
-    );
-    assert_eq!(diagnostic.spec_paths, [path]);
-    assert_eq!(
-        diagnostic.context,
-        context
-            .into_iter()
-            .map(|(name, value)| (name.into(), value))
-            .collect()
-    );
-    reached.insert(rendered(&diagnostic));
+    reached.insert(super::expect(
+        &diagnostic,
+        phase,
+        condition,
+        Some(rule),
+        &[path],
+        context,
+    ));
 }
 pub fn reached() -> BTreeSet<ConditionCode> {
     let mut reached = BTreeSet::new();

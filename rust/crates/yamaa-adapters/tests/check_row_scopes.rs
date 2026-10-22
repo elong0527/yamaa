@@ -6,24 +6,14 @@
 //! read of a lookup, a template placeholder that is no `str`, and a read of a
 //! 1.0 row driver as a lookup. Every case lists the same issues in both
 //! routes and hosts, and names the condition and rule of its first issue.
-use std::{
-    fs,
-    path::PathBuf,
-    sync::atomic::{AtomicUsize, Ordering},
-};
+use std::fs;
 use yamaa_adapters::{file_application, specification_report::Identity};
 use yamaa_core::{diagnostic::Diagnostic, domain_entry::Request, project_function::Language};
 
-struct Fixture(PathBuf);
+struct Fixture(crate::support::Scratch);
 impl Fixture {
     fn new(specification: &str) -> Self {
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        let root = std::env::temp_dir().join(format!(
-            "yamaa-row-scopes-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
-        fs::create_dir(&root).unwrap();
+        let root = crate::support::Scratch::new("row-scopes");
         fs::write(root.join("spec.yaml"), specification).unwrap();
         for (name, content) in [
             (
@@ -80,11 +70,6 @@ impl Fixture {
             Err(issues) => render(&issues),
         };
         (checked, built)
-    }
-}
-impl Drop for Fixture {
-    fn drop(&mut self) {
-        fs::remove_dir_all(&self.0).unwrap();
     }
 }
 

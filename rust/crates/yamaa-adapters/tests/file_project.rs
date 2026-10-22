@@ -3,11 +3,7 @@
 mod file {
     mod file_project {
         use crate::support::project_schemas as schemas;
-        use std::{
-            fs,
-            path::PathBuf,
-            sync::atomic::{AtomicUsize, Ordering},
-        };
+        use std::fs;
         use yamaa_adapters::{
             file_preparation::FileSpecification,
             file_project::{self, Error},
@@ -29,20 +25,14 @@ mod file {
             value::Value,
         };
 
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        struct Study(PathBuf);
+        struct Study(crate::support::Scratch);
         impl Study {
             fn new() -> Self {
-                let path = std::env::temp_dir().join(format!(
-                    "yamaa-file-project-{}-{}",
-                    std::process::id(),
-                    NEXT.fetch_add(1, Ordering::Relaxed)
-                ));
-                fs::create_dir(&path).unwrap();
+                let path = crate::support::Scratch::canonical("file-project");
                 for name in ["env", "entry", "parent", "outside"] {
                     fs::create_dir(path.join(name)).unwrap();
                 }
-                let study = Self(yamaa_adapters::canonical_path::canonicalize(path).unwrap());
+                let study = Self(path);
                 // The project declares its codelists beside itself and links the
                 // Python environment file, whose lock and function paths resolve
                 // from env/.
@@ -841,22 +831,12 @@ mod file {
     }
     mod file_publication {
         #![cfg(unix)]
-        use std::{
-            fs,
-            path::PathBuf,
-            sync::atomic::{AtomicUsize, Ordering},
-        };
+        use std::{fs, path::PathBuf};
         use yamaa_adapters::file_publication::{Error, Publisher};
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        struct Directory(PathBuf);
+        struct Directory(crate::support::Scratch);
         impl Directory {
             fn new() -> Self {
-                let directory = std::env::temp_dir().join(format!(
-                    "yamaa-native-publication-{}-{}",
-                    std::process::id(),
-                    NEXT.fetch_add(1, Ordering::Relaxed)
-                ));
-                fs::create_dir(&directory).unwrap();
+                let directory = crate::support::Scratch::new("native-publication");
                 Self(directory)
             }
             fn target(&self) -> PathBuf {
@@ -872,11 +852,6 @@ mod file {
                     .collect();
                 names.sort();
                 names
-            }
-        }
-        impl Drop for Directory {
-            fn drop(&mut self) {
-                fs::remove_dir_all(&self.0).unwrap();
             }
         }
         #[test]
@@ -993,7 +968,7 @@ mod file {
             let directory = Directory::new();
             fs::write(directory.target(), b"old").unwrap();
             let lock = native::open(
-                &directory.0,
+                directory.0.path(),
                 OFlags::RDONLY | OFlags::DIRECTORY,
                 Mode::empty(),
             )
@@ -1103,23 +1078,13 @@ mod file {
     mod file_resources {
         #[cfg(unix)]
         use std::path::Path;
-        use std::{
-            fs,
-            path::PathBuf,
-            sync::atomic::{AtomicUsize, Ordering},
-        };
+        use std::{fs, path::PathBuf};
         use yamaa_adapters::file_resources::{Error, Resources};
 
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        struct Study(PathBuf);
+        struct Study(crate::support::Scratch);
         impl Study {
             fn new() -> Self {
-                let path = std::env::temp_dir().join(format!(
-                    "yamaa-native-file-{}-{}",
-                    std::process::id(),
-                    NEXT.fetch_add(1, Ordering::Relaxed)
-                ));
-                fs::create_dir(&path).unwrap();
+                let path = crate::support::Scratch::new("native-file");
                 for child in ["project/spec", "project/data", "additional", "outside"] {
                     fs::create_dir_all(path.join(child)).unwrap();
                 }
@@ -1150,11 +1115,6 @@ mod file {
                     &[self.text("additional")],
                 )
                 .unwrap()
-            }
-        }
-        impl Drop for Study {
-            fn drop(&mut self) {
-                fs::remove_dir_all(&self.0).unwrap();
             }
         }
 
@@ -1626,11 +1586,7 @@ mod file {
         }
     }
     mod file_workflow {
-        use std::{
-            fs,
-            path::PathBuf,
-            sync::atomic::{AtomicUsize, Ordering},
-        };
+        use std::fs;
         use yamaa_adapters::{
             file_resources::Resources,
             file_workflow::{self, Error},
@@ -1640,7 +1596,6 @@ mod file {
         use yamaa_core::application_observer::Scope;
         use yamaa_core::project_function::Language;
 
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
         #[test]
         fn unavailable_environment_precedes_bad_entry_and_valid_environment_is_retained_before_missing_entry(
         ) {
@@ -1703,16 +1658,11 @@ mod file {
             assert_eq!(sources[0].1, raw.as_bytes());
             assert!(!study.0.join("input.csv").exists());
         }
-        struct Study(PathBuf);
+        struct Study(crate::support::Scratch);
         impl Study {
             fn new() -> Self {
-                let path = std::env::temp_dir().join(format!(
-                    "yamaa-workflow-check-{}-{}",
-                    std::process::id(),
-                    NEXT.fetch_add(1, Ordering::Relaxed)
-                ));
-                fs::create_dir(&path).unwrap();
-                let study = Self(yamaa_adapters::canonical_path::canonicalize(path).unwrap());
+                let path = crate::support::Scratch::canonical("workflow-check");
+                let study = Self(path);
                 // A project that links no environment file.
                 study.write("project.yaml", "schema_version: '1.0'\n");
                 study
@@ -2960,7 +2910,7 @@ mod file {
             let outer = Study::new();
             let root = outer.0.join("named\\root");
             fs::create_dir(&root).unwrap();
-            let study = Study(root);
+            let study = Study(crate::support::Scratch::adopt(root));
             study.write("project.yaml", "schema_version: '1.0'\n");
             study.write(
                 "leaf.yaml",

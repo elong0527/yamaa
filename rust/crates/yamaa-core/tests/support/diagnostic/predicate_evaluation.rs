@@ -1,5 +1,6 @@
 #![allow(unused_imports)]
 use super::rendered;
+pub(crate) use super::text;
 pub(crate) use std::{collections::BTreeSet, convert::Infallible};
 pub(crate) use yamaa_core::json::Value as V;
 pub(crate) use yamaa_core::{
@@ -11,9 +12,6 @@ pub(crate) use yamaa_core::{
     portable_regex as regex,
     value::{Selection, Value},
 };
-pub(crate) fn text(s: &str) -> V {
-    V::String(s.into())
-}
 /// Every name is absent.
 pub(crate) struct Absent;
 impl Resolver for Absent {

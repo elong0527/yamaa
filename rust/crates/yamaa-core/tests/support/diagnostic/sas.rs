@@ -3,11 +3,8 @@
 use super::rendered;
 use std::collections::BTreeSet;
 use yamaa_core::diagnostic::{ConditionCode, SourceFinding};
-use yamaa_core::json::Value as V;
 
-fn text(value: &str) -> V {
-    V::String(value.into())
-}
+use super::text;
 
 pub(crate) fn reached() -> BTreeSet<ConditionCode> {
     let mut reached = BTreeSet::new();

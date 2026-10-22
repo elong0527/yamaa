@@ -2,15 +2,10 @@
 //! Scalar contracts.
 mod scalar {
     mod declarative_rounding {
-        use std::{
-            fs,
-            path::PathBuf,
-            sync::atomic::{AtomicUsize, Ordering},
-        };
+        use std::fs;
         use yamaa_adapters::json;
         use yamaa_adapters::{file_application, specification_report::Identity};
         use yamaa_core::domain_entry::Request;
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
         // The two benchmarks' specifications as 1.0 writes them, so that the
         // tests that edit their text edit one language, whichever language
         // the benchmarks are written in (#3422); the inputs and the expected
@@ -26,29 +21,19 @@ mod scalar {
         const NEGATIVE: &str = include_str!(
             "fixtures/converted/negative-round-half-away-from-zero-non-numeric-source/spec.yaml"
         );
-        struct Study(PathBuf);
+        struct Study(crate::support::Scratch);
         impl Study {
             fn new(source: &str, input: bool) -> Self {
-                let path = std::env::temp_dir().join(format!(
-                    "yamaa-rounding-{}-{}",
-                    std::process::id(),
-                    NEXT.fetch_add(1, Ordering::Relaxed)
-                ));
-                fs::create_dir(&path).unwrap();
+                let path = crate::support::Scratch::new("rounding");
                 fs::write(path.join("spec.yaml"), source).unwrap();
                 if input {
                     fs::create_dir(path.join("input")).unwrap();
                     fs::write(path.join("input/adsl.csv"), INPUT).unwrap();
                 }
-                Self(fs::canonicalize(path).unwrap())
+                Self(path.resolved(std::fs::canonicalize))
             }
             fn path(&self) -> String {
                 self.0.join("spec.yaml").to_str().unwrap().into()
-            }
-        }
-        impl Drop for Study {
-            fn drop(&mut self) {
-                fs::remove_dir_all(&self.0).unwrap();
             }
         }
         fn identity(path: &str) -> Identity<'_> {
@@ -312,23 +297,13 @@ mod scalar {
         }
     }
     mod declarative_temporal {
-        use std::{
-            fs,
-            path::{Path, PathBuf},
-            sync::atomic::{AtomicUsize, Ordering},
-        };
+        use std::{fs, path::Path};
         use yamaa_adapters::{file_application, specification_report::Identity};
         use yamaa_core::domain_entry::Request;
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        struct Study(PathBuf);
+        struct Study(crate::support::Scratch);
         impl Study {
             fn new(name: &str, input: bool) -> Self {
-                let path = std::env::temp_dir().join(format!(
-                    "yamaa-temporal-{}-{}",
-                    std::process::id(),
-                    NEXT.fetch_add(1, Ordering::Relaxed)
-                ));
-                fs::create_dir(&path).unwrap();
+                let path = crate::support::Scratch::new("temporal");
                 let original = Path::new(env!("CARGO_MANIFEST_DIR"))
                     .join("../../../benchmarks")
                     .join(name);
@@ -336,15 +311,10 @@ mod scalar {
                 if input {
                     copy_directory(&original.join("input"), &path.join("input"));
                 }
-                Self(fs::canonicalize(path).unwrap())
+                Self(path.resolved(std::fs::canonicalize))
             }
             fn path(&self) -> String {
                 self.0.join("spec.yaml").to_str().unwrap().into()
-            }
-        }
-        impl Drop for Study {
-            fn drop(&mut self) {
-                fs::remove_dir_all(&self.0).unwrap();
             }
         }
         fn copy_directory(source: &Path, target: &Path) {
@@ -770,26 +740,16 @@ mod scalar {
         }
     }
     mod declarative_temporal_imputation {
-        use std::{
-            fs,
-            path::{Path, PathBuf},
-            sync::atomic::{AtomicUsize, Ordering},
-        };
+        use std::{fs, path::Path};
         use yamaa_adapters::{file_application, specification_report::Identity};
         use yamaa_core::domain_entry::Request;
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        struct Fixture(PathBuf);
+        struct Fixture(crate::support::Scratch);
         impl Fixture {
             fn new(name: &str) -> Self {
                 let source = Path::new(env!("CARGO_MANIFEST_DIR"))
                     .join("../../../benchmarks")
                     .join(name);
-                let path = std::env::temp_dir().join(format!(
-                    "yamaa-temporal-imputation-{}-{}",
-                    std::process::id(),
-                    NEXT.fetch_add(1, Ordering::Relaxed)
-                ));
-                fs::create_dir(&path).unwrap();
+                let path = crate::support::Scratch::new("temporal-imputation");
                 fn copy(source: &Path, target: &Path) {
                     for entry in fs::read_dir(source).unwrap() {
                         let entry = entry.unwrap();
@@ -824,11 +784,6 @@ mod scalar {
                     identity,
                 )
                 .unwrap_or_else(|issues| panic!("preparation {issues:?}"))
-            }
-        }
-        impl Drop for Fixture {
-            fn drop(&mut self) {
-                fs::remove_dir_all(&self.0).unwrap();
             }
         }
         fn golden(fixture: &Fixture) -> yamaa_core::json::Value {
@@ -1401,26 +1356,16 @@ columns:
         }
     }
     mod declarative_text_case {
-        use std::{
-            fs,
-            path::{Path, PathBuf},
-            sync::atomic::{AtomicUsize, Ordering},
-        };
+        use std::{fs, path::Path};
         use yamaa_adapters::{file_application, specification_report::Identity};
         use yamaa_core::domain_entry::Request;
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        struct Fixture(PathBuf);
+        struct Fixture(crate::support::Scratch);
         impl Fixture {
             fn new(name: &str) -> Self {
                 let source = Path::new(env!("CARGO_MANIFEST_DIR"))
                     .join("../../../benchmarks")
                     .join(name);
-                let path = std::env::temp_dir().join(format!(
-                    "yamaa-str-case-{}-{}",
-                    std::process::id(),
-                    NEXT.fetch_add(1, Ordering::Relaxed)
-                ));
-                fs::create_dir(&path).unwrap();
+                let path = crate::support::Scratch::new("str-case");
                 fn copy(source: &Path, target: &Path) {
                     for entry in fs::read_dir(source).unwrap() {
                         let entry = entry.unwrap();
@@ -1455,11 +1400,6 @@ columns:
                     identity,
                 )
                 .unwrap_or_else(|issues| panic!("preparation {issues:?}"))
-            }
-        }
-        impl Drop for Fixture {
-            fn drop(&mut self) {
-                fs::remove_dir_all(&self.0).unwrap();
             }
         }
         fn golden(fixture: &Fixture) -> yamaa_core::json::Value {
@@ -1719,26 +1659,16 @@ columns:
         }
     }
     mod declarative_text_extract {
-        use std::{
-            fs,
-            path::{Path, PathBuf},
-            sync::atomic::{AtomicUsize, Ordering},
-        };
+        use std::{fs, path::Path};
         use yamaa_adapters::{file_application, specification_report::Identity};
         use yamaa_core::domain_entry::Request;
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        struct Fixture(PathBuf);
+        struct Fixture(crate::support::Scratch);
         impl Fixture {
             fn new(name: &str) -> Self {
                 let source = Path::new(env!("CARGO_MANIFEST_DIR"))
                     .join("../../../benchmarks")
                     .join(name);
-                let path = std::env::temp_dir().join(format!(
-                    "yamaa-str-extract-{}-{}",
-                    std::process::id(),
-                    NEXT.fetch_add(1, Ordering::Relaxed)
-                ));
-                fs::create_dir(&path).unwrap();
+                let path = crate::support::Scratch::new("str-extract");
                 fn copy(source: &Path, target: &Path) {
                     for entry in fs::read_dir(source).unwrap() {
                         let entry = entry.unwrap();
@@ -1773,11 +1703,6 @@ columns:
                     identity,
                 )
                 .unwrap_or_else(|issues| panic!("preparation {issues:?}"))
-            }
-        }
-        impl Drop for Fixture {
-            fn drop(&mut self) {
-                fs::remove_dir_all(&self.0).unwrap();
             }
         }
         fn golden(fixture: &Fixture) -> yamaa_core::json::Value {
@@ -2018,26 +1943,16 @@ columns:
         }
     }
     mod declarative_text_pad {
-        use std::{
-            fs,
-            path::{Path, PathBuf},
-            sync::atomic::{AtomicUsize, Ordering},
-        };
+        use std::{fs, path::Path};
         use yamaa_adapters::{file_application, specification_report::Identity};
         use yamaa_core::domain_entry::Request;
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        struct Fixture(PathBuf);
+        struct Fixture(crate::support::Scratch);
         impl Fixture {
             fn new(name: &str) -> Self {
                 let source = Path::new(env!("CARGO_MANIFEST_DIR"))
                     .join("../../../benchmarks")
                     .join(name);
-                let path = std::env::temp_dir().join(format!(
-                    "yamaa-str-pad-{}-{}",
-                    std::process::id(),
-                    NEXT.fetch_add(1, Ordering::Relaxed)
-                ));
-                fs::create_dir(&path).unwrap();
+                let path = crate::support::Scratch::new("str-pad");
                 fn copy(source: &Path, target: &Path) {
                     for entry in fs::read_dir(source).unwrap() {
                         let entry = entry.unwrap();
@@ -2052,11 +1967,6 @@ columns:
                 }
                 copy(&source, &path);
                 Self(path)
-            }
-        }
-        impl Drop for Fixture {
-            fn drop(&mut self) {
-                fs::remove_dir_all(&self.0).unwrap();
             }
         }
         fn golden(fixture: &Fixture) -> yamaa_core::json::Value {
@@ -2260,26 +2170,16 @@ columns:
         }
     }
     mod declarative_text_template {
-        use std::{
-            fs,
-            path::{Path, PathBuf},
-            sync::atomic::{AtomicUsize, Ordering},
-        };
+        use std::{fs, path::Path};
         use yamaa_adapters::{file_application, specification_report::Identity};
         use yamaa_core::domain_entry::Request;
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        struct Fixture(PathBuf);
+        struct Fixture(crate::support::Scratch);
         impl Fixture {
             fn new(name: &str) -> Self {
                 let source = Path::new(env!("CARGO_MANIFEST_DIR"))
                     .join("../../../benchmarks")
                     .join(name);
-                let path = std::env::temp_dir().join(format!(
-                    "yamaa-str-template-{}-{}",
-                    std::process::id(),
-                    NEXT.fetch_add(1, Ordering::Relaxed)
-                ));
-                fs::create_dir(&path).unwrap();
+                let path = crate::support::Scratch::new("str-template");
                 fn copy(source: &Path, target: &Path) {
                     for entry in fs::read_dir(source).unwrap() {
                         let entry = entry.unwrap();
@@ -2314,11 +2214,6 @@ columns:
                     identity,
                 )
                 .unwrap_or_else(|issues| panic!("preparation {issues:?}"))
-            }
-        }
-        impl Drop for Fixture {
-            fn drop(&mut self) {
-                fs::remove_dir_all(&self.0).unwrap();
             }
         }
         fn golden(fixture: &Fixture) -> yamaa_core::json::Value {

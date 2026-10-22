@@ -466,11 +466,9 @@ fn a_malformed_parent_spelling_is_refused_as_written_on_every_route() {
         specification: "child.yaml",
         base_directory: ".",
     };
-    let directory =
-        std::env::temp_dir().join(format!("yamaa-malformed-parent-{}", std::process::id()));
-    std::fs::create_dir_all(directory.join("std")).unwrap();
-    std::fs::write(directory.join("std/base.yaml"), PARENT).unwrap();
-    let directory = yamaa_adapters::canonical_path::canonicalize(&directory).unwrap();
+    let scratch = crate::support::Scratch::canonical("malformed-parent");
+    scratch.write("std/base.yaml", PARENT);
+    let directory = scratch.to_path_buf();
     let child = directory.join("child.yaml");
     let child = child.to_str().unwrap();
     // A 0.5 entry and a 1.0 entry judge their parent the same way (D76).
@@ -602,7 +600,6 @@ fn a_malformed_parent_spelling_is_refused_as_written_on_every_route() {
         };
         refused(&[*diagnostic], "prepare through a resolver");
     }
-    std::fs::remove_dir_all(&directory).unwrap();
 }
 
 /// FILE-8 and LAYER-2: a `parent` that reaches a symbolic link, as the
@@ -651,25 +648,14 @@ fn a_linked_parent_is_refused_at_parent_on_every_route() {
     #[cfg(unix)]
     {
         const PARENT: &[u8] = b"schema_version: '1.0'\ndomain: BASE\nkeys: [ID]\ninput: {SRC: {path: src.csv, types: {ID: int}}}\noutput: {path: out.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
-        /// Removes the test's directory when the test ends, by a panic too.
-        struct Scratch(std::path::PathBuf);
-        impl Drop for Scratch {
-            fn drop(&mut self) {
-                let _ = std::fs::remove_dir_all(&self.0);
-            }
-        }
-        let scratch = Scratch(
-            std::env::temp_dir().join(format!("yamaa-linked-parent-{}", std::process::id())),
-        );
-        // A directory that a killed run left under a reused process id goes
-        // first, so the links below are created afresh.
-        let _ = std::fs::remove_dir_all(&scratch.0);
-        std::fs::create_dir_all(scratch.0.join("std")).unwrap();
-        std::fs::write(scratch.0.join("std/base.yaml"), PARENT).unwrap();
-        std::os::unix::fs::symlink("std/base.yaml", scratch.0.join("base.yaml")).unwrap();
-        std::os::unix::fs::symlink("std", scratch.0.join("linked")).unwrap();
-        std::os::unix::fs::symlink("std/absent.yaml", scratch.0.join("dangling.yaml")).unwrap();
-        let directory = yamaa_adapters::canonical_path::canonicalize(&scratch.0).unwrap();
+        // Removed when the test ends, by a panic too.
+        let scratch = crate::support::Scratch::new("linked-parent");
+        std::fs::create_dir_all(scratch.join("std")).unwrap();
+        std::fs::write(scratch.join("std/base.yaml"), PARENT).unwrap();
+        std::os::unix::fs::symlink("std/base.yaml", scratch.join("base.yaml")).unwrap();
+        std::os::unix::fs::symlink("std", scratch.join("linked")).unwrap();
+        std::os::unix::fs::symlink("std/absent.yaml", scratch.join("dangling.yaml")).unwrap();
+        let directory = yamaa_adapters::canonical_path::canonicalize(&scratch).unwrap();
         let child = directory.join("child.yaml");
         let child = child.to_str().unwrap();
         for (surface, header) in HEADERS {

@@ -135,7 +135,7 @@ fn mismatched_or_missing_closers_are_refused_without_panicking() {
 /// YAML at the flow pair, while the Python and R packages admitted it.
 #[test]
 fn check_admits_a_compact_flow_verification_in_a_block_specification() {
-    let specification = "schema_version: '1.0'\ndomain: ADSL\nkeys: [USUBJID]\ninput:\n  DM: input/dm.csv\noutput:\n  path: adsl.csv\n  columns: [USUBJID]\ncolumns:\n  - name: USUBJID\n    type: str\n    derivation: DM.USUBJID\nverifications: [row_count: {min: 3, max: 3}]\n";
+    let specification = "yamaa: \"1.0\"\ntype: spec\ndomain: ADSL\nkeys: [USUBJID]\ninput:\n  DM: input/dm.csv\noutput:\n  path: adsl.csv\n  columns: [USUBJID]\ncolumns:\n  - name: USUBJID\n    type: str\n    derivation: DM.USUBJID\nverifications: [row_count: {min: 3, max: 3}]\n";
     let check = engine(specification)
         .spec_check("spec.yaml", None, &CancellationToken::new())
         .unwrap();
