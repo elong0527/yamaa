@@ -1216,6 +1216,7 @@ mod service {
         }
     }
     mod submission_inventory {
+        use crate::support::document::Tree;
         use std::rc::Rc;
         use yamaa_core::schema::{Document, DocumentNode as N};
         use yamaa_core::submission_inventory::{self as service, Ports};
@@ -1230,24 +1231,24 @@ mod service {
             )
             .unwrap()
         }
-        fn environment() -> Document {
-            Document::new(
-                vec![
-                    N::Text("sdtm".into()),
-                    N::Text("specs".into()),
-                    N::Text("first.yaml".into()),
-                    N::Text("second.yaml".into()),
-                    N::Sequence(vec![2, 3]),
-                    N::Mapping(vec![(1, 4)]),
-                    N::Mapping(vec![(0, 5)]),
-                ],
-                6,
-            )
-            .unwrap()
+        /// A 1.0 project file whose `sdtm` section lists two specifications.
+        fn project_file() -> Document {
+            Tree::map(vec![
+                ("yamaa", Tree::text("1.0")),
+                ("type", Tree::text("project")),
+                (
+                    "sdtm",
+                    Tree::map(vec![(
+                        "specs",
+                        Tree::List(vec![Tree::text("first.yaml"), Tree::text("second.yaml")]),
+                    )]),
+                ),
+            ])
+            .document()
         }
         /// The project file, lowered as preparation lowers it.
         fn project() -> yamaa_core::ast::Project {
-            yamaa_core::front_end::v0_5::project::project(&environment(), None).unwrap()
+            yamaa_core::front_end::v1::project::project(&project_file(), None).unwrap()
         }
         struct Captured {
             document: Document,
@@ -1287,15 +1288,16 @@ mod service {
                 fail: false,
                 original: Rc::new(()),
             };
-            let held =
-                service::capture(&project(), "original/environment.yaml", &mut port).unwrap();
+            // A section's specifications resolve from the project file
+            // (PROJECT-4).
+            let held = service::capture(&project(), "original/project.yaml", &mut port).unwrap();
             assert_eq!(held.inventory.names(), ["ADSL", "DM"]);
             assert_eq!(held.specifications.len(), 2);
             assert_eq!(
                 port.calls,
                 [
-                    ("original/environment.yaml".into(), "first.yaml".into()),
-                    ("original/environment.yaml".into(), "second.yaml".into())
+                    ("original/project.yaml".into(), "first.yaml".into()),
+                    ("original/project.yaml".into(), "second.yaml".into())
                 ]
             );
         }
@@ -1308,7 +1310,7 @@ mod service {
                 original: Rc::clone(&original),
             };
             let Err(service::Error::Port { written, error }) =
-                service::capture(&project(), "environment.yaml", &mut port)
+                service::capture(&project(), "project.yaml", &mut port)
             else {
                 panic!("original capture failure")
             };
