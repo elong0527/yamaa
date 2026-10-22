@@ -6,6 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 publish.workspace = true
+autotests = false
 
 # The `yamaa` command line (#3030 D12, section 2.8). Its rustdoc would share
 # the facade library's output name, so only the facade is documented.
@@ -25,5 +26,18 @@ libc = "0.2.191"
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_System_Console"] }
 
+[dev-dependencies]
+# The parity family reads the shared host truth and the JSON documents the
+# binary prints. `raw_value` keeps each issue's context as the exact text the
+# binary printed; the adapters already build serde_json with it, so the
+# workspace's features do not change.
+serde_json = { version = "1.0.145", features = ["raw_value"] }
+
 [lints]
 workspace = true
+
+# The integration tests are one binary: tests/main.rs declares each family
+# file under tests/ as a module and checks that none is left out (#3556).
+[[test]]
+name = "main"
+path = "tests/main.rs"

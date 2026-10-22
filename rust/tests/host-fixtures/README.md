@@ -10,9 +10,10 @@ for CSV, Parquet and their generated Dataset-JSON and Define-XML documents. No
 benchmark input or expected artifact is regenerated.
 
 `cases.json` owns independently authored inputs and expected truth repeated by
-installed Python and R controls. The two readers only decode this data. They do
-not invoke a native engine, reference evaluator, benchmark or callback to make
-expected values. Integer boundaries remain decimal strings; each host constructs
+installed Python and R controls and, for its issue and run-report parity cases,
+by the command line's tests ([The command line](#the-command-line)). The
+readers only decode this data. They do not invoke a native engine, reference
+evaluator, benchmark or callback to make expected values. Integer boundaries remain decimal strings; each host constructs
 its original integer type. Text is UTF-8, and CSV comparisons retain all bytes,
 including quoting, trailing zeros and final newlines.
 
@@ -235,6 +236,34 @@ registered condition with neither a case nor an entry, and on an entry for a
 condition that a case reaches or that is not registered. The hosts never read
 the list, so the supplemental catalog stages it nowhere.
 
+## The command line
+
+The command line is the third host of the issue and run-report parity truth
+(#2846). `rust/crates/yamaa-cli/tests/parity.rs` runs each case of
+`diagnostic-parity` and `project-parity`, and the contained panic of
+`parquet-containment`, through the `yamaa` binary with `--format json`. It
+compares every issue that the printed document holds with the case's rows:
+all twelve columns, in report order, with the context as the canonical JSON
+text that the binary printed. It gives each specification as `spec.yaml`,
+relative to the case's directory, so `{path}` stands for that. Of the run
+reports, it reads the value-level rows of `public-contract.value_level_report`
+from the report that the case's specification declares, which the hosts read
+from `run.report`, and compares the report that the failed run of
+`public-contract` saves with `failed_report_csv`, byte for byte. Those rows
+and bytes hold all fourteen report columns, in order. `cargo test` builds
+and runs the binary, so the leg runs in `make test-rust`, CI's `rust` job, and
+in native qualification's workspace tests on each platform.
+
+A case whose rows or files differ by host gives them by host, under `python`,
+`r` and `cli`, and each host reads its own: a case that gives them by host
+gives the command line's too. The command line runs no project function and
+checks no lock (D110, D123). So `a_function_the_running_host_does_not_implement`
+writes it a function file that implements both languages, and both
+project-function cases give its `unsupported_operation`, which names the
+operation `environment` and has no location. A project run prints any project
+finding, then every member's issues in run order, and counts each member's in
+`members`, so a case that names a member compares that member's issues.
+
 ## Public conformance mapping
 
 The public-conformance plan reads benchmark metadata for membership and
@@ -269,6 +298,18 @@ the same owned truth. The readers select the staged files beside the suites,
 with no checkout fallback. The R suites find them in their working directory:
 the copy of the package's tests directory that `R CMD check` runs them in, or
 the directory where native qualification stages them. R does not install them.
+
+The ordinary lanes run every suite that reads this truth, so a parity
+regression fails CI's `python` and `r` jobs on the exact head, not only the
+`equivalence` job. `make test-python` stages every
+`python/tests/installed/installed_*.py` with these files, runs each in its own
+process beside pytest, and prints each suite's name and result
+(`== installed_<suite>.py`). `make test-r` runs `R CMD check` on the staged
+package, whose `tests/` holds every `R/yamaa/tests/*.R` and this directory,
+and its log names each suite as it runs (`Running '<suite>.R'`). Every family
+of `cases.json` has a suite in each host, and the equivalence gate runs the
+same suites on fresh installs. A suite decodes `cases.json` once, however many
+families it reads.
 
 The R codec uses jsonlite from the package's `Suggests`. The native
 workflow installs it before supplemental R tests; production R does not import
