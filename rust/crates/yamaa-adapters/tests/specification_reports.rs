@@ -10,7 +10,7 @@ mod execution {
         fn original_window_failures_match_independent_diagnostics_and_completed_observations() {
             use yamaa_adapters::json;
             use yamaa_adapters::{
-                specification_report::{self, ArtifactPort, Identity},
+                specification_report::{self, Identity},
                 specification_run::{PreparedRun, SpecificationSourcePort},
             };
             use yamaa_core::json::Value as Json;
@@ -44,12 +44,6 @@ mod execution {
                     Ok(self.bytes.clone())
                 }
             }
-            impl ArtifactPort for Host {
-                type Error = ();
-                fn publish(&mut self, _: &str, _: &[u8]) -> Result<(), ()> {
-                    panic!("failed window published")
-                }
-            }
             let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
             let case = root.join("benchmarks/schema-window-functions");
             let schema = schema(&root.join("yaml"));
@@ -80,7 +74,7 @@ mod execution {
                     requests: vec![],
                 };
                 let attempt = run.execute(&mut host, Scope::default());
-                let actual = specification_report::complete(
+                let result = specification_report::build_result(
                     &run,
                     &attempt,
                     Identity {
@@ -91,9 +85,12 @@ mod execution {
                         specification: "spec.yaml",
                         base_directory: ".",
                     },
-                    &mut host,
+                    &[],
                 )
                 .unwrap();
+                // A failed window has no file to save.
+                assert!(result.files().is_empty());
+                let actual = result.saved_observations().unwrap();
                 let mut expected: Json = yamaa_adapters::json_wire::decode(include_str!(
                     "fixtures/specs/schema-window-functions.json"
                 ))
@@ -367,7 +364,6 @@ mod execution {
             struct Data {
                 bytes: Arc<[u8]>,
                 reads: usize,
-                published: Vec<Vec<u8>>,
             }
             impl yamaa_adapters::specification_run::SpecificationSourcePort for Data {
                 fn inspect(
@@ -397,22 +393,14 @@ mod execution {
                     Ok(self.bytes.clone())
                 }
             }
-            impl yamaa_adapters::specification_report::ArtifactPort for Data {
-                type Error = ();
-                fn publish(&mut self, path: &str, bytes: &[u8]) -> Result<(), ()> {
-                    assert_eq!(path, "adlb.csv");
-                    self.published.push(bytes.to_vec());
-                    Ok(())
-                }
-            }
             let mut data = Data {
                 bytes: Arc::from(std::fs::read(case.join("input/lb.csv")).unwrap()),
                 reads: 0,
-                published: vec![],
             };
+            let artifact = std::fs::read(case.join("expected/adlb.csv")).unwrap();
             for created in [1, 0] {
                 let attempt = run.execute(&mut data, Scope::default());
-                let report = yamaa_adapters::specification_report::complete(
+                let result = yamaa_adapters::specification_report::build_result(
                     &run,
                     &attempt,
                     yamaa_adapters::specification_report::Identity {
@@ -423,9 +411,11 @@ mod execution {
                         specification: "spec_study.yaml",
                         base_directory: ".",
                     },
-                    &mut data,
+                    &[],
                 )
                 .unwrap();
+                assert_eq!(result.files(), [("adlb.csv", &artifact[..])]);
+                let report = result.saved_observations().unwrap();
                 let mut expected: yamaa_core::json::Value = yamaa_adapters::json_wire::decode(
                     include_str!("fixtures/specs/schema-inheritance.json"),
                 )
@@ -433,10 +423,6 @@ mod execution {
                 expected["source_reads"][0]["snapshots_created"] = yamaa_adapters::json!(created);
                 assert_eq!(report, expected);
             }
-            assert_eq!(
-                data.published,
-                vec![std::fs::read(case.join("expected/adlb.csv")).unwrap(); 2]
-            );
             host.fail_path = true;
             let error = lifecycle::prepare(
                 schema.structure(),
@@ -504,13 +490,6 @@ mod execution {
                     assert_eq!(source.name, "DM");
                     self.reads += usize::from(!self.cached);
                     Ok(Arc::clone(&self.bytes))
-                }
-            }
-            struct NoPublication;
-            impl specification_report::ArtifactPort for NoPublication {
-                type Error = ();
-                fn publish(&mut self, _: &str, _: &[u8]) -> Result<(), ()> {
-                    panic!("failed build published")
                 }
             }
             let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
@@ -607,10 +586,7 @@ mod execution {
                                 .unwrap();
                         assert_eq!(result.observations(), expected);
                         assert!(result.output().is_none());
-                        assert!(matches!(
-                            result.save(&mut NoPublication),
-                            Err(yamaa_core::specification_output::SaveError::FailedBuild)
-                        ));
+                        assert!(result.files().is_empty());
                         // Failed accounting and opaque host errors cannot borrow a known
                         // finding left in the source ledger to become semantic failures.
                         attempt
@@ -828,13 +804,6 @@ mod execution {
                     panic!("metadata failure reached study capture");
                 }
             }
-            struct Publisher;
-            impl specification_report::ArtifactPort for Publisher {
-                type Error = ();
-                fn publish(&mut self, _: &str, _: &[u8]) -> Result<(), ()> {
-                    panic!("inspection failure published");
-                }
-            }
             let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
             let schema = schema(&root.join("yaml"));
             let run = PreparedRun::prepare(prepare(
@@ -867,10 +836,8 @@ mod execution {
                     specification_report::build_result(&run, &attempt, metadata(), &[]).unwrap();
                 assert_eq!(result.observations(), expected, "{}", fields[0]);
                 assert!(result.output().is_none());
-                assert!(matches!(
-                    result.save(&mut Publisher),
-                    Err(yamaa_core::specification_output::SaveError::FailedBuild)
-                ));
+                // An inspection failure has no file to save.
+                assert!(result.files().is_empty(), "{}", fields[0]);
                 let Err(PortError::Inspect(ref mut failures)) = attempt.dataset.result else {
                     panic!("inspection findings");
                 };
@@ -969,7 +936,7 @@ mod execution {
         fn exact_wide_count_bounds_preserve_empty_counts_and_completed_check_prefix() {
             use yamaa_adapters::json;
             use yamaa_adapters::{
-                specification_report::{self, ArtifactPort, Identity},
+                specification_report::{self, Identity},
                 specification_run::{PreparedRun, SpecificationSourcePort},
             };
             use yamaa_core::specification::SourceDeclaration;
@@ -999,12 +966,6 @@ mod execution {
                     *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
                     self.reads += 1;
                     Ok(Arc::clone(&self.bytes))
-                }
-            }
-            impl ArtifactPort for Host {
-                type Error = ();
-                fn publish(&mut self, _: &str, _: &[u8]) -> Result<(), ()> {
-                    panic!("failed checks published")
                 }
             }
             let schema = yamaa_adapters::shipped_schema::capture().unwrap();
@@ -1210,7 +1171,6 @@ mod execution {
                 inputs: BTreeMap<String, Arc<[u8]>>,
                 calls: Vec<String>,
                 expected: Vec<u8>,
-                saves: usize,
             }
             impl SpecificationSourcePort for Port {
                 fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
@@ -1239,16 +1199,6 @@ mod execution {
                     Ok(Arc::clone(input))
                 }
             }
-            impl specification_report::ArtifactPort for Port {
-                type Error = ();
-                fn publish(&mut self, path: &str, content: &[u8]) -> Result<(), ()> {
-                    assert!(!self.expected.is_empty(), "failed source binding published");
-                    assert_eq!(path, "result.csv");
-                    assert_eq!(content, self.expected);
-                    self.saves += 1;
-                    Ok(())
-                }
-            }
             let schema = yamaa_adapters::shipped_schema::capture().unwrap();
             let mut count = 0;
             for row in fixture_rows(include_str!("fixtures/original_source_bindings.json")) {
@@ -1271,7 +1221,6 @@ mod execution {
                             .collect(),
                         calls: vec![],
                         expected: fixture_bytes(&row["artifact"]),
-                        saves: 0,
                     };
                     let attempt = run.execute(&mut port, Scope::default());
                     let example = format!("source-binding-{}", case);
@@ -1294,20 +1243,15 @@ mod execution {
                     assert_eq!(result.observations(), unsaved, "{}", case);
                     if port.expected.is_empty() {
                         assert!(result.output().is_none());
-                        assert!(matches!(
-                            result.save(&mut port),
-                            Err(yamaa_core::specification_output::SaveError::FailedBuild)
-                        ));
+                        assert!(result.files().is_empty(), "{}", case);
                     } else {
-                        for _ in 0..2 {
-                            assert_eq!(
-                                result.save(&mut port).unwrap().observations_value(false),
-                                expected,
-                                "{}",
-                                case
-                            );
-                        }
-                        assert_eq!(port.saves, 2);
+                        assert_eq!(
+                            result.files(),
+                            [("result.csv", &port.expected[..])],
+                            "{}",
+                            case
+                        );
+                        assert_eq!(result.saved_observations().unwrap(), expected, "{}", case);
                     }
                     assert_eq!(
                         port.calls,
@@ -1335,7 +1279,6 @@ mod execution {
                 inputs: BTreeMap<String, Arc<[u8]>>,
                 calls: Vec<String>,
                 expected: Vec<u8>,
-                saves: usize,
             }
             impl SpecificationSourcePort for Port {
                 fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
@@ -1362,16 +1305,6 @@ mod execution {
                     let input = &self.inputs[&source.name];
 
                     Ok(Arc::clone(input))
-                }
-            }
-            impl specification_report::ArtifactPort for Port {
-                type Error = ();
-                fn publish(&mut self, path: &str, content: &[u8]) -> Result<(), ()> {
-                    assert!(!self.expected.is_empty(), "failed mapping/cut published");
-                    assert_eq!(path, "result.csv");
-                    assert_eq!(content, self.expected);
-                    self.saves += 1;
-                    Ok(())
                 }
             }
             let schema = yamaa_adapters::shipped_schema::capture().unwrap();
@@ -1401,7 +1334,6 @@ mod execution {
                             .collect(),
                         calls: vec![],
                         expected: fixture_bytes(&row["artifact"]),
-                        saves: 0,
                     };
                     let attempt = run.execute(&mut port, Scope::default());
                     let example = format!("mapping-cut-{}", case);
@@ -1424,20 +1356,15 @@ mod execution {
                     assert_eq!(result.observations(), unsaved, "{}", case);
                     if port.expected.is_empty() {
                         assert!(result.output().is_none());
-                        assert!(matches!(
-                            result.save(&mut port),
-                            Err(yamaa_core::specification_output::SaveError::FailedBuild)
-                        ));
+                        assert!(result.files().is_empty(), "{}", case);
                     } else {
-                        for _ in 0..2 {
-                            assert_eq!(
-                                result.save(&mut port).unwrap().observations_value(false),
-                                expected,
-                                "{}",
-                                case
-                            );
-                        }
-                        assert_eq!(port.saves, 2);
+                        assert_eq!(
+                            result.files(),
+                            [("result.csv", &port.expected[..])],
+                            "{}",
+                            case
+                        );
+                        assert_eq!(result.saved_observations().unwrap(), expected, "{}", case);
                     }
                     assert_eq!(
                         port.calls,

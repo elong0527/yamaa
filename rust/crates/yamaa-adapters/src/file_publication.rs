@@ -612,12 +612,6 @@ impl Drop for DirectoryLock {
         let _ = fs::flock(&self.held, fs::FlockOperation::Unlock);
     }
 }
-impl yamaa_core::specification_output::ArtifactPort for Publisher {
-    type Error = Error;
-    fn publish(&mut self, path: &str, content: &[u8]) -> Result<(), Error> {
-        Publisher::publish(self, path, content)
-    }
-}
 fn kind(status: &fs::Stat) -> FileType {
     FileType::from_raw_mode(status.st_mode)
 }

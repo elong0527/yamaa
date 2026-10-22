@@ -113,8 +113,6 @@ pub mod inheritance;
 
 pub mod application_observer;
 
-pub mod specification_output;
-
 pub mod define;
 
 pub mod project_domain;

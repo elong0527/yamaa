@@ -48,12 +48,12 @@ mod service {
         }
     }
     mod build_ports {
-        //! End-to-end shared request effects with the production metadata, activation,
-        //! execution and held-output services and private native scripted ports.
+        //! End-to-end shared request effects with the production metadata, activation
+        //! and execution services and private native scripted ports.
         use crate::support::ports::*;
         use crate::support::project_call_compiler as support;
         use std::cell::RefCell;
-        use std::{convert::Infallible, rc::Rc, sync::Arc};
+        use std::sync::Arc;
         use support::{call, specification, Tree};
         use yamaa_core::{
             application_observer::Scope,
@@ -63,7 +63,6 @@ mod service {
             project_activation::{self, ActivationPort},
             project_domain::{self, CheckedOwnedProject},
             project_preparation as metadata,
-            specification_output::{self as output, CompleteError, OutputReport, PreparedOutput},
             specification_run::CapturedAttempt,
         };
         use yamaa_core::{
@@ -76,7 +75,9 @@ mod service {
             value::{ColumnType, Value},
         };
         #[derive(Debug)]
-        struct Opaque(Rc<()>);
+        struct Opaque;
+        /// The rows one build executed.
+        type Rows = Vec<Vec<Value>>;
         #[derive(Clone, Copy)]
         enum Scenario {
             Success,
@@ -84,15 +85,12 @@ mod service {
             Unsupported,
             Conformance,
             Capture,
-            Encode,
-            Report,
         }
         #[derive(Debug)]
         enum Failure {
             Metadata(Box<metadata::Failure<Opaque, MetadataDocument, Opaque>>),
             Compile(PrepareError),
             Activation(project_activation::Failure<Opaque>),
-            Output(CompleteError<&'static str, Opaque, Infallible>),
         }
         struct Entry {
             model: SpecificationDocument,
@@ -128,41 +126,6 @@ mod service {
                     arguments: vec![],
                 });
                 Ok(Value::Int(if self.fail { 8 } else { 7 }))
-            }
-        }
-        struct Report {
-            log: EventLog,
-            fail: bool,
-        }
-        impl OutputReport for Report {
-            type Error = &'static str;
-            type Report = ();
-            fn failure(&mut self) -> Result<(), Self::Error> {
-                self.log.record(Event::Observation("failed report"));
-                Ok(())
-            }
-            fn begin(&mut self, _: &yamaa_core::dataset::Execution) -> Result<(), Self::Error> {
-                self.log.record(Event::Observation("output observations"));
-                Ok(())
-            }
-            fn rejected(
-                &mut self,
-                _: &[yamaa_core::specification::OutputFinding],
-            ) -> Result<(), Self::Error> {
-                panic!("fixture output is admitted")
-            }
-            fn success(
-                &mut self,
-                _: &yamaa_core::dataset::Execution,
-                _: &[usize],
-                _: &[u8],
-            ) -> Result<(), Self::Error> {
-                self.log.record(Event::Observation("complete report"));
-                if self.fail {
-                    Err("original report refusal")
-                } else {
-                    Ok(())
-                }
             }
         }
         fn document(tree: Tree) -> Document {
@@ -222,9 +185,7 @@ mod service {
             log: EventLog,
             source: ScriptedSource<Opaque>,
             decoder: ScriptedDecoder<Opaque, FixtureTable<Opaque>>,
-            encoder: ScriptedEncoder<Opaque>,
             activation: Activation,
-            report: Report,
         }
         impl Application {
             fn new(scenario: Scenario) -> Self {
@@ -233,22 +194,16 @@ mod service {
                     scenario,
                     source: ScriptedSource::new(log.clone()),
                     decoder: ScriptedDecoder::new(log.clone()),
-                    encoder: ScriptedEncoder::new(log.clone()),
                     activation: Activation {
                         log: log.clone(),
                         fail: matches!(scenario, Scenario::Conformance),
                     },
-                    report: Report {
-                        log: log.clone(),
-                        fail: matches!(scenario, Scenario::Report),
-                    },
                     log,
                 }
             }
-            fn run(
-                &mut self,
-                checked: &CheckedOwnedProject,
-            ) -> Result<PreparedOutput<()>, Failure> {
+            /// One run of `checked`: the rows it executed, or none when the
+            /// study capture failed.
+            fn run(&mut self, checked: &CheckedOwnedProject) -> Result<Option<Rows>, Failure> {
                 let source = checked.compiled().source().clone();
                 self.source.inspections.push_back(InspectionStep {
                     source: source.clone(),
@@ -258,7 +213,7 @@ mod service {
                     source: source.clone(),
                     new_snapshots: 1,
                     outcome: if matches!(self.scenario, Scenario::Capture) {
-                        Err(Opaque(Rc::new(())))
+                        Err(Opaque)
                     } else {
                         Ok(Arc::from(b"held study".as_slice()))
                     },
@@ -276,14 +231,6 @@ mod service {
                         self.log.clone(),
                     )),
                 });
-                self.encoder.steps.push_back(EncodeStep {
-                    projection: vec![0, 1],
-                    outcome: if matches!(self.scenario, Scenario::Encode) {
-                        Err(Opaque(Rc::new(())))
-                    } else {
-                        Ok(b"ID,VALUE\n1,7\n".to_vec())
-                    },
-                });
                 let mut attempt = CapturedAttempt::new(&source);
                 checked
                     .build_into(
@@ -297,18 +244,12 @@ mod service {
                         ),
                     )
                     .map_err(Failure::Activation)?;
-                let execution = attempt
+                Ok(attempt
                     .result
                     .as_ref()
                     .ok()
-                    .and_then(|result| result.result.as_ref().ok());
-                output::prepare(
-                    checked.compiled(),
-                    execution,
-                    &mut self.report,
-                    &mut self.encoder,
-                )
-                .map_err(Failure::Output)
+                    .and_then(|result| result.result.as_ref().ok())
+                    .map(|execution| execution.dataset.rows().to_vec()))
             }
         }
         impl MetadataAdmissionPort for Application {
@@ -390,7 +331,7 @@ mod service {
                 Ok(())
             }
             /// One build: compile, then run.
-            fn build(&mut self) -> Result<PreparedOutput<()>, Failure> {
+            fn build(&mut self) -> Result<Option<Rows>, Failure> {
                 let ports = RefCell::new(self);
                 domain_entry::domain(
                     Scope::default(),
@@ -406,14 +347,12 @@ mod service {
             }
         }
         #[test]
-        fn complete_request_failures_never_publish_and_admission_precedes_study_capture() {
+        fn complete_request_failures_execute_nothing_and_admission_precedes_study_capture() {
             for scenario in [
                 Scenario::Environment,
                 Scenario::Unsupported,
                 Scenario::Conformance,
                 Scenario::Capture,
-                Scenario::Encode,
-                Scenario::Report,
             ] {
                 let mut ports = Application::new(scenario);
                 let result = ports.build();
@@ -430,14 +369,7 @@ mod service {
                         Scenario::Conformance,
                         Err(Failure::Activation(project_activation::Failure::Tests(_))),
                     ) => (),
-                    (Scenario::Capture, Ok(result)) => assert!(result.artifact().is_none()),
-                    (Scenario::Encode, Err(Failure::Output(CompleteError::Encode(error)))) => {
-                        assert_eq!(Rc::strong_count(&error.0), 1)
-                    }
-                    (
-                        Scenario::Report,
-                        Err(Failure::Output(CompleteError::Report("original report refusal"))),
-                    ) => (),
+                    (Scenario::Capture, Ok(rows)) => assert!(rows.is_none()),
                     _ => panic!("wrong failure: {result:?}"),
                 }
                 if matches!(
@@ -449,52 +381,20 @@ mod service {
                         Event::Inspect(_) | Event::Capture { .. } | Event::Decode { .. }
                     )));
                 }
-                let mut publisher = ScriptedPublisher::<Opaque>::new(ports.log.clone());
-                if let Ok(result) = result {
-                    assert!(result.save(&mut publisher).is_err());
-                }
-                assert!(!ports
-                    .log
-                    .events()
-                    .iter()
-                    .any(|event| matches!(event, Event::Publish { .. })));
             }
         }
         #[test]
-        fn check_has_no_runtime_effects_and_successful_build_saves_only_the_held_bytes() {
+        fn check_has_no_runtime_effects_and_a_successful_build_executes_its_rows() {
             let mut ports = Application::new(Scenario::Success);
             let checked = ports.prepare(request()).unwrap();
             ports.check(checked).unwrap();
             assert!(!ports.log.events().iter().any(|event| matches!(
                 event,
-                Event::Call { .. }
-                    | Event::Capture { .. }
-                    | Event::Encode { .. }
-                    | Event::Publish { .. }
-                    | Event::Observation("lock" | "binding")
+                Event::Call { .. } | Event::Capture { .. } | Event::Observation("lock" | "binding")
             )));
             ports.log.clear();
-            let result = ports.build().unwrap();
-            assert!(!ports
-                .log
-                .events()
-                .iter()
-                .any(|event| matches!(event, Event::Publish { .. })));
-            let before = ports.log.events().len();
-            let mut publisher = ScriptedPublisher::<Opaque>::new(ports.log.clone());
-            for _ in 0..2 {
-                publisher.steps.push_back(PublishStep {
-                    path: "output.csv".into(),
-                    bytes: b"ID,VALUE\n1,7\n".to_vec(),
-                    outcome: Ok(()),
-                });
-            }
-            result.save(&mut publisher).unwrap();
-            result.save(&mut publisher).unwrap();
-            assert_eq!(ports.log.events().len(), before + 2);
-            assert!(ports.log.events()[before..]
-                .iter()
-                .all(|event| matches!(event, Event::Publish { .. })));
+            let rows = ports.build().unwrap();
+            assert_eq!(rows, Some(vec![vec![Value::Int(1), Value::Int(7)]]));
         }
     }
     mod define_service {
