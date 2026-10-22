@@ -397,7 +397,7 @@ made to both, and `make check-repository` fails while they differ
   `include_str!`; assert their row count so a truncated fixture fails
   (`tests/portable_math_golden.rs` in core).
 - A variant of a document comes from an exact-once edit, as
-  `support::odm_files::edit` is, never from `str::replace`, which does
+  `support::edit` (adapters) is, never from `str::replace`, which does
   nothing when its pattern is missing.
 - Tests that differ in one value are one test over a table, with the
   label in every assertion:
