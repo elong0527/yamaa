@@ -32,7 +32,10 @@ jobs:
           r: runtime
           package: 'false'
       # The other jobs build with the pinned toolchain. Embedders build with
-      # their own, so the workspace rust-version must keep building.
+      # their own, so the workspace rust-version must keep building. CI's
+      # rust (minimum toolchain) job lints the workspace with it on every
+      # pull request; this lane repeats that check on a release branch and
+      # adds the embedder workspace and the minimal format builds below.
       - name: Activate the workspace rust-version toolchain
         run: python -m tools.ci.toolchain --minimum --install
       - name: Check and lint the workspace with the minimum toolchain

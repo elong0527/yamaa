@@ -307,11 +307,13 @@ fn decode_and_execute<D: SourceDecoder>(
         }
     }
     let plan = prepared.bind(table.schema()).map_err(RunError::Bind)?;
+    // Bytes a caller holds run to the end: nothing cancels them.
     Ok(plan.execute(
         table,
         &[],
         &mut crate::function_invocation::NoFunctions::new(),
         None,
+        &|| false,
     ))
 }
 
@@ -555,7 +557,14 @@ fn execute_inner_into<P: SpecificationSourcePort, D: SourceDecoder>(
             scope.refusal(crate::application_observer::Phase::Dataset(phase), refusal)
         }
     };
-    attempt.result = Ok(plan.execute(primary, &secondary, &mut functions, Some(&mut observer)));
+    let cancelled = || scope.cancelled();
+    attempt.result = Ok(plan.execute(
+        primary,
+        &secondary,
+        &mut functions,
+        Some(&mut observer),
+        &cancelled,
+    ));
 }
 
 impl<E: std::fmt::Debug> std::fmt::Display for RunError<E> {

@@ -4869,6 +4869,7 @@
         ]
       },
       "interrupt_message": "public contract activation interrupt",
+      "signal_interrupt_calls": 3,
       "report_output_yaml": "columns: [ID, VALUE], report: checks.csv}",
       "empty_text_column": "  - {name: EMPTY, type: str, derivation: {literal: ''}}\noutput: {",
       "unreached_row_count_yaml": "verifications:\n  - row_count: {min: 0, id: unreached}\noutput: {",
@@ -5254,30 +5255,78 @@
             }
           ]
         },
-      {
-        "name": "pattern_beyond_the_compiled_size_limit",
-        "call": "check",
-        "specification_yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: input.csv\ncolumns:\n  - name: ID\n    type: str\n    derivation: SRC.ID\n  - name: CODE\n    type: str\n    derivation:\n      str_extract:\n        source: SRC.TEXT\n        pattern: '(?:ab){18446744073709551615}'\noutput:\n  path: output.csv\n  columns: [ID, CODE]\n",
-        "input_csv": "ID,TEXT\na,abab\n",
-        "issues": [
-          {
-            "severity": "error",
-            "phase": "engine",
-            "condition": "engine_rejected",
-            "rule": null,
-            "spec_paths": [
-              "columns.CODE.derivation.str_extract.pattern"
-            ],
-            "file": "spec.yaml",
-            "line": 17,
-            "column": 9,
-            "message": "the engine refused the operation in its prepare step: compiler_limit",
-            "context": "{\"code\":\"compiler_limit\",\"limit\":10485760,\"resource\":\"regex_size\",\"step\":\"prepare\"}",
-            "source_span": null,
-            "operand_route": null
-          }
-        ]
-      }
+        {
+          "name": "range_value_reads_the_intermediate_that_builds_the_row",
+          "call": "run",
+          "specification_yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID, SEQ]\ninput: {SRC: {path: input.csv, types: {SEQ: int, DOSE: int, DAY: int, LO: int, HI: int}}}\nintermediates:\n  - {id: DOSED, dataset: SRC, filter: \"SRC.DOSE > 0\"}\n  - {id: WINDOW, dataset: SRC, key: [ID], between: {value: DOSED.DAY, lower: LO, upper: HI}}\ncolumns:\n  - {name: ID, type: str}\n  - {name: SEQ, type: int}\n  - {name: W, type: int}\nrows:\n  - {id: dosed, dataset: DOSED, derivations: {ID: DOSED.ID, SEQ: DOSED.SEQ, W: WINDOW.SEQ}}\noutput: {path: output.csv, columns: [ID, SEQ, W]}\n",
+          "input_csv": "ID,SEQ,DOSE,DAY,LO,HI\na,1,0,1,1,5\na,2,50,3,1,5\n",
+          "issues": [
+            {
+              "severity": "error",
+              "phase": "planning",
+              "condition": "unsupported_operation",
+              "rule": null,
+              "spec_paths": [
+                "intermediates.WINDOW.between.value"
+              ],
+              "file": "spec.yaml",
+              "line": 8,
+              "column": 53,
+              "message": "intermediate_driver_range_value is not supported by this engine",
+              "context": "{\"operation\":\"intermediate_driver_range_value\"}",
+              "source_span": null,
+              "operand_route": null
+            }
+          ]
+        },
+        {
+          "name": "check_reports_a_range_value_of_the_intermediate_that_builds_the_row",
+          "call": "check",
+          "specification_yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID, SEQ]\ninput: {SRC: {path: input.csv, types: {SEQ: int, DOSE: int, DAY: int, LO: int, HI: int}}}\nintermediates:\n  - {id: DOSED, dataset: SRC, filter: \"SRC.DOSE > 0\"}\n  - {id: WINDOW, dataset: SRC, key: [ID], between: {value: DOSED.DAY, lower: LO, upper: HI}}\ncolumns:\n  - {name: ID, type: str}\n  - {name: SEQ, type: int}\n  - {name: W, type: int}\nrows:\n  - {id: dosed, dataset: DOSED, derivations: {ID: DOSED.ID, SEQ: DOSED.SEQ, W: WINDOW.SEQ}}\noutput: {path: output.csv, columns: [ID, SEQ, W]}\n",
+          "input_csv": "ID,SEQ,DOSE,DAY,LO,HI\na,1,0,1,1,5\na,2,50,3,1,5\n",
+          "issues": [
+            {
+              "severity": "error",
+              "phase": "planning",
+              "condition": "unsupported_operation",
+              "rule": null,
+              "spec_paths": [
+                "intermediates.WINDOW.between.value"
+              ],
+              "file": "spec.yaml",
+              "line": 8,
+              "column": 53,
+              "message": "intermediate_driver_range_value is not supported by this engine",
+              "context": "{\"operation\":\"intermediate_driver_range_value\"}",
+              "source_span": null,
+              "operand_route": null
+            }
+          ]
+        },
+        {
+          "name": "pattern_beyond_the_compiled_size_limit",
+          "call": "check",
+          "specification_yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: input.csv\ncolumns:\n  - name: ID\n    type: str\n    derivation: SRC.ID\n  - name: CODE\n    type: str\n    derivation:\n      str_extract:\n        source: SRC.TEXT\n        pattern: '(?:ab){18446744073709551615}'\noutput:\n  path: output.csv\n  columns: [ID, CODE]\n",
+          "input_csv": "ID,TEXT\na,abab\n",
+          "issues": [
+            {
+              "severity": "error",
+              "phase": "engine",
+              "condition": "engine_rejected",
+              "rule": null,
+              "spec_paths": [
+                "columns.CODE.derivation.str_extract.pattern"
+              ],
+              "file": "spec.yaml",
+              "line": 17,
+              "column": 9,
+              "message": "the engine refused the operation in its prepare step: compiler_limit",
+              "context": "{\"code\":\"compiler_limit\",\"limit\":10485760,\"resource\":\"regex_size\",\"step\":\"prepare\"}",
+              "source_span": null,
+              "operand_route": null
+            }
+          ]
+        }
       ]
     },
     "read-odm": {

@@ -1,5 +1,7 @@
-"""The pinned and minimum Rust toolchains that CI activates."""
+"""The pinned, minimum and beta Rust toolchains that CI activates."""
 
+import contextlib
+import io
 import re
 import tempfile
 import unittest
@@ -209,6 +211,72 @@ class ToolchainTest(unittest.TestCase):
                 "python -m tools.commands.setup --keep-toolchain --without-package",
             ],
         )
+
+
+def activate(*arguments):
+    """Run the module's command with rustup mocked; return the RUSTUP_TOOLCHAIN
+    that it writes to GITHUB_ENV and the rustup commands that it runs."""
+    with tempfile.TemporaryDirectory() as directory:
+        environment = Path(directory) / "github-env"
+        with (
+            mock.patch.dict(toolchain.os.environ, {"GITHUB_ENV": str(environment)}),
+            mock.patch.object(toolchain.subprocess, "run") as run,
+        ):
+            toolchain.main(list(arguments))
+        lines = environment.read_text(encoding="utf-8").splitlines()
+    written = dict(line.split("=", 1) for line in lines)
+    return written["RUSTUP_TOOLCHAIN"], [call.args[0] for call in run.call_args_list]
+
+
+class ToolchainSelectionTest(unittest.TestCase):
+    """Which toolchain a CI job activates: the pinned channel, the workspace
+    rust-version that the minimum-toolchain jobs lint with, or another rustup
+    channel, such as the beta that the Next toolchain workflow tests."""
+
+    def test_the_default_activates_the_pinned_channel_and_installs_nothing(self):
+        self.assertEqual(activate(), (toolchain.channel(), []))
+
+    def test_minimum_activates_the_workspace_rust_version(self):
+        activated, commands = activate("--minimum")
+        self.assertEqual(activated, toolchain.minimum())
+        self.assertRegex(activated, r"^\d+\.\d+\.\d+$")
+        self.assertEqual(commands, [])
+
+    def test_channel_activates_another_rustup_channel(self):
+        self.assertEqual(activate("--channel", "beta"), ("beta", []))
+
+    def test_minimum_and_channel_each_select_the_toolchain(self):
+        with (
+            contextlib.redirect_stderr(io.StringIO()) as stderr,
+            self.assertRaises(SystemExit),
+        ):
+            activate("--minimum", "--channel", "beta")
+        self.assertIn(
+            "--minimum and --channel each select the toolchain", stderr.getvalue()
+        )
+
+    def test_install_adds_the_check_components_to_the_selected_toolchain(self):
+        declared = toolchain.declaration()
+        for arguments, channel in (
+            ((), declared["channel"]),
+            (("--minimum",), toolchain.minimum()),
+            (("--channel", "beta"), "beta"),
+        ):
+            with self.subTest(arguments=arguments):
+                activated, commands = activate("--install", *arguments)
+                self.assertEqual(activated, channel)
+                self.assertEqual(
+                    commands,
+                    [toolchain.install_command({**declared, "channel": channel})],
+                )
+                [command] = commands
+                self.assertEqual(
+                    command[:4], ["rustup", "toolchain", "install", channel]
+                )
+                for component in toolchain.CHECK_COMPONENTS:
+                    self.assertIn(component, command)
+                for component in toolchain.NOTICE_COMPONENTS:
+                    self.assertNotIn(component, command)
 
 
 if __name__ == "__main__":

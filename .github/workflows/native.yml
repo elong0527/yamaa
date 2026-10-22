@@ -784,7 +784,8 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-24.04, macos-15, windows-2025]
-        r: [devel, release, '4.4']
+        # Qualify the exact DESCRIPTION floor, including its oldest patch.
+        r: [devel, release, '4.2.0']
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -829,11 +830,13 @@ jobs:
       - name: Check the R source package as CRAN does
         env:
           R_LIBS: ${{ env.R_LIBS_USER }}
+          R_CHECK_VERSION: ${{ matrix.r }}
           http_proxy: http://127.0.0.1:9
           HTTPS_PROXY: http://127.0.0.1:9
           ALL_PROXY: http://127.0.0.1:9
           NO_PROXY: ''
         run: |
+          Rscript --vanilla -e 'v <- Sys.getenv("R_CHECK_VERSION"); if (grepl("^[0-9]", v)) stopifnot(identical(as.character(getRversion()), v))'
           python -m tools.commands.check_r --archive "${RUNNER_TEMP}"/published/yamaa_*.tar.gz \
             --work-dir "${RUNNER_TEMP}/cran-check"
       - name: Confirm that the build used the minimum Rust

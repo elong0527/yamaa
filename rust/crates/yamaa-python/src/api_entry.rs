@@ -3,7 +3,7 @@
 //! these functions; behavior, validation and messages stay in Rust.
 use pyo3::{exceptions::PyException, prelude::*, types::PyDict};
 use std::sync::{Arc, Mutex};
-use yamaa::{Action, CancellationToken, Engine, EngineOptions, Error, Failure, HostLanguage};
+use yamaa::{Action, Engine, EngineOptions, Error, Failure, HostLanguage};
 
 use crate::arrow_bridge::Table;
 
@@ -25,10 +25,7 @@ fn raise(py: Python<'_>, failure: Failure) -> PyErr {
 
 /// Raise the refusal of `action` for `error` (D39), or the cancellation.
 fn raise_error(py: Python<'_>, action: Action<'_>, error: Error) -> PyErr {
-    match error {
-        Error::Cancelled => pyo3::exceptions::PyRuntimeError::new_err("operation cancelled"),
-        error => raise(py, Failure::from_error(action, &error)),
-    }
+    raise(py, Failure::from_error(action, &error))
 }
 
 // `Python::version` builds on the PyO3 0.27.2 floor; 0.29 renamed it `version_str`.
@@ -55,19 +52,6 @@ impl Run {
             inner: Arc::new(Mutex::new(run)),
         }
     }
-
-    /// A project interrupt fails the call with its own object.
-    pub(crate) fn propagate_interrupt(&self, py: Python<'_>) -> PyResult<()> {
-        let guard = self.inner.try_lock().map_err(|_| poisoned())?;
-        let build = guard.build();
-        let interrupt = build
-            .interrupt()
-            .and_then(|error| crate::function_callback::payload(py, error));
-        match interrupt {
-            Some(error) => Err(crate::function_callback::raise(py, error)),
-            None => Ok(()),
-        }
-    }
 }
 
 #[pymethods]
@@ -89,8 +73,10 @@ impl Run {
         Ok(guard.report().map(Table::from))
     }
     fn save(&self, py: Python<'_>) -> PyResult<Vec<String>> {
-        let saved = self.inner.try_lock().map_err(|_| poisoned())?.save();
-        saved.map_err(|failure| raise(py, failure))
+        crate::interrupt::run(py, |token| {
+            let saved = self.inner.try_lock().map_err(|_| poisoned())?.save(token);
+            saved.map_err(|failure| raise(py, failure))
+        })
     }
     /// The printed text (D37), which `repr()` returns.
     fn summary(&self) -> PyResult<String> {
@@ -145,11 +131,12 @@ impl Check {
 #[pyfunction]
 #[pyo3(signature=(specification, project=None))]
 pub fn _spec_check(py: Python<'_>, specification: &str, project: Option<&str>) -> PyResult<Check> {
-    let token = CancellationToken::new();
-    engine(py)
-        .spec_check(specification, project, &token)
-        .map(Check::new)
-        .map_err(|error| raise_error(py, Action::Read(specification), error))
+    crate::interrupt::run(py, |token| {
+        engine(py)
+            .spec_check(specification, project, token)
+            .map(Check::new)
+            .map_err(|error| raise_error(py, Action::Read(specification), error))
+    })
 }
 
 /// The printed text of a lazy specification object, which has read nothing
@@ -188,16 +175,16 @@ pub fn _spec_run(
     project: Option<&str>,
     plans: Option<PyRef<'_, Plans>>,
 ) -> PyResult<Run> {
-    let token = CancellationToken::new();
-    let engine = engine(py);
-    let run = match plans.as_deref() {
-        Some(plans) => engine.spec_run_reusing(specification, project, &plans.inner, &token),
-        None => engine.spec_run(specification, project, &token),
-    }
-    .map_err(|error| raise_error(py, Action::Read(specification), error))?;
-    let run = Run::new(run);
-    run.propagate_interrupt(py)?;
-    Ok(run)
+    crate::interrupt::run(py, |token| {
+        let engine = engine(py);
+        let run = match plans.as_deref() {
+            Some(plans) => engine.spec_run_reusing(specification, project, &plans.inner, token),
+            None => engine.spec_run(specification, project, token),
+        }
+        .map_err(|error| raise_error(py, Action::Read(specification), error))?;
+        let run = Run::new(run);
+        Ok(run)
+    })
 }
 
 #[pyfunction]
@@ -381,12 +368,14 @@ impl ProjectRun {
         Ok(Table::from(&guard.report()))
     }
     fn save(&self, py: Python<'_>) -> PyResult<Vec<String>> {
-        let saved = self
-            .inner
-            .try_lock()
-            .map_err(|_| project_poisoned())?
-            .save();
-        saved.map_err(|failure| raise(py, failure))
+        crate::interrupt::run(py, |token| {
+            let saved = self
+                .inner
+                .try_lock()
+                .map_err(|_| project_poisoned())?
+                .save(token);
+            saved.map_err(|failure| raise(py, failure))
+        })
     }
     /// The printed text with one line per member (D37).
     fn summary(&self) -> PyResult<String> {
@@ -416,12 +405,14 @@ impl Submission {
         Ok(Table::from(&guard.issues()))
     }
     fn save(&self, py: Python<'_>) -> PyResult<Vec<String>> {
-        let saved = self
-            .inner
-            .try_lock()
-            .map_err(|_| project_poisoned())?
-            .save();
-        saved.map_err(|failure| raise(py, failure))
+        crate::interrupt::run(py, |token| {
+            let saved = self
+                .inner
+                .try_lock()
+                .map_err(|_| project_poisoned())?
+                .save(token);
+            saved.map_err(|failure| raise(py, failure))
+        })
     }
     /// The printed text (D37).
     fn summary(&self) -> PyResult<String> {
@@ -447,10 +438,12 @@ pub fn _project_names(py: Python<'_>, project: &str) -> PyResult<Vec<String>> {
 
 #[pyfunction]
 pub fn _project_check(py: Python<'_>, project: &str) -> PyResult<Check> {
-    engine(py)
-        .project_check(project, &CancellationToken::new())
-        .map(Check::new)
-        .map_err(|error| raise_error(py, Action::Read(project), error))
+    crate::interrupt::run(py, |token| {
+        engine(py)
+            .project_check(project, token)
+            .map(Check::new)
+            .map_err(|error| raise_error(py, Action::Read(project), error))
+    })
 }
 
 #[pyfunction]
@@ -461,29 +454,17 @@ pub fn _project_run(
     section: Option<&str>,
     plans: Option<PyRef<'_, Plans>>,
 ) -> PyResult<ProjectRun> {
-    let token = CancellationToken::new();
-    let engine = engine(py);
-    let runs = match plans.as_deref() {
-        Some(plans) => engine.project_run_reusing(project, section, &plans.inner, &token),
-        None => engine.project_run(project, section, &token),
-    }
-    // Only an unknown section refuses the call with issues.
-    .map_err(|error| raise_error(py, Action::Select(section.unwrap_or_default()), error))?;
-    // A project interrupt in any specification fails the call with its own
-    // object, as a single run does.
-    for name in runs.names() {
-        if let Some(run) = runs.get(&name) {
-            let build = run.build();
-            let interrupt = build
-                .interrupt()
-                .and_then(|error| crate::function_callback::payload(py, error));
-            if let Some(error) = interrupt {
-                return Err(crate::function_callback::raise(py, error));
-            }
+    crate::interrupt::run(py, |token| {
+        let engine = engine(py);
+        let runs = match plans.as_deref() {
+            Some(plans) => engine.project_run_reusing(project, section, &plans.inner, token),
+            None => engine.project_run(project, section, token),
         }
-    }
-    Ok(ProjectRun {
-        inner: Arc::new(Mutex::new(runs)),
+        // Only an unknown section refuses the call with issues.
+        .map_err(|error| raise_error(py, Action::Select(section.unwrap_or_default()), error))?;
+        Ok(ProjectRun {
+            inner: Arc::new(Mutex::new(runs)),
+        })
     })
 }
 
@@ -495,17 +476,13 @@ pub fn _project_submission(
     section: Option<&str>,
     created: Option<&str>,
 ) -> PyResult<Submission> {
-    let submission = engine(py)
-        .project_submission(
-            project,
-            section,
-            created,
-            yamaa::VERSION,
-            &CancellationToken::new(),
-        )
-        // Only an unknown section refuses the call with issues.
-        .map_err(|error| raise_error(py, Action::Select(section.unwrap_or_default()), error))?;
-    Ok(Submission {
-        inner: Arc::new(Mutex::new(submission)),
+    crate::interrupt::run(py, |token| {
+        let submission = engine(py)
+            .project_submission(project, section, created, yamaa::VERSION, token)
+            // Only an unknown section refuses the call with issues.
+            .map_err(|error| raise_error(py, Action::Select(section.unwrap_or_default()), error))?;
+        Ok(Submission {
+            inner: Arc::new(Mutex::new(submission)),
+        })
     })
 }

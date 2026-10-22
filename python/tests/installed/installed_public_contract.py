@@ -548,6 +548,40 @@ class PublicContract(unittest.TestCase):
                         )
                         self.assertFalse((case / "test.csv").exists())
 
+    def test_sigint_in_a_callback_stops_the_call_without_publishing(self):
+        import signal
+
+        project, case = self.function_study()
+        resolve = host.resolve_callable
+        for entry, call in (
+            ("spec", lambda: project.spec("TEST").run()),
+            ("project", lambda: project.run()),
+        ):
+            with self.subTest(entry=entry):
+                calls = []
+
+                def binding(*arguments):
+                    invoke = resolve(*arguments)
+
+                    def callback(**arguments):
+                        calls.append(arguments)
+                        if len(calls) == TRUTH["signal_interrupt_calls"]:
+                            signal.raise_signal(signal.SIGINT)
+                        return invoke(**arguments)
+
+                    return callback
+
+                with (
+                    patch.object(host, "resolve_callable", side_effect=binding),
+                    self.assertRaises(KeyboardInterrupt),
+                ):
+                    call()
+                self.assertEqual(
+                    (len(calls), (case / "test.csv").exists()),
+                    (TRUTH["signal_interrupt_calls"], False),
+                    entry,
+                )
+
     def test_callback_can_reenter_public_check_and_run(self):
         project, case = self.function_study()
         resolve = host.resolve_callable

@@ -20,10 +20,10 @@
 //!   failure:` when a case failed, `not covered:` when an adapter is not
 //!   covered, then the engine, language, host and platform.
 //! - **JSON** (`--format json`). One canonical JSON document (RFC 8785) on
-//!   one line, with the keys the draft `rust/interface/bindings-1.0.yaml`
-//!   lists in `cli.commands[].json_keys`: the command and its arguments, the
-//!   `status`, the issues as objects whose `context` is an object, and the
-//!   written `paths`. `resolve` prints the resolved specification itself,
+//!   one line, with the keys `rust/interface/bindings.yaml` lists in
+//!   `cli.commands[].json_keys`, or in `refusal_keys` where a refusal's
+//!   differ: the command and its arguments, the `status`, the issues as
+//!   objects whose `context` is an object, and the written `paths`. `resolve` prints the resolved specification itself,
 //!   and `schema` the JSON Schema itself (D149); a refusal of either prints
 //!   the command's document, which echoes its arguments: `resolve`'s `path`
 //!   and `spec`, and `schema`'s `type` (D169). A submission's `created` is
@@ -385,16 +385,23 @@ fn run(call: &Call) -> Result<Printed, Execution> {
     let token = CancellationToken::new();
     // The arguments give `--spec` or `--section`, not both.
     Ok(match (file_type, name, section) {
-        (FileType::Spec, None, None) => saved(document, engine.spec_run(path, None, &token), path),
+        (FileType::Spec, None, None) => {
+            saved(document, engine.spec_run(path, None, &token), path, &token)
+        }
         (FileType::Project, Some(name), _) => match engine.project_spec(path, name) {
-            Ok(spec) => saved(document, engine.spec_run(&spec, Some(path), &token), &spec),
+            Ok(spec) => saved(
+                document,
+                engine.spec_run(&spec, Some(path), &token),
+                &spec,
+                &token,
+            ),
             Err(failure) => refusal(document, failure),
         },
         // Every section, or the one named; an unknown section refuses the
         // run (D98).
         (FileType::Project, None, section) => match engine.project_run(path, section, &token) {
             Ok(mut runs) => {
-                let saved = runs.save();
+                let saved = runs.save(&token);
                 document.insert("members".into(), members(&runs));
                 result(
                     document,
@@ -419,12 +426,17 @@ fn run(call: &Call) -> Result<Printed, Execution> {
     })
 }
 
-/// One specification's run, then its save; a refusal of the run names the
-/// specification's path, `subject`.
-fn saved(document: Document, run: Result<Run, Error>, subject: &str) -> Printed {
+/// One specification's run, then its save, which polls `token`; a refusal of
+/// the run names the specification's path, `subject`.
+fn saved(
+    document: Document,
+    run: Result<Run, Error>,
+    subject: &str,
+    token: &CancellationToken,
+) -> Printed {
     match run {
         Ok(mut run) => {
-            let saved = run.save();
+            let saved = run.save(token);
             result(
                 document,
                 &run.summary(),
@@ -485,16 +497,11 @@ fn submission(call: &Call) -> Result<Printed, Execution> {
         Ok(other) => return Err(not_taken(call, path, other, None)),
         Err(failure) => return Ok(refusal(document, failure)),
     }
-    let composed = engine.project_submission(
-        path,
-        section,
-        created,
-        yamaa::VERSION,
-        &CancellationToken::new(),
-    );
+    let token = CancellationToken::new();
+    let composed = engine.project_submission(path, section, created, yamaa::VERSION, &token);
     Ok(match composed {
         Ok(mut submission) => {
-            let saved = submission.save();
+            let saved = submission.save(&token);
             let used = submission.created().to_owned();
             document.insert("created".into(), text(&used));
             let summary = submission.summary();
