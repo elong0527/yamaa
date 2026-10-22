@@ -527,7 +527,16 @@ Before pushing the release tag, confirm on the final commit:
    `yamaa-v0.5.0`, which the 1.0.0 notes summarize (#3462).
 4. Every ignored advisory in `rust/deny.toml` and `osv-scanner.toml` still
    matches a locked package, and its reason still holds. Remove any ignore
-   that fails either test.
+   that fails either test. An ignore past its review date fails the OSV
+   check until it is reviewed, so the first release after each date
+   re-reviews it and dates it again or removes it (#3154). After 2027-01-31,
+   that release re-reviews PyO3 0.27.2's RUSTSEC-2026-0176 and
+   RUSTSEC-2026-0177, checking that the Python binding still iterates lists
+   and tuples only with `next` and never calls `PyCFunction::new_closure`,
+   and thrift 0.17.0's GHSA-2f9f-gq7v-9h6m, checking that admission still
+   walks and bounds every footer and page header before Parquet decodes
+   them. After 2027-04-30, it re-reviews paste's RUSTSEC-2024-0436, checking
+   that paste is still only a compile-time dependency.
 5. Every [component outside the advisory scanners](#components-outside-the-advisory-scanners)
    was compared with its upstream releases and security advisories since the
    previous release, and each fix that applies is taken or has an issue.
@@ -798,6 +807,11 @@ does R ship through the release assets until CRAN accepts it (#3030 D50,
 D34). If CRAN asks for a change after the 1.0.0 tag, the change lands on main
 and every host moves to a coordinated 1.0.1, a patch that the stability
 contract allows; the 1.0.0 GitHub release stays as published (#3030 D51).
+
+Each later release, such a 1.0.1 included, follows the same sequence after
+the [release checklist](#release-checklist), whose item 4 names the dated
+advisory re-reviews: the first release after 2027-01-31 re-reviews the PyO3
+and thrift ignores, and the first after 2027-04-30 the paste ignore (#3154).
 
 ## Source package contents
 
