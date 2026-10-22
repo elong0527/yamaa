@@ -40,8 +40,8 @@ in full.
 
 ### An internal PyPI index
 
-From the 1.0.0 release candidates on, each release's wheels and Python source
-archive are on [PyPI](https://pypi.org/project/yamaa/). An index that proxies
+From 0.5.0 on, each release's wheels and Python source archive are on
+[PyPI](https://pypi.org/project/yamaa/). An index that proxies
 PyPI, such as an Artifactory PyPI repository, fetches them and yamaa's
 dependencies on the first request and serves them from then on, so pip on the
 restricted machine needs only the index:
@@ -52,8 +52,7 @@ python -m pip install --index-url <index URL> yamaa
 
 A release candidate is a pre-release, which pip installs only when asked: name
 it with `--pre`, as in `python -m pip install --pre yamaa==1.0.0rc1`. Until
-1.0.0 is out, a bare `pip install yamaa` installs 0.1.0, an early release that
-stays on PyPI (#3030 D57).
+1.0.0 is out, a bare `pip install yamaa` installs 0.5.0 (#3030 D177).
 
 An index that does not proxy PyPI can host the files instead: upload the
 wheels and the source archive from the release assets, which are the files

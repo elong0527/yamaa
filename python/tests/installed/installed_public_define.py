@@ -620,6 +620,8 @@ class PublicDefine(unittest.TestCase):
         self.assertEqual(context, {"path": "define.xml"})
 
     def test_source_version_defaults_and_schema_facet_failures(self):
+        from yamaa import _native
+
         directory = self.fixture("sdtm-dm-metadata", published=True)
         project = directory / "project.yaml"
         project.write_text(
@@ -628,12 +630,16 @@ class PublicDefine(unittest.TestCase):
         result = self.call(directory)
         self.assertEqual(result.issues.num_rows, 0, result.issues)
         written = self.save(result, directory, ["dm.json", "define.xml"])
+        # Both documents name the engine's version by default, in its Cargo
+        # spelling, so both hosts write the same bytes; for a release
+        # candidate it differs from `__version__` (#3030 D53).
         self.assertEqual(
-            json.loads(written["dm.json"])["sourceSystem"]["version"], yamaa.__version__
+            json.loads(written["dm.json"])["sourceSystem"]["version"],
+            _native._CORE_VERSION,
         )
         self.assertEqual(
             self.validate_xml(written["define.xml"]).get("SourceSystemVersion"),
-            yamaa.__version__,
+            _native._CORE_VERSION,
         )
         for name in written:
             (directory / name).unlink()
