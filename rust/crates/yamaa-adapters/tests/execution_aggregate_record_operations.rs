@@ -1411,13 +1411,13 @@ S1,002,2024-06
             selected
         }
 
-        /// `check` over every committed negative. One that fails once data is
-        /// read needs the study's data, so `check` reports nothing for it.
-        /// Every validation or planning negative has the same first issue in
-        /// `check` and `domain`, in both host routes, matching
-        /// `expected/error.yaml`, except the listed ones whose finding binding
-        /// decides from the inputs. Benchmarks run in place, so parents, links
-        /// and relative paths keep their authored meaning.
+        /// `check` over every committed negative. One that fails after
+        /// validation needs the study's data, so `check` reports nothing for
+        /// it. Every validation negative has the same first issue in `check`
+        /// and `domain`, in both host routes, matching `expected/error.yaml`,
+        /// except the listed ones whose finding binding decides from the
+        /// inputs. Benchmarks run in place, so parents, links and relative
+        /// paths keep their authored meaning.
         #[test]
         fn check_matches_domain_on_negative_benchmarks() {
             let selected = negative_benchmarks();
@@ -1453,7 +1453,7 @@ S1,002,2024-06
                     case.join(filename).to_str().unwrap().to_owned()
                 };
                 let oracle = expected(&case.join("expected/error.yaml"));
-                if phase != "validation" && phase != "planning" {
+                if phase != "validation" {
                     // This harness passes no project file. A 1.x
                     // specification that binds a codelist through its
                     // project is then refused for want of it (CT-13, D32),
@@ -1541,7 +1541,6 @@ S1,002,2024-06
                 "negative-lookup-key-other-template",
                 "negative-lookup-match-column-phase",
                 "negative-lookup-range-bare-field",
-                "negative-lookup-range-driver-intermediate",
                 "negative-row-aggregate-keys",
                 "negative-row-filter-lookup-scope",
                 "negative-row-phase-flag",

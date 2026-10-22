@@ -75,7 +75,7 @@ no record, and a record missing a key or a stated bound does not match.
 `between` names a current-row value and at least one bound field.
 
 Fails: `incompatible_input_type`, `incomparable_range_types`, `invalid_field_type`, `prohibited_construct`, `unknown_field`.
-Evidence: `negative-lookup-bad-range`, `negative-lookup-range-other-input`, `negative-lookup-range-bare-field`, `negative-lookup-range-driver-intermediate`, `negative-source-range-other-input`, `negative-aggregate-range-other-input`, `schema-lookup-source-range`, `schema-lookup-source-range-driver`, `schema-lookup-intermediate-range-driver`, `schema-aggregate-range-driver`, `sdtm-lb-lab-specific-ranges`, `adam-advs-window-table`, `adam-adtr-nadir`, `adam-adsl-new-therapy`, `rust/crates/yamaa-adapters/tests/execution_lookup_model.rs`, `rust/crates/yamaa-adapters/tests/check_variable_forms.rs`.
+Evidence: `negative-lookup-bad-range`, `negative-lookup-range-other-input`, `negative-lookup-range-bare-field`, `negative-source-range-other-input`, `negative-aggregate-range-other-input`, `schema-lookup-source-range`, `schema-lookup-source-range-driver`, `schema-lookup-intermediate-range-driver`, `schema-aggregate-range-driver`, `sdtm-lb-lab-specific-ranges`, `adam-advs-window-table`, `adam-adtr-nadir`, `adam-adsl-new-therapy`, `rust/crates/yamaa-adapters/tests/execution_lookup_model.rs`, `rust/crates/yamaa-adapters/tests/check_variable_forms.rs`, `rust/tests/host-fixtures/cases.json`.
 
 The key pairs are those of [LOOKUP-5](#lookup-5). Every pair is compared on
 every record offered, so a record value whose type cannot compare with its
