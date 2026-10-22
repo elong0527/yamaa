@@ -1,9 +1,11 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADEX
 keys: [STUDYID, USUBJID]
 input:
   TRT: input/subject_treatment.csv
-  EX: input/ex.csv
+  EX: {path: input/ex.csv, key: [STUDYID, USUBJID]}
 base: TRT
 
 output:
@@ -28,6 +30,4 @@ columns:
   - name: DOSEDBL
     type: float
     label: Doubled Dose
-    derivation:
-      compute:
-        expr: "EX.EXDOSE * 2"
+    derivation: "EX.EXDOSE * 2"

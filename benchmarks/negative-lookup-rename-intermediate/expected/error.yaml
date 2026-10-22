@@ -1,7 +1,7 @@
 phase: validation
 condition: rename_only_intermediate
 spec_paths:
-  - intermediates[0]
+  - intermediates.CODED
 rule: LOOKUP-4
 context:
   intermediate: CODED

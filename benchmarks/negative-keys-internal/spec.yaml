@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADSL
 # SITEID is part of the record identity but not an output column, so a
 # reader of the output could not check the identity: the specification is

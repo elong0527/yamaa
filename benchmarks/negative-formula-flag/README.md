@@ -36,8 +36,8 @@ from a yes-or-no answer to `1` or `0` is explicit:
   derivation:
     case:
       - when: "AVAL > ANRHI"
-        then: {literal: 1}
-      - otherwise: {literal: 0}
+        then: 1
+      - otherwise: 0
 ```
 
 A missing result or limit answers neither yes nor no, so it falls

@@ -26,7 +26,6 @@ explicitly:
 impute:
   type: datetime
   source: EX.EXSTDTC
-  minimum_source_precision: day
   time: first
-  invalid: {literal: null}
+  invalid: null
 ```

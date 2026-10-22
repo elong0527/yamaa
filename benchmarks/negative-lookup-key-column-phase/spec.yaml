@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADEX
 keys: [STUDYID, USUBJID, ASTDY]
 input:
@@ -15,7 +17,6 @@ intermediates:
   - id: PLANNED
     dataset: SCHEDULE
     key: {DOSENUM: ADOSENUM}
-    no_match: null
 
 columns:
   - {name: STUDYID, type: str, label: Study Identifier}

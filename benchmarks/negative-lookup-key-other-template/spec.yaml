@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: SDTM
 domain: VS
 keys: [USUBJID, VSDY, VSCAT]
 input:
@@ -16,7 +18,6 @@ intermediates:
   - id: DEVICE
     dataset: DEVICES
     key: {DEVICEID: CLINIC.DEVICEID}
-    no_match: null
 
 columns:
   - {name: USUBJID, type: str, label: Unique Subject Identifier}
@@ -41,7 +42,7 @@ rows:
     derivations:
       USUBJID: CLINIC.USUBJID
       VSDY: CLINIC.VSDY
-      VSCAT: {literal: CLINIC}
+      VSCAT: "'CLINIC'"
       VSSTRESN: CLINIC.SYSBP
 
   - id: home
@@ -49,5 +50,5 @@ rows:
     derivations:
       USUBJID: HOME.USUBJID
       VSDY: HOME.VSDY
-      VSCAT: {literal: HOME}
+      VSCAT: "'HOME'"
       VSSTRESN: HOME.SYSBP
