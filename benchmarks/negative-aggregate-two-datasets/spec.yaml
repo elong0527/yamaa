@@ -1,0 +1,35 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  DM: input/dm.csv
+  EX: {path: input/ex.csv, types: {EXDOSE: float}, key: [STUDYID, USUBJID]}
+  VS: {path: input/vs.csv, types: {WEIGHT: float}, key: [STUDYID, USUBJID]}
+base: DM
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, DOSEKG]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM.USUBJID
+
+  # The total dose over the heaviest recorded weight, written as one
+  # reduction that reads the exposure and the vital signs records together.
+  - name: DOSEKG
+    type: float
+    label: Total Dose per kg Body Weight
+    derivation:
+      aggregate:
+        key: [STUDYID, USUBJID]
+        expr: "SUM(EX.EXDOSE) / MAX(VS.WEIGHT)"

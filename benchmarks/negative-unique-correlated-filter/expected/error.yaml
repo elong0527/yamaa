@@ -1,0 +1,7 @@
+phase: validation
+condition: correlated_filter_with_unique_verification
+spec_paths:
+  - intermediates.POSTTRT.verifications[0].unique
+rule: LOOKUP-17
+context:
+  intermediate: POSTTRT

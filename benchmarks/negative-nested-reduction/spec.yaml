@@ -1,0 +1,37 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  DM: input/dm.csv
+  EX:
+    path: input/ex.csv
+    types: {EXSEQ: int, EXSTDY: int, EXDOSE: float}
+    key: [STUDYID, USUBJID]
+base: DM
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, MAXDDOSE]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM.USUBJID
+
+  # The largest daily dose, written as a sum inside a maximum, as if one
+  # expression could total each day and then take the largest total.
+  - name: MAXDDOSE
+    type: float
+    label: Maximum Daily Dose
+    derivation:
+      aggregate:
+        key: [STUDYID, USUBJID]
+        expr: "MAX(SUM(EX.EXDOSE))"
