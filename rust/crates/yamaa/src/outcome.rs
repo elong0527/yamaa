@@ -18,8 +18,10 @@ use yamaa_adapters::publication::{self, Cause};
 use yamaa_core::diagnostic::Diagnostic;
 
 use crate::api::{Failure, Run, Status};
+use crate::cancel::CancellationToken;
 use crate::diagnostic::{Locator, Report, Severity};
 use crate::engine::Build;
+use crate::error::Error;
 use crate::internal::EngineShared;
 use crate::text::Action;
 
@@ -205,12 +207,13 @@ impl Outcome {
         Status::of_all(&self.issues, self.members.iter().map(Member::status))
     }
 
-    /// Save every member as one save, whose refusals name `subject`; see
-    /// [`save`].
+    /// Save every member as one save, whose refusals name `subject`, polling
+    /// `token`; see [`save`].
     pub(crate) fn save(
         &mut self,
         operation: Operation,
         subject: &str,
+        token: &CancellationToken,
     ) -> Result<Vec<String>, Failure> {
         let parts = self
             .members
@@ -224,7 +227,14 @@ impl Outcome {
                 Work::Checked(..) => None,
             })
             .collect();
-        save(&self.issues, &self.locator, parts, operation, subject)
+        save(
+            &self.issues,
+            &self.locator,
+            parts,
+            operation,
+            subject,
+            token,
+        )
     }
 }
 
@@ -301,8 +311,10 @@ struct Planned {
 ///    save stops at it, after the sections before it (PROJECT-13).
 /// 2. Open every target, refusing a target that cannot be written and two
 ///    files that name one target, then stage every file beside its target.
-///    Nothing is visible yet, so a save stopped here writes nothing (D74).
-/// 3. Commit the files in order. The first that cannot replace its target
+///    Nothing is visible yet, so a save stopped here writes nothing.
+/// 3. Poll `token`, once (D74): a cancelled save removes every staged file
+///    and fails with the cancellation's error text, writing nothing.
+/// 4. Commit the files in order. The first that cannot replace its target
 ///    stops the save: the files before it stay, and the rest are removed.
 ///
 /// A stop is recorded on its part, whose issues then say why; the refusal
@@ -312,13 +324,15 @@ struct Planned {
 /// Every refusal is D39's error text for saving `subject`, the result's
 /// subject, whichever member stopped it, and each issue is located by the
 /// documents of the operation or part that found it: `locator` for the
-/// `refusal` that refused the whole operation.
+/// `refusal` that refused the whole operation. A cancelled save records
+/// nothing on its parts, so the result can be saved again.
 pub(crate) fn save(
     refusal: &[Diagnostic],
     locator: &Locator,
     mut parts: Vec<Part<'_>>,
     operation: Operation,
     subject: &str,
+    token: &CancellationToken,
 ) -> Result<Vec<String>, Failure> {
     let action = Action::Save(subject);
     if !refusal.is_empty() {
@@ -391,13 +405,17 @@ pub(crate) fn save(
         }
         return Err(parts[position].refusal(subject, Vec::new()));
     }
-    // D74: cancellation (#3260) polls once here, after every file is staged
-    // and before the first commit; a cancelled save aborts what it staged and
-    // writes nothing.
-    // 3. Commit in order.
-    let committed = staged
-        .expect("a planned save stages")
-        .and_then(publication::Staged::commit);
+    let staged = staged.expect("a planned save stages");
+    // 3. D74: poll once, after every file is staged and before the first
+    // commit; a cancelled save aborts what it staged and writes nothing.
+    if staged.is_ok() && token.is_cancelled() {
+        if let Ok(staged) = staged {
+            staged.abort();
+        }
+        return Err(Failure::from_error(action, &Error::Cancelled));
+    }
+    // 4. Commit in order.
+    let committed = staged.and_then(publication::Staged::commit);
     let (written, mut stop) = match committed {
         Ok(written) => (written, None),
         Err(stop) => (paths[..stop.committed].to_vec(), Some(stop)),

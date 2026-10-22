@@ -4,10 +4,10 @@ use super::*;
 use crate::bound_expression::{Binding as Bound, BoundPredicate, Read as BoundRead};
 use crate::conversion::LiteralHandler;
 use crate::dataset::{
-    Assignment, CaseBranch, Check, ColumnVerifications, ConversionHandler, Expression,
-    FirstAvailable, Intermediate, IntermediateKey, IntermediateSource, MatchRead, MatchValue,
-    OrderTerm, RowMode, RowTemplate, SecondarySource, SelectionRead, SelectionSource,
-    SourceSchemas, Verification, Window, WindowKind,
+    Assignment, CaseBranch, Check, ColumnVerifications, ConversionHandler, ExecutionError,
+    ExecutionEvent, ExecutionPhase, Expression, FirstAvailable, Intermediate, IntermediateKey,
+    IntermediateSource, MatchRead, MatchValue, OrderTerm, RowMode, RowTemplate, SecondarySource,
+    SelectionRead, SelectionSource, SourceSchemas, Verification, Window, WindowKind,
 };
 use crate::table::{CellError, Column, TableAccess, ValueRef};
 use crate::text_case::{Case, StringCase};
@@ -359,9 +359,10 @@ fn a_deferred_odm_read_is_bound_per_template_with_that_template_s_scope() {
     }
 }
 
-#[test]
-fn key_grain_filters_every_record_before_its_key_bindings() {
-    let plan = DatasetPlan::new(
+/// A key-grain template whose filter reads V, a column-phase collection and
+/// a check on each column and on the dataset.
+fn key_grain_plan() -> DatasetPlan {
+    DatasetPlan::new(
         ints(&["ID", "V"]),
         ints(&["ID", "N"]),
         vec![RowTemplate {
@@ -406,8 +407,12 @@ fn key_grain_filters_every_record_before_its_key_bindings() {
                 Check::NotMissing,
             )],
         },
-    ]);
-    let resolved = plan.resolve().unwrap();
+    ])
+}
+
+#[test]
+fn key_grain_filters_every_record_before_its_key_bindings() {
+    let resolved = key_grain_plan().resolve().unwrap();
     let template = TemplateId(0);
     assert_eq!(resolved.template(template).driver.grain, Grain::Keys);
     assert_eq!(
@@ -849,7 +854,7 @@ fn callback_sites_follow_the_admission_order() {
         plan: signature.clone(),
         admitted: Default::default(),
     };
-    let attempt = resolved.execute(&Empty(ints(&["ID"])), &[], &mut port, None);
+    let attempt = resolved.execute(&Empty(ints(&["ID"])), &[], &mut port, None, &|| false);
     assert!(attempt.result.is_ok());
     let slots: Vec<_> = resolved.functions().iter().map(|call| call.slot).collect();
     assert_eq!(slots, [3, 1, 2]);
@@ -998,6 +1003,7 @@ fn a_column_bound_per_driver_reads_each_rows_own_record() {
         &[&secondary_rows],
         &mut crate::function_invocation::NoFunctions::new(),
         None,
+        &|| false,
     );
     let rows = attempt.result.unwrap().dataset.rows().to_vec();
     let int = |values: [i64; 3]| values.map(Value::Int).to_vec();
@@ -1073,4 +1079,230 @@ fn column_bindings_register_their_sites_one_binding_after_another() {
             ),
         ]
     );
+}
+
+/// A cancellation probe that counts its polls and answers true from poll
+/// `from` on, or never.
+struct Probe {
+    polls: std::cell::Cell<usize>,
+    from: Option<usize>,
+}
+impl Probe {
+    fn new(from: Option<usize>) -> Self {
+        Self {
+            polls: std::cell::Cell::new(0),
+            from,
+        }
+    }
+    fn cancelled(&self) -> bool {
+        let poll = self.polls.get() + 1;
+        self.polls.set(poll);
+        self.from.is_some_and(|from| poll >= from)
+    }
+}
+
+fn checkpoints(plan: &ResolvedPlan) -> usize {
+    plan.region_schedule(RegionId::DATASET)
+        .iter()
+        .filter(|info| info.checkpoint)
+        .count()
+}
+
+/// A run asks its probe once at each checkpoint of the dataset's schedule
+/// and nowhere else when nothing calls the host, and an uncancelled run is
+/// the run without a probe (#2822).
+#[test]
+fn a_run_polls_its_probe_once_at_every_checkpoint_of_its_schedule() {
+    for (plan, rows) in [
+        (
+            records_plan(),
+            Rows(ints(&["ID", "V"]), vec![vec![1, 20], vec![2, 10]]),
+        ),
+        (
+            key_grain_plan(),
+            Rows(ints(&["ID", "V"]), vec![vec![1, 5], vec![2, 6], vec![3, 0]]),
+        ),
+    ] {
+        let resolved = plan.resolve().unwrap();
+        assert_eq!(checkpoints(&resolved), 7);
+        let probe = Probe::new(None);
+        let polled = resolved.execute(
+            &rows,
+            &[],
+            &mut crate::function_invocation::NoFunctions::new(),
+            None,
+            &|| probe.cancelled(),
+        );
+        assert_eq!(probe.polls.get(), 7);
+        let plain = resolved.execute(
+            &rows,
+            &[],
+            &mut crate::function_invocation::NoFunctions::new(),
+            None,
+            &|| false,
+        );
+        assert!(plain.result.is_ok(), "{:?}", plain.result);
+        assert_eq!(polled, plain);
+    }
+}
+
+/// A run cancelled at any checkpoint ends cancelled, asks its probe no more
+/// and keeps nothing it built: no output, handler counts, verifications or
+/// template rows.
+#[test]
+fn a_run_cancelled_at_any_checkpoint_ends_cancelled_and_keeps_nothing() {
+    for (plan, rows) in [
+        (
+            records_plan(),
+            Rows(ints(&["ID", "V"]), vec![vec![1, 20], vec![2, 10]]),
+        ),
+        (
+            key_grain_plan(),
+            Rows(ints(&["ID", "V"]), vec![vec![1, 5], vec![2, 6], vec![3, 0]]),
+        ),
+    ] {
+        let resolved = plan.resolve().unwrap();
+        for from in 1..=checkpoints(&resolved) {
+            let probe = Probe::new(Some(from));
+            let mut events = Vec::new();
+            let mut observe = |event| events.push(event);
+            let attempt = resolved.execute(
+                &rows,
+                &[],
+                &mut crate::function_invocation::NoFunctions::new(),
+                Some(&mut observe),
+                &|| probe.cancelled(),
+            );
+            assert!(
+                matches!(
+                    attempt.result.as_ref().map_err(|error| &**error),
+                    Err(ExecutionError::Cancelled)
+                ),
+                "cancelled at checkpoint {from}: {:?}",
+                attempt.result
+            );
+            assert_eq!(probe.polls.get(), from);
+            assert!(attempt.handler_counts.is_empty());
+            assert!(attempt.retained_verifications.is_empty());
+            assert!(attempt.template_rows.is_empty());
+            // The phase it stopped in exits as failed, then the run finishes.
+            assert!(matches!(
+                events[events.len() - 2],
+                ExecutionEvent::Exit {
+                    outcome: crate::application_observer::Outcome::Failed,
+                    ..
+                }
+            ));
+            assert_eq!(
+                events.last(),
+                Some(&ExecutionEvent::Phase(ExecutionPhase::Finished))
+            );
+        }
+    }
+}
+
+/// A function port that counts its calls and answers 0.
+struct Counting {
+    plan: crate::function_signature::ProjectInvocationPlan,
+    calls: std::rc::Rc<std::cell::Cell<usize>>,
+}
+impl crate::function_invocation::FunctionPort for Counting {
+    type Error = std::convert::Infallible;
+    fn project_signature(
+        &self,
+        _slot: usize,
+    ) -> Option<&crate::function_signature::ProjectInvocationPlan> {
+        Some(&self.plan)
+    }
+    fn call(
+        &mut self,
+        _slot: usize,
+        _arguments: &[crate::function_invocation::Argument<'_>],
+    ) -> Result<Value, crate::function_invocation::HostError<Self::Error>> {
+        self.calls.set(self.calls.get() + 1);
+        Ok(Value::Int(0))
+    }
+}
+
+/// A unit that calls the host polls before each row's calls, so a probe
+/// that a call cancels, as a host's probe is once its interpreter has an
+/// interrupt pending, stops the run before the next row's call.
+#[test]
+fn a_run_polls_before_each_batch_of_project_function_calls() {
+    use crate::dataset::{BoundProjectFunction, FunctionArgument, FunctionInput};
+    use crate::function_signature::{
+        Parameter, Presence, ProjectFunctionIdentity, ProjectInvocationPlan,
+    };
+    let signature = ProjectInvocationPlan::new(
+        ProjectFunctionIdentity {
+            name: "identity".into(),
+            call: "identity".into(),
+        },
+        vec![Parameter {
+            name: "value".into(),
+            host_name: "value".into(),
+            kind: crate::value::ValueType::Int,
+            accepts_missing: true,
+            presence: Presence::Required,
+        }],
+        ColumnType::Int,
+        true,
+    )
+    .unwrap();
+    let plan = DatasetPlan::new(
+        ints(&["ID"]),
+        ints(&["ID", "F"]),
+        vec![RowTemplate {
+            mode: RowMode::Records,
+            assignments: vec![
+                assign(0, Expression::Source(0)),
+                assign(
+                    1,
+                    Expression::ProjectFunction(
+                        BoundProjectFunction::new_project(
+                            0,
+                            signature.clone(),
+                            vec![FunctionArgument {
+                                name: "value".into(),
+                                input: FunctionInput::Read(BoundRead::Source(0)),
+                            }],
+                        )
+                        .unwrap(),
+                    ),
+                ),
+            ],
+            filter: None,
+        }],
+        vec![],
+        vec![0],
+        vec![],
+    );
+    let resolved = plan.resolve().unwrap();
+    let rows = Rows(ints(&["ID"]), vec![vec![1], vec![2], vec![3]]);
+    let run = |cancel_after: Option<usize>| {
+        let calls = std::rc::Rc::new(std::cell::Cell::new(0));
+        let mut port = Counting {
+            plan: signature.clone(),
+            calls: calls.clone(),
+        };
+        let probe = Probe::new(None);
+        let attempt = resolved.execute(&rows, &[], &mut port, None, &|| {
+            probe.cancelled();
+            cancel_after.is_some_and(|after| calls.get() >= after)
+        });
+        (attempt, calls.get(), probe.polls.get())
+    };
+    // Uncancelled: the checkpoints, then one poll before each of the three
+    // rows' calls.
+    let (attempt, calls, polls) = run(None);
+    assert!(attempt.result.is_ok(), "{:?}", attempt.result);
+    assert_eq!(calls, 3);
+    assert_eq!(polls, checkpoints(&resolved) + 3);
+    // The first call cancels: the second row's poll stops the run.
+    let (attempt, calls, _) = run(Some(1));
+    assert!(matches!(
+        attempt.result.as_ref().map_err(|error| &**error),
+        Err(ExecutionError::Cancelled)
+    ));
+    assert_eq!(calls, 1);
 }

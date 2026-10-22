@@ -379,7 +379,7 @@ fn check(case: &Case, info: &Info) -> Result<(), String> {
                 first.text()
             ));
         }
-        let paths = run.save().map_err(|failure| failure.message)?;
+        let paths = run.save(&token).map_err(|failure| failure.message)?;
         offer_saved(&served, &paths);
         saved.extend(paths);
     }
@@ -403,7 +403,7 @@ fn check(case: &Case, info: &Info) -> Result<(), String> {
                         first.text()
                     ));
                 }
-                saved.extend(submission.save().map_err(|failure| failure.message)?);
+                saved.extend(submission.save(&token).map_err(|failure| failure.message)?);
             }
         }
     } else if let Some(expected) = expected_issue {
