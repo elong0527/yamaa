@@ -18,16 +18,29 @@ unreachable:
   day_required: >-
     only the 0.5 path raises it, until P2-13 removes that path: 1.0 drops
     minimum_source_precision, and #3030 D61 retired its benchmarks
+  invalid_size: >-
+    no schema the engine ships declares a size constraint (yaml/ and yaml/v1/),
+    so no file can fail one (SCHEMA-12); the schema-language tests reach it
+    with a schema of their own
+  model_contract_mismatch: >-
+    only the 0.5 path raises it, until P2-13 removes that path: final
+    normalized model admission reads only a 0.5 model, and the 1.0 front end
+    reports the same faults under their schema conditions (SCHEMA-7,
+    SCHEMA-12, SCHEMA-13)
   month_not_permitted: >-
     only the 0.5 path raises it, until P2-13 removes that path: 1.0 drops
     minimum_source_precision, and #3030 D61 retired its benchmarks
   month_required: >-
     only the 0.5 path raises it, until P2-13 removes that path: 1.0 drops
     minimum_source_precision, and #3030 D61 retired its benchmarks
+  parent_on_another_share: >-
+    only a layer on a network share that the entry is not on raises it
+    (LAYER-10, FILE-4); only Windows hosts have shares, which no portable case
+    can stage, so the adapters' resolver tests reach it
+    (rust/crates/yamaa-adapters/tests/host_resources.rs)
 not_covered:
   "#3423":
     - artifact_outside_document
-    - artifact_path_collision
     - bare_derivation_scalar
     - codelist_duplicate_value
     - codelist_extended_alias
@@ -35,45 +48,23 @@ not_covered:
     - codelist_partial_item_field
     - codelist_shape_invalid
     - codelist_type_mismatch
-    - conflicting_row_construction
     - core_mandatory_conflict
-    - correlated_derivation_with_unique_verification
-    - correlated_filter_with_unique_verification
     - declared_length_conflict
-    - driver_unavailable
     - duplicate_dataset_entry
-    - duplicate_derivation
-    - empty_string_present_unsupported
-    - function_conformance_failed
-    - function_file_invalid
     - function_implementation_missing
-    - invalid_declaration
-    - invalid_operation_count
-    - invalid_producer_contract
-    - invalid_size
     - method_missing
-    - minimum_length
-    - mixed_relations
-    - model_contract_mismatch
-    - nested_reduction
     - origin_contradicts_derivation
     - origin_description_missing
     - origin_document_missing
     - origin_missing
     - origin_source_not_admitted
-    - parent_not_found
-    - parent_on_another_share
-    - pattern_mismatch
     - predecessor_label_mismatch
-    - producer_contract_mismatch
     - producer_not_completed
-    - producer_workflow_cycle
     - project_environment_invalid
     - project_environment_missing
     - reference_data_repeating_conflict
     - refuted_value_origin
     - reserved_metadata_key
-    - resource_path_not_normalized
     - runtime_artifact_mismatch
     - schema_version_mismatch
     - source_system_incomplete
@@ -85,11 +76,7 @@ not_covered:
     - submission_not_output_column
     - transport_path_collision
     - unknown_codelist
-    - unknown_derive_variable
     - unknown_document
-    - unknown_intermediate_driver_type
-    - unknown_project_function
-    - unknown_reference
     - unknown_section
     - unknown_standard_family
     - unlinked_producer
