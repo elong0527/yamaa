@@ -19,10 +19,9 @@ use yamaa::{
     Signature,
 };
 
-const SPECIFICATION: &str = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int}}}\noutput: {path: out.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {function: {name: f, args: {x: SRC.ID}}}}\n";
-const PROJECT: &str = "schema_version: '1.0'\nenvironments: {python: environment.yaml}\n";
-const ENVIRONMENT: &str = "schema_version: '1.0'\nfunctions: {f: f.yaml}\n";
-const IDENTITY: &str = "function: program.same\ndescription: Integer identity.\nparams: [{name: x, type: int, accepts_missing: true}]\nreturns: int\nmay_return_missing: true\ntests:\n  - {id: normal, covers: [normal, boundary], args: {x: 7}, result: 7}\n  - {id: missing, covers: ['accepted-missing:x', nullable-output], args: {x: null}, result: null}\n";
+const SPECIFICATION: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int}}}\noutput: {path: out.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {function: {name: f, args: {x: SRC.ID}}}}\n";
+const PROJECT: &str = "yamaa: \"1.0\"\ntype: project\nfunctions: [f.yaml]\n";
+const IDENTITY: &str = "yamaa: \"1.0\"\ntype: function\nname: f\ndescription: Integer identity.\nparams: [{name: x, type: int, accepts_missing: true}]\nreturns: int\nmay_return_missing: true\nimplementations: {python: program.same}\ntests:\n  - {id: normal, covers: [normal, boundary], args: {x: 7}, result: 7}\n  - {id: missing, covers: ['accepted-missing:x', nullable-output], args: {x: null}, result: null}\n";
 const INPUT: &str = "ID\n1\n2\n";
 const SAME: &str = "ID,VALUE\n1,1\n2,2\n";
 const DOUBLED: &str = "ID,VALUE\n1,2\n2,4\n";
@@ -152,15 +151,14 @@ fn saved(run: &mut Run, resolver: &Recording) -> String {
     String::from_utf8(bytes.to_vec()).unwrap()
 }
 
-/// A memory study: the specification, project file, environment file and
-/// function definition, plus the input.
+/// A memory study: the specification, the project file and the function file
+/// it lists, plus the input.
 fn memory_study() -> Arc<Recording> {
     let resolver = Arc::new(Recording::default());
     for (declaring, written, text) in [
         ("/", "spec.yaml", SPECIFICATION),
         ("/", "project.yaml", PROJECT),
-        ("/project.yaml", "environment.yaml", ENVIRONMENT),
-        ("/environment.yaml", "f.yaml", IDENTITY),
+        ("/project.yaml", "f.yaml", IDENTITY),
         ("/spec.yaml", "input.csv", INPUT),
     ] {
         resolver.inner.insert(
@@ -207,9 +205,9 @@ fn later_runs_reuse_the_plan_the_first_run_compiled() {
         assert_eq!(plan_of(&again), "reused");
         assert!(!compiled(&again));
         assert_eq!(saved(&mut again, &resolver), SAME);
-        // Nothing is resolved or captured anew; each of the four held files
+        // Nothing is resolved or captured anew; each of the three held files
         // is verified once against its reference.
-        assert_eq!(resolver.take(), (0, 4));
+        assert_eq!(resolver.take(), (0, 3));
         // Each run still activates the project function afresh.
         assert_eq!(installed.binds(), attempt);
     }
@@ -243,15 +241,15 @@ fn a_changed_specification_compiles_again_and_runs_the_change() {
 }
 
 #[test]
-fn a_changed_environment_or_function_contract_compiles_again_and_runs_the_change() {
+fn a_changed_project_or_function_contract_compiles_again_and_runs_the_change() {
     let resolver = memory_study();
     let installed = Arc::new(Installed::default());
     let engine = engine(Some(resolver.clone()), &installed);
     let plans = Plans::new();
     assert_eq!(saved(&mut run(&engine, &plans), &resolver), SAME);
-    // The function definition now names the doubling callable.
+    // The function file now names the doubling callable.
     resolver.inner.insert(
-        "/environment.yaml",
+        "/project.yaml",
         "f.yaml",
         "f.yaml:2",
         Arc::from(doubling().as_bytes()),
@@ -260,19 +258,18 @@ fn a_changed_environment_or_function_contract_compiles_again_and_runs_the_change
     assert!(compiled(&recompiled));
     assert_eq!(saved(&mut recompiled, &resolver), DOUBLED);
     assert!(!compiled(&run(&engine, &plans)));
-    // The environment file now declares the identity contract inline.
-    let inline = format!(
-        "schema_version: '1.0'\nfunctions:\n  f:\n{}",
-        IDENTITY
-            .lines()
-            .map(|line| format!("    {line}\n"))
-            .collect::<String>()
-    );
+    // The project now lists the identity contract in another function file.
     resolver.inner.insert(
         "/project.yaml",
-        "environment.yaml",
-        "environment.yaml:2",
-        Arc::from(inline.as_bytes()),
+        "g.yaml",
+        "g.yaml:1",
+        Arc::from(IDENTITY.as_bytes()),
+    );
+    resolver.inner.insert(
+        "/",
+        "project.yaml",
+        "project.yaml:2",
+        Arc::from(&b"yamaa: \"1.0\"\ntype: project\nfunctions: [g.yaml]\n"[..]),
     );
     let mut recompiled = run(&engine, &plans);
     assert!(compiled(&recompiled));
@@ -290,7 +287,7 @@ fn a_refused_compilation_keeps_nothing_and_the_next_run_compiles() {
         "/",
         "spec.yaml",
         "spec.yaml:2",
-        Arc::from(&b"schema_version: '1.0'\ndomain: TEST\n"[..]),
+        Arc::from(&b"yamaa: \"1.0\"\ntype: spec\ndomain: TEST\n"[..]),
     );
     let refused = run(&engine, &plans);
     assert_eq!(plan_of(&refused), "refused");
@@ -374,11 +371,11 @@ impl Study {
     fn new(name: &str) -> Self {
         let study = Self::empty(name);
         study.write("raw/dm.csv", "USUBJID,AGE\nS1,30\nS2,41\n");
-        study.write("sdtm/dm.yaml", "schema_version: '1.0'\ndomain: DM\nkeys: [USUBJID]\ninput: {RAW: {path: ../raw/dm.csv, types: {AGE: int}}}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: RAW.USUBJID}\n  - {name: AGE, type: int, label: Age, derivation: RAW.AGE}\noutput: {path: ../out/dm.csv, columns: [USUBJID, AGE]}\n");
-        study.write("adam/adsl.yaml", "schema_version: '1.0'\ndomain: ADSL\nkeys: [USUBJID]\ninput: {DM: {path: ../out/dm.csv, schema: ../sdtm/dm.yaml}}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: DM.USUBJID}\n  - {name: AGE, type: int, label: Age, derivation: DM.AGE}\noutput: {path: ../out/adsl.csv, columns: [USUBJID, AGE]}\n");
+        study.write("sdtm/dm.yaml", "yamaa: \"1.0\"\ntype: spec\ndomain: DM\nkeys: [USUBJID]\ninput: {RAW: {path: ../raw/dm.csv, types: {AGE: int}}}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: RAW.USUBJID}\n  - {name: AGE, type: int, label: Age, derivation: RAW.AGE}\noutput: {path: ../out/dm.csv, columns: [USUBJID, AGE]}\n");
+        study.write("adam/adsl.yaml", "yamaa: \"1.0\"\ntype: spec\ndomain: ADSL\nkeys: [USUBJID]\ninput: {DM: {path: ../out/dm.csv, schema: ../sdtm/dm.yaml}}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: DM.USUBJID}\n  - {name: AGE, type: int, label: Age, derivation: DM.AGE}\noutput: {path: ../out/adsl.csv, columns: [USUBJID, AGE]}\n");
         study.write(
             "project.yaml",
-            "schema_version: '1.0'\nsdtm:\n  specs: [sdtm/dm.yaml]\nadam:\n  specs: [adam/adsl.yaml]\n",
+            "yamaa: \"1.0\"\ntype: project\nsdtm:\n  specs: [sdtm/dm.yaml]\nadam:\n  specs: [adam/adsl.yaml]\n",
         );
         study
     }
@@ -451,7 +448,7 @@ fn project_runs_reuse_each_specifications_plan_and_compile_only_what_changed() {
     // The project file changed: every specification compiles again.
     study.write(
         "project.yaml",
-        "schema_version: '1.0'\nadam:\n  specs: [adam/adsl.yaml]\nsdtm:\n  specs: [sdtm/dm.yaml]\n",
+        "yamaa: \"1.0\"\ntype: project\nadam:\n  specs: [adam/adsl.yaml]\nsdtm:\n  specs: [sdtm/dm.yaml]\n",
     );
     assert_eq!(project_run(&engine, &study, &plans), rows([true, true]));
     assert_eq!(project_run(&engine, &study, &plans), rows([false, false]));
@@ -464,7 +461,7 @@ fn project_runs_reuse_each_specifications_plan_and_compile_only_what_changed() {
 #[test]
 fn a_path_through_a_retargeted_link_compiles_the_study_it_now_names() {
     /// A specification without project functions: its output repeats its input.
-    const PLAIN: &str = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int}}}\noutput: {path: out.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
+    const PLAIN: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int}}}\noutput: {path: out.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
     let study = Study::empty("link");
     for (name, input) in [("a", "ID\n1\n2\n"), ("b", "ID\n1\n2\n3\n")] {
         study.write(&format!("{name}/spec.yaml"), PLAIN);
