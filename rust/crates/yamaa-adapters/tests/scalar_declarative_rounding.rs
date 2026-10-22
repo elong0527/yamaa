@@ -1941,17 +1941,17 @@ columns:
                         assert_eq!(name, "width-noninteger");
                         assert_eq!(issues.len(), 1);
                         let mut expected = case["findings"][0].clone();
-                        // Keep the complete independent loader capture in the fixture.
-                        // Native schema diagnostics still omit these loader provenance fields.
+                        // The capture names the file its loader read; a 1.x
+                        // schema finding names the file this run loaded.
                         let context = expected["context"].as_object_mut().unwrap();
-                        assert_eq!(
-                            context.remove("source").unwrap(),
-                            "/private/tmp/yamaa-root-text-pad-audit/width-noninteger/spec.yaml"
-                        );
-                        assert_eq!(
-                            context.remove("entry").unwrap(),
-                            "/private/tmp/yamaa-root-text-pad-audit/width-noninteger/spec.yaml"
-                        );
+                        for field in ["source", "entry"] {
+                            assert_eq!(
+                                context
+                                    .insert(field.into(), yamaa_adapters::json!(specification))
+                                    .unwrap(),
+                                "/private/tmp/yamaa-root-text-pad-audit/width-noninteger/spec.yaml"
+                            );
+                        }
                         assert_eq!(issue_json(&issues[0]), expected);
                         None
                     }
@@ -2391,12 +2391,10 @@ columns:
         fn complete_template_findings_precede_zero_rows_and_inherited_row_defaults() {
             fn admission(spec: yamaa_core::json::Value, paths: Vec<String>) {
                 let schema = yamaa_adapters::shipped_schema::capture().unwrap();
-                let document = schema
-                    .prepare_standalone(yamaa_adapters::specification_source::Source {
-                        identity: "spec.yaml".into(),
-                        bytes: yamaa_adapters::json_wire::encode(&spec).into_bytes(),
-                    })
-                    .unwrap();
+                let document = crate::support::specification_run::prepare(
+                    &schema,
+                    yamaa_adapters::json_wire::encode(&spec).as_bytes(),
+                );
                 let Err(yamaa_adapters::specification_run::Error::Prepare(
                     yamaa_core::specification::PrepareError::Invalid(findings),
                 )) = yamaa_adapters::specification_run::PreparedRun::prepare(document)
@@ -2459,12 +2457,10 @@ columns:
             }
             spec["output"]["columns"] = yamaa_adapters::json!(["ID"]);
             let schema = yamaa_adapters::shipped_schema::capture().unwrap();
-            let document = schema
-                .prepare_standalone(yamaa_adapters::specification_source::Source {
-                    identity: "spec.yaml".into(),
-                    bytes: yamaa_adapters::json_wire::encode(&spec).into_bytes(),
-                })
-                .unwrap();
+            let document = crate::support::specification_run::prepare(
+                &schema,
+                yamaa_adapters::json_wire::encode(&spec).as_bytes(),
+            );
             assert!(yamaa_adapters::specification_run::PreparedRun::prepare(document).is_ok());
             let fixture = bespoke(&yamaa_adapters::json_wire::encode(&spec), b"ID,A,B,N\n");
             let mut result = attempt(&fixture).unwrap();

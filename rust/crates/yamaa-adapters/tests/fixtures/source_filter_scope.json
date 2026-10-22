@@ -9,7 +9,7 @@
   ],
   "cases": {
     "column-group-key-filter": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: str, derivation: {case: [{when: 'TRUE', then: {source: {variable: SRC.ID, filter: 'SRC.V > 0'}}}, {otherwise: {literal: unused}}]}}\nrows:\n  - {id: grouped, dataset: SRC, group_by: [SRC.ID], derivations: {}}\n",
+      "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: str, derivation: {case: [{when: 'TRUE', then: {source: {variable: SRC.ID, filter: 'SRC.V > 0'}}}, {otherwise: \"'unused'\"}]}}\nrows:\n  - {id: grouped, dataset: SRC, group_by: [SRC.ID]}\n",
       "inputs": {
         "input.csv": "ID,V\na,1\nb,\n"
       },
@@ -45,7 +45,7 @@
       "handlers": []
     },
     "column-group-key-first-available": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: str, derivation: {first_available: {sources: [{variable: SRC.ID, filter: 'SRC.V > 0'}, SRC.ID]}}}\nrows:\n  - {id: grouped, dataset: SRC, group_by: [SRC.ID], derivations: {}}\n",
+      "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: str, derivation: {first_available: {sources: [{variable: SRC.ID, filter: 'SRC.V > 0'}, SRC.ID]}}}\nrows:\n  - {id: grouped, dataset: SRC, group_by: [SRC.ID]}\n",
       "inputs": {
         "input.csv": "ID,V\na,1\nb,\n"
       },
@@ -81,7 +81,7 @@
       "handlers": []
     },
     "row-group-key-unreached-branch": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns: [{name: ID, type: str, derivation: SRC.ID}, {name: VALUE, type: str}]\nrows:\n  - id: grouped\n    dataset: SRC\n    group_by: [SRC.ID]\n    derivations:\n      VALUE: {case: [{when: 'FALSE', then: {source: {variable: SRC.ID, filter: 'SRC.V > 0'}}}, {otherwise: {literal: unused}}]}\n",
+      "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns: [{name: ID, type: str, derivation: SRC.ID}, {name: VALUE, type: str}]\nrows:\n  - id: grouped\n    dataset: SRC\n    group_by: [SRC.ID]\n    derivations:\n      VALUE: {case: [{when: 'FALSE', then: {source: {variable: SRC.ID, filter: 'SRC.V > 0'}}}, {otherwise: \"'unused'\"}]}\n",
       "inputs": {
         "input.csv": "ID,V\na,1\nb,\n"
       },
@@ -91,7 +91,7 @@
           "condition": "prohibited_construct",
           "rule": "LOOKUP-8",
           "spec_paths": [
-            "rows[0].derivations.VALUE.case[0].then.source.filter"
+            "rows.grouped.derivations.VALUE.case[0].then.source.filter"
           ],
           "context": {
             "identifier": "SRC.ID"
@@ -104,7 +104,7 @@
           "condition": "prohibited_construct",
           "rule": "LOOKUP-8",
           "spec_paths": [
-            "rows[0].derivations.VALUE.case[0].then.source.filter"
+            "rows.grouped.derivations.VALUE.case[0].then.source.filter"
           ],
           "context": {
             "identifier": "SRC.ID"
@@ -117,7 +117,7 @@
       "handlers": []
     },
     "group-key-prohibition-before-filter-grammar": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: str, derivation: {source: {variable: SRC.ID, filter: 'SRC.V >'}}}\nrows:\n  - {id: grouped, dataset: SRC, group_by: [SRC.ID], derivations: {}}\n",
+      "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: str, derivation: {source: {variable: SRC.ID, filter: 'SRC.V >'}}}\nrows:\n  - {id: grouped, dataset: SRC, group_by: [SRC.ID]}\n",
       "inputs": {
         "input.csv": "ID,V\na,1\nb,\n"
       },
@@ -153,7 +153,7 @@
       "handlers": []
     },
     "group-key-shared-across-templates": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: str, derivation: {source: {variable: SRC.ID, filter: 'TRUE'}}}\nrows:\n  - {id: first, dataset: SRC, group_by: [SRC.ID], derivations: {}}\n  - {id: second, dataset: SRC, group_by: [SRC.ID, SRC.V], derivations: {}}\n",
+      "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: str, derivation: {source: {variable: SRC.ID, filter: 'TRUE'}}}\nrows:\n  - {id: first, dataset: SRC, group_by: [SRC.ID]}\n  - {id: second, dataset: SRC, group_by: [SRC.ID, SRC.V]}\n",
       "inputs": {
         "input.csv": "ID,V\na,1\nb,\n"
       },
@@ -211,7 +211,7 @@
       "handlers": []
     },
     "grouped-nonkey-remains-unavailable": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: str, derivation: {source: {variable: SRC.V, filter: 'TRUE'}}}\nrows:\n  - {id: grouped, dataset: SRC, group_by: [SRC.ID], derivations: {}}\n",
+      "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: str, derivation: {source: {variable: SRC.V, filter: 'TRUE'}}}\nrows:\n  - {id: grouped, dataset: SRC, group_by: [SRC.ID]}\n",
       "inputs": {
         "input.csv": "ID,V\na,1\nb,\n"
       },
@@ -251,7 +251,7 @@
       "handlers": []
     },
     "resource-failure-precedes-group-bind": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: str, derivation: {case: [{when: 'TRUE', then: {source: {variable: SRC.ID, filter: 'SRC.V > 0'}}}, {otherwise: {literal: unused}}]}}\nrows:\n  - {id: grouped, dataset: SRC, group_by: [SRC.ID], derivations: {}}\n",
+      "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: str, derivation: {case: [{when: 'TRUE', then: {source: {variable: SRC.ID, filter: 'SRC.V > 0'}}}, {otherwise: \"'unused'\"}]}}\nrows:\n  - {id: grouped, dataset: SRC, group_by: [SRC.ID]}\n",
       "inputs": {},
       "issues": [
         {
@@ -284,7 +284,7 @@
       "handlers": []
     },
     "ordinary-key-grain-filter": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: str, derivation: {case: [{when: 'TRUE', then: {source: {variable: SRC.ID, filter: 'SRC.V > 0'}}}, {otherwise: {literal: unused}}]}}\n",
+      "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: str, derivation: {case: [{when: 'TRUE', then: {source: {variable: SRC.ID, filter: 'SRC.V > 0'}}}, {otherwise: \"'unused'\"}]}}\n",
       "inputs": {
         "input.csv": "ID,V\na,1\nb,\n"
       },
@@ -319,7 +319,7 @@
       }
     },
     "record-row-filter": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: str, derivation: {case: [{when: 'TRUE', then: {source: {variable: SRC.ID, filter: 'SRC.V > 0'}}}, {otherwise: {literal: unused}}]}}\nrows:\n  - {id: records, dataset: SRC, derivations: {}}\n",
+      "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: str, derivation: {case: [{when: 'TRUE', then: {source: {variable: SRC.ID, filter: 'SRC.V > 0'}}}, {otherwise: \"'unused'\"}]}}\nrows:\n  - {id: records, dataset: SRC}\n",
       "inputs": {
         "input.csv": "ID,V\na,1\nb,\n"
       },
@@ -354,7 +354,7 @@
       }
     },
     "unfiltered-group-key": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: str, derivation: SRC.ID}\nrows:\n  - {id: grouped, dataset: SRC, group_by: [SRC.ID], derivations: {}}\n",
+      "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: str, derivation: SRC.ID}\nrows:\n  - {id: grouped, dataset: SRC, group_by: [SRC.ID]}\n",
       "inputs": {
         "input.csv": "ID,V\na,1\nb,\n"
       },
@@ -389,7 +389,7 @@
       }
     },
     "group-key-keep-is-redundant": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: str, derivation: {source: {variable: SRC.ID, order_by: [SRC.V], keep: last}}}\nrows:\n  - {id: grouped, dataset: SRC, group_by: [SRC.ID], derivations: {}}\n",
+      "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: str, derivation: {source: {variable: SRC.ID, order_by: [SRC.V], keep: last}}}\nrows:\n  - {id: grouped, dataset: SRC, group_by: [SRC.ID]}\n",
       "inputs": {
         "input.csv": "ID,V\na,1\na,2\nb,3\n"
       },
@@ -430,7 +430,7 @@
       }
     },
     "secondary-record-filter-over-grouped-driver": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\nbase: SRC\ninput:\n  SRC: {path: input.csv, types: {V: int}}\n  D: {path: donor.csv, types: {SEQ: int, USE: int}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: str, derivation: {source: {variable: D.V, filter: 'D.USE = 1', order_by: [D.SEQ], keep: first}}}\nrows:\n  - {id: grouped, dataset: SRC, group_by: [SRC.ID], derivations: {}}\n",
+      "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\nbase: SRC\ninput:\n  SRC: {path: input.csv, types: {V: int}}\n  D: {path: donor.csv, types: {SEQ: int, USE: int}, key: [ID]}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: str, derivation: {source: {variable: D.V, filter: 'D.USE = 1', order_by: [D.SEQ], keep: first}}}\nrows:\n  - {id: grouped, dataset: SRC, group_by: [SRC.ID]}\n",
       "inputs": {
         "input.csv": "ID,V\na,1\nb,\n",
         "donor.csv": "ID,SEQ,USE,V\na,1,0,hidden\na,2,1,selected\nb,3,1,B\n"

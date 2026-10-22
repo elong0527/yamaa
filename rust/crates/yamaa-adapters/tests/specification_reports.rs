@@ -1177,12 +1177,7 @@ mod execution {
             let rows = fixture_rows(include_str!("fixtures/static_verification_checks.json"));
             assert_eq!(rows.len(), 15);
             for row in &rows {
-                let document = schema
-                    .prepare_standalone(Source {
-                        identity: "spec.yaml".into(),
-                        bytes: fixture_bytes(&row["source"]),
-                    })
-                    .unwrap();
+                let document = prepare(&schema, &fixture_bytes(&row["source"]));
                 let run =
                     yamaa_adapters::specification_run::PreparedRun::prepare(document).unwrap();
                 for _ in 0..2 {

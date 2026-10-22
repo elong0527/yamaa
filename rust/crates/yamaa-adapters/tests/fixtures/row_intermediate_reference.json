@@ -861,25 +861,25 @@
   },
   "cases": {
     "common-driver-no-base": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys:\n- ID\n- SECTION\ninput:\n  SRC: src.csv\n  DONOR: donor.csv\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - SECTION\n  - KEY\n  - ROWV\n  - COLV\nintermediates:\n- id: P\n  dataset: DONOR\n  key:\n    K: KEY\n  no_match: {literal: null}\ncolumns:\n- name: ID\n  type: str\n- name: SECTION\n  type: str\n- name: KEY\n  type: str\n- name: ROWV\n  type: str\n- name: COLV\n  type: str\n  derivation: P.V\nrows:\n- id: low\n  dataset: SRC\n  filter: SRC.KEEP = '0'\n  derivations:\n    ID: SRC.ID\n    SECTION:\n      literal: L\n    KEY: SRC.K\n    ROWV: P.V\n- id: high\n  dataset: SRC\n  filter: SRC.KEEP = '1'\n  derivations:\n    ID: SRC.ID\n    SECTION:\n      literal: H\n    KEY: SRC.K\n    ROWV: P.V\n",
+      "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys:\n- ID\n- SECTION\ninput:\n  SRC: src.csv\n  DONOR: donor.csv\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - SECTION\n  - KEY\n  - ROWV\n  - COLV\nintermediates:\n- id: P\n  dataset: DONOR\n  key:\n    K: KEY\ncolumns:\n- name: ID\n  type: str\n- name: SECTION\n  type: str\n- name: KEY\n  type: str\n- name: ROWV\n  type: str\n- name: COLV\n  type: str\n  derivation: P.V\nrows:\n- id: low\n  dataset: SRC\n  filter: SRC.KEEP = '0'\n  derivations:\n    ID: SRC.ID\n    SECTION: \"'L'\"\n    KEY: SRC.K\n    ROWV: P.V\n- id: high\n  dataset: SRC\n  filter: SRC.KEEP = '1'\n  derivations:\n    ID: SRC.ID\n    SECTION: \"'H'\"\n    KEY: SRC.K\n    ROWV: P.V\n",
       "inputs": {
         "src.csv": "ID,K,KEEP\na,x,0\nb,y,1\nc,z,0\n",
         "donor.csv": "K,V\nx,X\ny,Y\n"
       },
       "handler_counts": [
         {
-          "spec_path": "rows[0].derivations.ROWV.source.no_match",
-          "handler": "no_match",
+          "spec_path": "rows.low.derivations.ROWV.source.absent",
+          "handler": "absent",
           "count": 1
         },
         {
-          "spec_path": "rows[1].derivations.ROWV.source.no_match",
-          "handler": "no_match",
+          "spec_path": "rows.high.derivations.ROWV.source.absent",
+          "handler": "absent",
           "count": 1
         },
         {
-          "spec_path": "columns.COLV.derivation.source.no_match",
-          "handler": "no_match",
+          "spec_path": "columns.COLV.derivation.source.absent",
+          "handler": "absent",
           "count": 1
         }
       ],
@@ -925,7 +925,7 @@
       ]
     },
     "unknown-named-row-field": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys:\n- ID\n- SECTION\ninput:\n  SRC: src.csv\n  DONOR: donor.csv\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - SECTION\n  - KEY\n  - ROWV\n  - COLV\nintermediates:\n- id: P\n  dataset: DONOR\n  key:\n    K: KEY\n  no_match: {literal: null}\ncolumns:\n- name: ID\n  type: str\n- name: SECTION\n  type: str\n- name: KEY\n  type: str\n- name: ROWV\n  type: str\n- name: COLV\n  type: str\n  derivation: P.V\nrows:\n- id: low\n  dataset: SRC\n  filter: SRC.KEEP = '0'\n  derivations:\n    ID: SRC.ID\n    SECTION:\n      literal: L\n    KEY: SRC.K\n    ROWV: P.ABSENT\n- id: high\n  dataset: SRC\n  filter: SRC.KEEP = '1'\n  derivations:\n    ID: SRC.ID\n    SECTION:\n      literal: H\n    KEY: SRC.K\n    ROWV: P.V\n",
+      "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys:\n- ID\n- SECTION\ninput:\n  SRC: src.csv\n  DONOR: donor.csv\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - SECTION\n  - KEY\n  - ROWV\n  - COLV\nintermediates:\n- id: P\n  dataset: DONOR\n  key:\n    K: KEY\ncolumns:\n- name: ID\n  type: str\n- name: SECTION\n  type: str\n- name: KEY\n  type: str\n- name: ROWV\n  type: str\n- name: COLV\n  type: str\n  derivation: P.V\nrows:\n- id: low\n  dataset: SRC\n  filter: SRC.KEEP = '0'\n  derivations:\n    ID: SRC.ID\n    SECTION: \"'L'\"\n    KEY: SRC.K\n    ROWV: P.ABSENT\n- id: high\n  dataset: SRC\n  filter: SRC.KEEP = '1'\n  derivations:\n    ID: SRC.ID\n    SECTION: \"'H'\"\n    KEY: SRC.K\n    ROWV: P.V\n",
       "inputs": {
         "src.csv": "ID,K,KEEP\na,x,0\nb,y,1\nc,z,0\n",
         "donor.csv": "K,V\nx,X\ny,Y\n"
@@ -936,7 +936,7 @@
           "phase": "validation",
           "condition": "unknown_field",
           "spec_paths": [
-            "rows[0].derivations.ROWV.source"
+            "rows.low.derivations.ROWV.source"
           ],
           "rule": "LOOKUP-11",
           "context": {
@@ -947,7 +947,7 @@
       "select_calls": []
     },
     "unknown-named-row-field-with-missing-input": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys:\n- ID\n- SECTION\ninput:\n  SRC: src.csv\n  DONOR: donor.csv\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - SECTION\n  - KEY\n  - ROWV\n  - COLV\nintermediates:\n- id: P\n  dataset: DONOR\n  key:\n    K: KEY\n  no_match: {literal: null}\ncolumns:\n- name: ID\n  type: str\n- name: SECTION\n  type: str\n- name: KEY\n  type: str\n- name: ROWV\n  type: str\n- name: COLV\n  type: str\n  derivation: P.V\nrows:\n- id: low\n  dataset: SRC\n  filter: SRC.KEEP = '0'\n  derivations:\n    ID: SRC.ID\n    SECTION:\n      literal: L\n    KEY: SRC.K\n    ROWV: P.ABSENT\n- id: high\n  dataset: SRC\n  filter: SRC.KEEP = '1'\n  derivations:\n    ID: SRC.ID\n    SECTION:\n      literal: H\n    KEY: SRC.K\n    ROWV: P.V\n",
+      "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys:\n- ID\n- SECTION\ninput:\n  SRC: src.csv\n  DONOR: donor.csv\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - SECTION\n  - KEY\n  - ROWV\n  - COLV\nintermediates:\n- id: P\n  dataset: DONOR\n  key:\n    K: KEY\ncolumns:\n- name: ID\n  type: str\n- name: SECTION\n  type: str\n- name: KEY\n  type: str\n- name: ROWV\n  type: str\n- name: COLV\n  type: str\n  derivation: P.V\nrows:\n- id: low\n  dataset: SRC\n  filter: SRC.KEEP = '0'\n  derivations:\n    ID: SRC.ID\n    SECTION: \"'L'\"\n    KEY: SRC.K\n    ROWV: P.ABSENT\n- id: high\n  dataset: SRC\n  filter: SRC.KEEP = '1'\n  derivations:\n    ID: SRC.ID\n    SECTION: \"'H'\"\n    KEY: SRC.K\n    ROWV: P.V\n",
       "inputs": {},
       "handler_counts": [],
       "findings": [
@@ -979,25 +979,25 @@
       "select_calls": []
     },
     "reordered-inputs": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys:\n- ID\n- SECTION\ninput:\n  DONOR: donor.csv\n  SRC: src.csv\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - SECTION\n  - KEY\n  - ROWV\n  - COLV\nintermediates:\n- id: P\n  dataset: DONOR\n  key:\n    K: KEY\n  no_match: {literal: null}\ncolumns:\n- name: ID\n  type: str\n- name: SECTION\n  type: str\n- name: KEY\n  type: str\n- name: ROWV\n  type: str\n- name: COLV\n  type: str\n  derivation: P.V\nrows:\n- id: low\n  dataset: SRC\n  filter: SRC.KEEP = '0'\n  derivations:\n    ID: SRC.ID\n    SECTION:\n      literal: L\n    KEY: SRC.K\n    ROWV: P.V\n- id: high\n  dataset: SRC\n  filter: SRC.KEEP = '1'\n  derivations:\n    ID: SRC.ID\n    SECTION:\n      literal: H\n    KEY: SRC.K\n    ROWV: P.V\n",
+      "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys:\n- ID\n- SECTION\ninput:\n  DONOR: donor.csv\n  SRC: src.csv\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - SECTION\n  - KEY\n  - ROWV\n  - COLV\nintermediates:\n- id: P\n  dataset: DONOR\n  key:\n    K: KEY\ncolumns:\n- name: ID\n  type: str\n- name: SECTION\n  type: str\n- name: KEY\n  type: str\n- name: ROWV\n  type: str\n- name: COLV\n  type: str\n  derivation: P.V\nrows:\n- id: low\n  dataset: SRC\n  filter: SRC.KEEP = '0'\n  derivations:\n    ID: SRC.ID\n    SECTION: \"'L'\"\n    KEY: SRC.K\n    ROWV: P.V\n- id: high\n  dataset: SRC\n  filter: SRC.KEEP = '1'\n  derivations:\n    ID: SRC.ID\n    SECTION: \"'H'\"\n    KEY: SRC.K\n    ROWV: P.V\n",
       "inputs": {
         "src.csv": "ID,K,KEEP\na,x,0\nb,y,1\nc,z,0\n",
         "donor.csv": "K,V\nx,X\ny,Y\n"
       },
       "handler_counts": [
         {
-          "spec_path": "rows[0].derivations.ROWV.source.no_match",
-          "handler": "no_match",
+          "spec_path": "rows.low.derivations.ROWV.source.absent",
+          "handler": "absent",
           "count": 1
         },
         {
-          "spec_path": "rows[1].derivations.ROWV.source.no_match",
-          "handler": "no_match",
+          "spec_path": "rows.high.derivations.ROWV.source.absent",
+          "handler": "absent",
           "count": 1
         },
         {
-          "spec_path": "columns.COLV.derivation.source.no_match",
-          "handler": "no_match",
+          "spec_path": "columns.COLV.derivation.source.absent",
+          "handler": "absent",
           "count": 1
         }
       ],
@@ -1043,25 +1043,25 @@
       ]
     },
     "filtered-candidate-cache": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys:\n- ID\n- SECTION\ninput:\n  SRC: src.csv\n  DONOR: donor.csv\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - SECTION\n  - KEY\n  - ROWV\n  - COLV\nintermediates:\n- id: P\n  dataset: DONOR\n  key:\n    K: KEY\n  no_match: {literal: null}\ncolumns:\n- name: ID\n  type: str\n- name: SECTION\n  type: str\n- name: KEY\n  type: str\n- name: ROWV\n  type: str\n- name: COLV\n  type: str\n  derivation: P.V\nrows:\n- id: low\n  dataset: SRC\n  filter: SRC.KEEP = '1'\n  derivations:\n    ID: SRC.ID\n    SECTION:\n      literal: L\n    KEY: SRC.K\n    ROWV: P.V\n- id: high\n  dataset: SRC\n  filter: SRC.KEEP = '0'\n  derivations:\n    ID: SRC.ID\n    SECTION:\n      literal: H\n    KEY: SRC.K\n    ROWV: P.V\n",
+      "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys:\n- ID\n- SECTION\ninput:\n  SRC: src.csv\n  DONOR: donor.csv\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - SECTION\n  - KEY\n  - ROWV\n  - COLV\nintermediates:\n- id: P\n  dataset: DONOR\n  key:\n    K: KEY\ncolumns:\n- name: ID\n  type: str\n- name: SECTION\n  type: str\n- name: KEY\n  type: str\n- name: ROWV\n  type: str\n- name: COLV\n  type: str\n  derivation: P.V\nrows:\n- id: low\n  dataset: SRC\n  filter: SRC.KEEP = '1'\n  derivations:\n    ID: SRC.ID\n    SECTION: \"'L'\"\n    KEY: SRC.K\n    ROWV: P.V\n- id: high\n  dataset: SRC\n  filter: SRC.KEEP = '0'\n  derivations:\n    ID: SRC.ID\n    SECTION: \"'H'\"\n    KEY: SRC.K\n    ROWV: P.V\n",
       "inputs": {
         "src.csv": "ID,K,KEEP\na,x,0\nb,y,1\nc,z,0\n",
         "donor.csv": "K,V\nx,X\ny,Y\n"
       },
       "handler_counts": [
         {
-          "spec_path": "rows[0].derivations.ROWV.source.no_match",
-          "handler": "no_match",
+          "spec_path": "rows.low.derivations.ROWV.source.absent",
+          "handler": "absent",
           "count": 1
         },
         {
-          "spec_path": "rows[1].derivations.ROWV.source.no_match",
-          "handler": "no_match",
+          "spec_path": "rows.high.derivations.ROWV.source.absent",
+          "handler": "absent",
           "count": 1
         },
         {
-          "spec_path": "columns.COLV.derivation.source.no_match",
-          "handler": "no_match",
+          "spec_path": "columns.COLV.derivation.source.absent",
+          "handler": "absent",
           "count": 1
         }
       ],
@@ -1107,25 +1107,25 @@
       ]
     },
     "same-record-different-template-values": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys:\n- ID\n- SECTION\ninput:\n  SRC: src.csv\n  DONOR: donor.csv\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - SECTION\n  - KEY\n  - ROWV\n  - COLV\nintermediates:\n- id: P\n  dataset: DONOR\n  key:\n    K: KEY\n  no_match: {literal: null}\ncolumns:\n- name: ID\n  type: str\n- name: SECTION\n  type: str\n- name: KEY\n  type: str\n- name: ROWV\n  type: str\n- name: COLV\n  type: str\n  derivation: P.V\nrows:\n- id: low\n  dataset: SRC\n  derivations:\n    ID: SRC.ID\n    SECTION:\n      literal: L\n    KEY:\n      literal: x\n    ROWV: P.V\n- id: high\n  dataset: SRC\n  derivations:\n    ID: SRC.ID\n    SECTION:\n      literal: H\n    KEY:\n      literal: y\n    ROWV: P.V\n",
+      "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys:\n- ID\n- SECTION\ninput:\n  SRC: src.csv\n  DONOR: donor.csv\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - SECTION\n  - KEY\n  - ROWV\n  - COLV\nintermediates:\n- id: P\n  dataset: DONOR\n  key:\n    K: KEY\ncolumns:\n- name: ID\n  type: str\n- name: SECTION\n  type: str\n- name: KEY\n  type: str\n- name: ROWV\n  type: str\n- name: COLV\n  type: str\n  derivation: P.V\nrows:\n- id: low\n  dataset: SRC\n  derivations:\n    ID: SRC.ID\n    SECTION: \"'L'\"\n    KEY: \"'x'\"\n    ROWV: P.V\n- id: high\n  dataset: SRC\n  derivations:\n    ID: SRC.ID\n    SECTION: \"'H'\"\n    KEY: \"'y'\"\n    ROWV: P.V\n",
       "inputs": {
         "src.csv": "ID,K,KEEP\na,x,0\nb,y,1\nc,z,0\n",
         "donor.csv": "K,V\nx,X\ny,Y\n"
       },
       "handler_counts": [
         {
-          "spec_path": "rows[0].derivations.ROWV.source.no_match",
-          "handler": "no_match",
+          "spec_path": "rows.low.derivations.ROWV.source.absent",
+          "handler": "absent",
           "count": 0
         },
         {
-          "spec_path": "rows[1].derivations.ROWV.source.no_match",
-          "handler": "no_match",
+          "spec_path": "rows.high.derivations.ROWV.source.absent",
+          "handler": "absent",
           "count": 0
         },
         {
-          "spec_path": "columns.COLV.derivation.source.no_match",
-          "handler": "no_match",
+          "spec_path": "columns.COLV.derivation.source.absent",
+          "handler": "absent",
           "count": 0
         }
       ],
@@ -1171,7 +1171,7 @@
       ]
     },
     "unknown-row-driver": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys:\n- ID\n- SECTION\ninput:\n  SRC: src.csv\n  DONOR: donor.csv\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - SECTION\n  - KEY\n  - ROWV\n  - COLV\nintermediates:\n- id: P\n  dataset: DONOR\n  key:\n    K: KEY\n  no_match: {literal: null}\ncolumns:\n- name: ID\n  type: str\n- name: SECTION\n  type: str\n- name: KEY\n  type: str\n- name: ROWV\n  type: str\n- name: COLV\n  type: str\n  derivation: P.V\nrows:\n- id: low\n  dataset: SRC\n  filter: SRC.KEEP = '0'\n  derivations:\n    ID: SRC.ID\n    SECTION:\n      literal: L\n    KEY: SRC.K\n    ROWV: P.V\n- id: high\n  dataset: ABSENT\n  filter: SRC.KEEP = '1'\n  derivations:\n    ID: SRC.ID\n    SECTION:\n      literal: H\n    KEY: SRC.K\n    ROWV: P.V\n",
+      "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys:\n- ID\n- SECTION\ninput:\n  SRC: src.csv\n  DONOR: donor.csv\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - SECTION\n  - KEY\n  - ROWV\n  - COLV\nintermediates:\n- id: P\n  dataset: DONOR\n  key:\n    K: KEY\ncolumns:\n- name: ID\n  type: str\n- name: SECTION\n  type: str\n- name: KEY\n  type: str\n- name: ROWV\n  type: str\n- name: COLV\n  type: str\n  derivation: P.V\nrows:\n- id: low\n  dataset: SRC\n  filter: SRC.KEEP = '0'\n  derivations:\n    ID: SRC.ID\n    SECTION: \"'L'\"\n    KEY: SRC.K\n    ROWV: P.V\n- id: high\n  dataset: ABSENT\n  filter: SRC.KEEP = '1'\n  derivations:\n    ID: SRC.ID\n    SECTION: \"'H'\"\n    KEY: SRC.K\n    ROWV: P.V\n",
       "inputs": {},
       "handler_counts": [],
       "findings": [
@@ -1179,7 +1179,7 @@
           "phase": "validation",
           "condition": "driver_unavailable",
           "spec_paths": [
-            "rows[1].dataset"
+            "rows.high.dataset"
           ],
           "rule": "ROW-1",
           "context": {
@@ -1191,7 +1191,7 @@
       "select_calls": []
     },
     "omitted-row-driver": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys:\n- ID\n- SECTION\ninput:\n  SRC: src.csv\n  DONOR: donor.csv\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - SECTION\n  - KEY\n  - ROWV\n  - COLV\nintermediates:\n- id: P\n  dataset: DONOR\n  key:\n    K: KEY\n  no_match: {literal: null}\ncolumns:\n- name: ID\n  type: str\n- name: SECTION\n  type: str\n- name: KEY\n  type: str\n- name: ROWV\n  type: str\n- name: COLV\n  type: str\n  derivation: P.V\nrows:\n- id: low\n  dataset: SRC\n  filter: SRC.KEEP = '0'\n  derivations:\n    ID: SRC.ID\n    SECTION:\n      literal: L\n    KEY: SRC.K\n    ROWV: P.V\n- id: high\n  filter: SRC.KEEP = '1'\n  derivations:\n    ID: SRC.ID\n    SECTION:\n      literal: H\n    KEY: SRC.K\n    ROWV: P.V\nbase: SRC\n",
+      "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys:\n- ID\n- SECTION\ninput:\n  SRC: src.csv\n  DONOR: donor.csv\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - SECTION\n  - KEY\n  - ROWV\n  - COLV\nintermediates:\n- id: P\n  dataset: DONOR\n  key:\n    K: KEY\ncolumns:\n- name: ID\n  type: str\n- name: SECTION\n  type: str\n- name: KEY\n  type: str\n- name: ROWV\n  type: str\n- name: COLV\n  type: str\n  derivation: P.V\nrows:\n- id: low\n  dataset: SRC\n  filter: SRC.KEEP = '0'\n  derivations:\n    ID: SRC.ID\n    SECTION: \"'L'\"\n    KEY: SRC.K\n    ROWV: P.V\n- id: high\n  filter: SRC.KEEP = '1'\n  derivations:\n    ID: SRC.ID\n    SECTION: \"'H'\"\n    KEY: SRC.K\n    ROWV: P.V\nbase: SRC\n",
       "inputs": {},
       "handler_counts": [],
       "findings": [
@@ -1199,7 +1199,7 @@
           "phase": "validation",
           "condition": "driver_unavailable",
           "spec_paths": [
-            "rows[1].dataset"
+            "rows.high.dataset"
           ],
           "rule": "ROW-1",
           "context": {
@@ -1211,7 +1211,7 @@
       "select_calls": []
     },
     "unmatched-before-filter": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys:\n- ID\n- SECTION\ninput:\n  SRC: src.csv\n  DONOR: donor.csv\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - SECTION\n  - KEY\n  - ROWV\n  - COLV\nintermediates:\n- id: P\n  dataset: DONOR\n  key:\n    K: KEY\n  require_match: true\ncolumns:\n- name: ID\n  type: str\n- name: SECTION\n  type: str\n- name: KEY\n  type: str\n- name: ROWV\n  type: str\n- name: COLV\n  type: str\n  derivation: P.V\nrows:\n- id: low\n  dataset: SRC\n  filter: SRC.KEEP = '1'\n  derivations:\n    ID: SRC.ID\n    SECTION:\n      literal: L\n    KEY: SRC.K\n    ROWV: P.V\n- id: high\n  dataset: SRC\n  filter: SRC.KEEP = '1'\n  derivations:\n    ID: SRC.ID\n    SECTION:\n      literal: H\n    KEY: SRC.K\n    ROWV: P.V\n",
+      "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys:\n- ID\n- SECTION\ninput:\n  SRC: src.csv\n  DONOR: donor.csv\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - SECTION\n  - KEY\n  - ROWV\n  - COLV\nintermediates:\n- id: P\n  dataset: DONOR\n  key:\n    K: KEY\n  require_match: true\ncolumns:\n- name: ID\n  type: str\n- name: SECTION\n  type: str\n- name: KEY\n  type: str\n- name: ROWV\n  type: str\n- name: COLV\n  type: str\n  derivation: P.V\nrows:\n- id: low\n  dataset: SRC\n  filter: SRC.KEEP = '1'\n  derivations:\n    ID: SRC.ID\n    SECTION: \"'L'\"\n    KEY: SRC.K\n    ROWV: P.V\n- id: high\n  dataset: SRC\n  filter: SRC.KEEP = '1'\n  derivations:\n    ID: SRC.ID\n    SECTION: \"'H'\"\n    KEY: SRC.K\n    ROWV: P.V\n",
       "inputs": {
         "src.csv": "ID,K,KEEP\na,x,0\nb,y,1\nc,z,0\n",
         "donor.csv": "K,V\nx,X\ny,Y\n"
@@ -1222,7 +1222,7 @@
           "phase": "join",
           "condition": "unmatched_key",
           "spec_paths": [
-            "intermediates[0]"
+            "intermediates.P"
           ],
           "rule": "LOOKUP-24",
           "context": {
@@ -1265,25 +1265,25 @@
       ]
     },
     "multiple-before-filter": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys:\n- ID\n- SECTION\ninput:\n  SRC: src.csv\n  DONOR: donor.csv\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - SECTION\n  - KEY\n  - ROWV\n  - COLV\nintermediates:\n- id: P\n  dataset: DONOR\n  key:\n    K: KEY\n  no_match: {literal: null}\ncolumns:\n- name: ID\n  type: str\n- name: SECTION\n  type: str\n- name: KEY\n  type: str\n- name: ROWV\n  type: str\n- name: COLV\n  type: str\n  derivation: P.V\nrows:\n- id: low\n  dataset: SRC\n  filter: SRC.KEEP = '1'\n  derivations:\n    ID: SRC.ID\n    SECTION:\n      literal: L\n    KEY: SRC.K\n    ROWV: P.V\n- id: high\n  dataset: SRC\n  filter: SRC.KEEP = '1'\n  derivations:\n    ID: SRC.ID\n    SECTION:\n      literal: H\n    KEY: SRC.K\n    ROWV: P.V\n",
+      "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys:\n- ID\n- SECTION\ninput:\n  SRC: src.csv\n  DONOR: donor.csv\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - SECTION\n  - KEY\n  - ROWV\n  - COLV\nintermediates:\n- id: P\n  dataset: DONOR\n  key:\n    K: KEY\ncolumns:\n- name: ID\n  type: str\n- name: SECTION\n  type: str\n- name: KEY\n  type: str\n- name: ROWV\n  type: str\n- name: COLV\n  type: str\n  derivation: P.V\nrows:\n- id: low\n  dataset: SRC\n  filter: SRC.KEEP = '1'\n  derivations:\n    ID: SRC.ID\n    SECTION: \"'L'\"\n    KEY: SRC.K\n    ROWV: P.V\n- id: high\n  dataset: SRC\n  filter: SRC.KEEP = '1'\n  derivations:\n    ID: SRC.ID\n    SECTION: \"'H'\"\n    KEY: SRC.K\n    ROWV: P.V\n",
       "inputs": {
         "src.csv": "ID,K,KEEP\na,x,0\nb,y,1\nc,z,0\n",
         "donor.csv": "K,V\nx,X\ny,Y\nx,X2\n"
       },
       "handler_counts": [
         {
-          "spec_path": "rows[0].derivations.ROWV.source.no_match",
-          "handler": "no_match",
+          "spec_path": "rows.low.derivations.ROWV.source.absent",
+          "handler": "absent",
           "count": 0
         },
         {
-          "spec_path": "rows[1].derivations.ROWV.source.no_match",
-          "handler": "no_match",
+          "spec_path": "rows.high.derivations.ROWV.source.absent",
+          "handler": "absent",
           "count": 0
         },
         {
-          "spec_path": "columns.COLV.derivation.source.no_match",
-          "handler": "no_match",
+          "spec_path": "columns.COLV.derivation.source.absent",
+          "handler": "absent",
           "count": 0
         }
       ],
@@ -1292,7 +1292,7 @@
           "phase": "join",
           "condition": "multiple_matches",
           "spec_paths": [
-            "intermediates[0]"
+            "intermediates.P"
           ],
           "rule": "LOOKUP-10",
           "context": {
@@ -1324,25 +1324,25 @@
       ]
     },
     "conversion-before-filter": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys:\n- ID\n- SECTION\ninput:\n  SRC: src.csv\n  DONOR: donor.csv\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - SECTION\n  - KEY\n  - ROWV\n  - COLV\nintermediates:\n- id: P\n  dataset: DONOR\n  key:\n    K: KEY\n  no_match: {literal: null}\ncolumns:\n- name: ID\n  type: str\n- name: SECTION\n  type: str\n- name: KEY\n  type: str\n- name: ROWV\n  type: int\n- name: COLV\n  type: str\n  derivation: P.V\nrows:\n- id: low\n  dataset: SRC\n  filter: SRC.KEEP = '1'\n  derivations:\n    ID: SRC.ID\n    SECTION:\n      literal: L\n    KEY: SRC.K\n    ROWV: P.V\n- id: high\n  dataset: SRC\n  filter: SRC.KEEP = '1'\n  derivations:\n    ID: SRC.ID\n    SECTION:\n      literal: H\n    KEY: SRC.K\n    ROWV: P.V\n",
+      "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys:\n- ID\n- SECTION\ninput:\n  SRC: src.csv\n  DONOR: donor.csv\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - SECTION\n  - KEY\n  - ROWV\n  - COLV\nintermediates:\n- id: P\n  dataset: DONOR\n  key:\n    K: KEY\ncolumns:\n- name: ID\n  type: str\n- name: SECTION\n  type: str\n- name: KEY\n  type: str\n- name: ROWV\n  type: int\n- name: COLV\n  type: str\n  derivation: P.V\nrows:\n- id: low\n  dataset: SRC\n  filter: SRC.KEEP = '1'\n  derivations:\n    ID: SRC.ID\n    SECTION: \"'L'\"\n    KEY: SRC.K\n    ROWV: P.V\n- id: high\n  dataset: SRC\n  filter: SRC.KEEP = '1'\n  derivations:\n    ID: SRC.ID\n    SECTION: \"'H'\"\n    KEY: SRC.K\n    ROWV: P.V\n",
       "inputs": {
         "src.csv": "ID,K,KEEP\na,x,0\nb,y,1\nc,z,0\n",
         "donor.csv": "K,V\nx,X\ny,Y\n"
       },
       "handler_counts": [
         {
-          "spec_path": "rows[0].derivations.ROWV.source.no_match",
-          "handler": "no_match",
+          "spec_path": "rows.low.derivations.ROWV.source.absent",
+          "handler": "absent",
           "count": 0
         },
         {
-          "spec_path": "rows[1].derivations.ROWV.source.no_match",
-          "handler": "no_match",
+          "spec_path": "rows.high.derivations.ROWV.source.absent",
+          "handler": "absent",
           "count": 0
         },
         {
-          "spec_path": "columns.COLV.derivation.source.no_match",
-          "handler": "no_match",
+          "spec_path": "columns.COLV.derivation.source.absent",
+          "handler": "absent",
           "count": 0
         }
       ],
@@ -1377,7 +1377,7 @@
       ]
     },
     "width-after-input-capture": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys:\n- ID\n- SECTION\ninput:\n  SRC: src.csv\n  DONOR: donor.csv\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - SECTION\n  - KEY\n  - ROWV\n  - COLV\nintermediates:\n- id: P\n  dataset: DONOR\n  key:\n    K:\n      str_pad:\n        source: SRC.K\n        width: 0\n  no_match: {literal: null}\ncolumns:\n- name: ID\n  type: str\n- name: SECTION\n  type: str\n- name: KEY\n  type: str\n- name: ROWV\n  type: str\n- name: COLV\n  type: str\n  derivation: P.V\nrows:\n- id: low\n  dataset: SRC\n  filter: SRC.KEEP = '0'\n  derivations:\n    ID: SRC.ID\n    SECTION:\n      literal: L\n    KEY: SRC.K\n    ROWV: P.V\n- id: high\n  dataset: SRC\n  filter: SRC.KEEP = '1'\n  derivations:\n    ID: SRC.ID\n    SECTION:\n      literal: H\n    KEY: SRC.K\n    ROWV: P.V\n",
+      "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys:\n- ID\n- SECTION\ninput:\n  SRC: src.csv\n  DONOR: donor.csv\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - SECTION\n  - KEY\n  - ROWV\n  - COLV\nintermediates:\n- id: P\n  dataset: DONOR\n  key:\n    K:\n      str_pad:\n        source: SRC.K\n        width: 0\ncolumns:\n- name: ID\n  type: str\n- name: SECTION\n  type: str\n- name: KEY\n  type: str\n- name: ROWV\n  type: str\n- name: COLV\n  type: str\n  derivation: P.V\nrows:\n- id: low\n  dataset: SRC\n  filter: SRC.KEEP = '0'\n  derivations:\n    ID: SRC.ID\n    SECTION: \"'L'\"\n    KEY: SRC.K\n    ROWV: P.V\n- id: high\n  dataset: SRC\n  filter: SRC.KEEP = '1'\n  derivations:\n    ID: SRC.ID\n    SECTION: \"'H'\"\n    KEY: SRC.K\n    ROWV: P.V\n",
       "inputs": {
         "src.csv": "ID,K,KEEP\na,x,0\nb,y,1\nc,z,0\n",
         "donor.csv": "K,V\nx,X\ny,Y\n"
@@ -1388,7 +1388,7 @@
           "phase": "validation",
           "condition": "invalid_field_type",
           "spec_paths": [
-            "intermediates[0].key.K.str_pad.width"
+            "intermediates.P.key.K.str_pad.width"
           ],
           "rule": "TEXT-2",
           "context": {
@@ -1399,7 +1399,7 @@
       "select_calls": []
     },
     "missing-input-before-width": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys:\n- ID\n- SECTION\ninput:\n  SRC: src.csv\n  DONOR: donor.csv\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - SECTION\n  - KEY\n  - ROWV\n  - COLV\nintermediates:\n- id: P\n  dataset: DONOR\n  key:\n    K:\n      str_pad:\n        source: SRC.K\n        width: 0\n  no_match: {literal: null}\ncolumns:\n- name: ID\n  type: str\n- name: SECTION\n  type: str\n- name: KEY\n  type: str\n- name: ROWV\n  type: str\n- name: COLV\n  type: str\n  derivation: P.V\nrows:\n- id: low\n  dataset: SRC\n  filter: SRC.KEEP = '0'\n  derivations:\n    ID: SRC.ID\n    SECTION:\n      literal: L\n    KEY: SRC.K\n    ROWV: P.V\n- id: high\n  dataset: SRC\n  filter: SRC.KEEP = '1'\n  derivations:\n    ID: SRC.ID\n    SECTION:\n      literal: H\n    KEY: SRC.K\n    ROWV: P.V\n",
+      "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys:\n- ID\n- SECTION\ninput:\n  SRC: src.csv\n  DONOR: donor.csv\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - SECTION\n  - KEY\n  - ROWV\n  - COLV\nintermediates:\n- id: P\n  dataset: DONOR\n  key:\n    K:\n      str_pad:\n        source: SRC.K\n        width: 0\ncolumns:\n- name: ID\n  type: str\n- name: SECTION\n  type: str\n- name: KEY\n  type: str\n- name: ROWV\n  type: str\n- name: COLV\n  type: str\n  derivation: P.V\nrows:\n- id: low\n  dataset: SRC\n  filter: SRC.KEEP = '0'\n  derivations:\n    ID: SRC.ID\n    SECTION: \"'L'\"\n    KEY: SRC.K\n    ROWV: P.V\n- id: high\n  dataset: SRC\n  filter: SRC.KEEP = '1'\n  derivations:\n    ID: SRC.ID\n    SECTION: \"'H'\"\n    KEY: SRC.K\n    ROWV: P.V\n",
       "inputs": {},
       "handler_counts": [],
       "findings": [
@@ -1431,25 +1431,25 @@
       "select_calls": []
     },
     "zero-row-source": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys:\n- ID\n- SECTION\ninput:\n  SRC: src.csv\n  DONOR: donor.csv\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - SECTION\n  - KEY\n  - ROWV\n  - COLV\nintermediates:\n- id: P\n  dataset: DONOR\n  key:\n    K: KEY\n  no_match: {literal: null}\ncolumns:\n- name: ID\n  type: str\n- name: SECTION\n  type: str\n- name: KEY\n  type: str\n- name: ROWV\n  type: str\n- name: COLV\n  type: str\n  derivation: P.V\nrows:\n- id: low\n  dataset: SRC\n  filter: SRC.KEEP = '0'\n  derivations:\n    ID: SRC.ID\n    SECTION:\n      literal: L\n    KEY: SRC.K\n    ROWV: P.V\n- id: high\n  dataset: SRC\n  filter: SRC.KEEP = '1'\n  derivations:\n    ID: SRC.ID\n    SECTION:\n      literal: H\n    KEY: SRC.K\n    ROWV: P.V\n",
+      "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys:\n- ID\n- SECTION\ninput:\n  SRC: src.csv\n  DONOR: donor.csv\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - SECTION\n  - KEY\n  - ROWV\n  - COLV\nintermediates:\n- id: P\n  dataset: DONOR\n  key:\n    K: KEY\ncolumns:\n- name: ID\n  type: str\n- name: SECTION\n  type: str\n- name: KEY\n  type: str\n- name: ROWV\n  type: str\n- name: COLV\n  type: str\n  derivation: P.V\nrows:\n- id: low\n  dataset: SRC\n  filter: SRC.KEEP = '0'\n  derivations:\n    ID: SRC.ID\n    SECTION: \"'L'\"\n    KEY: SRC.K\n    ROWV: P.V\n- id: high\n  dataset: SRC\n  filter: SRC.KEEP = '1'\n  derivations:\n    ID: SRC.ID\n    SECTION: \"'H'\"\n    KEY: SRC.K\n    ROWV: P.V\n",
       "inputs": {
         "src.csv": "ID,K,KEEP\n",
         "donor.csv": "K,V\nx,X\ny,Y\n"
       },
       "handler_counts": [
         {
-          "spec_path": "rows[0].derivations.ROWV.source.no_match",
-          "handler": "no_match",
+          "spec_path": "rows.low.derivations.ROWV.source.absent",
+          "handler": "absent",
           "count": 0
         },
         {
-          "spec_path": "rows[1].derivations.ROWV.source.no_match",
-          "handler": "no_match",
+          "spec_path": "rows.high.derivations.ROWV.source.absent",
+          "handler": "absent",
           "count": 0
         },
         {
-          "spec_path": "columns.COLV.derivation.source.no_match",
-          "handler": "no_match",
+          "spec_path": "columns.COLV.derivation.source.absent",
+          "handler": "absent",
           "count": 0
         }
       ],
@@ -1458,25 +1458,25 @@
       "select_calls": []
     },
     "different-row-drivers": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys:\n- ID\n- SECTION\ninput:\n  SRC: src.csv\n  DONOR: donor.csv\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - SECTION\n  - KEY\n  - ROWV\n  - COLV\nintermediates:\n- id: P\n  dataset: DONOR\n  key:\n    K: KEY\n  no_match: {literal: null}\ncolumns:\n- name: ID\n  type: str\n- name: SECTION\n  type: str\n- name: KEY\n  type: str\n- name: ROWV\n  type: str\n- name: COLV\n  type: str\n  derivation: P.V\nrows:\n- id: low\n  dataset: SRC\n  filter: SRC.KEEP = '0'\n  derivations:\n    ID: SRC.ID\n    SECTION:\n      literal: L\n    KEY: SRC.K\n    ROWV: P.V\n- id: donors\n  dataset: DONOR\n  derivations:\n    ID: DONOR.K\n    SECTION:\n      literal: D\n    KEY: DONOR.K\n    ROWV: P.V\n",
+      "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys:\n- ID\n- SECTION\ninput:\n  SRC: src.csv\n  DONOR: donor.csv\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - SECTION\n  - KEY\n  - ROWV\n  - COLV\nintermediates:\n- id: P\n  dataset: DONOR\n  key:\n    K: KEY\ncolumns:\n- name: ID\n  type: str\n- name: SECTION\n  type: str\n- name: KEY\n  type: str\n- name: ROWV\n  type: str\n- name: COLV\n  type: str\n  derivation: P.V\nrows:\n- id: low\n  dataset: SRC\n  filter: SRC.KEEP = '0'\n  derivations:\n    ID: SRC.ID\n    SECTION: \"'L'\"\n    KEY: SRC.K\n    ROWV: P.V\n- id: donors\n  dataset: DONOR\n  derivations:\n    ID: DONOR.K\n    SECTION: \"'D'\"\n    KEY: DONOR.K\n    ROWV: P.V\n",
       "inputs": {
         "src.csv": "ID,K,KEEP\na,x,0\nb,y,1\nc,z,0\n",
         "donor.csv": "K,V\nx,X\ny,Y\n"
       },
       "handler_counts": [
         {
-          "spec_path": "rows[0].derivations.ROWV.source.no_match",
-          "handler": "no_match",
+          "spec_path": "rows.low.derivations.ROWV.source.absent",
+          "handler": "absent",
           "count": 1
         },
         {
-          "spec_path": "rows[1].derivations.ROWV.source.no_match",
-          "handler": "no_match",
+          "spec_path": "rows.donors.derivations.ROWV.source.absent",
+          "handler": "absent",
           "count": 0
         },
         {
-          "spec_path": "columns.COLV.derivation.source.no_match",
-          "handler": "no_match",
+          "spec_path": "columns.COLV.derivation.source.absent",
+          "handler": "absent",
           "count": 1
         }
       ],
@@ -1517,7 +1517,7 @@
     },
     "named-intermediate-column-default": {
       "contract": "https://github.com/elong0527/yamaa/issues/2294#issuecomment-6168847169",
-      "specification": "schema_version: '1.0'\ndomain: ADEX\nkeys: [STUDYID, USUBJID, PARAMCD]\ninput: {DM: dm.csv, EX: ex.csv}\nbase: DM\noutput: {path: result.csv, columns: [STUDYID, USUBJID, PARAMCD, AVALC]}\nintermediates:\n  - {id: FIRST_DOSE, dataset: EX, key: [USUBJID], order_by: [EX.EXSTDTC], keep: first, no_match: {literal: null}}\ncolumns:\n  - {name: STUDYID, type: str, derivation: DM.STUDYID}\n  - {name: USUBJID, type: str, derivation: DM.USUBJID}\n  - {name: PARAMCD, type: str}\n  - {name: AVALC, type: str, derivation: FIRST_DOSE.EXSTDTC}\nrows:\n  - {id: first, dataset: DM, derivations: {PARAMCD: {literal: FIRSTDT}}}\n  - {id: count, dataset: DM, derivations: {PARAMCD: {literal: NDOSE}, AVALC: {literal: '2'}}}\n",
+      "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: ADEX\nkeys: [STUDYID, USUBJID, PARAMCD]\ninput: {DM: dm.csv, EX: ex.csv}\nbase: DM\noutput: {path: result.csv, columns: [STUDYID, USUBJID, PARAMCD, AVALC]}\nintermediates:\n  - {id: FIRST_DOSE, dataset: EX, key: [USUBJID], order_by: [EX.EXSTDTC], keep: first}\ncolumns:\n  - {name: STUDYID, type: str, derivation: DM.STUDYID}\n  - {name: USUBJID, type: str, derivation: DM.USUBJID}\n  - {name: PARAMCD, type: str}\n  - {name: AVALC, type: str, derivation: FIRST_DOSE.EXSTDTC}\nrows:\n  - {id: first, dataset: DM, derivations: {PARAMCD: \"'FIRSTDT'\"}}\n  - {id: count, dataset: DM, derivations: {PARAMCD: \"'NDOSE'\", AVALC: \"'2'\"}}\n",
       "inputs": {
         "dm.csv": "STUDYID,USUBJID\nST-01,S-001\nST-01,S-002\n",
         "ex.csv": "STUDYID,USUBJID,EXSEQ,EXSTDTC\nST-01,S-001,1,2026-01-05\nST-01,S-001,2,2026-01-20\nST-01,S-002,1,2026-01-06\nST-01,S-002,2,2026-01-21\n"
@@ -1529,8 +1529,8 @@
           "count": 2
         },
         {
-          "spec_path": "columns.AVALC.derivation.source.no_match",
-          "handler": "no_match",
+          "spec_path": "columns.AVALC.derivation.source.absent",
+          "handler": "absent",
           "count": 0
         }
       ],
@@ -1539,7 +1539,7 @@
     },
     "transitive-named-default": {
       "contract": "https://github.com/elong0527/yamaa/issues/2294#issuecomment-6168847169",
-      "specification": "schema_version: '1.0'\ndomain: ADEX\nkeys: [STUDYID, USUBJID, PARAMCD]\ninput: {DM: dm.csv, EX: ex.csv}\nbase: DM\noutput: {path: result.csv, columns: [STUDYID, USUBJID, PARAMCD, AVALC]}\nintermediates:\n  - {id: FIRST_DOSE, dataset: EX, key: [USUBJID], order_by: [EX.EXSTDTC], keep: first, no_match: {literal: null}}\ncolumns:\n  - {name: STUDYID, type: str, derivation: DM.STUDYID}\n  - {name: USUBJID, type: str, derivation: DM.USUBJID}\n  - {name: PARAMCD, type: str}\n  - {name: FIRSTDT, type: str, derivation: FIRST_DOSE.EXSTDTC}\n  - {name: AVALC, type: str, derivation: FIRSTDT}\nrows:\n  - {id: first, dataset: DM, derivations: {PARAMCD: {literal: FIRSTDT}}}\n  - {id: count, dataset: DM, derivations: {PARAMCD: {literal: NDOSE}, AVALC: {literal: '2'}}}\n",
+      "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: ADEX\nkeys: [STUDYID, USUBJID, PARAMCD]\ninput: {DM: dm.csv, EX: ex.csv}\nbase: DM\noutput: {path: result.csv, columns: [STUDYID, USUBJID, PARAMCD, AVALC]}\nintermediates:\n  - {id: FIRST_DOSE, dataset: EX, key: [USUBJID], order_by: [EX.EXSTDTC], keep: first}\ncolumns:\n  - {name: STUDYID, type: str, derivation: DM.STUDYID}\n  - {name: USUBJID, type: str, derivation: DM.USUBJID}\n  - {name: PARAMCD, type: str}\n  - {name: FIRSTDT, type: str, derivation: FIRST_DOSE.EXSTDTC}\n  - {name: AVALC, type: str, derivation: FIRSTDT}\nrows:\n  - {id: first, dataset: DM, derivations: {PARAMCD: \"'FIRSTDT'\"}}\n  - {id: count, dataset: DM, derivations: {PARAMCD: \"'NDOSE'\", AVALC: \"'2'\"}}\n",
       "inputs": {
         "dm.csv": "STUDYID,USUBJID\nST-01,S-001\nST-01,S-002\n",
         "ex.csv": "STUDYID,USUBJID,EXSEQ,EXSTDTC\nST-01,S-001,1,2026-01-05\nST-01,S-001,2,2026-01-20\nST-01,S-002,1,2026-01-06\nST-01,S-002,2,2026-01-21\n"
@@ -1551,8 +1551,8 @@
           "count": 4
         },
         {
-          "spec_path": "columns.FIRSTDT.derivation.source.no_match",
-          "handler": "no_match",
+          "spec_path": "columns.FIRSTDT.derivation.source.absent",
+          "handler": "absent",
           "count": 0
         }
       ],
@@ -1561,7 +1561,7 @@
     },
     "aggregate-column-default-refused": {
       "contract": "https://github.com/elong0527/yamaa/issues/2294#issuecomment-6168847169",
-      "specification": "schema_version: '1.0'\ndomain: ADEX\nkeys: [STUDYID, USUBJID, PARAMCD]\ninput: {DM: dm.csv, EX: ex.csv}\nbase: DM\noutput: {path: result.csv, columns: [STUDYID, USUBJID, PARAMCD, AVAL]}\ncolumns:\n  - {name: STUDYID, type: str, derivation: DM.STUDYID}\n  - {name: USUBJID, type: str, derivation: DM.USUBJID}\n  - {name: PARAMCD, type: str}\n  - {name: AVAL, type: int, derivation: {aggregate: 'COUNT(EX.*)'}}\nrows:\n  - {id: ndose, dataset: DM, derivations: {PARAMCD: {literal: NDOSE}}}\n  - {id: fixed, dataset: DM, derivations: {PARAMCD: {literal: FIXED}, AVAL: {literal: 7}}}\n",
+      "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: ADEX\nkeys: [STUDYID, USUBJID, PARAMCD]\ninput: {DM: dm.csv, EX: {path: ex.csv, key: [STUDYID, USUBJID]}}\nbase: DM\noutput: {path: result.csv, columns: [STUDYID, USUBJID, PARAMCD, AVAL]}\ncolumns:\n  - {name: STUDYID, type: str, derivation: DM.STUDYID}\n  - {name: USUBJID, type: str, derivation: DM.USUBJID}\n  - {name: PARAMCD, type: str}\n  - {name: AVAL, type: int, derivation: {aggregate: 'COUNT(EX.*)'}}\nrows:\n  - {id: ndose, dataset: DM, derivations: {PARAMCD: \"'NDOSE'\"}}\n  - {id: fixed, dataset: DM, derivations: {PARAMCD: \"'FIXED'\", AVAL: 7}}\n",
       "inputs": {
         "dm.csv": "STUDYID,USUBJID\nST-01,S-001\nST-01,S-002\n",
         "ex.csv": "STUDYID,USUBJID,EXSEQ,EXSTDTC\nST-01,S-001,1,2026-01-05\nST-01,S-001,2,2026-01-20\nST-01,S-002,1,2026-01-06\nST-01,S-002,2,2026-01-21\n"
@@ -1587,15 +1587,15 @@
     },
     "wrapped-template-key": {
       "contract": "https://github.com/elong0527/yamaa/issues/2294#issuecomment-6168847169",
-      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID, SECTION]\ninput:\n  SRC: {path: src.csv, types: {K: int}}\n  DONOR: {path: donor.csv, types: {CODE: int}}\noutput: {path: result.csv, columns: [ID, SECTION, LABEL]}\nintermediates:\n  - {id: P, dataset: DONOR, key: {CODE: MATCHK}}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: SECTION, type: str}\n  - {name: RAW, type: int, derivation: SRC.K}\n  - {name: SHIFT, type: int, derivation: {literal: 1}}\n  - {name: MATCHK, type: int, derivation: {compute: {expr: 'RAW + SHIFT'}}}\n  - {name: LABEL, type: str, derivation: {str_template: 'value:{P.V}'}}\nrows:\n  - {id: first, dataset: SRC, derivations: {SECTION: {literal: first}}}\n  - {id: fixed, dataset: SRC, derivations: {SECTION: {literal: fixed}, LABEL: {literal: fixed}}}\n",
+      "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID, SECTION]\ninput:\n  SRC: {path: src.csv, types: {K: int}}\n  DONOR: {path: donor.csv, types: {CODE: int}}\noutput: {path: result.csv, columns: [ID, SECTION, LABEL]}\nintermediates:\n  - {id: P, dataset: DONOR, key: {CODE: MATCHK}}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: SECTION, type: str}\n  - {name: RAW, type: int, derivation: SRC.K}\n  - {name: SHIFT, type: int, derivation: 1}\n  - {name: MATCHK, type: int, derivation: 'RAW + SHIFT'}\n  - {name: LABEL, type: str, derivation: {str_template: 'value:{P.V}'}}\nrows:\n  - {id: first, dataset: SRC, derivations: {SECTION: \"'first'\"}}\n  - {id: fixed, dataset: SRC, derivations: {SECTION: \"'fixed'\", LABEL: \"'fixed'\"}}\n",
       "inputs": {
         "src.csv": "ID,K\na,10\nb,20\n",
         "donor.csv": "CODE,V\n11,alpha\n21,beta\n"
       },
       "handler_counts": [
         {
-          "spec_path": "columns.LABEL.derivation.str_template.template.no_match",
-          "handler": "no_match",
+          "spec_path": "columns.LABEL.derivation.str_template.template.absent",
+          "handler": "absent",
           "count": 0
         }
       ],
@@ -1604,7 +1604,7 @@
     },
     "wrapped-extract-key": {
       "contract": "https://github.com/elong0527/yamaa/issues/2294#issuecomment-6168847169",
-      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID, SECTION]\ninput:\n  SRC: {path: src.csv, types: {K: int}}\n  DONOR: {path: donor.csv, types: {CODE: int}}\noutput: {path: result.csv, columns: [ID, SECTION, LABEL]}\nintermediates:\n  - {id: P, dataset: DONOR, key: {CODE: MATCHK}}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: SECTION, type: str}\n  - {name: RAW, type: int, derivation: SRC.K}\n  - {name: SHIFT, type: int, derivation: {literal: 1}}\n  - {name: MATCHK, type: int, derivation: {compute: {expr: 'RAW + SHIFT'}}}\n  - {name: LABEL, type: str, derivation: {str_extract: {source: P.V, pattern: '^(.+)$', group: 1}}}\nrows:\n  - {id: first, dataset: SRC, derivations: {SECTION: {literal: first}}}\n  - {id: fixed, dataset: SRC, derivations: {SECTION: {literal: fixed}, LABEL: {literal: fixed}}}\n",
+      "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID, SECTION]\ninput:\n  SRC: {path: src.csv, types: {K: int}}\n  DONOR: {path: donor.csv, types: {CODE: int}}\noutput: {path: result.csv, columns: [ID, SECTION, LABEL]}\nintermediates:\n  - {id: P, dataset: DONOR, key: {CODE: MATCHK}}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: SECTION, type: str}\n  - {name: RAW, type: int, derivation: SRC.K}\n  - {name: SHIFT, type: int, derivation: 1}\n  - {name: MATCHK, type: int, derivation: 'RAW + SHIFT'}\n  - {name: LABEL, type: str, derivation: {str_extract: {source: P.V, pattern: '^(.+)$', group: 1}}}\nrows:\n  - {id: first, dataset: SRC, derivations: {SECTION: \"'first'\"}}\n  - {id: fixed, dataset: SRC, derivations: {SECTION: \"'fixed'\", LABEL: \"'fixed'\"}}\n",
       "inputs": {
         "src.csv": "ID,K\na,10\nb,20\n",
         "donor.csv": "CODE,V\n11,alpha\n21,beta\n"
@@ -1616,8 +1616,8 @@
           "count": 0
         },
         {
-          "spec_path": "columns.LABEL.derivation.str_extract.source.no_match",
-          "handler": "no_match",
+          "spec_path": "columns.LABEL.derivation.str_extract.source.absent",
+          "handler": "absent",
           "count": 0
         }
       ],

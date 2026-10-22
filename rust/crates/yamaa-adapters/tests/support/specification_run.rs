@@ -473,15 +473,15 @@ pub(crate) fn replay_source_selection_truth(truth: &str, prefix: &str, cases: us
         });
         let expected: yamaa_core::json::Value = row["expected"].clone();
         // Require the captured row-filter citations without changing any finding.
-        if prefix == "row-filter"
-            && matches!(
-                case,
-                "grouped_source_phase"
-                    | "grouped_unknown_phase"
-                    | "record_unknown_phase"
-                    | "group_and_filter_order"
-            )
-        {
+        let cited = match (prefix, case) {
+            (
+                "row-filter",
+                "grouped_source_phase" | "grouped_unknown_phase" | "group_and_filter_order",
+            ) => Some("rows.grouped.filter"),
+            ("row-filter", "record_unknown_phase") => Some("rows.records0.filter"),
+            _ => None,
+        };
+        if let Some(cited) = cited {
             for diagnostics in ["diagnostics", "nodes"] {
                 let values = if diagnostics == "nodes" {
                     &expected["nodes"][0]["diagnostics"]
@@ -492,10 +492,7 @@ pub(crate) fn replay_source_selection_truth(truth: &str, prefix: &str, cases: us
                 for finding in values.as_array().unwrap() {
                     if finding["condition"] == "phase_boundary" {
                         assert_eq!(finding["rule"], yamaa_adapters::json!("ROW-6"));
-                        assert_eq!(
-                            finding["spec_paths"],
-                            yamaa_adapters::json!(["rows[0].filter"])
-                        );
+                        assert_eq!(finding["spec_paths"], yamaa_adapters::json!([cited]));
                         phase_boundaries += 1;
                     }
                 }

@@ -5,6 +5,15 @@ former per-fixture notes in #2416. Fixtures converted from hex-encoded TSV are
 now plain JSON with the same rows; staging re-encodes the legacy TSV bytes for
 the installed hosts, so staged output is unchanged.
 
+The specifications in the JSON fixtures are written in 1.0: `tools/migrate`
+converted the captured 0.5 text (#3436). Where 1.0 declares a key that 0.5
+inferred, names a row or intermediate by its id, or counts an absence under
+`absent`, the document and its expectations follow the recorded decision. A
+case whose behaviour only 0.5 has keeps its captured text until the engine
+stops reading 0.5 specifications. So do the `originals` of
+`flag_reference.json`, which no test runs, and
+`inheritance_preparation_reference.json`, which pins the 0.5 model.
+
 ## binding_diagnostics
 # Original-document binding findings
 

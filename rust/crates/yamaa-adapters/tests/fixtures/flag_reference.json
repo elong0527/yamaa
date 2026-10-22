@@ -809,7 +809,7 @@
   },
   "witnesses": {
     "regex_valid_with_wrong_source_type": {
-      "specification": "schema_version: \"1.0\"\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: data.csv, types: {AGE: int, EXTRA: int}}\noutput:\n  path: out.csv\n  columns: [ID, AGE, F]\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: AGE, type: int, derivation: SRC.AGE}\n  - name: F\n    type: str\n    derivation:\n      flag: \"str_contains(SRC.EXTRA, 'a')\"\n",
+      "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: data.csv, types: {AGE: int, EXTRA: int}}\noutput:\n  path: out.csv\n  columns: [ID, AGE, F]\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: AGE, type: int, derivation: SRC.AGE}\n  - name: F\n    type: str\n    derivation:\n      flag: \"str_contains(SRC.EXTRA, 'a')\"\n",
       "inputs": {
         "data.csv": "ID,AGE,EXTRA\na,70,1\nb,5,1\nc,,1\n",
         "tab.csv": "K,V\na,1\nb,-1\n"
@@ -840,7 +840,7 @@
       ]
     },
     "regex_invalid_with_wrong_source_type": {
-      "specification": "schema_version: \"1.0\"\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: data.csv, types: {AGE: int, EXTRA: int}}\noutput:\n  path: out.csv\n  columns: [ID, AGE, F]\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: AGE, type: int, derivation: SRC.AGE}\n  - name: F\n    type: str\n    derivation:\n      flag: \"str_contains(SRC.EXTRA, '[')\"\n",
+      "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: data.csv, types: {AGE: int, EXTRA: int}}\noutput:\n  path: out.csv\n  columns: [ID, AGE, F]\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: AGE, type: int, derivation: SRC.AGE}\n  - name: F\n    type: str\n    derivation:\n      flag: \"str_contains(SRC.EXTRA, '[')\"\n",
       "inputs": {
         "data.csv": "ID,AGE,EXTRA\na,70,1\nb,5,1\nc,,1\n",
         "tab.csv": "K,V\na,1\nb,-1\n"
@@ -871,7 +871,7 @@
       ]
     },
     "regex_invalid_with_text_source": {
-      "specification": "schema_version: \"1.0\"\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: data.csv, types: {AGE: int, EXTRA: int}}\noutput:\n  path: out.csv\n  columns: [ID, AGE, F]\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: AGE, type: int, derivation: SRC.AGE}\n  - name: F\n    type: str\n    derivation:\n      flag: \"str_contains(SRC.ID, '[')\"\n",
+      "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: data.csv, types: {AGE: int, EXTRA: int}}\noutput:\n  path: out.csv\n  columns: [ID, AGE, F]\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: AGE, type: int, derivation: SRC.AGE}\n  - name: F\n    type: str\n    derivation:\n      flag: \"str_contains(SRC.ID, '[')\"\n",
       "inputs": {
         "data.csv": "ID,AGE,EXTRA\na,70,1\nb,5,1\nc,,1\n",
         "tab.csv": "K,V\na,1\nb,-1\n"
@@ -902,7 +902,7 @@
       ]
     },
     "three_truths": {
-      "specification": "schema_version: \"1.0\"\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: data.csv, types: {AGE: int, EXTRA: int}}\noutput:\n  path: out.csv\n  columns: [ID, AGE, F]\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: AGE, type: int, derivation: SRC.AGE}\n  - name: F\n    type: str\n    derivation:\n      flag: {condition: \"AGE >= 65\", false_value: N, missing: U}\n",
+      "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: data.csv, types: {AGE: int, EXTRA: int}}\noutput:\n  path: out.csv\n  columns: [ID, AGE, F]\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: AGE, type: int, derivation: SRC.AGE}\n  - name: F\n    type: str\n    derivation:\n      flag: {condition: \"AGE >= 65\", false_value: N, missing: U}\n",
       "inputs": {
         "data.csv": "ID,AGE,EXTRA\na,70,1\nb,5,1\nc,,1\n",
         "tab.csv": "K,V\na,1\nb,-1\n"
@@ -927,7 +927,7 @@
       ]
     },
     "bare_defaults": {
-      "specification": "schema_version: \"1.0\"\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: data.csv, types: {AGE: int, EXTRA: int}}\noutput:\n  path: out.csv\n  columns: [ID, AGE, F]\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: AGE, type: int, derivation: SRC.AGE}\n  - name: F\n    type: str\n    derivation:\n      flag: \"AGE >= 65\"\n",
+      "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: data.csv, types: {AGE: int, EXTRA: int}}\noutput:\n  path: out.csv\n  columns: [ID, AGE, F]\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: AGE, type: int, derivation: SRC.AGE}\n  - name: F\n    type: str\n    derivation:\n      flag: \"AGE >= 65\"\n",
       "inputs": {
         "data.csv": "ID,AGE,EXTRA\na,70,1\nb,5,1\nc,,1\n",
         "tab.csv": "K,V\na,1\nb,-1\n"
@@ -952,7 +952,7 @@
       ]
     },
     "explicit_null_missing": {
-      "specification": "schema_version: \"1.0\"\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: data.csv, types: {AGE: int, EXTRA: int}}\noutput:\n  path: out.csv\n  columns: [ID, AGE, F]\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: AGE, type: int, derivation: SRC.AGE}\n  - name: F\n    type: str\n    derivation:\n      flag: {condition: \"AGE >= 65\", false_value: N, missing: {literal: null}}\n",
+      "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: data.csv, types: {AGE: int, EXTRA: int}}\noutput:\n  path: out.csv\n  columns: [ID, AGE, F]\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: AGE, type: int, derivation: SRC.AGE}\n  - name: F\n    type: str\n    derivation:\n      flag: {condition: \"AGE >= 65\", false_value: N, missing: null}\n",
       "inputs": {
         "data.csv": "ID,AGE,EXTRA\na,70,1\nb,5,1\nc,,1\n",
         "tab.csv": "K,V\na,1\nb,-1\n"
@@ -977,7 +977,7 @@
       ]
     },
     "explicit_null_false_without_missing": {
-      "specification": "schema_version: \"1.0\"\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: data.csv, types: {AGE: int, EXTRA: int}}\noutput:\n  path: out.csv\n  columns: [ID, AGE, F]\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: AGE, type: int, derivation: SRC.AGE}\n  - name: F\n    type: str\n    derivation:\n      flag: {condition: \"AGE >= 65\", false_value: {literal: null}}\n",
+      "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: data.csv, types: {AGE: int, EXTRA: int}}\noutput:\n  path: out.csv\n  columns: [ID, AGE, F]\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: AGE, type: int, derivation: SRC.AGE}\n  - name: F\n    type: str\n    derivation:\n      flag: {condition: \"AGE >= 65\", false_value: null}\n",
       "inputs": {
         "data.csv": "ID,AGE,EXTRA\na,70,1\nb,5,1\nc,,1\n",
         "tab.csv": "K,V\na,1\nb,-1\n"
@@ -1007,7 +1007,7 @@
       ]
     },
     "grammar_and_missing": {
-      "specification": "schema_version: \"1.0\"\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: data.csv, types: {AGE: int, EXTRA: int}}\noutput:\n  path: out.csv\n  columns: [ID, AGE, F]\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: AGE, type: int, derivation: SRC.AGE}\n  - name: F\n    type: str\n    derivation:\n      flag: {condition: \"UNKNOWN >> 65\", false_value: N}\n",
+      "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: data.csv, types: {AGE: int, EXTRA: int}}\noutput:\n  path: out.csv\n  columns: [ID, AGE, F]\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: AGE, type: int, derivation: SRC.AGE}\n  - name: F\n    type: str\n    derivation:\n      flag: {condition: \"UNKNOWN >> 65\", false_value: N}\n",
       "inputs": {
         "data.csv": "ID,AGE,EXTRA\na,70,1\nb,5,1\nc,,1\n",
         "tab.csv": "K,V\na,1\nb,-1\n"
@@ -1049,7 +1049,7 @@
       ]
     },
     "unknown_and_missing": {
-      "specification": "schema_version: \"1.0\"\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: data.csv, types: {AGE: int, EXTRA: int}}\noutput:\n  path: out.csv\n  columns: [ID, AGE, F]\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: AGE, type: int, derivation: SRC.AGE}\n  - name: F\n    type: str\n    derivation:\n      flag: {condition: \"UNKNOWN >= 65\", false_value: N}\n",
+      "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: data.csv, types: {AGE: int, EXTRA: int}}\noutput:\n  path: out.csv\n  columns: [ID, AGE, F]\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: AGE, type: int, derivation: SRC.AGE}\n  - name: F\n    type: str\n    derivation:\n      flag: {condition: \"UNKNOWN >= 65\", false_value: N}\n",
       "inputs": {
         "data.csv": "ID,AGE,EXTRA\na,70,1\nb,5,1\nc,,1\n",
         "tab.csv": "K,V\na,1\nb,-1\n"
@@ -1090,7 +1090,7 @@
       ]
     },
     "malformed_non_scalar_unselected": {
-      "specification": "schema_version: \"1.0\"\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: data.csv, types: {AGE: int, EXTRA: int}}\noutput:\n  path: out.csv\n  columns: [ID, AGE, F]\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: AGE, type: int, derivation: SRC.AGE}\n  - name: F\n    type: str\n    derivation:\n      flag: {condition: \"TRUE\", true_value: Y, false_value: [N], missing: {literal: null}}\n",
+      "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: data.csv, types: {AGE: int, EXTRA: int}}\noutput:\n  path: out.csv\n  columns: [ID, AGE, F]\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: AGE, type: int, derivation: SRC.AGE}\n  - name: F\n    type: str\n    derivation:\n      flag: {condition: \"TRUE\", true_value: Y, false_value: [N], missing: null}\n",
       "inputs": {
         "data.csv": "ID,AGE,EXTRA\na,70,1\nb,5,1\nc,,1\n",
         "tab.csv": "K,V\na,1\nb,-1\n"
@@ -1115,7 +1115,7 @@
       "effects": []
     },
     "grammar_and_non_scalar": {
-      "specification": "schema_version: \"1.0\"\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: data.csv, types: {AGE: int, EXTRA: int}}\noutput:\n  path: out.csv\n  columns: [ID, AGE, F]\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: AGE, type: int, derivation: SRC.AGE}\n  - name: F\n    type: str\n    derivation:\n      flag: {condition: \"AGE >> 65\", false_value: [N], missing: {literal: null}}\n",
+      "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: data.csv, types: {AGE: int, EXTRA: int}}\noutput:\n  path: out.csv\n  columns: [ID, AGE, F]\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: AGE, type: int, derivation: SRC.AGE}\n  - name: F\n    type: str\n    derivation:\n      flag: {condition: \"AGE >> 65\", false_value: [N], missing: null}\n",
       "inputs": {
         "data.csv": "ID,AGE,EXTRA\na,70,1\nb,5,1\nc,,1\n",
         "tab.csv": "K,V\na,1\nb,-1\n"
@@ -1140,7 +1140,7 @@
       "effects": []
     },
     "bare_driver_suggestion": {
-      "specification": "schema_version: \"1.0\"\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: data.csv, types: {AGE: int, EXTRA: int}}\noutput:\n  path: out.csv\n  columns: [ID, AGE, F]\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: AGE, type: int, derivation: SRC.AGE}\n  - name: F\n    type: str\n    derivation:\n      flag: {condition: \"EXTRA = 1\", missing: {literal: null}}\n",
+      "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: data.csv, types: {AGE: int, EXTRA: int}}\noutput:\n  path: out.csv\n  columns: [ID, AGE, F]\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: AGE, type: int, derivation: SRC.AGE}\n  - name: F\n    type: str\n    derivation:\n      flag: \"EXTRA = 1\"\n",
       "inputs": {
         "data.csv": "ID,AGE,EXTRA\na,70,1\nb,5,1\nc,,1\n",
         "tab.csv": "K,V\na,1\nb,-1\n"
@@ -1171,7 +1171,7 @@
       ]
     },
     "named_repeat_read": {
-      "specification": "schema_version: \"1.0\"\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: data.csv, types: {AGE: int, EXTRA: int}}\n  TAB: {path: tab.csv, types: {V: int}}\nbase: SRC\noutput:\n  path: out.csv\n  columns: [ID, AGE, F]\nintermediates:\n  - id: MATCHED\n    dataset: TAB\n    key: {K: ID}\n    no_match: {literal: null}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: AGE, type: int, derivation: SRC.AGE}\n  - name: F\n    type: str\n    derivation:\n      flag: {condition: \"MATCHED.V > 0 AND MATCHED.V < 100\", false_value: N, missing: U}\n",
+      "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: data.csv, types: {AGE: int, EXTRA: int}}\n  TAB: {path: tab.csv, types: {V: int}}\nbase: SRC\noutput:\n  path: out.csv\n  columns: [ID, AGE, F]\nintermediates:\n  - id: MATCHED\n    dataset: TAB\n    key: {K: ID}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: AGE, type: int, derivation: SRC.AGE}\n  - name: F\n    type: str\n    derivation:\n      flag: {condition: \"MATCHED.V > 0 AND MATCHED.V < 100\", false_value: N, missing: U}\n",
       "inputs": {
         "data.csv": "ID,AGE,EXTRA\na,70,1\nb,5,1\nc,,1\n",
         "tab.csv": "K,V\na,1\nb,-1\n"
@@ -1197,7 +1197,7 @@
       ]
     },
     "selected_conversion_handler": {
-      "specification": "schema_version: \"1.0\"\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: data.csv, types: {AGE: int, EXTRA: int}}\noutput:\n  path: out.csv\n  columns: [ID, AGE, F]\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: AGE, type: int, derivation: SRC.AGE}\n  - name: F\n    type: int\n    derivation:\n      unconvertible: 99\n      value:\n        flag: {condition: \"AGE >= 65\", true_value: bad, false_value: 2, missing: 3}\n",
+      "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: data.csv, types: {AGE: int, EXTRA: int}}\noutput:\n  path: out.csv\n  columns: [ID, AGE, F]\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: AGE, type: int, derivation: SRC.AGE}\n  - name: F\n    type: int\n    derivation:\n      unconvertible: 99\n      value:\n        flag: {condition: \"AGE >= 65\", true_value: bad, false_value: 2, missing: 3}\n",
       "inputs": {
         "data.csv": "ID,AGE,EXTRA\na,70,1\nb,5,1\nc,,1\n",
         "tab.csv": "K,V\na,1\nb,-1\n"
@@ -1227,7 +1227,7 @@
       ]
     },
     "row_output_and_raw": {
-      "specification": "schema_version: \"1.0\"\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: data.csv, types: {AGE: int, EXTRA: int}}\noutput:\n  path: out.csv\n  columns: [ID, AGE, F]\ncolumns:\n  - {name: ID, type: str}\n  - {name: AGE, type: int}\n  - {name: F, type: str}\nrows:\n  - id: emit\n    dataset: SRC\n    derivations:\n      ID: SRC.ID\n      AGE: SRC.AGE\n      F: {flag: {condition: \"AGE >= 65 AND SRC.EXTRA > 0\", false_value: N, missing: U}}\n",
+      "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: data.csv, types: {AGE: int, EXTRA: int}}\noutput:\n  path: out.csv\n  columns: [ID, AGE, F]\ncolumns:\n  - {name: ID, type: str}\n  - {name: AGE, type: int}\n  - {name: F, type: str}\nrows:\n  - id: emit\n    dataset: SRC\n    derivations:\n      ID: SRC.ID\n      AGE: SRC.AGE\n      F: {flag: {condition: \"AGE >= 65 AND SRC.EXTRA > 0\", false_value: N, missing: U}}\n",
       "inputs": {
         "data.csv": "ID,AGE,EXTRA\na,70,1\nb,5,1\nc,,1\n",
         "tab.csv": "K,V\na,1\nb,-1\n"
@@ -1236,7 +1236,7 @@
       "findings": [],
       "handlers": [
         {
-          "spec_path": "rows[0].derivations.F.flag.missing",
+          "spec_path": "rows.emit.derivations.F.flag.missing",
           "handler": "missing",
           "count": 1
         }
@@ -1252,7 +1252,7 @@
       ]
     },
     "grouped_nonkey_raw": {
-      "specification": "schema_version: \"1.0\"\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: data.csv, types: {AGE: int, EXTRA: int}}\noutput:\n  path: out.csv\n  columns: [ID, AGE, F]\ncolumns:\n  - {name: ID, type: str}\n  - {name: AGE, type: int}\n  - {name: F, type: str}\nrows:\n  - id: emit\n    dataset: SRC\n    group_by: [SRC.ID]\n    derivations:\n      ID: SRC.ID\n      AGE: {literal: 70}\n      F: {flag: {condition: \"SRC.EXTRA > 0\", false_value: N, missing: U}}\n",
+      "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: data.csv, types: {AGE: int, EXTRA: int}}\noutput:\n  path: out.csv\n  columns: [ID, AGE, F]\ncolumns:\n  - {name: ID, type: str}\n  - {name: AGE, type: int}\n  - {name: F, type: str}\nrows:\n  - id: emit\n    dataset: SRC\n    group_by: [SRC.ID]\n    derivations:\n      ID: SRC.ID\n      AGE: 70\n      F: {flag: {condition: \"SRC.EXTRA > 0\", false_value: N, missing: U}}\n",
       "inputs": {
         "data.csv": "ID,AGE,EXTRA\na,70,1\nb,5,1\nc,,1\n",
         "tab.csv": "K,V\na,1\nb,-1\n"
@@ -1263,7 +1263,7 @@
           "phase": "validation",
           "condition": "ungrouped_driver_field",
           "spec_paths": [
-            "rows[0].derivations.F.flag.condition"
+            "rows.emit.derivations.F.flag.condition"
           ],
           "rule": "ROW-5",
           "context": {
@@ -1284,7 +1284,7 @@
       ]
     },
     "grouped_key_raw": {
-      "specification": "schema_version: \"1.0\"\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: data.csv, types: {AGE: int, EXTRA: int}}\noutput:\n  path: out.csv\n  columns: [ID, AGE, F]\ncolumns:\n  - {name: ID, type: str}\n  - {name: AGE, type: int}\n  - {name: F, type: str}\nrows:\n  - id: emit\n    dataset: SRC\n    group_by: [SRC.ID]\n    derivations:\n      ID: SRC.ID\n      AGE: {literal: 70}\n      F: {flag: {condition: \"SRC.ID = 'a'\", false_value: N, missing: U}}\n",
+      "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: data.csv, types: {AGE: int, EXTRA: int}}\noutput:\n  path: out.csv\n  columns: [ID, AGE, F]\ncolumns:\n  - {name: ID, type: str}\n  - {name: AGE, type: int}\n  - {name: F, type: str}\nrows:\n  - id: emit\n    dataset: SRC\n    group_by: [SRC.ID]\n    derivations:\n      ID: SRC.ID\n      AGE: 70\n      F: {flag: {condition: \"SRC.ID = 'a'\", false_value: N, missing: U}}\n",
       "inputs": {
         "data.csv": "ID,AGE,EXTRA\na,70,1\nb,5,1\nc,,1\n",
         "tab.csv": "K,V\na,1\nb,-1\n"
@@ -1293,7 +1293,7 @@
       "findings": [],
       "handlers": [
         {
-          "spec_path": "rows[0].derivations.F.flag.missing",
+          "spec_path": "rows.emit.derivations.F.flag.missing",
           "handler": "missing",
           "count": 0
         }
@@ -1309,7 +1309,7 @@
       ]
     },
     "nested_case_mixed_declarations": {
-      "specification": "schema_version: \"1.0\"\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: data.csv, types: {AGE: int, EXTRA: int}}\noutput:\n  path: out.csv\n  columns: [ID, AGE, F]\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: AGE, type: int, derivation: SRC.AGE}\n  - name: F\n    type: str\n    derivation:\n      case:\n        - when: \"EXTRA > 0\"\n          then: {flag: {condition: \"AGE >> 65\", false_value: N}}\n        - otherwise: {literal: N}\n",
+      "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: data.csv, types: {AGE: int, EXTRA: int}}\noutput:\n  path: out.csv\n  columns: [ID, AGE, F]\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: AGE, type: int, derivation: SRC.AGE}\n  - name: F\n    type: str\n    derivation:\n      case:\n        - when: \"EXTRA > 0\"\n          then: {flag: {condition: \"AGE >> 65\", false_value: N}}\n        - otherwise: \"'N'\"\n",
       "inputs": {
         "data.csv": "ID,AGE,EXTRA\na,70,1\nb,5,1\nc,,1\n",
         "tab.csv": "K,V\na,1\nb,-1\n"
@@ -1363,7 +1363,7 @@
       ]
     },
     "implicit_raw_ambiguous": {
-      "specification": "schema_version: \"1.0\"\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: data.csv, types: {AGE: int, EXTRA: int}}\noutput:\n  path: out.csv\n  columns: [ID, AGE, F]\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: AGE, type: int, derivation: {literal: 70}}\n  - name: F\n    type: str\n    derivation:\n      flag: \"SRC.AGE >= 65\"\n",
+      "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: data.csv, types: {AGE: int, EXTRA: int}}\noutput:\n  path: out.csv\n  columns: [ID, AGE, F]\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: AGE, type: int, derivation: 70}\n  - name: F\n    type: str\n    derivation:\n      flag: \"SRC.AGE >= 65\"\n",
       "inputs": {
         "data.csv": "ID,AGE,EXTRA\na,70,1\na,5,1\n",
         "tab.csv": "K,V\na,1\nb,-1\n"
@@ -1405,7 +1405,7 @@
       ]
     },
     "grammar_and_missing_input_absent": {
-      "specification": "schema_version: \"1.0\"\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: data.csv, types: {AGE: int, EXTRA: int}}\noutput:\n  path: out.csv\n  columns: [ID, AGE, F]\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: AGE, type: int, derivation: SRC.AGE}\n  - name: F\n    type: str\n    derivation:\n      flag: {condition: \"UNKNOWN >> 65\", false_value: N}\n",
+      "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: data.csv, types: {AGE: int, EXTRA: int}}\noutput:\n  path: out.csv\n  columns: [ID, AGE, F]\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: AGE, type: int, derivation: SRC.AGE}\n  - name: F\n    type: str\n    derivation:\n      flag: {condition: \"UNKNOWN >> 65\", false_value: N}\n",
       "result_type": "ExecutionFailure",
       "findings": [
         {
@@ -1432,7 +1432,7 @@
       ]
     },
     "unknown_and_missing_input_absent": {
-      "specification": "schema_version: \"1.0\"\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: data.csv, types: {AGE: int, EXTRA: int}}\noutput:\n  path: out.csv\n  columns: [ID, AGE, F]\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: AGE, type: int, derivation: SRC.AGE}\n  - name: F\n    type: str\n    derivation:\n      flag: {condition: \"UNKNOWN >= 65\", false_value: N}\n",
+      "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: data.csv, types: {AGE: int, EXTRA: int}}\noutput:\n  path: out.csv\n  columns: [ID, AGE, F]\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: AGE, type: int, derivation: SRC.AGE}\n  - name: F\n    type: str\n    derivation:\n      flag: {condition: \"UNKNOWN >= 65\", false_value: N}\n",
       "result_type": "ExecutionFailure",
       "findings": [
         {
@@ -1459,7 +1459,7 @@
       ]
     },
     "explicit_null_false_without_missing_input_absent": {
-      "specification": "schema_version: \"1.0\"\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: data.csv, types: {AGE: int, EXTRA: int}}\noutput:\n  path: out.csv\n  columns: [ID, AGE, F]\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: AGE, type: int, derivation: SRC.AGE}\n  - name: F\n    type: str\n    derivation:\n      flag: {condition: \"AGE >= 65\", false_value: {literal: null}}\n",
+      "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: data.csv, types: {AGE: int, EXTRA: int}}\noutput:\n  path: out.csv\n  columns: [ID, AGE, F]\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: AGE, type: int, derivation: SRC.AGE}\n  - name: F\n    type: str\n    derivation:\n      flag: {condition: \"AGE >= 65\", false_value: null}\n",
       "result_type": "ExecutionFailure",
       "findings": [
         {
@@ -1486,7 +1486,7 @@
       ]
     },
     "missing_named_field_keys": {
-      "specification": "schema_version: \"1.0\"\ndomain: TEST\nkeys: [ID]\nbase: SRC\ninput:\n  SRC: {path: data.csv, types: {ID: str, K: str}}\n  TAB: {path: tab.csv, types: {K: str, V: int}}\nintermediates:\n  - id: MATCHED\n    dataset: TAB\n    key: {K: KEY}\n    no_match: {literal: null}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: KEY, type: str, derivation: SRC.K}\n  - {name: F, type: str, derivation: {flag: {condition: \"MATCHED.ABSENT > 0\", false_value: N, missing: U}}}\noutput: {path: out.csv, columns: [ID, KEY, F]}\n",
+      "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\nbase: SRC\ninput:\n  SRC: {path: data.csv, types: {ID: str, K: str}}\n  TAB: {path: tab.csv, types: {K: str, V: int}}\nintermediates:\n  - id: MATCHED\n    dataset: TAB\n    key: {K: KEY}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: KEY, type: str, derivation: SRC.K}\n  - {name: F, type: str, derivation: {flag: {condition: \"MATCHED.ABSENT > 0\", false_value: N, missing: U}}}\noutput: {path: out.csv, columns: [ID, KEY, F]}\n",
       "inputs": {
         "data.csv": "ID,K\na,a\nb,b\nc,c\n",
         "tab.csv": "K,V\na,1\nb,-1\n"
