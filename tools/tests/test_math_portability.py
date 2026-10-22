@@ -31,10 +31,11 @@ class PortabilityTests(unittest.TestCase):
     def test_rejects_bit_missing_and_input_differences(self):
         """Reject even zero-sign differences and a single adjacent bit."""
         for value in ("8000000000000000", "0000000000000001", "missing"):
-            report = self.report()
-            report["candidate_results"][0]["result"] = value
-            with self.assertRaises(AssertionError):
-                portability.compare([self.report(), report])
+            with self.subTest(value=value):
+                report = self.report()
+                report["candidate_results"][0]["result"] = value
+                with self.assertRaises(AssertionError):
+                    portability.compare([self.report(), report])
         report = self.report()
         report["candidate_results"][0]["inputs"][0] = "3ff0000000000001"
         with self.assertRaises(AssertionError):
@@ -92,11 +93,12 @@ class MatrixTests(unittest.TestCase):
     def test_missing_or_duplicate_interpreter_is_rejected(self):
         """Require 3.13 and 3.15 on each OS, including when a duplicate preserves the count."""
         for index in (1, 3, 5, 7, 9, 11):
-            incomplete = self.HOSTS[:index] + self.HOSTS[index + 1 :]
-            with self.assertRaisesRegex(AssertionError, "native matrix"):
-                portability.validate_hosts(incomplete)
-            with self.assertRaisesRegex(AssertionError, "native matrix"):
-                portability.validate_hosts(incomplete + (self.HOSTS[0],))
+            with self.subTest(index=index):
+                incomplete = self.HOSTS[:index] + self.HOSTS[index + 1 :]
+                with self.assertRaisesRegex(AssertionError, "native matrix"):
+                    portability.validate_hosts(incomplete)
+                with self.assertRaisesRegex(AssertionError, "native matrix"):
+                    portability.validate_hosts(incomplete + (self.HOSTS[0],))
 
     def test_unapproved_tuple_does_not_replace_required_evidence(self):
         """An excluded architecture cannot fill a missing approved host slot."""

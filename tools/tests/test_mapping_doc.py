@@ -1,5 +1,6 @@
 """Tests for mapping_doc.py: the "Mapping spec" pane of a benchmark dashboard."""
 
+import functools
 import unittest
 from pathlib import Path
 
@@ -449,10 +450,22 @@ if __name__ == "__main__":
     unittest.main()
 
 
+@functools.cache
+def spec_sheets(path):
+    """A specification file and its sheets, read and rendered once per module:
+    the corpus scans below read every benchmark's sheets, and none changes
+    them."""
+    spec = yaml.safe_load(path.read_text(encoding="utf-8"))
+    return spec, mapping_doc.mapping_sheets(spec)
+
+
+@functools.cache
 def method_column(name):
     """The Conversion Definition / Computational Method cell, by variable name."""
-    spec = load_spec(name)
-    headers, rows = mapping_sheet(name)
+    spec, sheets = spec_sheets(BENCHMARKS / name / "spec.yaml")
+    [(headers, rows)] = [
+        (headers, rows) for tab_id, _, headers, rows in sheets if tab_id == "mapping"
+    ]
     index = headers.index(
         "Computational Method" if mapping_doc.is_adam(spec) else "Conversion Definition"
     )
@@ -596,8 +609,7 @@ class DerivationShapeTests(unittest.TestCase):
         raw = []
         for benchmark in sorted(BENCHMARKS.iterdir()):
             for path in generate.benchmark_spec_files(benchmark):
-                spec = yaml.safe_load(path.read_text(encoding="utf-8"))
-                for _, _, _, rows in mapping_doc.mapping_sheets(spec):
+                for _, _, _, rows in spec_sheets(path)[1]:
                     for row in rows:
                         for cell in row:
                             if any("{'" + verb + "'" in str(cell) for verb in verbs):
@@ -1060,16 +1072,17 @@ class BothSurfacesTests(unittest.TestCase):
         # the read (LOOKUP-24), so it is stated.
         required = {"input": {"EX": {"path": "ex.csv", "require_match": True}}}
         for header, absent in (({}, {"literal": None}), (V1, None)):
-            ctx = mapping_doc.SpecContext({**header, **required})
-            rule = mapping_doc.describe_derivation(
-                {"source": {"variable": "EX.EXDOSE", "absent": absent}}, ctx
-            )
-            self.assertEqual(
-                rule,
-                "Copy value from EX.EXDOSE; an absent source "
-                + mapping_doc.ARROW
-                + " blank.",
-            )
+            with self.subTest(header=header):
+                ctx = mapping_doc.SpecContext({**header, **required})
+                rule = mapping_doc.describe_derivation(
+                    {"source": {"variable": "EX.EXDOSE", "absent": absent}}, ctx
+                )
+                self.assertEqual(
+                    rule,
+                    "Copy value from EX.EXDOSE; an absent source "
+                    + mapping_doc.ARROW
+                    + " blank.",
+                )
 
     def test_renamed_operands_read_as_their_0_5_names(self):
         pairs = (
@@ -1254,10 +1267,11 @@ class BothSurfacesTests(unittest.TestCase):
             }
         )
         for derivation in ("PK.SAMPLED", {"flag": "PK.SAMPLED = 1"}):
-            self.assertEqual(
-                mapping_doc.describe_derivation(derivation, legacy),
-                mapping_doc.describe_derivation(derivation, current),
-            )
+            with self.subTest(derivation=derivation):
+                self.assertEqual(
+                    mapping_doc.describe_derivation(derivation, legacy),
+                    mapping_doc.describe_derivation(derivation, current),
+                )
         self.assertIn(
             'no match yields "0"',
             mapping_doc.describe_derivation("PK.SAMPLED", current),
@@ -1362,13 +1376,16 @@ class RevisionHistoryTests(unittest.TestCase):
 
     def test_every_benchmark_shows_the_same_renderer_history(self):
         for name in ("sdtm-ae-coding", "adam-adlb-bds", "sdtm-dm-basic"):
-            sheets = {
-                tab_id: rows
-                for tab_id, _, _, rows in mapping_doc.mapping_sheets(load_spec(name))
-            }
-            self.assertEqual(
-                sheets["revision-history"], mapping_doc.revision_history_rows()
-            )
+            with self.subTest(name=name):
+                sheets = {
+                    tab_id: rows
+                    for tab_id, _, _, rows in mapping_doc.mapping_sheets(
+                        load_spec(name)
+                    )
+                }
+                self.assertEqual(
+                    sheets["revision-history"], mapping_doc.revision_history_rows()
+                )
 
 
 class ExcelProseTests(unittest.TestCase):
@@ -1405,15 +1422,18 @@ class NoDerivationTests(unittest.TestCase):
         # A child layer that restates a column without its derivation, in
         # either language; a 0.5 null leaves the derivation absent too.
         for header in ({"schema_version": "1.0"}, {"yamaa": "1.0", "type": "spec"}):
-            spec = {
-                **header,
-                "parent": "base.yaml",
-                "domain": "ADSL",
-                "output": {"columns": ["USUBJID"]},
-                "columns": [{"name": "USUBJID", "label": "Unique Subject Identifier"}],
-            }
-            _, _, _, rows = mapping_doc.mapping_sheets(spec)[0]
-            self.assertEqual(rows[0][6], mapping_doc.INHERITED_RULE, header)
+            with self.subTest(header=header):
+                spec = {
+                    **header,
+                    "parent": "base.yaml",
+                    "domain": "ADSL",
+                    "output": {"columns": ["USUBJID"]},
+                    "columns": [
+                        {"name": "USUBJID", "label": "Unique Subject Identifier"}
+                    ],
+                }
+                _, _, _, rows = mapping_doc.mapping_sheets(spec)[0]
+                self.assertEqual(rows[0][6], mapping_doc.INHERITED_RULE, header)
         spec["columns"][0]["derivation"] = None
         _, _, _, rows = mapping_doc.mapping_sheets(spec)[0]
         self.assertEqual(rows[0][6], 'Set constant value "None".')

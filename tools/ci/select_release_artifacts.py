@@ -742,7 +742,7 @@ def candidate_introduction(root, identity, repository):
     return "\n".join(lines)
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=ROOT)
     parser.add_argument("--repository", required=True)
@@ -756,7 +756,7 @@ def main():
         help="rehearse a release of the checkout from this native run, without a tag",
     )
     parser.add_argument("--destination", type=Path, required=True)
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     try:
         assets = select_release(
             args.root, args.repository, args.tag, args.destination, args.run_id

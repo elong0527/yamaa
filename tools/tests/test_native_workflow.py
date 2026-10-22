@@ -17,7 +17,7 @@ from tools.ci import manylinux, native, release_assets
 from tools.ci import select_release_artifacts as release
 from tools.commands import rust_tests
 from tools.paths import ROOT
-from tools.validation._repository_yaml import UniqueKeyLoader
+from tools.tests import support
 
 EXPRESSION = re.compile(r"\$\{\{(.*?)\}\}")
 # The commands that stage an engine bundle, to build a source archive from it,
@@ -87,10 +87,7 @@ def expand(template, context):
 
 def native_run_jobs():
     """Map each job a native run lists to its steps and artifact names."""
-    workflow = yaml.load(
-        (ROOT / ".github/workflows/native.yml").read_text(encoding="utf-8"),
-        Loader=UniqueKeyLoader,
-    )
+    workflow = support.workflow("native.yml")
     jobs = {}
     for job_id, job in workflow["jobs"].items():
         matrix = job.get("strategy", {}).get("matrix", {})
@@ -571,18 +568,20 @@ class NativeWorkflowContract(unittest.TestCase):
                 )
                 self.assertIn('--volume "${PWD}/rust:/opt/rust" ', installation)
                 for tool in ("rustc", "cargo"):
-                    self.assertIn(
-                        f"/opt/rust/bin/{tool} --version | "
-                        f'grep -F "{tool} ${{STANDALONE_RUST_VERSION}} "',
-                        installation,
-                    )
+                    with self.subTest(tool=tool):
+                        self.assertIn(
+                            f"/opt/rust/bin/{tool} --version | "
+                            f'grep -F "{tool} ${{STANDALONE_RUST_VERSION}} "',
+                            installation,
+                        )
                 self.assertIn('--volume "${PWD}/rust:/opt/rust:ro"', compilation)
                 self.assertIn('test -z "$(command -v rustup)"', compilation)
                 for tool in ("cargo", "rustc"):
-                    self.assertIn(
-                        f'test "$(command -v {tool})" = /opt/rust/bin/{tool}',
-                        compilation,
-                    )
+                    with self.subTest(tool=tool):
+                        self.assertIn(
+                            f'test "$(command -v {tool})" = /opt/rust/bin/{tool}',
+                            compilation,
+                        )
                 self.assertEqual(compilation.count(commands[host]), 1)
                 self.assertLess(
                     compilation.index("command -v rustc"),

@@ -84,26 +84,24 @@ class ManylinuxBuild(unittest.TestCase):
     def test_the_command_creates_the_output_and_refuses_unknown_machines(self):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "native-dist"
-            argv = ["manylinux", "--out", str(output), "--engine", "podman"]
+            argv = ["--out", str(output), "--engine", "podman"]
             with (
-                patch("sys.argv", argv),
                 patch.object(manylinux.platform, "machine", return_value="x86_64"),
                 patch.object(manylinux.subprocess, "run") as run,
             ):
-                manylinux.main()
+                manylinux.main(argv)
             self.assertTrue(output.is_dir())
             run.assert_called_once_with(
                 manylinux.command("podman", "x86_64", output.resolve(), None),
                 check=True,
             )
             with (
-                patch("sys.argv", argv),
                 patch.object(manylinux.platform, "machine", return_value="riscv64"),
                 patch.object(manylinux.subprocess, "run") as run,
                 contextlib.redirect_stderr(io.StringIO()),
                 self.assertRaises(SystemExit),
             ):
-                manylinux.main()
+                manylinux.main(argv)
             run.assert_not_called()
 
 

@@ -14,9 +14,9 @@ schema holds.
 """
 
 import copy
+import functools
 import json
 import re
-import sys
 import tempfile
 import unittest
 from dataclasses import dataclass
@@ -25,10 +25,9 @@ from unittest import mock
 
 from jsonschema import Draft202012Validator
 
-import yaml
 from tools.packaging import generate_json_schema as generator
 from tools.paths import ROOT
-from tools.validation._repository_yaml import UniqueKeyLoader
+from tools.tests import support
 from tools.validation.repository_schema import SchemaSourceError
 from tools.validation.schema_bundle import Bundle, parse_type, type_text
 
@@ -37,15 +36,31 @@ EXAMPLES = ROOT / "docs/design/interface-1.0/examples"
 ABSENT = object()
 
 
-def load(path):
-    return yaml.load(path.read_text(encoding="utf-8"), Loader=UniqueKeyLoader)
+VOCABULARIES = support.load_yaml(ROOT / "yaml/vocabulary/cdisc.yaml")["vocabularies"]
 
 
-TABLE = load(ROOT / "tools/migrate/renames.yaml")
-VOCABULARIES = load(ROOT / "yaml/vocabulary/cdisc.yaml")["vocabularies"]
-BUNDLE = Bundle(V1)
-OWNERS = BUNDLE.owners()
-FIELDS = {(owner, item.name): item for owner, items in OWNERS.items() for item in items}
+# The rename table and the 1.0 schema bundle are read when a test first needs
+# them, not when the module is imported; no test changes them.
+@functools.cache
+def rename_table():
+    """The converter's rename table."""
+    return support.load_yaml(ROOT / "tools/migrate/renames.yaml")
+
+
+@functools.cache
+def v1_bundle():
+    """The 1.0 schema bundle."""
+    return Bundle(V1)
+
+
+@functools.cache
+def v1_fields():
+    """Each 1.0 field by (owner, name)."""
+    return {
+        (owner, item.name): item
+        for owner, items in v1_bundle().owners().items()
+        for item in items
+    }
 
 
 @dataclass(frozen=True)
@@ -308,7 +323,7 @@ def normalized(text):
 def renamed_fields():
     """0.5 (owner, field) to its 1.0 name, for fields renamed by key."""
     result = {}
-    for entry in TABLE["entries"]:
+    for entry in rename_table()["entries"]:
         convert = entry["convert"]
         if "schema" not in entry or "=" in entry["id"]:
             continue
@@ -321,7 +336,7 @@ def value_renames():
     """(owner, 1.0 field) to {0.5 value: 1.0 value}."""
     result = {}
     renamed = renamed_fields()
-    for entry in TABLE["entries"]:
+    for entry in rename_table()["entries"]:
         if entry["kind"] == "value" and "schema" in entry:
             owner, name = location(entry)
             field = renamed.get((owner, name), name)
@@ -338,7 +353,7 @@ def is_keyword(entry):
 
 
 def entry_kind(entry_id):
-    entry = next(item for item in TABLE["entries"] if item["id"] == entry_id)
+    entry = next(item for item in rename_table()["entries"] if item["id"] == entry_id)
     return entry.get("field_kind")
 
 
@@ -351,13 +366,13 @@ class RenameTableTests(unittest.TestCase):
 
     def descriptor_failures(self, label, owner, name, expected):
         """Compare one 1.0 field with what an entry expects of it."""
-        field = FIELDS.get((owner, name))
+        field = v1_fields().get((owner, name))
         if field is None:
             return [f"{label}: {owner}.{name} is missing"]
         failures = []
         actual = type_text(field.descriptor)
         if normalized(actual) != normalized(expected["type"]):
-            alias = BUNDLE.aliases.get(actual, {})
+            alias = v1_bundle().aliases.get(actual, {})
             # A named type that only gives an inline union its kind.
             same = "type" in alias and normalized(type_text(alias)) == normalized(
                 expected["type"]
@@ -373,11 +388,11 @@ class RenameTableTests(unittest.TestCase):
             failures.append(
                 f"{label}: default {default!r}, expected {expected['default']!r}"
             )
-        kind = BUNDLE.descriptor_kind(field.descriptor, label)
+        kind = v1_bundle().descriptor_kind(field.descriptor, label)
         if expected["kind"] is not None and kind != expected["kind"]:
             failures.append(f"{label}: kind {kind}, expected {expected['kind']}")
         if expected.get("values"):
-            spelled = BUNDLE.values(field.descriptor) or ()
+            spelled = v1_bundle().values(field.descriptor) or ()
             missing = [value for value in expected["values"] if value not in spelled]
             if missing:
                 failures.append(f"{label}: values lack {missing}")
@@ -386,18 +401,20 @@ class RenameTableTests(unittest.TestCase):
     def test_every_entry_is_read_exactly_once(self):
         transformed = {
             entry["id"]
-            for entry in TABLE["entries"]
+            for entry in rename_table()["entries"]
             if entry["kind"] in {"reshape", "new"}
             or (entry["kind"] == "rename" and entry["convert"]["action"] == "transform")
         }
         self.assertEqual(set(EXPECTED), transformed)
-        self.assertEqual(len(TABLE["entries"]), TABLE["summary"]["entries"])
+        self.assertEqual(
+            len(rename_table()["entries"]), rename_table()["summary"]["entries"]
+        )
         for entry_id, (_, justified_by) in RETYPED.items():
             self.assertIn(justified_by, EXPECTED, entry_id)
 
     def test_copied_and_renamed_fields_keep_type_requirement_default_and_kind(self):
         failures = []
-        for entry in TABLE["entries"]:
+        for entry in rename_table()["entries"]:
             if is_value(entry) or is_keyword(entry) or entry["id"] in EXPECTED:
                 continue
             if entry["kind"] not in {"keep", "rename"}:
@@ -415,20 +432,20 @@ class RenameTableTests(unittest.TestCase):
                 "kind": entry["field_kind"],
             }
             failures += self.descriptor_failures(entry["id"], owner, new_name, expected)
-            if new_name != name and (owner, name) in FIELDS:
+            if new_name != name and (owner, name) in v1_fields():
                 failures.append(f"{entry['id']}: the 0.5 spelling {name} remains")
         self.assertEqual(failures, [])
 
     def test_removed_entries_are_absent(self):
         failures = []
-        for entry in TABLE["entries"]:
+        for entry in rename_table()["entries"]:
             if entry["kind"] != "removed":
                 continue
             owner, name = location(entry)
             if is_keyword(entry):
-                if name in BUNDLE.registries.get(owner, {}):
+                if name in v1_bundle().registries.get(owner, {}):
                     failures.append(f"{entry['id']}: keyword {name} remains")
-            elif (owner, name) in FIELDS:
+            elif (owner, name) in v1_fields():
                 failures.append(f"{entry['id']}: field {owner}.{name} remains")
         # The classes that held only removed spellings are gone too.
         for name in (
@@ -438,33 +455,33 @@ class RenameTableTests(unittest.TestCase):
             "function_date_literal_class",
             "function_datetime_literal_class",
         ):
-            if name in BUNDLE.classes:
+            if name in v1_bundle().classes:
                 failures.append(f"class {name} remains")
         self.assertEqual(failures, [])
 
     def test_kept_registry_keywords_remain(self):
         failures = []
-        for entry in TABLE["entries"]:
+        for entry in rename_table()["entries"]:
             if is_keyword(entry) and entry["kind"] == "keep":
                 registry, keyword = location(entry)
-                if keyword not in BUNDLE.registries.get(registry, {}):
+                if keyword not in v1_bundle().registries.get(registry, {}):
                     failures.append(f"{entry['id']}: keyword {keyword} is missing")
         self.assertEqual(failures, [])
 
     def test_enumerated_values_take_their_1_0_spelling(self):
         failures = []
-        for entry in TABLE["entries"]:
+        for entry in rename_table()["entries"]:
             if not is_value(entry) or "schema" not in entry:
                 continue
             owner, name = location(entry)
             field_entry = entry["id"].split("=", 1)[0]
             if field_entry in REMOVED_FIELD_VALUES:
-                self.assertNotIn((owner, name), FIELDS)
+                self.assertNotIn((owner, name), v1_fields())
                 continue
             field = entry["convert"].get("field") or self.renamed.get(
                 (owner, name), name
             )
-            spelled = BUNDLE.values(FIELDS[(owner, field)].descriptor) or ()
+            spelled = v1_bundle().values(v1_fields()[(owner, field)].descriptor) or ()
             value = entry["proposed"] if entry["kind"] == "value" else entry["today"]
             if value not in spelled:
                 failures.append(f"{entry['id']}: {owner}.{field} lacks {value!r}")
@@ -501,7 +518,7 @@ class RenameTableTests(unittest.TestCase):
             return self.descriptor_failures(entry_id, check.owner, check.name, expected)
         if isinstance(check, Like):
             source = next(
-                item for item in TABLE["entries"] if item["id"] == check.entry
+                item for item in rename_table()["entries"] if item["id"] == check.entry
             )
             expected = {
                 "type": source["type"],
@@ -512,21 +529,22 @@ class RenameTableTests(unittest.TestCase):
             failures = self.descriptor_failures(
                 entry_id, check.owner, check.name, expected
             )
-            other = FIELDS.get(location(source))
-            mine = FIELDS.get((check.owner, check.name))
+            other = v1_fields().get(location(source))
+            mine = v1_fields().get((check.owner, check.name))
             if (
                 other
                 and mine
-                and BUNDLE.values(other.descriptor) != BUNDLE.values(mine.descriptor)
+                and v1_bundle().values(other.descriptor)
+                != v1_bundle().values(mine.descriptor)
             ):
                 failures.append(f"{entry_id}: {check.owner}.{check.name} values differ")
             return failures
         if isinstance(check, Absent):
-            if (check.owner, check.name) in FIELDS:
+            if (check.owner, check.name) in v1_fields():
                 return [f"{entry_id}: {check.owner}.{check.name} remains"]
             return []
         if isinstance(check, Keyword):
-            payload = BUNDLE.registries.get(check.registry, {}).get(check.keyword)
+            payload = v1_bundle().registries.get(check.registry, {}).get(check.keyword)
             if payload is None:
                 return [f"{entry_id}: keyword {check.keyword} is missing"]
             shape = "[]" if isinstance(payload, list) else type_text(payload)
@@ -535,15 +553,15 @@ class RenameTableTests(unittest.TestCase):
             return []
         if isinstance(check, NoClass):
             return [f"{entry_id}: class {check.name} remains"] * (
-                check.name in BUNDLE.classes
+                check.name in v1_bundle().classes
             )
         if isinstance(check, Alias):
-            alias = BUNDLE.aliases.get(check.name, {})
+            alias = v1_bundle().aliases.get(check.name, {})
             if alias.get("type") != check.type:
                 return [f"{entry_id}: {check.name} is {alias.get('type')!r}"]
             return []
-        field = FIELDS.get((check.owner, check.name))
-        spelled = BUNDLE.values(field.descriptor) if field else ()
+        field = v1_fields().get((check.owner, check.name))
+        spelled = v1_bundle().values(field.descriptor) if field else ()
         missing = [value for value in check.values if value not in (spelled or ())]
         return [f"{entry_id}: values lack {missing}"] if missing else []
 
@@ -551,7 +569,7 @@ class RenameTableTests(unittest.TestCase):
         """(owner, field) pairs and values the table accounts for."""
         fields = set()
         values = {}
-        for entry in TABLE["entries"]:
+        for entry in rename_table()["entries"]:
             if entry["id"] in EXPECTED or "schema" not in entry or is_keyword(entry):
                 continue
             owner, name = location(entry)
@@ -577,7 +595,7 @@ class RenameTableTests(unittest.TestCase):
                     source = location(
                         next(
                             item
-                            for item in TABLE["entries"]
+                            for item in rename_table()["entries"]
                             if item["id"] == check.entry
                         )
                     )
@@ -590,14 +608,14 @@ class RenameTableTests(unittest.TestCase):
         fields, values = self.accounted()
         keywords = {
             location(entry)
-            for entry in TABLE["entries"]
+            for entry in rename_table()["entries"]
             if is_keyword(entry) and entry["kind"] in {"keep", "reshape"}
         }
         failures = []
         for file_type, (entry, root) in generator.FILE_TYPES.items():
             bundle = Bundle(V1, entry)
             for owner in bundle.reachable(root):
-                for item in OWNERS[owner]:
+                for item in v1_bundle().owners()[owner]:
                     if (owner, item.name) not in fields and (
                         item.origin,
                         item.name,
@@ -606,12 +624,12 @@ class RenameTableTests(unittest.TestCase):
                     listed = values.get((owner, item.name), set()) | values.get(
                         (item.origin, item.name), set()
                     )
-                    for value in BUNDLE.values(item.descriptor) or ():
+                    for value in v1_bundle().values(item.descriptor) or ():
                         if value not in listed:
                             failures.append(
                                 f"{file_type}: {owner}.{item.name} value {value!r} is unlisted"
                             )
-        for registry, entries in BUNDLE.registries.items():
+        for registry, entries in v1_bundle().registries.items():
             for keyword in entries:
                 if (registry, keyword) not in keywords:
                     failures.append(f"keyword {registry}.{keyword} is unlisted")
@@ -621,7 +639,7 @@ class RenameTableTests(unittest.TestCase):
 def example_files():
     """Each converted example file, its file type, and whether it is complete."""
     paths = sorted(EXAMPLES.rglob("*.yaml"))
-    documents = {path: load(path) for path in paths}
+    documents = {path: support.load_yaml(path) for path in paths}
     parents = {
         (path.parent / document["parent"]).resolve()
         for path, document in documents.items()
@@ -669,9 +687,8 @@ class JsonSchemaTests(unittest.TestCase):
             ):
 
                 def run(*arguments):
-                    with mock.patch.object(sys, "argv", ["generate", *arguments]):
-                        with mock.patch("builtins.print"):
-                            return generator.main()
+                    with mock.patch("builtins.print"):
+                        return generator.main(list(arguments))
 
                 self.assertEqual(run(), 1)
                 self.assertEqual(run("--write"), 0)
@@ -724,7 +741,9 @@ class JsonSchemaTests(unittest.TestCase):
     def test_a_layer_defers_requiredness_only_inside_keyed_members(self):
         layer = validator("spec")
         complete = validator("spec", "root_class")
-        organization = load(EXAMPLES / "schema-inheritance/spec_organization.yaml")
+        organization = support.load_yaml(
+            EXAMPLES / "schema-inheritance/spec_organization.yaml"
+        )
         self.assertEqual(messages(layer, organization), [])
         self.assertIn(
             ": 'domain' is a required property", messages(complete, organization)
@@ -746,7 +765,7 @@ class JsonSchemaTests(unittest.TestCase):
                 )
 
     def test_0_5_spellings_are_refused(self):
-        spec = load(EXAMPLES / "adam-adtte-pfs/spec.yaml")
+        spec = support.load_yaml(EXAMPLES / "adam-adtte-pfs/spec.yaml")
         layer = validator("spec")
         aval = next(
             index
@@ -769,7 +788,7 @@ class JsonSchemaTests(unittest.TestCase):
             document = copy.deepcopy(spec)
             mutate(document)
             self.assertNotEqual(messages(layer, document), [])
-        project = load(EXAMPLES / "sdtm-dm-metadata/project.yaml")
+        project = support.load_yaml(EXAMPLES / "sdtm-dm-metadata/project.yaml")
         for mutate in (
             lambda d: d["sdtm"].update(datasets="json"),
             lambda d: d["sdtm"].update(
@@ -931,25 +950,31 @@ RESERVED_VALUES = {("where_comparison_class", "comparator"): ("LT", "LE", "GT", 
 class ReservedSpellingTests(unittest.TestCase):
     def setUp(self):
         self.documents = {
-            "spec": load(EXAMPLES / "sdtm-dm-metadata/spec.yaml"),
-            "project": load(EXAMPLES / "sdtm-dm-metadata/project.yaml"),
+            "spec": support.load_yaml(EXAMPLES / "sdtm-dm-metadata/spec.yaml"),
+            "project": support.load_yaml(EXAMPLES / "sdtm-dm-metadata/project.yaml"),
         }
 
     def test_every_reserved_spelling_has_a_check(self):
-        listed = {(item["spelling"], item["where"]) for item in TABLE["reserved"]}
+        listed = {
+            (item["spelling"], item["where"]) for item in rename_table()["reserved"]
+        }
         self.assertEqual(set(RESERVED), listed)
-        self.assertEqual(len(TABLE["reserved"]), TABLE["summary"]["reserved"])
+        self.assertEqual(
+            len(rename_table()["reserved"]), rename_table()["summary"]["reserved"]
+        )
 
     def test_no_reserved_spelling_is_admitted(self):
         for (spelling, where), (file_type, fields, write) in RESERVED.items():
             with self.subTest(spelling=spelling, where=where):
                 for owner, name in fields:
                     if (owner, name) in RESERVED_VALUES:
-                        spelled = BUNDLE.values(FIELDS[(owner, name)].descriptor)
+                        spelled = v1_bundle().values(
+                            v1_fields()[(owner, name)].descriptor
+                        )
                         for value in RESERVED_VALUES[(owner, name)]:
                             self.assertNotIn(value, spelled)
                     else:
-                        self.assertNotIn((owner, name), FIELDS)
+                        self.assertNotIn((owner, name), v1_fields())
                 document = copy.deepcopy(self.documents[file_type])
                 write(document)
                 self.assertNotEqual(messages(validator(file_type), document), [])
@@ -961,12 +986,13 @@ class ReservedSpellingTests(unittest.TestCase):
         self.assertEqual(messages(validator("project"), self.documents["project"]), [])
         # NE and NOTIN are admitted in 1.0 (D66), beside the plain list.
         for comparator, values in (("NE", ["DM"]), ("NOTIN", ["DM", "AE"])):
-            document = copy.deepcopy(self.documents["spec"])
-            value_level(document)["where"]["DOMAIN"] = {
-                "comparator": comparator,
-                "values": values,
-            }
-            self.assertEqual(messages(validator("spec"), document), [])
+            with self.subTest(comparator=comparator):
+                document = copy.deepcopy(self.documents["spec"])
+                value_level(document)["where"]["DOMAIN"] = {
+                    "comparator": comparator,
+                    "values": values,
+                }
+                self.assertEqual(messages(validator("spec"), document), [])
 
 
 class SchemaNotationTests(unittest.TestCase):

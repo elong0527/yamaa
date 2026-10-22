@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADVS
 keys: [STUDYID, USUBJID, PARAMCD, AVISIT]
 input:
@@ -55,5 +57,3 @@ columns:
         source: ADVS_RAW.ADY
         breaks: [0, 2, 22, 43]
         labels: [SCREENING, BASELINE, WEEK 2, WEEK 4, POST-TREATMENT]
-        right: false
-        missing: {literal: null}

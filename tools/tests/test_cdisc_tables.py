@@ -9,8 +9,8 @@ from unittest import mock
 import yaml
 from tools.commands import repository
 from tools.paths import ROOT
+from tools.tests import support
 from tools.validation import check_cdisc_tables as OWNER
-from tools.validation._repository_yaml import UniqueKeyLoader
 
 CARDS = Path("rules/profiles/submission.md")
 JSON_CARDS = Path("rules/profiles/dataset-json.md")
@@ -29,8 +29,7 @@ class CdiscTablesTests(unittest.TestCase):
         self.temporary.cleanup()
 
     def vocabulary(self):
-        path = self.root / OWNER.VOCABULARY
-        return yaml.load(path.read_text(encoding="utf-8"), Loader=UniqueKeyLoader)
+        return support.load_yaml(self.root / OWNER.VOCABULARY)
 
     def write(self, document):
         (self.root / OWNER.VOCABULARY).write_text(

@@ -31,7 +31,7 @@ class RuleCheckTests(unittest.TestCase):
 
     def assert_error(self, expected):
         errors = self.errors()
-        self.assertTrue(any(expected in error for error in errors), errors)
+        self.assertIn(expected, "\n".join(errors))
 
     def test_valid_repository_passes(self):
         self.assertEqual(self.errors(), [])
@@ -78,7 +78,8 @@ class RuleCheckTests(unittest.TestCase):
             "rules/README.md:16: expected | [Title](file.md) | PREFIX | Covers |",
             "rules/values/text.md: absent from the Rule files table in rules/README.md",
         ):
-            self.assertIn(expected, errors)
+            with self.subTest(expected=expected):
+                self.assertIn(expected, errors)
 
     def test_prefixes_are_capitals_and_unique(self):
         self.write(
@@ -176,7 +177,8 @@ class RuleCheckTests(unittest.TestCase):
             "rules/inheritance.md:20: LAYER-02: the heading must read '### LAYER-02. Title'",
             "rules/inheritance.md:20: LAYER-02: the title must not end with a period",
         ):
-            self.assertIn(expected, errors)
+            with self.subTest(expected=expected):
+                self.assertIn(expected, errors)
         self.replace(
             "rules/inheritance.md",
             "### LAYER-1. Layers compose depth first",
@@ -424,7 +426,7 @@ class RuleCheckTests(unittest.TestCase):
                 if expected is None:
                     self.assertEqual(errors, [])
                 else:
-                    self.assertTrue(any(expected in error for error in errors), errors)
+                    self.assertIn(expected, "\n".join(errors))
 
     # -- links ----------------------------------------------------------------
 
@@ -441,7 +443,8 @@ class RuleCheckTests(unittest.TestCase):
             "rules/inheritance.md:18: rules/values/types.md has no anchor #nowhere",
             "rules/inheritance.md:18: rules/inheritance.md has no anchor #absent",
         ):
-            self.assertIn(expected, errors)
+            with self.subTest(expected=expected):
+                self.assertIn(expected, errors)
 
     def test_links_into_rules_from_other_markdown(self):
         self.write(
@@ -512,7 +515,7 @@ class RuleCheckTests(unittest.TestCase):
                 if expected is None:
                     self.assertEqual(errors, [])
                 else:
-                    self.assertTrue(any(expected in error for error in errors), errors)
+                    self.assertIn(expected, "\n".join(errors))
                 self.replace(
                     schema, f"description: {value}", "description: See TYPE-1."
                 )

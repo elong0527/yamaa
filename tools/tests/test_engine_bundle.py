@@ -160,8 +160,8 @@ class SourceTests(unittest.TestCase):
         for relative, path in staged:
             self.assertTrue(path.is_relative_to(ROOT / "benchmarks"), relative)
             self.assertNotIn(path.name, ("README.md", "benchmark.yaml"))
-        self.assertTrue(
-            any(relative.endswith("/expected/error.yaml") for relative, _ in staged)
+        self.assertIn(
+            "/expected/error.yaml\n", "".join(f"{relative}\n" for relative, _ in staged)
         )
         for host in ("python", "r"):
             with self.subTest(host=host):
@@ -469,11 +469,12 @@ class StagingTests(unittest.TestCase):
             # library that they link.
             inventory = "COMPONENTS.tsv"
             for name in ("README.md", *pyproject["project"]["license-files"]):
-                if name != inventory:
-                    self.assertEqual(
-                        (destination / name).read_bytes(),
-                        (ROOT / "python" / name).read_bytes(),
-                    )
+                with self.subTest(name=name):
+                    if name != inventory:
+                        self.assertEqual(
+                            (destination / name).read_bytes(),
+                            (ROOT / "python" / name).read_bytes(),
+                        )
             wheels = (ROOT / "python" / inventory).read_bytes().decode("utf-8")
             self.assertIn("\nrust-std\t", wheels)
             self.assertEqual(

@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 # Intentionally invalid: a parent must be a local file, not a URL.
 parent: https://example.test/organization.yaml
 

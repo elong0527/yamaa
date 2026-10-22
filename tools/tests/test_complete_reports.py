@@ -94,8 +94,8 @@ class CompletePublicTruth(unittest.TestCase):
         self.assertTrue(
             all(row["truth"]["kind"] == cohort.TRUTH_KIND for row in result["coverage"])
         )
-        self.assertFalse(
-            any(batch["level"] == "reference_run" for batch in result["batches"])
+        self.assertNotIn(
+            "reference_run", [batch["level"] for batch in result["batches"]]
         )
         for row in result["coverage"]:
             self.assertEqual(
@@ -231,8 +231,8 @@ class CompletePublicTruth(unittest.TestCase):
             cohort.reports.parse_report(json.dumps(changed)),
         )
         self.assertFalse(verdict.passed)
-        self.assertTrue(
-            any(f.kind == "report.diagnostics.count" for f in verdict.findings)
+        self.assertIn(
+            "report.diagnostics.count", [finding.kind for finding in verdict.findings]
         )
 
     def test_present_null_geometry_is_rejected_while_omitted_geometry_reads(self):
@@ -290,7 +290,8 @@ class CompletePublicTruth(unittest.TestCase):
     def test_exact_scalar_bits_and_missing_empty_are_preserved(self):
         observe = cohort.reports.observe_scalar
         for value in (-(2**63), 2**63 - 1, 2**53 + 1):
-            self.assertEqual(observe(value).value, str(value))
+            with self.subTest(value=value):
+                self.assertEqual(observe(value).value, str(value))
         self.assertEqual(observe(0.1).value, "3fb999999999999a")
         self.assertNotEqual(observe(0.0), observe(-0.0))
         self.assertNotEqual(observe(None), observe(""))
@@ -340,12 +341,17 @@ class CompletePublicTruth(unittest.TestCase):
             byte_length=228,
         )
         for value in ("02", 1):
-            content = io.BytesIO()
-            pq.write_table(pa.table({"ID": [value]}), content)
-            findings = cohort.reports._artifact_findings(artifact, content.getvalue())
-            self.assertTrue(findings)
-            if isinstance(value, int):
-                self.assertIn("artifact.types", [finding.kind for finding in findings])
+            with self.subTest(value=value):
+                content = io.BytesIO()
+                pq.write_table(pa.table({"ID": [value]}), content)
+                findings = cohort.reports._artifact_findings(
+                    artifact, content.getvalue()
+                )
+                self.assertTrue(findings)
+                if isinstance(value, int):
+                    self.assertIn(
+                        "artifact.types", [finding.kind for finding in findings]
+                    )
 
     def test_held_parquet_truth_reader_finishes_before_process_shutdown(self):
         program = """
@@ -540,10 +546,11 @@ class CommandLineCohort(unittest.TestCase):
         output = self.fixture.output
         self.assertEqual(cohort.read(output / "cli/coverage.json"), result)
         for name in ("observed/run.json", "inventory.json"):
-            self.assertEqual(
-                (output / "cli" / Path(name).name).read_bytes(),
-                (self.cli / name).read_bytes(),
-            )
+            with self.subTest(name=name):
+                self.assertEqual(
+                    (output / "cli" / Path(name).name).read_bytes(),
+                    (self.cli / name).read_bytes(),
+                )
         [python, r] = self.rows("schema-verification-log")
         self.assertEqual((python["compared_with"], r["compared_with"]), ("python", "r"))
         self.assertEqual(

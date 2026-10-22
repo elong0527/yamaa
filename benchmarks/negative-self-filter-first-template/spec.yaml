@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: SDTM
 domain: SV
 keys: [USUBJID, VISITNUM]
 input:
@@ -14,7 +16,6 @@ intermediates:
   - id: RECORDED
     dataset: SELF
     key: [USUBJID, VISITNUM]
-    no_match: null
 
 columns:
   - {name: USUBJID, type: str, label: Unique Subject Identifier}
@@ -33,7 +34,7 @@ rows:
       USUBJID: PLAN.USUBJID
       VISITNUM: PLAN.VISITNUM
       VISIT: PLAN.VISIT
-      SVOCCUR: {literal: "N"}
+      SVOCCUR: "'N'"
 
   # Each visit that took place.
   - id: attended
@@ -42,4 +43,4 @@ rows:
       USUBJID: VISITS.USUBJID
       VISITNUM: VISITS.VISITNUM
       VISIT: VISITS.VISIT
-      SVOCCUR: {literal: "Y"}
+      SVOCCUR: "'Y'"
