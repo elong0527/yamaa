@@ -1,0 +1,8 @@
+phase: validation
+condition: invalid_operation_count
+spec_paths:
+  - columns.RACE.derivation
+rule: SCHEMA-7
+context:
+  registry: expressions
+  count: 2

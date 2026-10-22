@@ -1,0 +1,39 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADEXSUM
+keys: [STUDYID, USUBJID]
+input:
+  EX: {path: input/ex_first.csv, types: {TRTSDT: date}}
+  # The subject-level dataset, typed by the specification that produces it:
+  # spec_adsl.yaml, which itself copies from this summary.
+  ADSL:
+    path: adsl.csv
+    schema: spec_adsl.yaml
+    key: [STUDYID, USUBJID]
+base: EX
+
+output:
+  path: adexsum.csv
+  columns: [STUDYID, USUBJID, TRTSDT, AGE]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: EX.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: EX.USUBJID
+
+  - name: TRTSDT
+    type: date
+    label: Date of First Exposure to Treatment
+    derivation: EX.TRTSDT
+
+  # The age as the subject-level dataset states it.
+  - copy:
+      dataset: ADSL
+      columns: [AGE]

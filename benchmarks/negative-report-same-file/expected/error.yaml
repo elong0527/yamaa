@@ -1,0 +1,8 @@
+phase: validation
+condition: artifact_path_collision
+spec_paths:
+  - output.path
+  - output.report
+rule: OUTPUT-9
+context:
+  path: adsl.csv

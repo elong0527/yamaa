@@ -2770,6 +2770,48 @@ impl Checks<'_> {
                     .into_iter()
                     .map(BindFinding::Predicate),
             );
+            // LOOKUP-17: a uniqueness check cannot depend on the record
+            // reading the lookup. Direct reads of another input's current
+            // record are already decided by the declarations (#3606).
+            let foreign = |name: &str| {
+                name.split_once('.').is_some_and(|(owner, _)| {
+                    owner != relation && spec.inputs.iter().any(|input| input.name.name == owner)
+                })
+            };
+            let correlated_filter = item.filter.is_some_and(|filter| {
+                matches!(&spec.expr(filter).kind, ExprKind::Formula(ast::Formula {
+                    compiled: Ok(plan), ..
+                }) if plan.identifiers().any(foreign))
+            });
+            let correlated_derivation = item.bindings.iter().any(|binding| {
+                reads::names(
+                    spec,
+                    binding.derivation.expr,
+                    reads::Scan {
+                        relation: true,
+                        windows: true,
+                    },
+                    self.prepared.project_calls.is_some(),
+                )
+                .unwrap_or_default()
+                .iter()
+                .any(|name| foreign(name))
+            });
+            for check in &item.checks {
+                for (correlated, code) in [
+                    (correlated_filter, C::IntermediateUniqueCorrelatedFilter),
+                    (
+                        correlated_derivation,
+                        C::IntermediateUniqueCorrelatedDerivation,
+                    ),
+                ] {
+                    if correlated {
+                        let mut finding = LookupFinding::new(&render(spec, check.meta), code);
+                        finding.text("intermediate", identifier);
+                        findings.push(BindFinding::Lookup(finding));
+                    }
+                }
+            }
             // A range's value is a value of the reading row: an output
             // column, or on the 0.5 surface a field of the primary input's
             // record, or a field of an earlier intermediate or of an input.
@@ -2843,6 +2885,44 @@ impl Checks<'_> {
                         )));
                     }
                 }
+            }
+        }
+        // ROW-2: a driver must expose a single column type for every
+        // derived field it keeps. UNKNOWN still needs captured input types;
+        // an authored union or missing-only result already has no type.
+        for template in &spec.rows.templates {
+            let Some(donor) = donors.iter().find(|donor| {
+                template
+                    .driver
+                    .as_ref()
+                    .is_some_and(|driver| driver.name == donor.item.id.name)
+            }) else {
+                continue;
+            };
+            let unknown = donor
+                .item
+                .bindings
+                .iter()
+                .filter_map(|binding| {
+                    let name = binding.name.name.as_str();
+                    let kept = donor
+                        .item
+                        .columns
+                        .as_ref()
+                        .is_none_or(|columns| columns.iter().any(|column| column.name == name));
+                    let kind = donor.fields[name];
+                    (kept && kind != ResultType::UNKNOWN && kind.column_type().is_none())
+                        .then_some(name)
+                })
+                .collect::<Vec<_>>();
+            if !unknown.is_empty() {
+                let mut finding = LookupFinding::new(
+                    &format!("{}.dataset", spec.cite(template.meta)),
+                    C::IntermediateDriverType,
+                );
+                finding.text("intermediate", &donor.item.id.name);
+                finding.texts("columns", &unknown);
+                findings.push(BindFinding::Lookup(finding));
             }
         }
         Ok((refused, underived))
