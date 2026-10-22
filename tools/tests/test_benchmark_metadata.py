@@ -346,11 +346,10 @@ class BenchmarkMetadata(unittest.TestCase):
         # issues as a failed run does, not a traceback.
         case = ROOT / "benchmarks/negative-format-name-without-dollar"
         with (
-            mock.patch("sys.argv", ["benchmark", str(case)]),
             mock.patch("sys.stderr", new_callable=io.StringIO) as stderr,
             self.assertRaises(SystemExit) as exited,
         ):
-            benchmark.main()
+            benchmark.main([str(case)])
         self.assertEqual(exited.exception.code, 1)
         self.assertTrue(stderr.getvalue().startswith("spec.yaml: "))
         self.assertIn("CT-12", stderr.getvalue())

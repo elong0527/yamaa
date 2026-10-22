@@ -1,11 +1,10 @@
 """The statements report lists the card language a pull request changes."""
 
-import subprocess
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
+from tools.rules import migrate
 from tools.rules.migrate import statement_report
 from tools.rules.model import load, load_ref
 from tools.tests import support
@@ -87,23 +86,17 @@ class StatementTests(unittest.TestCase):
         )
 
     def test_command_line(self):
-        base = [sys.executable, "-m", "tools.rules.migrate", "--root", str(self.root)]
-        result = subprocess.run(
-            [*base, "statements", "--base", "HEAD"],
-            capture_output=True,
-            text=True,
-            check=False,
+        root = ("--root", str(self.root))
+        status, output, errors = support.run_main(
+            migrate.main, *root, "statements", "--base", "HEAD"
         )
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("0 added, 0 changed, 0 removed", result.stdout)
-        result = subprocess.run(
-            [*base, "statements", "--base", "missing-ref"],
-            capture_output=True,
-            text=True,
-            check=False,
+        self.assertEqual(status, 0, errors)
+        self.assertIn("0 added, 0 changed, 0 removed", output)
+        status, _, errors = support.run_main(
+            migrate.main, *root, "statements", "--base", "missing-ref"
         )
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("ERROR: git", result.stderr)
+        self.assertEqual(status, 1)
+        self.assertIn("ERROR: git", errors)
 
 
 if __name__ == "__main__":

@@ -17,7 +17,6 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tools.paths import ROOT
 from tools.tests import support
 
 # Changes to the engine, the hosts, the benchmarks, the repository tools, the

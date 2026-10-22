@@ -1,8 +1,6 @@
 import csv
 import re
 import shutil
-import subprocess
-import sys
 import tempfile
 import unittest
 from html.parser import HTMLParser
@@ -12,6 +10,7 @@ from urllib.parse import unquote
 
 import yaml
 from tools.benchmark_docs import generate
+from tools.tests import support
 
 HERE = Path(__file__).resolve().parent
 
@@ -256,16 +255,8 @@ class DashboardTests(unittest.TestCase):
             output = folder / "output"
             output.mkdir()
             page = output / (BENCHMARK.name + ".html")
-            command = [
-                sys.executable,
-                "-m",
-                "tools.benchmark_docs.generate",
-                BENCHMARK.name,
-                "--check",
-                "--output-dir",
-                str(output),
-            ]
-            self.assertEqual(subprocess.run(command, capture_output=True).returncode, 1)
+            command = [BENCHMARK.name, "--check", "--output-dir", str(output)]
+            self.assertEqual(support.run_main(generate.main, *command)[0], 1)
             self.assertFalse(page.exists())
             complete = sorted(
                 path.name
@@ -276,9 +267,9 @@ class DashboardTests(unittest.TestCase):
             previous = complete[index - 1] if index else None
             following = complete[index + 1] if index + 1 < len(complete) else None
             page.write_bytes(generate.render_benchmark(BENCHMARK, previous, following))
-            self.assertEqual(subprocess.run(command, capture_output=True).returncode, 0)
+            self.assertEqual(support.run_main(generate.main, *command)[0], 0)
             page.write_bytes(b"outdated page")
-            self.assertEqual(subprocess.run(command, capture_output=True).returncode, 1)
+            self.assertEqual(support.run_main(generate.main, *command)[0], 1)
             self.assertEqual(page.read_bytes(), b"outdated page")
 
     def test_markup_and_multiline_csv_values_are_preserved_as_data(self):

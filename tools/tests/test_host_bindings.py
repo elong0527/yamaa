@@ -7,7 +7,6 @@ leaves out the R binding, and `make test-r`, which runs where R is installed,
 lints it instead.
 """
 
-import sys
 import tomllib
 import unittest
 from unittest import mock
@@ -36,9 +35,8 @@ def repository_commands(command):
             repository, "run", lambda *arguments, **_: commands.append(arguments)
         ),
         mock.patch.object(repository.fuzz, "copy_lock"),
-        mock.patch.object(sys, "argv", ["repository", command]),
     ):
-        repository.main()
+        repository.main([command])
     return commands
 
 

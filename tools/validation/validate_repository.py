@@ -55,12 +55,12 @@ def check_yaml_files(root: Path):
     return errors
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--root", type=Path, default=ROOT, help="Repository root directory"
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     errors = check_yaml_files(args.root)
     for error in errors:
         print(error)

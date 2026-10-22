@@ -16,7 +16,6 @@ schema holds.
 import copy
 import json
 import re
-import sys
 import tempfile
 import unittest
 from dataclasses import dataclass
@@ -664,9 +663,8 @@ class JsonSchemaTests(unittest.TestCase):
             ):
 
                 def run(*arguments):
-                    with mock.patch.object(sys, "argv", ["generate", *arguments]):
-                        with mock.patch("builtins.print"):
-                            return generator.main()
+                    with mock.patch("builtins.print"):
+                        return generator.main(list(arguments))
 
                 self.assertEqual(run(), 1)
                 self.assertEqual(run("--write"), 0)

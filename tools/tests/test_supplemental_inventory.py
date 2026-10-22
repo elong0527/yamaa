@@ -66,10 +66,9 @@ class RepositoryCatalog(unittest.TestCase):
             tempfile.TemporaryDirectory() as directory,
             patch.object(installed.subprocess, "run") as run,
             patch.dict(installed.os.environ, {"R_LIBS": directory}),
-            patch(
-                "sys.argv",
+        ):
+            installed.main(
                 [
-                    "installed",
                     "run",
                     "--runtime",
                     "r",
@@ -85,10 +84,8 @@ class RepositoryCatalog(unittest.TestCase):
                     "github-actions:1/attempt-1/native-r-binary/yamaa_1.0.0-4.6.zip",
                     "--evidence",
                     "https://github.com/elong0527/yamaa/actions/runs/1",
-                ],
-            ),
-        ):
-            installed.main()
+                ]
+            )
         command = run.call_args.args[0]
         self.assertEqual(command[command.index("--package-form") + 1], "binary")
 

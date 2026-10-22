@@ -168,7 +168,7 @@ def check(path, root=ROOT):
     return target
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     commands = parser.add_subparsers(dest="command", required=True)
     writing = commands.add_parser("write", help="archive an executable")
@@ -177,7 +177,7 @@ def main():
     writing.add_argument("directory", type=Path)
     checking = commands.add_parser("check", help="check archives")
     checking.add_argument("archives", nargs="+", type=Path)
-    arguments = parser.parse_args()
+    arguments = parser.parse_args(argv)
     try:
         if arguments.command == "write":
             print(

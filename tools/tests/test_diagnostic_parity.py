@@ -5,7 +5,6 @@ parity case or an entry in the unreached list, and every entry is needed
 import contextlib
 import io
 import json
-import sys
 import tempfile
 import textwrap
 import unittest
@@ -217,16 +216,15 @@ class ParityGateTests(unittest.TestCase):
         self.assertEqual(self.errors(), [])
 
     def test_the_command_line_runs_the_gate(self):
-        arguments = ["check_diagnostics", "--root", str(self.root)]
+        arguments = ["--root", str(self.root)]
         output = io.StringIO()
         with (
             mock.patch.object(guard, "violations", return_value=[]),
-            mock.patch.object(sys, "argv", arguments),
             contextlib.redirect_stdout(output),
         ):
-            self.assertEqual(guard.main(), 0)
+            self.assertEqual(guard.main(arguments), 0)
             self.register("newly_registered")
-            self.assertEqual(guard.main(), 1)
+            self.assertEqual(guard.main(arguments), 1)
         lines = output.getvalue().splitlines()
         self.assertTrue(lines[0].startswith("PASS: "), lines)
         self.assertEqual(lines[1:], [NO_CASE.format("newly_registered")])

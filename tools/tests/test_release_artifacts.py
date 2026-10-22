@@ -1453,7 +1453,6 @@ class PublicationBoundary(unittest.TestCase):
 
     def test_the_command_takes_a_tag_or_a_rehearsal_run_id(self):
         command = [
-            "select_release_artifacts",
             "--repository",
             REPOSITORY["full_name"],
             "--destination",
@@ -1462,12 +1461,11 @@ class PublicationBoundary(unittest.TestCase):
         for extra in ([], ["--tag", TAG, "--run-id", "7"], ["--run-id", "latest"]):
             with (
                 self.subTest(extra=extra),
-                patch("sys.argv", command + extra),
                 patch.object(release, "select_release") as select,
                 contextlib.redirect_stderr(io.StringIO()),
                 self.assertRaises(SystemExit) as stop,
             ):
-                release.main()
+                release.main(command + extra)
             self.assertEqual(stop.exception.code, 2)
             select.assert_not_called()
         for extra, tag, run_id in [
@@ -1476,11 +1474,10 @@ class PublicationBoundary(unittest.TestCase):
         ]:
             with (
                 self.subTest(extra=extra),
-                patch("sys.argv", command + extra),
                 patch.object(release, "select_release", return_value=[]) as select,
                 contextlib.redirect_stdout(io.StringIO()),
             ):
-                release.main()
+                release.main(command + extra)
             select.assert_called_once_with(
                 ROOT, REPOSITORY["full_name"], tag, Path("selected"), run_id
             )
