@@ -79,31 +79,21 @@ class Blocks(unittest.TestCase):
         )
 
     def test_a_block_that_declares_yamaa_must_parse_and_name_a_file_type(self):
+        broken = 'yamaa: "1.0"\ntype: spec\ncolumns:\n  - name: A\n   x: 1\n'
+        unparsed = (
+            [
+                f"{PAGE}:8: the block does not parse as YAML: expected "
+                "<block end>, but found '<block mapping start>'"
+            ],
+            0,
+        )
         self.verdicts(
             (
-                (
-                    "does not parse",
-                    page('yamaa: "1.0"\ntype: spec\ncolumns:\n  - name: A\n   x: 1\n'),
-                    (
-                        [
-                            f"{PAGE}:8: the block does not parse as YAML: expected "
-                            "<block end>, but found '<block mapping start>'"
-                        ],
-                        0,
-                    ),
-                ),
+                ("does not parse", page(broken), unparsed),
                 (
                     "an indented root does not parse",
-                    page(
-                        '  yamaa: "1.0"\n  type: spec\n  columns:\n    - name: A\n     x: 1\n'
-                    ),
-                    (
-                        [
-                            f"{PAGE}:8: the block does not parse as YAML: expected "
-                            "<block end>, but found '<block mapping start>'"
-                        ],
-                        0,
-                    ),
+                    page("".join(f"  {line}\n" for line in broken.splitlines())),
+                    unparsed,
                 ),
                 (
                     "no type",
@@ -174,6 +164,14 @@ class Blocks(unittest.TestCase):
                     + "".join(f"    {line}\n" for line in INVALID.splitlines())
                     + "    ```\n",
                     ([f"{PAGE}:6: {UNEXPECTED}"], 1),
+                ),
+                (
+                    "a deeper fence-like line is the block's text",
+                    page(
+                        'yamaa: "1.0"\ntype: spec\ncolumns:\n  - name: AVAL\n'
+                        "    note: |\n      ```\ndomian: ADSL\n"
+                    ),
+                    ([f"{PAGE}:4: {UNEXPECTED}"], 1),
                 ),
                 (
                     "shown as Markdown source",

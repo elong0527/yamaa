@@ -54,7 +54,8 @@ REFUSE_SCHEMA_VERSION = False
 # A Markdown code fence and its info string, whose first word is the language.
 FENCE = re.compile(r"(?P<indent> *)(?P<fence>`{3,}|~{3,})(?P<info>.*)")
 YAML_LANGUAGES = ("yaml", "yml")
-# How a block that does not parse shows that its root declares `yamaa:`.
+# How a block that does not parse shows that its root declares `yamaa:`; YAML
+# admits an indented root mapping.
 HEADER_LINE = re.compile(r"^yamaa *:", re.MULTILINE)
 
 
@@ -92,16 +93,16 @@ def fenced_blocks(text):
         while index < len(lines):
             line = lines[index]
             index += 1
-            closing = FENCE.fullmatch(line)
+            depth, closing = len(line) - len(line.lstrip(" ")), line.strip()
+            # A fence indented more than three spaces past the opening one is
+            # the block's text.
             if (
-                closing is not None
-                and len(closing["indent"]) <= indent + 3
-                and closing["fence"][0] == fence[0]
-                and len(closing["fence"]) >= len(fence)
-                and not closing["info"].strip()
+                depth <= indent + 3
+                and closing.startswith(fence)
+                and closing == fence[0] * len(closing)
             ):
                 break
-            body.append(line[min(indent, len(line) - len(line.lstrip(" "))) :])
+            body.append(line[min(indent, depth) :])
         words = opening["info"].split()
         if words and words[0].lower() in YAML_LANGUAGES:
             yield start, "".join(f"{line}\n" for line in body)
