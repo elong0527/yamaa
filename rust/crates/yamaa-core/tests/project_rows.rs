@@ -127,7 +127,7 @@ mod project {
             };
             for _ in 0..2 {
                 let result = plan
-                    .execute(&table, &[], &mut bindings, None)
+                    .execute(&table, &[], &mut bindings, None, &|| false)
                     .result
                     .unwrap();
                 assert_eq!(result.dataset.row_count(), 2);

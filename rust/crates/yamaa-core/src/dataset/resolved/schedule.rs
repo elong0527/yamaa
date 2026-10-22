@@ -239,18 +239,19 @@ pub(super) fn annotate(plan: &mut ResolvedPlan) {
             if owner.is_some() {
                 template = owner;
             }
-            let checkpoint = first_of_template
-                || after_keys
-                || matches!(
-                    step,
-                    Step::Admit
-                        | Step::VerifyIntermediates { .. }
-                        | Step::KeyGrain
-                        | Step::Driver(_)
-                        | Step::Column(_)
-                        | Step::OutputKeys
-                )
-                || matches!(step, Step::Checks(check) if plan.check(check).scope == CheckScope::Dataset);
+            let checkpoint = region == RegionId::DATASET
+                && (first_of_template
+                    || after_keys
+                    || matches!(
+                        step,
+                        Step::Admit
+                            | Step::VerifyIntermediates { .. }
+                            | Step::KeyGrain
+                            | Step::Driver(_)
+                            | Step::Column(_)
+                            | Step::OutputKeys
+                    )
+                    || matches!(step, Step::Checks(check) if plan.check(check).scope == CheckScope::Dataset));
             after_keys = matches!(step, Step::OutputKeys);
             let mut partition = match step {
                 Step::Admit | Step::VerifyIntermediates { .. } | Step::Order => {

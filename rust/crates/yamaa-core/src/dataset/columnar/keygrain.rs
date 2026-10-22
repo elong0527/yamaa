@@ -25,10 +25,19 @@ pub(super) fn construct<'a, E>(
     let rows = table.row_count();
     crate::limits::Limits::table(rows, plan.keys().len())
         .map_err(|error| Box::new(ExecutionError::Grouping(GroupingError::Limit(error))))?;
+    // The template's first step, its filter or else its first key binding,
+    // is its checkpoint (#2822).
+    let filter = plan.template(template).filter;
+    let bindings: Vec<BindingId> = plan.row_bindings(template).collect();
+    if filter.is_some() {
+        run.poll(Step::Filter(template))?;
+    }
+    if let Some(&first) = bindings.first() {
+        run.poll(Step::Row(first))?;
+    }
     // Finish the entire source filter before any key conversion can fail.
     let mut retained = Vec::new();
     reserved(retained.try_reserve_exact(rows))?;
-    let filter = plan.template(template).filter;
     for row in 0..rows {
         if let Some(filter) = filter {
             let crate::dataset::resolved::Op::Predicate(predicate) = &plan.expr(filter.expr).op
@@ -54,7 +63,6 @@ pub(super) fn construct<'a, E>(
     for row in 0..rows {
         probes.push(NO_TEMPLATE, Identity::Probe(row), &[row]);
     }
-    let bindings: Vec<BindingId> = plan.row_bindings(template).collect();
     let callbacks = bindings
         .iter()
         .any(|&binding| run.step_callbacks(region, Step::Row(binding)));
@@ -86,6 +94,7 @@ pub(super) fn construct<'a, E>(
             Ok(())
         },
     )?;
+    run.poll(Step::KeyGrain)?;
     let keys: Vec<usize> = plan
         .keys()
         .iter()

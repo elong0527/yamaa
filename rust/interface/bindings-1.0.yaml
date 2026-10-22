@@ -22,9 +22,12 @@
 #   public                    the user-facing surface of each host, frozen by
 #                             section 2.11 and compared with the latest
 #                             release tag from 1.0.0
-#   cli                       the command line (D12)
 #   python, r                 native registrations (private), as in format 1
 #   operations, host_only     each operation's counterpart in every host
+#
+# The command line's section, and its output_format vocabulary, moved to
+# bindings.yaml's `cli` with #3060. The `cli` keys left in public, operations
+# and host_only say what each host call is on the command line.
 #
 # Type tokens of the native sections keep their format 1 meanings (see
 # README.md). Value types in `tables` and `records` are the language's column
@@ -113,7 +116,6 @@ values:
     - equality_filter
   report_kind: [run, input, rows, handler, column, check]
   report_outcome: [succeeded, failed, held, violated]
-  output_format: [text, json]
 
 # Frozen table columns, in order. New columns may only be appended (2.11).
 tables:
@@ -453,102 +455,6 @@ public:
       r_s3_methods:
         - "[[.yamaa_project_run"
 
-cli:
-  binary: yamaa
-  crate: rust/crates/yamaa-cli
-  depends_on: the yamaa facade crate only (section 2.10)
-  synopsis:
-    - yamaa [--format text|json] COMMAND [ARGUMENTS]
-    - yamaa --version [--format text|json]
-    - yamaa --help
-  inputs: "only the command line: no configuration file, no environment variable, no global option (2.8)"
-  global_flags:
-    - {name: --format, values: output_format, default: text, position: before or after COMMAND}
-    - {name: --version, effect: print info() and exit 0}
-    - {name: --help, effect: print usage and exit 0}
-  streams:
-    stdout: "the command's output: text, or with --format json exactly one canonical JSON document (RFC 8785) followed by one LF"
-    stderr: "usage and argument errors (exit status 2), with one exception (D142): a panic inside a selftest case fails that case, so the command exits 1, and Rust's default panic hook writes the panic message, which shows where the engine panicked, to stderr"
-  exit_status:
-    0: "the command completed and its status is succeeded; for resolve, schema and --version, the output was printed"
-    1: "the command completed with findings: a status of failed or skipped, remaining lint findings, a failed selftest case, or a refusal that carries issues"
-    2: "the command could not run as asked: invalid usage or arguments, a PATH whose declared type the command does not take, or a failure to write to stdout; a file problem the engine reports as an issue exits 1"
-  interrupt: "Ctrl+C stops the command and publishes nothing (D46); the process ends by the signal, which POSIX shells report as status 130"
-  commands:
-    - name: check
-      synopsis: yamaa check PATH [--spec NAME]
-      args: [{name: PATH, type: path}]
-      flags:
-        - {name: --spec, value: NAME, valid_when: "PATH declares `type: project`", host: Project.spec(name)}
-      operations: [spec_check, project_check]
-      text: the summary line, then one line per issue
-      json_keys: [command, path, spec, status, issues]
-    - name: run
-      synopsis: yamaa run PATH [--spec NAME | --section SECTION]
-      args: [{name: PATH, type: path}]
-      flags:
-        - {name: --spec, value: NAME, valid_when: "PATH declares `type: project`"}
-        - {name: --section, value: SECTION, values: section, valid_when: "PATH declares `type: project`"}
-      operations: [spec_run, run_save, project_run, project_run_save]
-      effect: runs, then saves; a failed run saves only its report (OUTPUT-10, PROJECT-12)
-      text: the summary, one line per issue, then one written path per line
-      json_keys: [command, path, spec, section, status, members, issues, paths]
-    - name: submission
-      synopsis: yamaa submission PATH [--section SECTION] [--created TIME]
-      args: [{name: PATH, type: path, valid_when: "PATH declares `type: project`"}]
-      flags:
-        - {name: --section, value: SECTION, values: section}
-        - {name: --created, value: TIME, meaning: "ISO 8601 creation time; omitted, the time used is printed"}
-      operations: [project_submission, submission_save]
-      effect: composes, then saves
-      text: "the summary, `created: TIME` when --created is omitted, one line per issue, then one written path per line"
-      json_keys: [command, path, section, created, status, issues, paths]
-    - name: resolve
-      synopsis: yamaa resolve PATH [--spec NAME]
-      args: [{name: PATH, type: path}]
-      flags:
-        - {name: --spec, value: NAME, valid_when: "PATH declares `type: project`"}
-      operations: [spec_resolve]
-      text: "the resolved specification as canonical JSON (both formats); on refusal, the issues and exit status 1"
-      json_keys: "the resolved document itself; on refusal [command, path, spec, status, issues]"
-    - name: read-odm
-      synopsis: yamaa read-odm SOURCE OUT [--archive-member NAME] [--max-archive-members N] [--max-expanded-bytes N] [--max-xml-depth N]
-      args: [{name: SOURCE, type: path}, {name: OUT, type: path, meaning: "its extension selects csv or parquet (OUTPUT-5); written atomically"}]
-      flags:
-        - {name: --archive-member, value: NAME}
-        - {name: --max-archive-members, value: N, default: 10000}
-        - {name: --max-expanded-bytes, value: N, default: 268435456}
-        - {name: --max-xml-depth, value: N, default: 64}
-      operations: [read_odm]
-      text: the written path
-      json_keys: [command, path, status, rows, issues, paths]
-    - name: lint
-      synopsis: yamaa lint [--fix] PATH...
-      args: [{name: PATH, type: path, repeat: true}]
-      flags:
-        - {name: --fix, meaning: apply the proved layout fixes in place}
-      operations: [lint]
-      text: "one `file:line:column: finding message` line per finding, then `N lint findings in M of K files`, with `; fixed F files` under --fix"
-      json_keys: "[command, status, findings, paths]; on refusal [command, status, findings, issues, paths]"
-    - name: schema
-      synopsis: yamaa schema TYPE
-      args: [{name: TYPE, values: file_type}]
-      operations: [schema]
-      text: the JSON Schema document (both formats)
-      json_keys: "the JSON Schema document itself; on refusal [command, type, status, issues]"
-    - name: selftest
-      synopsis: yamaa selftest
-      operations: [selftest]
-      text: "the facade's report, as the hosts print it (D119): the summary line, `first failure: <case>: <message>` when a case failed, `not covered: <adapters>` when an adapter is not covered, then the engine, language, host and platform"
-      json_keys: [command, status, info, cases]
-  json:
-    issue_keys: [severity, phase, condition, rule, spec_paths, file, line, column, message, context, source_span, operand_route]
-    issue_context: a JSON object, not text
-    member_keys: [name, status, rows, columns, issue_count]
-    finding_keys: [file, line, column, finding, spec_path, message]
-    case_keys: [case, status, message]
-    info_keys: [version, language_versions, features, host, host_version, platform]
-
 # Native registrations (private). Python: module yamaa._native.
 python:
   module: yamaa._native
@@ -695,7 +601,6 @@ r:
         - {name: run_report, args: {handle: robj}, returns: r_reply}
         - {name: run_save, args: {handle: robj}, returns: r_reply}
         - {name: run_observations, args: {handle: robj, include_measurements: bool}, returns: r_reply}
-        - {name: run_interrupt, args: {handle: robj}, returns: r_reply}
         - {name: project_spec, args: {project: raw, name: raw, version: raw}, returns: r_reply}
         - {name: project_check, args: {project: raw, version: raw}, returns: r_reply}
         - name: project_run
@@ -708,7 +613,6 @@ r:
         - {name: project_run_issues, args: {handle: robj}, returns: r_reply}
         - {name: project_run_report, args: {handle: robj}, returns: r_reply}
         - {name: project_run_save, args: {handle: robj}, returns: r_reply}
-        - {name: project_run_interrupt, args: {handle: robj}, returns: r_reply}
         - name: project_submission
           args: {project: raw, section: robj, created: robj, version: raw}
           returns: r_reply
@@ -762,5 +666,5 @@ operations:
 # the two helpers. yamaa.Table's methods are Python-only (bindings.yaml).
 host_only:
   python: []
-  r: [run_interrupt, project_run_interrupt]
+  r: []
   cli: []

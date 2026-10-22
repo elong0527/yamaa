@@ -400,6 +400,30 @@ qualify_callbacks <- function() {
       stopifnot("an interrupted run writes nothing" = !file.exists(file.path(case, "test.csv")))
     }
   }
+  # Windows cannot send SIGINT to the current process with tools::pskill.
+  if (.Platform$OS.type == "unix") {
+    for (entry_name in names(entries)) {
+      invoked <- 0L
+      resolve_signal <- function(call, parameters) {
+        resolved <- capabilities$resolve(call, parameters)
+        if (resolved[[1L]] != 0L) return(resolved)
+        invoke <- resolved[[2L]]
+        list(0L, function(arguments) {
+          invoked <<- invoked + 1L
+          if (invoked == host_truth[["signal_interrupt_calls"]]) tools::pskill(Sys.getpid(), signal = 2L)
+          invoke(arguments)
+        })
+      }
+      seen <- with_capabilities(capabilities$verify, resolve_signal,
+        tryCatch(entries[[entry_name]](), interrupt = identity))
+      actual <- list(interrupt = inherits(seen, "interrupt"), calls = invoked,
+        published = file.exists(file.path(case, "test.csv")))
+      expected <- list(interrupt = TRUE, calls = as.integer(host_truth[["signal_interrupt_calls"]]), published = FALSE)
+      if (!identical(actual, expected)) stop(paste("SIGINT callback", entry_name, "did not stop without publishing"))
+    }
+  } else {
+    cat("SKIP: in-process SIGINT requires tools::pskill on Unix\n")
+  }
   long_condition <- structure(list(message = paste0(strrep("\u00e9\n", 30000L), "complete failure"), call = NULL),
     class = c("public_contract_error", "error", "condition"))
   invoked <- 0L

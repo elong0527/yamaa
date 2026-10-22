@@ -79,11 +79,11 @@ define:
 ```
 
 `expected/` then holds the Define-XML document and each transport file the
-section's `datasets` requests (`.xpt` for `xpt`, `.json` for `json`) beside
-the published tables, or, for a negative case, `expected/error.yaml` with the
-submission's first issue; its domain build must still succeed. `.xpt` goldens
-are written by `python -m tools.conformance.xpt_goldens` from the
-hand-authored tables there.
+section's `transport` requests (`.xpt` for `xpt`, `.json` for
+`dataset_json`) beside the published tables, or, for a negative case,
+`expected/error.yaml` with the submission's first issue; its domain build must
+still succeed. `.xpt` goldens are written by
+`python -m tools.conformance.xpt_goldens` from the hand-authored tables there.
 
 `sdtm-dm-race-ethnicity` is the worked producer/consumer example. Each producer
 commits its own expected artifact beside the entry's. A `schema` link only types
@@ -247,7 +247,7 @@ no expression or field names, no `output.columns`, and none of the words
 
     - counting neither the last day of period one nor the first day of period
       two, so consecutive periods give zero
-    + `diff` with `bounds: between`
+    + `diff` with `closed: neither`
 
     - A subject who never entered period two has no exposure records there
     + Its period-two right side is empty after filtering, treated as
@@ -487,7 +487,7 @@ numeric grammar once rather than registering `add`, `subtract`, and `divide`.
 
 Prefer widening an existing entry to adding a new one -- but the test is the
 kind of value, not the saving in YAML. Widen when the new behavior returns the
-same kind of value, as `diff`'s `bounds` still returns a count. Add an
+same kind of value, as `diff`'s `closed` still returns a count. Add an
 entry when it does not: `study_day` returns an ordinal on a calendar with no
 zero, and folding it into `diff` would have allowed `unit: week` with it.
 

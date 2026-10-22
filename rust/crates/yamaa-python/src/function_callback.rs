@@ -46,6 +46,7 @@ pub(super) fn host_error(py: Python<'_>, error: PyErr) -> FunctionError {
             )),
         }
     } else {
+        crate::interrupt::remember(py, &error);
         FunctionError::Interrupted {
             payload: Some(HostPayload::new(
                 error.value(py).clone().into_any().unbind(),
@@ -69,23 +70,6 @@ fn describe(py: Python<'_>, error: &PyErr) -> (String, String) {
         .and_then(|s| s.to_str().ok().map(str::to_owned))
         .unwrap_or_else(|| "<exception message unavailable>".into());
     (class, message)
-}
-
-/// Borrow the retained original exception, when the failure carries one.
-pub(super) fn payload(py: Python<'_>, error: &FunctionError) -> Option<Py<PyAny>> {
-    match error {
-        FunctionError::Exception { payload, .. } | FunctionError::Interrupted { payload } => {
-            payload
-                .as_ref()?
-                .with::<Py<PyAny>, _>(|held| held.clone_ref(py))
-        }
-        _ => None,
-    }
-}
-
-/// Raise the retained original exception object.
-pub(super) fn raise(py: Python<'_>, error: Py<PyAny>) -> PyErr {
-    PyErr::from_value(error.into_bound(py))
 }
 
 /// Reject a returned representation without converting it to another logical type.

@@ -140,10 +140,12 @@ Version 1 serializes as compact UTF-8 JSON with these envelope fields:
 | `project` | Explicit project identity, or null when absent. |
 | `entries` | Exactly one element: the requested entry. |
 
-The entry contains `schema_version`, its complete composed normalized
-`specification`, `layers` in composition postorder, `origins`, `mapping_order`
-and `resources`. A linked producing specification is a `producer_schema`
-resource of the entry, never an entry of its own.
+The entry contains `language_version`, the version its resolved specification
+records in `yamaa` (the newest any of its layers declares), its complete
+composed normalized `specification`, `layers` in composition postorder,
+`origins`, `mapping_order` and `resources`; a 0.5 entry records its
+`schema_version` instead. A linked producing specification is a
+`producer_schema` resource of the entry, never an entry of its own.
 Named mapping-dictionary references remain in the specification; preparation
 admits those resources as usual, and their declaring locations are recorded.
 The artifact carries no reusable executable code or activated environment.
@@ -292,7 +294,7 @@ impl Build {
     pub fn run_report(&self) -> Option<&Table>;
     pub fn run_report_bytes(&self) -> Option<&[u8]>;
     pub fn report(&self) -> &Report;
-    pub fn save(&mut self) -> Result<Vec<String>, Failure>;  // the paths written
+    pub fn save(&mut self, token: &CancellationToken) -> Result<Vec<String>, Failure>;
 }
 ```
 
@@ -320,6 +322,8 @@ impl Build {
   then commits them in publication order and returns their absolute paths with
   forward slashes (a caller's resolver names each by its target reference). A
   refusal is a `Failure` carrying its issues and the paths written before it.
+  It polls its token once, after every file is staged and before the first
+  commit (D74): a cancelled save removes what it staged and writes nothing.
   It and `save_table` are the only mutating operations, and both publish
   through the resolver.
 - `save_table` saves a table, such as the item table `read_odm` returns, to
@@ -413,7 +417,7 @@ impl Build {
 | Handle | Ownership | `Send` | `Sync` | Notes |
 | --- | --- | --- | --- | --- |
 | `Engine` | Owned, cheap to clone (shared `Arc` state) | Yes | Yes | Operations take `&self`; concurrent calls are independent attempts. |
-| `Build` | Owned, one attempt | Yes | No | `save(&mut self)` publishes once, as today. |
+| `Build` | Owned, one attempt | Yes | No | `save(&mut self, token)` publishes once, as today. |
 | `Plan` | Owned, reusable, cheap to clone (shared `Arc` state) | Yes | Yes | `run` takes `&self`; each run is an independent attempt in its own resource scope. The plan lives until its last clone drops, independently of the `Engine`. |
 | `RunRequest` | Owned | Yes | Yes | Concurrent runs pass their own observer; progress events carry no run identity. |
 | `Plans` | Owned by one host object, interior lock | Yes | Yes | Keeps one `Plan` per resolved specification and project identity. The lock is held only to read or replace a kept plan, never across a compilation, a run or a callback, so a run started from a callback or another thread proceeds as any other. |
@@ -495,7 +499,7 @@ pub enum Error {                  // #[non_exhaustive]
     Host(FunctionError),          // a caller-supplied project function failed
     Table(TableError),            // Arrow/IPC representation failed
     Unavailable { feature: &'static str },  // a format feature is not compiled in
-    Cancelled,                    // the cancellation token was cancelled
+    Cancelled,                    // the call was cancelled (see Cancellation)
     Internal { code: &'static str },        // stable code, no internal payload
 }
 ```
@@ -509,21 +513,37 @@ makes this conversion table finite.
 
 ### Cancellation
 
-`CancellationToken` is a cloneable handle over a shared atomic flag, the same
-pattern as `MemoryResolver::cancel` today:
+`CancellationToken` is a cloneable handle over a shared atomic flag, with an
+optional probe (#3260, #3030 D46 and D74):
 
 ```rust
 impl CancellationToken {
     pub fn new() -> CancellationToken;
+    pub fn with_probe(probe: impl Fn() -> bool + Send + Sync + 'static) -> CancellationToken;
     pub fn cancel(&self);
-    pub fn is_cancelled(&self) -> bool;
+    pub fn is_cancelled(&self) -> bool;  // asks the probe while not yet cancelled
 }
 ```
 
-Hosts wire interrupts into the token (#2685). Threading the token through
-`ResolvedPlan::execute` is #2684; partial-result, publication and cleanup rules
-on cancellation are #2688. The token shape is settled here so those issues do
-not reopen it.
+An operation polls its token on its calling thread; nothing runs in the
+background. It polls when it starts, before each member of a project run or
+check and after each member it builds, before each submission section, at
+every step of a dataset's schedule marked `checkpoint` and before each batch
+of project-function calls (`ResolvedPlan::execute`, #2822 step 1), and once in
+a save, after every file is staged and before the first commit (D74). A
+cancelled operation returns `Error::Cancelled`, with no result and no issue:
+a cancelled run keeps nothing it built, and a cancelled save removes what it
+staged and fails with `cannot save <subject>: operation cancelled`. A save
+writes either nothing or everything it planned, and nothing is rolled back
+once committed. A project function that raises the host's interrupt, as
+`ProjectFunctions::is_interrupt` classifies it, cancels the call the same way.
+
+Each host call makes its token with `with_probe`: the probe asks the
+interpreter whether an interrupt is pending, keeps that interrupt and answers
+true, and the host raises the kept interrupt again once the call returns
+(#2822 step 2), as it does an interrupt a project function raised. The
+command line catches Ctrl+C, cancels its token and ends by the signal
+(P-CLI-1, #3060).
 
 ### Features
 
@@ -892,9 +912,9 @@ empty partitions $r_i = 0$ and single-row partitions $r_i = 1$):
      2. *Per-partition step*: Accept each primary partition $P_i$ with
         `(base_source_row, base_output_row)`, update cumulative `Limits::table`
         counters, construct partition candidates, and evaluate row-local /
-        combinable column assignments. Poll the cancellation token (#2684) at
-        steps marked `checkpoint`, between partitions, and between
-        intermediates.
+        combinable column assignments. The run already polls its cancellation
+        probe at the steps marked `checkpoint` (#2822 step 1); poll it
+        between partitions too.
      3. *Combine and finalize*: Finalize cross-partition group/key state, run
         `relations::check_unobserved_filter_types`, combine `OutputKeys` and
         `Verification` accumulators against total `output_rows = N`, and run

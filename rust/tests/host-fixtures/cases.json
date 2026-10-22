@@ -4784,6 +4784,7 @@
         "empty_submission_save": "cannot save {path}: there is nothing to save [nothing_to_save, PROJECT-13]"
       },
       "interrupt_message": "public contract activation interrupt",
+      "signal_interrupt_calls": 3,
       "report_output_yaml": "columns: [ID, VALUE], report: checks.csv}",
       "empty_text_column": "  - {name: EMPTY, type: str, derivation: {literal: ''}}\noutput: {",
       "unreached_row_count_yaml": "verifications:\n  - row_count: {min: 0, id: unreached}\noutput: {",

@@ -76,20 +76,40 @@ impl Observer for Noop {
     fn observe(&self, _: Event) {}
 }
 
-/// Every observed operation takes one scope; an unobserved caller passes
-/// `Scope::default()`, which discards events.
+/// Every observed operation takes one scope: the observer of its events and
+/// the probe of its cancellation. An unobserved caller passes
+/// `Scope::default()`, which discards events and is never cancelled.
 #[derive(Clone, Copy)]
 pub struct Scope<'a> {
     pub observer: &'a dyn Observer,
+    cancelled: &'a dyn Fn() -> bool,
 }
 impl Default for Scope<'_> {
     fn default() -> Self {
         Self::new(&Noop)
     }
 }
+/// The probe of an operation nothing cancels.
+fn never() -> bool {
+    false
+}
 impl<'a> Scope<'a> {
     pub fn new(observer: &'a dyn Observer) -> Self {
-        Self { observer }
+        Self {
+            observer,
+            cancelled: &never,
+        }
+    }
+    /// The same scope, cancelled once `cancelled` answers true (#2822). A run
+    /// polls it at every checkpoint of its schedule and before each batch of
+    /// project-function calls, and a cancelled run ends with
+    /// `ExecutionError::Cancelled`, keeping no output.
+    pub fn cancellable(self, cancelled: &'a dyn Fn() -> bool) -> Self {
+        Self { cancelled, ..self }
+    }
+    /// Whether the operation has been cancelled.
+    pub fn cancelled(self) -> bool {
+        (self.cancelled)()
     }
     pub fn phase(self, phase: Phase) {
         self.observer.observe(Event::Phase { phase });
