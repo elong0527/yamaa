@@ -1,0 +1,70 @@
+yamaa: "1.0"
+type: spec
+model: SDTM
+domain: DM
+keys: [STUDYID, USUBJID]
+input:
+  RAW: {path: input/dm_raw.csv, types: {AGE: int}}
+
+output:
+  path: dm.csv
+  columns: [DOMAIN, STUDYID, USUBJID, AGE]
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'DM'"
+    submission:
+      core: Req
+      role: Identifier
+      length: 2
+      origins:
+        - type: Assigned
+          source: Sponsor
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: RAW.STUDYID
+    submission:
+      core: Req
+      role: Identifier
+      length: 5
+      origins:
+        - type: Protocol
+          source: Sponsor
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: RAW.USUBJID
+    submission:
+      core: Req
+      role: Identifier
+      length: 9
+      origins:
+        - type: Assigned
+          source: Sponsor
+
+  # The display format separates width and decimals with a comma, as a
+  # spreadsheet in some locales would.
+  - name: AGE
+    type: int
+    label: Age
+    derivation: RAW.AGE
+    submission:
+      core: Exp
+      role: Record Qualifier
+      length: 3
+      display_format: "3,0"
+      origins:
+        - type: Derived
+          source: Sponsor
+      method: Age in years at informed consent
+
+submission:
+  label: Demographics
+  class: SPECIAL PURPOSE
+  structure: One record per subject
+  repeating: false

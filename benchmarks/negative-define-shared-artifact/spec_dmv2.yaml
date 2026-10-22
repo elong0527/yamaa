@@ -1,0 +1,56 @@
+yamaa: "1.0"
+type: spec
+model: SDTM
+# A copy of spec_dm.yaml renamed for a second version under review. It
+# still writes dm.csv.
+domain: DMV2
+keys: [STUDYID, USUBJID]
+input:
+  RAW: input/dm_raw.csv
+
+output:
+  path: dm.csv
+  columns: [DOMAIN, STUDYID, USUBJID]
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'DM'"
+    submission:
+      core: Req
+      role: Identifier
+      length: 2
+      origins:
+        - type: Assigned
+          source: Sponsor
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: RAW.STUDYID
+    submission:
+      core: Req
+      role: Identifier
+      length: 5
+      origins:
+        - type: Protocol
+          source: Sponsor
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: RAW.USUBJID
+    submission:
+      core: Req
+      role: Identifier
+      length: 9
+      origins:
+        - type: Assigned
+          source: Sponsor
+
+submission:
+  label: Demographics
+  class: SPECIAL PURPOSE
+  structure: One record per subject
+  repeating: false
