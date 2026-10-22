@@ -744,7 +744,7 @@ columns:
                 resolved_artifact::resolve(&source, None, Some(Language::Python), None).unwrap();
             let legacy = &artifact.entries()[0].specification;
             // The converter's output for the benchmark: its YAML values are
-            // the example's (`tools/tests/test_migrate.py`).
+            // the example's, as the converter's tests checked.
             let entry = repository_file(
                 "docs/design/interface-1.0/examples/schema-inheritance-clear/spec_study.yaml",
             );
