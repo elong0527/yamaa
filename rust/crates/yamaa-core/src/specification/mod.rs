@@ -1132,6 +1132,10 @@ impl PreparedSpecification {
     pub fn output_path(&self) -> &str {
         &self.output_path
     }
+    /// The surface the specification is written in, as its header declares.
+    pub fn surface(&self) -> ast::Surface {
+        self.tree.spec().header.surface
+    }
     /// The file the run report is written to, when the specification names one.
     pub fn output_report(&self) -> Option<&str> {
         self.output_report.as_deref()
