@@ -261,7 +261,7 @@ pub struct Handlers {
 /// variant. The variant keeps parameters as written so that lowering stays
 /// total: constructing the executor's operation validates them. What each
 /// verb answers about itself, before and after its operation is built,
-/// belongs to the executor ([`crate::scalar_verb`]), so no analysis names a
+/// belongs to the executor (`crate::scalar_verb`), so no analysis names a
 /// verb.
 #[derive(Clone, Debug, PartialEq)]
 pub enum ScalarOp {
