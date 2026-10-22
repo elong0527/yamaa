@@ -622,14 +622,15 @@ mod diagnostics {
                 reached.insert(rendered(&diagnostic));
             }
             // A row two value-level entries select fails; an entry that
-            // selects no row is a warning (SUB-13).
+            // selects no row is a warning that names the entry (SUB-13).
             let clause = |value: &str| yamaa_core::dataset::WhereClause {
                 terms: vec![yamaa_core::dataset::WhereTerm::listed(
                     1,
                     vec![value.into()],
                 )],
             };
-            for (check, path, condition) in [
+            let one = || JsonValue::from(1usize);
+            for (check, path, condition, context, message) in [
                 (
                     yamaa_core::dataset::Check::ValueEntries(vec![
                         ("A".into(), clause("X")),
@@ -637,6 +638,8 @@ mod diagnostics {
                     ]),
                     "columns.V.submission.value_level",
                     "value_level_multiple_matches",
+                    vec![("column", text("V")), ("failure_count", one())],
+                    "several value-level entries of column V select the same row in 1 of the rows",
                 ),
                 (
                     yamaa_core::dataset::Check::ValueEntryMatch {
@@ -645,6 +648,12 @@ mod diagnostics {
                     },
                     "columns.V.submission.value_level.A",
                     "value_level_unmatched",
+                    vec![
+                        ("column", text("V")),
+                        ("entry", text("A")),
+                        ("failure_count", one()),
+                    ],
+                    "value-level entry A of column V selects no row",
                 ),
             ] {
                 assert!(check
@@ -658,16 +667,15 @@ mod diagnostics {
                     1,
                 )
                 .unwrap();
-                assert_eq!(
-                    (
-                        diagnostic.definition().phase,
-                        diagnostic.definition().condition,
-                        diagnostic.definition().rule
-                    ),
-                    ("verification", condition, Some("SUB-13"))
-                );
-                assert_eq!(diagnostic.spec_paths, [path]);
-                reached.insert(rendered(&diagnostic));
+                reached.insert(expect(
+                    &diagnostic,
+                    "verification",
+                    condition,
+                    Some("SUB-13"),
+                    &[path],
+                    context,
+                ));
+                assert_eq!(diagnostic.message(), message, "{condition}");
             }
             let pattern = yamaa_core::portable_regex::Pattern::compile("b").unwrap();
             let rows = yamaa_core::dataset_checks::matches_offenders(

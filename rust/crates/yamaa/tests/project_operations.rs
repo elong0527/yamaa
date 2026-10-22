@@ -163,8 +163,9 @@ fn save_refusal(subject: &str, failure: &yamaa::Failure) -> String {
 
 /// D45: a project's names in run order, producer first, as a run of every
 /// section orders them, read without data. A listing that cannot be read has
-/// no name, as in a run; a project that cannot be read, or that lists a name
-/// twice, refuses as `cannot read <project>` (D39).
+/// no name, as in a run; a run that a collision refuses names nothing, while
+/// the names stay its listings' (D180); a project that cannot be read, or
+/// that lists a name twice, refuses as `cannot read <project>` (D39).
 #[test]
 fn project_names_list_the_run_order_and_refuse_as_a_read() {
     let study = study();
@@ -180,6 +181,29 @@ fn project_names_list_the_run_order_and_refuse_as_a_read() {
         .project_run(&study.project(), None, &CancellationToken::new())
         .unwrap();
     assert_eq!(runs.names(), names);
+
+    // AE writes DM's file, so the run refuses before any specification
+    // builds and names nothing, yet each name still selects its listing.
+    study.write("project.yaml", PROJECT);
+    study.write("sdtm/ae.yaml", AE.replace("../out/ae.csv", "../out/dm.csv"));
+    let names = engine.project_names(&study.project()).unwrap();
+    assert_eq!(names, ["DM", "AE", "ADSL"]);
+    for (name, listing) in names
+        .iter()
+        .zip(["sdtm/dm.yaml", "sdtm/ae.yaml", "adam/adsl.yaml"])
+    {
+        assert_eq!(
+            Path::new(&engine.project_spec(&study.project(), name).unwrap()),
+            study.0.join(listing),
+            "{name}"
+        );
+    }
+    let runs = engine
+        .project_run(&study.project(), None, &CancellationToken::new())
+        .unwrap();
+    assert!(runs.names().is_empty());
+    assert_eq!(conditions(&runs.issues()), ["artifact_path_collision"]);
+    study.write("sdtm/ae.yaml", AE);
 
     study.write(
         "project.yaml",

@@ -199,11 +199,12 @@ impl<'a> Live<'a> {
     }
 
     /// The names `root` reads in `scope` ([`Spec::reads`]) on a row whose
-    /// own record is `driver`'s, except an aggregate's own bindings and a
-    /// range bound, which names a donor field; the key columns of an
-    /// aggregate, each paired with the current row's same-named value; and
-    /// the declared key of each input an implicit join or a keyless qualified
-    /// aggregate reads ([`Live::key_reads`]).
+    /// own record is `driver`'s, except an aggregate's own bindings, a bare
+    /// reducer name of an aggregate that declares bindings, which names one
+    /// of them, and a range bound, which names a donor field; the key columns
+    /// of an aggregate, each paired with the current row's same-named value;
+    /// and the declared key of each input an implicit join or a keyless
+    /// qualified aggregate reads ([`Live::key_reads`]).
     fn read_driven(
         &self,
         root: ExprId,
@@ -217,6 +218,10 @@ impl<'a> Live<'a> {
         let mut items = BTreeSet::new();
         let mut keyless = BTreeSet::new();
         let mut matched = BTreeSet::new();
+        // The reducer names of each aggregate that declares bindings: a bare
+        // one never reads a column, and binding refuses one that no binding
+        // names as `unknown_derive_variable` (LOOKUP-22), layered or not.
+        let mut reducers = BTreeSet::new();
         let one_meaning = spec.header.surface.one_meaning_per_form();
         let mut failure = None;
         spec.walk(root, scope, |at, _| {
@@ -244,22 +249,31 @@ impl<'a> Live<'a> {
                         predicates.extend(formula.names.iter().map(|&(_, name)| name));
                     }
                 }
-                ExprKind::Aggregate(aggregate) => match &aggregate.key {
-                    Some(JoinKey::Columns { columns, .. }) => {
-                        out.extend(columns.iter().map(|column| Reading {
-                            name: column.name.clone(),
-                            kind: if one_meaning {
-                                Kind::Match
-                            } else {
-                                Kind::Variable
-                            },
-                        }));
+                ExprKind::Aggregate(aggregate) => {
+                    if !aggregate.bindings.is_empty() {
+                        reducers.extend(
+                            spec.children(aggregate.expr)
+                                .filter(|&(role, _)| role == Role::Reducer)
+                                .map(|(_, child)| child),
+                        );
                     }
-                    Some(JoinKey::FromInput) => {
-                        keyless.insert(at);
+                    match &aggregate.key {
+                        Some(JoinKey::Columns { columns, .. }) => {
+                            out.extend(columns.iter().map(|column| Reading {
+                                name: column.name.clone(),
+                                kind: if one_meaning {
+                                    Kind::Match
+                                } else {
+                                    Kind::Variable
+                                },
+                            }));
+                        }
+                        Some(JoinKey::FromInput) => {
+                            keyless.insert(at);
+                        }
+                        _ => {}
                     }
-                    _ => {}
-                },
+                }
                 ExprKind::Odm(odm) => {
                     items.insert(odm.item);
                 }
@@ -277,7 +291,10 @@ impl<'a> Live<'a> {
         }
         let mut joined = BTreeSet::new();
         for read in spec.reads(root, scope) {
-            if matches!(read.scope, Scope::Local(_)) || bounds.contains(&read.at) {
+            if matches!(read.scope, Scope::Local(_))
+                || bounds.contains(&read.at)
+                || (reducers.contains(&read.at) && read.name.owner().is_none())
+            {
                 continue;
             }
             let kind = if items.contains(&read.at) {

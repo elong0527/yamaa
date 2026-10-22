@@ -404,12 +404,14 @@ impl Application {
                     let href = reads
                         .package_reference(&artifact, &define_location)
                         .ok_or_else(|| {
-                            Failure::Metadata(vec![yamaa_core::define_diagnostics::admit_relation(
-                                yamaa_core::define_diagnostics::TargetRelation::ArtifactOutsidePackage,
-                                &path,
-                                "artifact must be inside the Define package",
-                            )
-                            .unwrap_err()])
+                            Failure::Metadata(vec![
+                                yamaa_core::define_diagnostics::artifact_outside_document(
+                                    &path,
+                                    &id,
+                                    origin.written,
+                                    &define.text,
+                                ),
+                            ])
                         })?;
                     (Some(href), None)
                 }
