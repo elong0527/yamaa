@@ -1232,7 +1232,8 @@ columns:
         fn a_read_that_feeds_another_lookup_or_a_predicate_counts_nothing() {
             let value = "  - {name: V, type: str, derivation: P.VAL}\n";
             let flag = "  - {name: F, type: str, derivation: {flag: {condition: \"P.VAL IS NOT NULL\", false_value: N, missing: N}}}\n";
-            let v_row = "out.csv,handler,columns.V.derivation.source.absent,absent,,V,LOOKUP-24,,,,2,,,{}";
+            let v_row =
+                "out.csv,handler,columns.V.derivation.source.absent,absent,,V,LOOKUP-24,,,,2,,,{}";
             let f_row = "out.csv,handler,columns.F.derivation.flag.missing,missing,,F,,,,,0,,,{}";
             // Either column may read P first: the flag before the value, or
             // the value before the flag.
