@@ -1997,12 +1997,26 @@ fn the_engine_reads_no_host_lock_and_refuses_a_run_that_calls_a_function() {
     let [refused] = issues.as_slice() else {
         panic!("one issue: {issues:?}");
     };
+    // The refusal names the first derivation that calls a project function
+    // (D221), located at its `derivation` key: line 9, column 42, after
+    // `  - {name: LOUD, type: str, label: Loud, ` (P-ISSUE-1).
+    let location = refused.location.clone().expect("a located refusal");
     assert_eq!(
-        (refused.code.as_str(), refused.context.get("operation")),
+        (
+            refused.code.as_str(),
+            refused.spec_path.as_slice(),
+            location.file,
+            location.position.map(|at| (at.line, at.column)),
+            refused.context.get("operation"),
+        ),
         (
             "unsupported_operation",
+            ["columns.LOUD.derivation".to_owned()].as_slice(),
+            calls.replace('\\', "/"),
+            Some((9, 42)),
             Some(&ContextValue::Text("environment".to_owned()))
-        )
+        ),
+        "the refused run"
     );
     assert_eq!(
         outcome(&yamaa(&["run", &project, "--spec", "CALLS"])),

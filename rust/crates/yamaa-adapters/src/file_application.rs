@@ -576,7 +576,8 @@ pub enum Classification {
 ///
 /// Through the empty port, which keeps no project functions, a build that
 /// calls one is refused before it reads any input (#3030 D110, D123), as one
-/// `unsupported_operation` issue with operation `environment`.
+/// `unsupported_operation` issue with operation `environment` at the first
+/// derivation that calls one (D221).
 pub fn run<A: HostFunctions>(
     prepared: &FileSpecification,
     run: &mut crate::file_resources::RunScope,
@@ -595,8 +596,8 @@ pub fn run<A: HostFunctions>(
         },
     )) = &attempt.boundary
     {
-        let issues = unsupported("environment", Some("environment"));
-        return (attempt, Err(issues));
+        let derivation = prepared.run().compiled().first_calling_derivation();
+        return (attempt, Err(unsupported("environment", derivation)));
     }
     if let Some(error) = file_preparation::opaque_resource_failure(&attempt.dataset) {
         let failure = resource_failure(Step::Capture, error);

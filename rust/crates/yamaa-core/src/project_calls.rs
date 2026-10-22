@@ -6,9 +6,12 @@ use crate::{
 };
 use std::{collections::BTreeMap, vec};
 
+/// One authored call: its own spec path, the spec path of the derivation
+/// that evaluates it, and the call as written.
 #[derive(Clone, Debug, PartialEq)]
 pub struct LocatedCall {
     pub path: String,
+    pub derivation: String,
     pub call: Call,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]

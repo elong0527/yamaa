@@ -59,8 +59,9 @@ impl EngineOptions {
     /// reads no project's `environments.<host>` entry, so it verifies no
     /// lock and activates nothing, and it runs no project function: a build
     /// that calls one is refused before any input is read, as
-    /// `unsupported_operation` with operation `environment` (D110), and
-    /// functions given to [`EngineOptions::with_functions`] are never called.
+    /// `unsupported_operation` with operation `environment` (D110) at the
+    /// first derivation that calls one (D221), and functions given to
+    /// [`EngineOptions::with_functions`] are never called.
     /// Every function file a 1.0 project lists is still read and admitted,
     /// so a check or resolve of a specification that calls one runs as a
     /// host's does; a 0.5 project's functions are declared in the environment

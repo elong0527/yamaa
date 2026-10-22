@@ -100,8 +100,9 @@ pub trait HostFunctions {
 /// functions, the command line's or a bare Rust embedder's (#3030 D110,
 /// D123). It keeps no function, so activation refuses the functions a build
 /// calls before binding any (`FunctionLanguageMismatch`, with no selected
-/// language), and the build reports that refusal before it reads any input
-/// (D110). Only [`HostFunctions::is_empty`] is ever asked.
+/// language), and the build reports that refusal before it reads any input,
+/// at the first derivation that calls one (D110, D221). Only
+/// [`HostFunctions::is_empty`] is ever asked.
 pub struct Empty<E>(std::marker::PhantomData<fn() -> E>);
 
 impl<E> Empty<E> {

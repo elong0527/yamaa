@@ -174,12 +174,35 @@ fn invalid(finding: FunctionFinding) -> PreflightFinding {
     PreflightFinding::ProjectFunction(finding)
 }
 
-/// One call a derivation evaluates: its expression, path and whether its
-/// references read a record context (an aggregate binding or a donor).
+/// One call a derivation evaluates: its expression, its path, the path of
+/// that derivation and whether its references read a record context (an
+/// aggregate binding or a donor).
 struct Request {
     call: ExprId,
     path: String,
+    derivation: String,
     contextual: bool,
+}
+
+/// The spec path of the derivation a call site evaluates: a column's, an
+/// intermediate's or a row template's.
+fn derivation_path(spec: &ast::Spec, site: &ast::Site) -> String {
+    use crate::ast::Owner;
+    let derivation = match site.owner {
+        Owner::Default { column } => spec.columns[column].derivation.as_ref(),
+        Owner::Binding {
+            intermediate,
+            binding,
+        } => Some(&spec.intermediates[intermediate].bindings[binding].derivation),
+        Owner::Override { template, entry } => {
+            Some(&spec.rows.templates[template].overrides[entry].1)
+        }
+        _ => None,
+    };
+    derivation.map_or_else(
+        || checks::path(spec, site.root),
+        |derivation| checks::render(spec, derivation.meta),
+    )
 }
 
 /// Every call the derivations evaluate, in today's occurrence order:
@@ -197,6 +220,7 @@ fn requests(spec: &ast::Spec) -> (Vec<Request>, BTreeMap<ExprId, Vec<usize>>, Ve
     ];
     for pass in passes {
         for site in sites.iter().filter(|site| pass(&site.owner)) {
+            let derivation = derivation_path(spec, site);
             let mut indices = Vec::new();
             spec.walk(site.root, site.scope, |at, scope| {
                 if matches!(spec.expr(at).kind, ExprKind::Call { .. }) {
@@ -204,6 +228,7 @@ fn requests(spec: &ast::Spec) -> (Vec<Request>, BTreeMap<ExprId, Vec<usize>>, Ve
                     requests.push(Request {
                         call: at,
                         path: checks::path(spec, at),
+                        derivation: derivation.clone(),
                         contextual: scope != Scope::Row,
                     });
                 }
@@ -356,6 +381,7 @@ pub(super) fn prepare(
                     origins.push((request, *call, path.clone(), decoded.name.clone()));
                     calls.push(LocatedCall {
                         path: path.clone(),
+                        derivation: requests[request].derivation.clone(),
                         call: decoded,
                     });
                 }

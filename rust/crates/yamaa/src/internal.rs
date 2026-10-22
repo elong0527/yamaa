@@ -429,7 +429,7 @@ type Ran = (
 /// through the empty port too. A member that calls no project function runs
 /// as a host runs it, with or without a project; through the empty port, one
 /// that calls a project function is refused before it reads any input
-/// (#3030 D110, D123).
+/// (#3030 D110, D123, D221).
 fn run_member(
     shared: &EngineShared,
     specification: &str,
