@@ -318,7 +318,13 @@ fn lowering_is_total_on_every_benchmark_specification() {
             }
             cited += 1;
             let parent = path.rsplit_once('.').map(|(parent, _)| parent);
-            if !rendered.contains(&path) && !parent.is_some_and(|p| rendered.contains(p)) {
+            // A root field is a field of the root node, even when it is not
+            // written: an omitted `base` is where ROW-8 reports.
+            let root_field = !path.contains(['.', '[']);
+            if !rendered.contains(&path)
+                && !root_field
+                && !parent.is_some_and(|p| rendered.contains(p))
+            {
                 failures.push(format!(
                     "{name}: the expected spec path {path} is no lowered node or field of one"
                 ));

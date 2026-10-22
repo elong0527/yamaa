@@ -1221,6 +1221,7 @@ S1,002,2024-06
                     "negative-order-repeated",
                     "negative-order-unknown-column",
                     "negative-output-transport",
+                    "negative-report-same-file",
                 ],
                 "output-validation benchmark denominator changed"
             );
@@ -1321,6 +1322,14 @@ S1,002,2024-06
         /// report fails until it leaves this list.
         const NOT_REPORTED_BY_CHECK: &[(&str, &str)] = &[
             (
+                "negative-driver-untyped-field",
+                "the type of a row driver's derived field, which binding decides (#3606)",
+            ),
+            (
+                "negative-linked-artifact-header",
+                "the fields stored in the linked artifact",
+            ),
+            (
                 "negative-odm-schema-ambiguous",
                 "the fields stored in the ODM input",
             ),
@@ -1349,13 +1358,49 @@ S1,002,2024-06
                 "negative-types-unknown-field",
                 "the fields stored in the input",
             ),
+            (
+                "negative-unique-correlated-derivation",
+                "an intermediate's current-record reads beside its uniqueness check, which binding decides (#3606)",
+            ),
+            (
+                "negative-unique-correlated-filter",
+                "an intermediate's current-record reads beside its uniqueness check, which binding decides (#3606)",
+            ),
         ];
 
         /// Validation negatives this harness does not run, with the reason.
-        const NOT_BUILT_HERE: [(&str, &str); 7] = [
+        const NOT_BUILT_HERE: [(&str, &str); 17] = [
             (
                 "negative-allowed-values-beside-codelist",
                 "the bound codelist's items come from its host environment, which this harness does not pass",
+            ),
+            (
+                "negative-codelist-extended-alias",
+                "the codelists are declared by the project file, which this harness does not pass",
+            ),
+            (
+                "negative-codelist-extension-closed-list",
+                "the codelists are declared by the project file, which this harness does not pass",
+            ),
+            (
+                "negative-codelist-items-and-dictionary",
+                "the codelists are declared by the project file, which this harness does not pass",
+            ),
+            (
+                "negative-codelist-partial-decode",
+                "the codelists are declared by the project file, which this harness does not pass",
+            ),
+            (
+                "negative-codelist-type-mismatch",
+                "the codelists are declared by the project file, which this harness does not pass",
+            ),
+            (
+                "negative-codelist-unknown",
+                "the codelists are declared by the project file, which this harness does not pass",
+            ),
+            (
+                "negative-codelist-value-twice",
+                "the codelists are declared by the project file, which this harness does not pass",
             ),
             (
                 "negative-donor-function-unkept",
@@ -1367,6 +1412,18 @@ S1,002,2024-06
             ),
             (
                 "negative-function-contract",
+                "domain activates its project functions only in a host",
+            ),
+            (
+                "negative-function-name-twice",
+                "the project file lists the function files, which this harness does not pass",
+            ),
+            (
+                "negative-function-not-listed",
+                "this harness passes no project file, so its project function is unknown",
+            ),
+            (
+                "negative-function-test-mismatch",
                 "domain activates its project functions only in a host",
             ),
             (
