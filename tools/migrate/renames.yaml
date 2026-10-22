@@ -1,4 +1,4 @@
-# yamaa 1.0 rename table (approved)
+# yamaa 1.0 rename table (approved; historical since #3443)
 #
 # Phase 0 of #3030, item 2. Status: approved. The owner approved the table
 # as a whole on #3030 (D58, 2026-10-19), with the answers to the design
@@ -7,12 +7,14 @@
 # options not taken; the item ids below (P-...) are its RFC items.
 #
 # What this file is. It maps every field, registry keyword and enumerated
-# value of today's schemas (yaml/schema*.yaml, 0.5.0) to its 1.0 spelling,
-# or to "removed" with the reason, and lists the fields 1.0 adds. Phase 2's
-# internal converter (tools/migrate/, D35) is driven by it, and refuses to
-# run unless every transform and `paths` rule named here has one
-# implementation. No repository check interprets it beyond the generic YAML,
-# ASCII and rule-citation checks.
+# value of the 0.5.0 schemas (yaml/schema*.yaml at the yamaa-v0.5.0 tag),
+# which it calls today's, to its 1.0 spelling, or to "removed" with the
+# reason, and lists the fields 1.0 adds. Phase 2's internal converter (D35)
+# was driven by it and wrote the repository's 0.5 files in 1.0; once none
+# was left, #3443 deleted the converter. The table stays as the record of
+# the rename, which the 1.0.0 release notes link, and changes only to
+# correct that record. tools/tests/test_schema_v1.py compares each entry's
+# 1.0 spelling, type, requirement, default and kind with the 1.0 schema.
 #
 # Measured at main 1758ad145. Counts are occurrences in parsed documents.
 #
@@ -22,7 +24,7 @@
 #                     identify the file and the commit it was measured at.
 #   summary           entry counts by kind and decision.
 #   transforms        the named transforms that `convert` refers to, each a
-#                     one-line description of what the converter writes.
+#                     one-line description of what the converter wrote.
 #   entries           one entry per field, registry keyword and enumerated
 #                     value of today's schemas, then the fields 1.0 adds.
 #   conditions        registered conditions that 1.0 renames, retires or
@@ -66,7 +68,7 @@
 #                 path, or structure. Expression and name are D31's
 #                 expression fields; value, identifier and path are its
 #                 value fields.
-#   convert       what the converter does: {action: none | rename_key |
+#   convert       what the converter did: {action: none | rename_key |
 #                 rename_value | delete_key | transform}, with the new name,
 #                 value or the transform's name.
 #   measurement   occurrences by area: bench (benchmarks/ files and README

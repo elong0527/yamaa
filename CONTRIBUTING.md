@@ -432,8 +432,8 @@ the narrowest `with`, and spawn a real program only when that program is
 the subject, as the staging and command tests do; a new `main` takes
 `argv` so its test calls it in-process instead of patching `sys.argv`.
 Skip with `self.skipTest(reason)` when an optional tool is missing. A
-walk of the benchmark corpus, a conversion of it or a `cargo` invocation
-runs in `setUpClass` or a cached module function, once per module.
+walk of the benchmark corpus or a `cargo` invocation runs in `setUpClass`
+or a cached module function, once per module.
 Prefer `assertEqual` on the whole list or dictionary and
 `assertRaisesRegex` on the message to `assertIn`, `assertTrue(any(...))`
 or a bare `assertRaises`.

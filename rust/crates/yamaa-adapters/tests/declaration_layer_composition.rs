@@ -690,7 +690,7 @@ columns:
             assert_eq!(ResolvedArtifact::from_json(&json).unwrap(), artifact);
         }
 
-        /// The converted `negative-property-clear`, as `tools/migrate` writes it.
+        /// The converted `negative-property-clear`, as the converter wrote it.
         const CONVERTED_PARENT: &str = "yamaa: \"1.0\"\ntype: spec\ninput:\n  DM: ../input/dm.csv\nbase: DM\n\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: DM.USUBJID\n";
         const CONVERTED_ENTRY: &str = "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\nparent: layers/parent.yaml\nclear:\n  # null clears the type inherited from layers/parent.yaml, but a column\n  # must have a type, so it cannot be cleared.\n  - columns.USUBJID.type\ndomain: ADSL\nkeys: [USUBJID]\n\noutput:\n  path: adsl.csv\n  columns: [USUBJID]\n";
 
