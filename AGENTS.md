@@ -98,7 +98,7 @@ The whole of this guide is the contract; this list is the order of work.
 ## Pull requests
 
 - **One theme per pull request**, as small as its theme allows (D171 on
-  #3030, amended by D207). One issue is the usual size; group issues only
+  #3030, amended by D230). One issue is the usual size; group issues only
   when they share files or a theme. The limits are an upper bound: under
   300 changed files, so an automated review covers the diff, and about
   3,000 changed lines. Write one `Closes #N` line for each issue the pull
