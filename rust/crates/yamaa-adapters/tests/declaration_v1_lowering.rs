@@ -1,7 +1,6 @@
 #![cfg(feature = "yaml")]
-//! The 1.0 front end for specifications (#3030 P1-5). `front_end_comparison.rs`
-//! compares the converted corpus with its 0.5 originals; these cases hold
-//! the forms the corpus lacks: text that holds one literal, the refusal of a
+//! The 1.0 front end for specifications (#3030 P1-5). These cases hold the
+//! forms the corpus lacks: text that holds one literal, the refusal of a
 //! function argument that is no leaf (FUNC-6), the stored `model`, keys and
 //! ODM profile, the position of a node a child layer wrote (P-ISSUE-1), the
 //! absence answer of D67, several origins, a dataset's standard, a

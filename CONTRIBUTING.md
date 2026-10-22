@@ -411,8 +411,7 @@ made to both, and `make check-repository` fails while they differ
 - No `#[ignore]` and no `thread::sleep`. An environment variable serves
   only a declared skip with its reason, as `YAMAA_SKIP_NETWORK_SHARES`
   does, and `Command::new` runs only the program under test: the
-  `yamaa-cli` binary, the shell whose quoting a path test proves, or the
-  converter a front-end comparison reads.
+  `yamaa-cli` binary, or the shell whose quoting a path test proves.
 - Run one family with `cargo test --locked -p <crate> --test main
   <family>::`, and one test with its whole path and `--exact`.
 

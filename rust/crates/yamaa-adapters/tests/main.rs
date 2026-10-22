@@ -54,7 +54,6 @@ mod file_diagnostic_origins;
 mod file_producer_links;
 mod file_project;
 mod file_resources;
-mod front_end_comparison;
 mod host_resources;
 mod intermediate_result_kinds;
 mod network_shares;

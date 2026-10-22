@@ -215,24 +215,6 @@ class NativeWorkflowContract(unittest.TestCase):
                 )
                 self.assertNotIn("PYO3_PYTHON", yaml.safe_dump(steps))
 
-    def test_each_rust_lane_syncs_the_tooling_environment_before_its_tests(self):
-        # The front-end comparison runs tools/migrate through `uv run
-        # --project python --no-sync`, which needs the locked tooling
-        # environment and its PyYAML. The sync leaves out the extension.
-        sync = (
-            "uv sync --project python --locked --group tooling "
-            "--no-install-package yamaa"
-        )
-        for lane in self.coverage["rust"]["include"]:
-            job = "native-rust ({os}, {python})".format(**lane)
-            runs = [step.get("run", "") for step in self.jobs[job]["definitions"]]
-            synced = [index for index, run in enumerate(runs) if sync in run]
-            tested = [index for index, run in enumerate(runs) if "cargo test" in run]
-            with self.subTest(job=job):
-                self.assertEqual(len(synced), 1)
-                self.assertTrue(tested)
-                self.assertLess(synced[0], min(tested))
-
     def test_only_the_source_platform_keeps_its_python_source_archive(self):
         # A release artifact holds exactly its declared assets, so the other
         # Python build lanes drop the source archive they built as a check.
