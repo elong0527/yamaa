@@ -26,14 +26,7 @@ impl Fixture {
         self.0.join("spec.yaml").to_str().unwrap().to_owned()
     }
     fn identity(specification: &str) -> Identity<'_> {
-        Identity {
-            runtime: "test",
-            runtime_version: "test",
-            engine_version: yamaa_core::VERSION,
-            example: "column-driver-bindings",
-            specification,
-            base_directory: ".",
-        }
+        crate::support::study::identity("column-driver-bindings", specification)
     }
     fn domain(&self) -> Result<file_application::Domain, Vec<Diagnostic>> {
         let specification = self.specification();

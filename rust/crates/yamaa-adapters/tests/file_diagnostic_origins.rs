@@ -160,6 +160,7 @@ mod file {
         }
     }
     mod file_application {
+        use crate::support::Edit as _;
         use std::fs;
         #[cfg(unix)]
         use yamaa_adapters::file_resources::Error;
@@ -207,14 +208,7 @@ mod file {
             }
         }
         fn identity(specification: &str) -> Identity<'_> {
-            Identity {
-                runtime: "test",
-                runtime_version: "test",
-                engine_version: yamaa_core::VERSION,
-                example: "test",
-                specification,
-                base_directory: ".",
-            }
+            crate::support::study::identity("test", specification)
         }
         #[test]
         fn changed_source_retains_original_snapshot_and_ingest_issue_and_refuses_both_saves() {
@@ -304,7 +298,7 @@ mod file {
             assert_eq!(issues[0].rule(), Some("FILE-7"));
             fs::write(
                 study.0.join("spec.yaml"),
-                VALID.replace("input: {SRC: input.csv}", "input: {SRC: input.unknown}"),
+                VALID.edit("input: {SRC: input.csv}", "input: {SRC: input.unknown}"),
             )
             .unwrap();
             let path = study.text("spec.yaml");
@@ -357,7 +351,7 @@ mod file {
             fs::create_dir(study.0.join("input.unknown")).unwrap();
             fs::write(
                 study.0.join("spec.yaml"),
-                VALID.replace("input.csv", "input.unknown"),
+                VALID.edit("input.csv", "input.unknown"),
             )
             .unwrap();
             let path = study.text("spec.yaml");
@@ -399,7 +393,7 @@ mod file {
             let study = Study::new();
             fs::write(
                 study.0.join("spec.yaml"),
-                VALID.replace("path: output.csv", "path: absent/output.csv"),
+                VALID.edit("path: output.csv", "path: absent/output.csv"),
             )
             .unwrap();
             fs::write(
@@ -520,9 +514,7 @@ mod file {
                 };
                 fs::write(
                     study.0.join("entry/spec.yaml"),
-                    VALID
-                        .replace("input.csv", &input)
-                        .replace("output.csv", &output),
+                    VALID.edit("input.csv", &input).edit("output.csv", &output),
                 )
                 .unwrap();
                 let path = study.text("entry/spec.yaml");
@@ -552,7 +544,7 @@ mod file {
             std::os::unix::fs::symlink("outside.csv", study.0.join("outside-link.csv")).unwrap();
             fs::write(
                 study.0.join("entry/spec.yaml"),
-                VALID.replace("input.csv", "../outside-link.csv"),
+                VALID.edit("input.csv", "../outside-link.csv"),
             )
             .unwrap();
             let path = study.text("entry/spec.yaml");
@@ -611,7 +603,7 @@ mod file {
                 let outside = Study::new();
                 fs::write(
                     study.0.join("spec.yaml"),
-                    VALID.replace("output.csv", "link/output.csv"),
+                    VALID.edit("output.csv", "link/output.csv"),
                 )
                 .unwrap();
                 fs::write(study.0.join("input.csv"), b"ID\n1\n").unwrap();
@@ -654,7 +646,7 @@ mod file {
             fs::create_dir(study.0.join("parent")).unwrap();
             fs::write(
                 study.0.join("spec.yaml"),
-                VALID.replace("output.csv", "parent/output.csv"),
+                VALID.edit("output.csv", "parent/output.csv"),
             )
             .unwrap();
             fs::write(study.0.join("input.csv"), b"ID\n1\n").unwrap();
@@ -733,7 +725,7 @@ mod file {
                             .map(|i| format!("C{i}"))
                             .collect::<Vec<_>>()
                             .join(", ");
-                        body = body.replace(
+                        body = body.edit(
                             "columns: [ID]}",
                             &format!("columns: [ID, {projected}]}}"),
                         );
@@ -751,8 +743,8 @@ mod file {
                         // (LAYER-11) discards it before the inputs capacity
                         // is counted.
                         body = body
-                            .replace("input: {SRC: input.csv}", &format!("input: {{{inputs}}}"))
-                            .replace(
+                            .edit("input: {SRC: input.csv}", &format!("input: {{{inputs}}}"))
+                            .edit(
                                 "derivation: SRC.ID",
                                 &format!(
                                     "derivation: {{first_available: {{sources: [{sources}]}}}}"
@@ -764,19 +756,19 @@ mod file {
                             .map(|i| format!("F{i}: str"))
                             .collect::<Vec<_>>()
                             .join(", ");
-                        body = body.replace(
+                        body = body.edit(
                             "input: {SRC: input.csv}",
                             &format!("input: {{SRC: {{path: input.csv, types: {{{fields}}}}}}}"),
                         );
                     }
                     "projected_columns" => {
-                        body = body.replace(
+                        body = body.edit(
                             "columns: [ID]",
                             &format!("columns: [{}]", vec!["ID"; actual].join(", ")),
                         );
                     }
                     "source_operands" => {
-                        body = body.replace(
+                        body = body.edit(
                             "derivation: SRC.ID",
                             &format!(
                                 "derivation: {{first_available: {{sources: [{}]}}}}",
@@ -1169,7 +1161,7 @@ mod file {
                 study.0.join("spec.yaml"),
                 format!(
                     "{}rows:\n  - id: selected\n    dataset: SRC\n    filter: SRC.A LIKE SRC.B\n    derivations: {{ID: SRC.ID}}\n",
-                    VALID.replace(", derivation: SRC.ID", "")
+                    VALID.edit(", derivation: SRC.ID", "")
                 ),
             )
             .unwrap();
@@ -1195,6 +1187,7 @@ mod file {
     mod file_entry {
         //! Entry capture reads each `schema`-linked producing specification once,
         //! as metadata. No producer is compiled, executed or followed further.
+        use crate::support::Edit as _;
         use std::{collections::BTreeMap, fs};
         use yamaa_adapters::{
             file_entry::{Error, RejectedEntry},
@@ -1315,7 +1308,7 @@ mod file {
             // VALUE reads all three linked datasets so pruning (LAYER-11) keeps
             // every link in the resolved model.
             let root = yaml("{RIGHT: {path: right.csv, schema: right.yaml}, LEFT: {path: left.csv, schema: left.yaml}, AGAIN: {path: left.csv, schema: './left.yaml'}}", "RIGHT", "root.csv")
-                .replace(
+                .edit(
                     "derivation: RIGHT.VALUE",
                     "derivation: {first_available: {sources: [RIGHT.VALUE, LEFT.VALUE, AGAIN.VALUE]}}",
                 );
@@ -1512,7 +1505,7 @@ mod file {
             study.write("root.yaml", &before);
             let mut resources = study.resources();
             resources.capture_metadata("root.yaml").unwrap();
-            study.write("root.yaml", &before.replace("TEST", "NEXT"));
+            study.write("root.yaml", &before.edit("TEST", "NEXT"));
             let failure = rejected_entry(select(resources));
             let Error::Document(DocumentError::ResourceFinding { error, diagnostic }) =
                 failure.error()
@@ -1700,6 +1693,7 @@ mod file {
     }
     mod file_preparation {
         use crate::support::ipc_snapshot;
+        use crate::support::Edit as _;
         use std::{fs, path::PathBuf};
         use yamaa_adapters::json;
         use yamaa_adapters::{
@@ -1816,7 +1810,7 @@ mod file {
                 &study,
                 &format!(
                     "{}parent: ../outside/missing.yaml\n",
-                    VALID.replace("'1.0'", "'99.0'")
+                    VALID.edit("'1.0'", "'99.0'")
                 ),
             );
             assert_eq!(

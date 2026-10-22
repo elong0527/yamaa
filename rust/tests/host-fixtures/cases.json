@@ -6351,6 +6351,344 @@
           }
         }
       ]
+    },
+    "compact-yaml": {
+      "input_csv": "ID\na\nb\nc\n",
+      "specification_yaml": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: input.csv\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\noutput:\n  path: out.csv\n  columns: [ID]\n",
+      "flow_input_yaml": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\noutput:\n  path: out.csv\n  columns: [ID]\n",
+      "equivalent": {
+        "cases": [
+          {
+            "name": "a block list",
+            "verification": "verifications:\n  - row_count:\n      min: 3\n      max: 3"
+          },
+          {
+            "name": "a compact pair",
+            "verification": "verifications: [row_count: {min: 3, max: 3}]"
+          },
+          {
+            "name": "a flow mapping",
+            "verification": "verifications: [{row_count: {min: 3, max: 3}}]"
+          },
+          {
+            "name": "an explicit key",
+            "verification": "verifications: [? row_count : {min: 3, max: 3}]"
+          },
+          {
+            "name": "two compact pairs",
+            "verification": "verifications: [row_count: {min: 3, max: 3}, row_count: {min: 3, max: 3}]"
+          }
+        ],
+        "output": {
+          "ID": [
+            "a",
+            "b",
+            "c"
+          ]
+        },
+        "output_csv": "ID\na\nb\nc\n"
+      },
+      "failed_bounds": [
+        {
+          "name": "a maximum below the row count",
+          "verification": "verifications: [row_count: {min: 0, max: 2}]",
+          "conditions": [
+            "row_count_failed"
+          ]
+        },
+        {
+          "name": "a minimum above the row count",
+          "verification": "verifications: [row_count: {min: 4, max: 10}]",
+          "conditions": [
+            "row_count_failed"
+          ]
+        }
+      ],
+      "malformed": [
+        {
+          "name": "a compact pair missing its closing brace",
+          "verification": "verifications: [row_count: {min: 3, max: 3]",
+          "conditions": [
+            "invalid_yaml"
+          ]
+        },
+        {
+          "name": "a compact pair with an extra closing brace",
+          "verification": "verifications: [row_count: {min: 3, max: 3}}]",
+          "conditions": [
+            "invalid_yaml"
+          ]
+        }
+      ],
+      "raw_nul": [
+        {
+          "name": "a NUL before the verifications",
+          "before_nul": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: input.csv\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\noutput:\n  path: out.csv\n  columns: [ID]\n",
+          "after_nul": "verifications: [row_count: {min: 4}]\n",
+          "issue": {
+            "condition": "invalid_yaml",
+            "context": "{\"column\":1,\"line\":14,\"reason\":\"found unprintable character\"}"
+          }
+        },
+        {
+          "name": "a NUL inside a key",
+          "before_nul": "schema_version: '1.0'\ndomain: TEST\nke",
+          "after_nul": "ys: [ID]\ninput:\n  SRC: input.csv\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\noutput:\n  path: out.csv\n  columns: [ID]\n",
+          "issue": {
+            "condition": "invalid_yaml",
+            "context": "{\"column\":3,\"line\":3,\"reason\":\"found unprintable character\"}"
+          }
+        }
+      ]
+    },
+    "longitudinal-capacity": {
+      "rows": 50000,
+      "id_column": "ID",
+      "value_columns": 99,
+      "value_column_name": "C%03d",
+      "value_offset": 1000000000000,
+      "value_modulus": 10007,
+      "minimum_source_bytes": 67108864,
+      "profiles": [
+        {
+          "name": "a CSV source saved as CSV",
+          "source": "csv",
+          "output": "csv"
+        },
+        {
+          "name": "a Parquet source saved as CSV",
+          "source": "parquet",
+          "output": "csv"
+        },
+        {
+          "name": "a CSV source saved as Parquet",
+          "source": "csv",
+          "output": "parquet"
+        }
+      ],
+      "saves_after_change": 2
+    },
+    "column-ceilings": {
+      "admitted": 1024,
+      "refused": 1025,
+      "boundaries": [
+        {
+          "name": "declared columns",
+          "kind": "declared_columns",
+          "operations": [
+            "check",
+            "run"
+          ],
+          "compiler_limit": true
+        },
+        {
+          "name": "output columns",
+          "kind": "output_columns",
+          "operations": [
+            "check",
+            "run"
+          ],
+          "compiler_limit": true
+        },
+        {
+          "name": "declared types",
+          "kind": "typed_fields",
+          "operations": [
+            "check",
+            "run"
+          ],
+          "compiler_limit": true
+        },
+        {
+          "name": "fields of a CSV source",
+          "kind": "csv_fields",
+          "operations": [
+            "run"
+          ],
+          "compiler_limit": false
+        },
+        {
+          "name": "fields of a Parquet source",
+          "kind": "parquet_fields",
+          "operations": [
+            "run"
+          ],
+          "compiler_limit": false
+        },
+        {
+          "name": "columns of a linked producer",
+          "kind": "producer_columns",
+          "operations": [
+            "check",
+            "run"
+          ],
+          "compiler_limit": false
+        },
+        {
+          "name": "columns of a linked stored artifact",
+          "kind": "stored_columns",
+          "operations": [
+            "run"
+          ],
+          "compiler_limit": false
+        }
+      ],
+      "compiler_limits": [
+        {
+          "resource": "columns",
+          "actual": 1025,
+          "limit": 1024,
+          "issue": {
+            "phase": "engine",
+            "condition": "engine_rejected",
+            "rule": null,
+            "spec_paths": [
+              "columns"
+            ],
+            "context": "{\"actual\":1025,\"code\":\"compiler_limit\",\"limit\":1024,\"resource\":\"columns\",\"step\":\"prepare\"}"
+          }
+        },
+        {
+          "resource": "inputs",
+          "actual": 17,
+          "limit": 16,
+          "issue": {
+            "phase": "engine",
+            "condition": "engine_rejected",
+            "rule": null,
+            "spec_paths": [
+              "input"
+            ],
+            "context": "{\"actual\":17,\"code\":\"compiler_limit\",\"limit\":16,\"resource\":\"inputs\",\"step\":\"prepare\"}"
+          }
+        },
+        {
+          "resource": "source_fields",
+          "actual": 1025,
+          "limit": 1024,
+          "issue": {
+            "phase": "engine",
+            "condition": "engine_rejected",
+            "rule": null,
+            "spec_paths": [
+              "input.SRC.types"
+            ],
+            "context": "{\"actual\":1025,\"code\":\"compiler_limit\",\"limit\":1024,\"resource\":\"source_fields\",\"step\":\"prepare\"}"
+          }
+        },
+        {
+          "resource": "projected_columns",
+          "actual": 1025,
+          "limit": 1024,
+          "issue": {
+            "phase": "engine",
+            "condition": "engine_rejected",
+            "rule": null,
+            "spec_paths": [
+              "output.columns"
+            ],
+            "context": "{\"actual\":1025,\"code\":\"compiler_limit\",\"limit\":1024,\"resource\":\"projected_columns\",\"step\":\"prepare\"}"
+          }
+        }
+      ],
+      "incomplete_checks": {
+        "columns": 1025,
+        "refusal": {
+          "rule": null,
+          "actual": 1025,
+          "limit": 1024
+        },
+        "remaining": {
+          "condition": "incompatible_input_type",
+          "rule": "TEXT-1"
+        }
+      },
+      "inheritance_depth": {
+        "layers_between_entry_and_base": 65,
+        "output_csv": "ID\nS-001\n"
+      },
+      "parent_occurrences": {
+        "layers_between_entry_and_base": 8192,
+        "issue": {
+          "phase": "engine",
+          "condition": "engine_rejected",
+          "rule": null,
+          "spec_paths": [],
+          "context": "{\"actual\":8193,\"code\":\"resource_limit\",\"limit\":8192,\"phase\":\"inheritance\",\"resource\":\"parent_occurrences\",\"step\":\"prepare\"}"
+        }
+      },
+      "wide_integers": {
+        "digits": 4097,
+        "cases": [
+          {
+            "name": "a wide schema version",
+            "yaml": "schema_version: {digits}\n",
+            "issue": {
+              "phase": "validation",
+              "condition": "schema_version_mismatch",
+              "rule": "SCHEMA-2",
+              "spec_paths": [
+                "schema_version"
+              ],
+              "context": "{\"actual\":{digits},\"expected\":\"1.0\"}"
+            }
+          },
+          {
+            "name": "a wide value without a schema version",
+            "yaml": "value: {digits}\n",
+            "issue": {
+              "phase": "validation",
+              "condition": "schema_version_mismatch",
+              "rule": "SCHEMA-2",
+              "spec_paths": [
+                "schema_version"
+              ],
+              "context": "{\"actual\":null,\"expected\":\"1.0\"}"
+            }
+          }
+        ]
+      },
+      "layered": {
+        "widths": [
+          40,
+          64,
+          1024
+        ],
+        "column_name": "K%04d",
+        "input_csv": "ID,A,B\nS-001,x,1\nS-002,y,2\nS-003,,3\n",
+        "files": [
+          "parent.yaml",
+          "explicit.yaml",
+          "child.yaml",
+          "grandchild.yaml"
+        ],
+        "rows": [
+          {
+            "ID": "S-001",
+            "cells_by_index_mod_3": [
+              "x",
+              "P",
+              "x"
+            ]
+          },
+          {
+            "ID": "S-002",
+            "cells_by_index_mod_3": [
+              "y",
+              "y",
+              "y"
+            ]
+          },
+          {
+            "ID": "S-003",
+            "cells_by_index_mod_3": [
+              "Q",
+              "Q",
+              "Q"
+            ]
+          }
+        ]
+      }
     }
   }
 }

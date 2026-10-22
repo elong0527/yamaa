@@ -4,8 +4,9 @@
 //! every column then reads that one record (ROW-8); otherwise a key that
 //! reads other records, an aggregate or an `odm` read, fails before any data
 //! is read.
+use crate::support::Edit as _;
 use std::fs;
-use yamaa_adapters::{file_application, specification_report::Identity};
+use yamaa_adapters::file_application;
 use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::{domain_entry::Request, json::Value};
 
@@ -23,14 +24,7 @@ impl Fixture {
     fn run(&self) -> Result<String, Vec<Value>> {
         let specification = self.0.join("spec.yaml");
         let specification = specification.to_str().unwrap();
-        let identity = Identity {
-            runtime: "test",
-            runtime_version: "test",
-            engine_version: yamaa_core::VERSION,
-            example: "no-rows-record-reads",
-            specification,
-            base_directory: ".",
-        };
+        let identity = crate::support::study::identity("no-rows-record-reads", specification);
         let request = Request {
             specification,
             environment: None,
@@ -59,14 +53,7 @@ impl Fixture {
                 specification,
                 environment: None,
             },
-            Identity {
-                runtime: "test",
-                runtime_version: "test",
-                engine_version: yamaa_core::VERSION,
-                example: "no-rows-record-reads",
-                specification,
-                base_directory: ".",
-            },
+            crate::support::study::identity("no-rows-record-reads", specification),
         )
         .iter()
         .map(issue)
@@ -75,7 +62,7 @@ impl Fixture {
 }
 
 fn issue(issue: &Diagnostic) -> Value {
-    yamaa_adapters::json!({"phase":issue.phase(),"condition":issue.condition(),"rule":issue.rule(),"spec_paths":issue.spec_paths,"context":issue.context.clone()})
+    crate::support::study::issue_row(issue)
 }
 
 const SOURCE: &str = "ID,VAL,X\n1,3,a\n1,5,\n2,4,c\n";
@@ -245,16 +232,16 @@ fn a_key_that_reads_other_records_fails_before_data() {
             "{case: [{when: \"USUBJID = '001'\", then: {odm: ODM.IT.DM.SEX}}, {otherwise: {literal: U}}]}",
             "",
         )
-        .replace("keys: [USUBJID, SEX]", "keys: [USUBJID]"),
+        .edit("keys: [USUBJID, SEX]", "keys: [USUBJID]"),
         &[("odm.csv", ODM)],
     );
     assert_eq!(fixture.run(), Ok("USUBJID,SEX\n001,F\n002,U\n".into()));
     // With a window key every record is its own row, and an aggregate key
     // is computed for that row as any column is.
     let numbered = aggregate
-        .replace("keys: [ID, TOP]", "keys: [ID, SEQ, TOP]")
-        .replace("columns: [ID, TOP]", "columns: [ID, SEQ, TOP]")
-        .replace(
+        .edit("keys: [ID, TOP]", "keys: [ID, SEQ, TOP]")
+        .edit("columns: [ID, TOP]", "columns: [ID, SEQ, TOP]")
+        .edit(
             "  - {name: TOP,",
             "  - name: SEQ\n    type: int\n    derivation:\n      row_number:\n        \
              window: {group_by: [ID], order_by: [SRC.VAL]}\n  - {name: TOP,",

@@ -5,8 +5,9 @@
 //! `filter` discards never becomes a row, so an intermediate declaring
 //! `require_match: true` must not fail `unmatched_key` for it (#2699). A kept
 //! row that does read the lookup still fails when nothing matches.
+use crate::support::Edit as _;
 use std::fs;
-use yamaa_adapters::{file_application, specification_report::Identity};
+use yamaa_adapters::file_application;
 use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::domain_entry::Request;
 
@@ -29,14 +30,7 @@ impl Fixture {
                 specification,
                 environment: None,
             },
-            Identity {
-                runtime: "test",
-                runtime_version: "test",
-                engine_version: yamaa_core::VERSION,
-                example: "key-lookup-reads",
-                specification,
-                base_directory: ".",
-            },
+            crate::support::study::identity("key-lookup-reads", specification),
         )
     }
     fn saved(&self, output: &str) -> String {
@@ -107,7 +101,7 @@ const RECORDS: &str = "keys: KEYS\n\
     \x20     AVAL: VS.VSSTRESN\n";
 
 fn specification(body: &str, keys: &str) -> String {
-    format!("{HEAD}{}", body.replace("KEYS", keys))
+    format!("{HEAD}{}", body.edit("KEYS", keys))
 }
 
 #[test]
@@ -154,7 +148,7 @@ const VS_KEPT: &str = "USUBJID,VSSEQ,VSTESTCD,VSDTC,VSSTRESN\n\
     S2,1,SYSBP,2025-01-01,90\n";
 
 fn strict_head() -> String {
-    HEAD.replace("VS.VSSTRESN IS NOT NULL", "VS.VSSTRESN > 100")
+    HEAD.edit("VS.VSSTRESN IS NOT NULL", "VS.VSSTRESN > 100")
 }
 
 fn assert_unmatched_key(fixture: &Fixture) {
@@ -175,7 +169,7 @@ fn grouped_unmatched_key_still_fails_for_a_kept_group() {
         &format!(
             "{}{}",
             strict_head(),
-            GROUPED.replace("KEYS", "[USUBJID, PARAMCD, SRCSEQ]")
+            GROUPED.edit("KEYS", "[USUBJID, PARAMCD, SRCSEQ]")
         ),
         &[("vs.csv", VS_KEPT)],
     );
@@ -188,7 +182,7 @@ fn ungrouped_unmatched_key_still_fails_for_a_kept_record() {
         &format!(
             "{}{}",
             strict_head(),
-            RECORDS.replace("KEYS", "[USUBJID, VSSEQ, LASTSEQ]")
+            RECORDS.edit("KEYS", "[USUBJID, VSSEQ, LASTSEQ]")
         ),
         &[("vs.csv", VS_KEPT)],
     );
