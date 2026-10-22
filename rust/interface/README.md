@@ -173,18 +173,26 @@ or `optional<T>`.
 
 ### Command line
 
-`cli` is empty until the `yamaa-cli` commands are implemented (#3060): the
-binary checks every command's arguments but refuses to run one yet, and this
-file declares only implemented surface. Its grammar follows the draft. A
-nonempty `cli` has `binary` (`yamaa`), `crate`
-(`rust/crates/yamaa-cli`), `synopsis`, `global_flags`, `exit_status` (integer
-statuses 0 to 125 and what each means) and `commands`, and may have
-`depends_on`, `inputs`, `streams`, `interrupt` and `json` (named lists of JSON
-keys). A command has a `name`, a `synopsis` starting with `yamaa <name>`, the
-`operations` it reaches and its `json_keys`, and may have `args`, `flags`,
-`effect` and `text`. A flag's name starts with `--`; a flag or argument may
-name the vocabulary its values come from. An operation's `cli` list, and
-`host_only.cli`, may name only declared commands and global flags.
+`cli` declares the `yamaa` binary of `rust/crates/yamaa-cli` (#3060), which
+calls the facade directly and so pairs no native export. It has `binary`
+(`yamaa`), `crate` (`rust/crates/yamaa-cli`), `synopsis`, `global_flags`,
+`exit_status` (integer statuses 0 to 125 and what each means) and `commands`,
+and may have `depends_on`, `inputs`, `values`, `streams`, `interrupt` and
+`json` (named lists of JSON keys: those of the objects the documents hold,
+such as an issue). `values` holds the command line's own closed vocabularies,
+which no facade constant owns, such as the output formats: each lists its
+values, and none shares a name with a vocabulary of the top-level `values`. A
+command has a `name`, a `synopsis` starting with `yamaa <name>`, the
+`operations` it reaches and its `json_keys`, the keys of the JSON document it
+prints, or text naming a document with no fixed keys, such as the JSON Schema
+that `schema` prints. It may have `args`, `flags`, `effect`, `text` and
+`refusal_keys`, the keys of the document a refusal prints when they differ
+from `json_keys`. A flag's name starts with `--`; a flag or argument may name
+the vocabulary its values come from, in either `values`. An operation's `cli`
+list, and `host_only.cli`, may name only declared commands and global flags.
+`tools/tests/test_bindings_cli.py` reads the binary's parser table and usage
+text, and keeps the commands, their arguments and flags, the global flags, the
+output formats and the exit statuses equal to them.
 
 ### Native registrations
 
@@ -251,9 +259,11 @@ same comparison beside the shipped-schema check.
 each value, each column and record field with its position and type, each
 public type projection, function, class, member and argument with its
 position, default and result, the refusal, each exported name and S3 method,
-and each command, flag, exit status and JSON key. It leaves out the private
-native sections, documentation and implementation details such as `holds` and
-`calls`. The interface check of
+and the command line's synopses, output formats, global flags and exit
+statuses, each command with its arguments, flags and JSON keys, a refusal's
+included, and the keys of each object its documents hold. It leaves out the
+private native sections, documentation and implementation details such as
+`holds` and `calls`. The interface check of
 [the stability contract](../../docs/release.md#stability-contract) compares
 these lines with the newest final release of the same major: a removed or
 changed line is a break, and an added line an addition. A stale manifest fails

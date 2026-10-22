@@ -5,9 +5,9 @@
 # 1. The R package is not standalone in this repository: R/yamaa only
 #    becomes a buildable source package after the shared Rust crates are
 #    staged into it, so the staged tree is what gets built and checked.
-# 2. DESCRIPTION requires R >= 4.4.0 and a Rust toolchain (Cargo and
+# 2. DESCRIPTION requires R >= 4.2.0 and a Rust toolchain (Cargo and
 #    rustc 1.82 or later); the matrix keeps release on all three operating
-#    systems plus devel and the 4.4 floor on Ubuntu, and installs the
+#    systems plus devel and the latest 4.2 patch on Ubuntu, and installs the
 #    pinned Rust toolchain before checking.
 # 3. Platform checks are release lanes, not development checks: they run
 #    on each release branch push and on dispatch. CI's `r` job runs the
@@ -57,7 +57,7 @@ jobs:
           - {os: windows-2025, r: release}
           - {os: ubuntu-24.04, r: devel, http-user-agent: release}
           - {os: ubuntu-24.04, r: release}
-          - {os: ubuntu-24.04, r: '4.4'}
+          - {os: ubuntu-24.04, r: '4.2'}
 
     env:
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}

@@ -1,4 +1,4 @@
-# Rtools45 uses GCC/MinGW-w64 and UCRT for x86_64 R. Select the GNU Rust
+# Rtools42 and later use GCC/MinGW-w64 and UCRT for x86_64 R. Select the GNU Rust
 # target explicitly even when the caller's rustup host defaults to MSVC.
 # configure.win writes this file as src/Makevars.win with the Cargo and rustc
 # that tools/configure.R found, checked and reported, and the target directory.

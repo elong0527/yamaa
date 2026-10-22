@@ -33,7 +33,7 @@ variants without the suggested packages and in R-hub's containers repeat that
 check in more of CRAN's configurations. A kind of lane that native.py adds
 fails this check until it is classified here.
 
-An R source package cell may state a floor, `R 4.4 or later`, as the package's
+An R source package cell may state a floor, `R 4.2 or later`, as the package's
 DESCRIPTION does. It counts as qualified when lanes on its platform qualify the
 floor and R-release, since no lane runs every series in between. Every other
 cell lists its series, singly or as a range such as `3.12 to 3.15`.
@@ -83,7 +83,7 @@ class Column:
 
     `noun` names the form in messages. `runtime` is the word before a cell's
     series, CPython or R; the command line's cells name a Rust target instead.
-    `floor` admits a cell such as `R 4.4 or later`, and `glibc` a suffix such
+    `floor` admits a cell such as `R 4.2 or later`, and `glibc` a suffix such
     as `on glibc 2.28 or later`.
     """
 

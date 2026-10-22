@@ -20,10 +20,10 @@
 //!   failure:` when a case failed, `not covered:` when an adapter is not
 //!   covered, then the engine, language, host and platform.
 //! - **JSON** (`--format json`). One canonical JSON document (RFC 8785) on
-//!   one line, with the keys the draft `rust/interface/bindings-1.0.yaml`
-//!   lists in `cli.commands[].json_keys`: the command and its arguments, the
-//!   `status`, the issues as objects whose `context` is an object, and the
-//!   written `paths`. `resolve` prints the resolved specification itself,
+//!   one line, with the keys `rust/interface/bindings.yaml` lists in
+//!   `cli.commands[].json_keys`, or in `refusal_keys` where a refusal's
+//!   differ: the command and its arguments, the `status`, the issues as
+//!   objects whose `context` is an object, and the written `paths`. `resolve` prints the resolved specification itself,
 //!   and `schema` the JSON Schema itself (D149); a refusal of either prints
 //!   the command's document, which echoes its arguments: `resolve`'s `path`
 //!   and `spec`, and `schema`'s `type` (D169). A submission's `created` is

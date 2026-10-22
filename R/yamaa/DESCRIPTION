@@ -24,7 +24,7 @@ Copyright: The yamaa contributors; for the bundled and linked third-party
     test files in tests/host-fixtures/sas, those that the license files beside
     them name.
 Encoding: UTF-8
-Depends: R (>= 4.4.0)
+Depends: R (>= 4.2.0)
 Imports: utils
 Suggests: arrow (>= 23.0.1), jsonlite (>= 2.0.0)
 SystemRequirements: Cargo (Rust's package manager) (>= 1.82.0),

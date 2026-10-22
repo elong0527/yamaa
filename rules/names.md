@@ -60,7 +60,7 @@ Fails: `unknown_field`, `unresolvable_name`.
 Evidence: `schema-source-binding`, `negative-source-undeclared-field`, `rust/crates/yamaa-adapters/tests/fixtures/binding_diagnostics.tsv`.
 
 ```yaml
-source: DM.SEX
+derivation: DM.SEX
 ```
 
 [Lookup and joins](lookup.md) defines record lookup resolution. An
@@ -70,9 +70,15 @@ a field of an in-scope dataset. A field typed `variable` holds a qualified
 source variable or an unqualified constructed output column. The rule that owns
 a field may narrow the qualified variables it accepts: a `between` value
 qualified by an input dataset must name the current row's driver
-([LOOKUP-9](lookup.md#lookup-9)), and a column-level window names a field
+([LOOKUP-9](lookup.md#lookup-9)), a key match value never names a lookup
+([LOOKUP-5](lookup.md#lookup-5)), and a column-level window names a field
 only of a driver that every row template has
-([WINDOW-11](windows.md#window-11)).
+([WINDOW-11](windows.md#window-11)). An unqualified name never falls back to a
+field of the driver's record that no column takes, in a `between` value or a
+key match value alike. A file that declares `schema_version` is read under the
+rules at the `yamaa-v0.5.0` tag, where a named intermediate's unqualified
+`between` value that no column takes reads that field of the driver's record
+([LOOKUP-9](lookup.md#lookup-9)).
 
 <a id="name-4"></a>
 
@@ -161,7 +167,7 @@ Evidence: `schema-handlers`, `rust/crates/yamaa-adapters/tests/fixtures/source_f
 ```yaml
 source:
   variable: ADSL.TRTSDT
-  absent: {literal: null}
+  absent: null
 ```
 
 [Lookup and joins](lookup.md) defines the join uniqueness the

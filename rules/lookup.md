@@ -75,7 +75,7 @@ no record, and a record missing a key or a stated bound does not match.
 `between` names a current-row value and at least one bound field.
 
 Fails: `incompatible_input_type`, `incomparable_range_types`, `invalid_field_type`, `prohibited_construct`, `unknown_field`.
-Evidence: `negative-lookup-bad-range`, `negative-lookup-range-other-input`, `negative-aggregate-range-other-input`, `schema-lookup-source-range`, `schema-lookup-source-range-driver`, `schema-lookup-intermediate-range-driver`, `schema-aggregate-range-driver`, `sdtm-lb-lab-specific-ranges`, `adam-advs-window-table`, `adam-adtr-nadir`, `adam-adsl-new-therapy`, `rust/crates/yamaa-adapters/tests/execution_lookup_model.rs`.
+Evidence: `negative-lookup-bad-range`, `negative-lookup-range-other-input`, `negative-lookup-range-bare-field`, `negative-source-range-other-input`, `negative-aggregate-range-other-input`, `schema-lookup-source-range`, `schema-lookup-source-range-driver`, `schema-lookup-intermediate-range-driver`, `schema-aggregate-range-driver`, `sdtm-lb-lab-specific-ranges`, `adam-advs-window-table`, `adam-adtr-nadir`, `adam-adsl-new-therapy`, `rust/crates/yamaa-adapters/tests/execution_lookup_model.rs`, `rust/crates/yamaa-adapters/tests/check_variable_forms.rs`, `rust/tests/host-fixtures/cases.json`.
 
 The key pairs are those of [LOOKUP-5](#lookup-5). Every pair is compared on
 every record offered, so a record value whose type cannot compare with its
@@ -105,25 +105,40 @@ intermediates:
     between: {value: AGE, lower: AGELO, upper: AGEHI}
 ```
 
-The value names what the current row holds: an output column, written bare; a
-field of the record of the row's driver, qualified by the driver; or a column
-a named intermediate selects for the row, qualified by its id. A value read
-from a driver's record must name the driver of every row that reads the
-lookup, wherever the lookup is read: in a row template, that template's driver
+The value names what the current row holds, and each form has one meaning: a
+bare name is an output column ([NAME-3](names.md#name-3)); a name qualified by
+the row's driver is a field of the record that built the row; and a name
+qualified by a named intermediate's id is the column it selects for the row. A
+bare name that no column takes names nothing the row holds, even when the
+driver's record stores a field of that name. A value read from a driver's
+record must name the driver of every row that reads the lookup, wherever the
+lookup is read: in a row template, that template's driver
 ([LOOKUP-2](#lookup-2)), and during column derivation, the driver of every row
-template the read can evaluate on: the templates that leave the column to the
-column phase. A row template's `filter` reads its lookups for that template's
-rows, and a dataset verification for the rows of every template. A named
-intermediate is also read through an aggregate's `derive` binding and through
-the range value of another lookup. A value naming nothing the current row
-holds, such as a field of another input or of the lookup's own relation, fails
-as `unknown_field` at `between.value`, once per range, whichever kind of
-lookup declares it. Which input drives each row is declared, so `check`
-reports a value qualified by an input that drives none of the rows reading the
-lookup from the declarations alone, whether or not that input stores the
-field. A field of another input is never read through the implicit join
-([LOOKUP-1](#lookup-1)); bring it onto the row as a column first, and name the
-column:
+template the read can evaluate on: the templates that leave the column to
+column derivation. A row template's `filter` reads its lookups for that
+template's rows, and a dataset verification for the rows of every template. A
+named intermediate is also read through an aggregate's `derive` binding and
+through the range value of another lookup. A value naming nothing the current
+row holds, such as a bare name that no column takes or a field of another
+input or of the lookup's own relation, fails as `unknown_field` at
+`between.value`, once per range, whichever kind of lookup declares it and
+whatever its bounds bind. Which columns a specification declares and which
+input drives each row are declared, so `check` reports a bare name that no
+column takes, and a value qualified by an input that does not drive every row
+reading the lookup, from the declarations alone, whether or not that input
+stores the field. A named intermediate that another intermediate's derivation
+reads matches for the donor record there ([LOOKUP-16](#lookup-16)), where its
+bare value is that record's field; a row that reads it finds no value in a
+bare name that no column takes all the same. A named intermediate binds its
+range once for every row that reads it, so its value cannot read the record
+that built a row from another named intermediate's records: qualified by the
+intermediate that builds a reading row, it is not supported and fails as
+`unsupported_operation` at `between.value`
+([COLUMN-15](columns.md#column-15)); for rows another input builds, it is a
+keyed lookup of a row driver, which declares no key
+([LOOKUP-3](#lookup-3)). A field of another input is never read through the
+implicit join ([LOOKUP-1](#lookup-1)); bring it onto the row as a column
+first, and name the column:
 
 ```yaml
 columns:
@@ -140,8 +155,9 @@ intermediates:
 The value and every stated bound must be mutually comparable, with no operand
 converted. A value and a bound whose types cannot compare fail validation as
 `incomparable_range_types`, reporting the types of the value and the stated
-bounds; a type decided per value fails the same way when the record is
-compared. A derived bound has its derivation's declared or result type
+bounds, and the named intermediate's id or the source binding's variable that
+declares the range; a type decided per value fails the same way when the
+record is compared. A derived bound has its derivation's declared or result type
 ([LOOKUP-15](#lookup-15)).
 
 A `between` with neither bound fails as `invalid_field_type`, and a bound
@@ -150,6 +166,15 @@ driver's own record, an output column or a named intermediate has no implicit
 join to narrow, and `between` there fails as `prohibited_construct` at the
 field. A `between` on an unqualified or grouped-row aggregate, which matches
 no relation, fails as `invalid_aggregate_context` ([LOOKUP-18](#lookup-18)).
+
+A file that declares `schema_version` is read under the rules at the
+`yamaa-v0.5.0` tag, where a named intermediate's bare `between.value` that no
+column takes reads the field of that name of the record that builds the rows
+of the first row template, or of `base`; a value that no row holds fails only
+once its bounds bind; a named intermediate's value qualified by an
+intermediate that builds a reading row reads that intermediate as a keyed
+lookup; and a source binding's `incomparable_range_types` names no
+variable.
 
 <a id="lookup-8"></a>
 
@@ -276,7 +301,7 @@ Evidence: `schema-lookup-absent-default`, `negative-source-require-match`, `nega
 ```yaml
 input:
   ADSL: {path: adsl.csv, require_match: true}
-  EX: ex.csv
+  EX: {path: ex.csv, key: [STUDYID, USUBJID]}
 intermediates:
   - id: REFRANGE
     dataset: LBRANGE
@@ -382,7 +407,7 @@ input's declared `key`. A lookup names at least one pair, every column must
 exist, and every match value must read a known current-row value.
 
 Fails: `invalid_field_type`, `no_applicable_keys`, `unknown_field`, `invalid_aggregate_context`.
-Evidence: `negative-lookup-mismatched`, `negative-lookup-unknown-key`, `negative-lookup-repeated-key`, `negative-lookup-key-other-template`, `negative-aggregate-key-other-template`, `negative-verification-lookup-key`, `negative-row-aggregate-keys`, `sdtm-lb-lab-specific-ranges`, `rust/crates/yamaa-adapters/tests/fixtures/intermediate_key_reference.json`, `rust/crates/yamaa-adapters/tests/fixtures/correlated_aggregates.json`, `rust/crates/yamaa-adapters/tests/execution_lookup_read_contexts.rs`, `rust/crates/yamaa-adapters/tests/execution_aggregate_key_reads.rs`, `rust/crates/yamaa-core/src/specification/declared_keys.rs`, `rust/crates/yamaa-core/src/key_relation.rs::a_declared_key_pairs_every_column_it_names`, `rust/crates/yamaa-adapters/tests/front_end_comparison.rs`.
+Evidence: `negative-lookup-mismatched`, `negative-lookup-unknown-key`, `negative-lookup-repeated-key`, `negative-lookup-key-other-template`, `negative-lookup-key-lookup-qualified`, `negative-aggregate-key-other-template`, `negative-aggregate-key-bare-field`, `negative-verification-lookup-key`, `negative-row-aggregate-keys`, `sdtm-lb-lab-specific-ranges`, `rust/crates/yamaa-adapters/tests/fixtures/intermediate_key_reference.json`, `rust/crates/yamaa-adapters/tests/fixtures/correlated_aggregates.json`, `rust/crates/yamaa-adapters/tests/execution_lookup_read_contexts.rs`, `rust/crates/yamaa-adapters/tests/execution_aggregate_key_reads.rs`, `rust/crates/yamaa-core/src/specification/declared_keys.rs`, `rust/crates/yamaa-core/src/key_relation.rs::a_declared_key_pairs_every_column_it_names`, `rust/crates/yamaa-adapters/tests/front_end_comparison.rs`, `rust/crates/yamaa-adapters/tests/check_variable_forms.rs`.
 
 ```yaml
 intermediates:
@@ -422,7 +447,30 @@ of fails naming the column. A `key` that no read uses is admitted, and the
 lint reports it as `unused_input_key`. `SELF` names donor rows and is never a
 current-row scope, so a match value written `SELF.field` names no current-row
 value and fails the same way; when the current row carries `field`, the
-diagnostic suggests that bare name.
+diagnostic suggests that bare name. A bare name is an output column
+([NAME-3](names.md#name-3)), so a field of the driver's record that no column
+takes fails too. A match value never reads a lookup: a name qualified by a
+named intermediate's id fails as `unknown_field`, whether written alone or
+read by an expression ([LOOKUP-11](#lookup-11)). Derive the lookup's value
+into a column, then match on the column:
+
+```yaml
+columns:
+  - {name: SEX, type: str, derivation: SUBJECT.SEX}
+intermediates:
+  - id: RANGE
+    dataset: LBRANGE
+    key: [LBTESTCD, SEX]
+```
+
+A written `key` reports its refusals where they are written, for a named
+intermediate and a qualified aggregate alike: a column the relation does not
+have, and a pair whose types cannot compare, at `key`. A match value that
+reads no current-row value fails at a named intermediate's `key` when it is a
+name written alone and at `key.<column>` for any other value, and at a
+qualified aggregate's pair, `key.<column>`, whatever its form. The pair's
+match value is read even when its column is missing. A key an input declares
+reports its refusals at the read.
 
 A match value read from an input's record names the driver of every row that
 reads the lookup, wherever the lookup is read: in a row template's derivations
@@ -451,7 +499,10 @@ and a named intermediate or qualified aggregate without `key`, pair the
 applicable keys: the output `keys`, in output-key order, that the lookup's
 relation also carries, each paired with the current row's same-named value.
 With no applicable key the lookup fails as `no_applicable_keys`, reporting the
-dataset and the output keys with a hint.
+dataset and the output keys with a hint. A qualified aggregate's key refusals
+are reported at its `expr`, or at the `filter` that names its relation when
+its reduction names no field, and a column the relation does not have stops
+the pair before its match value is read.
 
 <a id="lookup-6"></a>
 
@@ -474,7 +525,7 @@ the key column's type under [VALUE-19](values.md#value-19), and the failure
 names that result type. `N + 1` over an `int` `N` is an `int`, a `mapping` to
 integer values an `int`, and `greatest` over an `int` and a `float` a number of
 either type, which compares with a numeric key column and with no text one.
-`{literal: null}` is always missing and compares with every column. The same
+`null` is always missing and compares with every column. The same
 holds for a named intermediate's and an aggregate's `key` alike.
 
 ## The implicit join
@@ -745,7 +796,7 @@ bare name there is the current row's column, not a donor field. Row templates
 reading one `SELF` intermediate can each supply a match value from their own
 derivations. Below, an expected-record template derives its window and reads
 `COVER` to find a completed row already in that window; another template
-deriving `AVISIT: {literal: WEEK 4}` reads the same intermediate for its own
+deriving `AVISIT: "'WEEK 4'"` reads the same intermediate for its own
 window.
 
 ```yaml
@@ -755,7 +806,6 @@ intermediates:
     key: {USUBJID: VS.USUBJID, PARAMCD: VS.VSTESTCD, AVISIT: AVISIT}
     order_by: [SELF.VSSEQ]
     keep: last
-    no_match: {literal: null}
 rows:
   # ...after the template that builds the collected rows
   - id: expected_week2
@@ -763,7 +813,7 @@ rows:
     group_by: [VS.USUBJID, VS.VSTESTCD]
     filter: "COVERED IS NULL"
     derivations:
-      AVISIT: {literal: WEEK 2}
+      AVISIT: "'WEEK 2'"
       COVERED: COVER.VSSEQ
 ```
 
@@ -772,17 +822,22 @@ rows:
 ### LOOKUP-11. A lookup-qualified variable reads a column of the selected record
 
 A variable qualified by a lookup id, such as `DEATHEV.AEDECOD`, reads the named
-column of the selected record in any field typed as `variable`. A declared
+column of the selected record in any field typed as `variable` except a key
+match value, which never reads a lookup ([LOOKUP-5](#lookup-5)). A declared
 `columns` list restricts which columns the lookup may read; without it every
 stored and derived column is available. A column the lookup's dataset does not
 have, or one outside a declared `columns` list, fails.
 
 Fails: `unknown_field`.
-Evidence: `adam-adae-death`, `rust/crates/yamaa-core/tests/relations_reference_scope.rs`.
+Evidence: `adam-adae-death`, `negative-lookup-key-lookup-qualified`, `rust/crates/yamaa-core/tests/relations_reference_scope.rs`, `rust/crates/yamaa-adapters/tests/check_variable_forms.rs`.
 
 Naming in `columns` a column the dataset does not have fails as
 `unknown_field`, and so does a lookup-qualified read of a missing or
-unlisted column.
+unlisted column. In a `between.value` a lookup-qualified variable reads the
+column the lookup selects for the row ([LOOKUP-9](#lookup-9)), or in a donor
+read for the donor record ([LOOKUP-16](#lookup-16)). In a key match
+value it fails as `unknown_field` at the pair, written alone or read by an
+expression; derive the value into a column first and match on the column.
 
 <a id="lookup-12"></a>
 
@@ -822,8 +877,7 @@ behave there like stored fields.
 Fails: `unknown_field`, `duplicate_derivation`.
 Evidence: `schema-lookup-intermediate-derived-filter`, `schema-lookup-intermediate-correlated-derive`, `schema-lookup-intermediate-closest-datetime`, `schema-window-intermediate-rank`, `negative-lookup-derivation-scope`, `rust/crates/yamaa-adapters/tests/execution_lookup_read_contexts.rs`, `rust/crates/yamaa-adapters/tests/execution_lookup_matched_derivations.rs`.
 
-Each entry is either an untyped expression, including its
-`{value: <expression>}` wrapper, or a typed binding
+Each entry is either an untyped expression or a typed binding
 `{type: <column_type>, derivation: <expression>, unconvertible: <literal>?}`.
 An untyped entry cannot declare `unconvertible`, and an untyped handler
 wrapper fails schema validation. A typed entry converts each result under
@@ -840,7 +894,7 @@ derivations:
   VISITN:
     type: int
     derivation: {str_extract: {source: VISIT, pattern: '^WEEK ([0-9]+)$', group: 1}}
-    unconvertible: {literal: null}
+    unconvertible: null
 ```
 
 `WEEK 02` thus yields the integer `2` before numeric matching. `check` reports
@@ -897,10 +951,9 @@ excluded by a predicate.
 intermediates:
   - id: EOT
     dataset: DS
+    key: [STUDYID, USUBJID]
     derivations:
-      EOT_FALLBACK:
-        compute:
-          expr: "DSSTDY + DSSEQ / 1000"
+      EOT_FALLBACK: "DSSTDY + DSSEQ / 1000"
     filter: "DS.EOT_FALLBACK IS NOT NULL"
     order_by: [DS.EOT_FALLBACK]
     keep: first
@@ -916,17 +969,17 @@ intermediates:
     dataset: SRC
     key: [ID]
     derivations:
-      DIST: {compute: {expr: "ABS(DAY - BASE.REF)"}}
+      DIST: "ABS(DAY - BASE.REF)"
     filter: "SRC.DIST IS NOT NULL"
     order_by: [SRC.DIST]
     keep: first
     columns: [VALUE, DIST]
-    no_match: {literal: null}
 ```
 
 The `filter` drops every `SRC` record whose distance is missing. When the
 current input record's reference is missing, every distance is missing, no
-candidate survives, and the read takes `no_match` ([LOOKUP-24](#lookup-24)).
+candidate survives, and the read answers absence: missing, since `PICK`
+declares no `absent` ([LOOKUP-24](#lookup-24)).
 
 `ABS(DAY - BASE.REF)` is the number of days between two days only on a
 numbering without a gap. A study day (`--DY`, `ADY`) has no day 0
@@ -941,7 +994,7 @@ candidate's `ADT` and the reference's `BASE.REFDT`, with `diff`
 ```yaml
     derivations:
       GAP: {diff: {type: date, start: ADT, end: BASE.REFDT, unit: day}}
-      DIST: {compute: {expr: "ABS(GAP)"}}
+      DIST: "ABS(GAP)"
 ```
 
 To fall back to a candidate instead, leave the filter out and place missing
@@ -982,9 +1035,9 @@ distance:
 
 ```yaml
     derivations:
-      ADTM: {impute: {type: datetime, source: DTC, minimum_source_precision: day, time: first}}
+      ADTM: {impute: {type: datetime, source: DTC, time: first}}
       GAP: {diff: {type: datetime, start: ADTM, end: BASE.REFDTM, unit: hour}}
-      DIST: {compute: {expr: "ABS(GAP)"}}
+      DIST: "ABS(GAP)"
 ```
 
 `diff` with `type: datetime` reads two `datetime` values
@@ -996,23 +1049,24 @@ collected as text that may be partial or have no time, such as an SDTM
 reads the completed value:
 
 ```yaml
-      REFDTM: {impute: {type: datetime, source: BASE.REFDTC, minimum_source_precision: day, time: first}}
+      REFDTM: {impute: {type: datetime, source: BASE.REFDTC, time: first}}
       GAP: {diff: {type: datetime, start: ADTM, end: REFDTM, unit: hour}}
 ```
 
 `GAP`, and with it `DIST`, is missing when `ADTM` or the reference is missing,
-including a reference whose text is coarser than its minimum precision. A
+including a reference whose text is coarser than a day, since without a `day`
+rule `impute` supplies only the time ([TIME-8](temporal.md#time-8)). A
 candidate without a distance is dropped by the filter, or placed last by
 `nulls: last` when the filter is left out. For each candidate's `DTC`:
 
 - A missing `DTC` gives a missing `ADTM` without any handler
   ([TIME-13](temporal.md#time-13)).
 - Partial collected text such as `2024-03` is valid
-  ([TIME-7](temporal.md#time-7)), so `invalid` never answers it. Under
-  `minimum_source_precision: day` it gives a missing `ADTM` and has no
-  distance ([TIME-8](temporal.md#time-8)). A coarser minimum completes it
-  from the rules that minimum requires ([TIME-10](temporal.md#time-10)):
-  with `minimum_source_precision: month` and `day: first`, `2024-03` becomes
+  ([TIME-7](temporal.md#time-7)), so `invalid` never answers it. Without a
+  `day` rule it gives a missing `ADTM` and has no distance
+  ([TIME-8](temporal.md#time-8)). A declared `day` rule completes it, and a
+  `month` rule, which completes a year alone, needs one too
+  ([TIME-10](temporal.md#time-10)): with `day: first`, `2024-03` becomes
   `2024-03-01T00:00:00`, and the distance is measured from that imputed
   value. To measure in days instead, complete a `date` with `impute` of
   `type: date`, which takes no `time`, and take the day difference with
@@ -1023,7 +1077,7 @@ candidate without a distance is dropped by the filter, or placed last by
 - Text that is not collected date text, such as `2024-03-10 09:00`, fails as
   `invalid_date_text` at the derivation's path ([TIME-13](temporal.md#time-13)).
   One such record in `SRC` stops the run, even when no current input record
-  matches its key, unless `invalid: {literal: null}` answers it with a missing
+  matches its key, unless `invalid: null` answers it with a missing
   `ADTM` ([COLUMN-10](columns.md#column-10)).
 
 `time: first` is not neutral for a distance. Against a 09:00 reference, a
@@ -1034,7 +1088,7 @@ for a candidate or the reference, comes from the statistical analysis plan.
 When the imputed datetime is published, publish its imputation flags beside
 it: derive `ATMF: {imputation_flag: {source: ADTM, part: time}}` after `ADTM`
 ([TIME-18](temporal.md#time-18)), and a `part: date` flag as well when a
-coarser minimum supplies a day or month, and list them in `columns`. `ATMF`
+`day` or `month` rule supplies a date field, and list them in `columns`. `ATMF`
 is `H` for a date-only candidate, and `seconds_collected: false` keeps a study
 that collects times to the minute from flagging every timed candidate `S`.
 
@@ -1045,9 +1099,9 @@ those collected to the minute or the second:
 ```yaml
     derivations:
       PREC: {precision: {type: datetime, source: DTC}}
-      ADTM: {impute: {type: datetime, source: DTC, minimum_source_precision: day, time: first}}
+      ADTM: {impute: {type: datetime, source: DTC, time: first}}
       GAP: {diff: {type: datetime, start: ADTM, end: BASE.REFDTM, unit: hour}}
-      DIST: {compute: {expr: "ABS(GAP)"}}
+      DIST: "ABS(GAP)"
     filter: "SRC.DIST IS NOT NULL AND SRC.PREC IN ('minute', 'second')"
 ```
 
@@ -1065,13 +1119,26 @@ absence policy apply as for any other read ([LOOKUP-25](#lookup-25)), once per
 donor record.
 
 Fails: `unknown_field`, `phase_boundary`, `dependency_cycle`.
-Evidence: `adam-adlb-end-of-treatment`, `adam-adsl-crossover-sequence`, `rust/crates/yamaa-adapters/tests/execution_aggregate_record_operations.rs`, `rust/crates/yamaa-adapters/tests/project_environment.rs::intermediate_callback_reads_a_kept_selection_beside_its_own_donor_field`.
+Evidence: `adam-adlb-end-of-treatment`, `adam-adsl-crossover-sequence`, `schema-lookup-donor-range`, `negative-lookup-donor-range-driver`, `rust/crates/yamaa-adapters/tests/execution_aggregate_record_operations.rs`, `rust/crates/yamaa-adapters/tests/check_variable_forms.rs`, `rust/crates/yamaa-adapters/tests/project_environment.rs::intermediate_callback_reads_a_kept_selection_beside_its_own_donor_field`.
 
 Either form of a donor-record name names a stored field or a derivation
 declared before the reading one, and a name the donor record cannot supply
 fails as `unknown_field`. The read column must exist in the other
 intermediate's dataset or derivations and, when that intermediate declares
 `columns`, be one of them ([LOOKUP-11](#lookup-11)).
+
+In the other intermediate's `between.value` the bare form is the donor
+record's field even when no output column takes the name, while a row that
+reads the same intermediate still finds no value there
+([LOOKUP-9](#lookup-9)). A value qualified by a third intermediate's id reads
+that intermediate's column for the donor record, and that match too reads the
+donor record alone. A read of any other record fails as `unknown_field` at
+the reading derivation, naming the read as `identifier`, the reading
+intermediate and the intermediate it reads as `read`: a range value,
+correlated `filter` field or derivation field of the other intermediate that
+names another input's record, such as the record of the current row's
+driver, and a key value of an intermediate its range value reads that does
+so. A key match value never reads an intermediate ([LOOKUP-5](#lookup-5)).
 
 The other intermediate is selected once per donor record, and every derivation
 of that record that reads it shares the selection ([LOOKUP-12](#lookup-12)). A
@@ -1118,6 +1185,11 @@ intermediates:
 Each laboratory record reads its own supplemental endpoint qualifier, and the
 window ranks the records of each subject and test on it.
 
+A file that declares `schema_version` is read under the rules at the
+`yamaa-v0.5.0` tag, where the other intermediate's bare `between.value` that
+no output column takes is a field of the driver's record
+([LOOKUP-9](#lookup-9)).
+
 <a id="lookup-17"></a>
 
 ### LOOKUP-17. An intermediate's unique verification asserts that no donor column combination repeats
@@ -1136,6 +1208,7 @@ Evidence: `schema-lookup-intermediate-unique`, `negative-lookup-duplicate-interm
 ```yaml
 - id: DS_EOS
   dataset: DS
+  key: [STUDYID, USUBJID]
   filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.DSDECOD <> 'SCREEN FAILURE'"
   verifications:
     - unique: [STUDYID, USUBJID]
