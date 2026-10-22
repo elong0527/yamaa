@@ -1,5 +1,7 @@
 #![cfg(feature = "yaml")]
-//! Project contracts.
+//! Project contracts: project environment projection, project function
+//! diagnostics, project lock, project lock diagnostics, project report and
+//! project run.
 mod project {
     mod project_environment_projection {
         //! Complete retained-attempt witnesses; expected reports are authored independently.
@@ -1761,6 +1763,7 @@ mod project {
     }
     mod project_run {
         use crate::support::project_schemas as schemas;
+        use crate::support::Edit as _;
         use std::{cell::RefCell, rc::Rc, sync::Arc};
         use yamaa_adapters::{
             project_source::{self, Kind, OwnedEnvironment, ProjectCapturePort, Reply, Request},
@@ -2244,8 +2247,7 @@ functions:
             let document = schemas::domain_schema()
                 .prepare_standalone(source(
                     "study/domain.yaml",
-                    raw.replace(", order_by: [SRC.N], keep: first", "")
-                        .as_bytes(),
+                    raw.edit(", order_by: [SRC.N], keep: first", "").as_bytes(),
                 ))
                 .unwrap();
             let Err(rejected) = PreparedRun::prepare_with_environment(document, environment())
@@ -3229,8 +3231,8 @@ functions:
                     format!(
                         "{head}{}",
                         windowed
-                            .replace("TEMPLATE", "")
-                            .replace("VALUE_OF_N", "SRC.N")
+                            .edit("TEMPLATE", "")
+                            .edit("VALUE_OF_N", "SRC.N")
                     ),
                     vec![row(3, 3), row(1, 1), row(2, 2)],
                     vec![3, 1, 2],
@@ -3242,11 +3244,11 @@ functions:
                     format!(
                         "{head}{}",
                         windowed
-                            .replace(
+                            .edit(
                                 "TEMPLATE",
                                 "    group_by: [SRC.ID]\n    filter: \"SEQ <= 2\"\n"
                             )
-                            .replace("VALUE_OF_N", "{aggregate: \"SUM(SRC.N)\"}")
+                            .edit("VALUE_OF_N", "{aggregate: \"SUM(SRC.N)\"}")
                     ),
                     vec![row(1, 1), row(2, 2)],
                     vec![3, 1, 2],

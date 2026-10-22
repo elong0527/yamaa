@@ -1012,7 +1012,13 @@
         "R/yamaa/tests/issue_locations.R",
         "python/tests/installed/installed_project_parity.py",
         "R/yamaa/tests/project_parity.R",
-        "R/yamaa/tests/run_report.R"
+        "R/yamaa/tests/run_report.R",
+        "python/tests/installed/installed_compact_yaml.py",
+        "R/yamaa/tests/compact_yaml.R",
+        "python/tests/installed/installed_longitudinal_capacity.py",
+        "R/yamaa/tests/longitudinal_capacity.R",
+        "python/tests/installed/installed_column_ceilings.py",
+        "R/yamaa/tests/column_ceilings.R"
       ]
     },
     {

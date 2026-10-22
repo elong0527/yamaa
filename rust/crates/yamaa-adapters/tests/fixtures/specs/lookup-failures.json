@@ -356,18 +356,18 @@
     ],
     "handler_counts": [
       {
-        "spec_path": "columns.DTHDY.derivation.source.no_match",
-        "handler": "no_match",
+        "spec_path": "columns.DTHDY.derivation.source.absent",
+        "handler": "absent",
         "count": 0
       },
       {
-        "spec_path": "columns.DTHCAUS.derivation.source.no_match",
-        "handler": "no_match",
+        "spec_path": "columns.DTHCAUS.derivation.source.absent",
+        "handler": "absent",
         "count": 0
       },
       {
-        "spec_path": "columns.DTHPTERM.derivation.source.no_match",
-        "handler": "no_match",
+        "spec_path": "columns.DTHPTERM.derivation.source.absent",
+        "handler": "absent",
         "count": 0
       }
     ]

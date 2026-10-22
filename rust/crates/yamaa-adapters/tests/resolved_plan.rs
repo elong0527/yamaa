@@ -157,12 +157,7 @@ fn named_relation_indices_cannot_select_an_aggregate_or_another_region() {
 #[test]
 fn every_benchmark_node_carries_the_operation_of_its_kind() {
     let mut resolved_cases = 0;
-    let mut entries: Vec<_> = std::fs::read_dir(root().join("benchmarks"))
-        .unwrap()
-        .map(|entry| entry.unwrap().path())
-        .collect();
-    entries.sort();
-    for case in entries {
+    for case in crate::support::benchmarks::all() {
         let name = case.file_name().unwrap().to_str().unwrap().to_owned();
         let Some(resolved) = try_bind(&name) else {
             continue;

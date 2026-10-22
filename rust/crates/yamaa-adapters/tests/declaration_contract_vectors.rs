@@ -1,5 +1,7 @@
 #![cfg(feature = "yaml")]
-//! Declaration contracts.
+//! Declaration contracts: contract vectors, inheritance capture, ODM
+//! declaration fixture, original intermediate verifications and preparation
+//! dispatch.
 mod declaration {
     mod contract_vectors {
         //! Direct native checks of unchanged authored grammar, regex and rounding truth.
@@ -2261,8 +2263,8 @@ mod declaration {
         //! retired in #2110. Original valid and invalid verification payloads are kept;
         //! private Python model instances are replaced by the native check boundary.
         use std::fs;
+        use yamaa_adapters::file_application;
         use yamaa_adapters::json;
-        use yamaa_adapters::{file_application, specification_report::Identity};
         use yamaa_core::diagnostic::Diagnostic;
         use yamaa_core::domain_entry::Request;
         use yamaa_core::json::Value;
@@ -2298,14 +2300,7 @@ mod declaration {
                         specification: entry,
                         environment: None,
                     },
-                    Identity {
-                        runtime: "test",
-                        runtime_version: "test",
-                        engine_version: yamaa_core::VERSION,
-                        example: "original-intermediate-verification",
-                        specification: entry,
-                        base_directory: ".",
-                    },
+                    crate::support::study::identity("original-intermediate-verification", entry),
                 );
                 assert!(!self.0.join("never-read.csv").exists());
                 assert!(!self.0.join("out.csv").exists());
@@ -2394,6 +2389,7 @@ mod declaration {
     }
     mod preparation_dispatch {
         //! Existing YAML representation and independent complete outcomes around engine delegation.
+        use crate::support::Edit as _;
         use std::sync::Arc;
         use yamaa_adapters::json;
         use yamaa_adapters::{
@@ -2453,7 +2449,7 @@ mod declaration {
 
         #[test]
         fn adapter_moves_source_allocations_and_retains_original_physical_locations_and_defaults() {
-            let text = VALID.replace("domain: X\n", "");
+            let text = VALID.edit("domain: X\n", "");
             let entry = source(&text);
             let bytes = entry.bytes.as_ptr();
             let identity = entry.identity.as_ptr();
@@ -2508,7 +2504,7 @@ mod declaration {
         #[test]
         fn both_semantic_passes_keep_source_identity_and_independent_complete_reports() {
             let schema = schema();
-            let text = VALID.replace("'1.0'", "92233720368547758081234567890");
+            let text = VALID.edit("'1.0'", "92233720368547758081234567890");
             let entry = source(&text);
             let bytes = entry.bytes.as_ptr();
             let identity = entry.identity.as_ptr();
@@ -2552,8 +2548,8 @@ mod declaration {
         #[test]
         fn final_model_findings_retain_no_pass_document_and_move_original_source() {
             let text = VALID
-                .replace("domain: X", "domain: 7")
-                .replace("{path: output.csv, columns: []}", "{}");
+                .edit("domain: X", "domain: 7")
+                .edit("{path: output.csv, columns: []}", "{}");
             let entry = source(&text);
             let pointer = entry.bytes.as_ptr();
             let error = schema().dispatch(entry).unwrap_err();
@@ -2617,7 +2613,7 @@ mod declaration {
                 vec![Source {
                     identity: "schema.yaml".into(),
                     bytes: SCHEMA
-                        .replace(
+                        .edit(
                             "type: [str, int], default: DEFAULT",
                             "type: str, default: 7",
                         )
@@ -2723,7 +2719,7 @@ mod declaration {
                 assert_eq!(
                     study.report(&format!(
                         "{}parent: absent.yaml\n",
-                        VALID.replace("'1.0'", "'99.0'")
+                        VALID.edit("'1.0'", "'99.0'")
                     )),
                     json!([{
                         "phase":"validation","condition":"schema_version_mismatch","rule":"SCHEMA-2","spec_paths":["schema_version"],"context":{"expected":"1.0","actual":"99.0","source":root,"entry":root}

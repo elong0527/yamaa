@@ -32,7 +32,8 @@ local({
     stopifnot_case(name,"the case is copied"=file.copy(file.path(root,truth$directory,name),directory,recursive=TRUE))
     case <- file.path(directory,name);entry <- file.path(case,"spec.yaml")
     # A witness is staged from its capture; a benchmark runs as it is written,
-    # in either language, whose findings and handlers are the same (#3422).
+    # in either language, whose findings and handlers are the same (#3422)
+    # but for an intermediate's absence, counted under absent in 1.0 (D202).
     if(identical(truth$directory,"flags"))
       expect_identical(rawfile(entry),charToRaw(enc2utf8(truth$specification)),paste(name,"is staged from its capture"))
     files <- list.files(case,recursive=TRUE,full.names=TRUE)

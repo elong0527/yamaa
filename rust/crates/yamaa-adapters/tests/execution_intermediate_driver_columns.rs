@@ -9,6 +9,7 @@
 //! any input is addressable; a field it derives, or a driver read beside an
 //! aggregate, is refused before any data is read, by `check` and `domain`
 //! alike.
+use crate::support::Edit as _;
 use std::fs;
 use yamaa_adapters::{file_application, specification_report::Identity};
 use yamaa_core::diagnostic::Diagnostic;
@@ -27,14 +28,7 @@ impl Fixture {
         self.0.join("spec.yaml").to_str().unwrap().to_owned()
     }
     fn identity(specification: &str) -> Identity<'_> {
-        Identity {
-            runtime: "test",
-            runtime_version: "test",
-            engine_version: yamaa_core::VERSION,
-            example: "intermediate-driver-columns",
-            specification,
-            base_directory: ".",
-        }
+        crate::support::study::identity("intermediate-driver-columns", specification)
     }
     fn domain(&self) -> Result<file_application::Domain, Vec<Diagnostic>> {
         let specification = self.specification();
@@ -131,7 +125,7 @@ fn records(head: &str, kind: &str, derivation: &str) -> String {
 
 /// The serious events with one more declaration beside their filter.
 fn serious(declaration: &str, kind: &str, derivation: &str) -> String {
-    records("", kind, derivation).replace(
+    records("", kind, derivation).edit(
         "filter: \"AE.AESER = 'Y'\"}",
         &format!("filter: \"AE.AESER = 'Y'\", {declaration}}}"),
     )
@@ -375,11 +369,11 @@ fn derived_field_read_in_the_template_feeds_a_column() {
             "str",
             "{case: [{when: \"TERM = 'rash'\", then: {literal: SKIN}}, {otherwise: TERM}]}",
         )
-        .replace(
+        .edit(
             "derivations: {USUBJID: SER.USUBJID, AESEQ: SER.AESEQ}",
             "derivations: {USUBJID: SER.USUBJID, AESEQ: SER.AESEQ, TERM: SER.LOWER}",
         )
-        .replace(
+        .edit(
             "\x20 - {name: R,",
             "\x20 - {name: TERM, type: str}\n\x20 - {name: R,",
         ),
@@ -395,8 +389,8 @@ fn derived_field_in_an_imputation_bound_is_refused() {
             "date",
             "{impute: {type: date, source: SER.AEDTC, day: 15, minimum_source_precision: month, not_before: SER.FLOOR}}",
         )
-        .replace("types: {AESEQ: int}", "types: {AESEQ: int, AESTDT: date}")
-        .replace(
+        .edit("types: {AESEQ: int}", "types: {AESEQ: int, AESTDT: date}")
+        .edit(
             "filter: \"AE.AESER = 'Y'\"}",
             "filter: \"AE.AESER = 'Y'\", derivations: {FLOOR: AE.AESTDT}}",
         ),
@@ -503,7 +497,7 @@ fn failed_driver_intermediate_reports_only_its_own_finding() {
     // The intermediate's filter names a field AE lacks. Its template is
     // skipped, and so is the column completed for that template's rows.
     let issue = Fixture::new(
-        &records("", "str", "{literal: X}").replace("AE.AESER = 'Y'", "AE.SERIOUS = 'Y'"),
+        &records("", "str", "{literal: X}").edit("AE.AESER = 'Y'", "AE.SERIOUS = 'Y'"),
     )
     .issue();
     assert_eq!(

@@ -311,8 +311,8 @@
       "result_type": "ExecutionSuccess",
       "handlers": [
         {
-          "spec_path": "columns.COMPREC.derivation.source.no_match",
-          "handler": "no_match",
+          "spec_path": "columns.COMPREC.derivation.source.absent",
+          "handler": "absent",
           "count": 5
         },
         {
@@ -753,8 +753,8 @@
           "count": 0
         },
         {
-          "spec_path": "columns.DSDTHDT.derivation.source.no_match",
-          "handler": "no_match",
+          "spec_path": "columns.DSDTHDT.derivation.source.absent",
+          "handler": "absent",
           "count": 2
         },
         {
@@ -763,8 +763,8 @@
           "count": 0
         },
         {
-          "spec_path": "columns.AEDTHDT.derivation.source.no_match",
-          "handler": "no_match",
+          "spec_path": "columns.AEDTHDT.derivation.source.absent",
+          "handler": "absent",
           "count": 2
         },
         {

@@ -1,4 +1,5 @@
 //! The inspection reader works independently of optional physical readers.
+use crate::support::Edit as _;
 use yamaa_adapters::resolved_artifact::model::specification_value;
 use yamaa_adapters::resolved_artifact::ResolvedArtifact;
 use yamaa_core::schema::{Document, DocumentError, DocumentNode as N};
@@ -28,7 +29,7 @@ fn inspection_round_trip_requires_no_yaml_or_parquet_reader() {
     assert!(serialized.contains("123456789012345678901234567890,1.0"));
     assert_eq!(artifact, ResolvedArtifact::from_json(&serialized).unwrap());
     assert!(ResolvedArtifact::from_json(
-        &serialized.replace("\"artifact_version\":1", "\"artifact_version\":2")
+        &serialized.edit("\"artifact_version\":1", "\"artifact_version\":2")
     )
     .is_err());
 }

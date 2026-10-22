@@ -6,7 +6,7 @@
 //! `no_match` must not fail `unmatched_key` for it (LOOKUP-12), while A
 //! still completes its keys.
 use std::fs;
-use yamaa_adapters::{file_application, specification_report::Identity};
+use yamaa_adapters::file_application;
 use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::domain_entry::Request;
 
@@ -29,14 +29,7 @@ impl Fixture {
                 specification,
                 environment: None,
             },
-            Identity {
-                runtime: "test",
-                runtime_version: "test",
-                engine_version: yamaa_core::VERSION,
-                example: "per-template-defaults",
-                specification,
-                base_directory: ".",
-            },
+            crate::support::study::identity("per-template-defaults", specification),
         )
     }
     fn saved(&self, output: &str) -> String {

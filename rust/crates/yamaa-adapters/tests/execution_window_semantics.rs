@@ -7,7 +7,7 @@
 //! orders by a source field counts that field against the fixed column
 //! limit.
 use std::fs;
-use yamaa_adapters::{file_application, specification_report::Identity};
+use yamaa_adapters::file_application;
 use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::{domain_entry::Request, json::Value};
 
@@ -28,14 +28,7 @@ impl Fixture {
                 specification,
                 environment: None,
             },
-            Identity {
-                runtime: "test",
-                runtime_version: "test",
-                engine_version: yamaa_core::VERSION,
-                example: "window-semantics",
-                specification,
-                base_directory: ".",
-            },
+            crate::support::study::identity("window-semantics", specification),
         )
     }
     /// The run reports nothing and saves the artifact this returns.
@@ -58,9 +51,7 @@ impl Fixture {
         assert!(!self.0.join("out.csv").exists());
         let [issue] =
             <[Diagnostic; 1]>::try_from(issues).unwrap_or_else(|issues| panic!("{issues:?}"));
-        yamaa_adapters::json!({"phase": issue.phase(), "condition": issue.condition(),
-            "rule": issue.rule(), "spec_paths": issue.spec_paths,
-            "context": issue.context.clone()})
+        crate::support::study::issue_row(&issue)
     }
 }
 

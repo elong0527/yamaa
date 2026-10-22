@@ -1,4 +1,4 @@
-//! Table contracts.
+//! Table contracts: SAS source, source diagnostics and typed CSV.
 mod table {
     #[cfg(feature = "readstat")]
     mod sas_source {

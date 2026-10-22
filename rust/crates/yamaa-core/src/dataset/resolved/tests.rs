@@ -466,6 +466,7 @@ fn lookup() -> Intermediate {
         range: None,
         columns: None,
         no_match: Some(Value::Missing),
+        absence: HandlerKind::NoMatch,
         require_match: false,
         unique: vec![],
         derivations: None,
@@ -595,13 +596,16 @@ fn registration_registers_every_site_up_front_in_expression_order() {
     assert_eq!(info.partition, PartitionClass::Global);
 }
 
-/// A named read counts `no_match` whether or not the intermediate declares
-/// it; only `require_match` removes the site, and only `keep` adds
-/// `multiple_matches` (LOOKUP-24, LOOKUP-10).
+/// A named read counts its absence whether or not the intermediate declares
+/// an answer, under the handler its tree's surface names: `absent` on a 1.x
+/// tree (D202) and `no_match` on a 0.5 tree (D75). Only `require_match`
+/// removes the site, and only `keep` adds `multiple_matches` (LOOKUP-24,
+/// LOOKUP-10).
 #[test]
-fn a_named_read_has_a_no_match_site_unless_it_requires_a_match() {
-    let sites = |no_match: Option<Value>, require_match: bool, keep: bool| {
+fn a_named_read_has_an_absence_site_unless_it_requires_a_match() {
+    let sites = |absence: HandlerKind, no_match: Option<Value>, require_match: bool, keep: bool| {
         let mut intermediate = lookup();
+        intermediate.absence = absence;
         intermediate.no_match = no_match;
         intermediate.require_match = require_match;
         intermediate.selection = keep.then(|| crate::dataset::SourceSelection {
@@ -647,23 +651,33 @@ fn a_named_read_has_a_no_match_site_unless_it_requires_a_match() {
             .map(|site| (site.path.to_string(), site.kind))
             .collect::<Vec<_>>()
     };
-    let no_match = || {
-        (
-            "columns.C1.derivation.no_match".to_string(),
-            HandlerKind::NoMatch,
-        )
-    };
     let multiple = || {
         (
             "columns.C1.derivation.multiple_matches".to_string(),
             HandlerKind::MultipleMatches,
         )
     };
-    assert_eq!(sites(None, false, false), [no_match()]);
-    assert_eq!(sites(Some(Value::Missing), false, false), [no_match()]);
-    assert_eq!(sites(None, true, false), []);
-    assert_eq!(sites(None, false, true), [multiple(), no_match()]);
-    assert_eq!(sites(None, true, true), [multiple()]);
+    for (surface, absence, path) in [
+        ("1.x", HandlerKind::Absent, "columns.C1.derivation.absent"),
+        (
+            "0.5",
+            HandlerKind::NoMatch,
+            "columns.C1.derivation.no_match",
+        ),
+    ] {
+        let answer = || (path.to_string(), absence);
+        let declared = Some(Value::Missing);
+        assert_eq!(sites(absence, None, false, false), [answer()], "{surface}");
+        assert_eq!(
+            sites(absence, declared, false, false),
+            [answer()],
+            "{surface}"
+        );
+        assert_eq!(sites(absence, None, true, false), [], "{surface}");
+        let both = [multiple(), answer()];
+        assert_eq!(sites(absence, None, false, true), both, "{surface}");
+        assert_eq!(sites(absence, None, true, true), [multiple()], "{surface}");
+    }
 }
 
 /// A value-level `mandatory` or `data_type` check selects its rows by a where

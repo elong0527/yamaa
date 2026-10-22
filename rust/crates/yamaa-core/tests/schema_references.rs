@@ -1,4 +1,5 @@
-//! Schema contracts.
+//! Schema contracts: resolution pruning, schema layer admission, schema type
+//! expression and schema validation.
 mod schema {
     mod resolution_pruning {
         //! LAYER-11 pruning and the LAYER-13 order on the AST (#3134), over

@@ -24,6 +24,7 @@ pub mod sas7bdat;
 pub mod schema_declaration;
 pub mod scratch;
 pub mod string_template_syntax;
+pub mod study;
 pub mod syntax_spans;
 pub mod xport;
 
@@ -120,4 +121,17 @@ pub fn edit(document: &str, original: &str, replacement: &str) -> String {
         "expected exactly one {original:?}"
     );
     document.replacen(original, replacement, 1)
+}
+
+/// Exact-once edits on any text, as `edit` makes them: `body.edit(from, to)`
+/// fails the test when `from` occurs other than once.
+pub trait Edit {
+    fn edit(&self, from: &str, to: &str) -> String;
+}
+
+impl Edit for str {
+    #[track_caller]
+    fn edit(&self, from: &str, to: &str) -> String {
+        edit(self, from, to)
+    }
 }

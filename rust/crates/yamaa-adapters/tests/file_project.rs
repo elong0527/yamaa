@@ -1,8 +1,10 @@
 #![cfg(feature = "yaml")]
-//! File contracts.
+//! File contracts: file project, file publication, file resources and file
+//! workflow.
 mod file {
     mod file_project {
         use crate::support::project_schemas as schemas;
+        use crate::support::Edit as _;
         use std::fs;
         use yamaa_adapters::{
             file_preparation::FileSpecification,
@@ -96,7 +98,7 @@ mod file {
             fs::create_dir(study.0.join("entry/input.unknown")).unwrap();
             study.write(
                 "entry/domain.yaml",
-                &DOMAIN.replace("input.csv", "input.unknown"),
+                &DOMAIN.edit("input.csv", "input.unknown"),
             );
             let Err(Error::Compile(run)) = study.prepare(study.0.to_str().unwrap(), &[]) else {
                 panic!("directory finding")
@@ -586,7 +588,7 @@ mod file {
             let study = Study::new();
             study.write(
                 "parent/base.yaml",
-                DOMAIN.replace("input.csv", "data.csv").as_str(),
+                DOMAIN.edit("input.csv", "data.csv").as_str(),
             );
             study.write("parent/data.csv", "ID\n1\n");
             study.write(
@@ -612,7 +614,7 @@ mod file {
         ) {
             use yamaa_adapters::file_workflow;
             let study = Study::new();
-            study.write("parent/base.yaml", &DOMAIN.replace("input.csv", "data.csv"));
+            study.write("parent/base.yaml", &DOMAIN.edit("input.csv", "data.csv"));
             study.write(
                 "entry/domain.yaml",
                 "schema_version: '1.0'\nparent: ../parent/base.yaml\n",
@@ -658,7 +660,7 @@ mod file {
             assert_eq!(retained.captured_environment().captures().len(), 2);
             assert_eq!(
                 retained.document().parents()[0].source().bytes,
-                DOMAIN.replace("input.csv", "data.csv").as_bytes()
+                DOMAIN.edit("input.csv", "data.csv").as_bytes()
             );
             assert_eq!(
                 retained.captured_environment().lock().unwrap().source.bytes,
@@ -1586,6 +1588,7 @@ mod file {
         }
     }
     mod file_workflow {
+        use crate::support::Edit as _;
         use std::fs;
         use yamaa_adapters::{
             file_resources::Resources,
@@ -1722,7 +1725,7 @@ mod file {
             for index in 0..17 {
                 verifications.push_str(&format!("      - not_missing: {{id: CHECK{index}}}\n"));
             }
-            let source = yaml("{RAW: never-read.csv}", "RAW", "result.csv", false).replace(
+            let source = yaml("{RAW: never-read.csv}", "RAW", "result.csv", false).edit(
                 "    derivation: RAW.VALUE\n",
                 &format!("    derivation: RAW.VALUE\n{verifications}"),
             );
@@ -2420,7 +2423,7 @@ mod file {
             );
             // VALUE reads all three linked datasets so pruning (LAYER-11) keeps
             // every link in the resolved model.
-            study.write("root.yaml", &yaml("{L: {path: left.csv, schema: left.yaml}, R: {path: right.csv, schema: right.yaml}, Q: {path: right.csv, schema: './right.yaml'}}", "L", "root.csv", true).replace(
+            study.write("root.yaml", &yaml("{L: {path: left.csv, schema: left.yaml}, R: {path: right.csv, schema: right.yaml}, Q: {path: right.csv, schema: './right.yaml'}}", "L", "root.csv", true).edit(
                 "derivation: L.VALUE",
                 "derivation: {first_available: {sources: [L.VALUE, R.VALUE, Q.VALUE]}}",
             ));
@@ -2631,7 +2634,7 @@ mod file {
                     )
                 } else {
                     yaml("{RAW: never-read.csv}", "RAW", "leaf.csv", false)
-                        .replace("RAW.VALUE", "{function: {name: missing, args: {x: 1}}}")
+                        .edit("RAW.VALUE", "{function: {name: missing, args: {x: 1}}}")
                 };
                 study.write("leaf.yaml", &leaf);
                 // The producer is never compiled and its links are never followed.
@@ -2732,7 +2735,7 @@ mod file {
             study.write(
                 "parent/base.yaml",
                 &yaml("{RAW: never-read.csv}", "RAW", "root.csv", false)
-                    .replace("type: str", "type: invalid"),
+                    .edit("type: str", "type: invalid"),
             );
             study.write(
                 "root.yaml",
@@ -2760,9 +2763,9 @@ mod file {
                 "schema_version: '1.0'\nparent: producer/base.yaml\ndomain: LEAF\n",
             );
             let parent = yaml("{P: {path: ../leaf.csv, schema: ../leaf.yaml}, Q: {path: ../leaf.csv, schema: '../leaf.yaml'}}", "P", "../root.csv", false)
-        .replace("columns:\n", "intermediates: [{id: Q_REFERENCE, dataset: Q, require_match: true}]\ncolumns:\n")
-        .replace("output:", "  - {name: OTHER, type: str, label: Other, derivation: Q_REFERENCE.VALUE}\noutput:")
-        .replace("columns: [ID, VALUE]", "columns: [ID, VALUE, OTHER]");
+        .edit("columns:\n", "intermediates: [{id: Q_REFERENCE, dataset: Q, require_match: true}]\ncolumns:\n")
+        .edit("output:", "  - {name: OTHER, type: str, label: Other, derivation: Q_REFERENCE.VALUE}\noutput:")
+        .edit("columns: [ID, VALUE]", "columns: [ID, VALUE, OTHER]");
             study.write("parents/base.yaml", &parent);
             study.write(
                 "root.yaml",
@@ -2848,7 +2851,7 @@ mod file {
                 ),
             );
             let original = yaml("{RAW: never-read.csv}", "RAW", "leaf.csv", false)
-                .replace("    label: Reported value\n", "");
+                .edit("    label: Reported value\n", "");
             study.write("leaf.yaml", &original);
             let error = study.compile_rejection();
             let rows = specification_check::rejected(error.run()).unwrap();
@@ -3229,9 +3232,9 @@ mod file {
                 ),
             );
             let parent = yaml("{L: {path: ../left.csv, schema: ../left.yaml}, R: {path: ../right.csv, schema: ../right.yaml}, Q: {path: ../right.csv, schema: '../right.yaml'}}", "L", "../root.csv", true)
-        .replace("columns:\n", "intermediates: [{id: RIGHT, dataset: R, require_match: true}, {id: ALIAS, dataset: Q, require_match: true}]\ncolumns:\n")
-        .replace("output:", "  - {name: RIGHT_VALUE, type: str, label: Right value, derivation: RIGHT.VALUE}\n  - {name: ALIAS_VALUE, type: str, label: Alias value, derivation: ALIAS.VALUE}\noutput:")
-        .replace("columns: [ID, VALUE]", "columns: [ID, VALUE, RIGHT_VALUE, ALIAS_VALUE]");
+        .edit("columns:\n", "intermediates: [{id: RIGHT, dataset: R, require_match: true}, {id: ALIAS, dataset: Q, require_match: true}]\ncolumns:\n")
+        .edit("output:", "  - {name: RIGHT_VALUE, type: str, label: Right value, derivation: RIGHT.VALUE}\n  - {name: ALIAS_VALUE, type: str, label: Alias value, derivation: ALIAS.VALUE}\noutput:")
+        .edit("columns: [ID, VALUE]", "columns: [ID, VALUE, RIGHT_VALUE, ALIAS_VALUE]");
             study.write("parents/base.yaml", &parent);
             let entry = "schema_version: '1.0'\nparent: parents/base.yaml\ndomain: ROOT\n";
             study.write("root.yaml", entry);
@@ -3262,7 +3265,7 @@ mod file {
             use file_workflow::SelectionError;
             let study = Study::new();
             let raw = yaml("{RAW: never-read.csv}", "RAW", "root.csv", false)
-                .replace("RAW.VALUE", "{function: {name: missing, args: {x: 1}}}");
+                .edit("RAW.VALUE", "{function: {name: missing, args: {x: 1}}}");
             study.write("root.yaml", &raw);
             let SelectionError::Compile(rejected) = study.selection_rejection() else {
                 panic!("original ordinary compiler rejection");
@@ -3403,10 +3406,10 @@ mod file {
                         false,
                     ),
                     1 => yaml("{RAW: never-read.csv}", "RAW", "leaf.csv", false)
-                        .replace("label: Identifier, ", "")
-                        .replace("    label: Reported value\n", ""),
+                        .edit("label: Identifier, ", "")
+                        .edit("    label: Reported value\n", ""),
                     _ => yaml("{RAW: never-read.csv}", "RAW", "leaf.csv", false)
-                        .replace("RAW.VALUE", "{function: {name: missing, args: {x: 1}}}"),
+                        .edit("RAW.VALUE", "{function: {name: missing, args: {x: 1}}}"),
                 };
                 study.write("leaf.yaml", &leaf);
                 if mode != 1 {

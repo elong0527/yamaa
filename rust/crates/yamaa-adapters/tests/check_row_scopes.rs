@@ -6,8 +6,9 @@
 //! read of a lookup, a template placeholder that is no `str`, and a read of a
 //! 1.0 row driver as a lookup. Every case lists the same issues in both
 //! routes and hosts, and names the condition and rule of its first issue.
+use crate::support::Edit as _;
 use std::fs;
-use yamaa_adapters::{file_application, specification_report::Identity};
+use yamaa_adapters::file_application;
 use yamaa_core::{diagnostic::Diagnostic, domain_entry::Request, project_function::Language};
 
 struct Fixture(crate::support::Scratch);
@@ -42,14 +43,7 @@ impl Fixture {
             specification,
             environment: None,
         };
-        let identity = || Identity {
-            runtime: "test",
-            runtime_version: "test",
-            engine_version: yamaa_core::VERSION,
-            example: "row-scopes",
-            specification,
-            base_directory: ".",
-        };
+        let identity = || crate::support::study::identity("row-scopes", specification);
         let render = |issues: &[Diagnostic]| {
             issues
                 .iter()
@@ -158,8 +152,8 @@ fn ungrouped(case: Case) -> String {
 /// Templates over VS and HOME; `home` is one more derivation of the second.
 fn two(case: Case, home: &str) -> String {
     let header = header("STUDYID, USUBJID, PARAMCD, SEQ", case)
-        .replace("derivation: VS.STUDYID", "")
-        .replace("derivation: VS.USUBJID", "");
+        .edit("derivation: VS.STUDYID", "")
+        .edit("derivation: VS.USUBJID", "");
     let home = if home.is_empty() {
         String::new()
     } else {

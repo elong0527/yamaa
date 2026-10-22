@@ -1,3 +1,5 @@
+//! Portable math: the authored PortableLibmV1 table, evaluated through the
+//! expression compiler to its exact bits and domain failures.
 use std::convert::Infallible;
 use yamaa_core::expression::{compile, Condition, Context, ErrorKind, Resolver as NumericResolver};
 use yamaa_core::numeric::{ArithmeticErrorKind, Number};

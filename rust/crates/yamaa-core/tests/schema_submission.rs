@@ -1,4 +1,5 @@
-//! Schema contracts.
+//! Schema contracts: specification submission document, submission composition,
+//! submission document and submission values.
 mod schema {
     mod specification_submission_document {
         use yamaa_core::{

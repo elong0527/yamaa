@@ -1,5 +1,6 @@
 #![cfg(feature = "yaml")]
 //! Untyped donor expressions retain their scalar kind before later reads.
+use crate::support::Edit as _;
 use std::fs;
 use yamaa_adapters::{file_application, specification_report::Identity};
 use yamaa_core::domain_entry::Request;
@@ -29,14 +30,7 @@ impl Study {
     }
 }
 fn identity(specification: &str) -> Identity<'_> {
-    Identity {
-        runtime: "test",
-        runtime_version: "test",
-        engine_version: yamaa_core::VERSION,
-        example: "test",
-        specification,
-        base_directory: ".",
-    }
+    crate::support::study::identity("test", specification)
 }
 const SPECIFICATION: &str = "schema_version: '1.0'
 domain: ADSL
@@ -117,7 +111,7 @@ fn selector_dates_agree_in_check_and_build_with_or_without_typed_binding() {
             } else {
                 expression
             };
-            assert_output(&SPECIFICATION.replace("DERIVATION", &expression), expected);
+            assert_output(&SPECIFICATION.edit("DERIVATION", &expression), expected);
         }
     }
 }
@@ -139,7 +133,7 @@ fn selector_kind_flows_to_later_derivations_and_qualified_source_objects() {
         ),
     ] {
         assert_output(
-            &SPECIFICATION.replace(
+            &SPECIFICATION.edit(
                 "EXENDT: DERIVATION",
                 &format!(
                     "EXCHOICE: {{{operation}: {{sources: [EX.EXENDT0, EX.EXSTDT]}}}}\n      \
@@ -155,12 +149,12 @@ fn selector_kind_flows_to_later_derivations_and_qualified_source_objects() {
 fn first_available_infers_the_declared_missing_result_without_sources() {
     assert_output(
         &SPECIFICATION
-            .replace(
+            .edit(
                 "DERIVATION",
                 "{first_available: {sources: [], missing: 17}}",
             )
-            .replace("EX.EXENDT >= EX.EXSTDT", "EX.EXENDT >= 17")
-            .replace(
+            .edit("EX.EXENDT >= EX.EXSTDT", "EX.EXENDT >= 17")
+            .edit(
                 "type: date, derivation: EXP.EXENDT",
                 "type: int, derivation: EXP.EXENDT",
             ),
@@ -172,7 +166,7 @@ fn first_available_infers_the_declared_missing_result_without_sources() {
 fn known_date_choices_reject_incompatible_filter_types_in_check_and_build() {
     for operation in ["first_available", "greatest", "least"] {
         let expression = format!("{{{operation}: {{sources: [EXENDT0, EXSTDT]}}}}");
-        let study = Study::new(&SPECIFICATION.replace("DERIVATION", &expression).replace(
+        let study = Study::new(&SPECIFICATION.edit("DERIVATION", &expression).edit(
             "filter: 'EX.EXENDT >= EX.EXSTDT'",
             "filter: \"EX.EXENDT >= 'not a date'\"",
         ));
@@ -209,13 +203,13 @@ fn known_date_choices_reject_incompatible_filter_types_in_check_and_build() {
 
 fn heterogeneous_specification(expression: &str) -> String {
     SPECIFICATION
-        .replace("DERIVATION", expression)
-        .replace(
+        .edit("DERIVATION", expression)
+        .edit(
             "      EXENDT:",
             "      ANCHOR: {to_date: {source: REFDTC}}\n      EXENDT:",
         )
-        .replace("EX.EXENDT >= EX.EXSTDT", "EX.EXENDT >= EX.ANCHOR")
-        .replace(
+        .edit("EX.EXENDT >= EX.EXSTDT", "EX.EXENDT >= EX.ANCHOR")
+        .edit(
             "type: date, derivation: EXP.EXENDT",
             "type: str, derivation: EXP.EXENDT",
         )
@@ -306,8 +300,8 @@ fn unknown_choices_report_the_actual_integer_when_date_sources_are_missing() {
 
 fn assert_integer_day_count(expression: &str, integer_row: &str, float_row: &str) {
     let specification = SPECIFICATION
-            .replace("EX: ex.csv", "EX: {path: ex.csv, types: {EXINT: int, EXFLOAT: float}}")
-            .replace("EXENDT: DERIVATION", &format!("SELECTED: {expression}\n      EXENDT: {{shift: {{type: date, source: EXSTDT, days: SELECTED}}}}"));
+            .edit("EX: ex.csv", "EX: {path: ex.csv, types: {EXINT: int, EXFLOAT: float}}")
+            .edit("EXENDT: DERIVATION", &format!("SELECTED: {expression}\n      EXENDT: {{shift: {{type: date, source: EXSTDT, days: SELECTED}}}}"));
     let study = Study::new(&specification);
     let path = study.specification();
     let request = || Request {
@@ -386,8 +380,8 @@ fn numeric_choices_preserve_a_selected_integer_for_an_integer_only_operation() {
 #[test]
 fn nullif_over_an_int_and_a_float_is_refused_as_integer_days_when_bound() {
     let specification = SPECIFICATION
-        .replace("EX: ex.csv", "EX: {path: ex.csv, types: {EXINT: int, EXFLOAT: float}}")
-        .replace(
+        .edit("EX: ex.csv", "EX: {path: ex.csv, types: {EXINT: int, EXFLOAT: float}}")
+        .edit(
             "EXENDT: DERIVATION",
             "SELECTED: {compute: {expr: 'NULLIF(EXINT, EXFLOAT)'}}\n      EXENDT: {shift: {type: date, source: EXSTDT, days: SELECTED}}",
         );
@@ -484,8 +478,8 @@ fn unknown_kind_survives_later_aliases_and_choices() {
     for expression in HETEROGENEOUS_CHOICES {
         for alias in ["EXENDT", "{first_available: {sources: [EXENDT, EXSTDT]}}"] {
             let specification = heterogeneous_specification(expression)
-                .replace("    filter:", &format!("      ALIAS: {alias}\n    filter:"))
-                .replace("EX.EXENDT >= EX.ANCHOR", "EX.ALIAS >= 17");
+                .edit("    filter:", &format!("      ALIAS: {alias}\n    filter:"))
+                .edit("EX.EXENDT >= EX.ANCHOR", "EX.ALIAS >= 17");
             let study = Study::new(&specification);
             let path = study.specification();
             let request = || Request {
@@ -523,9 +517,9 @@ fn unknown_kind_survives_later_aliases_and_choices() {
 #[test]
 fn unknown_kind_flows_through_an_earlier_selector_in_dependency_order() {
     let specification = heterogeneous_specification(HETEROGENEOUS_CHOICES[0])
-        .replace("    filter: 'EX.EXENDT >= EX.ANCHOR'\n", "")
-        .replace("intermediates:\n", "intermediates:\n  - id: EXP2\n    dataset: EX\n    derivations:\n      COPY: EXP.EXENDT\n      ANCHOR2: EXP.ANCHOR\n    filter: 'EX.COPY >= EX.ANCHOR2'\n    no_match: {literal: null}\n")
-        .replace("derivation: EXP.EXENDT", "derivation: EXP2.COPY");
+        .edit("    filter: 'EX.EXENDT >= EX.ANCHOR'\n", "")
+        .edit("intermediates:\n", "intermediates:\n  - id: EXP2\n    dataset: EX\n    derivations:\n      COPY: EXP.EXENDT\n      ANCHOR2: EXP.ANCHOR\n    filter: 'EX.COPY >= EX.ANCHOR2'\n    no_match: {literal: null}\n")
+        .edit("derivation: EXP.EXENDT", "derivation: EXP2.COPY");
     let study = Study::new(&specification);
     let path = study.specification();
     let request = || Request {
@@ -560,8 +554,8 @@ fn unknown_kind_flows_through_an_earlier_selector_in_dependency_order() {
 #[test]
 fn generic_predicate_consumers_use_the_named_intermediates_unknown_kind() {
     let specification = heterogeneous_specification(HETEROGENEOUS_CHOICES[0])
-        .replace("    filter: 'EX.EXENDT >= EX.ANCHOR'\n", "")
-        .replace(
+        .edit("    filter: 'EX.EXENDT >= EX.ANCHOR'\n", "")
+        .edit(
             "[USUBJID, TRTSDT, TRTEDT]",
             "[USUBJID, TRTSDT, TRTEDT, PASS]",
         )
@@ -600,9 +594,9 @@ fn generic_predicate_consumers_use_the_named_intermediates_unknown_kind() {
 #[test]
 fn unknown_numeric_operands_do_not_invent_an_integer_result_kind() {
     let specification = SPECIFICATION
-        .replace("EX: ex.csv", "EX: {path: ex.csv, types: {EXINT: int, EXFLOAT: float}}")
-        .replace("EXENDT: DERIVATION", "SELECTED: {first_available: {sources: [EXINT, EXFLOAT]}}\n      RESULT: {compute: {expr: 'SELECTED + 1'}}\n      EXENDT: EXENDT0")
-        .replace("filter: 'EX.EXENDT >= EX.EXSTDT'", "filter: \"EX.RESULT >= 'not a number'\"");
+        .edit("EX: ex.csv", "EX: {path: ex.csv, types: {EXINT: int, EXFLOAT: float}}")
+        .edit("EXENDT: DERIVATION", "SELECTED: {first_available: {sources: [EXINT, EXFLOAT]}}\n      RESULT: {compute: {expr: 'SELECTED + 1'}}\n      EXENDT: EXENDT0")
+        .edit("filter: 'EX.EXENDT >= EX.EXSTDT'", "filter: \"EX.RESULT >= 'not a number'\"");
     let study = Study::new(&specification);
     let path = study.specification();
     let request = || Request {
@@ -701,7 +695,7 @@ fn nested_lookup_keys_retain_unknown_current_kinds() {
         "{greatest: {sources: [EX.CHOICE]}}",
     ] {
         assert_nested_lookup_output(
-            &nested_lookup_specification().replace("{source: EX.CHOICE}", expression),
+            &nested_lookup_specification().edit("{source: EX.CHOICE}", expression),
             "S01,2024-01-01,2024-01-01\n",
             b"USUBJID,SELECTED\nS01,2024-01-01\n",
         );
@@ -767,7 +761,7 @@ fn nested_lookup_keys_report_actual_incompatible_types_instead_of_no_match() {
         ),
     ] {
         assert_nested_lookup_type_error(
-            &nested_lookup_specification().replace("{source: EX.CHOICE}", expression),
+            &nested_lookup_specification().edit("{source: EX.CHOICE}", expression),
             source,
             path,
         );
@@ -781,7 +775,7 @@ fn nested_lookup_keys_report_actual_incompatible_types_instead_of_no_match() {
 fn unknown_keys_keep_no_match_when_missing_and_refuse_an_incomparable_filtered_donor() {
     assert_nested_lookup_no_match(nested_lookup_specification(), "S01,,\n");
     assert_nested_lookup_type_error(
-        &nested_lookup_specification().replace(
+        &nested_lookup_specification().edit(
             "    key: {DATE:",
             "    filter: \"EX.USUBJID = 'S02'\"\n    key: {DATE:",
         ),
@@ -801,10 +795,10 @@ fn raw_boolean_key_values_use_equality_without_requiring_an_order() {
         ("false", b"USUBJID,SELECTED\nS01,\n".as_slice()),
     ] {
         let specification = nested_lookup_specification()
-            .replace("{to_date: {source: EXENDTC}}", "{literal: true}")
-            .replace("missing: 17", &format!("missing: {missing}"))
-            .replace("SELECTED: DATES.DATE", "SELECTED: DATES.USUBJID")
-            .replace(
+            .edit("{to_date: {source: EXENDTC}}", "{literal: true}")
+            .edit("missing: 17", &format!("missing: {missing}"))
+            .edit("SELECTED: DATES.DATE", "SELECTED: DATES.USUBJID")
+            .edit(
                 "type: date, derivation: RESULT.SELECTED",
                 "type: str, derivation: RESULT.SELECTED",
             );
@@ -818,8 +812,7 @@ fn incompatible_raw_key_pairs_fail_independently_of_another_pairs_order_or_value
         "USUBJID: {literal: S02}, DATE: {source: EX.CHOICE}",
         "DATE: {source: EX.CHOICE}, USUBJID: {literal: S02}",
     ] {
-        let specification =
-            nested_lookup_specification().replace("DATE: {source: EX.CHOICE}", pairs);
+        let specification = nested_lookup_specification().edit("DATE: {source: EX.CHOICE}", pairs);
         assert_nested_lookup_type_error(&specification, "key[DATE]", "intermediates[0].key.DATE");
         assert_nested_lookup_no_match(&specification, "S01,,\n");
         assert_nested_lookup_no_match(&specification, "S01,2024-01-01,2024-01-02\n");
