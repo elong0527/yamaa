@@ -471,12 +471,33 @@ class NativeWorkflowContract(unittest.TestCase):
             sorted(self.coverage["offline_toolchain"]["host"]), ["python", "r"]
         )
 
+    def assert_verifies_the_minimum_rust_installer(self, run):
+        """Check that a script downloads the standalone installer archive of
+        the workspace's rust-version for the runner's target, and that gpg
+        checks the signature beside it, with a keyring that holds the
+        committed Rust signing key alone, before the archive is unpacked."""
+        self.assertIn("from tools.ci.toolchain import minimum", run)
+        self.assertIn('target="$(uname -m)-unknown-linux-gnu"', run)
+        self.assertIn('installer="rust-${version}-${target}.tar.xz"', run)
+        self.assertIn(
+            'for file in "dist/${installer}" "dist/${installer}.asc"; do', run
+        )
+        self.assertIn('"https://static.rust-lang.org/${file}"', run)
+        self.assertIn('export GNUPGHOME="${PWD}/gnupg"', run)
+        self.assertIn(
+            'gpg --batch --import "${GITHUB_WORKSPACE}/tools/ci/keys/rust-key.gpg.ascii"',
+            run,
+        )
+        verify = (
+            "gpg --batch --no-auto-key-retrieve --verify "
+            '"${installer}.asc" "${installer}"'
+        )
+        self.assertLess(run.index(verify), run.index('tar -xJf "${installer}"'))
+
     def test_offline_toolchain_lanes_verify_the_installer_of_the_minimum_rust(self):
-        # While the network is up, each lane downloads the standalone installer
-        # archive of the workspace's rust-version for the runner's target, and
-        # gpg checks the signature beside it, with a keyring that holds the
-        # committed Rust signing key alone, before the archive is unpacked.
-        # A replaced download must not supply its own verification key.
+        # While the network is up, each lane downloads and verifies the
+        # standalone installer of the minimum Rust. A replaced download must
+        # not supply its own verification key.
         name = "Download and verify the standalone Rust installer"
         scripts = set()
         for job, _ in self.offline_toolchain_jobs():
@@ -487,24 +508,7 @@ class NativeWorkflowContract(unittest.TestCase):
             scripts.add(run)
             with self.subTest(job=job):
                 self.assertNotIn("if", download)
-                self.assertIn("from tools.ci.toolchain import minimum", run)
-                self.assertIn('target="$(uname -m)-unknown-linux-gnu"', run)
-                self.assertIn('installer="rust-${version}-${target}.tar.xz"', run)
-                self.assertIn(
-                    'for file in "dist/${installer}" "dist/${installer}.asc"; do',
-                    run,
-                )
-                self.assertIn('"https://static.rust-lang.org/${file}"', run)
-                self.assertIn('export GNUPGHOME="${PWD}/gnupg"', run)
-                self.assertIn(
-                    'gpg --batch --import "${GITHUB_WORKSPACE}/tools/ci/keys/rust-key.gpg.ascii"',
-                    run,
-                )
-                verify = (
-                    "gpg --batch --no-auto-key-retrieve --verify "
-                    '"${installer}.asc" "${installer}"'
-                )
-                self.assertLess(run.index(verify), run.index('tar -xJf "${installer}"'))
+                self.assert_verifies_the_minimum_rust_installer(run)
                 self.assertLess(
                     names.index(name),
                     names.index(
@@ -1179,6 +1183,113 @@ class NativeWorkflowContract(unittest.TestCase):
                         step.get("name") == "Check the R source package as CRAN does"
                     )
                     self.assertEqual(proxy & names, proxy if checks else set())
+
+    def test_each_cran_container_runs_the_steps_of_its_own_image(self):
+        # The containers share one job. gcc16's image has Fedora's Rust;
+        # clang-asan's has none, so that lane installs the minimum Rust, and
+        # then confirms what the build used and what its sanitizers
+        # instrumented. A step for one image runs on that image alone.
+        own = {
+            "gcc16": ["Install Fedora's Cargo and rustc, and Python"],
+            "clang-asan": [
+                "Install Python and xz, and name the symbolizer",
+                "Install the minimum Rust from its standalone installer",
+                "Confirm that the build used the minimum Rust",
+                "Confirm that the sanitizers instrumented the crates' C",
+            ],
+        }
+        self.assertEqual(self.coverage["cran_container"]["platform"], list(own))
+        for platform in own:
+            job = self.jobs[f"native-cran ({platform})"]
+            conditions = {
+                step["name"]: step["if"]
+                for step in job["definitions"]
+                if "matrix." in step.get("if", "")
+            }
+            with self.subTest(platform=platform):
+                self.assertEqual(
+                    {
+                        name: evaluate(condition, job["context"])
+                        for name, condition in conditions.items()
+                    },
+                    {
+                        name: image == platform
+                        for image, names in own.items()
+                        for name in names
+                    },
+                )
+
+    def test_the_sanitizer_lane_builds_with_the_minimum_rust_from_its_installer(self):
+        # R-hub's clang-asan image carries no Rust. The lane installs the
+        # workspace's rust-version from its standalone installer, verified as
+        # native-offline-toolchain verifies it, with no rustup, and the
+        # installation log must show that configure found that toolchain.
+        steps = {
+            step.get("name"): step
+            for step in self.jobs["native-cran (clang-asan)"]["definitions"]
+        }
+        install = steps["Install the minimum Rust from its standalone installer"]["run"]
+        confirm = steps["Confirm that the build used the minimum Rust"]["run"]
+        self.assert_verifies_the_minimum_rust_installer(install)
+        # Each command on one line, with single spaces.
+        installation = " ".join(install.replace("\\\n", " ").split())
+        self.assertIn(
+            '"rust-${version}-${target}/install.sh" --prefix=/opt/rust '
+            '--components="rustc,cargo,rust-std-${target}" --disable-ldconfig',
+            installation,
+        )
+        self.assertLess(
+            installation.index("--no-auto-key-retrieve --verify"),
+            installation.index("/install.sh"),
+        )
+        for tool in ("rustc", "cargo"):
+            with self.subTest(tool=tool):
+                self.assertIn(
+                    f'/opt/rust/bin/{tool} --version | grep -F "{tool} ${{version}} "',
+                    installation,
+                )
+                self.assertIn(
+                    f'grep -F "using {tool} ${{STANDALONE_RUST_VERSION}} " '
+                    '"${RUNNER_TEMP}/cran-check/yamaa.Rcheck/00install.out"',
+                    confirm,
+                )
+        self.assertIn('echo /opt/rust/bin >> "${GITHUB_PATH}"', installation)
+        self.assertIn(
+            'echo "STANDALONE_RUST_VERSION=${version}" >> "${GITHUB_ENV}"',
+            installation,
+        )
+        self.assertNotIn("rustup", installation)
+        order = [
+            "Install Python and xz, and name the symbolizer",
+            "Install the minimum Rust from its standalone installer",
+            "Check the R source package as CRAN does",
+            "Confirm that the build used the minimum Rust",
+        ]
+        self.assertEqual(sorted(order, key=list(steps).index), order)
+
+    def test_the_sanitizer_lane_confirms_that_both_sanitizers_reach_the_crates_c(self):
+        # The Makevars give Cargo R's C compiler, which carries the image's
+        # -fsanitize flags. entrypoint.c calls neither sanitizer and the Rust
+        # code is not instrumented, so calls to both in the installed shared
+        # object show that the C of the crates was instrumented.
+        steps = {
+            step.get("name"): step
+            for step in self.jobs["native-cran (clang-asan)"]["definitions"]
+        }
+        name = "Confirm that the sanitizers instrumented the crates' C"
+        confirm = " ".join(steps[name]["run"].replace("\\\n", " ").split())
+        self.assertIn(
+            "nm -D --undefined-only "
+            '"${RUNNER_TEMP}/cran-check/yamaa.Rcheck/yamaa/libs/yamaa.so"',
+            confirm,
+        )
+        for symbols in ("' __asan_(report_)?(load|store)'", "' __ubsan_handle_'"):
+            with self.subTest(symbols=symbols):
+                self.assertIn(symbols, confirm)
+        self.assertLess(
+            list(steps).index("Check the R source package as CRAN does"),
+            list(steps).index(name),
+        )
 
     def cli_lanes(self):
         """List each command-line lane's platform and Rust target."""

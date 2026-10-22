@@ -33,8 +33,11 @@ package for that platform. `tools.validation.check_supported_platforms`, which
   admitted patch with the minimum Rust (#3561). On Linux x86_64, macOS arm64 and
   Windows x64 it passes `R CMD check --as-cran` with only the notes that
   `R/yamaa/cran-comments.md` explains: with R 4.6.1, and in CRAN's incoming
-  checks with R-devel, R-release and R 4.2.0 and the minimum Rust. The separate
-  R-CMD-check workflow also checks the latest R 4.2 patch on Linux.
+  checks with R-devel, R-release and R 4.2.0 and the minimum Rust. On Linux
+  x86_64 it also passes with its C compiled under AddressSanitizer and
+  UndefinedBehaviorSanitizer, with R-devel in R-hub's `clang-asan`
+  container. The separate R-CMD-check workflow also checks the latest R 4.2
+  patch on Linux.
 - On Linux aarch64, native qualification uses R-release alone. With the
   network disabled, it builds and installs the R source package that a
   release publishes and runs the conformance corpus with it: its
@@ -207,6 +210,17 @@ refuses connections and runs two Cargo jobs.
   configuration (R-devel built with GCC 16 on Fedora 44, with CRAN's check
   settings), the build uses the Cargo and rustc that Fedora packages, as
   CRAN's Linux check servers use their distribution's.
+- In R-hub v2's `clang-asan` container, the clang-ASAN configuration of
+  CRAN's additional checks (R-devel built with clang 23 and libc++ on Ubuntu
+  26.04, whose C compiler instruments packages with AddressSanitizer and
+  UndefinedBehaviorSanitizer), the build uses the minimum Rust, installed
+  from its standalone installer after GnuPG checks its signature, as in the
+  `native-offline-toolchain` jobs. The Makevars give Cargo R's C compiler, so
+  the bundled ReadStat and zstd C sources are instrumented as the package's
+  own C is, which the job confirms in the installed shared object; the Rust
+  code is not instrumented. `check_r.py` also fails on any sanitizer report
+  in the installation, example or test output, since
+  UndefinedBehaviorSanitizer reports and carries on.
 
 Development PRs do not run the release lanes, so before a release also
 dispatch R-CMD-check, Dependency graphs and Release compatibility on the

@@ -24,6 +24,14 @@
 # directory can move Cargo's build directory out of the target directory or
 # run a rustc wrapper, such as a compiler cache. With it, both are empty.
 # Paths are relative to this directory, where make and Cargo run.
+#
+# The cc crate compiles the C sources that crates carry, ReadStat's and
+# zstd's, with R's C compiler, CC, as Makevars.win does with Rtools' compiler:
+# the command that compiles entrypoint.c and links yamaa.so. A sanitizer
+# build of R, such as R-hub's clang-asan image, adds its -fsanitize flags to
+# CC, so they instrument that C as they instrument entrypoint.c. R's CFLAGS,
+# the warning and optimization flags for a package's own sources, stay out:
+# the crates' build scripts choose the flags of their C.
 CARGO = @CARGO@
 RUSTC = @RUSTC@
 CARGO_ENV = @CARGO_ENV@
@@ -44,7 +52,7 @@ $(RUST_LIB): FORCE
 	"$(R_HOME)/bin$(R_ARCH_BIN)/Rscript" --vanilla -e 'untar("rust/vendor.tar.xz", exdir = "$(CARGO_TARGET_DIR)", tar = "internal")'
 	cp rust/vendor-config.toml "$(CARGO_HOME_DIR)/config.toml"
 	MAKEFLAGS= MFLAGS= CARGO_MAKEFLAGS= RUSTUP_AUTO_INSTALL=0 $(CARGO_ENV) $(ISOLATION_ENV) \
-	  CARGO_HOME="$(CARGO_HOME_DIR)" CARGO_TARGET_DIR="$(CARGO_TARGET_DIR)" RUSTC="$(RUSTC)" \
+	  CARGO_HOME="$(CARGO_HOME_DIR)" CARGO_TARGET_DIR="$(CARGO_TARGET_DIR)" RUSTC="$(RUSTC)" CC="$(CC)" \
 	  "$(CARGO)" build --locked --offline -j 2 --release --manifest-path rust/Cargo.toml -p yamaa-r $(ISOLATION_CONFIG)
 
 .PHONY: clean rust_clean FORCE
