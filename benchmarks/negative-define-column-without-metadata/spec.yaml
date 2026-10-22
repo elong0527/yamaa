@@ -47,17 +47,11 @@ columns:
         - type: Assigned
           source: Sponsor
 
-  # Added late, with submission metadata but without a label.
+  # Added late, with a label but without its submission metadata.
   - name: SITEID
     type: str
+    label: Study Site Identifier
     derivation: RAW.SITEID
-    submission:
-      core: Req
-      role: Record Qualifier
-      length: 3
-      origins:
-        - type: Assigned
-          source: Sponsor
 
 submission:
   label: Demographics
