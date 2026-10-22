@@ -2,7 +2,7 @@
 //! scope and order, saved producers, failures, saves and submissions.
 #![cfg(feature = "yaml")]
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
@@ -14,22 +14,7 @@ use yamaa::{
 };
 use yamaa_core::json::Value;
 
-struct NoFunctions;
-impl ProjectFunctions for NoFunctions {
-    fn verify_lock(
-        &self,
-        _: &LockContext<'_>,
-        _: &[FunctionIdentity],
-    ) -> Result<(), FunctionError> {
-        Ok(())
-    }
-    fn bind(&self, _: &FunctionIdentity, _: &Signature) -> Result<FunctionHandle, FunctionError> {
-        unreachable!("these specifications call no project function")
-    }
-    fn invoke(&self, _: &FunctionHandle, _: &[Argument<'_>]) -> Result<Scalar, CallError> {
-        unreachable!("these specifications call no project function")
-    }
-}
+use crate::support::NoFunctions;
 
 fn engine() -> Engine {
     Engine::new(
@@ -38,19 +23,12 @@ fn engine() -> Engine {
     )
 }
 
-static NEXT: AtomicUsize = AtomicUsize::new(0);
-
-struct Study(PathBuf);
+struct Study(crate::support::Scratch);
 impl Study {
     fn new() -> Self {
-        let root = std::env::temp_dir().join(format!(
-            "yamaa-project-operations-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
-        std::fs::create_dir_all(&root).unwrap();
+        let root = crate::support::Scratch::new("project-operations");
         // The engine's spelling: no Windows verbatim prefix.
-        Self(yamaa_adapters::canonical_path::canonicalize(root).unwrap())
+        Self(root)
     }
     fn write(&self, name: &str, contents: impl AsRef<[u8]>) {
         let path = self.0.join(name);
@@ -72,11 +50,6 @@ impl Study {
     }
     fn project(&self) -> String {
         self.path("project.yaml")
-    }
-}
-impl Drop for Study {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
     }
 }
 
@@ -319,7 +292,7 @@ fn names_select_listed_specifications_and_refuse_unknown_or_shared_names() {
 #[cfg(unix)]
 #[test]
 fn a_project_spelled_through_a_linked_directory_keeps_its_authority() {
-    struct Link(PathBuf);
+    struct Link(std::path::PathBuf);
     impl Drop for Link {
         fn drop(&mut self) {
             let _ = std::fs::remove_file(&self.0);

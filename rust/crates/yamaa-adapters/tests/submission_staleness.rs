@@ -5,11 +5,7 @@
 //! built and saved by a real run first, so a report that matches is the one
 //! the engine wrote; each mismatch then changes one file after that save.
 mod staleness {
-    use std::{
-        fs,
-        path::PathBuf,
-        sync::atomic::{AtomicU64, Ordering},
-    };
+    use std::fs;
     use yamaa_adapters::{file_application, file_define::Define, specification_report::Identity};
     use yamaa_core::{
         diagnostic::{ConditionCode, Diagnostic},
@@ -18,8 +14,6 @@ mod staleness {
         project_environment::Submission,
         project_function::Language,
     };
-
-    static NEXT: AtomicU64 = AtomicU64::new(0);
 
     const PROJECT: &str = r#"yamaa: "1.0"
 type: project
@@ -94,17 +88,12 @@ submission:
     const RAW: &str = "STUDYID,USUBJID\nCATH,CATH-0001\nCATH,CATH-0002\n";
     const DM: &str = "DOMAIN,STUDYID,USUBJID\nDM,CATH,CATH-0001\nDM,CATH,CATH-0002\n";
 
-    struct Study(PathBuf);
+    struct Study(crate::support::Scratch);
     impl Study {
         /// A study whose project lists `spec` as `dm.yaml`, over [`RAW`].
         fn new(spec: &str) -> Self {
-            let root = std::env::temp_dir().join(format!(
-                "yamaa-staleness-{}-{}",
-                std::process::id(),
-                NEXT.fetch_add(1, Ordering::Relaxed)
-            ));
-            fs::create_dir_all(&root).unwrap();
-            let study = Self(yamaa_adapters::canonical_path::canonicalize(root).unwrap());
+            let root = crate::support::Scratch::canonical("staleness");
+            let study = Self(root);
             study.write("project.yaml", PROJECT);
             study.write("dm.yaml", spec);
             study.write("raw.csv", RAW);
@@ -157,11 +146,6 @@ submission:
                 Some(Language::Python),
                 None,
             )
-        }
-    }
-    impl Drop for Study {
-        fn drop(&mut self) {
-            let _ = fs::remove_dir_all(&self.0);
         }
     }
 

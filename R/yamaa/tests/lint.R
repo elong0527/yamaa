@@ -10,6 +10,7 @@ if (!requireNamespace("jsonlite", quietly = TRUE)) {
 }
 host_fixture_root <- normalizePath("host-fixtures", winslash = "/", mustWork = TRUE)
 source(file.path(host_fixture_root, "reader.R"), local = TRUE)
+source(file.path(host_fixture_root, "assert.R"), local = TRUE)
 truth <- read_host_fixture(host_fixture_root, "lint")
 columns <- fixture_strings(truth[["columns"]])
 integers <- fixture_strings(truth[["integer_columns"]])
@@ -23,33 +24,31 @@ write_text(path, truth[["specification_yaml"]])
 
 # Integer columns are decimal text in the truth and doubles in R; the file
 # column is the absolute path with forward slashes.
-check_table <- function(frame, rows) {
-  stopifnot(is.data.frame(frame), identical(names(frame), columns))
-  stopifnot(identical(unname(vapply(frame, typeof, "")),
-    ifelse(columns %in% integers, "double", "character")))
-  stopifnot(nrow(frame) == length(rows))
+check_table <- function(frame, rows, label) {
+  stopifnot_case(label, "the findings are a data frame" = is.data.frame(frame))
+  expect_identical(names(frame), columns, paste(label, "has the lint columns"))
+  expect_identical(unname(vapply(frame, typeof, "")), ifelse(columns %in% integers, "double", "character"),
+    paste(label, "types its columns"))
+  expect_identical(nrow(frame), length(rows), paste(label, "has the authored rows"))
   files <- frame[["file"]]
-  stopifnot(!grepl("\\", files, fixed = TRUE),
-    endsWith(files, paste0("/", truth[["file_name"]])),
-    grepl("^(/|[A-Za-z]:/)", files))
+  stopifnot_case(label, "a file has forward slashes" = !any(grepl("\\", files, fixed = TRUE)),
+    "a file is the linted file" = all(endsWith(files, paste0("/", truth[["file_name"]]))),
+    "a file is absolute" = all(grepl("^(/|[A-Za-z]:/)", files)))
   for (name in setdiff(columns, "file")) {
     cells <- vapply(rows, function(row) row[[name]], character(1))
     expected <- if (name %in% integers) as.double(cells) else cells
-    if (!identical(frame[[name]], expected)) {
-      str(frame[[name]]); str(expected)
-      stop("lint column differs from the shared truth: ", name)
-    }
+    expect_identical(frame[[name]], expected, paste(label, "column", name, "is the shared truth"))
   }
 }
 
-check_table(yamaa_lint(path), truth[["rows"]])
-check_table(yamaa_lint(c(path), fix = FALSE), truth[["rows"]])
-stopifnot(identical(read_text(path), truth[["specification_yaml"]]))
+check_table(yamaa_lint(path), truth[["rows"]], "lint")
+check_table(yamaa_lint(c(path), fix = FALSE), truth[["rows"]], "lint without fix")
+expect_identical(read_text(path), truth[["specification_yaml"]], "lint without fix writes nothing")
 cat("findings come as the six-column table\n")
 
-check_table(yamaa_lint(path, fix = TRUE), truth[["fixed_rows"]])
-stopifnot(identical(read_text(path), truth[["fixed_yaml"]]))
-check_table(yamaa_lint(path), truth[["fixed_rows"]])
+check_table(yamaa_lint(path, fix = TRUE), truth[["fixed_rows"]], "lint with fix")
+expect_identical(read_text(path), truth[["fixed_yaml"]], "fix writes the proved fixes")
+check_table(yamaa_lint(path), truth[["fixed_rows"]], "lint after fix")
 cat("fix rewrites the file and lists what remains\n")
 
 write_text(path, truth[["specification_yaml"]])
@@ -57,17 +56,19 @@ for (refusal in truth[["refusals"]]) {
   refused <- file.path(work, "refused.yaml")
   if (!is.null(refusal[["yaml"]])) write_text(refused, refusal[["yaml"]])
   error <- tryCatch(yamaa_lint(c(path, refused), fix = TRUE), yamaa_error = identity)
-  stopifnot(inherits(error, "yamaa_error"), is.data.frame(error$issues),
-    identical(error$issues[["condition"]], refusal[["condition"]]))
+  stopifnot_case(refusal[["condition"]], "the refusal signals yamaa_error" = inherits(error, "yamaa_error"),
+    "it carries an issues table" = is.data.frame(error$issues))
+  expect_identical(error$issues[["condition"]], refusal[["condition"]], "the refusal names its condition")
   # A refused call writes nothing.
-  stopifnot(identical(read_text(path), truth[["specification_yaml"]]))
+  expect_identical(read_text(path), truth[["specification_yaml"]], paste(refusal[["condition"]], "writes nothing"))
   unlink(refused)
 }
 cat("refusals signal yamaa_error naming the condition\n")
 
 for (paths in list(character(), NA_character_, 1)) {
   error <- tryCatch(yamaa_lint(paths), error = identity)
-  stopifnot(inherits(error, "error"), !inherits(error, "yamaa_error"))
+  stopifnot_case(paste("paths", deparse(paths)), "the mistake is an ordinary error" =
+    inherits(error, "error") && !inherits(error, "yamaa_error"))
 }
 cat("paths must be a non-empty character vector\n")
 unlink(work, recursive = TRUE)

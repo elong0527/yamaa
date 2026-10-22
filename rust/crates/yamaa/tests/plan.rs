@@ -13,7 +13,7 @@ use std::sync::Arc;
 
 use yamaa::{CancellationToken, Engine, EngineOptions, HostLanguage, MemoryResolver, Plans, Run};
 
-const SPECIFICATION: &[u8] = b"schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int}}}\noutput: {path: out.csv, columns: [ID, NAME]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: NAME, type: str, derivation: SRC.NAME}\n";
+const SPECIFICATION: &[u8] = b"yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int}}}\noutput: {path: out.csv, columns: [ID, NAME]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: NAME, type: str, derivation: SRC.NAME}\n";
 const STUDY_A: &[u8] = b"ID,NAME\n1,alpha\n2,beta\n";
 const STUDY_B: &[u8] = b"ID,NAME\n7,gamma\n";
 const SAVED: &str = "memory:/out.csv";

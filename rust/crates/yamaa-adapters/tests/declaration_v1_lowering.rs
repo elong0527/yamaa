@@ -8,8 +8,7 @@
 //! value-level comparator, and a month rule without a day rule (TIME-10).
 
 use std::fs;
-use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::path::Path;
 use yamaa_adapters::document::{
     self, Closures, Decoded, PreparedSpecification, SpecificationError,
 };
@@ -23,19 +22,12 @@ use yamaa_core::inheritance::{Source as GraphSource, SourceError};
 use yamaa_core::language::{FileType, LANGUAGE_VERSION};
 use yamaa_core::schema::SchemaContext as C;
 
-static NEXT: AtomicUsize = AtomicUsize::new(0);
-
 /// A study directory of written files, removed when dropped.
-struct Study(PathBuf);
+struct Study(crate::support::Scratch);
 impl Study {
     fn new(files: &[(&str, &str)]) -> Self {
-        let path = std::env::temp_dir().join(format!(
-            "yamaa-v1-lowering-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
-        fs::create_dir_all(&path).unwrap();
-        let study = Self(path.canonicalize().unwrap());
+        let path = crate::support::Scratch::new("v1-lowering");
+        let study = Self(path.resolved(std::fs::canonicalize));
         for (name, text) in files {
             fs::write(study.0.join(name), text).unwrap();
         }
@@ -43,11 +35,6 @@ impl Study {
     }
     fn path(&self, name: &str) -> String {
         self.0.join(name).to_str().unwrap().replace('\\', "/")
-    }
-}
-impl Drop for Study {
-    fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.0);
     }
 }
 

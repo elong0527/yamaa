@@ -4,10 +4,6 @@ use yamaa_adapters::{
     specification_source::{CapturedSchema, Source},
 };
 
-/// The separately versioned environment root alone.
-pub fn environment_schema() -> Arc<CapturedSchema> {
-    yamaa_adapters::shipped_schema::capture_environment().unwrap()
-}
 /// The project root and the environment root a project preparation decodes.
 pub fn project_schemas() -> ProjectSchemas {
     yamaa_adapters::shipped_schema::capture_project().unwrap()

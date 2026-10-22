@@ -119,6 +119,11 @@ pub enum Status {
 /// closed vocabulary of every `status` a host returns (P-STATUS-1).
 pub const STATUSES: [&str; 3] = ["succeeded", "failed", "skipped"];
 
+/// The sections a project file declares, as written, in run order: the closed
+/// vocabulary of the `section` that [`Engine::project_run`] and
+/// [`Engine::project_submission`] take (PROJECT-3).
+pub const SECTIONS: [&str; 3] = ["sdtm", "adam", "send"];
+
 impl Status {
     /// The status as written: `succeeded`, `failed` or `skipped`, one of
     /// [`STATUSES`].
@@ -445,7 +450,7 @@ impl Engine {
     ///
     /// let resolver = Arc::new(MemoryResolver::new());
     /// resolver.insert("/", "spec.yaml", "spec:1", Arc::from(
-    ///     &b"schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {VALUE: float}}}\noutput: {path: out.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: float, derivation: SRC.VALUE}\n"[..],
+    ///     &b"yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {VALUE: float}}}\noutput: {path: out.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: float, derivation: SRC.VALUE}\n"[..],
     /// ));
     /// let engine = Engine::new(
     ///     EngineOptions::new(HostLanguage::Python, "doctest".into(), "0".into())
@@ -504,7 +509,7 @@ impl Engine {
     ///
     /// let resolver = Arc::new(MemoryResolver::new());
     /// resolver.insert("/", "spec.yaml", "spec:1", Arc::from(
-    ///     &b"schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {VALUE: float}}}\noutput: {path: out.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: float, derivation: SRC.VALUE}\n"[..],
+    ///     &b"yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {VALUE: float}}}\noutput: {path: out.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: float, derivation: SRC.VALUE}\n"[..],
     /// ));
     /// let schema = Arc::new(Schema::new(vec![
     ///     Field::new("ID", DataType::Int64, true),
@@ -977,7 +982,7 @@ impl Engine {
         })
     }
 
-    /// Build every listed specification of `section` ("sdtm", "adam", "send"),
+    /// Build every listed specification of `section`, one of [`SECTIONS`],
     /// or of all sections in that order. Each builds once, producer first; a
     /// producer in the run scope hands its artifact to its consumers in
     /// memory, and one outside it is read from its saved artifact file. A
@@ -1084,7 +1089,7 @@ impl Engine {
     }
 
     /// One define.xml per section, selected or all declared, plus
-    /// Dataset-JSON where the section sets `datasets: json`. Without a
+    /// Dataset-JSON where the section sets `transport: dataset_json`. Without a
     /// section, every declared section that names `define` is composed.
     /// Every section is composed with one creation time,
     /// [`Submission::created`]: `created` as given, or else the current UTC
@@ -1192,7 +1197,7 @@ mod plan_tests {
 
     #[test]
     fn a_project_run_drops_the_plans_of_specifications_the_project_no_longer_lists() {
-        const SPEC: &str = "schema_version: '1.0'\ndomain: DM\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int}}}\noutput: {path: dm.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: SRC.ID}\n";
+        const SPEC: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: DM\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int}}}\noutput: {path: dm.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: SRC.ID}\n";
         let root = std::env::temp_dir().join(format!("yamaa-plan-drop-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).unwrap();
@@ -1208,7 +1213,7 @@ mod plan_tests {
         let listing = |specs: &str| {
             std::fs::write(
                 root.join("project.yaml"),
-                format!("schema_version: '1.0'\nsdtm:\n  specs: [{specs}]\n"),
+                format!("yamaa: \"1.0\"\ntype: project\nsdtm:\n  specs: [{specs}]\n"),
             )
             .unwrap();
         };
@@ -1282,6 +1287,12 @@ mod tests {
             }
         }
         assert_eq!(statuses.map(Status::as_str), STATUSES);
+    }
+
+    #[test]
+    fn sections_are_the_project_sections_in_run_order() {
+        use yamaa_core::project_scope::{key, SECTIONS as CORE};
+        assert_eq!(CORE.map(key), SECTIONS);
     }
 
     /// Resolved facts the engine cannot represent are refused as the

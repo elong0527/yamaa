@@ -15,6 +15,7 @@ if (!requireNamespace("jsonlite", quietly = TRUE)) {
 host_fixture_root <- normalizePath("host-fixtures", winslash = "/", mustWork = TRUE)
 projects <- normalizePath("project-base", winslash = "/", mustWork = TRUE)
 source(file.path(host_fixture_root, "reader.R"), local = TRUE)
+source(file.path(host_fixture_root, "assert.R"), local = TRUE)
 truth <- read_host_fixture(host_fixture_root, "plan-reuse")
 root <- tempfile("yamaa-plan-reuse-"); dir.create(root)
 root <- normalizePath(root, winslash = "/")
@@ -38,33 +39,9 @@ write_text <- function(path, text) {
 }
 read_text <- function(path) rawToChar(readBin(path, "raw", n = file.info(path)$size))
 refused <- function(code) inherits(tryCatch({ force(code); NULL }, yamaa_error = identity), "yamaa_error")
-# Issue rows as the shared parity truth holds them, all twelve columns:
-# context as canonical JSON text, lines, columns and spans as doubles and
-# routes as character. A truth row names its file relative to the study's
-# directory; a location names it by its absolute path (P-ISSUE-1).
-issue_rows <- function(frame) {
-  list(severity = frame$severity, phase = frame$phase, condition = frame$condition,
-    rule = frame$rule, spec_paths = frame$spec_paths, file = frame$file, line = frame$line,
-    column = frame$column, message = frame$message, context = frame$context,
-    source_span = frame$source_span, operand_route = frame$operand_route)
-}
-issue_truth <- function(expected) {
-  text <- function(field) vapply(expected, function(issue)
-    if (is.null(issue[[field]])) NA_character_ else issue[[field]], "")
-  number <- function(field) vapply(expected, function(issue)
-    if (is.null(issue[[field]])) NA_real_ else as.double(issue[[field]]), 0)
-  list(severity = text("severity"), phase = text("phase"), condition = text("condition"),
-    rule = text("rule"),
-    spec_paths = lapply(expected, function(issue) as.character(unlist(issue$spec_paths))),
-    file = vapply(expected, function(issue)
-      if (is.null(issue$file)) NA_character_ else file.path(root, issue$file), ""),
-    line = number("line"), column = number("column"),
-    message = enc2utf8(text("message")), context = enc2utf8(text("context")),
-    source_span = lapply(expected, function(issue)
-      if (is.null(issue$source_span)) NULL else as.double(unlist(issue$source_span))),
-    operand_route = lapply(expected, function(issue)
-      if (is.null(issue$operand_route)) NULL else as.character(unlist(issue$operand_route))))
-}
+# Issue rows compare with the shared parity truth through issue_truth()
+# (assert.R): a truth row names its file relative to the study's directory,
+# `root`; a location names it by its absolute path (P-ISSUE-1).
 
 # Run `spec` on one study's input and check its saved output or its issues.
 spec_path <- file.path(root, "spec.yaml")
@@ -73,17 +50,19 @@ run_study <- function(spec, study) {
   output <- file.path(root, "output.csv")
   unlink(output)
   run <- spec$run()
+  label <- paste("a run on the input", deparse(study$input_csv))
   if (length(study$issues) == 0L) {
-    stopifnot(nrow(run$issues) == 0L)
-  } else if (!identical(issue_rows(run$issues), issue_truth(study$issues))) {
-    str(issue_rows(run$issues)); str(issue_truth(study$issues))
-    stop("issue rows differ from the shared plan-reuse truth")
+    stopifnot_case(label, "the run has no issues" = nrow(run$issues) == 0L)
+  } else {
+    expect_identical(issue_columns_of(run$issues), issue_truth(study$issues, root),
+      paste(label, "has the shared plan-reuse issue rows"))
   }
   if (is.null(study$output_csv)) {
-    stopifnot(is.null(run$output), refused(run$save()), !file.exists(output))
+    stopifnot_case(label, "a failed run has no output" = is.null(run$output),
+      "its save is refused" = refused(run$save()), "nothing is written" = !file.exists(output))
   } else {
     run$save()
-    stopifnot(identical(read_text(output), study$output_csv))
+    expect_identical(read_text(output), study$output_csv, paste(label, "saves the authored CSV"))
   }
   run
 }
@@ -93,9 +72,9 @@ qualify_reuse <- function() {
   spec <- yamaa_spec(spec_path)
   compiles <- vapply(truth$sequence, function(name) compiled(run_study(spec, truth$studies[[name]])),
     logical(1))
-  stopifnot(identical(unname(compiles), c(TRUE, FALSE, FALSE)))
+  expect_identical(unname(compiles), c(TRUE, FALSE, FALSE), "A, B, A compile only on the first run")
   # Another object for the same file compiles on its own first run.
-  stopifnot(compiled(run_study(yamaa_spec(spec_path), truth$studies$A)))
+  stopifnot("another object compiles on its first run" = compiled(run_study(yamaa_spec(spec_path), truth$studies$A)))
   cat("later runs reuse the plan and read each input afresh\n")
 }
 qualify_reuse()
@@ -104,24 +83,26 @@ qualify_changed_specification <- function() {
   study <- truth$studies$A
   write_text(spec_path, truth$specification_yaml)
   spec <- yamaa_spec(spec_path)
-  stopifnot(compiled(run_study(spec, study)))
+  stopifnot("the first run compiles" = compiled(run_study(spec, study)))
   write_text(spec_path, truth$changed_specification_yaml)
   changed <- study
   changed$output_csv <- truth$changed_output_csv
-  stopifnot(compiled(run_study(spec, changed)), !compiled(run_study(spec, changed)))
+  stopifnot("a changed specification compiles again" = compiled(run_study(spec, changed)),
+    "the next run reuses the changed plan" = !compiled(run_study(spec, changed)))
   # A specification the engine refuses keeps nothing: the run reports the
   # refusal, and once it is fixed the next run compiles it.
   write_text(spec_path, "schema_version: '1.0'\ndomain: TEST\n")
   failed <- spec$run()
-  stopifnot(is.null(failed$output), nrow(failed$issues) > 0L)
+  stopifnot("a refused specification has no output" = is.null(failed$output),
+    "a refused specification reports issues" = nrow(failed$issues) > 0L)
   write_text(spec_path, truth$specification_yaml)
-  stopifnot(compiled(run_study(spec, study)))
+  stopifnot("the fixed specification compiles" = compiled(run_study(spec, study)))
   cat("a changed specification compiles again and is never stale\n")
 }
 qualify_changed_specification()
 
 qualify_changed_function_contract <- function() {
-  stopifnot(file.copy(file.path(projects, "base-round"), root, recursive = TRUE))
+  stopifnot("the project case is copied" = file.copy(file.path(projects, "base-round"), root, recursive = TRUE))
   case <- file.path(root, "base-round")
   spec <- yamaa_project(file.path(case, "project.yaml"))$spec("TEST")
   expected <- read_text(file.path(case, "expected", "test.csv"))
@@ -130,7 +111,8 @@ qualify_changed_function_contract <- function() {
     read_text(file.path(case, "test.csv"))
   }
   first <- spec$run()
-  stopifnot(compiled(first), identical(saved(first), expected), !compiled(spec$run()))
+  stopifnot("the first run compiles" = compiled(first), "it saves the authored CSV" = identical(saved(first), expected),
+    "the next run reuses the plan" = !compiled(spec$run()))
   # The function's default number of significant digits changes in its function
   # file: the run compiles the new contract and uses it.
   contract <- file.path(case, "functions", "rounded_value.yaml")
@@ -139,15 +121,18 @@ qualify_changed_function_contract <- function() {
     sub("args: {x: 2.375}, result: 2.38", "args: {x: 2.375}, result: 2.4",
       original, fixed = TRUE), fixed = TRUE))
   changed <- spec$run()
-  stopifnot(compiled(changed), identical(saved(changed), "ID,RESULT\n01,2.4\n02,-1.1\n03,\n"),
-    !compiled(spec$run()))
+  stopifnot("a changed contract compiles again" = compiled(changed),
+    "it rounds to the new default" = identical(saved(changed), "ID,RESULT\n01,2.4\n02,-1.1\n03,\n"),
+    "the next run reuses the changed plan" = !compiled(spec$run()))
   write_text(contract, original)
   restored <- spec$run()
-  stopifnot(compiled(restored), identical(saved(restored), expected))
+  stopifnot("the restored contract compiles again" = compiled(restored),
+    "it saves the authored CSV" = identical(saved(restored), expected))
   # The project file changes: every plan it holds compiles again.
   project <- file.path(case, "project.yaml")
   write_text(project, paste0(read_text(project), "# reviewed\n"))
-  stopifnot(compiled(spec$run()), !compiled(spec$run()))
+  stopifnot("a changed project file compiles again" = compiled(spec$run()),
+    "the next run reuses the plan" = !compiled(spec$run()))
   cat("a changed function contract or project file compiles again\n")
 }
 qualify_changed_function_contract()
@@ -175,23 +160,25 @@ qualify_project <- function() {
   project <- yamaa_project(file.path(study, "project.yaml"))
   saved <- function() {
     runs <- project$run()
-    stopifnot(identical(runs$names, c("DM", "ADSL")), nrow(runs$issues) == 0L)
+    expect_identical(runs$names, c("DM", "ADSL"), "the project builds DM, then ADSL")
+    stopifnot("the project run has no issues" = nrow(runs$issues) == 0L)
     runs$save()
     read_text(file.path(study, "out", "adsl.csv"))
   }
-  stopifnot(identical(saved(), "USUBJID,AGE\nS1,30\nS2,41\n"),
-    identical(saved(), "USUBJID,AGE\nS1,30\nS2,41\n"))
+  expect_identical(saved(), "USUBJID,AGE\nS1,30\nS2,41\n", "the first project run")
+  expect_identical(saved(), "USUBJID,AGE\nS1,30\nS2,41\n", "the second project run")
   # Each run reads the inputs afresh.
   write_text(file.path(study, "raw", "dm.csv"), "USUBJID,AGE\nS1,31\nS2,41\n")
-  stopifnot(identical(saved(), "USUBJID,AGE\nS1,31\nS2,41\n"))
+  expect_identical(saved(), "USUBJID,AGE\nS1,31\nS2,41\n", "a project run reads a changed input")
   # A changed specification runs as changed.
   write_text(file.path(study, "adam", "adsl.yaml"),
     sub("[USUBJID, AGE]}", "[AGE, USUBJID]}", adsl, fixed = TRUE))
-  stopifnot(identical(saved(), "AGE,USUBJID\n31,S1\n41,S2\n"),
-    identical(saved(), "AGE,USUBJID\n31,S1\n41,S2\n"))
+  expect_identical(saved(), "AGE,USUBJID\n31,S1\n41,S2\n", "a project run of a changed specification")
+  expect_identical(saved(), "AGE,USUBJID\n31,S1\n41,S2\n", "the next run of the changed specification")
   # A spec object of the project keeps its own plan.
   spec <- project$spec("DM")
-  stopifnot(identical(c(compiled(spec$run()), compiled(spec$run())), c(TRUE, FALSE)))
+  expect_identical(c(compiled(spec$run()), compiled(spec$run())), c(TRUE, FALSE),
+    "a project's spec object compiles once")
   cat("a project object reuses its plans and runs every change\n")
 }
 qualify_project()
@@ -227,23 +214,29 @@ qualify_working_directory <- function() {
   a <- "ID\n1\n2\n"
   b <- "ID\n1\n2\n3\n"
   first <- spec$run()
-  stopifnot(identical(plan_of(first), "compiled"), identical(saved(first, "a", "out.csv"), a),
-    identical(plan_of(spec$run()), "reused"), identical(saved(project$run(), "a", "dm.csv"), a),
-    identical(plan_of(member$run()), "compiled"), identical(plan_of(member$run()), "reused"))
+  stopifnot("the first run in A compiles" = identical(plan_of(first), "compiled"),
+    "it saves A" = identical(saved(first, "a", "out.csv"), a),
+    "the next run in A reuses the plan" = identical(plan_of(spec$run()), "reused"),
+    "the project run in A saves A" = identical(saved(project$run(), "a", "dm.csv"), a),
+    "the member's first run compiles" = identical(plan_of(member$run()), "compiled"),
+    "the member's next run reuses the plan" = identical(plan_of(member$run()), "reused"))
   # The same spellings now name study B: each object builds B and leaves A's
   # saved files as they were.
   setwd(file.path(where, "b"))
   moved <- spec$run()
-  stopifnot(identical(plan_of(moved), "compiled"), identical(saved(moved, "b", "out.csv"), b),
-    identical(read_text(file.path(where, "a", "out.csv")), a), nrow(spec$check()$issues) == 0L,
-    identical(saved(project$run(), "b", "dm.csv"), b),
-    identical(read_text(file.path(where, "a", "dm.csv")), a))
+  stopifnot("the first run in B compiles" = identical(plan_of(moved), "compiled"),
+    "it saves B" = identical(saved(moved, "b", "out.csv"), b),
+    "A's output stays" = identical(read_text(file.path(where, "a", "out.csv")), a),
+    "B checks" = nrow(spec$check()$issues) == 0L,
+    "the project run in B saves B" = identical(saved(project$run(), "b", "dm.csv"), b),
+    "A's project output stays" = identical(read_text(file.path(where, "a", "dm.csv")), a))
   # `project$spec(name)` keeps its located specification, A's, with the
   # project's relative path, which now names B's project.
-  stopifnot(identical(plan_of(member$run()), "compiled"), identical(plan_of(member$run()), "reused"))
+  stopifnot("the member compiles in B" = identical(plan_of(member$run()), "compiled"),
+    "the member's next run in B reuses the plan" = identical(plan_of(member$run()), "reused"))
   # Back in A, the spec object compiles A again: it keeps one plan.
   setwd(file.path(where, "a"))
-  stopifnot(identical(plan_of(spec$run()), "compiled"))
+  stopifnot("back in A the spec object compiles again" = identical(plan_of(spec$run()), "compiled"))
   cat("relative paths after a working directory change build the new study\n")
 }
 qualify_working_directory()
@@ -253,15 +246,17 @@ qualify_link <- function() {
   where <- file.path(root, "linked")
   studies(where)
   link <- file.path(where, "study")
-  stopifnot(file.symlink(file.path(where, "a"), link))
+  stopifnot("the link names A" = file.symlink(file.path(where, "a"), link))
   spec <- yamaa_spec(file.path(link, "spec.yaml"))
   project <- yamaa_project(file.path(link, "project.yaml"))
-  stopifnot(identical(plan_of(spec$run()), "compiled"), identical(plan_of(spec$run()), "reused"),
-    nrow(project$run()[["DM"]]$output) == 2L)
-  stopifnot(file.remove(link), file.symlink(file.path(where, "b"), link))
+  stopifnot("the first run compiles" = identical(plan_of(spec$run()), "compiled"),
+    "the next run reuses the plan" = identical(plan_of(spec$run()), "reused"),
+    "the project builds A's two rows" = nrow(project$run()[["DM"]]$output) == 2L)
+  stopifnot("the link is retargeted to B" = file.remove(link) && file.symlink(file.path(where, "b"), link))
   moved <- spec$run()
-  stopifnot(identical(plan_of(moved), "compiled"), nrow(moved$output) == 3L,
-    nrow(project$run()[["DM"]]$output) == 3L)
+  stopifnot("a run through the retargeted link compiles" = identical(plan_of(moved), "compiled"),
+    "it builds B's three rows" = nrow(moved$output) == 3L,
+    "the project builds B's three rows" = nrow(project$run()[["DM"]]$output) == 3L)
   cat("a path through a retargeted link builds the study it now names\n")
 }
 qualify_link()
@@ -275,19 +270,23 @@ qualify_serialization <- function() {
   write_text(file.path(where, "project.yaml"), "schema_version: '1.0'\nsdtm:\n  specs: [dm.yaml]\n")
   spec <- yamaa_spec(file.path(where, "spec.yaml"))
   project <- yamaa_project(file.path(where, "project.yaml"))
-  stopifnot(identical(plan_of(spec$run()), "compiled"))
+  stopifnot("the first run compiles" = identical(plan_of(spec$run()), "compiled"))
   invisible(project$run())
   # A restored object brings an expired holder, so it starts with nothing
   # kept and compiles on its first run.
   saved <- file.path(where, "objects.rds")
   saveRDS(list(spec = spec, project = project), saved)
-  for (restored in list(readRDS(saved), unserialize(serialize(list(spec = spec, project = project), NULL)))) {
-    stopifnot(identical(plan_of(restored$spec$run()), "compiled"),
-      identical(plan_of(restored$spec$run()), "reused"),
-      nrow(restored$project$run()[["DM"]]$output) == 1L)
+  restorations <- list(readRDS = readRDS(saved),
+    unserialize = unserialize(serialize(list(spec = spec, project = project), NULL)))
+  for (how in names(restorations)) {
+    restored <- restorations[[how]]
+    stopifnot_case(paste("an object restored by", how),
+      "its first run compiles" = identical(plan_of(restored$spec$run()), "compiled"),
+      "its next run reuses the plan" = identical(plan_of(restored$spec$run()), "reused"),
+      "its project builds the one row" = nrow(restored$project$run()[["DM"]]$output) == 1L)
   }
   # The original keeps its own plan.
-  stopifnot(identical(plan_of(spec$run()), "reused"))
+  stopifnot("the original keeps its plan" = identical(plan_of(spec$run()), "reused"))
   cat("restored objects start with nothing kept\n")
 }
 qualify_serialization()

@@ -9,28 +9,15 @@ mod transport {
     use std::{
         fs,
         path::{Path, PathBuf},
-        sync::atomic::{AtomicU64, Ordering},
     };
     use yamaa_adapters::file_define::{Define, PublicationState};
     use yamaa_core::{json::Value, project_function::Language, project_scope};
 
-    static NEXT: AtomicU64 = AtomicU64::new(0);
-
-    struct Temp(PathBuf);
+    struct Temp(crate::support::Scratch);
     impl Temp {
         fn new() -> Self {
-            let path = std::env::temp_dir().join(format!(
-                "yamaa-transport-{}-{}",
-                std::process::id(),
-                NEXT.fetch_add(1, Ordering::Relaxed)
-            ));
-            fs::create_dir_all(&path).unwrap();
-            Self(yamaa_adapters::canonical_path::canonicalize(path).unwrap())
-        }
-    }
-    impl Drop for Temp {
-        fn drop(&mut self) {
-            let _ = fs::remove_dir_all(&self.0);
+            let path = crate::support::Scratch::canonical("transport");
+            Self(path)
         }
     }
 

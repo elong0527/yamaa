@@ -28,7 +28,7 @@ fn engine_with_bad_derivation() -> (Engine, CancellationToken) {
 fn engine_with_columns(columns: &str, output: &str) -> (Engine, CancellationToken) {
     let resolver = Arc::new(MemoryResolver::new());
     let specification = format!(
-        "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {{SRC: {{path: input.csv, types: {{VALUE: float, ZERO: float}}}}}}\noutput: {{path: out.csv, columns: {output}}}\ncolumns:\n{columns}"
+        "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {{SRC: {{path: input.csv, types: {{VALUE: float, ZERO: float}}}}}}\noutput: {{path: out.csv, columns: {output}}}\ncolumns:\n{columns}"
     );
     resolver.insert(
         "/",
@@ -103,7 +103,7 @@ fn unknown_source_column_arrives_as_a_typed_record() {
 #[test]
 fn evaluation_failures_carry_recorded_geometry() {
     let (engine, token) = engine_with_columns(
-        "  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: float, derivation: SRC.VALUE}\n  - {name: ZERO, type: float, derivation: SRC.ZERO}\n  - {name: RATIO, type: float, derivation: {compute: {expr: 'VALUE / ZERO'}}}\n",
+        "  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: float, derivation: SRC.VALUE}\n  - {name: ZERO, type: float, derivation: SRC.ZERO}\n  - {name: RATIO, type: float, derivation: 'VALUE / ZERO'}\n",
         "[ID, VALUE, ZERO, RATIO]",
     );
     let run = engine
@@ -118,7 +118,7 @@ fn evaluation_failures_carry_recorded_geometry() {
         assert_eq!(diagnostic.code, "division_by_zero");
         assert_eq!(diagnostic.rule.as_deref(), Some("FORMULA-15"));
         assert_eq!(diagnostic.message, "VALUE / ZERO divides by zero");
-        assert_eq!(diagnostic.spec_path, ["columns.RATIO.derivation.compute"]);
+        assert_eq!(diagnostic.spec_path, ["columns.RATIO.derivation"]);
         assert_eq!(
             diagnostic.context.get("expr"),
             Some(&ContextValue::Text("VALUE / ZERO".into()))
@@ -138,7 +138,7 @@ fn evaluation_failures_carry_recorded_geometry() {
 #[test]
 fn integer_tokens_beyond_sixty_four_bits_stay_exact_numbers() {
     let (engine, token) = engine_with_columns(
-        "  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {literal: 340282366920938463463374607431768211456}}\n",
+        "  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: 340282366920938463463374607431768211456}\n",
         "[ID, VALUE]",
     );
     let diagnostics = engine
@@ -177,7 +177,8 @@ fn integer_tokens_beyond_sixty_four_bits_stay_exact_numbers() {
 /// runtime name: an embedder may name its runtime anything (#2838). The
 /// project links only an R environment file, which declares a field no
 /// environment file has, so only an R engine opens it and reports the field,
-/// and a check and a run agree on it.
+/// and a check and a run agree on it. The files stay as 0.5 wrote them until
+/// environment files go (#3030 D8).
 #[test]
 fn check_takes_the_host_language_from_the_options_not_the_runtime_name() {
     const SPECIFICATION: &[u8] = b"schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {VALUE: float}}}\noutput: {path: out.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: float, derivation: SRC.VALUE}\n";

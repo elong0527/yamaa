@@ -7,25 +7,15 @@
 //! its own `absent` answer, and leaves a named intermediate's policy alone. On
 //! a 1.0 file a named intermediate's absence is counted under `absent` too,
 //! at the same read paths, where a 0.5 file counts it under `no_match`.
-use std::{
-    fs,
-    path::PathBuf,
-    sync::atomic::{AtomicUsize, Ordering},
-};
+use std::fs;
 use yamaa_adapters::{file_application, specification_report::Identity};
 use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::{domain_entry::Request, json::Value};
 
-struct Fixture(PathBuf);
+struct Fixture(crate::support::Scratch);
 impl Fixture {
     fn new(specification: &str) -> Self {
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        let root = std::env::temp_dir().join(format!(
-            "yamaa-implicit-join-absence-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
-        fs::create_dir(&root).unwrap();
+        let root = crate::support::Scratch::new("implicit-join-absence");
         fs::write(root.join("spec.yaml"), specification).unwrap();
         fs::write(root.join("ae.csv"), AE).unwrap();
         fs::write(root.join("adsl.csv"), ADSL).unwrap();
@@ -66,11 +56,6 @@ impl Fixture {
         let issues = domain.issues();
         assert!(!issues.is_empty(), "the run succeeded");
         yamaa_adapters::report_storage::diagnostic_value(&issues[0])
-    }
-}
-impl Drop for Fixture {
-    fn drop(&mut self) {
-        fs::remove_dir_all(&self.0).unwrap();
     }
 }
 

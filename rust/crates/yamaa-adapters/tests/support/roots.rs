@@ -81,6 +81,28 @@ impl Definition {
 }
 
 impl Definition {
+    /// The root of a 1.0 function file defining this function, which names
+    /// the callable of each host language it implements; `function` is
+    /// unused.
+    pub fn file(self, implementations: &[(Language, &str)]) -> ast::Function {
+        let mut root = self.root(Language::Python);
+        root.header = Some(ast::Header {
+            surface: ast::Surface::V1 { minor: 0 },
+            version: text("1.0"),
+            meta: meta(),
+        });
+        root.implementations = implementations
+            .iter()
+            .map(|&(language, callable)| ast::Implementation {
+                language,
+                callable: text(callable),
+            })
+            .collect();
+        root
+    }
+}
+
+impl Definition {
     /// The plain data of a lowered definition, without its paths, for
     /// comparing with authored expectations. `function` is the first
     /// callable the definition writes.

@@ -1,28 +1,18 @@
 #![cfg(feature = "yaml")]
 //! `str_replace` through file application: the authored benchmarks, then
 //! bespoke specifications for each binding, handler and failure route.
-use std::{
-    fs,
-    path::{Path, PathBuf},
-    sync::atomic::{AtomicUsize, Ordering},
-};
+use std::{fs, path::Path};
 use yamaa_adapters::json;
 use yamaa_adapters::{file_application, specification_report::Identity};
 use yamaa_core::domain_entry::Request;
 use yamaa_core::json::Value as Json;
-static NEXT: AtomicUsize = AtomicUsize::new(0);
-struct Fixture(PathBuf);
+struct Fixture(crate::support::Scratch);
 impl Fixture {
     fn new(name: &str) -> Self {
         let source = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../../benchmarks")
             .join(name);
-        let path = std::env::temp_dir().join(format!(
-            "yamaa-str-replace-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
-        fs::create_dir(&path).unwrap();
+        let path = crate::support::Scratch::new("str-replace");
         fn copy(source: &Path, target: &Path) {
             for entry in fs::read_dir(source).unwrap() {
                 let entry = entry.unwrap();
@@ -65,11 +55,6 @@ impl Fixture {
                 base_directory: ".",
             },
         )
-    }
-}
-impl Drop for Fixture {
-    fn drop(&mut self) {
-        fs::remove_dir_all(&self.0).unwrap();
     }
 }
 fn issue_json(issue: &yamaa_core::diagnostic::Diagnostic) -> Json {

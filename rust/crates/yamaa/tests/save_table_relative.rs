@@ -5,6 +5,9 @@
 //! test, since it changes the process's working directory.
 #![cfg(feature = "odm")]
 
+#[allow(dead_code)]
+mod support;
+
 use yamaa::{Engine, EngineOptions, OdmOptions};
 
 const ODM: &str = r#"<ODM xmlns="http://www.cdisc.org/ns/odm/v1.3">
@@ -20,10 +23,7 @@ const ODM: &str = r#"<ODM xmlns="http://www.cdisc.org/ns/odm/v1.3">
 
 #[test]
 fn a_relative_path_saves_in_the_working_directory_and_returns_it_absolute() {
-    let root =
-        std::env::temp_dir().join(format!("yamaa-save-table-relative-{}", std::process::id()));
-    std::fs::create_dir_all(&root).unwrap();
-    let root = yamaa_adapters::canonical_path::canonicalize(root).unwrap();
+    let root = support::Scratch::new("save-table-relative");
     std::fs::write(root.join("odm.xml"), ODM).unwrap();
     let before = std::env::current_dir().unwrap();
     std::env::set_current_dir(&root).unwrap();
@@ -36,7 +36,6 @@ fn a_relative_path_saves_in_the_working_directory_and_returns_it_absolute() {
     let expected = root.join("items.csv").to_str().unwrap().to_owned();
     #[cfg(windows)]
     let expected = expected.replace('\\', "/");
-    std::fs::remove_dir_all(&root).unwrap();
     assert_eq!(saved.unwrap().unwrap(), [expected]);
     assert!(written.unwrap().starts_with(b"ODMVersion,FileOID,"));
 }
