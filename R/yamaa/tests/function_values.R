@@ -28,24 +28,6 @@ wrapped <- function(record = function(arguments) NULL, when = function(x) FALSE,
 }
 reasons <- function(issues) vapply(issues$context, function(context)
   jsonlite::fromJSON(context, simplifyVector = FALSE)$reason, "", USE.NAMES = FALSE)
-# An issue's file as its printed line names it (P-ISSUE-1): relative to the
-# working directory when the file is beneath it, and absolute otherwise.
-# Beneath is a matter of directories, not spellings: the engine names the file
-# canonically, while the working directory may be spelled another way, such
-# as with Windows 8.3 short names. So each directory above the file is
-# compared with the working directory as normalizePath() spells both.
-printed_file <- function(file) {
-  here <- normalizePath(getwd(), winslash = "/")
-  parts <- strsplit(file, "/", fixed = TRUE)[[1L]]
-  for (depth in rev(seq_len(length(parts) - 1L))) {
-    # The first part is the root: "" for "/", or a drive such as "C:".
-    directory <- paste(parts[seq_len(depth)], collapse = "/")
-    if (depth == 1L) directory <- paste0(directory, "/")
-    if (identical(normalizePath(directory, winslash = "/", mustWork = FALSE), here))
-      return(paste(parts[-seq_len(depth)], collapse = "/"))
-  }
-  file
-}
 # The run of one refused call, named by its `reason`.
 refused <- function(result, condition, rule, reason) {
   stopifnot_case(reason, "a refused call leaves no output" = is.null(result$output))

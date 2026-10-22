@@ -1,5 +1,6 @@
 //! Independent resolution controls over original entry preparation and schema links.
 #![cfg(feature = "yaml")]
+use crate::support::Edit as _;
 use std::fs;
 use yamaa_adapters::resolved_artifact::model::{
     specification_value, Location, OriginKind, RelativeTo, ResolvedArtifact, ResourceRole,
@@ -180,7 +181,7 @@ fn selector_only_overrides_and_atomic_output_keep_original_paths_and_selected_ro
 fn absolute_and_parent_relative_paths_are_facts_and_never_fallback_searches() {
     let study = Study::new();
     study.write("elsewhere/raw.csv", "ID\n1\n");
-    let source = PRODUCER.replace("input/raw.csv", &study.path("absent/raw.csv"));
+    let source = PRODUCER.edit("input/raw.csv", &study.path("absent/raw.csv"));
     study.write("study/spec.yaml", &source);
     let artifact = study.resolve("study/spec.yaml");
     let input = artifact.entries()[0]
@@ -197,7 +198,7 @@ fn absolute_and_parent_relative_paths_are_facts_and_never_fallback_searches() {
     );
     study.write(
         "study/spec.yaml",
-        &PRODUCER.replace("input/raw.csv", "../../parent/raw.csv"),
+        &PRODUCER.edit("input/raw.csv", "../../parent/raw.csv"),
     );
     let artifact = study.resolve("study/spec.yaml");
     let input = artifact.entries()[0]

@@ -1169,7 +1169,8 @@ owns decoding behavior.
   validation as `unknown_field`; it is never read through the implicit join
   (#2925).
 
-The [R and Python API](articles/api.md) page describes host behavior. The
+The [R, Python and command-line API](articles/api.md) page describes host
+behavior. The
 [Python README](../python/README.md#installation)
 and the
 [R README](../R/yamaa/README.md#installation)

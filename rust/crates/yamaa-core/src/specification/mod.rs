@@ -62,18 +62,9 @@ mod cases;
 mod declared_keys;
 mod derivations;
 mod flags;
-mod imputation;
 mod mandatory;
-mod mapping_cut;
 mod odm;
-mod rounding;
-mod scalar;
-mod str_case;
-mod str_extract;
-mod str_pad;
-mod str_template;
 mod submission;
-mod temporal;
 mod terminology;
 mod value_level;
 
@@ -107,30 +98,9 @@ pub enum PreflightFinding {
         value: String,
     },
     Odm(crate::diagnostic::Diagnostic),
+    /// A diagnostic as its cause renders it, a scalar verb's among them.
     Scalar(crate::diagnostic::Diagnostic),
-    TextExtract(crate::diagnostic::Diagnostic),
-    TextTemplate(crate::diagnostic::Diagnostic),
-    TextCase(crate::diagnostic::Diagnostic),
     Report(ReportFinding),
-    Imputation(crate::diagnostic::Diagnostic),
-    RoundingInput {
-        path: String,
-        source: String,
-        actual: &'static str,
-    },
-    TemporalInput {
-        path: String,
-        source: String,
-        actual: &'static str,
-    },
-    /// TIME-5's refusal of a `diff`'s endpoints, spelled as the tree's
-    /// surface writes them: `bounds` in 0.5, `closed` in 1.0 (P-ORD-2).
-    TemporalBounds {
-        path: String,
-        field: &'static str,
-        value: &'static str,
-        permitted: &'static str,
-    },
     ProjectFunction(FunctionFinding),
     ProjectCodelist(std::boxed::Box<crate::project_codelist_binding::Finding>),
     RowPhase {
@@ -231,11 +201,8 @@ pub enum BindError {
 pub enum BindFinding {
     Odm(crate::diagnostic::Diagnostic),
     AggregateDiagnostic(crate::diagnostic::Diagnostic),
-    Padding(crate::diagnostic::Diagnostic),
+    /// A diagnostic as its cause renders it, a scalar verb's among them.
     Scalar(crate::diagnostic::Diagnostic),
-    TextExtract(crate::diagnostic::Diagnostic),
-    TextTemplate(crate::diagnostic::Diagnostic),
-    Temporal(crate::diagnostic::Diagnostic),
     Predicate(crate::diagnostic::Diagnostic),
     ProjectFunction(FunctionFinding),
     Source(SourceFinding),
@@ -446,25 +413,54 @@ pub(super) fn constant(
     literal: &ast::Literal,
     path: &str,
 ) -> Result<crate::value::Value, PrepareError> {
-    use crate::value::Value;
-    Ok(match literal {
-        ast::Literal::Missing => Value::Missing,
-        ast::Literal::Text(value) => Value::Str(value.clone()),
-        ast::Literal::Bool(value) => Value::Bool(*value),
-        ast::Literal::Float(value) => Value::float(*value),
-        ast::Literal::Int(value) => Value::Int(value.parse().map_err(|_| {
+    literal
+        .value()
+        .ok_or_else(|| refused_literal(literal, path))
+}
+
+/// The refusal at `path` of a written scalar that holds no value.
+fn refused_literal(literal: &ast::Literal, path: &str) -> PrepareError {
+    match literal {
+        ast::Literal::Int(value) => {
             PrepareError::Invalid(vec![PreflightFinding::IntegerLiteralOverflow {
                 path: path.into(),
                 value: value.clone(),
             }])
-        })?),
-        ast::Literal::Date(_) | ast::Literal::DateTime(_) | ast::Literal::Unsupported => {
-            return Err(PrepareError::Unsupported(vec![UnsupportedFeature {
-                operation: "literal".into(),
-                path: path.into(),
-            }]))
         }
-    })
+        _ => PrepareError::Unsupported(vec![UnsupportedFeature {
+            operation: "literal".into(),
+            path: path.into(),
+        }]),
+    }
+}
+
+/// What refuses a scalar verb before any source is read, as preparation
+/// reports it.
+pub(super) fn refused_verb(refusal: crate::scalar_verb::Refusal) -> PrepareError {
+    use crate::scalar_verb::Refusal;
+    match refusal {
+        Refusal::Findings(findings) => {
+            PrepareError::Invalid(findings.into_iter().map(PreflightFinding::Scalar).collect())
+        }
+        Refusal::Literal { literal, path } => refused_literal(&literal, &path),
+        Refusal::Pattern {
+            resource,
+            limit,
+            path,
+        } => PrepareError::limit(
+            compiler_limits::regex_resource(resource),
+            limit,
+            None,
+            Some(&path),
+        ),
+        Refusal::Unsupported { operation, path } => {
+            PrepareError::Unsupported(vec![UnsupportedFeature {
+                operation: operation.into(),
+                path,
+            }])
+        }
+        Refusal::Internal => PrepareError::Internal,
+    }
 }
 
 /// A written value binding reads; preparation has already admitted it.

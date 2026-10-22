@@ -1,3 +1,7 @@
+//! Host resources: held bytes reused across aliases, absent and cancelled
+//! resources, frame freshness, staged output that an interruption or abort
+//! leaves behind, and parent files on another drive, on another share, linked
+//! or malformed.
 use arrow_array::{Float64Array, RecordBatch};
 use std::sync::Arc;
 #[cfg(feature = "yaml")]

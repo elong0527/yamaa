@@ -41,6 +41,7 @@ pub mod resource;
 pub mod result_type;
 pub mod run_report;
 pub mod scalar_language;
+mod scalar_verb;
 pub mod schema;
 pub mod source_ordinal;
 pub mod specification;

@@ -418,12 +418,12 @@ Evidence: `rust/crates/yamaa-adapters/tests/fixtures/original_source_bindings.js
 
 A default substitution is counted where the handler it stands for would be:
 at `<operation>.missing` for `mapping`, `cut`, `str_extract`, `str_replace`,
-`str_case`, `flag`, `first_available`, `impute` and `precision`; at
-`<path>.absent` for a read through an implicit join, at the source binding or
-operand that makes the read ([LOOKUP-24](lookup.md#lookup-24)); and at the
-reading column's `no_match` for a named intermediate
-([LOOKUP-14](lookup.md#lookup-14)). A lookup read made while a predicate is
-evaluated is not a handler site: its absence gives missing, uncounted. Nor is
+`str_case`, `flag`, `first_available`, `impute` and `precision`; and at
+`<path>.absent` for a read through an implicit join or of a named
+intermediate, at the source binding or operand that makes the read
+([LOOKUP-24](lookup.md#lookup-24), [LOOKUP-14](lookup.md#lookup-14)). A
+lookup read made while a predicate is evaluated is not a handler site: its
+absence gives missing, uncounted. Nor is
 a read of a named intermediate that supplies another lookup's `between`
 value, filter field or derivation's current-record operand: it answers as in
 a predicate, uncounted, and only the lookup it feeds counts its own answer.
@@ -437,8 +437,8 @@ a path even when it answers nothing. That covers every declared handler and
 every default substitution counted like one, a `partial` date and
 `not_after` included; the `multiple_matches` of each `keep`, on a source
 binding, a collected value or a named intermediate read; and each named
-intermediate read's `no_match` at its reading path. A read that requires a
-match registers no `no_match` and no `absent`.
+intermediate read's `absent` at its reading path. A read that requires a
+match registers no `absent`.
 
 Handler rows come in registration order. The dataset's own paths come first:
 the `unconvertible` paths of the output derivations, in declaration order with
@@ -450,7 +450,7 @@ derivation lists its other paths in expression order: an operation's own paths
 before those of the expressions it reads, which follow in the order the
 operation reads them. An operation lists its own paths as `missing` or
 `fallback`, `unmapped`, `invalid`, `not_after` and `partial`, then a lookup's
-`multiple_matches` before its `no_match` or `absent`. Then each intermediate
+`multiple_matches` before its `absent`. Then each intermediate
 with derivations follows in turn, its paths in the same order: the
 `unconvertible` paths of its typed derivations, each derivation in declaration
 order, then the key expressions of the intermediates those derivations read,

@@ -20,7 +20,14 @@
 //!   take, or a failed write to standard output.
 //!
 //! No configuration file, environment variable or colour changes what it
-//! does. Ctrl+C ends the process by the signal and publishes nothing (D46).
+//! does. Ctrl+C stops `check`, `run` and `submission` at the facade's next
+//! cancellation checkpoint, so they print nothing and a save writes every
+//! file it planned or none (D46, D74); it stops the other commands at once,
+//! so an interrupted `lint --fix`, which replaces each file atomically, can
+//! leave some files fixed and others not. The process then ends the native
+//! way, with none of the exit statuses above (D203): on POSIX it re-raises
+//! SIGINT, which shells report as status 130, and on Windows it exits with
+//! `STATUS_CONTROL_C_EXIT`.
 //!
 //! What each command prints, and how it dispatches on its PATH's `type:`
 //! header (D122), is in [`commands`].

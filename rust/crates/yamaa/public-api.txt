@@ -251,7 +251,6 @@ yamaa::diagnostic::Severity::as_str: pub fn as_str(self) -> &'static str
 yamaa::diagnostic::SourceSpan: pub struct SourceSpan [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
 yamaa::diagnostic::SourceSpan::end: pub end: usize
 yamaa::diagnostic::SourceSpan::start: pub start: usize
-yamaa::engine::Build: impl Build
 yamaa::engine::Engine: impl Engine
 yamaa::engine::Engine: pub struct Engine [derive(Clone)]
 yamaa::engine::Engine::new: pub fn new(options: EngineOptions) -> Self
@@ -266,8 +265,6 @@ yamaa::engine::EngineOptions::runtime_name: pub runtime_name: String
 yamaa::engine::EngineOptions::runtime_version: pub runtime_version: String
 yamaa::engine::EngineOptions::with_functions: pub fn with_functions(mut self, functions: Arc<dyn ProjectFunctions>) -> Self
 yamaa::engine::EngineOptions::with_resolver: pub fn with_resolver(mut self, resolver: Arc<dyn ResourceResolver>) -> Self
-yamaa::engine::Request: impl<'a> Request<'a>
-yamaa::engine::ResolvedSpecification: impl ResolvedSpecification
 yamaa::error::Error: impl std::error::Error for Error
 yamaa::error::Error: impl std::fmt::Display for Error
 yamaa::error::Error: pub enum Error [derive(Clone, Debug)] [non_exhaustive]

@@ -50,6 +50,9 @@ the held bytes.
 | printing | A study's files, and the status and printed lines of each result: a check, a failed check, a project check, a run, a failed run, a project run and each of its members, a submission, and a lazy specification and project; `{path}` stands for the path the test gave and `{root}` for its study directory, with forward slashes |
 | issue-locations | One case for each rule of P-ISSUE-1 (`docs/design/interface-1.0/api.md`, "Issue locations"): the files a case writes, its call, and its first issue's condition, first spec path, file, line and column, counted by hand in those files |
 | project-parity | Project cases with their complete expected issue rows: the files a case writes, its call (a member of a project run, a specification the project names, or a submission) and every issue row; rows and files that depend on the host language are given by language, `{root}` stands for the case's directory and `{version}` for the installed yamaa version |
+| compact-yaml | A specification with a block and a flow input, the block, compact, flow and explicit-key verification forms with their one output and saved CSV, failed row-count bounds, malformed closers, and raw NULs with their `invalid_yaml` context (#2196, #3125) |
+| longitudinal-capacity | The 50,000-row, 100-column profile: its column names, its value rule (the row index for the key, then an offset plus the row and column index modulo a prime), the size its CSV must exceed, and its source and output formats |
+| column-ceilings | The 1,024 admitted and 1,025 refused widths of each boundary, the compiler-limit, parent-occurrence and wide-integer issue rows (`{digits}` stands for the wide integer), the repaired capacity's remaining error, the inheritance depth that builds and the wide inherited cases' rows by column index modulo 3 |
 
 `plan-reuse` is the repeated-run truth for #2821. A spec object's first
 `run()` compiles and later runs reuse the plan, so study A, then B, then A on
@@ -167,6 +170,18 @@ ADTTE's at its `schema` key. The study lies outside the current directory,
 so the location names its file by its absolute path, which `{root}` stands
 for with forward slashes. Every status comes from the `selftest` family's
 vocabulary.
+
+`compact-yaml`, `longitudinal-capacity` and `column-ceilings` pair the
+installed Python and R suites of the same names. Where a case is too wide to
+write cell by cell (5,000,000 cells, or 1,024 columns), the family holds the
+authored rule its cells follow, and each host expands that rule itself; a
+host never derives an expected cell from what it built. The longitudinal
+values stay below 2^53, so R's plain doubles hold them exactly. Each host
+writes its own specification text and inputs and keeps its own route
+mechanics: Python reaches a listed specification through `project.spec()`
+where it has a domain, R through the project's own `check()` and `run()`.
+Without arrow, R skips the Parquet sources and only requires a saved Parquet
+output to exist.
 
 The R grammar suite's conditional failure and original
 CSV preservation controls also remain. Exact float bit witnesses, NUL/invalid

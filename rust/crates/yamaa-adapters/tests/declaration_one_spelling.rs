@@ -3,6 +3,7 @@
 //! through the shipped schema, before any study data is read.
 mod declaration {
     mod one_spelling {
+        use crate::support::Edit as _;
         use yamaa_adapters::json;
         use yamaa_adapters::{
             shipped_schema, specification_diagnostics::capture_failure,
@@ -120,7 +121,7 @@ mod declaration {
             let valid = column("DM.V");
             for (text, path, field, shorthand) in [
                 (
-                    valid.replace("DM: dm.csv", "DM: {path: dm.csv}"),
+                    valid.edit("DM: dm.csv", "DM: {path: dm.csv}"),
                     "input.DM",
                     "path",
                     json!("dm.csv"),
@@ -132,7 +133,7 @@ mod declaration {
                     json!("[\"V\"]"),
                 ),
                 (
-                    valid.replace(
+                    valid.edit(
                         "derivation: DM.V\n",
                         "derivation: DM.V\n    submission: {comment: {text: Collected}}\n",
                     ),
@@ -177,7 +178,7 @@ mod declaration {
             }
             let valid = column("DM.V");
             for text in [
-                valid.replace("DM: dm.csv", "DM: {path: dm.csv, types: {V: int}}"),
+                valid.edit("DM: dm.csv", "DM: {path: dm.csv, types: {V: int}}"),
                 format!("{valid}verifications: [{{unique: {{columns: [V], id: one-v}}}}]\n"),
             ] {
                 assert_eq!(diagnostics(&text), [] as [Value; 0], "{text}");
@@ -189,7 +190,7 @@ mod declaration {
             let valid = column("DM.V");
             for (text, path, expected) in [
                 (
-                    valid.replace(
+                    valid.edit(
                         "derivation: DM.V\n",
                         "derivation: DM.V\n    verifications: {not_missing: {}}\n",
                     ),
@@ -303,7 +304,7 @@ mod declaration {
             // a mapping holding only that path restates it.
             let child = |input: &str| format!("{entry}input: {input}\n");
             let parent = parent("  - {name: V, type: int, derivation: DM.V}\n")
-                .replace("DM: dm.csv", "DM: {path: dm.csv, types: {V: int}}");
+                .edit("DM: dm.csv", "DM: {path: dm.csv, types: {V: int}}");
             assert_eq!(
                 inherited(&child("{DM: other.csv}"), &parent),
                 [] as [Value; 0]

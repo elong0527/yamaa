@@ -2,6 +2,7 @@
 //! Project-scope contracts in the adapters: listed names, run-scope plans,
 //! held producer artifacts, report-only saves and the preflight of one save
 //! across results.
+use crate::support::Edit as _;
 use std::{fs, sync::Arc};
 use yamaa_adapters::{
     file_application::{self, Domain},
@@ -37,14 +38,7 @@ impl Study {
 }
 
 fn id() -> Identity<'static> {
-    Identity {
-        runtime: "test",
-        runtime_version: "test",
-        engine_version: yamaa_core::VERSION,
-        example: "project-scope",
-        specification: "spec.yaml",
-        base_directory: ".",
-    }
+    crate::support::study::identity("project-scope", "spec.yaml")
 }
 
 fn scope() -> yamaa_core::application_observer::Scope<'static> {
@@ -405,7 +399,7 @@ fn report_only_saves_write_the_report_file_and_no_primary_artifact() {
     // A specification without a report file has nothing to save alone.
     study.write(
         "sdtm/ae.yaml",
-        spec("AE", RAW, "../out/ae.csv").replace(", report: ../out/ae.csv.report.csv", ""),
+        spec("AE", RAW, "../out/ae.csv").edit(", report: ../out/ae.csv.report.csv", ""),
     );
     assert!(domain(&study, "sdtm/ae.yaml").save_report().is_err());
 }
@@ -443,7 +437,7 @@ fn the_preflight_refuses_two_results_that_write_one_file() {
     // A result whose report file is one already admitted is refused.
     study.write(
         "sdtm/ae.yaml",
-        spec("AE", RAW, "../out/ae.csv").replace(
+        spec("AE", RAW, "../out/ae.csv").edit(
             "report: ../out/ae.csv.report.csv",
             "report: ../out/adsl.csv.report.csv",
         ),

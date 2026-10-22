@@ -9,8 +9,9 @@ directly with the standard library only.
 
 Scope is the facade crate alone: public modules reachable from ``lib.rs`` plus
 the crate-root re-exports. The private ``internal`` bridge module, ``cfg(test)``
-modules, ``pub(crate)``/``pub(super)`` items and function bodies are not
-surface and are excluded; ``pub use`` re-exports (including the re-exported
+modules, ``pub(crate)``/``pub(super)`` items, the impl blocks of types that a
+module declares without plain ``pub``, and function bodies are not surface and
+are excluded; ``pub use`` re-exports (including the re-exported
 Arrow types) are recorded because they are addressable API. ``const``/``static``
 values are dropped (only name and type are surface) while type-alias targets
 are kept. Any unrecognised top-level construct fails loudly so new syntax gets
@@ -35,6 +36,10 @@ _HEADER = [
 _CHAR = re.compile(r"'(?:\\.|[^'\\])'")
 _SEMI_ITEM = re.compile(r"(?:pub\s*(?:\([^)]*\))?\s+)?(use|const|static|type)\b")
 _ITEM_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+# A type declared without plain `pub`: private, or restricted as `pub(crate)`.
+_PRIVATE_TYPE = re.compile(
+    r"(?:pub\s*\([^)]*\)\s*)?(?:unsafe\s+)?(?:struct|enum|union|trait|type)\s+(\w+)"
+)
 
 
 def _squash(text):
@@ -678,7 +683,23 @@ def _strip_generics(text):
     raise ValueError(f"unbalanced generics: {text[:80]!r}")
 
 
-def _parse_impl(modpath, attrs, body, entries):
+def _private_types(text):
+    """Names of the types a module declares without plain ``pub``.
+
+    No path outside the crate names such a type, so an impl of it, inherent
+    or trait, is not surface, whatever its members' visibility.
+    """
+    names = set()
+    for attrs, body in _split_items(text):
+        if _is_test_cfg(attrs):
+            continue
+        match = _PRIVATE_TYPE.match(body.strip())
+        if match:
+            names.add(match.group(1))
+    return names
+
+
+def _parse_impl(modpath, attrs, body, entries, private=frozenset()):
     suffix = _markers_suffix(attrs)
     if _is_test_cfg(attrs):
         return
@@ -686,11 +707,15 @@ def _parse_impl(modpath, attrs, body, entries):
     if kind != "{" or not head.startswith("impl"):
         raise ValueError(f"unrecognised impl item: {body[:80]!r}")
     rest = head[len("impl") :].strip()
-    if re.search(r"\sfor\s", rest):
+    trait = re.search(r"\sfor\s", rest)
+    if trait:
         selfpart = re.split(r"\sfor\s", rest, maxsplit=1)[1]
         selfpart = re.split(r"\swhere\s", selfpart, maxsplit=1)[0].strip()
     else:
         selfpart = re.split(r"\swhere\s", _strip_generics(rest), maxsplit=1)[0].strip()
+    if _self_name(selfpart, body) in private:
+        return
+    if not trait:
         for mattrs, mbody in _split_items(tail[1:-1]):
             _parse_member(
                 modpath + (_self_name(selfpart, body),),
@@ -736,6 +761,7 @@ def _parse_file_module(modpath, name, entries, state):
 
 
 def _parse_module(modpath, text, entries, state):
+    private = _private_types(text)
     for attrs, body in _split_items(text):
         if _is_test_cfg(attrs):
             continue
@@ -745,7 +771,7 @@ def _parse_module(modpath, text, entries, state):
                 continue
             _parse_pub_item(modpath, attrs, stripped, entries, state)
         elif re.match(r"impl(?:\s|<)", stripped):
-            _parse_impl(modpath, attrs, stripped, entries)
+            _parse_impl(modpath, attrs, stripped, entries, private)
         elif re.match(
             r"(?:mod|use|fn|struct|enum|trait|const|static|type|extern)\b", stripped
         ):

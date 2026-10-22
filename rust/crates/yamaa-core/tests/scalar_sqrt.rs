@@ -1,4 +1,5 @@
-//! Scalar contracts.
+//! Scalar contracts: sqrt, temporal, temporal arithmetic, text case, text
+//! extract, text pad, text template and values.
 mod scalar {
     mod sqrt {
         use yamaa_core::numeric::{sqrt, ArithmeticErrorKind, Number};

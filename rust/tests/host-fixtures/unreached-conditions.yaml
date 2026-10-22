@@ -59,10 +59,6 @@ unreachable:
     a host compiles a spec or project object again once a file it holds has
     changed (#3069), so no case can change a file mid-call; the facade's
     plan tests reach it (rust/crates/yamaa/tests/plan_contracts.rs)
-  schema_version_mismatch: >-
-    only the 0.5 path raises it, until P2-13 removes that path: a 1.0 file
-    declares yamaa, and a version the engine does not read fails as
-    unsupported_language_version (SCHEMA-2, #3030 D125)
   source_system_incomplete: >-
     no host reaches it: the schema refuses an empty source_system_version
     first (minimum_length, SCHEMA-12), and every host passes its own nonempty

@@ -1015,13 +1015,7 @@ fn first_difference(left: &[String], right: &[String]) -> String {
 fn every_converted_benchmark_lowers_to_its_original_tree() {
     let scratch = Scratch::new();
     convert("benchmarks", &scratch.0);
-    let benchmarks = repository().join("benchmarks");
-    let mut cases = fs::read_dir(&benchmarks)
-        .unwrap()
-        .filter_map(|entry| entry.ok().map(|entry| entry.path()))
-        .filter(|case| case.join("benchmark.yaml").is_file())
-        .collect::<Vec<_>>();
-    cases.sort();
+    let cases = crate::support::benchmarks::all();
     let mut compared = 0;
     let mut checked = 0;
     let mut written_1_0 = BTreeSet::new();
@@ -1152,10 +1146,9 @@ fn every_converted_benchmark_lowers_to_its_original_tree() {
 }
 
 /// A value-level comparator has no 0.5 form, so no benchmark converts to one.
-/// A converted case that writes one keeps it on the tree: `NE` as `NotIn`
-/// with its one value, as `EQ` is `In` with one, and `NOTIN` as `NotIn`,
-/// never read as a list it selects and never dropped (P-VLM-1). The switch
-/// refuses either until P1-14 builds them (P1-9, D66).
+/// A converted case that writes one keeps it on the tree: `NE` as `Ne` with
+/// its one value and `NOTIN` as `NotIn` with its values, beside a bare list's
+/// `In`, never read as a list it selects and never dropped (P-VLM-1, D187).
 #[test]
 fn a_converted_value_level_comparator_stays_on_the_tree() {
     let scratch = Scratch::new();

@@ -243,7 +243,8 @@ Portable numerical behavior has independently authored controls in
 `rust/crates/yamaa-core/tests/fixtures/portable_math.tsv`.
 
 The Python and R READMEs describe user installation, and the
-[R and Python API](docs/articles/api.md) page describes both host APIs.
+[R, Python and command-line API](docs/articles/api.md) page describes both
+host APIs and the command line.
 Installed-host
 [qualification](rust/qualification/README.md) owns distribution checks: tests
 run outside the checkout against an installed package, with independent inputs
@@ -386,8 +387,7 @@ caller's line and returns its rendered code, `support::benchmarks`
 (adapters) reads what a live benchmark states (D120),
 `support::inheritance::Files` (adapters) resolves parents beside their
 declaring file, `support::NoFunctions` (yamaa) stands for a project that
-calls no function, `support::edit` (adapters) replaces exactly one
-occurrence, and `support::Scratch` (adapters and yamaa) is a scratch
+calls no function, and `support::Scratch` (adapters and yamaa) is a scratch
 directory removed on drop. The core and adapters
 trees hold copies of four modules by design (#2158): a change to one is
 made to both, and `make check-repository` fails while they differ
@@ -396,9 +396,16 @@ made to both, and `make check-repository` fails while they differ
 - Authored controls are files under `tests/fixtures/`, read with
   `include_str!`; assert their row count so a truncated fixture fails
   (`tests/portable_math_golden.rs` in core).
-- A variant of a document comes from an exact-once edit, as
-  `support::edit` (adapters) is, never from `str::replace`, which does
-  nothing when its pattern is missing.
+- A variant of a document comes from an exact-once edit,
+  `document.edit(from, to)` through the adapters' `support::Edit`, never
+  from `str::replace`, which does nothing when its pattern is missing.
+  `replace` stays only where every occurrence is meant to change, which
+  may be none.
+- A file-route run takes its `Identity` from `support::study::identity`,
+  its authored issue rows from `support::study::issue_row` and `issues`,
+  and a test that only writes files and runs one specification uses
+  `support::study::Study`. The corpus tests walk
+  `support::benchmarks::all()`.
 - Tests that differ in one value are one test over a table, with the
   label in every assertion:
 

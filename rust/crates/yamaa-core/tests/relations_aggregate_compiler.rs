@@ -1,4 +1,6 @@
-//! Relations contracts.
+//! Relations contracts: aggregate expressions, column dependencies, dataset
+//! count, declarative flags, dependency analysis, intermediate match values,
+//! intermediate reference and reference binding.
 mod relations {
     mod aggregate_expressions {
         use yamaa_core::{

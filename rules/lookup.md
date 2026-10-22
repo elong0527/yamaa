@@ -380,17 +380,18 @@ the source/key pairs of every lookup and implicit join: the match performed,
 the type each side declares, whether the lookup or its input declares the
 pairs, and the absence policy that answers a miss.
 
-Evidence: `negative-lookup-unmatched-key`, `rust/crates/yamaa-adapters/tests/fixtures/specs/lookup-failures.json`.
+Evidence: `negative-lookup-unmatched-key`, `rust/crates/yamaa-adapters/tests/fixtures/specs/lookup-failures.json`, `rust/crates/yamaa-adapters/tests/execution_implicit_join_absence.rs::a_named_intermediate_s_absence_counts_under_the_handler_its_surface_names`.
 
 Neither failure renames the other's fields. Handler accounting follows
 [COLUMN-14](columns.md#column-14), whose counts are `handler` rows of the run
-report: a `keep` that chose among surviving
-records counts one `multiple_matches` handling, an absence an intermediate
-answers counts one `no_match` handling, declared or by default, and a record
-an implicit join does not find counts one `absent` handling at the read's path
-([LOOKUP-24](#lookup-24)). An `unmatched_key` from an implicit join names
-`intermediate(<dataset>)` as its intermediate, as an implicit join's multiple
-match does.
+report: a `keep` that chose among surviving records counts one
+`multiple_matches` handling, and an absence that a named intermediate answers,
+declared or by default, or a record an implicit join does not find counts one
+`absent` handling at the read's path ([LOOKUP-24](#lookup-24)). A file that
+declares `schema_version` counts an intermediate's answer as one `no_match`
+handling, as at the `yamaa-v0.5.0` tag. An `unmatched_key` from an implicit
+join names `intermediate(<dataset>)` as its intermediate, as an implicit
+join's multiple match does.
 
 ## Keys
 

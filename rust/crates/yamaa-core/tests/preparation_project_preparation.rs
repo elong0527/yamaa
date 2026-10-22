@@ -1,4 +1,5 @@
-//! Preparation contracts.
+//! Preparation contracts: project preparation, schema capture, source profile
+//! inspection, standalone preparation and structural preparation.
 mod preparation {
     mod project_preparation {
         //! Independent application truth over native captures and normalized document fixtures.

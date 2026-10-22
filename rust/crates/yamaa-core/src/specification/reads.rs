@@ -1,18 +1,21 @@
 //! The names a derivation's declaration names, as preparation has always
-//! scanned them for its dependency checks: each verb's operands, formula and
-//! predicate names, `case` conditions and results, project call arguments,
-//! an aggregate's names, keys, groups, filter and range value, and, unless
-//! left out, a window's operands, partitions, order and filter, followed by
-//! every `str_template` placeholder.
+//! scanned them for its dependency checks: each verb's operands as the verb
+//! asks ([`ast::ScalarOp::scan`]), formula and predicate names, `case`
+//! conditions and results, project call arguments, an aggregate's names,
+//! keys, groups, filter and range value, and, unless left out, a window's
+//! operands, partitions, order and filter, followed by every template
+//! placeholder.
 //!
 //! This is narrower than [`ast::Spec::reads`], which reads every name below
 //! a root: a structured source's filter, order and bounds, an aggregate's
-//! bounds and bindings, imputation bounds and fallbacks, and `odm` reads are
-//! not scanned here, and `diff` and `study_day` operands are scanned twice.
+//! bounds and bindings, a verb's conditional operands (an `impute`'s bounds
+//! and fallback) and `odm` reads are not scanned here, and the operands of
+//! a verb scanned twice (`diff`, `study_day`) are scanned twice.
 //! Each of these decides a diagnostic in some spec, so the narrower scan
 //! keeps them unchanged.
 use super::*;
-use crate::ast::{JoinKey, ScalarOp, Slot, WindowFunction};
+use crate::ast::{JoinKey, Slot, WindowFunction};
+use crate::scalar_verb::OperandScan;
 
 /// Which names of an aggregate and of a window the scan includes.
 #[derive(Clone, Copy)]
@@ -38,19 +41,17 @@ pub(super) fn names(
     Ok(names)
 }
 
-/// Each `str_template` placeholder at `root` or a `case` result below it.
+/// Each template placeholder at `root` or a `case` result below it.
 pub(super) fn placeholders(spec: &ast::Spec, root: ExprId) -> Vec<String> {
     checks::positions(spec, root)
         .into_iter()
         .flat_map(|e| match &spec.expr(e).kind {
-            ExprKind::Scalar {
-                op: ScalarOp::StrTemplate { .. },
-                operands,
-                ..
-            } => operands
-                .iter()
-                .filter_map(|operand| checks::name(spec, operand.expr).map(String::from))
-                .collect(),
+            ExprKind::Scalar { op, operands, .. } if op.scan() == OperandScan::Placeholders => {
+                operands
+                    .iter()
+                    .filter_map(|operand| checks::name(spec, operand.expr).map(String::from))
+                    .collect()
+            }
             _ => Vec::new(),
         })
         .collect()
@@ -115,44 +116,20 @@ impl Scanner<'_> {
                     self.name(between.value, names);
                 }
             }
+            // A verb's operands, as the verb asks the scan to read them.
             ExprKind::Scalar { op, operands, .. } => {
-                let operand = |slot| operands.iter().find(|operand| operand.slot == slot);
-                match op {
-                    ScalarOp::Mapping { .. } | ScalarOp::Cut { .. } => {
-                        if let Some(operand) = operand(Slot::Source) {
-                            self.variable(operand.expr, names);
-                        }
-                    }
-                    ScalarOp::Greatest | ScalarOp::Least => {
-                        for operand in operands {
-                            self.name(operand.expr, names);
-                        }
-                    }
-                    ScalarOp::Diff { .. } | ScalarOp::StudyDay => {
-                        // Scanned as operands, then again as the two dates.
-                        for _ in 0..2 {
-                            for operand in operands {
-                                self.name(operand.expr, names);
-                            }
-                        }
-                    }
-                    ScalarOp::ToEpochDay
-                    | ScalarOp::Shift { .. }
-                    | ScalarOp::DurationValue { .. }
-                    | ScalarOp::Dtc
-                    | ScalarOp::TimeOfDay => {
-                        for operand in operands {
-                            self.name(operand.expr, names);
-                        }
-                    }
+                let times = match op.scan() {
+                    OperandScan::Operands => 1,
+                    OperandScan::Twice => 2,
                     // A template's placeholders follow the scan.
-                    ScalarOp::StrTemplate { .. } => {}
-                    // Only the source: imputation bounds and its fallback are
-                    // read when a source needs them.
-                    _ => {
-                        if let Some(operand) = operand(Slot::Source) {
-                            self.name(operand.expr, names);
-                        }
+                    OperandScan::Placeholders => 0,
+                };
+                for _ in 0..times {
+                    for operand in operands
+                        .iter()
+                        .filter(|operand| !op.conditional(operand.slot))
+                    {
+                        self.variable(operand.expr, names);
                     }
                 }
             }

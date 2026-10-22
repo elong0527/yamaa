@@ -16,11 +16,7 @@
 //! (`yamaa-core/src/specification/lowering_audit.rs`); the Rust tests that
 //! prepare a specification run the same comparison.
 
-use std::{
-    collections::BTreeSet,
-    fs,
-    path::{Path, PathBuf},
-};
+use std::{collections::BTreeSet, fs, path::Path};
 use yamaa_adapters::{
     file_preparation::FileSpecification,
     file_resources::Resources,
@@ -37,10 +33,6 @@ use yamaa_core::{
     front_end::v0_5::{lower, Positions},
     schema::{Document, DocumentNode as N, SchemaSource},
 };
-
-fn benchmarks() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../benchmarks")
-}
 
 fn text(d: &Document, node: usize) -> Option<&str> {
     match &d.nodes()[node] {
@@ -228,12 +220,7 @@ const SPEC_ROOTS: [&str; 12] = [
 
 #[test]
 fn lowering_is_total_on_every_benchmark_specification() {
-    let mut cases = fs::read_dir(benchmarks())
-        .unwrap()
-        .filter_map(|entry| entry.ok().map(|entry| entry.path()))
-        .filter(|case| case.join("benchmark.yaml").is_file())
-        .collect::<Vec<_>>();
-    cases.sort();
+    let cases = crate::support::benchmarks::all();
     let (mut admitted, mut compiled, mut cited) = (0, 0, 0);
     let mut failures = Vec::new();
     for case in &cases {
@@ -288,8 +275,8 @@ fn lowering_is_total_on_every_benchmark_specification() {
             }
             cited += 1;
             let parent = path.rsplit_once('.').map(|(parent, _)| parent);
-            // A root field is a field of the root node, even when it is not
-            // written: an omitted `base` is where ROW-8 reports.
+            // A declared root field belongs to the root node even when
+            // omitted, as ROW-8's absent `base` does.
             let root_field = !path.contains(['.', '[']);
             if !rendered.contains(&path)
                 && !root_field

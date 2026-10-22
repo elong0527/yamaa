@@ -9,7 +9,7 @@
 //! VALUE-21). A pattern read from data is checked on every record or row its
 //! predicate is asked about (FORMULA-7).
 use std::fs;
-use yamaa_adapters::{file_application, json, specification_report::Identity};
+use yamaa_adapters::{file_application, json};
 use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::{domain_entry::Request, json::Value};
 
@@ -35,14 +35,7 @@ impl Fixture {
                 specification,
                 environment: None,
             },
-            Identity {
-                runtime: "test",
-                runtime_version: "test",
-                engine_version: yamaa_core::VERSION,
-                example: "key-selection-semantics",
-                specification,
-                base_directory: ".",
-            },
+            crate::support::study::identity("key-selection-semantics", specification),
         )
         .map_err(|failure| failure.iter().map(issue).collect::<Vec<_>>())?;
         let issues = domain.issues().iter().map(issue).collect::<Vec<_>>();
@@ -73,7 +66,7 @@ impl Fixture {
 }
 
 fn issue(issue: &Diagnostic) -> Value {
-    json!({"phase":issue.phase(),"condition":issue.condition(),"rule":issue.rule(),"spec_paths":issue.spec_paths,"context":issue.context.clone()})
+    crate::support::study::issue_row(issue)
 }
 
 /// The head of a specification without row templates whose one input SRC
