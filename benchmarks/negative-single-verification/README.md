@@ -24,7 +24,7 @@ Write the check as the only item of a list:
   type: str
   derivation: DM.SEX
   verifications:
-    - not_missing: {}
+    - not_missing
 ```
 
 A second check is then one more item of the same list.

@@ -1,0 +1,10 @@
+phase: output
+condition: xpt_value_out_of_range
+spec_paths:
+  - datasets.ADSL.columns.BRTHDT
+rule: XPT-8
+context:
+  dataset: ADSL
+  column: BRTHDT
+  row: 1
+  cause: date

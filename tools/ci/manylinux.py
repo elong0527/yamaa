@@ -79,12 +79,12 @@ def command(engine, architecture, output, jobs=None):
     ]
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--engine", default="docker")
     parser.add_argument("--jobs", type=int, help="Cargo build jobs in the container")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     architecture = platform.machine()
     if architecture not in IMAGES:
         parser.error(f"no manylinux image for {architecture}")

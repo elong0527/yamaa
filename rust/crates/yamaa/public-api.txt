@@ -10,9 +10,7 @@ yamaa: pub mod file_type
 yamaa: pub mod functions
 yamaa: pub mod info
 yamaa: pub mod lint
-yamaa: pub mod observe
 yamaa: pub mod odm
-yamaa: pub mod plan
 yamaa: pub mod resolver
 yamaa: pub mod scalar
 yamaa: pub mod schema
@@ -22,17 +20,13 @@ yamaa: pub mod text
 yamaa::Action: pub use yamaa::text::Action
 yamaa::Argument: pub use yamaa::functions::Argument
 yamaa::Array: pub use yamaa::table::Array
-yamaa::AttemptFailure: pub use yamaa::engine::AttemptFailure
 yamaa::BatchArgument: pub use yamaa::functions::BatchArgument
-yamaa::Build: pub use yamaa::engine::Build
 yamaa::CallError: pub use yamaa::functions::CallError
-yamaa::CallStage: pub use yamaa::observe::CallStage
 yamaa::CancellationToken: pub use yamaa::cancel::CancellationToken
 yamaa::Check: pub use yamaa::api::Check
 yamaa::ColumnType: pub use yamaa::functions::ColumnType
 yamaa::ContextValue: pub use yamaa::diagnostic::ContextValue
 yamaa::DataType: pub use yamaa::table::DataType
-yamaa::DatasetPhase: pub use yamaa::observe::DatasetPhase
 yamaa::Date32Array: pub use yamaa::table::Date32Array
 yamaa::Date: pub use yamaa::scalar::Date
 yamaa::DateTime: pub use yamaa::scalar::DateTime
@@ -42,7 +36,6 @@ yamaa::EncodedScalar: pub use yamaa::scalar::EncodedScalar
 yamaa::Engine: pub use yamaa::engine::Engine
 yamaa::EngineOptions: pub use yamaa::engine::EngineOptions
 yamaa::Error: pub use yamaa::error::Error
-yamaa::Event: pub use yamaa::observe::Event
 yamaa::FEATURES: pub use yamaa::info::FEATURES
 yamaa::FFI_ArrowArrayStream: pub use yamaa::table::FFI_ArrowArrayStream
 yamaa::FILE_TYPES: pub use yamaa::file_type::FILE_TYPES
@@ -79,25 +72,18 @@ yamaa::LockSyntaxError: pub use yamaa::error::LockSyntaxError
 yamaa::MemoryResolver: pub use yamaa::resolver::MemoryResolver
 yamaa::ODM_COLUMNS: pub use yamaa::odm::ODM_COLUMNS
 yamaa::OdmOptions: pub use yamaa::odm::OdmOptions
-yamaa::Outcome: pub use yamaa::observe::Outcome
 yamaa::PHASES: pub use yamaa::diagnostic::PHASES
 yamaa::Parameter: pub use yamaa::functions::Parameter
-yamaa::Phase: pub use yamaa::observe::Phase
-yamaa::Plan: pub use yamaa::plan::Plan
 yamaa::Plans: pub use yamaa::api::Plans
 yamaa::Position: pub use yamaa::diagnostic::Position
-yamaa::Progress: pub use yamaa::observe::Progress
 yamaa::ProjectFunctions: pub use yamaa::functions::ProjectFunctions
 yamaa::ProjectRun: pub use yamaa::api::ProjectRun
 yamaa::REPORT_COLUMNS: pub use yamaa::diagnostic::REPORT_COLUMNS
 yamaa::REPORT_KINDS: pub use yamaa::diagnostic::REPORT_KINDS
 yamaa::REPORT_OUTCOMES: pub use yamaa::diagnostic::REPORT_OUTCOMES
 yamaa::RecordBatch: pub use yamaa::table::RecordBatch
-yamaa::Refusal: pub use yamaa::observe::Refusal
 yamaa::RenvLock: pub use yamaa::functions::RenvLock
 yamaa::Report: pub use yamaa::diagnostic::Report
-yamaa::Request: pub use yamaa::engine::Request
-yamaa::ResolvedSpecification: pub use yamaa::engine::ResolvedSpecification
 yamaa::ResolverFailure: pub use yamaa::error::ResolverFailure
 yamaa::ResolverKind: pub use yamaa::resolver::ResolverKind
 yamaa::ResolverOperation: pub use yamaa::resolver::ResolverOperation
@@ -106,7 +92,6 @@ yamaa::ResolverRequest: pub use yamaa::resolver::ResolverRequest
 yamaa::ResourceKind: pub use yamaa::resolver::ResourceKind
 yamaa::ResourceResolver: pub use yamaa::resolver::ResourceResolver
 yamaa::Run: pub use yamaa::api::Run
-yamaa::RunRequest: pub use yamaa::plan::RunRequest
 yamaa::SELFTEST_COLUMNS: pub use yamaa::selftest::SELFTEST_COLUMNS
 yamaa::SEVERITIES: pub use yamaa::diagnostic::SEVERITIES
 yamaa::STATUSES: pub use yamaa::api::STATUSES
@@ -118,7 +103,6 @@ yamaa::SelfTest: pub use yamaa::selftest::SelfTest
 yamaa::SelfTestCase: pub use yamaa::selftest::SelfTestCase
 yamaa::Severity: pub use yamaa::diagnostic::Severity
 yamaa::Signature: pub use yamaa::functions::Signature
-yamaa::SourceBytes: pub use yamaa::engine::SourceBytes
 yamaa::SourceSpan: pub use yamaa::diagnostic::SourceSpan
 yamaa::Status: pub use yamaa::api::Status
 yamaa::StringArray: pub use yamaa::table::StringArray
@@ -175,9 +159,9 @@ yamaa::api::ProjectRun::status: pub fn status(&self) -> Status
 yamaa::api::ProjectRun::summary: pub fn summary(&self) -> Summary
 yamaa::api::Run: impl Run
 yamaa::api::Run: pub struct Run
-yamaa::api::Run::build: pub fn build(&self) -> &Build
 yamaa::api::Run::diagnostics: pub fn diagnostics(&self) -> Vec<yamaa::diagnostic::Diagnostic>
 yamaa::api::Run::issues: pub fn issues(&self) -> Table
+yamaa::api::Run::observations: pub fn observations(&self, include_measurements: bool) -> Option<String>
 yamaa::api::Run::output: pub fn output(&self) -> Option<&Table>
 yamaa::api::Run::report: pub fn report(&self) -> Option<&Table>
 yamaa::api::Run::save: pub fn save(&mut self, token: &CancellationToken) -> Result<Vec<String>, Failure>
@@ -265,53 +249,23 @@ yamaa::diagnostic::Severity::as_str: pub fn as_str(self) -> &'static str
 yamaa::diagnostic::SourceSpan: pub struct SourceSpan [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
 yamaa::diagnostic::SourceSpan::end: pub end: usize
 yamaa::diagnostic::SourceSpan::start: pub start: usize
-yamaa::engine::AttemptFailure: pub struct AttemptFailure [derive(Clone, Debug)] [non_exhaustive]
-yamaa::engine::AttemptFailure::error: pub error: FunctionError
-yamaa::engine::AttemptFailure::stage: pub stage: &'static str
 yamaa::engine::Build: impl Build
-yamaa::engine::Build: pub struct Build
-yamaa::engine::Build::observations: pub fn observations(&self, include_measurements: bool) -> Option<String>
-yamaa::engine::Build::output: pub fn output(&self) -> Option<&Table>
-yamaa::engine::Build::output_bytes: pub fn output_bytes(&self) -> Option<&[u8]>
-yamaa::engine::Build::preparation_sources: pub fn preparation_sources(&self) -> &SourceBytes
-yamaa::engine::Build::project_failures: pub fn project_failures(&self) -> Option<&[AttemptFailure]>
-yamaa::engine::Build::report: pub fn report(&self) -> &Report
-yamaa::engine::Build::run_report: pub fn run_report(&self) -> Option<&Table>
-yamaa::engine::Build::run_report_bytes: pub fn run_report_bytes(&self) -> Option<&[u8]>
-yamaa::engine::Build::save: pub fn save(&mut self, token: &CancellationToken) -> Result<Vec<String>, Failure>
 yamaa::engine::Engine: impl Engine
 yamaa::engine::Engine: pub struct Engine [derive(Clone)]
-yamaa::engine::Engine::build: pub fn build(&self, request: &Request<'_>, token: &CancellationToken) -> Result<Build, Error>
-yamaa::engine::Engine::check: pub fn check(&self, request: &Request<'_>, token: &CancellationToken) -> Result<Report, Error>
-yamaa::engine::Engine::compile: pub fn compile(&self, request: &Request<'_>, token: &CancellationToken) -> Result<Plan, Error>
 yamaa::engine::Engine::new: pub fn new(options: EngineOptions) -> Self
-yamaa::engine::Engine::resolve_specification: pub fn resolve_specification(&self, request: &Request<'_>) -> Result<ResolvedSpecification, Error>
 yamaa::engine::EngineOptions: impl EngineOptions
 yamaa::engine::EngineOptions: pub struct EngineOptions [derive(Default)] [non_exhaustive]
 yamaa::engine::EngineOptions::functions: pub functions: Option<Arc<dyn ProjectFunctions>>
 yamaa::engine::EngineOptions::host_language: pub host_language: Option<HostLanguage>
 yamaa::engine::EngineOptions::neutral: pub fn neutral(runtime_name: String, runtime_version: String) -> Self
 yamaa::engine::EngineOptions::new: pub fn new(host_language: HostLanguage, runtime_name: String, runtime_version: String) -> Self
-yamaa::engine::EngineOptions::observer: pub observer: Option<Arc<dyn Progress>>
 yamaa::engine::EngineOptions::resolver: pub resolver: Option<Arc<dyn ResourceResolver>>
 yamaa::engine::EngineOptions::runtime_name: pub runtime_name: String
 yamaa::engine::EngineOptions::runtime_version: pub runtime_version: String
 yamaa::engine::EngineOptions::with_functions: pub fn with_functions(mut self, functions: Arc<dyn ProjectFunctions>) -> Self
-yamaa::engine::EngineOptions::with_observer: pub fn with_observer(mut self, observer: Arc<dyn Progress>) -> Self
 yamaa::engine::EngineOptions::with_resolver: pub fn with_resolver(mut self, resolver: Arc<dyn ResourceResolver>) -> Self
 yamaa::engine::Request: impl<'a> Request<'a>
-yamaa::engine::Request: pub struct Request<'a> [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
-yamaa::engine::Request::environment: pub environment: Option<&'a str>
-yamaa::engine::Request::new: pub fn new(specification: &'a str) -> Self
-yamaa::engine::Request::specification: pub specification: &'a str
-yamaa::engine::Request::with_environment: pub fn with_environment(mut self, environment: &'a str) -> Self
 yamaa::engine::ResolvedSpecification: impl ResolvedSpecification
-yamaa::engine::ResolvedSpecification: pub struct ResolvedSpecification [derive(Clone, Debug)]
-yamaa::engine::ResolvedSpecification::entry: pub fn entry(&self) -> &str
-yamaa::engine::ResolvedSpecification::from_json: pub fn from_json(text: &str) -> Result<Self, Error>
-yamaa::engine::ResolvedSpecification::project: pub fn project(&self) -> Option<&str>
-yamaa::engine::ResolvedSpecification::to_json: pub fn to_json(&self) -> Result<String, Error>
-yamaa::engine::SourceBytes: pub type SourceBytes = Vec<(String, Arc<[u8]>)>
 yamaa::error::Error: impl std::error::Error for Error
 yamaa::error::Error: impl std::fmt::Display for Error
 yamaa::error::Error: pub enum Error [derive(Clone, Debug)] [non_exhaustive]
@@ -495,44 +449,6 @@ yamaa::lint::LintFinding::spec_path: pub spec_path: String
 yamaa::lint::LintFinding::text: pub fn text(&self) -> String
 yamaa::lint::LintFinding::to_value: pub fn to_value(&self) -> ContextValue
 yamaa::lint::lint: pub fn lint(paths: &[String], fix: bool) -> Result<Lint, Failure>
-yamaa::observe::CallStage: impl CallStage
-yamaa::observe::CallStage: pub enum CallStage [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
-yamaa::observe::CallStage::Activation: Activation
-yamaa::observe::CallStage::Dataset: Dataset(DatasetPhase)
-yamaa::observe::DatasetPhase: impl DatasetPhase
-yamaa::observe::DatasetPhase: pub enum DatasetPhase [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
-yamaa::observe::DatasetPhase::Admission: Admission
-yamaa::observe::DatasetPhase::Derivation: Derivation
-yamaa::observe::DatasetPhase::Finished: Finished
-yamaa::observe::DatasetPhase::OutputKeys: OutputKeys
-yamaa::observe::DatasetPhase::Verification: Verification
-yamaa::observe::Event: impl Event
-yamaa::observe::Event: pub enum Event [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
-yamaa::observe::Event::Exit: Exit { phase: Phase, outcome: Outcome }
-yamaa::observe::Event::FunctionCall: FunctionCall { stage: CallStage }
-yamaa::observe::Event::FunctionReturn: FunctionReturn { stage: CallStage, outcome: Outcome }
-yamaa::observe::Event::Phase: Phase { phase: Phase }
-yamaa::observe::Event::Refusal: Refusal { phase: Phase, refusal: Refusal }
-yamaa::observe::Outcome: impl Outcome
-yamaa::observe::Outcome: pub enum Outcome [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
-yamaa::observe::Outcome::Failed: Failed
-yamaa::observe::Outcome::Succeeded: Succeeded
-yamaa::observe::Phase: impl Phase
-yamaa::observe::Phase: pub enum Phase [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
-yamaa::observe::Phase::Activation: Activation
-yamaa::observe::Phase::Build: Build
-yamaa::observe::Phase::Dataset: Dataset(DatasetPhase)
-yamaa::observe::Phase::Finished: Finished
-yamaa::observe::Phase::Input: Input
-yamaa::observe::Phase::Output: Output
-yamaa::observe::Phase::Preparation: Preparation
-yamaa::observe::Progress: pub trait Progress: Send + Sync
-yamaa::observe::Progress::observe: fn observe(&self, event: Event) [required]
-yamaa::observe::Refusal: impl Refusal
-yamaa::observe::Refusal: pub struct Refusal [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
-yamaa::observe::Refusal::limit: pub limit: usize
-yamaa::observe::Refusal::required: pub required: Option<usize>
-yamaa::observe::Refusal::resource: pub resource: &'static str
 yamaa::odm::Engine: impl Engine
 yamaa::odm::Engine::read_odm: pub fn read_odm(&self, source: &str, options: &OdmOptions) -> Result<Table, Error>
 yamaa::odm::ODM_COLUMNS: pub const ODM_COLUMNS: [&str; 30]
@@ -548,19 +464,6 @@ yamaa::odm::OdmOptions::with_archive_member: pub fn with_archive_member(mut self
 yamaa::odm::OdmOptions::with_max_archive_members: pub fn with_max_archive_members(mut self, limit: usize) -> Self
 yamaa::odm::OdmOptions::with_max_expanded_bytes: pub fn with_max_expanded_bytes(mut self, limit: u64) -> Self
 yamaa::odm::OdmOptions::with_max_xml_depth: pub fn with_max_xml_depth(mut self, limit: usize) -> Self
-yamaa::odm::read_odm: pub fn read_odm(path: &Path, options: &OdmOptions) -> Result<Table, Error>
-yamaa::plan::Plan: impl Plan
-yamaa::plan::Plan: pub struct Plan [derive(Clone)]
-yamaa::plan::Plan::report: pub fn report(&self) -> &Report
-yamaa::plan::Plan::run: pub fn run(&self, request: &RunRequest, token: &CancellationToken) -> Result<Build, Error>
-yamaa::plan::RunRequest: impl RunRequest
-yamaa::plan::RunRequest: pub struct RunRequest [derive(Clone, Default)] [non_exhaustive]
-yamaa::plan::RunRequest::new: pub fn new() -> Self
-yamaa::plan::RunRequest::observer: pub observer: Option<Arc<dyn Progress>>
-yamaa::plan::RunRequest::resolver: pub resolver: Option<Arc<dyn ResourceResolver>>
-yamaa::plan::RunRequest::with_observer: pub fn with_observer(mut self, observer: Arc<dyn Progress>) -> Self
-yamaa::plan::RunRequest::with_resolver: pub fn with_resolver(mut self, resolver: Arc<dyn ResourceResolver>) -> Self
-yamaa::read_odm: pub use yamaa::odm::read_odm
 yamaa::resolver::MemoryResolver: impl MemoryResolver
 yamaa::resolver::MemoryResolver: impl ResourceResolver for MemoryResolver
 yamaa::resolver::MemoryResolver: pub struct MemoryResolver [derive(Default)] [non_exhaustive]
@@ -671,7 +574,6 @@ yamaa::selftest::SelfTestCase::case: pub case: &'static str
 yamaa::selftest::SelfTestCase::message: pub message: Option<String>
 yamaa::selftest::SelfTestCase::status: pub status: Status
 yamaa::selftest::selftest: pub fn selftest(host: Host, host_version: Option<&str>) -> SelfTest
-yamaa::style_same_value: pub fn style_same_value(before: &[u8], after: &[u8]) -> bool
 yamaa::table::Array: pub use arrow_array::Array
 yamaa::table::DataType: pub use arrow_schema::DataType
 yamaa::table::Date32Array: pub use arrow_array::Date32Array

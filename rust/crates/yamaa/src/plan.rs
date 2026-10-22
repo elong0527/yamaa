@@ -1,15 +1,12 @@
-//! The reusable compile-once plan handle.
+//! The compiled request a host's lazy object reuses (#2821), internal to the
+//! facade: there is no public compile-once plan handle (#3030 D22, D72).
 //!
-//! [`Engine::compile`](crate::Engine::compile) prepares a specification once:
-//! it captures and admits the metadata, compiles, and reads no study data.
-//! [`Plan::run`] then does the rest as often as needed: it activates project
-//! functions, reads the inputs, binds, executes and converts the outputs
-//! through the same public tables as [`Engine::build`](crate::Engine::build),
-//! which is exactly one compile followed by one run.
-//!
-//! Each run is an independent attempt in its own resource scope. Nothing a
-//! run captures, activates or produces is kept in the plan, so runs neither
-//! see nor disturb each other, and a failed run leaves the plan unchanged.
+//! A [`Plans`](crate::Plans) holder keeps one plan per specification and
+//! project identity. A run of a kept plan does the rest of a build: it
+//! activates project functions, reads the inputs, binds, executes and
+//! converts the outputs. Each run is an independent attempt in its own
+//! resource scope; nothing a run captures, activates or produces is kept in
+//! the plan, so runs neither see nor disturb each other.
 
 use std::sync::Arc;
 
@@ -18,20 +15,14 @@ use yamaa_adapters::application_measurements::Measurements;
 use crate::cancel::CancellationToken;
 use crate::diagnostic::Report;
 use crate::engine::Build;
-use crate::error::Error;
 use crate::internal::{Compiled, EngineShared, ObserverBridge};
-use crate::observe::Progress;
-use crate::resolver::ResourceResolver;
 
-/// An owned, reusable compiled specification. It is cheap to clone, every
-/// clone shares the same compiled state, and it lives until its last clone
-/// drops, independently of the [`Engine`](crate::Engine) that compiled it.
-///
-/// A refused compilation still returns a plan: [`Plan::report`] holds its
-/// diagnostics, and each run returns that same failed build, with its
-/// retained preparation sources, without any resource access.
+/// An owned compiled specification, cheap to clone: every clone shares the
+/// same compiled state. A refused compilation is a plan too: [`Plan::report`]
+/// holds its diagnostics, and each run returns that same failed build
+/// without any resource access.
 #[derive(Clone)]
-pub struct Plan {
+pub(crate) struct Plan {
     shared: Arc<EngineShared>,
     compiled: Arc<CompiledPlan>,
 }
@@ -40,40 +31,6 @@ struct CompiledPlan {
     specification: String,
     state: Compiled,
     report: Report,
-}
-
-/// One run's request. Without a resolver, the run reads its inputs and
-/// targets Save where compilation did: local files or the engine's resolver.
-/// A run resolver serves the inputs at the same declaring identities and
-/// receives this run's Save targets. Without an observer, the engine's
-/// observer, if any, sees the run's events.
-///
-/// Progress events carry no run identity, so concurrent runs pass their own
-/// observer.
-#[non_exhaustive]
-#[derive(Clone, Default)]
-pub struct RunRequest {
-    pub resolver: Option<Arc<dyn ResourceResolver>>,
-    pub observer: Option<Arc<dyn Progress>>,
-}
-
-impl RunRequest {
-    /// Run with the compile authority and the engine's observer.
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Serve this run's inputs and Save targets through a caller resolver.
-    pub fn with_resolver(mut self, resolver: Arc<dyn ResourceResolver>) -> Self {
-        self.resolver = Some(resolver);
-        self
-    }
-
-    /// Observe this run's events through a caller progress port.
-    pub fn with_observer(mut self, observer: Arc<dyn Progress>) -> Self {
-        self.observer = Some(observer);
-        self
-    }
 }
 
 impl Plan {
@@ -96,91 +53,9 @@ impl Plan {
         }
     }
 
-    /// Run the compiled specification once. Every adjudicated outcome
-    /// returns an owned build carrying its output, run report, observations
-    /// and diagnostics; only cancellation fails the call itself.
-    ///
-    /// # Example
-    ///
-    /// One plan runs two studies, each served by its own resolver. The
-    /// compile resolver holds only the specification. Lanes without the
-    /// `yaml` feature compile a refused plan whose runs carry its report.
-    ///
-    /// ```
-    /// use std::sync::Arc;
-    ///
-    /// use arrow_array::RecordBatchIterator;
-    /// use arrow_schema::Schema;
-    /// use yamaa::{
-    ///     CancellationToken, DataType, Engine, EngineOptions, FFI_ArrowArrayStream, Field,
-    ///     HostLanguage, InputFrame, Int64Array, MemoryResolver, RecordBatch, Request,
-    ///     RunRequest,
-    /// };
-    ///
-    /// let specification = MemoryResolver::new();
-    /// specification.insert("/", "spec.yaml", "spec:1", Arc::from(
-    ///     &b"schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: out.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n"[..],
-    /// ));
-    /// let study = |ids: Vec<i64>| {
-    ///     let schema = Arc::new(Schema::new(vec![Field::new("ID", DataType::Int64, true)]));
-    ///     let batch =
-    ///         RecordBatch::try_new(Arc::clone(&schema), vec![Arc::new(Int64Array::from(ids))])
-    ///             .unwrap();
-    ///     let frame = InputFrame::import(FFI_ArrowArrayStream::new(Box::new(
-    ///         RecordBatchIterator::new(vec![Ok(batch)], schema),
-    ///     )))
-    ///     .unwrap();
-    ///     let resolver = Arc::new(MemoryResolver::new());
-    ///     resolver.insert_frame("/spec.yaml", "input.csv", "data:1", &frame);
-    ///     resolver
-    /// };
-    /// let engine = Engine::new(
-    ///     EngineOptions::new(HostLanguage::Python, "doctest".into(), "0".into())
-    ///         .with_resolver(Arc::new(specification)),
-    /// );
-    /// let token = CancellationToken::new();
-    /// let plan = engine.compile(&Request::new("spec.yaml"), &token).unwrap();
-    /// for ids in [vec![1, 2], vec![7]] {
-    ///     let rows = ids.len();
-    ///     let build = plan
-    ///         .run(&RunRequest::new().with_resolver(study(ids)), &token)
-    ///         .unwrap();
-    ///     if cfg!(feature = "yaml") {
-    ///         assert!(plan.report().is_empty());
-    ///         assert_eq!(build.output().unwrap().rows(), rows);
-    ///     } else {
-    ///         assert!(build.output().is_none());
-    ///         assert_eq!(build.report(), plan.report());
-    ///     }
-    /// }
-    /// ```
-    pub fn run(&self, request: &RunRequest, token: &CancellationToken) -> Result<Build, Error> {
-        if token.is_cancelled() {
-            return Err(Error::Cancelled);
-        }
-        let measurements = Arc::new(Measurements::new());
-        let progress = request
-            .observer
-            .as_deref()
-            .or(self.shared.observer.as_deref());
-        let resolver = request.resolver.clone().map(crate::internal::bridge);
-        measurements.plan(if self.report().is_empty() {
-            "reused"
-        } else {
-            "refused"
-        });
-        let build = self.run_observed(resolver, true, &measurements, progress, token);
-        if build.interrupted() || token.is_cancelled() {
-            return Err(Error::Cancelled);
-        }
-        measurements.complete(build.accepted());
-        let subject = self.name().unwrap_or(&self.compiled.specification);
-        Ok(build.with_subject(subject))
-    }
-
     /// Borrow the compilation report: a refused compilation's diagnostics,
     /// empty when the specification compiled.
-    pub fn report(&self) -> &Report {
+    pub(crate) fn report(&self) -> &Report {
         &self.compiled.report
     }
 
@@ -189,32 +64,10 @@ impl Plan {
         self.compiled.state.name()
     }
 
-    /// One run, polling `token`; with `verify` it first verifies the
-    /// compiled metadata.
-    pub(crate) fn run_observed(
-        &self,
-        resolver: Option<Arc<dyn yamaa_adapters::host_resources::Resolver>>,
-        verify: bool,
-        measurements: &Arc<Measurements>,
-        progress: Option<&dyn Progress>,
-        token: &CancellationToken,
-    ) -> Build {
-        crate::internal::run(
-            &self.shared,
-            &self.compiled.specification,
-            &self.compiled.state,
-            resolver,
-            None,
-            verify,
-            &ObserverBridge::new(measurements, progress),
-            token,
-        )
-    }
-
-    /// This plan without the compiling engine's project functions and
-    /// observer, as a [`Plans`](crate::Plans) holder keeps it: a kept plan
-    /// runs through the calling engine's, so holding the compiling call's
-    /// host callbacks would only keep them alive.
+    /// This plan without the compiling engine's project functions, as a
+    /// [`Plans`](crate::Plans) holder keeps it: a kept plan runs through the
+    /// calling engine's, so holding the compiling call's host callbacks would
+    /// only keep them alive.
     pub(crate) fn detached(&self) -> Plan {
         Plan {
             shared: Arc::new(EngineShared {
@@ -223,7 +76,6 @@ impl Plan {
                 runtime_name: self.shared.runtime_name.clone(),
                 runtime_version: self.shared.runtime_version.clone(),
                 functions: None,
-                observer: None,
             }),
             compiled: Arc::clone(&self.compiled),
         }
@@ -238,26 +90,23 @@ impl Plan {
     }
 
     /// One run of this plan through an engine configured as `shared`: that
-    /// engine's project functions, observer and runtime identity, so a host
-    /// call keeps its own capabilities. The caller has just verified the held
-    /// files, or compiled them. A project run offers its `held` artifacts.
-    /// The run polls `token`.
+    /// engine's project functions and runtime identity, so a host call keeps
+    /// its own capabilities. The caller has just verified the held files, or
+    /// compiled them. A project run offers its `held` artifacts. The run
+    /// polls `token`.
     pub(crate) fn run_through(
         &self,
         shared: &EngineShared,
         held: Option<Arc<yamaa_adapters::file_resources::HeldArtifacts>>,
         measurements: &Arc<Measurements>,
-        progress: Option<&dyn Progress>,
         token: &CancellationToken,
     ) -> Build {
         crate::internal::run(
             shared,
             &self.compiled.specification,
             &self.compiled.state,
-            None,
             held,
-            false,
-            &ObserverBridge::new(measurements, progress),
+            &ObserverBridge::new(measurements),
             token,
         )
     }

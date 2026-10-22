@@ -319,10 +319,9 @@ fn nothing_is_sniffed_so_an_archive_named_xml_is_refused_as_xml() {
     let archive = [0_u8; 512];
     let study = Study::new();
     study.write("odm.xml", archive);
-    let Err(yamaa::Error::Rejected(report)) = yamaa::read_odm(
-        std::path::Path::new(&study.path("odm.xml")),
-        &yamaa::OdmOptions::new(),
-    ) else {
+    let Err(yamaa::Error::Rejected(report)) =
+        engine().read_odm(&study.path("odm.xml"), &yamaa::OdmOptions::new())
+    else {
         panic!("read_odm refuses an archive without an XML member");
     };
     assert_eq!(report.diagnostics[0].code, "source_odm_archive_member");

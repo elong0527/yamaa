@@ -30,5 +30,4 @@ intermediates:
     dataset: RAND
     key: [USUBJID]
     filter: "RAND.RANDDT <= DIARY.DIARYDT"
-    no_match: null
 ```

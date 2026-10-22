@@ -26,5 +26,4 @@ intermediates:
   - id: BASELINE
     dataset: LBBASE
     key: [USUBJID, LBTESTCD]
-    no_match: null
 ```

@@ -238,7 +238,7 @@ handler. Every other condition fails without its handler, a missing
 `str_template` placeholder among them.
 
 Fails: `missing_input`, `unmapped_value`, `unmatched_pattern`.
-Evidence: `schema-handlers`, `schema-missing-input-default`, `schema-lookup-absent-default`, `negative-mapping-unmapped-value`.
+Evidence: `schema-handlers`, `schema-missing-input-default`, `schema-lookup-absent-default`, `negative-mapping-unmapped-value`, `negative-str-template-missing-placeholder`, `negative-str-extract-no-match`.
 
 These sites identify conditions within expression evaluation or result
 handling; the ordered derivation lifecycle is [COLUMN-8](#column-8) and

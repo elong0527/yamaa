@@ -125,7 +125,7 @@ fn engine(resolver: Option<Arc<dyn ResourceResolver>>, installed: &Arc<Installed
 
 /// How the run got its plan, from its private measurements.
 fn plan_of(run: &Run) -> &'static str {
-    let observed = run.build().observations(true).unwrap();
+    let observed = run.observations(true).unwrap();
     let statuses = ["compiled", "refused", "reused"]
         .into_iter()
         .filter(|status| observed.contains(&format!("\"plan\":\"{status}\"")))
@@ -138,7 +138,6 @@ fn plan_of(run: &Run) -> &'static str {
 /// the `preparation` phase.
 fn compiled(run: &Run) -> bool {
     let preparation = run
-        .build()
         .observations(true)
         .unwrap()
         .contains("\"phase\":\"preparation\"");
@@ -148,7 +147,7 @@ fn compiled(run: &Run) -> bool {
 
 /// The saved output bytes of a run through a memory resolver.
 fn saved(run: &mut Run, resolver: &Recording) -> String {
-    assert_eq!(run.issues().rows(), 0, "{:?}", run.build().report());
+    assert_eq!(run.issues().rows(), 0, "{:?}", run.diagnostics());
     run.save(&CancellationToken::new()).unwrap();
     let bytes = resolver.inner.published("memory:/out.csv").unwrap();
     String::from_utf8(bytes.to_vec()).unwrap()

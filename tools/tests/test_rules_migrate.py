@@ -1,13 +1,13 @@
 """The statements report lists the card language a pull request changes."""
 
-import subprocess
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
+from tools.rules import migrate
 from tools.rules.migrate import statement_report
 from tools.rules.model import load, load_ref
+from tools.tests import support
 from tools.tests.rules_fixture import write
 
 INDEX = """\
@@ -46,22 +46,9 @@ class StatementTests(unittest.TestCase):
         self.root = Path(directory.name)
         write(self.root, "rules/README.md", INDEX)
         self.cards = write(self.root, "rules/inheritance.md", CARDS)
-        self.git("init", "-q")
-        self.git("add", "-A")
-        self.git(
-            "-c",
-            "user.name=t",
-            "-c",
-            "user.email=t@example.org",
-            "commit",
-            "-qm",
-            "base",
-        )
-
-    def git(self, *arguments):
-        subprocess.run(
-            ["git", "-C", str(self.root), *arguments], check=True, capture_output=True
-        )
+        support.init(self.root)
+        support.git(self.root, "add", "-A")
+        support.git(self.root, "commit", "-qm", "base")
 
     def report(self):
         return statement_report(load_ref(self.root, "HEAD"), load(self.root), "base")
@@ -99,23 +86,17 @@ class StatementTests(unittest.TestCase):
         )
 
     def test_command_line(self):
-        base = [sys.executable, "-m", "tools.rules.migrate", "--root", str(self.root)]
-        result = subprocess.run(
-            [*base, "statements", "--base", "HEAD"],
-            capture_output=True,
-            text=True,
-            check=False,
+        root = ("--root", str(self.root))
+        status, output, errors = support.run_main(
+            migrate.main, *root, "statements", "--base", "HEAD"
         )
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("0 added, 0 changed, 0 removed", result.stdout)
-        result = subprocess.run(
-            [*base, "statements", "--base", "missing-ref"],
-            capture_output=True,
-            text=True,
-            check=False,
+        self.assertEqual(status, 0, errors)
+        self.assertIn("0 added, 0 changed, 0 removed", output)
+        status, _, errors = support.run_main(
+            migrate.main, *root, "statements", "--base", "missing-ref"
         )
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("ERROR: git", result.stderr)
+        self.assertEqual(status, 1)
+        self.assertIn("ERROR: git", errors)
 
 
 if __name__ == "__main__":

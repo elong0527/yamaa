@@ -7,15 +7,13 @@ leaves out the R binding, and `make test-r`, which runs where R is installed,
 lints it instead.
 """
 
-import sys
 import tomllib
 import unittest
 from unittest import mock
 
-import yaml
 from tools.commands import repository, rust_tests
 from tools.paths import ROOT, WORKSPACE
-from tools.validation._repository_yaml import UniqueKeyLoader
+from tools.tests import support
 
 
 def members():
@@ -37,9 +35,8 @@ def repository_commands(command):
             repository, "run", lambda *arguments, **_: commands.append(arguments)
         ),
         mock.patch.object(repository.fuzz, "copy_lock"),
-        mock.patch.object(sys, "argv", ["repository", command]),
     ):
-        repository.main()
+        repository.main([command])
     return commands
 
 
@@ -71,7 +68,8 @@ class HostBindings(unittest.TestCase):
                 self.assertIs(manifest["lib"]["bench"], False)
                 # `test = false` would leave any of these unrun.
                 for targets in ("tests", "benches", "examples"):
-                    self.assertFalse((directory / targets).exists())
+                    with self.subTest(targets=targets):
+                        self.assertFalse((directory / targets).exists())
                 for source in sorted((directory / "src").rglob("*.rs")):
                     self.assertNotRegex(
                         source.read_text(encoding="utf-8"), r"#\[(cfg\()?test"
@@ -107,10 +105,7 @@ class HostBindings(unittest.TestCase):
         )
 
     def test_only_jobs_that_check_the_r_host_install_r(self):
-        workflow = yaml.load(
-            (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8"),
-            Loader=UniqueKeyLoader,
-        )
+        workflow = support.workflow("ci.yml")
         installs = {
             "r": ["check"],
             # The equivalence gate checks R in its R host job only.

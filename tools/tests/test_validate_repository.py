@@ -1,6 +1,7 @@
 """Static repository integrity checks; Rust and installed hosts own language behavior."""
 
 import copy
+import os
 import shutil
 import subprocess
 import sys
@@ -10,7 +11,9 @@ from pathlib import Path
 
 import yaml
 from tools.paths import ROOT
+from tools.tests import support
 from tools.validation import _repository_yaml as OWNER_REPOSITORY_YAML
+from tools.validation import check_documentation, validate_repository
 from tools.validation import editorial as OWNER_EDITORIAL
 from tools.validation import grammar_checks as OWNER_GRAMMAR_CHECKS
 from tools.validation import repository_artifacts as OWNER_REPOSITORY_ARTIFACTS
@@ -92,19 +95,15 @@ class TestYamlLoader(unittest.TestCase):
                 self.assertIsNone(loaded[f"value_{index}"])
         self.assertEqual(loaded["quoted"], ".inf")
 
-    def test_aliases_are_rejected(self):
-        with self.assertRaises(yaml.YAMLError):
-            yaml.load(
-                "first: &value text\nsecond: *value\n",
-                Loader=OWNER_REPOSITORY_YAML.UniqueKeyLoader,
-            )
-
-    def test_merge_keys_are_rejected(self):
-        with self.assertRaises(yaml.YAMLError):
-            yaml.load(
-                "base: &base {a: 1}\nmerged: {<<: *base}\n",
-                Loader=OWNER_REPOSITORY_YAML.UniqueKeyLoader,
-            )
+    def test_yaml_beyond_the_repository_subset_is_rejected(self):
+        for case, document in [
+            ("alias", "first: &value text\nsecond: *value\n"),
+            ("merge key", "base: &base {a: 1}\nmerged: {<<: *base}\n"),
+            ("explicit tag", "value: !!str 123\n"),
+        ]:
+            with self.subTest(case=case):
+                with self.assertRaises(yaml.YAMLError):
+                    yaml.load(document, Loader=OWNER_REPOSITORY_YAML.UniqueKeyLoader)
 
     def test_merge_keys_report_the_intended_reason(self):
         # The merge-key guard lives in flatten_mapping, which only runs when
@@ -116,13 +115,6 @@ class TestYamlLoader(unittest.TestCase):
         with self.assertRaisesRegex(yaml.YAMLError, "YAML merge keys are not allowed"):
             yaml.load(
                 "merged:\n  <<: just_a_scalar\n",
-                Loader=OWNER_REPOSITORY_YAML.UniqueKeyLoader,
-            )
-
-    def test_explicit_tags_are_rejected(self):
-        with self.assertRaises(yaml.YAMLError):
-            yaml.load(
-                "value: !!str 123\n",
                 Loader=OWNER_REPOSITORY_YAML.UniqueKeyLoader,
             )
 
@@ -348,7 +340,8 @@ class TestConditionRegistry(unittest.TestCase):
         self.assertEqual(placeholders("{{literal}} and {spec_path}"), ["spec_path"])
         self.assertEqual(placeholders("{{{key}}}"), ["key"])
         for stray in ("{", "}", "{key}}", "{Key}", "{1key}", "{key"):
-            self.assertIsNone(placeholders(stray), stray)
+            with self.subTest(stray=stray):
+                self.assertIsNone(placeholders(stray), stray)
 
     def test_wrong_phase_condition_is_rejected(self):
         changed = copy.deepcopy(self.registry)
@@ -389,9 +382,7 @@ class TestValidationMetadata(unittest.TestCase):
             contract["condition"] = "not_registered"
             contract_path.write_text(yaml.safe_dump(contract))
             _, errors = OWNER_REPOSITORY_MANIFESTS.load_validation_fixtures(root)
-            self.assertTrue(
-                any("unregistered validation condition" in error for error in errors)
-            )
+            self.assertIn("unregistered validation condition", "\n".join(errors))
 
 
 class TestClosedGrammarContracts(unittest.TestCase):
@@ -641,93 +632,64 @@ class TestClosedGrammarContracts(unittest.TestCase):
 
 
 class TestValidatorCLI(unittest.TestCase):
-    def setUp(self):
-        self.test_dir = tempfile.TemporaryDirectory()
-        self.root_dir = Path(self.test_dir.name)
+    @classmethod
+    def setUpClass(cls):
         # Every repository carries the shared regex fixtures and the closed
         # grammars, which are read against their rules, so a synthetic root
-        # that expects a clean run needs all of them too.
-        repository = ROOT
-        conformance = self.root_dir / "yaml" / "conformance"
+        # that expects a clean run needs all of them too. No test writes to
+        # them, so each test's root links the one copy that the class makes.
+        directory = tempfile.TemporaryDirectory()
+        cls.addClassCleanup(directory.cleanup)
+        cls.shared = Path(directory.name)
+        conformance = cls.shared / "yaml" / "conformance"
         conformance.mkdir(parents=True)
-        shutil.copy(
-            repository / "yaml" / "conformance" / "regex.yaml",
-            conformance / "regex.yaml",
-        )
-        shutil.copytree(
-            repository / "yaml" / "grammar", self.root_dir / "yaml" / "grammar"
-        )
-        shutil.copytree(repository / "rules", self.root_dir / "rules")
+        shutil.copy(ROOT / "yaml" / "conformance" / "regex.yaml", conformance)
+        shutil.copytree(ROOT / "yaml" / "grammar", cls.shared / "yaml" / "grammar")
+        shutil.copytree(ROOT / "rules", cls.shared / "rules")
 
-    def tearDown(self):
-        self.test_dir.cleanup()
+    def setUp(self):
+        self.test_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.test_dir.cleanup)
+        self.root_dir = Path(self.test_dir.name)
+        shutil.copytree(
+            self.shared, self.root_dir, copy_function=os.link, dirs_exist_ok=True
+        )
+
+    def validate(self):
+        """Run the repository validator on this root: (status, stdout, stderr)."""
+        return support.run_main(validate_repository.main, "--root", str(self.root_dir))
+
+    def check_documentation(self):
+        """Run the documentation lint on this root: (status, stdout, stderr)."""
+        return support.run_main(check_documentation.main, "--root", str(self.root_dir))
 
     def test_cli_help(self):
-        result = subprocess.run(
-            [sys.executable, "-m", "tools.validation.validate_repository", "--help"],
-            capture_output=True,
-            text=True,
-        )
-        self.assertEqual(result.returncode, 0)
-        self.assertIn("--root", result.stdout)
+        status, output, _ = support.run_main(validate_repository.main, "--help")
+        self.assertEqual(status, 0)
+        self.assertIn("--root", output)
 
     def test_cli_missing_schema_fails(self):
-        result = subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "tools.validation.validate_repository",
-                "--root",
-                str(self.root_dir),
-            ],
-            capture_output=True,
-            text=True,
-        )
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("schema.yaml", result.stdout)
+        status, output, errors = self.validate()
+        self.assertNotEqual(status, 0)
+        self.assertIn("schema.yaml", output)
 
-    def test_yaml_duplicate_keys(self):
-        yaml_dir = self.root_dir / "yaml"
-        yaml_dir.mkdir(exist_ok=True)
-        bad_yaml = yaml_dir / "bad.yaml"
-        bad_yaml.write_text("a: 1\na: 2\n")
-
-        result = subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "tools.validation.validate_repository",
-                "--root",
-                str(self.root_dir),
-            ],
-            capture_output=True,
-            text=True,
-        )
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("ERROR", result.stdout)
-        self.assertIn("bad.yaml", result.stdout)
-        self.assertIn("line 2", result.stdout.lower() + result.stderr.lower())
-
-    def test_yaml_syntax_error(self):
-        yaml_dir = self.root_dir / "yaml"
-        yaml_dir.mkdir(exist_ok=True)
-        bad_yaml = yaml_dir / "syntax.yaml"
-        bad_yaml.write_text("a: 1\n  b: 2\n")
-
-        result = subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "tools.validation.validate_repository",
-                "--root",
-                str(self.root_dir),
-            ],
-            capture_output=True,
-            text=True,
-        )
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("ERROR", result.stdout)
-        self.assertIn("syntax.yaml", result.stdout)
+    def test_a_yaml_file_that_does_not_load_is_an_error_naming_it(self):
+        for case, name, text, fragments in [
+            (
+                "duplicate keys",
+                "bad.yaml",
+                "a: 1\na: 2\n",
+                ("ERROR", "bad.yaml", "line 2"),
+            ),
+            ("syntax error", "syntax.yaml", "a: 1\n  b: 2\n", ("ERROR", "syntax.yaml")),
+        ]:
+            with self.subTest(case=case):
+                path = support.write(self.root_dir, f"yaml/{name}", text)
+                status, output, _ = self.validate()
+                path.unlink()
+                self.assertNotEqual(status, 0)
+                for fragment in fragments:
+                    self.assertIn(fragment, output)
 
     def test_yaml_check_skips_nested_checkouts_build_output_and_caches(self):
         for directory in SKIPPED_LOCATIONS + CHECKED_LOCATIONS:
@@ -735,22 +697,14 @@ class TestValidatorCLI(unittest.TestCase):
             folder.mkdir(parents=True, exist_ok=True)
             (folder / "bad.yaml").write_text("a: 1\na: 2\n")
 
-        result = subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "tools.validation.validate_repository",
-                "--root",
-                str(self.root_dir),
-            ],
-            capture_output=True,
-            text=True,
-        )
+        status, output, errors = self.validate()
 
         for directory in CHECKED_LOCATIONS:
-            self.assertIn(f"ERROR: {directory}bad.yaml:", result.stdout)
+            with self.subTest(directory=directory):
+                self.assertIn(f"ERROR: {directory}bad.yaml:", output)
         for directory in SKIPPED_LOCATIONS:
-            self.assertNotIn(f"ERROR: {directory}", result.stdout)
+            with self.subTest(directory=directory):
+                self.assertNotIn(f"ERROR: {directory}", output)
 
     def test_schema_shared_include_is_not_a_cycle(self):
         yaml_dir = self.root_dir / "yaml"
@@ -767,18 +721,8 @@ class TestValidatorCLI(unittest.TestCase):
         )
         (yaml_dir / "schema_shared.yaml").write_text('version: "1.0"\n')
 
-        result = subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "tools.validation.validate_repository",
-                "--root",
-                str(self.root_dir),
-            ],
-            capture_output=True,
-            text=True,
-        )
-        self.assertEqual(result.returncode, 0, result.stdout)
+        status, output, errors = self.validate()
+        self.assertEqual(status, 0, output)
 
     def test_schema_include_cannot_escape_yaml_directory(self):
         yaml_dir = self.root_dir / "yaml"
@@ -789,19 +733,9 @@ class TestValidatorCLI(unittest.TestCase):
         )
         (self.root_dir / "outside.yaml").write_text('version: "1.0"\n')
 
-        result = subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "tools.validation.validate_repository",
-                "--root",
-                str(self.root_dir),
-            ],
-            capture_output=True,
-            text=True,
-        )
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("local schema file name", result.stdout.lower())
+        status, output, errors = self.validate()
+        self.assertNotEqual(status, 0)
+        self.assertIn("local schema file name", output.lower())
 
     def test_schema_include_rejects_symlink_inside_yaml_directory(self):
         yaml_dir = self.root_dir / "yaml"
@@ -813,19 +747,9 @@ class TestValidatorCLI(unittest.TestCase):
         (yaml_dir / "schema_real.yaml").write_text('version: "1.0"\n')
         (yaml_dir / "schema_link.yaml").symlink_to("schema_real.yaml")
 
-        result = subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "tools.validation.validate_repository",
-                "--root",
-                str(self.root_dir),
-            ],
-            capture_output=True,
-            text=True,
-        )
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("regular file", result.stdout.lower())
+        status, output, errors = self.validate()
+        self.assertNotEqual(status, 0)
+        self.assertIn("regular file", output.lower())
 
     def test_schema_include_requires_mapping_root(self):
         yaml_dir = self.root_dir / "yaml"
@@ -836,20 +760,10 @@ class TestValidatorCLI(unittest.TestCase):
         )
         (yaml_dir / "schema_extra.yaml").write_text("- not\n- a\n- mapping\n")
 
-        result = subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "tools.validation.validate_repository",
-                "--root",
-                str(self.root_dir),
-            ],
-            capture_output=True,
-            text=True,
-        )
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("mapping", result.stdout.lower())
-        self.assertIn("schema_extra.yaml", result.stdout)
+        status, output, errors = self.validate()
+        self.assertNotEqual(status, 0)
+        self.assertIn("mapping", output.lower())
+        self.assertIn("schema_extra.yaml", output)
 
     def test_schema_include_name_must_follow_convention(self):
         yaml_dir = self.root_dir / "yaml"
@@ -860,37 +774,17 @@ class TestValidatorCLI(unittest.TestCase):
         )
         (yaml_dir / "other.yaml").write_text('version: "1.0"\n')
 
-        result = subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "tools.validation.validate_repository",
-                "--root",
-                str(self.root_dir),
-            ],
-            capture_output=True,
-            text=True,
-        )
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("local schema file name", result.stdout)
+        status, output, errors = self.validate()
+        self.assertNotEqual(status, 0)
+        self.assertIn("local schema file name", output)
 
     def test_documentation_missing_readme(self):
         ex_dir = self.root_dir / "benchmarks" / "bad-example"
         ex_dir.mkdir(parents=True, exist_ok=True)
         # missing everything
-        result = subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "tools.validation.check_documentation",
-                "--root",
-                str(self.root_dir),
-            ],
-            capture_output=True,
-            text=True,
-        )
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("README.md", result.stdout)
+        status, output, errors = self.check_documentation()
+        self.assertNotEqual(status, 0)
+        self.assertIn("README.md", output)
 
     def test_documentation_negative_missing_how_to_fix(self):
         ex_dir = self.root_dir / "benchmarks" / "negative-bad"
@@ -901,19 +795,9 @@ class TestValidatorCLI(unittest.TestCase):
         (ex_dir / "expected").mkdir()
         (ex_dir / "expected" / "error.yaml").write_text("{}")
 
-        result = subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "tools.validation.check_documentation",
-                "--root",
-                str(self.root_dir),
-            ],
-            capture_output=True,
-            text=True,
-        )
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("How to fix", result.stdout)
+        status, output, errors = self.check_documentation()
+        self.assertNotEqual(status, 0)
+        self.assertIn("How to fix", output)
 
     def test_example_layout_positive_has_error(self):
         ex_dir = self.root_dir / "benchmarks" / "positive-bad"
@@ -924,63 +808,33 @@ class TestValidatorCLI(unittest.TestCase):
         (ex_dir / "expected").mkdir()
         (ex_dir / "expected" / "error.yaml").write_text("{}")
 
-        result = subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "tools.validation.validate_repository",
-                "--root",
-                str(self.root_dir),
-            ],
-            capture_output=True,
-            text=True,
-        )
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("error.yaml", result.stdout)
+        status, output, errors = self.validate()
+        self.assertNotEqual(status, 0)
+        self.assertIn("error.yaml", output)
 
-    def test_example_index_stale(self):
-        ex_dir = self.root_dir / "benchmarks"
-        ex_dir.mkdir(parents=True, exist_ok=True)
-        (ex_dir / "README.md").write_text(
-            "# Index\n\n| [`stale`](stale/) | stale desc |\n"
-        )
-
-        result = subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "tools.validation.check_documentation",
-                "--root",
-                str(self.root_dir),
-            ],
-            capture_output=True,
-            text=True,
-        )
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("stale", result.stdout)
-
-    def test_example_index_link_must_match_directory(self):
-        examples_dir = self.root_dir / "benchmarks"
-        ex_dir = examples_dir / "good"
-        ex_dir.mkdir(parents=True)
-        (ex_dir / "README.md").write_text("# Good: description")
-        (examples_dir / "README.md").write_text(
-            "| [`good`](wrong-target/) | description |\n"
-        )
-
-        result = subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "tools.validation.check_documentation",
-                "--root",
-                str(self.root_dir),
-            ],
-            capture_output=True,
-            text=True,
-        )
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("wrong-target", result.stdout)
+    def test_an_index_row_without_its_directory_fails_the_documentation_lint(self):
+        for case, files, fragment in [
+            (
+                "stale row",
+                {"README.md": "# Index\n\n| [`stale`](stale/) | stale desc |\n"},
+                "stale",
+            ),
+            (
+                "link to another directory",
+                {
+                    "good/README.md": "# Good: description",
+                    "README.md": "| [`good`](wrong-target/) | description |\n",
+                },
+                "wrong-target",
+            ),
+        ]:
+            with self.subTest(case=case):
+                for relative, text in files.items():
+                    support.write(self.root_dir / "benchmarks", relative, text)
+                status, output, _ = self.check_documentation()
+                shutil.rmtree(self.root_dir / "benchmarks")
+                self.assertNotEqual(status, 0)
+                self.assertIn(fragment, output)
 
     def test_example_index_extra_columns_keep_link_title_and_duplicate_guards(self):
         examples = self.root_dir / "benchmarks"
@@ -1074,20 +928,10 @@ class TestValidatorCLI(unittest.TestCase):
             "| [`csv-bad`](csv-bad/) | bad header |\n"
         )
 
-        result = subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "tools.validation.validate_repository",
-                "--root",
-                str(self.root_dir),
-            ],
-            capture_output=True,
-            text=True,
-        )
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("csv-bad", result.stdout)
-        self.assertIn("header", result.stdout.lower())
+        status, output, errors = self.validate()
+        self.assertNotEqual(status, 0)
+        self.assertIn("csv-bad", output)
+        self.assertIn("header", output.lower())
 
     def write_producer_example(self, name):
         ex_dir = self.root_dir / "benchmarks" / name

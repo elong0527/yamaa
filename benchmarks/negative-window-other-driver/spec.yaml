@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: SDTM
 domain: VS
 keys: [USUBJID, VSCAT, VSDY]
 input:
@@ -37,7 +39,7 @@ rows:
     dataset: CLINIC
     derivations:
       USUBJID: CLINIC.USUBJID
-      VSCAT: {literal: CLINIC}
+      VSCAT: "'CLINIC'"
       VSDY: CLINIC.VSDY
       VSSTRESN: CLINIC.SYSBP
 
@@ -46,6 +48,6 @@ rows:
     dataset: HOME
     derivations:
       USUBJID: HOME.USUBJID
-      VSCAT: {literal: HOME}
+      VSCAT: "'HOME'"
       VSDY: HOME.VSDY
       VSSTRESN: HOME.SYSBP

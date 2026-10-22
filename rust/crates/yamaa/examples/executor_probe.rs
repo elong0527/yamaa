@@ -40,9 +40,8 @@ use std::time::{Duration, Instant};
 use arrow_array::{ArrayRef, RecordBatchIterator};
 use arrow_schema::Schema;
 use yamaa::{
-    Array, Build, CancellationToken, Engine, EngineOptions, FFI_ArrowArrayStream, Field,
-    Float64Array, HostLanguage, InputFrame, Int64Array, MemoryResolver, RecordBatch, Request,
-    StringArray,
+    Array, CancellationToken, Engine, EngineOptions, FFI_ArrowArrayStream, Field, Float64Array,
+    HostLanguage, InputFrame, Int64Array, MemoryResolver, RecordBatch, Run, StringArray,
 };
 
 const USAGE: &str =
@@ -265,28 +264,28 @@ fn run_case(shape: Shape, rows: usize) -> Result<Duration, String> {
     );
     let token = CancellationToken::new();
     let started = Instant::now();
-    let build = engine
-        .build(&Request::new("spec.yaml"), &token)
+    let run = engine
+        .spec_run("spec.yaml", None, &token)
         .map_err(|error| error.to_string())?;
     let elapsed = started.elapsed();
-    validate(&build, shape, rows)?;
+    validate(&run, shape, rows)?;
     Ok(elapsed)
 }
 
-/// Require a clean build with one row per source row and, for the lookup
+/// Require a clean run with one row per source row and, for the lookup
 /// shapes, the donor's `REF` on every row.
-fn validate(build: &Build, shape: Shape, rows: usize) -> Result<(), String> {
-    let report = build.report();
-    if let Some(first) = report.diagnostics.first() {
+fn validate(run: &Run, shape: Shape, rows: usize) -> Result<(), String> {
+    let diagnostics = run.diagnostics();
+    if let Some(first) = diagnostics.first() {
         return Err(format!(
             "{} diagnostic(s), first {} {} at {:?}",
-            report.len(),
+            diagnostics.len(),
             first.phase,
             first.code,
             first.spec_path
         ));
     }
-    let output = build.output().ok_or("the build kept no output table")?;
+    let output = run.output().ok_or("the run kept no output table")?;
     if output.rows() != rows {
         return Err(format!("{} output rows", output.rows()));
     }

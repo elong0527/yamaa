@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: SDTM
 domain: LB
 keys: [STUDYID, USUBJID, LBTESTCD]
 input:
@@ -33,9 +35,9 @@ columns:
     label: Result or Finding in Original Units
     submission:
       length: 4
-      origin:
-        type: Collected
-        source: Vendor
+      origins:
+        - type: Collected
+          source: Vendor
       value_level:
         - id: GLUC
           where: {LBTESTCD: ["1001"]}
@@ -48,10 +50,10 @@ rows:
   # One glucose and one creatinine record per collected sample.
   - id: glucose
     derivations:
-      LBTESTCD: {literal: "1001"}
+      LBTESTCD: "'1001'"
       LBORRES: LB_RAW.GLUC
 
   - id: creatinine
     derivations:
-      LBTESTCD: {literal: "1002"}
+      LBTESTCD: "'1002'"
       LBORRES: LB_RAW.CREAT

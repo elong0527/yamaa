@@ -233,7 +233,7 @@ optionally preceded by `U+000D`, and the final record may omit its terminator.
 else, including inside a quoted field, it fails rather than joining the value.
 
 Fails: `source_carriage_return`.
-Evidence: `adam-advs-windows`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::retired_python_admitted_terminators_and_header_only_schema_are_exact`, `rust/crates/yamaa-adapters/tests/fixtures/csv_profile_diagnostics.json::quoted-cr`.
+Evidence: `adam-advs-windows`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::retired_python_admitted_terminators_and_header_only_schema_are_exact`, `rust/crates/yamaa-adapters/tests/fixtures/csv_profile_diagnostics.json::quoted-cr`, `negative-source-carriage-return`.
 
 A writer controls its bytes and emits one spelling, while a reader receives a
 study file as stored. The admitted spellings are a record terminated by
@@ -255,7 +255,7 @@ characters of the value. A closing quote is followed only by a delimiter or a
 terminator.
 
 Fails: `source_quote_unterminated`, `source_quote_in_bare_field`, `source_text_after_quote`.
-Evidence: `negative-source-unterminated-quote`, `adam-adsl-investigator-comment`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::retired_python_nonconforming_csv_has_exact_coordinates`.
+Evidence: `negative-source-unterminated-quote`, `adam-adsl-investigator-comment`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::retired_python_nonconforming_csv_has_exact_coordinates`, `negative-source-quote-in-bare-field`, `negative-source-text-after-quote`.
 
 Nothing is trimmed. A space beside a delimiter is a character of the field,
 and a reader that removes it changes a collected value. A quoted field with no
@@ -276,7 +276,7 @@ no bytes has no header and fails; a header-only file holds no records and is
 valid.
 
 Fails: `source_header_absent`, `source_field_name_empty`, `source_field_name_duplicate`, `source_record_width`.
-Evidence: `negative-source-extra-field`, `negative-source-field-duplicate`, `negative-source-unnamed-field`.
+Evidence: `negative-source-extra-field`, `negative-source-field-duplicate`, `negative-source-unnamed-field`, `negative-source-empty-file`.
 
 A record with more or fewer fields than the header fails. Padding a short
 record and discarding a long record's surplus are not implementation options.
@@ -322,7 +322,7 @@ message carries no host path. Each condition rejects what the table below
 lists.
 
 Fails: `source_profile_unknown`, `source_byte_order_mark`, `source_header_absent`, `source_field_name_empty`, `source_field_name_duplicate`, `source_record_width`, `source_quote_unterminated`, `source_quote_in_bare_field`, `source_text_after_quote`, `source_carriage_return`.
-Evidence: `negative-source-unterminated-quote`, `negative-source-unnamed-field`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::every_csv_cause_retains_the_complete_independent_context`.
+Evidence: `negative-source-unterminated-quote`, `negative-source-unnamed-field`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::every_csv_cause_retains_the_complete_independent_context`, `negative-source-carriage-return`, `negative-source-quote-in-bare-field`, `negative-source-text-after-quote`, `negative-source-empty-file`.
 
 | Condition | Rejects |
 |---|---|

@@ -1,0 +1,7 @@
+phase: mapping
+condition: missing_input
+spec_paths:
+  - columns.USUBJID.derivation.str_template
+rule: COLUMN-10
+context:
+  variable: DM_RAW.SITEID

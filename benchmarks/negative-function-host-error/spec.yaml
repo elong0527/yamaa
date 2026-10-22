@@ -1,0 +1,44 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  # One baseline weight was recorded as zero.
+  EX: {path: input/ex.csv, types: {DOSEMG: float, WEIGHTKG: float}}
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, DOSEMG, WEIGHTKG, DOSEKG]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: EX.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: EX.USUBJID
+
+  - name: DOSEMG
+    type: float
+    label: First Dose (mg)
+    derivation: EX.DOSEMG
+
+  - name: WEIGHTKG
+    type: float
+    label: Baseline Weight (kg)
+    derivation: EX.WEIGHTKG
+
+  # The project function refuses a weight that is not positive.
+  - name: DOSEKG
+    type: float
+    label: First Dose per Body Weight (mg/kg)
+    derivation:
+      function:
+        name: dose_per_kg
+        args:
+          dose_mg: DOSEMG
+          weight_kg: WEIGHTKG

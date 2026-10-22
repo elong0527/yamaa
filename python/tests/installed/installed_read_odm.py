@@ -22,6 +22,13 @@ DOCUMENTS = Path(__file__).resolve().with_name("host-fixtures") / "odm"
 ISSUE_COLUMNS = load_truth(__file__, "public-contract")["issue_columns"]
 
 
+def fixture_bytes(value):
+    """A truth file is UTF-8 text, or its bytes written as hex."""
+    if isinstance(value, dict):
+        return bytes.fromhex(value["hex"])
+    return value.encode("utf-8")
+
+
 def expected_rows(rows):
     """Integer columns are decimal text in the truth; every other cell is text."""
     return [
@@ -47,11 +54,14 @@ class ReadOdm(unittest.TestCase):
                 info = tarfile.TarInfo(member)
                 info.size = len(data)
                 stream.addfile(info, io.BytesIO(data))
+        # Sources the refusals read that are neither document nor archive.
+        for name, value in TRUTH["files"].items():
+            (self.root / name).write_bytes(fixture_bytes(value))
 
     def source(self, name):
         if name is None:
             return self.root / "absent.xml"
-        if name == TRUTH["archive"]["name"]:
+        if name == TRUTH["archive"]["name"] or name in TRUTH["files"]:
             return self.root / name
         return DOCUMENTS / name
 

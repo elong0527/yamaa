@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
@@ -20,9 +22,9 @@ columns:
       core: Req
       mandatory: true
       length: 20
-      origin:
-        type: Predecessor
-        description: ADSL_RAW.STUDYID
+      origins:
+        - type: Predecessor
+          description: ADSL_RAW.STUDYID
 
   - name: USUBJID
     type: str
@@ -32,9 +34,9 @@ columns:
       core: Req
       mandatory: true
       length: 30
-      origin:
-        type: Predecessor
-        description: ADSL_RAW.USUBJID
+      origins:
+        - type: Predecessor
+          description: ADSL_RAW.USUBJID
 
   - name: HEIGHTBL
     type: float
@@ -46,9 +48,9 @@ columns:
       length: 6
       significant_digits: 2
       display_format: "6.1"
-      origin:
-        type: Predecessor
-        description: ADSL_RAW.HEIGHTBL
+      origins:
+        - type: Predecessor
+          description: ADSL_RAW.HEIGHTBL
 
 submission:
   label: Subject-Level Analysis Dataset

@@ -1,0 +1,11 @@
+phase: ingest
+condition: source_field_value_invalid
+spec_paths:
+  - input.RND.path
+rule: PARQUET-9
+context:
+  dataset: RND
+  path: input/rand.parquet
+  field: RANDDTM
+  record: 2
+  value: 1772448012250000

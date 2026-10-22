@@ -1,0 +1,10 @@
+phase: ingest
+condition: source_quote_in_bare_field
+spec_paths:
+  - input.DM.path
+rule: CSV-16
+context:
+  dataset: DM
+  path: input/dm.csv
+  record: 3
+  field: 3

@@ -1,0 +1,8 @@
+phase: mapping
+condition: unmatched_pattern
+spec_paths:
+  - columns.SITEID.derivation.str_extract
+rule: COLUMN-10
+context:
+  value: Karolinska Stockholm
+  pattern: 'Site ([0-9]{3})'

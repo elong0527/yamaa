@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
@@ -29,5 +31,4 @@ columns:
         source: USUBJID
         pattern: '^CATH-([^-]+)-[0-9]{4}$'
         group: 2
-        missing: {literal: null}
-        no_match: {literal: null}
+        no_match: null
