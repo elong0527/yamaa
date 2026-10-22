@@ -26,7 +26,7 @@
 //! on.
 
 use super::{PreflightFinding, PrepareError};
-use crate::ast::{ExprId, ExprKind, JoinKey, Read, ScalarOp, Scope, Spec, Step, Template};
+use crate::ast::{ExprId, ExprKind, JoinKey, Read, Scope, Spec, Step, Template};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Why a default cannot complete in the row phase (SPEC-6).
@@ -423,7 +423,8 @@ impl<'a> Phases<'a> {
     /// cannot admit. A default that reads a lookup stays with the templates
     /// that need it (LOOKUP-12), and one that reads only other inputs stays in
     /// the column phase, where it binds against each row's own driver.
-    /// Windows, aggregates and mappings stay in the column phase.
+    /// Windows, aggregates and the verbs that stay there (a mapping) stay in
+    /// the column phase.
     fn grouped_driver_reads(&self) -> Vec<usize> {
         let grouped = self
             .spec
@@ -441,15 +442,12 @@ impl<'a> Phases<'a> {
                 let Some(root) = self.default(column) else {
                     return false;
                 };
-                if matches!(
-                    &self.spec.expr(root).kind,
-                    ExprKind::Window(_)
-                        | ExprKind::Aggregate(_)
-                        | ExprKind::Scalar {
-                            op: ScalarOp::Mapping { .. },
-                            ..
-                        }
-                ) {
+                let column_phase = match &self.spec.expr(root).kind {
+                    ExprKind::Window(_) | ExprKind::Aggregate(_) => true,
+                    ExprKind::Scalar { op, .. } => op.stays_in_column_phase(),
+                    _ => false,
+                };
+                if column_phase {
                     return false;
                 }
                 let owners = self

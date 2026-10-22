@@ -162,7 +162,7 @@ impl<'a> BindContext<'a, '_> {
                     None => self.first_available(&selection, &path, column),
                 }
             }
-            ExprKind::Scalar { op, .. } => self.scalar(e, op, column),
+            ExprKind::Scalar { .. } => self.scalar(e, column),
             ExprKind::Window(_) => {
                 self.window(&windows::Declaration::from_tree(spec, e).map_err(internal)?)
             }
@@ -238,76 +238,141 @@ impl<'a> BindContext<'a, '_> {
         }
     }
 
-    /// Every scalar verb: its operands bind through [`Self::operand`], and
-    /// the verb's own module checks and wraps them.
-    fn scalar(
-        &mut self,
-        e: ExprId,
-        op: &ast::ScalarOp,
-        column: usize,
-    ) -> Result<Option<Expression>, BindError> {
-        use ast::ScalarOp as Op;
+    /// Every scalar verb: each operand binds as the scope decides
+    /// ([`Self::operand`], or as a source binding binds), binding types it as
+    /// the operation asks and refuses a type it does not accept, and the
+    /// operation gives the plan expression.
+    fn scalar(&mut self, e: ExprId, column: usize) -> Result<Option<Expression>, BindError> {
+        use crate::scalar_verb::{Completion, Read, Typing};
         let spec = self.spec();
-        let internal = |_| BindError::Internal;
-        match op {
-            Op::Round { .. } => rounding::bind(
-                &rounding::from_tree(spec, e).map_err(internal)?,
-                column,
-                self,
-            ),
-            Op::Diff { .. }
-            | Op::StudyDay
-            | Op::ToEpochDay
-            | Op::Shift { .. }
-            | Op::DurationValue { .. }
-            | Op::Dtc
-            | Op::TimeOfDay => temporal::bind(
-                &temporal::from_tree(spec, e).map_err(internal)?,
-                column,
-                self,
-            ),
-            Op::Impute { .. } | Op::Precision { .. } | Op::ImputationFlag { .. } | Op::ToDate => {
-                imputation::bind(
-                    &imputation::from_tree(spec, e).map_err(internal)?,
-                    column,
-                    self,
-                )
-            }
-            Op::StrCase { .. } => str_case::bind(
-                &str_case::from_tree(spec, e).map_err(internal)?,
-                column,
-                self,
-            ),
-            Op::StrPad { .. } => str_pad::bind(
-                &str_pad::from_tree(spec, e).map_err(internal)?,
-                column,
-                self,
-            ),
-            Op::StrExtract { .. } | Op::StrReplace { .. } => {
-                match str_extract::from_tree(spec, e).map_err(internal)? {
-                    str_extract::Admitted::Search(extract) => {
-                        str_extract::bind(&extract, column, self)
-                    }
-                    str_extract::Admitted::Replace(replace) => {
-                        str_extract::bind_replace(&replace, column, self)
-                    }
+        let operation =
+            crate::scalar_verb::Operation::from_tree(spec, e).map_err(|_| BindError::Internal)?;
+        let start = self.findings.len();
+        if let Some(refusal) = operation.refusal() {
+            self.findings.push(BindFinding::Scalar(refusal.clone()));
+            return Ok(None);
+        }
+        let typing = operation.typing();
+        let mut operands = Vec::new();
+        let mut complete = true;
+        for (index, operand) in operation.operands().iter().enumerate() {
+            let mark = self.findings.len();
+            let (name, bound) = match &operand.read {
+                Read::Literal(value) => {
+                    operands.push(Assignment {
+                        column,
+                        expression: Expression::Literal(value.clone()),
+                        path: operand.path.clone(),
+                    });
+                    continue;
                 }
+                Read::Name(name) => (name.as_str(), self.operand(name, &operand.path)?),
+                Read::Source(node) => {
+                    let source = source_expressions::Declaration::from_tree(spec, *node)
+                        .map_err(|_| BindError::Internal)?;
+                    let bound = source_expressions::bind(self, &source, column, &operand.path)?;
+                    (checks::variable(spec, *node).unwrap_or_default(), bound)
+                }
+            };
+            let Some(expression) = bound else {
+                complete = false;
+                if let Some(unknown) = operation.unknown(index) {
+                    self.unknown(mark, name, unknown);
+                }
+                continue;
+            };
+            let kind = match typing {
+                Typing::None | Typing::Together => None,
+                Typing::Catalog => self.catalog.type_of(name),
+                Typing::RowTemplates => self
+                    .implicit()
+                    .is_none()
+                    .then(|| self.catalog.type_of(name))
+                    .flatten(),
+                Typing::Bound => match &expression {
+                    Expression::Intermediate { index, column } => self.donors.items[*index]
+                        .as_ref()
+                        .and_then(|item| item.source_kind(self.donors.secondary, *column)),
+                    _ => self.catalog.type_of(name),
+                },
+                Typing::Captured => self.captured_type(name),
+            };
+            if let Some(refusal) = kind.and_then(|kind| operation.check(index, kind)) {
+                self.findings.push(BindFinding::Scalar(refusal));
+                complete = false;
+                continue;
             }
-            Op::StrTemplate { .. } => str_template::bind(
-                &str_template::from_tree(spec, e).map_err(internal)?,
+            operands.push(Assignment {
                 column,
-                self,
-            ),
-            Op::Greatest | Op::Least => scalar::bind(
-                &scalar::Declaration::from_tree(spec, e).map_err(internal)?,
-                column,
-                self,
-            ),
-            Op::Mapping { .. } | Op::Cut { .. } => mapping_cut::bind(
-                &mapping_cut::from_tree(spec, e).map_err(internal)?,
-                column,
-                self,
-            ),
+                expression,
+                path: operand.path.clone(),
+            });
+        }
+        if complete {
+            if let Some(refusal) = operation.late_refusal() {
+                self.findings.push(BindFinding::Scalar(refusal.clone()));
+                complete = false;
+            }
+        }
+        if typing == Typing::Together {
+            let types = operation
+                .operands()
+                .iter()
+                .map(|operand| match &operand.read {
+                    Read::Name(name) => self.captured_type(name),
+                    _ => None,
+                })
+                .collect::<Vec<_>>();
+            if let Some(refusal) = operation.incomparable(&types) {
+                self.findings.push(BindFinding::Scalar(refusal));
+            }
+        }
+        let done = match operation.completion() {
+            Completion::Operands => complete,
+            Completion::Findings => self.findings.len() == start,
+        };
+        Ok(if done { operation.plan(operands) } else { None })
+    }
+
+    /// A read of `name`, a field a named intermediate selects by its donor's
+    /// captured type and anything else by the catalog's.
+    fn captured_type(&self, name: &str) -> Option<ColumnType> {
+        match self.donors.named.reference(name) {
+            Some((index, field)) => self
+                .donors
+                .items
+                .get(index)
+                .and_then(Option::as_ref)
+                .and_then(|item| {
+                    let column = item.source_column(self.donors.secondary, field)?;
+                    item.source_kind(self.donors.secondary, column)
+                }),
+            None => self.catalog.type_of(name),
+        }
+    }
+
+    /// A verb's own refusal of an operand that did not bind because `name`
+    /// is unknown, in place of each reference refusal since `mark`.
+    fn unknown(&mut self, mark: usize, name: &str, unknown: crate::scalar_verb::Unknown) {
+        if !unknown.qualified && name.contains('.') {
+            return;
+        }
+        for finding in &mut self.findings[mark..] {
+            let replaced = match finding {
+                BindFinding::UnknownReference { .. }
+                | BindFinding::OutputReference {
+                    finding: reference_binding::Diagnostic::UnknownField,
+                    ..
+                } => true,
+                BindFinding::QualifiedReference {
+                    finding: crate::reference_scope::Finding::UnknownField,
+                    ..
+                } => unknown.qualified,
+                _ => false,
+            };
+            if replaced {
+                *finding = BindFinding::Scalar(unknown.diagnostic.clone());
+            }
         }
     }
 
