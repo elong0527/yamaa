@@ -77,6 +77,74 @@ mod declaration {
                     },
                 )
             }
+            /// The issues a public check of `spec` reports in `host`, then
+            /// those a public run refuses it with before it reads any input.
+            fn routes(&self, host: Language, spec: &str) -> [Vec<Issue>; 2] {
+                let specification = self.path(spec);
+                let request = || Request {
+                    specification: &specification,
+                    environment: None,
+                };
+                let identity = || Identity {
+                    runtime: "test",
+                    runtime_version: "test",
+                    engine_version: yamaa_core::VERSION,
+                    example: "test",
+                    specification: &specification,
+                    base_directory: ".",
+                };
+                let checked = yamaa_adapters::file_application::check(host, request(), identity());
+                let built =
+                    match yamaa_adapters::file_application::domain(host, request(), identity()) {
+                        Ok(domain) => domain.issues(),
+                        Err(issues) => issues,
+                    };
+                [checked, built]
+            }
+            /// The issues a submission of the `sdtm` section of the project
+            /// file `project` reports in `host`.
+            fn submission(&self, host: Language, project: &str) -> Vec<Issue> {
+                yamaa_adapters::file_define::Define::prepare(
+                    &self.path(project),
+                    yamaa_core::project_environment::Submission::Sdtm,
+                    Some("2026-09-11T00:00:00"),
+                    "0",
+                    Some(host),
+                    None,
+                )
+                .issues()
+                .to_vec()
+            }
+            /// Each listing of the project file `project` in `host`, in
+            /// listing order: the issues a project check reports for it,
+            /// each naming its specification as the entry, as a project's
+            /// member does (`project_scope::identify`), and those a project
+            /// run refuses its specification with.
+            fn listings(&self, host: Language, project: &str) -> Vec<[Vec<Issue>; 2]> {
+                let project = yamaa_adapters::project_scope::Project::read(
+                    &self.path(project),
+                    Some(host),
+                    None,
+                )
+                .unwrap();
+                let plan = project.plan(None);
+                project
+                    .listed()
+                    .iter()
+                    .enumerate()
+                    .map(|(index, listed)| {
+                        let mut checked = listed.failure().to_vec();
+                        yamaa_adapters::project_scope::identify(&mut checked, listed.identity());
+                        let refused = plan
+                            .steps()
+                            .iter()
+                            .find(|step| step.listed() == index)
+                            .map(|step| step.refused().to_vec())
+                            .unwrap_or_default();
+                        [checked, refused]
+                    })
+                    .collect()
+            }
         }
 
         /// The one issue a refused read reports.
@@ -91,6 +159,41 @@ mod declaration {
             assert_eq!(issue.rule(), Some(rule));
             assert_eq!(issue.spec_paths, [path]);
             assert_eq!(Value::Object(issue.context.clone()), context);
+        }
+
+        /// An issue's phase, condition, rule, spec paths and context.
+        type Row = (
+            &'static str,
+            &'static str,
+            Option<&'static str>,
+            Vec<String>,
+            Value,
+        );
+
+        fn rows(issues: &[Issue]) -> Vec<Row> {
+            issues
+                .iter()
+                .map(|issue| {
+                    (
+                        issue.phase(),
+                        issue.condition(),
+                        issue.rule(),
+                        issue.spec_paths.clone(),
+                        Value::Object(issue.context.clone()),
+                    )
+                })
+                .collect()
+        }
+
+        /// A validation issue of SCHEMA-2 at `path`.
+        fn header_row(condition: &'static str, path: &str, context: Value) -> Row {
+            (
+                "validation",
+                condition,
+                Some("SCHEMA-2"),
+                vec![path.into()],
+                context,
+            )
         }
 
         #[test]
@@ -249,6 +352,169 @@ mod declaration {
             );
             assert_eq!(issues[0].context["source"], study.path("ct.yaml"));
             assert_eq!(issues[0].context["environment_path"], "codelists[0]");
+        }
+
+        /// A 1.0 specification reads the header of the producer a `schema`
+        /// link names at the link, before the producer is prepared
+        /// (SCHEMA-2): a version the engine does not read, or another type,
+        /// is refused at `input.<name>.schema`, naming the producer as
+        /// `source`, by the check and the run of each host. A malformed
+        /// header stays a finding in the producer; a producer that declares
+        /// `schema_version` is read by that header, and a 0.5 specification
+        /// reads its links under the 0.5 rules (D75).
+        #[test]
+        fn a_1_0_schema_link_refuses_a_producer_it_does_not_read_at_the_link() {
+            let study = Study::new();
+            let link = "input: {SRC: {path: produced.csv, schema: producer.yaml}}";
+            study.write("spec.yaml", &SPEC.replace("input: {SRC: input.csv}", link));
+            let producer = study.path("producer.yaml");
+            for (text, expected) in [
+                (
+                    "yamaa: \"1.4\"\ntype: spec\nanything: [1, 2]\n",
+                    header_row(
+                        "unsupported_language_version",
+                        "input.SRC.schema",
+                        json!({"source": producer, "version": "1.4", "language_versions": ["1.0"]}),
+                    ),
+                ),
+                (
+                    "yamaa: \"1.0\"\ntype: project\n",
+                    header_row(
+                        "unexpected_file_type",
+                        "input.SRC.schema",
+                        json!({"source": producer, "type": "project", "expected": "spec"}),
+                    ),
+                ),
+            ] {
+                study.write("producer.yaml", text);
+                for host in [Language::Python, Language::R] {
+                    assert_eq!(
+                        study.routes(host, "spec.yaml").map(|issues| rows(&issues)),
+                        [vec![expected.clone()], vec![expected.clone()]],
+                        "{host:?}: {text}"
+                    );
+                }
+            }
+            // A malformed header is a finding in the producer, at its own
+            // `yamaa`.
+            study.write("producer.yaml", "yamaa: 1.0\ntype: spec\n");
+            let issue = only(&study.check("spec.yaml", None)).clone();
+            assert_eq!(
+                (issue.condition(), issue.spec_paths.as_slice()),
+                ("invalid_field_type", ["yamaa".to_string()].as_slice())
+            );
+            // A producer that declares `schema_version` supplies its contract.
+            study.write(
+                "producer.yaml",
+                &LEGACY
+                    .replace("path: output.csv", "path: produced.csv")
+                    .replace(
+                        "type: int, derivation",
+                        "type: int, label: Identifier, derivation",
+                    ),
+            );
+            assert_eq!(study.check("spec.yaml", None), []);
+            // A 0.5 consumer reads its producer's header as that file's own.
+            study.write("producer.yaml", "yamaa: \"1.4\"\ntype: spec\n");
+            study.write(
+                "legacy.yaml",
+                &LEGACY.replace("input: {SRC: input.csv}", link),
+            );
+            let issue = only(&study.check("legacy.yaml", None)).clone();
+            assert_eq!(
+                (issue.condition(), issue.spec_paths.as_slice()),
+                (
+                    "unsupported_language_version",
+                    ["yamaa".to_string()].as_slice()
+                )
+            );
+        }
+
+        /// A 1.0 project reads the header of each specification it lists at
+        /// the listing, before the specification is prepared (SCHEMA-2): a
+        /// version the engine does not read, or another type, is the
+        /// listing's own finding at `<section>.specs[i]`, naming the file as
+        /// `source`, in each host. A project check reports it for that
+        /// listing and a project run refuses the specification with it, each
+        /// naming the specification as the entry; a submission composing the
+        /// section reports it too. A malformed header stays the
+        /// specification's own finding, a listed specification that declares
+        /// `schema_version` is read by that header, and a 0.5 project lists
+        /// under the 0.5 rules (D75).
+        #[test]
+        fn a_1_0_project_refuses_a_listed_specification_it_does_not_read_at_its_listing() {
+            let study = Study::new();
+            study.write("input.csv", "ID\n1\n");
+            study.write("dm.yaml", &SPEC.replace("domain: TEST", "domain: DM"));
+            study.write(
+                "project.yaml",
+                "yamaa: \"1.0\"\ntype: project\nsdtm:\n  specs: [dm.yaml, listed.yaml]\n",
+            );
+            study.write(
+                "submission.yaml",
+                "yamaa: \"1.0\"\ntype: project\n\
+                 study: {id: S, name: S, description: A study, protocol_name: S-01}\n\
+                 sdtm:\n  specs: [listed.yaml]\n\
+                 \x20 standards: [{name: SDTMIG, version: \"3.4\", status: Final}]\n\
+                 \x20 define: define.xml\n",
+            );
+            study.write(
+                "legacy-project.yaml",
+                "schema_version: '1.0'\nsdtm:\n  specs: [dm.yaml, listed.yaml]\n",
+            );
+            let listed = study.path("listed.yaml");
+            for (text, condition, context) in [
+                (
+                    "yamaa: \"1.4\"\ntype: spec\nanything: [1, 2]\n",
+                    "unsupported_language_version",
+                    json!({"source": listed, "version": "1.4", "language_versions": ["1.0"]}),
+                ),
+                (
+                    "yamaa: \"1.0\"\ntype: codelists\ncodelists: []\n",
+                    "unexpected_file_type",
+                    json!({"source": listed, "type": "codelists", "expected": "spec"}),
+                ),
+            ] {
+                study.write("listed.yaml", text);
+                let mut entry = context.clone();
+                entry["entry"] = Value::String(listed.clone());
+                let refused = vec![header_row(condition, "sdtm.specs[1]", entry)];
+                for host in [Language::Python, Language::R] {
+                    assert_eq!(
+                        study
+                            .listings(host, "project.yaml")
+                            .into_iter()
+                            .map(|routes| routes.map(|issues| rows(&issues)))
+                            .collect::<Vec<_>>(),
+                        [[Vec::new(), Vec::new()], [refused.clone(), refused.clone()]],
+                        "{host:?}: {text}"
+                    );
+                    assert_eq!(
+                        rows(&study.submission(host, "submission.yaml")),
+                        [header_row(condition, "sdtm.specs[0]", context.clone())],
+                        "{host:?} submission: {text}"
+                    );
+                }
+            }
+            // None of these fails at its listing.
+            for (project, text) in [
+                ("project.yaml", "yamaa: 1.0\ntype: spec\n"),
+                ("project.yaml", LEGACY),
+                (
+                    "legacy-project.yaml",
+                    "yamaa: \"1.4\"\ntype: spec\nanything: [1, 2]\n",
+                ),
+            ] {
+                study.write("listed.yaml", text);
+                assert!(
+                    study
+                        .listings(Language::Python, project)
+                        .iter()
+                        .flatten()
+                        .all(Vec::is_empty),
+                    "{project}: {text}"
+                );
+            }
         }
 
         // -- The 1.0 path -------------------------------------------------------
