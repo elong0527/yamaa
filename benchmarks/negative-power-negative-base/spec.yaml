@@ -1,0 +1,40 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  # One baseline weight was entered with a minus sign.
+  VS: {path: input/vs.csv, types: {WEIGHTKG: float, HEIGHTCM: float}}
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, WEIGHTKG, HEIGHTCM, BSA]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: VS.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: VS.USUBJID
+
+  - name: WEIGHTKG
+    type: float
+    label: Baseline Weight (kg)
+    derivation: VS.WEIGHTKG
+
+  - name: HEIGHTCM
+    type: float
+    label: Baseline Height (cm)
+    derivation: VS.HEIGHTCM
+
+  # The DuBois body surface area raises the weight to a non-integer power,
+  # which has no real result for a negative weight.
+  - name: BSA
+    type: float
+    label: Body Surface Area (m2)
+    derivation: "0.007184 * POWER(WEIGHTKG, 0.425) * POWER(HEIGHTCM, 0.725)"

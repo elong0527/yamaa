@@ -12,6 +12,9 @@
 # is done. Each list is sorted.
 
 unreachable:
+  bare_derivation_scalar: >-
+    only the 0.5 path raises it, until P2-13 removes that path: in 1.0 a YAML
+    number, Boolean or null derivation is a literal (EXPR-5)
   day_not_permitted: >-
     only the 0.5 path raises it, until P2-13 removes that path: 1.0 drops
     minimum_source_precision, and #3030 D61 retired its benchmarks
@@ -38,10 +41,40 @@ unreachable:
     (LAYER-10, FILE-4); only Windows hosts have shares, which no portable case
     can stage, so the adapters' resolver tests reach it
     (rust/crates/yamaa-adapters/tests/host_resources.rs)
+  project_environment_invalid: >-
+    only the 0.5 path raises it, until P2-13 removes that path: a 1.0 project
+    reports a listed file it cannot admit with function_file_invalid or
+    FILE-11's conditions (FUNC-2, FUNC-3, #3030 D107)
+  project_environment_missing: >-
+    only the 0.5 path raises it, until P2-13 removes that path: a 1.0 host
+    without an environments entry calls its functions without a lock
+    (PROJECT-2), the cause #3030 D188 kept
+  publication_failed: >-
+    only a host file system failure while a save stages or replaces a file
+    raises it (OUTPUT-8): a target the walk cannot reach fails with FILE-7's
+    and FILE-8's conditions (#3030 D189), and no portable case can make a write
+    into a writable directory fail
+  resource_path_content_changed: >-
+    only a file that changes while one call reads it raises it (FILE-10):
+    a host compiles a spec or project object again once a file it holds has
+    changed (#3069), so no case can change a file mid-call; the facade's
+    plan tests reach it (rust/crates/yamaa/tests/plan_contracts.rs)
+  schema_version_mismatch: >-
+    only the 0.5 path raises it, until P2-13 removes that path: a 1.0 file
+    declares yamaa, and a version the engine does not read fails as
+    unsupported_language_version (SCHEMA-2, #3030 D125)
+  unknown_standard_family: >-
+    only the 0.5 path raises it, until P2-13 removes that path: a guide a 1.0
+    section lists outside its model fails as standard_model_mismatch (DEFINE-6,
+    #3030 D58)
+  xpt_file_too_large: >-
+    XPT-10 refuses a transport file past 5,000,000,000 bytes, which takes a
+    published dataset of at least 25 million 200-byte values (SUB-24 measures a
+    character variable by its longest value) or 625 million numbers; no parity
+    case can carry one, so XPT-10's encoder test owns it
 not_covered:
   "#3423":
     - artifact_outside_document
-    - bare_derivation_scalar
     - codelist_duplicate_value
     - codelist_extended_alias
     - codelist_extension_not_admitted
@@ -58,12 +91,9 @@ not_covered:
     - origin_missing
     - origin_source_not_admitted
     - predecessor_label_mismatch
-    - project_environment_invalid
-    - project_environment_missing
     - reference_data_repeating_conflict
     - refuted_value_origin
     - reserved_metadata_key
-    - schema_version_mismatch
     - source_system_incomplete
     - submission_data_type_not_admitted
     - submission_length_invalid
@@ -74,39 +104,4 @@ not_covered:
     - transport_path_collision
     - unknown_codelist
     - unknown_document
-    - unknown_standard_family
     - xpt_display_format_invalid
-  "#3424":
-    - resource_path_content_changed
-    - source_carriage_return
-    - source_field_type_unsupported
-    - source_field_value_invalid
-    - source_header_absent
-    - source_odm_archive_invalid
-    - source_odm_attribute_ambiguous
-    - source_odm_attribute_invalid
-    - source_odm_attribute_missing
-    - source_odm_compression_unsupported
-    - source_odm_document_unsupported
-    - source_odm_layout_unsupported
-    - source_odm_metadata_conflict
-    - source_odm_value_unsupported
-    - source_odm_xml_malformed
-    - source_odm_xml_unsupported
-    - source_quote_in_bare_field
-    - source_text_after_quote
-  "#3428":
-    - function_call_failed
-    - invalid_function_result
-    - invalid_power
-    - missing_input
-    - unmatched_pattern
-  "#3432":
-    - engine_rejected
-    - nothing_to_save
-    - publication_failed
-    - transport_dataset_empty
-    - value_level_unmatched
-    - xpt_file_too_large
-    - xpt_last_row_blank
-    - xpt_value_out_of_range

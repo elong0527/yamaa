@@ -1,9 +1,12 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
   DM: input/dm.csv
-  EX: {path: input/ex.csv, types: {EXSEQ: int, EXSTDTC: date, EXDOSE: float}}
+  EX: {path: input/ex.csv, types: {EXSEQ: int, EXSTDTC: date, EXDOSE: float},
+       key: [STUDYID, USUBJID]}
   DS: {path: input/ds.csv, types: {DSSEQ: int, DSSTDTC: date}}
 base: DM
 
@@ -13,9 +16,10 @@ output:
 
 intermediates:
   # The death disposition record. A subject without one selects nothing;
-  # with no `no_match` declared, every read gives missing and is counted.
+  # with no `absent` declared, every read gives missing and is counted.
   - id: DEATH
     dataset: DS
+    key: [STUDYID, USUBJID]
     filter: "DS.DSDECOD = 'DEATH'"
 
 columns:

@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: SDTM
 domain: DM
 keys: [STUDYID, USUBJID]
 input:
@@ -30,4 +32,4 @@ rows:
     derivations:
       STUDYID: ODM.StudyOID
       USUBJID: ODM.SubjectKey
-      SEX: {literal: U}
+      SEX: "'U'"

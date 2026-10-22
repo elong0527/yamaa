@@ -19,7 +19,6 @@ mod memory;
 mod memory_route;
 mod odm_input;
 mod plan;
-mod plan_contracts;
 mod plan_reuse;
 mod printed_text;
 mod project_binding;

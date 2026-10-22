@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: SDTM
 domain: EX
 keys: [STUDYID, USUBJID, EXSEQ]
 
@@ -25,7 +27,6 @@ intermediates:
   - id: KITMAP
     dataset: KITLIST
     key: [KIT]
-    no_match: {literal: null}
 
   # Body weight is collected on the VS form at the same visit. The lookup
   # is keyed at the visit level; the weight item filter is what makes the
@@ -87,7 +88,6 @@ intermediates:
       FormOID: ODM.FormOID
       FormRepeatKey: ODM.FormRepeatKey
     filter: "ODM.ItemOID = 'IT.EC.TABLETS'"
-    no_match: {literal: null}
 
   - id: EC_STRENGTHMG
     dataset: ODM
@@ -98,7 +98,6 @@ intermediates:
       FormOID: ODM.FormOID
       FormRepeatKey: ODM.FormRepeatKey
     filter: "ODM.ItemOID = 'IT.EC.STRENGTHMG'"
-    no_match: {literal: null}
 
   - id: EC_DOSEMKG
     dataset: ODM
@@ -109,7 +108,6 @@ intermediates:
       FormOID: ODM.FormOID
       FormRepeatKey: ODM.FormRepeatKey
     filter: "ODM.ItemOID = 'IT.EC.DOSEMKG'"
-    no_match: {literal: null}
 
   - id: EC_AUCTARGET
     dataset: ODM
@@ -120,7 +118,6 @@ intermediates:
       FormOID: ODM.FormOID
       FormRepeatKey: ODM.FormRepeatKey
     filter: "ODM.ItemOID = 'IT.EC.AUCTARGET'"
-    no_match: {literal: null}
 
   - id: EC_KIT
     dataset: ODM
@@ -131,7 +128,6 @@ intermediates:
       FormOID: ODM.FormOID
       FormRepeatKey: ODM.FormRepeatKey
     filter: "ODM.ItemOID = 'IT.EC.KIT'"
-    no_match: {literal: null}
 
   - id: EC_ECSTDTC
     dataset: ODM
@@ -159,7 +155,7 @@ columns:
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
-    derivation: {literal: EX}
+    derivation: "'EX'"
 
   - name: STUDYID
     type: str
@@ -227,7 +223,7 @@ columns:
           then: KITMAP.TREATMENT
         - otherwise: EC_ECTRT.Value
     verifications:
-      - not_missing: {}
+      - not_missing
 
   - name: EXDOSE
     type: float
@@ -235,18 +231,14 @@ columns:
     derivation:
       case:
         - when: "FORM = 'TABLET'"
-          then:
-            compute:
-              expr: "TABLETS * STRENGTHMG"
+          then: "TABLETS * STRENGTHMG"
         - when: "FORM = 'INFUSION'"
-          then:
-            compute:
-              expr: "DOSEMKG * WT_KG"
+          then: "DOSEMKG * WT_KG"
         - when: "FORM = 'AUCDOSE'"
           then: AUCTARGET
         - otherwise: KIT_DOSE
     verifications:
-      - not_missing: {}
+      - not_missing
 
   - name: EXDOSU
     type: str
@@ -254,8 +246,8 @@ columns:
     derivation:
       case:
         - when: "FORM = 'AUCDOSE'"
-          then: {literal: AUC}
-        - otherwise: {literal: mg}
+          then: "'AUC'"
+        - otherwise: "'mg'"
     verifications:
       - allowed_values:
           values: [mg, AUC]
@@ -283,7 +275,6 @@ rows:
   - id: administered
     dataset: ODM
     filter: "ODM.ItemOID = 'IT.EC.ECOCCUR' AND ODM.Value = 'Y'"
-    derivations: {}
 
 verifications:
   - row_count:

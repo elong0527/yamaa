@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
@@ -18,8 +20,8 @@ intermediates:
   # subject with no eligible record reads a missing EOSDT.
   - id: DS_EOS
     dataset: DS
+    key: [STUDYID, USUBJID]
     filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.DSDECOD <> 'SCREEN FAILURE'"
-    no_match: {literal: null}
     verifications:
       - unique: [STUDYID, USUBJID]
 

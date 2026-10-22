@@ -1,0 +1,9 @@
+phase: ingest
+condition: source_odm_attribute_ambiguous
+spec_paths:
+  - input.ODM.path
+rule: ODM-1
+context:
+  dataset: ODM
+  path: input/odm.xml
+  attribute: StudySubjectID

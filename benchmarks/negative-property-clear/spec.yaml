@@ -1,14 +1,14 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 parent: layers/parent.yaml
+clear:
+  # This clears the type inherited from layers/parent.yaml, but a column
+  # must have a type, so it cannot be cleared.
+  - columns.USUBJID.type
 domain: ADSL
 keys: [USUBJID]
 
 output:
   path: adsl.csv
   columns: [USUBJID]
-
-columns:
-  # null clears the type inherited from layers/parent.yaml, but a column
-  # must have a type, so it cannot be cleared.
-  - name: USUBJID
-    type: null

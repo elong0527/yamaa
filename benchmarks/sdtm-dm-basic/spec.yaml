@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: SDTM
 domain: DM
 keys: [STUDYID, USUBJID]
 
@@ -13,7 +15,7 @@ columns:
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
-    derivation: {literal: DM}
+    derivation: "'DM'"
 
   - name: STUDYID
     type: str
@@ -71,4 +73,4 @@ columns:
     derivation:
       case:
         - when: "ARM IS NULL"
-          then: {literal: Not assigned to treatment arm}
+          then: "'Not assigned to treatment arm'"

@@ -27,9 +27,9 @@ submission:
   core: Exp
   role: Variable Qualifier
   length: 5
-  origin:
-    type: Assigned
-    source: Sponsor
+  origins:
+    - type: Assigned
+      source: Sponsor
 ```
 
 A role is written exactly as the SDTM model spells it:

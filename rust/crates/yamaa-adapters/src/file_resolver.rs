@@ -173,11 +173,13 @@ impl FileResolver {
     /// caller passed, not a written path, so FILE-5's written form does not
     /// apply to it: on Unix it may hold a `:` or a `\`. Windows refuses a
     /// `:` in a name, which would name a stream of another file.
+    #[cfg(feature = "odm")]
     pub(crate) fn open_named(&self, base: &str, name: &str) -> Result<File, Failure> {
         self.named(base, name).map(|opened| opened.file)
     }
     /// [`Self::open_named`], read under `limit` bytes and confirmed as one
     /// snapshot as every capture is.
+    #[cfg(feature = "odm")]
     pub(crate) fn capture_named(
         &self,
         base: &str,
@@ -204,6 +206,7 @@ impl FileResolver {
             path_text(&anchor.key),
         ))
     }
+    #[cfg(feature = "odm")]
     fn named(&self, base: &str, name: &str) -> Result<Opened, Failure> {
         open_anchor(self.named_anchor(base, name)?)
     }

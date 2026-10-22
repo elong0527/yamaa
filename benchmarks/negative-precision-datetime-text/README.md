@@ -25,5 +25,5 @@ decision explicitly:
 precision:
   type: datetime
   source: EX.EXSTDTC
-  invalid: {literal: null}
+  invalid: null
 ```

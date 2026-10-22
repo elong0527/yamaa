@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: SDTM
 domain: MH
 keys: [STUDYID, USUBJID, MHSEQ]
 input:
@@ -25,7 +27,7 @@ columns:
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
-    derivation: {literal: MH}
+    derivation: "'MH'"
 
   - name: STUDYID
     type: str
@@ -41,7 +43,7 @@ columns:
     type: str
     label: Reported Term for the Medical History
     verifications:
-      - not_missing: {}
+      - not_missing
 
   - name: MHCAT
     type: str
@@ -115,27 +117,27 @@ rows:
         case:
           - when: "ODM.ItemGroupOID = 'IG.MH.CHECKLIST'"
             then: MH_MAP.MHTERM
-          - otherwise: {literal: null}
-      MHCAT: {literal: DISEASE-SPECIFIC HISTORY}
-      MHPRESP: {literal: Y}
+          - otherwise: null
+      MHCAT: "'DISEASE-SPECIFIC HISTORY'"
+      MHPRESP: "'Y'"
       # The answer is Y, N, or blank for an item left unanswered.
       MHOCCUR:
         case:
           - when: "ODM.Value = 'Y'"
-            then: {literal: Y}
+            then: "'Y'"
           - when: "ODM.Value = 'N'"
-            then: {literal: N}
-          - otherwise: {literal: null}
+            then: "'N'"
+          - otherwise: null
       MHSTAT:
         case:
           - when: "ODM.Value IS NULL"
-            then: {literal: NOT DONE}
-          - otherwise: {literal: null}
+            then: "'NOT DONE'"
+          - otherwise: null
       SORTORD:
         case:
           - when: "ODM.ItemGroupOID = 'IG.MH.CHECKLIST'"
             then: MH_MAP.SORTORD
-          - otherwise: {literal: null}
+          - otherwise: null
       EVENTORD:
         case:
           - when: "ODM.StudyEventOID IN ('SCREENING', 'BASELINE')"
@@ -145,7 +147,7 @@ rows:
                 dict:
                   SCREENING: 1
                   BASELINE: 2
-          - otherwise: {literal: 99}
+          - otherwise: 99
 
   # One record per non-blank free-text condition. SORTORD 4 places these
   # after the three checklist items; a visit other than SCREENING or
@@ -157,11 +159,11 @@ rows:
       AND ODM.Value IS NOT NULL
     derivations:
       MHTERM: ODM.Value
-      MHCAT: {literal: GENERAL HISTORY}
-      MHPRESP: {literal: null}
-      MHOCCUR: {literal: null}
-      MHSTAT: {literal: null}
-      SORTORD: {literal: 4}
+      MHCAT: "'GENERAL HISTORY'"
+      MHPRESP: null
+      MHOCCUR: null
+      MHSTAT: null
+      SORTORD: 4
       EVENTORD:
         case:
           # Guard the unhandled mapping with this template's filter. A retained
@@ -176,7 +178,7 @@ rows:
                 dict:
                   SCREENING: 1
                   BASELINE: 2
-          - otherwise: {literal: 99}
+          - otherwise: 99
 
 verifications:
   - row_count:

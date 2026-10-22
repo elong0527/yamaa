@@ -1,10 +1,13 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADTR
 keys: [STUDYID, USUBJID, AVISIT]
 input:
   TRVISIT: {path: input/trvisit.csv, types: {ADT: date}}
-  TR: {path: input/tr.csv, types: {TRSTRESN: float}}
-  TU: input/tu.csv
+  TR: {path: input/tr.csv, types: {TRSTRESN: float},
+       key: [STUDYID, USUBJID, AVISIT]}
+  TU: {path: input/tu.csv, key: [STUDYID, USUBJID]}
 base: TRVISIT
 
 output:
@@ -41,12 +44,12 @@ columns:
   - name: PARAMCD
     type: str
     label: Parameter Code
-    derivation: {literal: SDIAM}
+    derivation: "'SDIAM'"
 
   - name: PARAM
     type: str
     label: Parameter
-    derivation: {literal: Sum of Target Lesion Diameters (mm)}
+    derivation: "'Sum of Target Lesion Diameters (mm)'"
 
   # The subject's target-lesion longest diameters at this visit (TR matches
   # on study, subject and visit). A missing result is skipped; a visit with

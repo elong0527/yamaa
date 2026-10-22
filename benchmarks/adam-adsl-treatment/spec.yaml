@@ -1,9 +1,11 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
   DM: input/dm.csv
-  EX: {path: input/ex.csv, types: {EXSEQ: int}}
+  EX: {path: input/ex.csv, types: {EXSEQ: int}, key: [STUDYID, USUBJID]}
 base: DM
 
 output:
@@ -67,16 +69,15 @@ columns:
       aggregate:
         filter: "EX.EXTRT IN ('VITAMIN D3', 'PLACEBO')
           AND EX.EXSTDTC IS NOT NULL"
-        derive:
-          - name: EXSTDTM
+        derivations:
+          EXSTDTM:
             type: datetime
             derivation:
               impute:
                 type: datetime
                 source: EX.EXSTDTC
-                minimum_source_precision: day
                 time: first
-                invalid: {literal: null}
+                invalid: null
         expr: "MIN(EXSTDTM)"
 
   - name: TRTSTMF
@@ -98,16 +99,15 @@ columns:
       aggregate:
         filter: "EX.EXTRT IN ('VITAMIN D3', 'PLACEBO')
           AND EX.EXENDTC IS NOT NULL"
-        derive:
-          - name: EXENDTM
+        derivations:
+          EXENDTM:
             type: datetime
             derivation:
               impute:
                 type: datetime
                 source: EX.EXENDTC
-                minimum_source_precision: day
                 time: last
-                invalid: {literal: null}
+                invalid: null
         expr: "MAX(EXENDTM)"
 
   - name: TRTETMF
@@ -144,7 +144,7 @@ columns:
         start: TRTSDT
         end: TRTEDT
         unit: day
-        bounds: inclusive
+        closed: both
     verifications:
       - range:
           min: 1
@@ -158,7 +158,7 @@ columns:
         false_value: "N"
         missing: "N"
     verifications:
-      - not_missing: {}
+      - not_missing
       - allowed_values:
           values: [Y, N]
 

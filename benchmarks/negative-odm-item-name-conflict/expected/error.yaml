@@ -1,0 +1,12 @@
+phase: ingest
+condition: source_odm_metadata_conflict
+spec_paths:
+  - input.ODM.path
+rule: ODM-1
+context:
+  dataset: ODM
+  path: input/odm.xml
+  definition: item
+  study: STUDY01
+  metadata_version: MDV.1
+  oid: IT.DM.SEX

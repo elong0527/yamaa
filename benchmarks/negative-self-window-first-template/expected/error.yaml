@@ -1,8 +1,8 @@
 phase: validation
 condition: phase_boundary
 spec_paths:
-  - rows[0].derivations.VISIT.source
-  - intermediates[1].between.value
+  - rows.collected.derivations.VISIT.source
+  - intermediates.LATESTWIN.between.value
 rule: LOOKUP-7
 context:
   identifier: LATEST.VSDY

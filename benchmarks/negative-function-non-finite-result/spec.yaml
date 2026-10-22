@@ -1,0 +1,34 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: TEST
+keys: [ID]
+input:
+  # The last record names a kind whose constant is positive infinity.
+  SOURCE: input/source.csv
+
+output:
+  path: test.csv
+  columns: [ID, KIND, VALUE]
+
+columns:
+  - name: ID
+    type: str
+    label: Identifier
+    derivation: SOURCE.ID
+
+  - name: KIND
+    type: str
+    label: Constant Kind
+    derivation: SOURCE.KIND
+
+  # The function may not return missing, and a non-finite result is stored
+  # as missing before the function's contract is checked.
+  - name: VALUE
+    type: float
+    label: Project Function Result
+    derivation:
+      function:
+        name: numeric_constant
+        args:
+          kind: KIND

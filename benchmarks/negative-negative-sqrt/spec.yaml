@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
@@ -35,6 +37,4 @@ columns:
   - name: BSA
     type: float
     label: Body Surface Area (m2)
-    derivation:
-      compute:
-        expr: "SQRT(HEIGHTCM * WEIGHTKG / 3600)"
+    derivation: "SQRT(HEIGHTCM * WEIGHTKG / 3600)"

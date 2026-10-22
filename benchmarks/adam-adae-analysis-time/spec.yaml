@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADAE
 keys: [STUDYID, USUBJID, AESEQ]
 input:
@@ -17,9 +19,9 @@ columns:
       core: Req
       mandatory: true
       length: 20
-      origin:
-        type: Predecessor
-        description: AE.STUDYID
+      origins:
+        - type: Predecessor
+          description: AE.STUDYID
 
   - name: USUBJID
     type: str
@@ -29,9 +31,9 @@ columns:
       core: Req
       mandatory: true
       length: 30
-      origin:
-        type: Predecessor
-        description: AE.USUBJID
+      origins:
+        - type: Predecessor
+          description: AE.USUBJID
 
   - name: AESEQ
     type: int
@@ -41,9 +43,9 @@ columns:
       core: Req
       mandatory: true
       length: 8
-      origin:
-        type: Predecessor
-        description: AE.AESEQ
+      origins:
+        - type: Predecessor
+          description: AE.AESEQ
 
   - name: AETERM
     type: str
@@ -53,9 +55,9 @@ columns:
       core: Req
       mandatory: true
       length: 200
-      origin:
-        type: Predecessor
-        description: AE.AETERM
+      origins:
+        - type: Predecessor
+          description: AE.AETERM
 
   # A start collected to the hour or minute takes zero for the rest of its
   # time, and a date alone takes midnight; a start without its day gives
@@ -67,13 +69,12 @@ columns:
       impute:
         type: datetime
         source: AE.AESTDTC
-        minimum_source_precision: day
         time: first
     submission:
       core: Perm
       mandatory: false
-      origin:
-        type: Derived
+      origins:
+        - type: Derived
       method: AESTDTC completed with the earliest time its collected parts
         admit; missing when AESTDTC carries no complete date.
 
@@ -86,8 +87,8 @@ columns:
     submission:
       core: Cond
       mandatory: false
-      origin:
-        type: Derived
+      origins:
+        - type: Derived
       method: Date part of ASTDTM.
 
   # The time of day of the start in seconds since midnight, shown as
@@ -103,8 +104,8 @@ columns:
       mandatory: false
       length: 8
       display_format: TIME8.
-      origin:
-        type: Derived
+      origins:
+        - type: Derived
       method: Time part of ASTDTM as seconds since midnight.
 
   - name: ASTTMF
@@ -121,8 +122,8 @@ columns:
       core: Cond
       mandatory: false
       length: 1
-      origin:
-        type: Derived
+      origins:
+        - type: Derived
       method: H when the start was collected without a time, M when it stops
         at the hour and S when it stops at the minute.
 

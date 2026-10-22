@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADLB
 keys: [STUDYID, USUBJID, PARAMCD]
 input:
@@ -44,9 +46,7 @@ columns:
   - name: R2ANRLO
     type: float
     label: Ratio to Lower Limit of Normal
-    derivation:
-      compute:
-        expr: "AVAL / NULLIF(ANRLO, 0)"
+    derivation: "AVAL / NULLIF(ANRLO, 0)"
 
 verifications:
   - row_count:

@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADPP
 keys: [STUDYID, USUBJID, PARAMCD, AVISIT]
 input:
@@ -28,9 +30,9 @@ intermediates:
       SSVISIT:
         case:
           - when: "ARMCD = 'A'"
-            then: {literal: DAY 7}
+            then: "'DAY 7'"
           - when: "ARMCD = 'B'"
-            then: {literal: DAY 5}
+            then: "'DAY 5'"
 
 columns:
   - name: STUDYID
@@ -88,8 +90,8 @@ rows:
       PARAM: PPARM.PPTEST
       AVISIT: PPARM.VISIT
       ARMCD: PPARM.ARMCD
-      SSVAL: {literal: null}
-      D1VAL: {literal: null}
+      SSVAL: null
+      D1VAL: null
       AVAL: PPARM.PPSTRESN
       AVALU: PPARM.PPSTRESU
 
@@ -103,8 +105,8 @@ rows:
     derivations:
       STUDYID: PPARM.STUDYID
       USUBJID: PPARM.USUBJID
-      PARAMCD: {literal: ARAUC}
-      PARAM: {literal: Accumulation Ratio AUCTAU}
+      PARAMCD: "'ARAUC'"
+      PARAM: "'Accumulation Ratio AUCTAU'"
       AVISIT: PPARM.SSVISIT
       ARMCD: PPARM.ARMCD
       SSVAL:
@@ -115,10 +117,8 @@ rows:
         aggregate:
           filter: "PPARM.PPTESTCD = 'AUCTAU' AND PPARM.VISIT = 'DAY 1'"
           expr: "ONLY(PPARM.PPSTRESN)"
-      AVAL:
-        compute:
-          expr: "SSVAL / NULLIF(D1VAL, 0)"
-      AVALU: {literal: RATIO}
+      AVAL: "SSVAL / NULLIF(D1VAL, 0)"
+      AVALU: "'RATIO'"
 
   # The same for CMAX.
   - id: arcmax
@@ -128,8 +128,8 @@ rows:
     derivations:
       STUDYID: PPARM.STUDYID
       USUBJID: PPARM.USUBJID
-      PARAMCD: {literal: ARCMAX}
-      PARAM: {literal: Accumulation Ratio Cmax}
+      PARAMCD: "'ARCMAX'"
+      PARAM: "'Accumulation Ratio Cmax'"
       AVISIT: PPARM.SSVISIT
       ARMCD: PPARM.ARMCD
       SSVAL:
@@ -140,10 +140,8 @@ rows:
         aggregate:
           filter: "PPARM.PPTESTCD = 'CMAX' AND PPARM.VISIT = 'DAY 1'"
           expr: "ONLY(PPARM.PPSTRESN)"
-      AVAL:
-        compute:
-          expr: "SSVAL / NULLIF(D1VAL, 0)"
-      AVALU: {literal: RATIO}
+      AVAL: "SSVAL / NULLIF(D1VAL, 0)"
+      AVALU: "'RATIO'"
 
 verifications:
   - assert:

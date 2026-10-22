@@ -1,20 +1,17 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 parent: spec_organization.yaml
+clear:
+  # Clearing the inherited PD entry keeps the other three entries and the
+  # inherited answer for a code without an entry, so PD is now OTHER.
+  - columns.DCSREAS.derivation.mapping.dict.PD
 domain: ADSL
 keys: [USUBJID]
 
 output:
   path: adsl.csv
   columns: [USUBJID, DCSREAS]
-
-columns:
-  # null removes the inherited PD entry and keeps the other three entries and
-  # the inherited answer for a code without an entry, so PD is now OTHER.
-  - name: DCSREAS
-    derivation:
-      mapping:
-        dict:
-          PD: null
 
 metadata:
   scope: study

@@ -9,7 +9,7 @@ inherits, keeping the rest, to derive `DCSREAS`.
   code, AE, LTFU, WBS and PD, into its reason, and reports any other code as
   OTHER;
 - `spec_study.yaml` is the entry: it names the organization level as its
-  parent, removes only the translation of PD with `null`, and declares the
+  parent, removes only the translation of PD with `clear`, and declares the
   complete output.
 
 **Variables:**
@@ -18,6 +18,6 @@ inherits, keeping the rest, to derive `DCSREAS`.
   the code; a PD code is OTHER, because progressive disease is not a reason
   this study recognizes.
 
-**Note:** a `null` written by a later level removes the value it inherits at
-that one place and nothing else. The other three translations, and OTHER for
-a code without a translation, still come from the organization level.
+**Note:** `clear` removes the inherited PD translation before the study
+layer composes. The other three translations, and OTHER for a code without
+a translation, still come from the organization level.

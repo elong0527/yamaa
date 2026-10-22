@@ -1,0 +1,28 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  # One stored randomization time carries a fraction of a second.
+  RND: input/rand.parquet
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, RANDDTM]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: RND.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: RND.USUBJID
+
+  - name: RANDDTM
+    type: datetime
+    label: Datetime of Randomization
+    derivation: RND.RANDDTM

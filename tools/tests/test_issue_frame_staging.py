@@ -21,7 +21,7 @@ class IssueFrameTruth(unittest.TestCase):
             self.assertFalse(list(root.glob("*.tsv")))
             decoder = json.loads((root / "yaml_transport.json").read_text())
             self.assertEqual(len(decoder), 18)
-            self.assertTrue(any(isinstance(row["source"], dict) for row in decoder))
+            self.assertIn(dict, [type(row["source"]) for row in decoder])
 
     def test_public_output_projection_uses_plain_r_values_and_exact_float_bytes(
         self,

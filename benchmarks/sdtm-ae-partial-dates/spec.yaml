@@ -1,9 +1,11 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: SDTM
 domain: AE
 keys: [STUDYID, USUBJID, AESEQ]
 input:
   ODM: input/odm.csv
-  DM: {path: input/dm.csv, types: {RFSTDTC: date}}
+  DM: {path: input/dm.csv, types: {RFSTDTC: date}, key: [STUDYID, USUBJID]}
 base: ODM
 
 output:
@@ -16,7 +18,7 @@ columns:
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
-    derivation: {literal: AE}
+    derivation: "'AE'"
 
   - name: STUDYID
     type: str
@@ -166,7 +168,7 @@ columns:
     label: Study Day of Start of Adverse Event
     derivation:
       study_day:
-        date: AESTDT
+        source: AESTDT
         reference: RFSTDTC
 
   - name: AEENDY
@@ -174,7 +176,7 @@ columns:
     label: Study Day of End of Adverse Event
     derivation:
       study_day:
-        date: AEENDT
+        source: AEENDT
         reference: RFSTDTC
 
 verifications:

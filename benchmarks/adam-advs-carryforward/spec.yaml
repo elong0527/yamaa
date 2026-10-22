@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADVS
 keys: [STUDYID, USUBJID, ASEQ]
 input:
@@ -8,7 +10,7 @@ input:
   VS:
     path: input/vs.csv
     types: {VSDTC: date}
-  ADSL: {path: input/adsl.csv, types: {TRTSDT: date}}
+  ADSL: {path: input/adsl.csv, types: {TRTSDT: date}, key: [STUDYID, USUBJID]}
 
 base: PLAN
 
@@ -24,7 +26,6 @@ intermediates:
   - id: COLLECTED
     dataset: VS
     key: {STUDYID: STUDYID, USUBJID: USUBJID, VSTESTCD: PARAMCD, VSDTC: ADT}
-    no_match: {literal: null}
 
 columns:
   - name: STUDYID
@@ -108,8 +109,8 @@ columns:
         window:
           group_by: [STUDYID, USUBJID]
         date: HGTDT
-        reference_date: TRTSDT
-        value: AVALCOL
+        reference: TRTSDT
+        source: AVALCOL
 
   # The flagged height, repeated on every row of the subject; missing when
   # no height is flagged.

@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: SDTM
 domain: VS
 keys: [STUDYID, USUBJID, VSSEQ]
 input:
@@ -19,7 +21,7 @@ columns:
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
-    derivation: {literal: VS}
+    derivation: "'VS'"
 
   - name: STUDYID
     type: str
@@ -89,7 +91,7 @@ columns:
   - name: VSORRESU
     type: str
     label: Original Units
-    derivation: {literal: mmHg}
+    derivation: "'mmHg'"
     verifications:
       - allowed_values:
           values: [mmHg]
@@ -121,39 +123,39 @@ rows:
                ODM.ItemGroupRepeatKey, ODM.ItemOID]
     filter: "VSSTRESN IS NOT NULL"
     derivations:
-      ORD: {literal: 1}
+      ORD: 1
       VSREPNUM:
         aggregate: "ONLY(ODM.ItemGroupRepeatKey)"
       VSSTRESN:
         aggregate:
           filter: "ODM.ItemOID = 'IT.VS.SYSBP'"
           expr: "ONLY(ODM.Value)"
-      VSDRVFL: {literal: null}
+      VSDRVFL: null
 
   - id: diastolic
     group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID,
                ODM.ItemGroupRepeatKey, ODM.ItemOID]
     filter: "VSSTRESN IS NOT NULL"
     derivations:
-      ORD: {literal: 1}
+      ORD: 1
       VSREPNUM:
         aggregate: "ONLY(ODM.ItemGroupRepeatKey)"
       VSSTRESN:
         aggregate:
           filter: "ODM.ItemOID = 'IT.VS.DIABP'"
           expr: "ONLY(ODM.Value)"
-      VSDRVFL: {literal: null}
+      VSDRVFL: null
 
   # One mean row per subject, visit and test, over the readings present:
   # MEAN skips a blank value, and a reading never taken has no record.
   - id: means
     group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.ItemOID]
     derivations:
-      ORD: {literal: 2}
-      VSREPNUM: {literal: null}
+      ORD: 2
+      VSREPNUM: null
       VSSTRESN:
         aggregate: "MEAN(ODM.Value)"
-      VSDRVFL: {literal: Y}
+      VSDRVFL: "'Y'"
 
 verifications:
   - row_count:
