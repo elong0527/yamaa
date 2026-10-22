@@ -19,16 +19,20 @@ pub trait PathPort: InheritanceSourcePort {
     ) -> Result<String, Self::Error>;
     /// The output contract of the producing specification that `written`,
     /// input `dataset`'s `schema` link as `declaring` writes it, names, which
-    /// a copy entry copies columns from (SPEC-9). The producer is read and
-    /// resolved, never compiled or run (INPUT-10). `None` when it cannot be:
-    /// the port keeps why, and the chain does not resolve.
+    /// a copy entry copies columns from (SPEC-9). `resolving` holds the layers
+    /// that count as being resolved while it is read, entry first: the entry
+    /// and each parent layer up to the last one with a copy entry that reads
+    /// `dataset`. The producer is read and resolved, never compiled or run
+    /// (INPUT-10). `None` when it cannot be: the port keeps why, and the chain
+    /// does not resolve.
     fn producer(
         &mut self,
         declaring: &Source,
         written: &str,
         dataset: &str,
+        resolving: &[&Source],
     ) -> Option<crate::producer_contract::Contract> {
-        let _ = (declaring, written, dataset);
+        let _ = (declaring, written, dataset, resolving);
         None
     }
 }

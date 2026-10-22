@@ -822,3 +822,89 @@ fn a_dataset_binds_the_section_standard_it_selects() {
     );
     assert!(!study.0.join("define.xml").exists());
 }
+
+/// DEFINE-7: a listed specification without its submission metadata fails at
+/// its listing, and an output column without its `submission` or its `label`
+/// at the column's `submission`, naming in `detail` the domain, the column or
+/// the missing `label`. A column without both fails once, for its
+/// `submission`.
+#[test]
+fn missing_submission_metadata_is_reported_at_the_listing_or_the_column_submission() {
+    let study = define_study();
+    let dm = String::from_utf8(study.read("dm.yaml")).unwrap();
+    let engine = engine();
+    let token = CancellationToken::new();
+    let label = "    label: Study Identifier\n";
+    let column = "    submission:\n      core: Req\n      role: Identifier\n      length: 8\n      origins:\n        - {type: Protocol, source: Sponsor}\n";
+    let root = "submission: {label: Demographics, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false}\n";
+    for (removed, path, context, case) in [
+        (
+            &[label][..],
+            "sdtm.specs[0].columns.STUDYID.submission",
+            r#"{"detail":"label"}"#,
+            "a column without its label",
+        ),
+        (
+            &[column],
+            "sdtm.specs[0].columns.STUDYID.submission",
+            r#"{"detail":"STUDYID"}"#,
+            "a column without its submission",
+        ),
+        (
+            &[label, column],
+            "sdtm.specs[0].columns.STUDYID.submission",
+            r#"{"detail":"STUDYID"}"#,
+            "a column without its label and its submission",
+        ),
+        (
+            &[root],
+            "sdtm.specs[0]",
+            r#"{"detail":"DM"}"#,
+            "a specification without its submission",
+        ),
+    ] {
+        let mut edited = dm.clone();
+        for written in removed {
+            assert_eq!(edited.matches(written).count(), 1, "{case}");
+            edited = edited.replacen(written, "", 1);
+        }
+        study.write("dm.yaml", &edited);
+        let submission = engine
+            .project_submission(
+                &study.path("project.yaml"),
+                Some("sdtm"),
+                Some("2026-09-11T00:00:00"),
+                "0.4.0",
+                &token,
+            )
+            .unwrap();
+        let issues: Vec<_> = submission
+            .diagnostics()
+            .into_iter()
+            .map(|issue| {
+                (
+                    issue.phase,
+                    issue.code,
+                    issue.rule,
+                    issue.spec_path,
+                    issue.context.to_json().to_owned(),
+                    issue.source_span,
+                    issue.operand_route,
+                )
+            })
+            .collect();
+        assert_eq!(
+            issues,
+            [(
+                "validation".to_owned(),
+                "submission_metadata_missing".to_owned(),
+                Some("DEFINE-7".to_owned()),
+                vec![path.to_owned()],
+                context.to_owned(),
+                None,
+                None,
+            )],
+            "{case}"
+        );
+    }
+}

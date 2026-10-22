@@ -169,12 +169,15 @@ impl<'a> Resolved<'a> {
 
 /// A `schema` link a copy entry reads: the input and the link as the layer
 /// numbered `layer` writes it, resolved from the entry when `from_entry`.
+/// `reader` is the first layer, in contribution order, with a copy entry
+/// that reads it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Link<'a> {
     pub dataset: &'a str,
     pub layer: usize,
     pub written: &'a str,
     pub from_entry: bool,
+    pub reader: usize,
 }
 
 /// The copy entries of a 1.x chain's layers, each layer normalized, in
@@ -232,21 +235,24 @@ impl<'a> Copies<'a> {
     /// have one.
     pub fn links(&self) -> Vec<Link<'a>> {
         let mut links: Vec<Link<'a>> = Vec::new();
-        for entry in self.layers.iter().flatten() {
-            let Some(&Input {
-                link: Some((layer, written)),
-                from_entry,
-            }) = self.resolved.inputs.get(entry.dataset)
-            else {
-                continue;
-            };
-            if links.iter().all(|link| link.dataset != entry.dataset) {
-                links.push(Link {
-                    dataset: entry.dataset,
-                    layer,
-                    written,
+        for (reader, entries) in self.layers.iter().enumerate() {
+            for entry in entries {
+                let Some(&Input {
+                    link: Some((layer, written)),
                     from_entry,
-                });
+                }) = self.resolved.inputs.get(entry.dataset)
+                else {
+                    continue;
+                };
+                if links.iter().all(|link| link.dataset != entry.dataset) {
+                    links.push(Link {
+                        dataset: entry.dataset,
+                        layer,
+                        written,
+                        from_entry,
+                        reader,
+                    });
+                }
             }
         }
         links
@@ -440,8 +446,9 @@ pub fn producer_cycle(dataset: &str, cycle: &[&str]) -> Diagnostic {
 
 /// Replace every copy entry of `layers`, the normalized layers of `chain`,
 /// by the columns it declares, reading each linked producer's output
-/// contract through `port` (SPEC-9). A layer without a copy entry is kept as
-/// it is.
+/// contract through `port` (SPEC-9). While a producer is read, the first
+/// layer with a copy entry that reads it, and each layer after it, count as
+/// being resolved. A layer without a copy entry is kept as it is.
 pub(crate) fn expand<P: PathPort>(
     schema: &SchemaStructure,
     chain: &VersionedChain,
@@ -466,7 +473,13 @@ pub(crate) fn expand<P: PathPort>(
         } else {
             &chain.layers[link.layer].source
         };
-        let Some(contract) = port.producer(declaring, link.written, link.dataset) else {
+        let resolving = chain.layers[link.reader..]
+            .iter()
+            .rev()
+            .map(|layer| &layer.source)
+            .collect::<Vec<_>>();
+        let Some(contract) = port.producer(declaring, link.written, link.dataset, &resolving)
+        else {
             return Err(VersionedError::Producer {
                 dataset: link.dataset.into(),
             });
@@ -691,6 +704,7 @@ mod tests {
                 layer: 0,
                 written: "adsl.yaml",
                 from_entry: false,
+                reader: 0,
             }]
         );
         assert!(!copies.resolved.model);
