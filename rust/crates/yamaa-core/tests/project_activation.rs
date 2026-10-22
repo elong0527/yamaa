@@ -1010,6 +1010,7 @@ mod project {
                 &[function],
                 vec![LocatedCall {
                     path: "columns.OUT.function".into(),
+                    derivation: "columns.OUT".into(),
                     call: Call {
                         name: "id".into(),
                         name_node: 1,
@@ -1568,6 +1569,7 @@ mod project {
         fn call(name: &str, args: Vec<(&str, Input)>) -> LocatedCall {
             LocatedCall {
                 path: format!("columns.{name}.function"),
+                derivation: format!("columns.{name}"),
                 call: Call {
                     name: name.into(),
                     name_node: 5,
