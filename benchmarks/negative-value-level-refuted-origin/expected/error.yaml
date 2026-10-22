@@ -1,0 +1,9 @@
+phase: validation
+condition: refuted_value_origin
+spec_paths:
+  - columns.LBSTRESN.submission.value_level.CREAT
+rule: SUB-13
+context:
+  column: LBSTRESN
+  entry: CREAT
+  origin_type: Collected

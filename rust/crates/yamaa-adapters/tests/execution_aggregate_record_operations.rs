@@ -1268,10 +1268,38 @@ S1,002,2024-06
         ];
 
         /// Validation negatives this harness does not run, with the reason.
-        const NOT_BUILT_HERE: [(&str, &str); 10] = [
+        const NOT_BUILT_HERE: [(&str, &str); 17] = [
             (
                 "negative-allowed-values-beside-codelist",
                 "the bound codelist's items come from its host environment, which this harness does not pass",
+            ),
+            (
+                "negative-codelist-extended-alias",
+                "the codelists are declared by the project file, which this harness does not pass",
+            ),
+            (
+                "negative-codelist-extension-closed-list",
+                "the codelists are declared by the project file, which this harness does not pass",
+            ),
+            (
+                "negative-codelist-items-and-dictionary",
+                "the codelists are declared by the project file, which this harness does not pass",
+            ),
+            (
+                "negative-codelist-partial-decode",
+                "the codelists are declared by the project file, which this harness does not pass",
+            ),
+            (
+                "negative-codelist-type-mismatch",
+                "the codelists are declared by the project file, which this harness does not pass",
+            ),
+            (
+                "negative-codelist-unknown",
+                "the codelists are declared by the project file, which this harness does not pass",
+            ),
+            (
+                "negative-codelist-value-twice",
+                "the codelists are declared by the project file, which this harness does not pass",
             ),
             (
                 "negative-donor-function-unkept",

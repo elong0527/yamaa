@@ -1,0 +1,5 @@
+phase: validation
+condition: origin_missing
+spec_paths:
+  - columns.SEX.submission
+rule: SUB-14

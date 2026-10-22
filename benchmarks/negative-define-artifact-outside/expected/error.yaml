@@ -1,0 +1,5 @@
+phase: validation
+condition: artifact_outside_document
+spec_paths:
+  - adam.specs[0]
+rule: DEFINE-16

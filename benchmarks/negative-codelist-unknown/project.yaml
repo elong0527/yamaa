@@ -1,0 +1,13 @@
+yamaa: "1.0"
+type: project
+codelists:
+  - codelists:
+      - id: SEX
+        name: Sex
+        items:
+          - value: F
+          - value: M
+
+sdtm:
+  specs:
+    - spec.yaml

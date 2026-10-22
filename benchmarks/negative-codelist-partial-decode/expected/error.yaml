@@ -1,0 +1,8 @@
+phase: validation
+condition: codelist_partial_item_field
+spec_paths:
+  - codelists[0].codelists[0]
+rule: CT-5
+context:
+  codelist: SEX
+  field: decode

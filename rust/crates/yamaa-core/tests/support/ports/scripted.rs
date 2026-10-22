@@ -3,7 +3,6 @@ use super::*;
 use function_invocation::Argument;
 use function_invocation::FunctionPort;
 use function_invocation::HostError;
-use output::{ArtifactEncoder, ArtifactPort};
 use run::{SourceDecoder, SpecificationSourcePort};
 use std::{collections::VecDeque, sync::Arc};
 use yamaa_core::function_signature::InvocationPlan;
@@ -204,71 +203,6 @@ impl<E, T: TableAccess> SourceDecoder for ScriptedDecoder<E, T> {
         let step = self.steps.pop_front().expect("unexpected source decode");
         assert_eq!(&step.source, source, "decode declaration");
         assert_eq!(step.bytes, bytes, "decode bytes");
-        step.outcome
-    }
-}
-
-pub struct EncodeStep<E> {
-    pub projection: Vec<usize>,
-    pub outcome: Result<Vec<u8>, E>,
-}
-pub struct ScriptedEncoder<E> {
-    pub steps: VecDeque<EncodeStep<E>>,
-    log: EventLog,
-}
-impl<E> ScriptedEncoder<E> {
-    pub fn new(log: EventLog) -> Self {
-        Self {
-            steps: VecDeque::new(),
-            log,
-        }
-    }
-}
-impl<E> ArtifactEncoder for ScriptedEncoder<E> {
-    type Error = E;
-    fn encode(&mut self, _: &dataset::Dataset, projection: &[usize]) -> Result<Vec<u8>, E> {
-        self.log.record(Event::Encode {
-            projection: projection.into(),
-        });
-        let step = self
-            .steps
-            .pop_front()
-            .expect("unexpected artifact encoding");
-        assert_eq!(step.projection, projection, "encoding projection");
-        step.outcome
-    }
-}
-
-pub struct PublishStep<E> {
-    pub path: String,
-    pub bytes: Vec<u8>,
-    pub outcome: Result<(), E>,
-}
-pub struct ScriptedPublisher<E> {
-    pub steps: VecDeque<PublishStep<E>>,
-    log: EventLog,
-}
-impl<E> ScriptedPublisher<E> {
-    pub fn new(log: EventLog) -> Self {
-        Self {
-            steps: VecDeque::new(),
-            log,
-        }
-    }
-}
-impl<E> ArtifactPort for ScriptedPublisher<E> {
-    type Error = E;
-    fn publish(&mut self, path: &str, bytes: &[u8]) -> Result<(), E> {
-        self.log.record(Event::Publish {
-            path: path.into(),
-            bytes: bytes.into(),
-        });
-        let step = self
-            .steps
-            .pop_front()
-            .expect("unexpected artifact publication");
-        assert_eq!(step.path, path, "publication path");
-        assert_eq!(step.bytes, bytes, "publication bytes");
         step.outcome
     }
 }

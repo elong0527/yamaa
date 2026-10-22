@@ -28,7 +28,10 @@ import pyarrow as pa
 import yamaa
 from yamaa import _native
 
-SPEC = """schema_version: '1.0'
+# A section lists only specifications of its model (SUB-3).
+SPEC = """yamaa: "1.0"
+type: spec
+model: ADaM
 domain: TEST
 base: SRC
 keys: [ID]
@@ -119,9 +122,10 @@ ISSUE_TYPES = [pa.string()] * 4 + [
     pa.list_(pa.int64()),
     pa.list_(pa.string()),
 ]
-# A division by zero at one node of a compute expression: the issue's span
-# covers that node and its route leads to it, empty when the node is the root.
-DIVISION = """schema_version: '1.0'
+# A division by zero at one node of an expression: the issue's span covers
+# that node and its route leads to it, empty when the node is the root.
+DIVISION = """yamaa: "1.0"
+type: spec
 domain: TEST
 keys: [ID]
 input: {SRC: {path: input.csv, types: {ID: str, VALUE: float, ZERO: float}}}
@@ -129,7 +133,7 @@ columns:
   - {name: ID, type: str, derivation: SRC.ID}
   - {name: VALUE, type: float, derivation: SRC.VALUE}
   - {name: ZERO, type: float, derivation: SRC.ZERO}
-  - {name: RATIO, type: float, derivation: {compute: {expr: 'EXPRESSION'}}}
+  - {name: RATIO, type: float, derivation: 'EXPRESSION'}
 output: {path: output.csv, columns: [ID, VALUE, ZERO, RATIO]}
 """
 LIBRARIES = ("polars", "pyarrow", "pandas")
@@ -208,7 +212,8 @@ class Table(unittest.TestCase):
         run = self.run_spec()
         check = yamaa.spec(self.root / "spec.yaml").check()
         (self.root / "project.yaml").write_text(
-            "schema_version: '1.0'\nadam: {specs: [spec.yaml]}\n", encoding="utf-8"
+            'yamaa: "1.0"\ntype: project\nadam: {specs: [spec.yaml]}\n',
+            encoding="utf-8",
         )
         project = yamaa.project(self.root / "project.yaml")
         runs = project.run()
@@ -313,9 +318,7 @@ class Table(unittest.TestCase):
                 (row,) = self.division(expression).to_pylist()
                 self.assertEqual(list(row), ISSUE_COLUMNS)
                 self.assertEqual(row["condition"], "division_by_zero")
-                self.assertEqual(
-                    row["spec_paths"], ["columns.RATIO.derivation.compute"]
-                )
+                self.assertEqual(row["spec_paths"], ["columns.RATIO.derivation"])
                 self.assertEqual(row["source_span"], span)
                 self.assertEqual(row["operand_route"], route)
                 self.assertIs(type(row["operand_route"]), list)

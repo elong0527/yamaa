@@ -124,13 +124,14 @@ Where rustup cannot add `rust-src`, set `YAMAA_RUST_SRC_LIBRARY` to the
 `rust-src` archive from static.rust-lang.org.
 
 `make check-repository` fails while a linked crate has no matching notice entry
-or the Python License-Expression misses a license that a linked crate is relied
-on under. The generator reads only the crate packages Cargo has unpacked and
-the toolchain's own files. It stops instead of guessing when a crate needs a
-license outside its reviewed list, ships an unclassified license file, or would
-bring in a text that names a GNU license, and when the standard library links
-an in-tree crate that declares a license of its own that `LIBRARY_IN_TREE`
-does not list (#3494); review the crate and extend the tables in
+or the Python License-Expression misses a license that a linked crate, or a
+crate that the standard library links, is relied on under. The generator reads
+only the crate packages Cargo has unpacked and the toolchain's own files. It
+stops instead of guessing when a crate needs a license outside its reviewed
+list, ships an unclassified license file, or would bring in a text that names
+a GNU license, and when the standard library links an in-tree crate that
+declares a license of its own that `LIBRARY_IN_TREE` does not list (#3494);
+review the crate and extend the tables in
 `tools/packaging/generate_third_party_notices.py`. A toolchain update
 also needs `MUSL` there reviewed, and the check stops until it is: the musl
 release that the toolchain bundles for its `*-linux-musl` targets, as
@@ -813,6 +814,16 @@ generated page.
 Benchmark dashboards likewise render authored fixtures without executing the
 engine. Their [guide](tools/benchmark_docs/README.md) describes the
 rendered materials. Generated pages and build output are ignored by Git.
+
+The YAML examples that readers copy are checked against their file types'
+JSON Schemas. `make check-repository` reads each fenced `yaml` block of the
+site pages (`README.md`, `rules/README.md` and `docs/articles/*.md`), of the
+package READMEs and of the issue forms' placeholders
+(`tools.validation.check_site_examples`). A block whose root declares `yamaa:`
+is a whole 1.0 file: it must parse, name its `type:` and validate against that
+type's schema. A block without `yamaa:`, such as an excerpt of a few fields, is
+not checked. A block that declares `yamaa:` but shows only part of a file
+starts with the line `# fragment`, and the check skips it.
 
 `make setup` installs the locked documentation dependencies. The documentation
 targets use that same environment; the strict build checks navigation and

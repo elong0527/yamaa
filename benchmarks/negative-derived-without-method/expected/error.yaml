@@ -1,0 +1,5 @@
+phase: validation
+condition: method_missing
+spec_paths:
+  - columns.AGEGR1.submission
+rule: SUB-18

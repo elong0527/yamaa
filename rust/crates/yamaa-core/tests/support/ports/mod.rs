@@ -15,10 +15,7 @@ use yamaa_core::{
     value::Value,
 };
 
-use yamaa_core::{
-    dataset, function_invocation, project_preparation as metadata, specification_output as output,
-    specification_run as run,
-};
+use yamaa_core::{function_invocation, project_preparation as metadata, specification_run as run};
 
 mod scripted;
 #[allow(unused_imports)]
@@ -54,13 +51,6 @@ pub enum Event {
     Call {
         slot: usize,
         arguments: Vec<(String, Value)>,
-    },
-    Encode {
-        projection: Vec<usize>,
-    },
-    Publish {
-        path: String,
-        bytes: Vec<u8>,
     },
     Observation(&'static str),
 }
@@ -133,19 +123,6 @@ impl PartialEq for Event {
                     arguments: right,
                 },
             ) => a == b && arguments_equal(left, right),
-            (Self::Encode { projection: left }, Self::Encode { projection: right }) => {
-                left == right
-            }
-            (
-                Self::Publish {
-                    path: left,
-                    bytes: a,
-                },
-                Self::Publish {
-                    path: right,
-                    bytes: b,
-                },
-            ) => left == right && a == b,
             (Self::Observation(left), Self::Observation(right)) => left == right,
             _ => false,
         }

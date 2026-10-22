@@ -192,7 +192,7 @@ column in its `output.columns` must declare both `label` and
 `column.submission`, fails.
 
 Fails: `submission_metadata_missing`, `value_not_permitted`.
-Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionMetadataMissing`, `rust/crates/yamaa-core/tests/service_build_metadata.rs::missing_study_is_the_real_typed_owner_before_any_metadata_verification`.
+Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionMetadataMissing`, `rust/crates/yamaa-adapters/tests/submission_service.rs::missing_study_is_the_real_typed_owner_before_any_metadata_verification`.
 
 A document reports on the whole artifact, so a column with nothing to report is
 a gap in the document, not an omitted row. The failure reports

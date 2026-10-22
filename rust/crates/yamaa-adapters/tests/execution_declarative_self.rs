@@ -1994,11 +1994,22 @@ rows:
                 .as_array()
                 .unwrap()
             {
-                let fixture = Fixture(crate::support::Scratch::new("namespace"));
+                let fixture = Fixture(crate::support::Scratch::canonical("namespace"));
                 let path = fixture.0.join("spec.yaml");
                 fs::write(&path, case["specification"].as_str().unwrap()).unwrap();
                 // Deliberately absent: an invalid namespace grants no source authority.
                 let path = path.to_str().unwrap();
+                // `{entry}` stands for the specification's absolute path as
+                // the engine resolves it, with forward slashes.
+                let expected = yamaa_adapters::json_wire::decode(
+                    &yamaa_adapters::json_wire::encode(&case["issues"]).replace(
+                        "\"{entry}\"",
+                        &yamaa_adapters::json_wire::encode(&yamaa_adapters::json!(
+                            path.replace('\\', "/")
+                        )),
+                    ),
+                )
+                .unwrap();
                 let request = || Request {
                     specification: path,
                     environment: None,
@@ -2028,7 +2039,7 @@ rows:
                     .collect::<Vec<_>>();
                 assert_eq!(
                     yamaa_adapters::json!(rows),
-                    case["issues"],
+                    expected,
                     "{}",
                     yamaa_adapters::json_wire::encode(&case["name"])
                 );
