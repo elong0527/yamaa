@@ -228,7 +228,7 @@ run_contract <- function() {
   # The caller's own path, named as given at no field (FILE-7).
   stopifnot(identical(checked$condition, "resource_path_missing"), identical(checked$rule, "FILE-7"),
     identical(checked$spec_paths, list(character())),
-    identical(checked$context, paste0('{"path":"', path("absent.yaml"), '"}')),
+    identical(jsonlite::fromJSON(checked$context, simplifyVector = FALSE), list(path = path("absent.yaml"))),
     is.null(run$output), is.null(run$report), identical(run$issues, checked))
   for (attempt in 1:2) {
     error <- refusal(run$save())
@@ -575,7 +575,7 @@ qualify_project_refusals <- function() {
   stopifnot(identical(conditionMessage(error), error_text("unread_project", absent)),
     identical(unread$condition, "resource_path_missing"),
     identical(unread$spec_paths, list(character())),
-    identical(unread$context, paste0('{"path":"', absent, '"}')),
+    identical(jsonlite::fromJSON(unread$context, simplifyVector = FALSE), list(path = absent)),
     identical(check_issues(project$check()$issues), unread))
   error <- refusal(project$names)
   stopifnot(identical(conditionMessage(error), error_text("unread_project_names", absent)),
