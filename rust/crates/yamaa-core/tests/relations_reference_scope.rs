@@ -1051,6 +1051,7 @@ mod relations {
         use std::collections::BTreeMap;
         use yamaa_core::json::Value as Json;
         use yamaa_core::{
+            ast::Surface,
             dataset::VerificationSeverity,
             run_report::{self, Error, Facts, Failure, PreparedCell},
             table::{TableAccess, ValueRef},
@@ -1094,6 +1095,7 @@ mod relations {
         fn facts(checks: Vec<run_report::Check>) -> Facts {
             Facts {
                 artifact: "out.csv".into(),
+                surface: Surface::V1 { minor: 0 },
                 run: run_report::Run::Succeeded { rows: 8 },
                 inputs: vec![
                     run_report::Input {
@@ -1233,7 +1235,7 @@ mod relations {
             assert_eq!(rows[3][10], PreparedCell::Count(8));
             assert_eq!(rows[3][11], PreparedCell::Count(9));
             assert_eq!(rows[4][5], PreparedCell::Text("AGE".into()));
-            assert_eq!(rows[4][6], PreparedCell::Text("NAME-3".into()));
+            assert_eq!(rows[4][6], PreparedCell::Text("LOOKUP-24".into()));
             assert_eq!(rows[4][10], PreparedCell::Count(0));
             assert_eq!(
                 rows[5][13],
@@ -1341,118 +1343,200 @@ mod relations {
             assert!(run_report::verify(&run_report::assemble(short), &facts).is_err());
             assert!(run_report::verify(&run_report::assemble(rows), &facts).is_ok());
         }
+        /// A handler row names the output column its path belongs to,
+        /// however its file writes the row template (P-CLR-2), and cites the
+        /// rule of the condition its handler answers: an `absent` row
+        /// LOOKUP-24 in a 1.x file and NAME-3 in a 0.5 file (D204).
         #[test]
         fn handler_rows_cite_the_condition_their_handler_answers() {
-            for (path, handler, target, rule) in [
+            const V1: Surface = Surface::V1 { minor: 0 };
+            const V0_5: Surface = Surface::V0_5;
+            for (surface, path, handler, target, rule) in [
                 (
+                    V1,
                     "columns.A.derivation.mapping.missing",
                     "missing",
                     Some("A"),
                     None,
                 ),
                 (
+                    V0_5,
                     "rows[0].derivations.V.mapping.unmapped",
                     "unmapped",
                     Some("V"),
                     Some("COLUMN-10"),
                 ),
                 (
+                    V1,
+                    "rows.week-2.derivations.V.mapping.unmapped",
+                    "unmapped",
+                    Some("V"),
+                    Some("COLUMN-10"),
+                ),
+                (
+                    V1,
+                    "rows['week 2'].derivations.V.mapping.unmapped",
+                    "unmapped",
+                    Some("V"),
+                    Some("COLUMN-10"),
+                ),
+                // A quoted row id may hold what would end its step unquoted.
+                (
+                    V1,
+                    "rows['a].derivations.B'].derivations.V.mapping.unmapped",
+                    "unmapped",
+                    Some("V"),
+                    Some("COLUMN-10"),
+                ),
+                (
+                    V0_5,
+                    "rows[x].derivations.V.mapping.unmapped",
+                    "unmapped",
+                    None,
+                    Some("COLUMN-10"),
+                ),
+                (
+                    V1,
+                    "rows['week 2.derivations.V.mapping.unmapped",
+                    "unmapped",
+                    None,
+                    Some("COLUMN-10"),
+                ),
+                (
+                    V0_5,
                     "columns.A.derivation.source.no_match",
                     "no_match",
                     Some("A"),
                     Some("LOOKUP-24"),
                 ),
                 (
+                    V1,
                     "columns.A.derivation.str_extract.no_match",
                     "no_match",
                     Some("A"),
                     Some("COLUMN-10"),
                 ),
                 (
+                    V1,
                     "columns.A.derivation.case[0].then.source.multiple_matches",
                     "multiple_matches",
                     Some("A"),
                     Some("LOOKUP-10"),
                 ),
                 (
+                    V1,
                     "columns.A.derivation.cut.missing",
                     "missing",
                     Some("A"),
                     None,
                 ),
                 (
+                    V1,
                     "columns.S.derivation.str_template.missing",
                     "missing",
                     Some("S"),
                     Some("COLUMN-10"),
                 ),
                 (
+                    V1,
+                    "columns.A.derivation.source.absent",
+                    "absent",
+                    Some("A"),
+                    Some("LOOKUP-24"),
+                ),
+                (
+                    V0_5,
                     "columns.A.derivation.source.absent",
                     "absent",
                     Some("A"),
                     Some("NAME-3"),
                 ),
                 (
+                    V1,
+                    "rows.event.derivations.A.first_available.sources[1].absent",
+                    "absent",
+                    Some("A"),
+                    Some("LOOKUP-24"),
+                ),
+                (
+                    V1,
                     "columns.D.derivation.impute.missing",
                     "missing",
                     Some("D"),
                     None,
                 ),
                 (
+                    V1,
                     "columns.D.derivation.impute.invalid",
                     "invalid",
                     Some("D"),
                     Some("TIME-13"),
                 ),
                 (
+                    V1,
                     "columns.P.derivation.precision.missing",
                     "missing",
                     Some("P"),
                     None,
                 ),
                 (
+                    V0_5,
                     "rows[0].derivations.T.impute.partial",
                     "partial",
                     Some("T"),
                     None,
                 ),
                 (
+                    V1,
                     "columns.T.derivation.to_date.invalid",
                     "invalid",
                     Some("T"),
                     Some("TIME-13"),
                 ),
                 (
+                    V1,
                     "columns.Q.derivation.precision.invalid",
                     "invalid",
                     Some("Q"),
                     Some("TIME-13"),
                 ),
                 (
+                    V1,
                     "columns.E.derivation.duration_value.invalid",
                     "invalid",
                     Some("E"),
                     Some("TIME-17"),
                 ),
                 (
+                    V1,
                     "columns.S.derivation.dtc.invalid",
                     "invalid",
                     Some("S"),
                     Some("TIME-19"),
                 ),
                 (
+                    V1,
                     "columns.N.derivation.unconvertible",
                     "unconvertible",
                     Some("N"),
                     Some("VALUE-3"),
                 ),
                 (
+                    V0_5,
                     "intermediates[0].derivations.PICK.unconvertible",
                     "unconvertible",
                     None,
                     Some("VALUE-3"),
                 ),
                 (
+                    V1,
+                    "intermediates.CODED.derivations.PICK.unconvertible",
+                    "unconvertible",
+                    None,
+                    Some("VALUE-3"),
+                ),
+                (
+                    V1,
                     "columns.N.derivation.round.invalid",
                     "invalid",
                     Some("N"),
@@ -1461,10 +1545,10 @@ mod relations {
             ] {
                 assert_eq!(run_report::handler_target(path), target, "{path}");
                 assert_eq!(
-                    run_report::handler_condition(path, handler)
+                    run_report::handler_condition(path, handler, surface)
                         .and_then(|code| code.definition().rule),
                     rule,
-                    "{path}"
+                    "{surface:?} {path}"
                 );
             }
         }
