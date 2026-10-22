@@ -45,20 +45,34 @@ class RationalePhraseTests(unittest.TestCase):
                     "values/one.md",
                     f"# One\n\nA column fails {phrase} the value is missing.\n",
                 )
-                found = self.errors()
-                self.assertTrue(
-                    any(phrase in error for error in found),
-                    f"no violation reported for '{phrase}': {found}",
+                self.assertEqual(
+                    self.errors(),
+                    [
+                        f"values/one.md:3: rationale phrase '{phrase}': "
+                        f"A column fails {phrase} the value is missing."
+                    ],
                 )
-                (self.rules / "values/one.md").unlink()
 
-    def test_clean_prose_passes(self):
-        self.write(
-            "values/one.md",
-            "# One\n\nA column fails when the value is missing. "
-            "The run records the failure.\n",
-        )
-        self.assertEqual(self.errors(), [])
+    def test_text_that_is_not_rationale_prose_passes(self):
+        for case, body in [
+            (
+                "clean prose",
+                "# One\n\nA column fails when the value is missing. "
+                "The run records the failure.\n",
+            ),
+            (
+                "fenced code",
+                "# One\n\n```yaml\nreason: because the schema says so\n```\n",
+            ),
+            ("inline code", "# One\n\nThe field `because` names the reason column.\n"),
+            (
+                "front matter",
+                "---\ntitle: Because things fail\n---\n\nA column fails.\n",
+            ),
+        ]:
+            with self.subTest(case=case):
+                self.write("values/one.md", body)
+                self.assertEqual(self.errors(), [])
 
     def test_every_prose_section_is_checked(self):
         self.write(
@@ -71,37 +85,41 @@ class RationalePhraseTests(unittest.TestCase):
             "## Conformance examples\n\n"
             "A column fails so that the failure is recorded.\n",
         )
-        found = self.errors()
-        self.assertEqual(len(found), 3)
-        self.assertTrue(all("values/one.md:5" in e for e in found[:1]))
-        self.assertIn("values/one.md:9", found[1])
-        self.assertIn("values/one.md:13", found[2])
-
-    def test_fenced_code_is_excluded(self):
-        self.write(
-            "values/one.md",
-            "# One\n\n```yaml\nreason: because the schema says so\n```\n",
+        self.assertEqual(
+            self.errors(),
+            [
+                "values/one.md:5: rationale phrase 'because': "
+                "A column fails because the value is missing.",
+                "values/one.md:9: rationale phrase 'because': "
+                "A column fails because a missing value names no cell.",
+                "values/one.md:13: rationale phrase 'so that': "
+                "A column fails so that the failure is recorded.",
+            ],
         )
-        self.assertEqual(self.errors(), [])
 
     def test_prose_before_midline_fence_counts(self):
         self.write(
             "values/one.md",
             "# One\n\nA pattern fails because it is empty. ```text\nexample\n```\n",
         )
-        self.assertTrue(any("because" in error for error in self.errors()))
-
-    def test_inline_code_is_excluded(self):
-        self.write(
-            "values/one.md",
-            "# One\n\nThe field `because` names the reason column.\n",
+        self.assertEqual(
+            self.errors(),
+            [
+                "values/one.md:3: rationale phrase 'because': "
+                "A pattern fails because it is empty."
+            ],
         )
-        self.assertEqual(self.errors(), [])
 
     def test_allowlist_suppresses_listed_pattern(self):
         body = "# One\n\nA column fails because the value is missing.\n"
         self.write("values/one.md", body)
-        self.assertTrue(self.errors())
+        self.assertEqual(
+            self.errors(),
+            [
+                "values/one.md:3: rationale phrase 'because': "
+                "A column fails because the value is missing."
+            ],
+        )
         rules_check.RATIONALE_ALLOWLIST = {
             "values/one.md": [(r"because the value is missing", "unavoidable quote")]
         }
@@ -115,29 +133,38 @@ class RationalePhraseTests(unittest.TestCase):
         rules_check.RATIONALE_ALLOWLIST = {
             "values/one.md": [(r"because the value is missing", "unavoidable quote")]
         }
-        self.assertTrue(self.errors())
+        self.assertEqual(
+            self.errors(),
+            [
+                "values/one.md:3: rationale phrase 'because': "
+                "A column fails because the row is missing."
+            ],
+        )
 
     def test_case_insensitive(self):
         self.write(
             "values/one.md",
             "# One\n\nBecause the value is missing, the column fails.\n",
         )
-        self.assertTrue(any("Because" in error for error in self.errors()))
-
-    def test_frontmatter_is_excluded(self):
-        self.write(
-            "values/one.md",
-            "---\ntitle: Because things fail\n---\n\nA column fails.\n",
+        self.assertEqual(
+            self.errors(),
+            [
+                "values/one.md:3: rationale phrase 'Because': "
+                "Because the value is missing, the column fails."
+            ],
         )
-        self.assertEqual(self.errors(), [])
 
     def test_line_numbers_count_front_matter(self):
         self.write(
             "values/one.md",
             "---\ntitle: One\n---\n\nA column fails so that it is seen.\n",
         )
-        self.assertEqual(len(self.errors()), 1)
-        self.assertIn("values/one.md:5:", self.errors()[0])
+        self.assertEqual(
+            self.errors(),
+            [
+                "values/one.md:5: rationale phrase 'so that': A column fails so that it is seen."
+            ],
+        )
 
     def test_card_files_are_checked(self):
         self.write(

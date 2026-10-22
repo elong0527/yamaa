@@ -423,15 +423,6 @@ def validate_cli(cli, values, operations):
             _json_keys(keys, f"cli.json.{name}")
 
 
-def cli_names(cli):
-    """The commands and global flags an operation's `cli` list may name."""
-    if not cli:
-        return set()
-    return {command["name"] for command in cli["commands"]} | {
-        flag["name"] for flag in cli["global_flags"]
-    }
-
-
 # --- Manifest lines ------------------------------------------------------------------
 
 

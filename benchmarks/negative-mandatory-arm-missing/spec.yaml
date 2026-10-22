@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
@@ -28,6 +30,6 @@ columns:
     submission:
       core: Req
       mandatory: true
-      origin:
-        type: Predecessor
-        description: DM.ARM
+      origins:
+        - type: Predecessor
+          description: DM.ARM

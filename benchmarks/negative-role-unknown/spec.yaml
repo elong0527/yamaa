@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: SDTM
 domain: DM
 keys: [STUDYID, USUBJID]
 input:
@@ -30,11 +32,11 @@ columns:
   - name: AGEU
     type: str
     label: Age Units
-    derivation: {literal: YEARS}
+    derivation: "'YEARS'"
     submission:
       core: Exp
       role: Qualifier
       length: 5
-      origin:
-        type: Assigned
-        source: Sponsor
+      origins:
+        - type: Assigned
+          source: Sponsor

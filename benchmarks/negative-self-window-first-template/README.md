@@ -37,7 +37,6 @@ intermediates:
     dataset: WINDOWS
     key: [USUBJID]
     between: {value: VSDY, lower: LO, upper: HI}
-    no_match: null
 ```
 
 ```yaml

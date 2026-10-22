@@ -92,6 +92,7 @@ yamaa::ResolverRequest: pub use yamaa::resolver::ResolverRequest
 yamaa::ResourceKind: pub use yamaa::resolver::ResourceKind
 yamaa::ResourceResolver: pub use yamaa::resolver::ResourceResolver
 yamaa::Run: pub use yamaa::api::Run
+yamaa::SECTIONS: pub use yamaa::api::SECTIONS
 yamaa::SELFTEST_COLUMNS: pub use yamaa::selftest::SELFTEST_COLUMNS
 yamaa::SEVERITIES: pub use yamaa::diagnostic::SEVERITIES
 yamaa::STATUSES: pub use yamaa::api::STATUSES
@@ -167,6 +168,7 @@ yamaa::api::Run::report: pub fn report(&self) -> Option<&Table>
 yamaa::api::Run::save: pub fn save(&mut self, token: &CancellationToken) -> Result<Vec<String>, Failure>
 yamaa::api::Run::status: pub fn status(&self) -> Status
 yamaa::api::Run::summary: pub fn summary(&self) -> Summary
+yamaa::api::SECTIONS: pub const SECTIONS: [&str; 3]
 yamaa::api::STATUSES: pub const STATUSES: [&str; 3]
 yamaa::api::Status: impl Status
 yamaa::api::Status: pub enum Status [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]

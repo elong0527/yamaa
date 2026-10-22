@@ -34,4 +34,4 @@ intermediates:
 
 That one answer also covers a complete test and sex that the reference table
 does not list: both find no entry (LOOKUP-24), and the run counts each under
-`no_match`.
+`absent`.

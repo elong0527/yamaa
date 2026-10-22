@@ -156,13 +156,13 @@ def compare(repository, tag):
     return names
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repository", required=True)
     parser.add_argument(
         "--tag", required=True, help="release tag: " + release_identity.TAG_FORMS
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     try:
         names = compare(args.repository, args.tag)
     except (ValueError, OSError, subprocess.CalledProcessError) as error:

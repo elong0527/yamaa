@@ -11,9 +11,8 @@ cannot leave such a comparison on the old label.
 import re
 import unittest
 
-import yaml
 from tools.paths import ROOT
-from tools.validation._repository_yaml import UniqueKeyLoader
+from tools.tests import support
 
 FLOATING = re.compile(r"\b(?:ubuntu|windows|macos)-latest\b")
 MATRIX_VALUE = re.compile(r"\$\{\{\s*matrix\.([A-Za-z0-9_.-]+)\s*\}\}")
@@ -88,9 +87,7 @@ class WorkflowRunners(unittest.TestCase):
 
     def test_each_runner_label_that_a_job_compares_is_one_of_its_lanes(self):
         for path in workflow_files():
-            workflow = yaml.load(
-                path.read_text(encoding="utf-8"), Loader=UniqueKeyLoader
-            )
+            workflow = support.load_yaml(path)
             for job_id, job in workflow["jobs"].items():
                 # A job that calls a reusable workflow names no runner.
                 if "uses" in job:

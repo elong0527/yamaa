@@ -35,9 +35,7 @@ fn inputs() -> Tree {
         ),
     ])
 }
-fn text(value: &str) -> V {
-    V::String(value.into())
-}
+use super::text;
 fn texts(values: &[&str]) -> V {
     V::Array(values.iter().map(|v| text(v)).collect())
 }

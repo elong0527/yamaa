@@ -257,6 +257,21 @@ def has_checkbashisms(environment=None):
     return shutil.which("checkbashisms", path=environment.get("PATH")) is not None
 
 
+def print_failed_tests(work):
+    """Print the complete output of each test file that failed in a check.
+
+    R prints only the last lines of a failing file, and the caller may remove
+    the check directory, so each `*.Rout.fail` is printed whole while it is
+    still there. Returns the names of the files printed.
+    """
+    failed = sorted(work.glob("*.Rcheck/tests/*.Rout.fail"))
+    for path in failed:
+        print(f"===== {path.name} =====")
+        print(path.read_text(encoding="utf-8", errors="replace"), end="")
+        print(f"===== end of {path.name} =====")
+    return [path.name for path in failed]
+
+
 def check(archive, work, environment=None):
     archive, work = archive.resolve(), work.resolve()
     if work.is_relative_to(ROOT):
@@ -271,12 +286,20 @@ def check(archive, work, environment=None):
     )
     (work / "source-revision.txt").write_text(revision, encoding="utf-8")
     environment = check_environment(environment)
-    subprocess.run(
-        ["R", "CMD", "check", "--as-cran", "--no-manual", str(archive)],
-        cwd=work,
-        env=environment,
-        check=True,
-    )
+    # Every test file runs, so one failing file does not hide the others.
+    command = [
+        "R",
+        "CMD",
+        "check",
+        "--as-cran",
+        "--no-manual",
+        "--no-stop-on-test-error",
+        str(archive),
+    ]
+    completed = subprocess.run(command, cwd=work, env=environment, check=False)
+    print_failed_tests(work)
+    if completed.returncode != 0:
+        raise subprocess.CalledProcessError(completed.returncode, command)
     logs = list(work.glob("*.Rcheck/00check.log"))
     if len(logs) != 1:
         raise RuntimeError("R package check wrote no single 00check.log")

@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADLB
 keys: [STUDYID, USUBJID, PARAMCD]
 input:
@@ -35,6 +37,4 @@ columns:
   - name: AVALTOT
     type: float
     label: Total Analysis Value
-    derivation:
-      compute:
-        expr: "SUM(AVAL)"
+    derivation: "SUM(AVAL)"

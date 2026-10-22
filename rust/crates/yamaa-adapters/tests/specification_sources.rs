@@ -1171,15 +1171,8 @@ output: {{path: output.csv, columns: [I, S]}}
             let schema = schema(&root.join("yaml"));
             let case = root.join("benchmarks/adam-adlb-ordered-sum");
             let raw = std::fs::read_to_string(case.join("spec.yaml")).unwrap();
-            let directory = std::env::temp_dir().join(format!(
-                "yamaa-original-success-{}-{}",
-                std::process::id(),
-                std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
-                    .as_nanos()
-            ));
-            std::fs::create_dir(&directory).unwrap();
+            let scratch = crate::support::Scratch::new("original-success");
+            let directory = scratch.to_path_buf();
             let mut publisher = Publisher {
                 directory: directory.clone(),
                 calls: 0,
@@ -1299,7 +1292,6 @@ output: {{path: output.csv, columns: [I, S]}}
             expected["verifications"] = json!([unique, count]);
             assert_eq!(actual, expected);
             assert_eq!(publisher.calls, 2);
-            std::fs::remove_dir_all(directory).unwrap();
         }
 
         #[test]

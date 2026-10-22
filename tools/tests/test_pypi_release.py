@@ -328,16 +328,15 @@ class Transport(unittest.TestCase):
 
 
 class Command(unittest.TestCase):
-    ARGV = ["check_pypi_release", "--repository", REPOSITORY, "--tag", CANDIDATE.tag]
+    ARGV = ["--repository", REPOSITORY, "--tag", CANDIDATE.tag]
 
     def test_the_command_lists_the_packages_it_compared(self):
         stdout = io.StringIO()
         with (
-            patch("sys.argv", self.ARGV),
             patch.object(check, "compare", return_value=["a.whl", "a.tar.gz"]) as run,
             contextlib.redirect_stdout(stdout),
         ):
-            check.main()
+            check.main(self.ARGV)
         run.assert_called_once_with(REPOSITORY, CANDIDATE.tag)
         self.assertEqual(
             stdout.getvalue(),
@@ -354,12 +353,11 @@ class Command(unittest.TestCase):
             stderr = io.StringIO()
             with (
                 self.subTest(error=type(error).__name__),
-                patch("sys.argv", self.ARGV),
                 patch.object(check, "compare", side_effect=error),
                 contextlib.redirect_stderr(stderr),
             ):
                 with self.assertRaises(SystemExit) as caught:
-                    check.main()
+                    check.main(self.ARGV)
                 self.assertEqual(caught.exception.code, 1)
                 self.assertEqual(stderr.getvalue(), f"{error}\n")
 

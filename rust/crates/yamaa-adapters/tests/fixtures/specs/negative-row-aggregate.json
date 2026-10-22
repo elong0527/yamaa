@@ -12,7 +12,7 @@
       "phase": "validation",
       "rule": "FORMULA-13",
       "spec_paths": [
-        "columns.AVALTOT.derivation.compute.expr"
+        "columns.AVALTOT.derivation"
       ]
     }
   ],
@@ -32,7 +32,7 @@
           "phase": "validation",
           "rule": "FORMULA-13",
           "spec_paths": [
-            "columns.AVALTOT.derivation.compute.expr"
+            "columns.AVALTOT.derivation"
           ]
         }
       ],

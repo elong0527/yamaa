@@ -1,7 +1,7 @@
 phase: validation
 condition: incompatible_input_type
 spec_paths:
-  - columns.DTHDY.derivation.study_day.date
+  - columns.DTHDY.derivation.study_day.source
 rule: TIME-1
 context:
   source: DTHDTM

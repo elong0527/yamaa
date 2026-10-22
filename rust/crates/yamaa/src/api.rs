@@ -119,6 +119,11 @@ pub enum Status {
 /// closed vocabulary of every `status` a host returns (P-STATUS-1).
 pub const STATUSES: [&str; 3] = ["succeeded", "failed", "skipped"];
 
+/// The sections a project file declares, as written, in run order: the closed
+/// vocabulary of the `section` that [`Engine::project_run`] and
+/// [`Engine::project_submission`] take (PROJECT-3).
+pub const SECTIONS: [&str; 3] = ["sdtm", "adam", "send"];
+
 impl Status {
     /// The status as written: `succeeded`, `failed` or `skipped`, one of
     /// [`STATUSES`].
@@ -977,7 +982,7 @@ impl Engine {
         })
     }
 
-    /// Build every listed specification of `section` ("sdtm", "adam", "send"),
+    /// Build every listed specification of `section`, one of [`SECTIONS`],
     /// or of all sections in that order. Each builds once, producer first; a
     /// producer in the run scope hands its artifact to its consumers in
     /// memory, and one outside it is read from its saved artifact file. A
@@ -1282,6 +1287,12 @@ mod tests {
             }
         }
         assert_eq!(statuses.map(Status::as_str), STATUSES);
+    }
+
+    #[test]
+    fn sections_are_the_project_sections_in_run_order() {
+        use yamaa_core::project_scope::{key, SECTIONS as CORE};
+        assert_eq!(CORE.map(key), SECTIONS);
     }
 
     /// Resolved facts the engine cannot represent are refused as the

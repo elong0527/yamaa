@@ -1601,10 +1601,10 @@ def parity_errors(root: Path) -> list[str]:
     return errors
 
 
-def main() -> int:
+def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=ROOT)
-    arguments = parser.parse_args()
+    arguments = parser.parse_args(argv)
     errors = violations(arguments.root) + parity_errors(arguments.root)
     for error in errors:
         print(error)

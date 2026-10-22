@@ -7,33 +7,18 @@
 //! another study, so the run compiles that study instead of reusing the plan
 //! of the old one. This file holds one test because the working directory is
 //! shared by every thread of the process.
-use std::path::{Path, PathBuf};
+#[allow(dead_code)]
+mod support;
+
+use std::path::PathBuf;
 use std::sync::Arc;
 
-use yamaa::{
-    Argument, CallError, CancellationToken, Engine, EngineOptions, FunctionError, FunctionHandle,
-    FunctionIdentity, HostLanguage, LockContext, Plans, ProjectFunctions, Run, Scalar, Signature,
-};
+use yamaa::{CancellationToken, Engine, EngineOptions, HostLanguage, Plans, Run};
 
 const PLAIN: &str = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int}}}\noutput: {path: out.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: SRC.ID}\n";
 const PROJECT: &str = "schema_version: '1.0'\nsdtm:\n  specs: [dm.yaml]\n";
 
-struct NoFunctions;
-impl ProjectFunctions for NoFunctions {
-    fn verify_lock(
-        &self,
-        _: &LockContext<'_>,
-        _: &[FunctionIdentity],
-    ) -> Result<(), FunctionError> {
-        Ok(())
-    }
-    fn bind(&self, _: &FunctionIdentity, _: &Signature) -> Result<FunctionHandle, FunctionError> {
-        unreachable!("these specifications call no project function")
-    }
-    fn invoke(&self, _: &FunctionHandle, _: &[Argument<'_>]) -> Result<Scalar, CallError> {
-        unreachable!("these specifications call no project function")
-    }
-}
+use support::NoFunctions;
 
 /// How the run got its plan, from its private measurements.
 fn plan_of(run: &Run) -> &'static str {
@@ -46,13 +31,12 @@ fn plan_of(run: &Run) -> &'static str {
 
 /// Two studies with the same file names; B's input has one more row.
 struct Studies {
-    root: PathBuf,
+    root: support::Scratch,
     previous: PathBuf,
 }
 impl Studies {
     fn new() -> Self {
-        let root = std::env::temp_dir().join(format!("yamaa-plan-identity-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&root);
+        let root = support::Scratch::new("plan-identity");
         for (name, input) in [("a", "ID\n1\n2\n"), ("b", "ID\n1\n2\n3\n")] {
             let study = root.join(name);
             std::fs::create_dir_all(&study).unwrap();
@@ -68,7 +52,7 @@ impl Studies {
             std::fs::write(study.join("input.csv"), input).unwrap();
         }
         Self {
-            root: yamaa_adapters::canonical_path::canonicalize(root).unwrap(),
+            root,
             previous: std::env::current_dir().unwrap(),
         }
     }
@@ -78,8 +62,8 @@ impl Studies {
 }
 impl Drop for Studies {
     fn drop(&mut self) {
+        // The scratch field drops after this, once the process has left it.
         let _ = std::env::set_current_dir(&self.previous);
-        let _ = std::fs::remove_dir_all(Path::new(&self.root));
     }
 }
 

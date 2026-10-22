@@ -58,9 +58,7 @@ fn field_diagnostic(
     reached.insert(rendered(&finding));
 }
 
-fn text(value: &str) -> JsonValue {
-    JsonValue::String(value.into())
-}
+use super::text;
 
 fn texts(values: &[&str]) -> JsonValue {
     JsonValue::Array(values.iter().map(|value| text(value)).collect())

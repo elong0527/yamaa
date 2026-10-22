@@ -1,14 +1,12 @@
 #![allow(unused_imports)]
 use super::rendered;
+pub(crate) use super::text;
 pub(crate) use std::collections::BTreeSet;
 pub(crate) use yamaa_core::diagnostic::{
     lock_diagnostics, ConditionCode, LockDiagnosticError as E, LockFinding, LockOrigins,
     LockReason as R,
 };
 pub(crate) use yamaa_core::json::Value as V;
-pub(crate) fn text(value: &str) -> V {
-    V::String(value.into())
-}
 pub(crate) fn origins() -> LockOrigins<'static> {
     LockOrigins {
         source: "study/environment.yaml",

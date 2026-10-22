@@ -49,7 +49,8 @@ class BenchmarkMetadata(unittest.TestCase):
         )
         self.assertFalse((source / "python/uv.lock").exists())
         for name in ("expected", "README.md", "benchmark.yaml"):
-            self.assertFalse((staged / name).exists())
+            with self.subTest(name=name):
+                self.assertFalse((staged / name).exists())
         self.assertEqual(
             (staged / "input/source.csv").read_bytes(),
             (source / "input/source.csv").read_bytes(),
@@ -106,13 +107,14 @@ class BenchmarkMetadata(unittest.TestCase):
         self.assertFalse((staged / "r").exists())
         # A host that declares no lock has no entry, and nothing is staged.
         for environments in ("{r: {lock: r/renv.lock}}", "{}"):
-            project.write_text(
-                f'yamaa: "1.0"\ntype: project\nenvironments: {environments}\n'
-            )
-            self.assertIsNone(python_lock(source, "project.yaml"))
-            shutil.rmtree(staged)
-            stage_case(source, staged)
-            self.assertFalse((staged / "code").exists())
+            with self.subTest(environments=environments):
+                project.write_text(
+                    f'yamaa: "1.0"\ntype: project\nenvironments: {environments}\n'
+                )
+                self.assertIsNone(python_lock(source, "project.yaml"))
+                shutil.rmtree(staged)
+                stage_case(source, staged)
+                self.assertFalse((staged / "code").exists())
 
     def test_singleton_and_root_project_defaults_are_explicit_in_plan(self):
         (self.case / "environment.yaml").write_text("root is never automatic\n")
@@ -346,11 +348,10 @@ class BenchmarkMetadata(unittest.TestCase):
         # issues as a failed run does, not a traceback.
         case = ROOT / "benchmarks/negative-format-name-without-dollar"
         with (
-            mock.patch("sys.argv", ["benchmark", str(case)]),
             mock.patch("sys.stderr", new_callable=io.StringIO) as stderr,
             self.assertRaises(SystemExit) as exited,
         ):
-            benchmark.main()
+            benchmark.main([str(case)])
         self.assertEqual(exited.exception.code, 1)
         self.assertTrue(stderr.getvalue().startswith("spec.yaml: "))
         self.assertIn("CT-12", stderr.getvalue())

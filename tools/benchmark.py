@@ -372,7 +372,7 @@ def check_standard_model(case, metadata=None):
         )
 
 
-def main():
+def main(argv=None):
     """Build a case's declared Python entries in order inside a staged copy.
 
     Each entry is saved in the staged copy before the next entry is built, so a
@@ -383,7 +383,7 @@ def main():
     """
     parser = argparse.ArgumentParser(description=main.__doc__)
     parser.add_argument("case", type=Path, help="benchmark directory")
-    case = parser.parse_args().case.resolve()
+    case = parser.parse_args(argv).case.resolve()
     import yamaa
 
     from tools.staging.stage_project_inputs import stage_case

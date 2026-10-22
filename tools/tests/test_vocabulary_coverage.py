@@ -27,14 +27,14 @@ class TestVocabularyCoverage(unittest.TestCase):
         errors = OWNER_VOCABULARY.check_shared(
             "shift", ["date_literal_days_and_phase_dates"]
         )
-        self.assertTrue(any("lacks a refusal contract" in error for error in errors))
+        self.assertIn("lacks a refusal contract", "\n".join(errors))
 
     def test_missing_and_unrelated_shared_cases_are_refused(self):
         errors = OWNER_VOCABULARY.check_shared(
             "duration_value", ["absent_case", "date_shift_upper_overflow"]
         )
-        self.assertTrue(any("missing absent_case" in error for error in errors))
-        self.assertTrue(any("never names duration_value" in error for error in errors))
+        self.assertIn("missing absent_case", "\n".join(errors))
+        self.assertIn("never names duration_value", "\n".join(errors))
 
     def test_original_benchmark_refusal_owner_is_preserved(self):
         self.assertEqual(
@@ -60,7 +60,8 @@ class TestVocabularyCoverage(unittest.TestCase):
         self.assertEqual(resolve(document, "intermediates.LAST.absent"), 0)
         self.assertIsNone(resolve({"then": None}, "then"))
         for missing in ("columns.AGE.label", "columns.BMI", "columns[2]", "base.x"):
-            self.assertIs(resolve(document, missing), OWNER_VOCABULARY.UNRESOLVED)
+            with self.subTest(missing=missing):
+                self.assertIs(resolve(document, missing), OWNER_VOCABULARY.UNRESOLVED)
 
     def test_a_1_x_negative_names_an_operation_its_grammar_text_holds(self):
         """1.0 writes `compute` and `literal` as grammar text (D18), so a 1.0

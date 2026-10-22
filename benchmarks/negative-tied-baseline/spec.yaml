@@ -1,9 +1,11 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADLB
 keys: [STUDYID, USUBJID, PARAMCD, LBSEQ]
 input:
   LB: {path: input/lb.csv, types: {LBDTC: date}}
-  ADSL: {path: input/adsl.csv, types: {TRTSDT: date}}
+  ADSL: {path: input/adsl.csv, types: {TRTSDT: date}, key: [STUDYID, USUBJID]}
 base: LB
 
 output:
@@ -57,8 +59,8 @@ columns:
         window:
           group_by: [STUDYID, USUBJID, PARAMCD]
         date: ADT
-        reference_date: TRTSDT
-        value: AVAL
+        reference: TRTSDT
+        source: AVAL
 
   - name: BASE
     type: float

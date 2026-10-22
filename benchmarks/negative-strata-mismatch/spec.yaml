@@ -1,10 +1,12 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
   DM: input/dm.csv
-  MH: input/mh.csv
-  RE: input/re.csv
+  MH: {path: input/mh.csv, key: [STUDYID, USUBJID]}
+  RE: {path: input/re.csv, key: [STUDYID, USUBJID]}
 base: DM
 
 output:
