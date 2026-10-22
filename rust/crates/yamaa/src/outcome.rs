@@ -65,7 +65,7 @@ impl Member {
     pub(crate) fn issues(&self) -> Vec<Diagnostic> {
         let mut issues = match &self.work {
             Work::Checked(issues, _) => issues.clone(),
-            Work::Built(run) => run.build().issues(),
+            Work::Built(run) => run.build.issues(),
             Work::Composed(define) => define.issues(),
         };
         if let Some(identity) = &self.identity {
@@ -78,7 +78,7 @@ impl Member {
     fn locator(&self) -> &Locator {
         match &self.work {
             Work::Checked(_, locator) => locator,
-            Work::Built(run) => run.build().locator(),
+            Work::Built(run) => run.build.locator(),
             Work::Composed(define) => &define.locator,
         }
     }

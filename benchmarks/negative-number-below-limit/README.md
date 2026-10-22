@@ -23,9 +23,8 @@ missing numeric value, handle the failed conversion explicitly:
 
 ```yaml
 derivation:
-  value:
-    source: LB.LBSTRESC
-  unconvertible: {literal: null}
+  value: LB.LBSTRESC
+  unconvertible: null
 ```
 
 If the study uses a numeric substitution for values below the assay limit,

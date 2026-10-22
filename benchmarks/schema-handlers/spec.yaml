@@ -1,9 +1,11 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADVS
 keys: [USUBJID, VSSEQ]
 input:
   VS: {path: input/vs.csv, types: {VSSTRESN: str}}
-  EX: {path: input/ex.csv, types: {EXDOSE: float}}
+  EX: {path: input/ex.csv, types: {EXDOSE: float}, key: [USUBJID]}
 base: VS
 
 output:
@@ -50,9 +52,8 @@ columns:
     type: int
     label: Analysis Value
     derivation:
-      value:
-        source: VS.VSSTRESN
-      unconvertible: {literal: null}
+      value: VS.VSSTRESN
+      unconvertible: null
 
   # A dosing record with no dose never qualifies; among the dosed
   # records the later start date wins. Multiple matches fail by default;
@@ -68,4 +69,3 @@ columns:
         filter: "EX.EXDOSE IS NOT NULL"
         order_by: [EX.EXSTDTC]
         keep: last
-        absent: {literal: null}

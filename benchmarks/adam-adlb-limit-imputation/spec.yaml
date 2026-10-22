@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADLB
 keys: [STUDYID, USUBJID, LBSEQ]
 input:
@@ -45,7 +47,6 @@ columns:
         source: AVALC
         pattern: '^(?:[<>]=?|=)?([0-9]+(?:\.[0-9]+)?)$'
         group: 1
-        missing: {literal: null}
 
   # admiral v1.5.0 compute_qual_imputation, imputation_type=1, factor=1:
   # only a strict inequality receives the authored one-unit offset.
@@ -55,13 +56,9 @@ columns:
     derivation:
       case:
         - when: "AVALC LIKE '<%' AND AVALC NOT LIKE '<=%'"
-          then:
-            compute:
-              expr: "LIMITVAL - 1"
+          then: "LIMITVAL - 1"
         - when: "AVALC LIKE '>%' AND AVALC NOT LIKE '>=%'"
-          then:
-            compute:
-              expr: "LIMITVAL + 1"
+          then: "LIMITVAL + 1"
         - otherwise: LIMITVAL
 
   - name: AVALU
@@ -75,7 +72,7 @@ columns:
     derivation:
       case:
         - when: "AVALC LIKE '<%' OR AVALC LIKE '>%'"
-          then: {literal: IMPUTATION}
+          then: "'IMPUTATION'"
 
 verifications:
   - row_count:

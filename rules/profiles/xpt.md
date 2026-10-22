@@ -200,7 +200,7 @@ one below 16^-65, an `int` whose magnitude exceeds 2^53, and a date or
 datetime before 1582-01-01 fail.
 
 Fails: `xpt_value_out_of_range`.
-Evidence: `adam-adsl-xpt`, `rust/crates/yamaa-adapters/src/submission_xpt.rs::ibm_doubles_are_exact_and_normalized`, `rust/crates/yamaa-core/src/submission_transport.rs::number_causes_bound_exact_integers_and_ibm_magnitudes`.
+Evidence: `adam-adsl-xpt`, `rust/crates/yamaa-adapters/src/submission_xpt.rs::ibm_doubles_are_exact_and_normalized`, `rust/crates/yamaa-core/src/submission_transport.rs::number_causes_bound_exact_integers_and_ibm_magnitudes`, `negative-transport-date-before-1582`.
 
 Every binary64 value in range converts exactly: its 53 significant bits fit the
 56-bit fraction whatever leading zero bits the first hexadecimal digit has. An
@@ -250,7 +250,7 @@ and every value missing, fails: a reader drops trailing all-blank observations
 as the padding of the final record.
 
 Fails: `xpt_file_too_large`, `xpt_last_row_blank`.
-Evidence: `rust/crates/yamaa-adapters/tests/submission_encoders.rs::a_blank_last_row_or_a_file_past_five_billion_bytes_is_refused_before_writing`, `rust/crates/yamaa-adapters/src/submission_xpt.rs::file_size_pads_namestrs_and_observations_to_whole_records`.
+Evidence: `rust/crates/yamaa-adapters/tests/submission_encoders.rs::a_blank_last_row_or_a_file_past_five_billion_bytes_is_refused_before_writing`, `rust/crates/yamaa-adapters/src/submission_xpt.rs::file_size_pads_namestrs_and_observations_to_whole_records`, `rust/tests/host-fixtures/cases.json::a_composed_dataset_path_has_no_location`.
 
 Both failures report the dataset and the artifact at
 `datasets.<dataset>.artifact`, the size with `bytes` and the row with `row`. A

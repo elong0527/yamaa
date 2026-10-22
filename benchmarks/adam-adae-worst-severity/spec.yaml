@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADAE
 keys: [STUDYID, USUBJID, AESEQ]
 input:
@@ -66,7 +68,6 @@ columns:
           MILD: 1
           MODERATE: 2
           SEVERE: 3
-        missing: {literal: null}
     verifications:
       - range:
           min: 1

@@ -27,7 +27,6 @@ take the time of day from that column:
     impute:
       type: datetime
       source: AE.AESTDTC
-      minimum_source_precision: day
       time: first
 
 - name: ASTTM

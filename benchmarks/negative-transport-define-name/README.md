@@ -21,5 +21,5 @@ when several share a folder:
 ```yaml
 sdtm:
   define: define.xml
-  datasets: xpt
+  transport: xpt
 ```

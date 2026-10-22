@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: SDTM
 domain: LB
 keys: [STUDYID, USUBJID, LBSEQ]
 input:
@@ -12,7 +14,7 @@ columns:
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
-    derivation: {literal: LB}
+    derivation: "'LB'"
 
   - name: STUDYID
     type: str
@@ -65,7 +67,6 @@ rows:
           source: LB_RAW.LBSTRESN
           breaks: [0.5, 1.0, 1.5, 1.8]
           labels: ['4', '3', '2', '1', '0']
-          right: false
 
   # Below 8.0 grade 3, below 10.0 grade 2, below 13.5 grade 1, 13.5 and
   # above grade 0.
@@ -77,7 +78,6 @@ rows:
           source: LB_RAW.LBSTRESN
           breaks: [8.0, 10.0, 13.5]
           labels: ['3', '2', '1', '0']
-          right: false
 
   # As for males, except that grade 0 starts at 12.0.
   - id: haemoglobin-female
@@ -88,7 +88,6 @@ rows:
           source: LB_RAW.LBSTRESN
           breaks: [8.0, 10.0, 12.0]
           labels: ['3', '2', '1', '0']
-          right: false
 
 verifications:
   - row_count:

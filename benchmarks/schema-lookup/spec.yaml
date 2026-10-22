@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADSL
 keys: [USUBJID]
 input:
@@ -18,15 +20,14 @@ intermediates:
   # so every read of DEATHEV is blank.
   - id: DEATHEV
     dataset: AE
+    key: [USUBJID]
     filter: "AE.AEOUT = 'FATAL'"
     order_by: [AE.AEDY]
     keep: last
-    no_match: {literal: null}
 
   - id: MEDDRA_PT
     dataset: MEDDRA
     key: {LLTNAME: DTHCAUS}
-    no_match: {literal: null}
 
 columns:
   - name: USUBJID

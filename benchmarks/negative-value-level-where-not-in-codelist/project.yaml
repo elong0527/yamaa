@@ -1,4 +1,5 @@
-schema_version: '1.0'
+yamaa: "1.0"
+type: project
 codelists:
   - standard:
       name: CDISC/NCI
@@ -12,6 +13,7 @@ codelists:
           - {value: SYSBP, decode: Systolic Blood Pressure}
           - {value: DIABP, decode: Diastolic Blood Pressure}
           - {value: PULSE, decode: Pulse Rate}
+
 sdtm:
   specs:
   - spec.yaml

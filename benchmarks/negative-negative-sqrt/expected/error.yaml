@@ -1,7 +1,7 @@
 phase: derivation
 condition: sqrt_of_negative
 spec_paths:
-  - columns.BSA.derivation.compute
+  - columns.BSA.derivation
 rule: FORMULA-15
 context:
   expr: "SQRT(HEIGHTCM * WEIGHTKG / 3600)"

@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADLB
 keys: [STUDYID, USUBJID, PARAMCD]
 input:
@@ -39,6 +41,4 @@ columns:
     label: Percent Change from Baseline
     # Missing when AVAL or BASE is missing. A zero BASE stops the run with
     # a division by zero, since no rule says what the result should be.
-    derivation:
-      compute:
-        expr: "100 * (AVAL - BASE) / BASE"
+    derivation: "100 * (AVAL - BASE) / BASE"

@@ -1,0 +1,13 @@
+yamaa: "1.0"
+type: project
+functions:
+- functions/dose_per_kg.yaml
+environments:
+  python:
+    lock: python/uv.lock
+  r:
+    lock: r/renv.lock
+
+adam:
+  specs:
+  - spec.yaml

@@ -1,4 +1,6 @@
-schema_version: '1.0'
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADINC
 keys:
 - STUDYID
@@ -51,16 +53,12 @@ columns:
 - name: PERSONYRS
   type: float
   label: Total Time at Risk in Person Years
-  derivation:
-    compute:
-      expr: PERSONDAYS / 365.25
+  derivation: PERSONDAYS / 365.25
 
 - name: EAIR100
   type: float
   label: Incidence per 100 Person Years
-  derivation:
-    compute:
-      expr: 100 * NSUBJ / PERSONYRS
+  derivation: 100 * NSUBJ / PERSONYRS
 
 rows:
 - id: incidence

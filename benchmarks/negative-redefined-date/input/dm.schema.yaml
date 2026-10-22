@@ -1,4 +1,5 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
 domain: DM
 keys: [STUDYID, USUBJID]
 input:
@@ -27,4 +28,3 @@ columns:
 rows:
   - id: subject
     filter: "ODM.ItemOID = 'IT.DM.RANDDT'"
-    derivations: {}

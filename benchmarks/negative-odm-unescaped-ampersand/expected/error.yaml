@@ -1,0 +1,8 @@
+phase: ingest
+condition: source_odm_xml_malformed
+spec_paths:
+  - input.ODM.path
+rule: ODM-1
+context:
+  dataset: ODM
+  path: input/odm.xml

@@ -1,18 +1,20 @@
 # Fixed creation time is supplied by the submission call in benchmark.yaml.
-schema_version: '1.0'
+yamaa: "1.0"
+type: project
 study:
   id: CATH
   name: CATH
-  description: Example study submitting adverse event onset times in Dataset-JSON
+  description: Example study submitting adverse
+    event onset times in Dataset-JSON
   protocol_name: CATH-01
+
 adam:
-  standard:
-    name: ADaMIG
-    version: '1.3'
-    status: Final
   specs:
   - spec.yaml
+  standards:
+  - name: ADaMIG
+    version: '1.3'
+    status: Final
   define: define.xml
-  datasets: json
-  context: Submission
+  transport: dataset_json
   source_system_version: '1.0'

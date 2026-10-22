@@ -37,7 +37,7 @@ impl ProjectFunctions for NoFunctions {
 
 /// How the run got its plan, from its private measurements.
 fn plan_of(run: &Run) -> &'static str {
-    let observed = run.build().observations(true).unwrap();
+    let observed = run.observations(true).unwrap();
     ["compiled", "refused", "reused"]
         .into_iter()
         .find(|status| observed.contains(&format!("\"plan\":\"{status}\"")))

@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADVS
 keys: [STUDYID, USUBJID, PARAMCD, VSSEQ]
 input:
@@ -25,7 +27,6 @@ intermediates:
     filter: "SELF.AVISIT IN ('SCREENING', 'BASELINE', 'WEEK 2', 'WEEK 4')"
     order_by: [SELF.VSSEQ]
     keep: last
-    no_match: {literal: null}
 
   # The collected record with the highest sequence number for the study,
   # subject, and parameter; expected records continue the numbering past
@@ -35,7 +36,7 @@ intermediates:
     key: [STUDYID, USUBJID, PARAMCD]
     order_by: [SELF.VSSEQ]
     keep: last
-    no_match: 0
+    absent: 0
 
 columns:
   - name: STUDYID
@@ -103,8 +104,6 @@ columns:
         source: ADY
         breaks: [0, 2, 22, 43]
         labels: [SCREENING, BASELINE, WEEK 2, WEEK 4, POST-TREATMENT]
-        right: false
-        missing: {literal: null}
     verifications:
       - allowed_values:
           values: [SCREENING, BASELINE, WEEK 2, WEEK 4, POST-TREATMENT]
@@ -121,7 +120,6 @@ columns:
           WEEK 2: 2
           WEEK 4: 4
           POST-TREATMENT: 99
-        missing: {literal: null}
 
   # Within each subject, parameter, and window: earliest study day first,
   # then the lower sequence number. ANL01FL marks rank 1; a record with no
@@ -150,7 +148,7 @@ rows:
   - id: collected
     dataset: VS
     derivations:
-      EXPECTED_ORDER: {literal: null}
+      EXPECTED_ORDER: null
 
   # One expected record for each planned visit whose window no collected
   # record's study day covers. It carries the planned visit name and
@@ -162,12 +160,12 @@ rows:
     derivations:
       STUDYID: SV.STUDYID
       USUBJID: SV.USUBJID
-      PARAMCD: {literal: SYSBP}
+      PARAMCD: "'SYSBP'"
       VISIT: SV.VISIT
       VISITNUM: SV.VISITNUM
-      ADT: {literal: null}
-      ADY: {literal: null}
-      AVAL: {literal: null}
+      ADT: null
+      ADY: null
+      AVAL: null
       # The window each planned visit is expected in. Unscheduled visits
       # and planned visits after week 4 get no expected record.
       AVISIT:
@@ -178,16 +176,13 @@ rows:
             BASELINE: BASELINE
             WEEK 2: WEEK 2
             WEEK 4: WEEK 4
-          missing: {literal: null}
-          unmapped: {literal: null}
+          unmapped: null
       EXPECTED_ORDER:
         row_number:
           window:
             group_by: [STUDYID, USUBJID, PARAMCD]
             order_by: [SV.VISITNUM]
-      VSSEQ:
-        compute:
-          expr: "PRIOR_MAX.VSSEQ + EXPECTED_ORDER"
+      VSSEQ: "PRIOR_MAX.VSSEQ + EXPECTED_ORDER"
 
 verifications:
   # Pins the 19-row fixture: the 14 original collected rows, the new

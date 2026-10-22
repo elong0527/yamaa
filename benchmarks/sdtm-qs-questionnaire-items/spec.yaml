@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: SDTM
 domain: QS
 keys: [STUDYID, USUBJID, QSSEQ]
 input:
@@ -29,7 +31,7 @@ columns:
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
-    derivation: {literal: QS}
+    derivation: "'QS'"
 
   # Working keys for the VISIT and ITEM intermediates; not in the output.
   - name: VISIT_SUBJECT
@@ -73,7 +75,7 @@ columns:
   - name: QSCAT
     type: str
     label: Category for Questionnaires
-    derivation: {literal: "PHQ-9"}
+    derivation: "'PHQ-9'"
 
   # Non-output working columns: the item count and score sum live only on
   # the total template's grouped rows. They are declared before the
@@ -113,7 +115,7 @@ columns:
     derivation:
       case:
         - when: "VISITNUM = 1"
-          then: {literal: "Y"}
+          then: "'Y'"
 
   # Only the total-score record is derived, so it is the only one flagged.
   - name: QSDRVFL
@@ -122,7 +124,7 @@ columns:
     derivation:
       case:
         - when: "QSTESTCD = 'PHQ9T'"
-          then: {literal: "Y"}
+          then: "'Y'"
 
   - name: QSSEQ
     type: int
@@ -151,19 +153,19 @@ rows:
       QSORRES:
         case:
           - when: "ODM.Value = 0"
-            then: {literal: "Not at all"}
+            then: "'Not at all'"
           - when: "ODM.Value = 1"
-            then: {literal: "Several days"}
+            then: "'Several days'"
           - when: "ODM.Value = 2"
-            then: {literal: "More than half the days"}
+            then: "'More than half the days'"
           - when: "ODM.Value = 3"
-            then: {literal: "Nearly every day"}
+            then: "'Nearly every day'"
       QSSTRESC: ODM.Value
       QSSTRESN: ODM.Value
-      QSSTAT: {literal: null}
-      QSREASND: {literal: null}
-      ITEMCNT: {literal: null}
-      TOTALSCORE: {literal: null}
+      QSSTAT: null
+      QSREASND: null
+      ITEMCNT: null
+      TOTALSCORE: null
 
   # One record per declared not-collected entry: no result, and the
   # status says why. A row with no item is a whole-questionnaire
@@ -182,22 +184,22 @@ rows:
       QSTESTCD:
         case:
           - when: "NOTDONE.ItemOID IS NULL"
-            then: {literal: QSALL}
+            then: "'QSALL'"
           - when: "NOTDONE.ItemOID IS NOT NULL"
             then: ITEM.QSTESTCD
       QSTEST:
         case:
           - when: "NOTDONE.ItemOID IS NULL"
-            then: {literal: "All Questionnaires"}
+            then: "'All Questionnaires'"
           - when: "NOTDONE.ItemOID IS NOT NULL"
             then: ITEM.QSTEST
-      QSORRES: {literal: null}
-      QSSTRESC: {literal: null}
-      QSSTRESN: {literal: null}
-      QSSTAT: {literal: "NOT DONE"}
+      QSORRES: null
+      QSSTRESC: null
+      QSSTRESN: null
+      QSSTAT: "'NOT DONE'"
       QSREASND: NOTDONE.Reason
-      ITEMCNT: {literal: null}
-      TOTALSCORE: {literal: null}
+      ITEMCNT: null
+      TOTALSCORE: null
 
   # One total-score record per subject visit where all nine items were
   # answered. A visit with a skipped or refused item cannot be scored.
@@ -214,16 +216,16 @@ rows:
       USUBJID: ODM.SubjectKey
       VISIT_SUBJECT: ODM.SubjectKey
       VISIT_EVENT: ODM.StudyEventOID
-      ITEM_OID: {literal: null}
+      ITEM_OID: null
       VISITNUM: VISIT.VISITNUM
       QSDTC: VISIT.VisitDate
-      QSTESTCD: {literal: PHQ9T}
-      QSTEST: {literal: "Patient Health Questionnaire 9 item total score"}
-      QSORRES: {literal: null}
+      QSTESTCD: "'PHQ9T'"
+      QSTEST: "'Patient Health Questionnaire 9 item total score'"
+      QSORRES: null
       QSSTRESC: TOTALSCORE
       QSSTRESN: TOTALSCORE
-      QSSTAT: {literal: null}
-      QSREASND: {literal: null}
+      QSSTAT: null
+      QSREASND: null
 
 verifications:
   - row_count:

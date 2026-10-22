@@ -1,0 +1,8 @@
+phase: ingest
+condition: source_header_absent
+spec_paths:
+  - input.DM.path
+rule: CSV-16
+context:
+  dataset: DM
+  path: input/dm.csv

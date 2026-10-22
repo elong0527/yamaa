@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADEX
 keys: [STUDYID, USUBJID, EXSEQ]
 input:
@@ -25,7 +27,7 @@ columns:
     derivation: EX.EXSEQ
 
   # Reads the EX records with this row's STUDYID, USUBJID and EXSEQ. The
-  # derive step turns each record's start date into days since 1970-01-01
+  # derivations turn each record's start date into days since 1970-01-01
   # before reduction; ONLY takes that one value and fails on a second match.
   # The value is an epoch day, not a study day.
   - name: EXSTDY
@@ -34,8 +36,8 @@ columns:
     derivation:
       aggregate:
         key: [STUDYID, USUBJID, EXSEQ]
-        derive:
-          - name: EPOCHDAY
+        derivations:
+          EPOCHDAY:
             type: int
             derivation:
               to_epoch_day:
@@ -47,4 +49,3 @@ rows:
   # is derived for it, so the row template sets nothing itself.
   - id: exposure
     filter: "EX.EXSEQ = 1"
-    derivations: {}

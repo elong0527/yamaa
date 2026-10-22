@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: SDTM
 domain: TR
 keys: [STUDYID, USUBJID, TRSEQ]
 input:
@@ -16,7 +18,7 @@ columns:
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
-    derivation: {literal: TR}
+    derivation: "'TR'"
 
   - name: STUDYID
     type: str
@@ -68,9 +70,8 @@ columns:
     type: float
     label: Collected Result as a Number
     derivation:
-      value:
-        source: TR_RAW.TRORRES
-      unconvertible: {literal: null}
+      value: TR_RAW.TRORRES
+      unconvertible: null
 
   - name: TRSTRESN
     type: float
@@ -78,15 +79,11 @@ columns:
     derivation:
       case:
         - when: "TR_RAW.TRORRES = 'TOO SMALL TO MEASURE'"
-          then: {literal: 5}
+          then: 5
         - when: "TR_RAW.TRTESTCD = 'DIAMETER' AND TR_RAW.TRORRESU = 'cm'"
-          then:
-            compute:
-              expr: "TRORRES_N * 10"
+          then: "TRORRES_N * 10"
         - when: "TR_RAW.TRTESTCD = 'DIAMETER'"
-          then:
-            compute:
-              expr: "TRORRES_N"
+          then: "TRORRES_N"
 
   - name: TRSTRESC
     type: str
@@ -103,7 +100,7 @@ columns:
     derivation:
       case:
         - when: "TRSTRESN IS NOT NULL"
-          then: {literal: mm}
+          then: "'mm'"
     verifications:
       - allowed_values:
           values: [mm]

@@ -9,6 +9,7 @@ from unittest.mock import patch
 
 from tools.commands import installed
 from tools.conformance import supplemental_inventory as module
+from tools.tests.support import write
 
 
 class RepositoryCatalog(unittest.TestCase):
@@ -65,10 +66,9 @@ class RepositoryCatalog(unittest.TestCase):
             tempfile.TemporaryDirectory() as directory,
             patch.object(installed.subprocess, "run") as run,
             patch.dict(installed.os.environ, {"R_LIBS": directory}),
-            patch(
-                "sys.argv",
+        ):
+            installed.main(
                 [
-                    "installed",
                     "run",
                     "--runtime",
                     "r",
@@ -84,10 +84,8 @@ class RepositoryCatalog(unittest.TestCase):
                     "github-actions:1/attempt-1/native-r-binary/yamaa_1.0.0-4.6.zip",
                     "--evidence",
                     "https://github.com/elong0527/yamaa/actions/runs/1",
-                ],
-            ),
-        ):
-            installed.main()
+                ]
+            )
         command = run.call_args.args[0]
         self.assertEqual(command[command.index("--package-form") + 1], "binary")
 
@@ -313,13 +311,17 @@ class RepositoryCatalog(unittest.TestCase):
         staged = dict(module.host_fixture_files(catalog))
         # haven's datetime.sas7bdat and pandas' compressed files and truth.
         for owner in ("haven", "pandas"):
-            name = prefix + f"LICENSE-{owner}.txt"
-            self.assertEqual(roles[name], "license")
-            self.assertEqual(staged[name], f"host-fixtures/sas/LICENSE-{owner}.txt")
+            with self.subTest(owner=owner):
+                name = prefix + f"LICENSE-{owner}.txt"
+                self.assertEqual(roles[name], "license")
+                self.assertEqual(staged[name], f"host-fixtures/sas/LICENSE-{owner}.txt")
         self.assertEqual(roles[prefix + "README.md"], "documentation")
         self.assertNotIn(prefix + "README.md", staged)
         for fixture in ("datetime.sas7bdat", "rle.sas7bdat", "rdc.sas7bdat"):
-            self.assertEqual(staged[prefix + fixture], "host-fixtures/sas/" + fixture)
+            with self.subTest(fixture=fixture):
+                self.assertEqual(
+                    staged[prefix + fixture], "host-fixtures/sas/" + fixture
+                )
 
     def test_sas_fixture_cannot_overwrite_an_existing_shared_host_input(self):
         catalog = {
@@ -383,9 +385,7 @@ class SupplementalEvidence(unittest.TestCase):
         }
 
     def write(self, name, contents):
-        path = self.root / name
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(contents)
+        write(self.root, name, contents)
 
     def save_catalog_file(self):
         self.catalog_path.write_text(json.dumps(self.catalog_file))
