@@ -514,7 +514,11 @@ lists, with its consumers named in
 family and asserts the same rows; neither types the expected value by
 hand. A host suite adds only what is host-specific: argument conversion,
 retained ownership, i64 and NUL handling, callbacks, interrupts and the
-host's own failure text.
+host's own failure text. The command line's tests
+(`rust/crates/yamaa-cli/tests/parity.rs`) compare its `--format json` issues
+and saved run reports with the same issue and run-report parity cases, so a
+case whose rows or files differ by host gives them under `python`, `r` and
+`cli`.
 
 ## CI and release qualification
 
