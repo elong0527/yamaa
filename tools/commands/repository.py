@@ -39,6 +39,7 @@ CHECKS = (
     "tools.validation.check_supported_platforms",
     "tools.validation.check_diagnostics",
     "tools.validation.check_architecture",
+    "tools.validation.check_test_support",
     "tools.validation.check_interface_stability",
 )
 

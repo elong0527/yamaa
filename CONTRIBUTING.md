@@ -384,8 +384,9 @@ of `support::diagnostic` (core) compare a diagnostic's five base fields and
 return its rendered code, `support::benchmarks` (adapters) reads what a
 live benchmark states (D120), and `support::odm_files::Scratch`
 (adapters) is a scratch directory removed on drop. The core and adapters
-trees hold copies of the AST-root factories by design (#2158), so a
-change to one is made to both.
+trees hold copies of four modules by design (#2158): a change to one is
+made to both, and `make check-repository` fails while they differ
+(`tools.validation.check_test_support`).
 
 - Authored controls are files under `tests/fixtures/`, read with
   `include_str!`; assert their row count so a truncated fixture fails
