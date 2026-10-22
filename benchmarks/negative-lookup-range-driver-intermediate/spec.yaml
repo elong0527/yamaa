@@ -1,0 +1,55 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADEX
+keys: [STUDYID, USUBJID, ASEQ]
+input:
+  EX: {path: input/ex.csv, types: {EXSEQ: int, EXDOSE: int, EXSTDT: date}}
+  PERIODS:
+    path: input/periods.csv
+    types: {APERIOD: int, APERSDT: date, APEREDT: date}
+
+output:
+  path: adex.csv
+  columns: [STUDYID, USUBJID, ASEQ, APERIOD]
+
+intermediates:
+  # The exposure records that gave a dose; each builds one row.
+  - id: DOSED
+    dataset: EX
+    filter: "EX.EXDOSE > 0"
+
+  # The subject's period that holds the dose's start date. A named lookup
+  # is matched once for every row that reads it, so its range value cannot
+  # read the dose record that built the row: the specification is not
+  # supported, and nothing is read.
+  - id: PERIOD
+    dataset: PERIODS
+    key: [STUDYID, USUBJID]
+    between: {value: DOSED.EXSTDT, lower: APERSDT, upper: APEREDT}
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+
+  - name: ASEQ
+    type: int
+    label: Analysis Sequence Number
+
+  - name: APERIOD
+    type: int
+    label: Period
+
+rows:
+  - id: dosed
+    dataset: DOSED
+    derivations:
+      STUDYID: DOSED.STUDYID
+      USUBJID: DOSED.USUBJID
+      ASEQ: DOSED.EXSEQ
+      APERIOD: PERIOD.APERIOD

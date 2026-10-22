@@ -1,0 +1,6 @@
+phase: planning
+condition: unsupported_operation
+spec_paths:
+  - intermediates.PERIOD.between.value
+context:
+  operation: intermediate_driver_range_value
