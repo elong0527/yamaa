@@ -15,7 +15,9 @@
 //! declares no `key`, through its implicit join or by a qualified aggregate
 //! without `key`, fails at the read in either construction, whatever the
 //! input stores (D111), and so does one whose declared key column the read
-//! cannot pair (D111 item 2, [`super::declared_key`]).
+//! cannot pair (D111 item 2, [`super::declared_key`]). Each formula's
+//! operands are typed once its names bind, over the names that bound
+//! (FORMULA-12), and a flag's condition once every name it reads binds.
 //!
 //! Binding also decides from the declarations alone whether a key reads
 //! other records than its own ([`key_record`]); it calls the same check.
@@ -229,6 +231,42 @@ pub(in crate::specification) fn qualified_numeric_findings(
     }
 }
 
+/// A formula's operand types (FORMULA-12), which binding checks once the
+/// formula's names bind, over the names that bound (`BindContext::numeric`):
+/// `kind` types each name that bound as the declarations decide it, and a
+/// name of no known type is not checked.
+fn operand_types(
+    compiled: &CompiledExpression,
+    kind: impl Fn(&str) -> Option<crate::value::ValueType>,
+    findings: &mut Vec<BindFinding>,
+) {
+    findings.extend(
+        types::numeric_kinds(compiled, kind)
+            .into_iter()
+            .map(BindFinding::Scalar),
+    );
+}
+
+/// A flag's or `case` predicate's static types (FORMULA-5, FORMULA-12),
+/// with `kind` typing each name it reads.
+fn condition_types(
+    spec: &Spec,
+    condition: ExprId,
+    kind: impl Fn(&str) -> Option<crate::value::ValueType>,
+    findings: &mut Vec<BindFinding>,
+) {
+    if let ExprKind::Formula(ast::Formula {
+        compiled: Ok(plan), ..
+    }) = &spec.expr(condition).kind
+    {
+        findings.extend(
+            types::predicate_kinds(plan, kind)
+                .into_iter()
+                .map(BindFinding::Predicate),
+        );
+    }
+}
+
 /// Whether an aggregate reduces the constructed output rows: neither its
 /// expression nor a derive binding names a relation (LOOKUP-18).
 fn reduces_output(spec: &Spec, aggregate: &ast::Aggregate) -> bool {
@@ -382,8 +420,11 @@ impl Checks<'_> {
     /// cut's source type, each window's, each aggregate's header and filter,
     /// and each ODM read's filter. Without row templates (`scope`), also each
     /// read of another input through its implicit join ([`Self::join`]), a
-    /// `case` predicate's before its result. `output` types a column window's
-    /// baseline operands, which only a spec without row templates does here.
+    /// `case` predicate's before its result, and the static types binding
+    /// checks once those reads bind: each `case` predicate's, a flag's once
+    /// every name it reads binds, and a `case` result formula's operands'.
+    /// `output` types a column window's baseline operands, which only a spec
+    /// without row templates does here.
     fn selections(
         &self,
         root: ExprId,
@@ -406,10 +447,13 @@ impl Checks<'_> {
     ) -> Result<(), BindError> {
         let spec = self.spec;
         match &spec.expr(e).kind {
+            // The implicit template types each predicate once its names are
+            // read, before its result (`case_predicates::implicit_predicate`).
             ExprKind::Case(arms) => {
                 for arm in arms {
                     if let (Some(scope), Some(condition)) = (scope, arm.condition) {
                         self.predicate_joins(scope, condition, findings);
+                        condition_types(spec, condition, |name| self.declared_type(name), findings);
                     }
                     self.select(arm.result, scope, output, true, findings)?;
                 }
@@ -452,9 +496,20 @@ impl Checks<'_> {
                     }
                 }
             }
+            // A flag is typed only once every name it reads binds
+            // (`flags::bind`).
             ExprKind::Flag { condition, .. } => {
                 if let Some(scope) = scope {
+                    let start = findings.len();
                     self.predicate_joins(scope, *condition, findings);
+                    if findings.len() == start {
+                        condition_types(
+                            spec,
+                            *condition,
+                            |name| self.declared_type(name),
+                            findings,
+                        );
+                    }
                 }
             }
             ExprKind::Window(window) => {
@@ -572,7 +627,9 @@ impl Checks<'_> {
     /// Without row templates, a formula in a `case` result, at its text
     /// `path`, reads only lookups and columns (`BindContext::branch_formula`):
     /// each name, once, that is no column, no lookup's field, or a field of a
-    /// lookup binding does not bind fails as unknown (NAME-3).
+    /// lookup binding does not bind fails as unknown (NAME-3). Then its
+    /// operands are typed over the names that bound ([`Self::column_type`],
+    /// FORMULA-12).
     fn branch_formula(
         &self,
         compiled: &CompiledExpression,
@@ -598,6 +655,23 @@ impl Checks<'_> {
                 });
             }
         }
+        operand_types(compiled, |name| self.column_type(name), findings);
+    }
+
+    /// The declared type of the column a bare name reads, which types a
+    /// formula operand of the implicit template: there a formula binds no
+    /// stored field, and a lookup's field has the type its donor's capture
+    /// gives it.
+    fn column_type(&self, name: &str) -> Option<crate::value::ValueType> {
+        (!name.contains('.'))
+            .then(|| self.declared_type(name))
+            .flatten()
+    }
+
+    /// The declared type of a column or a stored field a name reads, when
+    /// the declarations give one ([`types::DeclaredTypes`]).
+    fn declared_type(&self, name: &str) -> Option<crate::value::ValueType> {
+        self.declared.name(name).single()
     }
 
     /// Without row templates, each name a flag's or `case` predicate's
@@ -735,8 +809,9 @@ impl Checks<'_> {
 
     /// An aggregate's expression grammar and header, then its filter's
     /// grammar, the key a column aggregate matches on, and its derive
-    /// bindings. Binding binds nothing more of a column or row aggregate
-    /// whose expression or header fails, and binds its derive steps only when
+    /// bindings, each followed by its conversion once it binds (VALUE-24).
+    /// Binding binds nothing more of a column or row aggregate whose
+    /// expression or header fails, and binds its derive steps only when
     /// nothing else of it failed.
     fn reduction(
         &self,
@@ -836,6 +911,9 @@ impl Checks<'_> {
                 Owner::Unnamed,
             ));
         }
+        if aggregate.bindings.is_empty() {
+            return Ok(());
+        }
         // Each derive binding reads the relation the aggregate reduces, in
         // an ungrouped row phase ([`Self::donor_walk`]), typed by the
         // relation's stored fields and the earlier bindings' declared types.
@@ -852,29 +930,50 @@ impl Checks<'_> {
                 .and_then(|binding| binding.declared),
             Some(_) => self.declared.name(name).column_type(),
         };
+        let env = self.prepared.tree.env(&self.declared);
+        let table = ast::Table::new(spec, e, ast::Scope::Row, &env);
         for (at, binding) in aggregate.bindings.iter().enumerate() {
-            let (Some(_), Some(relation)) = (scope, relation) else {
-                self.derivation(binding.derivation.expr, None, false, findings)?;
-                continue;
-            };
-            let drivers = [relation];
-            let donor = Scope {
-                drivers: &drivers,
-                row: None,
-                phase: Some(Phase::Row { group_by: None }),
-                available: None,
-            };
-            let reads = super::donors::DonorReads::derive(
-                spec,
-                self.prepared,
-                relation,
-                &derived,
-                at,
-                &self.refused,
-                &typing,
-            );
-            self.defects(binding.derivation.expr, findings)?;
-            self.donor_walk(&reads, donor, binding.derivation.expr, findings)?;
+            let start = findings.len();
+            match (scope, relation) {
+                (Some(_), Some(relation)) => {
+                    let drivers = [relation];
+                    let donor = Scope {
+                        drivers: &drivers,
+                        row: None,
+                        phase: Some(Phase::Row { group_by: None }),
+                        available: None,
+                    };
+                    let reads = super::donors::DonorReads::derive(
+                        spec,
+                        self.prepared,
+                        relation,
+                        &derived,
+                        at,
+                        &self.refused,
+                        &typing,
+                    );
+                    self.defects(binding.derivation.expr, findings)?;
+                    self.donor_walk(&reads, donor, binding.derivation.expr, findings)?;
+                }
+                _ => self.derivation(binding.derivation.expr, None, false, findings)?,
+            }
+            // A binding that bound converts to its declared type like a
+            // column (VALUE-24), as binding states it once the binding binds
+            // (`aggregates::bind_derivations`).
+            if let (Some(declared), None, true) = (
+                binding.declared,
+                &binding.derivation.unconvertible,
+                findings.len() == start,
+            ) {
+                findings.extend(
+                    types::conversion_finding(
+                        &render(spec, binding.meta),
+                        table.of(binding.derivation.expr),
+                        declared,
+                    )
+                    .map(BindFinding::Scalar),
+                );
+            }
         }
         Ok(())
     }
@@ -1003,11 +1102,26 @@ impl Checks<'_> {
             ExprKind::Ref(_) | ExprKind::Source(_) => {
                 source(e, findings)?;
             }
+            // Each name, then the operand types over the names that bound: a
+            // column's or a stored field's declared type (FORMULA-12).
             ExprKind::Formula(formula) => {
                 if let Ok(compiled) = &formula.compiled {
+                    let mut bound = Vec::new();
                     for (at, read) in names(e) {
-                        reads.formula(&at, compiled.expression(), read, findings);
+                        if reads.formula(&at, compiled.expression(), read, findings) {
+                            bound.push(read);
+                        }
                     }
+                    operand_types(
+                        compiled,
+                        |name| {
+                            bound
+                                .contains(&name)
+                                .then(|| self.declared.name(name).single())
+                                .flatten()
+                        },
+                        findings,
+                    );
                 }
             }
             ExprKind::Case(arms) => {
@@ -1018,9 +1132,15 @@ impl Checks<'_> {
                     self.walk(reads, scope, arm.result, findings)?;
                 }
             }
+            // Each name, then the condition's types once every name binds
+            // (`flags::bind`).
             ExprKind::Flag { condition, .. } => {
+                let start = findings.len();
                 for (at, read) in names(*condition) {
                     reads.flag(&at, read, findings);
+                }
+                if findings.len() == start {
+                    condition_types(spec, *condition, |name| self.declared_type(name), findings);
                 }
             }
             ExprKind::FirstAvailable { sources, .. } => {
@@ -1133,9 +1253,26 @@ impl Checks<'_> {
             ExprKind::Ref(_) | ExprKind::Source(_) => {
                 source(e, findings)?;
             }
-            ExprKind::Formula(_) => {
+            // Each name, then the operand types over the names that bound, as
+            // binding's captured types type them there (FORMULA-12).
+            ExprKind::Formula(formula) => {
+                let mut bound = Vec::new();
                 for (at, read) in names(spec, e) {
-                    reads.read(&at, read, findings);
+                    if reads.read(&at, read, findings) {
+                        bound.push(read);
+                    }
+                }
+                if let Ok(compiled) = &formula.compiled {
+                    operand_types(
+                        compiled,
+                        |name| {
+                            bound
+                                .contains(&name)
+                                .then(|| reads.kind(name).map(Into::into))
+                                .flatten()
+                        },
+                        findings,
+                    );
                 }
             }
             ExprKind::Case(arms) => {
@@ -1150,9 +1287,21 @@ impl Checks<'_> {
                     self.donor_walk(reads, scope, arm.result, findings)?;
                 }
             }
+            // Each name, then the condition's types once every name binds
+            // (`flags::bind`).
             ExprKind::Flag { condition, .. } => {
+                let start = findings.len();
+                let mut bound = true;
                 for (at, read) in names(spec, *condition) {
-                    reads.predicate(&at, read, true, findings);
+                    bound &= reads.predicate(&at, read, true, findings);
+                }
+                if bound && findings.len() == start {
+                    condition_types(
+                        spec,
+                        *condition,
+                        |name| reads.kind(name).map(Into::into),
+                        findings,
+                    );
                 }
             }
             ExprKind::FirstAvailable { sources, .. } => {
@@ -1975,59 +2124,21 @@ impl Checks<'_> {
         findings.push(BindFinding::Scalar(finding.diagnostic()));
     }
 
-    /// Static types over the declared types, as binding checks them: each
-    /// flag condition and case predicate (FORMULA-5, FORMULA-12), and each
-    /// aggregate derive binding's conversion (VALUE-24).
-    fn predicate_types(
-        &self,
-        root: ExprId,
-        findings: &mut Vec<BindFinding>,
-    ) -> Result<(), BindError> {
+    /// Under row templates, the static types over the declared types of each
+    /// `case` predicate at the positions below `root` (FORMULA-5,
+    /// FORMULA-12), which binding finds once it evaluates the predicate of a
+    /// derivation that bound. The walk types a flag where binding does, and
+    /// without row templates a `case` predicate too ([`Self::selections`]).
+    fn predicate_types(&self, root: ExprId, findings: &mut Vec<BindFinding>) {
         let spec = self.spec;
-        let check = |e: ExprId, findings: &mut Vec<BindFinding>| {
-            if let ExprKind::Formula(ast::Formula {
-                compiled: Ok(plan), ..
-            }) = &spec.expr(e).kind
-            {
-                findings.extend(
-                    types::predicate_kinds(plan, |name| self.declared.name(name).single())
-                        .into_iter()
-                        .map(BindFinding::Predicate),
-                );
-            }
-        };
-        match &spec.expr(root).kind {
-            ExprKind::Flag { condition, .. } => check(*condition, findings),
-            ExprKind::Case(arms) => {
-                for arm in arms {
-                    if let Some(condition) = arm.condition {
-                        check(condition, findings);
-                    }
-                    self.predicate_types(arm.result, findings)?;
+        if let ExprKind::Case(arms) = &spec.expr(root).kind {
+            for arm in arms {
+                if let Some(condition) = arm.condition {
+                    condition_types(spec, condition, |name| self.declared_type(name), findings);
                 }
+                self.predicate_types(arm.result, findings);
             }
-            ExprKind::Aggregate(aggregate) => {
-                let env = self.prepared.tree.env(&self.declared);
-                let table = ast::Table::new(spec, root, ast::Scope::Row, &env);
-                for binding in &aggregate.bindings {
-                    let (Some(declared), None) =
-                        (binding.declared, &binding.derivation.unconvertible)
-                    else {
-                        continue;
-                    };
-                    findings.extend(
-                        types::conversion_finding(
-                            &render(spec, binding.meta),
-                            table.of(binding.derivation.expr),
-                            declared,
-                        )
-                        .map(BindFinding::Scalar),
-                    );
-                }
-            }
-            _ => {}
         }
-        Ok(())
     }
 
     /// The output columns a derivation reads, as binding records them for
@@ -2687,12 +2798,12 @@ impl Checks<'_> {
 
     /// Without row templates, each column in declaration order: a key that
     /// reads other records, the derivation's defects and selections with its
-    /// reads of other inputs' joins, its formula's qualified names
-    /// (FORMULA-9) and reads of a lookup binding does not bind (NAME-3), its
-    /// static types and its conversion (VALUE-24); then column order over
-    /// what every derivation reads (COLUMN-5, COLUMN-6, COLUMN-7). Returns
-    /// whether each column's derivation binds: a conversion finding keeps it
-    /// bound.
+    /// reads of other inputs' joins and its static types, its formula's
+    /// qualified names (FORMULA-9), reads of a lookup binding does not bind
+    /// (NAME-3) and operand types (FORMULA-12), and its conversion
+    /// (VALUE-24); then column order over what every derivation reads
+    /// (COLUMN-5, COLUMN-6, COLUMN-7). Returns whether each column's
+    /// derivation binds: a conversion finding keeps it bound.
     fn base(&self, findings: &mut Vec<BindFinding>) -> Result<Vec<bool>, BindError> {
         let spec = self.spec;
         let prepared = self.prepared;
@@ -2742,9 +2853,10 @@ impl Checks<'_> {
                         name: name.into(),
                     });
                 }
+                // Then the operand types over the names that bound.
+                operand_types(compiled, |name| self.column_type(name), findings);
             }
             dependencies.push(Some(self.edges(root, Some(driver[0]))));
-            self.predicate_types(root, findings)?;
             bound.push(findings.len() == start);
             if findings.len() == start && derivation.unconvertible.is_none() {
                 let result = self.result_type(root, ast::Scope::Row, &self.declared);
@@ -2821,10 +2933,10 @@ impl Checks<'_> {
     /// bindings in turn, as binding binds them (`rows::Templates::bind`):
     /// each derivation's defects and then its nodes in binding's order,
     /// scoped to the rows it evaluates on ([`Self::walk`]); a template's
-    /// filter reads after its derivations. Then the static types and
-    /// conversions in binding's order, each template's derivations first;
-    /// then each template's cycles and the column phase's order. Returns
-    /// what bound.
+    /// filter reads after its derivations. Then the static types of each
+    /// flag and `case` predicate and the conversion of each derivation that
+    /// bound, each template's derivations first; then each template's cycles
+    /// and the column phase's order. Returns what bound.
     fn rows(
         &self,
         rows: &rows::Templates,
@@ -2849,6 +2961,10 @@ impl Checks<'_> {
             derived: Vec::new(),
         };
         let mut graphs = Vec::new();
+        // Whether each derivation, each template's and then the column
+        // phase's, bound without a finding in some binding: only such a
+        // derivation states its result type (`rows::bind_assignment`).
+        let mut converts = Vec::new();
         for (index, template) in phases.iter().enumerate() {
             let declared = &spec.rows.templates[index];
             let reads = super::boundaries::Reads::row(
@@ -2881,6 +2997,7 @@ impl Checks<'_> {
                 let read = reads.bound();
                 clean.push(read && findings.len() == start);
             }
+            converts.extend(clean.iter().copied());
             bound.derived.push(
                 template
                     .derivations
@@ -2931,10 +3048,12 @@ impl Checks<'_> {
                 .collect::<Vec<_>>();
             let start = findings.len();
             self.defects(root, findings)?;
+            let declared = findings.len() == start;
             // Every driver binds the whole derivation for its own rows, one
             // binding after another, and a failure several bindings share is
             // reported once.
             let mut read = true;
+            let mut clean = false;
             for (driver, owned) in &bindings {
                 let drivers = std::slice::from_ref(driver);
                 let scope = Scope {
@@ -2954,22 +3073,30 @@ impl Checks<'_> {
                     &column_groups,
                     refused,
                 );
+                let before = findings.len();
                 self.walk(&reads, scope, root, findings)?;
-                read &= reads.bound();
+                let bound = reads.bound();
+                read &= bound;
+                clean |= declared && bound && findings.len() == before;
             }
             if bindings.len() > 1 {
                 rows::distinct_findings(findings, start, self.prepared.source());
             }
             bound.columns.push(read && findings.len() == start);
+            converts.push(clean);
         }
-        for derivation in phases
+        for (derivation, converts) in phases
             .iter()
             .flat_map(|template| &template.derivations)
             .chain(&columns)
+            .zip(converts)
         {
+            if !converts {
+                continue;
+            }
             let start = findings.len();
             let root = derivation.expr;
-            self.predicate_types(root, findings)?;
+            self.predicate_types(root, findings);
             if derivation.handled || findings.len() != start {
                 continue;
             }
