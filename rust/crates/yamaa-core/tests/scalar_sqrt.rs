@@ -1,6 +1,4 @@
 //! Scalar contracts.
-#[allow(dead_code)]
-mod support;
 mod scalar {
     mod sqrt {
         use yamaa_core::numeric::{sqrt, ArithmeticErrorKind, Number};

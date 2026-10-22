@@ -1,6 +1,4 @@
 //! Schema contracts.
-#[allow(dead_code)]
-mod support;
 mod schema {
     mod schema_windows {
         use yamaa_core::schema::{

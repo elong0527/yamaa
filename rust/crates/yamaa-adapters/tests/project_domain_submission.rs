@@ -1,7 +1,5 @@
 #![cfg(feature = "yaml")]
 //! Project contracts.
-#[allow(dead_code)]
-mod support;
 mod project {
     mod domain_submission {
         use std::{
@@ -230,10 +228,11 @@ mod project {
                 .collect()
         }
         /// The engine's typed copies of each vocabulary are the data file's
-        /// lists, in order. The tests below reach the lists a reader or the
-        /// Define-XML writer keeps to itself. The engine keeps no list of
-        /// where comparators: the 1.0 lowering reads the two the 1.0 schema
-        /// spells, NE and NOTIN, by name.
+        /// lists, in order. The 0.5 specification model admits `core` and
+        /// `data_type` from `Core::NAMES` and `DataType::NAMES`. The tests
+        /// below reach the lists a reader or the Define-XML writer keeps to
+        /// itself. The engine keeps no list of where comparators: the 1.0
+        /// lowering reads the two the 1.0 schema spells, NE and NOTIN, by name.
         #[test]
         fn engine_vocabularies_equal_the_cdisc_vocabulary_file() {
             use yamaa_core::specification_submission_document::{
@@ -257,43 +256,6 @@ mod project {
                 assert!(
                     data_types.iter().any(|name| name == form.name()),
                     "{form:?}"
-                );
-            }
-        }
-        /// The 0.5 specification model keeps its own lists of core
-        /// designations and submission data types; its refusal names each
-        /// list, which is the data file's, in order.
-        #[test]
-        fn the_0_5_model_admits_the_core_designations_and_data_types_the_file_lists() {
-            use yamaa_core::diagnostic::ConditionCode;
-            use yamaa_core::schema::{SchemaContext, SpecificationDocument};
-            let text = "columns:\n  - submission: {core: Unlisted, data_type: Unlisted}\n";
-            let document = yamaa_adapters::yaml_decode::decode_yaml(text.as_bytes())
-                .unwrap()
-                .document;
-            let Err(findings) = SpecificationDocument::admit(document).unwrap() else {
-                panic!("an unlisted value is refused");
-            };
-            for (field, name) in [
-                ("core", "core_designation"),
-                ("data_type", "submission_data_type"),
-            ] {
-                let path = format!("columns.0.submission.{field}");
-                let finding = findings
-                    .iter()
-                    .find(|finding| finding.path == path)
-                    .unwrap_or_else(|| panic!("{path}: {findings:?}"));
-                assert_eq!(finding.code, ConditionCode::SchemaModelInvalidValue);
-                let quoted = vocabulary(name)
-                    .iter()
-                    .map(|value| format!("'{value}'"))
-                    .collect::<Vec<_>>();
-                let (last, rest) = quoted.split_last().unwrap();
-                let reason = format!("Input should be {} or {last}", rest.join(", "));
-                assert_eq!(
-                    finding.context,
-                    [("reason", SchemaContext::Text(reason))],
-                    "{field}"
                 );
             }
         }

@@ -16,6 +16,10 @@
 # rust/tests/schemas/define/2.1/define-enumerations.xsd, whose release
 # `source` names. `python -m tools.validation.check_cdisc_vocabulary` checks
 # both.
+#
+# The tables of SUB-3, SUB-9, SUB-10, SUB-15, SUB-26 and JSON-10 list these
+# values too; `python -m tools.validation.check_cdisc_tables` keeps them to
+# this file.
 version: "1.0"
 source:
   define_xml: "2.1.11"

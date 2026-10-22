@@ -1,3 +1,8 @@
-schema_version: '1.0'
-environments: {r: r/environment.yaml}
+yamaa: "1.0"
+type: project
+functions:
+  - functions/rounded_value.yaml
+environments:
+  r:
+    lock: r/renv.lock
 adam: {specs: [spec.yaml]}

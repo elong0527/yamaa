@@ -9,17 +9,21 @@ SDTM and ADaM datasets and define.xml files.
 |---|---|---|
 | Build one dataset | `yamaa_spec(path)$run()$save()` | `yamaa.spec(path).run().save()` |
 | Build one project dataset | `project$spec("DM")$run()$save()` | `project.spec("DM").run().save()` |
+| A project's specifications | `project$names` | `project.names` |
 | Build every SDTM dataset | `project$run("sdtm")$save()` | `project.run("sdtm").save()` |
 | Build every ADaM dataset | `project$run("adam")$save()` | `project.run("adam").save()` |
 | One dataset of a project run | `runs[["ADSL"]]$output` | `runs["ADSL"].output` |
 | Check without data | `spec$check()$issues` | `spec.check().issues` |
+| Did it succeed? | `run$status` | `run.status` |
 | See the resolved specification | `spec$resolve()` | `spec.resolve()` |
 | Run report | `run$report` | `run.report` |
+| A table in Polars or pandas | `run$output` is a data frame | `run.output.to_polars()`, `run.output.to_pandas()` |
 | define.xml and transport files | `project$submission("sdtm")$save()` | `project.submission("sdtm").save()` |
 | Read ODM XML | `yamaa_read_odm(path)` | `yamaa.read_odm(path)` |
 | Lint specifications | `yamaa_lint(paths)` | `yamaa.lint(paths)` |
 | JSON Schema of a file type | `yamaa_schema("spec")` | `yamaa.schema("spec")` |
 | Check an installation | `yamaa_selftest()` | `yamaa.selftest()` |
+| Engine version and platform | `yamaa_info()` | `yamaa.info()` |
 
 Examples in R and Python are shown in tabs, R first; pick a language once and
 every tab on the page follows. Both packages run the same Rust engine, so the
@@ -114,6 +118,7 @@ columns:
     ```r
     spec <- yamaa_spec("sdtm/dm.yaml")
     run <- spec$run()
+    run$status    # "succeeded" or "failed"
     run$output    # generated dataset
     run$issues    # identified errors
     run$report    # run report
@@ -125,10 +130,51 @@ columns:
     ```python
     spec = yamaa.spec("sdtm/dm.yaml")
     run = spec.run()
+    run.status    # "succeeded" or "failed"
     run.output    # generated dataset
     run.issues    # identified errors
     run.report    # run report
     run.save()    # save run report and dataset; returns their paths
+    ```
+
+## Tables
+
+Every table that yamaa returns is a data frame in R. In Python it is a
+`yamaa.Table`, which needs no other package: printing it shows its column
+names and types and its first and last rows, `len()` and `num_rows` count its
+rows, `column_names` names its columns, and `to_pylist()` gives one dict per
+row. `to_polars()`, `to_pandas()` and `to_arrow()` convert it to the table
+library you use, which must be installed: Polars, pandas with PyArrow, or
+PyArrow. A library that reads the Arrow PyCapsule interface, such as
+`polars.DataFrame(table)` or `pyarrow.table(table)`, reads it directly.
+
+| Column type | R | Python value | Arrow |
+|---|---|---|---|
+| `str` | character | `str` | Utf8 |
+| `int` | double; an error beyond 2^53 | `int` | Int64 |
+| `float` | double | `float` | Float64 |
+| `date` | `Date` | `datetime.date` | Date32 |
+| `datetime` | `POSIXct` in UTC | `datetime.datetime`, without a time zone | Timestamp, in seconds |
+| list, in `issues` | list column | `list` | List |
+
+A missing value is `NA` in R, `NULL` for a missing list, and `None` in
+Python. `to_pandas()` keeps each column's Arrow type as a `pandas.ArrowDtype`,
+so an integer column with a missing value keeps its exact integers.
+
+=== "R"
+
+    ```r
+    dm <- run$output
+    nrow(dm)
+    ```
+
+=== "Python"
+
+    ```python
+    dm = run.output              # prints a preview
+    dm.num_rows
+    rows = dm.to_pylist()        # [{"STUDYID": "STUDY01", ...}, ...]
+    frame = dm.to_polars()       # or dm.to_pandas(), dm.to_arrow()
     ```
 
 ## Check a specification without data
@@ -162,6 +208,55 @@ declared after it [forward_reference, COLUMN-5] (and 2 more issues)`, and its
     ```python
     yamaa.spec("sdtm/dm.yaml").check().issues
     ```
+
+## Status and printed results
+
+Every result has a `status`. A check succeeds when it finds no issue, and a
+run when it builds its dataset with no issue. A project run succeeds when
+every specification in it succeeds, and a submission when every section
+composes with no issue; anything else is `failed`. A specification of a
+project run that did not run, because a specification it reads from did not
+complete, is `skipped`.
+
+Printing a result shows its status, its size, its issue count and its first
+issue with its location. The engine writes the text, so R, Python and the
+command line print the same words. A project run lists each specification on
+a line of its own, and one of its runs prints like any run:
+
+=== "R"
+
+    ```r
+    runs <- yamaa_project("project.yaml")$run("adam")
+    runs$status        # "failed"
+    runs               # the summary below
+    runs[["ADTTE"]]
+    ```
+
+=== "Python"
+
+    ```python
+    runs = yamaa.project("project.yaml").run("adam")
+    runs.status        # "failed"
+    print(runs)        # the summary below
+    print(runs["ADTTE"])
+    ```
+
+```text
+yamaa project run of project.yaml, section adam: failed, 3 specifications, 2 issues
+  ADSL   succeeded  254 rows x 48 columns, 0 issues
+  ADAE   failed     no output, 1 issue
+  ADTTE  skipped    no output, 1 issue
+first issue: adam/adae.yaml:57:9: column ASTDY reads TRTSDT, which is declared after it [forward_reference, COLUMN-5]
+yamaa run of ADTTE: skipped, no output, 1 issue
+first issue: adam/adtte.yaml:9:5: this specification did not run because the producer of its input ADAE did not complete [producer_not_completed, PROJECT-11]
+```
+
+`yamaa_spec()`, `yamaa.spec()` and the project functions read nothing, so
+their objects print only the path you gave, such as `yamaa spec
+sdtm/dm.yaml`. In R, `format()` returns the printed lines, and `names()` of a
+result lists its fields and methods, starting with `status`, as
+`names(run)` gives `"status" "output" "issues" "report" "save"`; `length()`
+counts them.
 
 ## See the resolved specification
 
@@ -277,6 +372,7 @@ checked or run without its project, fails before any data is read with
 
     ```r
     project <- yamaa_project("project.yaml")
+    project$names             # every specification, in run order
     adae <- project$spec("ADAE")
     adae$run()$save()
     project$check()$issues    # every specification, no data read
@@ -286,6 +382,7 @@ checked or run without its project, fails before any data is read with
 
     ```python
     project = yamaa.project("project.yaml")
+    project.names             # every specification, in run order
     adae = project.spec("ADAE")
     adae.run().save()
     project.check().issues    # every specification, no data read
@@ -293,7 +390,9 @@ checked or run without its project, fails before any data is read with
 
 Only specifications listed in the project have names, and each name is unique
 across the project. An unknown name raises an error that lists the names the
-project has.
+project has. `names` lists them in the order a run of every section builds
+them, each specification after the ones it reads from, and reads no study
+data; it raises when the project file cannot be read or lists a name twice.
 
 The project's `check()` checks every listed specification as `spec(name)`
 would. It also reports two listings that share a name, specifications that
@@ -319,6 +418,7 @@ wrote. It checks every target before it writes anything.
     project$run("adam")$save()    # all ADaM datasets
     runs <- project$run()         # all SDTM and ADaM datasets
     runs$names                    # the specifications, in run order
+    length(runs)                  # how many; names(runs) lists them too
     runs[["ADSL"]]$output         # one specification's dataset
     runs$report                   # all run reports, in run order
     runs$save()                   # save every dataset and run report
@@ -331,6 +431,7 @@ wrote. It checks every target before it writes anything.
     project.run("adam").save()    # all ADaM datasets
     runs = project.run()          # all SDTM and ADaM datasets
     runs.names                    # the specifications, in run order
+    len(runs)                     # how many
     runs["ADSL"].output           # one specification's dataset
     runs.report                   # all run reports, in run order
     runs.save()                   # save every dataset and run report
@@ -346,7 +447,9 @@ benchmark shows. With `datasets: json` or `datasets: xpt` in a section, it also
 writes each saved dataset as one Dataset-JSON or SAS Transport version 5 file
 next to define.xml.
 Its `save()` writes each section's transport files, then its define.xml, and
-returns the paths it wrote.
+returns the paths it wrote. Its `created` is the creation time that the
+documents carry: the `created` you gave, or else the time the submission read
+once and gave every section.
 
 === "R"
 
@@ -469,6 +572,28 @@ evidence of the installation:
 yamaa selftest: succeeded, 5 of 5 cases passed
 engine 1.0.0, language 1.0, python 3.12.4, linux-x86_64
 ```
+
+## Engine information
+
+`info()` returns what the installed engine is and where it runs: its
+`version`, the `language_versions` it reads, the optional `features` it was
+built with, the `host`, the host's own `host_version`, and the `platform`,
+such as `linux-x86_64`. R returns a named list and Python a dict, in that
+order. A selftest's `info` holds the same facts, and the command line prints
+them for `yamaa --version`. The engine version is the same in every host;
+`packageVersion("yamaa")` and `yamaa.__version__` stay the package versions.
+
+=== "R"
+
+    ```r
+    yamaa_info()$version
+    ```
+
+=== "Python"
+
+    ```python
+    yamaa.info()["version"]
+    ```
 
 ## Inputs, outputs and paths
 

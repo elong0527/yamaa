@@ -1,7 +1,11 @@
-schema_version: '1.0'
+yamaa: "1.0"
+type: project
+functions:
+- functions/bmi.yaml
 environments:
-  python: python/environment.yaml
-  r: r/environment.yaml
+  r:
+    lock: r/renv.lock
+
 adam:
   specs:
   - spec.yaml

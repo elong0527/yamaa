@@ -3,8 +3,6 @@
 //! Expected values in this file are authored literals, never derived from
 //! the implementation under test. Scalar equivalence is proved against the
 //! independent scalar entry point `invoke_project`.
-#[allow(dead_code)]
-mod support;
 use crate::support::roots::{Case, Definition, Parameter as DefParam};
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};

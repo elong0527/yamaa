@@ -135,6 +135,7 @@ _SCALAR_TYPES = {
     "host_exception": "BaseException",
     "arrow_stream_capsule": "object",
     "context_object": "dict[str, object]",
+    "row": "dict[str, object]",
 }
 _GENERIC_TYPES = {"optional", "list", "tuple"}
 _NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
@@ -315,6 +316,15 @@ def _validate_python(definition):
             methods = [method.get("name") for method in export.get("methods", [])]
             if len(methods) != len(set(methods)):
                 raise ValueError(f"duplicate methods on Python class {name}")
+            for method in export.get("methods", []):
+                # A getter is a read-only attribute, a #[getter] in Rust.
+                if method.get("kind", "getter") != "getter" or (
+                    "kind" in method and method.get("args")
+                ):
+                    raise ValueError(
+                        f"method {name}.{method.get('name')} must be a plain "
+                        "method or a getter without arguments"
+                    )
         if kind == "exception" and export.get("base") != "Exception":
             raise ValueError(f"Python exception {name} must derive from Exception")
     if len(names) != len(set(names)):
@@ -712,6 +722,7 @@ def _reconcile(definition):
     exceptions = {}
     functions = {}
     methods = {}
+    getters = {}
     for path in sorted(src.glob("*.rs")):
         if path.name == "lib.rs":
             continue
@@ -732,6 +743,13 @@ def _reconcile(definition):
         for match in re.finditer(r"#\[pymethods\]\s*impl\s+(\w+)\s*\{", text):
             body, _ = _block(text, match.end() - 1)
             methods.setdefault(match.group(1), set()).update(_method_names(body))
+            getters.setdefault(match.group(1), set()).update(
+                re.findall(
+                    r"#\[getter\]\s*(?:#\[[^\]]*\]\s*)*"
+                    r"(?:pub(?:\(crate\))?\s+)?fn\s+(\w+)",
+                    body,
+                )
+            )
     declared = {export["name"]: export for export in definition["python"]["exports"]}
     by_kind = {}
     for export in declared.values():
@@ -753,6 +771,16 @@ def _reconcile(definition):
             raise ValueError(
                 f"bindings.yaml methods for {name} differ from #[pymethods]: "
                 f"{sorted(declared_methods)} != {sorted(methods.get(struct, set()))}"
+            )
+        declared_getters = {
+            method["name"]
+            for method in export.get("methods", [])
+            if method.get("kind") == "getter"
+        }
+        if declared_getters != getters.get(struct, set()):
+            raise ValueError(
+                f"bindings.yaml getters for {name} differ from #[getter]: "
+                f"{sorted(declared_getters)} != {sorted(getters.get(struct, set()))}"
             )
     if set(by_kind.get("exception", {})) != set(exceptions):
         raise ValueError(
@@ -938,6 +966,8 @@ def _render_pyi(definition):
                     _type_node(method["returns"]), definition, classes
                 )
                 prefix = ", " if args else ""
+                if method.get("kind") == "getter":
+                    lines.append("    @property")
                 lines.extend(
                     _stub_def(method["name"], f"self{prefix}{args}", returns, "    ")
                 )

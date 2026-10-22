@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: SDTM
 domain: LB
 keys: [USUBJID, LBSEQ]
 input:
@@ -67,10 +69,10 @@ columns:
     derivation:
       case:
         - when: "LB_RAW.STRESN IS NULL"
-          then: {literal: null}
+          then: null
         - otherwise:
             flag:
               condition: "LB_RAW.STRESN > LB_RAW.HIGH"
               true_value: HIGH
               false_value: NORMAL
-              missing: {literal: null}
+              missing: null

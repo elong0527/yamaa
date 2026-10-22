@@ -79,7 +79,7 @@ impl LintFinding {
         let directory = text::current_directory();
         text::ascii(&format!(
             "{}:{}:{}: {} {}",
-            text::relative(&self.file, directory.as_deref()),
+            text::relative(&self.file, &directory),
             self.line,
             self.column,
             self.finding,
@@ -265,11 +265,11 @@ pub fn lint(paths: &[String], fix: bool) -> Result<Lint, Failure> {
 fn refusal(error: &yamaa_adapters::lint::Error, paths: &[String]) -> Failure {
     let directory = text::current_directory();
     let path = match error.file() {
-        Some(file) => text::relative(file, directory.as_deref()),
-        None => paths.first().map_or("", String::as_str),
+        Some(file) => text::relative(file, &directory),
+        None => paths.first().map_or("", String::as_str).into(),
     };
     Failure::new(
-        Action::Lint(path),
+        Action::Lint(&path),
         &Report::from_issues(&error.diagnostics()),
     )
 }

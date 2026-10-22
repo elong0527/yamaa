@@ -18,6 +18,7 @@ import yamaa
 from yamaa import _native
 
 TRUTH = load_truth(__file__, "selftest")
+INFO = load_truth(__file__, "info")
 # How Rust names the operating system and architecture of the compiled engine,
 # from the names this interpreter reports for its own platform.
 OPERATING_SYSTEMS = {"linux": "linux", "darwin": "macos", "win32": "windows"}
@@ -35,8 +36,8 @@ def expected_info():
     architecture = ARCHITECTURES[platform.machine().lower()]
     return {
         "version": _native._CORE_VERSION,
-        "language_versions": TRUTH["language_versions"],
-        "features": TRUTH["features"],
+        "language_versions": INFO["language_versions"],
+        "features": INFO["features"],
         "host": "python",
         "host_version": platform.python_version(),
         "platform": f"{system}-{architecture}",
@@ -60,9 +61,9 @@ class SelfTest(unittest.TestCase):
         self.assertEqual(self.result.status, TRUTH["status"])
 
     def test_cases_has_one_row_per_case_in_list_order(self):
-        cases = self.result.cases
-        self.assertIsInstance(cases, pl.DataFrame)
-        self.assertEqual(cases.columns, TRUTH["columns"])
+        self.assertIsInstance(self.result.cases, yamaa.Table)
+        self.assertEqual(self.result.cases.column_names, TRUTH["columns"])
+        cases = self.result.cases.to_polars()
         self.assertEqual(cases.dtypes, [pl.String] * len(TRUTH["columns"]))
         self.assertEqual(cases["case"].to_list(), TRUTH["cases"])
         statuses = cases["status"].to_list()
@@ -73,7 +74,7 @@ class SelfTest(unittest.TestCase):
     def test_info_gives_the_engine_information_of_this_host(self):
         info = self.result.info
         self.assertIsInstance(info, dict)
-        self.assertEqual(list(info), TRUTH["info_fields"])
+        self.assertEqual(list(info), INFO["fields"])
         self.assertEqual(info, expected_info())
 
     def test_printing_gives_the_facade_report_byte_for_byte(self):

@@ -629,6 +629,24 @@ pub fn equal_name(left: &str, right: &str) -> bool {
             == CSTR_EQUAL
     }
 }
+/// The 8.3 short spelling of the existing `path`, for tests that spell one
+/// directory several ways: each name that has a short name takes it, and
+/// the others stay as they are.
+#[cfg(test)]
+pub(crate) fn short_path(path: &Path) -> io::Result<std::path::PathBuf> {
+    use std::os::windows::ffi::{OsStrExt, OsStringExt};
+    use windows_sys::Win32::Storage::FileSystem::GetShortPathNameW;
+    let long: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
+    let mut short = vec![0u16; 32_768];
+    let capacity = u32::try_from(short.len()).map_err(io::Error::other)?;
+    // SAFETY: the terminated input and the counted output buffer live through the call.
+    let written = unsafe { GetShortPathNameW(long.as_ptr(), short.as_mut_ptr(), capacity) };
+    let written = usize::try_from(written).map_err(io::Error::other)?;
+    if written == 0 || written >= short.len() {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(std::ffi::OsString::from_wide(&short[..written]).into())
+}
 
 #[cfg(test)]
 mod tests {

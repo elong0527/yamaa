@@ -7,6 +7,7 @@ use std::{
     path::{Path, PathBuf},
     sync::atomic::{AtomicU64, Ordering},
 };
+use yamaa_core::resource::ResourceFailure;
 
 static NEXT: AtomicU64 = AtomicU64::new(0);
 
@@ -14,6 +15,11 @@ static NEXT: AtomicU64 = AtomicU64::new(0);
 pub enum Error {
     Host(crate::host_resources::Failure),
     InvalidTarget,
+    /// The walk to the target stopped at an entry FILE-7 or FILE-8 refuses:
+    /// a directory on its way that is missing (`Missing`), is not a
+    /// directory (`NotRegularFile`) or is a link (`Symlink`), or a target
+    /// that is a link or another entry that is not a regular file.
+    Unreachable(yamaa_core::resource::ResourceFailure),
     PathMismatch,
     Limit(yamaa_core::limits::LimitExceeded),
     StagingCollision,
@@ -30,6 +36,7 @@ impl Error {
         match self {
             Self::Host(_) => "host resource publication failed",
             Self::InvalidTarget => "invalid explicit publication target",
+            Self::Unreachable(_) => "publication target cannot be reached",
             Self::PathMismatch => "publication path does not match explicit target",
             Self::Limit(_) => "publication output byte limit",
             Self::StagingCollision => "publication temporary names already exist",
@@ -102,10 +109,17 @@ impl AnchoredTarget {
         let mut witnesses = Vec::new();
         for name in parents {
             let parent = directories.last().unwrap_or(&self.root);
-            let initial = fs::statat(parent, name.as_str(), AtFlags::SYMLINK_NOFOLLOW)
-                .map_err(|_| Error::InvalidTarget)?;
-            if kind(&initial) != FileType::Directory {
-                return Err(Error::InvalidTarget);
+            let initial =
+                fs::statat(parent, name.as_str(), AtFlags::SYMLINK_NOFOLLOW).map_err(|error| {
+                    match error {
+                        rustix::io::Errno::NOENT => Error::Unreachable(ResourceFailure::Missing),
+                        _ => Error::InvalidTarget,
+                    }
+                })?;
+            match kind(&initial) {
+                FileType::Directory => {}
+                FileType::Symlink => return Err(Error::Unreachable(ResourceFailure::Symlink)),
+                _ => return Err(Error::Unreachable(ResourceFailure::NotRegularFile)),
             }
             let opened = fs::openat(
                 parent,
@@ -221,14 +235,17 @@ impl Publisher {
         Ok(publisher)
     }
     /// Admit an absent target or a regular file, returning a present
-    /// target's permission bits.
+    /// target's permission bits; a link or another entry is unreachable.
     fn check_target(&self) -> Result<Option<Mode>, Error> {
         match fs::statat(&self.parent, self.name.as_str(), AtFlags::SYMLINK_NOFOLLOW) {
             Ok(status) if kind(&status) == FileType::RegularFile => Ok(Some(
                 Mode::from_raw_mode(status.st_mode) & (Mode::RWXU | Mode::RWXG | Mode::RWXO),
             )),
             Err(rustix::io::Errno::NOENT) => Ok(None),
-            Ok(_) => Err(Error::InvalidTarget),
+            Ok(status) if kind(&status) == FileType::Symlink => {
+                Err(Error::Unreachable(ResourceFailure::Symlink))
+            }
+            Ok(_) => Err(Error::Unreachable(ResourceFailure::NotRegularFile)),
             Err(error) => Err(error.into()),
         }
     }

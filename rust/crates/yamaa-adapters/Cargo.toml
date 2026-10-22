@@ -6,6 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 publish.workspace = true
+autotests = false
 
 [features]
 default = ["yaml", "parquet", "readstat", "odm"]
@@ -70,3 +71,16 @@ cc = { version = "1.7.0", optional = true }
 
 [lints]
 workspace = true
+
+# The integration tests are one binary: tests/main.rs declares each family
+# file under tests/ as a module and checks that none is left out (#3556).
+[[test]]
+name = "main"
+path = "tests/main.rs"
+
+# format_features.rs is the focused capability test that the minimal format
+# builds compile alone and inspect for linked symbols
+# (tools/ci/format_features.py), so it stays its own binary.
+[[test]]
+name = "format_features"
+path = "tests/format_features.rs"

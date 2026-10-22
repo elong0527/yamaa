@@ -3,6 +3,7 @@
 import ast
 import copy
 import unittest
+from unittest.mock import patch
 
 from tools.packaging import bindings_public as public
 from tools.packaging import generate_bindings as generator
@@ -25,7 +26,9 @@ class RenderingTests(unittest.TestCase):
     def test_python_exports_the_declared_names(self):
         names = [
             "Error",
+            "Table",
             "__version__",
+            "info",
             "lint",
             "project",
             "read_odm",
@@ -53,11 +56,11 @@ class RenderingTests(unittest.TestCase):
         for expected in (
             "return Run(_call(_native._spec_run, self._path, self._project, self._plans))",
             "return Spec(_call(_native._project_spec, self._path, name), self._path)",
-            "return _optional_table(_call(self._native.output, self._name))",
+            "return _call(self._native.output, self._name)",
             "        return _call(self._native.save)\n",
             "            _call(self._native.member_issues, name)  # raises",
             "        return MemberRun(self._native, name)",
-            "        self.issues = _table(table)",
+            "        return Check(_call(_native._project_check, self._path))",
             "class Spec(_Lazy):",
             "    def __init__(self, path, project=None):",
             "    def __init__(self, native, name: str):",
@@ -78,8 +81,35 @@ class RenderingTests(unittest.TestCase):
                 "export(yamaa_read_odm)",
                 "export(yamaa_lint)",
                 "export(yamaa_schema)",
+                "export(yamaa_info)",
                 "export(yamaa_selftest)",
+                "S3method(names, yamaa_check)",
+                "S3method(length, yamaa_check)",
+                "S3method(print, yamaa_check)",
+                "S3method(format, yamaa_check)",
+                "S3method(names, yamaa_run)",
+                "S3method(length, yamaa_run)",
+                "S3method(print, yamaa_run)",
+                "S3method(format, yamaa_run)",
+                "S3method(names, yamaa_member_run)",
+                "S3method(length, yamaa_member_run)",
+                "S3method(print, yamaa_member_run)",
+                "S3method(format, yamaa_member_run)",
+                "S3method(names, yamaa_project_run)",
+                "S3method(length, yamaa_project_run)",
                 'S3method("[[", yamaa_project_run)',
+                "S3method(print, yamaa_project_run)",
+                "S3method(format, yamaa_project_run)",
+                "S3method(names, yamaa_submission)",
+                "S3method(length, yamaa_submission)",
+                "S3method(print, yamaa_submission)",
+                "S3method(format, yamaa_submission)",
+                "S3method(print, yamaa_spec)",
+                "S3method(format, yamaa_spec)",
+                "S3method(print, yamaa_project)",
+                "S3method(format, yamaa_project)",
+                "S3method(names, yamaa_selftest)",
+                "S3method(length, yamaa_selftest)",
                 "S3method(print, yamaa_selftest)",
                 "S3method(format, yamaa_selftest)",
             ],
@@ -95,8 +125,8 @@ class RenderingTests(unittest.TestCase):
         ):
             with self.subTest(expected=expected):
                 self.assertIn(expected, text)
-        # Only objects an S3 method or a private accessor reaches keep a handle.
-        self.assertEqual(text.count("object$.handle <- native"), 3)
+        # Every result prints, so every result keeps its handle for format().
+        self.assertEqual(text.count("object$.handle <- native"), 6)
 
     def test_a_printing_member_returns_the_text_rust_renders(self):
         python = self.public.render_python([])
@@ -120,6 +150,75 @@ class RenderingTests(unittest.TestCase):
             r,
         )
 
+    def test_a_lazy_object_prints_the_path_it_holds(self):
+        python = self.public.render_python([])
+        for name in ("spec", "project"):
+            with self.subTest(name=name):
+                self.assertIn(
+                    "    def __repr__(self) -> str:\n"
+                    f"        return _native._{name}_summary(self._path)\n",
+                    python,
+                )
+        r = self.public.render_r([])
+        # The object keeps the path an S3 method reads in a hidden binding.
+        self.assertEqual(r.count("  object$.path <- path\n"), 2)
+        self.assertIn(
+            "format.yamaa_spec <- function(x, ...) {\n"
+            '  path <- get(".path", envir = x, inherits = FALSE)\n'
+            "  .reply(.native_spec_summary(path))\n"
+            "}\n",
+            r,
+        )
+
+    def test_an_s3_method_reads_every_held_value_its_call_takes(self):
+        r = self.public.render_r([])
+        self.assertIn("  object$.handle <- native\n  object$.name <- name\n", r)
+        self.assertIn(
+            "format.yamaa_member_run <- function(x, ...) {\n"
+            '  native <- get(".handle", envir = x, inherits = FALSE)\n'
+            '  name <- get(".name", envir = x, inherits = FALSE)\n'
+            "  .reply(.native_project_run_member_summary(native, name))\n"
+            "}\n",
+            r,
+        )
+        self.assertIn(
+            "    def __repr__(self) -> str:\n"
+            "        return self._native.member_summary(self._name)\n",
+            self.public.render_python([]),
+        )
+
+    def test_every_result_names_its_public_members_in_r(self):
+        r = self.public.render_r([])
+        # Its properties and methods in declaration order, never the handle.
+        self.assertIn(
+            'names.yamaa_run <- function(x) c("status", "output", "issues", '
+            '"report", "save")\n\nlength.yamaa_run <- function(x) 5L\n',
+            r,
+        )
+        self.assertIn(
+            'names.yamaa_submission <- function(x) c("status", "created", '
+            '"issues", "save")\n',
+            r,
+        )
+        # A container names its keys, as its names member gives them.
+        self.assertIn(
+            "names.yamaa_project_run <- function(x) {\n"
+            '  native <- get(".handle", envir = x, inherits = FALSE)\n'
+            "  .reply(.native_project_run_names(native))\n"
+            "}\n\n"
+            "length.yamaa_project_run <- function(x) length(names(x))\n",
+            r,
+        )
+        # A lazy object is no result and keeps R's own names() and length().
+        self.assertNotIn("names.yamaa_spec", r)
+        self.assertNotIn("length.yamaa_project <-", r)
+        self.assertIn(
+            "    def __len__(self) -> int:\n"
+            '        """The number of names."""\n'
+            "        return len(self._native.names())\n",
+            self.public.render_python([]),
+        )
+
     def test_selftest_delegates_to_its_native_result(self):
         python = self.public.render_python([])
         for expected in (
@@ -128,7 +227,7 @@ class RenderingTests(unittest.TestCase):
             "    def status(self) -> str:\n        "
             '"""`failed` when a case failed, and `succeeded` otherwise."""\n'
             "        return self._native.status()",
-            "        return _table(self._native.cases())",
+            "        return self._native.cases()",
             "    def info(self) -> dict:",
         ):
             with self.subTest(expected=expected):
@@ -145,10 +244,8 @@ class RenderingTests(unittest.TestCase):
 
     def test_a_path_list_converts_each_path_in_both_hosts(self):
         python = self.public.render_python([])
-        self.assertIn("def lint(paths, fix: bool = False) -> _pl.DataFrame:", python)
-        self.assertIn(
-            "return _table(_call(_native._lint, _fspaths(paths), fix))", python
-        )
+        self.assertIn("def lint(paths, fix: bool = False) -> Table:", python)
+        self.assertIn("return _call(_native._lint, _fspaths(paths), fix)", python)
         self.assertIn(
             'yamaa_lint <- function(paths, fix = FALSE) .reply(.native_lint(.texts(paths, "paths"), fix))',
             self.public.render_r([]),
@@ -170,28 +267,34 @@ class RenderingTests(unittest.TestCase):
 
     def test_a_long_export_list_is_split_one_name_per_line(self):
         text = self.public.render_python([])
-        self.assertIn('__all__ = [\n    "Error",\n    "__version__",\n', text)
+        self.assertIn(
+            '__all__ = [\n    "Error",\n    "Table",\n    "__version__",\n', text
+        )
         self.assertIn('    "spec",\n]\n', text)
         candidate = copy.deepcopy(self.definition)
-        for name in ("lint", "schema"):
+        for name in ("lint", "schema", "info"):
             candidate["public"]["functions"].remove(function(candidate, name))
         short = public.Public(candidate).render_python([])
         self.assertIn(
-            '__all__ = ["Error", "__version__", "project", "read_odm", "selftest", '
-            '"spec"]\n',
+            '__all__ = ["Error", "Table", "__version__", "project", "read_odm", '
+            '"selftest", "spec"]\n',
             short,
         )
 
-    def test_a_long_helper_import_is_split_one_name_per_line(self):
+    def test_the_helper_import_names_the_helpers_used_and_wraps_when_long(self):
         text = self.public.render_python([])
-        self.assertIn("from yamaa._support import (\n    __version__,\n", text)
+        self.assertIn(
+            "from yamaa._support import __version__, _fspath, _fspaths, _Lazy\n", text
+        )
+        # lint() alone converts a list of paths.
         candidate = copy.deepcopy(self.definition)
         candidate["public"]["functions"].remove(function(candidate, "lint"))
         short = public.Public(candidate).render_python([])
+        self.assertIn("from yamaa._support import __version__, _fspath, _Lazy\n", short)
+        with patch.object(public, "_PY_WIDTH", 60):
+            narrow = public.Public(self.definition).render_python([])
         self.assertIn(
-            "from yamaa._support import __version__, _fspath, _Lazy, _optional_table, "
-            "_pl, _table\n",
-            short,
+            "from yamaa._support import (\n    __version__,\n    _fspath,\n", narrow
         )
 
     def test_a_removed_function_leaves_both_hosts_and_the_namespace(self):
@@ -210,6 +313,31 @@ class RenderingTests(unittest.TestCase):
         text = public.Public(candidate).render_python([])
         self.assertIn(
             "return Check(_native._spec_check(self._path, self._project))", text
+        )
+
+    def test_a_python_only_class_is_the_native_class_exported_as_it_is(self):
+        python = self.public.render_python([])
+        self.assertIn(
+            "from yamaa import _native\nfrom yamaa._native import Table\n", python
+        )
+        self.assertNotIn("class Table", python)
+        self.assertNotIn("Table", self.public.render_r([]))
+        self.assertNotIn("Table", self.public.render_namespace([]))
+        self.assertEqual(self.public.kind("Table"), "native")
+        self.assertEqual(
+            list(self.public.delegating_classes()),
+            [name for name in self.definition["public"]["classes"] if name != "Table"],
+        )
+        # Every table is that class: annotations name it, and nothing wraps
+        # the table that a native call returns.
+        self.assertIn("    def issues(self) -> Table:\n", python)
+        self.assertIn("    def output(self) -> Table | None:\n", python)
+        self.assertIn(
+            "    def __init__(self, message: str, issues: Table, paths: list[str]):",
+            python,
+        )
+        self.assertIn(
+            'str(error), getattr(error, "issues"), getattr(error, "paths")', python
         )
 
     def test_generated_python_is_valid_and_ascii(self):
@@ -298,10 +426,12 @@ class ValidationTests(unittest.TestCase):
                 ),
             ),
             (
-                "Spec.summary reaches a handle",
-                lambda d: classes(d)["Spec"]["members"].append(
-                    copy.deepcopy(member(d, "SelfTest", "summary"))
-                ),
+                "Spec.summary calls _SelfTest.summary without holding a handle",
+                lambda d: member(d, "Spec", "summary").update(calls="selftest_summary"),
+            ),
+            (
+                "nothing fills the Python argument specification",
+                lambda d: classes(d)["Spec"].update(holds={"path": "project"}),
             ),
             (
                 "keyword_only",
@@ -330,9 +460,10 @@ class ValidationTests(unittest.TestCase):
                     holds={"name": "name", "native": "handle"}
                 ),
             ),
+            # A held value is a handle or a path; `field` is no member kind.
             (
-                "must fill each field",
-                lambda d: classes(d)["Check"].update(holds={"table": "rows"}),
+                "unknown kind",
+                lambda d: member(d, "Check", "issues").update(kind="field"),
             ),
             (
                 "defined later",
@@ -348,7 +479,9 @@ class ValidationTests(unittest.TestCase):
             ),
             (
                 "needs a names member",
-                lambda d: classes(d)["ProjectRun"]["members"].pop(0),
+                lambda d: classes(d)["ProjectRun"]["members"].remove(
+                    member(d, "ProjectRun", "names")
+                ),
             ),
             (
                 "reaches a handle",
@@ -360,6 +493,113 @@ class ValidationTests(unittest.TestCase):
                         "calls": "spec_check",
                     }
                 ),
+            ),
+        ]
+        for message, mutate in cases:
+            with self.subTest(message=message):
+                self.refuses(message, mutate)
+
+    def test_a_python_only_class_declares_each_native_method_once(self):
+        table = lambda d: d["public"]["classes"]["Table"]  # noqa: E731
+        cases = [
+            # A class for any other host is an ordinary class, which holds values.
+            ("is missing \\['holds', 'r'\\]", lambda d: table(d).update(hosts=["r"])),
+            ("unknown keys", lambda d: table(d).update(r="yamaa_table")),
+            ("must be yamaa.Table", lambda d: table(d).update(python="yamaa.Frame")),
+            (
+                "is no class of yamaa._native",
+                lambda d: d["public"]["classes"].update(
+                    Frame={**copy.deepcopy(table(d)), "python": "yamaa.Frame"}
+                ),
+            ),
+            (
+                "must declare every native method: to_pandas",
+                lambda d: table(d)["members"].pop(),
+            ),
+            (
+                "is no method of yamaa._native.Table",
+                lambda d: member(d, "Table", "to_arrow").update(name="to_numpy"),
+            ),
+            (
+                "declares the native __len__ twice",
+                lambda d: table(d)["members"].append(
+                    {**member(d, "Table", "length"), "name": "size"}
+                ),
+            ),
+            (
+                "a property exactly when its native method is a getter",
+                lambda d: member(d, "Table", "num_rows").update(kind="method"),
+            ),
+            (
+                "a property exactly when its native method is a getter",
+                lambda d: member(d, "Table", "to_pylist").update(kind="property"),
+            ),
+            (
+                "must spell its special method",
+                lambda d: member(d, "Table", "length").pop("python"),
+            ),
+            (
+                "only protocol and printing do",
+                lambda d: member(d, "Table", "to_arrow").update(python="to_arrow"),
+            ),
+            (
+                "must be __repr__",
+                lambda d: member(d, "Table", "preview").update(python="__str__"),
+            ),
+            (
+                "must declare what it returns",
+                lambda d: member(d, "Table", "to_pylist").pop("returns"),
+            ),
+            (
+                "must take its native method's arguments",
+                lambda d: member(d, "Table", "arrow_stream").pop("args"),
+            ),
+            (
+                "imports must list the modules",
+                lambda d: member(d, "Table", "num_rows").update(imports=["polars"]),
+            ),
+            (
+                "imports must list the modules",
+                lambda d: member(d, "Table", "to_pandas").update(
+                    imports=["pandas", "pandas"]
+                ),
+            ),
+            (
+                "needs host_only entries: Table.to_pylist",
+                lambda d: d["host_only"]["python"].remove("Table.to_pylist"),
+            ),
+            # A Python-only token or class stays out of both hosts' surface.
+            (
+                "uses the Python-only type token 'rows'",
+                lambda d: member(d, "Run", "issues").update(returns="rows"),
+            ),
+            (
+                "returns the Python-only class Table",
+                lambda d: function(d, "read_odm").update(returns="Table"),
+            ),
+            (
+                "invalid R refusal field",
+                lambda d: d["public"]["errors"]["refusal"]["r"]["fields"].update(
+                    issues="rows"
+                ),
+            ),
+            # Every column type projects into both hosts.
+            (
+                "must project str, int, float, date, datetime, list",
+                lambda d: d["public"]["value_types"].pop("list"),
+            ),
+            (
+                "public.value_types.date must be a mapping|is missing",
+                lambda d: d["public"]["value_types"].update(date={"python": "date"}),
+            ),
+            (
+                "tables.lint.line has a type",
+                lambda d: d["tables"]["lint"]["columns"][1].update(type="decimal"),
+            ),
+            # The table token annotates the class every table is.
+            (
+                "public.classes.Table, the class every table is, is missing",
+                lambda d: d["public"]["classes"].pop("Table"),
             ),
         ]
         for message, mutate in cases:
@@ -391,7 +631,7 @@ class ValidationTests(unittest.TestCase):
             ),
             # A result made from the wrong native type.
             (
-                "returns _ArrowTable, not Run",
+                "returns _Check, not Run",
                 lambda d: member(d, "Spec", "run").update(calls="spec_check"),
             ),
             # Members of one handle class call one native class.
@@ -409,7 +649,7 @@ class ManifestTests(unittest.TestCase):
     def test_public_lines_leave_out_private_and_native_details(self):
         lines = public.Public(generator._load_definition()).manifest_lines()
         for expected in (
-            "public.types.table: python polars.DataFrame; r data.frame",
+            "public.types.table: python yamaa.Table; r data.frame",
             "public.functions.read_odm: python yamaa.read_odm; r yamaa_read_odm; "
             "returns table; table odm_items; raises refusal",
             "public.functions.read_odm.args[2]: max_archive_members: count = 10000; "
@@ -425,6 +665,26 @@ class ManifestTests(unittest.TestCase):
             "public.classes.SelfTest.summary: printing; python __repr__; r print, format",
             "public.r.s3methods.yamaa_selftest.print",
             "public.r.s3methods.yamaa_selftest.format",
+            "public.classes.Check.status: property; returns status",
+            "public.classes.MemberRun.status: property; returns status; raises refusal",
+            "public.classes.Spec.summary: printing; python __repr__; r print, format",
+            "public.r.s3methods.yamaa_spec.format",
+            "public.classes.ProjectRun.length: protocol; python __len__",
+            "public.r.s3methods.yamaa_check.names: status, issues",
+            "public.r.s3methods.yamaa_check.length",
+            "public.r.s3methods.yamaa_project_run.names: keys of names",
+            "public.types.polars_frame: python polars.DataFrame",
+            "public.value_types.date: python Arrow Date32, datetime.date; r Date",
+            "public.classes.Table: python yamaa.Table",
+            "public.classes.Table.num_rows: property; returns count",
+            "public.classes.Table.length: protocol; python __len__; returns count",
+            "public.classes.Table.preview: printing; python __repr__",
+            "public.classes.Table.arrow_stream.args[0]: "
+            "requested_schema: schema_request = None",
+            "public.classes.Table.to_pylist: method; returns rows",
+            "public.classes.Table.to_pandas: method; returns pandas_frame; "
+            "imports pandas, pyarrow",
+            "public.python.exports.Table",
         ):
             with self.subTest(expected=expected):
                 self.assertIn(expected, lines)

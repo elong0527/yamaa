@@ -46,9 +46,6 @@ pub(super) struct Layout {
     pub(super) specification: bool,
 }
 
-// Statics, not consts: the field orders they refer to are statics, and a
-// const that refers to a static needs Rust 1.83, newer than the workspace's
-// rust-version.
 static LEGACY: Layout = Layout {
     orders: fields::LEGACY_SPEC,
     sections: "output",

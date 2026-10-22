@@ -84,7 +84,7 @@ pub use functions::{
     FunctionHandle, FunctionIdentity, HostLanguage, InstalledDistributions, InstalledVersion,
     LockContext, LockKind, Parameter, ProjectFunctions, RenvLock, Signature,
 };
-pub use info::{info, Host, Info};
+pub use info::{info, Host, Info, FEATURES, HOSTS};
 pub use lint::{lint, Lint, LintFinding, LINT_COLUMNS, LINT_FINDINGS};
 pub use observe::{CallStage, DatasetPhase, Event, Outcome, Phase, Progress, Refusal};
 pub use odm::{read_odm, OdmOptions, ODM_COLUMNS};
@@ -111,6 +111,10 @@ pub const VERSION: &str = yamaa_core::VERSION;
 pub fn style_same_value(before: &[u8], after: &[u8]) -> bool {
     yamaa_adapters::style_values::same_value(before, after)
 }
+
+#[cfg(all(test, unix))]
+#[path = "../tests/support/scratch.rs"]
+mod test_scratch;
 
 #[cfg(test)]
 mod tests {

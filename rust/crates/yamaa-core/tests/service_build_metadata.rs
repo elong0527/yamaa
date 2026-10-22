@@ -1,6 +1,4 @@
 //! Service contracts.
-#[allow(dead_code)]
-mod support;
 mod service {
     mod build_metadata {
         //! Independent original-entry and admission-order controls for the shared Build boundary.
@@ -701,6 +699,21 @@ mod service {
             fn decode_parquet(&mut self, _: &[u8]) -> Result<EmptyTable, ()> {
                 panic!("no codec selected")
             }
+            fn read_report(
+                &mut self,
+                _: &str,
+                _: &str,
+                _: &str,
+            ) -> Result<Option<yamaa_core::run_report::Recorded>, Opaque> {
+                panic!("no dataset selected")
+            }
+            fn count_records(
+                &mut self,
+                _: &yamaa_core::specification::SourceDeclaration,
+                _: &[u8],
+            ) -> Option<usize> {
+                panic!("no dataset selected")
+            }
             fn target(&self, path: &str, declaring: &str, written: &str) -> Result<String, Opaque> {
                 assert_eq!(
                     (path, declaring, written),
@@ -1066,7 +1079,7 @@ mod service {
                     finding.context,
                     [
                         ("path".into(), C::String("declared.yaml".into())),
-                        ("stage".into(), C::String("define".into())),
+                        ("step".into(), C::String("define".into())),
                         ("code".into(), C::String(expected.into())),
                     ]
                     .into()
@@ -1144,7 +1157,7 @@ mod service {
                 if let P::TargetAdmission(fault) = stage {
                     expected.insert("code".into(), C::String(fault.as_str().into()));
                     expected.insert(
-                        "stage".into(),
+                        "step".into(),
                         C::String("publication_target_admission".into()),
                     );
                 }
@@ -1179,7 +1192,7 @@ mod service {
                                 "path".into(),
                                 yamaa_core::json::Value::from("declared.yaml")
                             ),
-                            ("stage".into(), yamaa_core::json::Value::from("define")),
+                            ("step".into(), yamaa_core::json::Value::from("define")),
                             (
                                 "code".into(),
                                 yamaa_core::json::Value::from("resource_limit")

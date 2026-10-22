@@ -1,6 +1,4 @@
 //! Relations contracts.
-#[allow(dead_code)]
-mod support;
 mod relations {
     mod reference_scope {
         use yamaa_core::{
@@ -1562,6 +1560,89 @@ mod relations {
                     assert_eq!(error.actual, Some(depth));
                 }
             }
+        }
+        /// The table a saved report decodes to, an input row's DETAILS
+        /// standing in as `bytes=<n>`, which [`details`] reads back.
+        fn saved(facts: &Facts) -> run_report::Report {
+            let rows = run_report::prepare(facts).unwrap();
+            run_report::assemble(
+                rows.into_iter()
+                    .map(|row| {
+                        row.into_iter()
+                            .map(|cell| match cell {
+                                PreparedCell::Details(details) if details.contains_key("bytes") => {
+                                    Value::Str(match details["bytes"].as_u64() {
+                                        Some(bytes) => format!("bytes={bytes}"),
+                                        None => "bytes=null".into(),
+                                    })
+                                }
+                                cell => plain(vec![vec![cell]]).remove(0).remove(0),
+                            })
+                            .collect()
+                    })
+                    .collect(),
+            )
+        }
+        fn details(text: &str) -> Option<Option<usize>> {
+            match text.strip_prefix("bytes=")? {
+                "null" => Some(None),
+                bytes => bytes.parse().ok().map(Some),
+            }
+        }
+        /// A saved report reads back as the run, its row count or failed
+        /// condition, and each input's records and bytes (PROJECT-15); a
+        /// table that is not a run report reads as nothing.
+        #[test]
+        fn a_saved_report_reads_back_its_run_and_its_inputs() {
+            let facts = facts(vec![held(), warning()]);
+            let recorded = run_report::recorded(&saved(&facts), details).unwrap();
+            assert_eq!(
+                recorded,
+                run_report::Recorded {
+                    artifact: "out.csv".into(),
+                    run: run_report::Run::Succeeded { rows: 8 },
+                    inputs: vec![
+                        run_report::RecordedInput {
+                            name: "DM".into(),
+                            records: Some(8),
+                            bytes: Some(96),
+                        },
+                        run_report::RecordedInput {
+                            name: "LINKED".into(),
+                            records: None,
+                            bytes: None,
+                        },
+                    ],
+                }
+            );
+            let mut failed = facts.clone();
+            failed.run = run_report::Run::Failed {
+                condition: "duplicate_key".into(),
+            };
+            failed.columns.clear();
+            let recorded = run_report::recorded(&saved(&failed), details).unwrap();
+            assert_eq!(recorded.run, failed.run);
+            // Not a run report: DETAILS without a byte length, a first row
+            // that is no run row, another artifact, or other columns.
+            assert_eq!(run_report::recorded(&saved(&facts), |_| None), None);
+            let rows = run_report::prepare(&facts).unwrap();
+            let mut moved = plain(rows.clone());
+            moved.swap(0, 1);
+            assert_eq!(
+                run_report::recorded(&run_report::assemble(moved), details),
+                None
+            );
+            let mut renamed = plain(rows);
+            renamed[1][0] = Value::Str("other.csv".into());
+            assert_eq!(
+                run_report::recorded(&run_report::assemble(renamed), details),
+                None
+            );
+            let other = yamaa_core::typed_csv::PreparedTypes::new(&[])
+                .unwrap()
+                .convert(yamaa_core::csv_source::parse(b"ARTIFACT,KIND\nout.csv,run\n").unwrap())
+                .unwrap();
+            assert_eq!(run_report::recorded(&other, details), None);
         }
     }
 }

@@ -57,7 +57,8 @@ stays on PyPI (#3030 D57).
 
 An index that does not proxy PyPI can host the files instead: upload the
 wheels and the source archive from the release assets, which are the files
-that PyPI serves, together with yamaa's dependency, Polars.
+that PyPI serves. yamaa has no dependencies; add Polars, pandas or PyArrow if
+you convert its tables to theirs.
 
 ### A CRAN mirror
 
@@ -120,12 +121,12 @@ install.packages("yamaa_<version>.tar.gz", repos = NULL, type = "source")
 ```
 
 pip's build isolation would download maturin to build the Python source
-archive, so install maturin 1.9.6 and yamaa's dependency first and build
-without isolation. The first command runs on the connected machine, the other
-two on the restricted one:
+archive, so install maturin 1.9.6 first and build without isolation. The
+first command runs on the connected machine, the other two on the restricted
+one:
 
 ```sh
-python -m pip download --dest yamaa-files maturin==1.9.6 polars
+python -m pip download --dest yamaa-files maturin==1.9.6
 python -m pip install --no-index --find-links yamaa-files maturin==1.9.6
 python -m pip install --no-build-isolation --no-index --find-links yamaa-files \
   yamaa-<version>.tar.gz

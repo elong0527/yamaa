@@ -18,7 +18,7 @@ def main():
         vectors = list(csv.DictReader(stream, delimiter="\t"))
     for case in vectors:
         issues = yamaa.spec(root / case["specification"]).run().issues
-        conditions = [row["condition"] for row in issues.to_dicts()]
+        conditions = [row["condition"] for row in issues.to_pylist()]
         observed = (
             conditions
             if case["parse"] == "reject"

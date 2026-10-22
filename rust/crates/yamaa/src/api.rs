@@ -17,7 +17,7 @@
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
-use yamaa_core::application_issue::{Fault, Stage};
+use yamaa_core::application_issue::{Fault, Step};
 use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::project_environment::Submission as Section;
 
@@ -526,7 +526,7 @@ fn resolved_value(
         Failure::from_issues(
             Action::Resolve(specification),
             &yamaa_adapters::file_application::rejected(
-                Stage::Resolve,
+                Step::Resolve,
                 Fault::ArtifactRepresentation,
             ),
         )
@@ -805,6 +805,36 @@ impl Engine {
             Ok(listed) => Ok(listed.path().to_owned()),
             Err(issues) => Err(Failure::from_issues(action, &issues)),
         }
+    }
+
+    /// The names of the listed specifications in run order, producer first,
+    /// as a project run of every section orders them (D45): the names that
+    /// [`ProjectRun::names`] of such a run gives, read from the project file
+    /// and the specifications' metadata alone, so no input data is read. A
+    /// listing that could not be read has no name and is left out, as a run
+    /// leaves it out.
+    ///
+    /// Every refusal names the call as `cannot read <project>` (D39): a
+    /// project that cannot be read, or one that lists a name twice, whose
+    /// issue names both listings.
+    pub fn project_names(&self, project: &str) -> Result<Vec<String>, Failure> {
+        let action = Action::Read(project);
+        let read = crate::internal::read_project(self.shared(), project).map_err(
+            |(issues, locator)| Failure::new(action, &Report::located(&issues, &locator)),
+        )?;
+        let duplicates = read.duplicates();
+        if !duplicates.is_empty() {
+            return Err(Failure::new(
+                action,
+                &Report::located(&duplicates, read.locator()),
+            ));
+        }
+        Ok(read
+            .plan(None)
+            .steps()
+            .iter()
+            .filter_map(|step| read.listed()[step.listed()].name().map(str::to_owned))
+            .collect())
     }
 
     /// Static check of every listed specification with the project's codelists
@@ -1147,14 +1177,19 @@ mod tests {
 
     #[test]
     fn statuses_are_the_statuses_in_order() {
-        assert_eq!(
-            [Status::Succeeded, Status::Failed, Status::Skipped].map(Status::as_str),
-            STATUSES
-        );
+        let statuses = [Status::Succeeded, Status::Failed, Status::Skipped];
+        for status in statuses {
+            // Exhaustive: a new status fails to compile here until it is
+            // listed above, and so in STATUSES.
+            match status {
+                Status::Succeeded | Status::Failed | Status::Skipped => {}
+            }
+        }
+        assert_eq!(statuses.map(Status::as_str), STATUSES);
     }
 
     /// Resolved facts the engine cannot represent are refused as the
-    /// registered engine fault, whose message names the stage and code.
+    /// registered engine fault, whose message names the step and code.
     #[test]
     fn unrepresentable_resolved_facts_are_an_engine_fault() {
         let fault = yamaa_core::diagnostic::ConditionCode::ApplicationRejected.definition();
@@ -1166,7 +1201,7 @@ mod tests {
             failure.message,
             format!(
                 "cannot resolve adam/adsl.yaml: the engine refused the operation in its \
-                 resolve stage: artifact_representation [{}]",
+                 resolve step: artifact_representation [{}]",
                 fault.condition
             )
         );
@@ -1182,7 +1217,7 @@ mod tests {
         assert_eq!(
             cells(&failure.issues, "context"),
             [Some(
-                r#"{"code":"artifact_representation","stage":"resolve"}"#.to_owned()
+                r#"{"code":"artifact_representation","step":"resolve"}"#.to_owned()
             )]
         );
         let tree = yamaa_core::json::Value::Object(

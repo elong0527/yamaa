@@ -1,7 +1,5 @@
 #![cfg(feature = "yaml")]
 //! Project contracts.
-#[allow(dead_code)]
-mod support;
 mod project {
     mod project_source {
         use crate::support::project_schemas::candidate_schemas;

@@ -33,6 +33,7 @@ CHECKS = (
     "tools.validation.check_selftest_cases",
     "tools.validation.check_vocabulary_coverage",
     "tools.validation.check_cdisc_vocabulary",
+    "tools.validation.check_cdisc_tables",
     "tools.rules.check",
     "tools.validation.check_documentation",
     "tools.validation.check_supported_platforms",

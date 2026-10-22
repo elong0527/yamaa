@@ -8,7 +8,7 @@
 //! document from that model, refuses a file the transport cannot carry and
 //! owns the byte projection.
 use yamaa_core::{
-    application_issue::{Fault, Stage},
+    application_issue::{Fault, Step},
     define_diagnostics::{xpt_file_too_large, xpt_last_row_blank},
     limits::{LimitExceeded, Limits},
     project_environment::Submission,
@@ -245,7 +245,7 @@ impl Writer<'_> {
     /// Admission already refused every authored one, so this is a byte
     /// projection the writer could not complete.
     fn failure(&self, detail: &str) -> Finding {
-        Finding::fault(self.path, Stage::Define, Fault::OutputProjection).with_detail(detail)
+        Finding::fault(self.path, Step::Define, Fault::OutputProjection).with_detail(detail)
     }
     fn limit(&self, bound: LimitExceeded) -> Finding {
         let detail = if bound.actual.is_none() {
@@ -253,7 +253,7 @@ impl Writer<'_> {
         } else {
             bound.to_string()
         };
-        Finding::limit(self.path, Stage::Define, Fault::OutputLimit, bound).with_detail(detail)
+        Finding::limit(self.path, Step::Define, Fault::OutputLimit, bound).with_detail(detail)
     }
     /// Admit `required` output bytes against the shared output bound; a size
     /// with no representation exceeds it.
@@ -472,7 +472,7 @@ mod tests {
         let finding = render(&document, &Oversized).unwrap_err();
         assert_eq!(finding.code, ConditionCode::ApplicationRejected);
         assert_eq!(finding.path, "datasets.DM.transport");
-        assert_eq!(finding.context["stage"], "define");
+        assert_eq!(finding.context["step"], "define");
         assert_eq!(finding.context["code"], "output_limit");
         assert_eq!(finding.context["resource"], "output_bytes");
         assert_eq!(finding.context["limit"], Limits::OUTPUT_BYTES);
@@ -485,7 +485,7 @@ mod tests {
             path: "datasets.DM.transport",
         };
         let projection = writer.number(f64::INFINITY).unwrap_err();
-        assert_eq!(projection.context["stage"], "define");
+        assert_eq!(projection.context["step"], "define");
         assert_eq!(projection.context["code"], "output_projection");
         assert_eq!(
             projection.context["detail"],
@@ -562,7 +562,7 @@ mod tests {
                 ("code".into(), text("output_limit")),
                 ("limit".into(), V::from(Limits::OUTPUT_BYTES)),
                 ("resource".into(), text("output_bytes")),
-                ("stage".into(), text("define")),
+                ("step".into(), text("define")),
             ]
             .into();
             if let Some(actual) = actual {
@@ -582,7 +582,7 @@ mod tests {
             [
                 ("code".into(), text("output_projection")),
                 ("detail".into(), text("number outside IBM double range")),
-                ("stage".into(), text("define")),
+                ("step".into(), text("define")),
             ]
             .into()
         );

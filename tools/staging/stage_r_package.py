@@ -275,6 +275,8 @@ def stage_projects(projects: Path) -> None:
     lock = json.loads((negative / "r/renv.lock").read_text(encoding="utf-8"))
     del lock["Packages"]["yamaabenchmarks"]
     for case in (negative, projects / "base-round"):
+        # The authored study commits no file under r/ (D8).
+        (case / "r").mkdir(exist_ok=True)
         (case / "r/renv.lock").write_text(
             json.dumps(lock, indent=2) + "\n", encoding="utf-8", newline="\n"
         )

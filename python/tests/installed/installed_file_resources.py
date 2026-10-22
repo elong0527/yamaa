@@ -95,7 +95,7 @@ class FileResources(unittest.TestCase):
                     # A link only types the stored artifact: callers build and
                     # save each study's producer before its consumer reads it.
                     produced = yamaa.spec(study / "producer.yaml").run()
-                    self.assertTrue(produced.issues.is_empty(), produced.issues)
+                    self.assertEqual(produced.issues.num_rows, 0, produced.issues)
                     self.assertEqual(
                         produced.save(), paths_of(study / "output/produced.csv")
                     )
@@ -104,9 +104,9 @@ class FileResources(unittest.TestCase):
                         csv.encode("ascii"),
                     )
                 spec = yamaa.spec(entry)
-                self.assertTrue(spec.check().issues.is_empty())
+                self.assertEqual(spec.check().issues.num_rows, 0)
                 result = spec.run()
-                self.assertTrue(result.issues.is_empty(), result.issues)
+                self.assertEqual(result.issues.num_rows, 0, result.issues)
                 self.assertFalse((study / "output/result.csv").exists())
                 results.append((study, csv.encode("ascii"), result))
             shutil.rmtree(shared)
@@ -195,11 +195,11 @@ class FileResources(unittest.TestCase):
         self.assertEqual(self.observe(result), expected)
         self.assertIsNone(result.output)
         self.assertEqual(
-            result.issues.columns,
+            result.issues.column_names,
             TRUTH["issue_columns"],
         )
         self.assertEqual(
-            result.issues.to_dicts(),
+            result.issues.to_pylist(),
             [
                 {
                     "severity": "error",
@@ -224,7 +224,9 @@ class FileResources(unittest.TestCase):
         for _ in range(2):
             with self.assertRaises(yamaa.Error) as caught:
                 result.save()
-            self.assertTrue(caught.exception.issues.equals(result.issues))
+            self.assertTrue(
+                caught.exception.issues.to_polars().equals(result.issues.to_polars())
+            )
             self.assertEqual(caught.exception.paths, [])
             self.assertEqual(self.observe(result), expected)
             self.assertFalse((case / "adsl.csv").exists())
@@ -264,7 +266,7 @@ class FileResources(unittest.TestCase):
                 # requires every metadata cause in order, with zero reads.
                 for name in PATHS.keys() - failures.keys():
                     (case / PATHS[name]).write_bytes(b"\xff")
-                self.assertTrue(yamaa.spec(entry).check().issues.is_empty())
+                self.assertEqual(yamaa.spec(entry).check().issues.num_rows, 0)
                 expected = self.expected(row["expected"], entry)
                 for _ in range(2):
                     self.failed(yamaa.spec(entry).run(), expected, case)
@@ -307,9 +309,13 @@ class FileResources(unittest.TestCase):
                 content.replace(old, b"MYOCARDIAL INFARCTION,FATAL,151\n")
             )
             second = spec.run()
-            self.assertTrue(second.issues.is_empty(), second.issues)
-            self.assertEqual(first.output["DTHDY"].to_list(), [150, 80, None, None])
-            self.assertEqual(second.output["DTHDY"].to_list(), [151, 80, None, None])
+            self.assertEqual(second.issues.num_rows, 0, second.issues)
+            self.assertEqual(
+                first.output.to_polars()["DTHDY"].to_list(), [150, 80, None, None]
+            )
+            self.assertEqual(
+                second.output.to_polars()["DTHDY"].to_list(), [151, 80, None, None]
+            )
             self.assertEqual(self.observe(first), expected)
             self.assertEqual(
                 [r["snapshots_created"] for r in self.observe(second)["source_reads"]],
@@ -326,10 +332,12 @@ class FileResources(unittest.TestCase):
             case, entry = self.case(directory)
             result = yamaa.spec(entry).run()
             self.assertEqual(self.observe(result), self.lookup_expected(entry))
-            self.assertTrue(result.issues.is_empty())
+            self.assertEqual(result.issues.num_rows, 0)
             held = result.output
-            self.assertEqual(held["USUBJID"].to_list(), ["01", "02", "03", "04"])
-            self.assertEqual(held["DTHDY"].to_list(), [150, 80, None, None])
+            self.assertEqual(
+                held.to_polars()["USUBJID"].to_list(), ["01", "02", "03", "04"]
+            )
+            self.assertEqual(held.to_polars()["DTHDY"].to_list(), [150, 80, None, None])
             golden = (case / "expected/adsl.csv").read_bytes()
             expected = self.lookup_expected(entry, True)
             entry.unlink()
@@ -338,10 +346,10 @@ class FileResources(unittest.TestCase):
             self.assertEqual(result.save(), paths_of(case / "adsl.csv"))
             self.assertEqual((case / "adsl.csv").read_bytes(), golden)
             self.assertEqual(self.observe(result), expected)
-            self.assertTrue(result.output.equals(held))
+            self.assertTrue(result.output.to_polars().equals(held.to_polars()))
             del result
             gc.collect()
-            self.assertEqual(held["DTHDY"].to_list(), [150, 80, None, None])
+            self.assertEqual(held.to_polars()["DTHDY"].to_list(), [150, 80, None, None])
 
     def simple_document(self, source):
         return (
@@ -362,8 +370,8 @@ class FileResources(unittest.TestCase):
             for written in ("../outside.csv", source.as_posix()):
                 entry.write_text(self.simple_document(written), encoding="ascii")
                 result = yamaa.spec(entry).run()
-                self.assertTrue(result.issues.is_empty(), result.issues)
-                self.assertEqual(result.output["ID"].to_list(), [7])
+                self.assertEqual(result.issues.num_rows, 0, result.issues)
+                self.assertEqual(result.output.to_polars()["ID"].to_list(), [7])
                 self.assertEqual(result.save(), paths_of(case / "result.csv"))
                 self.assertEqual((case / "result.csv").read_bytes(), b"ID\n7\n")
 
@@ -382,7 +390,7 @@ class FileResources(unittest.TestCase):
             result = yamaa.spec(entry).run()
             self.assertIsNone(result.output)
             self.assertEqual(
-                result.issues.to_dicts(),
+                result.issues.to_pylist(),
                 [
                     {
                         "severity": "error",

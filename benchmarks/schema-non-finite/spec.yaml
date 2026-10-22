@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADSL
 keys: [USUBJID]
 input:
@@ -36,17 +38,17 @@ columns:
   - name: YAML_PINF
     type: float
     label: Positive Infinity YAML Literal
-    derivation: {literal: .inf}
+    derivation: .inf
 
   - name: YAML_NINF
     type: float
     label: Negative Infinity YAML Literal
-    derivation: {literal: -.Inf}
+    derivation: -.Inf
 
   - name: YAML_NAN
     type: float
     label: Not-a-Number YAML Literal
-    derivation: {literal: .NAN}
+    derivation: .NAN
 
   - name: SOURCE_PINF
     type: float
@@ -73,7 +75,7 @@ columns:
       function:
         name: numeric_constant
         args:
-          kind: {literal: positive-infinity}
+          kind: "'positive-infinity'"
 
   - name: FUNCTION_NINF
     type: float
@@ -82,7 +84,7 @@ columns:
       function:
         name: numeric_constant
         args:
-          kind: {literal: negative-infinity}
+          kind: "'negative-infinity'"
 
   - name: FUNCTION_NAN
     type: float
@@ -91,4 +93,4 @@ columns:
       function:
         name: numeric_constant
         args:
-          kind: {literal: nan}
+          kind: "'nan'"

@@ -106,6 +106,10 @@ pub trait DocumentPort<E> {
 }
 #[derive(Debug, thiserror::Error)]
 pub enum Error<E, X> {
+    /// The file `written` names could not be resolved or captured as the
+    /// entry itself; a failure of any file it declares is `Resource`.
+    #[error("file preparation entry: {0:?}")]
+    Entry(E),
     #[error("file preparation resource: {0:?}")]
     Resource(E),
     #[error("file preparation preparation: {0:?}")]
@@ -243,7 +247,7 @@ pub fn prepare<P: NativePort, D: DocumentPort<P::Error>>(
                 ),
             }
         } else {
-            Error::Resource(error)
+            Error::Entry(error)
         }
     };
     let identity = port
