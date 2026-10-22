@@ -21,7 +21,7 @@ use crate::cancel::CancellationToken;
 use crate::diagnostic::{Locator, Report};
 use crate::error::{Error, FunctionError};
 use crate::functions::{HostLanguage, ProjectFunctions};
-use crate::internal::{EngineShared, ObserverBridge};
+use crate::internal::EngineShared;
 use crate::plan::Plan;
 use crate::resolver::ResourceResolver;
 use crate::table::Table;
@@ -139,12 +139,11 @@ impl Engine {
     /// no study data and activating nothing. A refused compilation still
     /// returns a plan that owns its report.
     fn compile(&self, request: &Request<'_>, measurements: &Arc<Measurements>) -> Plan {
-        let bridge = ObserverBridge::new(measurements);
         let compiled = crate::internal::compile(
             &self.shared,
             request.specification,
             request.environment,
-            yamaa_core::application_observer::Scope::new(&bridge),
+            yamaa_core::application_observer::Scope::new(&**measurements),
         );
         Plan::new(
             Arc::clone(&self.shared),
