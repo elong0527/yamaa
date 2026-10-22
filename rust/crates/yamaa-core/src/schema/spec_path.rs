@@ -11,10 +11,40 @@ use std::borrow::Cow;
 
 /// Whether `text` is one bare segment of a spec path.
 pub(crate) fn plain(text: &str) -> bool {
-    !text.is_empty()
-        && text
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
+    bare(text) == Some(text.len())
+}
+
+/// The length of the bare segment `text` starts with; `None` when it starts
+/// with none.
+fn bare(text: &str) -> Option<usize> {
+    let end = text
+        .bytes()
+        .position(|byte| !(byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-')))
+        .unwrap_or(text.len());
+    (end > 0).then_some(end)
+}
+
+/// Read the step `text` starts with, `.segment` or `['quoted']`: the key it
+/// names and the text after it. `None` when `text` starts with no step, such
+/// as a list index, an empty segment or an unclosed quote.
+pub(crate) fn read_step(text: &str) -> Option<(String, &str)> {
+    if let Some(rest) = text.strip_prefix('.') {
+        let end = bare(rest)?;
+        return Some((rest[..end].to_string(), &rest[end..]));
+    }
+    let mut rest = text.strip_prefix("['")?;
+    let mut key = String::new();
+    loop {
+        let (part, after) = rest.split_once('\'')?;
+        key.push_str(part);
+        match after.strip_prefix('\'') {
+            Some(after) => {
+                key.push('\'');
+                rest = after;
+            }
+            None => return Some((key, after.strip_prefix(']')?)),
+        }
+    }
 }
 
 /// One key as a path step: `.key` when it is a bare segment, else `['key']`.
@@ -48,45 +78,13 @@ impl SpecPath {
     /// clearable value, so they are refused like any other spelling outside
     /// the notation.
     pub(crate) fn parse(text: &str) -> Option<Self> {
-        let bytes = text.as_bytes();
-        let bare = |from: usize| {
-            let end = bytes[from..]
-                .iter()
-                .position(|byte| !(byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-')))
-                .map_or(bytes.len(), |offset| from + offset);
-            (end > from).then_some(end)
-        };
-        let mut at = bare(0)?;
-        let mut keys = vec![text[..at].to_string()];
-        while at < bytes.len() {
-            match bytes[at] {
-                b'.' => {
-                    let end = bare(at + 1)?;
-                    keys.push(text[at + 1..end].to_string());
-                    at = end;
-                }
-                b'[' if bytes.get(at + 1) == Some(&b'\'') => {
-                    let mut key = String::new();
-                    let mut index = at + 2;
-                    loop {
-                        let offset = text[index..].find('\'')?;
-                        key.push_str(&text[index..index + offset]);
-                        index += offset + 1;
-                        if bytes.get(index) == Some(&b'\'') {
-                            key.push('\'');
-                            index += 1;
-                        } else {
-                            break;
-                        }
-                    }
-                    if bytes.get(index) != Some(&b']') {
-                        return None;
-                    }
-                    keys.push(key);
-                    at = index + 1;
-                }
-                _ => return None,
-            }
+        let first = bare(text)?;
+        let mut keys = vec![text[..first].to_string()];
+        let mut rest = &text[first..];
+        while !rest.is_empty() {
+            let (key, after) = read_step(rest)?;
+            keys.push(key);
+            rest = after;
         }
         Some(Self { keys })
     }
@@ -195,5 +193,28 @@ mod tests {
         assert!(plain("collected-occurrence"));
         assert!(!plain(""));
         assert!(!plain("a.b"));
+    }
+
+    #[test]
+    fn a_step_names_one_key_and_leaves_the_text_after_it() {
+        for (text, step) in [
+            (".rows.event", Some(("rows", ".event"))),
+            ("['week 2'].derivations", Some(("week 2", ".derivations"))),
+            // A quoted key may hold what would end a step outside quotes.
+            ("['a].b'''].c", Some(("a].b'", ".c"))),
+            ("['']", Some(("", ""))),
+            ("[0].c", None),
+            (".", None),
+            (".['x']", None),
+            ("['open", None),
+            ("['x'y", None),
+            ("rows.x", None),
+        ] {
+            assert_eq!(
+                read_step(text),
+                step.map(|(key, rest)| (key.to_string(), rest)),
+                "{text:?}"
+            );
+        }
     }
 }
