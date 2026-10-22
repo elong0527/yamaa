@@ -100,7 +100,7 @@
       "family": "text",
       "level": "component",
       "consumers": [
-        "R/yamaa/tests/original_specifications.R",
+        "R/yamaa/tests/original_specifications_text.R",
         "rust/crates/yamaa-adapters/tests/scalar_declarative_rounding.rs",
         "python/tests/installed/installed_original_specifications.py",
         "tools/staging/stage_specification_inputs.py"
@@ -111,7 +111,7 @@
       "family": "text",
       "level": "component",
       "consumers": [
-        "R/yamaa/tests/original_specifications.R",
+        "R/yamaa/tests/original_specifications_text.R",
         "rust/crates/yamaa-adapters/tests/scalar_declarative_rounding.rs",
         "python/tests/installed/installed_original_specifications.py",
         "tools/staging/stage_specification_inputs.py"
@@ -122,7 +122,7 @@
       "family": "datasets",
       "level": "component",
       "consumers": [
-        "R/yamaa/tests/original_specifications.R",
+        "R/yamaa/tests/original_specifications_keys.R",
         "rust/crates/yamaa-adapters/tests/execution_declarative_case_predicates.rs",
         "python/tests/installed/installed_original_specifications.py",
         "tools/staging/stage_specification_inputs.py"
@@ -133,7 +133,7 @@
       "family": "predicate",
       "level": "component",
       "consumers": [
-        "R/yamaa/tests/original_specifications.R",
+        "R/yamaa/tests/original_specifications_keys.R",
         "rust/crates/yamaa-adapters/tests/execution_declarative_case_predicates.rs",
         "python/tests/installed/installed_original_specifications.py",
         "tools/staging/stage_specification_inputs.py"
@@ -144,7 +144,7 @@
       "family": "predicate",
       "level": "component",
       "consumers": [
-        "R/yamaa/tests/original_specifications.R",
+        "R/yamaa/tests/original_specifications_lookups.R",
         "rust/crates/yamaa-adapters/tests/execution_declarative_case_predicates.rs",
         "python/tests/installed/installed_original_specifications.py",
         "tools/staging/stage_specification_inputs.py"
@@ -202,7 +202,7 @@
       "family": "datasets",
       "level": "component",
       "consumers": [
-        "R/yamaa/tests/original_specifications.R",
+        "R/yamaa/tests/original_specifications_keys.R",
         "rust/crates/yamaa-adapters/tests/execution_declarative_case_predicates.rs",
         "python/tests/installed/installed_original_specifications.py",
         "tools/staging/stage_specification_inputs.py"
@@ -213,7 +213,7 @@
       "family": "text",
       "level": "component",
       "consumers": [
-        "R/yamaa/tests/original_specifications.R",
+        "R/yamaa/tests/original_specifications_text.R",
         "rust/crates/yamaa-adapters/tests/scalar_declarative_rounding.rs",
         "python/tests/installed/installed_original_specifications.py",
         "tools/staging/stage_specification_inputs.py"
@@ -224,7 +224,7 @@
       "family": "text",
       "level": "component",
       "consumers": [
-        "R/yamaa/tests/original_specifications.R",
+        "R/yamaa/tests/original_specifications_text.R",
         "rust/crates/yamaa-adapters/tests/scalar_declarative_rounding.rs",
         "python/tests/installed/installed_original_specifications.py",
         "tools/staging/stage_specification_inputs.py"
@@ -235,7 +235,7 @@
       "family": "temporal",
       "level": "component",
       "consumers": [
-        "R/yamaa/tests/original_specifications.R",
+        "R/yamaa/tests/original_specifications_scalars.R",
         "rust/crates/yamaa-adapters/tests/scalar_declarative_rounding.rs",
         "python/tests/installed/installed_original_specifications.py",
         "tools/staging/stage_specification_inputs.py"
@@ -917,7 +917,7 @@
         "rust/crates/yamaa-adapters/tests/execution_declarative_self.rs",
         "tools/staging/stage_specification_inputs.py",
         "python/tests/installed/installed_original_specifications.py",
-        "R/yamaa/tests/original_specifications.R"
+        "R/yamaa/tests/original_specifications_sources.R"
       ]
     },
     {
@@ -928,7 +928,7 @@
         "rust/crates/yamaa-adapters/tests/execution_declarative_self.rs",
         "tools/staging/stage_specification_inputs.py",
         "python/tests/installed/installed_original_specifications.py",
-        "R/yamaa/tests/original_specifications.R"
+        "R/yamaa/tests/original_specifications_sources.R"
       ]
     },
     {
@@ -939,7 +939,7 @@
         "rust/crates/yamaa-adapters/tests/execution_declarative_self.rs",
         "tools/staging/stage_specification_inputs.py",
         "python/tests/installed/installed_original_specifications.py",
-        "R/yamaa/tests/original_specifications.R"
+        "R/yamaa/tests/original_specifications_sources.R"
       ]
     },
     {
@@ -950,7 +950,7 @@
         "rust/crates/yamaa-adapters/tests/execution_declarative_case_predicates.rs",
         "tools/staging/stage_specification_inputs.py",
         "python/tests/installed/installed_original_specifications.py",
-        "R/yamaa/tests/original_specifications.R"
+        "R/yamaa/tests/original_specifications_sources.R"
       ]
     },
     {
@@ -961,7 +961,7 @@
         "rust/crates/yamaa-adapters/tests/execution_aggregate_record_operations.rs",
         "tools/staging/stage_specification_inputs.py",
         "python/tests/installed/installed_original_specifications.py",
-        "R/yamaa/tests/original_specifications.R"
+        "R/yamaa/tests/original_specifications_sources.R"
       ]
     },
     {
@@ -972,6 +972,14 @@
         "rust/crates/yamaa-adapters/tests/execution_retired_odm_context.rs",
         "python/tests/installed/installed_original_specifications.py",
         "R/yamaa/tests/original_specifications.R",
+        "R/yamaa/tests/original_specifications_handlers.R",
+        "R/yamaa/tests/original_specifications_issue_rows.R",
+        "R/yamaa/tests/original_specifications_keys.R",
+        "R/yamaa/tests/original_specifications_lookups.R",
+        "R/yamaa/tests/original_specifications_parquet.R",
+        "R/yamaa/tests/original_specifications_scalars.R",
+        "R/yamaa/tests/original_specifications_sources.R",
+        "R/yamaa/tests/original_specifications_text.R",
         "python/tests/installed/installed_file_resources.py",
         "python/tests/installed/installed_public_environment.py",
         "R/yamaa/tests/public_environment.R",
@@ -1003,7 +1011,8 @@
         "python/tests/installed/installed_issue_locations.py",
         "R/yamaa/tests/issue_locations.R",
         "python/tests/installed/installed_project_parity.py",
-        "R/yamaa/tests/project_parity.R"
+        "R/yamaa/tests/project_parity.R",
+        "R/yamaa/tests/run_report.R"
       ]
     },
     {
@@ -1053,6 +1062,14 @@
     "r/compact-yaml": "shared_run",
     "r/longitudinal-capacity": "shared_run",
     "r/original-specifications": "shared_run",
+    "r/original-specifications-handlers": "shared_run",
+    "r/original-specifications-issue-rows": "shared_run",
+    "r/original-specifications-keys": "shared_run",
+    "r/original-specifications-lookups": "shared_run",
+    "r/original-specifications-parquet": "shared_run",
+    "r/original-specifications-scalars": "shared_run",
+    "r/original-specifications-sources": "shared_run",
+    "r/original-specifications-text": "shared_run",
     "r/public-contract": "shared_run",
     "r/public-define": "shared_run",
     "r/public-environment": "shared_run",

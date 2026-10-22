@@ -6,11 +6,7 @@ mod file {
         //! specification's output contract. The producer is never executed:
         //! callers build and save it first, and the consumer reads the file at
         //! its own `path` like any other input.
-        use std::{
-            fs,
-            path::PathBuf,
-            sync::atomic::{AtomicUsize, Ordering},
-        };
+        use std::fs;
         use yamaa_adapters::{
             file_application::{self, Domain},
             specification_report::Identity,
@@ -18,17 +14,11 @@ mod file {
         use yamaa_core::diagnostic::Diagnostic;
         use yamaa_core::domain_entry::Request;
 
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        struct Study(PathBuf);
+        struct Study(crate::support::Scratch);
         impl Study {
             fn new() -> Self {
-                let root = std::env::temp_dir().join(format!(
-                    "yamaa-producer-links-{}-{}",
-                    std::process::id(),
-                    NEXT.fetch_add(1, Ordering::Relaxed)
-                ));
-                fs::create_dir(&root).unwrap();
-                Self(yamaa_adapters::canonical_path::canonicalize(root).unwrap())
+                let root = crate::support::Scratch::canonical("producer-links");
+                Self(root)
             }
             fn path(&self, written: &str) -> String {
                 let path = self.0.join(written).to_str().unwrap().to_owned();
@@ -66,13 +56,6 @@ mod file {
                     },
                     identity(&path),
                 )
-            }
-        }
-        impl Drop for Study {
-            fn drop(&mut self) {
-                if self.0.exists() {
-                    fs::remove_dir_all(&self.0).unwrap();
-                }
             }
         }
         fn identity(specification: &str) -> Identity<'_> {

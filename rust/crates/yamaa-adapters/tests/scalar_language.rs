@@ -2,26 +2,16 @@
 //! Scalar contracts.
 mod scalar {
     mod scalar_language {
-        use std::{
-            fs,
-            path::{Path, PathBuf},
-            sync::atomic::{AtomicUsize, Ordering},
-        };
+        use std::{fs, path::Path};
         use yamaa_adapters::{file_application, specification_report::Identity};
         use yamaa_core::domain_entry::Request;
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        struct Fixture(PathBuf);
+        struct Fixture(crate::support::Scratch);
         impl Fixture {
             fn new(name: &str) -> Self {
                 let source = Path::new(env!("CARGO_MANIFEST_DIR"))
                     .join("../../../benchmarks")
                     .join(name);
-                let path = std::env::temp_dir().join(format!(
-                    "yamaa-scalar-{}-{}",
-                    std::process::id(),
-                    NEXT.fetch_add(1, Ordering::Relaxed)
-                ));
-                fs::create_dir(&path).unwrap();
+                let path = crate::support::Scratch::new("scalar");
                 fn copy(source: &Path, target: &Path) {
                     for entry in fs::read_dir(source).unwrap() {
                         let entry = entry.unwrap();
@@ -56,11 +46,6 @@ mod scalar {
                     identity,
                 )
                 .unwrap_or_else(|issues| panic!("preparation {issues:?}"))
-            }
-        }
-        impl Drop for Fixture {
-            fn drop(&mut self) {
-                fs::remove_dir_all(&self.0).unwrap();
             }
         }
         fn golden(fixture: &Fixture) -> yamaa_core::json::Value {
@@ -314,23 +299,13 @@ mod scalar {
     }
     mod secondary_scalar_operands {
         //! Implicit joins bind completed keys, preserve laziness and keep source scopes.
-        use std::{
-            fs,
-            path::{Path, PathBuf},
-            sync::atomic::{AtomicUsize, Ordering},
-        };
+        use std::{fs, path::Path};
         use yamaa_adapters::{file_application, specification_report::Identity};
         use yamaa_core::domain_entry::Request;
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        struct Fixture(PathBuf);
+        struct Fixture(crate::support::Scratch);
         impl Fixture {
             fn new() -> Self {
-                let path = std::env::temp_dir().join(format!(
-                    "yamaa-secondary-scalars-{}-{}",
-                    std::process::id(),
-                    NEXT.fetch_add(1, Ordering::Relaxed)
-                ));
-                fs::create_dir(&path).unwrap();
+                let path = crate::support::Scratch::new("secondary-scalars");
                 Self(path)
             }
             fn run(
@@ -359,11 +334,6 @@ mod scalar {
                 assert!(domain.issues().is_empty(), "{:?}", domain.issues());
                 assert!(domain.save().unwrap());
                 fs::read(self.0.join("result.csv")).unwrap()
-            }
-        }
-        impl Drop for Fixture {
-            fn drop(&mut self) {
-                fs::remove_dir_all(&self.0).unwrap();
             }
         }
         #[test]
@@ -694,24 +664,15 @@ rows:
         }
     }
     mod run_report {
-        use std::{
-            fs,
-            path::PathBuf,
-            sync::atomic::{AtomicUsize, Ordering},
-        };
+        use std::{fs, path::PathBuf};
         use yamaa_adapters::{file_application, specification_report::Identity};
         use yamaa_core::domain_entry::Request;
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        struct Study(PathBuf);
+        struct Study(crate::support::Scratch);
         impl Study {
             fn new() -> Self {
-                let path = std::env::temp_dir().join(format!(
-                    "yamaa-report-witness-{}-{}",
-                    std::process::id(),
-                    NEXT.fetch_add(1, Ordering::Relaxed)
-                ));
+                let path = crate::support::Scratch::new("report-witness");
                 fs::create_dir_all(path.join("input")).unwrap();
-                Self(fs::canonicalize(path).unwrap())
+                Self(path.resolved(std::fs::canonicalize))
             }
             fn benchmark() -> (Self, String) {
                 let study = Self::new();
@@ -745,11 +706,6 @@ rows:
             }
             fn build(&self, raw: &str) -> file_application::Domain {
                 self.try_build(raw).unwrap()
-            }
-        }
-        impl Drop for Study {
-            fn drop(&mut self) {
-                fs::remove_dir_all(&self.0).unwrap();
             }
         }
         const HEADER: &str = "ARTIFACT,KIND,SPEC_PATH,NAME,ID,TARGET,RULE,SEVERITY,OUTCOME,CONDITION,COUNT,TOTAL,KEYS,DETAILS\n";

@@ -14,7 +14,6 @@ use std::{
     fs,
     os::windows::process::CommandExt,
     path::{Path, PathBuf},
-    sync::atomic::{AtomicUsize, Ordering},
 };
 use yamaa_adapters::{
     file_application, file_configuration, file_resources::Error, specification_report::Identity,
@@ -23,27 +22,20 @@ use yamaa_core::{domain_entry::Request, project_function::Language};
 
 const SPEC: &str = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: ../data/src.csv, types: {ID: int}}}\noutput: {path: out/result.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
 
-static NEXT: AtomicUsize = AtomicUsize::new(0);
-
 /// A temporary study and its spelling through the drive's administrative
 /// share.
 struct Study {
-    local: PathBuf,
+    local: crate::support::Scratch,
     share: PathBuf,
 }
 impl Study {
     fn new() -> Option<Self> {
-        let local = std::env::temp_dir().join(format!(
-            "yamaa-network-share-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
+        let local = crate::support::Scratch::canonical("network-share");
         for directory in ["study/out", "data"] {
             fs::create_dir_all(local.join(directory)).unwrap();
         }
         fs::write(local.join("study/spec.yaml"), SPEC).unwrap();
         fs::write(local.join("data/src.csv"), "ID\n1\n2\n").unwrap();
-        let local = yamaa_adapters::canonical_path::canonicalize(local).unwrap();
         let text = local.to_str().unwrap();
         let (drive, rest) = text.split_once(":\\").unwrap();
         let share = PathBuf::from(format!(r"\\localhost\{drive}$\{rest}"));
@@ -62,11 +54,6 @@ impl Study {
     }
     fn share(&self, name: &str) -> String {
         self.share.join(name).to_str().unwrap().to_owned()
-    }
-}
-impl Drop for Study {
-    fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.local);
     }
 }
 

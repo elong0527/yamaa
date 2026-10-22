@@ -1126,8 +1126,6 @@ mod table {
             convert::Infallible,
             fs::{File, OpenOptions},
             io::Write,
-            path::PathBuf,
-            sync::atomic::{AtomicUsize, Ordering},
         };
         use yamaa_adapters::parquet_artifact::{render, Error};
         use yamaa_core::{
@@ -1175,31 +1173,23 @@ mod table {
                 rows,
             }
         }
-        struct Source(PathBuf);
+        /// A Parquet file in its own scratch directory.
+        struct Source(crate::support::Scratch);
         impl Source {
             fn new(bytes: &[u8]) -> Self {
-                static NEXT: AtomicUsize = AtomicUsize::new(0);
-                let path = std::env::temp_dir().join(format!(
-                    "yamaa-parquet-test-{}-{}",
-                    std::process::id(),
-                    NEXT.fetch_add(1, Ordering::Relaxed)
-                ));
+                let directory = crate::support::Scratch::new("parquet-test");
                 OpenOptions::new()
                     .write(true)
                     .create_new(true)
-                    .open(&path)
+                    .open(directory.join("source.parquet"))
                     .unwrap()
                     .write_all(bytes)
                     .unwrap();
-                Self(path)
+                Self(directory)
             }
             fn reader(&self) -> SerializedFileReader<File> {
-                SerializedFileReader::new(File::open(&self.0).unwrap()).unwrap()
-            }
-        }
-        impl Drop for Source {
-            fn drop(&mut self) {
-                let _ = std::fs::remove_file(&self.0);
+                SerializedFileReader::new(File::open(self.0.join("source.parquet")).unwrap())
+                    .unwrap()
             }
         }
 

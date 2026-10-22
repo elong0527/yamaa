@@ -4,23 +4,13 @@
 mod execution {
     mod aggregate_record_operations {
         //! Independent YAML, donor bytes and exact saved truth for per-record aggregates.
-        use std::{
-            fs,
-            path::{Path, PathBuf},
-            sync::atomic::{AtomicUsize, Ordering},
-        };
+        use std::{fs, path::Path};
         use yamaa_adapters::{file_application, specification_report::Identity};
         use yamaa_core::domain_entry::Request;
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        struct Fixture(PathBuf);
+        struct Fixture(crate::support::Scratch);
         impl Fixture {
             fn new() -> Self {
-                let path = std::env::temp_dir().join(format!(
-                    "yamaa-aggregate-records-{}-{}",
-                    std::process::id(),
-                    NEXT.fetch_add(1, Ordering::Relaxed)
-                ));
-                fs::create_dir(&path).unwrap();
+                let path = crate::support::Scratch::new("aggregate-records");
                 Self(path)
             }
             fn run(
@@ -49,11 +39,6 @@ mod execution {
                 assert!(domain.issues().is_empty(), "{:?}", domain.issues());
                 assert!(domain.save().unwrap());
                 fs::read(self.0.join("result.csv")).unwrap()
-            }
-        }
-        impl Drop for Fixture {
-            fn drop(&mut self) {
-                fs::remove_dir_all(&self.0).unwrap();
             }
         }
         fn specification(operation: &str) -> String {
@@ -760,21 +745,11 @@ S1,002,2024-06
     }
     mod baseline_window_types {
         //! Baseline temporal operands retain their typed condition and authored input site.
-        use std::{
-            fs,
-            path::PathBuf,
-            sync::atomic::{AtomicUsize, Ordering},
-        };
+        use std::fs;
         use yamaa_adapters::{file_application, specification_report::Identity};
         use yamaa_core::domain_entry::Request;
 
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        struct Fixture(PathBuf);
-        impl Drop for Fixture {
-            fn drop(&mut self) {
-                fs::remove_dir_all(&self.0).unwrap();
-            }
-        }
+        struct Fixture(crate::support::Scratch);
         fn issues(rows: &[yamaa_core::diagnostic::Diagnostic]) -> yamaa_core::json::Value {
             yamaa_adapters::json!(rows
                 .iter()
@@ -794,12 +769,7 @@ S1,002,2024-06
                 .as_array()
                 .unwrap()
             {
-                let fixture = Fixture(std::env::temp_dir().join(format!(
-                    "yamaa-baseline-window-types-{}-{}",
-                    std::process::id(),
-                    NEXT.fetch_add(1, Ordering::Relaxed)
-                )));
-                fs::create_dir(&fixture.0).unwrap();
+                let fixture = Fixture(crate::support::Scratch::new("baseline-window-types"));
                 for (path, bytes) in case["inputs"].as_object().unwrap() {
                     let path = fixture.0.join(path);
                     fs::create_dir_all(path.parent().unwrap()).unwrap();
@@ -869,25 +839,15 @@ S1,002,2024-06
         //! EXPR-7 case item order is one validation finding at every expression site,
         //! with the same issue from check and domain in both shared host routes. Paths
         //! follow the schema validator: keyed list members are named by `name` or `id`.
-        use std::{
-            fs,
-            path::PathBuf,
-            sync::atomic::{AtomicUsize, Ordering},
-        };
+        use std::fs;
         use yamaa_adapters::{file_application, specification_report::Identity};
         use yamaa_core::diagnostic::Diagnostic;
         use yamaa_core::{domain_entry::Request, json::Value};
 
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        struct Fixture(PathBuf);
+        struct Fixture(crate::support::Scratch);
         impl Fixture {
             fn new(body: &str) -> Self {
-                let root = std::env::temp_dir().join(format!(
-                    "yamaa-case-item-order-{}-{}",
-                    std::process::id(),
-                    NEXT.fetch_add(1, Ordering::Relaxed)
-                ));
-                fs::create_dir(&root).unwrap();
+                let root = crate::support::Scratch::new("case-item-order");
                 fs::write(
                     root.join("spec.yaml"),
                     format!(
@@ -901,11 +861,6 @@ S1,002,2024-06
             }
             fn specification(&self) -> String {
                 self.0.join("spec.yaml").to_str().unwrap().to_owned()
-            }
-        }
-        impl Drop for Fixture {
-            fn drop(&mut self) {
-                fs::remove_dir_all(&self.0).unwrap();
             }
         }
 
@@ -1060,29 +1015,16 @@ S1,002,2024-06
         use std::{
             fs,
             path::{Path, PathBuf},
-            sync::atomic::{AtomicUsize, Ordering},
         };
         use yamaa_adapters::{file_application, specification_report::Identity};
         use yamaa_core::domain_entry::Request;
 
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-
-        struct Fixture(PathBuf);
+        struct Fixture(crate::support::Scratch);
         impl Fixture {
             fn new(name: &str) -> Self {
-                let p = std::env::temp_dir().join(format!(
-                    "yamaa-check-output-{}-{}-{}",
-                    name,
-                    std::process::id(),
-                    NEXT.fetch_add(1, Ordering::Relaxed)
-                ));
-                fs::create_dir(&p).unwrap();
-                Self(p)
-            }
-        }
-        impl Drop for Fixture {
-            fn drop(&mut self) {
-                fs::remove_dir_all(&self.0).unwrap();
+                Self(crate::support::Scratch::new(&format!(
+                    "check-output-{name}"
+                )))
             }
         }
 
@@ -2495,29 +2437,14 @@ S1,002,2024-06
     }
     mod completed_intermediate_scopes {
         //! Original committed YAML and independent expected artifacts remain the oracle.
-        use std::{
-            fs,
-            path::{Path, PathBuf},
-            sync::atomic::{AtomicUsize, Ordering},
-        };
+        use std::{fs, path::Path};
         use yamaa_adapters::{file_application, specification_report::Identity};
         use yamaa_core::domain_entry::Request;
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        struct Fixture(PathBuf);
+        struct Fixture(crate::support::Scratch);
         impl Fixture {
             fn new() -> Self {
-                let p = std::env::temp_dir().join(format!(
-                    "yamaa-intermediate-scopes-{}-{}",
-                    std::process::id(),
-                    NEXT.fetch_add(1, Ordering::Relaxed)
-                ));
-                fs::create_dir(&p).unwrap();
+                let p = crate::support::Scratch::new("intermediate-scopes");
                 Self(p)
-            }
-        }
-        impl Drop for Fixture {
-            fn drop(&mut self) {
-                fs::remove_dir_all(&self.0).unwrap();
             }
         }
         fn copy(source: &Path, destination: &Path) {
@@ -3357,21 +3284,11 @@ S1,002,2024-06
     }
     mod completed_lookup_assertions {
         //! Independent completed-row assertion scope, order and whole-record truth.
-        use std::{
-            fs,
-            path::PathBuf,
-            sync::atomic::{AtomicUsize, Ordering},
-        };
+        use std::fs;
         use yamaa_adapters::{file_application, specification_report::Identity};
         use yamaa_core::diagnostic::Diagnostic;
         use yamaa_core::domain_entry::Request;
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        struct Fixture(PathBuf);
-        impl Drop for Fixture {
-            fn drop(&mut self) {
-                fs::remove_dir_all(&self.0).unwrap();
-            }
-        }
+        struct Fixture(crate::support::Scratch);
         fn issues(rows: &[Diagnostic]) -> yamaa_core::json::Value {
             yamaa_core::json::Value::Array(
                 rows.iter()
@@ -3391,12 +3308,7 @@ S1,002,2024-06
             .unwrap();
             for (name, case) in truth["cases"].as_object().unwrap() {
                 for _ in 0..2 {
-                    let fixture = Fixture(std::env::temp_dir().join(format!(
-                        "yamaa-completed-assert-{}-{}",
-                        std::process::id(),
-                        NEXT.fetch_add(1, Ordering::Relaxed)
-                    )));
-                    fs::create_dir(&fixture.0).unwrap();
+                    let fixture = Fixture(crate::support::Scratch::new("completed-assert"));
                     let entry = fixture.0.join("spec.yaml");
                     fs::write(&entry, case["specification"].as_str().unwrap()).unwrap();
                     for (path, content) in case["inputs"].as_object().unwrap() {
@@ -3469,23 +3381,13 @@ S1,002,2024-06
     }
     mod declarative_case_intermediates {
         //! Complete case observations use the shared scalar source binder.
-        use std::{
-            fs,
-            path::{Path, PathBuf},
-            sync::atomic::{AtomicUsize, Ordering},
-        };
+        use std::{fs, path::Path};
         use yamaa_adapters::{file_application, specification_report::Identity};
         use yamaa_core::domain_entry::Request;
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        struct Fixture(PathBuf);
+        struct Fixture(crate::support::Scratch);
         impl Fixture {
             fn new() -> Self {
-                let path = std::env::temp_dir().join(format!(
-                    "yamaa-case-intermediate-{}-{}",
-                    std::process::id(),
-                    NEXT.fetch_add(1, Ordering::Relaxed)
-                ));
-                fs::create_dir(&path).unwrap();
+                let path = crate::support::Scratch::new("case-intermediate");
                 Self(path)
             }
             fn run(
@@ -3519,11 +3421,6 @@ S1,002,2024-06
                     "ID,SEQ,A,B\n1,1,first,\n1,2,second,present\n2,1,hidden,hidden\n",
                 )
                 .unwrap();
-            }
-        }
-        impl Drop for Fixture {
-            fn drop(&mut self) {
-                fs::remove_dir_all(&self.0).unwrap();
             }
         }
         const BODY: &str = r#"schema_version: '1.0'

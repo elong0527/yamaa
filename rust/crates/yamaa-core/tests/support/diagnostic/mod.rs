@@ -124,6 +124,53 @@ pub fn rendered(finding: &impl Record) -> ConditionCode {
     record.code
 }
 
+/// A text context value.
+pub fn text(value: &str) -> Value {
+    Value::String(value.into())
+}
+
+/// Assert that `finding` is the record its author wrote: phase, condition,
+/// rule, spec paths and context, with no source span and no operand route.
+/// The fields are compared as one value, so a failure shows all of them, at
+/// the caller's line. Returns the rendered cause.
+#[track_caller]
+pub fn expect(
+    finding: &Diagnostic,
+    phase: &str,
+    condition: &str,
+    rule: Option<&str>,
+    paths: &[&str],
+    context: Vec<(&str, Value)>,
+) -> ConditionCode {
+    let definition = finding.definition();
+    let spec_paths: Vec<&str> = finding.spec_paths.iter().map(String::as_str).collect();
+    let context: yamaa_core::diagnostic::Context = context
+        .into_iter()
+        .map(|(name, value)| (name.into(), value))
+        .collect();
+    assert_eq!(
+        (
+            definition.phase,
+            definition.condition,
+            definition.rule,
+            spec_paths,
+            &finding.context,
+            &finding.source_span,
+            &finding.operand_route,
+        ),
+        (
+            phase,
+            condition,
+            rule,
+            paths.to_vec(),
+            &context,
+            &None,
+            &None
+        ),
+    );
+    rendered(finding)
+}
+
 /// Every cause this thread rendered from a reached finding.
 pub fn rendered_causes() -> BTreeSet<ConditionCode> {
     RENDERED.with(|causes| causes.borrow().clone())

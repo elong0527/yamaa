@@ -315,21 +315,25 @@ class BindingsTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "keys must be text"):
                     generator._text_keys(value)
 
-    def test_operations_may_name_only_declared_commands(self):
+    def test_operations_and_host_only_name_no_command(self):
+        # Each command lists the operations it reaches, so the native pairing
+        # tables name only Python and R exports.
         definition = generator._load_definition()
-        candidate = copy.deepcopy(definition)
-        candidate["operations"]["spec_check"]["cli"] = ["check"]
-        candidate["operations"]["info"]["cli"] = ["--version"]
-        candidate["host_only"]["cli"] = ["lint"]
-        generator._validate_operations(candidate)
-        candidate = copy.deepcopy(definition)
-        candidate["operations"]["spec_check"]["cli"] = ["verify"]
-        with self.assertRaisesRegex(ValueError, "absent command verify"):
-            generator._validate_operations(candidate)
-        candidate = copy.deepcopy(definition)
-        candidate["host_only"]["cli"] = ["--verbose"]
-        with self.assertRaisesRegex(ValueError, "absent command --verbose"):
-            generator._validate_operations(candidate)
+        for message, mutate in (
+            (
+                "operation spec_check has invalid host mapping",
+                lambda d: d["operations"]["spec_check"].update(cli=["check"]),
+            ),
+            (
+                "host_only must contain python and r lists",
+                lambda d: d["host_only"].update(cli=["lint"]),
+            ),
+        ):
+            with self.subTest(message=message):
+                candidate = copy.deepcopy(definition)
+                mutate(candidate)
+                with self.assertRaisesRegex(ValueError, message):
+                    generator._validate_operations(candidate)
 
     def test_read_only_check_rejects_stale_public_layers_and_manifest(self):
         rendered = generator.render_all()

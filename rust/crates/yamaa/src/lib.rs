@@ -66,7 +66,7 @@ mod internal;
 mod outcome;
 mod plan;
 
-pub use api::{Check, Failure, Plans, ProjectRun, Run, Status, Submission, STATUSES};
+pub use api::{Check, Failure, Plans, ProjectRun, Run, Status, Submission, SECTIONS, STATUSES};
 pub use cancel::CancellationToken;
 pub use diagnostic::{
     ContextValue, Diagnostic, DiagnosticContext, Location, Position, Report, Severity, SourceSpan,
@@ -104,6 +104,7 @@ pub use text::{Action, Summary};
 pub const VERSION: &str = yamaa_core::VERSION;
 
 #[cfg(all(test, unix))]
+#[allow(dead_code)]
 #[path = "../tests/support/scratch.rs"]
 mod test_scratch;
 

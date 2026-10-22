@@ -379,19 +379,25 @@ by hand, `support::roots` lowers project functions and codelists into
 the AST roots a project file produces, `support::ports` (core) holds the
 scripted ports that log each effect and panic on an unexpected request,
 `support::specification_run` (adapters) prepares, compiles and lowers a
-document and replays authored reports against it, the `check` helpers
-of `support::diagnostic` (core) compare a diagnostic's five base fields and
-return its rendered code, `support::benchmarks` (adapters) reads what a
-live benchmark states (D120), and `support::odm_files::Scratch`
-(adapters) is a scratch directory removed on drop. The core and adapters
-trees hold copies of the AST-root factories by design (#2158), so a
-change to one is made to both.
+document and replays authored reports against it,
+`support::diagnostic::expect` (core) compares a diagnostic's phase,
+condition, rule, spec paths, context, span and route as one value at the
+caller's line and returns its rendered code, `support::benchmarks`
+(adapters) reads what a live benchmark states (D120),
+`support::inheritance::Files` (adapters) resolves parents beside their
+declaring file, `support::NoFunctions` (yamaa) stands for a project that
+calls no function, `support::edit` (adapters) replaces exactly one
+occurrence, and `support::Scratch` (adapters and yamaa) is a scratch
+directory removed on drop. The core and adapters
+trees hold copies of four modules by design (#2158): a change to one is
+made to both, and `make check-repository` fails while they differ
+(`tools.validation.check_test_support`).
 
 - Authored controls are files under `tests/fixtures/`, read with
   `include_str!`; assert their row count so a truncated fixture fails
   (`tests/portable_math_golden.rs` in core).
 - A variant of a document comes from an exact-once edit, as
-  `support::odm_files::edit` is, never from `str::replace`, which does
+  `support::edit` (adapters) is, never from `str::replace`, which does
   nothing when its pattern is missing.
 - Tests that differ in one value are one test over a table, with the
   label in every assertion:
@@ -409,10 +415,13 @@ change to one is made to both.
   code, reaches the shared builders through the crate's `#[path]`
   includes (`crate::test_document::Tree` in core), and repeats nothing
   an integration test proves through the public surface.
-- A scratch directory is a value removed on drop, as the adapters'
-  `Scratch` is, and its `Drop` never unwraps: a panic while unwinding
-  aborts the whole binary. A crate without such a helper adds it to
-  `support/` rather than building a `std::env::temp_dir()` path by hand.
+- A scratch directory is a `support::Scratch`, named by its label, the
+  process and a shared counter, and removed on drop without unwrapping:
+  a `Drop` that panics while a test unwinds aborts the whole binary.
+  `Scratch::canonical` names it as the engine spells paths,
+  `resolved(std::fs::canonicalize)` keeps the standard library's
+  spelling, and `adopt` owns a directory nested in another. A test never
+  builds a `std::env::temp_dir()` path by hand.
 - No `#[ignore]` and no `thread::sleep`. An environment variable serves
   only a declared skip with its reason, as `YAMAA_SKIP_NETWORK_SHARES`
   does, and `Command::new` runs only the program under test: the
@@ -458,15 +467,20 @@ suites run outside the checkout against an installed package: they import
 
 `R/yamaa/tests/*.R` are plain scripts: `R CMD check` runs each in a copy
 of the tests directory with the staged inputs beside it, and the first
-failing assertion ends the file. A script finds its inputs relative to
+failing assertion ends the file. The check runs every file
+(`--no-stop-on-test-error`), and `tools/commands/check_r.py` prints each
+failing file's whole `.Rout.fail`. A script finds its inputs relative to
 the working directory and sources the shared readers from
-`host-fixtures/` (`reader.R`, `context.R`); every shared R helper lives
-there, because a file in `rust/tests/host-fixtures/` is staged beside
-every suite and into the R source package. Each case is a
-`local({ ... })` block that creates its directory with `tempfile()` and
-removes it with `on.exit(unlink(dir, recursive = TRUE), add = TRUE)`.
-Name every assertion, so a failure says what was expected and for which
-case:
+`host-fixtures/` (`reader.R`, `context.R`, and `assert.R` for the
+labelled expectations and the helpers the suites share); every shared R
+helper lives there, because a file in `rust/tests/host-fixtures/` is
+staged beside every suite and into the R source package, while a file in
+`R/yamaa/tests/` is run as a suite. Each case is a `local({ ... })` block
+that creates its directory with `tempfile()` and removes it with
+`on.exit(unlink(dir, recursive = TRUE), add = TRUE)`. Name every
+assertion, so a failure says what was expected and for which case, and
+compare a whole value with `expect_identical()`, which shows both values
+when they differ:
 
 ```r
 stopifnot(
@@ -474,12 +488,15 @@ stopifnot(
   "the first issue is the refusal" =
     identical(issues$condition[[1]], expected$condition)
 )
+expect_identical(as.list(issues[c("condition", "rule")]),
+  list(condition = "range_failed", rule = "CHECK-7"), "the failed range check")
 ```
 
 A loop over cases wraps each case in `local()` and puts the case's name
-in its labels. A suggested package that is missing skips the file with a
-message, as the files do. A file holds one family, split by feature,
-because the first failure hides the rest.
+in its labels: `stopifnot_case(label, "what is expected" = ...)` names
+the case before the clause. A suggested package that is missing skips the
+file with a message, as the files do. A file holds one family, split by
+feature, because the first failure hides the rest.
 
 ### Shared truth across hosts
 

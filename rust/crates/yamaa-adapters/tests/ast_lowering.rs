@@ -25,7 +25,7 @@ use yamaa_adapters::{
     file_preparation::FileSpecification,
     file_resources::Resources,
     shipped_schema,
-    specification_source::{InheritancePort, PreparedDocument, Source},
+    specification_source::{PreparedDocument, Source},
     yaml_decode::{decode_yaml, SourcePosition},
 };
 use yamaa_core::{
@@ -35,7 +35,6 @@ use yamaa_core::{
         TemporalType, TimeUnit, WindowFunction,
     },
     front_end::v0_5::{lower, Positions},
-    inheritance::{Source as GraphSource, SourceError},
     schema::{Document, DocumentNode as N, SchemaSource},
 };
 
@@ -104,36 +103,7 @@ fn expected_paths(case: &Path) -> Vec<String> {
         .unwrap_or_default()
 }
 
-/// Parents resolve beside their declaring file; input paths stay as written.
-struct Files;
-impl InheritancePort for Files {
-    type Error = std::io::Error;
-    fn canonicalize(
-        &mut self,
-        declaring: &str,
-        written: &str,
-    ) -> Result<GraphSource, SourceError<Self::Error>> {
-        let candidate = Path::new(declaring).parent().unwrap().join(written);
-        let identity = candidate
-            .canonicalize()
-            .map_err(|_| SourceError::Unavailable)?;
-        Ok(GraphSource {
-            identity: identity.to_str().unwrap().into(),
-            display_path: candidate.to_str().unwrap().into(),
-        })
-    }
-    fn capture(&mut self, source: &GraphSource) -> Result<Vec<u8>, SourceError<Self::Error>> {
-        fs::read(&source.identity).map_err(SourceError::Raised)
-    }
-    fn rebase(
-        &mut self,
-        _: &GraphSource,
-        _: &GraphSource,
-        written: &str,
-    ) -> Result<String, Self::Error> {
-        Ok(written.into())
-    }
-}
+use crate::support::inheritance::Files;
 
 fn span(file: usize, position: &SourcePosition) -> Span {
     Span {

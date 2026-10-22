@@ -18,6 +18,12 @@ including quoting, trailing zeros and final newlines.
 
 The R assertions share `context.R` to compare decoded JSON contexts with key
 order ignored at every level. Array order and scalar types remain exact.
+`assert.R` holds the helpers every R suite shares: labelled expectations that
+name the case and show the actual and expected values when they fail, D39's
+save-refusal text, the issue-truth decoder and the PATH that hides Python.
+`original.R` holds the helpers of the `original_specifications*.R` suites,
+which split the original-specifications family by feature. Neither authors
+truth; both only compare.
 
 Each host's environments entry, lock, ABI handles and callbacks remain
 host-owned. Public-contract data retains the different Python and R i64

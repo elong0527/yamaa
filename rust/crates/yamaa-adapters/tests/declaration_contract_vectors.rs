@@ -1440,19 +1440,12 @@ mod declaration {
             }
         }
         struct CaseFiles {
-            root: std::path::PathBuf,
+            root: crate::support::Scratch,
         }
         impl CaseFiles {
             fn new(case: &Value) -> Self {
-                static NEXT: std::sync::atomic::AtomicUsize =
-                    std::sync::atomic::AtomicUsize::new(0);
-                let root = std::env::temp_dir().join(format!(
-                    "yamaa-inheritance-{}-{}",
-                    std::process::id(),
-                    NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-                ));
-                std::fs::create_dir(&root).unwrap();
-                let root = root.canonicalize().unwrap();
+                let root =
+                    crate::support::Scratch::new("inheritance").resolved(std::fs::canonicalize);
                 for source in case["sources"].as_array().unwrap() {
                     let name = source["name"].as_str().unwrap();
                     assert_eq!(std::path::Path::new(name).components().count(), 1);
@@ -1460,11 +1453,6 @@ mod declaration {
                         .unwrap();
                 }
                 Self { root }
-            }
-        }
-        impl Drop for CaseFiles {
-            fn drop(&mut self) {
-                let _ = std::fs::remove_dir_all(&self.root);
             }
         }
         #[test]
@@ -2272,27 +2260,17 @@ mod declaration {
         //! Shipped-schema successors for specification/test_intermediate_verification.py
         //! retired in #2110. Original valid and invalid verification payloads are kept;
         //! private Python model instances are replaced by the native check boundary.
-        use std::{
-            fs,
-            path::PathBuf,
-            sync::atomic::{AtomicUsize, Ordering},
-        };
+        use std::fs;
         use yamaa_adapters::json;
         use yamaa_adapters::{file_application, specification_report::Identity};
         use yamaa_core::diagnostic::Diagnostic;
         use yamaa_core::domain_entry::Request;
         use yamaa_core::json::Value;
 
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        struct Study(PathBuf);
+        struct Study(crate::support::Scratch);
         impl Study {
             fn new() -> Self {
-                let path = std::env::temp_dir().join(format!(
-                    "yamaa-original-intermediate-verification-{}-{}",
-                    std::process::id(),
-                    NEXT.fetch_add(1, Ordering::Relaxed)
-                ));
-                fs::create_dir(&path).unwrap();
+                let path = crate::support::Scratch::new("original-intermediate-verification");
                 Self(path)
             }
             fn check(&self, intermediate: Value) -> Vec<Diagnostic> {
@@ -2332,11 +2310,6 @@ mod declaration {
                 assert!(!self.0.join("never-read.csv").exists());
                 assert!(!self.0.join("out.csv").exists());
                 issues
-            }
-        }
-        impl Drop for Study {
-            fn drop(&mut self) {
-                fs::remove_dir_all(&self.0).unwrap();
             }
         }
 
@@ -2683,28 +2656,18 @@ mod declaration {
 
         mod native {
             use super::*;
-            use std::{
-                fs,
-                path::PathBuf,
-                sync::atomic::{AtomicUsize, Ordering},
-            };
+            use std::fs;
             use yamaa_adapters::{
                 file_preparation::{Error as NativeError, FileSpecification},
                 file_resources::Resources,
             };
-            static NEXT: AtomicUsize = AtomicUsize::new(0);
-            struct Study(PathBuf);
+            struct Study(crate::support::Scratch);
             impl Study {
                 fn new() -> Self {
-                    let path = std::env::temp_dir().join(format!(
-                        "yamaa-dispatch-{}-{}",
-                        std::process::id(),
-                        NEXT.fetch_add(1, Ordering::Relaxed)
-                    ));
-                    fs::create_dir(&path).unwrap();
+                    let path = crate::support::Scratch::canonical("dispatch");
                     fs::create_dir(path.join("entry")).unwrap();
                     fs::create_dir(path.join("parent")).unwrap();
-                    Self(yamaa_adapters::canonical_path::canonicalize(path).unwrap())
+                    Self(path)
                 }
                 fn identity(&self, name: &str) -> String {
                     let path = self.0.join(name).to_str().unwrap().to_string();
@@ -2730,11 +2693,6 @@ mod declaration {
                         panic!("native rejection")
                     };
                     crate::support::preparation_findings(error)
-                }
-            }
-            impl Drop for Study {
-                fn drop(&mut self) {
-                    fs::remove_dir_all(&self.0).unwrap();
                 }
             }
             const VALID:&str="schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: never-read.csv}\noutput: {path: never-written.csv, columns: [ID]}\ncolumns: [{name: ID, type: int, derivation: SRC.ID}]\n";

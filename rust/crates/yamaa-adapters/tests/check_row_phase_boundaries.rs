@@ -4,24 +4,14 @@
 //! column phase (COLUMN-4), directly or through a lookup that matches on it
 //! (LOOKUP-2), and a template that names a column whose default is not row
 //! local (SPEC-6). Every case lists the same issues in both routes and hosts.
-use std::{
-    fs,
-    path::PathBuf,
-    sync::atomic::{AtomicUsize, Ordering},
-};
+use std::fs;
 use yamaa_adapters::{file_application, specification_report::Identity};
 use yamaa_core::{diagnostic::Diagnostic, domain_entry::Request, project_function::Language};
 
-struct Fixture(PathBuf);
+struct Fixture(crate::support::Scratch);
 impl Fixture {
     fn new(specification: &str) -> Self {
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        let root = std::env::temp_dir().join(format!(
-            "yamaa-row-phase-boundaries-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
-        fs::create_dir(&root).unwrap();
+        let root = crate::support::Scratch::new("row-phase-boundaries");
         fs::write(root.join("spec.yaml"), specification).unwrap();
         fs::write(
             root.join("vs.csv"),
@@ -76,11 +66,6 @@ impl Fixture {
         };
         let (checked, built) = self.diagnostics(host);
         (render(checked), render(built))
-    }
-}
-impl Drop for Fixture {
-    fn drop(&mut self) {
-        fs::remove_dir_all(&self.0).unwrap();
     }
 }
 

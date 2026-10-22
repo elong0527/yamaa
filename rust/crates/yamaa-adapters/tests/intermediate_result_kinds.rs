@@ -1,25 +1,15 @@
 #![cfg(feature = "yaml")]
 //! Untyped donor expressions retain their scalar kind before later reads.
-use std::{
-    fs,
-    path::PathBuf,
-    sync::atomic::{AtomicUsize, Ordering},
-};
+use std::fs;
 use yamaa_adapters::{file_application, specification_report::Identity};
 use yamaa_core::domain_entry::Request;
 
-static NEXT: AtomicUsize = AtomicUsize::new(0);
-struct Study(PathBuf);
+struct Study(crate::support::Scratch);
 impl Study {
     fn new(specification: &str) -> Self {
-        let directory = std::env::temp_dir().join(format!(
-            "yamaa-intermediate-kinds-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
-        fs::create_dir(&directory).unwrap();
+        let directory = crate::support::Scratch::canonical("intermediate-kinds");
         fs::write(directory.join("spec.yaml"), specification).unwrap();
-        Self(yamaa_adapters::canonical_path::canonicalize(directory).unwrap())
+        Self(directory)
     }
     fn specification(&self) -> String {
         let path = self.0.join("spec.yaml").to_str().unwrap().to_owned();
@@ -36,11 +26,6 @@ impl Study {
              S03,2024-01-03,2024-01-02\n",
         )
         .unwrap();
-    }
-}
-impl Drop for Study {
-    fn drop(&mut self) {
-        fs::remove_dir_all(&self.0).unwrap();
     }
 }
 fn identity(specification: &str) -> Identity<'_> {
