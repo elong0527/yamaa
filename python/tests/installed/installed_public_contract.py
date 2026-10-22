@@ -137,17 +137,6 @@ def unknown_section(section, sections):
     )
 
 
-def nothing_to_save(rule):
-    """The one issue of a save with nothing to write, under `rule`."""
-    return issue_row(
-        "there is nothing to save",
-        phase="output",
-        condition="nothing_to_save",
-        rule=rule,
-        context="{}",
-    )
-
-
 def arguments(function):
     return list(inspect.signature(function).parameters)
 
@@ -716,18 +705,36 @@ class PublicContract(unittest.TestCase):
         self.assertRegex(
             project.submission().created, r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$"
         )
-        # A run or a submission that built nothing has nothing to save.
-        for result, key, rule in (
-            (project.run("sdtm"), "empty_project_run_save", "PROJECT-12"),
-            (project.submission(), "empty_submission_save", "PROJECT-13"),
+        # A run or a submission that built nothing has nothing to save; R
+        # compares the same issue rows.
+        for result, key in (
+            (project.run("sdtm"), "empty_project_run_save"),
+            (project.submission(), "empty_submission_save"),
         ):
             error = self.refusal(result.save)
             self.assertEqual(str(error), error_text(key, case / "project.yaml"))
             self.assertEqual(error.paths, [])
-            self.assertEqual(error.issues.to_pylist(), [nothing_to_save(rule)])
+            self.assertEqual(
+                error.issues.to_pylist(), [TRUTH["nothing_to_save_issues"][key]]
+            )
         self.assertFalse((case / "test.csv").exists())
         self.assertEqual(runs.save(), paths_of(case / "test.csv"))
         self.assertEqual((case / "test.csv").read_bytes(), b"ID,RESULT\n01,1.5\n")
+
+    def test_a_value_level_entry_that_selects_no_row_warns_in_the_report(self):
+        # The warning is a row of the run's report, never an issue (SUB-13);
+        # R compares the same rows.
+        case = TRUTH["value_level_report"]
+        self.spec.write_text(case["specification_yaml"], encoding="utf-8")
+        (self.root / "input.csv").write_bytes(case["input_csv"].encode("utf-8"))
+        run = yamaa.spec(self.spec).run()
+        self.assertTrue(self.issues(run).is_empty())
+        checks = [row for row in run.report.to_pylist() if row["NAME"] == "value_level"]
+        self.assertEqual(checks, case["checks"])
+        self.assertEqual(
+            [row["CONDITION"] for row in checks if row["OUTCOME"] == "violated"],
+            [case["condition"]],
+        )
 
     def test_every_save_rewrites_what_the_result_holds_without_rereading(self):
         def restored(directory, names, save):

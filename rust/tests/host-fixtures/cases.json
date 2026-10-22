@@ -4783,6 +4783,91 @@
         "empty_project_run_save": "cannot save {path}, section sdtm: there is nothing to save [nothing_to_save, PROJECT-12]",
         "empty_submission_save": "cannot save {path}: there is nothing to save [nothing_to_save, PROJECT-13]"
       },
+      "nothing_to_save_issues": {
+        "empty_project_run_save": {
+          "severity": "error",
+          "phase": "output",
+          "condition": "nothing_to_save",
+          "rule": "PROJECT-12",
+          "spec_paths": [],
+          "file": null,
+          "line": null,
+          "column": null,
+          "message": "there is nothing to save",
+          "context": "{}",
+          "source_span": null,
+          "operand_route": null
+        },
+        "empty_submission_save": {
+          "severity": "error",
+          "phase": "output",
+          "condition": "nothing_to_save",
+          "rule": "PROJECT-13",
+          "spec_paths": [],
+          "file": null,
+          "line": null,
+          "column": null,
+          "message": "there is nothing to save",
+          "context": "{}",
+          "source_span": null,
+          "operand_route": null
+        }
+      },
+      "value_level_report": {
+        "specification_yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: ADVS\nkeys: [USUBJID, PARAMCD]\ninput:\n  VS: {path: input.csv, types: {AVAL: float}}\noutput:\n  path: output.csv\n  columns: [USUBJID, PARAMCD, AVAL]\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: VS.USUBJID\n  - name: PARAMCD\n    type: str\n    label: Parameter Code\n    derivation: VS.PARAMCD\n  - name: AVAL\n    type: float\n    label: Analysis Value\n    derivation: VS.AVAL\n    submission:\n      core: Cond\n      mandatory: true\n      length: 8\n      origins:\n        - type: Predecessor\n          description: VS.AVAL\n      value_level:\n        - {id: SYSBP, where: {PARAMCD: [SYSBP]}}\n        - {id: PULSE, where: {PARAMCD: [PULSE]}}\n",
+        "input_csv": "USUBJID,PARAMCD,AVAL\nS-001,SYSBP,128\nS-002,SYSBP,135\n",
+        "condition": "value_level_unmatched",
+        "checks": [
+          {
+            "ARTIFACT": "output.csv",
+            "KIND": "check",
+            "SPEC_PATH": "columns.AVAL.submission.value_level",
+            "NAME": "value_level",
+            "ID": null,
+            "TARGET": "AVAL",
+            "RULE": "SUB-13",
+            "SEVERITY": "error",
+            "OUTCOME": "held",
+            "CONDITION": null,
+            "COUNT": 0,
+            "TOTAL": 2,
+            "KEYS": null,
+            "DETAILS": "{}"
+          },
+          {
+            "ARTIFACT": "output.csv",
+            "KIND": "check",
+            "SPEC_PATH": "columns.AVAL.submission.value_level.SYSBP",
+            "NAME": "value_level",
+            "ID": null,
+            "TARGET": "AVAL",
+            "RULE": "SUB-13",
+            "SEVERITY": "warning",
+            "OUTCOME": "held",
+            "CONDITION": null,
+            "COUNT": 0,
+            "TOTAL": 1,
+            "KEYS": null,
+            "DETAILS": "{}"
+          },
+          {
+            "ARTIFACT": "output.csv",
+            "KIND": "check",
+            "SPEC_PATH": "columns.AVAL.submission.value_level.PULSE",
+            "NAME": "value_level",
+            "ID": null,
+            "TARGET": "AVAL",
+            "RULE": "SUB-13",
+            "SEVERITY": "warning",
+            "OUTCOME": "violated",
+            "CONDITION": "value_level_unmatched",
+            "COUNT": 1,
+            "TOTAL": 1,
+            "KEYS": "[{}]",
+            "DETAILS": "{\"column\":\"AVAL\",\"entry\":\"PULSE\"}"
+          }
+        ]
+      },
       "interrupt_message": "public contract activation interrupt",
       "report_output_yaml": "columns: [ID, VALUE], report: checks.csv}",
       "empty_text_column": "  - {name: EMPTY, type: str, derivation: {literal: ''}}\noutput: {",
@@ -5168,7 +5253,31 @@
               "operand_route": null
             }
           ]
-        }
+        },
+      {
+        "name": "pattern_beyond_the_compiled_size_limit",
+        "call": "check",
+        "specification_yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: input.csv\ncolumns:\n  - name: ID\n    type: str\n    derivation: SRC.ID\n  - name: CODE\n    type: str\n    derivation:\n      str_extract:\n        source: SRC.TEXT\n        pattern: '(?:ab){18446744073709551615}'\noutput:\n  path: output.csv\n  columns: [ID, CODE]\n",
+        "input_csv": "ID,TEXT\na,abab\n",
+        "issues": [
+          {
+            "severity": "error",
+            "phase": "engine",
+            "condition": "engine_rejected",
+            "rule": null,
+            "spec_paths": [
+              "columns.CODE.derivation.str_extract.pattern"
+            ],
+            "file": "spec.yaml",
+            "line": 17,
+            "column": 9,
+            "message": "the engine refused the operation in its prepare step: compiler_limit",
+            "context": "{\"code\":\"compiler_limit\",\"limit\":10485760,\"resource\":\"regex_size\",\"step\":\"prepare\"}",
+            "source_span": null,
+            "operand_route": null
+          }
+        ]
+      }
       ]
     },
     "read-odm": {
@@ -6165,6 +6274,28 @@
           "issue": {
             "condition": "unknown_specification_name",
             "spec_path": null,
+            "file": null,
+            "line": null,
+            "column": null
+          }
+        },
+        {
+          "name": "a_composed_dataset_path_has_no_location",
+          "files": {
+            "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy:\n  id: CATH\n  name: CATH\n  description: A study\n  protocol_name: CATH-01\nadam:\n  standards:\n    - {name: ADaMIG, version: \"1.3\", status: Final}\n  specs:\n    - adae.yaml\n  define: define.xml\n  transport: xpt\n  context: Submission\n  source_system_version: \"1.0\"\n",
+            "adae.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: ADAE\nkeys: [USUBJID, AETERM]\ninput: {AE: ae.csv}\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: AE.USUBJID\n    submission: {core: Req, mandatory: true, length: 8, origins: [{type: Predecessor, description: AE.USUBJID}]}\n  - name: AETERM\n    type: str\n    label: Reported Term for the Adverse Event\n    derivation: AE.AETERM\n    submission: {core: Req, mandatory: true, length: 20, origins: [{type: Predecessor, description: AE.AETERM}]}\noutput: {path: adae.csv, columns: [USUBJID, AETERM]}\nsubmission: {label: Adverse Events Analysis Dataset, class: OCCURRENCE DATA STRUCTURE, structure: One record per subject per adverse event, repeating: true}\n",
+            "ae.csv": "USUBJID,AETERM\nS-001,HEADACHE\n",
+            "adae.csv": "USUBJID,AETERM\nS-001,HEADACHE\n,\n"
+          },
+          "call": {
+            "operation": "submission",
+            "path": "project.yaml",
+            "section": "adam",
+            "created": "2026-09-11T00:00:00"
+          },
+          "issue": {
+            "condition": "xpt_last_row_blank",
+            "spec_path": "datasets.ADAE.artifact",
             "file": null,
             "line": null,
             "column": null

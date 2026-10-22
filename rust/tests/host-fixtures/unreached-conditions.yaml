@@ -24,11 +24,21 @@ unreachable:
   month_required: >-
     only the 0.5 path raises it, until P2-13 removes that path: 1.0 drops
     minimum_source_precision, and #3030 D61 retired its benchmarks
+  publication_failed: >-
+    only a host file system failure while a save stages or replaces a file
+    raises it (OUTPUT-8): a target the walk cannot reach fails with FILE-7's
+    and FILE-8's conditions (#3030 D189), and no portable case can make a write
+    into a writable directory fail
   resource_path_content_changed: >-
     only a file that changes while one call reads it raises it (FILE-10):
     a host compiles a spec or project object again once a file it holds has
     changed (#3069), so no case can change a file mid-call; the facade's
     plan tests reach it (rust/crates/yamaa/tests/plan_contracts.rs)
+  xpt_file_too_large: >-
+    XPT-10 refuses a transport file past 5,000,000,000 bytes, which takes a
+    published dataset of at least 25 million 200-byte values (SUB-24 measures a
+    character variable by its longest value) or 625 million numbers; no parity
+    case can carry one, so XPT-10's encoder test owns it
 not_covered:
   "#3423":
     - artifact_outside_document
@@ -99,12 +109,3 @@ not_covered:
     - unknown_standard_family
     - unlinked_producer
     - xpt_display_format_invalid
-  "#3432":
-    - engine_rejected
-    - nothing_to_save
-    - publication_failed
-    - transport_dataset_empty
-    - value_level_unmatched
-    - xpt_file_too_large
-    - xpt_last_row_blank
-    - xpt_value_out_of_range

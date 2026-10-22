@@ -1,0 +1,70 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADAE
+keys: [STUDYID, USUBJID, AESEQ]
+input:
+  # No subject had an adverse event, so the listing holds only its header.
+  AE: {path: input/ae.csv, types: {AESEQ: int}}
+
+output:
+  path: adae.csv
+  columns: [STUDYID, USUBJID, AESEQ, AEDECOD]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: AE.STUDYID
+    submission:
+      core: Req
+      mandatory: true
+      length: 20
+      origins:
+        - type: Predecessor
+          description: AE.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: AE.USUBJID
+    submission:
+      core: Req
+      mandatory: true
+      length: 30
+      origins:
+        - type: Predecessor
+          description: AE.USUBJID
+
+  - name: AESEQ
+    type: int
+    label: Sequence Number
+    derivation: AE.AESEQ
+    submission:
+      core: Req
+      mandatory: true
+      length: 3
+      display_format: "3."
+      origins:
+        - type: Predecessor
+          description: AE.AESEQ
+
+  - name: AEDECOD
+    type: str
+    label: Dictionary-Derived Term
+    derivation: AE.AEDECOD
+    submission:
+      core: Req
+      mandatory: true
+      length: 40
+      origins:
+        - type: Predecessor
+          description: AE.AEDECOD
+
+# The dataset is submitted although it has no rows, and it does not declare
+# that it has no data.
+submission:
+  label: Adverse Events Analysis Dataset
+  class: OCCURRENCE DATA STRUCTURE
+  structure: One record per subject per adverse event
+  repeating: true
