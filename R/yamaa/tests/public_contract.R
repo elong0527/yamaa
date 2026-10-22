@@ -86,35 +86,27 @@ unknown_member <- function(error, available) {
     identical(issue$message, "the project has no specification named ADSL") &&
     identical(issue$context, paste0('{"available":', available, ',"name":"ADSL"}'))
 }
+# Whether a refusal carries exactly one issue equal to a shared truth row
+# that, like every project refusal, has no location and no geometry.
+one_truth_row <- function(error, row) {
+  issue <- error$issues
+  nrow(issue) == 1L && is.null(row$file) && is.null(row$line) && is.null(row$column) &&
+    is.null(row$source_span) && is.null(row$operand_route) &&
+    identical(list(issue$severity, issue$phase, issue$condition, issue$rule, issue$spec_paths,
+      issue$file, issue$line, issue$column, issue$message, issue$context, issue$source_span,
+      issue$operand_route),
+      list(row$severity, row$phase, row$condition, row$rule,
+        list(as.character(unlist(row$spec_paths))), NA_character_, NA_real_, NA_real_,
+        row$message, row$context, list(NULL), list(NULL)))
+}
 # The one issue of a call that selects a section the project does not
-# declare: the shared truth under `key`, which Python compares too. It has no
-# location and no geometry.
-unknown_section <- function(error, key) {
-  issue <- error$issues
-  row <- host_truth[["unknown_section_issues"]][[key]]
-  nrow(issue) == 1L && is.null(row$file) && is.null(row$line) && is.null(row$column) &&
-    is.null(row$source_span) && is.null(row$operand_route) &&
-    identical(list(issue$severity, issue$phase, issue$condition, issue$rule, issue$spec_paths,
-      issue$file, issue$line, issue$column, issue$message, issue$context, issue$source_span,
-      issue$operand_route),
-      list(row$severity, row$phase, row$condition, row$rule,
-        list(as.character(unlist(row$spec_paths))), NA_character_, NA_real_, NA_real_,
-        row$message, row$context, list(NULL), list(NULL)))
-}
+# declare: the shared truth under `key`, which Python compares too.
+unknown_section <- function(error, key)
+  one_truth_row(error, host_truth[["unknown_section_issues"]][[key]])
 # The one issue of a save with nothing to write: the shared truth under `key`,
-# which Python compares too. It has no location and no geometry.
-nothing_to_save <- function(error, key) {
-  issue <- error$issues
-  row <- host_truth[["nothing_to_save_issues"]][[key]]
-  nrow(issue) == 1L && is.null(row$file) && is.null(row$line) && is.null(row$column) &&
-    is.null(row$source_span) && is.null(row$operand_route) &&
-    identical(list(issue$severity, issue$phase, issue$condition, issue$rule, issue$spec_paths,
-      issue$file, issue$line, issue$column, issue$message, issue$context, issue$source_span,
-      issue$operand_route),
-      list(row$severity, row$phase, row$condition, row$rule,
-        list(as.character(unlist(row$spec_paths))), NA_character_, NA_real_, NA_real_,
-        row$message, row$context, list(NULL), list(NULL)))
-}
+# which Python compares too.
+nothing_to_save <- function(error, key)
+  one_truth_row(error, host_truth[["nothing_to_save_issues"]][[key]])
 # Argument mistakes are ordinary errors, never yamaa_error.
 argument_failure <- function(code) {
   seen <- tryCatch({ force(code); NULL }, error = identity)
