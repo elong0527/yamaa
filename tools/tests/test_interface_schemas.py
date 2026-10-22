@@ -8,7 +8,6 @@ import contextlib
 import copy
 import io
 import json
-import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -17,6 +16,8 @@ from unittest import mock
 import yaml
 from tools.packaging import generate_json_schema, release_identity
 from tools.paths import ROOT
+from tools.tests import support
+from tools.tests.support import git, write
 from tools.validation import check_interface_stability as STABILITY
 from tools.validation import interface_schemas as SCHEMAS
 from tools.validation.interface_manifests import ManifestError, Tree
@@ -173,45 +174,21 @@ vocabulary: {}
 """
 
 
-def git(root, *arguments):
-    return subprocess.run(
-        [
-            *("git", "-C", str(root)),
-            *("-c", "user.name=test", "-c", "user.email=test@example.invalid"),
-            *("-c", "commit.gpgSign=false", "-c", "tag.gpgSign=false"),
-            *arguments,
-        ],
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stdout
-
-
-def write(root, path, text):
-    (root / path).parent.mkdir(parents=True, exist_ok=True)
-    (root / path).write_text(text, encoding="utf-8")
-
-
 def save_json(root, path, document):
     write(root, path, json.dumps(document, indent=2) + "\n")
 
 
-class Repository:
+class Repository(support.Repository):
     """A git repository whose tag yamaa-v1.0.0 holds a JSON Schema, both
     grammars and an empty exception list; the working tree starts the same."""
 
     def __init__(self, root, document=DOCUMENT):
-        self.root = root
-        root.mkdir(parents=True)
-        git(root, "init", "-q", "-b", "main")
+        super().__init__(root)
         save_json(root, SCHEMA, document)
-        write(root, SCHEMAS.EXPRESSION, EXPRESSION)
-        write(root, SCHEMAS.TEMPLATE, TEMPLATE)
-        write(root, STABILITY.EXCEPTIONS, "exceptions: []\n")
-        write(root, release_identity.DECLARATION, 'version = "1.0.0"\n')
-        git(root, "add", "-A")
-        git(root, "commit", "-q", "-m", "release")
-        git(root, "tag", "-a", TAG, "-m", TAG)
+        self.write(SCHEMAS.EXPRESSION, EXPRESSION)
+        self.write(SCHEMAS.TEMPLATE, TEMPLATE)
+        self.write(STABILITY.EXCEPTIONS, "exceptions: []\n")
+        self.tag(TAG)
 
     def document(self):
         return json.loads((self.root / SCHEMA).read_text(encoding="utf-8"))
@@ -804,9 +781,7 @@ class Breaks(Temporary):
 
 class Manifests(Temporary):
     def test_a_manifest_the_baseline_lacks_is_all_additions(self):
-        root = self.directory / "repo"
-        root.mkdir()
-        git(root, "init", "-q", "-b", "main")
+        root = support.init(self.directory / "repo")
         write(root, "README.md", "A release before the manifests.\n")
         git(root, "add", "-A")
         git(root, "commit", "-q", "-m", "release")

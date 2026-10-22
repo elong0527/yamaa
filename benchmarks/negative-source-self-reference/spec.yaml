@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADLB
 keys: [STUDYID, USUBJID, ADT, PARAMCD]
 input:
@@ -53,7 +55,7 @@ columns:
   - name: ASTCODE
     type: str
     label: Aspartate Aminotransferase Parameter Code
-    derivation: {literal: AST}
+    derivation: "'AST'"
 
   # The AST value for the same subject and date, read from input ADLB --
   # a name this specification also gives the dataset it builds.
@@ -68,9 +70,7 @@ columns:
     derivation:
       case:
         - when: "PARAMCD = 'ASTALT'"
-          then:
-            compute:
-              expr: "ASTVAL / NULLIF(ALTDEN, 0)"
+          then: "ASTVAL / NULLIF(ALTDEN, 0)"
         - otherwise: LBRESN
 
 rows:
@@ -78,19 +78,19 @@ rows:
     dataset: LB
     filter: "LB.LBTESTCD = 'ALT'"
     derivations:
-      PARAMCD: {literal: ALT}
-      PARAM: {literal: Alanine Aminotransferase}
+      PARAMCD: "'ALT'"
+      PARAM: "'Alanine Aminotransferase'"
       LBRESN: LB.LBSTRESN
-      ALTDEN: {literal: null}
+      ALTDEN: null
 
   - id: ast
     dataset: LB
     filter: "LB.LBTESTCD = 'AST'"
     derivations:
-      PARAMCD: {literal: AST}
-      PARAM: {literal: Aspartate Aminotransferase}
+      PARAMCD: "'AST'"
+      PARAM: "'Aspartate Aminotransferase'"
       LBRESN: LB.LBSTRESN
-      ALTDEN: {literal: null}
+      ALTDEN: null
 
   # One ratio record per ALT record, carrying the ALT result as the
   # denominator.
@@ -98,9 +98,9 @@ rows:
     dataset: LB
     filter: "LB.LBTESTCD = 'ALT'"
     derivations:
-      PARAMCD: {literal: ASTALT}
-      PARAM: {literal: Aspartate to Alanine Aminotransferase Ratio}
-      LBRESN: {literal: null}
+      PARAMCD: "'ASTALT'"
+      PARAM: "'Aspartate to Alanine Aminotransferase Ratio'"
+      LBRESN: null
       ALTDEN: LB.LBSTRESN
 
 verifications:

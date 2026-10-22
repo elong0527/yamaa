@@ -37,10 +37,10 @@ the held bytes.
 | public-environment | Original case selection, schema link references, quota/version inputs, exact callback CSV and the project-relative inherited and codelist files |
 | verification-logs | `specification-original/schema-verification-log`, evaluated counts and fatal outcomes, now checked in the run report |
 | public-define | Existing Define input/XML/JSON owners, creation time, issue columns, column schemas, numeric metadata variants and spec/project text mutations |
-| public-contract | Shared YAML, issue and report columns, argument/member/read-only view names and defaults, shared messages (D39's error text, written from `docs/design/interface-1.0/api.md` and the templates of `yaml/conditions.yaml`; `{path}` stands for the specification or project path the test gave, and `{file}` for the file the first issue is located in, as its location names it), typed plain values and the failed run's report bytes; distinct host i64 vectors |
+| public-contract | Shared YAML, issue and report columns, argument/member/read-only view names and defaults, shared messages (D39's error text, written from `docs/design/interface-1.0/api.md` and the templates of `yaml/conditions.yaml`; `{path}` stands for the specification or project path the test gave, and `{file}` for the file the first issue is located in, as its location names it), typed plain values, the failed run's report bytes, the issue rows of a save with nothing to write, and the value-level check rows of a run whose entry selects no row (SUB-13); distinct host i64 vectors |
 | public-grammar | Shared condition families; existing `grammar-original/cases.tsv` decisions |
 | diagnostic-parity | Refusal cases with their complete expected issue rows; `{path}` in a row's message and context stands for the specification path the test gave |
-| read-odm | The two reader documents (the adapters' `odm` fixtures), all 30 columns and cells, archive member selection, and each refusal's one issue row and error text (`{source}` stands for the source path the test gave) |
+| read-odm | The two reader documents (the adapters' `odm` fixtures), all 30 columns and cells, archive member selection, the authored sources two refusals read, and each refusal's one issue row and error text (`{source}` stands for the source path the test gave) |
 | parquet-containment | A Parquet file that makes the native decoder panic, its issue row, and a readable file with its saved CSV |
 | plan-reuse | One specification run A, B, A on one object with exact output CSV and issue rows; a changed specification's output; a changed function default's output |
 | lint | One specification with layout, authoring and suppression findings: its exact `lint()` rows, the text the proved fixes write, the rows that remain, and two refusals |
@@ -96,7 +96,11 @@ expected cells were read from the documents by hand. `SourceOrdinal` is
 decimal text in the truth (an integer in Python, a double in R) and every
 other cell is text or null. Each refusal holds the one issue row that
 `yamaa.Error` or `yamaa_error` carries, and its error text is D39's prefix
-and that issue; `{source}` stands for the source path the test gave.
+and that issue; `{source}` stands for the source path the test gave. Its
+`files` are sources that are neither document nor archive, which both
+suites write beside the documents: a plain document under a `.tar` name,
+which ODM-1 refuses as an archive name holding no archive, and a bzip2
+stream, refused from its first bytes before anything is decompressed.
 
 `parquet-containment` pairs the installed Python and R containment suites.
 Both files were authored field by field. In the first, the column chunk of an

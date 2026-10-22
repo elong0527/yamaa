@@ -139,23 +139,24 @@ class BenchmarkSdkVersions(unittest.TestCase):
             root = Path(directory)
             fixture(root)
             for name in ("R/yamaa/DESCRIPTION", "python/pyproject.toml"):
-                path = root / name
-                original = path.read_bytes()
-                path.unlink()
-                self.assertTrue(
-                    guard.violations(root)[0].startswith(name + ": unreadable")
-                )
-                path.mkdir()
-                self.assertTrue(
-                    guard.violations(root)[0].startswith(name + ": unreadable")
-                )
-                path.rmdir()
-                path.write_bytes(b"\xff")
-                self.assertTrue(
-                    guard.violations(root)[0].startswith(name + ": unreadable")
-                )
-                self.assertEqual(path.read_bytes(), b"\xff")
-                path.write_bytes(original)
+                with self.subTest(path=name):
+                    path = root / name
+                    original = path.read_bytes()
+                    path.unlink()
+                    self.assertTrue(
+                        guard.violations(root)[0].startswith(name + ": unreadable")
+                    )
+                    path.mkdir()
+                    self.assertTrue(
+                        guard.violations(root)[0].startswith(name + ": unreadable")
+                    )
+                    path.rmdir()
+                    path.write_bytes(b"\xff")
+                    self.assertTrue(
+                        guard.violations(root)[0].startswith(name + ": unreadable")
+                    )
+                    self.assertEqual(path.read_bytes(), b"\xff")
+                    path.write_bytes(original)
             (root / "python/pyproject.toml").write_text('project = "unterminated')
             self.assertTrue(
                 guard.violations(root)[0].startswith(

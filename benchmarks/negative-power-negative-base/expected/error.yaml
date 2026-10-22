@@ -1,0 +1,12 @@
+phase: derivation
+condition: invalid_power
+spec_paths:
+  - columns.BSA.derivation
+rule: FORMULA-15
+context:
+  expr: "0.007184 * POWER(WEIGHTKG, 0.425) * POWER(HEIGHTCM, 0.725)"
+  base: -72.5
+  exponent: 0.425
+  keys:
+    - STUDYID: CTX
+      USUBJID: CTX-62

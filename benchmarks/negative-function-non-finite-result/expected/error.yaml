@@ -1,0 +1,7 @@
+phase: derivation
+condition: invalid_function_result
+spec_paths:
+  - columns.VALUE.derivation.function
+rule: FUNC-9
+context:
+  function: numeric_constant

@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
@@ -24,4 +26,4 @@ columns:
     label: Age
     derivation: DM.AGE
     verifications:
-      - not_missing: {}
+      - not_missing

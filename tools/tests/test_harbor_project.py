@@ -5,7 +5,6 @@ the Harbor evaluation needs stays in evaluations/harbor/uv.lock. No pull request
 job installs that project, so the repository check keeps its lock current.
 """
 
-import sys
 import tomllib
 import unittest
 from unittest import mock
@@ -31,9 +30,8 @@ class HarborProjectTests(unittest.TestCase):
             mock.patch.object(
                 repository, "run", lambda *arguments, **_: commands.append(arguments)
             ),
-            mock.patch.object(sys, "argv", ["repository", "check"]),
         ):
-            repository.main()
+            repository.main(["check"])
         self.assertIn(
             ("lock", "--check", "--project", "evaluations/harbor"),
             [arguments[1:] for arguments in commands],

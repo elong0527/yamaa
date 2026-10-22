@@ -56,110 +56,119 @@ class ReleaseTree(unittest.TestCase):
         self.assertIn(old, text)
         path.write_text(text.replace(old, new, 1))
 
+    def violations_after(self, relative, old, new):
+        """The tree's violations after one change to a file, which is then
+        restored."""
+        path = self.root / relative
+        original = path.read_text()
+        self.change(relative, old, new)
+        try:
+            return checker.violations(self.root)
+        finally:
+            path.write_text(original)
+
 
 class CoherentRelease(ReleaseTree):
     def test_selected_versions_and_real_lock_owners_agree(self):
         self.assertEqual(checker.violations(self.root), [])
 
-    def test_stale_cargo_workspace_is_refused(self):
-        self.change("rust/Cargo.toml", f'version = "{VERSION}"', 'version = "0.1.0"')
-        self.assertIn(
-            f"rust/Cargo.toml: workspace version '0.1.0' is not '{VERSION}', the "
-            f"Cargo version of release {IDENTITY}",
-            checker.violations(self.root),
-        )
-
-    def test_member_cannot_override_the_shared_version(self):
-        self.change(
-            "rust/crates/yamaa-core/Cargo.toml",
-            "version.workspace = true",
-            'version = "0.1.0"',
-        )
-        self.assertIn(
-            "crates/yamaa-core: package version differs from the shared Cargo "
-            f"version '{VERSION}'",
-            checker.violations(self.root),
-        )
-
-    def test_stale_cargo_lock_identity_is_refused(self):
-        self.change(
-            "rust/Cargo.lock",
-            f'name = "yamaa-core"\nversion = "{VERSION}"',
-            'name = "yamaa-core"\nversion = "0.1.0"',
-        )
-        self.assertIn(
-            "Cargo.lock: yamaa-core version identity is stale or ambiguous",
-            checker.violations(self.root),
-        )
-
-    def test_stale_python_lock_or_wrong_owner_is_refused(self):
-        for old, new in (
+    def test_each_drift_is_refused_with_its_violation(self):
+        lock = "uv.lock: selected yamaa project/version ownership differs"
+        holder = "copyright holder is not 'yamaa contributors'"
+        authors = "author list differs from the selected author list"
+        for case, change, violation in [
             (
-                f'name = "yamaa"\nversion = "{PYTHON_VERSION}"',
-                'name = "yamaa"\nversion = "0.3.0"',
+                "stale Cargo workspace",
+                ("rust/Cargo.toml", f'version = "{VERSION}"', 'version = "0.1.0"'),
+                f"rust/Cargo.toml: workspace version '0.1.0' is not '{VERSION}', "
+                f"the Cargo version of release {IDENTITY}",
             ),
-            ('source = { editable = "." }', 'source = { editable = "../foreign" }'),
-        ):
-            path = self.root / "python/uv.lock"
-            original = path.read_text()
-            self.change("python/uv.lock", old, new)
-            self.assertIn(
-                "uv.lock: selected yamaa project/version ownership differs",
-                checker.violations(self.root),
-            )
-            path.write_text(original)
-
-    def test_collective_holder_drift_is_refused(self):
-        self.change("LICENSE", "yamaa contributors", "yamaa authors")
-        self.assertIn(
-            "LICENSE: copyright holder is not 'yamaa contributors'",
-            checker.violations(self.root),
-        )
-
-    def test_extended_copyright_holder_is_refused(self):
-        for relative in ("LICENSE", "mkdocs.yml", "R/yamaa/LICENSE"):
-            path = self.root / relative
-            original = path.read_text()
-            self.change(relative, "yamaa contributors", "yamaa contributors and others")
-            self.assertIn(
-                f"{relative}: copyright holder is not 'yamaa contributors'",
-                checker.violations(self.root),
-            )
-            path.write_text(original)
-
-    def test_python_author_drift_is_refused(self):
-        self.change(
-            "python/pyproject.toml",
-            '{ name = "Peng Zhang" }',
-            '{ name = "P. Zhang" }',
-        )
-        self.assertIn(
-            "python/pyproject.toml: author list differs from the selected author list",
-            checker.violations(self.root),
-        )
-
-    def test_r_contributor_promoted_to_author_is_refused(self):
-        self.change(
-            "R/yamaa/DESCRIPTION",
-            'person("Peng", "Zhang", role = "ctb")',
-            'person("Peng", "Zhang", role = "aut")',
-        )
-        self.assertIn(
-            "R/yamaa/DESCRIPTION: author list differs from the selected author list",
-            checker.violations(self.root),
-        )
-
-    def test_r_author_appended_with_named_arguments_is_refused(self):
-        self.change(
-            "R/yamaa/DESCRIPTION",
-            'person("Jingwei", "Xiong", role = "ctb"),',
-            'person("Jingwei", "Xiong", role = "ctb"),\n'
-            '    person(given = "Another", family = "Contributor", role = "ctb"),',
-        )
-        self.assertIn(
-            "R/yamaa/DESCRIPTION: author list differs from the selected author list",
-            checker.violations(self.root),
-        )
+            (
+                "member overrides the shared version",
+                (
+                    "rust/crates/yamaa-core/Cargo.toml",
+                    "version.workspace = true",
+                    'version = "0.1.0"',
+                ),
+                "crates/yamaa-core: package version differs from the shared Cargo "
+                f"version '{VERSION}'",
+            ),
+            (
+                "stale Cargo.lock identity",
+                (
+                    "rust/Cargo.lock",
+                    f'name = "yamaa-core"\nversion = "{VERSION}"',
+                    'name = "yamaa-core"\nversion = "0.1.0"',
+                ),
+                "Cargo.lock: yamaa-core version identity is stale or ambiguous",
+            ),
+            (
+                "stale Python lock",
+                (
+                    "python/uv.lock",
+                    f'name = "yamaa"\nversion = "{PYTHON_VERSION}"',
+                    'name = "yamaa"\nversion = "0.3.0"',
+                ),
+                lock,
+            ),
+            (
+                "Python lock with another owner",
+                (
+                    "python/uv.lock",
+                    'source = { editable = "." }',
+                    'source = { editable = "../foreign" }',
+                ),
+                lock,
+            ),
+            (
+                "collective holder drift",
+                ("LICENSE", "yamaa contributors", "yamaa authors"),
+                f"LICENSE: {holder}",
+            ),
+            *(
+                (
+                    f"extended holder in {relative}",
+                    (relative, "yamaa contributors", "yamaa contributors and others"),
+                    f"{relative}: {holder}",
+                )
+                for relative in ("LICENSE", "mkdocs.yml", "R/yamaa/LICENSE")
+            ),
+            (
+                "Python author drift",
+                (
+                    "python/pyproject.toml",
+                    '{ name = "Peng Zhang" }',
+                    '{ name = "P. Zhang" }',
+                ),
+                f"python/pyproject.toml: {authors}",
+            ),
+            (
+                "R contributor promoted to author",
+                (
+                    "R/yamaa/DESCRIPTION",
+                    'person("Peng", "Zhang", role = "ctb")',
+                    'person("Peng", "Zhang", role = "aut")',
+                ),
+                f"R/yamaa/DESCRIPTION: {authors}",
+            ),
+            (
+                "R author appended with named arguments",
+                (
+                    "R/yamaa/DESCRIPTION",
+                    'person("Jingwei", "Xiong", role = "ctb"),',
+                    'person("Jingwei", "Xiong", role = "ctb"),\n'
+                    '    person(given = "Another", family = "Contributor", role = "ctb"),',
+                ),
+                f"R/yamaa/DESCRIPTION: {authors}",
+            ),
+            (
+                "Cargo author drift",
+                ("rust/Cargo.toml", '"Peng Zhang",', '"P. Zhang",'),
+                f"rust/Cargo.toml: {authors}",
+            ),
+        ]:
+            with self.subTest(case=case):
+                self.assertIn(violation, self.violations_after(*change))
 
     def test_r_bundled_code_authors_must_stay_credited(self):
         # CRAN's policy asks the R package to credit the authors of the
@@ -192,13 +201,6 @@ class CoherentRelease(ReleaseTree):
                     " author list",
                     checker.violations(self.root),
                 )
-
-    def test_cargo_author_drift_is_refused(self):
-        self.change("rust/Cargo.toml", '"Peng Zhang",', '"P. Zhang",')
-        self.assertIn(
-            "rust/Cargo.toml: author list differs from the selected author list",
-            checker.violations(self.root),
-        )
 
     def test_malformed_or_missing_metadata_is_a_violation_not_a_crash(self):
         # The checker must report violations for the malformed shapes a
@@ -394,47 +396,45 @@ class CandidateRelease(ReleaseTree):
     def test_selected_versions_and_real_lock_owners_agree(self):
         self.assertEqual(checker.violations(self.root), [])
 
-    def test_stale_cargo_workspace_is_refused(self):
-        self.change("rust/Cargo.toml", 'version = "1.0.0-rc.2"', 'version = "0.1.0"')
-        self.assertIn(
-            "rust/Cargo.toml: workspace version '0.1.0' is not '1.0.0-rc.2', the "
-            "Cargo version of release 1.0.0 release candidate 2",
-            checker.violations(self.root),
-        )
-
-    def test_member_cannot_override_the_shared_version(self):
-        self.change(
-            "rust/crates/yamaa-core/Cargo.toml",
-            "version.workspace = true",
-            'version = "1.0.0-rc.1"',
-        )
-        self.assertIn(
-            "crates/yamaa-core: package version differs from the shared Cargo "
-            "version '1.0.0-rc.2'",
-            checker.violations(self.root),
-        )
-
-    def test_stale_cargo_lock_identity_is_refused(self):
-        self.change(
-            "rust/Cargo.lock",
-            'name = "yamaa-core"\nversion = "1.0.0-rc.2"',
-            'name = "yamaa-core"\nversion = "1.0.0-rc.1"',
-        )
-        self.assertIn(
-            "Cargo.lock: yamaa-core version identity is stale or ambiguous",
-            checker.violations(self.root),
-        )
-
-    def test_stale_python_lock_or_wrong_owner_is_refused(self):
-        self.change(
-            "python/uv.lock",
-            'name = "yamaa"\nversion = "1.0.0rc2"',
-            'name = "yamaa"\nversion = "1.0.0"',
-        )
-        self.assertIn(
-            "uv.lock: selected yamaa project/version ownership differs",
-            checker.violations(self.root),
-        )
+    def test_each_drift_from_the_candidate_is_refused_with_its_violation(self):
+        for case, change, violation in [
+            (
+                "stale Cargo workspace",
+                ("rust/Cargo.toml", 'version = "1.0.0-rc.2"', 'version = "0.1.0"'),
+                "rust/Cargo.toml: workspace version '0.1.0' is not '1.0.0-rc.2', the "
+                "Cargo version of release 1.0.0 release candidate 2",
+            ),
+            (
+                "member overrides the shared version",
+                (
+                    "rust/crates/yamaa-core/Cargo.toml",
+                    "version.workspace = true",
+                    'version = "1.0.0-rc.1"',
+                ),
+                "crates/yamaa-core: package version differs from the shared Cargo "
+                "version '1.0.0-rc.2'",
+            ),
+            (
+                "stale Cargo.lock identity",
+                (
+                    "rust/Cargo.lock",
+                    'name = "yamaa-core"\nversion = "1.0.0-rc.2"',
+                    'name = "yamaa-core"\nversion = "1.0.0-rc.1"',
+                ),
+                "Cargo.lock: yamaa-core version identity is stale or ambiguous",
+            ),
+            (
+                "stale Python lock",
+                (
+                    "python/uv.lock",
+                    'name = "yamaa"\nversion = "1.0.0rc2"',
+                    'name = "yamaa"\nversion = "1.0.0"',
+                ),
+                "uv.lock: selected yamaa project/version ownership differs",
+            ),
+        ]:
+            with self.subTest(case=case):
+                self.assertIn(violation, self.violations_after(*change))
 
     def test_ambiguous_python_distribution_is_refused(self):
         path = self.root / "python/uv.lock"

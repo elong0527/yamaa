@@ -264,7 +264,7 @@ callable once for one logical row, supplying no undeclared data or execution
 context.
 
 Fails: `function_call_failed`.
-Evidence: `schema-functions`, `rust/crates/yamaa-core/tests/project_execution.rs::observer_counts_actual_calls_and_preserves_signature_short_circuit_and_original_failure`, `rust/crates/yamaa-adapters/tests/project_environment.rs::actual_engine_failures_project_without_a_second_callback_or_payload_consumption`.
+Evidence: `schema-functions`, `rust/crates/yamaa-core/tests/project_execution.rs::observer_counts_actual_calls_and_preserves_signature_short_circuit_and_original_failure`, `rust/crates/yamaa-adapters/tests/project_environment.rs::actual_engine_failures_project_without_a_second_callback_or_payload_consumption`, `negative-function-host-error`.
 
 No argument-name mapping or computed name is permitted. Normal installed module
 or namespace resolution runs only after the lock gate of [FUNC-3](#func-3)
@@ -289,7 +289,7 @@ a normalized missing result still requires `may_return_missing: true`. An
 invalid result fails and is not converted.
 
 Fails: `invalid_function_result`.
-Evidence: `schema-non-finite`, `rust/crates/yamaa-core/tests/project_function_invocation.rs::shared_function_invocation_vectors`, `R/yamaa/tests/function_values.R`.
+Evidence: `schema-non-finite`, `rust/crates/yamaa-core/tests/project_function_invocation.rs::shared_function_invocation_vectors`, `R/yamaa/tests/function_values.R`, `negative-function-non-finite-result`.
 
 Conversion under the [Column derivation](../columns.md) is not a
 repair mechanism for an invalid function result. A wrong type or shape, or an

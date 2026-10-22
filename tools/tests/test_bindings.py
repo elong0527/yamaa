@@ -311,8 +311,9 @@ class BindingsTests(unittest.TestCase):
     def test_only_the_cli_exit_statuses_may_have_integer_keys(self):
         generator._text_keys({"cli": {"exit_status": {0: "succeeded"}}})
         for value in ({"values": {1: "x"}}, {"cli": {"commands": [{2: "x"}]}}):
-            with self.assertRaisesRegex(ValueError, "keys must be text"):
-                generator._text_keys(value)
+            with self.subTest(value=value):
+                with self.assertRaisesRegex(ValueError, "keys must be text"):
+                    generator._text_keys(value)
 
     def test_operations_may_name_only_declared_commands(self):
         definition = generator._load_definition()
@@ -333,32 +334,30 @@ class BindingsTests(unittest.TestCase):
     def test_read_only_check_rejects_stale_public_layers_and_manifest(self):
         rendered = generator.render_all()
         with mock.patch.object(generator, "render_all", return_value=rendered):
-            with mock.patch("sys.argv", ["generate_bindings"]):
-                for target in (
-                    generator.PUBLIC_PYTHON_TARGET,
-                    generator.PUBLIC_R_TARGET,
-                    generator.NAMESPACE_TARGET,
-                    generator.MANIFEST_TARGET,
-                ):
-                    with self.subTest(target=target):
-                        rendered[target] += "# drift\n"
-                        with self.assertRaisesRegex(AssertionError, "regenerate"):
-                            generator.main()
-                        rendered[target] = rendered[target].removesuffix("# drift\n")
+            for target in (
+                generator.PUBLIC_PYTHON_TARGET,
+                generator.PUBLIC_R_TARGET,
+                generator.NAMESPACE_TARGET,
+                generator.MANIFEST_TARGET,
+            ):
+                with self.subTest(target=target):
+                    rendered[target] += "# drift\n"
+                    with self.assertRaisesRegex(AssertionError, "regenerate"):
+                        generator.main([])
+                    rendered[target] = rendered[target].removesuffix("# drift\n")
 
     def test_read_only_check_rejects_r_generated_drift(self):
         rendered = generator.render_all()
         with mock.patch.object(generator, "render_all", return_value=rendered):
-            with mock.patch("sys.argv", ["generate_bindings"]):
-                for target in (
-                    generator.R_WRAPPERS_TARGET,
-                    generator.R_SOURCE / "generated" / "api_entry.rs",
-                ):
-                    with self.subTest(target=target):
-                        rendered[target] += "# drift\n"
-                        with self.assertRaisesRegex(AssertionError, "regenerate"):
-                            generator.main()
-                        rendered[target] = rendered[target].removesuffix("# drift\n")
+            for target in (
+                generator.R_WRAPPERS_TARGET,
+                generator.R_SOURCE / "generated" / "api_entry.rs",
+            ):
+                with self.subTest(target=target):
+                    rendered[target] += "# drift\n"
+                    with self.assertRaisesRegex(AssertionError, "regenerate"):
+                        generator.main([])
+                    rendered[target] = rendered[target].removesuffix("# drift\n")
 
 
 if __name__ == "__main__":

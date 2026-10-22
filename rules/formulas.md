@@ -479,7 +479,7 @@ converted to missing, and `NULLIF(denominator, 0)` chooses missing
 explicitly. A failure reports the expression and the operation that failed.
 
 Fails: `division_by_zero`, `sqrt_of_negative`, `ln_of_nonpositive`, `invalid_power`, `integer_overflow`.
-Evidence: `negative-zero-division`, `negative-negative-sqrt`, `negative-log-zero`, `negative-integer-overflow`.
+Evidence: `negative-zero-division`, `negative-negative-sqrt`, `negative-log-zero`, `negative-integer-overflow`, `negative-power-negative-base`.
 
 An invalid `POWER` fails with `invalid_power`, and an `int` result outside
 the range fails with `integer_overflow` under [VALUE-5](values.md#value-5).

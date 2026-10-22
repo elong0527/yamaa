@@ -42,10 +42,10 @@ The baseline is then the last of the same-day results in that order:
     baseline_flag:
       window:
         group_by: [STUDYID, USUBJID, PARAMCD]
+        order_by: [ADT, LBSEQ]
       date: ADT
-      reference_date: TRTSDT
-      value: AVAL
-      tie_break: [LBSEQ]
+      reference: TRTSDT
+      source: AVAL
 ```
 
 Order by the term the study names, such as a collection time; the sequence

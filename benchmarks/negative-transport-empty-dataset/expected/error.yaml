@@ -1,0 +1,7 @@
+phase: output
+condition: transport_dataset_empty
+spec_paths:
+  - datasets.ADAE.artifact
+rule: JSON-3
+context:
+  dataset: ADAE

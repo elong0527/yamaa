@@ -15,9 +15,10 @@ import yaml
 from tools.commands import repository
 from tools.packaging import release_identity
 from tools.paths import ROOT
+from tools.tests import support
+from tools.tests.support import git
 from tools.validation import check_interface_stability as STABILITY
 from tools.validation import interface_lines as LINES
-from tools.validation._repository_yaml import UniqueKeyLoader
 from tools.validation.interface_manifests import Change, ManifestError, Tree
 
 CONDITIONS = """\
@@ -46,20 +47,6 @@ yamaa::api::Engine::check: pub fn check(&self) -> Table
 EMPTY = "exceptions: []\n"
 
 
-def git(root, *arguments):
-    return subprocess.run(
-        [
-            *("git", "-C", str(root)),
-            *("-c", "user.name=test", "-c", "user.email=test@example.invalid"),
-            *("-c", "commit.gpgSign=false", "-c", "tag.gpgSign=false"),
-            *arguments,
-        ],
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stdout
-
-
 def run_check(root):
     """Run the check with the line manifests' comparer alone: these
     repositories hold no other comparer's manifests."""
@@ -72,45 +59,16 @@ def run_check(root):
     return status, output.getvalue()
 
 
-class Repository:
+class Repository(support.Repository):
     """A git repository holding the three line manifests, the release identity
     and an empty exception list."""
 
     def __init__(self, root):
-        self.root = root
-        root.mkdir(parents=True, exist_ok=True)
-        git(root, "init", "-q", "-b", "main")
+        super().__init__(root)
         self.write(LINES.CONDITIONS, CONDITIONS)
         self.write(LINES.INTERFACE, INTERFACE)
         self.write(LINES.PUBLIC_API, PUBLIC_API)
         self.write(STABILITY.EXCEPTIONS, EMPTY)
-
-    def write(self, path, text):
-        (self.root / path).parent.mkdir(parents=True, exist_ok=True)
-        (self.root / path).write_text(text, encoding="utf-8")
-
-    def edit(self, path, old, new):
-        text = (self.root / path).read_text(encoding="utf-8")
-        assert old in text, (path, old)
-        self.write(path, text.replace(old, new))
-
-    def release(self, version, candidate=None):
-        self.write(
-            release_identity.DECLARATION,
-            f'version = "{version}"\n'
-            + ("" if candidate is None else f"candidate = {candidate}\n"),
-        )
-
-    def commit(self):
-        git(self.root, "add", "-A")
-        git(self.root, "commit", "-q", "--allow-empty", "-m", "change")
-
-    def tag(self, name):
-        """Commit the tree as the release the tag names, and tag it."""
-        identity = release_identity.from_tag(name)
-        self.release(identity.version, identity.candidate)
-        self.commit()
-        git(self.root, "tag", "-a", name, "-m", name)
 
     def check(self):
         return run_check(self.root)
@@ -244,10 +202,7 @@ class Baseline(Temporary):
             output,
         )
         # CI's repository job fetches the tags before it runs the check.
-        steps = yaml.load(
-            (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8"),
-            Loader=UniqueKeyLoader,
-        )["jobs"]["repository"]["steps"]
+        steps = support.workflow("ci.yml")["jobs"]["repository"]["steps"]
         names = [step.get("name") or step.get("run") or step["uses"] for step in steps]
         fetch = steps[names.index("Fetch the release tags")]
         self.assertLess(
@@ -256,7 +211,7 @@ class Baseline(Temporary):
         subprocess.run(
             ["bash", "-c", fetch["run"]], cwd=clone, check=True, capture_output=True
         )
-        self.assertEqual(git(clone, "rev-parse", "--is-shallow-repository"), "true\n")
+        self.assertEqual(git(clone, "rev-parse", "--is-shallow-repository"), "true")
         status, output = run_check(clone)
         self.assertEqual(status, 1, output)
         self.assertIn("yaml/conditions.yaml: beta_failed: removed\n", output)

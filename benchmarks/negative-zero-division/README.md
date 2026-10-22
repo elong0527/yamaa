@@ -27,9 +27,7 @@ If the intended result is missing when `BASE` is zero, guard the denominator
 explicitly with `NULLIF`:
 
 ```yaml
-derivation:
-  compute:
-    expr: "100 * (AVAL - BASE) / NULLIF(BASE, 0)"
+derivation: "100 * (AVAL - BASE) / NULLIF(BASE, 0)"
 ```
 
 `NULLIF(BASE, 0)` returns missing for a zero baseline. Missing then propagates

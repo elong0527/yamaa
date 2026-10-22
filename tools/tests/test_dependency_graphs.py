@@ -195,9 +195,10 @@ class DependencyGraphsTests(unittest.TestCase):
                 "rust/crates/yamaa-adapters/Cargo.toml",
                 "python/pyproject.toml",
             ):
-                self.assertEqual(
-                    (stage / path).read_bytes(), (ROOT / path).read_bytes()
-                )
+                with self.subTest(path=path):
+                    self.assertEqual(
+                        (stage / path).read_bytes(), (ROOT / path).read_bytes()
+                    )
             requirements = (stage / "requirements.in").read_text().splitlines()
             for python, floors in (
                 ("3.14", EARLIER_FLOORS),

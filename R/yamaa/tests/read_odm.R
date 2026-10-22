@@ -23,6 +23,10 @@ stopifnot("the archive's documents are copied" = all(file.copy(file.path(host_fi
 previous <- setwd(work)
 utils::tar(archive[["name"]], files = members, tar = "internal")
 setwd(previous)
+# Sources the refusals read that are neither document nor archive.
+for (name in names(truth[["files"]])) {
+  writeBin(fixture_bytes(truth[["files"]][[name]]), file.path(work, name))
+}
 source_path <- function(name) {
   if (is.null(name)) file.path(work, "absent.xml") else file.path(work, name)
 }

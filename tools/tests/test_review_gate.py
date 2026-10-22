@@ -230,10 +230,11 @@ class ExactCoverage(unittest.TestCase):
 
     def test_old_review_cannot_replace_pending_or_missing_final_head_status(self):
         for rows in [[], [status(state="pending", description="Review in progress")]]:
-            api = Evidence(statuses=[rows])
-            api.formal_reviews = [{"commit_id": OTHER, "state": "COMMENTED"}]
-            self.assertEqual(gate.verify(api, NUMBER).state, "pending")
-            self.assertFalse(any(row[0] == "threads" for row in api.history))
+            with self.subTest(statuses=rows):
+                api = Evidence(statuses=[rows])
+                api.formal_reviews = [{"commit_id": OTHER, "state": "COMMENTED"}]
+                self.assertEqual(gate.verify(api, NUMBER).state, "pending")
+                self.assertNotIn("threads", [row[0] for row in api.history])
 
     def test_successful_skips_and_unknown_completion_text_are_not_completed_reviews(
         self,
@@ -255,19 +256,20 @@ class ExactCoverage(unittest.TestCase):
 
     def test_newest_authentic_status_wins_even_if_rows_are_not_ordered(self):
         for state in ["pending", "failure", "error"]:
-            api = Evidence(
-                statuses=[
-                    [
-                        status(30, state=state),
-                        status(100, context=gate.CONTEXT),
-                        status(7),
+            with self.subTest(state=state):
+                api = Evidence(
+                    statuses=[
+                        [
+                            status(30, state=state),
+                            status(100, context=gate.CONTEXT),
+                            status(7),
+                        ]
                     ]
-                ]
-            )
-            self.assertEqual(
-                gate.verify(api, NUMBER).state,
-                "pending" if state == "pending" else "failure",
-            )
+                )
+                self.assertEqual(
+                    gate.verify(api, NUMBER).state,
+                    "pending" if state == "pending" else "failure",
+                )
 
     def test_impersonated_context_account_or_account_type_never_proves_completion(self):
         for creator in [
@@ -296,12 +298,13 @@ class ExactCoverage(unittest.TestCase):
 
     def test_any_unresolved_thread_blocks_even_when_outdated(self):
         for outdated in [False, True]:
-            row = thread(resolved=False)
-            row["isOutdated"] = outdated
-            self.assertEqual(
-                gate.verify(Evidence(threads=[[thread(), row]]), NUMBER).state,
-                "failure",
-            )
+            with self.subTest(outdated=outdated):
+                row = thread(resolved=False)
+                row["isOutdated"] = outdated
+                self.assertEqual(
+                    gate.verify(Evidence(threads=[[thread(), row]]), NUMBER).state,
+                    "failure",
+                )
 
     def test_manual_expected_head_is_checked_before_any_evidence_or_status_write(self):
         api = Evidence()
@@ -362,9 +365,10 @@ class ExactCoverage(unittest.TestCase):
             pull(branch="review/1-base"),
             pull(repository_id=123),
         ]:
-            api = Evidence(pulls=[value])
-            self.assertIsNone(gate.verify(api, NUMBER, publish=True))
-            self.assertEqual(api.published, [])
+            with self.subTest(pull=value):
+                api = Evidence(pulls=[value])
+                self.assertIsNone(gate.verify(api, NUMBER, publish=True))
+                self.assertEqual(api.published, [])
 
     def test_release_branch_pulls_are_verified_like_main_pulls(self):
         api = Evidence(pulls=[pull(branch="release/0.5.0")])
@@ -586,8 +590,8 @@ class OrdinaryReviewScope(unittest.TestCase):
             api.pull_snapshots[0]["base"]["repo"],
         )
         self.assertEqual(gate.verify(api, NUMBER, expected_head=HEAD).state, "success")
-        self.assertFalse(
-            any("/pulls" in call.args[0] for call in api.pages.call_args_list)
+        self.assertNotIn(
+            "/pulls", "\n".join(call.args[0] for call in api.pages.call_args_list)
         )
 
     def test_normal_main_fastforward_before_verification_preserves_completed_head(self):
@@ -959,7 +963,8 @@ class TrustedRouting(unittest.TestCase):
                 sha=HEAD,
             ),
         ]:
-            self.assertEqual(gate.candidates(api, "status", event), [])
+            with self.subTest(event=event):
+                self.assertEqual(gate.candidates(api, "status", event), [])
         api.pages.assert_not_called()
 
     def test_status_event_only_refreshes_actual_open_main_prs_of_that_head(self):
@@ -988,16 +993,22 @@ class TrustedRouting(unittest.TestCase):
         self,
     ):
         for event_name in ["schedule", "workflow_dispatch"]:
-            api = Evidence()
-            second = pull()
-            second["number"] = 99
-            release = pull(branch="release/0.5.0")
-            release["number"] = 100
-            api.pages.return_value = [pull(), second, release, pull(branch="release")]
-            self.assertEqual(
-                gate.candidates(api, event_name, self.event()), [NUMBER, 99, 100]
-            )
-            api.pages.assert_called_once_with("pulls?state=open")
+            with self.subTest(event=event_name):
+                api = Evidence()
+                second = pull()
+                second["number"] = 99
+                release = pull(branch="release/0.5.0")
+                release["number"] = 100
+                api.pages.return_value = [
+                    pull(),
+                    second,
+                    release,
+                    pull(branch="release"),
+                ]
+                self.assertEqual(
+                    gate.candidates(api, event_name, self.event()), [NUMBER, 99, 100]
+                )
+                api.pages.assert_called_once_with("pulls?state=open")
 
     def test_pr_and_discussion_bodies_and_refs_are_never_instructions(self):
         api = Evidence()
@@ -1038,37 +1049,40 @@ class TrustedRouting(unittest.TestCase):
     def test_foreign_repository_and_untrusted_workflow_events_refuse(self):
         api = Evidence()
         for event in [{}, {"repository": {"full_name": REPOSITORY, "id": 3}}]:
-            with self.assertRaises(gate.GateError):
-                gate.candidates(api, "schedule", event)
+            with self.subTest(event=event):
+                with self.assertRaises(gate.GateError):
+                    gate.candidates(api, "schedule", event)
         for name in [
             "pull_request",
             "pull_request_review",
             "pull_request_review_comment",
         ]:
-            with self.assertRaises(gate.GateError):
-                gate.candidates(api, name, self.event())
+            with self.subTest(event=name):
+                with self.assertRaises(gate.GateError):
+                    gate.candidates(api, name, self.event())
 
     def test_manual_cli_is_read_only_and_only_completed_coverage_exits_zero(self):
         for state, expected in [("success", 0), ("pending", 1)]:
-            api = Evidence(statuses=[[status(state=state)]])
-            with (
-                patch.object(gate, "GitHub", return_value=api),
-                patch("builtins.print"),
-            ):
-                self.assertEqual(
-                    gate.main(
-                        [
-                            "--repository",
-                            REPOSITORY,
-                            "--pr",
-                            str(NUMBER),
-                            "--head",
-                            HEAD,
-                        ]
-                    ),
-                    expected,
-                )
-            self.assertEqual(api.published, [])
+            with self.subTest(state=state):
+                api = Evidence(statuses=[[status(state=state)]])
+                with (
+                    patch.object(gate, "GitHub", return_value=api),
+                    patch("builtins.print"),
+                ):
+                    self.assertEqual(
+                        gate.main(
+                            [
+                                "--repository",
+                                REPOSITORY,
+                                "--pr",
+                                str(NUMBER),
+                                "--head",
+                                HEAD,
+                            ]
+                        ),
+                        expected,
+                    )
+                self.assertEqual(api.published, [])
 
     def test_publisher_refreshes_later_prs_after_a_real_malformed_pr_failure(self):
         api = MultipleEvidence()
@@ -1103,11 +1117,9 @@ class TrustedRouting(unittest.TestCase):
             ],
         )
         self.assertIn(("threads", NUMBER + 1, OTHER), api.history)
-        self.assertTrue(
-            any(
-                f"PR #{NUMBER}: invalid review-batch JSON" in call.args[0]
-                for call in output.call_args_list
-            )
+        self.assertIn(
+            f"PR #{NUMBER}: invalid review-batch JSON",
+            "\n".join(call.args[0] for call in output.call_args_list),
         )
 
     def test_read_only_cli_still_raises_immediately_for_the_same_invalid_pr(self):

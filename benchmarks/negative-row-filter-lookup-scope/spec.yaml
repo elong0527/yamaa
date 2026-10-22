@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: SDTM
 domain: QS
 keys: [USUBJID, QSDTC]
 input:
@@ -19,7 +21,6 @@ intermediates:
     dataset: RAND
     key: [USUBJID]
     filter: "RAND.RANDDT <= DM.RFSTDTC"
-    no_match: null
 
 columns:
   - name: USUBJID

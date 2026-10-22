@@ -1,7 +1,7 @@
 phase: derivation
 condition: division_by_zero
 spec_paths:
-  - columns.PCHG.derivation.compute
+  - columns.PCHG.derivation
 rule: FORMULA-15
 context:
   expr: "100 * (AVAL - BASE) / BASE"
