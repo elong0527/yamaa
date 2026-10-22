@@ -3,7 +3,6 @@
 //! the first row template's SELF reads, and the reads a column completed for
 //! a driver intermediate's rows cannot address.
 use super::*;
-use crate::ast::{ScalarOp, Slot};
 use crate::diagnostic::{
     lookup::{self, Owner},
     ConditionCode as C, Diagnostic,
@@ -328,11 +327,7 @@ pub(in crate::specification) fn first_template(
                     }
                 }
             }
-            ExprKind::Scalar {
-                op: ScalarOp::Greatest | ScalarOp::Least,
-                operands,
-                ..
-            } => {
+            ExprKind::Scalar { op, operands, .. } if op.cites_operands() => {
                 for operand in operands {
                     if let Some(name) = name(spec, operand.expr) {
                         register(named, name, &path(spec, operand.expr), &mut findings);
@@ -453,22 +448,13 @@ pub(in crate::specification) fn unaddressable(
     };
     let mut names = reads::names(spec, root, scan, calls)?;
     for position in positions(spec, root) {
-        // The imputation bounds and fallback the shared reference scan skips.
-        if let ExprKind::Scalar {
-            op: ScalarOp::Impute { .. },
-            operands,
-            ..
-        } = &spec.expr(position).kind
-        {
+        // The conditional operands the shared reference scan skips, such as
+        // an `impute`'s bounds and fallback.
+        if let ExprKind::Scalar { op, operands, .. } = &spec.expr(position).kind {
             names.extend(
                 operands
                     .iter()
-                    .filter(|operand| {
-                        matches!(
-                            operand.slot,
-                            Slot::NotBefore | Slot::NotAfter | Slot::Fallback
-                        )
-                    })
+                    .filter(|operand| op.conditional(operand.slot))
                     .filter_map(|operand| name(spec, operand.expr).map(String::from)),
             );
         }

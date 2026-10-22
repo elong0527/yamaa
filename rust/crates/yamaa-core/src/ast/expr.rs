@@ -3,7 +3,7 @@
 
 use super::{Constant, JoinKey, Meta, Named, Text};
 use crate::expression::{CompileError, CompiledExpression, Context};
-use crate::value::ColumnType;
+use crate::value::{ColumnType, Value};
 
 /// An expression: an index into its spec's expression arena.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -101,6 +101,21 @@ pub enum Literal {
     DateTime(String),
     /// A value outside the language; see [`ExprKind::Unsupported`].
     Unsupported,
+}
+
+impl Literal {
+    /// The value the literal writes: none for an integer beyond 64 bits or a
+    /// value outside the language, which the check that converts it refuses.
+    pub fn value(&self) -> Option<Value> {
+        Some(match self {
+            Self::Missing => Value::Missing,
+            Self::Text(value) => Value::Str(value.clone()),
+            Self::Bool(value) => Value::Bool(*value),
+            Self::Float(value) => Value::float(*value),
+            Self::Int(value) => Value::Int(value.parse().ok()?),
+            Self::Date(_) | Self::DateTime(_) | Self::Unsupported => return None,
+        })
+    }
 }
 
 /// A name as written: `COLUMN`, `OWNER.FIELD`, or `OWNER.*`.
@@ -244,8 +259,10 @@ pub struct Handlers {
 /// A scalar verb and its written parameters; its operands are separate.
 /// Each verb is one of the executor's operation types, named on each
 /// variant. The variant keeps parameters as written so that lowering stays
-/// total: constructing the executor's operation validates them, and that
-/// check still belongs to the compiler.
+/// total: constructing the executor's operation validates them. What each
+/// verb answers about itself, before and after its operation is built,
+/// belongs to the executor ([`crate::scalar_verb`]), so no analysis names a
+/// verb.
 #[derive(Clone, Debug, PartialEq)]
 pub enum ScalarOp {
     /// `dataset::Rounding`: `round_half_away_from_zero`, digits as written.

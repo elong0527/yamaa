@@ -3,8 +3,8 @@
 use super::*;
 use crate::{
     dataset::{
-        completion_policy_findings, DatePolicyError, DayDeclaration, FlagPart, Imputation,
-        ImputationKind, Temporal, TemporalType, TimeRule,
+        completion_policy_findings, DatePolicyError, DayDeclaration, FlagPart, ImputationKind,
+        TemporalType, TimeRule,
     },
     temporal::Precision,
 };
@@ -17,7 +17,7 @@ fn policy(
     minimum: Precision,
     time: Option<TimeRule>,
     path: &str,
-) -> Result<ImputationKind, PrepareError> {
+) -> Result<ImputationKind, Refusal> {
     // `time` belongs to `type: datetime` alone; a finding keeps the policy
     // shape so the month and day findings are still reported.
     let (time, time_finding) = match (target, time) {
@@ -25,32 +25,18 @@ fn policy(
         (TemporalType::Date, Some(_)) => (None, Some(false)),
         (_, time) => (time, None),
     };
-    let time_finding = time_finding.map(|required| {
-        PreflightFinding::Imputation(Temporal::type_field_diagnostic(
-            required,
-            path,
-            "time",
-            target.name(),
-        ))
-    });
+    let time_finding = time_finding
+        .map(|required| Temporal::type_field_diagnostic(required, path, "time", target.name()));
     match completion_policy_findings(target, month, day, minimum, time, path) {
         Ok(Ok(completion)) => match time_finding {
             None => Ok(ImputationKind::Impute(completion)),
-            Some(finding) => Err(PrepareError::Invalid(vec![finding])),
+            Some(finding) => Err(Refusal::Findings(vec![finding])),
         },
-        Ok(Err(policy)) => Err(PrepareError::Invalid(
-            policy
-                .into_iter()
-                .map(PreflightFinding::Imputation)
-                .chain(time_finding)
-                .collect(),
+        Ok(Err(policy)) => Err(Refusal::Findings(
+            policy.into_iter().chain(time_finding).collect(),
         )),
-        Err(DatePolicyError::Diagnostic(diagnostic)) => {
-            Err(PrepareError::Invalid(vec![PreflightFinding::Imputation(
-                diagnostic,
-            )]))
-        }
-        Err(DatePolicyError::Shape) => Err(PrepareError::Internal),
+        Err(DatePolicyError::Diagnostic(diagnostic)) => Err(Refusal::Findings(vec![diagnostic])),
+        Err(DatePolicyError::Shape) => Err(Refusal::Internal),
     }
 }
 fn tree_type(kind: ast::TemporalType) -> TemporalType {
@@ -69,7 +55,7 @@ fn tree_completion(
     minimum: ast::Precision,
     time: Option<ast::TimeRule>,
     path: &str,
-) -> Result<ImputationKind, PrepareError> {
+) -> Result<ImputationKind, Refusal> {
     let target = tree_type(kind);
     let minimum = match minimum {
         ast::Precision::Year => Precision::Year,
@@ -94,7 +80,7 @@ fn tree_completion(
 /// a year alone with `month` and `day`, a year and month with `day` alone,
 /// and a whole date with neither (TIME-8). Validation refuses `month`
 /// without `day` (TIME-10).
-fn unwritten_precision(spec: &ast::Spec, month: bool, day: bool) -> ast::Precision {
+fn unwritten_precision(spec: &Spec, month: bool, day: bool) -> ast::Precision {
     match (spec.header.surface, month, day) {
         (ast::Surface::V0_5, _, _) | (_, true, _) => ast::Precision::Year,
         (_, false, true) => ast::Precision::Month,
@@ -102,19 +88,32 @@ fn unwritten_precision(spec: &ast::Spec, month: bool, day: bool) -> ast::Precisi
     }
 }
 
-/// One imputation verb's executor operation from the tree.
-pub(super) fn from_tree(spec: &ast::Spec, e: ExprId) -> Result<Imputation, PrepareError> {
+/// One imputation verb's executor operation from the tree. Each operand
+/// binds as the scope decides; the operation needs every one.
+pub(super) fn from_tree(spec: &Spec, e: ExprId) -> Result<Operation, Refusal> {
+    let operation = imputation(spec, e)?;
+    let operands = operation
+        .operands()
+        .map(|(field, name)| Operand::name(name, format!("{}.{}", operation.path(), field)))
+        .collect();
+    Ok(Operation {
+        kind: Kind::Imputation(operation),
+        operands,
+    })
+}
+
+fn imputation(spec: &Spec, e: ExprId) -> Result<Imputation, Refusal> {
     let ExprKind::Scalar {
         op,
         operands,
         handlers,
     } = &spec.expr(e).kind
     else {
-        return Err(PrepareError::Internal);
+        return Err(Refusal::Internal);
     };
-    let path = checks::path(spec, e);
+    let path = path(spec, e);
     let kind = match op {
-        ast::ScalarOp::Impute {
+        ScalarOp::Impute {
             kind,
             month,
             day,
@@ -129,10 +128,10 @@ pub(super) fn from_tree(spec: &ast::Spec, e: ExprId) -> Result<Imputation, Prepa
             *time,
             &path,
         )?,
-        ast::ScalarOp::Precision { kind } => ImputationKind::Precision {
+        ScalarOp::Precision { kind } => ImputationKind::Precision {
             target: tree_type(*kind),
         },
-        ast::ScalarOp::ImputationFlag {
+        ScalarOp::ImputationFlag {
             part,
             seconds_collected,
         } => ImputationKind::Flag {
@@ -142,86 +141,55 @@ pub(super) fn from_tree(spec: &ast::Spec, e: ExprId) -> Result<Imputation, Prepa
             },
             seconds_collected: *seconds_collected,
         },
-        ast::ScalarOp::ToDate => ImputationKind::ToDate,
-        _ => return Err(PrepareError::Internal),
+        ScalarOp::ToDate => ImputationKind::ToDate,
+        _ => return Err(Refusal::Internal),
     };
-    let operand = |slot| checks::operand_name(spec, operands, slot).map(String::from);
+    let operand = |slot| operand_name(spec, operands, slot).map(String::from);
     Imputation::new(
         kind,
-        operand(ast::Slot::Source).ok_or(PrepareError::Internal)?,
-        operand(ast::Slot::NotBefore),
-        operand(ast::Slot::NotAfter),
-        operand(ast::Slot::Fallback),
+        operand(Slot::Source).ok_or(Refusal::Internal)?,
+        operand(Slot::NotBefore),
+        operand(Slot::NotAfter),
+        operand(Slot::Fallback),
         path,
-        checks::handler(spec, handlers.invalid.as_ref())?,
+        handler(spec, handlers.invalid.as_ref())?,
     )
-    .ok_or(PrepareError::Internal)
+    .ok_or(Refusal::Internal)
 }
 
 /// One imputation verb's declaration findings at `path`: its completion
 /// policy, then each operand whose declared type it does not accept. With
 /// `rows` a bare name's phase is binding's to decide, so its type is not
 /// checked here.
-pub(super) fn operand_findings(
-    spec: &ast::Spec,
+pub(super) fn preflight(
+    spec: &Spec,
     e: ExprId,
-    declared: &types::DeclaredTypes<'_>,
+    declared: &dyn Fn(&str) -> Option<ColumnType>,
     rows: bool,
-    findings: &mut Vec<PreflightFinding>,
-) -> Result<(), PrepareError> {
+) -> Result<Vec<Diagnostic>, Refusal> {
     let kind = |name: &str| {
         (name.contains('.') || !rows)
-            .then(|| declared.name(name).column_type())
+            .then(|| declared(name))
             .flatten()
     };
-    match from_tree(spec, e) {
+    match imputation(spec, e) {
         Ok(operation) => {
+            let mut findings = Vec::new();
             if let Some(kind) = kind(operation.source()) {
                 if !operation.accepts(kind) {
-                    findings.push(PreflightFinding::Imputation(
-                        operation.input_diagnostic(checks::type_name(kind)),
-                    ));
+                    findings.push(operation.input_diagnostic(kind.name()));
                 }
             }
             for (field, name) in operation.operands().skip(1) {
                 if let Some(kind) = kind(name).filter(|&kind| !operation.accepts_operand(kind)) {
-                    findings.push(PreflightFinding::Imputation(
-                        operation.operand_input_diagnostic(field, name, checks::type_name(kind)),
-                    ));
+                    findings.push(operation.operand_input_diagnostic(field, name, kind.name()));
                 }
             }
-            Ok(())
+            Ok(findings)
         }
-        Err(PrepareError::Invalid(errors)) => {
-            findings.extend(errors);
-            Ok(())
-        }
+        Err(Refusal::Findings(errors)) => Ok(errors),
         Err(error) => Err(error),
     }
-}
-/// Each operand binds as the scope decides; the operation needs every one.
-pub(super) fn bind(
-    operation: &Imputation,
-    column: usize,
-    cx: &mut BindContext<'_, '_>,
-) -> Result<Option<Expression>, BindError> {
-    let mut operands = Vec::new();
-    for (field, name) in operation.operands() {
-        let path = format!("{}.{}", operation.path(), field);
-        if let Some(expression) = cx.operand(name, &path)? {
-            operands.push(Assignment {
-                column,
-                path,
-                expression,
-            });
-        }
-    }
-    Ok(
-        (operands.len() == operation.operands().count()).then(|| Expression::Imputation {
-            operands,
-            operation: operation.clone(),
-        }),
-    )
 }
 
 #[cfg(test)]
@@ -234,10 +202,7 @@ mod tests {
 
     /// The completion of an `impute` of a date with `rules`, read from a
     /// tree lowered in `surface`.
-    fn completion(
-        rules: &[(&str, Tree)],
-        surface: ast::Surface,
-    ) -> Result<Completion, PrepareError> {
+    fn completion(rules: &[(&str, Tree)], surface: ast::Surface) -> Result<Completion, Refusal> {
         let mut payload = vec![
             ("source", Tree::text("SRC.DTC")),
             ("type", Tree::text("date")),
@@ -256,9 +221,9 @@ mod tests {
         let document = Document::new(nodes, root).unwrap();
         let spec = crate::front_end::v0_5::lower_surface(&document, None, surface).into_spec();
         let e = spec.columns[1].derivation.as_ref().unwrap().expr;
-        match from_tree(&spec, e)?.kind() {
+        match imputation(&spec, e)?.kind() {
             ImputationKind::Impute(completion) => Ok(completion),
-            _ => Err(PrepareError::Internal),
+            _ => Err(Refusal::Internal),
         }
     }
 
@@ -280,10 +245,10 @@ mod tests {
             assert_eq!(completion(&rules, v1).unwrap().minimum, minimum);
         }
 
-        let Err(PrepareError::Invalid(findings)) = completion(&[day], ast::Surface::V0_5) else {
+        let Err(Refusal::Findings(findings)) = completion(&[day], ast::Surface::V0_5) else {
             panic!("a 0.5 minimum of year requires a month");
         };
-        let [PreflightFinding::Imputation(diagnostic)] = findings.as_slice() else {
+        let [diagnostic] = findings.as_slice() else {
             panic!("one finding: {findings:?}");
         };
         // TIME-10 at the `yamaa-v0.5.0` tag.

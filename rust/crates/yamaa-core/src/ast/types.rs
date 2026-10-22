@@ -11,10 +11,7 @@
 //!
 //! [`CompiledExpression::result_type`]: crate::expression::CompiledExpression::result_type
 
-use super::{
-    Dictionary, ExprId, ExprKind, Formula, Literal, Name, Read, ScalarOp, Scope, Slot, Spec,
-    TemporalType, TimeUnit, WindowFunction,
-};
+use super::{ExprId, ExprKind, Formula, Literal, Name, Read, Scope, Slot, Spec, WindowFunction};
 use crate::result_type::ResultType;
 use crate::value::ValueType;
 use std::collections::BTreeMap;
@@ -72,7 +69,7 @@ impl<'a> Table<'a> {
             exprs.fold(start, |kind, e| kind.or(self.of(e)))
         };
         match &self.spec.expr(e).kind {
-            ExprKind::Literal(value) => literal(value),
+            ExprKind::Literal(value) => value.result_type(),
             ExprKind::Ref(name) => self.read(e, name),
             ExprKind::Formula(formula) => self.formula(formula),
             ExprKind::Source(source) => self.of(source.variable),
@@ -88,21 +85,17 @@ impl<'a> Table<'a> {
                 .into_iter()
                 .flatten()
                 .fold(ResultType::MISSING, |kind, value| {
-                    kind.or(literal(&value.value))
+                    kind.or(value.value.result_type())
                 }),
             ExprKind::FirstAvailable { sources, missing } => fold(
                 &mut sources.iter().copied(),
                 missing
                     .as_ref()
-                    .map_or(ResultType::MISSING, |value| literal(&value.value)),
+                    .map_or(ResultType::MISSING, |value| value.value.result_type()),
             ),
-            ExprKind::Scalar { op, operands, .. } => match op {
-                ScalarOp::Greatest | ScalarOp::Least => fold(
-                    &mut operands.iter().map(|operand| operand.expr),
-                    ResultType::MISSING,
-                ),
-                op => scalar(op),
-            },
+            ExprKind::Scalar { op, operands, .. } => {
+                op.result_type(&mut operands.iter().map(|operand| self.of(operand.expr)))
+            }
             ExprKind::Window(window) => match &window.function {
                 WindowFunction::RowNumber | WindowFunction::Rank { .. } => ResultType::INT,
                 WindowFunction::RowValue { .. } | WindowFunction::Locf { .. } => window
@@ -175,66 +168,20 @@ impl<'a> Table<'a> {
     }
 }
 
-/// A written scalar's type; a value outside the language has none known.
-fn literal(value: &Literal) -> ResultType {
-    match value {
-        Literal::Missing => ResultType::MISSING,
-        Literal::Bool(_) => ResultType::of(ValueType::Bool),
-        Literal::Int(_) => ResultType::INT,
-        Literal::Float(value) if value.is_finite() => ResultType::FLOAT,
-        Literal::Float(_) => ResultType::MISSING,
-        Literal::Text(_) => ResultType::STR,
-        Literal::Date(_) => ResultType::DATE,
-        Literal::DateTime(_) => ResultType::DATETIME,
-        Literal::Unsupported => ResultType::UNKNOWN,
-    }
-}
-
-/// A scalar verb's type, fixed by the verb or set by its written `type` or
-/// unit. Differences, study days, epoch days and times of day are counts;
-/// a difference of datetimes in seconds is a whole count and in a longer
-/// unit a fraction; a shift and `impute` keep their declared type; a
-/// duration is a fraction in every unit; `to_date` is a date; assembled
-/// date parts, text verbs, precisions, imputation flags and cuts are text;
-/// a mapping returns the types its dictionary values take.
-fn scalar(op: &ScalarOp) -> ResultType {
-    let temporal = |kind: &TemporalType| match kind {
-        TemporalType::Date => ResultType::DATE,
-        TemporalType::DateTime => ResultType::DATETIME,
-    };
-    match op {
-        ScalarOp::Round { .. } | ScalarOp::DurationValue { .. } => ResultType::FLOAT,
-        ScalarOp::Diff {
-            kind: TemporalType::DateTime,
-            unit,
-            ..
-        } if *unit != TimeUnit::Second => ResultType::FLOAT,
-        ScalarOp::Diff { .. } | ScalarOp::StudyDay | ScalarOp::ToEpochDay | ScalarOp::TimeOfDay => {
-            ResultType::INT
+impl Literal {
+    /// A written scalar's type; a value outside the language has none known.
+    pub fn result_type(&self) -> ResultType {
+        match self {
+            Literal::Missing => ResultType::MISSING,
+            Literal::Bool(_) => ResultType::of(ValueType::Bool),
+            Literal::Int(_) => ResultType::INT,
+            Literal::Float(value) if value.is_finite() => ResultType::FLOAT,
+            Literal::Float(_) => ResultType::MISSING,
+            Literal::Text(_) => ResultType::STR,
+            Literal::Date(_) => ResultType::DATE,
+            Literal::DateTime(_) => ResultType::DATETIME,
+            Literal::Unsupported => ResultType::UNKNOWN,
         }
-        ScalarOp::Shift { kind, .. } | ScalarOp::Impute { kind, .. } => temporal(kind),
-        ScalarOp::ToDate => ResultType::DATE,
-        ScalarOp::Dtc
-        | ScalarOp::Precision { .. }
-        | ScalarOp::ImputationFlag { .. }
-        | ScalarOp::StrCase { .. }
-        | ScalarOp::StrPad { .. }
-        | ScalarOp::StrExtract { .. }
-        | ScalarOp::StrReplace { .. }
-        | ScalarOp::StrTemplate { .. }
-        | ScalarOp::Cut { .. } => ResultType::STR,
-        ScalarOp::Mapping {
-            dict: Dictionary::Inline(entries),
-            ..
-        } => entries
-            .iter()
-            .fold(ResultType::MISSING, |kind, (_, value)| {
-                kind.or(literal(&value.value))
-            }),
-        // A dictionary resource is refused before typing.
-        ScalarOp::Mapping { .. } => ResultType::UNKNOWN,
-        // Typed from their operands by the table.
-        ScalarOp::Greatest | ScalarOp::Least => ResultType::UNKNOWN,
     }
 }
 

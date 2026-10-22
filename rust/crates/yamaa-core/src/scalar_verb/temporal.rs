@@ -1,7 +1,7 @@
 //! Temporal declarations dispatch on their declared `type` and share operand
 //! binding with other scalar operations.
 use super::*;
-use crate::dataset::{CalendarUnit, DateBounds, ElapsedUnit, Temporal, TemporalKind, DATE_PARTS};
+use crate::dataset::{CalendarUnit, DateBounds, ElapsedUnit, TemporalKind, DATE_PARTS};
 
 const CALENDAR_UNITS: &[&str] = &["day", "week", "month", "year"];
 const ELAPSED_UNITS: &[&str] = &["second", "minute", "hour", "day"];
@@ -30,12 +30,12 @@ fn unit_name(unit: ast::TimeUnit) -> &'static str {
 }
 
 /// The endpoints a `diff` counts; `left` belongs to `cut` alone.
-fn date_bounds(closed: ast::Closed) -> Result<DateBounds, PrepareError> {
+fn date_bounds(closed: ast::Closed) -> Result<DateBounds, Refusal> {
     match closed {
         ast::Closed::Right => Ok(DateBounds::Exclusive),
         ast::Closed::Both => Ok(DateBounds::Inclusive),
         ast::Closed::Neither => Ok(DateBounds::Between),
-        ast::Closed::Left => Err(PrepareError::Internal),
+        ast::Closed::Left => Err(Refusal::Internal),
     }
 }
 
@@ -43,42 +43,38 @@ fn date_bounds(closed: ast::Closed) -> Result<DateBounds, PrepareError> {
 /// unit coarser than a day, as the tree's surface writes them: 0.5's
 /// `bounds`, permitting `exclusive`, or 1.0's `closed`, permitting `right`
 /// (P-ORD-2).
-fn bounds_finding(
-    spec: &ast::Spec,
-    path: String,
-    closed: ast::Closed,
-) -> Result<PreflightFinding, PrepareError> {
+fn bounds_finding(spec: &Spec, path: String, closed: ast::Closed) -> Result<Diagnostic, Refusal> {
     let v1 = !matches!(spec.header.surface, ast::Surface::V0_5);
     let value = match (v1, closed) {
         (false, ast::Closed::Both) => "inclusive",
         (false, ast::Closed::Neither) => "between",
         (true, ast::Closed::Both) => "both",
         (true, ast::Closed::Neither) => "neither",
-        _ => return Err(PrepareError::Internal),
+        _ => return Err(Refusal::Internal),
     };
-    Ok(PreflightFinding::TemporalBounds {
-        path,
-        field: if v1 { "closed" } else { "bounds" },
+    Ok(Temporal::bounds_diagnostic(
+        &path,
+        if v1 { "closed" } else { "bounds" },
         value,
-        permitted: if v1 { "right" } else { "exclusive" },
-    })
+        if v1 { "right" } else { "exclusive" },
+    ))
 }
 
 /// The operand field of a temporal verb that `field` names: each verb's
 /// fields in the executor's order ([`TemporalKind::fields`]).
-fn slot(field: &str) -> Option<ast::Slot> {
+fn slot(field: &str) -> Option<Slot> {
     Some(match field {
-        "start" => ast::Slot::Start,
-        "end" => ast::Slot::End,
-        "date" | "source" => ast::Slot::Source,
-        "reference" => ast::Slot::Reference,
-        "days" | "amount" => ast::Slot::Amount,
-        "year" => ast::Slot::Year,
-        "month" => ast::Slot::Month,
-        "day" => ast::Slot::Day,
-        "hour" => ast::Slot::Hour,
-        "minute" => ast::Slot::Minute,
-        "second" => ast::Slot::Second,
+        "start" => Slot::Start,
+        "end" => Slot::End,
+        "date" | "source" => Slot::Source,
+        "reference" => Slot::Reference,
+        "days" | "amount" => Slot::Amount,
+        "year" => Slot::Year,
+        "month" => Slot::Month,
+        "day" => Slot::Day,
+        "hour" => Slot::Hour,
+        "minute" => Slot::Minute,
+        "second" => Slot::Second,
         _ => return None,
     })
 }
@@ -87,10 +83,10 @@ fn slot(field: &str) -> Option<ast::Slot> {
 /// operand fields differ from the executor's names (`study_day.source`,
 /// P-OP-1); a 0.5 tree writes the executor's names.
 fn surface_operands(
-    spec: &ast::Spec,
+    spec: &Spec,
     operands: &[ast::Operand],
     operation: Temporal,
-) -> Result<Temporal, PrepareError> {
+) -> Result<Temporal, Refusal> {
     if matches!(spec.header.surface, ast::Surface::V0_5) {
         return Ok(operation);
     }
@@ -100,16 +96,16 @@ fn surface_operands(
         .iter()
         .map(|field| {
             slot(field)
-                .and_then(|slot| checks::operand(operands, slot))
+                .and_then(|slot| operand(operands, slot))
                 .map(|operand| spec.cite(spec.expr(operand).meta))
-                .ok_or(PrepareError::Internal)
+                .ok_or(Refusal::Internal)
         })
         .collect::<Result<Vec<_>, _>>()?;
     Ok(operation.with_operand_paths(paths))
 }
 
 /// Whether an operand of the verb is written in the field `field`.
-fn written(spec: &ast::Spec, operands: &[ast::Operand], field: &str) -> bool {
+fn written(spec: &Spec, operands: &[ast::Operand], field: &str) -> bool {
     operands.iter().any(|operand| {
         matches!(spec.paths.segment(spec.expr(operand.expr).meta.path),
             ast::Segment::Field(name) if *name == field)
@@ -120,21 +116,23 @@ fn written(spec: &ast::Spec, operands: &[ast::Operand], field: &str) -> bool {
 /// one: a unit or bounds its `type` does not take, a field its `type`
 /// requires or does not take, or a gap in its date parts.
 pub(super) fn tree_kind(
-    spec: &ast::Spec,
+    spec: &Spec,
     e: ExprId,
-) -> Result<Result<TemporalKind, Vec<PreflightFinding>>, PrepareError> {
+) -> Result<Result<TemporalKind, Vec<Diagnostic>>, Refusal> {
     let ExprKind::Scalar { op, operands, .. } = &spec.expr(e).kind else {
-        return Err(PrepareError::Internal);
+        return Err(Refusal::Internal);
     };
-    let path = checks::path(spec, e);
+    let path = path(spec, e);
     Ok(Ok(match op {
-        ast::ScalarOp::Diff { kind, unit, closed } => {
+        ScalarOp::Diff { kind, unit, closed } => {
             let bounds = date_bounds(*closed)?;
             let unit = unit_name(*unit);
             if *kind == ast::TemporalType::DateTime {
                 let Some(unit) = elapsed_unit(unit) else {
-                    return Ok(Err(vec![PreflightFinding::Scalar(
-                        Temporal::unit_diagnostic(&path, unit, ELAPSED_UNITS),
+                    return Ok(Err(vec![Temporal::unit_diagnostic(
+                        &path,
+                        unit,
+                        ELAPSED_UNITS,
                     )]));
                 };
                 if bounds != DateBounds::Exclusive {
@@ -149,8 +147,10 @@ pub(super) fn tree_kind(
                         "month" => CalendarUnit::Month,
                         "year" => CalendarUnit::Year,
                         other => {
-                            return Ok(Err(vec![PreflightFinding::Scalar(
-                                Temporal::unit_diagnostic(&path, other, CALENDAR_UNITS),
+                            return Ok(Err(vec![Temporal::unit_diagnostic(
+                                &path,
+                                other,
+                                CALENDAR_UNITS,
                             )]))
                         }
                     },
@@ -158,7 +158,7 @@ pub(super) fn tree_kind(
                 }
             }
         }
-        ast::ScalarOp::Shift { kind, unit } => {
+        ScalarOp::Shift { kind, unit } => {
             let datetime = *kind == ast::TemporalType::DateTime;
             let target = if datetime { "datetime" } else { "date" };
             let findings = [
@@ -168,11 +168,7 @@ pub(super) fn tree_kind(
             ]
             .into_iter()
             .filter(|&(_, wanted, present)| present != wanted)
-            .map(|(name, wanted, _)| {
-                PreflightFinding::Scalar(Temporal::type_field_diagnostic(
-                    wanted, &path, name, target,
-                ))
-            })
+            .map(|(name, wanted, _)| Temporal::type_field_diagnostic(wanted, &path, name, target))
             .collect::<Vec<_>>();
             if !findings.is_empty() {
                 return Ok(Err(findings));
@@ -181,38 +177,37 @@ pub(super) fn tree_kind(
                 TemporalKind::DateTimeShift {
                     unit: unit
                         .and_then(|unit| elapsed_unit(unit_name(unit)))
-                        .ok_or(PrepareError::Internal)?,
+                        .ok_or(Refusal::Internal)?,
                 }
             } else {
                 TemporalKind::DateShift
             }
         }
-        ast::ScalarOp::StudyDay => TemporalKind::StudyDay,
-        ast::ScalarOp::ToEpochDay => TemporalKind::EpochDay,
-        ast::ScalarOp::DurationValue { unit } => TemporalKind::DurationValue {
-            unit: elapsed_unit(unit_name(*unit)).ok_or(PrepareError::Internal)?,
+        ScalarOp::StudyDay => TemporalKind::StudyDay,
+        ScalarOp::ToEpochDay => TemporalKind::EpochDay,
+        ScalarOp::DurationValue { unit } => TemporalKind::DurationValue {
+            unit: elapsed_unit(unit_name(*unit)).ok_or(Refusal::Internal)?,
         },
-        ast::ScalarOp::TimeOfDay => TemporalKind::TimeOfDay,
-        ast::ScalarOp::Dtc => {
+        ScalarOp::TimeOfDay => TemporalKind::TimeOfDay,
+        ScalarOp::Dtc => {
             // Every part before the finest declared one must be declared too.
-            let declared = DATE_PARTS.map(|name| {
-                slot(name).is_some_and(|slot| checks::operand(operands, slot).is_some())
-            });
+            let declared = DATE_PARTS
+                .map(|name| slot(name).is_some_and(|slot| operand(operands, slot).is_some()));
             let depth = declared
                 .iter()
                 .rposition(|&present| present)
                 .map_or(0, |index| index + 1);
             if depth == 0 {
-                return Err(PrepareError::Internal);
+                return Err(Refusal::Internal);
             }
             let gaps = (0..depth)
                 .filter(|&index| !declared[index])
                 .map(|index| {
-                    PreflightFinding::Scalar(Temporal::date_part_gap_diagnostic(
+                    Temporal::date_part_gap_diagnostic(
                         &path,
                         DATE_PARTS[index],
                         DATE_PARTS[depth - 1],
-                    ))
+                    )
                 })
                 .collect::<Vec<_>>();
             if !gaps.is_empty() {
@@ -220,90 +215,112 @@ pub(super) fn tree_kind(
             }
             TemporalKind::DateText { depth: depth as u8 }
         }
-        _ => return Err(PrepareError::Internal),
+        _ => return Err(Refusal::Internal),
     }))
 }
 
 /// The executor's temporal operation for the verb at `e`: each operand a
-/// name, or a written number with the field's name as its source.
-pub(super) fn from_tree(spec: &ast::Spec, e: ExprId) -> Result<Temporal, PrepareError> {
+/// name, or a written number with the field's name as its source. Each
+/// operand binds as the scope decides, at the path its surface writes.
+pub(super) fn from_tree(spec: &Spec, e: ExprId) -> Result<Operation, Refusal> {
     let ExprKind::Scalar {
         op,
         operands,
         handlers,
     } = &spec.expr(e).kind
     else {
-        return Err(PrepareError::Internal);
+        return Err(Refusal::Internal);
     };
-    let path = checks::path(spec, e);
-    let kind = tree_kind(spec, e)?.map_err(PrepareError::Invalid)?;
+    let path = path(spec, e);
+    let kind = tree_kind(spec, e)?.map_err(Refusal::Findings)?;
     let mut sources = Vec::new();
     let mut literals = Vec::new();
     for (index, field_name) in kind.fields().iter().enumerate() {
         let operand = slot(field_name)
-            .and_then(|slot| checks::operand(operands, slot))
-            .ok_or(PrepareError::Internal)?;
+            .and_then(|slot| operand(operands, slot))
+            .ok_or(Refusal::Internal)?;
         match &spec.expr(operand).kind {
             ExprKind::Ref(name) => sources.push(name.0.clone()),
             ExprKind::Literal(value) => {
                 sources.push(String::from(*field_name));
                 literals.push((index, value, spec.expr(operand).meta));
             }
-            _ => return Err(PrepareError::Internal),
+            _ => return Err(Refusal::Internal),
         }
     }
     match Temporal::new(kind, sources, path.clone()) {
         Ok(operation) => {
             let mut operation = surface_operands(spec, operands, operation)?;
             for (index, value, meta) in literals {
-                operation =
-                    operation.with_literal(index, constant(value, &checks::render(spec, meta))?);
+                operation = operation.with_literal(index, literal(value, spec.cite(meta))?);
             }
-            if let Some(invalid) = checks::handler(spec, handlers.invalid.as_ref())? {
+            if let Some(invalid) = handler(spec, handlers.invalid.as_ref())? {
                 operation = operation
                     .with_invalid(invalid)
-                    .map_err(|_| PrepareError::Internal)?;
+                    .map_err(|_| Refusal::Internal)?;
             }
-            Ok(operation)
+            let operands = (0..operation.sources().len())
+                .map(|index| {
+                    Ok(Operand {
+                        read: match operation.literal(index) {
+                            Some(value) => Read::Literal(value.clone()),
+                            None => Read::Name(operation.sources()[index].clone()),
+                        },
+                        path: operation.operand_path(index).ok_or(Refusal::Internal)?,
+                    })
+                })
+                .collect::<Result<_, Refusal>>()?;
+            Ok(Operation {
+                kind: Kind::Temporal(operation),
+                operands,
+            })
         }
-        Err(crate::dataset::InvalidTemporal::Shape) => Err(PrepareError::Internal),
+        Err(crate::dataset::InvalidTemporal::Shape) => Err(Refusal::Internal),
         Err(crate::dataset::InvalidTemporal::Bounds) => {
-            let ast::ScalarOp::Diff { closed, .. } = op else {
-                return Err(PrepareError::Internal);
+            let ScalarOp::Diff { closed, .. } = op else {
+                return Err(Refusal::Internal);
             };
-            Err(PrepareError::Invalid(vec![bounds_finding(
+            Err(Refusal::Findings(vec![bounds_finding(
                 spec, path, *closed,
             )?]))
         }
     }
 }
 
+/// A whole number the operation counts, written as a fraction.
+pub(super) fn literal_findings(operation: &Temporal) -> Vec<Diagnostic> {
+    (0..operation.sources().len())
+        .filter(|&index| {
+            matches!(operation.literal(index), Some(Value::Float(_)))
+                && operation.expected(index) == "int"
+        })
+        .map(|index| operation.operand_diagnostic(index, "float"))
+        .collect()
+}
+
 /// One temporal verb's declaration findings: a unit, bounds or field its
 /// `type` does not take, a gap in its date parts, and each operand whose
 /// declared type it does not accept. With `rows` a bare name's phase is
 /// binding's to decide, so its type is not checked here.
-pub(super) fn operand_findings(
-    spec: &ast::Spec,
+pub(super) fn preflight(
+    spec: &Spec,
     e: ExprId,
-    declared: &types::DeclaredTypes<'_>,
+    declared: &dyn Fn(&str) -> Option<ColumnType>,
     rows: bool,
-    findings: &mut Vec<PreflightFinding>,
-) -> Result<(), PrepareError> {
+) -> Result<Vec<Diagnostic>, Refusal> {
     let ExprKind::Scalar { op, operands, .. } = &spec.expr(e).kind else {
-        return Err(PrepareError::Internal);
+        return Err(Refusal::Internal);
     };
-    let path = checks::path(spec, e);
+    let path = path(spec, e);
     let operation = match tree_kind(spec, e)? {
         Ok(operation) => operation,
-        Err(errors) => {
-            findings.extend(errors);
-            return Ok(());
-        }
+        Err(errors) => return Ok(errors),
     };
+    let mut findings = Vec::new();
     if let TemporalKind::Difference { unit, bounds } = operation {
         if unit != CalendarUnit::Day && bounds != DateBounds::Exclusive {
-            let ast::ScalarOp::Diff { closed, .. } = op else {
-                return Err(PrepareError::Internal);
+            let ScalarOp::Diff { closed, .. } = op else {
+                return Err(Refusal::Internal);
             };
             findings.push(bounds_finding(spec, path.clone(), *closed)?);
         }
@@ -318,8 +335,8 @@ pub(super) fn operand_findings(
     };
     let operand = |field: &str| {
         slot(field)
-            .and_then(|slot| checks::operand(operands, slot))
-            .ok_or(PrepareError::Internal)
+            .and_then(|slot| operand(operands, slot))
+            .ok_or(Refusal::Internal)
     };
     let witness = Temporal::new(
         witness_kind,
@@ -332,10 +349,10 @@ pub(super) fn operand_findings(
                     _ => String::from(*name),
                 })
             })
-            .collect::<Result<Vec<_>, PrepareError>>()?,
+            .collect::<Result<Vec<_>, Refusal>>()?,
         path,
     )
-    .map_err(|_| PrepareError::Internal)?;
+    .map_err(|_| Refusal::Internal)?;
     let witness = surface_operands(spec, operands, witness)?;
     for (index, field_name) in operation.fields().iter().enumerate() {
         let ExprKind::Ref(source) = &spec.expr(operand(field_name)?).kind else {
@@ -344,70 +361,18 @@ pub(super) fn operand_findings(
                 ExprKind::Literal(ast::Literal::Float(_))
             ) && witness.expected(index) == "int"
             {
-                findings.push(PreflightFinding::Scalar(
-                    witness.operand_diagnostic(index, "float"),
-                ));
+                findings.push(witness.operand_diagnostic(index, "float"));
             }
             continue;
         };
         let kind = (source.0.contains('.') || !rows)
-            .then(|| declared.name(&source.0).column_type())
+            .then(|| declared(&source.0))
             .flatten();
         if let Some(kind) = kind.filter(|&kind| !witness.accepts(index, kind)) {
-            findings.push(PreflightFinding::Scalar(
-                witness.operand_diagnostic(index, checks::type_name(kind)),
-            ));
+            findings.push(witness.operand_diagnostic(index, kind.name()));
         }
     }
-    Ok(())
-}
-
-/// Each operand binds as the scope decides, then its type must be one the
-/// operation accepts: a lookup read's from its selector's donor, any other
-/// read's from the catalog.
-pub(super) fn bind(
-    operation: &Temporal,
-    column: usize,
-    cx: &mut BindContext<'_, '_>,
-) -> Result<Option<Expression>, BindError> {
-    let mut operands = Vec::new();
-    for (index, source) in operation.sources().iter().enumerate() {
-        let path = operation.operand_path(index).ok_or(BindError::Internal)?;
-        if let Some(value) = operation.literal(index) {
-            operands.push(Assignment {
-                column,
-                expression: Expression::Literal(value.clone()),
-                path,
-            });
-            continue;
-        }
-        if let Some(expression) = cx.operand(source, &path)? {
-            let column_type = if let Expression::Intermediate { index, column } = &expression {
-                cx.donors.items[*index]
-                    .as_ref()
-                    .and_then(|item| item.source_kind(cx.donors.secondary, *column))
-            } else {
-                cx.catalog.type_of(source)
-            };
-            if let Some(column_type) = column_type.filter(|&kind| !operation.accepts(index, kind)) {
-                cx.findings.push(BindFinding::Temporal(
-                    operation.operand_diagnostic(index, checks::type_name(column_type)),
-                ));
-                continue;
-            }
-            operands.push(Assignment {
-                column,
-                expression,
-                path,
-            });
-        }
-    }
-    Ok(
-        (operands.len() == operation.sources().len()).then(|| Expression::Temporal {
-            operands,
-            operation: operation.clone(),
-        }),
-    )
+    Ok(findings)
 }
 
 #[cfg(test)]
@@ -449,7 +414,7 @@ mod tests {
             let [finding] = findings.as_slice() else {
                 panic!("one finding: {findings:?}");
             };
-            finding.diagnostic()
+            finding.clone()
         };
         let permitted = |value: &str| Json::Array(vec![Json::String(value.into())]);
 

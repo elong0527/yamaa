@@ -1,6 +1,5 @@
 //! Bounded ordered `case`. Unselected branches have no runtime effects.
 use super::*;
-use crate::ast::ScalarOp;
 use crate::dataset::CaseBranch;
 
 /// The grammar finding of an arm's `when`, which binding reports when it
@@ -53,12 +52,12 @@ pub(super) fn admit(
     Ok(())
 }
 
-/// A width defect shares its derivation's authored declaration-validation
-/// order with the expression defects of its predicates and formulas, before
-/// any reference binding: when the derivation at `e` holds one (or a flag's
-/// defect), its declaration findings are reported now, and the binding that
-/// follows reports none of them again. Other derivations keep their binding
-/// checkpoint.
+/// A verb's declaration defect (a `str_pad` width) shares its derivation's
+/// authored declaration-validation order with the expression defects of its
+/// predicates and formulas, before any reference binding: when the
+/// derivation at `e` holds one (or a flag's defect), its declaration findings
+/// are reported now, and the binding that follows reports none of them
+/// again. Other derivations keep their binding checkpoint.
 pub(super) fn padding_findings(
     spec: &ast::Spec,
     e: ExprId,
@@ -66,12 +65,10 @@ pub(super) fn padding_findings(
 ) -> Result<bool, BindError> {
     fn width_error(spec: &ast::Spec, e: ExprId) -> Result<bool, BindError> {
         Ok(match &spec.expr(e).kind {
-            ExprKind::Scalar {
-                op: ScalarOp::StrPad { .. },
-                ..
-            } => str_pad::from_tree(spec, e)
+            ExprKind::Scalar { .. } => crate::scalar_verb::Operation::from_tree(spec, e)
                 .map_err(|_| BindError::Internal)?
-                .has_width_error(),
+                .defect()
+                .is_some(),
             ExprKind::Flag { .. } => flags::Declaration::from_tree(spec, e)
                 .map_err(|_| BindError::Internal)?
                 .has_findings(),
@@ -92,12 +89,12 @@ pub(super) fn padding_findings(
         findings: &mut Vec<BindFinding>,
     ) -> Result<(), BindError> {
         match &spec.expr(e).kind {
-            ExprKind::Scalar {
-                op: ScalarOp::StrPad { .. },
-                ..
-            } => str_pad::declaration_findings(
-                &str_pad::from_tree(spec, e).map_err(|_| BindError::Internal)?,
-                findings,
+            ExprKind::Scalar { .. } => findings.extend(
+                crate::scalar_verb::Operation::from_tree(spec, e)
+                    .map_err(|_| BindError::Internal)?
+                    .defect()
+                    .cloned()
+                    .map(BindFinding::Scalar),
             ),
             ExprKind::Flag { .. } => flags::Declaration::from_tree(spec, e)
                 .map_err(|_| BindError::Internal)?

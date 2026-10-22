@@ -41,28 +41,7 @@ impl PreflightFinding {
                 ]),
             ),
             Self::Report(finding) => return finding.diagnostic(),
-            Self::Odm(diagnostic)
-            | Self::Imputation(diagnostic)
-            | Self::TextCase(diagnostic)
-            | Self::TextTemplate(diagnostic)
-            | Self::Scalar(diagnostic)
-            | Self::TextExtract(diagnostic) => return diagnostic.clone(),
-            Self::RoundingInput {
-                path,
-                source,
-                actual,
-            } => return crate::dataset::Rounding::input_diagnostic(source, path, actual),
-            Self::TemporalInput {
-                path,
-                source,
-                actual,
-            } => return crate::dataset::Temporal::input_diagnostic(source, path, actual),
-            Self::TemporalBounds {
-                path,
-                field,
-                value,
-                permitted,
-            } => return crate::dataset::Temporal::bounds_diagnostic(path, field, value, permitted),
+            Self::Odm(diagnostic) | Self::Scalar(diagnostic) => return diagnostic.clone(),
             Self::ProjectFunction(finding) => return finding.diagnostic(),
             Self::ProjectCodelist(finding) => return finding.diagnostic(),
             Self::RowPhase {
