@@ -1,7 +1,5 @@
 #![cfg(feature = "yaml")]
 //! Declaration contracts.
-#[allow(dead_code)]
-mod support;
 mod declaration {
     mod contract_vectors {
         //! Direct native checks of unchanged authored grammar, regex and rounding truth.

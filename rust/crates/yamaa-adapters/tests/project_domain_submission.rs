@@ -1,7 +1,5 @@
 #![cfg(feature = "yaml")]
 //! Project contracts.
-#[allow(dead_code)]
-mod support;
 mod project {
     mod domain_submission {
         use std::{

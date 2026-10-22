@@ -270,33 +270,49 @@ fn located(location: &Location, directory: &[String]) -> String {
     let file = relative(&location.file, directory);
     match location.position {
         Some(position) => format!("{file}:{}:{}", position.line, position.column),
-        None => file.to_owned(),
+        None => file.into_owned(),
     }
 }
 
 /// `file` relative to the current directory when the file lies beneath it,
 /// and as it is otherwise. `directory` holds the current directory's
 /// spellings ([`current_directory`]); the file and each spelling are
-/// absolute, with forward slashes.
-pub(crate) fn relative<'a>(file: &'a str, directory: &[String]) -> &'a str {
-    directory
-        .iter()
-        .find_map(|spelling| {
-            file.strip_prefix(spelling.trim_end_matches('/'))?
-                .strip_prefix('/')
-                .filter(|rest| !rest.is_empty())
-        })
-        .unwrap_or(file)
+/// absolute, with forward slashes. Resolve only the file's parent for this
+/// display projection: a caller can name it through a different directory
+/// alias. Append the literal suffix, including a refused path's trailing
+/// separator. The leaf is never read or followed; capture keeps its own path.
+pub(crate) fn relative<'a>(file: &'a str, directory: &[String]) -> Cow<'a, str> {
+    if directory.is_empty() {
+        return Cow::Borrowed(file);
+    }
+    let identity = Path::new(file).parent().and_then(|parent| {
+        let suffix = file
+            .strip_prefix(parent.to_str()?.trim_end_matches('/'))?
+            .strip_prefix('/')?;
+        let directory = yamaa_adapters::file_configuration::directory_identity(parent).ok()?;
+        Some(format!("{directory}{suffix}"))
+    });
+    let displayed = identity.as_deref().unwrap_or(file);
+    let relative = directory.iter().find_map(|spelling| {
+        displayed
+            .strip_prefix(spelling.trim_end_matches('/'))?
+            .strip_prefix('/')
+            .filter(|rest| !rest.is_empty())
+    });
+    match relative {
+        Some(rest) => match file.strip_suffix(rest) {
+            Some(prefix) => Cow::Borrowed(&file[prefix.len()..]),
+            None => Cow::Owned(rest.to_owned()),
+        },
+        None => Cow::Borrowed(file),
+    }
 }
 
-/// The current directory in each spelling a printed file can start with,
-/// absolute with forward slashes: first its identity, canonical as
-/// compilation spells each file it reads and so the file of an issue's
-/// location; then the spelling the operating system reports, which starts a
-/// lint finding's file, the path given made absolute. The two differ when the
-/// directory was entered by another spelling, such as Windows 8.3 short
-/// names, so a located file prints relative to the current directory however
-/// that is spelled (#3540). Empty when the current directory cannot be read.
+/// The current directory's identity and reported spelling, absolute with
+/// forward slashes. The identity matches canonical issue locations and the
+/// parent identity used by [`relative`]. The reported spelling also keeps
+/// the lexical projection when a file's parent cannot be resolved. Empty
+/// when the current directory cannot be read.
 pub(crate) fn current_directory() -> Vec<String> {
     std::env::current_dir().map_or_else(|_| Vec::new(), |directory| spellings(&directory))
 }
@@ -679,22 +695,102 @@ mod tests {
             .iter()
             .map(|spelling| {
                 let directory = spellings(spelling);
-                let given = format!(
-                    "{}/adae.yaml",
-                    spelling.to_str().unwrap().replace('\\', "/")
-                );
-                [
-                    relative(&located, &directory).to_owned(),
-                    relative(&given, &directory).to_owned(),
-                ]
+                std::iter::once(located.clone())
+                    .chain(spellings_of.iter().map(|file| {
+                        format!("{}/adae.yaml", file.to_str().unwrap().replace('\\', "/"))
+                    }))
+                    .map(|file| relative(&file, &directory).into_owned())
+                    .collect::<Vec<_>>()
             })
             .collect::<Vec<_>>();
         #[cfg(unix)]
         std::fs::remove_file(&link).unwrap();
         std::fs::remove_dir_all(&directory).unwrap();
         for (spelling, printed) in spellings_of.iter().zip(printed) {
-            assert_eq!(printed, ["adae.yaml"; 2], "{}", spelling.display());
+            assert_eq!(
+                printed,
+                vec!["adae.yaml"; spellings_of.len() + 1],
+                "{}",
+                spelling.display()
+            );
         }
+    }
+
+    /// P-PRINT-1 rule 3: display resolves the parent without following the leaf.
+    #[cfg(unix)]
+    #[test]
+    fn a_parent_alias_projects_its_resolved_directory_without_following_the_leaf() {
+        let root = crate::test_scratch::Scratch::new("text-parent-alias");
+        let root_path = root.path();
+        std::fs::create_dir_all(root_path.join("study/nested")).unwrap();
+        std::fs::create_dir_all(root_path.join("outside")).unwrap();
+        let study = root_path.join("study");
+        let outside = root_path.join("outside");
+        let alias = root_path.join("alias");
+        let nested_alias = root_path.join("nested-alias");
+        std::os::unix::fs::symlink(&study, &alias).unwrap();
+        std::os::unix::fs::symlink(study.join("nested"), &nested_alias).unwrap();
+        std::os::unix::fs::symlink(&outside, study.join("outside-alias")).unwrap();
+        std::os::unix::fs::symlink(outside.join("spec.yaml"), study.join("leaf.yaml")).unwrap();
+        let directory = spellings(&study);
+        // These leaves need not exist: only the parent is resolved for text.
+        let outside_file = study.join("outside-alias/spec.yaml");
+        for (file, expected, label) in [
+            (alias.join("spec.yaml"), "spec.yaml", "parent alias"),
+            (alias.join("spec.yaml/"), "spec.yaml/", "trailing separator"),
+            (
+                alias.join("missing.yaml/"),
+                "missing.yaml/",
+                "missing leaf trailing separator",
+            ),
+            (
+                alias.join("leaf.yaml/"),
+                "leaf.yaml/",
+                "link leaf trailing separator",
+            ),
+            (
+                alias.join("nested/spec.yaml"),
+                "nested/spec.yaml",
+                "nested path through alias",
+            ),
+            (
+                nested_alias.join("spec.yaml"),
+                "nested/spec.yaml",
+                "alias targets nested directory",
+            ),
+            (
+                study.join("missing/spec.yaml"),
+                "missing/spec.yaml",
+                "unresolved parent fallback",
+            ),
+            (
+                study.join("leaf.yaml"),
+                "leaf.yaml",
+                "leaf link not followed",
+            ),
+            (
+                outside_file.clone(),
+                outside_file.to_str().unwrap(),
+                "alias outside physical directory",
+            ),
+        ] {
+            assert_eq!(
+                relative(file.to_str().unwrap(), &directory),
+                expected,
+                "{label}"
+            );
+        }
+        assert_eq!(
+            (
+                std::fs::symlink_metadata(study.join("leaf.yaml"))
+                    .unwrap()
+                    .file_type()
+                    .is_symlink(),
+                std::fs::read_link(study.join("leaf.yaml")).unwrap()
+            ),
+            (true, outside.join("spec.yaml")),
+            "display leaves the link and its target unchanged"
+        );
     }
 
     #[test]

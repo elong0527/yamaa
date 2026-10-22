@@ -1,6 +1,4 @@
 //! Project contracts.
-#[allow(dead_code)]
-mod support;
 mod project {
     mod producer_contract {
         use yamaa_core::{

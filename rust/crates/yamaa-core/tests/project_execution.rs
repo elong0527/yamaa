@@ -1,6 +1,4 @@
 //! Project contracts.
-#[allow(dead_code)]
-mod support;
 mod project {
     mod project_function_execution {
         //! Shared capture executes compiler-owned calls with already activated bindings.
