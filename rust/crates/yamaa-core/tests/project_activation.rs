@@ -1,4 +1,6 @@
-//! Project contracts.
+//! Project contracts: project activation, project call binding, project call
+//! document, project calls, project codelist binding, project codelist checks,
+//! project codelist diagnostics and project collections.
 mod project {
     mod project_activation {
         use crate::support::roots::{Case, Definition, Parameter};

@@ -1,4 +1,4 @@
-//! Service contracts.
+//! Service contracts: specification run and submission inventory.
 mod service {
     mod specification_run {
         //! Fake native ports pin application order without a host runtime or codec.

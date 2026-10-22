@@ -1,4 +1,4 @@
-//! File contracts.
+//! File contracts: local paths and shared Define-XML.
 mod file {
     #[cfg(feature = "yaml")]
     mod local_paths {

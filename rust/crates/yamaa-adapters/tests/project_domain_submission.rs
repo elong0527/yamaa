@@ -1,5 +1,7 @@
 #![cfg(feature = "yaml")]
-//! Project contracts.
+//! Project contracts: domain submission, producer links, project activation
+//! diagnostics, project codelist diagnostics and project environment
+//! diagnostics.
 mod project {
     mod domain_submission {
         use crate::support::Edit as _;

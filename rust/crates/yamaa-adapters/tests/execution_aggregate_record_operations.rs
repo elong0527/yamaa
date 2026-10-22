@@ -1,5 +1,8 @@
 #![cfg(feature = "yaml")]
-//! Execution contracts.
+//! Execution contracts: aggregate record operations, baseline window types,
+//! case item order, check output validation, compiled model, completed
+//! intermediate scopes, completed lookup assertions and declarative case
+//! intermediates.
 
 mod execution {
     mod aggregate_record_operations {

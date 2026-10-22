@@ -1,5 +1,7 @@
 #![cfg(feature = "yaml")]
-//! Project contracts.
+//! Project contracts: project environment projection, project function
+//! diagnostics, project lock, project lock diagnostics, project report and
+//! project run.
 mod project {
     mod project_environment_projection {
         //! Complete retained-attempt witnesses; expected reports are authored independently.

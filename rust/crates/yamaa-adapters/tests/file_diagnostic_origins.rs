@@ -1,5 +1,6 @@
 #![cfg(feature = "yaml")]
-//! File contracts.
+//! File contracts: diagnostic origins, file application, file entry and file
+//! preparation.
 mod file {
     mod diagnostic_origins {
         //! Native index paths resolve only through the exact held composed member IDs.
