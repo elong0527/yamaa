@@ -578,6 +578,26 @@ fn each_copy_refusal_names_what_it_refuses() {
         checked(&study, "case.yaml")
     };
     let keep = |spec: String| spec;
+    // An entry declares its columns by the names it lists, and expands
+    // before the layers compose, so nothing completes it later: it holds its
+    // `dataset` and `columns` in the layer that writes it (SCHEMA-13,
+    // LAYER-4).
+    assert_eq!(
+        refused("  - copy: {columns: [AGE]}\n", &keep),
+        [issue(
+            "missing_required_field",
+            "SCHEMA-13",
+            "columns[3].copy.dataset"
+        )]
+    );
+    assert_eq!(
+        refused("  - copy: {dataset: ADSL}\n", &keep),
+        [issue(
+            "missing_required_field",
+            "SCHEMA-13",
+            "columns[3].copy.columns"
+        )]
+    );
     // A name the producer does not output (SPEC-9).
     assert_eq!(
         refused("  - copy: {dataset: ADSL, columns: [AGE, BMI]}\n", &keep),

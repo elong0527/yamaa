@@ -739,6 +739,7 @@ impl SchemaStructure {
                 value,
                 "<normalization>",
                 fragment,
+                None,
             )?
         } else if written {
             self.validate_descriptor_with(

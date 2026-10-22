@@ -1774,8 +1774,13 @@ fn restated_defaults_are_removed() {
             )],
         ),
     ]);
-    // A source binding's own absence answer: the binding then holds only its
-    // variable, which the schema reads as no long form.
+}
+
+#[test]
+fn a_removed_default_that_leaves_a_long_form_is_written_as_the_shorthand() {
+    // Removing a source binding's own absence answer leaves the binding
+    // holding only its variable, which the next pass writes as the bare
+    // read (EXPR-5); a written answer keeps the binding.
     let source = |fields: &str| {
         SPELLED.replace(
             "    derivation: DM.AGE\n",
@@ -1789,12 +1794,8 @@ fn restated_defaults_are_removed() {
             "columns.AGE.derivation.source.absent".to_owned()
         )]
     );
-    assert_eq!(fixed(&source(", absent: null")), source(""));
+    assert_eq!(fixed(&source(", absent: null")), SPELLED);
     assert!(names(&source(", absent: 0")).is_empty());
-}
-
-#[test]
-fn a_removed_default_that_leaves_a_long_form_is_written_as_the_shorthand() {
     // Removing `direction: asc` leaves `{variable: X}`, which the next pass
     // writes as its shorthand.
     let text = SPELLED.replace(
@@ -2036,6 +2037,26 @@ fn a_long_form_is_written_as_its_shorthand() {
                 "redundant_long_form",
                 "columns.AGE.derivation",
                 "the long form of `value` only restates its shorthand; write `DM.AGE`",
+            )],
+        ),
+        // A structured source that holds only its variable is replaced, as
+        // the operation it is, by the bare read (EXPR-5).
+        (
+            "    derivation: DM.AGE\n",
+            "    derivation: {source: {variable: DM.AGE}}\n",
+            &[(
+                "redundant_long_form",
+                "columns.AGE.derivation.source",
+                "the long form of `variable` only restates its shorthand; write `DM.AGE`",
+            )],
+        ),
+        (
+            "    derivation: DM.AGE\n",
+            "    derivation:\n      source: {variable: DM.AGE}\n",
+            &[(
+                "redundant_long_form",
+                "columns.AGE.derivation.source",
+                "the long form of `variable` only restates its shorthand; write `DM.AGE`",
             )],
         ),
     ]);
