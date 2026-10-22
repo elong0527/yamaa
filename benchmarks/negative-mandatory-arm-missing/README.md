@@ -30,9 +30,9 @@ metadata instead:
 submission:
   core: Req
   mandatory: false
-  origin:
-    type: Predecessor
-    description: DM.ARM
+  origins:
+    - type: Predecessor
+      description: DM.ARM
 ```
 
 Do not add a separate not-missing check beside `mandatory: true`; the

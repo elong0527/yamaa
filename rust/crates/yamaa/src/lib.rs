@@ -1,12 +1,14 @@
 //! The supported Rust API: a small facade over `yamaa-adapters` and
 //! `yamaa-core`.
 //!
-//! An embedder configures one [`Engine`] and calls operations on it. The
-//! facade wraps the existing prepare, bind, execute and publish workflow;
-//! there is no second admission or evaluation route. All physical access goes
-//! through a resolver; local files are just the default resolver. Every
-//! operation on [`Engine`] carries a runnable example, and
-//! `examples/memory.rs` runs one specification entirely from memory.
+//! An embedder configures one [`Engine`] and calls its use cases: check, run
+//! and save, submission, resolve, `read_odm` and `file_type`, beside the free
+//! [`lint`], [`schema()`], [`info`] and [`selftest`]. The facade wraps the
+//! existing prepare, bind, execute and publish workflow; there is no second
+//! admission or evaluation route. All physical access goes through a
+//! resolver; local files are just the default resolver. The use cases carry
+//! runnable examples, and `examples/memory.rs` runs one specification
+//! entirely from memory.
 //!
 //! Adapters and core may change in any release without notice; their `pub`
 //! items are visibility for the workspace, not a public API. Every public
@@ -20,7 +22,7 @@
 //! stable codes (`yaml_reader_unavailable`, `parquet_reader_unavailable`,
 //! `sas_reader_unavailable`, `odm_reader_unavailable`,
 //! `parquet_codec_unavailable`) surface as diagnostics or as
-//! [`Error::Unavailable`], and [`read_odm`] without `odm` returns
+//! [`Error::Unavailable`], and [`Engine::read_odm`] without `odm` returns
 //! `Error::Unavailable { feature: "odm" }`. The facade adds no native
 //! dependencies of its own.
 //!
@@ -52,9 +54,7 @@ pub mod file_type;
 pub mod functions;
 pub mod info;
 pub mod lint;
-pub mod observe;
 pub mod odm;
-pub mod plan;
 pub mod resolver;
 pub mod scalar;
 pub mod schema;
@@ -64,16 +64,15 @@ pub mod text;
 
 mod internal;
 mod outcome;
+mod plan;
 
-pub use api::{Check, Failure, Plans, ProjectRun, Run, Status, Submission, STATUSES};
+pub use api::{Check, Failure, Plans, ProjectRun, Run, Status, Submission, SECTIONS, STATUSES};
 pub use cancel::CancellationToken;
 pub use diagnostic::{
     ContextValue, Diagnostic, DiagnosticContext, Location, Position, Report, Severity, SourceSpan,
     ISSUE_COLUMNS, PHASES, REPORT_COLUMNS, REPORT_KINDS, REPORT_OUTCOMES, SEVERITIES,
 };
-pub use engine::{
-    AttemptFailure, Build, Engine, EngineOptions, Request, ResolvedSpecification, SourceBytes,
-};
+pub use engine::{Engine, EngineOptions};
 pub use error::{
     Error, FunctionError, HostPayload, LockFinding, LockReason, LockSyntaxError, ResolverFailure,
     TableError,
@@ -86,9 +85,7 @@ pub use functions::{
 };
 pub use info::{info, Host, Info, FEATURES, HOSTS};
 pub use lint::{lint, Lint, LintFinding, LINT_COLUMNS, LINT_FINDINGS};
-pub use observe::{CallStage, DatasetPhase, Event, Outcome, Phase, Progress, Refusal};
-pub use odm::{read_odm, OdmOptions, ODM_COLUMNS};
-pub use plan::{Plan, RunRequest};
+pub use odm::{OdmOptions, ODM_COLUMNS};
 pub use resolver::{
     MemoryResolver, ResolverKind, ResolverOperation, ResolverReply, ResolverRequest, ResourceKind,
     ResourceResolver,
@@ -106,13 +103,8 @@ pub use text::{Action, Summary};
 /// Version of the shared core compiled into a native installation.
 pub const VERSION: &str = yamaa_core::VERSION;
 
-/// Compare two style documents for value equality through shared YAML
-/// admission, without exposing any parser result.
-pub fn style_same_value(before: &[u8], after: &[u8]) -> bool {
-    yamaa_adapters::style_values::same_value(before, after)
-}
-
 #[cfg(all(test, unix))]
+#[allow(dead_code)]
 #[path = "../tests/support/scratch.rs"]
 mod test_scratch;
 
@@ -121,13 +113,5 @@ mod tests {
     #[test]
     fn version_matches_the_shared_core() {
         assert_eq!(crate::VERSION, yamaa_core::VERSION);
-    }
-
-    #[cfg(feature = "yaml")]
-    #[test]
-    fn style_comparison_uses_shared_admission() {
-        assert!(crate::style_same_value(b"a: 1\n", b"a: 1\n"));
-        assert!(!crate::style_same_value(b"a: 1\n", b"a: 2\n"));
-        assert!(!crate::style_same_value(b"a: [\n", b"a: [\n"));
     }
 }

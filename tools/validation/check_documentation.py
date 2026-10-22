@@ -24,7 +24,7 @@ from tools.validation.editorial import (
 )
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--root",
@@ -32,7 +32,7 @@ def main():
         default=ROOT,
         help="Repository root directory",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     errors = []
     errors.extend(validate_examples_readme_presence(args.root))

@@ -39,6 +39,7 @@ CHECKS = (
     "tools.validation.check_supported_platforms",
     "tools.validation.check_diagnostics",
     "tools.validation.check_architecture",
+    "tools.validation.check_test_support",
     "tools.validation.check_interface_stability",
 )
 
@@ -47,14 +48,14 @@ def run(*arguments, cwd=ROOT):
     subprocess.run(arguments, cwd=cwd, check=True)
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "command",
         choices=("lint", "lint-r-binding", "check"),
         help="lint-r-binding runs Clippy over the R binding alone, which needs R",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     if args.command == "lint-r-binding":
         # Building the R binding needs R, so `make test-r` runs this beside
         # the R package check, rather than `lint`. `--no-deps` leaves the

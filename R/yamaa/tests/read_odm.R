@@ -10,6 +10,7 @@ if (!requireNamespace("jsonlite", quietly = TRUE)) {
 host_fixture_root <- normalizePath("host-fixtures",winslash="/",mustWork=TRUE)
 source(file.path(host_fixture_root,"reader.R"),local=TRUE)
 source(file.path(host_fixture_root,"context.R"),local=TRUE)
+source(file.path(host_fixture_root,"assert.R"),local=TRUE)
 truth <- read_host_fixture(host_fixture_root, "read-odm")
 issue_columns <- fixture_strings(read_host_fixture(host_fixture_root, "public-contract")[["issue_columns"]])
 columns <- fixture_strings(truth[["columns"]])
@@ -18,10 +19,14 @@ integers <- fixture_strings(truth[["integer_columns"]])
 work <- tempfile("yamaa-read-odm-"); dir.create(work)
 archive <- truth[["archive"]]
 members <- fixture_strings(archive[["members"]])
-stopifnot(all(file.copy(file.path(host_fixture_root, "odm", members), work)))
+stopifnot("the archive's documents are copied" = all(file.copy(file.path(host_fixture_root, "odm", members), work)))
 previous <- setwd(work)
 utils::tar(archive[["name"]], files = members, tar = "internal")
 setwd(previous)
+# Sources the refusals read that are neither document nor archive.
+for (name in names(truth[["files"]])) {
+  writeBin(fixture_bytes(truth[["files"]][[name]]), file.path(work, name))
+}
 source_path <- function(name) {
   if (is.null(name)) file.path(work, "absent.xml") else file.path(work, name)
 }
@@ -44,20 +49,16 @@ expected_frame <- function(rows) {
 
 for (read in truth[["reads"]]) {
   frame <- yamaa_read_odm(source_path(read[["document"]]))
-  expected <- expected_frame(read[["rows"]])
-  if (!identical(frame, expected)) {
-    str(frame); str(expected)
-    stop("read_odm differs from the shared truth: ", read[["document"]])
-  }
-  stopifnot(identical(unname(vapply(frame, typeof, "")),
-    ifelse(columns %in% integers, "double", "character")))
+  label <- paste("reading", read[["document"]])
+  expect_identical(frame, expected_frame(read[["rows"]]), paste(label, "gives the shared truth"))
+  expect_identical(unname(vapply(frame, typeof, "")), ifelse(columns %in% integers, "double", "character"),
+    paste(label, "types its columns"))
 }
 cat("documents read into the fixed clinical item table\n")
 
 selected <- Filter(function(read) identical(read[["document"]], archive[["selected"]]), truth[["reads"]])[[1L]]
-stopifnot(identical(
-  yamaa_read_odm(file.path(work, archive[["name"]]), archive_member = archive[["selected"]]),
-  expected_frame(selected[["rows"]])))
+expect_identical(yamaa_read_odm(file.path(work, archive[["name"]]), archive_member = archive[["selected"]]),
+  expected_frame(selected[["rows"]]), "an archive member reads like its document")
 cat("an archive member reads like its document\n")
 
 for (refusal in truth[["refusals"]]) {
@@ -75,16 +76,19 @@ for (refusal in truth[["refusals"]]) {
   # D39: the call names the source as given, then the issue.
   text <- paste0("cannot read ", source, ": ", message, " [", expected[["condition"]], ", ",
     expected[["rule"]], "]")
-  stopifnot(inherits(error, "yamaa_error"), identical(conditionMessage(error), text),
-    is.data.frame(error$issues), identical(names(error$issues), issue_columns),
-    nrow(error$issues) == 1L)
+  label <- paste("the refusal", expected[["condition"]])
+  stopifnot_case(label, "the refusal signals yamaa_error" = inherits(error, "yamaa_error"),
+    "it carries an issues table" = is.data.frame(error$issues))
+  expect_identical(conditionMessage(error), text, paste(label, "gives D39's text"))
+  expect_identical(names(error$issues), issue_columns, paste(label, "has the issue columns"))
   row <- error$issues
-  stopifnot(identical(row$severity, "error"), identical(row$phase, expected[["phase"]]),
-    identical(row$condition, expected[["condition"]]), identical(row$rule, expected[["rule"]]),
-    identical(row$spec_paths[[1L]], as.character(unlist(expected[["spec_paths"]]))),
-    identical(row$message, message),
-    context_equal(jsonlite::fromJSON(row$context, simplifyVector = FALSE),
-      lapply(expected[["context"]], given)))
+  expect_identical(as.list(row[c("severity", "phase", "condition", "rule", "spec_paths", "message")]),
+    list(severity = "error", phase = expected[["phase"]], condition = expected[["condition"]],
+      rule = expected[["rule"]], spec_paths = list(as.character(unlist(expected[["spec_paths"]]))),
+      message = message),
+    paste(label, "is its one authored issue"))
+  expect_context(jsonlite::fromJSON(row$context, simplifyVector = FALSE),
+    lapply(expected[["context"]], given), paste(label, "has the authored context"))
 }
 cat("refusals signal yamaa_error carrying their issue\n")
 unlink(work, recursive = TRUE)

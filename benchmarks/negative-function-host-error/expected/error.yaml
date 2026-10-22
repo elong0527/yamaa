@@ -1,0 +1,7 @@
+phase: derivation
+condition: function_call_failed
+spec_paths:
+  - columns.DOSEKG.derivation.function
+rule: FUNC-8
+context:
+  function: dose_per_kg

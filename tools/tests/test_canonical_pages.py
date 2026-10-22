@@ -93,7 +93,8 @@ class CanonicalPages(unittest.TestCase):
             "benchmarks/README.md",
             "rules/values/types.md?plain=1#requirements",
         ):
-            self.assertIn(f'href="{repository}/blob/main/{path}"', home + rules)
+            with self.subTest(path=path):
+                self.assertIn(f'href="{repository}/blob/main/{path}"', home + rules)
         self.assertIn(f'src="{repository}/raw/main/docs/diagrams/design.svg"', rules)
         for url in (
             "#rules",
@@ -102,7 +103,8 @@ class CanonicalPages(unittest.TestCase):
             "/absolute/",
             "//example.org/image.svg",
         ):
-            self.assertIn(f'href="{url}"', rules)
+            with self.subTest(url=url):
+                self.assertIn(f'href="{url}"', rules)
         self.assertIn("[Code](values/types.md)", rules)
         code_text = html.fromstring(rules).xpath("string(//pre/code)")
         self.assertEqual("[Sample](values/types.md)\n", code_text)
@@ -125,15 +127,17 @@ class CanonicalPages(unittest.TestCase):
                 file.write("\nCurrent source after rebuild.\n")
         self.build()
         for output in ("index.html", "articles/rules/index.html"):
-            self.assertIn("Current source after rebuild.", self.page(output))
+            with self.subTest(output=output):
+                self.assertIn("Current source after rebuild.", self.page(output))
 
     def test_repository_sources_build_without_copies(self):
         for source, destination in (
             ("README.md", "index.md"),
             ("rules/README.md", "articles/rules.md"),
         ):
-            self.assertFalse((ROOT / "docs" / destination).exists())
-            (self.root / source).write_bytes((ROOT / source).read_bytes())
+            with self.subTest(source=source):
+                self.assertFalse((ROOT / "docs" / destination).exists())
+                (self.root / source).write_bytes((ROOT / source).read_bytes())
         self.build()
 
     def test_rule_references_render_from_current_sources(self):

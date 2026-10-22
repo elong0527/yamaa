@@ -38,7 +38,6 @@ DASHBOARD_DIFFERENCES = {
     # P-CLR-1: a 0.5 child layer writes a cleared field as a column entry
     # holding null, which the sheet lists as a row; the 1.0 child lists the
     # path in `clear` and declares no column entry.
-    "negative-property-clear": "P-CLR-1",
     "schema-inheritance-clear": "P-CLR-1",
     # D18: `{compute: {expr: TRORRES_N}}` is the reference `TRORRES_N` in 1.0,
     # which a case result renders as the 0.5 reference it is.

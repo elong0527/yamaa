@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: SDTM
 domain: VS
 keys: [STUDYID, USUBJID, VSSEQ]
 input:
@@ -13,7 +15,7 @@ columns:
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
-    derivation: {literal: VS}
+    derivation: "'VS'"
 
   - name: STUDYID
     type: str
@@ -89,7 +91,7 @@ columns:
     derivation:
       case:
         - when: "VS_RAW.VSORRES IS NULL"
-          then: {literal: 'NOT DONE'}
+          then: "'NOT DONE'"
 
 # One row template per test, so the output holds all HEIGHT records, then
 # WEIGHT, then TEMP, each in input order. Each template sets its test's
@@ -108,7 +110,7 @@ rows:
       VSSTRESU:
         case:
           - when: "VS_RAW.VSORRES IS NOT NULL AND VS_RAW.VSORRESU = 'cm'"
-            then: {literal: cm}
+            then: "'cm'"
 
   - id: weight
     filter: "VS_RAW.VSTESTCD = 'WEIGHT'"
@@ -118,16 +120,14 @@ rows:
       VSSTRESN:
         case:
           - when: "VS_RAW.VSORRESU = 'LB'"
-            then:
-              compute:
-                expr: "VS_RAW.VSORRES * 0.45359237"
+            then: "VS_RAW.VSORRES * 0.45359237"
           - when: "VS_RAW.VSORRESU = 'kg'"
             then: VS_RAW.VSORRES
       VSSTRESU:
         case:
           - when: "VS_RAW.VSORRES IS NOT NULL AND (VS_RAW.VSORRESU = 'kg'
               OR VS_RAW.VSORRESU = 'LB')"
-            then: {literal: kg}
+            then: "'kg'"
 
   - id: temp
     filter: "VS_RAW.VSTESTCD = 'TEMP'"
@@ -137,16 +137,14 @@ rows:
       VSSTRESN:
         case:
           - when: "VS_RAW.VSORRESU = 'F'"
-            then:
-              compute:
-                expr: "(VS_RAW.VSORRES - 32) * 5 / 9"
+            then: "(VS_RAW.VSORRES - 32) * 5 / 9"
           - when: "VS_RAW.VSORRESU = 'C'"
             then: VS_RAW.VSORRES
       VSSTRESU:
         case:
           - when: "VS_RAW.VSORRES IS NOT NULL AND (VS_RAW.VSORRESU = 'C'
               OR VS_RAW.VSORRESU = 'F')"
-            then: {literal: C}
+            then: "'C'"
 
 verifications:
   # Every input record matches exactly one per-test row template, so the

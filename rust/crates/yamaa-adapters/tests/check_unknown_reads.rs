@@ -6,29 +6,22 @@
 //! are bound; a flag's or `case` predicate's qualifier that nothing declares
 //! (FORMULA-9); a formula in a `case` result of a specification without
 //! `rows`, which reads only lookups and columns (NAME-3); and each read of a
-//! lookup whose key types fail, which binding does not bind. Every case lists
-//! the same issues in both routes and hosts, in the same order.
-use std::{
-    fs,
-    path::PathBuf,
-    sync::atomic::{AtomicUsize, Ordering},
-};
+//! lookup whose key types fail, which binding does not bind. So it does for
+//! two more (#3552): a row template filter's field qualified by nothing
+//! declared (NAME-3), and the operands a formula reads, typed once its names
+//! bind (FORMULA-12). Every case lists the same issues in both routes and
+//! hosts, in the same order.
+use std::fs;
 use yamaa_adapters::{file_application, specification_report::Identity};
 use yamaa_core::{diagnostic::Diagnostic, domain_entry::Request, project_function::Language};
 
 /// Rendered issues, each with its spec paths.
 type Issues = Vec<(String, Vec<String>)>;
 
-struct Fixture(PathBuf);
+struct Fixture(crate::support::Scratch);
 impl Fixture {
     fn new(specification: &str) -> Self {
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        let root = std::env::temp_dir().join(format!(
-            "yamaa-unknown-reads-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
-        fs::create_dir(&root).unwrap();
+        let root = crate::support::Scratch::new("unknown-reads");
         fs::write(root.join("spec.yaml"), specification).unwrap();
         for (name, content) in [
             (
@@ -89,11 +82,6 @@ impl Fixture {
             Err(issues) => render(&issues),
         };
         (checked, built)
-    }
-}
-impl Drop for Fixture {
-    fn drop(&mut self) {
-        fs::remove_dir_all(&self.0).unwrap();
     }
 }
 
@@ -442,4 +430,258 @@ fn check_reports_each_read_of_a_lookup_whose_key_types_fail_as_domain_does() {
             "{str_template: \"{PB.USUBJID}\"}",
         ),
     ]);
+}
+
+const OPERAND: &str = "incompatible_input_type Some(\"FORMULA-12\")";
+
+/// Without row templates a formula reads columns and lookups, and binding
+/// types its operands once its names bind, over the names that bound
+/// (FORMULA-12): a column's declared type and a literal's, each operand once,
+/// after its qualified names (FORMULA-9) and its reads of a lookup binding
+/// does not bind (NAME-3). A `case` result is typed after its own names and
+/// after its predicate's types. A derivation whose operand fails converts
+/// nothing (VALUE-24).
+#[test]
+fn check_types_a_formula_s_operands_without_rows_as_domain_does() {
+    let column = |x: &str| implicit("", "", x, C);
+    let result = |then: &str| {
+        column(&format!(
+            "{{case: [{{when: \"VS.SYSBP > 1\", then: {then}}}, {{otherwise: 0.0}}]}}"
+        ))
+    };
+    let at = "columns.X.derivation";
+    let then = "columns.X.derivation.case[0].then";
+    assert_cases(&[
+        (column("\"USUBJID + 1\""), &[at], OPERAND),
+        (column("\"'a' + 1\""), &[at], OPERAND),
+        (
+            column("\"USUBJID + STUDYID + USUBJID\""),
+            &[at, at],
+            OPERAND,
+        ),
+        (
+            column("\"DM.AGE + USUBJID\""),
+            &[at, at],
+            "qualified_identifier Some(\"FORMULA-9\")",
+        ),
+        (
+            column("\"PL.PLANDOSE + USUBJID\""),
+            &[PL, at, at],
+            KEY_TYPES,
+        ),
+        (
+            implicit("", "", X, "\"USUBJID + 1\""),
+            &["columns.C.derivation"],
+            OPERAND,
+        ),
+        (result("\"USUBJID + 1\""), &[then], OPERAND),
+        (result("\"DM.AGE + USUBJID\""), &[then, then], NAME),
+        (
+            result("{case: [{when: \"VSDY > 1\", then: \"USUBJID + 1\"}, {otherwise: 0.0}]}"),
+            &["columns.X.derivation.case[0].then.case[0].then"],
+            OPERAND,
+        ),
+        (
+            column("{case: [{when: \"USUBJID > 1\", then: \"USUBJID + 1\"}, {otherwise: 0.0}]}"),
+            &["columns.X.derivation.case[0].when", then],
+            "incompatible_input_type Some(\"FORMULA-5\")",
+        ),
+        // The 0.5 surface types every name of its `compute` text.
+        (
+            "schema_version: \"1.0\"\ndomain: ADVS\nkeys: [STUDYID, USUBJID]\n\
+             input: {VS: {path: vs.csv, types: {VSDY: int}}}\n\
+             output: {path: out.csv, columns: [STUDYID, USUBJID, X]}\n\
+             columns:\n\
+             \x20 - {name: STUDYID, type: str, derivation: VS.STUDYID}\n\
+             \x20 - {name: USUBJID, type: str, derivation: VS.USUBJID}\n\
+             \x20 - {name: X, type: float, derivation: {compute: {expr: \"USUBJID + 1\"}}}\n"
+                .into(),
+            &["columns.X.derivation.compute"],
+            OPERAND,
+        ),
+    ]);
+    assert_clean(&[column("\"VSDY + 1.5\""), result("\"VSDY * PB.PLANDOSE\"")]);
+}
+
+/// Under row templates a formula's operands are typed the same way: in the
+/// row phase over its template's columns and its driver's fields, in the
+/// column phase over columns, after its names (FORMULA-9). A flag is typed
+/// once its names bind, where binding types it, and a `case` predicate,
+/// which binding refuses only once it evaluates it, adds nothing to a
+/// derivation that failed.
+#[test]
+fn check_types_a_formula_s_operands_under_row_templates_as_domain_does() {
+    let row = |derivation: &str| record("", &format!("      X: {derivation}\n"), X, C);
+    let at = "rows.record.derivations.X";
+    let then = "rows.record.derivations.X.case[0].then";
+    assert_cases(&[
+        (row("\"VS.VSTESTCD + 1\""), &[at], OPERAND),
+        (row("\"USUBJID + 1\""), &[at], OPERAND),
+        (
+            row("\"VS.VSTESTCD + DM.AGE\""),
+            &[at, at],
+            "unknown_field Some(\"FORMULA-9\")",
+        ),
+        (
+            row("{case: [{when: \"VS.SYSBP > 1\", then: \"VS.VSTESTCD + 1\"}, {otherwise: 1.0}]}"),
+            &[then],
+            OPERAND,
+        ),
+        (
+            row("{case: [{when: \"VS.VSTESTCD > 1\", then: \"VS.VSTESTCD + 1\"}, {otherwise: 1.0}]}"),
+            &[then],
+            OPERAND,
+        ),
+        (
+            record("", "      C: \"VS.VSTESTCD + 1\"\n", X, C),
+            &["rows.record.derivations.C"],
+            OPERAND,
+        ),
+        (
+            record(
+                "",
+                "      X: {flag: {condition: \"VS.VSTESTCD + 1 > 2\", true_value: 1.0, false_value: 0.0, missing: 0.0}}\n      C: HOME.VSTESTCD\n",
+                X,
+                C,
+            ),
+            &[
+                "rows.record.derivations.X.flag.condition",
+                "rows.record.derivations.C.source",
+            ],
+            OPERAND,
+        ),
+        // The column phase.
+        (record("", "", "\"USUBJID + 1\"", C), &["columns.X.derivation"], OPERAND),
+        (
+            record(
+                "",
+                "",
+                "{case: [{when: \"USUBJID = 'a'\", then: \"USUBJID + 1\"}, {otherwise: 1.0}]}",
+                C,
+            ),
+            &["columns.X.derivation.case[0].then"],
+            OPERAND,
+        ),
+    ]);
+    assert_clean(&[
+        row("\"VS.SYSBP + VS.VSDY\""),
+        record("", "", "\"VSDY * 2\"", C),
+    ]);
+}
+
+/// A lookup's derivation and an aggregate's derive binding type a formula's
+/// operands over the donor's records, as binding's captured types type them:
+/// the donor's stored fields and the derivations before it; and a flag's
+/// condition once its names bind. A typed derivation whose operand fails
+/// converts nothing (VALUE-24).
+#[test]
+fn check_types_a_formula_s_operands_over_a_donor_s_records_as_domain_does() {
+    let lookup = |derivations: &str, x: &str, c: &str| {
+        implicit(
+            &format!(
+                "  - {{id: P, dataset: PLAN, key: [USUBJID], derivations: {{{derivations}}}}}\n"
+            ),
+            "",
+            x,
+            c,
+        )
+    };
+    let derive = |derivations: &str| {
+        implicit(
+            "",
+            "",
+            &format!("{{aggregate: {{expr: \"COUNT(F)\", derivations: {{{derivations}}}}}}}"),
+            C,
+        )
+    };
+    let at = "intermediates.P.derivations.D";
+    let binding = "columns.X.derivation.aggregate.derivations.F.derivation";
+    assert_cases(&[
+        (lookup("D: \"PLAN.USUBJID + 1\"", "P.D", C), &[at], OPERAND),
+        (lookup("D: \"USUBJID + 1\"", "P.D", C), &[at], OPERAND),
+        (
+            lookup("E: {str_template: \"{USUBJID}\"}, D: \"E + 1\"", "P.D", C),
+            &[at],
+            OPERAND,
+        ),
+        (
+            lookup("D: {type: str, derivation: \"USUBJID + 1\"}", X, "P.D"),
+            &["intermediates.P.derivations.D.derivation"],
+            OPERAND,
+        ),
+        (
+            lookup("D: {flag: \"USUBJID + 1 > 2\"}", X, "P.D"),
+            &["intermediates.P.derivations.D.flag.condition"],
+            OPERAND,
+        ),
+        (
+            derive("F: {type: str, derivation: \"PLAN.USUBJID + 1\"}"),
+            &[binding],
+            OPERAND,
+        ),
+        (
+            derive(
+                "G: {type: str, derivation: PLAN.USUBJID}, F: {type: float, derivation: \"G + 1\"}",
+            ),
+            &[binding],
+            OPERAND,
+        ),
+        (
+            derive("F: {type: str, derivation: {flag: \"PLAN.USUBJID + 1 > 2\"}}"),
+            &["columns.X.derivation.aggregate.derivations.F.derivation.flag.condition"],
+            OPERAND,
+        ),
+    ]);
+    assert_clean(&[
+        lookup("D: \"PLAN.DOSENUM + 1\"", "P.D", C),
+        derive("F: {type: float, derivation: \"PLAN.PLANDOSE + 1\"}"),
+    ]);
+}
+
+/// An ungrouped row template's filter reads its driver's record, lookups and
+/// other inputs through their joins: a field qualified by nothing declared
+/// is unknown there (NAME-3), each name once, in written order, after the
+/// template's derivations.
+#[test]
+fn check_reports_a_row_filter_s_undeclared_qualifier_as_domain_does() {
+    let filtered = |filter: &str, derivations: &str| {
+        record(&format!("    filter: \"{filter}\"\n"), derivations, X, C)
+    };
+    let at = "rows.record.filter";
+    assert_cases(&[
+        (filtered("XX.Y > 1", ""), &[at], NAME),
+        (
+            filtered("NOTDERIVED > 1 AND XX.Y > 1 AND XX.Y < 3 AND YY.Z > 0", ""),
+            &[at, at, at],
+            "phase_boundary Some(\"ROW-6\")",
+        ),
+        (
+            filtered("HOME.SYSBP > 1 AND XX.Y > 1", ""),
+            &[at, at],
+            "no_applicable_keys Some(\"LOOKUP-5\")",
+        ),
+        (
+            filtered("XX.Y > 1", "      X: \"VS.VSTESTCD + 1\"\n"),
+            &["rows.record.derivations.X", at],
+            OPERAND,
+        ),
+        // The 0.5 surface.
+        (
+            "schema_version: \"1.0\"\ndomain: ADVS\nkeys: [STUDYID, USUBJID]\n\
+             input: {VS: vs.csv}\n\
+             output: {path: out.csv, columns: [STUDYID, USUBJID]}\n\
+             columns:\n\
+             \x20 - {name: STUDYID, type: str}\n\
+             \x20 - {name: USUBJID, type: str}\n\
+             rows:\n\
+             \x20 - {id: vs, dataset: VS, filter: \"XX.Y > 1\", derivations: {STUDYID: VS.STUDYID, USUBJID: VS.USUBJID}}\n"
+                .into(),
+            &["rows[0].filter"],
+            NAME,
+        ),
+    ]);
+    assert_clean(&[filtered(
+        "VS.SYSBP > 1 AND PB.PLANDOSE > 1 AND DM.AGE > 1",
+        "",
+    )]);
 }

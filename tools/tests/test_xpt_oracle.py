@@ -44,13 +44,15 @@ class IbmDoubles(unittest.TestCase):
             (0.0, "0000000000000000"),
             (-0.0, "0000000000000000"),
         ]:
-            self.assertEqual(xpt_oracle.ibm(value).hex().upper(), expected, value)
+            with self.subTest(value=value):
+                self.assertEqual(xpt_oracle.ibm(value).hex().upper(), expected, value)
         self.assertEqual(xpt_oracle.ibm(None), b".\0\0\0\0\0\0\0")
 
     def test_values_without_an_exact_ibm_double_are_refused(self):
         for value in (2.0**252, 2.0**-261, 2**57 + 1):
-            with self.assertRaises(ValueError):
-                xpt_oracle.ibm(value)
+            with self.subTest(value=value):
+                with self.assertRaises(ValueError):
+                    xpt_oracle.ibm(value)
 
 
 class Layout(unittest.TestCase):
@@ -131,21 +133,23 @@ class Layout(unittest.TestCase):
 
     def test_fields_refuse_text_a_transport_cannot_carry(self):
         for text in ("caf\u00e9", "A\tB", "NINECHARS"):
-            with self.assertRaises(ValueError):
-                xpt_oracle.ascii_field(text, 8)
+            with self.subTest(text=text):
+                with self.assertRaises(ValueError):
+                    xpt_oracle.ascii_field(text, 8)
 
 
 class Goldens(unittest.TestCase):
     def test_committed_goldens_are_the_authored_tables(self):
         for benchmark, file, name, label, variables, rows in xpt_goldens.GOLDENS:
-            committed = (
-                ROOT / "benchmarks" / benchmark / "expected" / file
-            ).read_bytes()
-            self.assertEqual(
-                committed,
-                xpt_goldens.golden(benchmark, name, label, variables, rows),
-                benchmark,
-            )
+            with self.subTest(benchmark=benchmark, file=file):
+                committed = (
+                    ROOT / "benchmarks" / benchmark / "expected" / file
+                ).read_bytes()
+                self.assertEqual(
+                    committed,
+                    xpt_goldens.golden(benchmark, name, label, variables, rows),
+                    benchmark,
+                )
 
     @unittest.skipUnless(
         importlib.util.find_spec("pyreadstat"), "pyreadstat is not installed"
@@ -154,23 +158,25 @@ class Goldens(unittest.TestCase):
         import pyreadstat
 
         for benchmark, file, _, label, variables, rows in xpt_goldens.GOLDENS:
-            frame, meta = pyreadstat.read_xport(
-                str(ROOT / "benchmarks" / benchmark / "expected" / file)
-            )
-            self.assertEqual(meta.table_name, label)
-            self.assertEqual(list(frame.columns), [v.name for v in variables])
-            self.assertEqual(len(frame), len(rows))
+            with self.subTest(benchmark=benchmark, file=file):
+                frame, meta = pyreadstat.read_xport(
+                    str(ROOT / "benchmarks" / benchmark / "expected" / file)
+                )
+                self.assertEqual(meta.table_name, label)
+                self.assertEqual(list(frame.columns), [v.name for v in variables])
+                self.assertEqual(len(frame), len(rows))
 
     @unittest.skipUnless(importlib.util.find_spec("pandas"), "pandas is not installed")
     def test_goldens_read_back_through_pandas(self):
         import pandas
 
         for benchmark, file, _, _, variables, rows in xpt_goldens.GOLDENS:
-            frame = pandas.read_sas(
-                ROOT / "benchmarks" / benchmark / "expected" / file, format="xport"
-            )
-            self.assertEqual(list(frame.columns), [v.name for v in variables])
-            self.assertEqual(len(frame), len(rows))
+            with self.subTest(benchmark=benchmark, file=file):
+                frame = pandas.read_sas(
+                    ROOT / "benchmarks" / benchmark / "expected" / file, format="xport"
+                )
+                self.assertEqual(list(frame.columns), [v.name for v in variables])
+                self.assertEqual(len(frame), len(rows))
 
 
 class BenchmarkInput(unittest.TestCase):

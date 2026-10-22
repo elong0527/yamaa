@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADLB
 keys: [USUBJID, LBSEQ]
 input:
@@ -52,11 +54,11 @@ columns:
     derivation:
       baseline_flag:
         date: ADT
-        reference_date: TRTSDT
-        value: AVAL
-        tie_break: [ATM, LBSEQ]
+        reference: TRTSDT
+        source: AVAL
         window:
           group_by: [USUBJID]
+          order_by: [ADT, ATM, LBSEQ]
 
 verifications:
   - row_count:

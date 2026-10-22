@@ -66,6 +66,12 @@ numeric_constant <- function(kind) {
   values[[as.character(kind)]]
 }
 project_value <- function(x) x
+# A dose in mg per kg of body weight; a weight that is not positive is refused,
+# as the Python project function refuses it.
+dose_per_kg <- function(dose_mg, weight_kg) {
+  if (weight_kg <= 0) stop("weight_kg must be positive")
+  dose_mg / weight_kg
+}
 
 # The same authored algorithm and constants as the Python project function.
 .project_exp <- function(x) {

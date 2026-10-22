@@ -8,8 +8,6 @@
 //! opaque engine fault.
 #![cfg(feature = "yaml")]
 
-use std::path::PathBuf;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
 use yamaa::{
@@ -17,22 +15,15 @@ use yamaa::{
     ResolverFailure, ResolverReply, ResolverRequest, ResourceKind, ResourceResolver, Status,
 };
 
-static NEXT: AtomicUsize = AtomicUsize::new(0);
-
 const SPEC: &str = "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: DM\nkeys: [USUBJID]\ninput: {RAW: raw.csv}\noutput: {path: dm.csv, columns: [USUBJID]}\ncolumns:\n  - {name: USUBJID, type: str, derivation: RAW.USUBJID}\n";
 const PROJECT: &str = "yamaa: \"1.0\"\ntype: project\nsdtm:\n  specs: [dm.yaml]\n";
 
-struct Study(PathBuf);
+struct Study(crate::support::Scratch);
 impl Study {
     fn new() -> Self {
-        let root = std::env::temp_dir().join(format!(
-            "yamaa-caller-paths-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
-        std::fs::create_dir_all(&root).unwrap();
+        let root = crate::support::Scratch::new("caller-paths");
         // The engine's spelling: no Windows verbatim prefix.
-        let study = Self(yamaa_adapters::canonical_path::canonicalize(root).unwrap());
+        let study = Self(root);
         study.write("dm.yaml", SPEC);
         study.write("project.yaml", PROJECT);
         study.write("raw.csv", "USUBJID\nS1\n");
@@ -87,11 +78,6 @@ impl Study {
             }
         }
         paths
-    }
-}
-impl Drop for Study {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
     }
 }
 

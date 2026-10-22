@@ -387,6 +387,29 @@ impl Ports for NativePorts {
         declaring: &str,
         written: &str,
     ) -> Result<Self::Specification, Failure> {
+        // A 1.0 project reads the header of a specification it lists at the
+        // listing, as reading the project does (SCHEMA-2).
+        let versioned = self
+            .environment
+            .as_ref()
+            .and_then(|environment| environment.project())
+            .is_some_and(|project| {
+                matches!(project.header.surface, yamaa_core::ast::Surface::V1 { .. })
+            });
+        if let Some(identity) = versioned
+            .then(|| self.resources().resolve_from(declaring, written).ok())
+            .flatten()
+        {
+            if let Some(refused) = file_preparation::refused_header(
+                self.resources_mut(),
+                declaring,
+                written,
+                &identity,
+                path,
+            ) {
+                return Err(Failure::Diagnostic(vec![refused]));
+            }
+        }
         let document = file_preparation::prepare_document_from(
             self.resources_mut(),
             Some(declaring),

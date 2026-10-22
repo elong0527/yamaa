@@ -35,7 +35,9 @@ each number was taken.
 | [Method](interface-1.0/method.md) | How each measurement was taken, and the converter footprint |
 
 The bindings draft is
-[`rust/interface/bindings-1.0.yaml`](../../rust/interface/bindings-1.0.yaml).
+[`rust/interface/bindings-1.0.yaml`](https://github.com/elong0527/yamaa/blob/yamaa-v0.5.0/rust/interface/bindings-1.0.yaml)
+at the yamaa-v0.5.0 tag; `rust/interface/bindings.yaml` replaced it in 1.0
+(#3434).
 
 ## Summary
 

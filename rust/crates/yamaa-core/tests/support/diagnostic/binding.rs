@@ -16,9 +16,8 @@ pub(crate) use yamaa_core::{
     value::ColumnType,
 };
 
-pub(crate) fn text(v: &str) -> V {
-    V::String(v.into())
-}
+pub(crate) use super::text;
+#[track_caller]
 pub(crate) fn check(
     d: Diagnostic,
     condition: &str,
@@ -26,22 +25,7 @@ pub(crate) fn check(
     paths: &[&str],
     values: Vec<(&str, V)>,
 ) -> ConditionCode {
-    let def = d.definition();
-    assert_eq!(
-        (def.phase, def.condition, def.rule),
-        ("validation", condition, rule)
-    );
-    assert_eq!(d.spec_paths, paths);
-    assert_eq!(
-        d.context,
-        values
-            .into_iter()
-            .map(|(k, v)| (k.into(), v))
-            .collect::<Context>()
-    );
-    assert_eq!(d.source_span, None);
-    assert_eq!(d.operand_route, None);
-    rendered(&d)
+    super::expect(&d, "validation", condition, rule, paths, values)
 }
 pub(crate) fn source() -> SourceDeclaration {
     SourceDeclaration {

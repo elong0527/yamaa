@@ -1,4 +1,5 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
 domain: ADAE
 keys: [USUBJID, AESEQ]
 input:
@@ -14,8 +15,7 @@ output:
   # breaks ties descending, two missing days included. Rows equal on both
   # terms keep their input order.
   order_by:
-    - variable: AESTDY
-      direction: asc
+    - AESTDY
     - variable: AESEQ
       direction: desc
 
@@ -23,7 +23,7 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation: {literal: YAMAA-01}
+    derivation: "'YAMAA-01'"
 
   - name: USUBJID
     type: str

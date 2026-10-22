@@ -1,7 +1,5 @@
 """Each command-line archive holds its target's executable and the notices."""
 
-import contextlib
-import io
 import struct
 import tempfile
 import unittest
@@ -13,6 +11,7 @@ from tools.ci import native
 from tools.packaging import check_package_notices as notices
 from tools.packaging import cli_archive as archives
 from tools.packaging.release_identity import Identity
+from tools.tests import support
 
 
 def executable(target, marker=b"fixture"):
@@ -330,18 +329,8 @@ class Archives(unittest.TestCase):
         binary.write_bytes(executable("x86_64-pc-windows-msvc"))
 
         def run(*arguments):
-            output, errors = io.StringIO(), io.StringIO()
-            with (
-                mock.patch.object(archives, "ROOT", self.root),
-                mock.patch("sys.argv", ["cli_archive", *arguments]),
-                contextlib.redirect_stdout(output),
-                contextlib.redirect_stderr(errors),
-            ):
-                try:
-                    archives.main()
-                except SystemExit as stopped:
-                    return stopped.code, output.getvalue(), errors.getvalue()
-            return 0, output.getvalue(), errors.getvalue()
+            with mock.patch.object(archives, "ROOT", self.root):
+                return support.run_main(archives.main, *arguments)
 
         code, output, _ = run(
             "write", "x86_64-pc-windows-msvc", str(binary), str(self.root / "out")

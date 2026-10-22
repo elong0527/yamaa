@@ -15,12 +15,12 @@ use arrow_array::RecordBatchIterator;
 use arrow_schema::Schema;
 use yamaa::{
     CancellationToken, DataType, Engine, EngineOptions, FFI_ArrowArrayStream, Field, Float64Array,
-    HostLanguage, InputFrame, Int64Array, MemoryResolver, RecordBatch, Request,
+    HostLanguage, InputFrame, Int64Array, MemoryResolver, RecordBatch,
 };
 
 /// Specification bytes served from memory. The input table arrives as an
 /// Arrow frame below, so the example needs no CSV, Parquet or SAS reader.
-const SPECIFICATION: &[u8] = b"schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {VALUE: float}}}\noutput: {path: out.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: float, derivation: SRC.VALUE}\n";
+const SPECIFICATION: &[u8] = b"yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {VALUE: float}}}\noutput: {path: out.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: float, derivation: SRC.VALUE}\n";
 
 /// Build the Arrow input frame the host owns: two rows over `ID` and `VALUE`.
 fn input_frame() -> InputFrame {
@@ -94,11 +94,14 @@ pub fn main() {
     }
 
     // Typed diagnostics out: a missing entry reports records, never text.
-    let missing = engine.check(&Request::new("missing.csv"), &token).unwrap();
+    let missing = engine
+        .spec_check("missing.csv", None, &token)
+        .unwrap()
+        .diagnostics();
     assert!(!missing.is_empty());
-    assert!(!missing.diagnostics[0].code.is_empty());
+    assert!(!missing[0].code.is_empty());
     println!(
         "memory example: missing entry reports code '{}'",
-        missing.diagnostics[0].code
+        missing[0].code
     );
 }

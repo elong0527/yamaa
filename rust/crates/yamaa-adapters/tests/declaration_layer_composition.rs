@@ -12,7 +12,7 @@ mod declaration {
     mod layer_composition {
         use std::fs;
         use std::path::{Component, Path, PathBuf};
-        use std::sync::atomic::{AtomicUsize, Ordering};
+
         use yamaa_adapters::document::{
             self, Closures, Decoded, PreparedSpecification, SpecificationError,
         };
@@ -27,8 +27,6 @@ mod declaration {
         use yamaa_core::project_function::Language;
         use yamaa_core::schema::{NormalizationError, SchemaContext as C, SchemaDiagnostic};
 
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-
         fn repository() -> PathBuf {
             Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..")
         }
@@ -40,16 +38,11 @@ mod declaration {
             )
         }
 
-        struct Study(PathBuf);
+        struct Study(crate::support::Scratch);
         impl Study {
             fn new() -> Self {
-                let path = std::env::temp_dir().join(format!(
-                    "yamaa-layer-composition-{}-{}",
-                    std::process::id(),
-                    NEXT.fetch_add(1, Ordering::Relaxed)
-                ));
-                fs::create_dir_all(&path).unwrap();
-                Self(yamaa_adapters::canonical_path::canonicalize(path).unwrap())
+                let path = crate::support::Scratch::canonical("layer-composition");
+                Self(path)
             }
             fn write(&self, name: &str, text: &str) {
                 let path = self.0.join(name);
@@ -58,11 +51,6 @@ mod declaration {
             }
             fn path(&self, name: &str) -> String {
                 identity(&self.0.join(name))
-            }
-        }
-        impl Drop for Study {
-            fn drop(&mut self) {
-                let _ = fs::remove_dir_all(&self.0);
             }
         }
 

@@ -1,8 +1,7 @@
 import csv
+import functools
 import re
 import shutil
-import subprocess
-import sys
 import tempfile
 import unittest
 from html.parser import HTMLParser
@@ -12,11 +11,20 @@ from urllib.parse import unquote
 
 import yaml
 from tools.benchmark_docs import generate
+from tools.tests import support
 
 HERE = Path(__file__).resolve().parent
 
 BENCHMARK = generate.BENCHMARKS / "adam-adae-death"
 SOLUTIONS = generate.HARBOR / "solutions" / BENCHMARK.name
+
+
+@functools.cache
+def benchmark_page():
+    """The dashboard of BENCHMARK as the checkout renders it, rendered once for
+    the tests that read it."""
+    return generate.render_benchmark(BENCHMARK)
+
 
 # The resolution of the schema-inheritance entry chain. The committed file
 # (benchmarks/schema-inheritance/expected/spec_resolved.yaml) was removed at
@@ -159,7 +167,7 @@ class DashboardTests(unittest.TestCase):
         self.assertIn(">C16576</td>", mapping)
 
     def test_source_values_and_yaml_are_exact(self):
-        content = DashboardContent(generate.render_benchmark(BENCHMARK).decode("ascii"))
+        content = DashboardContent(benchmark_page().decode("ascii"))
         expected_cells = []
         for relative in ["input/ae.csv", "input/dm.csv", "expected/adae.csv"]:
             path = BENCHMARK / relative
@@ -250,22 +258,12 @@ class DashboardTests(unittest.TestCase):
             (copied / "README.md").write_text(
                 (copied / "README.md").read_text() + "\nAdditional explanation.\n"
             )
-            self.assertNotEqual(
-                generate.render_benchmark(copied), generate.render_benchmark(BENCHMARK)
-            )
+            self.assertNotEqual(generate.render_benchmark(copied), benchmark_page())
             output = folder / "output"
             output.mkdir()
             page = output / (BENCHMARK.name + ".html")
-            command = [
-                sys.executable,
-                "-m",
-                "tools.benchmark_docs.generate",
-                BENCHMARK.name,
-                "--check",
-                "--output-dir",
-                str(output),
-            ]
-            self.assertEqual(subprocess.run(command, capture_output=True).returncode, 1)
+            command = [BENCHMARK.name, "--check", "--output-dir", str(output)]
+            self.assertEqual(support.run_main(generate.main, *command)[0], 1)
             self.assertFalse(page.exists())
             complete = sorted(
                 path.name
@@ -276,9 +274,9 @@ class DashboardTests(unittest.TestCase):
             previous = complete[index - 1] if index else None
             following = complete[index + 1] if index + 1 < len(complete) else None
             page.write_bytes(generate.render_benchmark(BENCHMARK, previous, following))
-            self.assertEqual(subprocess.run(command, capture_output=True).returncode, 0)
+            self.assertEqual(support.run_main(generate.main, *command)[0], 0)
             page.write_bytes(b"outdated page")
-            self.assertEqual(subprocess.run(command, capture_output=True).returncode, 1)
+            self.assertEqual(support.run_main(generate.main, *command)[0], 1)
             self.assertEqual(page.read_bytes(), b"outdated page")
 
     def test_markup_and_multiline_csv_values_are_preserved_as_data(self):
@@ -371,7 +369,7 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(generate.subject_key({"STUDYID": "STUDY-A"}), "")
 
     def test_specification_controls_are_generated(self):
-        page = generate.render_benchmark(BENCHMARK).decode("ascii")
+        page = benchmark_page().decode("ascii")
         self.assertIn("<span>Hide yamaa spec</span>", page)
         self.assertIn('role="separator" aria-label="Resize specification panel"', page)
         self.assertIn('aria-valuenow="740"', page)
@@ -390,7 +388,7 @@ class DashboardTests(unittest.TestCase):
         self.assertNotIn("Jump to section", page)
 
     def test_comments_map_to_a_stable_discussion_per_benchmark(self):
-        page = generate.render_benchmark(BENCHMARK).decode("ascii")
+        page = benchmark_page().decode("ascii")
         self.assertEqual(page.count('src="https://giscus.app/client.js"'), 1)
         self.assertIn(
             'data-mapping="specific" data-term="yaml/examples/adam-adae-death" data-strict="1"',
@@ -552,7 +550,7 @@ class DashboardTests(unittest.TestCase):
                     self.assertTrue(target.is_file(), links[0])
 
     def test_comments_lead_the_tabs_and_the_rest_are_not_under_review(self):
-        content = DashboardContent(generate.render_benchmark(BENCHMARK).decode("ascii"))
+        content = DashboardContent(benchmark_page().decode("ascii"))
         comments, *materials = content.tabs
         self.assertEqual(comments["aria-controls"], "comments")
         self.assertEqual(comments["aria-selected"], "true")
@@ -563,19 +561,20 @@ class DashboardTests(unittest.TestCase):
             self.assertIn("reference-tab", tab["class"].split())
 
     def test_prompts_and_solutions_come_from_the_agent_evaluation(self):
-        page = generate.render_benchmark(BENCHMARK).decode("ascii")
+        page = benchmark_page().decode("ascii")
         prompts = generate.HARBOR / "prompts" / BENCHMARK.name
         self.assertIn(
             '<option value="prompt-pane-full">Full &#8212; every rule an expected cell depends on</option>',
             page,
         )
         for tier in ("full", "conventions", "brief"):
-            self.assertIn(f'id="prompt-pane-{tier}"', page)
-            self.assertIn(
-                '<a class="edit-button" href="https://github.com/elong0527/yamaa/edit/main/'
-                f'evaluations/harbor/prompts/adam-adae-death/{"full" if tier == "brief" else tier}.md">Edit</a>',
-                page,
-            )
+            with self.subTest(tier=tier):
+                self.assertIn(f'id="prompt-pane-{tier}"', page)
+                self.assertIn(
+                    '<a class="edit-button" href="https://github.com/elong0527/yamaa/edit/main/'
+                    f'evaluations/harbor/prompts/adam-adae-death/{"full" if tier == "brief" else tier}.md">Edit</a>',
+                    page,
+                )
         self.assertIn(
             'DTHFL is "Y" or has no value.', (prompts / "conventions.md").read_text()
         )
@@ -689,7 +688,8 @@ class DashboardTests(unittest.TestCase):
                 "spec_study.yaml",
                 "expected/spec_resolved.yaml",
             ]:
-                self.assertIn(f'data-edit-url="{base}/{path}"', page)
+                with self.subTest(path=path):
+                    self.assertIn(f'data-edit-url="{base}/{path}"', page)
             self.assertIn(
                 'fileHeading.className = "file-heading spec-file-heading"', page
             )
@@ -702,9 +702,10 @@ class DashboardTests(unittest.TestCase):
                 "spec_compound.yaml",
                 "spec_study.yaml",
             ):
-                self.assertIn(
-                    f'<a class="edit-button" href="{base}/{target}">Edit</a>', page
-                )
+                with self.subTest(target=target):
+                    self.assertIn(
+                        f'<a class="edit-button" href="{base}/{target}">Edit</a>', page
+                    )
             self.assertIn(
                 f'<a class="edit-button" href="{base}/expected/spec_resolved.yaml">Edit</a>',
                 page,
@@ -896,7 +897,7 @@ class DashboardTests(unittest.TestCase):
         )
 
     def test_gallery_link_is_reachable_without_scrolling(self):
-        page = generate.render_benchmark(BENCHMARK).decode("ascii")
+        page = benchmark_page().decode("ascii")
         header, _, footer = page.partition("</header>")
         self.assertIn('<a class="gallery-link" href="index.html">', header)
         self.assertIn('<a href="index.html">All benchmarks</a>', footer)
@@ -915,7 +916,8 @@ class DashboardTests(unittest.TestCase):
             text.index("adam-aaa-two.html"), text.index("adam-mmm-three.html")
         )
         for name in ("adam-zzz-one", "adam-aaa-two", "adam-mmm-three"):
-            self.assertIn(f'href="{name}.html"', text)
+            with self.subTest(name=name):
+                self.assertIn(f'href="{name}.html"', text)
 
     def test_gallery_counts_groups_from_the_directory_names(self):
         # The group table is the figure readers quote, so it is counted from
@@ -1031,7 +1033,8 @@ class DashboardTests(unittest.TestCase):
             "spec_compound.yaml",
             "spec_study.yaml",
         ]:
-            self.assertIn(f'data-edit-url="{base}/{path}"', page)
+            with self.subTest(path=path):
+                self.assertIn(f'data-edit-url="{base}/{path}"', page)
         self.assertIn('fileHeading.className = "file-heading spec-file-heading"', page)
         self.assertIn("edit.href = active.dataset.editUrl", page)
         self.assertNotIn('aria-label="expected/spec_resolved.yaml"', page)
@@ -1044,9 +1047,10 @@ class DashboardTests(unittest.TestCase):
             "spec_compound.yaml",
             "spec_study.yaml",
         ):
-            self.assertIn(
-                f'<a class="edit-button" href="{base}/{target}">Edit</a>', page
-            )
+            with self.subTest(target=target):
+                self.assertIn(
+                    f'<a class="edit-button" href="{base}/{target}">Edit</a>', page
+                )
         self.assertNotIn('data-filename="spec_resolved.yaml"', page)
         self.assertIn(
             '<header class="section-header"><h2 id="schema-heading">YAML specification</h2>',

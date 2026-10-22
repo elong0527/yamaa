@@ -13,10 +13,10 @@ mod declaration {
         use std::path::{Path, PathBuf};
         use yamaa_adapters::document::{self, check_references, Closures, Decoded};
         use yamaa_adapters::shipped_schema;
-        use yamaa_adapters::specification_source::{Error, InheritancePort, Source};
+        use yamaa_adapters::specification_source::{Error, Source};
         use yamaa_adapters::yaml_decode::decode_yaml;
         use yamaa_core::diagnostic::ConditionCode;
-        use yamaa_core::inheritance::{Source as GraphSource, SourceError};
+
         use yamaa_core::language::{FileType, LANGUAGE_VERSION};
         use yamaa_core::schema::{Document, DocumentNode as N, SchemaAliasKind};
 
@@ -31,39 +31,7 @@ mod declaration {
             }
         }
 
-        /// Files resolved beside their declaring file.
-        struct Files;
-        impl InheritancePort for Files {
-            type Error = std::io::Error;
-            fn canonicalize(
-                &mut self,
-                declaring: &str,
-                written: &str,
-            ) -> Result<GraphSource, SourceError<Self::Error>> {
-                let candidate = Path::new(declaring).parent().unwrap().join(written);
-                let identity = candidate
-                    .canonicalize()
-                    .map_err(|_| SourceError::Unavailable)?;
-                Ok(GraphSource {
-                    identity: identity.to_str().unwrap().into(),
-                    display_path: candidate.to_str().unwrap().into(),
-                })
-            }
-            fn capture(
-                &mut self,
-                source: &GraphSource,
-            ) -> Result<Vec<u8>, SourceError<Self::Error>> {
-                std::fs::read(&source.identity).map_err(SourceError::Raised)
-            }
-            fn rebase(
-                &mut self,
-                _: &GraphSource,
-                _: &GraphSource,
-                written: &str,
-            ) -> Result<String, Self::Error> {
-                Ok(written.into())
-            }
-        }
+        use crate::support::inheritance::Files;
 
         fn examples() -> Vec<PathBuf> {
             let mut paths = Vec::new();

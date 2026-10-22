@@ -119,3 +119,11 @@ def normal_cdf(q):
 def project_value(x):
     """Return the supplied numeric value."""
     return x
+
+
+def dose_per_kg(dose_mg, weight_kg):
+    """Return a dose in mg per kg of body weight; refuse a weight that is not
+    positive."""
+    if weight_kg <= 0:
+        raise ValueError("weight_kg must be positive")
+    return dose_mg / weight_kg

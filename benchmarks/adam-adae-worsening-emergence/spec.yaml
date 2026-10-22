@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADAE
 keys: [STUDYID, USUBJID, ASEQ]
 input:
@@ -8,7 +10,8 @@ input:
   FA:
     path: input/fa.csv
     types: {FASEQ: int, FADTC: datetime}
-  ADSL: {path: input/adsl.csv, types: {TRTSDTM: datetime}}
+  ADSL: {path: input/adsl.csv, types: {TRTSDTM: datetime},
+         key: [STUDYID, USUBJID]}
 
 output:
   path: adae.csv
@@ -123,7 +126,6 @@ columns:
       mapping:
         source: ASEV
         dict: {MILD: 1, MODERATE: 2, SEVERE: 3}
-        missing: {literal: null}
 
   - name: PRETRTFL
     type: str
@@ -133,8 +135,8 @@ columns:
     derivation:
       baseline_flag:
         date: ASTDTM
-        reference_date: TRTSDTM
-        value: ASEVN
+        reference: TRTSDTM
+        source: ASEVN
         window:
           group_by: [STUDYID, USUBJID, AESEQ]
           filter: "ASTDTM < TRTSDTM"

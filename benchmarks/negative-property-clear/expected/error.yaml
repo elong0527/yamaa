@@ -1,7 +1,7 @@
 phase: validation
 condition: invalid_clear
 spec_paths:
-  - columns.USUBJID.type
+  - clear[0]
 rule: LAYER-9
 context:
   field: type

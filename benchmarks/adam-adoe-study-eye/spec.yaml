@@ -1,9 +1,11 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADOE
 keys: [STUDYID, USUBJID, OESEQ]
 input:
   OE: input/oe.csv
-  ADSL: input/adsl.csv
+  ADSL: {path: input/adsl.csv, key: [STUDYID, USUBJID]}
 base: OE
 
 output:
@@ -64,13 +66,13 @@ columns:
     derivation:
       case:
         - when: "OELAT = 'BILATERAL' AND STUDYEYE IS NOT NULL"
-          then: {literal: Both Eyes}
+          then: "'Both Eyes'"
         - when: "STUDYEYE = 'BILATERAL' AND OELAT IS NOT NULL"
-          then: {literal: Study Eye}
+          then: "'Study Eye'"
         - when: "OELAT = STUDYEYE"
-          then: {literal: Study Eye}
+          then: "'Study Eye'"
         - when: "STUDYEYE IS NOT NULL AND OELAT IS NOT NULL"
-          then: {literal: Fellow Eye}
+          then: "'Fellow Eye'"
     verifications:
       - allowed_values:
           values: [Study Eye, Fellow Eye, Both Eyes]

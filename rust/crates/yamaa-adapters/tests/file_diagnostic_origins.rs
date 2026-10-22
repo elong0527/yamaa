@@ -3,23 +3,14 @@
 mod file {
     mod diagnostic_origins {
         //! Native index paths resolve only through the exact held composed member IDs.
-        use std::{
-            fs,
-            path::PathBuf,
-            sync::atomic::{AtomicUsize, Ordering},
-        };
+        use std::fs;
         use yamaa_adapters::{file_resources::Resources, file_workflow, shipped_schema};
         use yamaa_core::project_function::Language;
 
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        struct Study(PathBuf);
+        struct Study(crate::support::Scratch);
         impl Study {
             fn new() -> Self {
-                let directory = std::env::temp_dir().join(format!(
-                    "yamaa-diagnostic-origins-{}-{}",
-                    std::process::id(),
-                    NEXT.fetch_add(1, Ordering::Relaxed)
-                ));
+                let directory = crate::support::Scratch::canonical("diagnostic-origins");
                 fs::create_dir_all(directory.join("parent")).unwrap();
                 // A minimal project linking a Python environment file.
                 fs::write(
@@ -32,18 +23,13 @@ mod file {
                     "schema_version: '1.0'\n",
                 )
                 .unwrap();
-                Self(yamaa_adapters::canonical_path::canonicalize(directory).unwrap())
+                Self(directory)
             }
             fn identity(&self, name: &str) -> String {
                 let value = self.0.join(name).to_string_lossy().into_owned();
                 #[cfg(windows)]
                 let value = value.replace('\\', "/");
                 value
-            }
-        }
-        impl Drop for Study {
-            fn drop(&mut self) {
-                fs::remove_dir_all(&self.0).unwrap();
             }
         }
 
@@ -174,11 +160,7 @@ mod file {
         }
     }
     mod file_application {
-        use std::{
-            fs,
-            path::PathBuf,
-            sync::atomic::{AtomicUsize, Ordering},
-        };
+        use std::fs;
         #[cfg(unix)]
         use yamaa_adapters::file_resources::Error;
         use yamaa_adapters::{
@@ -187,18 +169,12 @@ mod file {
         };
         use yamaa_core::application_observer::Scope;
         use yamaa_core::domain_entry::Request;
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
         const VALID: &str = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
-        struct Study(PathBuf);
+        struct Study(crate::support::Scratch);
         impl Study {
             fn new() -> Self {
-                let path = std::env::temp_dir().join(format!(
-                    "yamaa-file-application-{}-{}",
-                    std::process::id(),
-                    NEXT.fetch_add(1, Ordering::Relaxed)
-                ));
-                fs::create_dir(&path).unwrap();
-                Self(yamaa_adapters::canonical_path::canonicalize(path).unwrap())
+                let path = crate::support::Scratch::canonical("file-application");
+                Self(path)
             }
             fn text(&self, path: &str) -> String {
                 let path = self.0.join(path).to_str().unwrap().to_owned();
@@ -228,11 +204,6 @@ mod file {
                     identity(&path),
                 )
                 .unwrap()
-            }
-        }
-        impl Drop for Study {
-            fn drop(&mut self) {
-                fs::remove_dir_all(&self.0).unwrap();
             }
         }
         fn identity(specification: &str) -> Identity<'_> {
@@ -1224,12 +1195,7 @@ mod file {
     mod file_entry {
         //! Entry capture reads each `schema`-linked producing specification once,
         //! as metadata. No producer is compiled, executed or followed further.
-        use std::{
-            collections::BTreeMap,
-            fs,
-            path::PathBuf,
-            sync::atomic::{AtomicUsize, Ordering},
-        };
+        use std::{collections::BTreeMap, fs};
         use yamaa_adapters::{
             file_entry::{Error, RejectedEntry},
             file_preparation::{Error as DocumentError, FileSpecification, Rejected},
@@ -1242,17 +1208,11 @@ mod file {
             project_function::Language, specification::PrepareError, value::ColumnType,
         };
 
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        struct Study(PathBuf);
+        struct Study(crate::support::Scratch);
         impl Study {
             fn new() -> Self {
-                let root = std::env::temp_dir().join(format!(
-                    "yamaa-native-entry-{}-{}",
-                    std::process::id(),
-                    NEXT.fetch_add(1, Ordering::Relaxed)
-                ));
-                fs::create_dir(&root).unwrap();
-                Self(yamaa_adapters::canonical_path::canonicalize(root).unwrap())
+                let root = crate::support::Scratch::canonical("native-entry");
+                Self(root)
             }
             fn path(&self, written: &str) -> String {
                 let path = self.0.join(written).to_str().unwrap().to_owned();
@@ -1270,11 +1230,6 @@ mod file {
             }
             fn select(&self) -> Result<yamaa_adapters::file_workflow::Selected, SelectionError> {
                 select(self.resources())
-            }
-        }
-        impl Drop for Study {
-            fn drop(&mut self) {
-                fs::remove_dir_all(&self.0).unwrap();
             }
         }
         fn select(
@@ -1722,7 +1677,7 @@ mod file {
             let outer = Study::new();
             let root = outer.0.join("named\\root");
             fs::create_dir(&root).unwrap();
-            let study = Study(root.clone());
+            let study = Study(crate::support::Scratch::adopt(root.clone()));
             leaf(&study);
             study.write(
                 "root.yaml",
@@ -1745,11 +1700,7 @@ mod file {
     }
     mod file_preparation {
         use crate::support::ipc_snapshot;
-        use std::{
-            fs,
-            path::PathBuf,
-            sync::atomic::{AtomicUsize, Ordering},
-        };
+        use std::{fs, path::PathBuf};
         use yamaa_adapters::json;
         use yamaa_adapters::{
             file_preparation::{Error, FileSpecification},
@@ -1757,20 +1708,14 @@ mod file {
         };
         use yamaa_core::application_observer::Scope;
         use yamaa_core::json::Value;
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        struct Study(PathBuf);
+        struct Study(crate::support::Scratch);
         impl Study {
             fn new() -> Self {
-                let path = std::env::temp_dir().join(format!(
-                    "yamaa-file-preparation-{}-{}",
-                    std::process::id(),
-                    NEXT.fetch_add(1, Ordering::Relaxed)
-                ));
-                fs::create_dir(&path).unwrap();
+                let path = crate::support::Scratch::canonical("file-preparation");
                 for name in ["entry", "parent", "outside"] {
                     fs::create_dir(path.join(name)).unwrap();
                 }
-                Self(yamaa_adapters::canonical_path::canonicalize(path).unwrap())
+                Self(path)
             }
             fn text(&self, name: &str) -> String {
                 self.0.join(name).to_str().unwrap().into()
@@ -1789,11 +1734,6 @@ mod file {
                     Resources::new(&self.text(""), &self.text("entry"), &[]).unwrap(),
                     "spec.yaml",
                 )
-            }
-        }
-        impl Drop for Study {
-            fn drop(&mut self) {
-                fs::remove_dir_all(&self.0).unwrap();
             }
         }
         const VALID: &str = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";

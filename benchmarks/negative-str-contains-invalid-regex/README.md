@@ -23,8 +23,8 @@ intensity, as the goal states, remove the bracket:
 derivation:
   case:
     - when: "str_contains(AE.AETERM, 'SEVERE')"
-      then: {literal: SEVERE}
-    - otherwise: {literal: MILD}
+      then: "'SEVERE'"
+    - otherwise: "'MILD'"
 ```
 
 Only if the literal text `SEVERE[` is meant, escape the bracket:
@@ -33,6 +33,6 @@ Only if the literal text `SEVERE[` is meant, escape the bracket:
 derivation:
   case:
     - when: "str_contains(AE.AETERM, 'SEVERE\\[')"
-      then: {literal: SEVERE}
-    - otherwise: {literal: MILD}
+      then: "'SEVERE'"
+    - otherwise: "'MILD'"
 ```

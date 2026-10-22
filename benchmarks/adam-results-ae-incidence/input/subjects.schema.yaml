@@ -1,4 +1,6 @@
-schema_version: '1.0'
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: SUBJECT
 keys:
 - STUDYID
@@ -31,7 +33,6 @@ intermediates:
   order_by:
   - ADAE.ASEQ
   keep: first
-  no_match: {literal: null}
 
 columns:
 - name: STUDYID
@@ -60,5 +61,5 @@ columns:
   derivation:
     case:
     - when: FIRST.ASEQ IS NOT NULL
-      then: {literal: 1}
-    - otherwise: {literal: 0}
+      then: 1
+    - otherwise: 0

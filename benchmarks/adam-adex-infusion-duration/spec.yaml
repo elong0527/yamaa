@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADEX
 keys: [STUDYID, USUBJID, PARAMCD, EXSEQ]
 input:
@@ -43,12 +45,12 @@ columns:
   - name: PARAMCD
     type: str
     label: Parameter Code
-    derivation: {literal: INFDUR}
+    derivation: "'INFDUR'"
 
   - name: PARAM
     type: str
     label: Parameter
-    derivation: {literal: Infusion Duration (min)}
+    derivation: "'Infusion Duration (min)'"
 
   # A start or end collected as a date alone names a day, not a moment, so
   # it converts to no value rather than taking an invented time of day.
@@ -56,17 +58,15 @@ columns:
     type: datetime
     label: Analysis Start Date/Time
     derivation:
-      value:
-        source: EXSTDTC
-      unconvertible: {literal: null}
+      value: EXSTDTC
+      unconvertible: null
 
   - name: AENDTM
     type: datetime
     label: Analysis End Date/Time
     derivation:
-      value:
-        source: EXENDTC
-      unconvertible: {literal: null}
+      value: EXENDTC
+      unconvertible: null
 
   # Elapsed minutes from start to end, seconds kept as a fraction of a
   # minute: nothing is added or rounded. Empty when either end has no time.
@@ -90,7 +90,7 @@ columns:
       duration_value:
         source: EXDUR
         unit: minute
-        invalid: {literal: null}
+        invalid: null
 
   # A readable collected duration wins, even when it disagrees with the
   # start and end; CALCDUR keeps the computed value beside it.
@@ -104,7 +104,7 @@ columns:
   - name: AVALU
     type: str
     label: Analysis Value Unit
-    derivation: {literal: min}
+    derivation: "'min'"
 
 verifications:
   - row_count:

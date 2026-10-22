@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADPC
 keys: [STUDYID, USUBJID, PCSEQ]
 input:
@@ -20,7 +22,6 @@ intermediates:
     key: {STUDYID: STUDYID, USUBJID: USUBJID, EXTRT: DRUG}
     order_by: [EX.EXSTDTC, EX.EXSEQ]
     keep: first
-    no_match: {literal: null}
 
   # The latest dose starting at or before the sample, the sample's own dose
   # time included.
@@ -30,7 +31,6 @@ intermediates:
     between: {value: ADTM, lower: EXSTDTC}
     order_by: [EX.EXSTDTC, EX.EXSEQ]
     keep: last
-    no_match: {literal: null}
 
 columns:
   - name: STUDYID
@@ -107,7 +107,7 @@ columns:
     derivation:
       case:
         - when: "ADTM IS NULL"
-          then: {literal: null}
+          then: null
         - when: "PRIORDOSE.EXSTDTC IS NOT NULL"
           then: PRIORDOSE.EXSTDTC
         - otherwise: FANLDTM

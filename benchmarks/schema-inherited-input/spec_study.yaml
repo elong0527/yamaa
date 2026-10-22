@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 parent: spec_shared.yaml
 
 # Merged into the inherited DM input: the study adds the type of the field

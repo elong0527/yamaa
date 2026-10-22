@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: SDTM
 domain: EC
 keys: [STUDYID, USUBJID, ECSEQ]
 input:
@@ -15,7 +17,7 @@ columns:
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
-    derivation: {literal: EC}
+    derivation: "'EC'"
 
   - name: STUDYID
     type: str
@@ -30,12 +32,12 @@ columns:
   - name: ECTRT
     type: str
     label: Name of Treatment
-    derivation: {literal: Study Drug}
+    derivation: "'Study Drug'"
 
   - name: ECMOOD
     type: str
     label: Mood
-    derivation: {literal: PERFORMED}
+    derivation: "'PERFORMED'"
 
   - name: ECOCCUR
     type: str
@@ -60,22 +62,22 @@ columns:
   - name: ECDOSU
     type: str
     label: Dose Units
-    derivation: {literal: tablet}
+    derivation: "'tablet'"
 
   - name: ECDOSFRM
     type: str
     label: Dose Form
-    derivation: {literal: TABLET}
+    derivation: "'TABLET'"
 
   - name: ECDOSFRQ
     type: str
     label: Dosing Frequency per Interval
-    derivation: {literal: QD}
+    derivation: "'QD'"
 
   - name: ECROUTE
     type: str
     label: Route of Administration
-    derivation: {literal: ORAL}
+    derivation: "'ORAL'"
 
   - name: ECSTDTC
     type: date

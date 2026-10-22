@@ -11,10 +11,9 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use yamaa::{
-    Argument, CallError, CancellationToken, Engine, EngineOptions, FunctionError, FunctionHandle,
-    FunctionIdentity, HostLanguage, LockContext, MemoryResolver, OdmOptions, ProjectFunctions,
+    CancellationToken, Engine, EngineOptions, HostLanguage, MemoryResolver, OdmOptions,
     ResolverFailure, ResolverKind, ResolverOperation, ResolverReply, ResolverRequest,
-    ResourceResolver, Scalar, Signature,
+    ResourceResolver,
 };
 
 const CREATED: &str = "2026-09-11T00:00:00";
@@ -189,22 +188,7 @@ impl Case {
     }
 }
 
-struct NoFunctions;
-impl ProjectFunctions for NoFunctions {
-    fn verify_lock(
-        &self,
-        _: &LockContext<'_>,
-        _: &[FunctionIdentity],
-    ) -> Result<(), FunctionError> {
-        Ok(())
-    }
-    fn bind(&self, _: &FunctionIdentity, _: &Signature) -> Result<FunctionHandle, FunctionError> {
-        unreachable!("the case calls no project function")
-    }
-    fn invoke(&self, _: &FunctionHandle, _: &[Argument<'_>]) -> Result<Scalar, CallError> {
-        unreachable!("the case calls no project function")
-    }
-}
+use crate::support::NoFunctions;
 
 fn set(accesses: &[(&'static str, &str)]) -> BTreeSet<Access> {
     accesses
@@ -225,9 +209,11 @@ const SAVE_DM: [(&str, &str); 3] = [
     ("commit", "/dm.csv"),
 ];
 
+/// sdtm-dm-xpt's specification binds no codelist, so it checks, runs and
+/// resolves without a project file (CT-13); sdtm-dm-metadata's needs one.
 #[test]
 fn a_check_reads_only_metadata_through_the_resolver() {
-    let case = Case::new("sdtm-dm-metadata", &[]);
+    let case = Case::new("sdtm-dm-xpt", &[]);
     let engine = case.engine();
     let token = CancellationToken::new();
     assert_eq!(
@@ -312,7 +298,7 @@ fn project_names_read_no_input_data_and_name_what_a_run_builds() {
 
 #[test]
 fn a_run_reads_and_saves_only_through_the_resolver() {
-    let case = Case::new("sdtm-dm-metadata", &[]);
+    let case = Case::new("sdtm-dm-xpt", &[]);
     let token = CancellationToken::new();
     let mut run = case.engine().spec_run("spec.yaml", None, &token).unwrap();
     assert_eq!(run.issues().rows(), 0);
@@ -386,7 +372,7 @@ fn a_submission_reads_and_saves_only_through_the_resolver() {
 
 #[test]
 fn resolve_reads_only_the_specification_through_the_resolver() {
-    let case = Case::new("sdtm-dm-metadata", &[]);
+    let case = Case::new("sdtm-dm-xpt", &[]);
     let resolved = case.engine().spec_resolve("spec.yaml", None).unwrap();
     assert_eq!(case.accesses(), set(&SPEC));
     let yamaa::ContextValue::Map(fields) = resolved else {

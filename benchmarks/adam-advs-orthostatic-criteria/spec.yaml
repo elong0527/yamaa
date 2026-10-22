@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADVS
 keys: [STUDYID, USUBJID, AVISIT, PARAMCD]
 input:
@@ -38,65 +40,59 @@ columns:
   - name: SYSBP_SUP
     type: float
     label: Supine Systolic Blood Pressure
-    derivation: {literal: null}
+    derivation: null
 
   - name: SYSBP_STD
     type: float
     label: Standing Systolic Blood Pressure at 3 Minutes
-    derivation: {literal: null}
+    derivation: null
 
   - name: DIABP_SUP
     type: float
     label: Supine Diastolic Blood Pressure
-    derivation: {literal: null}
+    derivation: null
 
   - name: DIABP_STD
     type: float
     label: Standing Diastolic Blood Pressure at 3 Minutes
-    derivation: {literal: null}
+    derivation: null
 
   - name: HR_SUP
     type: float
     label: Supine Heart Rate
-    derivation: {literal: null}
+    derivation: null
 
   - name: HR_STD
     type: float
     label: Standing Heart Rate at 3 Minutes
-    derivation: {literal: null}
+    derivation: null
 
   # Standing minus supine, so a fall is negative; empty when either reading
   # is missing or was not taken. Not in the output.
   - name: SYSBP_CHG
     type: float
     label: Systolic Blood Pressure Change on Standing
-    derivation:
-      compute:
-        expr: "SYSBP_STD - SYSBP_SUP"
+    derivation: "SYSBP_STD - SYSBP_SUP"
 
   - name: DIABP_CHG
     type: float
     label: Diastolic Blood Pressure Change on Standing
-    derivation:
-      compute:
-        expr: "DIABP_STD - DIABP_SUP"
+    derivation: "DIABP_STD - DIABP_SUP"
 
   - name: HR_CHG
     type: float
     label: Heart Rate Change on Standing
-    derivation:
-      compute:
-        expr: "HR_STD - HR_SUP"
+    derivation: "HR_STD - HR_SUP"
 
   - name: AVAL
     type: float
     label: Analysis Value
-    derivation: {literal: null}
+    derivation: null
 
   - name: AVALC
     type: str
     label: Analysis Value (C)
-    derivation: {literal: null}
+    derivation: null
     verifications:
       - allowed_values:
           values: ["Y", "N"]
@@ -108,8 +104,8 @@ rows:
     group_by: [VS.STUDYID, VS.USUBJID, VS.VISIT]
     filter: "AVAL IS NOT NULL"
     derivations:
-      PARAMCD: {literal: SYSBPOC}
-      PARAM: {literal: Systolic Blood Pressure Change on Standing (mmHg)}
+      PARAMCD: "'SYSBPOC'"
+      PARAM: "'Systolic Blood Pressure Change on Standing (mmHg)'"
       SYSBP_SUP:
         aggregate:
           filter: "VS.VSTESTCD = 'SYSBP' AND VS.VSPOS = 'SUPINE'"
@@ -126,8 +122,8 @@ rows:
     group_by: [VS.STUDYID, VS.USUBJID, VS.VISIT]
     filter: "AVAL IS NOT NULL"
     derivations:
-      PARAMCD: {literal: DIABPOC}
-      PARAM: {literal: Diastolic Blood Pressure Change on Standing (mmHg)}
+      PARAMCD: "'DIABPOC'"
+      PARAM: "'Diastolic Blood Pressure Change on Standing (mmHg)'"
       DIABP_SUP:
         aggregate:
           filter: "VS.VSTESTCD = 'DIABP' AND VS.VSPOS = 'SUPINE'"
@@ -144,8 +140,8 @@ rows:
     group_by: [VS.STUDYID, VS.USUBJID, VS.VISIT]
     filter: "AVAL IS NOT NULL"
     derivations:
-      PARAMCD: {literal: HROC}
-      PARAM: {literal: Heart Rate Change on Standing (beats/min)}
+      PARAMCD: "'HROC'"
+      PARAM: "'Heart Rate Change on Standing (beats/min)'"
       HR_SUP:
         aggregate:
           filter: "VS.VSTESTCD = 'HR' AND VS.VSPOS = 'SUPINE'"
@@ -165,8 +161,8 @@ rows:
     group_by: [VS.STUDYID, VS.USUBJID, VS.VISIT]
     filter: "AVALC IS NOT NULL"
     derivations:
-      PARAMCD: {literal: OHYPO}
-      PARAM: {literal: Orthostatic Hypotension}
+      PARAMCD: "'OHYPO'"
+      PARAM: "'Orthostatic Hypotension'"
       SYSBP_SUP:
         aggregate:
           filter: "VS.VSTESTCD = 'SYSBP' AND VS.VSPOS = 'SUPINE'"
@@ -191,15 +187,15 @@ rows:
         flag:
           condition: "SYSBP_CHG <= -20 OR DIABP_CHG <= -10"
           false_value: "N"
-          missing: {literal: null}
+          missing: null
 
   # A rise of 30 beats/min or more; no record when the change is missing.
   - id: orthostatic_tachycardia
     group_by: [VS.STUDYID, VS.USUBJID, VS.VISIT]
     filter: "AVALC IS NOT NULL"
     derivations:
-      PARAMCD: {literal: OTACHY}
-      PARAM: {literal: Orthostatic Tachycardia}
+      PARAMCD: "'OTACHY'"
+      PARAM: "'Orthostatic Tachycardia'"
       HR_SUP:
         aggregate:
           filter: "VS.VSTESTCD = 'HR' AND VS.VSPOS = 'SUPINE'"
@@ -214,7 +210,7 @@ rows:
         flag:
           condition: "HR_CHG >= 30"
           false_value: "N"
-          missing: {literal: null}
+          missing: null
 
 verifications:
   - row_count:

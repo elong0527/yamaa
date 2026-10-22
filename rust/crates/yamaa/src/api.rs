@@ -119,6 +119,11 @@ pub enum Status {
 /// closed vocabulary of every `status` a host returns (P-STATUS-1).
 pub const STATUSES: [&str; 3] = ["succeeded", "failed", "skipped"];
 
+/// The sections a project file declares, as written, in run order: the closed
+/// vocabulary of the `section` that [`Engine::project_run`] and
+/// [`Engine::project_submission`] take (PROJECT-3).
+pub const SECTIONS: [&str; 3] = ["sdtm", "adam", "send"];
+
 impl Status {
     /// The status as written: `succeeded`, `failed` or `skipped`, one of
     /// [`STATUSES`].
@@ -238,10 +243,13 @@ impl Run {
         self.build.save(token)
     }
 
-    /// Borrow the underlying build for qualification evidence.
+    /// The run's observations as JSON, enveloped with its timing measurements
+    /// when `include_measurements` is true: installed-run evidence for the
+    /// hosts' qualification suites, missing when the run never began. Its
+    /// text is not part of the interface.
     #[doc(hidden)]
-    pub fn build(&self) -> &Build {
-        &self.build
+    pub fn observations(&self, include_measurements: bool) -> Option<String> {
+        self.build.observations(include_measurements)
     }
 }
 
@@ -328,7 +336,7 @@ impl Plans {
         drop(dropped);
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, feature = "yaml"))]
     pub(crate) fn identities(&self) -> Vec<PlanKey> {
         self.kept().keys().cloned().collect()
     }
@@ -425,8 +433,38 @@ impl Engine {
     }
 
     /// Check one specification without reading study data or running project
-    /// code, with the project's codelists and functions when it has one. Only
-    /// cancellation fails the call.
+    /// code, with the project's codelists and functions when it has one.
+    /// Admission and preparation failures are the check's issues, never a
+    /// second error channel; only cancellation fails the call.
+    ///
+    /// # Example
+    ///
+    /// The specification's bytes enter through a memory resolver; no
+    /// filesystem path is touched. Lanes without the `yaml` feature report
+    /// issues for the same call.
+    ///
+    /// ```
+    /// use std::sync::Arc;
+    ///
+    /// use yamaa::{CancellationToken, Engine, EngineOptions, HostLanguage, MemoryResolver};
+    ///
+    /// let resolver = Arc::new(MemoryResolver::new());
+    /// resolver.insert("/", "spec.yaml", "spec:1", Arc::from(
+    ///     &b"yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {VALUE: float}}}\noutput: {path: out.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: float, derivation: SRC.VALUE}\n"[..],
+    /// ));
+    /// let engine = Engine::new(
+    ///     EngineOptions::new(HostLanguage::Python, "doctest".into(), "0".into())
+    ///         .with_resolver(resolver),
+    /// );
+    /// let check = engine
+    ///     .spec_check("spec.yaml", None, &CancellationToken::new())
+    ///     .unwrap();
+    /// if cfg!(feature = "yaml") {
+    ///     assert!(check.diagnostics().is_empty());
+    /// } else {
+    ///     assert!(!check.diagnostics().is_empty());
+    /// }
+    /// ```
     pub fn spec_check(
         &self,
         specification: &str,
@@ -450,6 +488,62 @@ impl Engine {
     }
 
     /// Build one specification in memory; nothing is written until `save`.
+    /// Every adjudicated outcome is a [`Run`] carrying its output, issues and
+    /// run report; only cancellation fails the call.
+    ///
+    /// # Example
+    ///
+    /// The specification bytes and one Arrow input table enter through a
+    /// memory resolver, and Arrow tables and typed issues come out. Lanes
+    /// without the `yaml` feature keep a run carrying issues but no output.
+    ///
+    /// ```
+    /// use std::sync::Arc;
+    ///
+    /// use arrow_array::RecordBatchIterator;
+    /// use arrow_schema::Schema;
+    /// use yamaa::{
+    ///     CancellationToken, DataType, Engine, EngineOptions, FFI_ArrowArrayStream, Field,
+    ///     Float64Array, HostLanguage, InputFrame, Int64Array, MemoryResolver, RecordBatch,
+    /// };
+    ///
+    /// let resolver = Arc::new(MemoryResolver::new());
+    /// resolver.insert("/", "spec.yaml", "spec:1", Arc::from(
+    ///     &b"yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {VALUE: float}}}\noutput: {path: out.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: float, derivation: SRC.VALUE}\n"[..],
+    /// ));
+    /// let schema = Arc::new(Schema::new(vec![
+    ///     Field::new("ID", DataType::Int64, true),
+    ///     Field::new("VALUE", DataType::Float64, true),
+    /// ]));
+    /// let batch = RecordBatch::try_new(
+    ///     Arc::clone(&schema),
+    ///     vec![
+    ///         Arc::new(Int64Array::from(vec![1, 2])),
+    ///         Arc::new(Float64Array::from(vec![2.5, 3.5])),
+    ///     ],
+    /// )
+    /// .unwrap();
+    /// let frame = InputFrame::import(FFI_ArrowArrayStream::new(Box::new(
+    ///     RecordBatchIterator::new(vec![Ok(batch)], schema),
+    /// )))
+    /// .unwrap();
+    /// resolver.insert_frame("/spec.yaml", "input.csv", "data:1", &frame);
+    /// let engine = Engine::new(
+    ///     EngineOptions::new(HostLanguage::Python, "doctest".into(), "0".into())
+    ///         .with_resolver(resolver.clone()),
+    /// );
+    /// let token = CancellationToken::new();
+    /// let mut run = engine.spec_run("spec.yaml", None, &token).unwrap();
+    /// if cfg!(feature = "yaml") {
+    ///     assert_eq!(run.output().unwrap().rows(), 2);
+    ///     assert!(run.diagnostics().is_empty());
+    ///     assert_eq!(run.save(&token).unwrap(), ["memory:/out.csv"]);
+    ///     assert!(resolver.published("memory:/out.csv").is_some());
+    /// } else {
+    ///     assert!(run.output().is_none());
+    ///     assert!(!run.diagnostics().is_empty());
+    /// }
+    /// ```
     pub fn spec_run(
         &self,
         specification: &str,
@@ -888,7 +982,7 @@ impl Engine {
         })
     }
 
-    /// Build every listed specification of `section` ("sdtm", "adam", "send"),
+    /// Build every listed specification of `section`, one of [`SECTIONS`],
     /// or of all sections in that order. Each builds once, producer first; a
     /// producer in the run scope hands its artifact to its consumers in
     /// memory, and one outside it is read from its saved artifact file. A
@@ -995,7 +1089,7 @@ impl Engine {
     }
 
     /// One define.xml per section, selected or all declared, plus
-    /// Dataset-JSON where the section sets `datasets: json`. Without a
+    /// Dataset-JSON where the section sets `transport: dataset_json`. Without a
     /// section, every declared section that names `define` is composed.
     /// Every section is composed with one creation time,
     /// [`Submission::created`]: `created` as given, or else the current UTC
@@ -1103,7 +1197,7 @@ mod plan_tests {
 
     #[test]
     fn a_project_run_drops_the_plans_of_specifications_the_project_no_longer_lists() {
-        const SPEC: &str = "schema_version: '1.0'\ndomain: DM\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int}}}\noutput: {path: dm.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: SRC.ID}\n";
+        const SPEC: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: DM\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int}}}\noutput: {path: dm.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: SRC.ID}\n";
         let root = std::env::temp_dir().join(format!("yamaa-plan-drop-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).unwrap();
@@ -1119,7 +1213,7 @@ mod plan_tests {
         let listing = |specs: &str| {
             std::fs::write(
                 root.join("project.yaml"),
-                format!("schema_version: '1.0'\nsdtm:\n  specs: [{specs}]\n"),
+                format!("yamaa: \"1.0\"\ntype: project\nsdtm:\n  specs: [{specs}]\n"),
             )
             .unwrap();
         };
@@ -1193,6 +1287,12 @@ mod tests {
             }
         }
         assert_eq!(statuses.map(Status::as_str), STATUSES);
+    }
+
+    #[test]
+    fn sections_are_the_project_sections_in_run_order() {
+        use yamaa_core::project_scope::{key, SECTIONS as CORE};
+        assert_eq!(CORE.map(key), SECTIONS);
     }
 
     /// Resolved facts the engine cannot represent are refused as the

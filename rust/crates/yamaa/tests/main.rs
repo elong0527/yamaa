@@ -5,6 +5,9 @@
 //! executable (#3556). A new family file gets its `mod` line below, which
 //! `every_family_file_is_declared` requires.
 
+#[allow(dead_code)]
+mod support;
+
 mod caller_paths;
 mod cancellation;
 mod copy_entry;
@@ -19,7 +22,6 @@ mod memory;
 mod memory_route;
 mod odm_input;
 mod plan;
-mod plan_contracts;
 mod plan_reuse;
 mod printed_text;
 mod project_binding;

@@ -52,10 +52,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use yamaa_adapters::document::{self, Closures, Decoded};
 use yamaa_adapters::shipped_schema;
-use yamaa_adapters::specification_source::{InheritancePort, PreparedDocument, Source};
+use yamaa_adapters::specification_source::{PreparedDocument, Source};
 use yamaa_adapters::yaml_decode::decode_yaml;
 use yamaa_core::ast::{
     Comparator, Constant, ExprId, ExprKind, Filtered, Input, JoinKey, KeyDecl, Literal, Meta,
@@ -63,7 +62,6 @@ use yamaa_core::ast::{
 };
 use yamaa_core::expression::Context;
 use yamaa_core::front_end::v0_5::lower;
-use yamaa_core::inheritance::{Source as GraphSource, SourceError};
 use yamaa_core::key_relation::{self, Inference};
 use yamaa_core::language::{FileType, LANGUAGE_VERSION};
 use yamaa_core::reference_binding::{Catalog, Field};
@@ -83,25 +81,14 @@ fn repository() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..")
 }
 
-static NEXT: AtomicUsize = AtomicUsize::new(0);
-
 /// A temporary directory, removed when dropped.
-struct Scratch(PathBuf);
+struct Scratch(crate::support::Scratch);
 impl Scratch {
     fn new() -> Self {
-        let path = std::env::temp_dir().join(format!(
-            "yamaa-front-end-comparison-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
+        let path = crate::support::Scratch::new("front-end-comparison");
         let _ = fs::remove_dir_all(&path);
         fs::create_dir_all(&path).unwrap();
         Self(path)
-    }
-}
-impl Drop for Scratch {
-    fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.0);
     }
 }
 
@@ -180,37 +167,7 @@ fn entries(case: &Path) -> Vec<String> {
     specs
 }
 
-/// Parents resolve beside their declaring file; paths stay as written, so
-/// both surfaces keep the spelling their layers wrote.
-struct Files;
-impl InheritancePort for Files {
-    type Error = std::io::Error;
-    fn canonicalize(
-        &mut self,
-        declaring: &str,
-        written: &str,
-    ) -> Result<GraphSource, SourceError<Self::Error>> {
-        let candidate = Path::new(declaring).parent().unwrap().join(written);
-        let identity = candidate
-            .canonicalize()
-            .map_err(|_| SourceError::Unavailable)?;
-        Ok(GraphSource {
-            identity: identity.to_str().unwrap().into(),
-            display_path: candidate.to_str().unwrap().into(),
-        })
-    }
-    fn capture(&mut self, source: &GraphSource) -> Result<Vec<u8>, SourceError<Self::Error>> {
-        fs::read(&source.identity).map_err(SourceError::Raised)
-    }
-    fn rebase(
-        &mut self,
-        _: &GraphSource,
-        _: &GraphSource,
-        written: &str,
-    ) -> Result<String, Self::Error> {
-        Ok(written.into())
-    }
-}
+use crate::support::inheritance::Files;
 
 fn source(path: &Path) -> (Source, String) {
     let path = path.canonicalize().unwrap();

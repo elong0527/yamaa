@@ -1,9 +1,11 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: SDTM
 domain: DM
 keys: [STUDYID, USUBJID]
 input:
   RAND: input/rand.csv
-  EX: input/ex.csv
+  EX: {path: input/ex.csv, key: [STUDYID, USUBJID]}
 base: RAND
 
 output:
@@ -15,7 +17,7 @@ columns:
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
-    derivation: {literal: DM}
+    derivation: "'DM'"
 
   - name: STUDYID
     type: str
@@ -60,8 +62,7 @@ columns:
         dict:
           PLACEBO: PBO
           VITAMIN D3: TRT
-        missing: {literal: null}
-        unmapped: {literal: null}
+        unmapped: null
 
   - name: ACTARM
     type: str
@@ -72,8 +73,7 @@ columns:
         dict:
           PLACEBO: Placebo
           VITAMIN D3: Vitamin D3
-        missing: {literal: null}
-        unmapped: {literal: null}
+        unmapped: null
 
   - name: ACTARMUD
     type: str
@@ -92,11 +92,11 @@ columns:
     derivation:
       case:
         - when: "ARMCD IS NULL AND ACTARMCD IS NULL AND SCRNFL = 'Y'"
-          then: {literal: SCREEN FAILURE}
+          then: "'SCREEN FAILURE'"
         - when: "ARMCD IS NULL AND ACTARMCD IS NULL"
-          then: {literal: NOT ASSIGNED}
+          then: "'NOT ASSIGNED'"
         - when: "ARMCD IS NOT NULL AND ACTARMCD IS NULL AND ACTARMUD IS NULL"
-          then: {literal: NOT TREATED}
+          then: "'NOT TREATED'"
 
 verifications:
   - row_count:

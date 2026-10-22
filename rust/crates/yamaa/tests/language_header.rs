@@ -5,25 +5,15 @@
 //! is refused as `unsupported_operation` any longer (D76).
 #![cfg(feature = "yaml")]
 
-use std::path::PathBuf;
-use std::sync::atomic::{AtomicUsize, Ordering};
-
 use arrow_array::{Array, ListArray, StringArray};
 use yamaa::{CancellationToken, ContextValue, Engine, EngineOptions, HostLanguage, Table};
 use yamaa_core::json::Value;
 
-static NEXT: AtomicUsize = AtomicUsize::new(0);
-
-struct Study(PathBuf);
+struct Study(crate::support::Scratch);
 impl Study {
     fn new() -> Self {
-        let root = std::env::temp_dir().join(format!(
-            "yamaa-language-header-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
-        std::fs::create_dir_all(&root).unwrap();
-        Self(yamaa_adapters::canonical_path::canonicalize(root).unwrap())
+        let root = crate::support::Scratch::new("language-header");
+        Self(root)
     }
     fn write(&self, name: &str, contents: &str) {
         let path = self.0.join(name);
@@ -38,11 +28,6 @@ impl Study {
         #[cfg(windows)]
         let path = path.replace('\\', "/");
         path
-    }
-}
-impl Drop for Study {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
     }
 }
 

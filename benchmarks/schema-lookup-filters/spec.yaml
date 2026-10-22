@@ -1,4 +1,5 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
 domain: ADLB
 keys: [USUBJID, VISIT]
 input:
@@ -23,16 +24,14 @@ intermediates:
     key: [USUBJID]
     filter: "LB.LBSTRESN IS NOT NULL AND LB.VISITN <= PLAN.VISITN"
     order_by:
-      - variable: LB.VISITN
-        direction: asc
+      - LB.VISITN
     keep: last
-    no_match: {literal: null}
 
 columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation: {literal: YAMAA-01}
+    derivation: "'YAMAA-01'"
 
   - name: USUBJID
     type: str

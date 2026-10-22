@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
@@ -18,15 +20,13 @@ intermediates:
   # has a missing rank and is never chosen; the smallest rank is kept.
   - id: EOT
     dataset: DS
+    key: [STUDYID, USUBJID]
     filter: "DS.EOT_FALLBACK IS NOT NULL"
     order_by: [DS.EOT_FALLBACK]
     keep: first
     columns: [DSDECOD, DSVALUE, EOT_FALLBACK]
-    no_match: {literal: null}
     derivations:
-      EOT_FALLBACK:
-        compute:
-          expr: "DSSTDY + DSSEQ / 1000"
+      EOT_FALLBACK: "DSSTDY + DSSEQ / 1000"
 
 columns:
   - name: STUDYID

@@ -8,10 +8,9 @@ import tomllib
 import unittest
 from pathlib import Path
 
-import yaml
 from tools.ci import fuzz
 from tools.paths import ROOT
-from tools.validation._repository_yaml import UniqueKeyLoader
+from tools.tests import support
 
 
 class FuzzTargets(unittest.TestCase):
@@ -161,24 +160,24 @@ class RegressionInputs(unittest.TestCase):
                     ("gnu", long, b"././@LongLink"),
                     ("pax", long, b"path="),
                 ):
-                    with tarfile.open(fileobj=io.BytesIO(archives[kind])) as archive:
-                        (member,) = archive.getmembers()
-                        self.assertEqual(member.name, name)
-                        self.assertEqual(
-                            archive.extractfile(member).read(), path.read_bytes()
-                        )
-                    if marker:
-                        # The name exceeds a ustar header's 100 bytes, so a GNU
-                        # long-name entry or a PAX path record precedes it.
-                        self.assertGreater(len(name.encode()), 100)
-                        self.assertIn(marker, archives[kind][:1024])
+                    with self.subTest(kind=kind, name=name):
+                        with tarfile.open(
+                            fileobj=io.BytesIO(archives[kind])
+                        ) as archive:
+                            (member,) = archive.getmembers()
+                            self.assertEqual(member.name, name)
+                            self.assertEqual(
+                                archive.extractfile(member).read(), path.read_bytes()
+                            )
+                        if marker:
+                            # The name exceeds a ustar header's 100 bytes, so a GNU
+                            # long-name entry or a PAX path record precedes it.
+                            self.assertGreater(len(name.encode()), 100)
+                            self.assertIn(marker, archives[kind][:1024])
 
 
 def workflow():
-    return yaml.load(
-        (ROOT / ".github/workflows/fuzz.yml").read_text(encoding="utf-8"),
-        Loader=UniqueKeyLoader,
-    )
+    return support.workflow("fuzz.yml")
 
 
 if __name__ == "__main__":

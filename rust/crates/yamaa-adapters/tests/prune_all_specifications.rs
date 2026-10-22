@@ -5,28 +5,18 @@
 //! declaration's unresolved reference is discarded with it and does not fail
 //! validation; the three forms build with equal outputs.
 
-use std::{
-    fs,
-    path::PathBuf,
-    sync::atomic::{AtomicUsize, Ordering},
-};
+use std::fs;
 use yamaa_adapters::{file_application, specification_report::Identity};
 use yamaa_core::domain_entry::Request;
 
-static NEXT: AtomicUsize = AtomicUsize::new(0);
-
-struct Study(PathBuf);
+struct Study(crate::support::Scratch);
 impl Study {
     fn new(name: &str) -> Self {
-        let root = std::env::temp_dir().join(format!(
-            "yamaa-prune-all-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
+        let root = crate::support::Scratch::new("prune-all");
         let dir = root.join(name);
         fs::create_dir_all(dir.join("input")).unwrap();
         fs::write(dir.join("input/obs.csv"), "ID,AGE\n1,40\n2,52\n").unwrap();
-        Self(fs::canonicalize(root).unwrap())
+        Self(root.resolved(std::fs::canonicalize))
     }
     fn text(&self, path: &str) -> String {
         let value = self.0.join(path).to_string_lossy().into_owned();
@@ -96,11 +86,6 @@ impl Study {
         assert_eq!(flat, b"ID,AGE\n1,40\n2,52\n", "{case} flat output");
         assert_eq!(self.build(case, "null_parent.yaml"), flat, "{case} null");
         assert_eq!(self.build(case, "child.yaml"), flat, "{case} child");
-    }
-}
-impl Drop for Study {
-    fn drop(&mut self) {
-        fs::remove_dir_all(&self.0).unwrap();
     }
 }
 

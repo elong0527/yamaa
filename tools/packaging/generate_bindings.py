@@ -344,17 +344,11 @@ def _validate_operations(definition):
         for group in definition["r"]["groups"]
         for function in group["functions"]
     }
-    commands = bindings_surface.cli_names(definition["cli"])
+    # The command line calls the facade directly and pairs no native export:
+    # each of its commands lists the operations it reaches.
     for operation, hosts in definition["operations"].items():
-        if not isinstance(hosts, dict) or not set(hosts) <= {"python", "r", "cli"}:
+        if not isinstance(hosts, dict) or not set(hosts) <= {"python", "r"}:
             raise ValueError(f"operation {operation} has invalid host mapping")
-        # The command line calls the facade directly, so a command or flag
-        # that reaches an operation pairs nothing natively.
-        for reference in hosts.get("cli", []):
-            if reference not in commands:
-                raise ValueError(
-                    f"operation {operation} references absent command {reference}"
-                )
         for reference in hosts.get("python", []):
             if "." in reference:
                 owner, _, member = reference.partition(".")
@@ -373,15 +367,8 @@ def _validate_operations(definition):
                     f"operation {operation} references absent R export {reference}"
                 )
     host_only = definition["host_only"]
-    if not isinstance(host_only, dict) or not {"python", "r"} <= set(host_only) <= {
-        "python",
-        "r",
-        "cli",
-    }:
+    if not isinstance(host_only, dict) or set(host_only) != {"python", "r"}:
         raise ValueError("host_only must contain python and r lists")
-    for reference in host_only.get("cli", []):
-        if reference not in commands:
-            raise ValueError(f"host_only references absent command {reference}")
     for reference in host_only["python"]:
         if "." in reference:
             owner, _, member = reference.partition(".")
@@ -1061,10 +1048,10 @@ def render_all():
     return rendered
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--write", action="store_true")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     rendered = render_all()
     for target, text in rendered.items():
         expected = text.encode("utf-8")

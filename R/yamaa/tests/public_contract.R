@@ -1,10 +1,5 @@
 # Installed public API contracts; inputs and exact truth are independently authored.
 library(yamaa)
-# save() returns the absolute paths it wrote, invisibly, with forward slashes,
-# in publication order (D38); each one exists once written.
-returns_paths <- function(paths) is.character(paths) && length(paths) > 0L && !anyNA(paths) &&
-  all(grepl("^(/|[[:alpha:]]:/)", paths)) && !any(grepl("\\", paths, fixed = TRUE)) &&
-  all(file.exists(paths))
 # The truth is JSON, and jsonlite, which reads it, is a suggested package:
 # where it is not installed, the file is skipped.
 if (!requireNamespace("jsonlite", quietly = TRUE)) {
@@ -15,6 +10,7 @@ host_fixture_root <- normalizePath("host-fixtures",winslash="/",mustWork=TRUE)
 projects <- normalizePath("project-base",winslash="/",mustWork=TRUE)
 define_fixtures <- normalizePath("define-fixtures",winslash="/",mustWork=TRUE)
 source(file.path(host_fixture_root,"reader.R"),local=TRUE)
+source(file.path(host_fixture_root,"assert.R"),local=TRUE)
 host_truth <- read_host_fixture(host_fixture_root,"public-contract")
 messages <- host_truth[["messages"]]
 # D39's error text the fixture authors under `key`, naming the path given
@@ -26,12 +22,14 @@ error_text <- function(key, path = NULL, file = NULL) {
 }
 namespace <- asNamespace("yamaa")
 
-stopifnot(identical(as.character(packageVersion("yamaa")), "0.5.0"),
-  identical(yamaa:::.core_version(), as.character(packageVersion("yamaa"))),
-  identical(sort(getNamespaceExports("yamaa")),
-    c("yamaa_info", "yamaa_lint", "yamaa_project", "yamaa_read_odm", "yamaa_schema",
-      "yamaa_selftest", "yamaa_spec")),
-  identical(getNamespaceInfo("yamaa", "S3methods")[, 3L],
+expect_identical(as.character(packageVersion("yamaa")), "0.5.0", "the package version")
+expect_identical(yamaa:::.core_version(), as.character(packageVersion("yamaa")),
+  "the engine's version is the package's")
+expect_identical(sort(getNamespaceExports("yamaa")),
+  c("yamaa_info", "yamaa_lint", "yamaa_project", "yamaa_read_odm", "yamaa_schema",
+    "yamaa_selftest", "yamaa_spec"),
+  "the exported functions")
+expect_identical(getNamespaceInfo("yamaa", "S3methods")[, 3L],
     c("names.yamaa_check", "length.yamaa_check", "print.yamaa_check", "format.yamaa_check",
       "names.yamaa_run", "length.yamaa_run", "print.yamaa_run", "format.yamaa_run",
       "names.yamaa_member_run", "length.yamaa_member_run", "print.yamaa_member_run",
@@ -40,12 +38,13 @@ stopifnot(identical(as.character(packageVersion("yamaa")), "0.5.0"),
       "names.yamaa_submission", "length.yamaa_submission", "print.yamaa_submission",
       "format.yamaa_submission", "print.yamaa_spec", "format.yamaa_spec", "print.yamaa_project",
       "format.yamaa_project", "names.yamaa_selftest", "length.yamaa_selftest",
-      "print.yamaa_selftest", "format.yamaa_selftest")))
+      "print.yamaa_selftest", "format.yamaa_selftest"),
+  "the registered S3 methods")
 for (name in c("yamaa_domain", "yamaa_check", "yamaa_define", "yamaa_resolve_specification",
   "yamaa_read_resolved_specification", "yamaa_resource_resolver", "yamaa_memory_resolver",
   "yamaa_synthetic_remote_resolver", "yamaa_resource_result", "yamaa_resource_failure",
   "yamaa_int64", "yamaa_utf8")) {
-  stopifnot(!exists(name, envir = namespace, inherits = FALSE))
+  if (exists(name, envir = namespace, inherits = FALSE)) stop("a retired interface remains: ", name)
 }
 
 # The one findings view: the twelve columns of D28, context as canonical JSON
@@ -53,26 +52,34 @@ for (name in c("yamaa_domain", "yamaa_check", "yamaa_define", "yamaa_resolve_spe
 # and a location in all three of file, line and column or in none
 # (P-ISSUE-1).
 check_issues <- function(frame) {
-  stopifnot(is.data.frame(frame),
-    identical(names(frame), fixture_strings(host_truth[["issue_columns"]])),
-    all(vapply(frame[c("severity", "phase", "condition", "rule", "file", "message", "context")],
-      is.character, logical(1))),
-    all(vapply(frame[c("line", "column")], is.double, logical(1))),
-    all(frame$severity == "error"), all(nzchar(frame$message)),
-    identical(is.na(frame$file), is.na(frame$line)),
-    identical(is.na(frame$file), is.na(frame$column)),
-    all(vapply(frame[c("spec_paths", "source_span", "operand_route")], is.list, logical(1))),
-    all(vapply(frame$spec_paths, is.character, logical(1))),
-    all(startsWith(frame$context, "{")),
-    all(vapply(frame$source_span, function(span) is.null(span) || (is.double(span) &&
-      length(span) == 2L && span[[1L]] >= 0 && span[[1L]] <= span[[2L]]), logical(1))),
-    all(vapply(frame$operand_route, function(route) is.null(route) || is.character(route), logical(1))))
+  stopifnot("the issues are a data frame" = is.data.frame(frame))
+  expect_identical(names(frame), fixture_strings(host_truth[["issue_columns"]]), "the issue columns")
+  stopifnot(
+    "the text columns are character" =
+      all(vapply(frame[c("severity", "phase", "condition", "rule", "file", "message", "context")],
+        is.character, logical(1))),
+    "line and column are double" = all(vapply(frame[c("line", "column")], is.double, logical(1))),
+    "every issue is an error" = all(frame$severity == "error"),
+    "every issue has a message" = all(nzchar(frame$message)),
+    "a location has a file and a line, or neither" = identical(is.na(frame$file), is.na(frame$line)),
+    "a location has a file and a column, or neither" = identical(is.na(frame$file), is.na(frame$column)),
+    "spec paths, spans and routes are list columns" =
+      all(vapply(frame[c("spec_paths", "source_span", "operand_route")], is.list, logical(1))),
+    "spec paths are character" = all(vapply(frame$spec_paths, is.character, logical(1))),
+    "every context is a JSON object" = all(startsWith(frame$context, "{")),
+    "a span is NULL or two ordered doubles" =
+      all(vapply(frame$source_span, function(span) is.null(span) || (is.double(span) &&
+        length(span) == 2L && span[[1L]] >= 0 && span[[1L]] <= span[[2L]]), logical(1))),
+    "a route is NULL or character" =
+      all(vapply(frame$operand_route, function(route) is.null(route) || is.character(route), logical(1))))
   frame
 }
 # A failed operation signals yamaa_error carrying the issues that explain it.
 refusal <- function(code) {
   seen <- tryCatch({ force(code); NULL }, yamaa_error = identity)
-  stopifnot(inherits(seen, "yamaa_error"), inherits(seen, "error"), is.null(conditionCall(seen)))
+  stopifnot("the operation signals yamaa_error" = inherits(seen, "yamaa_error"),
+    "yamaa_error is an error" = inherits(seen, "error"),
+    "yamaa_error has no call" = is.null(conditionCall(seen)))
   check_issues(seen$issues)
   seen
 }
@@ -96,18 +103,26 @@ unknown_section <- function(error, section, sections) {
     identical(issue$message, paste("the project declares no section", section)) &&
     identical(issue$context, paste0('{"section":"', section, '","sections":', sections, "}"))
 }
-# The one issue of a save with nothing to write, under `rule`.
-nothing_to_save <- function(error, rule) {
+# The one issue of a save with nothing to write: the shared truth under `key`,
+# which Python compares too. It has no location and no geometry.
+nothing_to_save <- function(error, key) {
   issue <- error$issues
-  nrow(issue) == 1L && identical(issue$phase, "output") &&
-    identical(issue$condition, "nothing_to_save") && identical(issue$rule, rule) &&
-    identical(issue$spec_paths, list(character())) &&
-    identical(issue$message, "there is nothing to save") && identical(issue$context, "{}")
+  row <- host_truth[["nothing_to_save_issues"]][[key]]
+  nrow(issue) == 1L && is.null(row$file) && is.null(row$line) && is.null(row$column) &&
+    is.null(row$source_span) && is.null(row$operand_route) &&
+    identical(list(issue$severity, issue$phase, issue$condition, issue$rule, issue$spec_paths,
+      issue$file, issue$line, issue$column, issue$message, issue$context, issue$source_span,
+      issue$operand_route),
+      list(row$severity, row$phase, row$condition, row$rule,
+        list(as.character(unlist(row$spec_paths))), NA_character_, NA_real_, NA_real_,
+        row$message, row$context, list(NULL), list(NULL)))
 }
 # Argument mistakes are ordinary errors, never yamaa_error.
 argument_failure <- function(code) {
   seen <- tryCatch({ force(code); NULL }, error = identity)
-  stopifnot(inherits(seen, "error"), !inherits(seen, "yamaa_error"), is.character(conditionMessage(seen)))
+  stopifnot("an argument mistake is an error" = inherits(seen, "error"),
+    "an argument mistake is not yamaa_error" = !inherits(seen, "yamaa_error"),
+    "an argument mistake has a message" = is.character(conditionMessage(seen)))
 }
 members <- function(object) sort(ls(object), method = "radix")
 expected_members <- function(kind) fixture_strings(host_truth[["members"]][[kind]])
@@ -124,7 +139,8 @@ arguments_of <- function(f) as.character(names(formals(f)))
 expected_arguments <- function(name) as.character(fixture_strings(host_truth[["arguments"]][[name]]))
 locked <- function(object, names) {
   for (name in names) {
-    stopifnot(inherits(tryCatch({ assign(name, NULL, envir = object); NULL }, error = identity), "error"))
+    if (!inherits(tryCatch({ assign(name, NULL, envir = object); NULL }, error = identity), "error"))
+      stop("a locked member could be assigned: ", name)
   }
 }
 
@@ -142,17 +158,23 @@ qualify_signatures <- function() {
   }
   limits <- host_truth[["read_odm_limits"]]
   options <- formals(yamaa_read_odm)
-  stopifnot(is.null(options$archive_member), is.null(formals(project$run)$section),
-    is.null(formals(project$submission)$section), is.null(formals(project$submission)$created))
-  for (name in names(limits)) stopifnot(identical(options[[name]], as.numeric(limits[[name]])))
-  stopifnot(identical(members(spec), expected_members("spec")),
-    identical(members(project), expected_members("project")),
-    identical(members(spec$check()), expected_members("check")),
-    named(spec$check(), "check"))
+  stopifnot("read_odm's archive member defaults to NULL" = is.null(options$archive_member),
+    "a project run's section defaults to NULL" = is.null(formals(project$run)$section),
+    "a submission's section defaults to NULL" = is.null(formals(project$submission)$section),
+    "a submission's creation time defaults to NULL" = is.null(formals(project$submission)$created))
+  for (name in names(limits)) {
+    expect_identical(options[[name]], as.numeric(limits[[name]]), paste("read_odm's default", name))
+  }
+  expect_identical(members(spec), expected_members("spec"), "a spec's members")
+  expect_identical(members(project), expected_members("project"), "a project's members")
+  expect_identical(members(spec$check()), expected_members("check"), "a check's members")
+  stopifnot("a check names its members" = named(spec$check(), "check"))
   run <- spec$run()
-  stopifnot(identical(members(run), expected_members("run")), named(run, "run"),
-    is.character(run$status), identical(run[["status"]], run$status),
-    identical(arguments_of(run$save), expected_arguments("run.save")))
+  expect_identical(members(run), expected_members("run"), "a run's members")
+  stopifnot("a run names its members" = named(run, "run"),
+    "a run's status is character" = is.character(run$status),
+    "[[ reaches a run's status" = identical(run[["status"]], run$status))
+  expect_identical(arguments_of(run$save), expected_arguments("run.save"), "a run's save arguments")
   locked(spec, c(expected_members("spec"), "extra"))
   locked(project, c(expected_members("project"), "extra"))
   locked(run, c(expected_members("run"), "extra"))
@@ -180,7 +202,7 @@ qualify_signatures <- function() {
     }
   }
   argument_failure(run$save(file.path(root, "other.csv")))
-  stopifnot(identical(list.files(root), character()))
+  expect_identical(list.files(root), character(), "argument mistakes write nothing")
   cat("public exports, signatures, members, locked results and argument errors passed\n")
 }
 qualify_signatures()
@@ -206,40 +228,53 @@ run_contract <- function() {
   first <- yamaa_spec(path("spec.yaml"))$run(); second <- yamaa_spec(path("spec.yaml"))$run()
   for (result in list(first, second)) {
     report <- result$report
-    stopifnot(nrow(check_issues(result$issues)) == 0L, is.environment(result),
-      refuses_output(result, beyond), is.data.frame(report),
-      identical(names(report), fixture_strings(host_truth[["report_columns"]])),
-      identical(report$KIND, c("run", "input", "rows", "column", "column")),
-      identical(report$OUTCOME[[1L]], "succeeded"), identical(report$COUNT[[1L]], 5))
+    stopifnot("the run has no issues" = nrow(check_issues(result$issues)) == 0L,
+      "a run is an environment" = is.environment(result),
+      "the frame refuses integers beyond 2^53" = refuses_output(result, beyond),
+      "the report is a data frame" = is.data.frame(report))
+    expect_identical(names(report), fixture_strings(host_truth[["report_columns"]]), "the report columns")
+    expect_identical(report$KIND, c("run", "input", "rows", "column", "column"), "the report's rows")
+    expect_identical(report$OUTCOME[[1L]], "succeeded", "the run row's outcome")
+    expect_identical(report$COUNT[[1L]], 5, "the run row counts five rows")
     locked(result, fixture_strings(host_truth[["read_only_views"]][["run"]]))
   }
-  stopifnot(!file.exists(path("output.csv")))
+  stopifnot("nothing is written before save" = !file.exists(path("output.csv")))
   unlink(path(c("spec.yaml", "input.csv"))); invisible(gc())
   # save() returns the one path it wrote, invisibly (D38).
   saved <- withVisible(first$save())
-  stopifnot(!saved$visible, identical(saved$value, normalizePath(path("output.csv"), winslash = "/")),
-    identical(rawfile("output.csv"), charToRaw(input)))
+  stopifnot("save returns invisibly" = !saved$visible)
+  expect_identical(saved$value, normalizePath(path("output.csv"), winslash = "/"), "save returns the path it wrote")
+  expect_identical(rawfile("output.csv"), charToRaw(input), "the saved CSV keeps the input bytes")
   rm(first); invisible(gc())
-  stopifnot(refuses_output(second, beyond), returns_paths(second$save()))
+  stopifnot("the second run still refuses its frame" = refuses_output(second, beyond),
+    "the second run saves" = returns_paths(second$save()))
 
   absent <- yamaa_spec(path("absent.yaml"))
   checked <- check_issues(absent$check()$issues)
   run <- absent$run()
   # The caller's own path, named as given at no field (FILE-7).
-  stopifnot(identical(checked$condition, "resource_path_missing"), identical(checked$rule, "FILE-7"),
-    identical(checked$spec_paths, list(character())),
-    identical(jsonlite::fromJSON(checked$context, simplifyVector = FALSE), list(path = path("absent.yaml"))),
-    is.null(run$output), is.null(run$report), identical(run$issues, checked))
+  expect_identical(as.list(checked[c("condition", "rule", "spec_paths")]),
+    list(condition = "resource_path_missing", rule = "FILE-7", spec_paths = list(character())),
+    "an absent specification's one issue")
+  expect_identical(jsonlite::fromJSON(checked$context, simplifyVector = FALSE), list(path = path("absent.yaml")),
+    "an absent specification's issue names the path given")
+  stopifnot("a run of an absent specification has no output" = is.null(run$output),
+    "a run of an absent specification has no report" = is.null(run$report))
+  expect_identical(run$issues, checked, "the run's issues are the check's")
   for (attempt in 1:2) {
     error <- refusal(run$save())
+    label <- sprintf("save attempt %d of an absent specification", attempt)
     # A run whose file was not read names the path as given.
-    stopifnot(identical(conditionMessage(error), error_text("missing_run_save", path("absent.yaml"))),
-      identical(error$issues, checked), identical(run$issues, checked),
-      identical(error$paths, character()))
+    expect_identical(conditionMessage(error), error_text("missing_run_save", path("absent.yaml")),
+      paste(label, "gives D39's text"))
+    expect_identical(error$issues, checked, paste(label, "carries the run's issues"))
+    expect_identical(run$issues, checked, paste(label, "leaves the run's issues"))
+    expect_identical(error$paths, character(), paste(label, "wrote nothing"))
   }
   error <- refusal(absent$resolve())
-  stopifnot(identical(conditionMessage(error), error_text("resolve", path("absent.yaml"))),
-    identical(error$issues, checked))
+  expect_identical(conditionMessage(error), error_text("resolve", path("absent.yaml")),
+    "resolving an absent specification gives D39's text")
+  expect_identical(error$issues, checked, "resolving an absent specification carries the check's issues")
 
   text_spec <- sub("VALUE, type: int", "VALUE, type: str", spec, fixed = TRUE)
   text_spec <- sub("output: {", host_truth[["empty_text_column"]], text_spec, fixed = TRUE)
@@ -247,32 +282,38 @@ run_contract <- function() {
   write("spec.yaml", text_spec)
   write("input.csv", c(charToRaw("ID,VALUE\na,a"), as.raw(0L), charToRaw("b\nb,"),
     as.raw(c(0xc3, 0xa9)), charToRaw("\nc,\n")))
-  text <- yamaa_spec(path("spec.yaml"))$run(); stopifnot(nrow(check_issues(text$issues)) == 0L)
+  text <- yamaa_spec(path("spec.yaml"))$run()
+  stopifnot("the text run has no issues" = nrow(check_issues(text$issues)) == 0L)
   # Text holding NUL has no R character value either: the frame refuses it and
   # save still publishes the held bytes.
-  stopifnot(refuses_output(text, "text containing NUL cannot be held by an R character vector"),
-    returns_paths(text$save()))
+  stopifnot("the frame refuses text holding NUL" =
+      refuses_output(text, "text containing NUL cannot be held by an R character vector"),
+    "the text run saves" = returns_paths(text$save()))
   expected <- c(charToRaw('ID,VALUE,EMPTY\na,a'), as.raw(0L), charToRaw('b,""\nb,'),
     as.raw(c(0xc3, 0xa9)), charToRaw(',""\nc,,""\n'))
-  stopifnot(identical(rawfile("output.csv"), expected))
+  expect_identical(rawfile("output.csv"), expected, "the saved text keeps NUL, UTF-8 and empty strings")
 
   write("spec.yaml", host_truth[["typed_specification_yaml"]])
   write("input.csv", host_truth[["typed_input_csv"]])
   typed <- yamaa_spec(path("spec.yaml"))$run()
-  stopifnot(nrow(check_issues(typed$issues)) == 0L)
+  stopifnot("the typed run has no issues" = nrow(check_issues(typed$issues)) == 0L)
   frame <- typed$output
   values <- host_truth[["typed_values"]]
   decimal <- function(name) vapply(values[[name]], function(value)
     if (is.null(value)) NA_real_ else as.double(value), double(1), USE.NAMES = FALSE)
-  stopifnot(is.data.frame(frame), identical(names(frame), names(values)),
-    identical(frame$ID, decimal("ID")), identical(frame$I, decimal("I")),
-    identical(frame$F, decimal("F")), identical(1 / frame$F[[1L]], -Inf),
-    identical(frame$S, vapply(values$S, function(value) if (is.null(value)) NA_character_ else value,
-      "", USE.NAMES = FALSE)),
-    identical(class(frame$D), "Date"), identical(unclass(frame$D), decimal("D")),
-    identical(class(frame$T), c("POSIXct", "POSIXt")), identical(attr(frame$T, "tzone"), "UTC"),
-    identical(as.numeric(frame$T), decimal("T")),
-    identical(format(frame$T[[3L]], "%Y-%m-%dT%H:%M:%S"), "9999-12-31T23:59:59"))
+  stopifnot("the typed output is a data frame" = is.data.frame(frame))
+  expect_identical(names(frame), names(values), "the typed columns")
+  for (name in c("ID", "I", "F")) expect_identical(frame[[name]], decimal(name), paste("typed column", name))
+  expect_identical(1 / frame$F[[1L]], -Inf, "the first float is negative zero")
+  expect_identical(frame$S, vapply(values$S, function(value) if (is.null(value)) NA_character_ else value,
+    "", USE.NAMES = FALSE), "typed column S")
+  expect_identical(class(frame$D), "Date", "a date column is Date")
+  expect_identical(unclass(frame$D), decimal("D"), "typed column D counts days")
+  expect_identical(class(frame$T), c("POSIXct", "POSIXt"), "a datetime column is POSIXct")
+  expect_identical(attr(frame$T, "tzone"), "UTC", "a datetime column is in UTC")
+  expect_identical(as.numeric(frame$T), decimal("T"), "typed column T counts seconds")
+  expect_identical(format(frame$T[[3L]], "%Y-%m-%dT%H:%M:%S"), "9999-12-31T23:59:59",
+    "the last representable datetime")
 
   failed_spec <- sub(host_truth[["integer_column_yaml"]],
     host_truth[["fatal_integer_column_yaml"]], spec, fixed = TRUE)
@@ -285,48 +326,40 @@ run_contract <- function() {
   failed <- yamaa_spec(path("spec.yaml"))$run(); issues <- check_issues(failed$issues)
   report <- failed$report
   checks <- report[report$KIND == "check", , drop = FALSE]
-  stopifnot(identical(issues$phase, "verification"), identical(issues$condition, "range_failed"),
-    identical(issues$rule, "CHECK-7"),
-    identical(issues$context, '{"column":"VALUE","failure_count":1,"keys":[{"ID":"b"}],"verification_id":"fatal"}'),
-    is.null(failed$output),
-    identical(names(report), fixture_strings(host_truth[["report_columns"]])),
-    identical(report$KIND, c("run", "input", "rows", "check", "check")),
-    identical(checks$ID, c("warn", "fatal")), identical(checks$OUTCOME, c("violated", "violated")),
-    identical(checks$COUNT, c(1, 1)), identical(checks$TOTAL, c(3, 3)),
-    identical(checks$RULE, c("CHECK-7", "CHECK-7")))
+  expect_identical(as.list(issues[c("phase", "condition", "rule", "context")]),
+    list(phase = "verification", condition = "range_failed", rule = "CHECK-7",
+      context = '{"column":"VALUE","failure_count":1,"keys":[{"ID":"b"}],"verification_id":"fatal"}'),
+    "the failed run's one issue")
+  stopifnot("a failed run has no output" = is.null(failed$output))
+  expect_identical(names(report), fixture_strings(host_truth[["report_columns"]]), "the failed run's report columns")
+  expect_identical(report$KIND, c("run", "input", "rows", "check", "check"), "the failed run's report rows")
+  expect_identical(as.list(checks[c("ID", "OUTCOME", "COUNT", "TOTAL", "RULE")]),
+    list(ID = c("warn", "fatal"), OUTCOME = c("violated", "violated"), COUNT = c(1, 1),
+      TOTAL = c(3, 3), RULE = c("CHECK-7", "CHECK-7")),
+    "the failed run's check rows")
   unlink(path(c("spec.yaml", "input.csv"))); invisible(gc())
   # Every save rewrites the report, then raises: a deleted report comes back
   # unchanged and the stale output is never touched.
   for (attempt in 1:2) {
     error <- refusal(failed$save())
-    stopifnot(identical(conditionMessage(error), error_text("failed_run_save", file = failed_file)),
-      identical(error$issues, issues), identical(failed$issues, issues), identical(failed$report, report),
-      identical(rawfile("output.csv"), charToRaw("sentinel")),
-      identical(rawfile("checks.csv"), charToRaw(host_truth[["failed_report_csv"]])))
+    label <- sprintf("save attempt %d of the failed run", attempt)
+    expect_identical(conditionMessage(error), error_text("failed_run_save", file = failed_file),
+      paste(label, "gives D39's text"))
+    expect_identical(error$issues, issues, paste(label, "carries the run's issues"))
+    expect_identical(failed$issues, issues, paste(label, "leaves the run's issues"))
+    expect_identical(failed$report, report, paste(label, "leaves the run's report"))
+    expect_identical(rawfile("output.csv"), charToRaw("sentinel"), paste(label, "leaves the stale output"))
+    expect_identical(rawfile("checks.csv"), charToRaw(host_truth[["failed_report_csv"]]),
+      paste(label, "rewrites the report"))
     unlink(path("checks.csv"))
   }
   rm(failed); invisible(gc())
-  stopifnot(identical(checks$ID, c("warn", "fatal")))
+  expect_identical(checks$ID, c("warn", "fatal"), "a report view outlives its run")
   cat("public results, plain values, snapshots, failed saves and run reports passed\n")
 }
 run_contract()
 
 capabilities <- get(".yamaa_locked_host_capabilities", namespace)()
-with_binding <- function(name, replacement, code) {
-  original <- get(name, namespace)
-  replace <- function(value) {
-    unlockBinding(name, namespace)
-    assign(name, value, namespace)
-    lockBinding(name, namespace)
-  }
-  on.exit(replace(original))
-  replace(replacement)
-  force(code)
-}
-with_capabilities <- function(verify, resolve, code) {
-  with_binding(".yamaa_locked_host_capabilities",
-    function() list(verify = verify, resolve = resolve), code)
-}
 
 qualify_callbacks <- function() {
   root <- tempfile("yamaa-public-callbacks-"); dir.create(root)
@@ -336,7 +369,7 @@ qualify_callbacks <- function() {
   writeBin(charToRaw(host_truth[["r_input_csv"]]), path("input.csv"))
   beyond <- "is beyond 2^53 and cannot be held exactly by an R double"
   original <- file.path(projects, "negative-function-contract")
-  stopifnot(file.copy(original, root, recursive = TRUE))
+  stopifnot("the project case is copied" = file.copy(original, root, recursive = TRUE))
   case <- path("negative-function-contract")
   entry <- file.path(case, "spec.yaml")
   source <- readBin(entry, "raw", n = file.info(entry)$size)
@@ -346,7 +379,8 @@ qualify_callbacks <- function() {
   entries <- list(spec = function() project$spec("TEST")$run(), project = function() project$run())
   # Each activation stage returns the original interrupt object itself.
   for (stage in c("lock", "binding", "conformance", "derivation")) {
-    for (call in entries) {
+    for (entry_name in names(entries)) {
+      call <- entries[[entry_name]]
       interrupted <- structure(list(message = host_truth[["interrupt_message"]], call = NULL, token = new.env()),
         class = c("public_contract_interrupt", "interrupt", "condition"))
       invoked <- 0L
@@ -367,7 +401,10 @@ qualify_callbacks <- function() {
       }
       seen <- with_capabilities(verify, resolve, tryCatch(call(), interrupt = identity))
       expected <- if (stage == "conformance") 1L else if (stage == "derivation") 3L else 0L
-      stopifnot(identical(seen, interrupted), identical(invoked, expected), !file.exists(file.path(case, "test.csv")))
+      label <- sprintf("an interrupt at the %s stage of a %s run", stage, entry_name)
+      expect_identical(seen, interrupted, paste(label, "returns the original interrupt"))
+      expect_identical(invoked, expected, paste(label, "follows this many invocations"))
+      stopifnot("an interrupted run writes nothing" = !file.exists(file.path(case, "test.csv")))
     }
   }
   # Windows cannot send SIGINT to the current process with tools::pskill.
@@ -389,7 +426,7 @@ qualify_callbacks <- function() {
       actual <- list(interrupt = inherits(seen, "interrupt"), calls = invoked,
         published = file.exists(file.path(case, "test.csv")))
       expected <- list(interrupt = TRUE, calls = as.integer(host_truth[["signal_interrupt_calls"]]), published = FALSE)
-      if (!identical(actual, expected)) stop(paste("SIGINT callback", entry_name, "did not stop without publishing"))
+      expect_identical(actual, expected, paste("a SIGINT in a callback of a", entry_name, "run stops it without publishing"))
     }
   } else {
     cat("SKIP: in-process SIGINT requires tools::pskill on Unix\n")
@@ -408,11 +445,14 @@ qualify_callbacks <- function() {
     })
   }
   long_failed <- with_capabilities(capabilities$verify, resolve_long, project$spec("TEST")$run())
-  stopifnot(identical(invoked, 3L), is.null(long_failed$output),
-    identical(check_issues(long_failed$issues)$condition, "function_call_failed"))
+  expect_identical(invoked, 3L, "the long failure ends the third invocation")
+  stopifnot("a failed callback leaves no output" = is.null(long_failed$output))
+  expect_identical(check_issues(long_failed$issues)$condition, "function_call_failed",
+    "a failed callback's issue")
   context <- jsonlite::fromJSON(long_failed$issues$context[[1L]], simplifyVector = FALSE)
-  stopifnot(identical(context$host_error, "public_contract_error"),
-    identical(context$host_message, long_condition$message), is.null(context$host_details_truncated))
+  expect_identical(context$host_error, "public_contract_error", "the host error's class")
+  expect_identical(context$host_message, long_condition$message, "the host message is complete")
+  stopifnot("the host details are not truncated" = is.null(context$host_details_truncated))
   refusal(long_failed$save())
   # Public operations reenter from inside a project function callback.
   calls <- list()
@@ -423,13 +463,15 @@ qualify_callbacks <- function() {
     list(0L, function(arguments) {
       checked <- yamaa_spec(path("spec.yaml"))$check()
       nested <- yamaa_spec(path("spec.yaml"))$run()
-      stopifnot(nrow(check_issues(checked$issues)) == 0L, nrow(check_issues(nested$issues)) == 0L)
+      stopifnot("a reentrant check has no issues" = nrow(check_issues(checked$issues)) == 0L,
+        "a reentrant run has no issues" = nrow(check_issues(nested$issues)) == 0L)
       calls[[length(calls) + 1L]] <<- nested
       invoke(arguments)
     })
   }
   outer <- with_capabilities(capabilities$verify, resolve_reentrant, project$spec("TEST")$run())
-  stopifnot(nrow(check_issues(outer$issues)) == 0L, length(calls) >= 3L)
+  stopifnot("the outer run has no issues" = nrow(check_issues(outer$issues)) == 0L,
+    "every callback reentered" = length(calls) >= 3L)
   # A condition whose details cannot be rendered stays an opaque host failure.
   original_condition <- structure(list(message = "held output formatter failure", call = NULL),
     class = c("public_contract_error", "error", "condition"))
@@ -446,13 +488,17 @@ qualify_callbacks <- function() {
   failed <- with_binding(".project_condition_details", function(condition) list(),
     with_capabilities(capabilities$verify, resolve_failed, project$spec("TEST")$run()))
   measured <- yamaa:::.run_observations(failed, include_measurements = TRUE)
-  stopifnot(is.character(measured), length(measured) == 1L, is.null(failed$output),
-    grepl('"code":"opaque_host"', failed$issues$context, fixed = TRUE),
-    grepl('"outcome":"failed","phase":"output_preparation"', measured, fixed = TRUE))
+  stopifnot("the measured observations are one string" = is.character(measured) && length(measured) == 1L,
+    "an opaque host failure leaves no output" = is.null(failed$output),
+    "an unrenderable condition is an opaque host failure" =
+      grepl('"code":"opaque_host"', failed$issues$context, fixed = TRUE),
+    "output preparation failed" =
+      grepl('"outcome":"failed","phase":"output_preparation"', measured, fixed = TRUE))
   refusal(failed$save())
   unlink(path(c("spec.yaml", "input.csv"))); invisible(gc())
   seen <- tryCatch(calls[[1L]]$output, yamaa_error = identity)
-  stopifnot(inherits(seen, "yamaa_error"), grepl(beyond, conditionMessage(seen), fixed = TRUE))
+  stopifnot("a nested run outlives its sources and still refuses its frame" =
+    inherits(seen, "yamaa_error") && grepl(beyond, conditionMessage(seen), fixed = TRUE))
   cat("public interrupts, callback failures and reentrant operations passed\n")
 }
 qualify_callbacks()
@@ -461,53 +507,64 @@ qualify_project_run_members <- function() {
   root <- tempfile("yamaa-project-run-"); dir.create(root)
   on.exit(unlink(root, recursive = TRUE))
   original <- file.path(projects, "negative-function-contract")
-  stopifnot(file.copy(original, root, recursive = TRUE))
+  stopifnot("the project case is copied" = file.copy(original, root, recursive = TRUE))
   case <- file.path(root, "negative-function-contract")
   entry <- file.path(case, "spec.yaml")
   writeLines(sub("name: project_value", "name: project_value\n        args: {x: SOURCE.VALUE}",
     readLines(entry), fixed = TRUE), entry)
   project <- yamaa_project(file.path(case, "project.yaml"))
   runs <- project$run()
-  stopifnot(identical(runs$names, "TEST"), nrow(check_issues(runs$issues)) == 0L,
-    # The project names what a run of every section builds, read without data
-    # (D45).
-    identical(project$names, runs$names))
+  expect_identical(runs$names, "TEST", "the project run builds TEST")
+  stopifnot("the project run has no issues" = nrow(check_issues(runs$issues)) == 0L)
+  # The project names what a run of every section builds, read without data
+  # (D45).
+  expect_identical(project$names, runs$names, "the project names what its run builds")
   member <- runs[["TEST"]]
   single <- project$spec("TEST")$run()
-  stopifnot(identical(members(member), expected_members("member_run")),
-    named(member, "member_run"),
-    # A project run names its specifications, and counts them.
-    identical(names(runs), runs$names), identical(length(runs), length(runs$names)),
-    nrow(check_issues(member$issues)) == 0L, identical(member$output, single$output),
-    identical(member$report, single$report),
-    # The project report stacks its members' reports in run order.
-    identical(runs$report, member$report))
+  expect_identical(members(member), expected_members("member_run"), "a member run's members")
+  stopifnot("a member run names its members" = named(member, "member_run"))
+  # A project run names its specifications, and counts them.
+  expect_identical(names(runs), runs$names, "a project run's names")
+  expect_identical(length(runs), length(runs$names), "a project run's length")
+  stopifnot("the member has no issues" = nrow(check_issues(member$issues)) == 0L)
+  expect_identical(member$output, single$output, "the member's output is a single run's")
+  expect_identical(member$report, single$report, "the member's report is a single run's")
+  # The project report stacks its members' reports in run order.
+  expect_identical(runs$report, member$report, "the project report stacks its members'")
   locked(member, c(fixture_strings(host_truth[["read_only_views"]][["member_run"]]), "save"))
   error <- refusal(runs[["ADSL"]])
-  stopifnot(identical(conditionMessage(error), error_text("unknown_member")),
-    unknown_member(error, '["TEST"]'))
+  expect_identical(conditionMessage(error), error_text("unknown_member"), "an unknown member's error text")
+  stopifnot("an unknown member's one issue" = unknown_member(error, '["TEST"]'))
   # A section the project does not declare refuses the run (PROJECT-14).
-  stopifnot(unknown_section(refusal(project$run("sdtm")), "sdtm", '["adam"]'))
+  stopifnot("an undeclared section refuses the run" =
+    unknown_section(refusal(project$run("sdtm")), "sdtm", '["adam"]'))
   # A declared section that lists no specification builds nothing, and a run or
   # a submission that built nothing has nothing to save.
   listing <- file.path(case, "project.yaml")
   cat("sdtm:\n  specs: []\n", file = listing, append = TRUE)
   error <- refusal(project$run("sdtm")$save())
-  stopifnot(identical(conditionMessage(error), error_text("empty_project_run_save", listing)),
-    nothing_to_save(error, "PROJECT-12"))
+  expect_identical(conditionMessage(error), error_text("empty_project_run_save", listing),
+    "an empty project run's save text")
+  stopifnot("an empty project run has nothing to save" = nothing_to_save(error, "empty_project_run_save"))
   submission <- project$submission()
   error <- refusal(submission$save())
-  stopifnot(identical(conditionMessage(error), error_text("empty_submission_save", listing)),
-    nothing_to_save(error, "PROJECT-13"),
+  expect_identical(conditionMessage(error), error_text("empty_submission_save", listing),
+    "an empty submission's save text")
+  stopifnot("an empty submission has nothing to save" = nothing_to_save(error, "empty_submission_save"),
     # Without a creation time the submission reads the clock once and reports
     # the time it gave every section (D129).
-    grepl("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}$", submission$created),
-    identical(project$names, "TEST"))
+    "the submission reports the clock time it read" =
+      grepl("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}$", submission$created))
+  expect_identical(project$names, "TEST", "an empty section adds no names")
   empty <- project$run("sdtm")
-  stopifnot(identical(names(empty), character()), identical(length(empty), 0L))
-  stopifnot(identical(project$run("adam")$names, "TEST"), identical(project$run("sdtm")$names, character()),
-    !file.exists(file.path(case, "test.csv")), returns_paths(runs$save()),
-    identical(readBin(file.path(case, "test.csv"), "raw", 100L), charToRaw("ID,RESULT\n01,1.5\n")))
+  expect_identical(names(empty), character(), "an empty project run names nothing")
+  expect_identical(length(empty), 0L, "an empty project run has length 0")
+  expect_identical(project$run("adam")$names, "TEST", "the adam section builds TEST")
+  expect_identical(project$run("sdtm")$names, character(), "the sdtm section builds nothing")
+  stopifnot("nothing is written before save" = !file.exists(file.path(case, "test.csv")),
+    "the project run saves" = returns_paths(runs$save()))
+  expect_identical(readBin(file.path(case, "test.csv"), "raw", 100L), charToRaw("ID,RESULT\n01,1.5\n"),
+    "the project run saves its member's CSV")
   cat("project run members hold each run and only the project run saves\n")
 }
 qualify_project_run_members()
@@ -515,13 +572,13 @@ qualify_project_run_members()
 # Save, delete what was written, save again: the same held bytes return,
 # with every source already gone.
 restored <- function(directory, names, save) {
-  stopifnot(returns_paths(save()))
-  held <- lapply(file.path(directory, names), function(path) readBin(path, "raw", file.info(path)$size))
+  stopifnot("the first save writes" = returns_paths(save()))
+  held <- lapply(file.path(directory, names), rawfile)
   unlink(file.path(directory, names))
-  stopifnot(returns_paths(save()))
+  stopifnot("the second save writes again" = returns_paths(save()))
   for (index in seq_along(names)) {
-    path <- file.path(directory, names[[index]])
-    stopifnot(identical(readBin(path, "raw", file.info(path)$size), held[[index]]))
+    expect_identical(rawfile(file.path(directory, names[[index]])), held[[index]],
+      paste("the second save rewrites the same", names[[index]]))
   }
   setNames(held, names)
 }
@@ -532,33 +589,34 @@ qualify_every_save_rewrites <- function() {
     host_truth[["specification_yaml"]], fixed = TRUE)), file.path(root, "spec.yaml"))
   writeBin(charToRaw(host_truth[["r_input_csv"]]), file.path(root, "input.csv"))
   run <- yamaa_spec(file.path(root, "spec.yaml"))$run()
-  stopifnot(nrow(check_issues(run$issues)) == 0L)
+  stopifnot("the run has no issues" = nrow(check_issues(run$issues)) == 0L)
   unlink(file.path(root, c("spec.yaml", "input.csv")))
   held <- restored(root, c("output.csv", "report.csv"), run$save)
-  stopifnot(identical(held[["output.csv"]], charToRaw(host_truth[["r_input_csv"]])))
+  expect_identical(held[["output.csv"]], charToRaw(host_truth[["r_input_csv"]]), "a run saves its held output")
   original <- file.path(projects, "negative-function-contract")
-  stopifnot(file.copy(original, root, recursive = TRUE))
+  stopifnot("the project case is copied" = file.copy(original, root, recursive = TRUE))
   case <- file.path(root, "negative-function-contract")
   entry <- file.path(case, "spec.yaml")
   writeLines(sub("name: project_value", "name: project_value\n        args: {x: SOURCE.VALUE}",
     readLines(entry), fixed = TRUE), entry)
   runs <- yamaa_project(file.path(case, "project.yaml"))$run()
-  stopifnot(nrow(check_issues(runs$issues)) == 0L)
+  stopifnot("the project run has no issues" = nrow(check_issues(runs$issues)) == 0L)
   unlink(file.path(case, "input"), recursive = TRUE); unlink(entry)
   held <- restored(case, "test.csv", runs$save)
-  stopifnot(identical(held[["test.csv"]], charToRaw("ID,RESULT\n01,1.5\n")))
+  expect_identical(held[["test.csv"]], charToRaw("ID,RESULT\n01,1.5\n"), "a project run saves its held output")
   fixture <- file.path(define_fixtures, "sdtm-dm-metadata")
   directory <- file.path(root, "submission"); dir.create(directory)
-  stopifnot(file.copy(file.path(fixture, c("project.yaml", "spec.yaml")), directory),
-    file.copy(file.path(fixture, "expected", "dm.csv"), directory))
+  stopifnot("the submission fixture is copied" =
+    all(file.copy(file.path(fixture, c("project.yaml", "spec.yaml")), directory)) &&
+      file.copy(file.path(fixture, "expected", "dm.csv"), directory))
   created <- read_host_fixture(host_fixture_root, "public-define")[["created"]]
   submission <- yamaa_project(file.path(directory, "project.yaml"))$submission("sdtm", created = created)
-  stopifnot(nrow(check_issues(submission$issues)) == 0L)
+  stopifnot("the submission has no issues" = nrow(check_issues(submission$issues)) == 0L)
   unlink(file.path(directory, c("project.yaml", "spec.yaml", "dm.csv")))
   held <- restored(directory, c("define.xml", "dm.json"), submission$save)
   for (name in names(held)) {
-    path <- file.path(fixture, "expected", name)
-    stopifnot(identical(held[[name]], readBin(path, "raw", file.info(path)$size)))
+    expect_identical(held[[name]], rawfile(file.path(fixture, "expected", name)),
+      paste("the submission saves the authored", name))
   }
   cat("every save rewrites what its run, project run or submission holds\n")
 }
@@ -580,10 +638,12 @@ qualify_public_large_text_callback <- function() {
   expected <- charToRaw(paste0("ID,V\n1,", value, "\n"))
   writeBin(expected, file.path(directory, "input.csv"))
   built <- yamaa_project(file.path(directory, "project.yaml"))$spec("TEXT")$run()
-  stopifnot(nrow(check_issues(built$issues)) == 0L, identical(built$output$V, value))
+  stopifnot("the large text run has no issues" = nrow(check_issues(built$issues)) == 0L,
+    "the callback returns the whole text" = identical(built$output$V, value))
   unlink(file.path(directory, c("domain.yaml", "project.yaml", "environment.yaml", "renv.lock", "input.csv")))
-  stopifnot(returns_paths(built$save()),
-    identical(readBin(file.path(directory, "held.csv"), "raw", n = length(expected) + 1L), expected))
+  stopifnot("the large text run saves" = returns_paths(built$save()),
+    "the saved CSV holds the whole text" =
+      identical(readBin(file.path(directory, "held.csv"), "raw", n = length(expected) + 1L), expected))
   cat("public callback text beyond one MiB remains owned and saves exact bytes\n")
 }
 qualify_public_large_text_callback()
@@ -596,40 +656,53 @@ qualify_project_refusals <- function() {
   error <- refusal(project$spec("TEST"))
   unread <- error$issues
   # The caller's own path, named as given at no field (FILE-7).
-  stopifnot(identical(conditionMessage(error), error_text("unread_project", absent)),
-    identical(unread$condition, "resource_path_missing"),
-    identical(unread$spec_paths, list(character())),
-    identical(jsonlite::fromJSON(unread$context, simplifyVector = FALSE), list(path = absent)),
-    identical(check_issues(project$check()$issues), unread))
+  expect_identical(conditionMessage(error), error_text("unread_project", absent),
+    "selecting from an absent project gives D39's text")
+  expect_identical(as.list(unread[c("condition", "spec_paths")]),
+    list(condition = "resource_path_missing", spec_paths = list(character())),
+    "an absent project's one issue")
+  expect_identical(jsonlite::fromJSON(unread$context, simplifyVector = FALSE), list(path = absent),
+    "an absent project's issue names the path given")
+  expect_identical(check_issues(project$check()$issues), unread, "an absent project's check")
   error <- refusal(project$names)
-  stopifnot(identical(conditionMessage(error), error_text("unread_project_names", absent)),
-    identical(error$issues, unread))
+  expect_identical(conditionMessage(error), error_text("unread_project_names", absent),
+    "an absent project's names give D39's text")
+  expect_identical(error$issues, unread, "an absent project's names carry its issue")
   runs <- project$run()
-  stopifnot(identical(runs$names, character()), identical(check_issues(runs$issues), unread),
-    identical(names(runs$report), fixture_strings(host_truth[["report_columns"]])),
-    nrow(runs$report) == 0L, identical(members(runs), expected_members("project_run")))
+  expect_identical(runs$names, character(), "an absent project's run builds nothing")
+  expect_identical(check_issues(runs$issues), unread, "an absent project's run carries its issue")
+  expect_identical(names(runs$report), fixture_strings(host_truth[["report_columns"]]),
+    "an absent project's report columns")
+  expect_identical(nrow(runs$report), 0L, "an absent project's report is empty")
+  expect_identical(members(runs), expected_members("project_run"), "a project run's members")
   locked(runs, c(fixture_strings(host_truth[["read_only_views"]][["project_run"]]), "save"))
   error <- refusal(runs$save())
-  stopifnot(identical(conditionMessage(error), error_text("refused_project_run_save", absent)),
-    identical(error$issues, unread))
+  expect_identical(conditionMessage(error), error_text("refused_project_run_save", absent),
+    "a refused project run's save text")
+  expect_identical(error$issues, unread, "a refused project run's save carries its issue")
   error <- refusal(runs[["ADSL"]])
-  stopifnot(identical(conditionMessage(error), error_text("no_member_built")), unknown_member(error, "[]"))
+  expect_identical(conditionMessage(error), error_text("no_member_built"), "a project run that built nothing")
+  stopifnot("a project run that built nothing names no member" = unknown_member(error, "[]"))
   submission <- project$submission("sdtm", created = "2026-09-11T00:00:00")
-  stopifnot(identical(members(submission), expected_members("submission")),
-    named(submission, "submission"),
-    identical(check_issues(submission$issues), unread),
-    # The creation time given is kept, though nothing composed (D129).
-    identical(submission$created, "2026-09-11T00:00:00"))
+  expect_identical(members(submission), expected_members("submission"), "a submission's members")
+  stopifnot("a submission names its members" = named(submission, "submission"))
+  expect_identical(check_issues(submission$issues), unread, "an absent project's submission carries its issue")
+  # The creation time given is kept, though nothing composed (D129).
+  expect_identical(submission$created, "2026-09-11T00:00:00", "the creation time given is kept")
   locked(submission, c(fixture_strings(host_truth[["read_only_views"]][["submission"]]), "save"))
   for (attempt in 1:2) {
     error <- refusal(submission$save())
-    stopifnot(identical(conditionMessage(error), error_text("refused_submission_save", absent)),
-      identical(error$issues, submission$issues))
+    label <- sprintf("save attempt %d of a refused submission", attempt)
+    expect_identical(conditionMessage(error), error_text("refused_submission_save", absent),
+      paste(label, "gives D39's text"))
+    expect_identical(error$issues, submission$issues, paste(label, "carries the submission's issues"))
   }
   # The project file is read first: one that cannot be read reports its own
   # findings, and no section is checked.
-  stopifnot(identical(check_issues(project$run("bogus")$issues), unread),
-    identical(check_issues(project$submission("bogus")$issues), unread))
+  expect_identical(check_issues(project$run("bogus")$issues), unread,
+    "an absent project's run of any section carries its issue")
+  expect_identical(check_issues(project$submission("bogus")$issues), unread,
+    "an absent project's submission of any section carries its issue")
   # A name that is no section of the project raises (PROJECT-14).
   listing <- file.path(root, "project.yaml")
   writeLines(c("schema_version: '1.0'", "adam:", "  specs: []"), listing)
@@ -637,10 +710,10 @@ qualify_project_refusals <- function() {
   for (case in list(list(call = function() project$run("bogus"), message = "unknown_section_run"),
                     list(call = function() project$submission("bogus"), message = "unknown_section_submission"))) {
     error <- refusal(case$call())
-    stopifnot(identical(conditionMessage(error), error_text(case$message)),
-      unknown_section(error, "bogus", '["adam"]'))
+    expect_identical(conditionMessage(error), error_text(case$message), paste("the text of", case$message))
+    stopifnot("an unknown section's one issue" = unknown_section(error, "bogus", '["adam"]'))
   }
-  stopifnot(identical(list.files(root), "project.yaml"))
+  expect_identical(list.files(root), "project.yaml", "project refusals write nothing")
   cat("project refusals are issues, refused saves fail and unknown sections raise\n")
 }
 qualify_project_refusals()
@@ -656,10 +729,13 @@ qualify_issue_geometry <- function() {
     "  - {name: N, type: int, derivation: {literal: 18446744073709551616}}",
     "output: {path: output.csv, columns: [ID, N]}"), path("spec.yaml"))
   frame <- check_issues(yamaa_spec(path("spec.yaml"))$check()$issues)
-  stopifnot(identical(frame$phase, "validation"), identical(frame$condition, "integer_overflow"),
-    identical(frame$rule, "VALUE-5"), identical(frame$spec_paths, list("columns.N.derivation.literal")),
-    identical(frame$context, '{"actual":18446744073709551616,"maximum":9223372036854775807,"minimum":-9223372036854775808}'),
-    is.null(frame$source_span[[1L]]), is.null(frame$operand_route[[1L]]))
+  expect_identical(as.list(frame[c("phase", "condition", "rule", "spec_paths", "context", "source_span",
+    "operand_route")]),
+    list(phase = "validation", condition = "integer_overflow", rule = "VALUE-5",
+      spec_paths = list("columns.N.derivation.literal"),
+      context = '{"actual":18446744073709551616,"maximum":9223372036854775807,"minimum":-9223372036854775808}',
+      source_span = list(NULL), operand_route = list(NULL)),
+    "a literal beyond 64 bits keeps its exact digits and has no geometry")
   # A division by zero fails at one node of the compute expression: the span
   # covers that node's bytes and the route leads to it from the root, so a
   # failure at the root has a present empty route, never NULL.
@@ -676,10 +752,13 @@ qualify_issue_geometry <- function() {
     result <- yamaa_spec(path("spec.yaml"))$run()
     frame <- check_issues(result$issues)
     span <- frame$source_span[[1L]]
-    stopifnot(is.null(result$output), identical(frame$condition, "division_by_zero"),
-      identical(substr(case$expression, span[[1L]] + 1, span[[2L]]), "VALUE / ZERO"),
-      identical(frame$operand_route[[1L]], case$route),
-      grepl('"keys":[{"ID":"a"}]', frame$context, fixed = TRUE))
+    label <- paste("a division by zero in", case$expression)
+    expect_identical(result$output, NULL, paste(label, "leaves no output"))
+    expect_identical(frame$condition, "division_by_zero", paste(label, "is its condition"))
+    expect_identical(substr(case$expression, span[[1L]] + 1, span[[2L]]), "VALUE / ZERO",
+      paste(label, "spans the failing node"))
+    expect_identical(frame$operand_route[[1L]], case$route, paste(label, "routes to the failing node"))
+    stopifnot("the context names the row's key" = grepl('"keys":[{"ID":"a"}]', frame$context, fixed = TRUE))
   }
   cat("issue rows keep exact wide integers and distinguish recorded from absent geometry\n")
 }
@@ -703,37 +782,54 @@ qualify_issue_parity <- function() {
     # `{path}` stands for the specification path given, as JSON text in the
     # context.
     given <- c(message = spec, context = gsub("\\", "\\\\", spec, fixed = TRUE))
-    text <- function(field) vapply(expected, function(issue)
-      if (is.null(issue[[field]])) NA_character_
-      else if (field %in% names(given)) gsub("{path}", given[[field]], issue[[field]], fixed = TRUE)
-      else issue[[field]], "")
-    number <- function(field) vapply(expected, function(issue)
-      if (is.null(issue[[field]])) NA_real_ else as.double(issue[[field]]), 0)
-    actual <- list(severity = frame$severity, phase = frame$phase, condition = frame$condition,
-      rule = frame$rule, spec_paths = frame$spec_paths, file = frame$file, line = frame$line,
-      column = frame$column, message = frame$message, context = frame$context,
-      source_span = frame$source_span, operand_route = frame$operand_route)
-    truth <- list(severity = text("severity"), phase = text("phase"),
-      condition = text("condition"), rule = text("rule"),
-      spec_paths = lapply(expected, function(issue) as.character(unlist(issue$spec_paths))),
-      # A truth row names its file relative to the case's directory; a
-      # location names it by its absolute path (P-ISSUE-1).
-      file = vapply(expected, function(issue) if (is.null(issue$file)) NA_character_ else
-        normalizePath(file.path(directory, issue$file), winslash = "/", mustWork = TRUE), ""),
-      line = number("line"), column = number("column"),
-      message = enc2utf8(text("message")), context = enc2utf8(text("context")),
-      source_span = lapply(expected, function(issue)
-        if (is.null(issue$source_span)) NULL else as.double(unlist(issue$source_span))),
-      operand_route = lapply(expected, function(issue)
-        if (is.null(issue$operand_route)) NULL else as.character(unlist(issue$operand_route))))
-    if (!identical(actual, truth)) {
-      str(actual); str(truth)
-      stop("issue rows differ from the shared parity truth: ", case$name)
-    }
+    expected <- lapply(expected, function(issue) {
+      for (field in names(given)) if (!is.null(issue[[field]]))
+        issue[[field]] <- gsub("{path}", given[[field]], issue[[field]], fixed = TRUE)
+      issue
+    })
+    # A truth row names its file relative to the case's directory; a
+    # location names it by its absolute path (P-ISSUE-1).
+    expect_identical(issue_columns_of(frame),
+      issue_truth(expected, normalizePath(directory, winslash = "/", mustWork = TRUE)),
+      paste("the issue rows of the shared parity case", case$name))
   }
   cat("issue rows equal the shared parity truth field for field\n")
 }
 qualify_issue_parity()
+
+# A value-level entry that selects no row is a warning in the run's report,
+# never an issue (SUB-13); Python compares the same rows. COUNT and TOTAL are
+# doubles in R, and a missing cell is NA.
+qualify_value_level_report <- function() {
+  root <- tempfile("yamaa-value-level-"); dir.create(root)
+  on.exit(unlink(root, recursive = TRUE))
+  case <- host_truth[["value_level_report"]]
+  spec <- file.path(root, "spec.yaml")
+  writeBin(charToRaw(enc2utf8(case$specification_yaml)), spec)
+  writeBin(charToRaw(enc2utf8(case$input_csv)), file.path(root, "input.csv"))
+  run <- yamaa_spec(spec)$run()
+  stopifnot(nrow(check_issues(run$issues)) == 0L)
+  report <- run$report
+  checks <- report[!is.na(report$NAME) & report$NAME == "value_level", , drop = FALSE]
+  columns <- fixture_strings(host_truth[["report_columns"]])
+  cells <- function(name) lapply(case$checks, `[[`, name)
+  expected <- lapply(columns, function(name) {
+    if (name %in% c("COUNT", "TOTAL")) {
+      vapply(cells(name), function(value) if (is.null(value)) NA_real_ else as.double(value), 0)
+    } else {
+      vapply(cells(name), function(value) if (is.null(value)) NA_character_ else value, "")
+    }
+  })
+  actual <- lapply(columns, function(name) checks[[name]])
+  names(expected) <- names(actual) <- columns
+  if (!identical(actual, expected)) {
+    str(actual); str(expected)
+    stop("value-level report rows differ from the shared truth")
+  }
+  stopifnot(identical(checks$CONDITION[checks$OUTCOME == "violated"], case$condition))
+  cat("a value-level entry that selects no row warns in the run's report\n")
+}
+qualify_value_level_report()
 
 qualify_resolve <- function() {
   root <- tempfile("yamaa-resolve-"); dir.create(root)
@@ -747,15 +843,19 @@ qualify_resolve <- function() {
   spec <- yamaa_spec(entry)
   facts <- spec$resolve()
   resource <- Filter(function(value) identical(value$role, "input_data"), facts$entries[[1L]]$resources)[[1L]]
-  stopifnot(is.list(facts), identical(facts$format, "yamaa.resolved-specification"),
-    identical(facts$artifact_version, 1), identical(facts$entry, entry),
-    identical(facts$replay, "inspection_only"), "project" %in% names(facts), is.null(facts[["project"]]),
-    identical(resource$location, list(kind = "local", path = file.path(root, "missing/raw.csv"))),
-    !dir.exists(file.path(root, "absent")))
+  stopifnot("the facts are a list" = is.list(facts))
+  expect_identical(facts[c("format", "artifact_version", "entry", "replay")],
+    list(format = "yamaa.resolved-specification", artifact_version = 1, entry = entry,
+      replay = "inspection_only"),
+    "the resolved facts' identity")
+  stopifnot("the facts name no project, as NULL" = "project" %in% names(facts) && is.null(facts[["project"]]))
+  expect_identical(resource$location, list(kind = "local", path = file.path(root, "missing/raw.csv")),
+    "an input's location")
+  stopifnot("resolve creates no output directory" = !dir.exists(file.path(root, "absent")))
   unlink(entry)
   error <- refusal(spec$resolve())
-  stopifnot(identical(conditionMessage(error), error_text("resolve", entry)),
-    identical(error$issues$condition, "resource_path_missing"))
+  expect_identical(conditionMessage(error), error_text("resolve", entry), "resolving a removed specification")
+  expect_identical(error$issues$condition, "resource_path_missing", "a removed specification's issue")
 
   # The project supplies the function and names itself; the same file alone
   # names an unknown function. No callable is activated.
@@ -775,12 +875,13 @@ qualify_resolve <- function() {
   refuse <- function(...) stop("unexpected activation")
   facts <- with_capabilities(refuse, refuse,
     yamaa_project(file.path(root, "project.yaml"))$spec("TEST")$resolve())
-  stopifnot(identical(facts$project, file.path(root, "project.yaml")), identical(facts$entry, entry))
+  expect_identical(facts[c("project", "entry")], list(project = file.path(root, "project.yaml"), entry = entry),
+    "a project's specification names the project")
   error <- refusal(yamaa_spec(entry)$resolve())
-  stopifnot(identical(error$issues$condition, "unknown_project_function"),
-    identical(error$issues$rule, "FUNC-4"),
-    identical(error$issues$spec_paths, list("columns.V.derivation.function.name")),
-    identical(error$issues$context, '{"function":"text"}'))
+  expect_identical(as.list(error$issues[c("condition", "rule", "spec_paths", "context")]),
+    list(condition = "unknown_project_function", rule = "FUNC-4",
+      spec_paths = list("columns.V.derivation.function.name"), context = '{"function":"text"}'),
+    "the specification alone names an unknown function")
 
   # A mapping key holding NUL is both text and a name in the facts, and R
   # holds neither: resolve refuses it instead of failing inside R.
@@ -789,7 +890,7 @@ qualify_resolve <- function() {
     "columns: [{name: ID, type: int, derivation: RAW.ID}, {name: W, type: str, derivation: {mapping: {source: RAW.V, dict: {\"L\\0\": LOW}}}}]",
     "output: {path: output.csv, columns: [ID, W]}"), entry)
   error <- refusal(yamaa_spec(entry)$resolve())
-  stopifnot(grepl("containing NUL cannot be held by an R character vector",
+  stopifnot("resolve refuses a key holding NUL" = grepl("containing NUL cannot be held by an R character vector",
     conditionMessage(error), fixed = TRUE))
   cat("resolve returns plain facts, names the project and refuses unreadable specifications\n")
 }
@@ -819,17 +920,21 @@ qualify_resolved_schema_links <- function() {
     spec <- yamaa_spec(file.path(study, "spec.yaml"))
     entries <- spec$resolve()$entries
     # A linked producer is type metadata, not a resolved entry.
-    stopifnot(length(entries) == 1L, is.null(entries[[1L]]$producers))
+    expect_identical(length(entries), 1L, paste("study", wrapper, "resolves one entry"))
+    stopifnot("a linked producer is no resolved entry" = is.null(entries[[1L]]$producers))
     schema <- Filter(function(value) identical(value$role, "producer_schema"), entries[[1L]]$resources)[[1L]]
-    stopifnot(identical(schema$location$path, file.path(study, "producer.yaml")))
+    expect_identical(schema$location$path, file.path(study, "producer.yaml"),
+      paste("study", wrapper, "links its own producer"))
     source <- Filter(function(value) identical(value$role, "input_data"), entries[[1L]]$resources)[[1L]]
-    stopifnot(identical(source$location$path, file.path(study, "output/produced.csv")))
+    expect_identical(source$location$path, file.path(study, "output/produced.csv"),
+      paste("study", wrapper, "reads its own producer's output"))
     # Callers build and save each study's producer first.
     dir.create(file.path(study, "output"))
-    stopifnot(returns_paths(yamaa_spec(file.path(study, "producer.yaml"))$run()$save()))
+    stopifnot("the producer saves" = returns_paths(yamaa_spec(file.path(study, "producer.yaml"))$run()$save()))
     result <- spec$run()
-    stopifnot(nrow(result$issues) == 0L, identical(result$output$ID, identifier),
-      !file.exists(file.path(study, "output/final.csv")))
+    expect_identical(nrow(result$issues), 0L, paste("study", wrapper, "runs without issues"))
+    expect_identical(result$output$ID, identifier, paste("study", wrapper, "reads its own identifier"))
+    stopifnot("the consumer writes nothing before save" = !file.exists(file.path(study, "output/final.csv")))
   }
   cat("resolved schema links agree with ordered direct runs for both studies\n")
 }
@@ -850,8 +955,9 @@ qualify_resolved_origins <- function() {
   direct <- origins(base)
   inherited <- origins(child)
   pointer <- "/columns/0/derivation/value/mapping/case_sensitive"
-  stopifnot(identical(direct[[pointer]]$source_kind, "schema_default"),
-    identical(inherited[[pointer]], direct[[pointer]]), isTRUE(inherited[["/input/RAW"]]$generated))
+  expect_identical(direct[[pointer]]$source_kind, "schema_default", "a default's origin")
+  expect_identical(inherited[[pointer]], direct[[pointer]], "an inherited default keeps its origin")
+  stopifnot("a shorthand input is generated" = isTRUE(inherited[["/input/RAW"]]$generated))
   writeLines(c("schema_version: '1.0'", "domain: TEST", "keys: [ID]", "input: {RAW: missing.csv}",
     "windows: {W: {order_by: [RAW.ID]}}", "columns: [{name: ID, type: int, derivation: RAW.ID}]",
     "output: {path: result.csv, columns: [ID]}"), base)
@@ -860,9 +966,12 @@ qualify_resolved_origins <- function() {
     "output: {path: result.csv, columns: [ID, N]}"), child)
   inherited <- origins(child)
   prefix <- "/columns/1/derivation/value/row_number/window"
-  stopifnot(identical(inherited[[prefix]]$declaring_source, child),
-    identical(inherited[[paste0(prefix, "/order_by/0/variable")]]$declaring_source, base),
-    identical(inherited[[paste0(prefix, "/order_by/0/direction")]]$source_kind, "schema_default"),
+  expect_identical(inherited[[prefix]]$declaring_source, child, "the window reference's origin")
+  expect_identical(inherited[[paste0(prefix, "/order_by/0/variable")]]$declaring_source, base,
+    "the named window's definition keeps its origin")
+  expect_identical(inherited[[paste0(prefix, "/order_by/0/direction")]]$source_kind, "schema_default",
+    "the window's default direction")
+  stopifnot("a shorthand source is generated" =
     isTRUE(inherited[["/columns/0/derivation/value/source/variable"]]$generated))
   cat("resolved original origins retain inherited defaults, shorthand and named-window definitions\n")
 }

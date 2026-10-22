@@ -14,25 +14,15 @@
 //! of the shared driver that a grouped row template does not group by
 //! (NAME-4), and a field of a dataset whose records build none of the rows,
 //! in any window (NAME-3).
-use std::{
-    fs,
-    path::PathBuf,
-    sync::atomic::{AtomicUsize, Ordering},
-};
+use std::fs;
 use yamaa_adapters::{file_application, specification_report::Identity};
 use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::{domain_entry::Request, json::Value};
 
-struct Fixture(PathBuf);
+struct Fixture(crate::support::Scratch);
 impl Fixture {
     fn new(specification: &str) -> Self {
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        let root = std::env::temp_dir().join(format!(
-            "yamaa-column-window-drivers-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
-        fs::create_dir(&root).unwrap();
+        let root = crate::support::Scratch::new("column-window-drivers");
         fs::write(root.join("spec.yaml"), specification).unwrap();
         fs::write(root.join("dm.csv"), DM).unwrap();
         fs::write(root.join("ae.csv"), AE).unwrap();
@@ -124,11 +114,6 @@ impl Fixture {
             fs::read_to_string(self.0.join("out.csv")).unwrap(),
             expected
         );
-    }
-}
-impl Drop for Fixture {
-    fn drop(&mut self) {
-        fs::remove_dir_all(&self.0).unwrap();
     }
 }
 

@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADRS
 keys: [STUDYID, USUBJID, RSSEQ]
 input:
@@ -27,7 +29,7 @@ columns:
   - name: PARAMCD
     type: str
     label: Parameter Code
-    derivation: {literal: CONFRESP}
+    derivation: "'CONFRESP'"
 
   - name: RSSEQ
     type: int
@@ -84,11 +86,11 @@ columns:
     derivation:
       case:
         - when: "AVALC = 'PD'"
-          then: {literal: Y}
+          then: "'Y'"
         - when: "AVALC IN ('PR', 'CR') AND NEXTRESP IN ('PR',
             'CR') AND DAYS_TO_NEXT >= 28"
-          then: {literal: Y}
-        - otherwise: {literal: N}
+          then: "'Y'"
+        - otherwise: "'N'"
 
 verifications:
   - row_count:

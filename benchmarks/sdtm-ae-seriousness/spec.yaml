@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: SDTM
 domain: AE
 keys: [STUDYID, USUBJID, AESEQ]
 input:
@@ -14,7 +16,7 @@ columns:
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
-    derivation: {literal: AE}
+    derivation: "'AE'"
 
   - name: STUDYID
     type: str
@@ -47,8 +49,8 @@ columns:
             AE_RAW.AESDTH = 'Y' OR AE_RAW.AESLIFE = 'Y'
             OR AE_RAW.AESHOSP = 'Y' OR AE_RAW.AESDISAB = 'Y'
             OR AE_RAW.AESCONG = 'Y' OR AE_RAW.AESMIE = 'Y'
-          then: {literal: Y}
-        - otherwise: {literal: N}
+          then: "'Y'"
+        - otherwise: "'N'"
     verifications:
       - allowed_values: {values: [Y, N]}
 

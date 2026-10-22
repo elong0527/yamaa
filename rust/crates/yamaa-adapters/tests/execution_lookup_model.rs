@@ -3,25 +3,15 @@
 //! qualified aggregate match their keys and range (LOOKUP-9), narrow the
 //! matched records by their filter (LOOKUP-8), and select or reduce the
 //! candidates in stored record order (LOOKUP-10).
-use std::{
-    fs,
-    path::PathBuf,
-    sync::atomic::{AtomicUsize, Ordering},
-};
+use std::fs;
 use yamaa_adapters::{file_application, specification_report::Identity};
 use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::{domain_entry::Request, json::Value};
 
-struct Fixture(PathBuf);
+struct Fixture(crate::support::Scratch);
 impl Fixture {
     fn new(specification: &str, inputs: &[(&str, &str)]) -> Self {
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        let root = std::env::temp_dir().join(format!(
-            "yamaa-lookup-model-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
-        fs::create_dir(&root).unwrap();
+        let root = crate::support::Scratch::new("lookup-model");
         fs::write(root.join("spec.yaml"), specification).unwrap();
         for (name, content) in inputs {
             fs::write(root.join(name), content).unwrap();
@@ -112,11 +102,6 @@ impl Fixture {
         .iter()
         .map(yamaa_adapters::report_storage::diagnostic_value)
         .collect()
-    }
-}
-impl Drop for Fixture {
-    fn drop(&mut self) {
-        fs::remove_dir_all(&self.0).unwrap();
     }
 }
 

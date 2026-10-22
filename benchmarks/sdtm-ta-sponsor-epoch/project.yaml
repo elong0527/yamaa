@@ -1,10 +1,6 @@
 # Fixed creation time is supplied by the submission call in benchmark.yaml.
-schema_version: '1.0'
-study:
-  id: STUDY02
-  name: STUDY02
-  description: Example study submitting a sponsor-extended epoch
-  protocol_name: STUDY-02
+yamaa: "1.0"
+type: project
 codelists:
 - standard:
     name: CDISC/NCI
@@ -24,14 +20,18 @@ codelists:
       alias: C101526
     - value: EXTENSION
       extended: true
-    data_type: text
+study:
+  id: STUDY02
+  name: STUDY02
+  description: Example study submitting a sponsor-extended epoch
+  protocol_name: STUDY-02
+
 sdtm:
-  standard:
-    name: SDTMIG
-    version: '3.4'
-    status: Final
   specs:
   - spec.yaml
+  standards:
+  - name: SDTMIG
+    version: '3.4'
+    status: Final
   define: define.xml
-  context: Submission
   source_system_version: '1.0'

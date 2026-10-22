@@ -1,9 +1,7 @@
 //! Original declarations reach range and projection causes with complete context.
-use super::rendered;
 use crate::support::document::Tree;
 use crate::support::table_schema as schema;
 use std::collections::BTreeSet;
-use yamaa_core::json::Value as JsonValue;
 use yamaa_core::{
     diagnostic::{ConditionCode, Diagnostic},
     schema::{Document, SpecificationDocument},
@@ -67,9 +65,8 @@ fn model(between: Option<Tree>, columns: Option<Tree>) -> SpecificationDocument 
         .unwrap()
         .unwrap()
 }
-fn text(value: &str) -> JsonValue {
-    JsonValue::String(value.into())
-}
+use super::text;
+#[track_caller]
 fn check(
     d: Diagnostic,
     condition: &str,
@@ -77,25 +74,11 @@ fn check(
     path: &str,
     context: &[(&str, &str)],
 ) -> ConditionCode {
-    assert_eq!(
-        (
-            d.definition().phase,
-            d.definition().condition,
-            d.definition().rule
-        ),
-        ("validation", condition, Some(rule))
-    );
-    assert_eq!(d.spec_paths, [path]);
-    assert_eq!(
-        d.context,
-        context
-            .iter()
-            .map(|(name, value)| ((*name).into(), text(value)))
-            .collect()
-    );
-    assert_eq!(d.source_span, None);
-    assert_eq!(d.operand_route, None);
-    rendered(&d)
+    let context = context
+        .iter()
+        .map(|&(name, value)| (name, text(value)))
+        .collect();
+    super::expect(&d, "validation", condition, Some(rule), &[path], context)
 }
 fn bind(between: Option<Tree>, columns: Option<Tree>, lower: T) -> Vec<Diagnostic> {
     let prepared = PreparedSpecification::prepare(&model(between, columns)).unwrap();

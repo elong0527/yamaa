@@ -5,25 +5,15 @@
 //! keeps its sign (VALUE-19); a result converts only when a row holds it
 //! (VALUE-3); a `unique` check counts missing values (CHECK-10); and SUM adds
 //! in record order (FORMULA-19).
-use std::{
-    fs,
-    path::PathBuf,
-    sync::atomic::{AtomicUsize, Ordering},
-};
+use std::fs;
 use yamaa_adapters::{file_application, specification_report::Identity};
 use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::{domain_entry::Request, json::Value};
 
-struct Fixture(PathBuf);
+struct Fixture(crate::support::Scratch);
 impl Fixture {
     fn new(specification: &str, files: &[(&str, &str)]) -> Self {
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        let root = std::env::temp_dir().join(format!(
-            "yamaa-value-semantics-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
-        fs::create_dir(&root).unwrap();
+        let root = crate::support::Scratch::new("value-semantics");
         fs::write(root.join("spec.yaml"), specification).unwrap();
         for (name, text) in files {
             fs::write(root.join(name), text).unwrap();
@@ -77,11 +67,6 @@ impl Fixture {
         .iter()
         .map(issue)
         .collect()
-    }
-}
-impl Drop for Fixture {
-    fn drop(&mut self) {
-        fs::remove_dir_all(&self.0).unwrap();
     }
 }
 

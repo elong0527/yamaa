@@ -1,7 +1,7 @@
 phase: validation
 condition: invalid_aggregate_context
 spec_paths:
-  - rows[0].derivations.RACECOUNT.aggregate.key
+  - rows.reported_race.derivations.RACECOUNT.aggregate.key
 rule: LOOKUP-5
 context:
   expr: "COUNT(ODM.*)"

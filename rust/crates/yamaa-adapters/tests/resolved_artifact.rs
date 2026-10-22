@@ -1,27 +1,17 @@
 //! Independent resolution controls over original entry preparation and schema links.
 #![cfg(feature = "yaml")]
-use std::{
-    fs,
-    path::PathBuf,
-    sync::atomic::{AtomicUsize, Ordering},
-};
+use std::fs;
 use yamaa_adapters::resolved_artifact::model::{
     specification_value, Location, OriginKind, RelativeTo, ResolvedArtifact, ResourceRole,
 };
-use yamaa_adapters::{canonical_path, file_workflow, resolved_artifact};
+use yamaa_adapters::{file_workflow, resolved_artifact};
 use yamaa_core::{build::Request, json::Value, project_function::Language};
 
-static NEXT: AtomicUsize = AtomicUsize::new(0);
-struct Study(PathBuf);
+struct Study(crate::support::Scratch);
 impl Study {
     fn new() -> Self {
-        let root = std::env::temp_dir().join(format!(
-            "yamaa-resolved-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
-        fs::create_dir_all(&root).unwrap();
-        Self(canonical_path::canonicalize(root).unwrap())
+        let root = crate::support::Scratch::canonical("resolved");
+        Self(root)
     }
     fn path(&self, path: &str) -> String {
         self.0.join(path).to_str().unwrap().replace('\\', "/")
@@ -33,11 +23,6 @@ impl Study {
     }
     fn resolve(&self, path: &str) -> ResolvedArtifact {
         resolved_artifact::resolve(&self.path(path), None, Some(Language::Python), None).unwrap()
-    }
-}
-impl Drop for Study {
-    fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.0);
     }
 }
 

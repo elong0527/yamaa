@@ -2,7 +2,7 @@
 //! scope and order, saved producers, failures, saves and submissions.
 #![cfg(feature = "yaml")]
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
@@ -14,22 +14,7 @@ use yamaa::{
 };
 use yamaa_core::json::Value;
 
-struct NoFunctions;
-impl ProjectFunctions for NoFunctions {
-    fn verify_lock(
-        &self,
-        _: &LockContext<'_>,
-        _: &[FunctionIdentity],
-    ) -> Result<(), FunctionError> {
-        Ok(())
-    }
-    fn bind(&self, _: &FunctionIdentity, _: &Signature) -> Result<FunctionHandle, FunctionError> {
-        unreachable!("these specifications call no project function")
-    }
-    fn invoke(&self, _: &FunctionHandle, _: &[Argument<'_>]) -> Result<Scalar, CallError> {
-        unreachable!("these specifications call no project function")
-    }
-}
+use crate::support::NoFunctions;
 
 fn engine() -> Engine {
     Engine::new(
@@ -38,19 +23,12 @@ fn engine() -> Engine {
     )
 }
 
-static NEXT: AtomicUsize = AtomicUsize::new(0);
-
-struct Study(PathBuf);
+struct Study(crate::support::Scratch);
 impl Study {
     fn new() -> Self {
-        let root = std::env::temp_dir().join(format!(
-            "yamaa-project-operations-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
-        std::fs::create_dir_all(&root).unwrap();
+        let root = crate::support::Scratch::new("project-operations");
         // The engine's spelling: no Windows verbatim prefix.
-        Self(yamaa_adapters::canonical_path::canonicalize(root).unwrap())
+        Self(root)
     }
     fn write(&self, name: &str, contents: impl AsRef<[u8]>) {
         let path = self.0.join(name);
@@ -74,17 +52,12 @@ impl Study {
         self.path("project.yaml")
     }
 }
-impl Drop for Study {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
-    }
-}
 
-const DM: &str = "schema_version: '1.0'\ndomain: DM\nkeys: [USUBJID]\ninput: {RAW: {path: ../raw/dm.csv, types: {AGE: int}}}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: RAW.USUBJID}\n  - {name: AGE, type: int, label: Age, derivation: RAW.AGE}\noutput: {path: ../out/dm.csv, columns: [USUBJID, AGE], report: ../out/dm-report.csv}\n";
-const AE: &str = "schema_version: '1.0'\ndomain: AE\nkeys: [USUBJID, AESEQ]\ninput: {RAW: {path: ../raw/ae.csv, types: {AESEQ: int}}}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: RAW.USUBJID}\n  - {name: AESEQ, type: int, label: Sequence, derivation: RAW.AESEQ}\noutput: {path: ../out/ae.csv, columns: [USUBJID, AESEQ]}\n";
-const ADSL: &str = "schema_version: '1.0'\ndomain: ADSL\nkeys: [USUBJID]\ninput: {DM: {path: ../out/dm.csv, schema: ../sdtm/dm.yaml}}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: DM.USUBJID}\n  - {name: AGE, type: int, label: Age, derivation: DM.AGE}\noutput: {path: ../out/adsl.csv, columns: [USUBJID, AGE], report: ../out/adsl-report.csv}\n";
+const DM: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: DM\nkeys: [USUBJID]\ninput: {RAW: {path: ../raw/dm.csv, types: {AGE: int}}}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: RAW.USUBJID}\n  - {name: AGE, type: int, label: Age, derivation: RAW.AGE}\noutput: {path: ../out/dm.csv, columns: [USUBJID, AGE], report: ../out/dm-report.csv}\n";
+const AE: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: AE\nkeys: [USUBJID, AESEQ]\ninput: {RAW: {path: ../raw/ae.csv, types: {AESEQ: int}}}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: RAW.USUBJID}\n  - {name: AESEQ, type: int, label: Sequence, derivation: RAW.AESEQ}\noutput: {path: ../out/ae.csv, columns: [USUBJID, AESEQ]}\n";
+const ADSL: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: ADSL\nkeys: [USUBJID]\ninput: {DM: {path: ../out/dm.csv, schema: ../sdtm/dm.yaml}}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: DM.USUBJID}\n  - {name: AGE, type: int, label: Age, derivation: DM.AGE}\noutput: {path: ../out/adsl.csv, columns: [USUBJID, AGE], report: ../out/adsl-report.csv}\n";
 const PROJECT: &str =
-    "schema_version: '1.0'\nsdtm:\n  specs: [sdtm/dm.yaml, sdtm/ae.yaml]\nadam:\n  specs: [adam/adsl.yaml]\n";
+    "yamaa: \"1.0\"\ntype: project\nsdtm:\n  specs: [sdtm/dm.yaml, sdtm/ae.yaml]\nadam:\n  specs: [adam/adsl.yaml]\n";
 const DM_CSV: &str = "USUBJID,AGE\nS1,30\nS2,41\n";
 
 /// DM and AE in SDTM, ADSL in ADaM reading DM through its `schema` link.
@@ -199,7 +172,7 @@ fn project_names_list_the_run_order_and_refuse_as_a_read() {
     // ADSL, listed first, reads DM, so DM runs before it.
     study.write(
         "project.yaml",
-        "schema_version: '1.0'\nsdtm:\n  specs: [adam/adsl.yaml, sdtm/dm.yaml, sdtm/ae.yaml]\n",
+        "yamaa: \"1.0\"\ntype: project\nsdtm:\n  specs: [adam/adsl.yaml, sdtm/dm.yaml, sdtm/ae.yaml]\n",
     );
     let names = engine.project_names(&study.project()).unwrap();
     assert_eq!(names, ["DM", "ADSL", "AE"]);
@@ -319,7 +292,7 @@ fn names_select_listed_specifications_and_refuse_unknown_or_shared_names() {
 #[cfg(unix)]
 #[test]
 fn a_project_spelled_through_a_linked_directory_keeps_its_authority() {
-    struct Link(PathBuf);
+    struct Link(std::path::PathBuf);
     impl Drop for Link {
         fn drop(&mut self) {
             let _ = std::fs::remove_file(&self.0);
@@ -463,12 +436,12 @@ fn a_user_interrupt_cancels_the_project_run() {
     let study = Study::new();
     study.write("raw.csv", "ID,V\n1,2\n");
     study.write(
-        "environment.yaml",
-        "schema_version: '1.0'\nfunctions:\n  double:\n    function: pkg.double\n    description: Double the value.\n    params: [{name: x, type: int}]\n    returns: int\n    tests:\n      - {id: normal, covers: [normal], args: {x: 1}, result: 2}\n      - {id: zero, covers: [boundary], args: {x: 0}, result: 0}\n      - {id: missing, covers: ['short-circuit-missing:x'], args: {x: null}, result: null}\n",
+        "functions/double.yaml",
+        "yamaa: \"1.0\"\ntype: function\nname: double\ndescription: Double the value.\nparams: [{name: x, type: int}]\nreturns: int\nimplementations: {python: pkg.double}\ntests:\n  - {id: normal, covers: [normal], args: {x: 1}, result: 2}\n  - {id: zero, covers: [boundary], args: {x: 0}, result: 0}\n  - {id: missing, covers: ['short-circuit-missing:x'], args: {x: null}, result: null}\n",
     );
     let spec = |domain: &str| {
         format!(
-            "schema_version: '1.0'\ndomain: {domain}\nkeys: [ID]\ninput: {{RAW: {{path: raw.csv, types: {{ID: int, V: int}}}}}}\ncolumns:\n  - {{name: ID, type: int, label: Identifier, derivation: RAW.ID}}\n  - {{name: W, type: int, label: Doubled, derivation: {{function: {{name: double, args: {{x: RAW.V}}}}}}}}\noutput: {{path: {}.csv, columns: [ID, W]}}\n",
+            "yamaa: \"1.0\"\ntype: spec\ndomain: {domain}\nkeys: [ID]\ninput: {{RAW: {{path: raw.csv, types: {{ID: int, V: int}}}}}}\ncolumns:\n  - {{name: ID, type: int, label: Identifier, derivation: RAW.ID}}\n  - {{name: W, type: int, label: Doubled, derivation: {{function: {{name: double, args: {{x: RAW.V}}}}}}}}\noutput: {{path: {}.csv, columns: [ID, W]}}\n",
             domain.to_lowercase()
         )
     };
@@ -476,7 +449,7 @@ fn a_user_interrupt_cancels_the_project_run() {
     study.write("two.yaml", spec("TWO"));
     study.write(
         "project.yaml",
-        "schema_version: '1.0'\nenvironments: {python: environment.yaml}\nadam: {specs: [one.yaml, two.yaml]}\n",
+        "yamaa: \"1.0\"\ntype: project\nfunctions: [functions/double.yaml]\nadam: {specs: [one.yaml, two.yaml]}\n",
     );
     let functions = Arc::new(Interrupting(AtomicUsize::new(0)));
     let engine = Engine::new(
@@ -641,7 +614,7 @@ fn project_check_reports_every_specification_and_the_project_findings() {
     // A second ADaM specification reads DM's artifact without a link.
     study.write(
         "adam/adae.yaml",
-        "schema_version: '1.0'\ndomain: ADAE\nkeys: [USUBJID]\ninput: {DM: {path: ../out/dm.csv, types: {AGE: int}}}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: DM.USUBJID}\noutput: {path: ../out/adae.csv, columns: [USUBJID]}\n",
+        "yamaa: \"1.0\"\ntype: spec\ndomain: ADAE\nkeys: [USUBJID]\ninput: {DM: {path: ../out/dm.csv, types: {AGE: int}}}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: DM.USUBJID}\noutput: {path: ../out/adae.csv, columns: [USUBJID]}\n",
     );
     study.write(
         "project.yaml",
@@ -694,7 +667,7 @@ fn a_section_run_builds_only_its_scope_and_a_full_run_hands_producers_over_in_me
     // even though ADADD is listed first.
     study.write(
         "adam/adadd.yaml",
-        "schema_version: '1.0'\ndomain: ADADD\nkeys: [USUBJID]\ninput: {ADSL: {path: ../out/adsl.csv, schema: adsl.yaml}}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: ADSL.USUBJID}\noutput: {path: ../out/adadd.csv, columns: [USUBJID]}\n",
+        "yamaa: \"1.0\"\ntype: spec\ndomain: ADADD\nkeys: [USUBJID]\ninput: {ADSL: {path: ../out/adsl.csv, schema: adsl.yaml}}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: ADSL.USUBJID}\noutput: {path: ../out/adadd.csv, columns: [USUBJID]}\n",
     );
     study.write(
         "project.yaml",
@@ -1051,10 +1024,7 @@ fn a_specification_runs_alike_alone_and_in_a_project_run_with_computed_statuses(
         member.report().unwrap().ipc().unwrap(),
         alone.report().unwrap().ipc().unwrap()
     );
-    assert_eq!(
-        member.build().observations(false),
-        alone.build().observations(false)
-    );
+    assert_eq!(member.observations(false), alone.observations(false));
     // A failed input fails the run but not the check, which reads no data.
     study.write("raw/dm.csv", "USUBJID,AGE\nS1,thirty\n");
     assert_eq!(
@@ -1133,6 +1103,8 @@ fn an_engine_without_functions_runs_every_build_that_calls_no_project_function()
     assert_eq!(runs.status(), Status::Succeeded);
     assert_eq!(runs.names(), ["DM", "AE", "ADSL"]);
 
+    // A 0.5 environment file, kept as 0.5 wrote it until environment files
+    // go; the next test is its 1.0 counterpart.
     let study = Study::new();
     study.write("raw.csv", "ID,V\n1,2\n");
     study.write(
@@ -1330,7 +1302,7 @@ fn a_submission_without_a_section_composes_each_section_that_names_define_in_ord
     assert!(study.exists("define.xml"));
     std::fs::remove_file(study.0.join("define.xml")).unwrap();
 
-    // ADaM names a define but no standard: SDTM still composes and saves
+    // ADaM names a define but no standards: SDTM still composes and saves
     // first, and the ADaM failure stops the save after it.
     study.write(
         "project.yaml",
@@ -1345,14 +1317,16 @@ fn a_submission_without_a_section_composes_each_section_that_names_define_in_ord
     assert!(issues
         .iter()
         .all(|row| row.condition == "missing_required_field"));
-    assert!(issues.iter().any(|row| row.spec_paths == ["adam.standard"]));
+    assert!(issues
+        .iter()
+        .any(|row| row.spec_paths == ["adam.standards"]));
     let failure = submission.save(&CancellationToken::new()).unwrap_err();
     // D39: the call names the submission; ADaM's issue says what it lacks.
     assert_eq!(failure.message, save_refusal(&study.project(), &failure));
     assert!(
         failure
             .message
-            .contains(": adam.standard lacks a field it requires [missing_required_field, "),
+            .contains(": adam.standards lacks a field it requires [missing_required_field, "),
         "{}",
         failure.message
     );
@@ -1374,7 +1348,7 @@ fn adam_section(project: &str) -> String {
             "name: ADaMIG\n    version: '1.3'",
         )
         .replace("  specs:\n  - spec.yaml\n", "  specs: []\n")
-        .replace("  datasets: json\n", "")
+        .replace("  transport: dataset_json\n", "")
         .replace("define: define.xml", "define: adam-define.xml")
 }
 
@@ -1482,7 +1456,7 @@ fn two_sections_that_write_one_file_save_neither() {
             "name: ADaMIG\n    version: '1.3'",
         )
         .replace("  specs:\n  - spec.yaml\n", "  specs: []\n")
-        .replace("  datasets: json\n", "");
+        .replace("  transport: dataset_json\n", "");
     study.write("project.yaml", format!("{project}{adam}"));
     let mut submission = engine
         .project_submission(

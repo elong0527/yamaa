@@ -24,12 +24,14 @@
 //!
 //! What each command prints, and how it dispatches on its PATH's `type:`
 //! header (D122), is in [`commands`].
-#![forbid(unsafe_code)]
+#![deny(unsafe_code)]
 
 mod arguments;
 mod commands;
+// The process's signal/console boundary is the only code that calls OS APIs.
+#[allow(unsafe_code)]
+mod interrupt;
 
-use std::ffi::OsString;
 use std::io::{self, Write};
 use std::process::ExitCode;
 
@@ -45,30 +47,69 @@ const NOT_RUN: u8 = 2;
 
 fn main() -> ExitCode {
     let arguments = std::env::args_os().skip(1).collect::<Vec<_>>();
+    let invocation = arguments::parse(&arguments);
+    // Only these commands have facade cancellation checkpoints. Other
+    // commands retain the operating system's immediate signal handling.
+    let cooperative = matches!(
+        &invocation,
+        Ok(Invocation::Command(call, _)) if matches!(call.name, "check" | "run" | "submission")
+    );
+    let token = match if cooperative {
+        interrupt::install()
+    } else {
+        Ok(yamaa::CancellationToken::new())
+    } {
+        Ok(token) => token,
+        Err(error) => {
+            let _ = writeln!(
+                io::stderr(),
+                "yamaa: cannot install Ctrl+C handler: {error}"
+            );
+            return ExitCode::from(NOT_RUN);
+        }
+    };
     let status = run(
-        &arguments,
+        invocation,
         &mut io::stdout().lock(),
         &mut io::stderr().lock(),
+        &token,
     );
+    // All engine-owned state and staged files have unwound before the
+    // original interrupt terminates the process (D46, D74).
+    if cooperative {
+        interrupt::finish();
+    }
     ExitCode::from(status)
 }
 
-/// Carry out what `arguments` ask for, writing to `stdout` and `stderr`, and
+/// Carry out `invocation`, writing to `stdout` and `stderr`, and
 /// return the exit status.
-fn run(arguments: &[OsString], stdout: &mut dyn Write, stderr: &mut dyn Write) -> u8 {
-    match arguments::parse(arguments) {
+fn run(
+    invocation: Result<Invocation, Usage>,
+    stdout: &mut dyn Write,
+    stderr: &mut dyn Write,
+    token: &yamaa::CancellationToken,
+) -> u8 {
+    match invocation {
         Ok(Invocation::Help) => print(stdout, stderr, &help()),
         Ok(Invocation::Version(format)) => print(stdout, stderr, &version(format)),
-        Ok(Invocation::Command(call, format)) => match commands::execute(&call, format) {
-            Execution::Ran {
-                stdout: text,
-                status,
-            } => match print(stdout, stderr, &text) {
-                SUCCEEDED => status,
-                failed => failed,
-            },
-            Execution::Refused(usage) => refuse(stderr, &usage),
-        },
+        Ok(Invocation::Command(call, format)) => {
+            let execution = commands::execute(&call, format, token);
+            // An interrupt has no result or diagnostic to print (D46).
+            if token.is_cancelled() {
+                return SUCCEEDED;
+            }
+            match execution {
+                Execution::Ran {
+                    stdout: text,
+                    status,
+                } => match print(stdout, stderr, &text) {
+                    SUCCEEDED => status,
+                    failed => failed,
+                },
+                Execution::Refused(usage) => refuse(stderr, &usage),
+            }
+        }
         Err(usage) => refuse(stderr, &usage),
     }
 }
@@ -142,6 +183,7 @@ fn help() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::ffi::OsString;
 
     /// A standard output that refuses every write, as a closed pipe does.
     struct Refusing;
@@ -177,6 +219,66 @@ mod tests {
         words.iter().map(OsString::from).collect()
     }
 
+    /// D46, D74: every command that takes a token uses the caller's token,
+    /// including every run route and the saves those routes compose.
+    #[test]
+    fn cancelled_commands_publish_and_print_nothing() {
+        struct Study(std::path::PathBuf);
+        impl Drop for Study {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_dir_all(&self.0);
+            }
+        }
+        let study =
+            Study(std::env::temp_dir().join(format!("yamaa-cli-cancelled-{}", std::process::id())));
+        std::fs::create_dir_all(study.0.join("out")).unwrap();
+        std::fs::write(study.0.join("raw.csv"), "USUBJID\nS1\n").unwrap();
+        std::fs::write(
+            study.0.join("dm.yaml"),
+            "yamaa: '1.0'\ntype: spec\nmodel: SDTM\ndomain: DM\nkeys: [USUBJID]\n\
+             input: {RAW: {path: raw.csv}}\ncolumns:\n\
+             - {name: USUBJID, type: str, label: Subject, derivation: RAW.USUBJID}\n\
+             output: {path: out/dm.csv, columns: [USUBJID], report: out/report.csv}\n",
+        )
+        .unwrap();
+        std::fs::write(
+            study.0.join("project.yaml"),
+            "yamaa: '1.0'\ntype: project\nsdtm: {specs: [dm.yaml]}\n",
+        )
+        .unwrap();
+        let spec = study.0.join("dm.yaml").to_str().unwrap().to_owned();
+        let project = study.0.join("project.yaml").to_str().unwrap().to_owned();
+        let token = yamaa::CancellationToken::new();
+        token.cancel();
+        for arguments in [
+            vec!["check", &spec],
+            vec!["check", &project],
+            vec!["check", &project, "--spec", "DM"],
+            vec!["run", &spec],
+            vec!["run", &project],
+            vec!["run", &project, "--spec", "DM"],
+            vec!["run", &project, "--section", "sdtm"],
+            vec!["submission", &project],
+        ] {
+            let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
+            run(
+                arguments::parse(&words(&arguments)),
+                &mut stdout,
+                &mut stderr,
+                &token,
+            );
+            let files = std::fs::read_dir(study.0.join("out"))
+                .unwrap()
+                .map(|entry| entry.unwrap().file_name())
+                .collect::<Vec<_>>();
+            assert_eq!(
+                (stdout, stderr, files),
+                (Vec::<u8>::new(), Vec::<u8>::new(), Vec::new()),
+                "{arguments:?}"
+            );
+        }
+    }
+
     /// A failed write exits 2 whatever the command found: here a lint whose
     /// finding would otherwise exit 1.
     #[test]
@@ -185,7 +287,7 @@ mod tests {
             std::env::temp_dir().join(format!("yamaa-cli-write-{}.yaml", std::process::id()));
         std::fs::write(
             &spec,
-            "schema_version: '1.0'\ndomain: DM\noutput:\n  path: dm.csv\n",
+            "yamaa: \"1.0\"\ntype: spec\ndomain: DM\noutput:\n  path: dm.csv\n",
         )
         .unwrap();
         let spec = spec.to_str().unwrap().to_owned();
@@ -197,13 +299,29 @@ mod tests {
             &["lint", &spec, "--format", "json"],
         ] {
             let mut stderr = Vec::new();
-            assert_eq!(run(&words(arguments), &mut Refusing, &mut stderr), 2);
+            assert_eq!(
+                run(
+                    arguments::parse(&words(arguments)),
+                    &mut Refusing,
+                    &mut stderr,
+                    &yamaa::CancellationToken::new()
+                ),
+                2
+            );
             assert_eq!(
                 String::from_utf8(stderr).unwrap(),
                 "yamaa: cannot write to standard output: the reader is gone\n"
             );
             let mut stderr = Vec::new();
-            assert_eq!(run(&words(arguments), &mut Full, &mut stderr), 2);
+            assert_eq!(
+                run(
+                    arguments::parse(&words(arguments)),
+                    &mut Full,
+                    &mut stderr,
+                    &yamaa::CancellationToken::new()
+                ),
+                2
+            );
             assert_eq!(
                 String::from_utf8(stderr).unwrap(),
                 "yamaa: cannot write to standard output: the disk is full\n"
@@ -220,7 +338,15 @@ mod tests {
             (&["--help"], help()),
         ] {
             let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
-            assert_eq!(run(&words(arguments), &mut stdout, &mut stderr), 0);
+            assert_eq!(
+                run(
+                    arguments::parse(&words(arguments)),
+                    &mut stdout,
+                    &mut stderr,
+                    &yamaa::CancellationToken::new()
+                ),
+                0
+            );
             assert_eq!(String::from_utf8(stdout).unwrap(), expected);
             assert!(stderr.is_empty());
         }

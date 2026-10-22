@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
@@ -71,10 +73,10 @@ columns:
     derivation:
       case:
         - when: "RAWTXT IS NULL AND PEERTXT IS NULL"
-          then: {literal: "Y"}
+          then: "'Y'"
         - when: "RAWTXT = PEERTXT"
-          then: {literal: "Y"}
-        - otherwise: {literal: "N"}
+          then: "'Y'"
+        - otherwise: "'N'"
 
   - name: LEASTTXT
     type: str
@@ -99,7 +101,7 @@ columns:
     derivation:
       case:
         - when: "RAWTXT IS NULL"
-          then: {literal: MISSING}
+          then: "'MISSING'"
         - otherwise:
             mapping:
               source: RAWTXT

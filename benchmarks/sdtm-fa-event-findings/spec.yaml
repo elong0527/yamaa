@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: SDTM
 domain: FA
 keys: [STUDYID, USUBJID, FASEQ]
 input:
@@ -22,13 +24,12 @@ intermediates:
       StudyEventOID: ODM.StudyEventOID
       StudyEventRepeatKey: ODM.StudyEventRepeatKey
     filter: "ODM_AE.ItemOID = 'IT.AE.AETERM'"
-    no_match: {literal: null}
 
 columns:
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
-    derivation: {literal: FA}
+    derivation: "'FA'"
 
   - name: STUDYID
     type: str
@@ -52,12 +53,12 @@ columns:
     type: str
     label: Object of the Observation
     verifications:
-      - not_missing: {}
+      - not_missing
 
   - name: FACAT
     type: str
     label: Category for Findings About
-    derivation: {literal: AE}
+    derivation: "'AE'"
 
   - name: FAORRES
     type: str
@@ -95,11 +96,11 @@ columns:
     derivation:
       case:
         - when: "FATESTCD = 'LOC'"
-          then: {literal: 1}
+          then: 1
         - when: "FATESTCD = 'SIZE'"
-          then: {literal: 2}
+          then: 2
         - when: "FATESTCD = 'BIOPSY'"
-          then: {literal: 3}
+          then: 3
 
   - name: FASEQ
     type: int
@@ -123,16 +124,16 @@ rows:
                ODM.StudyEventRepeatKey]
     filter: "FAORRES IS NOT NULL"
     derivations:
-      FATESTCD: {literal: LOC}
-      FATEST: {literal: Location}
+      FATESTCD: "'LOC'"
+      FATEST: "'Location'"
       FAOBJ: AE_TERM.Value
       FAORRES:
         aggregate:
           filter: "ODM.ItemOID = 'IT.FA.LOCATION'"
           expr: "ONLY(ODM.Value)"
-      FAORRESU: {literal: null}
-      FASTRESN: {literal: null}
-      FASTRESU: {literal: null}
+      FAORRESU: null
+      FASTRESN: null
+      FASTRESU: null
       FALNKID:
         aggregate:
           filter: "ODM.ItemOID = 'IT.FA.AELNKID'"
@@ -148,8 +149,8 @@ rows:
                ODM.StudyEventRepeatKey]
     filter: "FAORRES IS NOT NULL"
     derivations:
-      FATESTCD: {literal: SIZE}
-      FATEST: {literal: Size}
+      FATESTCD: "'SIZE'"
+      FATEST: "'Size'"
       FAOBJ: AE_TERM.Value
       FAORRES:
         aggregate:
@@ -177,16 +178,16 @@ rows:
                ODM.StudyEventRepeatKey]
     filter: "FAORRES IS NOT NULL"
     derivations:
-      FATESTCD: {literal: BIOPSY}
-      FATEST: {literal: Biopsied}
+      FATESTCD: "'BIOPSY'"
+      FATEST: "'Biopsied'"
       FAOBJ: AE_TERM.Value
       FAORRES:
         aggregate:
           filter: "ODM.ItemOID = 'IT.FA.BIOPSY'"
           expr: "ONLY(ODM.Value)"
-      FAORRESU: {literal: null}
-      FASTRESN: {literal: null}
-      FASTRESU: {literal: null}
+      FAORRESU: null
+      FASTRESN: null
+      FASTRESU: null
       FALNKID:
         aggregate:
           filter: "ODM.ItemOID = 'IT.FA.AELNKID'"

@@ -2,10 +2,10 @@
 //!
 //! The conversion unit tests in `src/diagnostic.rs` deliberately use an
 //! unregistered probe condition (the `check_diagnostics` ratchet forbids
-//! registered condition/rule literals in crate sources). This suite
-//! pins real registry diagnostics -- codes, requirements, ordered spec paths
-//! and structured context -- through `Engine::check` on an in-memory
-//! specification, where such literals are allowed.
+//! registered condition/rule literals in crate sources). This suite pins real
+//! registry diagnostics -- codes, requirements, ordered spec paths and
+//! structured context -- through `Engine::spec_check` and `Engine::spec_run`
+//! on an in-memory specification, where such literals are allowed.
 
 use std::sync::Arc;
 
@@ -13,8 +13,7 @@ use arrow_array::RecordBatchIterator;
 use arrow_schema::Schema;
 use yamaa::{
     CancellationToken, ContextValue, DataType, Engine, EngineOptions, FFI_ArrowArrayStream, Field,
-    Float64Array, HostLanguage, InputFrame, Int64Array, MemoryResolver, RecordBatch, Request,
-    Severity,
+    Float64Array, HostLanguage, InputFrame, Int64Array, MemoryResolver, RecordBatch, Severity,
 };
 
 fn engine_with_bad_derivation() -> (Engine, CancellationToken) {
@@ -29,7 +28,7 @@ fn engine_with_bad_derivation() -> (Engine, CancellationToken) {
 fn engine_with_columns(columns: &str, output: &str) -> (Engine, CancellationToken) {
     let resolver = Arc::new(MemoryResolver::new());
     let specification = format!(
-        "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {{SRC: {{path: input.csv, types: {{VALUE: float, ZERO: float}}}}}}\noutput: {{path: out.csv, columns: {output}}}\ncolumns:\n{columns}"
+        "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {{SRC: {{path: input.csv, types: {{VALUE: float, ZERO: float}}}}}}\noutput: {{path: out.csv, columns: {output}}}\ncolumns:\n{columns}"
     );
     resolver.insert(
         "/",
@@ -66,14 +65,14 @@ fn engine_with_columns(columns: &str, output: &str) -> (Engine, CancellationToke
 #[test]
 fn unknown_source_column_arrives_as_a_typed_record() {
     let (engine, token) = engine_with_bad_derivation();
-    let build = engine
-        .build(&Request::new("spec.yaml"), &token)
-        .expect("adjudicated outcomes return an owned build");
-    let report = build.report();
-    assert!(!report.is_empty());
+    let run = engine
+        .spec_run("spec.yaml", None, &token)
+        .expect("adjudicated outcomes return a run");
+    let diagnostics = run.diagnostics();
+    assert!(!diagnostics.is_empty());
     if cfg!(feature = "yaml") {
-        assert_eq!(report.len(), 1);
-        let diagnostic = &report.diagnostics[0];
+        assert_eq!(diagnostics.len(), 1);
+        let diagnostic = &diagnostics[0];
         assert_eq!(diagnostic.severity, Severity::Error);
         assert_eq!(diagnostic.phase, "validation");
         assert_eq!(diagnostic.code, "unknown_field");
@@ -104,22 +103,22 @@ fn unknown_source_column_arrives_as_a_typed_record() {
 #[test]
 fn evaluation_failures_carry_recorded_geometry() {
     let (engine, token) = engine_with_columns(
-        "  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: float, derivation: SRC.VALUE}\n  - {name: ZERO, type: float, derivation: SRC.ZERO}\n  - {name: RATIO, type: float, derivation: {compute: {expr: 'VALUE / ZERO'}}}\n",
+        "  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: float, derivation: SRC.VALUE}\n  - {name: ZERO, type: float, derivation: SRC.ZERO}\n  - {name: RATIO, type: float, derivation: 'VALUE / ZERO'}\n",
         "[ID, VALUE, ZERO, RATIO]",
     );
-    let build = engine
-        .build(&Request::new("spec.yaml"), &token)
-        .expect("adjudicated outcomes return an owned build");
-    let report = build.report();
-    assert!(!report.is_empty());
+    let run = engine
+        .spec_run("spec.yaml", None, &token)
+        .expect("adjudicated outcomes return a run");
+    let diagnostics = run.diagnostics();
+    assert!(!diagnostics.is_empty());
     if cfg!(feature = "yaml") {
-        assert_eq!(report.len(), 1);
-        let diagnostic = &report.diagnostics[0];
+        assert_eq!(diagnostics.len(), 1);
+        let diagnostic = &diagnostics[0];
         assert_eq!(diagnostic.phase, "derivation");
         assert_eq!(diagnostic.code, "division_by_zero");
         assert_eq!(diagnostic.rule.as_deref(), Some("FORMULA-15"));
         assert_eq!(diagnostic.message, "VALUE / ZERO divides by zero");
-        assert_eq!(diagnostic.spec_path, ["columns.RATIO.derivation.compute"]);
+        assert_eq!(diagnostic.spec_path, ["columns.RATIO.derivation"]);
         assert_eq!(
             diagnostic.context.get("expr"),
             Some(&ContextValue::Text("VALUE / ZERO".into()))
@@ -139,13 +138,16 @@ fn evaluation_failures_carry_recorded_geometry() {
 #[test]
 fn integer_tokens_beyond_sixty_four_bits_stay_exact_numbers() {
     let (engine, token) = engine_with_columns(
-        "  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {literal: 340282366920938463463374607431768211456}}\n",
+        "  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: 340282366920938463463374607431768211456}\n",
         "[ID, VALUE]",
     );
-    let report = engine.check(&Request::new("spec.yaml"), &token).unwrap();
-    assert!(!report.is_empty());
+    let diagnostics = engine
+        .spec_check("spec.yaml", None, &token)
+        .unwrap()
+        .diagnostics();
+    assert!(!diagnostics.is_empty());
     if cfg!(feature = "yaml") {
-        let diagnostic = &report.diagnostics[0];
+        let diagnostic = &diagnostics[0];
         assert_eq!(diagnostic.phase, "validation");
         assert_eq!(diagnostic.code, "integer_overflow");
         assert_eq!(
@@ -175,7 +177,8 @@ fn integer_tokens_beyond_sixty_four_bits_stay_exact_numbers() {
 /// runtime name: an embedder may name its runtime anything (#2838). The
 /// project links only an R environment file, which declares a field no
 /// environment file has, so only an R engine opens it and reports the field,
-/// and `check` and `build` agree on it.
+/// and a check and a run agree on it. The files stay as 0.5 wrote them until
+/// environment files go (#3030 D8).
 #[test]
 fn check_takes_the_host_language_from_the_options_not_the_runtime_name() {
     const SPECIFICATION: &[u8] = b"schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {VALUE: float}}}\noutput: {path: out.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: float, derivation: SRC.VALUE}\n";
@@ -195,19 +198,23 @@ fn check_takes_the_host_language_from_the_options_not_the_runtime_name() {
             EngineOptions::new(host, "embedder".into(), "0".into()).with_resolver(resolver),
         );
         let token = CancellationToken::new();
-        let request = Request::new("spec.yaml").with_environment("project.yaml");
-        let checked = engine.check(&request, &token).unwrap();
-        let built = engine
-            .build(&request, &token)
-            .expect("adjudicated outcomes return an owned build");
-        for (route, report) in [("check", &checked), ("build", built.report())] {
-            let reported = report.diagnostics.iter().any(|diagnostic| {
+        let project = Some("project.yaml");
+        let checked = engine
+            .spec_check("spec.yaml", project, &token)
+            .unwrap()
+            .diagnostics();
+        let ran = engine
+            .spec_run("spec.yaml", project, &token)
+            .expect("adjudicated outcomes return a run")
+            .diagnostics();
+        for (route, diagnostics) in [("check", &checked), ("run", &ran)] {
+            let reported = diagnostics.iter().any(|diagnostic| {
                 diagnostic.code == "unknown_field" && diagnostic.spec_path == ["language"]
             });
             assert_eq!(
                 reported,
                 opened && cfg!(feature = "yaml"),
-                "{host:?} {route}: {report:?}"
+                "{host:?} {route}: {diagnostics:?}"
             );
         }
     }
