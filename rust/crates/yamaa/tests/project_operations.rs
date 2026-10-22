@@ -2,7 +2,7 @@
 //! scope and order, saved producers, failures, saves and submissions.
 #![cfg(feature = "yaml")]
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
@@ -292,7 +292,7 @@ fn names_select_listed_specifications_and_refuse_unknown_or_shared_names() {
 #[cfg(unix)]
 #[test]
 fn a_project_spelled_through_a_linked_directory_keeps_its_authority() {
-    struct Link(PathBuf);
+    struct Link(std::path::PathBuf);
     impl Drop for Link {
         fn drop(&mut self) {
             let _ = std::fs::remove_file(&self.0);
