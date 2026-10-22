@@ -127,8 +127,9 @@ values:
 # optional<T>; a column's `values` names a vocabulary above, or the condition
 # registry.
 tables:
-  # Section 2.7 (D28): the frozen twelve columns. Issue locations (#3262)
-  # fill file, line and column; until then they are missing.
+  # Section 2.7 (D28): the frozen twelve columns. file, line and column say
+  # where the first spec path is written (#3262, D181); an issue without a
+  # spec path, or whose path names no node of a file the call read, has none.
   issues:
     rust: yamaa::ISSUE_COLUMNS
     order: report order, the first issue first

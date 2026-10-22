@@ -162,8 +162,8 @@ reads study data:
   `function` type; an editor that reads it validates and completes a file as
   it is typed.
 - **Check** reports each problem it can find without data: its condition, the
-  rule it breaks, its spec path and a message, and its file, line and column
-  once the engine locates them. Problems that need the data, such as a column
+  rule it breaks, its spec path and a message, and the file, line and column
+  where that path is written. Problems that need the data, such as a column
   no input has, appear when the specification runs.
 - **Resolve** shows the specification after its layers are composed, and
   where each field came from.
