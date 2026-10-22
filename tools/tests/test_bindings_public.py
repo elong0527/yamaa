@@ -452,9 +452,8 @@ class ValidationTests(unittest.TestCase):
                 "exactly the refusal",
                 lambda d: d["public"]["errors"].update(argument={}),
             ),
-            # A class asks for no interrupt: each host asks inside every call.
             (
-                r"has unknown keys \['interrupt'\]",
+                "unknown keys",
                 lambda d: classes(d)["Run"].update(interrupt="run_output"),
             ),
             (

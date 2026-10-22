@@ -427,14 +427,11 @@ fn a_section_the_project_does_not_declare_refuses_the_call() {
     // own findings as the result's issues, and no section is checked.
     let absent = study.path("absent.yaml");
     let run = engine.project_run(&absent, Some("adm"), &token).unwrap();
-    assert_eq!(conditions(&run.issues()), ["project_environment_missing"]);
+    assert_eq!(conditions(&run.issues()), ["resource_path_missing"]);
     let submission = engine
         .project_submission(&absent, Some("adm"), None, "0.4.0", &token)
         .unwrap();
-    assert_eq!(
-        conditions(&submission.issues()),
-        ["project_environment_missing"]
-    );
+    assert_eq!(conditions(&submission.issues()), ["resource_path_missing"]);
 }
 
 /// Counts its calls and interrupts every one, as a user's Ctrl-C would.
@@ -1539,18 +1536,21 @@ fn a_later_section_whose_target_cannot_be_written_saves_nothing() {
     let failure = submission.save(&CancellationToken::new()).unwrap_err();
     assert_eq!(failure.message, save_refusal(&study.project(), &failure));
     assert!(failure.paths.is_empty());
+    // A directory where the file belongs is refused at the section's
+    // `define`, naming the file as written (FILE-7, #3030 D189).
     let issues = rows(&failure.issues);
     assert_eq!(issues.len(), 1, "{issues:?}");
-    assert_eq!(issues[0].condition, "engine_rejected");
-    assert_eq!(
-        issues[0].context["stage"],
-        text("publication_target_admission")
-    );
-    assert_eq!(issues[0].context["code"], text("invalid_target"));
+    assert_eq!(issues[0].phase, "output");
+    assert_eq!(issues[0].condition, "resource_path_not_regular_file");
+    assert_eq!(issues[0].spec_paths, ["adam.define"]);
+    assert_eq!(issues[0].context["path"], text("adam-define.xml"));
     assert!(!study.exists("define.xml"));
     assert!(!study.exists("dm.json"));
     // The submission keeps the cause; its status describes the composition.
-    assert_eq!(conditions(&submission.issues()), ["engine_rejected"]);
+    assert_eq!(
+        conditions(&submission.issues()),
+        ["resource_path_not_regular_file"]
+    );
     assert_eq!(submission.status(), Status::Succeeded);
 }
 
@@ -1694,7 +1694,7 @@ fn a_submission_composes_the_artifacts_their_run_reports_record_and_refuses_stal
             .project_run(&study.project(), section, &token)
             .unwrap();
         assert_eq!(run.issues().rows(), 0, "{:?}", rows(&run.issues()));
-        run.save(&token).unwrap();
+        run.save(&CancellationToken::new()).unwrap();
     };
     let submit = || {
         let submission = engine

@@ -17,7 +17,7 @@
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
-use yamaa_core::application_issue::{Fault, Stage};
+use yamaa_core::application_issue::{Fault, Step};
 use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::project_environment::Submission as Section;
 
@@ -614,7 +614,7 @@ fn resolved_value(
         Failure::from_issues(
             Action::Resolve(specification),
             &yamaa_adapters::file_application::rejected(
-                Stage::Resolve,
+                Step::Resolve,
                 Fault::ArtifactRepresentation,
             ),
         )
@@ -1285,7 +1285,7 @@ mod tests {
     }
 
     /// Resolved facts the engine cannot represent are refused as the
-    /// registered engine fault, whose message names the stage and code.
+    /// registered engine fault, whose message names the step and code.
     #[test]
     fn unrepresentable_resolved_facts_are_an_engine_fault() {
         let fault = yamaa_core::diagnostic::ConditionCode::ApplicationRejected.definition();
@@ -1297,7 +1297,7 @@ mod tests {
             failure.message,
             format!(
                 "cannot resolve adam/adsl.yaml: the engine refused the operation in its \
-                 resolve stage: artifact_representation [{}]",
+                 resolve step: artifact_representation [{}]",
                 fault.condition
             )
         );
@@ -1313,7 +1313,7 @@ mod tests {
         assert_eq!(
             cells(&failure.issues, "context"),
             [Some(
-                r#"{"code":"artifact_representation","stage":"resolve"}"#.to_owned()
+                r#"{"code":"artifact_representation","step":"resolve"}"#.to_owned()
             )]
         );
         let tree = yamaa_core::json::Value::Object(

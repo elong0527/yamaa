@@ -5,11 +5,8 @@
 //! Every function replies `list(value, error)`. `error` is `NULL` on success,
 //! otherwise `list(message, issues, paths)`, where `issues` is the issues data
 //! frame (empty when the refusal carries none) and `paths` the files a refused
-//! save wrote before it stopped. A cancelled call replies `list(value = NULL,
-//! error = NULL, interrupt)`, where `interrupt` is the condition that stopped
-//! it, which `.reply()` signals again (#3030 D46).
+//! save wrote before it stopped.
 use crate::handle::address;
-use crate::interrupt::Interrupt;
 use extendr_api::prelude::*;
 use std::{
     cell::{Cell, RefCell},
@@ -24,9 +21,6 @@ use yamaa::{Action, Engine, EngineOptions, Error, Failure, HostLanguage, Report}
 enum Refusal {
     Failure(Failure),
     Message(String),
-    /// The call was cancelled by this condition, an interrupt or the error R
-    /// signaled when asked about one.
-    Interrupt(Robj),
 }
 
 impl From<String> for Refusal {
@@ -47,9 +41,6 @@ fn refused(error: Refusal) -> List {
     let (message, issues, paths) = match error {
         Refusal::Failure(failure) => (failure.message, failure.issues, failure.paths),
         Refusal::Message(message) => (message, Report::default().table(), Vec::new()),
-        Refusal::Interrupt(condition) => {
-            return list!(value = NULL, error = NULL, interrupt = condition)
-        }
     };
     let paths = Strings::from_values(&paths);
     match crate::public_table::frame(&issues) {
@@ -69,48 +60,21 @@ fn refused(error: Refusal) -> List {
 }
 
 fn reply(run: impl FnOnce() -> std::result::Result<Robj, Refusal>) -> List {
-    match catch_unwind(AssertUnwindSafe(run)) {
+    let scope = crate::interrupt::Scope::new();
+    let result = catch_unwind(AssertUnwindSafe(run));
+    if let Some(condition) = scope.take() {
+        return list!(value = NULL, error = list!(condition = condition));
+    }
+    match result {
         Ok(Ok(value)) => list!(value = value, error = NULL),
         Ok(Err(error)) => refused(error),
         Err(_) => refused("internal host boundary failure".into()),
     }
 }
 
-/// The refusal of `action` for `error` (D39), from a call nothing cancels.
+/// The refusal of `action` for `error` (D39).
 fn from_error(action: Action<'_>, error: &Error) -> Refusal {
     Refusal::Failure(Failure::from_error(action, error))
-}
-
-impl Interrupt {
-    /// Why a cancellable call returned nothing: its interrupt for a
-    /// cancellation, otherwise the refusal of `action` for `error` (D39).
-    fn refusal(&self, action: Action<'_>, error: &Error) -> Refusal {
-        match error {
-            Error::Cancelled => Refusal::Interrupt(self.condition()),
-            error => from_error(action, error),
-        }
-    }
-
-    /// The value of a cancellable call, or why it has none: its interrupt,
-    /// when the call was cancelled or an interrupt is pending as it returns,
-    /// otherwise the refusal of `action` for `error` (D39).
-    fn settle<T>(&self, result: Result<T, Error>, action: Action<'_>) -> Result<T, Refusal> {
-        match result {
-            Ok(_) if self.pending_now() => Err(Refusal::Interrupt(self.condition())),
-            Ok(value) => Ok(value),
-            Err(error) => Err(self.refusal(action, &error)),
-        }
-    }
-
-    /// Why a save returned nothing: its interrupt when it was cancelled, its
-    /// refusal otherwise.
-    fn refused(&self, failure: Failure) -> Refusal {
-        if self.token().is_cancelled() {
-            Refusal::Interrupt(self.condition())
-        } else {
-            Refusal::Failure(failure)
-        }
-    }
 }
 
 fn text(bytes: &Raw) -> std::result::Result<String, Refusal> {
@@ -159,21 +123,12 @@ fn parse_capabilities(
     ))
 }
 
-/// The engine of one call, whose project functions, when it has
-/// `capabilities`, keep their interrupts in `interrupt`.
-fn engine(
-    version: &Raw,
-    capabilities: Option<List>,
-    interrupt: &Interrupt,
-) -> std::result::Result<Engine, Refusal> {
+fn engine(version: &Raw, capabilities: Option<List>) -> std::result::Result<Engine, Refusal> {
     let mut options = EngineOptions::new(HostLanguage::R, "r".into(), text(version)?);
     if let Some(capabilities) = capabilities {
         let (verify, resolve, formatter) = parse_capabilities(capabilities)?;
         options = options.with_functions(Arc::new(crate::project_activation::Functions::new(
-            verify,
-            resolve,
-            formatter,
-            interrupt.clone(),
+            verify, resolve, formatter,
         )));
     }
     Ok(Engine::new(options))
@@ -284,13 +239,13 @@ fn spec_check(specification: Raw, project: Robj, version: Raw) -> List {
     reply(|| {
         let project = optional_text(&project)?;
         let specification = text(&specification)?;
-        let interrupt = Interrupt::new();
-        let checked = engine(&version, None, &interrupt)?.spec_check(
-            &specification,
-            project.as_deref(),
-            interrupt.token(),
-        );
-        let check = interrupt.settle(checked, Action::Read(&specification))?;
+        let check = engine(&version, None)?
+            .spec_check(
+                &specification,
+                project.as_deref(),
+                &crate::interrupt::token(),
+            )
+            .map_err(|error| from_error(Action::Read(&specification), &error))?;
         store_check(check)
     })
 }
@@ -370,17 +325,16 @@ fn spec_run(
 ) -> List {
     reply(|| {
         let project = optional_text(&project)?;
-        let interrupt = Interrupt::new();
-        let token = interrupt.token();
-        let engine = engine(&version, Some(capabilities), &interrupt)?;
+        let engine = engine(&version, Some(capabilities))?;
         let specification = text(&specification)?;
-        let ran = match held_plans(&plans)? {
+        let token = crate::interrupt::token();
+        let run = match held_plans(&plans)? {
             Some(plans) => {
-                engine.spec_run_reusing(&specification, project.as_deref(), &plans.borrow(), token)
+                engine.spec_run_reusing(&specification, project.as_deref(), &plans.borrow(), &token)
             }
-            None => engine.spec_run(&specification, project.as_deref(), token),
-        };
-        let run = interrupt.settle(ran, Action::Read(&specification))?;
+            None => engine.spec_run(&specification, project.as_deref(), &token),
+        }
+        .map_err(|error| from_error(Action::Read(&specification), &error))?;
         store(run)
     })
 }
@@ -389,7 +343,7 @@ fn spec_run(
 fn spec_resolve(specification: Raw, project: Robj, version: Raw) -> List {
     reply(|| {
         let project = optional_text(&project)?;
-        let value = engine(&version, None, &Interrupt::new())?
+        let value = engine(&version, None)?
             .spec_resolve(&text(&specification)?, project.as_deref())
             .map_err(Refusal::Failure)?;
         Ok(crate::context_values::context_value(&value)?)
@@ -503,10 +457,9 @@ fn run_save(handle: Robj) -> List {
     reply(|| {
         let run = run(&handle)?;
         let mut run = run.try_borrow_mut().map_err(|_| "run handle in use")?;
-        let interrupt = Interrupt::new();
         let paths = run
-            .save(interrupt.token())
-            .map_err(|failure| interrupt.refused(failure))?;
+            .save(&crate::interrupt::token())
+            .map_err(Refusal::Failure)?;
         Ok(Strings::from_values(paths).into_robj())
     })
 }
@@ -535,7 +488,7 @@ fn run_observations(handle: Robj, include_measurements: bool) -> List {
 #[extendr]
 fn project_spec(project: Raw, name: Raw, version: Raw) -> List {
     reply(|| {
-        let path = engine(&version, None, &Interrupt::new())?
+        let path = engine(&version, None)?
             .project_spec(&text(&project)?, &text(&name)?)
             .map_err(Refusal::Failure)?;
         Ok(r!(path.as_str()))
@@ -546,7 +499,7 @@ fn project_spec(project: Raw, name: Raw, version: Raw) -> List {
 #[extendr]
 fn project_names(project: Raw, version: Raw) -> List {
     reply(|| {
-        let names = engine(&version, None, &Interrupt::new())?
+        let names = engine(&version, None)?
             .project_names(&text(&project)?)
             .map_err(Refusal::Failure)?;
         Ok(Strings::from_values(names).into_robj())
@@ -557,10 +510,9 @@ fn project_names(project: Raw, version: Raw) -> List {
 fn project_check(project: Raw, version: Raw) -> List {
     reply(|| {
         let project = text(&project)?;
-        let interrupt = Interrupt::new();
-        let checked =
-            engine(&version, None, &interrupt)?.project_check(&project, interrupt.token());
-        let check = interrupt.settle(checked, Action::Read(&project))?;
+        let check = engine(&version, None)?
+            .project_check(&project, &crate::interrupt::token())
+            .map_err(|error| from_error(Action::Read(&project), &error))?;
         store_check(check)
     })
 }
@@ -569,19 +521,22 @@ fn project_check(project: Raw, version: Raw) -> List {
 fn project_run(project: Raw, section: Robj, version: Raw, capabilities: List, plans: Robj) -> List {
     reply(|| {
         let section = optional_text(&section)?;
-        let interrupt = Interrupt::new();
-        let token = interrupt.token();
-        let engine = engine(&version, Some(capabilities), &interrupt)?;
+        let engine = engine(&version, Some(capabilities))?;
         let project = text(&project)?;
-        let ran = match held_plans(&plans)? {
+        let token = crate::interrupt::token();
+        let runs = match held_plans(&plans)? {
             Some(plans) => {
-                engine.project_run_reusing(&project, section.as_deref(), &plans.borrow(), token)
+                engine.project_run_reusing(&project, section.as_deref(), &plans.borrow(), &token)
             }
-            None => engine.project_run(&project, section.as_deref(), token),
-        };
+            None => engine.project_run(&project, section.as_deref(), &token),
+        }
         // Only an unknown section refuses the call with issues.
-        let action = Action::Select(section.as_deref().unwrap_or_default());
-        let runs = interrupt.settle(ran, action)?;
+        .map_err(|error| {
+            from_error(
+                Action::Select(section.as_deref().unwrap_or_default()),
+                &error,
+            )
+        })?;
         store_project_run(runs)
     })
 }
@@ -680,10 +635,9 @@ fn project_run_save(handle: Robj) -> List {
         let mut runs = runs
             .try_borrow_mut()
             .map_err(|_| "project run handle in use")?;
-        let interrupt = Interrupt::new();
         let paths = runs
-            .save(interrupt.token())
-            .map_err(|failure| interrupt.refused(failure))?;
+            .save(&crate::interrupt::token())
+            .map_err(Refusal::Failure)?;
         Ok(Strings::from_values(paths).into_robj())
     })
 }
@@ -703,17 +657,21 @@ fn project_submission(project: Raw, section: Robj, created: Robj, version: Raw) 
     reply(|| {
         let section = optional_text(&section)?;
         let created = optional_text(&created)?;
-        let interrupt = Interrupt::new();
-        let composed = engine(&version, None, &interrupt)?.project_submission(
-            &text(&project)?,
-            section.as_deref(),
-            created.as_deref(),
-            yamaa::VERSION,
-            interrupt.token(),
-        );
-        // Only an unknown section refuses the call with issues.
-        let action = Action::Select(section.as_deref().unwrap_or_default());
-        let submission = interrupt.settle(composed, action)?;
+        let submission = engine(&version, None)?
+            .project_submission(
+                &text(&project)?,
+                section.as_deref(),
+                created.as_deref(),
+                yamaa::VERSION,
+                &crate::interrupt::token(),
+            )
+            // Only an unknown section refuses the call with issues.
+            .map_err(|error| {
+                from_error(
+                    Action::Select(section.as_deref().unwrap_or_default()),
+                    &error,
+                )
+            })?;
         store_submission(submission)
     })
 }
@@ -759,10 +717,9 @@ fn submission_save(handle: Robj) -> List {
         let mut submission = submission
             .try_borrow_mut()
             .map_err(|_| "submission handle in use")?;
-        let interrupt = Interrupt::new();
         let paths = submission
-            .save(interrupt.token())
-            .map_err(|failure| interrupt.refused(failure))?;
+            .save(&crate::interrupt::token())
+            .map_err(Refusal::Failure)?;
         Ok(Strings::from_values(paths).into_robj())
     })
 }

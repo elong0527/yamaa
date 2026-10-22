@@ -942,10 +942,9 @@ operations:
   selftest_cases: {python: [_SelfTest.cases], r: [selftest_cases]}
   selftest_info: {python: [_SelfTest.info], r: [selftest_info]}
   selftest_summary: {python: [_SelfTest.summary], r: [selftest_summary]}
-# Host transport: each host asks its own interpreter for interrupts inside
-# every native call (#3030 D46). yamaa.Table is Python's table type, and R
-# converts every table to a data frame instead, so each of its methods is
-# Python-only.
+# Host transport: both hosts check interrupts inside their native calls.
+# yamaa.Table is Python's table type, and R converts every
+# table to a data frame instead, so each of its methods is Python-only.
 host_only:
   python:
     - Table.num_rows

@@ -109,8 +109,8 @@ result and lazy objects, S3 methods and private accessors) and
 `R/yamaa/NAMESPACE`. The handwritten rest stays beside them:
 `python/src/yamaa/_support.py` holds path conversion, lazy-object pickling and
 the version lookup, and `R/yamaa/R/api.R`
-holds the reply and argument conversions, the host-function capabilities, the
-interrupt signaling and the locked-object helpers. Docstrings come from `doc`;
+holds the reply and argument conversions, the host-function capabilities and
+the locked-object helpers. Docstrings come from `doc`;
 R's help pages stay handwritten under `R/yamaa/man/`.
 
 Generated code only delegates, and the delegation is declared, never written:
@@ -143,11 +143,10 @@ formats a result or a lazy object, which prints from the path it holds; D37)
 and `private` (a qualification accessor such as R's `.run_observations(run)`,
 which Python reaches through the handle; the manifest leaves it out). A member
 that returns a record token (`info`) names the record it returns as `record`.
-No class asks for an interrupt: each binding asks its interpreter inside every
-native call (#3030 D46). An R object keeps each held value that an S3 method
-or a private accessor reaches in a hidden binding: its handle in `.handle`,
-and any other value under its own name with a leading dot, such as a lazy
-object's `.path` or a project-run member's `.name`.
+An R object keeps each held value
+that an S3 method or a private accessor reaches in a hidden binding: its
+handle in `.handle`, and any other value under its own name with a leading
+dot, such as a lazy object's `.path` or a project-run member's `.name`.
 
 Every result, a class that holds a handle, also has R `names()` and `length()`
 S3 methods, which nothing declares (D44): the generator derives them. A result
@@ -213,10 +212,8 @@ native `Table`, and the R binding converts it natively into a data.frame.
 `context_object` is the owned tree `spec_resolve` returns, a `dict[str, object]`
 of text, booleans, exact integers, floats, `None`, lists and nested objects.
 `r_reply` describes the existing `{value, error}` list, whose error carries a
-message and the issues table; a cancelled call replies `{value = NULL, error =
-NULL, interrupt}` instead, with the condition that stopped it. The definition
-does not treat a Rust `Result`, `Vec`, `String`, enum or trait as a C-layout
-type.
+message and the issues table. The definition does not treat a Rust `Result`,
+`Vec`, `String`, enum or trait as a C-layout type.
 
 `operations` pairs equivalent semantic operations despite different calling
 conventions: a Python handle method with the R function that takes the handle,
@@ -225,10 +222,11 @@ counterpart, such as `_project_run` and `project_run`. Every Python export,
 each class method included, and every R function names its counterpart under
 `operations` unless `host_only` declares it host transport. The generator
 refuses an export that has neither and an operation that names only one host.
-`host_only` holds the methods of Python's `Table`; R has no host-only export.
-Each binding checks for a host interrupt inside every native call.
-extendr-generated `wrap__*`, metadata, registration and finalizer functions
-are framework machinery, not additional engine operations.
+`host_only` holds the methods of Python's `Table`; R has no host-only
+exports. Both hosts check interrupts inside their native calls and retain
+original callback interrupts until the call returns. extendr-generated
+`wrap__*`, metadata, registration and finalizer functions are
+framework machinery, not additional engine operations.
 
 ### Outputs and the manifest
 
@@ -405,23 +403,15 @@ owner refuses; unrelated owned results remain usable. Generated glue must root
 callbacks for all native uses and contain exceptions/conditions before Rust
 resumes. Finalizers do not invoke project code or start publication.
 
-Cancellation is control flow, distinct from a semantic finding (#3030 D46).
-Every native call that runs, checks, composes or saves makes one facade
-`CancellationToken` with a probe, which the engine polls on the calling
-thread, between members and at the checkpoints its run and its save reach.
-Python's probe runs the interpreter's pending signal handlers, as its own loop
-does, so Ctrl+C raises `KeyboardInterrupt` there; R's asks R with
-`R_CheckUserInterrupt` under `R_tryCatch`, at most every 20 ms, and catches
-the interrupt condition, or an error such as an elapsed time limit. The probe
-keeps what it caught and cancels the token. A project function's
-`KeyboardInterrupt` or `SystemExit`, or R interrupt condition, is kept on the
-call the same way, and cancels it. The engine stops new work at the next poll,
-unwinds native temporaries normally and returns `Error::Cancelled`; the
-binding then raises the kept object again, the original one: Python raises
-the exception, and R signals the condition, which returns to the top level
-unless a handler takes it. A resolver's `Cancelled` result stops work without
-fabricating a host exception when none exists. Nothing runs in the
-background.
+Cancellation is control flow, distinct from a semantic finding. Retain the
+original Python interrupt/SystemExit or R interrupt for the current native
+call, stop new work when observed, unwind native temporaries normally, and
+rethrow the original object after returning to the host. Each host installs a
+probe on the call's cancellation token: Python checks pending signals; R
+checks under `R_tryCatch`, at most every 20 ms and once more as the call
+returns. A nested call restores its enclosing call's interrupt state. A resolver's `Cancelled` result
+stops work without fabricating a host exception when none exists. No background
+kill, asynchronous cancellation token or new public cancel API is promised.
 
 On failed conversion, cancellation or callback failure, release temporary native
 owners, Arrow schemas/arrays/streams and callback roots exactly once. Owners

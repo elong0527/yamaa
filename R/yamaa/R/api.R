@@ -10,10 +10,9 @@
 # `.RData` file or another R process.
 
 .reply <- function(reply) {
-  interrupted <- reply$interrupt
-  if (!is.null(interrupted)) .signal_again(interrupted)
   error <- reply$error
   if (!is.null(error)) {
+    if (!is.null(error$condition)) stop(error$condition)
     stop(structure(
       list(message = error$message, call = NULL, issues = error$issues, paths = error$paths),
       class = c("yamaa_error", "error", "condition")
@@ -44,20 +43,6 @@
 .capabilities <- function() {
   capabilities <- .yamaa_locked_host_capabilities()
   list(capabilities$verify, capabilities$resolve, .project_condition_details)
-}
-
-# D46: a native call stops at the first interrupt it is asked about, or that a
-# project function raised, publishes nothing and returns that condition, which
-# is signaled again here, the original object. Handlers established for the
-# interrupt take it; without one, R returns to the top level, as an interrupt
-# does. An error R signaled instead when asked, such as an elapsed time limit,
-# is raised again.
-.signal_again <- function(condition) {
-  if (inherits(condition, "interrupt")) {
-    signalCondition(condition)
-    invokeRestart("abort")
-  }
-  stop(condition)
 }
 
 # Locked bindings refuse assignment, so a binding only reads.

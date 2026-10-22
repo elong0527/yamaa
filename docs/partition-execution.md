@@ -52,11 +52,9 @@ At the adapter boundary, the same accepted dataset must produce the same saved
 artifact bytes under the same writer configuration. A failed attempt exposes no
 accepted output. Cancellation is a distinct control-flow outcome; partitioning
 must not convert it into a semantic diagnostic or publish provisional output.
-The executor polls its cancellation probe at the schedule's checkpoints, a
-cancelled attempt keeps nothing and a cancelled save writes nothing (#3260,
-[#2822](https://github.com/elong0527/yamaa/issues/2822) steps 1 and 2); the
-partition cleanup of its later steps is not supplied here. Comparing
-successful rows alone does not prove equivalence.
+The checkpoint and cleanup implementations follow in
+[#2684-#2688](https://github.com/elong0527/yamaa/issues/2684); this document
+does not supply them. Comparing successful rows alone does not prove equivalence.
 
 ## Classification
 

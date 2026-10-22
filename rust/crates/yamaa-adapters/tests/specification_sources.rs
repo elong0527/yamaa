@@ -2253,7 +2253,7 @@ output: {{path: output.csv, columns: [I, S]}}
                 specification_diagnostics::failure(&error, Some(run.source())),
                 specification_diagnostics::Rejection::Fault(
                     yamaa_core::application_issue::rejected(
-                        yamaa_core::application_issue::Stage::Bind,
+                        yamaa_core::application_issue::Step::Bind,
                         yamaa_core::application_issue::Fault::SourceCount,
                     )
                 )

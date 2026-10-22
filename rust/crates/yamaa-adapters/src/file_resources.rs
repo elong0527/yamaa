@@ -1049,7 +1049,9 @@ mod declaring_publication_tests {
         std::os::windows::fs::symlink_dir("../entry/out", study.0.join("shared/out")).unwrap();
         assert!(matches!(
             target.publisher("out/held.csv"),
-            Err(crate::file_publication::Error::InvalidTarget)
+            Err(crate::file_publication::Error::Unreachable(
+                yamaa_core::resource::ResourceFailure::Symlink
+            ))
         ));
         assert!(!study.0.join("entry/out/held.csv").exists());
         assert!(!study.0.join("shared/moved/held.csv").exists());

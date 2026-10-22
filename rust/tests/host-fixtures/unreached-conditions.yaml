@@ -120,6 +120,7 @@ not_covered:
     - missing_input
     - unmatched_pattern
   "#3432":
+    - engine_rejected
     - nothing_to_save
     - publication_failed
     - transport_dataset_empty

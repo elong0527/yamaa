@@ -15,7 +15,7 @@ with their members, the refusal error and the type tokens. From it
 Generated code only delegates. The handwritten rest stays where it was:
 Python's path conversion, lazy-object pickling and version lookup in
 ``python/src/yamaa/_support.py``; R's reply and argument
-conversions, host-function capabilities, interrupt signaling and locked-object
+conversions, host-function capabilities, locked-object
 helpers in ``R/yamaa/R/api.R``; and every native body in the binding crates.
 
 A class with ``hosts: [python]`` is a native class of ``yamaa._native`` that

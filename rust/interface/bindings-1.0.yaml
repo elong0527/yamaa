@@ -756,8 +756,8 @@ operations:
   selftest_info: {python: [_SelfTest.info], r: [selftest_info], cli: [selftest]}
   selftest_summary: {python: [_SelfTest.summary], r: [selftest_summary], cli: [selftest]}
 
-# Host transport: each host asks its interpreter for interrupts inside every
-# native call (D46). yamaa.Table's methods are Python-only (bindings.yaml).
+# Host transport: Python checks interrupts inside each native call, R through
+# the two helpers. yamaa.Table's methods are Python-only (bindings.yaml).
 host_only:
   python: []
   r: []

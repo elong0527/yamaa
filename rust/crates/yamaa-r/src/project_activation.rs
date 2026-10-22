@@ -13,56 +13,21 @@ use yamaa::{
 
 /// Installed capabilities: lock verification, binding resolution and host
 /// condition rendering. Constructing this host port does not query versions,
-/// load project namespaces or invoke any project function. The port of one
-/// native call keeps, in that call's interrupt, the original condition of an
-/// interrupt its project functions raise (#3030 D46).
+/// load project namespaces or invoke any project function.
 pub struct Functions {
     verify: Mutex<crate::thread_bound::ThreadBound<Function>>,
     resolve: Mutex<crate::thread_bound::ThreadBound<Function>>,
     formatter: Mutex<crate::thread_bound::ThreadBound<Function>>,
-    interrupt: crate::interrupt::Interrupt,
 }
 
 impl Functions {
-    pub fn new(
-        verify: Function,
-        resolve: Function,
-        formatter: Function,
-        interrupt: crate::interrupt::Interrupt,
-    ) -> Self {
+    pub fn new(verify: Function, resolve: Function, formatter: Function) -> Self {
         use crate::thread_bound::ThreadBound;
         Self {
             verify: Mutex::new(ThreadBound::new(verify)),
             resolve: Mutex::new(ThreadBound::new(resolve)),
             formatter: Mutex::new(ThreadBound::new(formatter)),
-            interrupt,
         }
-    }
-
-    /// Keep the original condition of `error` when it is an interrupt, which
-    /// cancels the call.
-    fn keep(&self, error: &FunctionError) {
-        if let FunctionError::Interrupted {
-            payload: Some(payload),
-        } = error
-        {
-            let condition = payload
-                .with::<crate::thread_bound::ThreadBound<Robj>, _>(|condition| {
-                    condition.get().ok().cloned()
-                })
-                .flatten();
-            if let Some(condition) = condition {
-                self.interrupt.keep(condition);
-            }
-        }
-    }
-
-    /// `result`, after keeping the interrupt it fails with, if any.
-    fn kept<T>(&self, result: Result<T, FunctionError>) -> Result<T, FunctionError> {
-        if let Err(error) = &result {
-            self.keep(error);
-        }
-        result
     }
 }
 
@@ -191,11 +156,14 @@ fn completed(formatter: &Function, status: Status) -> std::result::Result<Robj, 
     match status {
         Status::Completed(payload) => Ok(payload),
         Status::Host(condition) => Err(classify_host(formatter, &condition)),
-        Status::Interrupt(condition) => Err(FunctionError::Interrupted {
-            payload: Some(HostPayload::new(crate::thread_bound::ThreadBound::new(
-                condition,
-            ))),
-        }),
+        Status::Interrupt(condition) => {
+            crate::interrupt::remember(condition.clone());
+            Err(FunctionError::Interrupted {
+                payload: Some(HostPayload::new(crate::thread_bound::ThreadBound::new(
+                    condition,
+                ))),
+            })
+        }
     }
 }
 
@@ -230,9 +198,8 @@ fn plain_result(value: &Robj, returns: ColumnType) -> std::result::Result<Scalar
     })
 }
 
-// The calls themselves; the port below keeps the interrupts they fail with.
-impl Functions {
-    fn verify_installed(
+impl ProjectFunctions for Functions {
+    fn verify_lock(
         &self,
         lock: &LockContext<'_>,
         functions: &[FunctionIdentity],
@@ -299,7 +266,7 @@ impl Functions {
         }
     }
 
-    fn bind_installed(
+    fn bind(
         &self,
         identity: &FunctionIdentity,
         signature: &Signature,
@@ -333,7 +300,7 @@ impl Functions {
             .map(|function| Bound::handle(function, signature.returns))
     }
 
-    fn invoke_installed(
+    fn invoke(
         &self,
         handle: &FunctionHandle,
         arguments: &[Argument<'_>],
@@ -349,36 +316,6 @@ impl Functions {
             call_status(&function, pairlist!(arguments = arguments)).map_err(CallError::Raised)?;
         let value = completed(formatter, status).map_err(CallError::Raised)?;
         plain_result(&value, returns)
-    }
-}
-
-impl ProjectFunctions for Functions {
-    fn verify_lock(
-        &self,
-        lock: &LockContext<'_>,
-        functions: &[FunctionIdentity],
-    ) -> Result<(), FunctionError> {
-        self.kept(self.verify_installed(lock, functions))
-    }
-
-    fn bind(
-        &self,
-        identity: &FunctionIdentity,
-        signature: &Signature,
-    ) -> Result<FunctionHandle, FunctionError> {
-        self.kept(self.bind_installed(identity, signature))
-    }
-
-    fn invoke(
-        &self,
-        handle: &FunctionHandle,
-        arguments: &[Argument<'_>],
-    ) -> std::result::Result<Scalar, CallError> {
-        let result = self.invoke_installed(handle, arguments);
-        if let Err(error) = &result {
-            self.keep(error.error());
-        }
-        result
     }
 }
 

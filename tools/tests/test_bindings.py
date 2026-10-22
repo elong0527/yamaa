@@ -72,7 +72,9 @@ class BindingsTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "without an R counterpart"):
             generator._validate_operations(candidate)
         candidate = copy.deepcopy(definition)
-        candidate["operations"]["run_observations"]["r"] = ["run_save"]
+        candidate["r"]["groups"][0]["functions"].append(
+            {"name": "unpaired", "args": {}, "returns": "r_reply"}
+        )
         with self.assertRaisesRegex(ValueError, "without a Python counterpart"):
             generator._validate_operations(candidate)
         candidate = copy.deepcopy(definition)
@@ -261,8 +263,10 @@ class BindingsTests(unittest.TestCase):
                 lambda d: d["operations"]["run_observations"].update(r=[]),
             ),
             (
-                "R exports without a Python counterpart: run_observations",
-                lambda d: d["operations"]["run_observations"].update(r=["run_save"]),
+                "R exports without a Python counterpart: unpaired",
+                lambda d: d["r"]["groups"][0]["functions"].append(
+                    {"name": "unpaired", "args": {}, "returns": "r_reply"}
+                ),
             ),
             (
                 "Python exports without an R counterpart: Table.__arrow_c_stream__",

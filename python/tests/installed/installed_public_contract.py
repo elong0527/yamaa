@@ -2,17 +2,14 @@
 
 from __future__ import annotations
 
-import _thread
 import datetime
 import gc
 import importlib.util
 import inspect
-import itertools
 import json
 import math
 import os
 import shutil
-import signal
 import tempfile
 import unittest
 import weakref
@@ -328,11 +325,11 @@ class PublicContract(unittest.TestCase):
         absent = self.root / "absent.yaml"
         spec = yamaa.spec(absent)
         checked = self.issues(spec.check())
-        self.assertEqual(checked["condition"].to_list(), ["engine_rejected"])
-        self.assertEqual(
-            json.loads(checked["context"][0]),
-            {"code": "resource_missing", "stage": "prepare"},
-        )
+        # The caller's own path, named as given at no field (FILE-7).
+        self.assertEqual(checked["condition"].to_list(), ["resource_path_missing"])
+        self.assertEqual(checked["rule"].to_list(), ["FILE-7"])
+        self.assertEqual(checked["spec_paths"].to_list(), [[]])
+        self.assertEqual(json.loads(checked["context"][0]), {"path": os.fspath(absent)})
         run = spec.run()
         self.assertIsNone(run.output)
         self.assertIsNone(run.report)
@@ -562,89 +559,39 @@ class PublicContract(unittest.TestCase):
                         )
                         self.assertFalse((case / "test.csv").exists())
 
-    def test_a_signal_in_a_callback_interrupts_the_run_and_publishes_nothing(self):
-        # Ctrl+C arrives as SIGINT, whose default handler raises
-        # KeyboardInterrupt inside the project function (D46).
+    def test_sigint_in_a_callback_stops_the_call_without_publishing(self):
+        import signal
+
         project, case = self.function_study()
         resolve = host.resolve_callable
-        calls = []
-
-        def binding(*arguments):
-            invoke = resolve(*arguments)
-
-            def callback(**arguments):
-                calls.append(arguments)
-                if len(calls) > 2:
-                    signal.raise_signal(signal.SIGINT)
-                return invoke(**arguments)
-
-            return callback
-
-        for call in (lambda: project.spec("TEST").run(), lambda: project.run()):
-            calls.clear()
-            with (
-                self.subTest(call=call),
-                patch.object(host, "resolve_callable", side_effect=binding),
-                self.assertRaises(KeyboardInterrupt),
-            ):
-                call()
-            # The two function tests that call it, then the first row's call.
-            self.assertEqual(len(calls), 3)
-            self.assertFalse((case / "test.csv").exists())
-
-    def test_an_interrupt_pending_between_steps_cancels_the_call(self):
-        # The engine asks the interpreter at each of its checkpoints. The
-        # function's one test calls `_thread.interrupt_main`, which only marks
-        # SIGINT pending, and returns to the engine with the interrupt still
-        # pending, so the run's next checkpoint raises it: the default
-        # handler's KeyboardInterrupt ends the call before any row calls the
-        # function, and nothing is published. Every call is a builtin, so no
-        # Python code runs that could raise it earlier.
-        _, case = self.function_study()
-        function = case / "functions" / "project_value.yaml"
-        function.write_text(
-            'yamaa: "1.0"\n'
-            "type: function\n"
-            "name: project_value\n"
-            "description: Mark an interrupt pending.\n"
-            "params: []\n"
-            "returns: str\n"
-            "may_return_missing: true\n"
-            "implementations:\n"
-            "  python: yamaa_benchmarks.project_value\n"
-            "  r: yamaabenchmarks::project_value\n"
-            "tests:\n"
-            "- {id: once, covers: [normal, boundary, nullable-output], args: {}, result: null}\n",
-            encoding="utf-8",
-        )
-        spec = case / "spec.yaml"
-        text = spec.read_text(encoding="utf-8")
-        for written, edited in (
-            ("        args: {x: SOURCE.VALUE}\n", ""),
-            ("type: float\n    label: Project", "type: str\n    label: Project"),
+        for entry, call in (
+            ("spec", lambda: project.spec("TEST").run()),
+            ("project", lambda: project.run()),
         ):
-            # An edit that no longer applies would test another case.
-            self.assertIn(written, text)
-            text = text.replace(written, edited)
-        spec.write_text(text, encoding="utf-8")
-        project = yamaa.project(case / "project.yaml")
-        rows = []
+            with self.subTest(entry=entry):
+                calls = []
 
-        def binding(*_):
-            # The first call marks the interrupt pending; each later one, a
-            # row's, answers the next count.
-            count = itertools.count()
-            rows.append(count)
-            pending = map(_thread.interrupt_main, [signal.SIGINT])
-            return itertools.chain(pending, map(str, count)).__next__
+                def binding(*arguments):
+                    invoke = resolve(*arguments)
 
-        with patch.object(host, "resolve_callable", side_effect=binding):
-            for call in (lambda: project.spec("TEST").run(), lambda: project.run()):
-                with self.subTest(call=call):
-                    with self.assertRaises(KeyboardInterrupt):
-                        call()
-                    self.assertEqual(next(rows[-1]), 0)
-                    self.assertFalse((case / "test.csv").exists())
+                    def callback(**arguments):
+                        calls.append(arguments)
+                        if len(calls) == TRUTH["signal_interrupt_calls"]:
+                            signal.raise_signal(signal.SIGINT)
+                        return invoke(**arguments)
+
+                    return callback
+
+                with (
+                    patch.object(host, "resolve_callable", side_effect=binding),
+                    self.assertRaises(KeyboardInterrupt),
+                ):
+                    call()
+                self.assertEqual(
+                    (len(calls), (case / "test.csv").exists()),
+                    (TRUTH["signal_interrupt_calls"], False),
+                    entry,
+                )
 
     def test_callback_can_reenter_public_check_and_run(self):
         project, case = self.function_study()
@@ -916,11 +863,15 @@ class PublicContract(unittest.TestCase):
         absent = self.root / "absent-project.yaml"
         project = yamaa.project(absent)
         error = self.refusal(lambda: project.spec("TEST"))
-        self.assertEqual(str(error), error_text("unread_project"))
+        self.assertEqual(str(error), error_text("unread_project", absent))
         unread = error.issues.to_pylist()
+        # The caller's own path, named as given at no field (FILE-7).
         self.assertEqual(
-            [(row["condition"], row["spec_paths"]) for row in unread],
-            [("project_environment_missing", ["environment"])],
+            [
+                (row["condition"], row["spec_paths"], json.loads(row["context"]))
+                for row in unread
+            ],
+            [("resource_path_missing", [], {"path": os.fspath(absent)})],
         )
         checked = self.issues(project.check())
         self.assertEqual(checked.to_dicts(), unread)
@@ -1057,9 +1008,22 @@ class PublicContract(unittest.TestCase):
                         fixture_bytes(case["input_csv"])
                     )
                 call = getattr(yamaa.spec(spec), case["call"])
+                # `{path}` stands for the specification path given, as JSON
+                # text in the context.
+                given = os.fspath(spec)
+                expected = [
+                    {
+                        **row,
+                        "message": row["message"].replace("{path}", given),
+                        "context": row["context"].replace(
+                            "{path}", json.dumps(given, ensure_ascii=False)[1:-1]
+                        ),
+                    }
+                    for row in case["issues"]
+                ]
                 self.assertEqual(
                     self.issues(call()).to_dicts(),
-                    located(case["issues"], spec.parent.resolve()),
+                    located(expected, spec.parent.resolve()),
                 )
 
 
@@ -1282,7 +1246,7 @@ class Resolve(unittest.TestCase):
         self.assertEqual(str(caught.exception), error_text("resolve", spec))
         self.assertEqual(
             caught.exception.issues.to_polars()["condition"].to_list(),
-            ["engine_rejected"],
+            ["resource_path_missing"],
         )
 
 

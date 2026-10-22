@@ -22,7 +22,7 @@ messages <- host_truth[["messages"]]
 error_text <- function(key, path = NULL, file = NULL) {
   text <- messages[[key]]
   if (!is.null(file)) text <- sub("{file}", file, text, fixed = TRUE)
-  if (is.null(path)) text else sub("{path}", path, text, fixed = TRUE)
+  if (is.null(path)) text else gsub("{path}", path, text, fixed = TRUE)
 }
 namespace <- asNamespace("yamaa")
 
@@ -225,8 +225,10 @@ run_contract <- function() {
   absent <- yamaa_spec(path("absent.yaml"))
   checked <- check_issues(absent$check()$issues)
   run <- absent$run()
-  stopifnot(identical(checked$condition, "engine_rejected"),
-    identical(checked$context, '{"code":"resource_missing","stage":"prepare"}'),
+  # The caller's own path, named as given at no field (FILE-7).
+  stopifnot(identical(checked$condition, "resource_path_missing"), identical(checked$rule, "FILE-7"),
+    identical(checked$spec_paths, list(character())),
+    identical(checked$context, paste0('{"path":"', path("absent.yaml"), '"}')),
     is.null(run$output), is.null(run$report), identical(run$issues, checked))
   for (attempt in 1:2) {
     error <- refusal(run$save())
@@ -368,28 +370,29 @@ qualify_callbacks <- function() {
       stopifnot(identical(seen, interrupted), identical(invoked, expected), !file.exists(file.path(case, "test.csv")))
     }
   }
-  # An interrupt R receives during a run, here the SIGINT that Ctrl+C sends,
-  # raised from a project function, ends the call with R's interrupt condition
-  # and publishes nothing (D46), whether R takes it inside the function, the
-  # engine at its next checkpoint, or the call as it returns. A process on
-  # Windows cannot send itself SIGINT.
+  # Windows cannot send SIGINT to the current process with tools::pskill.
   if (.Platform$OS.type == "unix") {
-    signaling <- function(call, parameters) {
-      resolved <- capabilities$resolve(call, parameters)
-      if (resolved[[1L]] != 0L) return(resolved)
-      invoke <- resolved[[2L]]
-      list(0L, function(arguments) tryCatch({
-        invoked <<- invoked + 1L
-        if (invoked > 2L) tools::pskill(Sys.getpid(), tools::SIGINT)
-        invoke(arguments)
-      }, interrupt = function(condition) list(3L, condition)))
-    }
-    for (call in entries) {
+    for (entry_name in names(entries)) {
       invoked <- 0L
-      seen <- with_capabilities(capabilities$verify, signaling,
-        tryCatch(call(), interrupt = function(condition) "interrupted"))
-      stopifnot(identical(seen, "interrupted"), invoked >= 3L, !file.exists(file.path(case, "test.csv")))
+      resolve_signal <- function(call, parameters) {
+        resolved <- capabilities$resolve(call, parameters)
+        if (resolved[[1L]] != 0L) return(resolved)
+        invoke <- resolved[[2L]]
+        list(0L, function(arguments) {
+          invoked <<- invoked + 1L
+          if (invoked == host_truth[["signal_interrupt_calls"]]) tools::pskill(Sys.getpid(), signal = 2L)
+          invoke(arguments)
+        })
+      }
+      seen <- with_capabilities(capabilities$verify, resolve_signal,
+        tryCatch(entries[[entry_name]](), interrupt = identity))
+      actual <- list(interrupt = inherits(seen, "interrupt"), calls = invoked,
+        published = file.exists(file.path(case, "test.csv")))
+      expected <- list(interrupt = TRUE, calls = as.integer(host_truth[["signal_interrupt_calls"]]), published = FALSE)
+      if (!identical(actual, expected)) stop(paste("SIGINT callback", entry_name, "did not stop without publishing"))
     }
+  } else {
+    cat("SKIP: in-process SIGINT requires tools::pskill on Unix\n")
   }
   long_condition <- structure(list(message = paste0(strrep("\u00e9\n", 30000L), "complete failure"), call = NULL),
     class = c("public_contract_error", "error", "condition"))
@@ -592,9 +595,11 @@ qualify_project_refusals <- function() {
   project <- yamaa_project(absent)
   error <- refusal(project$spec("TEST"))
   unread <- error$issues
-  stopifnot(identical(conditionMessage(error), error_text("unread_project")),
-    identical(unread$condition, "project_environment_missing"),
-    identical(unread$spec_paths, list("environment")),
+  # The caller's own path, named as given at no field (FILE-7).
+  stopifnot(identical(conditionMessage(error), error_text("unread_project", absent)),
+    identical(unread$condition, "resource_path_missing"),
+    identical(unread$spec_paths, list(character())),
+    identical(unread$context, paste0('{"path":"', absent, '"}')),
     identical(check_issues(project$check()$issues), unread))
   error <- refusal(project$names)
   stopifnot(identical(conditionMessage(error), error_text("unread_project_names", absent)),
@@ -695,8 +700,13 @@ qualify_issue_parity <- function() {
     }
     frame <- check_issues(yamaa_spec(spec)[[case$call]]()$issues)
     expected <- case$issues
+    # `{path}` stands for the specification path given, as JSON text in the
+    # context.
+    given <- c(message = spec, context = gsub("\\", "\\\\", spec, fixed = TRUE))
     text <- function(field) vapply(expected, function(issue)
-      if (is.null(issue[[field]])) NA_character_ else issue[[field]], "")
+      if (is.null(issue[[field]])) NA_character_
+      else if (field %in% names(given)) gsub("{path}", given[[field]], issue[[field]], fixed = TRUE)
+      else issue[[field]], "")
     number <- function(field) vapply(expected, function(issue)
       if (is.null(issue[[field]])) NA_real_ else as.double(issue[[field]]), 0)
     actual <- list(severity = frame$severity, phase = frame$phase, condition = frame$condition,
@@ -745,7 +755,7 @@ qualify_resolve <- function() {
   unlink(entry)
   error <- refusal(spec$resolve())
   stopifnot(identical(conditionMessage(error), error_text("resolve", entry)),
-    identical(error$issues$condition, "engine_rejected"))
+    identical(error$issues$condition, "resource_path_missing"))
 
   # The project supplies the function and names itself; the same file alone
   # names an unknown function. No callable is activated.
