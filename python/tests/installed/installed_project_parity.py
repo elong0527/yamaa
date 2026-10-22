@@ -69,7 +69,9 @@ class ProjectParity(unittest.TestCase):
         for case in TRUTH["cases"]:
             with (
                 self.subTest(case=case["name"]),
-                tempfile.TemporaryDirectory(prefix="yamaa-project-parity-") as temporary,
+                tempfile.TemporaryDirectory(
+                    prefix="yamaa-project-parity-"
+                ) as temporary,
             ):
                 root = Path(temporary).resolve()
                 files = {**case["files"], **case.get("host_files", {}).get(HOST, {})}
