@@ -629,3 +629,184 @@ the same computer that reaches that folder meanwhile fails rather than waits.
 The lock does not reach other computers: saves from two computers into one
 network folder are not serialized, so save into a shared folder from one
 computer at a time.
+
+## Command line
+
+The `yamaa` command line runs the same engine as the R and Python packages,
+as one standalone binary that needs no Python, R or Rust. Each command makes
+the calls described above and prints the engine's own text, so a result, an
+issue or an error reads as it does in R and Python. Only its arguments change
+what it does: no configuration file, environment variable or colour does.
+
+```text
+yamaa [--format text|json] COMMAND [ARGUMENTS]
+yamaa --version [--format text|json]
+yamaa --help
+```
+
+`--format` selects what a command prints: `text`, the default, or `json`, one
+JSON document. It may come before or after the command. `--version` prints
+the [engine information](#engine-information) for the host `cli`, one field
+per line, or with `--format json` one object with the six keys of `info()`,
+whose `host_version` is null. `--help`, given anywhere before `--`, prints the
+usage whatever else is given. Both exit 0.
+
+### Commands
+
+```text
+yamaa check PATH [--spec NAME]
+yamaa run PATH [--spec NAME | --section SECTION]
+yamaa submission PATH [--section SECTION] [--created TIME]
+yamaa resolve PATH [--spec NAME]
+yamaa read-odm SOURCE OUT [--archive-member NAME] [--max-archive-members N] [--max-expanded-bytes N] [--max-xml-depth N]
+yamaa lint [--fix] PATH...
+yamaa schema TYPE
+yamaa selftest
+```
+
+| Command | What it does | In R and Python |
+|---|---|---|
+| `check` | Checks a specification or a project without reading data | `check()` |
+| `run` | Builds a specification or a project, then saves what it built and prints each path written | `run()`, then `save()` |
+| `submission` | Composes a project's define.xml and transport files, then saves them and prints each path written | `submission()`, then `save()` |
+| `resolve` | Prints the resolved specification as canonical JSON | `resolve()` |
+| `read-odm` | Reads SOURCE, an ODM XML file or a TAR archive that holds one, and saves its items to OUT | `read_odm()` |
+| `lint` | Lints each PATH, a yamaa file or a directory of them; with `--fix`, first applies the proved fixes in place | `lint()` |
+| `schema` | Prints the JSON Schema of TYPE: `spec`, `project`, `codelists` or `function` | `schema()` |
+| `selftest` | Runs the cases built into the engine and compares each with its expected files | `selftest()` |
+
+`check`, `run` and `resolve` take a specification or a project, whichever
+PATH declares in its `type:`, and `submission` takes a project. For a
+project, `--spec NAME` selects one of its specifications, as `spec(name)`
+does, and `--section SECTION` one of its sections, `sdtm`, `adam` or `send`;
+without them, `check` and `run` cover the whole project, and `submission`
+every section that names `define`. `run` takes `--spec` or `--section`, not
+both, and `resolve` needs `--spec` for a project, which has no resolved form
+of its own. `--created TIME` gives the ISO 8601 creation time that a
+submission's documents carry; without it, the submission reads the clock once
+for every section and prints the time it read. A command's flags follow it,
+before or after its arguments, each at most once, and `--` ends the flags, so
+a PATH that starts with `-` can follow it. A PATH whose type the command does
+not take, such as a specification with `--spec`, is a usage error.
+
+`read-odm` reads SOURCE as `read_odm()` does, then saves the items to OUT,
+whose extension, `.csv` or `.parquet`, selects the format; any other
+extension is refused before anything is written. Its flags are
+`read_odm()`'s arguments, with the same defaults: `--archive-member NAME`
+names the archive member to read, and `--max-archive-members N` (default
+10000), `--max-expanded-bytes N` (default 268435456) and `--max-xml-depth N`
+(default 64) bound the members an archive holds, the bytes read or expanded,
+and the depth of element nesting
+([ODM-1](../../rules/reference/odm.md#odm-1)). Each N is a whole number.
+
+The command line runs no project function. It reads no project's
+`environments` entry, so it checks no lock, and a run of a specification
+that calls a project function fails before it reads any input, with
+`unsupported_operation`: run that specification from R or Python. Every
+other build runs as it does in R and Python, and `check` checks every
+specification, since it runs no project code.
+
+```sh
+yamaa check project.yaml
+yamaa run sdtm/dm.yaml
+yamaa run project.yaml --section sdtm
+yamaa --format json run project.yaml --spec DM
+yamaa submission project.yaml --section sdtm --created 2026-10-21T12:00:00
+yamaa read-odm edc/export.tar.gz edc/odm.parquet --archive-member odm.xml
+yamaa lint --fix project.yaml sdtm/ adam/
+yamaa schema spec > spec.schema.json
+```
+
+### Output
+
+Standard output carries what a command prints, each line ending in a line
+feed. As text, `check`, `run` and `submission` print the summary line and
+member lines that R and Python print
+([Status and printed results](#status-and-printed-results)), then each issue
+on a line of its own, as the `first issue:` line shows the first. `run` and
+`submission` then print the absolute path of each file the save wrote, in the
+order written, and a submission made without `--created` prints
+`created: <time>` after its summary line. `resolve` and `schema` print
+canonical JSON in either format, and `read-odm` prints the path it wrote.
+`lint` prints each finding as `<file>:<line>:<column>: <finding> <message>`,
+then a summary line such as `3 lint findings in 2 of 5 files`, to which
+`--fix` adds `; fixed 1 file`. `selftest` prints the report that R and Python
+print. A call that cannot complete prints the message of the error that R and
+Python raise, which carries the first issue, then each other issue's line and
+the paths written before it.
+
+With `--format json`, a command prints one canonical JSON document instead:
+one line, with its members in key order ([JSON documents](#json-documents)).
+
+Standard error carries only the refusals of exit status 2, each as
+`yamaa: <message>` and then `run 'yamaa --help' for usage`, which a failed
+write to standard output leaves out. The one exception is a `selftest` case
+that panics: the case fails, and the panic message, which shows where the
+engine panicked, goes to standard error.
+
+### Exit status
+
+| Status | Meaning |
+|---|---|
+| 0 | The command completed and succeeded: its status is `succeeded` and any save wrote everything, or `resolve`, `schema`, `--version` or `--help` printed its output. |
+| 1 | The command completed with findings: a status of `failed` or `skipped`, a refused save, remaining lint findings, a failed selftest case, or a refusal that carries issues, such as an unknown section, an unknown TYPE or a PATH that cannot be read. |
+| 2 | The command could not run as asked: a usage error, an argument the engine cannot take, such as text that is not UTF-8, a PATH whose declared type the command does not take, or a failed write to standard output. |
+
+A file problem the engine reports as an issue, such as a missing input,
+exits 1, since R and Python return the same issue.
+
+Press Ctrl+C, and `check`, `run` and `submission` stop at the engine's next
+checkpoint, as a call in R or Python does: the command prints nothing, and a
+save writes every file it planned or none. The other commands stop at once.
+Either way, an interrupted command ends with none of the statuses above.
+
+### JSON documents
+
+With `--format json`, each command prints one object with the keys below, and
+`resolve` and `schema` print the JSON they print as text. A refusal prints the
+same keys, except where the table names a refusal's.
+
+| Command | Keys |
+|---|---|
+| `check` | `command`, `path`, `spec`, `status`, `issues` |
+| `run` | `command`, `path`, `spec`, `section`, `status`, `members`, `issues`, `paths` |
+| `submission` | `command`, `path`, `section`, `created`, `status`, `issues`, `paths` |
+| `resolve` | the resolved specification; a refusal: `command`, `path`, `spec`, `status`, `issues` |
+| `read-odm` | `command`, `path`, `rows`, `status`, `issues`, `paths` |
+| `lint` | `command`, `status`, `findings`, `paths`; a refusal: `command`, `status`, `findings`, `issues`, `paths` |
+| `schema` | the JSON Schema; a refusal: `command`, `type`, `status`, `issues` |
+| `selftest` | `command`, `status`, `cases`, `info` |
+| `--version` | `version`, `language_versions`, `features`, `host`, `host_version`, `platform` |
+
+* `command` is the command's name. `path`, `spec`, `section` and `type` are
+  its arguments as given, null for a flag not given; `read-odm`'s `path` is
+  SOURCE.
+* `status` is the result's status, which a refused save keeps, and `failed`
+  for a call refused before it has a result. `lint`'s is `failed` when a
+  finding remains, and `selftest`'s when a case failed.
+* `issues` holds every issue as an object with the twelve columns of
+  `issues`: `severity`, `phase`, `condition`, `rule`, `spec_paths`, `file`,
+  `line`, `column`, `message`, `context`, `source_span` and `operand_route`,
+  whose `context` is an object rather than JSON text.
+* `paths` lists the files written, as the text prints them.
+* `members` has one object for each specification of a project run, in run
+  order, with its `name`, `status`, `rows`, `columns` and `issue_count`;
+  `rows` and `columns` are null without output, and a listing that could not
+  be read is named by its path. A specification's own run has none.
+* `created` is the creation time that a submission's documents carry; a
+  refused submission has none, so it is `--created` as given, or null.
+* `rows` is the number of items `read-odm` read, null only when the read is
+  refused. Its `status` follows the read, as a run's follows the run: a read
+  that completed is `succeeded` even when the save of OUT is then refused,
+  which its `issues` and exit status 1 report.
+* `findings` has one object for each lint finding, with its `file`, `line`,
+  `column`, `finding`, `spec_path` and `message`.
+* `cases` has one object for each selftest case, with its `case`, `status`
+  and `message`, and `info` holds the engine information with the keys that
+  `--version` prints.
+
+From 1.0.0, every 1.x release keeps the commands, flags, exit statuses and
+JSON keys on this page, and may add commands, flags and keys, as the
+[stability contract](../release.md#stability-contract) says. The messages
+are not frozen: a program reads `status`, and an issue's `condition` and
+`rule`, never its `message`.

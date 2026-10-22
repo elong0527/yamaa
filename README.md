@@ -193,6 +193,9 @@ license notices and the component inventory, or put that directory on your
 `PATH`. The Linux binaries are static, so they run on any Linux of their
 architecture. `yamaa --version` names the engine, and `yamaa selftest` runs
 the self-test above.
+The API page's
+[command line](https://elong0527.github.io/yamaa/articles/api/#command-line)
+section lists every command and flag, the exit statuses and the JSON output.
 
 The binaries are not signed. On macOS, a binary that a browser downloaded
 carries the quarantine attribute, and Gatekeeper refuses to run it, saying

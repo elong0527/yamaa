@@ -170,7 +170,7 @@ reads study data:
 
 Sign-off happens on the YAML diff, with comments carrying the rationale next
 to the fields they explain. The [R and Python API](api.md) describes the R
-and Python calls, and `yamaa --help` the command line.
+and Python calls and [the command line](api.md#command-line).
 
 ## Programs in a study submission
 
