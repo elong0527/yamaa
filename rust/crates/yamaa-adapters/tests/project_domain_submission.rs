@@ -872,7 +872,7 @@ mod project {
                 assert_issues(
                     &issues,
                     &[yamaa_adapters::json!({"phase":"validation","condition":condition,"rule":rule,"spec_paths":[path],"context":value(context)})],
-                    to.as_ref(),
+                    to,
                 );
             }
             // Without dataset metadata, `core` and ADaM's `mandatory` are not
