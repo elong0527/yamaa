@@ -260,35 +260,55 @@ fn model_keys_and_profiles_lower_as_declared() {
 
 /// An intermediate states its own `key` unless it drives a row template
 /// (LOOKUP-3, ROW-2): one without `key` is refused before any input is read,
-/// at its `key`, as the schema records a missing required field (D23, D63).
+/// at its `key`, as the schema records a missing required field (D23, D63),
+/// even when nothing reads it: pruning keeps it for its refusal (D219).
 #[test]
 fn an_intermediate_without_key_is_refused_unless_it_drives_rows() {
-    let text = spec(&["{name: TERM, type: str, derivation: NAMES.TERM}"]).edit(
-        "base: SRC\n",
-        "base: SRC\nintermediates:\n  - {id: NAMES, dataset: EX, filter: \"EX.N > 0\"}\n",
-    );
-    let study = Study::new(&[("spec.yaml", &text)]);
-    let Err(SpecificationError::Entry(Error::Findings(captured))) = prepare(&study, "spec.yaml")
-    else {
-        panic!("refused");
+    let declaring = |derivation: &str| {
+        spec(&[&format!(
+            "{{name: TERM, type: str, derivation: {derivation}}}"
+        )])
+        .edit(
+            "base: SRC\n",
+            "base: SRC\nintermediates:\n  - {id: NAMES, dataset: EX, filter: \"EX.N > 0\"}\n",
+        )
     };
-    let [finding] = captured.findings() else {
-        panic!("one finding");
-    };
-    let definition = finding.code.definition();
-    assert_eq!(
-        (definition.phase, definition.condition, definition.rule),
-        ("validation", "missing_required_field", Some("LOOKUP-3"))
-    );
-    assert_eq!(finding.path, "intermediates.NAMES.key");
-    assert_eq!(
-        finding.context,
-        [
-            ("field", C::Text("key".into())),
-            ("class", C::Text("intermediate_class".into())),
-        ]
-    );
+    // TERM reads the intermediate as a lookup, or reads only the base.
+    for derivation in ["NAMES.TERM", "SRC.TERM"] {
+        let study = Study::new(&[("spec.yaml", &declaring(derivation))]);
+        let Err(SpecificationError::Entry(Error::Findings(captured))) =
+            prepare(&study, "spec.yaml")
+        else {
+            panic!("{derivation}: refused");
+        };
+        let [finding] = captured.findings() else {
+            panic!("{derivation}: one finding");
+        };
+        let definition = finding.code.definition();
+        assert_eq!(
+            (
+                definition.phase,
+                definition.condition,
+                definition.rule,
+                finding.path.as_str(),
+                finding.context.as_slice(),
+            ),
+            (
+                "validation",
+                "missing_required_field",
+                Some("LOOKUP-3"),
+                "intermediates.NAMES.key",
+                [
+                    ("field", C::Text("key".into())),
+                    ("class", C::Text("intermediate_class".into())),
+                ]
+                .as_slice(),
+            ),
+            "{derivation}"
+        );
+    }
     // A row template's driver declares none.
+    let text = declaring("NAMES.TERM");
     let driver = text
         .edit(
             "  - {name: TERM, type: str, derivation: NAMES.TERM}\n",

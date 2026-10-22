@@ -70,8 +70,11 @@ impl column_dependencies::Diagnostic {
                 vec![format!("columns.{}.derivation", columns.get(*column)?)],
                 context([("column", text(columns.get(*column)?))]),
             ),
+            // At the key's derivation whatever its operation, so a 1.0
+            // formula, which writes no operation segment, reports where its
+            // 0.5 `compute` does (COLUMN-7, D18).
             Self::KeyDependency { column, dependency } => (
-                vec![paths.get(*column)?.rsplit_once('.')?.0.into()],
+                vec![format!("columns.{}.derivation", columns.get(*column)?)],
                 context([
                     ("column", text(columns.get(*column)?)),
                     ("dependency", text(columns.get(*dependency)?)),

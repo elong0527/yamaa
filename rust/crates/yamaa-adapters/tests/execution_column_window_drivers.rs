@@ -153,10 +153,10 @@ const SUBJECTS: &str =
     "  - {id: subjects, dataset: DM, derivations: {USUBJID: DM.USUBJID, SRC: \"'DM'\", SEQ: 0}}\n";
 const EVENTS: &str = "  - {id: events, dataset: AE, derivations: {USUBJID: AE.USUBJID, SRC: \"'AE'\", SEQ: AE.AESEQ}}\n";
 const SERIOUS: &str = "  - {id: serious, dataset: SER, derivations: {USUBJID: SER.USUBJID, SRC: \"'SER'\", SEQ: SER.AESEQ}}\n";
-/// Two named intermediates select AE's serious and non-serious events.
-const INTERMEDIATES: &str = "intermediates:\n\
-    \x20 - {id: SER, dataset: AE, filter: \"AE.AESER = 'Y'\"}\n\
-    \x20 - {id: NONSER, dataset: AE, filter: \"AE.AESER = 'N'\"}\n";
+/// Declare only the row driver in use: an unread keyless intermediate is
+/// refused before the window's own admission (LOOKUP-3, D219).
+const SERIOUS_INTERMEDIATE: &str = "intermediates:\n\
+    \x20 - {id: SER, dataset: AE, filter: \"AE.AESER = 'Y'\"}\n";
 
 /// Rows built by `rows` in order, and the column-level derivation of `ORD`
 /// after `extra` declared columns.
@@ -349,19 +349,52 @@ fn grouping_either_template_refuses_the_read_the_same_way() {
 fn named_intermediate_drivers_and_the_input_they_read() {
     let grouped = "  - {id: serious, dataset: SER, group_by: [SER.USUBJID], derivations: {USUBJID: SER.USUBJID, SRC: \"'SER'\", SEQ: 1}}\n";
     let other = "  - {id: other, dataset: NONSER, derivations: {USUBJID: NONSER.USUBJID, SRC: \"'NONSER'\", SEQ: NONSER.AESEQ}}\n";
-    for (rows, order, drivers) in [
-        (vec![SUBJECTS, SERIOUS], "DM.AGE", &["DM", "SER"][..]),
-        (vec![SUBJECTS, grouped], "DM.AGE", &["DM", "SER"][..]),
-        (vec![SERIOUS, SUBJECTS], "SER.AESEQ", &["SER", "DM"][..]),
+    let both = format!(
+        "{SERIOUS_INTERMEDIATE}  - {{id: NONSER, dataset: AE, filter: \"AE.AESER = 'N'\"}}\n"
+    );
+    for (prefix, rows, order, drivers) in [
+        (
+            SERIOUS_INTERMEDIATE,
+            vec![SUBJECTS, SERIOUS],
+            "DM.AGE",
+            &["DM", "SER"][..],
+        ),
+        (
+            SERIOUS_INTERMEDIATE,
+            vec![SUBJECTS, grouped],
+            "DM.AGE",
+            &["DM", "SER"][..],
+        ),
+        (
+            SERIOUS_INTERMEDIATE,
+            vec![SERIOUS, SUBJECTS],
+            "SER.AESEQ",
+            &["SER", "DM"][..],
+        ),
         // The intermediate's records are AE's, read at their AE positions;
         // a subject row has none.
-        (vec![SERIOUS, SUBJECTS], "AE.AESEQ", &["SER", "DM"][..]),
+        (
+            SERIOUS_INTERMEDIATE,
+            vec![SERIOUS, SUBJECTS],
+            "AE.AESEQ",
+            &["SER", "DM"][..],
+        ),
         // A serious row is built from SER, not from AE, although it reads
         // AE's records.
-        (vec![EVENTS, SERIOUS], "AE.AESEQ", &["AE", "SER"][..]),
-        (vec![SERIOUS, other], "AE.AESEQ", &["SER", "NONSER"][..]),
+        (
+            SERIOUS_INTERMEDIATE,
+            vec![EVENTS, SERIOUS],
+            "AE.AESEQ",
+            &["AE", "SER"][..],
+        ),
+        (
+            both.as_str(),
+            vec![SERIOUS, other],
+            "AE.AESEQ",
+            &["SER", "NONSER"][..],
+        ),
     ] {
-        numbered(INTERMEDIATES, &rows, order).refused(&[(ORDER, order, drivers, "row_number")]);
+        numbered(prefix, &rows, order).refused(&[(ORDER, order, drivers, "row_number")]);
     }
 }
 
@@ -385,7 +418,7 @@ fn a_window_whose_templates_share_the_driver_builds_unchanged() {
         .edit("id: serious", "id: again")
         .edit("SRC: \"'SER'\"", "SRC: \"'SER2'\"");
     numbered(
-        INTERMEDIATES,
+        SERIOUS_INTERMEDIATE,
         &[SERIOUS, &again],
         "{variable: SER.AESEQ, direction: desc}",
     )
@@ -415,11 +448,12 @@ fn a_grouped_template_over_the_shared_driver_still_reads_only_its_group_keys() {
     )]);
     // And a window over a named intermediate driver that one template groups.
     let grouped_serious = "  - {id: grouped, dataset: SER, group_by: [SER.USUBJID], derivations: {USUBJID: SER.USUBJID, SRC: \"'SERG'\", SEQ: 1}}\n";
-    numbered(INTERMEDIATES, &[SERIOUS, grouped_serious], "SER.AESEQ").reports(&[ungrouped(
-        ORDER,
+    numbered(
+        SERIOUS_INTERMEDIATE,
+        &[SERIOUS, grouped_serious],
         "SER.AESEQ",
-        "SER",
-    )]);
+    )
+    .reports(&[ungrouped(ORDER, "SER.AESEQ", "SER")]);
     // The group key itself checks clean and builds; each subject's two rows
     // tie and keep row-template order.
     numbered("", &[SUBJECTS, grouped], "DM.USUBJID").saved(
@@ -455,7 +489,8 @@ fn a_read_of_a_dataset_no_row_is_built_from_is_refused_before_any_data_is_read()
     let again = SERIOUS
         .edit("id: serious", "id: again")
         .edit("SRC: \"'SER'\"", "SRC: \"'SER2'\"");
-    numbered(INTERMEDIATES, &[SERIOUS, &again], "AE.AESEQ").reports(&[unknown(ORDER, "AE.AESEQ")]);
+    numbered(SERIOUS_INTERMEDIATE, &[SERIOUS, &again], "AE.AESEQ")
+        .reports(&[unknown(ORDER, "AE.AESEQ")]);
     // The operands first, then each name of the filter once, in sorted order.
     let filter = "columns.ORD.derivation.row_number.window.filter";
     Fixture::new(&specification(

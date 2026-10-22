@@ -674,7 +674,7 @@ naming list with dataset identifiers, other lookup ids and the output
 `key` fails as `missing_required_field`.
 
 Fails: `duplicate_identifier`, `missing_required_field`.
-Evidence: `negative-lookup-id-collision`, `negative-lookup-unknown-key`, `schema-lookup`, `rust/crates/yamaa-core/src/specification/declared_keys.rs::an_intermediate_read_as_a_lookup_requires_its_key`, `rust/crates/yamaa-core/src/specification/declared_keys.rs::a_row_driver_read_as_a_lookup_is_refused_at_its_key`, `rust/crates/yamaa-adapters/tests/declaration_v1_lowering.rs::an_intermediate_without_key_is_refused_unless_it_drives_rows`.
+Evidence: `negative-lookup-id-collision`, `negative-lookup-unknown-key`, `schema-lookup`, `rust/crates/yamaa-core/src/specification/declared_keys.rs::an_intermediate_read_as_a_lookup_requires_its_key`, `rust/crates/yamaa-core/src/specification/declared_keys.rs::a_row_driver_read_as_a_lookup_is_refused_at_its_key`, `rust/crates/yamaa-adapters/tests/declaration_v1_lowering.rs::an_intermediate_without_key_is_refused_unless_it_drives_rows`, `rust/tests/host-fixtures/cases.json::ordinary_lookup_without_keys`.
 
 For a named intermediate, `dataset: SELF` instead reads the specification's
 completed derived rows ([LOOKUP-7](#lookup-7)). The current row is the output
@@ -686,10 +686,11 @@ survive `filter` ([LOOKUP-25](#lookup-25)).
 An `id` collision fails as `duplicate_identifier`. The schema requires `id`
 and `dataset`: omitting either fails as `missing_required_field` with no
 rule cited. An intermediate that drives no row template and declares no `key`
-fails as `missing_required_field` at its `key` before any input is read, its
-context naming the field and its class as the schema's does; a row template's
-driver read as a lookup by the rows another template builds fails the same
-way. An intermediate never falls back to its input's `key`.
+fails as `missing_required_field` at its `key` before any input is read, even
+when nothing reads it, its context naming the field and its class as the
+schema's does; a row template's driver read as a lookup by the rows another
+template builds fails the same way. An intermediate never falls back to its
+input's `key`.
 
 ```yaml
 intermediates:

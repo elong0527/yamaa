@@ -41,8 +41,7 @@ impl Diagnostic {
     pub fn location(&self) -> &'static str {
         match self {
             Self::Cycle { .. } | Self::ForwardReference { .. } => "operation",
-            Self::MissingKeyDerivation { .. } => "declaration",
-            Self::KeyDependency { .. } => "expression",
+            Self::MissingKeyDerivation { .. } | Self::KeyDependency { .. } => "declaration",
         }
     }
 

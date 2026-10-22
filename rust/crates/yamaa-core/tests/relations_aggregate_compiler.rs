@@ -265,7 +265,7 @@ mod relations {
                     },
                     "key_dependency",
                     "COLUMN-7",
-                    "expression",
+                    "declaration",
                     vec![2, 0],
                 ),
             ];
