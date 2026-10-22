@@ -836,8 +836,8 @@ mod schema {
             let derived = || {
                 aggregate(vec![
                     (
-                        "derive",
-                        V::List(vec![binding("DOSE", source("EX.EXDOSE"))]),
+                        "derivations",
+                        V::map(vec![binding("DOSE", source("EX.EXDOSE"))]),
                     ),
                     ("expr", text("SUM(DOSE_MG)")),
                 ])
