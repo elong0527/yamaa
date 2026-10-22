@@ -31,6 +31,7 @@ the minute or a coarser precision is a partial date-time:
     data_type: partialDatetime
     origins:
       - type: Collected
+        source: Investigator
 ```
 
 A comparison or lookup that needs a moment completes the text into an

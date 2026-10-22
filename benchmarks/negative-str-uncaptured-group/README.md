@@ -43,5 +43,6 @@ str_extract:
   no_match: null
 ```
 
-Keep the blank results for a blank or ill-formed identifier; dropping them
-would stop the run on such an identifier instead.
+Keep the blank result for an ill-formed identifier; dropping `no_match: null`
+would stop the run on such an identifier instead. A blank identifier gives a
+blank site either way.

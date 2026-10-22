@@ -3,7 +3,7 @@ type: spec
 model: ADaM
 parent: layers/parent.yaml
 clear:
-  # null clears the type inherited from layers/parent.yaml, but a column
+  # This clears the type inherited from layers/parent.yaml, but a column
   # must have a type, so it cannot be cleared.
   - columns.USUBJID.type
 domain: ADSL
