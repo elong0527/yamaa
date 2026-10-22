@@ -78,7 +78,8 @@ fn project_failure(error: &file_project::Error) -> Failure {
                 file_application::resource_failure(Step::Prepare, error)
             }
             crate::file_preparation::Error::ResourceFinding { diagnostic, .. }
-            | crate::file_preparation::Error::PreparationFinding { diagnostic, .. } => {
+            | crate::file_preparation::Error::PreparationFinding { diagnostic, .. }
+            | crate::file_preparation::Error::Reference(diagnostic) => {
                 file_application::classified_resource(diagnostic)
             }
             crate::file_preparation::Error::Preparation(error) => inherited(error),
@@ -220,7 +221,8 @@ fn entry_failure(error: &crate::file_entry::Error) -> Failure {
             file_application::resource_failure_from(Step::Prepare, error, identity)
         }
         E::Document(D::ResourceFinding { diagnostic, .. })
-        | E::Document(D::PreparationFinding { diagnostic, .. }) => {
+        | E::Document(D::PreparationFinding { diagnostic, .. })
+        | E::Document(D::Reference(diagnostic)) => {
             file_application::classified_resource(diagnostic)
         }
         E::Document(D::Preparation(error)) => preparation_boundary(error),

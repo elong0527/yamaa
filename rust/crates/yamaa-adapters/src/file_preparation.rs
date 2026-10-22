@@ -24,6 +24,10 @@ pub enum Error {
         error: InheritanceError<ResourceError>,
         diagnostic: Box<yamaa_core::diagnostic::Diagnostic>,
     },
+    /// The file a referencing field names declares a version the engine
+    /// does not read, or another type: refused at that field before the
+    /// file is prepared (SCHEMA-2, [`refused_header`]).
+    Reference(Box<yamaa_core::diagnostic::Diagnostic>),
     Compile(crate::specification_run::Error),
 }
 impl Error {
@@ -304,6 +308,46 @@ pub(crate) fn prepare_document_from(
     })
 }
 
+/// The refusal at `field` of the specification it names, `written` from
+/// `declaring` and resolved as `identity`, read before that file is prepared
+/// (SCHEMA-2), as a 1.0 project reads a function or codelist file it lists:
+/// a 1.x header that declares a version the engine does not read, or a type
+/// other than `spec`, is refused at the field, naming the file as `source`.
+/// A file that declares `schema_version` keeps the 0.5 path (D75); a
+/// malformed header is a finding in the file, and a file that cannot be read
+/// or decoded fails as before, each when the file is prepared.
+pub(crate) fn refused_header(
+    resources: &mut Resources,
+    declaring: &str,
+    written: &str,
+    identity: &str,
+    field: &str,
+) -> Option<yamaa_core::diagnostic::Diagnostic> {
+    use yamaa_core::language::{
+        self, FileType, HeaderFault, PathBase, Reference, ReferenceFault, LANGUAGE_VERSION,
+    };
+    let (bytes, _) = resources.capture_metadata_from(declaring, written).ok()?;
+    let document = crate::yaml_decode::decode_yaml(&bytes).ok()?.document;
+    if !language::declares_header(&document) {
+        return None;
+    }
+    let fault @ (HeaderFault::Version { .. } | HeaderFault::FileType { .. }) =
+        language::read_header(&document, Some(LANGUAGE_VERSION), FileType::Spec).err()?
+    else {
+        return None;
+    };
+    let reference = Reference {
+        field: field.into(),
+        written: written.into(),
+        expected: FileType::Spec,
+        base: PathBase::Declaring,
+    };
+    match reference.refuse(identity, &fault) {
+        ReferenceFault::Field(diagnostic) => Some(diagnostic),
+        ReferenceFault::Finding(_) => None,
+    }
+}
+
 /// A classified failure observed for a `schema` link keeps its authored field.
 fn link_resource(error: ResourceError, field: &str, written: &str) -> Error {
     match crate::file_resources::resource_failure(&error) {
@@ -316,7 +360,9 @@ fn link_resource(error: ResourceError, field: &str, written: &str) -> Error {
 }
 
 /// Read each producing specification a `schema` link names once, as a validated
-/// specification document; aliases share the one prepared document. A linked
+/// specification document; aliases share the one prepared document. A 1.x
+/// consumer checks the producer's header at its link before the producer is
+/// prepared ([`refused_header`], SCHEMA-2). A linked
 /// producer's own links are not followed: a link supplies only the stored
 /// artifact's output contract, and the producer is never compiled or executed.
 /// `origin` names the input being read when a failure returns.
@@ -371,6 +417,11 @@ pub(crate) fn capture_links(
                 .map_err(|error| link_resource(error, &field, link.written))?;
             Some(known)
         } else {
+            if let Some(refused) = document.versioned().and_then(|_| {
+                refused_header(resources, link.base_source, link.written, &identity, &field)
+            }) {
+                return Err(Error::Reference(Box::new(refused)));
+            }
             let prepared = prepare_document_from(
                 resources,
                 Some(link.base_source),
