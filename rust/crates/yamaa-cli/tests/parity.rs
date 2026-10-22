@@ -489,14 +489,24 @@ fn a_run_saves_the_value_level_report_rows_both_hosts_report() {
 fn a_failed_run_saves_the_report_bytes_both_hosts_save() {
     let contract = family("public-contract");
     let piece = |key| text(contract, key);
-    let specification = piece("specification_yaml")
-        .replacen(
+    // Each edit replaces the one place its text is written, as the hosts'
+    // edits do; a piece that matched nowhere, or twice, would leave another
+    // specification.
+    let edited = |text: String, old: &str, new: &str| {
+        assert_eq!(text.matches(old).count(), 1, "{old:?} once in {text:?}");
+        text.replacen(old, new, 1)
+    };
+    let mut specification = piece("specification_yaml").to_owned();
+    for (old, new) in [
+        (
             piece("integer_column_yaml"),
             piece("fatal_integer_column_yaml"),
-            1,
-        )
-        .replacen("output: {", piece("unreached_row_count_yaml"), 1)
-        .replacen("columns: [ID, VALUE]}", piece("report_output_yaml"), 1);
+        ),
+        ("output: {", piece("unreached_row_count_yaml")),
+        ("columns: [ID, VALUE]}", piece("report_output_yaml")),
+    ] {
+        specification = edited(specification, old, new);
+    }
     let directory = Scratch::new("parity");
     directory.write("spec.yaml", specification);
     directory.write("input.csv", piece("failed_input_csv"));
