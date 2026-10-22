@@ -1,0 +1,5 @@
+phase: validation
+condition: codelist_type_mismatch
+spec_paths:
+  - columns.AGEGR1N.submission.codelist
+rule: CT-8

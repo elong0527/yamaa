@@ -9,8 +9,15 @@
 //! lookup whose key types fail, which binding does not bind. So it does for
 //! two more (#3552): a row template filter's field qualified by nothing
 //! declared (NAME-3), and the operands a formula reads, typed once its names
-//! bind (FORMULA-12). Every case lists the same issues in both routes and
-//! hosts, in the same order.
+//! bind (FORMULA-12); and for two more (#3580): every other read of a field
+//! qualified by nothing declared (NAME-3, FORMULA-9, LOOKUP-9), and the
+//! reads of a lookup binding binds without its derivations, which it admits
+//! for no row (LOOKUP-15); and for one more (#3585): a text extraction's or
+//! replacement's source that is not text (TEXT-1) and, once binding takes
+//! its source, its pattern and group (TEXT-6, TEXT-10), wherever binding
+//! binds it. Every case lists the same issues in both routes and hosts, in
+//! the same order.
+use crate::support::Edit as _;
 use std::fs;
 use yamaa_adapters::file_application;
 use yamaa_core::{diagnostic::Diagnostic, domain_entry::Request, project_function::Language};
@@ -677,4 +684,543 @@ fn check_reports_a_row_filter_s_undeclared_qualifier_as_domain_does() {
         "VS.SYSBP > 1 AND PB.PLANDOSE > 1 AND DM.AGE > 1",
         "",
     )]);
+}
+
+const RANGE: &str = "unknown_field Some(\"LOOKUP-9\")";
+
+/// A field qualified by nothing declared, no input, lookup or driver, binds
+/// nothing whatever any input stores, so binding refuses each read of one
+/// where it reads it: as unknown (NAME-3) at a name, a structured source, a
+/// verb's operand or placeholder, a `first_available` source and a formula,
+/// in a row template, the column phase and without `rows`; as unknown to a
+/// `case` predicate (FORMULA-9); and as no value of the range of a
+/// structured source, a lookup or an aggregate (LOOKUP-9), as a field of a
+/// lookup binding does not bind is none. Outside the implicit template a
+/// structured source's filter reads only its variable's record, so each name
+/// it qualifies as the variable is unknown there first, once, and over a
+/// lookup's records each is the lookup's read (LOOKUP-15).
+#[test]
+fn check_reports_a_read_qualified_by_nothing_declared_as_domain_does() {
+    let row = |derivation: &str| record("", &format!("      X: {derivation}\n"), X, C);
+    let text = |derivation: &str| record("", &format!("      C: {derivation}\n"), X, C);
+    let column = |x: &str, c: &str| implicit("", "", x, c);
+    let at = "rows.record.derivations.X";
+    let source = "rows.record.derivations.X.source";
+    let filter = "rows.record.derivations.X.source.filter";
+    let then = "rows.record.derivations.X.case[0].then";
+    let template = "rows.record.derivations.C.str_template.template";
+    let between = "source: {variable: DM.AGE, between: {value: XX.Y, lower: AGE}}";
+    let filtered =
+        "source: {variable: XX.Y, filter: \"XX.Z > 1 AND DM.AGE > 1 AND XX.Z < 9\", absent: 0.0}";
+    assert_cases(&[
+        // A row template's derivations.
+        (row("\"XX.Y + VS.VSTESTCD + XX.Y\""), &[at, at], NAME),
+        (row("XX.Y"), &[source], NAME),
+        (row("SELF.Y"), &[source], NAME),
+        (row("{source: {variable: XX.Y, absent: 0.0}}"), &[source], NAME),
+        (
+            row("{case: [{when: \"XX.Y > 1\", then: 1.0}, {otherwise: 0.0}]}"),
+            &["rows.record.derivations.X.case[0].when"],
+            PREDICATE,
+        ),
+        (
+            row("{case: [{when: \"VS.SYSBP > 1\", then: \"XX.Y + VS.VSTESTCD\"}, {otherwise: 0.0}]}"),
+            &[then, then],
+            NAME,
+        ),
+        (
+            row("{greatest: {sources: [VS.SYSBP, XX.Y]}}"),
+            &["rows.record.derivations.X.greatest.sources[1]"],
+            NAME,
+        ),
+        (
+            row("{first_available: {sources: [XX.Y, VS.SYSBP]}}"),
+            &["rows.record.derivations.X.first_available.sources[0]"],
+            NAME,
+        ),
+        (
+            text("{str_template: \"{XX.Y}-{VS.USUBJID}-{YY.Z}\"}"),
+            &[template, template],
+            NAME,
+        ),
+        (
+            text("{str_extract: {source: XX.Y, pattern: \"^(A)\", group: 1}}"),
+            &["rows.record.derivations.C.str_extract.source"],
+            NAME,
+        ),
+        (
+            text("{mapping: {source: XX.Y, dict: {\"1\": one}}}"),
+            &["rows.record.derivations.C.mapping.source"],
+            NAME,
+        ),
+        (
+            row(&format!("{{{between}}}")),
+            &["rows.record.derivations.X.source.between.value"],
+            RANGE,
+        ),
+        (
+            row(&format!("{{{filtered}}}")),
+            &[filter, filter, source],
+            NAME,
+        ),
+        // The column phase.
+        (
+            record("", "", "XX.Y", C),
+            &["columns.X.derivation.source"],
+            NAME,
+        ),
+        (
+            record("", "", "{source: {variable: XX.Y, absent: 0.0}}", C),
+            &["columns.X.derivation.source"],
+            NAME,
+        ),
+        (
+            record(
+                "",
+                "",
+                "{case: [{when: \"XX.Y > 1\", then: 1.0}, {otherwise: 0.0}]}",
+                C,
+            ),
+            &["columns.X.derivation.case[0].when"],
+            PREDICATE,
+        ),
+        (
+            record("", "", X, "{str_template: \"{XX.Y}\"}"),
+            &["columns.C.derivation.str_template.template"],
+            NAME,
+        ),
+        (
+            record("", "", &format!("{{{between}}}"), C),
+            &["columns.X.derivation.source.between.value"],
+            RANGE,
+        ),
+        (
+            record("", "", &format!("{{{filtered}}}"), C),
+            &[
+                "columns.X.derivation.source.filter",
+                "columns.X.derivation.source.filter",
+                "columns.X.derivation.source",
+            ],
+            NAME,
+        ),
+        // Without rows the variable fails before any filter binds.
+        (column("XX.Y", C), &["columns.X.derivation.source"], NAME),
+        (column("SELF.Y", C), &["columns.X.derivation.source"], NAME),
+        (
+            column(&format!("{{{filtered}}}"), C),
+            &["columns.X.derivation.source"],
+            NAME,
+        ),
+        (
+            column("{greatest: {sources: [VS.SYSBP, XX.Y]}}", C),
+            &["columns.X.derivation.greatest.sources[1]"],
+            NAME,
+        ),
+        (
+            column("{first_available: {sources: [XX.Y, VS.SYSBP]}}", C),
+            &["columns.X.derivation.first_available.sources[0]"],
+            NAME,
+        ),
+        (
+            column(X, "{str_template: \"{XX.Y}\"}"),
+            &["columns.C.derivation.str_template.template"],
+            NAME,
+        ),
+        (
+            column(
+                "{case: [{when: \"VS.SYSBP > 1\", then: XX.Y}, {otherwise: 0.0}]}",
+                C,
+            ),
+            &["columns.X.derivation.case[0].then.source"],
+            NAME,
+        ),
+        (
+            column(&format!("{{{between}}}"), C),
+            &["columns.X.derivation.source.between.value"],
+            RANGE,
+        ),
+        // A lookup's range and an aggregate's, whose value no lookup binding
+        // binds gives either.
+        (
+            implicit(
+                "  - {id: HR, dataset: HOME, key: [USUBJID], between: {value: XX.Y, lower: VSDY}}\n",
+                "",
+                "HR.SYSBP",
+                C,
+            ),
+            &["intermediates.HR.between.value"],
+            RANGE,
+        ),
+        (
+            column(
+                "{aggregate: {expr: \"SUM(PLAN.PLANDOSE)\", between: {value: XX.Y, lower: DOSENUM}}}",
+                C,
+            ),
+            &["columns.X.derivation.aggregate.between.value"],
+            RANGE,
+        ),
+        (
+            column(
+                "{aggregate: {expr: \"SUM(PLAN.PLANDOSE)\", between: {value: PL.DOSENUM, lower: DOSENUM}}}",
+                "PL.USUBJID",
+            ),
+            &[
+                PL,
+                "columns.X.derivation.aggregate.between.value",
+                "columns.C.derivation.source",
+            ],
+            KEY_TYPES,
+        ),
+        // Over a lookup's records.
+        (
+            implicit(
+                &format!(
+                    "  - {{id: P, dataset: PLAN, key: [USUBJID], derivations: {{D: {{{filtered}}}}}}}\n"
+                ),
+                "",
+                "P.D",
+                C,
+            ),
+            &[
+                "intermediates.P.derivations.D.source.filter",
+                "intermediates.P.derivations.D.source.filter",
+                "intermediates.P.derivations.D.source",
+            ],
+            "unknown_field Some(\"LOOKUP-15\")",
+        ),
+        // The 0.5 surface.
+        (
+            "schema_version: \"1.0\"\ndomain: ADVS\nkeys: [STUDYID, USUBJID]\n\
+             input: {VS: vs.csv}\n\
+             output: {path: out.csv, columns: [STUDYID, USUBJID]}\n\
+             columns:\n\
+             \x20 - {name: STUDYID, type: str}\n\
+             \x20 - {name: USUBJID, type: str}\n\
+             rows:\n\
+             \x20 - {id: vs, dataset: VS, derivations: {STUDYID: VS.STUDYID, USUBJID: XX.Y}}\n"
+                .into(),
+            &["rows[0].derivations.USUBJID.source"],
+            NAME,
+        ),
+        (
+            "schema_version: \"1.0\"\ndomain: ADVS\nkeys: [STUDYID, USUBJID]\n\
+             input: {VS: vs.csv, PLAN: {path: plan.csv, types: {DOSENUM: int, PLANDOSE: float}}}\n\
+             base: VS\n\
+             output: {path: out.csv, columns: [STUDYID, USUBJID, X]}\n\
+             columns:\n\
+             \x20 - {name: STUDYID, type: str, derivation: VS.STUDYID}\n\
+             \x20 - {name: USUBJID, type: str, derivation: XX.Y}\n\
+             \x20 - name: X\n\
+             \x20   type: float\n\
+             \x20   derivation: {aggregate: {expr: \"SUM(PLAN.PLANDOSE)\", between: {value: XX.Y, lower: DOSENUM}}}\n"
+                .into(),
+            &[
+                "columns.USUBJID.derivation.source",
+                "columns.X.derivation.aggregate.between.value",
+            ],
+            NAME,
+        ),
+    ]);
+    // The same reads of a declared record bind.
+    assert_clean(&[
+        row("{source: {variable: DM.AGE, between: {value: VS.VSDY, lower: AGE}}}"),
+        row("{source: {variable: VS.SYSBP, filter: \"VS.VSDY > 1\", absent: 0.0}}"),
+        record(
+            "",
+            "",
+            "{first_available: {sources: [PB.PLANDOSE, DM.AGE]}}",
+            C,
+        ),
+        column(
+            "{aggregate: {expr: \"SUM(PLAN.PLANDOSE)\", between: {value: VSDY, lower: DOSENUM}}}",
+            "{str_template: \"{VS.USUBJID}-{DM.STUDYID}\"}",
+        ),
+    ]);
+}
+
+/// Binding binds a lookup without its derivations when one of them fails,
+/// whether by a read, an operand's type or a conversion, and when a lookup
+/// derived before it is not bound (`intermediate_derivations::bind`). It
+/// then admits none of their reads for a row that reads the lookup, so a
+/// read of another input's record there is no finding (LOOKUP-15), and a
+/// uniqueness verification of the lookup depends on no such read
+/// (LOOKUP-17).
+#[test]
+fn check_admits_no_read_of_a_lookup_bound_without_its_derivations_as_domain_does() {
+    let lookup = |derivations: &str| {
+        format!("  - {{id: P, dataset: PLAN, key: [USUBJID], derivations: {{{derivations}}}}}\n")
+    };
+    let unique = |derivations: &str| {
+        format!(
+            "  - {{id: P, dataset: PLAN, key: [USUBJID], derivations: {{{derivations}}}, verifications: [{{unique: [USUBJID]}}]}}\n"
+        )
+    };
+    let at = "intermediates.P.derivations.D";
+    let current = "unknown_field Some(\"LOOKUP-15\")";
+    assert_cases(&[
+        (
+            implicit(
+                &lookup("D: {str_template: \"{DOSENUM}\"}, E: DM.RFSTDTC"),
+                "",
+                X,
+                "P.D",
+            ),
+            &["intermediates.P.derivations.D.str_template.template"],
+            "incompatible_input_type Some(\"TEXT-1\")",
+        ),
+        (
+            implicit(&lookup("D: \"DM.RFSTDTC + 1\""), "", "P.D", C),
+            &[at],
+            OPERAND,
+        ),
+        (
+            implicit(
+                &lookup("D: {type: int, derivation: DM.RFSTDTC}"),
+                "",
+                "P.D",
+                C,
+            ),
+            &[at],
+            "conversion_failed Some(\"VALUE-24\")",
+        ),
+        // PL, whose key types fail, is derived before P.
+        (
+            implicit(&lookup("E: DM.RFSTDTC"), "", "PL.PLANDOSE", "P.E"),
+            &[PL, "columns.X.derivation.source"],
+            KEY_TYPES,
+        ),
+        // A uniqueness verification of the lookup.
+        (
+            implicit(&unique("D: \"DM.RFSTDTC + 1\""), "", "P.D", C),
+            &[at],
+            OPERAND,
+        ),
+        (
+            implicit(&unique("E: DM.RFSTDTC"), "", "PL.PLANDOSE", "P.E"),
+            &[PL, "columns.X.derivation.source"],
+            KEY_TYPES,
+        ),
+        // Under row templates.
+        (
+            record("", "      X: P.D\n", X, C).edit(
+                "intermediates:\n",
+                &format!("intermediates:\n{}", lookup("D: \"DM.RFSTDTC + 1\"")),
+            ),
+            &[at],
+            OPERAND,
+        ),
+        // Derivations that bind are read for the row (LOOKUP-15).
+        (
+            implicit(&lookup("E: DM.RFSTDTC"), "", X, "P.E"),
+            &["intermediates.P.derivations.E.source"],
+            current,
+        ),
+        (
+            record("", "      C: P.E\n", X, C).edit(
+                "intermediates:\n",
+                &format!("intermediates:\n{}", lookup("E: DM.RFSTDTC")),
+            ),
+            &["intermediates.P.derivations.E.source"],
+            current,
+        ),
+        (
+            implicit(&unique("E: DM.RFSTDTC"), "", X, "P.E"),
+            &[
+                "intermediates.P.verifications[0].unique",
+                "intermediates.P.derivations.E.source",
+            ],
+            "correlated_derivation_with_unique_verification Some(\"LOOKUP-17\")",
+        ),
+    ]);
+}
+
+const PATTERN: &str = "invalid_regex Some(\"TEXT-6\")";
+const TEXT: &str = "incompatible_input_type Some(\"TEXT-1\")";
+
+/// Binding binds a text extraction or replacement by its source: once the
+/// source binds it types it by the reading scope's catalog, refusing a
+/// source that is not text (TEXT-1), and once it takes the source it refuses
+/// the pattern and group (TEXT-6, TEXT-10). Without row templates preflight
+/// checks a source a declaration types; elsewhere `check()` follows binding,
+/// in a row template and the column phase, a `case` result, a lookup's
+/// derivation, an aggregate's derive binding and, under row templates, a
+/// lookup's or an aggregate's key value. The catalog does not type a
+/// lookup's field, so a source that reads one is taken as it binds.
+#[test]
+fn check_reports_a_text_pattern_where_binding_takes_its_source_as_domain_does() {
+    let text = |derivation: &str| record("", &format!("      C: {derivation}\n"), X, C);
+    let column = |c: &str| record("", "", X, c);
+    let lookup = |lookups: &str, c: &str| implicit(lookups, "", X, c);
+    let extract = |source: &str| {
+        format!("{{str_extract: {{source: {source}, pattern: \"^(?=A)\", group: 1}}}}")
+    };
+    let keyed = |key: &str, derivations: &str| {
+        record("", derivations, X, C).edit(
+            "intermediates:\n",
+            &format!("intermediates:\n  - {{id: Q, dataset: PLAN, key: {{USUBJID: {key}}}}}\n"),
+        )
+    };
+    assert_cases(&[
+        // #3585's report: the column phase, a row template and a replacement,
+        // with a Python-only named group and a lookahead.
+        (
+            column("{str_extract: {source: USUBJID, pattern: \"^(?P<site>[A-Z]+)-\", group: 1}}"),
+            &["columns.C.derivation.str_extract.pattern"],
+            PATTERN,
+        ),
+        (
+            text("{str_extract: {source: VS.USUBJID, pattern: \"^(?P<site>[A-Z]+)-\", group: 1}}"),
+            &["rows.record.derivations.C.str_extract.pattern"],
+            PATTERN,
+        ),
+        (
+            text("{str_extract: {source: USUBJID, pattern: \"^([A-Z]+)(?=-)\", group: 1}}"),
+            &["rows.record.derivations.C.str_extract.pattern"],
+            PATTERN,
+        ),
+        (
+            column("{str_replace: {source: USUBJID, pattern: \"-(?P<n>[0-9]+)$\", replacement: \"\"}}"),
+            &["columns.C.derivation.str_replace.pattern"],
+            PATTERN,
+        ),
+        (
+            text("{str_extract: {source: VS.VSTESTCD, pattern: \"^(A)\", group: 2}}"),
+            &["rows.record.derivations.C.str_extract.group"],
+            "regex_group_out_of_range Some(\"TEXT-10\")",
+        ),
+        (
+            text(&format!(
+                "{{case: [{{when: \"VS.SYSBP > 1\", then: {}}}, {{otherwise: \"'B'\"}}]}}",
+                extract("VS.USUBJID")
+            )),
+            &["rows.record.derivations.C.case[0].then.str_extract.pattern"],
+            PATTERN,
+        ),
+        // A source that is not text, whose pattern binding then leaves.
+        (
+            text(&extract("VS.VSDY")),
+            &["rows.record.derivations.C.str_extract.source"],
+            TEXT,
+        ),
+        (
+            column("{str_replace: {source: VSDY, pattern: \"A\", replacement: \"B\"}}"),
+            &["columns.C.derivation.str_replace.source"],
+            TEXT,
+        ),
+        // A lookup's field, without and with row templates.
+        (
+            lookup("", &extract("PB.DOSENUM")),
+            &["columns.C.derivation.str_extract.pattern"],
+            PATTERN,
+        ),
+        (
+            text(&extract("PB.DOSENUM")),
+            &["rows.record.derivations.C.str_extract.pattern"],
+            PATTERN,
+        ),
+        // Over a lookup's records and an aggregate's.
+        (
+            lookup(
+                &format!(
+                    "  - {{id: P, dataset: PLAN, key: [USUBJID], derivations: {{D: {}}}}}\n",
+                    extract("USUBJID")
+                ),
+                "P.D",
+            ),
+            &["intermediates.P.derivations.D.str_extract.pattern"],
+            PATTERN,
+        ),
+        (
+            lookup(
+                "  - {id: P, dataset: PLAN, key: [USUBJID], derivations: {D: {str_extract: {source: DOSENUM, pattern: \"^(A)\", group: 1}}}}\n",
+                "P.D",
+            ),
+            &["intermediates.P.derivations.D.str_extract.source"],
+            TEXT,
+        ),
+        (
+            lookup(
+                &format!(
+                    "  - {{id: Q, dataset: PLAN, key: {{USUBJID: HOME.USUBJID}}}}\n\
+                     \x20 - {{id: P, dataset: HOME, key: [USUBJID], derivations: {{D: {}}}}}\n",
+                    extract("Q.DOSENUM")
+                ),
+                "P.D",
+            ),
+            &["intermediates.P.derivations.D.str_extract.pattern"],
+            PATTERN,
+        ),
+        (
+            lookup(
+                "",
+                &format!(
+                    "{{aggregate: {{expr: \"COUNT(F)\", derivations: {{F: {{type: str, derivation: {}}}}}}}}}",
+                    extract("PLAN.USUBJID")
+                ),
+            ),
+            &["columns.C.derivation.aggregate.derivations.F.derivation.str_extract.pattern"],
+            PATTERN,
+        ),
+        // A key value under row templates; binding binds nothing more of
+        // its lookup.
+        (
+            keyed(&extract("VS.USUBJID"), "      X: Q.PLANDOSE\n"),
+            &[
+                "intermediates.Q.key.USUBJID.str_extract.pattern",
+                "rows.record.derivations.X.source",
+            ],
+            PATTERN,
+        ),
+        (
+            keyed("{str_template: \"{VS.VSDY}-{VS.USUBJID}\"}", "      X: Q.PLANDOSE\n"),
+            &[
+                "intermediates.Q.key.USUBJID.str_template.template",
+                "rows.record.derivations.X.source",
+            ],
+            TEXT,
+        ),
+        (
+            record(
+                "",
+                "",
+                &format!(
+                    "{{aggregate: {{expr: \"SUM(PLAN.PLANDOSE)\", key: {{USUBJID: {}}}}}}}",
+                    extract("USUBJID")
+                ),
+                C,
+            ),
+            &["columns.X.derivation.aggregate.key.USUBJID.str_extract.pattern"],
+            PATTERN,
+        ),
+        // The 0.5 surface, #3585's own specification.
+        (
+            "schema_version: \"1.0\"\ndomain: ADTOY\nkeys: [USUBJID]\n\
+             input: {SRC: vs.csv}\n\
+             output: {path: out.csv, columns: [USUBJID, SITE]}\n\
+             columns:\n\
+             \x20 - {name: USUBJID, type: str, label: Subject}\n\
+             \x20 - name: SITE\n\
+             \x20   type: str\n\
+             \x20   label: Site\n\
+             \x20   derivation:\n\
+             \x20     str_extract: {source: USUBJID, pattern: '^(?P<site>[A-Z]+)-', group: 1}\n\
+             rows:\n\
+             \x20 - id: subjects\n\
+             \x20   dataset: SRC\n\
+             \x20   derivations:\n\
+             \x20     USUBJID: SRC.USUBJID\n"
+                .into(),
+            &["columns.SITE.derivation.str_extract.pattern"],
+            PATTERN,
+        ),
+    ]);
+    // A valid pattern over a text source.
+    assert_clean(&[
+        text("{str_extract: {source: VS.USUBJID, pattern: \"^([A-Z]+)-\", group: 1}}"),
+        column("{str_replace: {source: USUBJID, pattern: \"-([0-9]+)$\", replacement: \"\"}}"),
+        lookup(
+            "  - {id: P, dataset: PLAN, key: [USUBJID], derivations: {D: {str_extract: {source: USUBJID, pattern: \"^([A-Z]+)\", group: 1}}}}\n",
+            "P.D",
+        ),
+    ]);
 }

@@ -1,7 +1,7 @@
 [
   {
     "case": "keys_one",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [STUDYID, USUBJID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [STUDYID, USUBJID, VAL]}\ncolumns:\n  - {name: STUDYID, type: str, label: Study, derivation: SRC.StudyOID}\n  - {name: USUBJID, type: str, label: Subject, derivation: SRC.SubjectKey}\n  - {name: VAL, type: str, label: Value, derivation: {odm: SRC.IT.TEST.OID}}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [STUDYID, USUBJID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [STUDYID, USUBJID, VAL]}\ncolumns:\n  - {name: STUDYID, type: str, label: Study, derivation: SRC.StudyOID}\n  - {name: USUBJID, type: str, label: Subject, derivation: SRC.SubjectKey}\n  - {name: VAL, type: str, label: Value, derivation: {odm: SRC.IT.TEST.OID}}\n",
     "input": "StudyOID,MetaDataVersionOID,SubjectKey,StudyEventOID,StudyEventRepeatKey,FormOID,FormRepeatKey,ItemGroupOID,ItemGroupRepeatKey,ItemOID,Value\nS,M,P,E,,F,,G,,IT.TEST.OID,Y\n",
     "expected": {
       "artifacts": [
@@ -175,7 +175,7 @@
   },
   {
     "case": "keys_absent",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [STUDYID, USUBJID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [STUDYID, USUBJID, VAL]}\ncolumns:\n  - {name: STUDYID, type: str, label: Study, derivation: SRC.StudyOID}\n  - {name: USUBJID, type: str, label: Subject, derivation: SRC.SubjectKey}\n  - {name: VAL, type: str, label: Value, derivation: {odm: SRC.IT.ABSENT}}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [STUDYID, USUBJID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [STUDYID, USUBJID, VAL]}\ncolumns:\n  - {name: STUDYID, type: str, label: Study, derivation: SRC.StudyOID}\n  - {name: USUBJID, type: str, label: Subject, derivation: SRC.SubjectKey}\n  - {name: VAL, type: str, label: Value, derivation: {odm: SRC.IT.ABSENT}}\n",
     "input": "StudyOID,MetaDataVersionOID,SubjectKey,StudyEventOID,StudyEventRepeatKey,FormOID,FormRepeatKey,ItemGroupOID,ItemGroupRepeatKey,ItemOID,Value\nS,M,P,E,,F,,G,,IT.TEST.OID,Y\n",
     "expected": {
       "artifacts": [
@@ -349,7 +349,7 @@
   },
   {
     "case": "keys_selectors",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [STUDYID, USUBJID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [STUDYID, USUBJID, VAL]}\ncolumns:\n  - {name: STUDYID, type: str, label: Study, derivation: SRC.StudyOID}\n  - {name: USUBJID, type: str, label: Subject, derivation: SRC.SubjectKey}\n  - {name: VAL, type: str, label: Value, derivation: {odm: {item: SRC.IT.TEST.OID, event: [E], form: [F2], item_group: [G]}}}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [STUDYID, USUBJID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [STUDYID, USUBJID, VAL]}\ncolumns:\n  - {name: STUDYID, type: str, label: Study, derivation: SRC.StudyOID}\n  - {name: USUBJID, type: str, label: Subject, derivation: SRC.SubjectKey}\n  - {name: VAL, type: str, label: Value, derivation: {odm: {item: SRC.IT.TEST.OID, event: [E], form: [F2], item_group: [G]}}}\n",
     "input": "StudyOID,MetaDataVersionOID,SubjectKey,StudyEventOID,StudyEventRepeatKey,FormOID,FormRepeatKey,ItemGroupOID,ItemGroupRepeatKey,ItemOID,Value\nS,M,P,E,,F,,G,,IT.TEST.OID,Y\nS,M,P,E,,F2,,G,,IT.TEST.OID,N\n",
     "expected": {
       "artifacts": [
@@ -569,7 +569,7 @@
   },
   {
     "case": "keys_predicate",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [STUDYID, USUBJID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [STUDYID, USUBJID, VAL]}\ncolumns:\n  - {name: STUDYID, type: str, label: Study, derivation: SRC.StudyOID}\n  - {name: USUBJID, type: str, label: Subject, derivation: SRC.SubjectKey}\n  - {name: VAL, type: str, label: Value, derivation: {odm: {item: SRC.IT.TEST.OID, filter: \"SRC.Value = 'Y'\"}}}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [STUDYID, USUBJID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [STUDYID, USUBJID, VAL]}\ncolumns:\n  - {name: STUDYID, type: str, label: Study, derivation: SRC.StudyOID}\n  - {name: USUBJID, type: str, label: Subject, derivation: SRC.SubjectKey}\n  - {name: VAL, type: str, label: Value, derivation: {odm: {item: SRC.IT.TEST.OID, filter: \"SRC.Value = 'Y'\"}}}\n",
     "input": "StudyOID,MetaDataVersionOID,SubjectKey,StudyEventOID,StudyEventRepeatKey,FormOID,FormRepeatKey,ItemGroupOID,ItemGroupRepeatKey,ItemOID,Value\nS,M,P,E,,F,,G,,IT.TEST.OID,Y\nS,M,P,E,,F2,,G,,IT.TEST.OID,N\n",
     "expected": {
       "artifacts": [
@@ -789,7 +789,7 @@
   },
   {
     "case": "ascii_and_vendor",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [STUDYID, USUBJID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [STUDYID, USUBJID, VAL]}\ncolumns:\n  - {name: STUDYID, type: str, label: Study, derivation: SRC.StudyOID}\n  - {name: USUBJID, type: str, label: Subject, derivation: SRC.SubjectKey}\n  - {name: VAL, type: str, label: Value, derivation: {odm: SRC.IT.TEST.OID}}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [STUDYID, USUBJID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [STUDYID, USUBJID, VAL]}\ncolumns:\n  - {name: STUDYID, type: str, label: Study, derivation: SRC.StudyOID}\n  - {name: USUBJID, type: str, label: Subject, derivation: SRC.SubjectKey}\n  - {name: VAL, type: str, label: Value, derivation: {odm: SRC.IT.TEST.OID}}\n",
     "input": "sTUDYoid,mETAdATAvERSIONoid,sUBJECTkEY,sTUDYeVENToid,sTUDYeVENTrEPEATkEY,fORMoid,fORMrEPEATkEY,iTEMgROUPoid,iTEMgROUPrEPEATkEY,iTEMoid,vALUE,VendorBool,VendorNumber\nS,M,P,E,,F,,G,,IT.TEST.OID,Y,FALSE,9007199254740993\n",
     "expected": {
       "artifacts": [
@@ -963,7 +963,7 @@
   },
   {
     "case": "group_original_scope",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [STUDYID, USUBJID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [STUDYID, USUBJID, VAL]}\ncolumns:\n  - {name: STUDYID, type: str, label: Study, derivation: SRC.StudyOID}\n  - {name: USUBJID, type: str, label: Subject, derivation: SRC.SubjectKey}\n  - {name: VAL, type: str, label: Value, derivation: {odm: SRC.IT.TEST.OID}}\n  - {name: ITEM, type: str, label: Item, derivation: SRC.ItemOID}\nrows:\n  - id: subjects\n    dataset: SRC\n    group_by: [SRC.StudyOID, SRC.SubjectKey, SRC.ItemOID]\n    filter: \"ITEM = 'IT.ANCHOR'\"\n    derivations:\n      STUDYID: SRC.StudyOID\n      USUBJID: SRC.SubjectKey\n      VAL: {odm: SRC.IT.TEST.OID}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [STUDYID, USUBJID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [STUDYID, USUBJID, VAL]}\ncolumns:\n  - {name: STUDYID, type: str, label: Study, derivation: SRC.StudyOID}\n  - {name: USUBJID, type: str, label: Subject, derivation: SRC.SubjectKey}\n  - {name: VAL, type: str, label: Value, derivation: {odm: SRC.IT.TEST.OID}}\n  - {name: ITEM, type: str, label: Item, derivation: SRC.ItemOID}\nrows:\n  - id: subjects\n    dataset: SRC\n    group_by: [SRC.StudyOID, SRC.SubjectKey, SRC.ItemOID]\n    filter: \"ITEM = 'IT.ANCHOR'\"\n    derivations:\n      STUDYID: SRC.StudyOID\n      USUBJID: SRC.SubjectKey\n      VAL: {odm: SRC.IT.TEST.OID}\n",
     "input": "StudyOID,MetaDataVersionOID,SubjectKey,StudyEventOID,StudyEventRepeatKey,FormOID,FormRepeatKey,ItemGroupOID,ItemGroupRepeatKey,ItemOID,Value\nS,M,P,E,,F,,G,,IT.ANCHOR,anchor\nS,M,P,E,,F,,G,,IT.TEST.OID,Y\n",
     "expected": {
       "artifacts": [
@@ -1189,7 +1189,7 @@
   },
   {
     "case": "record_occurrence",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [STUDYID, USUBJID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [STUDYID, USUBJID, VAL]}\ncolumns:\n  - {name: STUDYID, type: str, label: Study, derivation: SRC.StudyOID}\n  - {name: USUBJID, type: str, label: Subject, derivation: SRC.SubjectKey}\n  - {name: VAL, type: str, label: Value, derivation: {odm: SRC.IT.TEST.OID}}\nrows:\n  - id: occurrence\n    dataset: SRC\n    filter: \"SRC.ItemOID = 'IT.ANCHOR'\"\n    derivations:\n      STUDYID: SRC.StudyOID\n      USUBJID: SRC.SubjectKey\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [STUDYID, USUBJID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [STUDYID, USUBJID, VAL]}\ncolumns:\n  - {name: STUDYID, type: str, label: Study, derivation: SRC.StudyOID}\n  - {name: USUBJID, type: str, label: Subject, derivation: SRC.SubjectKey}\n  - {name: VAL, type: str, label: Value, derivation: {odm: SRC.IT.TEST.OID}}\nrows:\n  - id: occurrence\n    dataset: SRC\n    filter: \"SRC.ItemOID = 'IT.ANCHOR'\"\n    derivations:\n      STUDYID: SRC.StudyOID\n      USUBJID: SRC.SubjectKey\n",
     "input": "StudyOID,MetaDataVersionOID,SubjectKey,StudyEventOID,StudyEventRepeatKey,FormOID,FormRepeatKey,ItemGroupOID,ItemGroupRepeatKey,ItemOID,Value\nS,M,P,E,,F,,G,,IT.ANCHOR,anchor\nS,M,P,E,,F,,G,,IT.TEST.OID,Y\nS,M,P,E,,F,2,G,,IT.TEST.OID,other\n",
     "expected": {
       "artifacts": [
@@ -1455,7 +1455,7 @@
   },
   {
     "case": "column_override",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [STUDYID, USUBJID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [STUDYID, USUBJID, VAL]}\ncolumns:\n  - {name: STUDYID, type: str, label: Study, derivation: SRC.StudyOID}\n  - {name: USUBJID, type: str, label: Subject, derivation: SRC.SubjectKey}\n  - {name: VAL, type: str, label: Value, derivation: {odm: SRC.IT.TEST.OID}}\n  - {name: ITEM, type: str, label: Item, derivation: SRC.ItemOID}\nrows:\n  - id: subjects\n    dataset: SRC\n    group_by: [SRC.StudyOID, SRC.SubjectKey, SRC.ItemOID]\n    filter: \"ITEM = 'IT.ANCHOR'\"\n    derivations:\n      STUDYID: SRC.StudyOID\n      USUBJID: SRC.SubjectKey\n      VAL: {literal: U}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [STUDYID, USUBJID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [STUDYID, USUBJID, VAL]}\ncolumns:\n  - {name: STUDYID, type: str, label: Study, derivation: SRC.StudyOID}\n  - {name: USUBJID, type: str, label: Subject, derivation: SRC.SubjectKey}\n  - {name: VAL, type: str, label: Value, derivation: {odm: SRC.IT.TEST.OID}}\n  - {name: ITEM, type: str, label: Item, derivation: SRC.ItemOID}\nrows:\n  - id: subjects\n    dataset: SRC\n    group_by: [SRC.StudyOID, SRC.SubjectKey, SRC.ItemOID]\n    filter: \"ITEM = 'IT.ANCHOR'\"\n    derivations:\n      STUDYID: SRC.StudyOID\n      USUBJID: SRC.SubjectKey\n      VAL: \"'U'\"\n",
     "input": "StudyOID,MetaDataVersionOID,SubjectKey,StudyEventOID,StudyEventRepeatKey,FormOID,FormRepeatKey,ItemGroupOID,ItemGroupRepeatKey,ItemOID,Value\nS,M,P,E,,F,,G,,IT.ANCHOR,anchor\nS,M,P,E,,F,,G,,IT.TEST.OID,Y\nS,M,P,E,,F2,,G,,IT.TEST.OID,N\n",
     "expected": {
       "artifacts": [
@@ -1727,7 +1727,7 @@
   },
   {
     "case": "keys_repeated",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [STUDYID, USUBJID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [STUDYID, USUBJID, VAL]}\ncolumns:\n  - {name: STUDYID, type: str, label: Study, derivation: SRC.StudyOID}\n  - {name: USUBJID, type: str, label: Subject, derivation: SRC.SubjectKey}\n  - {name: VAL, type: str, label: Value, derivation: {odm: SRC.IT.TEST.OID}}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [STUDYID, USUBJID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [STUDYID, USUBJID, VAL]}\ncolumns:\n  - {name: STUDYID, type: str, label: Study, derivation: SRC.StudyOID}\n  - {name: USUBJID, type: str, label: Subject, derivation: SRC.SubjectKey}\n  - {name: VAL, type: str, label: Value, derivation: {odm: SRC.IT.TEST.OID}}\n",
     "input": "StudyOID,MetaDataVersionOID,SubjectKey,StudyEventOID,StudyEventRepeatKey,FormOID,FormRepeatKey,ItemGroupOID,ItemGroupRepeatKey,ItemOID,Value\nS,M,P,E,,F,,G,,IT.TEST.OID,Y\nS,M,P,E,,F,,G,,IT.TEST.OID,N\n",
     "expected": {
       "artifacts": [],
@@ -1946,7 +1946,7 @@
   },
   {
     "case": "row_not_unique",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [STUDYID, USUBJID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [STUDYID, USUBJID, VAL]}\ncolumns:\n  - {name: STUDYID, type: str, label: Study, derivation: SRC.StudyOID}\n  - {name: USUBJID, type: str, label: Subject, derivation: SRC.SubjectKey}\n  - {name: VAL, type: str, label: Value, derivation: {odm: SRC.IT.TEST.OID}}\n  - {name: ITEM, type: str, label: Item, derivation: SRC.ItemOID}\nrows:\n  - id: subjects\n    dataset: SRC\n    group_by: [SRC.StudyOID, SRC.SubjectKey, SRC.ItemOID]\n    filter: \"ITEM = 'IT.ANCHOR'\"\n    derivations:\n      STUDYID: SRC.StudyOID\n      USUBJID: SRC.SubjectKey\n      VAL: {odm: SRC.IT.TEST.OID}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [STUDYID, USUBJID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [STUDYID, USUBJID, VAL]}\ncolumns:\n  - {name: STUDYID, type: str, label: Study, derivation: SRC.StudyOID}\n  - {name: USUBJID, type: str, label: Subject, derivation: SRC.SubjectKey}\n  - {name: VAL, type: str, label: Value, derivation: {odm: SRC.IT.TEST.OID}}\n  - {name: ITEM, type: str, label: Item, derivation: SRC.ItemOID}\nrows:\n  - id: subjects\n    dataset: SRC\n    group_by: [SRC.StudyOID, SRC.SubjectKey, SRC.ItemOID]\n    filter: \"ITEM = 'IT.ANCHOR'\"\n    derivations:\n      STUDYID: SRC.StudyOID\n      USUBJID: SRC.SubjectKey\n      VAL: {odm: SRC.IT.TEST.OID}\n",
     "input": "StudyOID,MetaDataVersionOID,SubjectKey,StudyEventOID,StudyEventRepeatKey,FormOID,FormRepeatKey,ItemGroupOID,ItemGroupRepeatKey,ItemOID,Value\nS,M,P,E,,F,,G,,IT.ANCHOR,anchor\nS,M,P,E,,F,,G,,IT.TEST.OID,Y\nS,M2,P,E,,F,,G,,IT.TEST.OID,Y\n",
     "expected": {
       "artifacts": [],
@@ -1974,7 +1974,7 @@
           "phase": "row_construction",
           "rule": "NAME-13",
           "spec_paths": [
-            "rows[0].derivations.VAL.odm"
+            "rows.subjects.derivations.VAL.odm"
           ]
         }
       ],
@@ -2006,7 +2006,7 @@
               "phase": "row_construction",
               "rule": "NAME-13",
               "spec_paths": [
-                "rows[0].derivations.VAL.odm"
+                "rows.subjects.derivations.VAL.odm"
               ]
             }
           ],
@@ -2209,7 +2209,7 @@
   },
   {
     "case": "column_group_not_unique",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [STUDYID, USUBJID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [STUDYID, USUBJID, VAL]}\ncolumns:\n  - {name: STUDYID, type: str, label: Study, derivation: SRC.StudyOID}\n  - {name: USUBJID, type: str, label: Subject, derivation: SRC.SubjectKey}\n  - {name: VAL, type: str, label: Value, derivation: {odm: SRC.IT.TEST.OID}}\n  - {name: ITEM, type: str, label: Item, derivation: SRC.ItemOID}\nrows:\n  - id: subjects\n    dataset: SRC\n    group_by: [SRC.StudyOID, SRC.SubjectKey, SRC.ItemOID]\n    filter: \"ITEM = 'IT.ANCHOR'\"\n    derivations:\n      STUDYID: SRC.StudyOID\n      USUBJID: SRC.SubjectKey\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [STUDYID, USUBJID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [STUDYID, USUBJID, VAL]}\ncolumns:\n  - {name: STUDYID, type: str, label: Study, derivation: SRC.StudyOID}\n  - {name: USUBJID, type: str, label: Subject, derivation: SRC.SubjectKey}\n  - {name: VAL, type: str, label: Value, derivation: {odm: SRC.IT.TEST.OID}}\n  - {name: ITEM, type: str, label: Item, derivation: SRC.ItemOID}\nrows:\n  - id: subjects\n    dataset: SRC\n    group_by: [SRC.StudyOID, SRC.SubjectKey, SRC.ItemOID]\n    filter: \"ITEM = 'IT.ANCHOR'\"\n    derivations:\n      STUDYID: SRC.StudyOID\n      USUBJID: SRC.SubjectKey\n",
     "input": "StudyOID,MetaDataVersionOID,SubjectKey,StudyEventOID,StudyEventRepeatKey,FormOID,FormRepeatKey,ItemGroupOID,ItemGroupRepeatKey,ItemOID,Value\nS,M,P,E,,F,,G,,IT.ANCHOR,anchor\nS,M,P,E,,F,,G,,IT.TEST.OID,Y\nS,M2,P,E,,F,,G,,IT.TEST.OID,Y\n",
     "expected": {
       "artifacts": [],
@@ -2484,7 +2484,7 @@
   },
   {
     "case": "required_values",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [STUDYID, USUBJID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [STUDYID, USUBJID, VAL]}\ncolumns:\n  - {name: STUDYID, type: str, label: Study, derivation: SRC.StudyOID}\n  - {name: USUBJID, type: str, label: Subject, derivation: SRC.SubjectKey}\n  - {name: VAL, type: str, label: Value, derivation: {odm: SRC.IT.TEST.OID}}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [STUDYID, USUBJID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [STUDYID, USUBJID, VAL]}\ncolumns:\n  - {name: STUDYID, type: str, label: Study, derivation: SRC.StudyOID}\n  - {name: USUBJID, type: str, label: Subject, derivation: SRC.SubjectKey}\n  - {name: VAL, type: str, label: Value, derivation: {odm: SRC.IT.TEST.OID}}\n",
     "input": "StudyOID,MetaDataVersionOID,SubjectKey,StudyEventOID,StudyEventRepeatKey,FormOID,FormRepeatKey,ItemGroupOID,ItemGroupRepeatKey,ItemOID,Value\nS,M,,E,,F,,G,,IT.TEST.OID,Y\nS,M,,E,,F,,G,,IT.TEST.OID,Y\n",
     "expected": {
       "artifacts": [],
@@ -2681,7 +2681,7 @@
   },
   {
     "case": "missing_schema",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [STUDYID, USUBJID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [STUDYID, USUBJID, VAL]}\ncolumns:\n  - {name: STUDYID, type: str, label: Study, derivation: SRC.StudyOID}\n  - {name: USUBJID, type: str, label: Subject, derivation: SRC.SubjectKey}\n  - {name: VAL, type: str, label: Value, derivation: {odm: SRC.IT.TEST.OID}}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [STUDYID, USUBJID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [STUDYID, USUBJID, VAL]}\ncolumns:\n  - {name: STUDYID, type: str, label: Study, derivation: SRC.StudyOID}\n  - {name: USUBJID, type: str, label: Subject, derivation: SRC.SubjectKey}\n  - {name: VAL, type: str, label: Value, derivation: {odm: SRC.IT.TEST.OID}}\n",
     "input": "StudyOID,MetaDataVersionOID,SubjectKey,StudyEventOID,StudyEventRepeatKey,ItemGroupOID,ItemGroupRepeatKey,ItemOID,Value\nS,M,P,E,,G,,IT.TEST.OID,Y\n",
     "expected": {
       "artifacts": [],
@@ -2754,7 +2754,7 @@
   },
   {
     "case": "ambiguous_schema",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [STUDYID, USUBJID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [STUDYID, USUBJID, VAL]}\ncolumns:\n  - {name: STUDYID, type: str, label: Study, derivation: SRC.StudyOID}\n  - {name: USUBJID, type: str, label: Subject, derivation: SRC.SubjectKey}\n  - {name: VAL, type: str, label: Value, derivation: {odm: SRC.IT.TEST.OID}}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [STUDYID, USUBJID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [STUDYID, USUBJID, VAL]}\ncolumns:\n  - {name: STUDYID, type: str, label: Study, derivation: SRC.StudyOID}\n  - {name: USUBJID, type: str, label: Subject, derivation: SRC.SubjectKey}\n  - {name: VAL, type: str, label: Value, derivation: {odm: SRC.IT.TEST.OID}}\n",
     "input": "StudyOID,MetaDataVersionOID,SubjectKey,StudyEventOID,StudyEventRepeatKey,FormOID,FormRepeatKey,ItemGroupOID,ItemGroupRepeatKey,ItemOID,Value,studyoid\nS,M,P,E,,F,,G,,IT.TEST.OID,Y,S\n",
     "expected": {
       "artifacts": [],

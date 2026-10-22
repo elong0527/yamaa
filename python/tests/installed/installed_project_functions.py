@@ -177,20 +177,24 @@ class InstalledLockedHostCapabilities(unittest.TestCase):
                 self.assertEqual(bound(x=1, y=100), 101)
                 self.assertEqual(sys.modules[module].calls, [(1, 100)])
                 (root / "uv.lock").write_bytes(raw)
-                (root / "environment.yaml").write_text(
-                    "schema_version: '1.0'\nlock: uv.lock\nfunctions:\n"
-                    "  add:\n    function: yamaa_lock_witness_programs.calculate\n"
-                    "    description: Add a declared default.\n"
-                    "    params: [{name: x, type: int}, {name: y, type: int, required: false, default: 100}]\n"
-                    "    returns: int\n    tests:\n"
-                    "      - {id: normal, covers: [normal, 'default:y'], args: {x: 1}, result: 101}\n"
-                    "      - {id: boundary, covers: [boundary], args: {x: -9223372036854775808}, result: -9223372036854775708}\n"
-                    "      - {id: missing, covers: ['short-circuit-missing:x'], args: {x: null}, result: null}\n"
-                    "      - {id: missing-y, covers: ['short-circuit-missing:y'], args: {x: 1, y: null}, result: null}\n",
+                # One function file holds the contract and its Python
+                # callable; the project names it and the Python lock (D8).
+                (root / "add.yaml").write_text(
+                    'yamaa: "1.0"\ntype: function\nname: add\n'
+                    "description: Add a declared default.\n"
+                    "params: [{name: x, type: int}, {name: y, type: int, required: false, default: 100}]\n"
+                    "returns: int\n"
+                    "implementations: {python: yamaa_lock_witness_programs.calculate}\n"
+                    "tests:\n"
+                    "  - {id: normal, covers: [normal, 'default:y'], args: {x: 1}, result: 101}\n"
+                    "  - {id: boundary, covers: [boundary], args: {x: -9223372036854775808}, result: -9223372036854775708}\n"
+                    "  - {id: missing, covers: ['short-circuit-missing:x'], args: {x: null}, result: null}\n"
+                    "  - {id: missing-y, covers: ['short-circuit-missing:y'], args: {x: 1, y: null}, result: null}\n",
                     encoding="ascii",
                 )
+                # A section lists only specifications of its model (SUB-3).
                 (root / "domain.yaml").write_text(
-                    "schema_version: '1.0'\ndomain: TEST\nkeys: [x]\n"
+                    'yamaa: "1.0"\ntype: spec\nmodel: ADaM\ndomain: TEST\nkeys: [x]\n'
                     "input: {SRC: {path: input.csv, types: {x: int}}}\n"
                     "columns:\n  - {name: x, type: int, derivation: SRC.x}\n"
                     "  - {name: V, type: int, derivation: {function: {name: add, args: {x: SRC.x}}}}\n"
@@ -198,16 +202,17 @@ class InstalledLockedHostCapabilities(unittest.TestCase):
                     encoding="ascii",
                 )
                 (root / "project.yaml").write_text(
-                    "schema_version: '1.0'\nenvironments: {python: environment.yaml}\n"
+                    'yamaa: "1.0"\ntype: project\nfunctions: [add.yaml]\n'
+                    "environments: {python: {lock: uv.lock}}\n"
                     "adam: {specs: [domain.yaml]}\n",
                     encoding="ascii",
                 )
                 (root / "input.csv").write_bytes(b"x\n1\n")
                 sys.modules.pop(module)
                 marker.unlink()
-                specification, environment, project = (
+                specification, function, project = (
                     root / "domain.yaml",
-                    root / "environment.yaml",
+                    root / "add.yaml",
                     root / "project.yaml",
                 )
 
@@ -341,7 +346,7 @@ class InstalledLockedHostCapabilities(unittest.TestCase):
                             failed.save()
                 package.failure = None
                 specification.unlink()
-                environment.unlink()
+                function.unlink()
                 project.unlink()
                 (root / "input.csv").unlink()
                 gc.collect()

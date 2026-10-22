@@ -7,11 +7,12 @@
 //! document nodes. The schema admits only complete declarations, so only a
 //! document admitted without it is refused.
 //!
-//! The 1.0 front end ([`crate::front_end::v1::project`]) lowers its sections
-//! here too. A 1.0 section writes `standards`, a list whose first entry is the
-//! default (D16), where 0.5 writes one `standard`; `transport: dataset_json`
-//! or `xpt` where 0.5 writes `datasets: json` or `xpt` (P-PRJ-1); and a guide
-//! status may be `Provisional` (P-STD-1).
+//! Both surfaces' sections lower here (`lower`), each in its own spelling,
+//! the 1.0 one's from [`crate::front_end::v1::project`]. A 1.0 section writes
+//! `standards`, a list whose first entry is the default (D16), where 0.5
+//! writes one `standard`; `transport: dataset_json` or `xpt` where 0.5 writes
+//! `datasets: json` or `xpt` (P-PRJ-1); and a guide status may be
+//! `Provisional` (P-STD-1).
 
 use super::project::Metas;
 use crate::ast::{
@@ -267,15 +268,6 @@ pub(in crate::front_end) fn lower<'d>(
     } else {
         Err(refuse(Cause::Findings(parser.findings)))
     }
-}
-
-/// Lower the study and sections of a whole 0.5 project document, as
-/// [`super::project`] does, into an arena of their own.
-pub fn sections(input: &Document) -> Result<SubmissionDeclarations, Error<'_>> {
-    let mut paths = crate::ast::Paths::new();
-    let mut metas = Metas::new(None, &mut paths);
-    let meta = metas.root(input.root());
-    lower(input, input.root(), &mut metas, meta, Surface::V0_5)
 }
 
 struct Parser<'d, 'm, 'p> {

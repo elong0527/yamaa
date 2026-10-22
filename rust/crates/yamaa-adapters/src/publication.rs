@@ -10,6 +10,14 @@
 //! replaced, and every staged file after it is removed. Between staging and
 //! the first commit nothing is visible at any target, so a save stopped there
 //! writes nothing (D74).
+//!
+//! This is the engine's one publisher port (#3030 section 2.10): target,
+//! stage, commit and abort, implemented by the file publisher (Unix and
+//! Windows) and by a caller's resolver (a memory resolver or an embedder's
+//! bridge). Every save writes through it, as does a saved table, and a
+//! submission composition admits its targets through `AnchoredTarget`
+//! before it is held. The files come encoded: a run's result and a
+//! composition hold their bytes, and a save never encodes again.
 use crate::{
     file_publication as file,
     host_resources::{Failure, Kind, Operation, Request, Resolver},

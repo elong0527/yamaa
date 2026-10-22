@@ -16,7 +16,8 @@ import pyarrow.compute as pc
 
 import yamaa
 
-SPEC = """schema_version: '1.0'
+SPEC = """yamaa: "1.0"
+type: spec
 domain: TEST
 base: SRC
 keys: [ID]

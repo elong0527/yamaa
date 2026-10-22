@@ -1103,11 +1103,10 @@ output: {{path: output.csv, columns: [I, S]}}
         }
 
         #[test]
-        fn original_success_report_follows_actual_atomic_publication_and_output_failures_do_not_publish(
-        ) {
+        fn original_success_report_describes_its_saved_file_and_output_failures_save_nothing() {
             use yamaa_adapters::json;
             use yamaa_adapters::{
-                specification_report::{self, ArtifactPort, CompleteError, Identity},
+                specification_report::{self, Identity},
                 specification_run::{PreparedRun, SpecificationSourcePort},
             };
             use yamaa_core::json::Value as Json;
@@ -1141,44 +1140,10 @@ output: {{path: output.csv, columns: [I, S]}}
                     Ok(self.bytes.clone())
                 }
             }
-            struct Publisher {
-                directory: std::path::PathBuf,
-                calls: usize,
-                fail: bool,
-            }
-            impl ArtifactPort for Publisher {
-                type Error = &'static str;
-                fn publish(&mut self, path: &str, bytes: &[u8]) -> Result<(), Self::Error> {
-                    self.calls += 1;
-                    if self.fail {
-                        return Err("original publication error");
-                    }
-                    assert_eq!(path, "adlb.csv");
-                    use std::io::Write;
-                    let temporary = self.directory.join("candidate.csv");
-                    let mut file = std::fs::OpenOptions::new()
-                        .write(true)
-                        .create_new(true)
-                        .open(&temporary)
-                        .unwrap();
-                    file.write_all(bytes).unwrap();
-                    file.sync_all().unwrap();
-                    drop(file);
-                    std::fs::rename(temporary, self.directory.join(path)).unwrap();
-                    Ok(())
-                }
-            }
             let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
             let schema = schema(&root.join("yaml"));
             let case = root.join("benchmarks/adam-adlb-ordered-sum");
             let raw = std::fs::read_to_string(case.join("spec.yaml")).unwrap();
-            let scratch = crate::support::Scratch::new("original-success");
-            let directory = scratch.to_path_buf();
-            let mut publisher = Publisher {
-                directory: directory.clone(),
-                calls: 0,
-                fail: false,
-            };
             let mut port = Captured {
                 bytes: std::fs::read(case.join("input/lb.csv")).unwrap().into(),
                 reads: 0,
@@ -1197,29 +1162,23 @@ output: {{path: output.csv, columns: [I, S]}}
             ))
             .unwrap();
             let attempt = run.execute(&mut port, Scope::default());
-            let report =
-                specification_report::complete(&run, &attempt, id(), &mut publisher).unwrap();
-            assert_eq!(report, expected);
-            assert_eq!(publisher.calls, 1);
-            assert_eq!(
-                std::fs::read(directory.join("adlb.csv")).unwrap(),
-                std::fs::read(case.join("expected/adlb.csv")).unwrap()
-            );
-            publisher.fail = true;
-            assert!(matches!(
-                specification_report::complete(&run, &attempt, id(), &mut publisher),
-                Err(CompleteError::Publish("original publication error"))
-            ));
-            assert_eq!(publisher.calls, 2);
-            publisher.fail = false;
+            let result = specification_report::build_result(&run, &attempt, id(), &[]).unwrap();
+            let artifact = std::fs::read(case.join("expected/adlb.csv")).unwrap();
+            assert_eq!(result.files(), [("adlb.csv", &artifact[..])]);
+            assert_eq!(result.saved_observations().unwrap(), expected);
+            // An output failure has no file to save.
+            let saved = |run: &PreparedRun, port: &mut Captured| {
+                let attempt = run.execute(port, Scope::default());
+                let result = specification_report::build_result(run, &attempt, id(), &[]).unwrap();
+                assert!(result.files().is_empty());
+                result.saved_observations().unwrap()
+            };
             let run = PreparedRun::prepare(prepare(
                 &schema,
                 raw.edit("path: adlb.csv", "path: adlb.bad").as_bytes(),
             ))
             .unwrap();
-            let attempt = run.execute(&mut port, Scope::default());
-            let report =
-                specification_report::complete(&run, &attempt, id(), &mut publisher).unwrap();
+            let report = saved(&run, &mut port);
             let mut expected = expected;
             expected["outcome"] = json!("failure");
             expected["artifacts"] = json!([]);
@@ -1229,7 +1188,6 @@ output: {{path: output.csv, columns: [I, S]}}
             expected["nodes"][0]["diagnostics"] = expected["diagnostics"].clone();
             expected["source_reads"][0]["snapshots_created"] = json!(0);
             assert_eq!(report, expected);
-            assert_eq!(publisher.calls, 2);
 
             let run = PreparedRun::prepare(prepare(
                 &schema,
@@ -1237,9 +1195,7 @@ output: {{path: output.csv, columns: [I, S]}}
                     .as_bytes(),
             ))
             .unwrap();
-            let attempt = run.execute(&mut port, Scope::default());
-            let actual =
-                specification_report::complete(&run, &attempt, id(), &mut publisher).unwrap();
+            let actual = saved(&run, &mut port);
             let diagnostic = json!({"phase":"verification","condition":"row_count_failed","rule":"CHECK-13","spec_paths":["verifications[0].row_count"],"context":{"count":17,"failure_count":1,"keys":[{}]}});
             expected["diagnostics"] = json!([diagnostic.clone()]);
             expected["nodes"][0]["diagnostics"] = expected["diagnostics"].clone();
@@ -1249,7 +1205,6 @@ output: {{path: output.csv, columns: [I, S]}}
             failure["log_context"] = failure["context"].clone();
             expected["verifications"][0]["failure"] = failure;
             assert_eq!(actual, expected);
-            assert_eq!(publisher.calls, 2);
             // All checks execute despite an earlier data failure; output diagnostics
             // remain later than verification and no derived/accepted artifact is exposed.
             // A `unique` over a non-key column comes first and fails on repeats.
@@ -1260,13 +1215,7 @@ output: {{path: output.csv, columns: [I, S]}}
                 )
                 .edit("path: adlb.csv", "path: adlb.bad");
             let run = PreparedRun::prepare(prepare(&schema, written.as_bytes())).unwrap();
-            let actual = specification_report::complete(
-                &run,
-                &run.execute(&mut port, Scope::default()),
-                id(),
-                &mut publisher,
-            )
-            .unwrap();
+            let actual = saved(&run, &mut port);
             let original: Json = yamaa_adapters::json_wire::decode(include_str!(
                 "fixtures/specs/adam-adlb-ordered-sum.json"
             ))
@@ -1292,14 +1241,13 @@ output: {{path: output.csv, columns: [I, S]}}
             unique["failure"] = failure;
             expected["verifications"] = json!([unique, count]);
             assert_eq!(actual, expected);
-            assert_eq!(publisher.calls, 2);
         }
 
         #[test]
         fn verification_declarations_preserve_completed_prefix_and_phase_precedence() {
             use yamaa_adapters::json;
             use yamaa_adapters::{
-                specification_report::{self, ArtifactPort, Identity},
+                specification_report::{self, Identity},
                 specification_run::{PreparedRun, SpecificationSourcePort},
             };
             use yamaa_core::json::Value as Json;
@@ -1330,12 +1278,6 @@ output: {{path: output.csv, columns: [I, S]}}
                     *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
                     self.reads += 1;
                     Ok(self.bytes.clone())
-                }
-            }
-            impl ArtifactPort for Host {
-                type Error = ();
-                fn publish(&mut self, _: &str, _: &[u8]) -> Result<(), ()> {
-                    panic!("invalid verification must never publish")
                 }
             }
             let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
@@ -1409,8 +1351,11 @@ output: {{path: output.csv, columns: [I, S]}}
                         reads: 0,
                     };
                     let attempt = run.execute(&mut host, Scope::default());
-                    let actual =
-                        specification_report::complete(&run, &attempt, id(), &mut host).unwrap();
+                    let result =
+                        specification_report::build_result(&run, &attempt, id(), &[]).unwrap();
+                    // An invalid verification has no file to save.
+                    assert!(result.files().is_empty());
+                    let actual = result.saved_observations().unwrap();
                     assert_eq!(host.reads, 1);
                     assert_eq!(actual["outcome"], "failure");
                     assert_eq!(actual["artifacts"], json!([]));
@@ -1440,13 +1385,11 @@ output: {{path: output.csv, columns: [I, S]}}
                 bytes: bytes.clone().into(),
                 reads: 0,
             };
-            let actual = specification_report::complete(
-                &run,
-                &run.execute(&mut host, Scope::default()),
-                id(),
-                &mut host,
-            )
-            .unwrap();
+            let attempt = run.execute(&mut host, Scope::default());
+            let actual = specification_report::build_result(&run, &attempt, id(), &[])
+                .unwrap()
+                .saved_observations()
+                .unwrap();
             assert_eq!(actual["verifications"], json!([]));
             assert_eq!(
                 actual["diagnostics"][0]["spec_paths"],
@@ -1460,13 +1403,11 @@ output: {{path: output.csv, columns: [I, S]}}
                     .as_bytes(),
             ))
             .unwrap();
-            let actual = specification_report::complete(
-                &run,
-                &run.execute(&mut host, Scope::default()),
-                id(),
-                &mut host,
-            )
-            .unwrap();
+            let attempt = run.execute(&mut host, Scope::default());
+            let actual = specification_report::build_result(&run, &attempt, id(), &[])
+                .unwrap()
+                .saved_observations()
+                .unwrap();
             assert_eq!(actual["verifications"], json!([]));
             assert_eq!(actual["diagnostics"][0]["condition"], "missing_key");
             // Report admission scans all declarations before granting study ports,
@@ -1565,7 +1506,7 @@ output: {{path: output.csv, columns: [I, S]}}
         fn original_sum_reports_nonnumeric_values_but_publishes_all_missing_groups() {
             use yamaa_adapters::json;
             use yamaa_adapters::{
-                specification_report::{self, ArtifactPort, Identity},
+                specification_report::{self, Identity},
                 specification_run::{PreparedRun, SpecificationSourcePort},
             };
             use yamaa_core::json::Value as Json;
@@ -1573,7 +1514,6 @@ output: {{path: output.csv, columns: [I, S]}}
             struct Host {
                 bytes: Arc<[u8]>,
                 reads: usize,
-                published: Vec<Vec<u8>>,
             }
             impl SpecificationSourcePort for Host {
                 fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
@@ -1597,14 +1537,6 @@ output: {{path: output.csv, columns: [I, S]}}
                     *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
                     self.reads += 1;
                     Ok(self.bytes.clone())
-                }
-            }
-            impl ArtifactPort for Host {
-                type Error = ();
-                fn publish(&mut self, path: &str, bytes: &[u8]) -> Result<(), ()> {
-                    assert_eq!(path, "adlb.csv");
-                    self.published.push(bytes.to_vec());
-                    Ok(())
                 }
             }
             let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
@@ -1648,12 +1580,11 @@ output: {{path: output.csv, columns: [I, S]}}
                 let mut host = Host {
                     bytes: source.into_bytes().into(),
                     reads: 0,
-                    published: Vec::new(),
                 };
                 let run = PreparedRun::prepare(prepare(&schema, raw.as_bytes())).unwrap();
                 let attempt = run.execute(&mut host, Scope::default());
-                let actual =
-                    specification_report::complete(&run, &attempt, id(), &mut host).unwrap();
+                let result = specification_report::build_result(&run, &attempt, id(), &[]).unwrap();
+                let actual = result.saved_observations().unwrap();
                 if all_missing {
                     for row in expected["tables"][1]["rows"].as_array_mut().unwrap() {
                         row[5] = json!({"type":"missing","value":null});
@@ -1676,7 +1607,7 @@ output: {{path: output.csv, columns: [I, S]}}
                     expected["artifacts"][0]["records"] = json!(records);
                     expected["artifacts"][0]["content"] = json!(content);
                     expected["artifacts"][0]["byte_length"] = json!(content.len());
-                    assert_eq!(host.published, vec![content.into_bytes()]);
+                    assert_eq!(result.files(), [("adlb.csv", content.as_bytes())]);
                 } else {
                     expected["outcome"] = json!("failure");
                     expected["artifacts"] = json!([]);
@@ -1685,7 +1616,7 @@ output: {{path: output.csv, columns: [I, S]}}
                     expected["diagnostics"] = json!([{"phase":"validation","condition":"incompatible_input_type","rule":"FORMULA-23","spec_paths":["rows.total.derivations.AVAL.aggregate"],"context":{"expr":"SUM(LB.LBSTRESN)","reducer":"SUM","source":"LB.LBSTRESN","expected":"numeric","actual":"str"}}]);
                     expected["nodes"][0]["outcome"] = json!("failure");
                     expected["nodes"][0]["diagnostics"] = expected["diagnostics"].clone();
-                    assert!(host.published.is_empty());
+                    assert!(result.files().is_empty());
                 }
                 assert_eq!(host.reads, 1);
                 assert_eq!(actual, expected);
@@ -1696,7 +1627,7 @@ output: {{path: output.csv, columns: [I, S]}}
         fn row_defaults_are_inherited_per_template_and_coverage_errors_precede_io() {
             use yamaa_adapters::json;
             use yamaa_adapters::{
-                specification_report::{self, ArtifactPort, Identity},
+                specification_report::{self, Identity},
                 specification_run::{PreparedRun, SpecificationSourcePort},
             };
             use yamaa_core::json::Value as Json;
@@ -1704,7 +1635,6 @@ output: {{path: output.csv, columns: [I, S]}}
             struct Host {
                 bytes: Arc<[u8]>,
                 reads: usize,
-                published: Vec<Vec<u8>>,
             }
             impl SpecificationSourcePort for Host {
                 fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
@@ -1730,14 +1660,6 @@ output: {{path: output.csv, columns: [I, S]}}
                     Ok(self.bytes.clone())
                 }
             }
-            impl ArtifactPort for Host {
-                type Error = ();
-                fn publish(&mut self, path: &str, bytes: &[u8]) -> Result<(), ()> {
-                    assert_eq!(path, "adlb.csv");
-                    self.published.push(bytes.to_vec());
-                    Ok(())
-                }
-            }
             let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
             let schema = schema(&root.join("yaml"));
             let case = root.join("benchmarks/adam-adlb-ordered-sum");
@@ -1758,11 +1680,10 @@ output: {{path: output.csv, columns: [I, S]}}
             let mut host = Host {
                 bytes: std::fs::read(case.join("input/lb.csv")).unwrap().into(),
                 reads: 0,
-                published: Vec::new(),
             };
             let run = PreparedRun::prepare(prepare(&schema, written.as_bytes())).unwrap();
             let attempt = run.execute(&mut host, Scope::default());
-            let actual = specification_report::complete(
+            let result = specification_report::build_result(
                 &run,
                 &attempt,
                 Identity {
@@ -1773,19 +1694,18 @@ output: {{path: output.csv, columns: [I, S]}}
                     specification: "spec.yaml",
                     base_directory: ".",
                 },
-                &mut host,
+                &[],
             )
             .unwrap();
+            let actual = result.saved_observations().unwrap();
             let expected: Json = yamaa_adapters::json_wire::decode(include_str!(
                 "fixtures/specs/adam-adlb-ordered-sum.json"
             ))
             .unwrap();
             assert_eq!(actual, expected);
             assert_eq!(host.reads, 1);
-            assert_eq!(
-                host.published,
-                vec![std::fs::read(case.join("expected/adlb.csv")).unwrap()]
-            );
+            let artifact = std::fs::read(case.join("expected/adlb.csv")).unwrap();
+            assert_eq!(result.files(), [("adlb.csv", &artifact[..])]);
             // The inherited declaration retains its column path, although it executes
             // at row construction for the template without an override.
             let bad = written.edit("derivation: LB.LBTEST", "derivation: LB.ABSENT");
@@ -1926,7 +1846,7 @@ output: {{path: output.csv, columns: [I, S]}}
             use std::collections::BTreeMap;
             use yamaa_adapters::json;
             use yamaa_adapters::{
-                specification_report::{self, ArtifactPort, Identity},
+                specification_report::{self, Identity},
                 specification_run::{PreparedRun, SpecificationSourcePort},
             };
             use yamaa_core::json::Value as Json;
@@ -1936,7 +1856,6 @@ output: {{path: output.csv, columns: [I, S]}}
                 seen: Vec<String>,
                 reads: usize,
                 requests: Vec<String>,
-                published: Vec<Vec<u8>>,
             }
             impl SpecificationSourcePort for Host {
                 fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
@@ -1968,14 +1887,6 @@ output: {{path: output.csv, columns: [I, S]}}
                     Ok(bytes)
                 }
             }
-            impl ArtifactPort for Host {
-                type Error = ();
-                fn publish(&mut self, path: &str, bytes: &[u8]) -> Result<(), ()> {
-                    assert_eq!(path, "adsl.csv");
-                    self.published.push(bytes.to_vec());
-                    Ok(())
-                }
-            }
             let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
             let case = root.join("benchmarks/schema-lookup");
             let schema = schema(&root.join("yaml"));
@@ -2000,8 +1911,8 @@ output: {{path: output.csv, columns: [I, S]}}
                 seen: Vec::new(),
                 reads: 0,
                 requests: Vec::new(),
-                published: Vec::new(),
             };
+            let artifact = std::fs::read(case.join("expected/adsl.csv")).unwrap();
             for created in [1, 0] {
                 let attempt = prepared.execute(&mut host, Scope::default());
                 assert_eq!(attempt.dataset.sources.len(), 3);
@@ -2013,8 +1924,10 @@ output: {{path: output.csv, columns: [I, S]}}
                     specification: "spec.yaml",
                     base_directory: ".",
                 };
-                let actual =
-                    specification_report::complete(&prepared, &attempt, id, &mut host).unwrap();
+                let result =
+                    specification_report::build_result(&prepared, &attempt, id, &[]).unwrap();
+                assert_eq!(result.files(), [("adsl.csv", &artifact[..])]);
+                let actual = result.saved_observations().unwrap();
                 let mut expected: Json = yamaa_adapters::json_wire::decode(include_str!(
                     "fixtures/specs/schema-lookup.json"
                 ))
@@ -2026,17 +1939,13 @@ output: {{path: output.csv, columns: [I, S]}}
             }
             assert_eq!(host.requests, ["DM", "AE", "MEDDRA", "DM", "AE", "MEDDRA"]);
             assert_eq!(host.reads, 3);
-            assert_eq!(
-                host.published,
-                vec![std::fs::read(case.join("expected/adsl.csv")).unwrap(); 2]
-            );
         }
 
         #[test]
         fn original_lookup_failures_match_independent_diagnostics_and_completed_observations() {
             use yamaa_adapters::json;
             use yamaa_adapters::{
-                specification_report::{self, ArtifactPort, Identity},
+                specification_report::{self, Identity},
                 specification_run::{PreparedRun, SpecificationSourcePort},
             };
             use yamaa_core::json::Value as Json;
@@ -2071,12 +1980,6 @@ output: {{path: output.csv, columns: [I, S]}}
                     ))
                 }
             }
-            impl ArtifactPort for Host {
-                type Error = ();
-                fn publish(&mut self, _: &str, _: &[u8]) -> Result<(), ()> {
-                    panic!("failed lookup published")
-                }
-            }
             let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
             let case = root.join("benchmarks/schema-lookup");
             let schema = schema(&root.join("yaml"));
@@ -2098,7 +2001,7 @@ output: {{path: output.csv, columns: [I, S]}}
                     requests: vec![],
                 };
                 let attempt = run.execute(&mut host, Scope::default());
-                let actual = specification_report::complete(
+                let result = specification_report::build_result(
                     &run,
                     &attempt,
                     Identity {
@@ -2109,9 +2012,12 @@ output: {{path: output.csv, columns: [I, S]}}
                         specification: "spec.yaml",
                         base_directory: ".",
                     },
-                    &mut host,
+                    &[],
                 )
                 .unwrap();
+                // A failed lookup has no file to save.
+                assert!(result.files().is_empty());
+                let actual = result.saved_observations().unwrap();
                 let mut expected: Json = yamaa_adapters::json_wire::decode(include_str!(
                     "fixtures/specs/schema-lookup.json"
                 ))
@@ -2255,7 +2161,7 @@ output: {{path: output.csv, columns: [I, S]}}
         fn original_window_yaml_compiles_and_publishes_complete_independent_report() {
             use yamaa_adapters::json;
             use yamaa_adapters::{
-                specification_report::{self, ArtifactPort, Identity},
+                specification_report::{self, Identity},
                 specification_run::{PreparedRun, SpecificationSourcePort},
             };
             use yamaa_core::json::Value as Json;
@@ -2264,7 +2170,6 @@ output: {{path: output.csv, columns: [I, S]}}
                 bytes: Arc<[u8]>,
                 reads: usize,
                 requests: usize,
-                published: Vec<Vec<u8>>,
             }
             impl SpecificationSourcePort for Host {
                 fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
@@ -2292,14 +2197,6 @@ output: {{path: output.csv, columns: [I, S]}}
                     Ok(self.bytes.clone())
                 }
             }
-            impl ArtifactPort for Host {
-                type Error = ();
-                fn publish(&mut self, path: &str, bytes: &[u8]) -> Result<(), ()> {
-                    assert_eq!(path, "advs.csv");
-                    self.published.push(bytes.to_vec());
-                    Ok(())
-                }
-            }
             let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
             let case = root.join("benchmarks/schema-window-functions");
             let prepared = prepare(
@@ -2317,11 +2214,11 @@ output: {{path: output.csv, columns: [I, S]}}
                 bytes: Arc::from(std::fs::read(case.join("input/vs.csv")).unwrap()),
                 reads: 0,
                 requests: 0,
-                published: vec![],
             };
+            let artifact = std::fs::read(case.join("expected/advs.csv")).unwrap();
             for created in [1, 0] {
                 let attempt = run.execute(&mut host, Scope::default());
-                let report = specification_report::complete(
+                let result = specification_report::build_result(
                     &run,
                     &attempt,
                     Identity {
@@ -2332,9 +2229,11 @@ output: {{path: output.csv, columns: [I, S]}}
                         specification: "spec.yaml",
                         base_directory: ".",
                     },
-                    &mut host,
+                    &[],
                 )
                 .unwrap();
+                assert_eq!(result.files(), [("advs.csv", &artifact[..])]);
+                let report = result.saved_observations().unwrap();
                 let mut expected: Json = yamaa_adapters::json_wire::decode(include_str!(
                     "fixtures/specs/schema-window-functions.json"
                 ))
@@ -2343,10 +2242,6 @@ output: {{path: output.csv, columns: [I, S]}}
                 assert_eq!(report, expected);
             }
             assert_eq!((host.reads, host.requests), (1, 2));
-            assert_eq!(
-                host.published,
-                vec![std::fs::read(case.join("expected/advs.csv")).unwrap(); 2]
-            );
         }
     }
 }

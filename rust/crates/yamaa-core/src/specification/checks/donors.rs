@@ -118,6 +118,13 @@ impl<'a> DonorReads<'a> {
             .position(|item| item.id.name == owner)
     }
 
+    /// Whether `name` is a lookup's field, which binding reads through the
+    /// lookup's selector.
+    pub(super) fn lookup_field(&self, name: &str) -> bool {
+        name.split_once('.')
+            .is_some_and(|(owner, _)| self.named(owner).is_some())
+    }
+
     /// Whether a lookup's derivation reads its donor's `field` before it is
     /// derived: at or after the derivation being read.
     fn later(&self, field: &str) -> bool {
@@ -131,6 +138,20 @@ impl<'a> DonorReads<'a> {
             && owner != self.relation
             && !self.input(owner)
             && self.named(owner).is_none()
+    }
+
+    /// A lookup's derivation names each read binding finds unknown there,
+    /// such as a filter's field of a record nothing declares, as its own
+    /// (LOOKUP-15, `intermediate_derivations::donor_scope_findings`).
+    pub(super) fn name_unknown(&self, findings: &mut [BindFinding]) {
+        if self.reader.is_none() {
+            return;
+        }
+        for finding in findings {
+            if let BindFinding::UnknownReference { path, name } = finding {
+                *finding = self.refusal(C::IntermediateDerivationReference, path, name);
+            }
+        }
     }
 
     /// A lookup derivation's refusal at `path` of a read of `name`, with

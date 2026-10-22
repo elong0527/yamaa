@@ -187,7 +187,8 @@ class ParquetOriginalOutput(unittest.TestCase):
         ):
             with self.subTest(policy=policy):
                 source = {
-                    "schema_version": "1.0",
+                    "yamaa": "1.0",
+                    "type": "spec",
                     "domain": "TEST",
                     "input": {"SRC": {"path": "input.PARQUET", "empty_string": policy}},
                     "keys": ["I"],
@@ -275,7 +276,8 @@ class ParquetOriginalOutput(unittest.TestCase):
                     )
                     self.assertEqual(stored[name].to_pylist(), text, name)
                 source = {
-                    "schema_version": "1.0",
+                    "yamaa": "1.0",
+                    "type": "spec",
                     "domain": "TEST",
                     "input": {"SRC": {"path": path.name, "empty_string": "present"}},
                     "keys": ["ID"],
@@ -324,7 +326,8 @@ class ParquetOriginalOutput(unittest.TestCase):
                 stored = pq.read_table(path)
                 self.assertEqual(stored["V"].to_pylist(), values)
                 source = {
-                    "schema_version": "1.0",
+                    "yamaa": "1.0",
+                    "type": "spec",
                     "domain": "TEST",
                     "input": {"SRC": path.name},
                     "keys": ["ID"],
@@ -376,7 +379,8 @@ class ParquetOriginalOutput(unittest.TestCase):
                     self.assertEqual(column.converted_type, converted)
                 names = ["ID", *columns]
                 source = {
-                    "schema_version": "1.0",
+                    "yamaa": "1.0",
+                    "type": "spec",
                     "domain": "TEST",
                     "input": {"SRC": path.name},
                     "keys": ["ID"],
@@ -394,7 +398,8 @@ class ParquetOriginalOutput(unittest.TestCase):
                     )
         # The staged pyarrow int32 fixture, which 0.4.0 refused, holds 1.
         source = {
-            "schema_version": "1.0",
+            "yamaa": "1.0",
+            "type": "spec",
             "domain": "TEST",
             "input": {"SRC": "input.parquet"},
             "keys": ["FIELD"],
@@ -413,10 +418,15 @@ class ParquetOriginalOutput(unittest.TestCase):
         # through a row-phase default so ingest failures are still collected
         # instead of pruned away with unused inputs.
         source = {
-            "schema_version": "1.0",
+            "yamaa": "1.0",
+            "type": "spec",
             "domain": "TEST",
             "base": "FIRST",
-            "input": {name: name + ".parquet" for name in aliases},
+            # A qualified read of an input matches on its declared key (D23,
+            # D111): each input declares the output key.
+            "input": {
+                name: {"path": name + ".parquet", "key": ["ID"]} for name in aliases
+            },
             "keys": ["ID"],
             "columns": [
                 {
@@ -716,7 +726,8 @@ class ParquetOriginalOutput(unittest.TestCase):
         }
         projection = ["T", "I", "S", "F", "D", "EMPTY"]
         specification = {
-            "schema_version": "1.0",
+            "yamaa": "1.0",
+            "type": "spec",
             "domain": "TEST",
             "keys": ["I"],
             "input": {"SOURCE": {"path": "input.csv", "types": kinds}},
@@ -731,7 +742,7 @@ class ParquetOriginalOutput(unittest.TestCase):
                 for name, kind in kinds.items()
             ]
             + [{"name": "EMPTY", "type": "str", "label": "Empty text"}],
-            "rows": [{"id": "all", "derivations": {"EMPTY": {"literal": ""}}}],
+            "rows": [{"id": "all", "derivations": {"EMPTY": "''"}}],
         }
         data = (
             "ID,S,I,F,D,T\n"
@@ -819,7 +830,7 @@ class PublicDomains(unittest.TestCase):
                 "phase": "validation",
                 "condition": "incompatible_input_type",
                 "rule": "FORMULA-5",
-                "spec_paths": ["intermediates[0].filter"],
+                "spec_paths": ["intermediates.LOOK.filter"],
                 "context": {"left_type": "int", "right_type": "str"},
             }
         ]
@@ -855,12 +866,12 @@ class PublicDomains(unittest.TestCase):
                     case["inputs"]["tab.csv"] = 'K,KINT,KNUM,VAL\n"       7",,7,A\n'
                 elif variant == "unused":
                     case["specification"] = case["specification"].replace(
-                        "derivation: LOOK.VAL", "derivation: {literal: ok}"
+                        "derivation: LOOK.VAL", "derivation: \"'ok'\""
                     )
                 elif variant == "unread_branch":
                     case["specification"] = case["specification"].replace(
                         "derivation: LOOK.VAL",
-                        "derivation: {case: [{when: 'FALSE', then: LOOK.VAL}, {otherwise: {literal: ok}}]}",
+                        "derivation: {case: [{when: 'FALSE', then: LOOK.VAL}, {otherwise: \"'ok'\"}]}",
                     )
                 if variant == "boolean_missing":
                     case["specification"] = case["specification"].replace(
@@ -934,14 +945,18 @@ class PublicDomains(unittest.TestCase):
                     self.assertIsNone(result.output)
                 observations = result._native.observations()
                 if observations is not None:
+                    # A 1.x file counts the intermediate's absence under
+                    # `absent`, a 0.5 file under `no_match` (D202); each case
+                    # names the count it reaches.
+                    handler = "absent" if "absent_count" in case else "no_match"
                     counts = json.loads(observations)["handler_counts"]
                     self.assertEqual(
                         sum(
                             item["count"]
                             for item in counts
-                            if item["handler"] == "no_match"
+                            if item["handler"] == handler
                         ),
-                        case["no_match_count"],
+                        case[f"{handler}_count"],
                     )
 
     def test_public_temporal_arithmetic_conformance(self):
@@ -1402,7 +1417,8 @@ class PublicDomains(unittest.TestCase):
                 record["context"] = json.loads(record["context"])
             return records
 
-        source = """schema_version: '1.0'
+        source = """yamaa: "1.0"
+type: spec
 domain: TEST
 keys: [ID]
 input: {SRC: {path: input.csv, ordinal: REC}}
@@ -2161,7 +2177,7 @@ columns:
     def test_public_check_without_study_and_save_retry(self):
         import yamaa
 
-        source = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: absent/output.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n"
+        source = 'yamaa: "1.0"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: absent/output.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n'
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             entry = root / "spec.yaml"
@@ -2301,23 +2317,23 @@ columns:
                 json.loads(result._native.observations())["handler_counts"],
                 [
                     {
-                        "spec_path": "rows[1].derivations.V.compute.multiple_matches",
+                        "spec_path": "rows.grouped.derivations.V.multiple_matches",
                         "handler": "multiple_matches",
                         "count": 1,
                     },
                     {
-                        "spec_path": "rows[1].derivations.V.compute.no_match",
-                        "handler": "no_match",
+                        "spec_path": "rows.grouped.derivations.V.absent",
+                        "handler": "absent",
                         "count": 0,
                     },
                     {
-                        "spec_path": "rows[2].derivations.V.compute.multiple_matches",
+                        "spec_path": "rows.added.derivations.V.multiple_matches",
                         "handler": "multiple_matches",
                         "count": 2,
                     },
                     {
-                        "spec_path": "rows[2].derivations.V.compute.no_match",
-                        "handler": "no_match",
+                        "spec_path": "rows.added.derivations.V.absent",
+                        "handler": "absent",
                         "count": 0,
                     },
                     {
@@ -2326,8 +2342,8 @@ columns:
                         "count": 5,
                     },
                     {
-                        "spec_path": "columns.FINAL.derivation.source.no_match",
-                        "handler": "no_match",
+                        "spec_path": "columns.FINAL.derivation.source.absent",
+                        "handler": "absent",
                         "count": 0,
                     },
                     {
@@ -2336,8 +2352,8 @@ columns:
                         "count": 5,
                     },
                     {
-                        "spec_path": "columns.FIRST.derivation.source.no_match",
-                        "handler": "no_match",
+                        "spec_path": "columns.FIRST.derivation.source.absent",
+                        "handler": "absent",
                         "count": 0,
                     },
                 ],
@@ -2349,7 +2365,7 @@ columns:
             )
             for name in tuple(TRUTH["section_case_files"]):
                 (root / name).unlink()
-            entry.write_text(body.replace("SECTION: {literal: first}", "SECTION: P.K"))
+            entry.write_text(body.replace("SECTION: \"'first'\"", "SECTION: P.K"))
             for checked in (yamaa.spec(entry).check(), yamaa.spec(entry).run()):
                 records = checked.issues.to_polars().select(FIELDS).to_dicts()
                 for record in records:
@@ -2361,7 +2377,7 @@ columns:
                             "phase": "validation",
                             "condition": "phase_boundary",
                             "rule": "LOOKUP-7",
-                            "spec_paths": ["rows[0].derivations.SECTION.source"],
+                            "spec_paths": ["rows.collected.derivations.SECTION.source"],
                             "context": {
                                 "identifier": "P.K",
                                 "available_phase": "completed_prior_row_template",
@@ -2416,8 +2432,8 @@ columns:
                         "count": 1,
                     },
                     {
-                        "spec_path": "columns.A.derivation.source.no_match",
-                        "handler": "no_match",
+                        "spec_path": "columns.A.derivation.source.absent",
+                        "handler": "absent",
                         "count": 1,
                     },
                     {
@@ -2426,8 +2442,8 @@ columns:
                         "count": 1,
                     },
                     {
-                        "spec_path": "columns.B.derivation.source.no_match",
-                        "handler": "no_match",
+                        "spec_path": "columns.B.derivation.source.absent",
+                        "handler": "absent",
                         "count": 1,
                     },
                 ],
@@ -2467,7 +2483,7 @@ columns:
                         "rule": "LOOKUP-4"
                         if condition == "rename_only_intermediate"
                         else "LOOKUP-10",
-                        "spec_paths": ["intermediates[0]"],
+                        "spec_paths": ["intermediates.P"],
                         "context": context,
                     }
                 ]
@@ -2503,8 +2519,8 @@ columns:
                         "count": 2,
                     },
                     {
-                        "spec_path": "columns.A.derivation.source.no_match",
-                        "handler": "no_match",
+                        "spec_path": "columns.A.derivation.source.absent",
+                        "handler": "absent",
                         "count": 1,
                     },
                     {
@@ -2513,8 +2529,8 @@ columns:
                         "count": 2,
                     },
                     {
-                        "spec_path": "columns.B.derivation.source.no_match",
-                        "handler": "no_match",
+                        "spec_path": "columns.B.derivation.source.absent",
+                        "handler": "absent",
                         "count": 1,
                     },
                 ],
@@ -2546,8 +2562,8 @@ columns:
                         "count": 1,
                     },
                     {
-                        "spec_path": "columns.A.derivation.source.no_match",
-                        "handler": "no_match",
+                        "spec_path": "columns.A.derivation.source.absent",
+                        "handler": "absent",
                         "count": 2,
                     },
                     {
@@ -2556,8 +2572,8 @@ columns:
                         "count": 1,
                     },
                     {
-                        "spec_path": "columns.B.derivation.source.no_match",
-                        "handler": "no_match",
+                        "spec_path": "columns.B.derivation.source.absent",
+                        "handler": "absent",
                         "count": 2,
                     },
                 ],
@@ -2567,23 +2583,23 @@ columns:
                 b"ID,SEQ,A,B\n1,1,three,\n3,1,,\n",
                 [
                     {
-                        "spec_path": "rows[0].derivations.A.source.multiple_matches",
+                        "spec_path": "rows.alternate.derivations.A.source.multiple_matches",
                         "handler": "multiple_matches",
                         "count": 1,
                     },
                     {
-                        "spec_path": "rows[0].derivations.A.source.no_match",
-                        "handler": "no_match",
+                        "spec_path": "rows.alternate.derivations.A.source.absent",
+                        "handler": "absent",
                         "count": 1,
                     },
                     {
-                        "spec_path": "rows[0].derivations.B.source.multiple_matches",
+                        "spec_path": "rows.alternate.derivations.B.source.multiple_matches",
                         "handler": "multiple_matches",
                         "count": 1,
                     },
                     {
-                        "spec_path": "rows[0].derivations.B.source.no_match",
-                        "handler": "no_match",
+                        "spec_path": "rows.alternate.derivations.B.source.absent",
+                        "handler": "absent",
                         "count": 1,
                     },
                 ],
@@ -2631,7 +2647,7 @@ columns:
                         "phase": "validation",
                         "condition": "unknown_field",
                         "rule": "LOOKUP-7",
-                        "spec_paths": ["intermediates[0].filter"],
+                        "spec_paths": ["intermediates.P.filter"],
                         "context": {"identifier": "SRC.CUT", "intermediate": "P"},
                     }
                 ],
@@ -2664,8 +2680,8 @@ columns:
                         "count": 1,
                     },
                     {
-                        "spec_path": "columns.A.derivation.case[0].then.source.no_match",
-                        "handler": "no_match",
+                        "spec_path": "columns.A.derivation.case[0].then.source.absent",
+                        "handler": "absent",
                         "count": 1,
                     },
                     {
@@ -2674,8 +2690,8 @@ columns:
                         "count": 1,
                     },
                     {
-                        "spec_path": "columns.B.derivation.case[0].then.source.no_match",
-                        "handler": "no_match",
+                        "spec_path": "columns.B.derivation.case[0].then.source.absent",
+                        "handler": "absent",
                         "count": 1,
                     },
                 ],
@@ -2685,12 +2701,16 @@ columns:
                 (root / "result.csv").read_bytes(),
                 b"ID,A,B\n1,first,\n2,skip,skip\n3,,\n",
             )
+            # 0.5 only, until #3447 deletes the 0.5 path: a 0.5 `absent`
+            # answers a variable the lookup does not hold, and a donor without
+            # a record is the intermediate's own `no_match` (D67).
+            legacy = TRUTH["lookup_fallback_0_5_yaml"]
             for variable, expected, count in (
                 ("P.A", b"ID,A,B\n1,first,\n2,skip,skip\n3,,\n", 0),
                 ("P.ABSENT", TRUTH["fallback_lookup_csv"].encode("utf-8"), 2),
             ):
                 entry.write_text(
-                    body.replace(
+                    legacy.replace(
                         "then: P.A",
                         f"then: {{source: {{variable: {variable}, absent: fallback}}}}",
                     )
@@ -2713,6 +2733,59 @@ columns:
                         "count": count,
                     },
                 )
+            # On a 1.x file the intermediate answers the donor without a
+            # record, and its answer counts under `absent` at the read, the
+            # binding's own row (D202); a variable the lookup does not hold
+            # fails (D67, LOOKUP-11).
+            entry.write_text(
+                body.replace(
+                    "then: P.A", "then: {source: {variable: P.A, absent: fallback}}"
+                )
+            )
+            admitted = yamaa.spec(entry).run()
+            self.assertEqual(admitted.issues.to_polars().rows(), [])
+            admitted.save()
+            self.assertEqual(
+                (root / "result.csv").read_bytes(),
+                b"ID,A,B\n1,first,\n2,skip,skip\n3,,\n",
+            )
+            handlers = json.loads(admitted._native.observations())["handler_counts"]
+            self.assertEqual(
+                next(
+                    row
+                    for row in handlers
+                    if row["spec_path"]
+                    == "columns.A.derivation.case[0].then.source.absent"
+                ),
+                {
+                    "spec_path": "columns.A.derivation.case[0].then.source.absent",
+                    "handler": "absent",
+                    "count": 1,
+                },
+            )
+            entry.write_text(
+                body.replace(
+                    "then: P.A",
+                    "then: {source: {variable: P.ABSENT, absent: fallback}}",
+                )
+            )
+            refused = yamaa.spec(entry).run()
+            records = refused.issues.to_polars().select(FIELDS).to_dicts()
+            for record in records:
+                record["context"] = json.loads(record["context"])
+            self.assertEqual(
+                records,
+                [
+                    {
+                        "phase": "validation",
+                        "condition": "unknown_field",
+                        "rule": "LOOKUP-11",
+                        "spec_paths": ["columns.A.derivation.case[0].then.source"],
+                        "context": {"identifier": "P.ABSENT"},
+                    }
+                ],
+            )
+            self.assertIsNone(refused.output)
 
     def test_public_case_predicates_and_filtered_sources_preserve_complete_authored_truth(
         self,
@@ -2980,6 +3053,19 @@ class NamespaceAdmission(unittest.TestCase):
                 entry = root / "spec.yaml"
                 entry.write_text(case["specification"], encoding="ascii")
                 original = entry.read_bytes()
+                # `{entry}` stands for the specification's absolute path as
+                # the engine resolves it, with forward slashes.
+                resolved = entry.resolve().as_posix()
+                expected = [
+                    {
+                        **issue,
+                        "context": {
+                            key: resolved if value == "{entry}" else value
+                            for key, value in issue["context"].items()
+                        },
+                    }
+                    for issue in case["issues"]
+                ]
                 # The absent source also proves these are declaration refusals.
                 for _ in range(2):
                     checked = yamaa.spec(entry).check()
@@ -2988,7 +3074,7 @@ class NamespaceAdmission(unittest.TestCase):
                         rows = frame.to_polars().select(FIELDS).to_dicts()
                         for row in rows:
                             row["context"] = json.loads(row["context"])
-                        self.assertEqual(rows, case["issues"])
+                        self.assertEqual(rows, expected)
                     self.assertIsNone(result.output)
                     with self.assertRaises(yamaa.Error):
                         result.save()

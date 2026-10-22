@@ -1,0 +1,96 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  VS: {path: input/vs.csv, types: {WEIGHTBL: float, HEIGHTBL: float}}
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, WEIGHTBL, HEIGHTBL, BMIBL]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: VS.STUDYID
+    submission:
+      core: Req
+      mandatory: true
+      length: 8
+      origins:
+        - type: Predecessor
+          description: VS.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: VS.USUBJID
+    submission:
+      core: Req
+      mandatory: true
+      length: 12
+      origins:
+        - type: Predecessor
+          description: VS.USUBJID
+
+  - name: WEIGHTBL
+    type: float
+    label: Weight (kg) at Baseline
+    derivation: VS.WEIGHTBL
+    submission:
+      core: Perm
+      mandatory: false
+      length: 8
+      significant_digits: 1
+      origins:
+        - type: Predecessor
+          description: VS.WEIGHTBL
+
+  - name: HEIGHTBL
+    type: float
+    label: Height (cm) at Baseline
+    derivation: VS.HEIGHTBL
+    submission:
+      core: Perm
+      mandatory: false
+      length: 8
+      significant_digits: 1
+      origins:
+        - type: Predecessor
+          description: VS.HEIGHTBL
+
+  # A working value that is not published, yet carries the metadata of a
+  # published variable.
+  - name: HEIGHTM
+    type: float
+    label: Height (m) at Baseline
+    derivation: "HEIGHTBL / 100"
+    submission:
+      core: Perm
+      mandatory: false
+      length: 8
+      significant_digits: 3
+      origins:
+        - type: Derived
+      method: Height in centimetres divided by 100
+
+  - name: BMIBL
+    type: float
+    label: Body Mass Index (kg/m2) at Baseline
+    derivation: "WEIGHTBL / (HEIGHTM * HEIGHTM)"
+    submission:
+      core: Perm
+      mandatory: false
+      length: 8
+      significant_digits: 1
+      origins:
+        - type: Derived
+      method: Weight in kilograms divided by the square of height in metres
+
+submission:
+  label: Subject-Level Analysis Dataset
+  class: SUBJECT LEVEL ANALYSIS DATASET
+  structure: One record per subject
+  repeating: false

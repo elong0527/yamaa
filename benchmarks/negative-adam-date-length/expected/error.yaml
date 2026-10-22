@@ -1,0 +1,7 @@
+phase: validation
+condition: submission_length_not_applicable
+spec_paths:
+  - columns.TRTSDT.submission
+rule: SUB-7
+context:
+  column: TRTSDT

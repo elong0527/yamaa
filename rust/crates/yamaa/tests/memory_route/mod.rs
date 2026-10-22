@@ -872,7 +872,10 @@ fn the_contract_tests_check_the_port() {
 /// another version of the package fails activation with a lock finding.
 #[test]
 fn the_port_verifies_the_lock() {
-    let lock = br#"{"R": {"Version": "4.6.1"}, "Packages": {"yamaa": {"Package": "yamaa", "Version": "0.5.0"}, "yamaabenchmarks": {"Package": "yamaabenchmarks", "Version": "0.9.0"}}}"#;
+    // `yamaa` at the R package's version, so only the benchmarks' package
+    // mismatches.
+    let lock = br#"{"R": {"Version": "4.6.1"}, "Packages": {"yamaa": {"Package": "yamaa", "Version": "1.0.0"}, "yamaabenchmarks": {"Package": "yamaabenchmarks", "Version": "0.9.0"}}}"#;
+    assert_eq!(functions::r_package_version(), "1.0.0");
     let issue = first_issue("adam-adsl-bmi", Arc::new(functions::Benchmarks), |served| {
         served.offer("r/renv.lock", Arc::from(&lock[..]));
     });

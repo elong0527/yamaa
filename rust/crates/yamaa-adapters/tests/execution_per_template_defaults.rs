@@ -3,7 +3,7 @@
 //! A selector read in template A promotes the key column whose derivation
 //! reads a named lookup for A only. A suppressed candidate in template B
 //! must not read that lookup before its filter, so an intermediate without
-//! `no_match` must not fail `unmatched_key` for it (LOOKUP-12), while A
+//! `absent` must not fail `unmatched_key` for it (LOOKUP-12), while A
 //! still completes its keys.
 use std::fs;
 use yamaa_adapters::file_application;
@@ -49,8 +49,9 @@ const VS: &str = "USUBJID,VSSEQ,VSTESTCD,VSDTC,VSSTRESN\n\
     S2,1,SYSBP,2025-01-01,\n";
 const DM: &str = "USUBJID\nS1\n";
 
-// LAST: the latest record with a result for the subject and test; no no_match.
-const HEAD: &str = "schema_version: \"1.0\"\n\
+// LAST: the latest record with a result for the subject and test; no absent.
+const HEAD: &str = "yamaa: \"1.0\"\n\
+    type: spec\n\
     domain: ADVS\n\
     input:\n\
     \x20 VS: {path: vs.csv, types: {VSSEQ: int, VSSTRESN: float}}\n\
@@ -79,10 +80,10 @@ const GROUPED: &str = "keys: [USUBJID, PARAMCD, SRCSEQ, ROWSRC]\n\
     \x20   dataset: DM\n\
     \x20   derivations:\n\
     \x20     USUBJID: DM.USUBJID\n\
-    \x20     PARAMCD: {literal: SYSBP}\n\
+    \x20     PARAMCD: \"'SYSBP'\"\n\
     \x20     SRCSEQ: LAST.VSSEQ\n\
     \x20     AVAL: LAST.VSSTRESN\n\
-    \x20     ROWSRC: {literal: A}\n\
+    \x20     ROWSRC: \"'A'\"\n\
     \x20 - id: mean\n\
     \x20   dataset: VS\n\
     \x20   group_by: [VS.USUBJID, VS.VSTESTCD]\n\
@@ -91,7 +92,7 @@ const GROUPED: &str = "keys: [USUBJID, PARAMCD, SRCSEQ, ROWSRC]\n\
     \x20     USUBJID: VS.USUBJID\n\
     \x20     PARAMCD: VS.VSTESTCD\n\
     \x20     AVAL: {aggregate: \"MEAN(VS.VSSTRESN)\"}\n\
-    \x20     ROWSRC: {literal: B}\n";
+    \x20     ROWSRC: \"'B'\"\n";
 
 const UNGROUPED: &str = "keys: [USUBJID, VSSEQ, SRCSEQ, ROWSRC]\n\
     output: {path: advs.csv, columns: [USUBJID, VSSEQ, SRCSEQ, AVAL, ROWSRC]}\n\
@@ -107,11 +108,11 @@ const UNGROUPED: &str = "keys: [USUBJID, VSSEQ, SRCSEQ, ROWSRC]\n\
     \x20   dataset: DM\n\
     \x20   derivations:\n\
     \x20     USUBJID: DM.USUBJID\n\
-    \x20     PARAMCD: {literal: SYSBP}\n\
+    \x20     PARAMCD: \"'SYSBP'\"\n\
     \x20     VSSEQ: LAST.VSSEQ\n\
     \x20     SRCSEQ: LAST.VSSEQ\n\
     \x20     AVAL: LAST.VSSTRESN\n\
-    \x20     ROWSRC: {literal: A}\n\
+    \x20     ROWSRC: \"'A'\"\n\
     \x20 - id: results\n\
     \x20   dataset: VS\n\
     \x20   filter: \"VS.VSSTRESN IS NOT NULL\"\n\
@@ -120,7 +121,7 @@ const UNGROUPED: &str = "keys: [USUBJID, VSSEQ, SRCSEQ, ROWSRC]\n\
     \x20     PARAMCD: VS.VSTESTCD\n\
     \x20     VSSEQ: VS.VSSEQ\n\
     \x20     AVAL: VS.VSSTRESN\n\
-    \x20     ROWSRC: {literal: B}\n";
+    \x20     ROWSRC: \"'B'\"\n";
 
 #[test]
 fn grouped_suppressed_candidate_does_not_read_lookup() {

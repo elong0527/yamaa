@@ -124,13 +124,14 @@ Where rustup cannot add `rust-src`, set `YAMAA_RUST_SRC_LIBRARY` to the
 `rust-src` archive from static.rust-lang.org.
 
 `make check-repository` fails while a linked crate has no matching notice entry
-or the Python License-Expression misses a license that a linked crate is relied
-on under. The generator reads only the crate packages Cargo has unpacked and
-the toolchain's own files. It stops instead of guessing when a crate needs a
-license outside its reviewed list, ships an unclassified license file, or would
-bring in a text that names a GNU license, and when the standard library links
-an in-tree crate that declares a license of its own that `LIBRARY_IN_TREE`
-does not list (#3494); review the crate and extend the tables in
+or the Python License-Expression misses a license that a linked crate, or a
+crate that the standard library links, is relied on under. The generator reads
+only the crate packages Cargo has unpacked and the toolchain's own files. It
+stops instead of guessing when a crate needs a license outside its reviewed
+list, ships an unclassified license file, or would bring in a text that names
+a GNU license, and when the standard library links an in-tree crate that
+declares a license of its own that `LIBRARY_IN_TREE` does not list (#3494);
+review the crate and extend the tables in
 `tools/packaging/generate_third_party_notices.py`. A toolchain update
 also needs `MUSL` there reviewed, and the check stops until it is: the musl
 release that the toolchain bundles for its `*-linux-musl` targets, as

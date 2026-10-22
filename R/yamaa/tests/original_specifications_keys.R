@@ -133,7 +133,7 @@ local({
   source(file.path(root,"key-truth.R"),local=TRUE)
   original <- file.path(root,"keys","dependency_before_bad_filter")
   type_truth <- list(phase="validation",condition="incompatible_input_type",rule="FORMULA-5",
-    spec_paths=list("intermediates[0].filter"),context='{"left_type":"int","right_type":"str"}')
+    spec_paths=list("intermediates.LOOK.filter"),context='{"left_type":"int","right_type":"str"}')
   directory <- tempfile("retained-filter-types-");dir.create(directory)
   on.exit(unlink(directory,recursive=TRUE))
   for(variant in c("duplicate","resolved","empty_donor","empty_driver","missing_filter_operand","unused","unread_branch","boolean_missing")) {
@@ -147,9 +147,9 @@ local({
     if(variant=="empty_driver") writeBin(charToRaw("ID,N\n"),file.path(case,"src.csv"))
     if(variant %in% c("missing_filter_operand","boolean_missing"))
       writeBin(charToRaw('K,KINT,KNUM,VAL\n"       7",,7,A\n'),file.path(case,"tab.csv"))
-    if(variant=="unused") written <- gsub("derivation: LOOK.VAL","derivation: {literal: ok}",written,fixed=TRUE)
+    if(variant=="unused") written <- gsub("derivation: LOOK.VAL","derivation: \"'ok'\"",written,fixed=TRUE)
     if(variant=="unread_branch") written <- gsub("derivation: LOOK.VAL",
-      "derivation: {case: [{when: 'FALSE', then: LOOK.VAL}, {otherwise: {literal: ok}}]}",written,fixed=TRUE)
+      "derivation: {case: [{when: 'FALSE', then: LOOK.VAL}, {otherwise: \"'ok'\"}]}",written,fixed=TRUE)
     if(variant=="boolean_missing") written <- sub("TAB.KINT > 'bad'","FALSE AND TAB.KINT > 'bad'",written,fixed=TRUE)
     writeBin(charToRaw(written),entry)
     result <- run_spec(entry)

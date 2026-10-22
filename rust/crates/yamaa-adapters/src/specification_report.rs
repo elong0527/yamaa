@@ -1,6 +1,7 @@
 //! The one result builder: format one observed attempt, with or without a
-//! project, and publish only through explicit host authority. Classified
-//! resource findings retain observations; opaque host failures stay opaque.
+//! project, and prepare the files its save publishes; building never
+//! publishes. Classified resource findings retain observations; opaque host
+//! failures stay opaque.
 use crate::json;
 use crate::{
     dataset_result::{Condition, Outcome},
@@ -461,11 +462,44 @@ pub(crate) fn set_handler_counts(report: &mut Value, counts: &[HandlerCount]) {
     report["nodes"][0]["handler_counts"] = report["handler_counts"].clone();
 }
 
-pub use yamaa_core::specification_output::ArtifactPort;
+/// The primary artifact of an accepted build: the path its specification
+/// declares, its encoded bytes and the projection they hold. They belong to
+/// the build; a save publishes them and never encodes again.
 #[derive(Debug)]
-pub enum CompleteError<E> {
-    Report(Error),
-    Publish(E),
+struct Artifact {
+    path: String,
+    bytes: std::sync::Arc<[u8]>,
+    projection: Vec<usize>,
+}
+
+/// A completed build's prepared observations, with its primary artifact only
+/// when the build was accepted. The observations may describe a prospective
+/// publication; only a save performs one.
+#[derive(Debug)]
+struct PreparedOutput {
+    report: StoredReport,
+    artifact: Option<Artifact>,
+}
+impl PreparedOutput {
+    /// A diagnostic-only result: it has no primary artifact, including after
+    /// an encoding refusal.
+    fn failed(report: StoredReport) -> Self {
+        Self {
+            report,
+            artifact: None,
+        }
+    }
+    fn prepared_report(&self) -> &StoredReport {
+        &self.report
+    }
+    /// Formatting may enrich the prospective observations without replacing
+    /// the artifact.
+    fn replace_report(&mut self, report: StoredReport) {
+        self.report = report;
+    }
+    fn artifact(&self) -> Option<&Artifact> {
+        self.artifact.as_ref()
+    }
 }
 
 /// An owned build result; obtaining it never calls a publisher. Table bytes are
@@ -473,7 +507,7 @@ pub enum CompleteError<E> {
 /// Every result holds its verified run report.
 #[derive(Debug)]
 pub struct BuildResult {
-    prepared: yamaa_core::specification_output::PreparedOutput<StoredReport>,
+    prepared: PreparedOutput,
     table: Option<(crate::public_table::PublicTable, Vec<u8>)>,
     issues: Vec<Diagnostic>,
     report: crate::run_report::HeldReport,
@@ -504,7 +538,7 @@ impl BuildResult {
         self.output()?;
         self.prepared
             .artifact()
-            .map(yamaa_core::specification_output::Artifact::retained_bytes)
+            .map(|artifact| std::sync::Arc::clone(&artifact.bytes))
     }
     /// Failed results have only an explicit diagnostic publication capability:
     /// the declared report file. The primary artifact requires the accepted
@@ -517,8 +551,8 @@ impl BuildResult {
         if self.output().is_some() {
             if let Some(artifact) = self.prepared.artifact() {
                 items.push((
-                    artifact.path(),
-                    artifact.bytes(),
+                    artifact.path.as_str(),
+                    &artifact.bytes[..],
                     self.prepared.prepared_report()["artifacts"]
                         .as_array()
                         .expect("prepared artifacts")
@@ -528,6 +562,24 @@ impl BuildResult {
             }
         }
         items
+    }
+    /// The files a save of this result writes, each with the path its
+    /// specification wrote and its complete bytes, in publication order: the
+    /// declared report file, then the accepted primary artifact (OUTPUT-10).
+    /// A failed build writes only its report file.
+    pub fn files(&self) -> Vec<(&str, &[u8])> {
+        self.publication_items()
+            .into_iter()
+            .map(|(path, bytes, _)| (path, bytes))
+            .collect()
+    }
+    /// The observations a save that writes every one of [`Self::files`]
+    /// records: the build's observations with each file's artifact entry.
+    pub fn saved_observations(&self) -> Result<Value, Error> {
+        let files = self.publication_items().len();
+        Ok(self
+            .publication_observations(files)?
+            .observations_value(false))
     }
     pub(crate) fn publication_observations(&self, completed: usize) -> Result<StoredReport, Error> {
         let items = self.publication_items();
@@ -554,21 +606,6 @@ impl BuildResult {
     }
     pub fn observations_json(&self) -> String {
         self.prepared.prepared_report().observations_json(true)
-    }
-    /// Return complete publication observations only after the publisher succeeds.
-    pub fn save<P: ArtifactPort>(
-        &self,
-        publisher: &mut P,
-    ) -> Result<&StoredReport, yamaa_core::specification_output::SaveError<P::Error>> {
-        for (path, bytes, _) in self.publication_items() {
-            publisher
-                .publish(path, bytes)
-                .map_err(yamaa_core::specification_output::SaveError::Publish)?;
-        }
-        if self.output().is_none() {
-            return Err(yamaa_core::specification_output::SaveError::FailedBuild);
-        }
-        Ok(self.prepared.prepared_report())
     }
 }
 
@@ -647,41 +684,17 @@ pub(crate) fn prepare_result(
     observations: StoredReport,
     facts: &crate::run_report::RunFacts,
 ) -> Result<BuildResult, Error> {
-    use yamaa_core::specification_output::{self as output, CompleteError as E};
     let fallback = observations.clone();
     // Every run reports, so a failed output preparation becomes a failed run
     // whose report records the failure rather than a refused result.
-    let mut prepared = output::prepare(
-        run.compiled(),
-        execution,
-        &mut Report {
-            run,
-            id,
-            value: Some(observations),
-        },
-        &mut Encoder(
-            run.compiled().output_profile(),
-            run.compiled().output_decimals(),
-        ),
-    )
-    .map_err(|error| match error {
-        E::Report(e) | E::Encode(e) => e,
-        E::Projection => Error::InvalidObservation,
-        E::Limit(error) => Error::ResourceLimit(crate::resource_diagnostics::Refusal::new(
-            error.resource,
-            error.limit,
-            error.actual,
-            vec!["output.path".into()],
-        )),
-        E::Publish(never) => match never {},
-    })
-    .or_else(|error| rejected_output(fallback, &error))?;
+    let mut prepared = prepare_output(run, execution, &id, observations)
+        .or_else(|error| rejected_output(fallback, &error))?;
     let table = prepared
         .artifact()
         .map(|artifact| {
             crate::public_table::PublicTable::from_table(
                 &execution.ok_or(Error::InvalidObservation)?.dataset,
-                artifact.projection(),
+                &artifact.projection,
             )
             .and_then(|table| table.ipc().map(|bytes| (table, bytes)))
             .map_err(|e| match e {
@@ -741,10 +754,66 @@ pub(crate) fn prepare_result(
     })
 }
 
-fn rejected_output(
-    mut report: StoredReport,
-    error: &Error,
-) -> Result<yamaa_core::specification_output::PreparedOutput<StoredReport>, Error> {
+/// Prepare one build's output without publishing it. Only a successful
+/// execution reaches the encoder: a failed capture, decoding, binding or
+/// execution supplies none, and its observations are the failed report.
+/// Output declaration findings precede encoding, and the encoded bytes are
+/// bounded before the report that describes them is completed.
+fn prepare_output(
+    run: &PreparedRun,
+    execution: Option<&yamaa_core::dataset::Execution>,
+    id: &Identity<'_>,
+    observations: StoredReport,
+) -> Result<PreparedOutput, Error> {
+    let Some(execution) = execution else {
+        return Ok(PreparedOutput::failed(observations));
+    };
+    let compiled = run.compiled();
+    let findings = compiled.output_findings();
+    if !findings.is_empty() {
+        let mut report = observations;
+        report.set_diagnostics(output_diagnostics(&findings));
+        return Ok(PreparedOutput::failed(report));
+    }
+    let projection = compiled
+        .projection()
+        .iter()
+        .map(|name| {
+            execution
+                .dataset
+                .schema()
+                .columns()
+                .iter()
+                .position(|column| &column.name == name)
+                .ok_or(Error::InvalidObservation)
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let bytes = encode(
+        compiled.output_profile(),
+        compiled.output_decimals(),
+        &execution.dataset,
+        &projection,
+    )?;
+    yamaa_core::limits::Limits::output_bytes(bytes.len()).map_err(|error| {
+        Error::ResourceLimit(crate::resource_diagnostics::Refusal::new(
+            error.resource,
+            error.limit,
+            error.actual,
+            vec!["output.path".into()],
+        ))
+    })?;
+    let report = artifact_report(run, id, observations, execution, &projection, &bytes)?;
+    Ok(PreparedOutput {
+        report,
+        artifact: Some(Artifact {
+            path: compiled.output_path().into(),
+            bytes: bytes.into(),
+            projection,
+        }),
+    })
+}
+
+fn rejected_output(mut report: StoredReport, error: &Error) -> Result<PreparedOutput, Error> {
     let mut diagnostics = report.diagnostics().to_vec();
     diagnostics.push(match error {
         Error::ResourceLimit(refusal) => refusal.diagnostic(Step::Output, Fault::OutputLimit),
@@ -754,14 +823,7 @@ fn rejected_output(
     report["outcome"] = json!("failure");
     report["nodes"][0]["outcome"] = json!("failure");
     report["artifacts"] = json!([]);
-    Ok(yamaa_core::specification_output::PreparedOutput::failed(
-        report,
-    ))
-}
-impl<E> From<Error> for CompleteError<E> {
-    fn from(error: Error) -> Self {
-        Self::Report(error)
-    }
+    Ok(PreparedOutput::failed(report))
 }
 pub(crate) fn check_observations(
     run: &PreparedRun,
@@ -801,81 +863,56 @@ pub(crate) fn output_diagnostics(
         .map(|finding| finding.diagnostic())
         .collect()
 }
-/// Render all retained observations and validate output boundaries before
-/// publication. A host publication failure is retained, never a success report.
-pub fn complete<C, E, P: ArtifactPort>(
-    run: &PreparedRun,
-    attempt: &Attempt<C, E>,
-    id: Identity<'_>,
-    publisher: &mut P,
-) -> Result<Value, CompleteError<P::Error>> {
-    let result = build_result(run, attempt, id, &[]).map_err(|refusal| match refusal {
-        Refusal::Report(error) => CompleteError::Report(error),
-        Refusal::Opaque(_) | Refusal::Boundary(_) => {
-            CompleteError::Report(Error::UnsupportedOutcome)
-        }
-    })?;
-    let items = result.publication_items();
-
-    let report = result.publication_observations(items.len())?;
-    for (path, bytes, _) in &items {
-        publisher
-            .publish(path, bytes)
-            .map_err(CompleteError::Publish)?;
-    }
-    Ok(report.observations_value(false))
-}
-
-struct Encoder<'a>(Option<&'static str>, Option<&'a str>);
-impl yamaa_core::specification_output::ArtifactEncoder for Encoder<'_> {
-    type Error = Error;
-    fn encode(
-        &mut self,
-        dataset: &yamaa_core::dataset::Dataset,
-        projection: &[usize],
-    ) -> Result<Vec<u8>, Error> {
-        match self.0 {
-            Some("csv") => crate::csv_artifact::render(dataset, projection, self.1).map_err(
-                |error| match error {
-                    crate::csv_artifact::Error::Limit {
-                        resource,
-                        limit,
-                        actual,
-                        decimal_formatting,
-                    } => Error::ResourceLimit(crate::resource_diagnostics::Refusal::new(
-                        resource,
-                        limit,
-                        actual,
-                        vec![if decimal_formatting {
-                            "output.decimals"
-                        } else {
-                            "output.path"
-                        }
-                        .into()],
-                    )),
-                    _ => Error::InvalidObservation,
-                },
-            ),
-            Some("parquet") => {
-                crate::parquet_artifact::render(dataset, projection).map_err(|error| match error {
-                    crate::parquet_artifact::Error::Unavailable => {
-                        Error::CapabilityUnavailable { feature: "parquet" }
+/// Encode the projected dataset under the specification's output `profile`,
+/// with its CSV display `decimals`. Each codec bounds its allocation as it
+/// encodes; the caller bounds the bytes it returns.
+fn encode(
+    profile: Option<&'static str>,
+    decimals: Option<&str>,
+    dataset: &yamaa_core::dataset::Dataset,
+    projection: &[usize],
+) -> Result<Vec<u8>, Error> {
+    match profile {
+        Some("csv") => crate::csv_artifact::render(dataset, projection, decimals).map_err(
+            |error| match error {
+                crate::csv_artifact::Error::Limit {
+                    resource,
+                    limit,
+                    actual,
+                    decimal_formatting,
+                } => Error::ResourceLimit(crate::resource_diagnostics::Refusal::new(
+                    resource,
+                    limit,
+                    actual,
+                    vec![if decimal_formatting {
+                        "output.decimals"
+                    } else {
+                        "output.path"
                     }
-                    crate::parquet_artifact::Error::Limit {
-                        resource,
-                        limit,
-                        actual,
-                    } => Error::ResourceLimit(crate::resource_diagnostics::Refusal::new(
-                        resource,
-                        limit,
-                        actual,
-                        vec!["output.path".into()],
-                    )),
-                    _ => Error::InvalidObservation,
-                })
-            }
-            _ => Err(Error::InvalidObservation),
+                    .into()],
+                )),
+                _ => Error::InvalidObservation,
+            },
+        ),
+        Some("parquet") => {
+            crate::parquet_artifact::render(dataset, projection).map_err(|error| match error {
+                crate::parquet_artifact::Error::Unavailable => {
+                    Error::CapabilityUnavailable { feature: "parquet" }
+                }
+                crate::parquet_artifact::Error::Limit {
+                    resource,
+                    limit,
+                    actual,
+                } => Error::ResourceLimit(crate::resource_diagnostics::Refusal::new(
+                    resource,
+                    limit,
+                    actual,
+                    vec!["output.path".into()],
+                )),
+                _ => Error::InvalidObservation,
+            })
         }
+        _ => Err(Error::InvalidObservation),
     }
 }
 
@@ -906,46 +943,6 @@ fn observations<'a, C, E>(
     set_handler_counts(&mut report, &execution.handler_counts);
     report["verifications"] = json!(checks);
     Ok(report)
-}
-
-struct Report<'a, 'i> {
-    run: &'a PreparedRun,
-    id: Identity<'i>,
-    value: Option<StoredReport>,
-}
-impl yamaa_core::specification_output::OutputReport for Report<'_, '_> {
-    type Error = Error;
-    type Report = StoredReport;
-    fn failure(&mut self) -> Result<StoredReport, Error> {
-        self.value.take().ok_or(Error::InvalidObservation)
-    }
-    fn begin(&mut self, _execution: &yamaa_core::dataset::Execution) -> Result<(), Error> {
-        self.value.as_ref().ok_or(Error::InvalidObservation)?;
-        Ok(())
-    }
-    fn rejected(
-        &mut self,
-        findings: &[yamaa_core::specification::OutputFinding],
-    ) -> Result<StoredReport, Error> {
-        let mut report = self.value.take().ok_or(Error::InvalidObservation)?;
-        report.set_diagnostics(output_diagnostics(findings));
-        Ok(report)
-    }
-    fn success(
-        &mut self,
-        execution: &yamaa_core::dataset::Execution,
-        projection: &[usize],
-        bytes: &[u8],
-    ) -> Result<StoredReport, Error> {
-        artifact_report(
-            self.run,
-            &self.id,
-            self.value.take().ok_or(Error::InvalidObservation)?,
-            execution,
-            projection,
-            bytes,
-        )
-    }
 }
 
 pub(crate) fn artifact_report(

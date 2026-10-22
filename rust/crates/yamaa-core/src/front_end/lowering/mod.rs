@@ -1,33 +1,32 @@
-//! Lower today's admitted specification into the AST.
+//! The construct lowering both surfaces share: an admitted specification,
+//! written in either surface's spelling, into the AST.
+//!
+//! Each front end enters it with the surface its document is written in
+//! (`lower_surface`): the 1.0 front end ([`crate::front_end::v1::spec`])
+//! with the version a 1.x specification declares, and the 0.5 front end
+//! (`front_end/v0_5.rs`) with [`Surface::V0_5`]. Where the two spellings of
+//! one construct differ, the lowering reads the spelling of the surface it
+//! was started for, so both reach the same node by one code path: each 0.5
+//! form lowers to the node its 1.0 spelling lowers to (#2844, design
+//! section 4). Some nodes exist only for the 0.5 surface and go with it:
+//! inputs with [`KeyDecl::Inferred`], lookups with [`JoinKey::Applicable`],
+//! a declared `minimum_source_precision`, a written `window.order_by` on
+//! `baseline_flag`, and the 0.5 path notation ([`Notation::V0_5`]).
 //!
 //! Lowering runs once per spec, after composition and pruning, on the
 //! normalized document the specification model admitted. Pruning lowers the
-//! composed document before that, only to find what each declaration reads
-//! ([`lower_document`]). Each 0.5 form lowers to the node its 1.0 spelling
-//! lowers to (#2844, design section 4).
-//! Some nodes exist only for this surface and go with it: inputs with
-//! [`KeyDecl::Inferred`], lookups with [`JoinKey::Applicable`], a declared
-//! `minimum_source_precision`, a written `window.order_by` on
-//! `baseline_flag`, and the 0.5 path notation ([`Notation::V0_5`]).
-//!
-//! The 1.0 front end ([`crate::front_end::v1::spec`]) shares this construct
-//! lowering: where the two spellings of one construct differ, the lowering
-//! reads the spelling of the surface it was started for ([`Surface`]), so
-//! both reach the same node by one code path. P2-13 moves the shared lowering
-//! into `v1` when the 0.5 surface goes.
+//! composed document before that, only to find what each declaration reads.
 //!
 //! Lowering is total over every document the model admits. The model does
 //! not check operation payloads, so an operation outside the language
 //! lowers to [`ExprKind::Unsupported`], which preparation refuses as before.
 //!
-//! A project's own files lower into their roots in [`project`], and its
-//! study and sections in [`sections`].
+//! What a project's own files write alike in both surfaces lowers in
+//! [`project`], and a project's study and sections in [`sections`].
 
 mod expressions;
 pub mod project;
 pub mod sections;
-#[cfg(test)]
-pub(crate) mod tests;
 
 use crate::ast::{
     Binding, Column, ColumnCheck, ColumnCheckKind, ColumnOrigin, ColumnSubmission, Comment,
@@ -38,7 +37,7 @@ use crate::ast::{
     Span, Spec, SubmissionMetadata, Surface, Template, Text, UniqueCheck, ValueLevel, WhereClause,
     Written,
 };
-use crate::schema::{Document, DocumentNode as N, SpecificationDocument};
+use crate::schema::{Document, DocumentNode as N};
 use crate::value::ColumnType;
 use std::collections::BTreeSet;
 
@@ -67,22 +66,9 @@ impl Lowered {
     }
 }
 
-/// Lower one admitted spec. Without positions every span is
-/// [`Span::UNKNOWN`].
-pub fn lower(spec: &SpecificationDocument, positions: Option<&Positions>) -> Lowered {
-    lower_document(spec.document(), positions)
-}
-
-/// Lower a document the model has not admitted yet, such as a composed
-/// spec before pruning (LAYER-11 precedes requiredness, LAYER-12). Lowering
-/// stays total: a missing required field lowers to an unsupported node, and
-/// final validation still reports it.
-pub fn lower_document(d: &Document, positions: Option<&Positions>) -> Lowered {
-    lower_surface(d, positions, Surface::V0_5)
-}
-
-/// Lower a document written in `surface`'s spelling. The 1.0 front end
-/// enters here ([`crate::front_end::v1::spec::lower`]).
+/// Lower a document written in `surface`'s spelling. Without positions every
+/// span is [`Span::UNKNOWN`]. Each front end enters here: the 1.0 one from
+/// [`crate::front_end::v1::spec::lower`].
 pub(crate) fn lower_surface(
     d: &Document,
     positions: Option<&Positions>,

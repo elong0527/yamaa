@@ -1,7 +1,7 @@
 [
   {
     "case": "unknown-field",
-    "source": "{\"schema_version\":\"1.0\",\"domain\":\"TEST\",\"input\":{\"SRC\":{\"path\":\"source.csv\",\"types\":{\"ID\":\"int\",\"ABSENT\":\"int\"}}},\"keys\":[\"ID\"],\"columns\":[{\"name\":\"ID\",\"type\":\"int\",\"derivation\":\"SRC.ID\"},{\"name\":\"VALUE\",\"type\":\"int\",\"derivation\":\"SRC.V\"}],\"output\":{\"path\":\"result.csv\",\"columns\":[\"ID\",\"VALUE\"]}}",
+    "source": "{\"yamaa\":\"1.0\",\"type\":\"spec\",\"domain\":\"TEST\",\"input\":{\"SRC\":{\"path\":\"source.csv\",\"types\":{\"ID\":\"int\",\"ABSENT\":\"int\"}}},\"keys\":[\"ID\"],\"columns\":[{\"name\":\"ID\",\"type\":\"int\",\"derivation\":\"SRC.ID\"},{\"name\":\"VALUE\",\"type\":\"int\",\"derivation\":\"SRC.V\"}],\"output\":{\"path\":\"result.csv\",\"columns\":[\"ID\",\"VALUE\"]}}",
     "expected": {
       "artifacts": [],
       "backend": "rust",
@@ -67,7 +67,7 @@
   },
   {
     "case": "unknown-before-conversion",
-    "source": "{\"schema_version\":\"1.0\",\"domain\":\"TEST\",\"input\":{\"SRC\":{\"path\":\"source.csv\",\"types\":{\"V\":\"int\",\"ABSENT\":\"date\"}}},\"keys\":[\"ID\"],\"columns\":[{\"name\":\"ID\",\"type\":\"int\",\"derivation\":\"SRC.ID\"},{\"name\":\"VALUE\",\"type\":\"int\",\"derivation\":\"SRC.V\"}],\"output\":{\"path\":\"result.csv\",\"columns\":[\"ID\",\"VALUE\"]}}",
+    "source": "{\"yamaa\":\"1.0\",\"type\":\"spec\",\"domain\":\"TEST\",\"input\":{\"SRC\":{\"path\":\"source.csv\",\"types\":{\"V\":\"int\",\"ABSENT\":\"date\"}}},\"keys\":[\"ID\"],\"columns\":[{\"name\":\"ID\",\"type\":\"int\",\"derivation\":\"SRC.ID\"},{\"name\":\"VALUE\",\"type\":\"int\",\"derivation\":\"SRC.V\"}],\"output\":{\"path\":\"result.csv\",\"columns\":[\"ID\",\"VALUE\"]}}",
     "expected": {
       "artifacts": [],
       "backend": "rust",
@@ -133,7 +133,7 @@
   },
   {
     "case": "stored-order",
-    "source": "{\"schema_version\":\"1.0\",\"domain\":\"TEST\",\"input\":{\"SRC\":{\"path\":\"source.csv\",\"types\":{\"B\":\"int\",\"A\":\"int\"}}},\"keys\":[\"ID\"],\"columns\":[{\"name\":\"ID\",\"type\":\"int\",\"derivation\":\"SRC.ID\"},{\"name\":\"VALUE\",\"type\":\"int\",\"derivation\":\"SRC.V\"}],\"output\":{\"path\":\"result.csv\",\"columns\":[\"ID\",\"VALUE\"]}}",
+    "source": "{\"yamaa\":\"1.0\",\"type\":\"spec\",\"domain\":\"TEST\",\"input\":{\"SRC\":{\"path\":\"source.csv\",\"types\":{\"B\":\"int\",\"A\":\"int\"}}},\"keys\":[\"ID\"],\"columns\":[{\"name\":\"ID\",\"type\":\"int\",\"derivation\":\"SRC.ID\"},{\"name\":\"VALUE\",\"type\":\"int\",\"derivation\":\"SRC.V\"}],\"output\":{\"path\":\"result.csv\",\"columns\":[\"ID\",\"VALUE\"]}}",
     "expected": {
       "artifacts": [],
       "backend": "rust",
@@ -203,7 +203,7 @@
   },
   {
     "case": "invalid-temporal",
-    "source": "{\"schema_version\":\"1.0\",\"domain\":\"TEST\",\"input\":{\"SRC\":{\"path\":\"source.csv\",\"types\":{\"V\":\"date\"}}},\"keys\":[\"ID\"],\"columns\":[{\"name\":\"ID\",\"type\":\"int\",\"derivation\":\"SRC.ID\"},{\"name\":\"VALUE\",\"type\":\"int\",\"derivation\":\"SRC.V\"}],\"output\":{\"path\":\"result.csv\",\"columns\":[\"ID\",\"VALUE\"]}}",
+    "source": "{\"yamaa\":\"1.0\",\"type\":\"spec\",\"domain\":\"TEST\",\"input\":{\"SRC\":{\"path\":\"source.csv\",\"types\":{\"V\":\"date\"}}},\"keys\":[\"ID\"],\"columns\":[{\"name\":\"ID\",\"type\":\"int\",\"derivation\":\"SRC.ID\"},{\"name\":\"VALUE\",\"type\":\"int\",\"derivation\":\"SRC.V\"}],\"output\":{\"path\":\"result.csv\",\"columns\":[\"ID\",\"VALUE\"]}}",
     "expected": {
       "artifacts": [],
       "backend": "rust",

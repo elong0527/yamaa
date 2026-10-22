@@ -1,0 +1,10 @@
+phase: validation
+condition: core_mandatory_conflict
+spec_paths:
+  - columns.AGE.submission.core
+rule: SUB-10
+context:
+  column: AGE
+  reason: core_not_admitted
+  core: Exp
+  model: ADaM
