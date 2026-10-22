@@ -29,16 +29,37 @@ mod file {
 
         struct Study(crate::support::Scratch);
         impl Study {
-            fn new() -> Self {
+            fn empty() -> Self {
                 let path = crate::support::Scratch::canonical("file-project");
                 for name in ["env", "entry", "parent", "outside"] {
                     fs::create_dir(path.join(name)).unwrap();
                 }
-                let study = Self(path);
-                // The project declares its codelists beside itself and links the
-                // Python environment file, whose lock and function paths resolve
-                // from env/.
+                Self(path)
+            }
+            /// The project lists its codelist file and its function file and
+            /// declares the Python lock, each relative to itself (D8).
+            fn new() -> Self {
+                let study = Self::empty();
                 study.write("project.yaml", PROJECT);
+                study.write("uv.lock", "version = 1\npackage = []\n");
+                study.write("env/id.yaml", FUNCTION);
+                study.write(
+                    "ct.yaml",
+                    "yamaa: \"1.0\"\ntype: codelists\ncodelists: [{id: SEX, name: Sex, items: [{value: F}, {value: M}]}]\n",
+                );
+                study.write("entry/domain.yaml", DOMAIN);
+                study
+            }
+            /// The same study as 0.5 wrote it, for the tests of environment
+            /// files, which stay until the 0.5 path goes: the project declares
+            /// its codelists beside itself and links the Python environment
+            /// file, whose lock and function paths resolve from env/.
+            fn legacy() -> Self {
+                let study = Self::empty();
+                study.write(
+                    "project.yaml",
+                    "schema_version: '1.0'\nenvironments: {python: env/environment.yaml}\ncodelists: [ct.yaml]\n",
+                );
                 study.write(
                     "env/environment.yaml",
                     "schema_version: '1.0'\nlock: ../uv.lock\nfunctions: {id: id.yaml}\n",
@@ -49,7 +70,10 @@ mod file {
                     "ct.yaml",
                     "codelists: [{id: SEX, name: Sex, items: [{value: F}, {value: M}]}]\n",
                 );
-                study.write("entry/domain.yaml", DOMAIN);
+                study.write(
+                    "entry/domain.yaml",
+                    &DOMAIN.edit("yamaa: \"1.0\"\ntype: spec\n", "schema_version: '1.0'\n"),
+                );
                 study
             }
             fn text(&self, name: &str) -> String {
@@ -89,8 +113,9 @@ mod file {
                 }
             }
         }
-        const DOMAIN: &str = "schema_version: '1.0'\ndomain: TEST\ninput: {SRC: {path: input.csv, types: {ID: int}}}\nkeys: [ID]\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {function: {name: id, args: {x: SRC.ID}}}}\noutput: {path: output.csv, columns: [ID, VALUE]}\n";
-        const PROJECT: &str = "schema_version: '1.0'\nenvironments: {python: env/environment.yaml}\ncodelists: [ct.yaml]\n";
+        const DOMAIN: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\ninput: {SRC: {path: input.csv, types: {ID: int}}}\nkeys: [ID]\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {function: {name: id, args: {x: SRC.ID}}}}\noutput: {path: output.csv, columns: [ID, VALUE]}\n";
+        const PROJECT: &str = "yamaa: \"1.0\"\ntype: project\ncodelists: [ct.yaml]\nfunctions: [env/id.yaml]\nenvironments: {python: {lock: uv.lock}}\n";
+        const FUNCTION: &str = "yamaa: \"1.0\"\ntype: function\nname: id\ndescription: Integer identity.\nparams: [{name: x, type: int, accepts_missing: true}]\nreturns: int\nmay_return_missing: true\nimplementations: {python: program.id}\ntests:\n  - {id: normal, covers: [normal, boundary], args: {x: 7}, result: 7}\n  - {id: missing, covers: ['accepted-missing:x', nullable-output], args: {x: null}, result: null}\n";
 
         #[test]
         fn project_preparation_rejects_unknown_suffix_directory_before_activation() {
@@ -128,8 +153,8 @@ mod file {
             .unwrap();
             assert!(project.run().check_diagnostics().is_empty());
             assert!(!study.0.join("entry/input.csv").exists());
-            // Entry, project, environment, lock, function and codelist metadata only.
-            assert_eq!(project.capture_reads(), 6);
+            // Entry, project, lock, function and codelist metadata only.
+            assert_eq!(project.capture_reads(), 5);
         }
 
         #[derive(Default)]
@@ -149,7 +174,7 @@ mod file {
                 functions: &[ProjectFunctionIdentity],
             ) -> Result<(), Self::Error> {
                 assert_eq!(lock.kind, LockKind::Uv);
-                assert_eq!(lock.written, "../uv.lock");
+                assert_eq!(lock.written, "uv.lock");
                 assert_eq!(functions[0].call, "program.id");
                 self.trace.push("lock");
                 if self.reject {
@@ -200,10 +225,6 @@ mod file {
             };
             let attempt = project.build(&mut run_scope, &mut activation, Scope::default());
             study.write("env/id.yaml", "changed after preparation");
-            study.write(
-                "env/environment.yaml",
-                "changed environment after preparation",
-            );
             study.write("project.yaml", "changed root after preparation");
             let result = yamaa_adapters::specification_report::build_result(
                 project.run(),
@@ -222,10 +243,11 @@ mod file {
             assert_eq!(result.issues().len(), 1);
             assert_eq!(result.issues()[0].spec_paths, ["tests[0]"]);
             let context = yamaa_core::json::Value::Object(result.issues()[0].context.clone());
-            // The external function file is the source; the project is the entry.
+            // The function file is the source, the project the entry and its
+            // listing the environment path (FUNC-12).
             assert_eq!(context["source"], identity("env/id.yaml"));
             assert_eq!(context["entry"], identity("project.yaml"));
-            assert_eq!(context["environment_path"], "functions.id");
+            assert_eq!(context["environment_path"], "functions[0]");
             assert_eq!(context["actual"], 8);
             assert_eq!(context["expected"], 7);
             assert_eq!(
@@ -233,7 +255,7 @@ mod file {
                 yamaa_adapters::json!([])
             );
             assert_eq!(activation.trace, ["lock", "bind", "call", "call"]);
-            assert_eq!(reads, 6);
+            assert_eq!(reads, 5);
             assert_eq!(
                 project.run().captured_environment().captures()[0]
                     .document
@@ -247,8 +269,8 @@ mod file {
         fn project_functions_build_without_any_adjacent_packaging_lock() {
             let study = Study::new();
             study.write(
-                "env/environment.yaml",
-                "schema_version: '1.0'\nfunctions: {id: id.yaml}\n",
+                "project.yaml",
+                &PROJECT.edit("environments: {python: {lock: uv.lock}}\n", ""),
             );
             fs::remove_file(study.0.join("uv.lock")).unwrap();
             study.write("entry/input.csv", "ID\n1\n");
@@ -281,8 +303,8 @@ mod file {
         fn functions_without_a_lock_still_reject_bindings_and_cases_before_study_reads() {
             let study = Study::new();
             study.write(
-                "env/environment.yaml",
-                "schema_version: '1.0'\nfunctions: {id: id.yaml}\n",
+                "project.yaml",
+                &PROJECT.edit("environments: {python: {lock: uv.lock}}\n", ""),
             );
             fs::remove_file(study.0.join("uv.lock")).unwrap();
             let project = study.prepare(&study.text(""), &[]).unwrap();
@@ -322,25 +344,19 @@ mod file {
             let study = Study::new();
             let project = study.prepare(&study.text(""), &[]).unwrap();
             let mut run_scope = project.run_scope(None);
-            assert_eq!(project.capture_reads(), 6);
+            assert_eq!(project.capture_reads(), 5);
             let captures = project.run().captured_environment();
             assert_eq!(
                 captures.root().source().bytes,
                 fs::read(study.0.join("project.yaml")).unwrap()
             );
-            let environment = captures.environment_file().unwrap();
-            assert_eq!(
-                environment.source().bytes,
-                fs::read(study.0.join("env/environment.yaml")).unwrap()
-            );
             assert_eq!(
                 captures.lock().unwrap().source.bytes,
                 b"version = 1\npackage = []\n"
             );
-            // The linked environment file is held beside the project root, not
-            // among the function and codelist captures.
+            // The project's function file and codelist file are its captures.
             assert_eq!(captures.captures().len(), 2);
-            assert_eq!(captures.captures()[0].origin, Origin::Function("id".into()));
+            assert_eq!(captures.captures()[0].origin, Origin::FunctionFile(0));
             assert!(captures.captures()[0]
                 .document
                 .source()
@@ -353,7 +369,6 @@ mod file {
             );
             assert!(project.run().check_diagnostics().is_empty());
             let root_bytes = captures.root().source().bytes.as_ptr();
-            let environment_bytes = environment.source().bytes.as_ptr();
             let lock_bytes = captures.lock().unwrap().source.bytes.as_ptr();
             let definition = project.run().environment().functions()[0]
                 .definition()
@@ -362,7 +377,6 @@ mod file {
             // Metadata bytes belong to the prepared capability, independently of later
             // filesystem changes. Study bytes are first captured only after activation.
             study.write("project.yaml", "[changed");
-            study.write("env/environment.yaml", "[changed");
             study.write("env/id.yaml", "[changed");
             study.write("uv.lock", "changed");
             study.write("entry/domain.yaml", "[changed");
@@ -371,7 +385,7 @@ mod file {
             let first = project.build(&mut run_scope, &mut activation, Scope::default());
             assert!(first.boundary.is_ok());
             assert_eq!(first.activation.lock, LockObservation::Verified);
-            assert_eq!(run_scope.capture_reads(), 7);
+            assert_eq!(run_scope.capture_reads(), 6);
             assert_eq!(
                 first
                     .dataset
@@ -387,7 +401,7 @@ mod file {
             );
             let second = project.build(&mut run_scope, &mut activation, Scope::default());
             assert!(second.boundary.is_ok());
-            assert_eq!(run_scope.capture_reads(), 7);
+            assert_eq!(run_scope.capture_reads(), 6);
             assert_eq!(second.dataset.sources[0].read.snapshots_created, Some(0));
             assert!(std::sync::Arc::ptr_eq(
                 first.dataset.sources[0].snapshot.as_ref().unwrap(),
@@ -415,17 +429,6 @@ mod file {
                     .bytes
                     .as_ptr(),
                 root_bytes
-            );
-            assert_eq!(
-                project
-                    .run()
-                    .captured_environment()
-                    .environment_file()
-                    .unwrap()
-                    .source()
-                    .bytes
-                    .as_ptr(),
-                environment_bytes
             );
             assert_eq!(
                 project
@@ -465,7 +468,7 @@ mod file {
             ));
             assert!(attempt.dataset.sources.is_empty());
             assert!(matches!(attempt.dataset.result, Err(PortError::Incomplete)));
-            assert_eq!(run_scope.capture_reads(), 6);
+            assert_eq!(run_scope.capture_reads(), 5);
             assert_eq!(activation.trace, ["lock"]);
         }
 
@@ -538,7 +541,7 @@ mod file {
                 assert!(attempt.dataset.result.unwrap().result.is_ok());
             }
             assert_eq!(constructed, 2);
-            assert_eq!(run_scope.capture_reads(), 7);
+            assert_eq!(run_scope.capture_reads(), 6);
         }
 
         #[test]
@@ -562,10 +565,14 @@ mod file {
             assert!(attempt.dataset.result.unwrap().result.is_ok());
             assert!(attempt.dataset.sources[0].read.source.path == "input.csv");
 
-            // A function path resolving from env/ above the approved root is refused.
+            // A function file the project lists above the approved root is
+            // refused.
             study.write(
-                "env/environment.yaml",
-                "schema_version: '1.0'\nlock: ../uv.lock\nfunctions: {id: ../../unapproved.yaml}\n",
+                "project.yaml",
+                &PROJECT.edit(
+                    "functions: [env/id.yaml]",
+                    "functions: [../unapproved.yaml]",
+                ),
             );
             let Err(Error::Environment(EnvironmentFailure::Rejected(rejected))) =
                 study.prepare(&study.text(""), &[])
@@ -573,13 +580,12 @@ mod file {
                 panic!("unapproved definition")
             };
             assert_eq!(rejected.sources.len(), 1);
-            assert_eq!(rejected.sources[0].origin, Origin::Function("id".into()));
-            assert_eq!(rejected.sources[0].written, "../../unapproved.yaml");
+            assert_eq!(rejected.sources[0].origin, Origin::FunctionFile(0));
+            assert_eq!(rejected.sources[0].written, "../unapproved.yaml");
             assert!(matches!(
                 rejected.sources[0].error,
                 CaptureFailure::Port(ResourceError::OutsideRoots)
             ));
-            assert!(rejected.environment_file.is_some());
             assert!(rejected.lock.is_some());
         }
 
@@ -593,11 +599,11 @@ mod file {
             study.write("parent/data.csv", "ID\n1\n");
             study.write(
                 "entry/domain.yaml",
-                "schema_version: '1.0'\nparent: ../parent/base.yaml\n",
+                "yamaa: \"1.0\"\ntype: spec\nparent: ../parent/base.yaml\n",
             );
             let project = study.prepare(&study.text(""), &[]).unwrap();
             let mut run_scope = project.run_scope(None);
-            assert_eq!(project.capture_reads(), 7);
+            assert_eq!(project.capture_reads(), 6);
             let document = project.run().document();
             assert_eq!(document.parents().len(), 1);
             assert_eq!(document.written_source_path("SRC"), Some("data.csv"));
@@ -606,7 +612,7 @@ mod file {
                 project.build(&mut run_scope, &mut Activation::default(), Scope::default());
             assert!(attempt.boundary.is_ok());
             assert!(attempt.dataset.result.unwrap().result.is_ok());
-            assert_eq!(run_scope.capture_reads(), 8);
+            assert_eq!(run_scope.capture_reads(), 7);
         }
 
         #[test]
@@ -617,7 +623,7 @@ mod file {
             study.write("parent/base.yaml", &DOMAIN.edit("input.csv", "data.csv"));
             study.write(
                 "entry/domain.yaml",
-                "schema_version: '1.0'\nparent: ../parent/base.yaml\n",
+                "yamaa: \"1.0\"\ntype: spec\nparent: ../parent/base.yaml\n",
             );
             let project = file_workflow::select_with_resources(
                 Resources::new(&study.text(""), &study.text("entry"), &[]).unwrap(),
@@ -629,7 +635,7 @@ mod file {
             )
             .unwrap();
             let mut run_scope = project.run_scope(None);
-            assert_eq!(project.capture_reads(), 7);
+            assert_eq!(project.capture_reads(), 6);
             assert_eq!(project.run().compiled().source().path, "../parent/data.csv");
             // A fresh activation still refuses before the absent authored study source.
             let mut failed = Activation {
@@ -639,7 +645,7 @@ mod file {
             let rejection = project.build(&mut run_scope, &mut failed, Scope::default());
             assert_eq!(failed.trace, ["lock"]);
             assert!(rejection.dataset.sources.is_empty());
-            assert_eq!(run_scope.capture_reads(), 7);
+            assert_eq!(run_scope.capture_reads(), 6);
             study.write("parent/data.csv", "ID\n1\n");
             let mut host = Activation::default();
             let first = project.build(&mut run_scope, &mut host, Scope::default());
@@ -649,7 +655,7 @@ mod file {
                 host.trace,
                 ["lock", "bind", "call", "call", "call", "lock", "bind", "call", "call", "call"]
             );
-            assert_eq!(run_scope.capture_reads(), 8);
+            assert_eq!(run_scope.capture_reads(), 7);
             assert!(std::sync::Arc::ptr_eq(
                 first.dataset.sources[0].snapshot.as_ref().unwrap(),
                 second.dataset.sources[0].snapshot.as_ref().unwrap()
@@ -671,7 +677,7 @@ mod file {
         #[test]
         fn each_host_opens_only_the_environment_file_its_own_project_key_names() {
             use yamaa_adapters::{file_workflow, project_application::preparation_issues};
-            let study = Study::new();
+            let study = Study::legacy();
             // The R entry names a file that is not YAML. Python preparation never
             // opens it, and R preparation never opens the Python environment file,
             // its lock or its function.
@@ -740,7 +746,7 @@ mod file {
         #[test]
         fn environment_file_paths_resolve_beside_it_and_project_paths_beside_the_project() {
             use yamaa_adapters::project_application;
-            let study = Study::new();
+            let study = Study::legacy();
             // The environment file in env/ writes its lock and function beside
             // itself; the project writes its codelist beside itself. Each decoy
             // sits beside the other declaring file and fails preparation if read.
@@ -813,7 +819,7 @@ mod file {
             let mut run_scope = project.run_scope(None);
             assert!(project.run().check_diagnostics().is_empty());
             // Define alone composes the section; a run reads none of its specs.
-            assert_eq!(project.capture_reads(), 6);
+            assert_eq!(project.capture_reads(), 5);
             let attempt =
                 project.build(&mut run_scope, &mut Activation::default(), Scope::default());
             assert!(attempt.boundary.is_ok());
@@ -828,7 +834,7 @@ mod file {
                     .rows(),
                 &[vec![Value::Int(1), Value::Int(1)]]
             );
-            assert_eq!(run_scope.capture_reads(), 7);
+            assert_eq!(run_scope.capture_reads(), 6);
         }
     }
     mod file_publication {
@@ -1634,9 +1640,10 @@ mod file {
             }
             fs::remove_file(study.0.join("root.yaml")).unwrap();
             // A valid project whose only environment entry names another host's
-            // file: the Python host retains the project without opening that file.
+            // lock: the Python host retains the project without reading that lock.
             let project = study.path("project.yaml");
-            let raw = "schema_version: '1.0'\nenvironments: {r: r/absent-environment.yaml}\n";
+            let raw =
+                "yamaa: \"1.0\"\ntype: project\nenvironments: {r: {lock: r/absent-renv.lock}}\n";
             study.write("project.yaml", raw);
             let file_workflow::SelectionError::Preparation(Error::Entry(owner)) =
                 file_workflow::select(&entry, &project, Language::Python)
@@ -1666,8 +1673,8 @@ mod file {
             fn new() -> Self {
                 let path = crate::support::Scratch::canonical("workflow-check");
                 let study = Self(path);
-                // A project that links no environment file.
-                study.write("project.yaml", "schema_version: '1.0'\n");
+                // A project that declares no function.
+                study.write("project.yaml", "yamaa: \"1.0\"\ntype: project\n");
                 study
             }
             fn path(&self, written: &str) -> String {
@@ -1715,7 +1722,7 @@ mod file {
             } else {
                 ""
             };
-            format!("schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\nbase: {base}\ninput: {input}\ncolumns:\n  - {{name: ID, type: int, label: Identifier, derivation: {base}.ID}}\n  - name: VALUE\n    type: str\n    label: Reported value\n    derivation: {base}.VALUE{checks}\noutput: {{path: {output}, columns: [ID, VALUE]}}\n")
+            format!("yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\nbase: {base}\ninput: {input}\ncolumns:\n  - {{name: ID, type: int, label: Identifier, derivation: {base}.ID}}\n  - name: VALUE\n    type: str\n    label: Reported value\n    derivation: {base}.VALUE{checks}\noutput: {{path: {output}, columns: [ID, VALUE]}}\n")
         }
 
         #[test]
@@ -1733,10 +1740,7 @@ mod file {
             let project = study.prepare();
             assert_eq!(project.capture_reads(), 2);
             assert!(specification_check::issues(project.run()).is_empty());
-            let compiled = yamaa_core::specification::PreparedSpecification::prepare(
-                project.run().document().model(),
-            )
-            .unwrap();
+            let compiled = project.run().compiled();
             for index in 0..17 {
                 let path = format!("columns.VALUE.verifications[{index}].not_missing");
                 assert_eq!(
@@ -1771,11 +1775,14 @@ mod file {
             assert_eq!(entry.capture_reads(), 2); // project and specification only
             let raw = preparation_issues(&owner).unwrap();
             assert_eq!(raw.len(), 10_001);
+            // A 1.x specification's findings name the layer that writes the
+            // field and the entry, here both the specification (LAYER-4).
+            let root = study.path("root.yaml");
             for (index, issue) in raw.iter().enumerate() {
                 let name = format!("extra_{index:05}");
                 assert_eq!(
                     yamaa_adapters::report_storage::diagnostic_value(issue),
-                    yamaa_adapters::json!({"phase": "validation", "condition": "unknown_field", "rule": "SCHEMA-13", "spec_paths": vec![name.clone()], "context": {"class":"root_class", "field":name}}),
+                    yamaa_adapters::json!({"phase": "validation", "condition": "unknown_field", "rule": "SCHEMA-13", "spec_paths": vec![name.clone()], "context": {"class":"root_class", "field":name, "source": root, "entry": root}}),
                     "root field {index} keeps its complete finding in authored order"
                 );
             }
@@ -1986,6 +1993,9 @@ mod file {
         #[test]
         fn project_function_calls_without_a_host_environment_report_the_undeclared_environment() {
             let study = Study::new();
+            // Environment files are 0.5's, so this study stays as 0.5 wrote it
+            // until the 0.5 path goes.
+            study.write("project.yaml", "schema_version: '1.0'\n");
             // Two live columns call the same project function.
             study.write("root.yaml", "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {RAW: never-read.csv}\ncolumns:\n  - {name: ID, type: int, derivation: RAW.ID}\n  - {name: FIRST, type: str, derivation: {function: {name: lookup, args: {x: RAW.VALUE}}}}\n  - {name: SECOND, type: str, derivation: {function: {name: lookup, args: {x: RAW.ID}}}}\noutput: {path: never-written.csv, columns: [ID, FIRST, SECOND]}\n");
             let entry = study.path("root.yaml");
@@ -2141,7 +2151,7 @@ mod file {
 
             for structural in [false, true] {
                 let study = Study::new();
-                let project = "schema_version: '1.0'\ncodelists: [missing.yaml, ct.yaml]\n";
+                let project = "yamaa: \"1.0\"\ntype: project\ncodelists: [missing.yaml, ct.yaml]\n";
                 study.write("project.yaml", project);
                 let metadata = if structural {
                     format!(
@@ -2298,7 +2308,7 @@ mod file {
                         "]".repeat(Limits::YAML_DEPTH + 1),
                     )
                 } else {
-                    "schema_version: '1.0'\ncodelists: [\n".to_owned()
+                    "yamaa: \"1.0\"\ntype: project\ncodelists: [\n".to_owned()
                 };
                 study.write("project.yaml", &raw);
                 let entry = study.path("root.yaml");
@@ -2423,12 +2433,12 @@ mod file {
             );
             // VALUE reads all three linked datasets so pruning (LAYER-11) keeps
             // every link in the resolved model.
-            study.write("root.yaml", &yaml("{L: {path: left.csv, schema: left.yaml}, R: {path: right.csv, schema: right.yaml}, Q: {path: right.csv, schema: './right.yaml'}}", "L", "root.csv", true).edit(
+            study.write("root.yaml", &yaml("{L: {path: left.csv, schema: left.yaml}, R: {path: right.csv, schema: right.yaml, key: [ID]}, Q: {path: right.csv, schema: './right.yaml', key: [ID]}}", "L", "root.csv", true).edit(
                 "derivation: L.VALUE",
                 "derivation: {first_available: {sources: [L.VALUE, R.VALUE, Q.VALUE]}}",
             ));
             let project = study.prepare();
-            // One environment, the entry and its two distinct producers. The
+            // The project, the entry and its two distinct producers. The
             // producers are neither compiled nor followed to leaf.yaml.
             assert_eq!(project.capture_reads(), 4);
             let expected = vec![yamaa_adapters::json!({
@@ -2447,7 +2457,7 @@ mod file {
             );
             assert_eq!(
                 project.run().captured_environment().root().source().bytes,
-                b"schema_version: '1.0'\n"
+                b"yamaa: \"1.0\"\ntype: project\n"
             );
         }
 
@@ -2542,15 +2552,15 @@ mod file {
             let study = Study::new();
             study.write(
                 "parent.yaml",
-                "schema_version: \"1.0\"\ndomain: ADSL\nkeys: [USUBJID]\ninput:\n  DM: {path: input/dm.csv, types: {RANDDT: date}}\noutput:\n  path: adsl.csv\n  columns: [USUBJID, RANDDT]\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: DM.USUBJID\n  - name: RANDDT\n    type: date\n    label: Date of Randomization\n    derivation: DM.RANDDT\n",
+                "yamaa: \"1.0\"\ntype: spec\ndomain: ADSL\nkeys: [USUBJID]\ninput:\n  DM: {path: input/dm.csv, types: {RANDDT: date}}\noutput:\n  path: adsl.csv\n  columns: [USUBJID, RANDDT]\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: DM.USUBJID\n  - name: RANDDT\n    type: date\n    label: Date of Randomization\n    derivation: DM.RANDDT\n",
             );
             study.write(
                 "producer/dm.yaml",
-                "schema_version: \"1.0\"\ndomain: DM\nkeys: [USUBJID]\ninput:\n  RAW: {path: ../raw/dm_raw.csv, types: {RANDDT: date}}\noutput:\n  path: ../input/dm.csv\n  columns: [USUBJID, RANDDT]\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: RAW.USUBJID\n  - name: RANDDT\n    type: date\n    label: Date of Randomization\n    derivation: RAW.RANDDT\n",
+                "yamaa: \"1.0\"\ntype: spec\ndomain: DM\nkeys: [USUBJID]\ninput:\n  RAW: {path: ../raw/dm_raw.csv, types: {RANDDT: date}}\noutput:\n  path: ../input/dm.csv\n  columns: [USUBJID, RANDDT]\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: RAW.USUBJID\n  - name: RANDDT\n    type: date\n    label: Date of Randomization\n    derivation: RAW.RANDDT\n",
             );
             study.write(
                 "root.yaml",
-                "schema_version: \"1.0\"\nparent: parent.yaml\ninput:\n  DM: {schema: producer/dm.yaml}\n",
+                "yamaa: \"1.0\"\ntype: spec\nparent: parent.yaml\ninput:\n  DM: {schema: producer/dm.yaml}\n",
             );
             let error = study.compile_rejection();
             let rows = specification_check::rejected(error.run()).unwrap();
@@ -2672,7 +2682,7 @@ mod file {
                 "root.yaml",
                 &yaml("{RAW: never-read.csv}", "RAW", "root.csv", false),
             );
-            let raw = "schema_version: '1.0'\ncodelists: [\n";
+            let raw = "yamaa: \"1.0\"\ntype: project\ncodelists: [\n";
             study.write("project.yaml", raw);
             let error = study.rejected();
             let Error::Environment(environment) = &error else {
@@ -2731,7 +2741,7 @@ mod file {
                 panic!("environment");
             };
             assert_eq!(environment.capture_reads(), 3); // project, environment and lock
-            study.write("project.yaml", "schema_version: '1.0'\n");
+            study.write("project.yaml", "yamaa: \"1.0\"\ntype: project\n");
             study.write(
                 "parent/base.yaml",
                 &yaml("{RAW: never-read.csv}", "RAW", "root.csv", false)
@@ -2739,7 +2749,7 @@ mod file {
             );
             study.write(
                 "root.yaml",
-                "schema_version: '1.0'\nparent: parent/base.yaml\ndomain: CHILD\n",
+                "yamaa: \"1.0\"\ntype: spec\nparent: parent/base.yaml\ndomain: CHILD\n",
             );
             let error = study.rejected();
             let rows = preparation_issues(&error).unwrap();
@@ -2760,19 +2770,19 @@ mod file {
             );
             study.write(
                 "leaf.yaml",
-                "schema_version: '1.0'\nparent: producer/base.yaml\ndomain: LEAF\n",
+                "yamaa: \"1.0\"\ntype: spec\nparent: producer/base.yaml\ndomain: LEAF\n",
             );
             let parent = yaml("{P: {path: ../leaf.csv, schema: ../leaf.yaml}, Q: {path: ../leaf.csv, schema: '../leaf.yaml'}}", "P", "../root.csv", false)
-        .edit("columns:\n", "intermediates: [{id: Q_REFERENCE, dataset: Q, require_match: true}]\ncolumns:\n")
+        .edit("columns:\n", "intermediates: [{id: Q_REFERENCE, dataset: Q, key: [ID], require_match: true}]\ncolumns:\n")
         .edit("output:", "  - {name: OTHER, type: str, label: Other, derivation: Q_REFERENCE.VALUE}\noutput:")
         .edit("columns: [ID, VALUE]", "columns: [ID, VALUE, OTHER]");
             study.write("parents/base.yaml", &parent);
             study.write(
                 "root.yaml",
-                "schema_version: '1.0'\nparent: parents/base.yaml\ndomain: ROOT\n",
+                "yamaa: \"1.0\"\ntype: spec\nparent: parents/base.yaml\ndomain: ROOT\n",
             );
             let project = study.prepare();
-            // One environment, the entry, its parent and the one linked producer
+            // The project, the entry, its parent and the one linked producer
             // with its own parent. The producer's invalid regex is never compiled.
             assert_eq!(project.capture_reads(), 5);
             assert!(specification_check::issues(project.run()).is_empty());
@@ -2858,14 +2868,10 @@ mod file {
             assert!(rows.iter().any(|row| row.rule() == Some("INPUT-10")
                 && row.condition() == "invalid_producer_contract"
                 && row.spec_paths == ["input.P.schema.columns.VALUE.label"]));
-            // The linked environment file's lock and function resolve beside it.
+            // The project's lock and function file resolve beside it (D8).
             study.write(
                 "project.yaml",
-                "schema_version: '1.0'\nenvironments: {python: python/environment.yaml}\n",
-            );
-            study.write(
-                "python/environment.yaml",
-                "schema_version: '1.0'\nlock: uv.lock\nfunctions: {id: broken.yaml}\n",
+                "yamaa: \"1.0\"\ntype: project\nfunctions: [python/broken.yaml]\nenvironments: {python: {lock: python/uv.lock}}\n",
             );
             study.write("python/uv.lock", "version = 1\npackage = []\n");
             let malformed = "function: [\n";
@@ -2874,8 +2880,8 @@ mod file {
             let Error::Environment(environment) = &failure else {
                 panic!("original environment");
             };
-            // project, environment, lock and the broken function file
-            assert_eq!(environment.capture_reads(), 4);
+            // project, lock and the broken function file
+            assert_eq!(environment.capture_reads(), 3);
             assert_eq!(
                 environment
                     .captured_sources()
@@ -2889,8 +2895,8 @@ mod file {
             assert_eq!(failures[0].condition(), "invalid_yaml");
             let context = yamaa_core::json::Value::Object(failures[0].context.clone());
             assert_eq!(context["entry"], study.path("project.yaml"));
-            assert_eq!(context["path"], "broken.yaml");
-            assert_eq!(context["environment_path"], "functions.id");
+            assert_eq!(context["path"], "python/broken.yaml");
+            assert_eq!(context["environment_path"], "functions[0]");
             fs::remove_dir_all(&study.0).unwrap();
             assert!(error
                 .retained_sources()
@@ -2914,7 +2920,7 @@ mod file {
             let root = outer.0.join("named\\root");
             fs::create_dir(&root).unwrap();
             let study = Study(crate::support::Scratch::adopt(root));
-            study.write("project.yaml", "schema_version: '1.0'\n");
+            study.write("project.yaml", "yamaa: \"1.0\"\ntype: project\n");
             study.write(
                 "leaf.yaml",
                 &yaml("{RAW: never-read.csv}", "RAW", "leaf.csv", false),
@@ -2981,7 +2987,7 @@ mod file {
             );
             study.write(
                 "root.yaml",
-                "schema_version: '1.0'\nparent: base.yaml\ndomain: TEST\n",
+                "yamaa: \"1.0\"\ntype: spec\nparent: base.yaml\ndomain: TEST\n",
             );
             let project = study.prepare();
             assert_eq!(project.capture_reads(), 4);
@@ -3006,24 +3012,20 @@ mod file {
         #[test]
         fn rejected_mistyped_schema_keeps_the_original_shipped_schema_cause_and_raw_entry() {
             let study = Study::new();
+            // A null field is absent only in 0.5, so these specifications stay
+            // as 0.5 wrote them until the 0.5 path goes.
+            let legacy = |input: &str| {
+                yaml(input, "RAW", "never-written.csv", false)
+                    .edit("yamaa: \"1.0\"\ntype: spec\n", "schema_version: '1.0'\n")
+            };
             // A null schema is absent, so the input is an ordinary source.
             study.write(
                 "root.yaml",
-                &yaml(
-                    "{RAW: {path: never-read.csv, schema: null}}",
-                    "RAW",
-                    "never-written.csv",
-                    false,
-                ),
+                &legacy("{RAW: {path: never-read.csv, schema: null}}"),
             );
             let plain = study.prepare();
             assert!(plain.run().compiled().source_contract(0).is_none());
-            let original = yaml(
-                "{RAW: {path: never-read.csv, schema: 7}}",
-                "RAW",
-                "never-written.csv",
-                false,
-            );
+            let original = legacy("{RAW: {path: never-read.csv, schema: 7}}");
             study.write("root.yaml", &original);
             let rejection = study.rejected();
             let Error::Entry(entry) = &rejection else {
@@ -3232,14 +3234,14 @@ mod file {
                 ),
             );
             let parent = yaml("{L: {path: ../left.csv, schema: ../left.yaml}, R: {path: ../right.csv, schema: ../right.yaml}, Q: {path: ../right.csv, schema: '../right.yaml'}}", "L", "../root.csv", true)
-        .edit("columns:\n", "intermediates: [{id: RIGHT, dataset: R, require_match: true}, {id: ALIAS, dataset: Q, require_match: true}]\ncolumns:\n")
+        .edit("columns:\n", "intermediates: [{id: RIGHT, dataset: R, key: [ID], require_match: true}, {id: ALIAS, dataset: Q, key: [ID], require_match: true}]\ncolumns:\n")
         .edit("output:", "  - {name: RIGHT_VALUE, type: str, label: Right value, derivation: RIGHT.VALUE}\n  - {name: ALIAS_VALUE, type: str, label: Alias value, derivation: ALIAS.VALUE}\noutput:")
         .edit("columns: [ID, VALUE]", "columns: [ID, VALUE, RIGHT_VALUE, ALIAS_VALUE]");
             study.write("parents/base.yaml", &parent);
-            let entry = "schema_version: '1.0'\nparent: parents/base.yaml\ndomain: ROOT\n";
+            let entry = "yamaa: \"1.0\"\ntype: spec\nparent: parents/base.yaml\ndomain: ROOT\n";
             study.write("root.yaml", entry);
             let project = study.select().unwrap();
-            // Environment, entry, parent and the two distinct linked producers;
+            // Project, entry, parent and the two distinct linked producers;
             // leaf.yaml is linked only by producers and is never read.
             assert_eq!(project.capture_reads(), 5);
             let document = project.run().document();
@@ -3272,19 +3274,19 @@ mod file {
             };
             assert_eq!(rejected.capture_reads(), 2);
             assert_eq!(rejected.entry(), "root.yaml");
-            // The default project links no Python environment, so the call
-            // reports the undeclared environment rather than an unknown function.
+            // The default project lists no function file, so the call names an
+            // unknown function (FUNC-4, #3030 D8).
             let rows = yamaa_adapters::specification_check::rejected(rejected.run()).unwrap();
             assert_eq!(rows.len(), 1);
-            assert_eq!(rows[0].condition(), "project_environment_missing");
-            assert_eq!(rows[0].rule(), Some("FUNC-1"));
+            assert_eq!(rows[0].condition(), "unknown_project_function");
+            assert_eq!(rows[0].rule(), Some("FUNC-4"));
             assert_eq!(
                 rows[0].spec_paths,
                 ["columns.VALUE.derivation.function.name"]
             );
             assert_eq!(
                 yamaa_core::json::Value::Object(rows[0].context.clone()),
-                yamaa_adapters::json!({"function": "missing", "language": "python", "cause": "undeclared"})
+                yamaa_adapters::json!({"function": "missing"})
             );
             fs::remove_dir_all(&study.0).unwrap();
             let held = rejected.retained_sources();
@@ -3299,7 +3301,7 @@ mod file {
             );
             assert_eq!(
                 rejected.run().captured.root().source().bytes,
-                b"schema_version: '1.0'\n"
+                b"yamaa: \"1.0\"\ntype: project\n"
             );
         }
 
@@ -3364,14 +3366,17 @@ mod file {
                 "root.yaml",
                 &yaml("{RAW: never-read.csv}", "RAW", "root.csv", false),
             );
-            study.write("project.yaml", "schema_version: '1.0'\ncodelists: [\n");
+            study.write(
+                "project.yaml",
+                "yamaa: \"1.0\"\ntype: project\ncodelists: [\n",
+            );
             let SelectionError::Preparation(Error::Environment(environment)) =
                 study.selection_rejection()
             else {
                 panic!("raw project rejection");
             };
             assert_eq!(environment.capture_reads(), 1);
-            study.write("project.yaml", "schema_version: '1.0'\n");
+            study.write("project.yaml", "yamaa: \"1.0\"\ntype: project\n");
             study.write("root.yaml", "[");
             let SelectionError::Preparation(root @ Error::Entry(_)) = study.selection_rejection()
             else {
@@ -3475,7 +3480,7 @@ mod file {
             assert_eq!(refused.retained_sources().len(), 0);
             assert_eq!(
                 project.run().captured_environment().root().source().bytes,
-                b"schema_version: '1.0'\n"
+                b"yamaa: \"1.0\"\ntype: project\n"
             );
         }
 
@@ -3532,10 +3537,10 @@ mod file {
             let study = Study::new();
             study.write("project.yaml", "[");
             study.write("environment.yaml", "[");
-            study.write("parent/base.yaml", "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input/unknown}\noutput: {path: output.csv, columns: [ID]}\ncolumns: [{name: ID, type: int, derivation: SRC.ID}]\n");
+            study.write("parent/base.yaml", "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input/unknown}\noutput: {path: output.csv, columns: [ID]}\ncolumns: [{name: ID, type: int, derivation: SRC.ID}]\n");
             study.write(
                 "entry/root.yaml",
-                "schema_version: '1.0'\nparent: ../parent/base.yaml\n",
+                "yamaa: \"1.0\"\ntype: spec\nparent: ../parent/base.yaml\n",
             );
             fs::create_dir_all(study.0.join("parent/input")).unwrap();
             for (kind, expected) in [
