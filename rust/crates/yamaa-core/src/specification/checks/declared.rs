@@ -22,13 +22,14 @@
 //! Binding also decides from the declarations alone whether a key reads
 //! other records than its own ([`key_record`]); it calls the same check.
 use super::*;
-use crate::ast::{ScalarOp, Slot, WindowFunction};
+use crate::ast::{Slot, WindowFunction};
 use crate::diagnostic::{
     lookup::{self, Owner},
     ConditionCode as C, Diagnostic,
 };
 use crate::reference_scope::Phase;
 use crate::result_type::ResultType;
+use crate::scalar_verb::{CheckTyping, Operation, Read};
 use std::collections::BTreeSet;
 
 /// The rows a derivation evaluates on, as binding scopes its reads.
@@ -318,8 +319,9 @@ impl Checks<'_> {
 
     /// The authored defects at the positions below `root`, which binding
     /// reports before it binds any reference: each case predicate's grammar,
-    /// a flag's, a `str_pad` width, a fractional literal an integer operand
-    /// receives, and a formula's grammar.
+    /// a flag's, a verb's defect and the written operands it does not take
+    /// (a `str_pad` width, a fractional literal an integer operand receives),
+    /// and a formula's grammar.
     fn defects(&self, root: ExprId, findings: &mut Vec<BindFinding>) -> Result<(), BindError> {
         let spec = self.spec;
         match &spec.expr(root).kind {
@@ -352,47 +354,16 @@ impl Checks<'_> {
                     }));
                 }
             }
-            ExprKind::Scalar {
-                op: ScalarOp::StrPad { width },
-                operands,
-                ..
-            } => {
-                let source = operands
-                    .first()
-                    .and_then(|operand| name(spec, operand.expr))
-                    .unwrap_or_default();
-                let path = path(spec, root);
-                if let Err(crate::text_pad::DeclarationError::Width) =
-                    crate::text_pad::StringPad::new(source, &path, width)
-                {
-                    findings.extend(
-                        crate::text_pad::DeclarationError::Width
-                            .diagnostic(&path)
-                            .map(BindFinding::Padding),
-                    );
-                }
-            }
-            ExprKind::Scalar { op, operands, .. } if temporal(op) => {
-                if operands.iter().any(|operand| {
-                    matches!(
-                        spec.expr(operand.expr).kind,
-                        ExprKind::Literal(ast::Literal::Float(_))
-                    )
-                }) {
-                    let operation =
-                        temporal::from_tree(spec, root).map_err(|_| BindError::Internal)?;
-                    for index in 0..operation.sources().len() {
-                        if matches!(
-                            operation.literal(index),
-                            Some(crate::value::Value::Float(_))
-                        ) && operation.expected(index) == "int"
-                        {
-                            findings.push(BindFinding::Temporal(
-                                operation.operand_diagnostic(index, "float"),
-                            ));
-                        }
-                    }
-                }
+            ExprKind::Scalar { .. } => {
+                let operation = crate::scalar_verb::Operation::from_tree(spec, root)
+                    .map_err(|_| BindError::Internal)?;
+                findings.extend(operation.defect().cloned().map(BindFinding::Scalar));
+                findings.extend(
+                    operation
+                        .literal_findings()
+                        .into_iter()
+                        .map(BindFinding::Scalar),
+                );
             }
             // A row formula: 0.5's `compute` text, or 1.0's derivation text,
             // which binding compiles alike (FORMULA-27).
@@ -469,30 +440,31 @@ impl Checks<'_> {
                     self.selection(source, scope, branch, findings)?;
                 }
             }
-            ExprKind::Scalar {
-                op: ScalarOp::Mapping { .. } | ScalarOp::Cut { .. },
-                operands,
-                ..
-            } => {
-                for operand in operands {
-                    let start = findings.len();
-                    self.selection(operand.expr, scope, false, findings)?;
-                    if findings.len() == start && scope.is_some() {
-                        self.mapping_type(e, operand.expr, findings)?;
-                    }
-                }
-            }
-            // Each operand reads a name in written order; a placeholder is
-            // read at the template's text.
-            ExprKind::Scalar { op, operands, .. } => {
-                if let Some(scope) = scope {
-                    let template = matches!(op, ScalarOp::StrTemplate { .. })
-                        .then(|| format!("{}.template", path(spec, e)));
-                    for operand in operands {
-                        if let Some(read) = name(spec, operand.expr) {
-                            let at = template.clone().unwrap_or_else(|| path(spec, operand.expr));
-                            self.read(scope, &at, read, findings);
+            // Each operand is read where binding reads it, a source binding
+            // through its selection; the verb's operand types once a source
+            // binding reads without a finding (EXPR-11, EXPR-13), where
+            // `check()` types them ([`CheckTyping::Always`]).
+            ExprKind::Scalar { op, .. } => {
+                let operation = crate::scalar_verb::Operation::from_tree(spec, e)
+                    .map_err(|_| BindError::Internal)?;
+                for (index, operand) in operation.operands().iter().enumerate() {
+                    match &operand.read {
+                        Read::Source(source) => {
+                            let start = findings.len();
+                            self.selection(*source, scope, false, findings)?;
+                            let typed = findings.len() == start
+                                && scope.is_some()
+                                && op.check_typing() == CheckTyping::Always;
+                            if let Some(read) = variable(spec, *source).filter(|_| typed) {
+                                self.operand_type(&operation, index, read, findings);
+                            }
                         }
+                        Read::Name(read) => {
+                            if let Some(scope) = scope {
+                                self.read(scope, &operand.path, read, findings);
+                            }
+                        }
+                        Read::Literal(_) => {}
                     }
                 }
             }
@@ -1148,46 +1120,26 @@ impl Checks<'_> {
                     source(operand, findings)?;
                 }
             }
-            ExprKind::Scalar {
-                op: ScalarOp::Mapping { .. } | ScalarOp::Cut { .. },
-                operands,
-                ..
-            } => {
-                for operand in operands {
-                    if source(operand.expr, findings)? {
-                        self.mapping_type(e, operand.expr, findings)?;
-                    }
-                }
-            }
-            // Each placeholder is read at the template's text, then typed
-            // once it binds (TEXT-1).
-            ExprKind::Scalar {
-                op: ScalarOp::StrTemplate { .. },
-                operands,
-                ..
-            } => {
-                let at = format!("{}.template", path(spec, e));
-                let template = str_template::from_tree(spec, e).map_err(|_| BindError::Internal)?;
-                for (index, operand) in operands.iter().enumerate() {
-                    let Some(read) = name(spec, operand.expr) else {
-                        continue;
+            // Each operand is read where binding reads it, a source binding
+            // as binding binds it; once a read binds, the verb's operand type
+            // where `check()` types it (EXPR-11, EXPR-13, TEXT-1).
+            ExprKind::Scalar { op, .. } => {
+                let operation = crate::scalar_verb::Operation::from_tree(spec, e)
+                    .map_err(|_| BindError::Internal)?;
+                for (index, operand) in operation.operands().iter().enumerate() {
+                    let (read, bound) = match &operand.read {
+                        Read::Source(node) => (variable(spec, *node), source(*node, findings)?),
+                        Read::Name(name) => (
+                            Some(name.as_str()),
+                            reads.read(&operand.path, name, findings),
+                        ),
+                        Read::Literal(_) => continue,
                     };
-                    if let Some(kind) = reads
-                        .read(&at, read, findings)
-                        .then(|| self.placeholder(read))
-                        .flatten()
+                    if let Some(read) =
+                        read.filter(|_| bound && op.check_typing() != CheckTyping::Never)
                     {
-                        findings.extend(
-                            template
-                                .input_diagnostic(index, type_name(kind))
-                                .map(BindFinding::TextTemplate),
-                        );
+                        self.operand_type(&operation, index, read, findings);
                     }
-                }
-            }
-            ExprKind::Scalar { operands, .. } => {
-                for operand in operands {
-                    self.walk(reads, scope, operand.expr, findings)?;
                 }
             }
             ExprKind::Window(window) => self.window(e, window, Some(scope), findings)?,
@@ -1309,48 +1261,27 @@ impl Checks<'_> {
                     source(operand, findings)?;
                 }
             }
-            ExprKind::Scalar {
-                op: ScalarOp::Mapping { .. } | ScalarOp::Cut { .. },
-                operands,
-                ..
-            } => {
-                for operand in operands {
-                    if source(operand.expr, findings)? {
-                        let kind = variable(spec, operand.expr).and_then(|name| reads.kind(name));
-                        self.source_type(e, kind, findings)?;
-                    }
-                }
-            }
-            // Each placeholder is read at the template's text, then typed
-            // once it binds (TEXT-1).
-            ExprKind::Scalar {
-                op: ScalarOp::StrTemplate { .. },
-                operands,
-                ..
-            } => {
-                let at = format!("{}.template", path(spec, e));
-                let template = str_template::from_tree(spec, e).map_err(|_| BindError::Internal)?;
-                for (index, operand) in operands.iter().enumerate() {
-                    let Some(read) = name(spec, operand.expr) else {
-                        continue;
+            // Each operand is read where binding reads it, a source binding
+            // as binding binds it; once a read binds, the verb's operand type
+            // where `check()` types it, as the donor's records type it
+            // (EXPR-11, EXPR-13, TEXT-1).
+            ExprKind::Scalar { op, .. } => {
+                let operation = crate::scalar_verb::Operation::from_tree(spec, e)
+                    .map_err(|_| BindError::Internal)?;
+                for (index, operand) in operation.operands().iter().enumerate() {
+                    let (read, bound) = match &operand.read {
+                        Read::Source(node) => (variable(spec, *node), source(*node, findings)?),
+                        Read::Name(name) => (
+                            Some(name.as_str()),
+                            reads.read(&operand.path, name, findings),
+                        ),
+                        Read::Literal(_) => continue,
                     };
-                    if let Some(kind) = reads
-                        .read(&at, read, findings)
-                        .then(|| reads.kind(read))
-                        .flatten()
-                        .filter(|&kind| kind != ColumnType::Str)
-                    {
-                        findings.extend(
-                            template
-                                .input_diagnostic(index, type_name(kind))
-                                .map(BindFinding::TextTemplate),
-                        );
+                    if bound && op.check_typing() != CheckTyping::Never {
+                        if let Some(kind) = read.and_then(|read| reads.kind(read)) {
+                            findings.extend(operation.check(index, kind).map(BindFinding::Scalar));
+                        }
                     }
-                }
-            }
-            ExprKind::Scalar { operands, .. } => {
-                for operand in operands {
-                    self.donor_walk(reads, scope, operand.expr, findings)?;
                 }
             }
             // The window's defects, then its operands and each name of its
@@ -1388,53 +1319,26 @@ impl Checks<'_> {
         Ok(())
     }
 
-    /// A mapping or cut reads a source of a type it accepts (EXPR-11,
-    /// EXPR-13): here a bare output column's or a stored field's declared
-    /// type.
-    fn mapping_type(
+    /// A verb refuses its operand `index`, which reads `name`, of a declared
+    /// type it does not accept (EXPR-11, EXPR-13, TEXT-1): a bare output
+    /// column's or a stored field's declared type. A lookup's field is
+    /// checked against the values it reads.
+    fn operand_type(
         &self,
-        e: ExprId,
-        source: ExprId,
+        operation: &Operation,
+        index: usize,
+        name: &str,
         findings: &mut Vec<BindFinding>,
-    ) -> Result<(), BindError> {
-        let kind = variable(self.spec, source)
-            .filter(|name| {
-                name.split_once('.')
-                    .is_none_or(|(owner, _)| !self.prepared.intermediates.contains(owner))
-            })
-            .and_then(|name| self.declared.name(name).column_type());
-        self.source_type(e, kind, findings)
-    }
-
-    /// A mapping or cut at `e` refuses a source of `kind`, when known, that
-    /// it does not accept (EXPR-11, EXPR-13).
-    fn source_type(
-        &self,
-        e: ExprId,
-        kind: Option<ColumnType>,
-        findings: &mut Vec<BindFinding>,
-    ) -> Result<(), BindError> {
-        let Some(kind) = kind else {
-            return Ok(());
-        };
-        let declaration = mapping_cut::from_tree(self.spec, e).map_err(|_| BindError::Internal)?;
-        if !declaration.operation.accepts(kind) {
-            findings.push(BindFinding::Scalar(
-                declaration.operation.input_diagnostic(type_name(kind)),
-            ));
-        }
-        Ok(())
-    }
-
-    /// The type of a `str_template` placeholder that binding refuses as no
-    /// `str` (TEXT-1): a column's declared type, or a stored field's. A
-    /// lookup's field is checked against the values it reads.
-    fn placeholder(&self, name: &str) -> Option<ColumnType> {
-        name.split_once('.')
+    ) {
+        let kind = name
+            .split_once('.')
             .is_none_or(|(owner, _)| !self.prepared.intermediates.contains(owner))
             .then(|| self.declared.name(name).column_type())
-            .flatten()
-            .filter(|&kind| kind != ColumnType::Str)
+            .flatten();
+        findings.extend(
+            kind.and_then(|kind| operation.check(index, kind))
+                .map(BindFinding::Scalar),
+        );
     }
 
     /// What binding decides of an aggregate from its declarations before it
@@ -2496,7 +2400,7 @@ impl Checks<'_> {
                 match_values::Declaration::Variable(read)
                 | match_values::Declaration::Source(read) => names(read),
                 match_values::Declaration::Literal(_, expr)
-                | match_values::Declaration::StrPad(_, expr)
+                | match_values::Declaration::Read(_, expr)
                 | match_values::Declaration::Expression { expr, .. } => {
                     self.result_type(*expr, ast::Scope::Row, &names)
                 }
@@ -3851,19 +3755,6 @@ pub(super) fn join_options(spec: &Spec, e: ExprId, findings: &mut Vec<BindFindin
             )));
         }
     }
-}
-
-fn temporal(op: &ScalarOp) -> bool {
-    matches!(
-        op,
-        ScalarOp::Diff { .. }
-            | ScalarOp::StudyDay
-            | ScalarOp::ToEpochDay
-            | ScalarOp::Shift { .. }
-            | ScalarOp::DurationValue { .. }
-            | ScalarOp::Dtc
-            | ScalarOp::TimeOfDay
-    )
 }
 
 /// A written substitute value, admitted by preparation.

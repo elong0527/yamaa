@@ -1508,14 +1508,13 @@ impl Templates {
         let mut dependencies = std::vec![None; output.columns().len()];
         let spec = prepared.tree.spec();
         for declaration in &self.columns {
-            if let ExprKind::Scalar {
-                op: ast::ScalarOp::StrPad { .. },
-                ..
-            } = &spec.expr(declaration.expr).kind
-            {
-                str_pad::declaration_findings(
-                    &str_pad::from_tree(spec, declaration.expr).map_err(|_| BindError::Internal)?,
-                    &mut findings,
+            if let ExprKind::Scalar { .. } = &spec.expr(declaration.expr).kind {
+                findings.extend(
+                    crate::scalar_verb::Operation::from_tree(spec, declaration.expr)
+                        .map_err(|_| BindError::Internal)?
+                        .defect()
+                        .cloned()
+                        .map(BindFinding::Scalar),
                 );
             }
             // A column derivation evaluates only for the rows of the bound

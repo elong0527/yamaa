@@ -4,11 +4,11 @@
 //! composition, which both read each specification's typed tree; no study,
 //! host or data access.
 use crate::{
-    ast::{self, ExprId, ExprKind, ScalarOp, Slot},
+    ast::{self, ExprId, ExprKind, Slot},
     expression::{self, NodeKind, Reducer},
+    scalar_verb::Recode,
     schema::{Document, DocumentNode as N},
     specification_submission_document::OriginType,
-    text_template::StringTemplate,
 };
 use std::collections::BTreeSet;
 
@@ -190,30 +190,18 @@ fn recode_expr(spec: &ast::Spec, expr: ExprId, reads: &Reads, strict: bool) -> b
     let reads_variable =
         |expr: ExprId| variable_of(spec, expr).is_some_and(|name| reads.reads(name, strict));
     match &spec.expr(expr).kind {
-        ExprKind::Scalar { op, operands, .. } => match op {
-            ScalarOp::Mapping { .. }
-            | ScalarOp::StrCase { .. }
-            | ScalarOp::StrPad { .. }
-            | ScalarOp::StrReplace { .. }
-            | ScalarOp::StrExtract { .. }
-            | ScalarOp::ToDate => operands
+        ExprKind::Scalar { op, operands, .. } => match op.recode() {
+            Recode::Source => operands
                 .iter()
                 .find(|operand| operand.slot == Slot::Source)
                 .is_some_and(|operand| reads_variable(operand.expr)),
-            // An ISO 8601 assembly of collected date parts.
-            ScalarOp::Dtc => {
+            // For example an ISO 8601 assembly of collected date parts.
+            Recode::Parts => {
                 !operands.is_empty() && operands.iter().all(|operand| reads_variable(operand.expr))
             }
-            ScalarOp::StrTemplate { template } => {
-                StringTemplate::new(template.clone(), "origin".into(), None).is_ok_and(|parsed| {
-                    parsed.declaration_diagnostic().is_none()
-                        && parsed
-                            .identifiers()
-                            .iter()
-                            .all(|name| reads.reads(name, strict))
-                })
-            }
-            _ => false,
+            // A valid template's placeholders are its operands.
+            Recode::Template => operands.iter().all(|operand| reads_variable(operand.expr)),
+            Recode::Computed => false,
         },
         ExprKind::FirstAvailable { sources, .. } => {
             !sources.is_empty() && sources.iter().all(|&source| reads_variable(source))

@@ -24,7 +24,9 @@ pub(super) enum Declaration {
     Variable(String),
     Source(String),
     Literal(crate::value::Value, ExprId),
-    StrPad(str_pad::Declaration, ExprId),
+    /// A verb that matches on one read of its source, transformed
+    /// ([`ast::ScalarOp::key_read`]).
+    Read(Box<crate::scalar_verb::Operation>, ExprId),
     Expression {
         expr: ExprId,
         references: Vec<String>,
@@ -82,12 +84,8 @@ pub(super) fn admit(
         ExprKind::Literal(literal) => {
             constant(literal, &site)?;
         }
-        ExprKind::Scalar {
-            op: ast::ScalarOp::StrPad { .. },
-            operands,
-            ..
-        } => {
-            str_pad::from_tree(spec, value)?;
+        ExprKind::Scalar { op, operands, .. } if op.key_read() => {
+            crate::scalar_verb::Operation::from_tree(spec, value).map_err(refused_verb)?;
             reference = checks::operand_name(spec, operands, ast::Slot::Source);
         }
         ExprKind::Scalar { .. } | ExprKind::Formula(_) | ExprKind::Window(_) => {
@@ -102,20 +100,19 @@ pub(super) fn admit(
                 intermediates: &none,
             }
             .admit(spec, value, 0)?;
-            // Bounds and a fallback are read only when a source needs them,
-            // which a key's demand cannot know.
-            if let ExprKind::Scalar {
-                op:
-                    ast::ScalarOp::Impute { .. }
-                    | ast::ScalarOp::Precision { .. }
-                    | ast::ScalarOp::ImputationFlag { .. }
-                    | ast::ScalarOp::ToDate,
-                ..
-            } = &spec.expr(value).kind
-            {
-                let operation = imputation::from_tree(spec, value)?;
-                for (field, _) in operation.operands().skip(1) {
-                    reject(extra, field, format!("{site}.{field}"));
+            // An operand the verb reads only when its source needs it, such as
+            // an `impute`'s bounds and fallback, which a key's demand cannot
+            // know.
+            if let ExprKind::Scalar { op, operands, .. } = &spec.expr(value).kind {
+                for operand in operands
+                    .iter()
+                    .filter(|operand| op.conditional(operand.slot))
+                {
+                    if let ast::Segment::Field(field) =
+                        spec.paths.segment(spec.expr(operand.expr).meta.path)
+                    {
+                        reject(extra, field, format!("{site}.{field}"));
+                    }
                 }
             }
         }
@@ -158,10 +155,12 @@ impl Declaration {
             ExprKind::Literal(literal) => {
                 Self::Literal(constant(literal, &checks::path(spec, value))?, value)
             }
-            ExprKind::Scalar {
-                op: ast::ScalarOp::StrPad { .. },
-                ..
-            } => Self::StrPad(str_pad::from_tree(spec, value)?, value),
+            ExprKind::Scalar { op, .. } if op.key_read() => Self::Read(
+                Box::new(
+                    crate::scalar_verb::Operation::from_tree(spec, value).map_err(refused_verb)?,
+                ),
+                value,
+            ),
             ExprKind::Scalar { .. } | ExprKind::Formula(_) | ExprKind::Window(_) => {
                 let scan = reads::Scan {
                     relation: true,
@@ -179,7 +178,15 @@ impl Declaration {
     pub(super) fn reference(&self) -> Option<&str> {
         match self {
             Self::Variable(name) | Self::Source(name) => Some(name),
-            Self::StrPad(pad, _) => Some(pad.source()),
+            Self::Read(operation, _) => {
+                operation
+                    .operands()
+                    .first()
+                    .and_then(|operand| match &operand.read {
+                        crate::scalar_verb::Read::Name(name) => Some(name.as_str()),
+                        _ => None,
+                    })
+            }
             Self::Literal(..) | Self::Expression { .. } => None,
         }
     }
@@ -206,7 +213,7 @@ impl Declaration {
         let names = |name: &str| ResultType::declared(catalog.type_of(name));
         match self {
             Self::Variable(name) | Self::Source(name) => Ok(names(name)),
-            Self::Literal(_, expr) | Self::StrPad(_, expr) | Self::Expression { expr, .. } => {
+            Self::Literal(_, expr) | Self::Read(_, expr) | Self::Expression { expr, .. } => {
                 Ok(tree.result_type(*expr, ast::Scope::Row, &names))
             }
         }
@@ -357,8 +364,8 @@ impl Declaration {
                 })
                 .transpose();
         }
-        if let Self::StrPad(operation, _) = self {
-            str_pad::declaration_findings(operation, findings);
+        if let Self::Read(operation, _) = self {
+            findings.extend(operation.defect().cloned().map(BindFinding::Scalar));
         }
         let Some(name) = self.reference() else {
             let Self::Literal(value, _) = self else {
@@ -393,13 +400,9 @@ impl Declaration {
                 let declaration = match self {
                     Self::Variable(_) => ContextualMatch::Variable(name.into()),
                     Self::Source(_) => ContextualMatch::Source(name.into()),
-                    Self::StrPad(operation, _) => ContextualMatch::StrPad {
-                        identifier: name.into(),
-                        operation: match operation {
-                            str_pad::Declaration::Valid(operation) => Some(operation.clone()),
-                            str_pad::Declaration::WidthError { .. } => None,
-                        },
-                    },
+                    Self::Read(operation, _) => operation
+                        .contextual_match(name.into())
+                        .ok_or(BindError::Internal)?,
                     Self::Literal(..) | Self::Expression { .. } => return Err(BindError::Internal),
                 };
                 return Ok(Some(MatchValue::Contextual(declaration)));
@@ -426,13 +429,7 @@ impl Declaration {
         Ok(Some(match self {
             Self::Variable(_) => MatchValue::Variable(read),
             Self::Source(_) => MatchValue::Source(read),
-            Self::StrPad(operation, _) => MatchValue::StrPad {
-                read,
-                operation: match operation {
-                    str_pad::Declaration::Valid(operation) => Some(operation.clone()),
-                    str_pad::Declaration::WidthError { .. } => None,
-                },
-            },
+            Self::Read(operation, _) => operation.match_value(read).ok_or(BindError::Internal)?,
             Self::Literal(..) | Self::Expression { .. } => return Err(BindError::Internal),
         }))
     }

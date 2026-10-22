@@ -5,7 +5,6 @@
 //! order preparation has always reported them; binding builds each
 //! operation from the tree again.
 use super::*;
-use crate::ast::{ScalarOp, Slot};
 
 fn unsupported(path: &str, operation: &str) -> PrepareError {
     PrepareError::Unsupported(vec![UnsupportedFeature {
@@ -84,82 +83,35 @@ impl Admission<'_> {
         Ok(())
     }
 
+    /// A scalar verb: within the depth it adds for its operands, each source
+    /// binding it reads admitted as any source is, then its operation built
+    /// from the tree.
     fn scalar(
         &self,
         spec: &ast::Spec,
         e: ExprId,
-        op: &ScalarOp,
+        op: &ast::ScalarOp,
         depth: usize,
     ) -> Result<(), PrepareError> {
-        match op {
-            ScalarOp::StrTemplate { .. } => {
-                str_template::from_tree(spec, e)?;
-            }
-            ScalarOp::StrExtract { .. } | ScalarOp::StrReplace { .. } => {
-                str_extract::from_tree(spec, e)?;
-            }
-            ScalarOp::Greatest | ScalarOp::Least => {
-                if depth + 1 > crate::limits::Limits::SEMANTIC_DEPTH {
-                    return Err(PrepareError::limit(
-                        "semantic_depth",
-                        crate::limits::Limits::SEMANTIC_DEPTH,
-                        Some(depth + 1),
-                        None,
-                    ));
-                }
-                scalar::Declaration::from_tree(spec, e)?;
-            }
-            ScalarOp::Mapping { dict, .. } => {
-                self.mapping_source(spec, e)?;
-                mapping_cut::from_tree(spec, e)?;
-                if let ast::Dictionary::File(file) = dict {
-                    return Err(unsupported(
-                        &checks::render(spec, file.meta),
-                        "mapping_dictionary_resource",
-                    ));
-                }
-            }
-            ScalarOp::Cut { .. } => {
-                self.mapping_source(spec, e)?;
-                mapping_cut::from_tree(spec, e)?;
-            }
-            ScalarOp::StrCase { .. } => {
-                str_case::from_tree(spec, e)?;
-            }
-            ScalarOp::StrPad { .. } => {
-                str_pad::from_tree(spec, e)?;
-            }
-            ScalarOp::Impute { .. }
-            | ScalarOp::Precision { .. }
-            | ScalarOp::ImputationFlag { .. }
-            | ScalarOp::ToDate => {
-                imputation::from_tree(spec, e)?;
-            }
-            ScalarOp::Round { .. } => {
-                rounding::from_tree(spec, e)?;
-            }
-            ScalarOp::Diff { .. }
-            | ScalarOp::StudyDay
-            | ScalarOp::ToEpochDay
-            | ScalarOp::Shift { .. }
-            | ScalarOp::DurationValue { .. }
-            | ScalarOp::Dtc
-            | ScalarOp::TimeOfDay => {
-                temporal::from_tree(spec, e)?;
-            }
+        let nested = depth + op.operand_depth();
+        if nested > crate::limits::Limits::SEMANTIC_DEPTH {
+            return Err(PrepareError::limit(
+                "semantic_depth",
+                crate::limits::Limits::SEMANTIC_DEPTH,
+                Some(nested),
+                None,
+            ));
         }
-        Ok(())
-    }
-
-    /// A mapping's or cut's structured source, admitted as any source is.
-    fn mapping_source(&self, spec: &ast::Spec, e: ExprId) -> Result<(), PrepareError> {
         let ExprKind::Scalar { operands, .. } = &spec.expr(e).kind else {
             return Err(PrepareError::Internal);
         };
-        self.source_filter(
-            spec,
-            checks::operand(operands, Slot::Source).ok_or(PrepareError::Internal)?,
-        )
+        for operand in operands {
+            if let ExprKind::Source(_) = &spec.expr(operand.expr).kind {
+                self.source(spec, operand.expr)?;
+            }
+        }
+        crate::scalar_verb::Operation::from_tree(spec, e).map_err(refused_verb)?;
+        Ok(())
     }
 
     /// A structured source: its filter within the compiler's limits unless
@@ -205,8 +157,9 @@ pub(super) fn predicate_limits(spec: &ast::Spec, e: Option<ExprId>) -> Result<()
 /// The declaration defects a derivation reports before any of its
 /// references binds, in written order: each `case` predicate's grammar
 /// finding, a flag's condition and its `false_value` without `missing`, a
-/// formula's grammar finding, a padding width and a whole number a
-/// temporal verb counts written as a fraction.
+/// formula's grammar finding, and a scalar verb's defect and the written
+/// operands it does not take (a padding width, a whole number a temporal
+/// verb counts written as a fraction).
 pub(super) fn declaration_findings(
     spec: &ast::Spec,
     e: ExprId,
@@ -216,26 +169,16 @@ pub(super) fn declaration_findings(
         ExprKind::Flag { .. } => flags::Declaration::from_tree(spec, e)
             .map_err(|_| BindError::Internal)?
             .findings(findings),
-        ExprKind::Scalar {
-            op: ScalarOp::StrPad { .. },
-            ..
-        } => str_pad::declaration_findings(
-            &str_pad::from_tree(spec, e).map_err(|_| BindError::Internal)?,
-            findings,
-        ),
-        ExprKind::Scalar { op, .. } if checks::verbs::temporal(op) => {
-            let operation = temporal::from_tree(spec, e).map_err(|_| BindError::Internal)?;
-            for index in 0..operation.sources().len() {
-                if matches!(
-                    operation.literal(index),
-                    Some(crate::value::Value::Float(_))
-                ) && operation.expected(index) == "int"
-                {
-                    findings.push(BindFinding::Temporal(
-                        operation.operand_diagnostic(index, "float"),
-                    ));
-                }
-            }
+        ExprKind::Scalar { .. } => {
+            let operation = crate::scalar_verb::Operation::from_tree(spec, e)
+                .map_err(|_| BindError::Internal)?;
+            findings.extend(operation.defect().cloned().map(BindFinding::Scalar));
+            findings.extend(
+                operation
+                    .literal_findings()
+                    .into_iter()
+                    .map(BindFinding::Scalar),
+            );
         }
         ExprKind::Formula(formula) => {
             if let Err(error @ CompileError::Invalid { .. }) = &formula.compiled {
