@@ -465,6 +465,35 @@ class CopiedCorpus(unittest.TestCase):
             cli_conformance.main(["--binary", "yamaa", "--output", temp.name])
         self.assertEqual(raised.exception.code, 2)
 
+    def test_output_inside_the_corpus_is_rejected_before_copying(self):
+        linked = self.root / "linked-corpus"
+        linked.symlink_to(self.source, target_is_directory=True)
+        for source in (self.source, linked):
+            output = source / "output"
+            with (
+                self.subTest(source=source.name),
+                contextlib.redirect_stderr(io.StringIO()) as error,
+                mock.patch.object(
+                    cli_conformance,
+                    "prepare",
+                    side_effect=AssertionError("must reject before copying"),
+                ),
+                self.assertRaises(SystemExit) as raised,
+            ):
+                cli_conformance.main(["--prepare-only", "--output", str(output)])
+            self.assertEqual(
+                (
+                    raised.exception.code,
+                    error.getvalue().split(": error: ", 1)[1],
+                    output.exists(),
+                ),
+                (
+                    2,
+                    "output must be a fresh directory outside the fixture tree\n",
+                    False,
+                ),
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
