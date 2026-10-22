@@ -188,10 +188,9 @@ def relative_file(case, value, field):
 def entries(case, metadata=None):
     """Preserve authored call order and the explicit project each call passes.
 
-    A case's root `project.yaml` is the default for every call in both hosts;
-    its `environments` key links each host's environment file. An entry's
-    `environment` field names that project file, or is None for a call that
-    opens its specification without a project.
+    A case's root `project.yaml` is the default for every call in both hosts.
+    An entry's `environment` field names that project file, or is None for a
+    call that opens its specification without a project.
     """
     metadata = load_metadata(case) if metadata is None else metadata
     declared = metadata.get("entries")
@@ -351,8 +350,8 @@ def check_standard_model(case, metadata=None):
     `standard` stays in benchmark.yaml, where the dashboards and the Harbor
     evaluation read it (#3030 Phase 1 and 2 plan, question 9). Where it names
     a model, the `model` that each host's last entry specification declares
-    in the 1.0 surface (D25) is that model. A CDISC or TEST benchmark may
-    build any model, and a 0.5 specification declares none. Layers a negative
+    (D25) is that model. A CDISC or TEST benchmark may build any model, and
+    a specification that declares none is not checked. Layers a negative
     benchmark cannot compose leave its fault to the engine.
     """
     metadata = load_metadata(case) if metadata is None else metadata

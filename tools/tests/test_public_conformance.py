@@ -359,7 +359,7 @@ class PublicConformance(unittest.TestCase):
     def test_an_empty_child_declares_the_1_x_header(self):
         """An empty child layer declares the 1.x header (LAYER-4)."""
         self.assertEqual(
-            judge.empty_child({"yamaa": "1.0", "type": "spec"}, "spec.yaml"),
+            judge.empty_child("spec.yaml"),
             'yamaa: "1.0"\ntype: spec\nparent: spec.yaml\n',
         )
 

@@ -1,14 +1,8 @@
-"""Reading a file's language and a 1.x expression field (#3030 P2-3)."""
+"""Reading what a 1.x expression field holds (#3030 P2-3)."""
 
 import unittest
 
 from tools import surface
-
-
-class LanguageTests(unittest.TestCase):
-    def test_a_root_declaring_yamaa_and_no_schema_version_is_1_x(self):
-        self.assertTrue(surface.declares_header({"yamaa": "1.0", "type": "spec"}))
-        self.assertTrue(surface.declares_header({"yamaa": "1.0"}))
 
 
 class ExpressionTests(unittest.TestCase):

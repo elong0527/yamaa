@@ -281,8 +281,8 @@ class AdamMappingTests(unittest.TestCase):
             {
                 "baseline_flag": {
                     "date": "ADT",
-                    "reference_date": "TRTSDT",
-                    "value": "AVAL",
+                    "reference": "TRTSDT",
+                    "source": "AVAL",
                     "window": "BASELINE_GROUPS",
                 }
             }
@@ -296,11 +296,17 @@ class AdamMappingTests(unittest.TestCase):
             {
                 "baseline_flag": {
                     "date": "ADT",
-                    "reference_date": "TRTSDT",
-                    "value": "AVAL",
+                    "reference": "TRTSDT",
+                    "source": "AVAL",
                     "inclusive": False,
-                    "tie_break": [{"variable": "ATM", "direction": "desc"}, "ASEQ"],
-                    "window": {"group_by": ["USUBJID"]},
+                    "window": {
+                        "group_by": ["USUBJID"],
+                        "order_by": [
+                            "ADT",
+                            {"variable": "ATM", "direction": "desc"},
+                            "ASEQ",
+                        ],
+                    },
                 }
             }
         )
@@ -354,6 +360,29 @@ class SheetStructureTests(unittest.TestCase):
         templates = {row[0]: row for row in rows}
         self.assertIn("ALTSI", templates["alt_si"][2])
         self.assertIn("Alanine Aminotransferase (SI)", templates["alt_si"][3])
+
+    def test_a_template_cell_tells_a_written_null_from_an_absent_variable(self):
+        # A written null is the missing literal (#3030 D18); a variable that
+        # only another template fills is absent from this one.
+        spec = {
+            "yamaa": "1.0",
+            "type": "spec",
+            "domain": "DM",
+            "keys": ["STUDYID", "USUBJID"],
+            "input": {"RAW": "raw.csv"},
+            "output": {"path": "dm.csv", "columns": ["USUBJID", "AGE", "AGEGR1"]},
+            "columns": [
+                {"name": "USUBJID", "type": "str", "derivation": "RAW.USUBJID"},
+                {"name": "AGE", "type": "int"},
+                {"name": "AGEGR1", "type": "str"},
+            ],
+            "rows": [
+                {"id": "a", "derivations": {"AGE": None}},
+                {"id": "b", "derivations": {"AGE": 1, "AGEGR1": "RAW.AGEGRP"}},
+            ],
+        }
+        _, _, _, rows = mapping_doc.mapping_sheets(spec)[1]
+        self.assertEqual(rows[0][2:], ['Constant "None"', "None"])
 
     def test_rendering_is_deterministic(self):
         spec = load_spec("sdtm-dm-basic")
@@ -580,8 +609,8 @@ class DerivationShapeTests(unittest.TestCase):
         rule = mapping_doc.describe_derivation(
             {
                 "case": [
-                    {"when": "X = 1", "then": {"literal": "Y"}},
-                    {"otherwise": {"literal": "N"}},
+                    {"when": "X = 1", "then": "'Y'"},
+                    {"otherwise": "'N'"},
                 ]
             }
         )
@@ -624,7 +653,7 @@ class DerivationShapeTests(unittest.TestCase):
                     "start": "BRTHDT",
                     "end": "RANDDT",
                     "unit": "year",
-                    "bounds": "exclusive",
+                    "closed": "right",
                 }
             }
         )
@@ -716,7 +745,7 @@ class DerivationShapeTests(unittest.TestCase):
                     "precision": {
                         "type": kind,
                         "source": "PC.PCDTC",
-                        "invalid": {"literal": None},
+                        "invalid": None,
                     }
                 }
             )
@@ -752,9 +781,8 @@ class DerivationShapeTests(unittest.TestCase):
                 "impute": {
                     "type": "datetime",
                     "source": "AEENDTC",
-                    "minimum_source_precision": "day",
                     "time": "last",
-                    "invalid": {"literal": None},
+                    "invalid": None,
                 }
             }
         )
@@ -765,17 +793,16 @@ class DerivationShapeTests(unittest.TestCase):
             "gives blank; invalid text " + mapping_doc.ARROW + " blank.",
         )
 
-    def test_impute_states_what_its_minimum_source_precision_leaves_blank(self):
-        def rule(minimum):
-            node = {"type": "date", "source": "AESTDTC", "day": 15}
-            if minimum:
-                node["minimum_source_precision"] = minimum
+    def test_impute_states_what_its_month_and_day_rules_leave_blank(self):
+        # The month and day rules a node declares state the minimum source
+        # precision (TIME-10, P-IMP-1).
+        def rule(**parts):
+            node = {"type": "date", "source": "AESTDTC", **parts}
             return mapping_doc.describe_derivation({"impute": node})
 
-        self.assertNotIn("gives blank", rule(None))
-        self.assertNotIn("gives blank", rule("year"))
-        self.assertIn("day=15; a year alone gives blank;", rule("month"))
-        self.assertIn("; a source without a complete date gives blank;", rule("day"))
+        self.assertNotIn("gives blank", rule(month=6, day=15))
+        self.assertIn("day=15; a year alone gives blank;", rule(day=15))
+        self.assertIn("; a source without a complete date gives blank;", rule())
 
     def test_impute_bound_outside_the_collected_period_is_ignored(self):
         def rule(**bounds):
@@ -807,11 +834,7 @@ class DerivationShapeTests(unittest.TestCase):
 
     def test_impute_bound_read_through_a_lookup_names_its_column_again(self):
         ctx = mapping_doc.SpecContext(
-            {
-                "intermediates": [
-                    {"id": "DEATH", "dataset": "DS", "no_match": {"literal": None}}
-                ]
-            }
+            {"intermediates": [{"id": "DEATH", "dataset": "DS", "absent": None}]}
         )
         rule = mapping_doc.describe_derivation(
             {
@@ -892,9 +915,7 @@ class DerivationShapeTests(unittest.TestCase):
             "8601 date text, stopping before the first blank part; blank when the "
             "year is blank; a part that is not its digits is an error.",
         )
-        rule = mapping_doc.describe_derivation(
-            {"dtc": {"year": "YR", "invalid": {"literal": None}}}
-        )
+        rule = mapping_doc.describe_derivation({"dtc": {"year": "YR", "invalid": None}})
         self.assertIn("a part that is not its digits " + mapping_doc.ARROW, rule)
 
     def test_time_of_day_counts_seconds_since_midnight(self):

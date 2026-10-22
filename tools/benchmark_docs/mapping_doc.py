@@ -12,10 +12,10 @@ the study environment's codelists. The derivation supplies a plain-language
 conversion rule and a Define-XML 2.1 origin classification (Assigned,
 Collected, Derived, Not Available, Other, Predecessor, Protocol).
 
-A specification in either language renders the same sheet while both
-surfaces exist (#3030 P2-3): a 1.x file's expression fields, renamed operands
-and handler nulls read as the 0.5 spellings with the same meaning
-(`expression_node`, `declared`).
+An expression field holds grammar text (EXPR-5, #3030 D18), which
+`expression_node` reads into the node its describer reads, and YAML null is
+the missing value, so a written handler is declared whatever it holds
+(`declared`).
 
 This file is ASCII-only to satisfy the repository source lint; arrows and
 other non-ASCII glyphs are emitted as HTML character references.
@@ -64,9 +64,6 @@ class SpecContext:
 
     def __init__(self, spec=None):
         spec = spec or {}
-        # A 1.x file writes expression fields as grammar text and YAML null
-        # as the missing value (#3030 D18).
-        self.v1 = surface.declares_header(spec)
         intermediates = spec.get("intermediates")
         self.lookups = {
             str(item.get("id")): item
@@ -105,17 +102,15 @@ def context(ctx):
     return ctx if isinstance(ctx, SpecContext) else EMPTY_CONTEXT
 
 
-def expression_node(value, ctx=None):
+def expression_node(value):
     """An expression field's value in the shape the describers read.
 
-    A 0.5 file writes a reference as text, a constant as `{literal: X}` and a
-    formula as `{compute: {expr: E}}`. A 1.x file writes grammar text, where
-    a bare name is a reference and quoted text a literal, or a YAML number,
-    Boolean or null literal (EXPR-5, #3030 D18); it reads as the 0.5 node with
-    the same meaning, so a rule reads alike in either language.
+    An expression field holds grammar text, where a bare name is a reference
+    and quoted text a literal, or a YAML number, Boolean or null literal
+    (EXPR-5, #3030 D18). A reference reads as its name, a literal as
+    `{literal: X}`, a formula as `{compute: {expr: E}}` and an operation as
+    its mapping.
     """
-    if not context(ctx).v1:
-        return value
     kind, payload = surface.expression(value)
     if kind == "literal":
         return {"literal": payload}
@@ -127,8 +122,8 @@ def expression_node(value, ctx=None):
 def literal_text(value):
     """A declared literal as a reviewer reads it; the missing value is a blank cell.
 
-    `{literal: null}` is the 0.5 spelling of a missing substitute, and YAML
-    null the 1.x one (COLUMN-10).
+    The literal is a value field's value or the `{literal: X}` node that
+    `expression_node` reads; YAML null is the missing value (COLUMN-10).
     """
     if isinstance(value, dict) and set(value) == {"literal"}:
         value = value["literal"]
@@ -144,18 +139,11 @@ def missing_answer(value):
     )
 
 
-def declared(node, field, ctx=None):
-    """Whether a handler or substitute field is declared.
-
-    In a 0.5 file a YAML null leaves the field absent (LAYER-9), exactly as
-    an omitted field. In a 1.x file YAML null is the missing value, so a
-    written field is declared whatever it holds (#3030 D18).
-    """
-    if not isinstance(node, dict):
-        return False
-    if context(ctx).v1:
-        return field in node
-    return node.get(field) is not None
+def declared(node, field):
+    """Whether a handler or substitute field is declared: YAML null is the
+    missing value, so a written field is declared whatever it holds (#3030
+    D18)."""
+    return isinstance(node, dict) and field in node
 
 
 def join_and(parts):
@@ -278,7 +266,7 @@ KEY_VALUE_PHRASES = {
 
 def match_value(value, ctx=None, depth=0):
     """The current-row side of one join key: a variable, or a computed value."""
-    value = expression_node(value, ctx)
+    value = expression_node(value)
     if not isinstance(value, dict):
         return describe_variable(value, ctx, depth)
     for shape, phrase in KEY_VALUE_PHRASES.items():
@@ -289,16 +277,16 @@ def match_value(value, ctx=None, depth=0):
     return "the value from " + value_phrase(value, ctx, depth)
 
 
-def no_match_phrase(lookup, depth=0, ctx=None):
+def no_match_phrase(lookup, depth=0):
     """What an unmatched row yields, as a trailing clause.
 
     A sponsor's variable sheet is written in sentences, so this is worded as
     one rather than bracketed like a code comment. `require_match: true` makes
     an unmatched row fatal (LOOKUP-24), which is the reviewable fact; without
-    it the declared absence answer (`no_match` in a 0.5 file, `absent` in a
-    1.x one) answers, or a blank when none is declared. A lookup reached
-    through another lookup answers in the shorter form, so its clause cannot
-    be mistaken for the outer lookup's own answer at the end of the sentence.
+    it the declared absence answer, `absent`, answers, or a blank when none
+    is declared. A lookup reached through another lookup answers in the
+    shorter form, so its clause cannot be mistaken for the outer lookup's own
+    answer at the end of the sentence.
     """
     if isinstance(lookup, dict) and lookup.get("require_match") is True:
         return (
@@ -306,8 +294,7 @@ def no_match_phrase(lookup, depth=0, ctx=None):
             if depth
             else ", and a row with no match is an error"
         )
-    field = "absent" if context(ctx).v1 else "no_match"
-    answer = literal_text(lookup[field]) if declared(lookup, field, ctx) else "blank"
+    answer = literal_text(lookup["absent"]) if declared(lookup, "absent") else "blank"
     if depth:
         return ", " + answer + " when unmatched"
     return ", and no match yields " + answer
@@ -356,7 +343,7 @@ def describe_variable(variable, ctx=None, depth=0):
         tail
         + " from "
         + record_phrase(lookup, tail, ctx, depth + 1)
-        + no_match_phrase(lookup, depth, ctx)
+        + no_match_phrase(lookup, depth)
     )
 
 
@@ -376,7 +363,7 @@ def value_phrase(derivation, ctx=None, depth=0):
     wrong after "where ENDPOINT is"; the leading capital is what marks it as a
     sentence, so dropping it is all the repair needed.
     """
-    derivation = expression_node(derivation, ctx)
+    derivation = expression_node(derivation)
     if isinstance(derivation, str):
         return describe_variable(derivation, ctx, depth)
     text = clause(describe_derivation(derivation, ctx, depth))
@@ -410,7 +397,7 @@ def describe_expression_text(text, ctx=None, depth=0):
         tail
         + " taken from "
         + record_phrase(ctx.lookup(head), tail, ctx, depth + 1)
-        + no_match_phrase(ctx.lookup(head), depth, ctx)
+        + no_match_phrase(ctx.lookup(head), depth)
         for head, tail in seen
     ]
     return rewritten + ", with " + join_and(origins)
@@ -433,7 +420,7 @@ def describe_reference(variable, ctx=None, depth=0):
         + tail
         + " from "
         + record_phrase(lookup, tail, ctx, depth + 1)
-        + no_match_phrase(lookup, depth, ctx)
+        + no_match_phrase(lookup, depth)
     )
 
 
@@ -460,14 +447,14 @@ def with_window(text, node, ctx=None, depth=0):
     return text + (" " + window if window else "")
 
 
-def handler_phrase(node, field, label, ctx=None, restated=False):
+def handler_phrase(node, field, label, restated=False):
     """'; missing input -> "X"' for one declared handler, or nothing.
 
     `restated` marks a handler whose omission already gives the missing value
-    (COLUMN-10): a declared missing answer there restates the default, which
-    the 1.0 converter drops (P-HND-3), so neither language states it.
+    (COLUMN-10): a declared missing answer there restates the default
+    (P-HND-3), so the sheet does not state it.
     """
-    if not declared(node, field, ctx):
+    if not declared(node, field):
         return ""
     if restated and missing_answer(node[field]):
         return ""
@@ -524,13 +511,11 @@ def describe_source(src, ctx=None, depth=0):
         src.get("require_match") is True or head in context(ctx).required_inputs
     )
     required = src.get("require_match") is True or (
-        not declared(src, "absent", ctx) and head in context(ctx).required_inputs
+        not declared(src, "absent") and head in context(ctx).required_inputs
     )
     return sentence(
         text
-        + handler_phrase(
-            src, "absent", "an absent source", ctx, restated=not match_required
-        )
+        + handler_phrase(src, "absent", "an absent source", restated=not match_required)
         + (REQUIRED_RECORD if required else "")
     )
 
@@ -548,15 +533,13 @@ def describe_mapping(mapping, ctx=None, depth=0):
         # A dictionary kept in a project file is named rather than inlined.
         rule = " using the dictionary in " + dictionary
     else:
-        # In a 0.5 file a null entry is absent (LAYER-9) and `{literal: null}`
-        # recodes to missing; in a 1.x file a null entry recodes to missing.
+        # A null entry recodes to missing.
         rule = ": " + ", ".join(
             '"' + str(k) + '" ' + ARROW + " " + literal_text(v)
             for k, v in dictionary.items()
-            if v is not None or context(ctx).v1
         )
-    absent = describe_mapping_handler(mapping, "missing", ctx)
-    unlisted = describe_mapping_handler(mapping, "unmapped", ctx)
+    absent = describe_mapping_handler(mapping, "missing")
+    unlisted = describe_mapping_handler(mapping, "unmapped")
     if absent == unlisted:
         tail = "; missing or unlisted values " + absent
     else:
@@ -566,13 +549,13 @@ def describe_mapping(mapping, ctx=None, depth=0):
     return "Recode " + describe_variable(var, ctx, depth) + where + rule + tail + "."
 
 
-def describe_mapping_handler(mapping, handler, ctx=None):
+def describe_mapping_handler(mapping, handler):
     """What one mapping event yields: a literal, missing, or an error.
 
     Each event has its own handler. An omitted `missing` gives the missing
     value and an omitted `unmapped` fails (COLUMN-10).
     """
-    if not declared(mapping, handler, ctx):
+    if not declared(mapping, handler):
         return "stay missing" if handler == "missing" else "are errors"
     value = mapping[handler]
     if isinstance(value, dict) and set(value) == {"literal"}:
@@ -606,7 +589,7 @@ def describe_case(branches, ctx=None, depth=0):
 
 def describe_case_result(result, ctx=None, depth=0):
     """A branch result: a literal, or a nested expression described in place."""
-    result = expression_node(result, ctx)
+    result = expression_node(result)
     if isinstance(result, dict):
         if "literal" in result:
             return '"' + str(result["literal"]) + '"'
@@ -623,10 +606,9 @@ def describe_flag(node, ctx=None, depth=0):
             + "; blank otherwise."
         )
     condition = describe_expression_text(node.get("condition"), ctx, depth)
-    # A 0.5 null leaves the field absent, so `true_value` keeps its default;
-    # a 1.x null is the missing value.
+    # A written null is the missing value; an omitted `true_value` is "Y".
     true_value = literal_text(
-        node["true_value"] if declared(node, "true_value", ctx) else "Y"
+        node["true_value"] if declared(node, "true_value") else "Y"
     )
     false_value = literal_text(node.get("false_value"))
     text = true_value + " when " + condition + "; " + false_value + " otherwise"
@@ -647,7 +629,7 @@ def describe_first_available(node, ctx=None, depth=0):
             sources.append(describe_variable(src, ctx, depth))
     text = listed("First non-missing of", sources)
     return sentence(
-        text + handler_phrase(node, "missing", "all missing", ctx, restated=True)
+        text + handler_phrase(node, "missing", "all missing", restated=True)
     )
 
 
@@ -671,15 +653,12 @@ def describe_aggregate(node, ctx=None, depth=0):
     if groups:
         clauses.append("grouped by " + ", ".join(str(g) for g in groups))
     clauses.extend(match_clauses(node, ctx, depth))
-    if context(ctx).v1:
-        # A 1.x file maps each binding's name to its type and derivation.
-        derive = [
-            {"name": name, **binding}
-            for name, binding in (node.get("derivations") or {}).items()
-            if isinstance(binding, dict)
-        ]
-    else:
-        derive = node.get("derive") or []
+    # `derivations` maps each binding's name to its type and derivation.
+    derive = [
+        {"name": name, **binding}
+        for name, binding in (node.get("derivations") or {}).items()
+        if isinstance(binding, dict)
+    ]
     for binding in derive:
         if isinstance(binding, dict):
             clauses.append(
@@ -714,21 +693,14 @@ def describe_odm(node):
     return sentence(text + "; no identified record yields blank")
 
 
-def describe_function(node, ctx=None):
+def describe_function(node):
     args = []
     for name, value in (node.get("args") or {}).items():
-        if context(ctx).v1:
-            # A 1.x argument is one grammar leaf: a name, or a literal
-            # written as quoted or temporal text (FUNC-6).
-            kind, payload = surface.expression(value)
-            if kind != "operation":
-                value = payload
-        elif isinstance(value, dict):
-            value = (
-                value.get("literal")
-                if "literal" in value
-                else value.get("date", value.get("datetime"))
-            )
+        # An argument is one grammar leaf: a name, or a literal written as
+        # quoted or temporal text (FUNC-6).
+        kind, payload = surface.expression(value)
+        if kind != "operation":
+            value = payload
         args.append(str(name) + " = " + str(value))
     text = "Call project function " + str(node.get("name"))
     version = node.get("contract_version")
@@ -742,7 +714,7 @@ def describe_function(node, ctx=None):
 def describe_cut(node, ctx=None, depth=0):
     breaks = [str(b) for b in node.get("breaks") or []]
     labels = ['"' + str(label) + '"' for label in node.get("labels") or []]
-    right = node.get("closed") == "right" if context(ctx).v1 else node.get("right")
+    right = node.get("closed") == "right"
     closed = (
         "intervals closed on the right" if right else "intervals closed on the left"
     )
@@ -757,7 +729,7 @@ def describe_cut(node, ctx=None, depth=0):
         + closed
     )
     return sentence(
-        text + handler_phrase(node, "missing", "a missing source", ctx, restated=True)
+        text + handler_phrase(node, "missing", "a missing source", restated=True)
     )
 
 
@@ -784,14 +756,11 @@ def describe_diff(node, ctx=None, depth=0):
             + " is earlier"
         )
         return sentence(text if unit == "second" else text + ", not rounded")
-    if context(ctx).v1:
-        # A 1.x file spells endpoint inclusion `closed` (P-ORD-2).
-        closed = str(node.get("closed") or "right")
-        bounds = {"right": "exclusive", "both": "inclusive", "neither": "between"}.get(
-            closed, closed
-        )
-    else:
-        bounds = str(node.get("bounds") or "exclusive")
+    # Endpoint inclusion is spelled `closed` (P-ORD-2).
+    closed = str(node.get("closed") or "right")
+    bounds = {"right": "exclusive", "both": "inclusive", "neither": "between"}.get(
+        closed, closed
+    )
     counted = {
         "exclusive": "counting the end date but not the start",
         "inclusive": "counting both endpoints",
@@ -843,9 +812,7 @@ def describe_shift(node, ctx=None, depth=0):
 def describe_study_day(node, ctx=None, depth=0):
     return sentence(
         "CDISC study day of "
-        + describe_variable(
-            node.get("source") if context(ctx).v1 else node.get("date"), ctx, depth
-        )
+        + describe_variable(node.get("source"), ctx, depth)
         + " against "
         + describe_variable(node.get("reference"), ctx, depth)
         + " as day 1; there is no day zero"
@@ -884,8 +851,8 @@ def describe_dtc(node, ctx=None, depth=0):
         + " as ISO 8601 date text, stopping before the first blank part; "
         + "blank when the year is blank"
     )
-    if declared(node, "invalid", ctx):
-        text += handler_phrase(node, "invalid", "a part that is not its digits", ctx)
+    if declared(node, "invalid"):
+        text += handler_phrase(node, "invalid", "a part that is not its digits")
     else:
         text += "; a part that is not its digits is an error"
     return sentence(text)
@@ -901,7 +868,7 @@ def describe_time_of_day(node, ctx=None, depth=0):
 def invalid_text_phrase(node, ctx=None):
     """What text that is not a date yields; with no handler it is fatal."""
     if "invalid" in node:
-        return handler_phrase(node, "invalid", "invalid text", ctx)
+        return handler_phrase(node, "invalid", "invalid text")
     return "; invalid text is an error"
 
 
@@ -982,18 +949,15 @@ def describe_impute(node, ctx=None, depth=0):
             + " wins over a later "
             + variable_name(before, ctx)
         )
-    if context(ctx).v1:
-        # A 1.x file drops minimum_source_precision: the declared month and
-        # day state it (TIME-10, P-IMP-1).
-        minimum = (
-            "year"
-            if node.get("month") is not None
-            else "month"
-            if node.get("day") is not None
-            else "day"
-        )
-    else:
-        minimum = node.get("minimum_source_precision")
+    # The declared month and day state the minimum source precision
+    # (TIME-10, P-IMP-1).
+    minimum = (
+        "year"
+        if node.get("month") is not None
+        else "month"
+        if node.get("day") is not None
+        else "day"
+    )
     uncompleted = UNCOMPLETED_SOURCES.get(str(minimum))
     if uncompleted:
         text += "; " + uncompleted
@@ -1074,7 +1038,7 @@ def describe_str_case(node, ctx=None, depth=0):
         + " case"
     )
     return sentence(
-        text + handler_phrase(node, "missing", "a missing source", ctx, restated=True)
+        text + handler_phrase(node, "missing", "a missing source", restated=True)
     )
 
 
@@ -1099,8 +1063,8 @@ def describe_str_extract(node, ctx=None, depth=0):
         + " from "
         + describe_variable(node.get("source"), ctx, depth)
     )
-    text += handler_phrase(node, "missing", "a missing source", ctx, restated=True)
-    return sentence(text + handler_phrase(node, "no_match", "no match", ctx))
+    text += handler_phrase(node, "missing", "a missing source", restated=True)
+    return sentence(text + handler_phrase(node, "no_match", "no match"))
 
 
 def describe_str_replace(node, ctx=None, depth=0):
@@ -1113,7 +1077,7 @@ def describe_str_replace(node, ctx=None, depth=0):
         + (" with " + literal_text(replacement) if replacement else " with nothing")
     )
     return sentence(
-        text + handler_phrase(node, "missing", "a missing source", ctx, restated=True)
+        text + handler_phrase(node, "missing", "a missing source", restated=True)
     )
 
 
@@ -1121,7 +1085,7 @@ def describe_str_template(node, ctx=None, depth=0):
     if isinstance(node, str):
         node = {"template": node}
     text = 'Fill the template "' + str(node.get("template")) + '"'
-    return sentence(text + handler_phrase(node, "missing", "a missing field", ctx))
+    return sentence(text + handler_phrase(node, "missing", "a missing field"))
 
 
 def describe_row_number(node, ctx=None, depth=0):
@@ -1185,15 +1149,11 @@ def describe_baseline_flag(node, ctx=None, depth=0):
         else " within each group of "
         + ", ".join(str(g) for g in window.get("group_by", []))
     )
-    if context(ctx).v1:
-        # A 1.x file renames the operands and orders the eligible rows by
-        # `window.order_by`, the date alone by default (P-OP-2, P-OP-3, P-ORD-1).
-        source, reference = node.get("source"), node.get("reference")
-        order = window.get("order_by") if isinstance(window, dict) else None
-        terms = order or [node.get("date")]
-    else:
-        source, reference = node.get("value"), node.get("reference_date")
-        terms = [node.get("date"), *(node.get("tie_break") or [])]
+    # The eligible rows are ordered by `window.order_by`, the date alone by
+    # default (P-OP-2, P-OP-3, P-ORD-1).
+    source, reference = node.get("source"), node.get("reference")
+    order = window.get("order_by") if isinstance(window, dict) else None
+    terms = order or [node.get("date")]
     value = " and a non-missing " + str(source) if source else ""
     bound = " before " if node.get("inclusive") is False else " on or before "
     ordering = order_terms(terms)
@@ -1223,7 +1183,7 @@ DERIVATION_DESCRIBERS = {
     "least": lambda n, c, d: describe_extreme(n, "Least", c, d),
     "aggregate": describe_aggregate,
     "odm": lambda n, c, d: describe_odm(n),
-    "function": lambda n, c, d: describe_function(n, c),
+    "function": lambda n, c, d: describe_function(n),
     "cut": describe_cut,
     "compute": describe_compute,
     "round_half_away_from_zero": describe_round,
@@ -1252,7 +1212,7 @@ DERIVATION_DESCRIBERS = {
 
 def describe_derivation(derivation, ctx=None, depth=0):
     """Plain-language mapping rule for one column-level derivation."""
-    derivation = expression_node(derivation, ctx)
+    derivation = expression_node(derivation)
     if isinstance(derivation, str):
         return describe_reference(derivation, ctx, depth)
     if not isinstance(derivation, dict):
@@ -1261,7 +1221,7 @@ def describe_derivation(derivation, ctx=None, depth=0):
     # conversion yields (SUB-1).
     if "value" in derivation:
         text = clause(describe_derivation(derivation["value"], ctx, depth))
-        if declared(derivation, "unconvertible", ctx):
+        if declared(derivation, "unconvertible"):
             text += (
                 "; a value that cannot be converted "
                 + ARROW
@@ -1290,7 +1250,7 @@ def classify_origin(derivation, input_names, ctx=None, adam=False):
     """
     lookups = context(ctx).lookups
     if derivation is not None:
-        derivation = expression_node(derivation, ctx)
+        derivation = expression_node(derivation)
     if isinstance(derivation, str):
         base = derivation.split(".")[0]
         if base in lookups:
@@ -1422,22 +1382,15 @@ def type_label(col_type, adam):
     return text
 
 
-def submission_origin(col, ctx=None):
-    """The authored origin type; a 1.x file lists the origins (P-ORIGIN-1)."""
-    origin = submission(col).get("origin")
-    if context(ctx).v1:
-        origins = submission(col).get("origins")
-        types = [
-            str(item.get("type") or "")
-            for item in (origins if isinstance(origins, list) else [])
-            if isinstance(item, dict)
-        ]
-        return ", ".join(t for t in types if t)
-    if isinstance(origin, dict):
-        return str(origin.get("type") or "")
-    if isinstance(origin, str):
-        return origin
-    return ""
+def submission_origin(col):
+    """The authored origin types, which a column lists (P-ORIGIN-1)."""
+    origins = submission(col).get("origins")
+    types = [
+        str(item.get("type") or "")
+        for item in (origins if isinstance(origins, list) else [])
+        if isinstance(item, dict)
+    ]
+    return ", ".join(t for t in types if t)
 
 
 TEMPORAL_SUBMISSION_TYPES = frozenset(
@@ -1571,7 +1524,7 @@ def document_codelist_rows(definitions):
 
 def describe_row_template_derivation(derivation, ctx=None):
     """A row-template cell: terser than a variable-sheet rule, but never raw YAML."""
-    derivation = expression_node(derivation, ctx)
+    derivation = expression_node(derivation)
     if isinstance(derivation, str):
         return "Copy " + describe_variable(derivation, ctx)
     if isinstance(derivation, dict):
@@ -1720,12 +1673,10 @@ def mapping_row(
     name = col.get("name", "")
     label = col.get("label", "")
     sub = submission(col)
-    # A 1.x derivation written as YAML null is the missing literal (D18).
-    written = (
-        "derivation" in col if context(ctx).v1 else col.get("derivation") is not None
-    )
-    origin = submission_origin(col, ctx) or classify_origin(
-        expression_node(col.get("derivation"), ctx) if written else None,
+    # A derivation written as YAML null is the missing literal (D18).
+    written = "derivation" in col
+    origin = submission_origin(col) or classify_origin(
+        expression_node(col.get("derivation")) if written else None,
         input_names,
         ctx,
         adam,
@@ -1857,10 +1808,10 @@ def mapping_sheets(spec, define=None):
                 [template.get("id", ""), template.get("filter", "")]
                 + [
                     # A variable that only another template fills is absent
-                    # here, which a 1.x null is not.
+                    # here, unlike a written null, which is a constant.
                     describe_row_template_derivation(derivs[v], ctx)
                     if v in derivs
-                    else describe_row_template_derivation(None)
+                    else "None"
                     for v in template_vars
                 ]
             )

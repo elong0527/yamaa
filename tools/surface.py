@@ -1,12 +1,7 @@
-"""Read a yamaa file in either language while both surfaces exist.
+"""Read what a 1.x expression field holds (EXPR-5, #3030 D18).
 
-From the switch (#3030 P1-9) until P2-13, a benchmark is written in either
-language, and the corpus moves to 1.0 one prefix at a time (P2-5 to P2-8).
-A tool reads each file by its own header, as the engine does (D115): a root
-that declares `yamaa` and no `schema_version` is a 1.x file
-(`rust/crates/yamaa-core/src/language.rs`), and any other root is read under
-the rules at the `yamaa-v0.5.0` tag (D75). P2-13 deletes the 0.5 half of each
-tool with the 0.5 front end.
+A tool that reads a specification's expression fields asks what one holds:
+a reference, a literal, a formula or an operation, as EXPR-5 states.
 """
 
 import re
@@ -25,16 +20,6 @@ TEMPORAL = re.compile(r"(?:DATE|DATETIME)\s*'((?:[^']|'')*)'", re.IGNORECASE)
 NUMBER = re.compile(r"[0-9]+(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?")
 
 
-def declares_header(document):
-    """Whether a parsed root is a 1.x file: it declares `yamaa` and no
-    `schema_version`, as the engine routes a root (SCHEMA-2, D115)."""
-    return (
-        isinstance(document, dict)
-        and "yamaa" in document
-        and "schema_version" not in document
-    )
-
-
 def is_reference(text):
     """Whether grammar text is one bare or qualified name: a reference."""
     if not isinstance(text, str) or not REFERENCE.fullmatch(text):
@@ -50,8 +35,7 @@ def expression(value):
     text that is one quoted string, temporal literal, number, `TRUE`, `FALSE`
     or `NULL`; quoted and temporal text give their unquoted text),
     `("formula", text)` for any other grammar text, and `("operation", value)`
-    for a mapping, which holds one registered operation. Text in a 0.5
-    expression field is a reference; this reads only 1.x files.
+    for a mapping, which holds one registered operation.
     """
     if isinstance(value, dict):
         return "operation", value

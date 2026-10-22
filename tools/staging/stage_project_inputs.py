@@ -9,7 +9,6 @@ from pathlib import Path, PurePosixPath
 import yaml
 from tools.benchmark import entries
 from tools.paths import ROOT
-from tools.surface import declares_header
 
 REPOSITORY = ROOT
 CASES = (
@@ -25,22 +24,15 @@ def python_lock(case: Path, project: str) -> PurePosixPath | None:
     """Where the Python packaging lock a project names is staged, relative to
     the case, or None when the project names none.
 
-    A 1.x project names its lock in `environments.python.lock`, relative to
-    the project file (FUNC-3). A 0.5 project links a Python environment file,
-    whose own relative spellings start at that file, and its lock is staged
-    as `uv.lock` beside it.
+    A project names its lock in `environments.python.lock`, relative to the
+    project file (FUNC-3).
     """
     document = yaml.safe_load((case / project).read_text(encoding="utf-8"))
     environments = document.get("environments") if isinstance(document, dict) else None
-    linked = environments.get("python") if isinstance(environments, dict) else None
-    if linked is None:
-        return None
+    python = environments.get("python") if isinstance(environments, dict) else None
+    lock = python.get("lock") if isinstance(python, dict) else None
     # A project's own paths resolve from the project file.
-    base = PurePosixPath(project).parent
-    if declares_header(document):
-        lock = linked.get("lock") if isinstance(linked, dict) else None
-        return None if lock is None else base / lock
-    return base / PurePosixPath(linked).parent / "uv.lock"
+    return None if lock is None else PurePosixPath(project).parent / lock
 
 
 def stage_case(source: Path, destination: Path, *, ignore=None) -> None:
