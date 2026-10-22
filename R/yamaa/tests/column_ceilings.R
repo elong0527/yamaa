@@ -192,7 +192,7 @@ run_column_ceilings <- function() {
     result <- operation(file.path(dirname(base), "layer-0.yaml"))
     assert_refusal(result)
     stopifnot(nrow(result$issues) == 1L, identical(result$issues$context,
-      '{"actual":8193,"code":"resource_limit","limit":8192,"phase":"inheritance","resource":"parent_occurrences","stage":"prepare"}'))
+      '{"actual":8193,"code":"resource_limit","limit":8192,"phase":"inheritance","resource":"parent_occurrences","step":"prepare"}'))
   }
 
   # A fixed refusal does not certify that later semantic checks passed. Once
@@ -256,7 +256,7 @@ run_column_ceilings <- function() {
     }
     spec_path <- switch(resource, inputs = "input", source_fields = "input.SRC.types",
                         projected_columns = "output.columns", "columns")
-    expected <- sprintf('{"actual":%s,"code":"compiler_limit","limit":%s,"resource":"%s","stage":"prepare"}',
+    expected <- sprintf('{"actual":%s,"code":"compiler_limit","limit":%s,"resource":"%s","step":"prepare"}',
                         actual, limit, resource)
     for (project in routes) {
       for (operation in operations(project)) {

@@ -130,6 +130,124 @@ records.info.fields[2]: features: list<str>, values feature
 records.info.fields[3]: host: str, values host
 records.info.fields[4]: host_version: optional<str>
 records.info.fields[5]: platform: str
+cli.synopsis: yamaa [--format text|json] COMMAND [ARGUMENTS]
+cli.synopsis: yamaa --version [--format text|json]
+cli.synopsis: yamaa --help
+cli.values.output_format.text
+cli.values.output_format.json
+cli.global_flags.--format: values output_format; default text
+cli.global_flags.--version: flag
+cli.global_flags.--help: flag
+cli.exit_status.0: the command completed and succeeded: its status is succeeded and any save wrote everything, or resolve, schema, --version or --help printed its output
+cli.exit_status.1: the command completed with findings: a status of failed or skipped, a refused save, remaining lint findings, a failed selftest case, or a refusal that carries issues
+cli.exit_status.2: the command could not run as asked: a usage error, an argument the facade cannot take, a PATH whose declared type the command does not take, or a failed write to standard output; a file problem the engine reports as an issue exits 1
+cli.commands.check: yamaa check PATH [--spec NAME]
+cli.commands.check.args[0]: PATH: path
+cli.commands.check.flags.--spec: NAME
+cli.commands.check.json_keys.command
+cli.commands.check.json_keys.path
+cli.commands.check.json_keys.spec
+cli.commands.check.json_keys.status
+cli.commands.check.json_keys.issues
+cli.commands.run: yamaa run PATH [--spec NAME | --section SECTION]
+cli.commands.run.args[0]: PATH: path
+cli.commands.run.flags.--spec: NAME
+cli.commands.run.flags.--section: SECTION
+cli.commands.run.json_keys.command
+cli.commands.run.json_keys.path
+cli.commands.run.json_keys.spec
+cli.commands.run.json_keys.section
+cli.commands.run.json_keys.status
+cli.commands.run.json_keys.members
+cli.commands.run.json_keys.issues
+cli.commands.run.json_keys.paths
+cli.commands.submission: yamaa submission PATH [--section SECTION] [--created TIME]
+cli.commands.submission.args[0]: PATH: path
+cli.commands.submission.flags.--section: SECTION
+cli.commands.submission.flags.--created: TIME
+cli.commands.submission.json_keys.command
+cli.commands.submission.json_keys.path
+cli.commands.submission.json_keys.section
+cli.commands.submission.json_keys.created
+cli.commands.submission.json_keys.status
+cli.commands.submission.json_keys.issues
+cli.commands.submission.json_keys.paths
+cli.commands.resolve: yamaa resolve PATH [--spec NAME]
+cli.commands.resolve.args[0]: PATH: path
+cli.commands.resolve.flags.--spec: NAME
+cli.commands.resolve.refusal_keys.command
+cli.commands.resolve.refusal_keys.path
+cli.commands.resolve.refusal_keys.spec
+cli.commands.resolve.refusal_keys.status
+cli.commands.resolve.refusal_keys.issues
+cli.commands.read-odm: yamaa read-odm SOURCE OUT [--archive-member NAME] [--max-archive-members N] [--max-expanded-bytes N] [--max-xml-depth N]
+cli.commands.read-odm.args[0]: SOURCE: path
+cli.commands.read-odm.args[1]: OUT: path
+cli.commands.read-odm.flags.--archive-member: NAME
+cli.commands.read-odm.flags.--max-archive-members: N; default 10000
+cli.commands.read-odm.flags.--max-expanded-bytes: N; default 268435456
+cli.commands.read-odm.flags.--max-xml-depth: N; default 64
+cli.commands.read-odm.json_keys.command
+cli.commands.read-odm.json_keys.path
+cli.commands.read-odm.json_keys.rows
+cli.commands.read-odm.json_keys.status
+cli.commands.read-odm.json_keys.issues
+cli.commands.read-odm.json_keys.paths
+cli.commands.lint: yamaa lint [--fix] PATH...
+cli.commands.lint.args[0]: PATH: path, repeated
+cli.commands.lint.flags.--fix: flag
+cli.commands.lint.json_keys.command
+cli.commands.lint.json_keys.status
+cli.commands.lint.json_keys.findings
+cli.commands.lint.json_keys.paths
+cli.commands.lint.refusal_keys.command
+cli.commands.lint.refusal_keys.status
+cli.commands.lint.refusal_keys.findings
+cli.commands.lint.refusal_keys.issues
+cli.commands.lint.refusal_keys.paths
+cli.commands.schema: yamaa schema TYPE
+cli.commands.schema.args[0]: TYPE: file_type
+cli.commands.schema.refusal_keys.command
+cli.commands.schema.refusal_keys.type
+cli.commands.schema.refusal_keys.status
+cli.commands.schema.refusal_keys.issues
+cli.commands.selftest: yamaa selftest
+cli.commands.selftest.json_keys.command
+cli.commands.selftest.json_keys.status
+cli.commands.selftest.json_keys.cases
+cli.commands.selftest.json_keys.info
+cli.json.issue_keys.severity
+cli.json.issue_keys.phase
+cli.json.issue_keys.condition
+cli.json.issue_keys.rule
+cli.json.issue_keys.spec_paths
+cli.json.issue_keys.file
+cli.json.issue_keys.line
+cli.json.issue_keys.column
+cli.json.issue_keys.message
+cli.json.issue_keys.context
+cli.json.issue_keys.source_span
+cli.json.issue_keys.operand_route
+cli.json.member_keys.name
+cli.json.member_keys.status
+cli.json.member_keys.rows
+cli.json.member_keys.columns
+cli.json.member_keys.issue_count
+cli.json.finding_keys.file
+cli.json.finding_keys.line
+cli.json.finding_keys.column
+cli.json.finding_keys.finding
+cli.json.finding_keys.spec_path
+cli.json.finding_keys.message
+cli.json.case_keys.case
+cli.json.case_keys.status
+cli.json.case_keys.message
+cli.json.info_keys.version
+cli.json.info_keys.language_versions
+cli.json.info_keys.features
+cli.json.info_keys.host
+cli.json.info_keys.host_version
+cli.json.info_keys.platform
 public.types.path: python str or os.PathLike, unannotated; r character(1)
 public.types.path_list: python a path or a list of paths, unannotated; r character()
 public.types.text: python str; r character(1)

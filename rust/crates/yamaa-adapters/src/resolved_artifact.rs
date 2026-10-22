@@ -65,11 +65,11 @@ pub fn resolve_located(
     selected.resolved_specification().map_err(|error| {
         let issues = match error {
             Error::Resource(error) => crate::file_application::resource_failure(
-                yamaa_core::application_issue::Stage::Resolve,
+                yamaa_core::application_issue::Step::Resolve,
                 &error,
             ),
             _ => crate::file_application::rejected(
-                yamaa_core::application_issue::Stage::Resolve,
+                yamaa_core::application_issue::Step::Resolve,
                 yamaa_core::application_issue::Fault::ArtifactRepresentation,
             ),
         };

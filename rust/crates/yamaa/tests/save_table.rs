@@ -76,7 +76,7 @@ fn issue(failure: &Failure) -> &Diagnostic {
     issue
 }
 
-/// Assert `failure` is the engine fault `code` in the output stage, at no
+/// Assert `failure` is the engine fault `code` in the output step, at no
 /// spec path, with nothing written.
 #[track_caller]
 fn assert_output_fault(failure: &Failure, code: &str) {
@@ -84,7 +84,7 @@ fn assert_output_fault(failure: &Failure, code: &str) {
     assert_eq!(issue.code, "engine_rejected");
     assert_eq!(issue.rule, None);
     assert!(issue.spec_path.is_empty(), "{:?}", issue.spec_path);
-    assert_eq!(issue.context.get("stage"), Some(&text("output")));
+    assert_eq!(issue.context.get("step"), Some(&text("output")));
     assert_eq!(issue.context.get("code"), Some(&text(code)));
     assert!(failure.paths.is_empty());
 }
@@ -373,8 +373,11 @@ fn run_refusal(study: &Study, engine: &Engine, output: &str) -> Diagnostic {
 }
 
 /// A target that cannot be written is refused as a run's save refuses one
-/// (OUTPUT-8, #3030 D99): a missing directory, a directory, a trailing
-/// separator and a link name no file the publisher may replace.
+/// (OUTPUT-8, #3030 D99, D189). A missing directory, a directory and a link
+/// are the walk's refusals: FILE-7's or FILE-8's condition under `output`, at
+/// no field, naming the path as given, where a run names its field and the
+/// path as written. A trailing separator names no file the publisher may
+/// replace, an engine refusal.
 #[test]
 fn a_target_that_cannot_be_written_is_refused_as_a_run_refuses_it() {
     let study = Study::new();
@@ -382,38 +385,58 @@ fn a_target_that_cannot_be_written_is_refused_as_a_run_refuses_it() {
     let table = items(&study, &engine);
     // A run whose output is in a missing directory records this issue.
     let ran = run_refusal(&study, &engine, "absent/ids.csv");
-    let saved = engine
-        .save_table(&table, &study.path("absent/items.csv"))
-        .unwrap_err();
-    let saved = issue(&saved);
     assert_eq!(
-        (&saved.code, &saved.spec_path, saved.context.to_json()),
-        (&ran.code, &ran.spec_path, ran.context.to_json())
+        (ran.phase.as_str(), ran.code.as_str(), ran.rule.as_deref()),
+        ("output", "resource_path_missing", Some("FILE-7"))
     );
+    assert_eq!(ran.spec_path, ["output.path"]);
+    assert_eq!(ran.context.to_json(), r#"{"path":"absent/ids.csv"}"#);
     std::fs::remove_file(study.0.join("ids.csv")).unwrap();
     std::fs::remove_file(study.0.join("ids.yaml")).unwrap();
     std::fs::create_dir(study.0.join("folder.csv")).unwrap();
+    #[cfg_attr(not(unix), allow(unused_mut))]
+    let mut unreached = vec![
+        ("absent/items.csv", "resource_path_missing", "FILE-7"),
+        ("absent/child/items.csv", "resource_path_missing", "FILE-7"),
+        ("folder.csv", "resource_path_not_regular_file", "FILE-7"),
+    ];
     #[cfg(unix)]
     {
         study.write("kept.csv", "kept\n");
         std::os::unix::fs::symlink("kept.csv", study.0.join("link.csv")).unwrap();
+        unreached.push(("link.csv", "resource_path_symlink", "FILE-8"));
     }
-    let link = cfg!(unix).then_some("link.csv");
-    for name in ["absent/items.csv", "folder.csv", "items.csv/"]
-        .into_iter()
-        .chain(link)
-    {
+    for (name, condition, rule) in unreached {
         let out = study.path(name);
         let failure = engine.save_table(&table, &out).unwrap_err();
-        assert_output_fault(&failure, "invalid_target");
+        let saved = issue(&failure);
+        assert_eq!(
+            (
+                saved.phase.as_str(),
+                saved.code.as_str(),
+                saved.rule.as_deref()
+            ),
+            ("output", condition, Some(rule)),
+            "{name}"
+        );
+        assert!(saved.spec_path.is_empty(), "{:?}", saved.spec_path);
+        assert_eq!(saved.context.to_json(), format!(r#"{{"path":"{out}"}}"#));
         assert_eq!(
             failure.message,
-            format!(
-                "cannot save {out}: the engine refused the operation in its output stage: \
-                 invalid_target [engine_rejected]"
-            )
+            format!("cannot save {out}: {}", saved.text())
         );
+        assert!(failure.paths.is_empty());
     }
+    let out = study.path("items.csv/");
+    let failure = engine.save_table(&table, &out).unwrap_err();
+    assert_output_fault(&failure, "invalid_target");
+    assert_eq!(
+        failure.message,
+        format!(
+            "cannot save {out}: the engine refused the operation in its output step: \
+             invalid_target [engine_rejected]"
+        )
+    );
     #[cfg(unix)]
     {
         assert_eq!(study.read("kept.csv"), b"kept\n");
@@ -430,6 +453,30 @@ fn a_target_that_cannot_be_written_is_refused_as_a_run_refuses_it() {
         .unwrap()
         .next()
         .is_none());
+}
+
+/// A regular file cannot serve as a directory anywhere in the caller's
+/// target parent (FILE-7, D189). The refusal names the complete target and
+/// leaves both the blocking file and its directory unchanged.
+#[test]
+fn a_regular_file_in_a_table_targets_parent_is_not_a_missing_path() {
+    let study = Study::new();
+    let engine = engine();
+    let table = items(&study, &engine);
+    study.write("regular.csv", "kept\n");
+    for name in ["regular.csv/items.csv", "regular.csv/child/items.csv"] {
+        let out = study.path(name);
+        let failure = engine.save_table(&table, &out).unwrap_err();
+        let saved = issue(&failure);
+        assert_eq!(saved.phase, "output", "{name}");
+        assert_eq!(saved.code, "resource_path_not_regular_file", "{name}");
+        assert_eq!(saved.rule.as_deref(), Some("FILE-7"));
+        assert!(saved.spec_path.is_empty());
+        assert_eq!(saved.context.get("path"), Some(&text(&out)));
+        assert!(failure.paths.is_empty());
+        assert_eq!(study.read("regular.csv"), b"kept\n");
+        assert_eq!(study.entries(), ["odm.xml", "regular.csv"]);
+    }
 }
 
 /// A file that cannot be staged, in a directory that admits no new entry,
@@ -466,7 +513,7 @@ fn a_file_that_cannot_be_staged_is_refused_and_leaves_nothing() {
     // attempt, at its output field and with the path its specification wrote.
     assert_eq!(ran.code, issue.code);
     assert_eq!(ran.spec_path, ["output.path"]);
-    for key in ["stage", "code", "entered", "completed"] {
+    for key in ["step", "code", "entered", "completed"] {
         assert_eq!(ran.context.get(key), issue.context.get(key), "{key}");
     }
     assert_eq!(ran.context.get("path"), Some(&text("locked/ids.csv")));

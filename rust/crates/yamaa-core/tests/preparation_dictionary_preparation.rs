@@ -1,6 +1,4 @@
 //! Preparation contracts.
-#[allow(dead_code)]
-mod support;
 mod preparation {
     mod dictionary_preparation {
         //! Independent logical arenas and opaque effects exercise capture ownership.
@@ -1419,7 +1417,8 @@ mod preparation {
                 let marker = Rc::as_ptr(&fault.marker);
                 native.fault = Some((step, fault));
                 let error = match run(&mut native, &mut documents) {
-                    Err(app::Error::Resource(error))
+                    Err(app::Error::Entry(error))
+                    | Err(app::Error::Resource(error))
                     | Err(app::Error::Preparation(Failure::Parent(error))) => error,
                     _ => panic!("native failure"),
                 };

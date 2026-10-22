@@ -1,9 +1,12 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADEX
 keys: [STUDYID, USUBJID, EXTRT]
 input:
   TRT: input/subject_treatment.csv
-  EX: {path: input/ex.csv, types: {EXDOSE: float, EXPLDOS: float}}
+  EX: {path: input/ex.csv, types: {EXDOSE: float, EXPLDOS: float},
+       key: [STUDYID, USUBJID, EXTRT]}
 base: TRT
 
 output:

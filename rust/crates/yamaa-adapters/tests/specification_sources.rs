@@ -1,7 +1,5 @@
 #![cfg(feature = "yaml")]
 //! Native specification run assertions.
-#[allow(dead_code)]
-mod support;
 mod execution {
     mod specification_run {
         use crate::support::specification_run::*;
@@ -2248,7 +2246,7 @@ output: {{path: output.csv, columns: [I, S]}}
                 specification_diagnostics::failure(&error, Some(run.source())),
                 specification_diagnostics::Rejection::Fault(
                     yamaa_core::application_issue::rejected(
-                        yamaa_core::application_issue::Stage::Bind,
+                        yamaa_core::application_issue::Step::Bind,
                         yamaa_core::application_issue::Fault::SourceCount,
                     )
                 )

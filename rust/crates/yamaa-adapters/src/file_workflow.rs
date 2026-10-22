@@ -27,7 +27,13 @@ pub fn repository_resources(
 }
 
 pub enum Error {
-    Configuration(crate::file_configuration::Error),
+    /// A path the caller passed, the specification's or the project file's,
+    /// that cannot be read: `path` as given, and why (FILE-7, FILE-8,
+    /// FILE-11). Nothing was captured before it.
+    Caller {
+        path: String,
+        error: crate::file_resources::Error,
+    },
     Schema(crate::specification_source::Error),
     Environment(Box<RejectedEnvironment>),
     Entry(Box<RejectedEntry>),
@@ -85,7 +91,11 @@ impl std::fmt::Debug for RejectedEnvironment {
 impl std::fmt::Debug for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Configuration(error) => f.debug_tuple("Configuration").field(error).finish(),
+            Self::Caller { path, error } => f
+                .debug_struct("Caller")
+                .field("path", path)
+                .field("error", error)
+                .finish(),
             Self::Schema(error) => f.debug_tuple("Schema").field(error).finish(),
             Self::Environment(error) => f.debug_tuple("Environment").field(error).finish(),
             Self::Entry(error) => f.debug_tuple("Entry").field(error).finish(),
@@ -99,29 +109,26 @@ struct Configured {
     specification_schema: Arc<CapturedSchema>,
     project_schemas: ProjectSchemas,
 }
+/// The refusal of the caller's own path `given`.
+fn caller(given: &str, error: crate::file_resources::Error) -> Error {
+    Error::Caller {
+        path: given.to_owned(),
+        error,
+    }
+}
 fn configure(specification: &str, environment: Option<&str>) -> Result<Configured, Error> {
-    let (mut resources, entry) =
-        crate::file_configuration::resources(specification).map_err(Error::Configuration)?;
+    let (mut resources, entry) = crate::file_configuration::resources(specification)
+        .map_err(|crate::file_configuration::Error::Path(error)| caller(specification, error))?;
     // Public caller paths retain the established absolute-path policy. This is
     // a lexical fact; the first environment file is opened only after admission.
     let specification_schema = crate::shipped_schema::capture().map_err(Error::Schema)?;
     let project_schemas = crate::shipped_schema::capture_project().map_err(Error::Schema)?;
-    let environment = match environment
-        .map(crate::project_application::environment_path)
-        .transpose()
-    {
-        Ok(environment) => environment,
-        Err(error) => {
-            return Err(Error::Environment(Box::new(RejectedEnvironment {
-                error: file_project::Error::Resource(error),
-                entry: None,
-                environment: None,
-                specification_schema,
-                project_schemas,
-                resources,
-            })))
-        }
-    };
+    let environment = environment
+        .map(|given| {
+            crate::project_application::environment_path(given)
+                .map_err(|error| caller(given, error))
+        })
+        .transpose()?;
     if let Some(environment) = environment.as_deref() {
         resources.select_caller_parent(environment);
     }
@@ -166,7 +173,10 @@ pub fn capture_project(
     let (resources, environment) = capture_environment(
         request.resources,
         &request.entry,
-        request.environment.as_deref(),
+        request
+            .environment
+            .as_deref()
+            .map(|resolved| (project, resolved)),
         host,
         Arc::clone(&request.specification_schema),
         request.project_schemas,
@@ -194,7 +204,7 @@ impl SelectionError {
             Self::Preparation(Error::Environment(error)) => error.retained_sources(),
             Self::Preparation(Error::Entry(error)) => error.retained_sources(),
             Self::Compile(error) => error.retained_sources(),
-            Self::Preparation(Error::Configuration(_) | Error::Schema(_)) => Vec::new(),
+            Self::Preparation(Error::Caller { .. } | Error::Schema(_)) => Vec::new(),
         }
     }
 }
@@ -220,12 +230,13 @@ pub fn select_request(
     request: yamaa_core::build::Request<'_>,
     host: Option<Language>,
 ) -> Result<Selected, SelectionError> {
-    let request = configure(request.specification, request.environment)
-        .map_err(SelectionError::Preparation)?;
+    let given = request;
+    let request =
+        configure(given.specification, given.environment).map_err(SelectionError::Preparation)?;
     let (resources, environment) = capture_environment(
         request.resources,
         &request.entry,
-        request.environment.as_deref(),
+        given.environment.zip(request.environment.as_deref()),
         host,
         Arc::clone(&request.specification_schema),
         request.project_schemas,
@@ -233,6 +244,7 @@ pub fn select_request(
     .map_err(SelectionError::Preparation)?;
     compile(
         resources,
+        given.specification,
         &request.entry,
         environment,
         request.specification_schema,
@@ -261,15 +273,18 @@ pub fn select_with_resolver(
 }
 
 /// Capture the entry and the producing specifications its links name under
-/// the captured environment, then compile.
+/// the captured environment, then compile. `entry` names the entry to
+/// `resources`, and `given` is the path the caller passed.
 fn compile(
     resources: Resources,
+    given: &str,
     entry: &str,
     environment: crate::project_source::OwnedEnvironment,
     specification_schema: Arc<CapturedSchema>,
 ) -> Result<Selected, SelectionError> {
-    let entry = crate::file_entry::capture(resources, entry, environment, specification_schema)
-        .map_err(|error| SelectionError::Preparation(Error::Entry(error)))?;
+    let entry =
+        crate::file_entry::capture(resources, given, entry, environment, specification_schema)
+            .map_err(|error| SelectionError::Preparation(Error::Entry(error)))?;
     FileSpecification::from_workflow(entry).map_err(SelectionError::Compile)
 }
 
@@ -302,26 +317,28 @@ pub fn select_with_optional_resources(
     let (resources, environment) = capture_environment(
         resources,
         entry,
-        environment,
+        environment.map(|environment| (environment, environment)),
         host,
         Arc::clone(&specification_schema),
         project_schemas,
     )
     .map_err(SelectionError::Preparation)?;
-    compile(resources, entry, environment, specification_schema)
+    compile(resources, entry, entry, environment, specification_schema)
 }
 
+/// Capture the project file `environment` names, as the path the caller gave
+/// and as `resources` name it, and what it declares. A project file that
+/// cannot be read is the caller's own path (FILE-7, FILE-8, FILE-11).
 fn capture_environment(
     mut resources: Resources,
     entry: &str,
-    environment: Option<&str>,
+    environment: Option<(&str, &str)>,
     host: Option<Language>,
     specification_schema: Arc<CapturedSchema>,
     project_schemas: ProjectSchemas,
 ) -> Result<(Resources, crate::project_source::OwnedEnvironment), Error> {
     let owned_entry = entry.to_owned();
-    let owned_environment = environment.map(str::to_owned);
-    let Some(environment) = environment else {
+    let Some((given, environment)) = environment else {
         return Ok((
             resources,
             crate::project_source::OwnedEnvironment::without_environment(host),
@@ -334,10 +351,11 @@ fn capture_environment(
         project_schemas.clone(),
     ) {
         Ok(environment) => Ok((resources, environment)),
+        Err(file_project::Error::Resource(error)) => Err(caller(given, error)),
         Err(error) => Err(Error::Environment(Box::new(RejectedEnvironment {
             error,
             entry: Some(owned_entry),
-            environment: owned_environment,
+            environment: Some(environment.to_owned()),
             specification_schema,
             project_schemas,
             resources,
@@ -348,50 +366,58 @@ fn capture_environment(
 #[cfg(all(test, feature = "yaml"))]
 mod root_read_tests {
     use super::*;
-    #[test]
-    fn classified_unreadable_root_projects_without_new_captures_or_losing_its_owner() {
-        let root =
-            std::env::temp_dir().join(format!("yamaa-env-read-facts-{}", std::process::id()));
-        std::fs::create_dir(&root).unwrap();
-        struct Cleanup(std::path::PathBuf);
-        impl Drop for Cleanup {
-            fn drop(&mut self) {
-                std::fs::remove_dir_all(&self.0).unwrap();
-            }
-        }
-        let _cleanup = Cleanup(root.clone());
-        let entry = root
-            .join("absent-entry.yaml")
-            .to_string_lossy()
-            .into_owned();
-        let environment = root.join("environment.yaml").to_string_lossy().into_owned();
-        let configured = configure(&entry, Some(&environment)).unwrap();
-        let path = configured.environment.clone().unwrap();
-        let rejection = Error::Environment(Box::new(RejectedEnvironment {
-            error: file_project::Error::Resource(crate::file_resources::Error::Unreadable),
-            entry: Some(configured.entry),
-            environment: configured.environment,
-            specification_schema: configured.specification_schema,
-            project_schemas: configured.project_schemas,
-            resources: configured.resources,
-        }));
-        let Error::Environment(owner) = &rejection else {
-            unreachable!()
-        };
-        let original = owner.error() as *const file_project::Error;
-        let issues = crate::project_application::preparation_issues(&rejection).unwrap();
-        assert_eq!(issues.len(), 1);
-        let definition =
-            yamaa_core::diagnostic::ConditionCode::ProjectEnvironmentMissing.definition();
-        assert_eq!(issues[0].condition(), definition.condition);
-        assert_eq!(issues[0].rule(), definition.rule);
-        assert_eq!(
-            yamaa_core::json::Value::Object(issues[0].context.clone()),
-            crate::json!({"cause":"unreadable", "path":path})
-        );
+    use crate::host_resources::{Failure, Reply, Request, ResourceKind};
 
-        assert_eq!(owner.error() as *const file_project::Error, original);
-        assert_eq!(owner.capture_reads(), 0);
-        assert_eq!(owner.captured_sources().count(), 0);
+    /// A resolver that serves nothing, reporting every name as `failure`.
+    struct Refusing(Failure);
+    impl crate::host_resources::Resolver for Refusing {
+        fn request(&self, _: Request<'_>) -> Result<Reply, Failure> {
+            Err(self.0)
+        }
+    }
+
+    /// A project file that cannot be read is the caller's own path: named as
+    /// given, before anything is captured, with its file rule's condition
+    /// when the resolver reports a kind and the opaque refusal otherwise.
+    #[test]
+    fn an_unreadable_project_file_is_the_callers_own_path_before_any_capture() {
+        for (failure, expected) in [
+            (
+                Failure::Missing,
+                crate::json!({"path": "study/project.yaml"}),
+            ),
+            (
+                Failure::Kind(ResourceKind::Junction),
+                crate::json!({"path": "study/project.yaml"}),
+            ),
+            (
+                Failure::Unreadable,
+                crate::json!({"step": "prepare", "code": "resource_unreadable"}),
+            ),
+        ] {
+            let rejection = select_with_resolver(
+                yamaa_core::build::Request {
+                    specification: "study/dm.yaml",
+                    environment: Some("study/project.yaml"),
+                },
+                Some(Language::Python),
+                Arc::new(Refusing(failure)),
+            )
+            .err()
+            .unwrap();
+            let SelectionError::Preparation(Error::Caller { path, .. }) = &rejection else {
+                panic!("the caller's own path: {rejection:?}")
+            };
+            assert_eq!(path, "study/project.yaml");
+            assert!(rejection.retained_sources().is_empty());
+            let issues = crate::project_application::selection_failure(&rejection);
+            assert_eq!(issues.len(), 1);
+            assert!(issues[0].spec_paths.is_empty());
+            assert_eq!(
+                yamaa_core::json::Value::Object(issues[0].context.clone()),
+                expected,
+                "{failure:?}"
+            );
+        }
     }
 }

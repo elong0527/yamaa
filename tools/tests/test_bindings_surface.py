@@ -2,6 +2,7 @@
 
 import copy
 import json
+import re
 import shutil
 import tempfile
 import unittest
@@ -18,9 +19,9 @@ DRAFT = generator.DEFINITION.with_name("bindings-1.0.yaml")
 def draft():
     """The 1.0 draft, which later pull requests move into bindings.yaml.
 
-    Only its records, cli, values and operations are read here, so a plain
-    load suffices: its public section still has a YAML 1.1 boolean key, which
-    the closed loader refuses.
+    Only its records and values are read here, so a plain load suffices: its
+    public section still has a YAML 1.1 boolean key, which the closed loader
+    refuses.
     """
     with DRAFT.open(encoding="utf-8") as stream:
         return yaml.safe_load(stream)
@@ -240,13 +241,10 @@ class GrammarTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, message):
                     surface.validate_records(candidate, planned["values"])
 
-    def test_the_command_line_grammar_accepts_the_draft(self):
-        planned = draft()
-        surface.validate_cli(planned["cli"], planned["values"], planned["operations"])
-        self.assertEqual(self.definition["cli"], {})
+    def test_the_command_line_names_every_command_and_global_flag(self):
         surface.validate_cli({}, {}, {})
         self.assertEqual(
-            surface.cli_names(planned["cli"]),
+            surface.cli_names(self.definition["cli"]),
             {
                 "check",
                 "run",
@@ -263,7 +261,7 @@ class GrammarTests(unittest.TestCase):
         )
 
     def test_the_command_line_grammar_refuses_malformed_commands(self):
-        planned = draft()
+        definition = self.definition
         mutations = [
             ("unknown keys", lambda c: c.update(environment="none")),
             ("is missing", lambda c: c.pop("commands")),
@@ -292,14 +290,33 @@ class GrammarTests(unittest.TestCase):
                 "invalid argument name",
                 lambda c: c["commands"][0]["args"][0].update(name="path"),
             ),
+            # The command line's own vocabularies, which --format names.
+            ("names an undeclared vocabulary", lambda c: c.pop("values")),
+            (
+                "shadows values.file_type",
+                lambda c: c["values"].update(file_type=["spec"]),
+            ),
+            (
+                "has an invalid value",
+                lambda c: c["values"]["output_format"].append("JSON"),
+            ),
+            (
+                "lists a value twice",
+                lambda c: c["values"]["output_format"].append("text"),
+            ),
+            # A refusal prints the command's own document, whose keys are named.
+            (
+                "resolve.refusal_keys must be a nonempty list",
+                lambda c: c["commands"][3].update(refusal_keys="the issues"),
+            ),
         ]
         for message, mutate in mutations:
             with self.subTest(message=message):
-                candidate = copy.deepcopy(planned["cli"])
+                candidate = copy.deepcopy(definition["cli"])
                 mutate(candidate)
                 with self.assertRaisesRegex(ValueError, message):
                     surface.validate_cli(
-                        candidate, planned["values"], planned["operations"]
+                        candidate, definition["values"], definition["operations"]
                     )
 
 
@@ -316,25 +333,42 @@ class ManifestTests(unittest.TestCase):
         self.assertEqual(len(lines), len(set(lines)))
         self.assertFalse([line for line in lines if "meaning" in line or "::" in line])
 
-    def test_the_command_line_and_records_of_the_draft_render_as_lines(self):
-        planned = draft()
+    def test_the_command_line_and_records_render_as_lines(self):
         definition = generator._load_definition()
-        definition["records"] = planned["records"]
-        definition["cli"] = planned["cli"]
         lines = surface.manifest_lines(definition)
         for expected in (
             "records.info.fields[0]: version: str",
             "records.info.fields[2]: features: list<str>, values feature",
+            "cli.synopsis: yamaa --help",
+            "cli.values.output_format.json",
             "cli.global_flags.--format: values output_format; default text",
-            "cli.exit_status.2: " + planned["cli"]["exit_status"][2],
+            "cli.global_flags.--help: flag",
+            "cli.exit_status.2: " + definition["cli"]["exit_status"][2],
             "cli.commands.lint: yamaa lint [--fix] PATH...",
             "cli.commands.lint.args[0]: PATH: path, repeated",
+            "cli.commands.schema.args[0]: TYPE: file_type",
             "cli.commands.read-odm.flags.--max-xml-depth: N; default 64",
             "cli.commands.check.json_keys.status",
+            "cli.commands.schema.refusal_keys.type",
             "cli.json.issue_keys.operand_route",
         ):
             with self.subTest(expected=expected):
                 self.assertIn(expected, lines)
+        # The resolved specification has no fixed keys, so only its refusal's
+        # keys give lines.
+        self.assertEqual(
+            [line for line in lines if re.match(r"cli\.commands\.resolve[.:]", line)],
+            [
+                "cli.commands.resolve: yamaa resolve PATH [--spec NAME]",
+                "cli.commands.resolve.args[0]: PATH: path",
+                "cli.commands.resolve.flags.--spec: NAME",
+                "cli.commands.resolve.refusal_keys.command",
+                "cli.commands.resolve.refusal_keys.path",
+                "cli.commands.resolve.refusal_keys.spec",
+                "cli.commands.resolve.refusal_keys.status",
+                "cli.commands.resolve.refusal_keys.issues",
+            ],
+        )
         self.assertEqual(len(lines), len(set(lines)))
 
 

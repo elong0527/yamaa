@@ -1,7 +1,7 @@
 phase: derivation
 condition: ln_of_nonpositive
 spec_paths:
-  - columns.AVALLN.derivation.compute
+  - columns.AVALLN.derivation
 rule: FORMULA-15
 context:
   expr: "LN(AVAL)"

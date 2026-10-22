@@ -306,7 +306,8 @@ stopifnot(nrow(built$issues)==0L,inherits(unheld,"yamaa_error"),
   identical(conditionMessage(unheld),"integer -9223372036854775808 is beyond 2^53 and cannot be held exactly by an R double"),
   identical(built$report$COUNT[[1L]],2))
 writeLines("[changed",entry); writeLines("changed",file.path(directory,"input.csv"))
-stopifnot(refused_save(built),identical(built$issues$condition,"engine_rejected"))
+# The output directory does not exist (FILE-7).
+stopifnot(refused_save(built),identical(built$issues$condition,"resource_path_missing"))
 dir.create(file.path(directory,"absent"))
 stopifnot(saved(built),nrow(built$issues)==0L,identical(rawfile(file.path(directory,"absent/output.csv")),fixture_bytes(host_truth[["integer_boundary_csv"]])))
 # A missing project file refuses every project operation before any
@@ -315,16 +316,15 @@ absent <- yamaa_project("absent-project.yaml")
 refused <- absent$run()
 stopifnot(identical(refused$names,character()),identical(names(refused$report),report_columns),
   nrow(refused$report)==0L,identical(refused$issues$phase,"validation"),
-  identical(refused$issues$condition,"project_environment_missing"),
-  identical(refused$issues$rule,"FUNC-1"),identical(refused$issues$spec_paths,list("environment")),
-  identical(refused$issues$context,paste0('{"cause":"missing","path":',
-    json_text(file.path(normalizePath(getwd(),winslash="/"),"absent-project.yaml")),'}')),
+  identical(refused$issues$condition,"resource_path_missing"),
+  identical(refused$issues$rule,"FILE-7"),identical(refused$issues$spec_paths,list(character())),
+  identical(refused$issues$context,'{"path":"absent-project.yaml"}'),
   identical(refused$issues,absent$check()$issues),
   save_refused(refused))
+# The caller's own path, named as given at no field (FILE-7).
 unread <- tryCatch(absent$spec("TEST"),error=identity)
 stopifnot(inherits(unread,"yamaa_error"),identical(conditionMessage(unread),paste0("cannot select TEST: ",
-    "environment needs an environment file for this host that is not declared or cannot be read ",
-    "[project_environment_missing, FUNC-1]")),
+    "absent-project.yaml does not exist [resource_path_missing, FILE-7]")),
   identical(unread$issues,refused$issues))
 # Argument mistakes are ordinary errors, never yamaa_error.
 argument <- tryCatch(yamaa_spec(NULL)$run(),error=identity)
@@ -361,7 +361,9 @@ for(late in c(FALSE,TRUE)) for(existing in c(FALSE,TRUE)) {
   if(late) {
     stopifnot(identical(unlink(link,recursive=TRUE),0L),!file.exists(link),file.symlink(outside,link))
   }
-  stopifnot(refused_save(built),identical(built$issues$context,'{"code":"invalid_target","stage":"output"}'),
+  # A link on the way to the target (FILE-8).
+  stopifnot(refused_save(built),identical(built$issues$condition,"resource_path_symlink"),
+            identical(built$issues$context,'{"path":"link/output.csv"}'),
             identical(list.files(outside,all.files=TRUE,no..=TRUE),if(existing) c("output.csv","sentinel") else "sentinel"))
   stopifnot(identical(rawfile(sentinel),sentinel_bytes))
   if(existing) stopifnot(identical(rawfile(target),charToRaw("retained")))

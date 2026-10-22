@@ -351,7 +351,7 @@ fn a_missing_first_match_value_does_not_skip_a_later_one() {
         padded(&"9".repeat(81)).run(),
         Err(vec![json!({
             "phase": "engine", "condition": "engine_rejected", "rule": null,
-            "spec_paths": [], "context": {"code": "result_projection", "stage": "build"}
+            "spec_paths": [], "context": {"code": "result_projection", "step": "build"}
         })])
     );
 }

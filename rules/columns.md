@@ -387,9 +387,8 @@ A derivation that needs stage 3 wraps its expression in `value`:
 
 ```yaml
 derivation:
-  value:
-    source: RAW.AGE
-  unconvertible: {literal: null}
+  value: RAW.AGE
+  unconvertible: null
 ```
 
 The wrapper is written only beside `unconvertible`: a wrapper holding `value`

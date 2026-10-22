@@ -1,7 +1,5 @@
 #![cfg(feature = "yaml")]
 //! File contracts.
-#[allow(dead_code)]
-mod support;
 mod file {
     mod producer_links {
         //! A `schema` link types a stored artifact from its producing

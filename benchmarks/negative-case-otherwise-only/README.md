@@ -21,9 +21,9 @@ everyone else as the last item:
 ```yaml
 case:
   - when: "AGE >= 65"
-    then: {literal: "Y"}
-  - otherwise: {literal: "N"}
+    then: "'Y'"
+  - otherwise: "'N'"
 ```
 
 When every subject genuinely takes the same value, write that value alone,
-`{literal: "N"}`, without `case`.
+`derivation: "'N'"`, without `case`.

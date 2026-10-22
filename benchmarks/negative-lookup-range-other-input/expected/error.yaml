@@ -1,7 +1,7 @@
 phase: validation
 condition: unknown_field
 spec_paths:
-  - intermediates[0].between.value
+  - intermediates.REFRANGE.between.value
 rule: LOOKUP-9
 context:
   identifier: DM.AGE

@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
@@ -15,6 +17,7 @@ intermediates:
   # keep says whether the first or the last one supplies the treatment.
   - id: DOSING
     dataset: EX
+    key: [STUDYID, USUBJID]
     order_by: [EX.EXSTDTC, EX.EXSEQ]
     require_match: true
 

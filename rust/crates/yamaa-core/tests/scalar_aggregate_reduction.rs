@@ -1,6 +1,4 @@
 //! Scalar contracts.
-#[allow(dead_code)]
-mod support;
 mod scalar {
     mod aggregate_reduction {
         use yamaa_core::{

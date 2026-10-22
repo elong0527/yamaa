@@ -1,6 +1,4 @@
 //! Schema contracts.
-#[allow(dead_code)]
-mod support;
 mod schema {
     mod specification_submission_document {
         use yamaa_core::{

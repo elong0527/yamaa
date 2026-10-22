@@ -1,7 +1,5 @@
 #![cfg(feature = "yaml")]
 //! Declaration contracts.
-#[allow(dead_code)]
-mod support;
 mod declaration {
     mod schema_capture {
         use yamaa_adapters::json;
@@ -183,7 +181,7 @@ mod declaration {
             assert_eq!(
                 capture_failure(&error),
                 Rejection::Fault(yamaa_core::application_issue::rejected(
-                    yamaa_core::application_issue::Stage::Capture,
+                    yamaa_core::application_issue::Step::Capture,
                     yamaa_core::application_issue::Fault::SchemaBundle,
                 ))
             );

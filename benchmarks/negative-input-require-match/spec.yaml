@@ -1,11 +1,14 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADAE
 keys: [STUDYID, USUBJID, AESEQ]
 input:
   AE: {path: input/ae.csv, types: {AESEQ: int, AESTDTC: date}}
   # Every adverse event belongs to a subject of the analysis population, so
   # each must find its subject-level record. Subject 104 has none.
-  ADSL: {path: input/adsl.csv, types: {TRTSDT: date}, require_match: true}
+  ADSL: {path: input/adsl.csv, types: {TRTSDT: date},
+         key: [STUDYID, USUBJID], require_match: true}
 base: AE
 
 output:

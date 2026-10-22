@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
@@ -29,7 +31,7 @@ columns:
     label: Date/Time of Last Exposure to Treatment
     derivation: DM.TRTEDT
 
-  # Counting both end dates is defined only for a day count, so inclusive
+  # Counting both end dates is defined only for a day count, so closed: both
   # beside unit: month is rejected before any data is read.
   - name: TRTDURM
     type: int
@@ -40,4 +42,4 @@ columns:
         start: TRTSDT
         end: TRTEDT
         unit: month
-        bounds: inclusive
+        closed: both

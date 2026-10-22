@@ -28,6 +28,7 @@ the output domain, then read through that name:
 intermediates:
   - id: FIRSTEX
     dataset: EX
+    key: [STUDYID, USUBJID]
     order_by: [EX.EXSTDTC, EX.EXSEQ]
     keep: first
 

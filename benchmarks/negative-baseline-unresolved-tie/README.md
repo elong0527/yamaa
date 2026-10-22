@@ -32,11 +32,11 @@ add it after the collection time:
 ```yaml
 baseline_flag:
   date: ADT
-  reference_date: TRTSDT
-  value: AVAL
-  tie_break: [ATM, LBSEQ]
+  reference: TRTSDT
+  source: AVAL
   window:
     group_by: [USUBJID]
+    order_by: [ADT, ATM, LBSEQ]
 ```
 
 Order by the term the study names; the sequence number above stands in for
