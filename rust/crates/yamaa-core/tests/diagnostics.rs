@@ -333,7 +333,7 @@ mod diagnostics {
                     "FORMULA-15",
                 ),
             ] {
-                let plan = compile_numeric(expression, "columns.X.compute").unwrap();
+                let plan = compile_numeric(expression, "columns.X").unwrap();
                 let error = plan.evaluate_number(&mut Bindings).unwrap_err();
                 let diagnostic = error.diagnostic().unwrap();
                 let definition = diagnostic.definition();
@@ -341,7 +341,7 @@ mod diagnostics {
                     (definition.phase, definition.condition, definition.rule),
                     (phase, condition, Some(rule))
                 );
-                assert_eq!(diagnostic.spec_paths, ["columns.X.compute"]);
+                assert_eq!(diagnostic.spec_paths, ["columns.X"]);
                 assert_eq!(
                     diagnostic.context["expr"],
                     JsonValue::String(expression.into())
@@ -890,7 +890,7 @@ mod diagnostics {
         #[test]
         fn nested_failure_retains_location_and_full_width_context() {
             let expression = "1 + (9223372036854775807 + 1)";
-            let error = compile_numeric(expression, "columns.X.compute")
+            let error = compile_numeric(expression, "columns.X")
                 .unwrap()
                 .evaluate_number(&mut Bindings)
                 .unwrap_err();
@@ -909,13 +909,13 @@ mod diagnostics {
             // A literal outside the int range is refused before any value is read.
             let Err(CompileError::Invalid {
                 position, failure, ..
-            }) = compile_numeric("9223372036854775808", "columns.Y.compute")
+            }) = compile_numeric("9223372036854775808", "columns.Y")
             else {
                 panic!("an overflowing literal is refused")
             };
             let literal = failure.diagnostic(
                 Context::Compute,
-                "columns.Y.compute",
+                "columns.Y",
                 "9223372036854775808",
                 position.character,
             );

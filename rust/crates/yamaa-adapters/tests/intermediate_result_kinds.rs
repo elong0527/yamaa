@@ -32,7 +32,8 @@ impl Study {
 fn identity(specification: &str) -> Identity<'_> {
     crate::support::study::identity("test", specification)
 }
-const SPECIFICATION: &str = "schema_version: '1.0'
+const SPECIFICATION: &str = "yamaa: \"1.0\"
+type: spec
 domain: ADSL
 keys: [USUBJID]
 input: {EX: ex.csv}
@@ -41,12 +42,12 @@ output: {path: out.csv, columns: [USUBJID, TRTSDT, TRTEDT]}
 intermediates:
   - id: EXP
     dataset: EX
+    key: [USUBJID]
     derivations:
       EXSTDT: {to_date: {source: EXSTDTC}}
       EXENDT0: {to_date: {source: EXENDTC}}
       EXENDT: DERIVATION
     filter: 'EX.EXENDT >= EX.EXSTDT'
-    no_match: {literal: null}
 columns:
   - {name: USUBJID, type: str, derivation: EX.USUBJID}
   - {name: TRTSDT, type: date, derivation: EXP.EXSTDT}
@@ -137,7 +138,7 @@ fn selector_kind_flows_to_later_derivations_and_qualified_source_objects() {
                 "EXENDT: DERIVATION",
                 &format!(
                     "EXCHOICE: {{{operation}: {{sources: [EX.EXENDT0, EX.EXSTDT]}}}}\n      \
-                     EXENDT: {{first_available: {{sources: [{{variable: EX.EXCHOICE, filter: 'EX.EXSTDT IS NOT NULL'}}, EX.EXSTDT], missing: {{literal: null}}}}}}"
+                     EXENDT: {{first_available: {{sources: [{{variable: EX.EXCHOICE, filter: 'EX.EXSTDT IS NOT NULL'}}, EX.EXSTDT], missing: null}}}}"
                 ),
             ),
             expected,
@@ -183,7 +184,7 @@ fn known_date_choices_reject_incompatible_filter_types_in_check_and_build() {
         assert_eq!(checked.len(), 1, "{operation}: {checked:?}");
         assert_eq!(checked[0].condition(), "incompatible_input_type");
         assert_eq!(checked[0].rule(), Some("FORMULA-5"));
-        assert_eq!(checked[0].spec_paths, ["intermediates[0].filter"]);
+        assert_eq!(checked[0].spec_paths, ["intermediates.EXP.filter"]);
         assert_eq!(
             yamaa_core::json::Value::Object(checked[0].context.clone()),
             yamaa_adapters::json!({"left_type":"date","right_type":"str"})
@@ -216,7 +217,7 @@ fn heterogeneous_specification(expression: &str) -> String {
 }
 const HETEROGENEOUS_CHOICES: [&str; 2] = [
     "{first_available: {sources: [EXENDT0, EXSTDT], missing: 17}}",
-    "{case: [{when: 'EX.EXENDT0 IS NOT NULL', then: EXENDT0}, {otherwise: {literal: 17}}]}",
+    "{case: [{when: 'EX.EXENDT0 IS NOT NULL', then: EXENDT0}, {otherwise: 17}]}",
 ];
 
 #[test]
@@ -288,7 +289,7 @@ fn unknown_choices_report_the_actual_integer_when_date_sources_are_missing() {
         assert_eq!(issues.len(), 1, "{expression}: {issues:?}");
         assert_eq!(issues[0].condition(), "incompatible_input_type");
         assert_eq!(issues[0].rule(), Some("FORMULA-5"));
-        assert_eq!(issues[0].spec_paths, ["intermediates[0].filter"]);
+        assert_eq!(issues[0].spec_paths, ["intermediates.EXP.filter"]);
         assert_eq!(
             yamaa_core::json::Value::Object(issues[0].context.clone()),
             yamaa_adapters::json!({"left_type":"int","right_type":"date"})
@@ -353,7 +354,7 @@ fn assert_integer_day_count(expression: &str, integer_row: &str, float_row: &str
     assert_eq!(issues[0].rule(), Some("TIME-14"));
     assert_eq!(
         issues[0].spec_paths,
-        ["intermediates[0].derivations.EXENDT.shift.days"]
+        ["intermediates.EXP.derivations.EXENDT.shift.days"]
     );
     assert_eq!(
         yamaa_core::json::Value::Object(issues[0].context.clone()),
@@ -383,7 +384,7 @@ fn nullif_over_an_int_and_a_float_is_refused_as_integer_days_when_bound() {
         .edit("EX: ex.csv", "EX: {path: ex.csv, types: {EXINT: int, EXFLOAT: float}}")
         .edit(
             "EXENDT: DERIVATION",
-            "SELECTED: {compute: {expr: 'NULLIF(EXINT, EXFLOAT)'}}\n      EXENDT: {shift: {type: date, source: EXSTDT, days: SELECTED}}",
+            "SELECTED: 'NULLIF(EXINT, EXFLOAT)'\n      EXENDT: {shift: {type: date, source: EXSTDT, days: SELECTED}}",
         );
     let study = Study::new(&specification);
     let path = study.specification();
@@ -397,7 +398,7 @@ fn nullif_over_an_int_and_a_float_is_refused_as_integer_days_when_bound() {
         assert_eq!(issues[0].rule(), Some("TIME-14"));
         assert_eq!(
             issues[0].spec_paths,
-            ["intermediates[0].derivations.EXENDT.shift.days"]
+            ["intermediates.EXP.derivations.EXENDT.shift.days"]
         );
         assert_eq!(
             yamaa_core::json::Value::Object(issues[0].context.clone()),
@@ -430,7 +431,8 @@ fn nullif_over_an_int_and_a_float_is_refused_as_integer_days_when_bound() {
 /// type when the `float` argument is missing, as when it is present.
 #[test]
 fn nullif_widens_its_int_result_when_the_float_argument_is_missing() {
-    let specification = "schema_version: '1.0'
+    let specification = "yamaa: \"1.0\"
+type: spec
 domain: ADSL
 keys: [USUBJID]
 input: {EX: {path: ex.csv, types: {EXINT: int, EXFLOAT: float}}}
@@ -440,7 +442,7 @@ columns:
   - {name: USUBJID, type: str, derivation: EX.USUBJID}
   - {name: EXINT, type: int, derivation: EX.EXINT}
   - {name: EXFLOAT, type: float, derivation: EX.EXFLOAT}
-  - {name: VALUE, type: str, derivation: {compute: {expr: 'NULLIF(EXINT, EXFLOAT)'}}}
+  - {name: VALUE, type: str, derivation: 'NULLIF(EXINT, EXFLOAT)'}
 ";
     let study = Study::new(specification);
     let path = study.specification();
@@ -518,7 +520,7 @@ fn unknown_kind_survives_later_aliases_and_choices() {
 fn unknown_kind_flows_through_an_earlier_selector_in_dependency_order() {
     let specification = heterogeneous_specification(HETEROGENEOUS_CHOICES[0])
         .edit("    filter: 'EX.EXENDT >= EX.ANCHOR'\n", "")
-        .edit("intermediates:\n", "intermediates:\n  - id: EXP2\n    dataset: EX\n    derivations:\n      COPY: EXP.EXENDT\n      ANCHOR2: EXP.ANCHOR\n    filter: 'EX.COPY >= EX.ANCHOR2'\n    no_match: {literal: null}\n")
+        .edit("intermediates:\n", "intermediates:\n  - id: EXP2\n    dataset: EX\n    key: [USUBJID]\n    derivations:\n      COPY: EXP.EXENDT\n      ANCHOR2: EXP.ANCHOR\n    filter: 'EX.COPY >= EX.ANCHOR2'\n")
         .edit("derivation: EXP.EXENDT", "derivation: EXP2.COPY");
     let study = Study::new(&specification);
     let path = study.specification();
@@ -595,7 +597,7 @@ fn generic_predicate_consumers_use_the_named_intermediates_unknown_kind() {
 fn unknown_numeric_operands_do_not_invent_an_integer_result_kind() {
     let specification = SPECIFICATION
         .edit("EX: ex.csv", "EX: {path: ex.csv, types: {EXINT: int, EXFLOAT: float}}")
-        .edit("EXENDT: DERIVATION", "SELECTED: {first_available: {sources: [EXINT, EXFLOAT]}}\n      RESULT: {compute: {expr: 'SELECTED + 1'}}\n      EXENDT: EXENDT0")
+        .edit("EXENDT: DERIVATION", "SELECTED: {first_available: {sources: [EXINT, EXFLOAT]}}\n      RESULT: 'SELECTED + 1'\n      EXENDT: EXENDT0")
         .edit("filter: 'EX.EXENDT >= EX.EXSTDT'", "filter: \"EX.RESULT >= 'not a number'\"");
     let study = Study::new(&specification);
     let path = study.specification();
@@ -623,7 +625,7 @@ fn unknown_numeric_operands_do_not_invent_an_integer_result_kind() {
     let issues = result.issues();
     assert_eq!(issues.len(), 1, "{issues:?}");
     assert_eq!(issues[0].condition(), "incompatible_input_type");
-    assert_eq!(issues[0].spec_paths, ["intermediates[0].filter"]);
+    assert_eq!(issues[0].spec_paths, ["intermediates.EXP.filter"]);
     assert_eq!(
         yamaa_core::json::Value::Object(issues[0].context.clone()),
         yamaa_adapters::json!({"left_type":"float","right_type":"str"})
@@ -632,7 +634,8 @@ fn unknown_numeric_operands_do_not_invent_an_integer_result_kind() {
 }
 
 fn nested_lookup_specification() -> &'static str {
-    "schema_version: '1.0'
+    "yamaa: \"1.0\"
+type: spec
 domain: TEST
 keys: [USUBJID]
 input: {EX: ex.csv}
@@ -643,15 +646,14 @@ intermediates:
     dataset: EX
     derivations:
       DATE: {to_date: {source: EXENDTC}}
-    key: {DATE: {source: EX.CHOICE}}
-    no_match: {literal: null}
+    key: {DATE: EX.CHOICE}
   - id: RESULT
     dataset: EX
+    key: [USUBJID]
     derivations:
       DATE: {to_date: {source: EXSTDTC}}
       CHOICE: {first_available: {sources: [DATE], missing: 17}}
       SELECTED: DATES.DATE
-    no_match: {literal: null}
 columns:
   - {name: USUBJID, type: str, derivation: EX.USUBJID}
   - {name: SELECTED, type: date, derivation: RESULT.SELECTED}
@@ -689,13 +691,11 @@ fn assert_nested_lookup_output(specification: &str, input: &str, expected: &[u8]
 
 #[test]
 fn nested_lookup_keys_retain_unknown_current_kinds() {
-    for expression in [
-        "{source: EX.CHOICE}",
-        "EX.CHOICE",
-        "{greatest: {sources: [EX.CHOICE]}}",
-    ] {
+    // 1.0 writes the name alone where 0.5 also wrapped it in `source` (D18).
+    for expression in ["EX.CHOICE", "{greatest: {sources: [EX.CHOICE]}}"] {
         assert_nested_lookup_output(
-            &nested_lookup_specification().edit("{source: EX.CHOICE}", expression),
+            &nested_lookup_specification()
+                .edit("{DATE: EX.CHOICE}", &format!("{{DATE: {expression}}}")),
             "S01,2024-01-01,2024-01-01\n",
             b"USUBJID,SELECTED\nS01,2024-01-01\n",
         );
@@ -747,21 +747,18 @@ fn assert_nested_lookup_type_error(
 
 #[test]
 fn nested_lookup_keys_report_actual_incompatible_types_instead_of_no_match() {
+    // 1.0 writes the name alone where 0.5 also wrapped it in `source` (D18).
     for (expression, source, path) in [
-        (
-            "{source: EX.CHOICE}",
-            "key[DATE]",
-            "intermediates[0].key.DATE",
-        ),
-        ("EX.CHOICE", "EX.CHOICE", "intermediates[0].key"),
+        ("EX.CHOICE", "EX.CHOICE", "intermediates.DATES.key"),
         (
             "{greatest: {sources: [EX.CHOICE]}}",
             "key[DATE]",
-            "intermediates[0].key.DATE",
+            "intermediates.DATES.key.DATE",
         ),
     ] {
         assert_nested_lookup_type_error(
-            &nested_lookup_specification().edit("{source: EX.CHOICE}", expression),
+            &nested_lookup_specification()
+                .edit("{DATE: EX.CHOICE}", &format!("{{DATE: {expression}}}")),
             source,
             path,
         );
@@ -779,8 +776,8 @@ fn unknown_keys_keep_no_match_when_missing_and_refuse_an_incomparable_filtered_d
             "    key: {DATE:",
             "    filter: \"EX.USUBJID = 'S02'\"\n    key: {DATE:",
         ),
-        "key[DATE]",
-        "intermediates[0].key.DATE",
+        "EX.CHOICE",
+        "intermediates.DATES.key",
     );
 }
 
@@ -795,7 +792,7 @@ fn raw_boolean_key_values_use_equality_without_requiring_an_order() {
         ("false", b"USUBJID,SELECTED\nS01,\n".as_slice()),
     ] {
         let specification = nested_lookup_specification()
-            .edit("{to_date: {source: EXENDTC}}", "{literal: true}")
+            .edit("{to_date: {source: EXENDTC}}", "true")
             .edit("missing: 17", &format!("missing: {missing}"))
             .edit("SELECTED: DATES.DATE", "SELECTED: DATES.USUBJID")
             .edit(
@@ -809,11 +806,11 @@ fn raw_boolean_key_values_use_equality_without_requiring_an_order() {
 #[test]
 fn incompatible_raw_key_pairs_fail_independently_of_another_pairs_order_or_value() {
     for pairs in [
-        "USUBJID: {literal: S02}, DATE: {source: EX.CHOICE}",
-        "DATE: {source: EX.CHOICE}, USUBJID: {literal: S02}",
+        "USUBJID: \"'S02'\", DATE: EX.CHOICE",
+        "DATE: EX.CHOICE, USUBJID: \"'S02'\"",
     ] {
-        let specification = nested_lookup_specification().edit("DATE: {source: EX.CHOICE}", pairs);
-        assert_nested_lookup_type_error(&specification, "key[DATE]", "intermediates[0].key.DATE");
+        let specification = nested_lookup_specification().edit("DATE: EX.CHOICE", pairs);
+        assert_nested_lookup_type_error(&specification, "EX.CHOICE", "intermediates.DATES.key");
         assert_nested_lookup_no_match(&specification, "S01,,\n");
         assert_nested_lookup_no_match(&specification, "S01,2024-01-01,2024-01-02\n");
     }

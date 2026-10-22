@@ -402,7 +402,9 @@ mod project {
         }
     }
     mod producer_links {
+        //! A 1.0 consumer prepared with the output contracts its `schema` links name.
         use crate::support::producer as support;
+        use crate::support::specification::{prepare, prepare_linked};
         use support::{consumer, document, link, links, producer, Tree, CONSUMER};
         use yamaa_core::json::Value as V;
         use yamaa_core::schema::DocumentNode as N;
@@ -430,9 +432,7 @@ mod project {
             // consumer's compilation: only its selected output contract does.
             let source = producer();
             let consumer = consumer(None);
-            let compiled =
-                PreparedSpecification::prepare_linked(&consumer, None, links(&[link(&source)]))
-                    .unwrap();
+            let compiled = prepare_linked(&consumer, None, links(&[link(&source)])).unwrap();
             assert_eq!(compiled.sources().len(), 1);
             assert_eq!(compiled.sources()[0].name, "SRC");
             assert_eq!(compiled.sources()[0].path, "produced.csv");
@@ -484,8 +484,7 @@ mod project {
             let mut b = link(&source);
             a.dataset = "A";
             b.dataset = "B";
-            let compiled =
-                PreparedSpecification::prepare_linked(&consumer, None, links(&[a, b])).unwrap();
+            let compiled = prepare_linked(&consumer, None, links(&[a, b])).unwrap();
             assert_eq!(
                 compiled
                     .sources()
@@ -508,7 +507,7 @@ mod project {
                 Tree::map(vec![]),
                 Tree::Scalar(N::Null),
             ] {
-                let findings = invalid(PreparedSpecification::prepare_linked(
+                let findings = invalid(prepare_linked(
                     &consumer(Some(types)),
                     None,
                     links(&[link(&source)]),
@@ -530,14 +529,12 @@ mod project {
             let source = producer();
             let consumer = consumer(None);
             for supplied in [Links::default(), links(&[])] {
-                let findings = invalid(PreparedSpecification::prepare_linked(
-                    &consumer, None, supplied,
-                ));
+                let findings = invalid(prepare_linked(&consumer, None, supplied));
                 assert_eq!(findings[0].context["reason"], text("missing_metadata"));
             }
-            let findings = invalid(PreparedSpecification::prepare(&consumer));
+            let findings = invalid(prepare(&consumer));
             assert_eq!(findings[0].context["reason"], text("missing_metadata"));
-            let findings = invalid(PreparedSpecification::prepare_linked(
+            let findings = invalid(prepare_linked(
                 &consumer,
                 None,
                 links(&[link(&source), link(&source)]),
@@ -545,7 +542,7 @@ mod project {
             assert_eq!(findings[0].context["reason"], text("duplicate_metadata"));
             let mut extra = link(&source);
             extra.dataset = "ABSENT";
-            let findings = invalid(PreparedSpecification::prepare_linked(
+            let findings = invalid(prepare_linked(
                 &consumer,
                 None,
                 links(&[link(&source), extra]),
@@ -559,13 +556,9 @@ mod project {
             let own = Link {
                 dataset: "SRC",
                 identity: CONSUMER,
-                document: consumer.document(),
+                document: &consumer,
             };
-            let findings = invalid(PreparedSpecification::prepare_linked(
-                &consumer,
-                None,
-                links(&[own]),
-            ));
+            let findings = invalid(prepare_linked(&consumer, None, links(&[own])));
             assert_eq!(findings.len(), 1);
             assert_eq!(findings[0].spec_paths, ["input.SRC.schema"]);
             let definition = findings[0].definition();
@@ -588,7 +581,7 @@ mod project {
                 &["ID", "ID", "OTHER"],
                 false,
             );
-            let findings = invalid(PreparedSpecification::prepare_linked(
+            let findings = invalid(prepare_linked(
                 &consumer(None),
                 None,
                 links(&[link(&source)]),
@@ -629,12 +622,12 @@ mod project {
                 true,
             );
             assert!(
-                matches!(PreparedSpecification::prepare_linked(&consumer, None, links(&[link(&source)])), Err(PrepareError::Unsupported(features)) if features.iter().any(|f| f.path=="parent" && f.operation == "parent"))
+                matches!(prepare_linked(&consumer, None, links(&[link(&source)])), Err(PrepareError::Unsupported(features)) if features.iter().any(|f| f.path=="parent" && f.operation == "parent"))
             );
         }
         #[test]
         fn actual_metadata_comparison_is_ordered_typed_bounded_and_portable() {
-            let contract = producer_contract::prepare(&producer()).unwrap();
+            let contract = producer_contract::prepare_document(&producer()).unwrap();
             assert!(contract
                 .validate_header("SRC", &["ID", "VALUE"])
                 .unwrap()
@@ -709,11 +702,7 @@ mod project {
             a.dataset = "A";
             let mut b = link(&other);
             b.dataset = "B";
-            let findings = invalid(PreparedSpecification::prepare_linked(
-                &consumer,
-                None,
-                links(&[a, b]),
-            ));
+            let findings = invalid(prepare_linked(&consumer, None, links(&[a, b])));
             assert_eq!(findings[0].spec_paths, ["input.B.schema"]);
             assert_eq!(
                 findings[0].context["reason"],

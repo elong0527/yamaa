@@ -653,11 +653,12 @@ mod relations {
         //! Row admission uses original named selectors and actual completed match values.
         use crate::support::document::Tree;
         use crate::support::resolved;
+        use crate::support::specification::{header, prepare};
         use crate::support::table_schema as schema;
         use yamaa_core::{
             dataset::resolved::Grain,
-            schema::{Document, DocumentNode as N, SpecificationDocument},
-            specification::{BindError, PrepareError, PreparedSpecification},
+            schema::{Document, DocumentNode as N},
+            specification::{BindError, PrepareError},
             value::{ColumnType as T, Value},
         };
 
@@ -666,18 +667,18 @@ mod relations {
             drivers: [Option<&str>; 2],
             grouped: bool,
             field: &str,
-        ) -> SpecificationDocument {
-            let source = |name| {
-                Tree::map(vec![(
-                    "value",
-                    Tree::map(vec![(
-                        "source",
-                        Tree::map(vec![("variable", Tree::text(name))]),
-                    )]),
-                )])
-            };
+        ) -> Document {
+            let source = |name| Tree::map(vec![("value", Tree::text(name))]);
+            // A template another input drives joins SRC on the key SRC
+            // declares, the output key ID (D23).
             let mut inputs = vec![
-                ("SRC", Tree::map(vec![("path", Tree::text("src.csv"))])),
+                (
+                    "SRC",
+                    Tree::map(vec![
+                        ("path", Tree::text("src.csv")),
+                        ("key", Tree::List(vec![Tree::text("ID")])),
+                    ]),
+                ),
                 ("DONOR", Tree::map(vec![("path", Tree::text("donor.csv"))])),
             ];
             if reordered {
@@ -700,8 +701,8 @@ mod relations {
                 }
                 rows.push(Tree::map(fields));
             }
-            let tree = Tree::map(vec![
-                ("schema_version", Tree::text("1.0")),
+            let mut fields = header();
+            fields.extend([
                 ("domain", Tree::text("TEST")),
                 ("input", Tree::map(inputs)),
                 ("keys", Tree::List(vec![Tree::text("ID")])),
@@ -711,10 +712,7 @@ mod relations {
                         ("id", Tree::text("P")),
                         ("dataset", Tree::text("DONOR")),
                         ("key", Tree::map(vec![("K", Tree::text("KEY"))])),
-                        (
-                            "no_match",
-                            Tree::map(vec![("literal", Tree::Scalar(N::Null))]),
-                        ),
+                        ("absent", Tree::Scalar(N::Null)),
                     ])]),
                 ),
                 (
@@ -758,24 +756,15 @@ mod relations {
                     ]),
                 ),
             ]);
-            let mut nodes = Vec::new();
-            let root = tree.append(&mut nodes);
-            SpecificationDocument::admit(Document::new(nodes, root).unwrap())
-                .unwrap()
-                .unwrap()
+            Tree::map(fields).document()
         }
         #[test]
         fn common_authored_input_needs_no_base_and_can_follow_secondary_input_in_written_order() {
             let src = schema(&[("ID", T::Str), ("K", T::Str)]);
             let donor = schema(&[("K", T::Str), ("V", T::Str)]);
             for reordered in [false, true] {
-                let prepared = PreparedSpecification::prepare(&doc(
-                    reordered,
-                    [Some("SRC"), Some("SRC")],
-                    false,
-                    "P.V",
-                ))
-                .unwrap();
+                let prepared =
+                    prepare(&doc(reordered, [Some("SRC"), Some("SRC")], false, "P.V")).unwrap();
                 assert_eq!(prepared.source().name, "SRC");
                 let schemas = if reordered {
                     vec![&donor, &src]
@@ -809,12 +798,9 @@ mod relations {
         #[test]
         fn unknown_and_omitted_drivers_keep_model_preflight_and_exact_typed_context() {
             for (driver, expected) in [(Some("ABSENT"), Some("ABSENT")), (None, None)] {
-                let Err(PrepareError::Invalid(findings)) = PreparedSpecification::prepare(&doc(
-                    false,
-                    [Some("SRC"), driver],
-                    false,
-                    "P.V",
-                )) else {
+                let Err(PrepareError::Invalid(findings)) =
+                    prepare(&doc(false, [Some("SRC"), driver], false, "P.V"))
+                else {
                     panic!("preflight")
                 };
                 assert_eq!(findings.len(), 1);
@@ -827,7 +813,7 @@ mod relations {
                     ),
                     ("validation", "driver_unavailable", Some("ROW-1"))
                 );
-                assert_eq!(diagnostic.spec_paths, ["rows[1].dataset"]);
+                assert_eq!(diagnostic.spec_paths, ["rows.second.dataset"]);
                 assert_eq!(diagnostic.context.len(), 2);
                 assert_eq!(
                     diagnostic.context["row"],
@@ -845,13 +831,8 @@ mod relations {
         }
         #[test]
         fn foreign_driver_defaults_require_raw_keys_and_grouped_named_reads_bind() {
-            let prepared = PreparedSpecification::prepare(&doc(
-                false,
-                [Some("SRC"), Some("DONOR")],
-                false,
-                "P.V",
-            ))
-            .unwrap();
+            let prepared =
+                prepare(&doc(false, [Some("SRC"), Some("DONOR")], false, "P.V")).unwrap();
             let src = schema(&[("ID", T::Str), ("K", T::Str)]);
             let donor = schema(&[("K", T::Str), ("V", T::Str)]);
             let Err(BindError::Invalid(findings)) = prepared.bind_sources(&[&src, &donor]) else {
@@ -884,13 +865,7 @@ mod relations {
                     )])
                 );
             }
-            let prepared = PreparedSpecification::prepare(&doc(
-                false,
-                [Some("SRC"), Some("SRC")],
-                true,
-                "P.V",
-            ))
-            .unwrap();
+            let prepared = prepare(&doc(false, [Some("SRC"), Some("SRC")], true, "P.V")).unwrap();
             let src = schema(&[("ID", T::Str), ("K", T::Str)]);
             let donor = schema(&[("K", T::Str), ("V", T::Str)]);
             let plan = prepared.bind_sources(&[&src, &donor]).unwrap();
@@ -902,13 +877,8 @@ mod relations {
         }
         #[test]
         fn unknown_named_field_retains_full_lookup_cause_at_authored_read_boundary() {
-            let prepared = PreparedSpecification::prepare(&doc(
-                false,
-                [Some("SRC"), Some("SRC")],
-                false,
-                "P.ABSENT",
-            ))
-            .unwrap();
+            let prepared =
+                prepare(&doc(false, [Some("SRC"), Some("SRC")], false, "P.ABSENT")).unwrap();
             let src = schema(&[("ID", T::Str), ("K", T::Str)]);
             let donor = schema(&[("K", T::Str), ("V", T::Str)]);
             let Err(BindError::Invalid(findings)) = prepared.bind_sources(&[&src, &donor]) else {
@@ -930,7 +900,10 @@ mod relations {
                 );
                 assert_eq!(
                     d.spec_paths,
-                    [format!("rows[{index}].derivations.ROWV.source")]
+                    [format!(
+                        "rows.{}.derivations.ROWV.source",
+                        ["first", "second"][index]
+                    )]
                 );
                 assert_eq!(
                     d.context,
@@ -943,13 +916,7 @@ mod relations {
         }
         #[test]
         fn complete_source_metadata_is_preserved_even_without_source_rows() {
-            let prepared = PreparedSpecification::prepare(&doc(
-                false,
-                [Some("SRC"), Some("SRC")],
-                false,
-                "P.V",
-            ))
-            .unwrap();
+            let prepared = prepare(&doc(false, [Some("SRC"), Some("SRC")], false, "P.V")).unwrap();
             let huge = "q".repeat(1_000_000);
             let src = schema(&[("ID", T::Str), ("K", T::Str), (&huge, T::Str)]);
             let donor = schema(&[("K", T::Str), ("V", T::Str)]);
