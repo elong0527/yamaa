@@ -109,9 +109,9 @@ intermediate's ([ROW-2](rows.md#row-2)), and a field of that input names
 nothing the row holds either.
 
 The read fails validation as `unknown_field` at the operand that names it: the
-operation's `source`, `date`, `reference_date`, `value` or `tie_break` entry,
-an entry of `window.group_by` or `window.order_by`, or `window.filter` for
-each qualified name the filter reads. A window in a `case` result
+operation's `source`, `date` or `reference` entry, an entry of
+`window.group_by` or `window.order_by`, or `window.filter` for each qualified
+name the filter reads. A window in a `case` result
 ([EXPR-3](expressions.md#expr-3)) and a named window
 ([WINDOW-2](#window-2)) are checked where they are used. The finding names the
 field as `identifier`, the distinct drivers of the row templates in
@@ -119,9 +119,9 @@ construction order as `drivers`, and the window operation as `operation`.
 
 Bring such a value onto every row as its own column, which each row completes
 in its own scope, and name the column. A column-level `source` reads the
-record of the row's own driver and joins another input on the output keys
-([LOOKUP-1](lookup.md#lookup-1)), and a row template may derive the column
-itself:
+record of the row's own driver and joins another input on that input's
+declared `key` ([LOOKUP-1](lookup.md#lookup-1)), and a row template may derive
+the column itself:
 
 ```yaml
 columns:

@@ -31,7 +31,5 @@ already computed:
   derivation: LB.AVAL
 - name: AVALDOUBLED
   type: float
-  derivation:
-    compute:
-      expr: "AVAL * 2"
+  derivation: "AVAL * 2"
 ```

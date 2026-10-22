@@ -1,8 +1,11 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADSL
 keys: [STUDYID, USUBJID, MAXDOSE]
 input:
-  EX: {path: input/ex.csv, types: {EXSTDY: int, EXDOSE: float}}
+  EX: {path: input/ex.csv, types: {EXSTDY: int, EXDOSE: float},
+       key: [STUDYID, USUBJID]}
 
 output:
   path: adsl.csv

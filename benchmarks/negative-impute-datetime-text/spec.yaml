@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADSL
 keys: [STUDYID, USUBJID, EXSEQ]
 input:
@@ -36,5 +38,4 @@ columns:
       impute:
         type: datetime
         source: EX.EXSTDTC
-        minimum_source_precision: day
         time: first

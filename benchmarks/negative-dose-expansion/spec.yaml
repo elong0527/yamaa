@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADEX
 keys: [STUDYID, USUBJID, EXSEQ, ADOSEN]
 input:
@@ -84,17 +86,17 @@ rows:
   - id: dose_1
     filter: "EX.EXDOSCNT >= 1"
     derivations:
-      ADOSEN: {literal: 1}
+      ADOSEN: 1
 
   - id: dose_2
     filter: "EX.EXDOSCNT >= 2"
     derivations:
-      ADOSEN: {literal: 2}
+      ADOSEN: 2
 
   - id: dose_3
     filter: "EX.EXDOSCNT >= 3"
     derivations:
-      ADOSEN: {literal: 3}
+      ADOSEN: 3
 
 verifications:
   # Fails on every row of a record counting more administrations than

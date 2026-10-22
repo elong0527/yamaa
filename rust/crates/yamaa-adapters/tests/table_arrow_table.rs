@@ -1,6 +1,4 @@
 //! Table contracts.
-#[allow(dead_code)]
-mod support;
 mod table {
     mod arrow_table {
         use crate::support::table_schema as logical_schema;

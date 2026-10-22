@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADLB
 keys: [STUDYID, USUBJID, ADT, PARAMCD]
 input:
@@ -68,33 +70,31 @@ columns:
     derivation:
       case:
         - when: "PARAMCD = 'ASTALT'"
-          then:
-            compute:
-              expr: "ASTVAL / NULLIF(ALTVAL, 0)"
+          then: "ASTVAL / NULLIF(ALTVAL, 0)"
         - otherwise: LBRESN
 
 rows:
   - id: alt
     filter: "LB.LBTESTCD = 'ALT'"
     derivations:
-      PARAMCD: {literal: ALT}
-      PARAM: {literal: Alanine Aminotransferase}
+      PARAMCD: "'ALT'"
+      PARAM: "'Alanine Aminotransferase'"
       LBRESN: LB.LBSTRESN
 
   - id: ast
     filter: "LB.LBTESTCD = 'AST'"
     derivations:
-      PARAMCD: {literal: AST}
-      PARAM: {literal: Aspartate Aminotransferase}
+      PARAMCD: "'AST'"
+      PARAM: "'Aspartate Aminotransferase'"
       LBRESN: LB.LBSTRESN
 
   # One ratio row per ALT record; its value comes from AVAL above.
   - id: ast_alt_ratio
     filter: "LB.LBTESTCD = 'ALT'"
     derivations:
-      PARAMCD: {literal: ASTALT}
-      PARAM: {literal: Aspartate to Alanine Aminotransferase Ratio}
-      LBRESN: {literal: null}
+      PARAMCD: "'ASTALT'"
+      PARAM: "'Aspartate to Alanine Aminotransferase Ratio'"
+      LBRESN: null
 
 verifications:
   - row_count:

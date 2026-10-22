@@ -1,6 +1,4 @@
 //! Relations contracts.
-#[allow(dead_code)]
-mod support;
 mod relations {
     mod reference_scope {
         use yamaa_core::{

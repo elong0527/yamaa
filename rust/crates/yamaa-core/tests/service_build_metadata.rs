@@ -1,6 +1,4 @@
 //! Service contracts.
-#[allow(dead_code)]
-mod support;
 mod service {
     mod build_metadata {
         //! Independent original-entry and admission-order controls for the shared Build boundary.

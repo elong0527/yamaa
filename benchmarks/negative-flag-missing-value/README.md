@@ -28,5 +28,5 @@ flag:
   missing: N
 ```
 
-Write `missing: {literal: null}` instead to leave the flag missing when the age
-is unknown.
+Write `missing: null` instead to leave the flag missing when the age is
+unknown.

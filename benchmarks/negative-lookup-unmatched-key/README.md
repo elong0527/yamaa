@@ -29,5 +29,5 @@ intermediates:
 
 The lookup then returns a missing value for every column read through it when
 a complete key has no match, and the run counts each such answer under
-`no_match`. Declaring `no_match` beside `require_match: true` is refused as a
+`absent`. Declaring `absent` beside `require_match: true` is refused as a
 contradiction.

@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
@@ -17,6 +19,7 @@ intermediates:
   # not count), so the run fails before any output row is built.
   - id: DS_EOS
     dataset: DS
+    key: [STUDYID, USUBJID]
     filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.DSDECOD <> 'SCREEN FAILURE'"
     require_match: true
     verifications:

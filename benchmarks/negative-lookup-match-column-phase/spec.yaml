@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADVS
 keys: [STUDYID, USUBJID, ADY]
 input:
@@ -16,7 +18,6 @@ intermediates:
     dataset: PERIODS
     key: [STUDYID]
     between: {value: ASEQ, lower: FIRST, upper: LAST}
-    no_match: null
 
 columns:
   - {name: STUDYID, type: str, label: Study Identifier}

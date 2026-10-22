@@ -30,7 +30,6 @@ impute:
   source: AE.AESTDTC
   month: 1
   day: 1
-  minimum_source_precision: year
 ```
 
 A year-and-month value such as `2023-06` then becomes `2023-06-01`, and a

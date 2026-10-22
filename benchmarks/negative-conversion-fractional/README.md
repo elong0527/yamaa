@@ -24,5 +24,5 @@ precision by declaring the result as `float`:
 
 If the result must be an integer, the specification must choose an explicit
 rule, such as `round_half_away_from_zero` with `digits: 0`, or `FLOOR`,
-`CEIL`, or `TRUNC` in a `compute` expression; conversion will not choose a
-rounding rule implicitly.
+`CEIL`, or `TRUNC` in the derivation's expression; conversion will not choose
+a rounding rule implicitly.

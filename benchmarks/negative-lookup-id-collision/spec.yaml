@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
@@ -15,6 +17,7 @@ intermediates:
   # dataset name EX, so a later EX.EXTRT could mean either one.
   - id: EX
     dataset: EX
+    key: [STUDYID, USUBJID]
     order_by: [EX.EXSTDTC, EX.EXSEQ]
     keep: first
     require_match: true

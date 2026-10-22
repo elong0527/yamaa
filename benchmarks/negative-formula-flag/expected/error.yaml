@@ -1,7 +1,7 @@
 phase: validation
 condition: prohibited_construct
 spec_paths:
-  - columns.HIFL.derivation.compute.expr
+  - columns.HIFL.derivation
 rule: FORMULA-27
 context:
   expr: "AVAL > ANRHI"
