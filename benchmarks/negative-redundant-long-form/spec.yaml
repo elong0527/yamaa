@@ -1,9 +1,12 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
   DM: input/dm.csv
-  VS: {path: input/vs.csv, types: {VSSEQ: int, WEIGHT: float}}
+  VS: {path: input/vs.csv, types: {VSSEQ: int, WEIGHT: float},
+       key: [STUDYID, USUBJID]}
 base: DM
 
 output:

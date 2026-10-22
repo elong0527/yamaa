@@ -1,7 +1,7 @@
 phase: validation
 condition: prohibited_function
 spec_paths:
-  - columns.AVALTOT.derivation.compute.expr
+  - columns.AVALTOT.derivation
 rule: FORMULA-13
 context:
   expr: "SUM(AVAL)"
