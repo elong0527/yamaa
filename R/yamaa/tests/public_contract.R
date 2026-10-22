@@ -228,7 +228,7 @@ run_contract <- function() {
   # The caller's own path, named as given at no field (FILE-7).
   stopifnot(identical(checked$condition, "resource_path_missing"), identical(checked$rule, "FILE-7"),
     identical(checked$spec_paths, list(character())),
-    identical(checked$context, paste0('{"path":"', path("absent.yaml"), '"}')),
+    identical(jsonlite::fromJSON(checked$context, simplifyVector = FALSE), list(path = path("absent.yaml"))),
     is.null(run$output), is.null(run$report), identical(run$issues, checked))
   for (attempt in 1:2) {
     error <- refusal(run$save())
@@ -369,6 +369,30 @@ qualify_callbacks <- function() {
       expected <- if (stage == "conformance") 1L else if (stage == "derivation") 3L else 0L
       stopifnot(identical(seen, interrupted), identical(invoked, expected), !file.exists(file.path(case, "test.csv")))
     }
+  }
+  # Windows cannot send SIGINT to the current process with tools::pskill.
+  if (.Platform$OS.type == "unix") {
+    for (entry_name in names(entries)) {
+      invoked <- 0L
+      resolve_signal <- function(call, parameters) {
+        resolved <- capabilities$resolve(call, parameters)
+        if (resolved[[1L]] != 0L) return(resolved)
+        invoke <- resolved[[2L]]
+        list(0L, function(arguments) {
+          invoked <<- invoked + 1L
+          if (invoked == host_truth[["signal_interrupt_calls"]]) tools::pskill(Sys.getpid(), signal = 2L)
+          invoke(arguments)
+        })
+      }
+      seen <- with_capabilities(capabilities$verify, resolve_signal,
+        tryCatch(entries[[entry_name]](), interrupt = identity))
+      actual <- list(interrupt = inherits(seen, "interrupt"), calls = invoked,
+        published = file.exists(file.path(case, "test.csv")))
+      expected <- list(interrupt = TRUE, calls = as.integer(host_truth[["signal_interrupt_calls"]]), published = FALSE)
+      if (!identical(actual, expected)) stop(paste("SIGINT callback", entry_name, "did not stop without publishing"))
+    }
+  } else {
+    cat("SKIP: in-process SIGINT requires tools::pskill on Unix\n")
   }
   long_condition <- structure(list(message = paste0(strrep("\u00e9\n", 30000L), "complete failure"), call = NULL),
     class = c("public_contract_error", "error", "condition"))
@@ -575,7 +599,7 @@ qualify_project_refusals <- function() {
   stopifnot(identical(conditionMessage(error), error_text("unread_project", absent)),
     identical(unread$condition, "resource_path_missing"),
     identical(unread$spec_paths, list(character())),
-    identical(unread$context, paste0('{"path":"', absent, '"}')),
+    identical(jsonlite::fromJSON(unread$context, simplifyVector = FALSE), list(path = absent)),
     identical(check_issues(project$check()$issues), unread))
   error <- refusal(project$names)
   stopifnot(identical(conditionMessage(error), error_text("unread_project_names", absent)),

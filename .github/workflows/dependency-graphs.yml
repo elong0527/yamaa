@@ -2,15 +2,24 @@ name: Dependency graphs
 
 # Every graph is resolved and built from scratch. The declared ranges and the
 # advisory policy in rust/deny.toml and osv-scanner.toml are release claims,
-# so this release lane runs on dispatch before a release.
+# so this release lane runs on dispatch before a release. It also runs weekly
+# on main, because what it proves changes without a commit: a new advisory
+# or a lapsed ignore fails the advisory checks, and a new release of a
+# dependency changes the graphs that the same manifests resolve to, which
+# Cargo's guide to continuous integration asks a project to keep testing.
+# The Main health workflow reports a failing main run.
 on:
   workflow_dispatch:
+  schedule:
+    - cron: '53 5 * * 3'
 
 permissions:
   contents: read
 
+# The event is part of the group, so the weekly run cancels no dispatched run
+# on main, and a dispatch cancels no weekly run.
 concurrency:
-  group: dependency-graphs-${{ github.ref }}
+  group: dependency-graphs-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 defaults:

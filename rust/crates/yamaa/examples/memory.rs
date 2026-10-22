@@ -74,7 +74,10 @@ pub fn main() {
         assert!(!output.ipc().unwrap().is_empty());
         // A save returns what it wrote; a caller's resolver names each file
         // by the reference its target reply gave.
-        assert_eq!(run.save().unwrap(), ["memory:/out.csv"]);
+        assert_eq!(
+            run.save(&CancellationToken::new()).unwrap(),
+            ["memory:/out.csv"]
+        );
         assert!(resolver.published("memory:/out.csv").is_some());
         assert_eq!(resolver.staged_count(), 0);
         println!("memory example: 2 output rows, save published memory:/out.csv");
@@ -82,7 +85,11 @@ pub fn main() {
         // Without document admission the same calls report typed diagnostics.
         assert!(check.issues().rows() > 0);
         assert!(run.output().is_none());
-        assert!(run.save().unwrap_err().paths.is_empty());
+        assert!(run
+            .save(&CancellationToken::new())
+            .unwrap_err()
+            .paths
+            .is_empty());
         println!("memory example: unavailable without the yaml feature, as reported");
     }
 

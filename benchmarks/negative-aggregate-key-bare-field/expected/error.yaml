@@ -1,0 +1,7 @@
+phase: validation
+condition: unknown_field
+spec_paths:
+  - columns.NCAL.derivation.aggregate.key.DEVICEID
+rule: LOOKUP-5
+context:
+  identifier: DEVNUM

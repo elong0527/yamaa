@@ -399,6 +399,7 @@ fn select_earlier(
                 .map(|_| index)
         })
         .collect::<std::collections::BTreeSet<_>>();
+    let direct = required.clone();
     // A referenced selector may itself read an earlier selector. Retain its
     // transitive current-record dependencies, preserving their original slots.
     for index in (0..previous.len()).rev() {
@@ -421,6 +422,7 @@ fn select_earlier(
     let earlier = rebase(
         previous,
         &required,
+        &direct,
         &mut unavailable,
         sources,
         schemas,
@@ -759,10 +761,51 @@ fn unused_slot_placeholder(
     }
 }
 
+/// The first key value of `item`, a lookup that a range value reads for the
+/// donor record, that reads no field of that record (LOOKUP-16): a field of
+/// another input's record, or an output column or contextual name the donor
+/// record does not store.
+#[allow(clippy::too_many_arguments)]
+fn chained_key(
+    item: &Intermediate,
+    donor: Option<usize>,
+    driver: usize,
+    donor_name: &str,
+    authored: &dyn Fn(usize) -> Result<usize, BindError>,
+    donor_field: &dyn Fn(&str) -> Option<usize>,
+    outer: &TableSchema,
+) -> Option<String> {
+    item.keys.iter().find_map(|key| {
+        if let crate::dataset::MatchValue::Contextual(declaration) = &key.value {
+            let name = declaration.identifier();
+            let local = name
+                .strip_prefix(&format!("{donor_name}."))
+                .or_else(|| (!name.contains('.')).then_some(name));
+            return local
+                .and_then(donor_field)
+                .is_none()
+                .then(|| name.to_owned());
+        }
+        key.value.reads().find_map(|read| {
+            let readable = match read {
+                crate::dataset::MatchRead::Output { column, .. } => {
+                    donor_field(&outer.columns()[*column].name).is_some()
+                }
+                crate::dataset::MatchRead::SecondaryRecord { source, .. } => {
+                    authored(source + 1).is_ok_and(|authored| Some(authored) == donor)
+                }
+                crate::dataset::MatchRead::Record { .. } => Some(driver) == donor,
+            };
+            (!readable).then(|| read.identifier().to_owned())
+        })
+    })
+}
+
 #[allow(clippy::too_many_arguments)]
 fn rebase(
     previous: &[Option<Intermediate>],
     required: &std::collections::BTreeSet<usize>,
+    direct: &std::collections::BTreeSet<usize>,
     unavailable: &mut BTreeMap<usize, String>,
     sources: &[SourceDeclaration],
     schemas: &[&TableSchema],
@@ -781,20 +824,27 @@ fn rebase(
 ) -> Result<Vec<Option<Intermediate>>, BindError> {
     let mut result = previous.to_vec();
     let original_secondary = outer_secondary(sources, schemas, driver);
+    let one_meaning = tree.spec().header.surface.one_meaning_per_form();
+    // The authored input whose record a current read at record port `owner`
+    // reads in the outer plan.
+    let authored = |owner: usize| -> Result<usize, BindError> {
+        if owner == 0 {
+            Ok(driver)
+        } else {
+            sources
+                .iter()
+                .position(|source| source.name == original_secondary[owner - 1].name)
+                .ok_or(BindError::Internal)
+        }
+    };
+    let donor_field = |name: &str| output.columns().iter().position(|field| field.name == name);
     let current_field = |field: &CurrentField| -> Result<CurrentField, BindError> {
         let read = match field.read {
             CurrentRead::Record {
                 source: owner,
                 column,
             } => {
-                let authored = if owner == 0 {
-                    driver
-                } else {
-                    sources
-                        .iter()
-                        .position(|source| source.name == original_secondary[owner - 1].name)
-                        .ok_or(BindError::Internal)?
-                };
+                let authored = authored(owner)?;
                 CurrentRead::Record {
                     source: if Some(authored) == donor {
                         0
@@ -826,6 +876,10 @@ fn rebase(
             CurrentRead::Intermediate { index, column } => {
                 CurrentRead::Intermediate { index, column }
             }
+            // A bare name reads the donor record's field of that name.
+            CurrentRead::Contextual => {
+                CurrentRead::Output(donor_field(&field.identifier).ok_or(BindError::Internal)?)
+            }
         };
         Ok(CurrentField {
             identifier: field.identifier.clone(),
@@ -850,15 +904,42 @@ fn rebase(
             .source_schema(&original_secondary)
             .ok_or(BindError::Internal)?
             .clone();
-        let missing = item.current_fields().find_map(|field| match field.read {
-            CurrentRead::Output(column) => (!output
-                .columns()
-                .iter()
-                .any(|field| field.name == outer.columns()[column].name))
-            .then(|| field.identifier.clone()),
-            CurrentRead::Intermediate { index, .. } => unavailable.get(&index).cloned(),
-            CurrentRead::Record { .. } => None,
-        });
+        let missing = item
+            .current_fields()
+            .find_map(|field| match field.read {
+                CurrentRead::Output(column) => (!output
+                    .columns()
+                    .iter()
+                    .any(|field| field.name == outer.columns()[column].name))
+                .then(|| field.identifier.clone()),
+                CurrentRead::Intermediate { index, .. } => unavailable.get(&index).cloned(),
+                // A donor read gives the donor record alone (LOOKUP-16): on a
+                // 1.0 tree the record of any other input names no value of it.
+                CurrentRead::Record { source: owner, .. } => (one_meaning
+                    && authored(owner).is_ok_and(|authored| Some(authored) != donor))
+                .then(|| field.identifier.clone()),
+                CurrentRead::Contextual => donor_field(&field.identifier)
+                    .is_none()
+                    .then(|| field.identifier.clone()),
+            })
+            .or_else(|| {
+                // A lookup a range value reads runs for the donor record too,
+                // so its key values read that record alone. The read of a
+                // lookup a derivation reads refuses its own key values.
+                (one_meaning && !direct.contains(&index))
+                    .then(|| {
+                        chained_key(
+                            item,
+                            donor,
+                            driver,
+                            donor_name,
+                            &authored,
+                            &donor_field,
+                            outer,
+                        )
+                    })
+                    .flatten()
+            });
         if let Some(identifier) = missing {
             // Retain the unavailable name until its actual read is bound, so
             // the finding belongs to the reading derivation's operand path.

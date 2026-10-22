@@ -70,7 +70,7 @@ fn range_deferred(
         Some(CurrentRead::Intermediate { index, .. }) => {
             intermediate_deferred(index, deferred, intermediates)
         }
-        Some(CurrentRead::Record { .. }) | None => false,
+        Some(CurrentRead::Record { .. } | CurrentRead::Contextual) | None => false,
     }
 }
 pub(super) fn expression_deferred(

@@ -6,6 +6,7 @@ mod api_entry;
 mod arrow_bridge;
 mod context_values;
 mod function_callback;
+mod interrupt;
 mod project_activation;
 #[pymodule]
 fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {

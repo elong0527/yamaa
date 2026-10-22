@@ -213,9 +213,9 @@ fn fix_rewrites_the_file_and_lists_what_remains() {
     );
 }
 
-/// The command line's text, authored from `api.md` ("lint()") and the
-/// draft's `cli.commands`: one `file:line:column: finding message` line per
-/// finding, then `N lint findings in M of K files`.
+/// The command line's text, authored from `api.md` ("lint()") and
+/// `bindings.yaml`'s `cli.commands`: one `file:line:column: finding message`
+/// line per finding, then `N lint findings in M of K files`.
 #[test]
 fn findings_print_as_the_style_line_and_the_summary_line() {
     let directory = Directory::new("print");

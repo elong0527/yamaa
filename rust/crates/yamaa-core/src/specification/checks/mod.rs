@@ -417,3 +417,35 @@ pub(super) fn type_name(kind: ColumnType) -> &'static str {
         ColumnType::DateTime => "datetime",
     }
 }
+
+/// Whether another lookup's derivations read the lookup at `index`: binding
+/// then binds its match per reading context, for each row and for each donor
+/// record that reads it (LOOKUP-16).
+pub(super) fn donor_read(spec: &Spec, index: usize) -> bool {
+    let item = &spec.intermediates[index];
+    spec.intermediates
+        .iter()
+        .enumerate()
+        .any(|(reader, other)| {
+            other.bindings.iter().any(|binding| {
+                spec.reads(binding.derivation.expr, ast::Scope::Donor(reader))
+                    .iter()
+                    .any(|read| read.name.owner() == Some(item.id.name.as_str()))
+            })
+        })
+}
+
+/// Whether a match value's reference `name` reads no value of the current
+/// row whatever an input stores (LOOKUP-5): a bare name that no column takes
+/// (NAME-3), or a name qualified by a lookup, by `SELF` or by nothing
+/// declared. Only an input's field is left for its records to decide.
+pub(super) fn unknown_match_value(
+    spec: &Spec,
+    prepared: &PreparedSpecification,
+    name: &str,
+) -> bool {
+    match name.split_once('.') {
+        None => !spec.columns.iter().any(|column| column.name.name == name),
+        Some((owner, _)) => !prepared.sources.iter().any(|input| input.name == owner),
+    }
+}
