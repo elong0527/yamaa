@@ -467,15 +467,20 @@ suites run outside the checkout against an installed package: they import
 
 `R/yamaa/tests/*.R` are plain scripts: `R CMD check` runs each in a copy
 of the tests directory with the staged inputs beside it, and the first
-failing assertion ends the file. A script finds its inputs relative to
+failing assertion ends the file. The check runs every file
+(`--no-stop-on-test-error`), and `tools/commands/check_r.py` prints each
+failing file's whole `.Rout.fail`. A script finds its inputs relative to
 the working directory and sources the shared readers from
-`host-fixtures/` (`reader.R`, `context.R`); every shared R helper lives
-there, because a file in `rust/tests/host-fixtures/` is staged beside
-every suite and into the R source package. Each case is a
-`local({ ... })` block that creates its directory with `tempfile()` and
-removes it with `on.exit(unlink(dir, recursive = TRUE), add = TRUE)`.
-Name every assertion, so a failure says what was expected and for which
-case:
+`host-fixtures/` (`reader.R`, `context.R`, and `assert.R` for the
+labelled expectations and the helpers the suites share); every shared R
+helper lives there, because a file in `rust/tests/host-fixtures/` is
+staged beside every suite and into the R source package, while a file in
+`R/yamaa/tests/` is run as a suite. Each case is a `local({ ... })` block
+that creates its directory with `tempfile()` and removes it with
+`on.exit(unlink(dir, recursive = TRUE), add = TRUE)`. Name every
+assertion, so a failure says what was expected and for which case, and
+compare a whole value with `expect_identical()`, which shows both values
+when they differ:
 
 ```r
 stopifnot(
@@ -483,12 +488,15 @@ stopifnot(
   "the first issue is the refusal" =
     identical(issues$condition[[1]], expected$condition)
 )
+expect_identical(as.list(issues[c("condition", "rule")]),
+  list(condition = "range_failed", rule = "CHECK-7"), "the failed range check")
 ```
 
 A loop over cases wraps each case in `local()` and puts the case's name
-in its labels. A suggested package that is missing skips the file with a
-message, as the files do. A file holds one family, split by feature,
-because the first failure hides the rest.
+in its labels: `stopifnot_case(label, "what is expected" = ...)` names
+the case before the clause. A suggested package that is missing skips the
+file with a message, as the files do. A file holds one family, split by
+feature, because the first failure hides the rest.
 
 ### Shared truth across hosts
 

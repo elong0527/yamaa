@@ -4,11 +4,6 @@
 # same process still work. On Windows this runs the GNU build, whose unwinding
 # no Rust test reaches. Python reads the same truth.
 library(yamaa)
-# save() returns the absolute paths it wrote, invisibly, with forward slashes,
-# in publication order (D38); each one exists once written.
-returns_paths <- function(paths) is.character(paths) && length(paths) > 0L && !anyNA(paths) &&
-  all(grepl("^(/|[[:alpha:]]:/)", paths)) && !any(grepl("\\", paths, fixed = TRUE)) &&
-  all(file.exists(paths))
 # The truth is JSON, and jsonlite, which reads it, is a suggested package:
 # where it is not installed, the file is skipped.
 if (!requireNamespace("jsonlite", quietly = TRUE)) {
@@ -17,6 +12,7 @@ if (!requireNamespace("jsonlite", quietly = TRUE)) {
 }
 host_fixture_root <- normalizePath("host-fixtures",winslash="/",mustWork=TRUE)
 source(file.path(host_fixture_root,"reader.R"),local=TRUE)
+source(file.path(host_fixture_root,"assert.R"),local=TRUE)
 truth <- read_host_fixture(host_fixture_root, "parquet-containment")
 
 work <- tempfile("yamaa-parquet-containment-"); dir.create(work)
@@ -33,37 +29,19 @@ readable_csv <- charToRaw(enc2utf8(truth[["readable_csv"]]))
 saved_csv <- function() readBin(saved, "raw", file.size(saved))
 
 # Field for field, as public_contract.R compares the shared parity truth. A
-# truth row names its file relative to `directory`, the specification's; a
+# truth row names its file relative to the specification's directory; a
 # location names it by its absolute path (P-ISSUE-1).
-issues_equal <- function(frame, expected, directory) {
-  text <- function(field) vapply(expected, function(issue)
-    if (is.null(issue[[field]])) NA_character_ else issue[[field]], "")
-  number <- function(field) vapply(expected, function(issue)
-    if (is.null(issue[[field]])) NA_real_ else as.double(issue[[field]]), 0)
-  actual <- list(frame$severity, frame$phase, frame$condition, frame$rule, frame$spec_paths,
-    frame$file, frame$line, frame$column, frame$message, frame$context, frame$source_span,
-    frame$operand_route)
-  authored <- list(text("severity"), text("phase"), text("condition"), text("rule"),
-    lapply(expected, function(issue) as.character(unlist(issue$spec_paths))),
-    vapply(expected, function(issue)
-      if (is.null(issue$file)) NA_character_ else file.path(directory, issue$file), ""),
-    number("line"), number("column"), enc2utf8(text("message")),
-    enc2utf8(text("context")),
-    lapply(expected, function(issue)
-      if (is.null(issue$source_span)) NULL else as.double(unlist(issue$source_span))),
-    lapply(expected, function(issue)
-      if (is.null(issue$operand_route)) NULL else as.character(unlist(issue$operand_route))))
-  if (!identical(actual, authored)) { str(actual); str(authored) }
-  identical(actual, authored)
-}
-
 for (attempt in 1:2) {
   result <- yamaa_spec(contained)$run()
   failure <- tryCatch({result$save(); NULL}, yamaa_error = identity)
-  stopifnot(issues_equal(result$issues, truth[["issues"]], dirname(contained)), is.null(result$output),
-    inherits(failure, "yamaa_error"))
+  label <- sprintf("run %d of the panicking file", attempt)
+  expect_identical(issue_columns_of(result$issues), issue_truth(truth[["issues"]], dirname(contained)),
+    paste(label, "has the shared issue rows"))
+  stopifnot_case(label, "a contained panic leaves no output" = is.null(result$output),
+    "its save signals yamaa_error" = inherits(failure, "yamaa_error"))
   result <- yamaa_spec(readable)$run()
-  stopifnot(nrow(result$issues) == 0L, returns_paths(result$save()), identical(saved_csv(), readable_csv))
+  stopifnot_case(sprintf("run %d of the readable file", attempt), "the run has no issues" = nrow(result$issues) == 0L,
+    "the run saves" = returns_paths(result$save()), "the saved CSV is the authored one" = identical(saved_csv(), readable_csv))
 }
 cat("a decoder panic is source_parquet_invalid, and later reads in the process still work\n")
 
@@ -93,8 +71,9 @@ if (is.na(tests)) Sys.unsetenv("R_TESTS") else Sys.setenv(R_TESTS = tests)
 printed <- readLines(err)
 if (length(printed)) cat(printed, sep = "\n")
 conditions <- vapply(truth[["issues"]], function(issue) issue[["condition"]], "")
-stopifnot(identical(status, 0L), file.size(err) == 0,
-  identical(readLines(out), c(paste(conditions, collapse = " "), "")),
-  identical(saved_csv(), readable_csv))
+stopifnot("the child process succeeds" = identical(status, 0L),
+  "a contained panic prints nothing to stderr" = file.size(err) == 0)
+expect_identical(readLines(out), c(paste(conditions, collapse = " "), ""), "the child prints each run's conditions")
+expect_identical(saved_csv(), readable_csv, "the child saves the readable run")
 cat("a contained decoder panic prints nothing to stderr\n")
 unlink(work, recursive = TRUE)
