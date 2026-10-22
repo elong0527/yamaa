@@ -2,7 +2,7 @@
 
 These tests run R/yamaa/tools/configure.R, which configure and configure.win
 run, against fake cargo and rustc commands, and run the engine recipe of the
-Makevars that it writes with make. They need R; `make test-r` runs them.
+Makevars that it writes with make. Configure tests need R; `make test-r` runs them.
 Two tests run the recipes with the real Cargo of the Rust toolchain that the
 workspace selects; set RUSTUP_TOOLCHAIN to run them with another, such as the
 workspace rust-version.
@@ -13,6 +13,7 @@ import re
 import shlex
 import shutil
 import subprocess
+import sys
 import tarfile
 import tempfile
 import textwrap
@@ -877,6 +878,87 @@ class BuildRulesTests(unittest.TestCase):
         for name in ("cleanup", "cleanup.win"):
             with self.subTest(name=name):
                 self.assertTrue(os.access(PACKAGE / name, os.X_OK))
+
+
+@unittest.skipIf(MAKE is None or SH is None, "POSIX make and sh are not installed")
+class RustExportsTests(unittest.TestCase):
+    """The Windows DLL link prepares the archive outside R's nested build path."""
+
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.temporary = self.root / "temporary files"
+        self.temporary.mkdir()
+        self.archive = self.root / ("nested-" * 20) / ("install-" * 10) / "libyamaa_r.a"
+        self.archive.parent.mkdir(parents=True)
+        self.archive.write_bytes(b"original archive")
+        self.dll = self.root / "yamaa.dll"
+        self.record = self.root / "objcopy-directory.txt"
+        self.objcopy = self.root / "objcopy"
+        # GNU objcopy extracts archive members beside its input. Model the
+        # Windows limit with the long member name that a Rust archive can hold.
+        member = "yamaa_r-" + "rustc_std_workspace_alloc-" * 5 + "cgu.0.rcgu.o"
+        self.assertGreater(len(str(self.archive.parent / "sta00000" / member)), 260)
+        self.objcopy.write_text(
+            f"#!{sys.executable}\n"
+            "import os, sys\nfrom pathlib import Path\n"
+            "assert sys.argv[1] == '--remove-section=.drectve'\n"
+            "archive = Path(sys.argv[2])\n"
+            f"Path({str(self.record)!r}).write_text(str(archive.parent))\n"
+            f"if len(str(archive.parent / 'sta00000' / {member!r})) >= 260:\n"
+            "    raise SystemExit('archive member path exceeds MAX_PATH')\n"
+            "assert archive.read_bytes() == b'original archive'\n"
+            "archive.write_bytes(b'without directives')\n"
+            "if os.environ.get('OBJCOPY_FAIL') == '1':\n"
+            "    raise SystemExit('simulated objcopy failure')\n",
+            encoding="utf-8",
+        )
+        self.objcopy.chmod(0o755)
+        self.rules = self.root / "link.mk"
+        self.rules.write_text(
+            "$(RUST_LIB):\n\t@:\n$(SHLIB):\n"
+            '\ttest "$$(cat "$(RUST_LIB)")" = "without directives" && touch "$@"\n',
+            encoding="utf-8",
+        )
+
+    def link(self, failure=False):
+        if MAKE is None:
+            self.skipTest("make is not installed")
+        return subprocess.run(
+            [
+                MAKE,
+                "-f",
+                str(PACKAGE / "src/Makevars.win.in"),
+                "-f",
+                str(self.rules),
+                f"RUST_LIB={self.archive}",
+                f"SHLIB={self.dll}",
+                f"OBJCOPY={self.objcopy}",
+                str(self.dll),
+            ],
+            cwd=self.root,
+            env=os.environ
+            | {"TMPDIR": str(self.temporary), "OBJCOPY_FAIL": "1" if failure else "0"},
+            capture_output=True,
+            text=True,
+        )
+
+    def test_long_archive_member_names_are_prepared_in_a_temporary_directory(self):
+        result = self.link()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.archive.read_bytes(), b"without directives")
+        self.assertTrue(self.dll.is_file())
+        self.assertEqual(Path(self.record.read_text()).parent, self.temporary)
+        self.assertEqual(list(self.temporary.iterdir()), [])
+
+    def test_a_failed_archive_edit_leaves_the_original_and_links_nothing(self):
+        result = self.link(failure=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("simulated objcopy failure", result.stderr)
+        self.assertEqual(self.archive.read_bytes(), b"original archive")
+        self.assertFalse(self.dll.exists())
+        self.assertEqual(list(self.temporary.iterdir()), [])
 
 
 if __name__ == "__main__":
