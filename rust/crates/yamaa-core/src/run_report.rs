@@ -6,6 +6,7 @@
 //! and hands plain rows back to `assemble` here, then calls `verify` before any
 //! byte of the report is written.
 use crate::{
+    ast::Surface,
     dataset::{VerificationSeverity, SEVERITIES},
     diagnostic::ConditionCode,
     limits::{LimitExceeded, Limits},
@@ -145,6 +146,9 @@ pub struct Check {
 pub struct Facts {
     /// The specification's `output.path`.
     pub artifact: String,
+    /// The surface the specification is written in, which decides the
+    /// condition an `absent` handler answers ([`handler_condition`]).
+    pub surface: Surface,
     pub run: Run,
     pub inputs: Vec<Input>,
     pub rows: Vec<Rows>,
@@ -228,18 +232,22 @@ pub enum PreparedCell {
     Keys(Vec<Json>),
 }
 
-/// The output column a handler path belongs to: `columns.<NAME>...` or
-/// `rows[<i>].derivations.<NAME>...`. A handler of a named intermediate's own
-/// derivations or match keys belongs to no output column.
+/// The output column a handler path belongs to: `columns.<NAME>...` or a row
+/// template's `<row>.derivations.<NAME>...`, the row written `rows[<i>]` in a
+/// 0.5 file and `rows.<id>` or `rows['<id>']` in a 1.x file (P-CLR-2). A
+/// handler of a named intermediate's own derivations or match keys belongs to
+/// no output column.
 pub fn handler_target(path: &str) -> Option<&str> {
     let rest = if let Some(rest) = path.strip_prefix("columns.") {
         rest
     } else {
-        let rest = path.strip_prefix("rows[")?;
-        let (index, rest) = rest.split_once(']')?;
-        if index.is_empty() || !index.bytes().all(|byte| byte.is_ascii_digit()) {
-            return None;
-        }
+        let row = path.strip_prefix("rows")?;
+        let digits = |text: &str| !text.is_empty() && text.bytes().all(|b| b.is_ascii_digit());
+        let index = row.strip_prefix('[').and_then(|text| text.split_once(']'));
+        let rest = match index {
+            Some((index, rest)) if digits(index) => rest,
+            _ => crate::schema::read_step(row)?.1,
+        };
         rest.strip_prefix(".derivations.")?
     };
     let name = rest.split(['.', '[']).next()?;
@@ -248,10 +256,12 @@ pub fn handler_target(path: &str) -> Option<&str> {
 
 /// The registered condition a counted handler answers, decided by its name and
 /// the operation that declares it (the path segment before the name): the
-/// condition that operation raises when the handler is not declared. The
-/// handler's citation is that condition's registered rule. A handler
-/// name or operation outside the counted vocabulary has none.
-pub fn handler_condition(path: &str, handler: &str) -> Option<ConditionCode> {
+/// condition that operation raises when the handler is not declared. An
+/// `absent` answers the condition its specification's `surface` names
+/// ([`Surface::absent_condition`], D204). The handler's citation is that
+/// condition's registered rule. A handler name or operation outside the
+/// counted vocabulary has none.
+pub fn handler_condition(path: &str, handler: &str, surface: Surface) -> Option<ConditionCode> {
     use crate::numeric_lifecycle::HandlerKind as H;
     use ConditionCode as C;
     let kind = [
@@ -269,7 +279,7 @@ pub fn handler_condition(path: &str, handler: &str) -> Option<ConditionCode> {
     .find(|kind| kind.name() == handler)?;
     let operation = path.rsplit('.').nth(1).unwrap_or("");
     Some(match kind {
-        H::Absent => C::SourceUnknownReference,
+        H::Absent => surface.absent_condition(),
         H::MultipleMatches => C::DatasetMultipleMatches,
         H::NoMatch if operation == "str_extract" => C::ExtractNoMatch,
         H::NoMatch => C::LookupUnmatchedKey,
@@ -466,7 +476,8 @@ pub fn prepare(facts: &Facts) -> Result<Vec<Vec<PreparedCell>>, Error> {
             Some(&handler.name),
             None,
             handler_target(&handler.path),
-            handler_condition(&handler.path, &handler.name).and_then(|code| code.definition().rule),
+            handler_condition(&handler.path, &handler.name, facts.surface)
+                .and_then(|code| code.definition().rule),
             None,
             None,
             None,
