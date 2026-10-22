@@ -8,27 +8,17 @@
 //! `rows`, which reads only lookups and columns (NAME-3); and each read of a
 //! lookup whose key types fail, which binding does not bind. Every case lists
 //! the same issues in both routes and hosts, in the same order.
-use std::{
-    fs,
-    path::PathBuf,
-    sync::atomic::{AtomicUsize, Ordering},
-};
+use std::fs;
 use yamaa_adapters::{file_application, specification_report::Identity};
 use yamaa_core::{diagnostic::Diagnostic, domain_entry::Request, project_function::Language};
 
 /// Rendered issues, each with its spec paths.
 type Issues = Vec<(String, Vec<String>)>;
 
-struct Fixture(PathBuf);
+struct Fixture(crate::support::Scratch);
 impl Fixture {
     fn new(specification: &str) -> Self {
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        let root = std::env::temp_dir().join(format!(
-            "yamaa-unknown-reads-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
-        fs::create_dir(&root).unwrap();
+        let root = crate::support::Scratch::new("unknown-reads");
         fs::write(root.join("spec.yaml"), specification).unwrap();
         for (name, content) in [
             (
@@ -89,11 +79,6 @@ impl Fixture {
             Err(issues) => render(&issues),
         };
         (checked, built)
-    }
-}
-impl Drop for Fixture {
-    fn drop(&mut self) {
-        fs::remove_dir_all(&self.0).unwrap();
     }
 }
 

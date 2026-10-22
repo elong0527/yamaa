@@ -2,25 +2,15 @@
 //! Project contracts.
 mod project {
     mod domain_submission {
-        use std::{
-            fs,
-            path::{Path, PathBuf},
-            sync::atomic::{AtomicUsize, Ordering},
-        };
+        use std::{fs, path::Path};
         use yamaa_adapters::{file_application, specification_report::Identity};
         use yamaa_core::application_observer::Scope;
         use yamaa_core::domain_entry::Request;
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        struct Study(PathBuf);
+        struct Study(crate::support::Scratch);
         impl Study {
             fn new() -> Self {
-                let root = std::env::temp_dir().join(format!(
-                    "yamaa-domain-submission-{}-{}",
-                    std::process::id(),
-                    NEXT.fetch_add(1, Ordering::Relaxed)
-                ));
-                fs::create_dir_all(&root).unwrap();
-                Self(fs::canonicalize(root).unwrap())
+                let root = crate::support::Scratch::new("domain-submission");
+                Self(root.resolved(std::fs::canonicalize))
             }
             fn check(&self, raw: &str) -> Vec<yamaa_core::diagnostic::Diagnostic> {
                 fs::write(self.0.join("spec.yaml"), raw).unwrap();
@@ -34,11 +24,6 @@ mod project {
                     },
                     identity(path),
                 )
-            }
-        }
-        impl Drop for Study {
-            fn drop(&mut self) {
-                fs::remove_dir_all(&self.0).unwrap();
             }
         }
         fn identity(path: &str) -> Identity<'_> {

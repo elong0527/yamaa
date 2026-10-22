@@ -52,7 +52,6 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use yamaa_adapters::document::{self, Closures, Decoded};
 use yamaa_adapters::shipped_schema;
 use yamaa_adapters::specification_source::{InheritancePort, PreparedDocument, Source};
@@ -83,25 +82,14 @@ fn repository() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..")
 }
 
-static NEXT: AtomicUsize = AtomicUsize::new(0);
-
 /// A temporary directory, removed when dropped.
-struct Scratch(PathBuf);
+struct Scratch(crate::support::Scratch);
 impl Scratch {
     fn new() -> Self {
-        let path = std::env::temp_dir().join(format!(
-            "yamaa-front-end-comparison-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
+        let path = crate::support::Scratch::new("front-end-comparison");
         let _ = fs::remove_dir_all(&path);
         fs::create_dir_all(&path).unwrap();
         Self(path)
-    }
-}
-impl Drop for Scratch {
-    fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.0);
     }
 }
 

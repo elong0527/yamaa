@@ -5,25 +5,15 @@
 //! cannot fail on it. A key or `between` bound on a derived field, or a
 //! window among the derivations, reads every record's derived values, so
 //! every record is augmented as before.
-use std::{
-    fs,
-    path::PathBuf,
-    sync::atomic::{AtomicUsize, Ordering},
-};
+use std::fs;
 use yamaa_adapters::{file_application, specification_report::Identity};
 use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::{domain_entry::Request, json::Value};
 
-struct Fixture(PathBuf);
+struct Fixture(crate::support::Scratch);
 impl Fixture {
     fn new(specification: &str, source: &str) -> Self {
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        let root = std::env::temp_dir().join(format!(
-            "yamaa-lookup-matched-derivations-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
-        fs::create_dir(&root).unwrap();
+        let root = crate::support::Scratch::new("lookup-matched-derivations");
         fs::write(root.join("spec.yaml"), specification).unwrap();
         fs::write(root.join("src.csv"), source).unwrap();
         // Subject 9's day is the largest integer: adding any positive
@@ -63,11 +53,6 @@ impl Fixture {
         }
         assert!(domain.save().unwrap());
         Ok(fs::read_to_string(self.0.join("out.csv")).unwrap())
-    }
-}
-impl Drop for Fixture {
-    fn drop(&mut self) {
-        fs::remove_dir_all(&self.0).unwrap();
     }
 }
 

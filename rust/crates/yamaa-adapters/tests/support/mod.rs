@@ -21,6 +21,7 @@ pub mod project_schemas;
 pub mod roots;
 pub mod sas7bdat;
 pub mod schema_declaration;
+pub mod scratch;
 pub mod string_template_syntax;
 pub mod syntax_spans;
 pub mod xport;
@@ -105,4 +106,17 @@ pub fn host(runtime: &str) -> yamaa_core::project_function::Language {
         "r" => yamaa_core::project_function::Language::R,
         other => panic!("no host for test runtime {other}"),
     }
+}
+
+pub use scratch::Scratch;
+
+/// Replace exactly one occurrence, so an edit can never silently miss.
+#[track_caller]
+pub fn edit(document: &str, original: &str, replacement: &str) -> String {
+    assert_eq!(
+        document.matches(original).count(),
+        1,
+        "expected exactly one {original:?}"
+    );
+    document.replacen(original, replacement, 1)
 }

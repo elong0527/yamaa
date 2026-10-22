@@ -4,25 +4,15 @@
 //! grouped row template's window fails under ROW-5, and a column-level
 //! window under NAME-4, before any data is read. The declarations decide
 //! it, so `check` reports the same refusal.
-use std::{
-    fs,
-    path::PathBuf,
-    sync::atomic::{AtomicUsize, Ordering},
-};
+use std::fs;
 use yamaa_adapters::{file_application, specification_report::Identity};
 use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::domain_entry::Request;
 
-struct Fixture(PathBuf);
+struct Fixture(crate::support::Scratch);
 impl Fixture {
     fn new(specification: &str) -> Self {
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        let root = std::env::temp_dir().join(format!(
-            "yamaa-window-group-sources-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
-        fs::create_dir(&root).unwrap();
+        let root = crate::support::Scratch::new("window-group-sources");
         fs::write(root.join("spec.yaml"), specification).unwrap();
         fs::write(root.join("source.csv"), "ID,VAL\n1,3\n1,1\n2,5\n").unwrap();
         Self(root)
@@ -66,11 +56,6 @@ fn identity(specification: &str) -> Identity<'_> {
         example: "window-group-sources",
         specification,
         base_directory: ".",
-    }
-}
-impl Drop for Fixture {
-    fn drop(&mut self) {
-        fs::remove_dir_all(&self.0).unwrap();
     }
 }
 

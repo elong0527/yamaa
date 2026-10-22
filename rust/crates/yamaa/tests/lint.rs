@@ -5,8 +5,7 @@
 use std::path::PathBuf;
 
 #[cfg(unix)]
-#[path = "support/scratch.rs"]
-mod scratch;
+use crate::support::scratch;
 
 use yamaa::{lint, Array, DataType, Int64Array, StringArray, Table, LINT_COLUMNS, LINT_FINDINGS};
 
