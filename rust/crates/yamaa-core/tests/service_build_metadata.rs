@@ -48,12 +48,12 @@ mod service {
         }
     }
     mod build_ports {
-        //! End-to-end shared request effects with the production metadata, activation,
-        //! execution and held-output services and private native scripted ports.
+        //! End-to-end shared request effects with the production metadata, activation
+        //! and execution services and private native scripted ports.
         use crate::support::ports::*;
         use crate::support::project_call_compiler as support;
         use std::cell::RefCell;
-        use std::{convert::Infallible, rc::Rc, sync::Arc};
+        use std::sync::Arc;
         use support::{call, specification, Tree};
         use yamaa_core::{
             application_observer::Scope,
@@ -63,7 +63,6 @@ mod service {
             project_activation::{self, ActivationPort},
             project_domain::{self, CheckedOwnedProject},
             project_preparation as metadata,
-            specification_output::{self as output, CompleteError, OutputReport, PreparedOutput},
             specification_run::CapturedAttempt,
         };
         use yamaa_core::{
@@ -76,7 +75,9 @@ mod service {
             value::{ColumnType, Value},
         };
         #[derive(Debug)]
-        struct Opaque(Rc<()>);
+        struct Opaque;
+        /// The rows one build executed.
+        type Rows = Vec<Vec<Value>>;
         #[derive(Clone, Copy)]
         enum Scenario {
             Success,
@@ -84,15 +85,12 @@ mod service {
             Unsupported,
             Conformance,
             Capture,
-            Encode,
-            Report,
         }
         #[derive(Debug)]
         enum Failure {
             Metadata(Box<metadata::Failure<Opaque, MetadataDocument, Opaque>>),
             Compile(PrepareError),
             Activation(project_activation::Failure<Opaque>),
-            Output(CompleteError<&'static str, Opaque, Infallible>),
         }
         struct Entry {
             model: SpecificationDocument,
@@ -128,41 +126,6 @@ mod service {
                     arguments: vec![],
                 });
                 Ok(Value::Int(if self.fail { 8 } else { 7 }))
-            }
-        }
-        struct Report {
-            log: EventLog,
-            fail: bool,
-        }
-        impl OutputReport for Report {
-            type Error = &'static str;
-            type Report = ();
-            fn failure(&mut self) -> Result<(), Self::Error> {
-                self.log.record(Event::Observation("failed report"));
-                Ok(())
-            }
-            fn begin(&mut self, _: &yamaa_core::dataset::Execution) -> Result<(), Self::Error> {
-                self.log.record(Event::Observation("output observations"));
-                Ok(())
-            }
-            fn rejected(
-                &mut self,
-                _: &[yamaa_core::specification::OutputFinding],
-            ) -> Result<(), Self::Error> {
-                panic!("fixture output is admitted")
-            }
-            fn success(
-                &mut self,
-                _: &yamaa_core::dataset::Execution,
-                _: &[usize],
-                _: &[u8],
-            ) -> Result<(), Self::Error> {
-                self.log.record(Event::Observation("complete report"));
-                if self.fail {
-                    Err("original report refusal")
-                } else {
-                    Ok(())
-                }
             }
         }
         fn document(tree: Tree) -> Document {
@@ -222,9 +185,7 @@ mod service {
             log: EventLog,
             source: ScriptedSource<Opaque>,
             decoder: ScriptedDecoder<Opaque, FixtureTable<Opaque>>,
-            encoder: ScriptedEncoder<Opaque>,
             activation: Activation,
-            report: Report,
         }
         impl Application {
             fn new(scenario: Scenario) -> Self {
@@ -233,22 +194,16 @@ mod service {
                     scenario,
                     source: ScriptedSource::new(log.clone()),
                     decoder: ScriptedDecoder::new(log.clone()),
-                    encoder: ScriptedEncoder::new(log.clone()),
                     activation: Activation {
                         log: log.clone(),
                         fail: matches!(scenario, Scenario::Conformance),
                     },
-                    report: Report {
-                        log: log.clone(),
-                        fail: matches!(scenario, Scenario::Report),
-                    },
                     log,
                 }
             }
-            fn run(
-                &mut self,
-                checked: &CheckedOwnedProject,
-            ) -> Result<PreparedOutput<()>, Failure> {
+            /// One run of `checked`: the rows it executed, or none when the
+            /// study capture failed.
+            fn run(&mut self, checked: &CheckedOwnedProject) -> Result<Option<Rows>, Failure> {
                 let source = checked.compiled().source().clone();
                 self.source.inspections.push_back(InspectionStep {
                     source: source.clone(),
@@ -258,7 +213,7 @@ mod service {
                     source: source.clone(),
                     new_snapshots: 1,
                     outcome: if matches!(self.scenario, Scenario::Capture) {
-                        Err(Opaque(Rc::new(())))
+                        Err(Opaque)
                     } else {
                         Ok(Arc::from(b"held study".as_slice()))
                     },
@@ -276,14 +231,6 @@ mod service {
                         self.log.clone(),
                     )),
                 });
-                self.encoder.steps.push_back(EncodeStep {
-                    projection: vec![0, 1],
-                    outcome: if matches!(self.scenario, Scenario::Encode) {
-                        Err(Opaque(Rc::new(())))
-                    } else {
-                        Ok(b"ID,VALUE\n1,7\n".to_vec())
-                    },
-                });
                 let mut attempt = CapturedAttempt::new(&source);
                 checked
                     .build_into(
@@ -297,18 +244,12 @@ mod service {
                         ),
                     )
                     .map_err(Failure::Activation)?;
-                let execution = attempt
+                Ok(attempt
                     .result
                     .as_ref()
                     .ok()
-                    .and_then(|result| result.result.as_ref().ok());
-                output::prepare(
-                    checked.compiled(),
-                    execution,
-                    &mut self.report,
-                    &mut self.encoder,
-                )
-                .map_err(Failure::Output)
+                    .and_then(|result| result.result.as_ref().ok())
+                    .map(|execution| execution.dataset.rows().to_vec()))
             }
         }
         impl MetadataAdmissionPort for Application {
@@ -390,7 +331,7 @@ mod service {
                 Ok(())
             }
             /// One build: compile, then run.
-            fn build(&mut self) -> Result<PreparedOutput<()>, Failure> {
+            fn build(&mut self) -> Result<Option<Rows>, Failure> {
                 let ports = RefCell::new(self);
                 domain_entry::domain(
                     Scope::default(),
@@ -406,14 +347,12 @@ mod service {
             }
         }
         #[test]
-        fn complete_request_failures_never_publish_and_admission_precedes_study_capture() {
+        fn complete_request_failures_execute_nothing_and_admission_precedes_study_capture() {
             for scenario in [
                 Scenario::Environment,
                 Scenario::Unsupported,
                 Scenario::Conformance,
                 Scenario::Capture,
-                Scenario::Encode,
-                Scenario::Report,
             ] {
                 let mut ports = Application::new(scenario);
                 let result = ports.build();
@@ -430,14 +369,7 @@ mod service {
                         Scenario::Conformance,
                         Err(Failure::Activation(project_activation::Failure::Tests(_))),
                     ) => (),
-                    (Scenario::Capture, Ok(result)) => assert!(result.artifact().is_none()),
-                    (Scenario::Encode, Err(Failure::Output(CompleteError::Encode(error)))) => {
-                        assert_eq!(Rc::strong_count(&error.0), 1)
-                    }
-                    (
-                        Scenario::Report,
-                        Err(Failure::Output(CompleteError::Report("original report refusal"))),
-                    ) => (),
+                    (Scenario::Capture, Ok(rows)) => assert!(rows.is_none()),
                     _ => panic!("wrong failure: {result:?}"),
                 }
                 if matches!(
@@ -449,564 +381,83 @@ mod service {
                         Event::Inspect(_) | Event::Capture { .. } | Event::Decode { .. }
                     )));
                 }
-                let mut publisher = ScriptedPublisher::<Opaque>::new(ports.log.clone());
-                if let Ok(result) = result {
-                    assert!(result.save(&mut publisher).is_err());
-                }
-                assert!(!ports
-                    .log
-                    .events()
-                    .iter()
-                    .any(|event| matches!(event, Event::Publish { .. })));
             }
         }
         #[test]
-        fn check_has_no_runtime_effects_and_successful_build_saves_only_the_held_bytes() {
+        fn check_has_no_runtime_effects_and_a_successful_build_executes_its_rows() {
             let mut ports = Application::new(Scenario::Success);
             let checked = ports.prepare(request()).unwrap();
             ports.check(checked).unwrap();
             assert!(!ports.log.events().iter().any(|event| matches!(
                 event,
-                Event::Call { .. }
-                    | Event::Capture { .. }
-                    | Event::Encode { .. }
-                    | Event::Publish { .. }
-                    | Event::Observation("lock" | "binding")
+                Event::Call { .. } | Event::Capture { .. } | Event::Observation("lock" | "binding")
             )));
             ports.log.clear();
-            let result = ports.build().unwrap();
-            assert!(!ports
-                .log
-                .events()
-                .iter()
-                .any(|event| matches!(event, Event::Publish { .. })));
-            let before = ports.log.events().len();
-            let mut publisher = ScriptedPublisher::<Opaque>::new(ports.log.clone());
-            for _ in 0..2 {
-                publisher.steps.push_back(PublishStep {
-                    path: "output.csv".into(),
-                    bytes: b"ID,VALUE\n1,7\n".to_vec(),
-                    outcome: Ok(()),
-                });
-            }
-            result.save(&mut publisher).unwrap();
-            result.save(&mut publisher).unwrap();
-            assert_eq!(ports.log.events().len(), before + 2);
-            assert!(ports.log.events()[before..]
-                .iter()
-                .all(|event| matches!(event, Event::Publish { .. })));
+            let rows = ports.build().unwrap();
+            assert_eq!(rows, Some(vec![vec![Value::Int(1), Value::Int(7)]]));
         }
     }
     mod define_service {
-        //! Independently authored engine use-case controls; no native filesystem or host.
-        use std::{cell::Cell, rc::Rc};
-        use yamaa_core::define::{self, Application, Failure, Ports, PublicationState};
-        use yamaa_core::{
-            ast::Transport,
-            diagnostic::ConditionCode,
-            project_environment::Submission,
-            project_terminology::Catalogue,
-            schema::Document,
-            submission_composition::{Dataset, Finding, Study},
-            table::{CellError, TableAccess, TableSchema, ValueRef},
-        };
+        //! The Define service's findings and creation time, which core keeps.
+        //! The service itself, which composes, renders and admits a section's
+        //! files, is the adapters' `file_define`.
+        use std::cell::Cell;
+        use yamaa_core::define;
+        use yamaa_core::diagnostic::ConditionCode;
 
-        #[derive(Debug)]
-        struct Opaque(Box<u8>);
-        impl Opaque {
-            fn identity(&self) -> *const u8 {
-                &*self.0
-            }
-        }
-        struct Environment {
-            project: yamaa_core::ast::Project,
-            catalogue: Catalogue,
-        }
-        struct EmptyTable(TableSchema);
-        impl TableAccess for EmptyTable {
-            type Error = ();
-            fn schema(&self) -> &TableSchema {
-                &self.0
-            }
-            fn row_count(&self) -> usize {
-                0
-            }
-            fn cell(&self, row: usize, column: usize) -> Result<ValueRef<'_>, CellError<()>> {
-                Err(CellError::OutOfBounds { row, column })
-            }
-        }
-        use crate::support::document::Tree;
-
-        fn text(value: &'static str) -> Tree {
-            Tree::text(value)
-        }
-        /// The project file, lowered as preparation lowers it.
-        fn lowered(tree: Tree) -> yamaa_core::ast::Project {
-            yamaa_core::front_end::v0_5::project::project(&tree.document(), None).unwrap()
-        }
-        fn project(with_study: bool) -> Environment {
-            let mut fields = vec![(
-                "sdtm",
-                Tree::map(vec![
-                    (
-                        "standard",
-                        Tree::map(vec![
-                            ("name", text("SDTMIG")),
-                            ("version", text("3.4")),
-                            ("status", text("Final")),
-                        ]),
-                    ),
-                    ("specs", Tree::List(vec![])),
-                    ("define", text("define.xml")),
-                ]),
-            )];
-            if with_study {
-                fields.push((
-                    "study",
-                    Tree::map(vec![
-                        ("id", text("STUDY01")),
-                        ("name", text("Study")),
-                        ("description", text("Independent service fixture")),
-                        ("protocol_name", text("Protocol")),
-                    ]),
-                ));
-            }
-            Environment {
-                project: lowered(Tree::map(fields)),
-                catalogue: Catalogue::admit(vec![]).unwrap(),
-            }
-        }
-        struct Spy {
-            environment: Option<Environment>,
-            events: Vec<&'static str>,
-            seconds: Option<u64>,
-            environment_error: Option<Opaque>,
-            verification_error: Option<Opaque>,
-            publisher_error: Option<(usize, Opaque)>,
-            publishers: usize,
-            clock_calls: Rc<Cell<usize>>,
-        }
-        impl Spy {
-            fn new() -> Self {
-                Self {
-                    environment: Some(project(true)),
-                    events: Vec::new(),
-                    seconds: Some(0),
-                    environment_error: None,
-                    verification_error: None,
-                    publisher_error: None,
-                    publishers: 0,
-                    clock_calls: Rc::new(Cell::new(0)),
-                }
-            }
-        }
-        impl Ports for Spy {
-            type Environment = Environment;
-            type Specification = Document;
-            type Error = Opaque;
-            type PublicationError = Opaque;
-            type Bytes = Vec<u8>;
-            type Parquet = EmptyTable;
-            type ParquetError = ();
-            type Target = String;
-            type Publisher = String;
-            fn utc_seconds(&mut self) -> Option<u64> {
-                self.clock_calls.set(self.clock_calls.get() + 1);
-                self.seconds
-            }
-            fn capture_environment(&mut self, written: &str) -> Result<Environment, Opaque> {
-                assert_eq!(written, "project.yaml");
-                self.events.push("capture_environment");
-                if let Some(error) = self.environment_error.take() {
-                    return Err(error);
-                }
-                Ok(self.environment.take().unwrap())
-            }
-            fn environment(environment: &Environment) -> define::EnvironmentView<'_> {
-                define::EnvironmentView {
-                    project: &environment.project,
-                    catalogue: &environment.catalogue,
-                    source: "/project/project.yaml",
-                }
-            }
-            fn capture_specification(
-                &mut self,
-                _: &str,
-                _: &str,
-                _: &str,
-            ) -> Result<Document, Opaque> {
-                panic!("no spec selected")
-            }
-            fn specification(_: &Document) -> define::SpecificationView<'_> {
-                panic!("no spec selected")
-            }
-            fn location(
-                &self,
-                path: &str,
-                declaring: &str,
-                written: &str,
-            ) -> Result<String, Opaque> {
-                assert_eq!(path, "sdtm.define");
-                assert_eq!(declaring, "/project/project.yaml");
-                assert_eq!(written, "define.xml");
-                Ok("/project/define.xml".into())
-            }
-            fn transport_written(&self, _: &str, _: &str) -> String {
-                panic!("no dataset selected")
-            }
-            fn same_location(&self, left: &str, right: &str) -> bool {
-                left == right
-            }
-            fn package_reference(&self, _: &str, _: &str) -> Option<String> {
-                panic!("no dataset selected")
-            }
-            fn define_name(&self, _: &str) -> String {
-                panic!("no dataset selected")
-            }
-            fn verify_metadata(&mut self, path: &str, source: &str) -> Result<(), Opaque> {
-                assert_eq!(path, "sdtm");
-                assert_eq!(source, "/project/project.yaml");
-                self.events.push("verify_metadata");
-                self.verification_error.take().map_or(Ok(()), Err)
-            }
-            fn capture_published(&mut self, _: &str, _: &str, _: &str) -> Result<Vec<u8>, Opaque> {
-                panic!("no dataset selected")
-            }
-            /// The document an adapter encodes; this double holds the creation
-            /// time composition selected as the document's bytes.
-            fn render_define(&mut self, study: &Study) -> Result<Vec<u8>, Finding> {
-                self.events.push("render_define");
-                Ok(study.created().as_bytes().to_vec())
-            }
-            fn admit_transport<T: TableAccess>(
-                &mut self,
-                _: Transport,
-                _: &Study,
-                _: &Dataset,
-                _: &T,
-            ) -> Result<(), Finding> {
-                panic!("no transport selected")
-            }
-            fn render_transport<T: TableAccess>(
-                &mut self,
-                _: Transport,
-                _: &Study,
-                _: &Dataset,
-                _: &T,
-                _: &str,
-            ) -> Result<Vec<u8>, Finding> {
-                panic!("no transport selected")
-            }
-            fn decode_parquet(&mut self, _: &[u8]) -> Result<EmptyTable, ()> {
-                panic!("no codec selected")
-            }
-            fn read_report(
-                &mut self,
-                _: &str,
-                _: &str,
-                _: &str,
-            ) -> Result<Option<yamaa_core::run_report::Recorded>, Opaque> {
-                panic!("no dataset selected")
-            }
-            fn count_records(
-                &mut self,
-                _: &yamaa_core::specification::SourceDeclaration,
-                _: &[u8],
-            ) -> Option<usize> {
-                panic!("no dataset selected")
-            }
-            fn target(&self, path: &str, declaring: &str, written: &str) -> Result<String, Opaque> {
-                assert_eq!(
-                    (path, declaring, written),
-                    ("sdtm.define", "/project/project.yaml", "define.xml")
-                );
-                Ok("/project/define.xml".into())
-            }
-            fn publisher(&mut self, target: &String, written: &str) -> Result<String, Opaque> {
-                assert_eq!(written, "define.xml");
-                self.events.push("publisher");
-                self.publishers += 1;
-                if self
-                    .publisher_error
-                    .as_ref()
-                    .is_some_and(|(call, _)| *call == self.publishers)
-                {
-                    return Err(self.publisher_error.take().unwrap().1);
-                }
-                Ok(target.clone())
-            }
-            fn same_target(&mut self, left: &String, right: &String) -> Result<bool, Opaque> {
-                Ok(left == right)
-            }
-        }
-        fn prepare(
-            spy: &mut Spy,
-            section: Submission,
-            created: Option<&str>,
-        ) -> define::Attempt<Spy> {
-            Application::prepare(
-                spy,
-                define::Request {
-                    environment: "project.yaml",
-                    section,
-                    created,
-                    installed: "0.3.0",
-                },
-            )
-        }
-        #[test]
-        fn explicit_creation_admits_before_any_capture_or_clock() {
-            for created in ["2026-10-11T00:00:00.5", "2026-02-30T00:00:00"] {
-                let mut spy = Spy::new();
-                let attempt = prepare(&mut spy, Submission::Sdtm, Some(created));
-                let Err(Failure::Metadata(findings)) = attempt.outcome else {
-                    panic!("missing admission cause")
-                };
-                assert_eq!(findings.len(), 1);
-                assert_eq!(findings[0].code, ConditionCode::DefineCreatedInvalid);
-                assert!(spy.events.is_empty());
-                assert_eq!(spy.clock_calls.get(), 0);
-                assert!(attempt.application.failed());
-                assert_eq!(attempt.application.files().len(), 0);
-            }
-        }
-        #[test]
-        fn actual_capture_failure_moves_opaque_payload_once_and_refuses_save_without_retry() {
-            let mut spy = Spy::new();
-            let error = Opaque(Box::new(42));
-            let identity = error.identity();
-            spy.environment_error = Some(error);
-            let attempt = prepare(&mut spy, Submission::Sdtm, Some("2026-10-11T00:00:00"));
-            let Err(Failure::Port(error)) = attempt.outcome else {
-                panic!("original port error lost")
-            };
-            assert_eq!(error.identity(), identity);
-            assert_eq!(spy.events, ["capture_environment"]);
-            assert!(attempt.application.failed());
-            assert_eq!(attempt.application.artifacts().len(), 0);
-        }
-        #[test]
-        fn complete_metadata_and_rendering_precede_publication_and_record_marks_held_bytes() {
-            let mut spy = Spy::new();
-            let mut attempt = prepare(&mut spy, Submission::Sdtm, Some("2026-10-11T00:00:00"));
-            assert!(attempt.outcome.is_ok());
-            // The document is rendered before the captured metadata is
-            // verified, so every document fault precedes any published read.
-            assert_eq!(
-                spy.events,
-                [
-                    "capture_environment",
-                    "render_define",
-                    "verify_metadata",
-                    "publisher"
-                ]
-            );
-            assert_eq!(spy.clock_calls.get(), 0);
-            let held = attempt.application.artifacts().next().unwrap();
-            assert_eq!(held.0, "define.xml");
-            assert_eq!(held.2, PublicationState::Ready);
-            assert_eq!(held.1, b"2026-10-11T00:00:00");
-            let bytes = held.1.to_vec();
-            // A save publishes the held files in order; nothing is recomposed.
-            let files = attempt
-                .application
-                .files()
-                .map(|(target, written, bytes)| {
-                    (target.clone(), written.to_owned(), bytes.to_vec())
-                })
-                .collect::<Vec<_>>();
-            assert_eq!(
-                files,
-                [(
-                    "/project/define.xml".to_owned(),
-                    "define.xml".to_owned(),
-                    bytes.clone()
-                )]
-            );
-            // A repeated save rewrites the same held bytes.
-            for _ in 0..2 {
-                attempt.application.record(1, None);
-                assert_eq!(
-                    attempt.application.artifacts().next().unwrap(),
-                    ("define.xml", bytes.as_slice(), PublicationState::Published)
-                );
-                assert!(!attempt.application.failed());
-            }
-            assert_eq!(spy.publishers, 1);
-            assert_eq!(spy.clock_calls.get(), 0);
-        }
-        #[test]
-        fn verification_failure_retains_original_payload_and_never_acquires_a_publisher() {
-            let mut spy = Spy::new();
-            let error = Opaque(Box::new(17));
-            let identity = error.identity();
-            spy.verification_error = Some(error);
-            let attempt = prepare(&mut spy, Submission::Sdtm, Some("2026-10-11T00:00:00"));
-            let Err(Failure::Port(error)) = attempt.outcome else {
-                panic!("original verification error lost")
-            };
-            assert_eq!(error.identity(), identity);
-            assert_eq!(
-                spy.events,
-                ["capture_environment", "render_define", "verify_metadata"]
-            );
-            assert_eq!(attempt.application.artifacts().len(), 0);
-        }
-        #[test]
-        fn target_admission_during_prepare_retains_the_original_error_and_never_writes() {
-            let mut spy = Spy::new();
-            let error = Opaque(Box::new(23));
-            let identity = error.identity();
-            spy.publisher_error = Some((1, error));
-            let attempt = prepare(&mut spy, Submission::Sdtm, Some("2026-10-11T00:00:00"));
-            let Some(Failure::TargetAdmission { index, error }) = attempt.outcome.err() else {
-                panic!("original target cause lost")
-            };
-            assert_eq!(index, 0);
-            assert_eq!(error.identity(), identity);
-            assert_eq!(
-                attempt.application.artifacts().next().unwrap().2,
-                PublicationState::Failed
-            );
-            assert!(attempt.application.failed());
-        }
-        #[test]
-        fn a_recorded_save_failure_keeps_admitted_bytes_and_fails_the_composition() {
-            for admission in [true, false] {
-                let mut spy = Spy::new();
-                let mut attempt = prepare(&mut spy, Submission::Sdtm, Some("2026-10-11T00:00:00"));
-                assert!(attempt.outcome.is_ok());
-                let held = attempt.application.artifacts().next().unwrap().1.to_vec();
-                let error = Opaque(Box::new(81));
-                let failure = if admission {
-                    Failure::TargetAdmission { index: 0, error }
-                } else {
-                    Failure::Publication { index: 0, error }
-                };
-                attempt.application.record(0, Some(&failure));
-                assert_eq!(
-                    attempt.application.artifacts().next().unwrap(),
-                    ("define.xml", held.as_slice(), PublicationState::Failed)
-                );
-                assert!(attempt.application.failed());
-                assert_eq!(spy.publishers, 1);
-            }
-        }
-        #[test]
-        fn missing_study_is_the_real_typed_owner_before_any_metadata_verification() {
-            let mut spy = Spy::new();
-            spy.environment = Some(project(false));
-            let attempt = prepare(&mut spy, Submission::Sdtm, Some("2026-10-11T00:00:00"));
-            let Err(Failure::Metadata(findings)) = attempt.outcome else {
-                panic!("missing actual cause")
-            };
-            assert_eq!(
-                findings,
-                [yamaa_core::submission_composition::Finding::cause(
-                    ConditionCode::DefineRequiredDeclaration,
-                    "study",
-                    "study"
-                )]
-            );
-            assert_eq!(findings[0].definition().rule, Some("DEFINE-28"));
-            assert_eq!(spy.events, ["capture_environment"]);
-        }
-        #[test]
-        fn a_section_listing_only_specs_reports_every_missing_define_declaration_together() {
-            let mut spy = Spy::new();
-            // A run admits this section; only Define composition needs more.
-            spy.environment = Some(Environment {
-                project: lowered(Tree::map(vec![(
-                    "sdtm",
-                    Tree::map(vec![("specs", Tree::List(vec![]))]),
-                )])),
-                catalogue: Catalogue::admit(vec![]).unwrap(),
-            });
-            let attempt = prepare(&mut spy, Submission::Sdtm, Some("2026-10-11T00:00:00"));
-            let Err(Failure::Metadata(findings)) = attempt.outcome else {
-                panic!("missing define declarations")
-            };
-            let cause = |path, detail| {
-                yamaa_core::submission_composition::Finding::cause(
-                    ConditionCode::DefineRequiredDeclaration,
-                    path,
-                    detail,
-                )
-            };
-            assert_eq!(
-                findings,
-                [
-                    cause("study", "study"),
-                    cause("sdtm.standard", "standard"),
-                    cause("sdtm.define", "define"),
-                ]
-            );
-            assert!(findings
-                .iter()
-                .all(|finding| finding.definition().rule == Some("DEFINE-28")));
-            assert_eq!(spy.events, ["capture_environment"]);
-        }
-        /// A project file that no longer declares the selected section when
-        /// composition reads it refuses the section as any undeclared section
-        /// is refused (PROJECT-14), before the section's declarations are
-        /// checked or any specification is captured.
-        #[test]
-        fn a_project_that_no_longer_declares_the_selected_section_refuses_it() {
-            use yamaa_core::json::Value;
-            let mut spy = Spy::new();
-            let attempt = prepare(&mut spy, Submission::Adam, Some("2026-10-11T00:00:00"));
-            let Err(Failure::Diagnostic(issues)) = attempt.outcome else {
-                panic!("missing selected section")
-            };
-            let [issue] = issues.as_slice() else {
-                panic!("one refusal: {issues:?}")
-            };
-            let definition = issue.definition();
-            assert_eq!(
-                (definition.phase, definition.condition, definition.rule),
-                ("validation", "unknown_section", Some("PROJECT-14"))
-            );
-            assert!(issue.spec_paths.is_empty());
-            assert_eq!(issue.context["section"], Value::String("adam".into()));
-            assert_eq!(
-                issue.context["sections"],
-                Value::Array(vec![Value::String("sdtm".into())])
-            );
-            assert_eq!(spy.events, ["capture_environment"]);
-            assert!(attempt.application.failed());
-            assert_eq!(attempt.application.files().len(), 0);
-        }
+        /// Without `created`, the clock is read once, and its reading is one
+        /// whole-second civil time or a refusal (DEFINE-3).
         #[test]
         fn clock_is_observed_once_and_calendar_admission_is_owned_by_the_engine() {
             for (seconds, expected) in [
                 (0, "1970-01-01T00:00:00"),
                 (951782400, "2000-02-29T00:00:00"),
             ] {
-                let mut spy = Spy::new();
-                spy.seconds = Some(seconds);
-                let attempt = prepare(&mut spy, Submission::Sdtm, None);
-                assert!(attempt.outcome.is_ok());
-                let held = attempt.application.artifacts().next().unwrap();
-                assert_eq!(held.1, expected.as_bytes());
-                assert_eq!(spy.clock_calls.get(), 1);
+                let calls = Cell::new(0);
+                let created = define::created_time(None, || {
+                    calls.set(calls.get() + 1);
+                    Some(seconds)
+                });
+                assert_eq!(created.as_deref(), Ok(expected), "{seconds}");
+                assert_eq!(calls.get(), 1);
             }
             for (seconds, detail) in [
                 (None, "UTC clock before epoch"),
                 (Some(u64::MAX), "UTC clock outside supported calendar"),
             ] {
-                let mut spy = Spy::new();
-                spy.seconds = seconds;
-                let attempt = prepare(&mut spy, Submission::Sdtm, None);
-                let Err(Failure::Metadata(findings)) = attempt.outcome else {
-                    panic!("missing clock refusal")
+                let calls = Cell::new(0);
+                let refused = define::created_time(None, || {
+                    calls.set(calls.get() + 1);
+                    seconds
+                });
+                assert_eq!(
+                    refused,
+                    Err(yamaa_core::define_diagnostics::creation_refusal(detail)),
+                    "{detail}"
+                );
+                assert_eq!(calls.get(), 1);
+            }
+        }
+
+        /// An explicit creation time is admitted, or refused, without reading
+        /// the clock.
+        #[test]
+        fn explicit_creation_is_admitted_without_reading_the_clock() {
+            let clock = || -> Option<u64> { panic!("an explicit creation time read the clock") };
+            for created in ["2026-10-11T00:00:00.5", "2026-02-30T00:00:00"] {
+                let Err(finding) = define::created_time(Some(created), clock) else {
+                    panic!("{created} admitted")
                 };
                 assert_eq!(
-                    findings,
-                    [yamaa_core::define_diagnostics::creation_refusal(detail)]
+                    finding.code,
+                    ConditionCode::DefineCreatedInvalid,
+                    "{created}"
                 );
-                assert_eq!(spy.clock_calls.get(), 1);
-                assert!(spy.events.is_empty());
             }
+            assert_eq!(
+                define::created_time(Some("2026-10-11T00:00:00"), clock).as_deref(),
+                Ok("2026-10-11T00:00:00")
+            );
         }
 
         /// The time a composition records for one clock reading, which a

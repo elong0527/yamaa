@@ -210,15 +210,9 @@ mod file {
         #[test]
         fn changed_source_retains_original_snapshot_and_ingest_issue_and_refuses_both_saves() {
             use yamaa_adapters::{
-                file_preparation, specification_report, specification_run::PortError,
+                file_application::Domain, file_preparation, specification_report,
+                specification_run::PortError,
             };
-            struct NoPublication;
-            impl specification_report::ArtifactPort for NoPublication {
-                type Error = ();
-                fn publish(&mut self, _: &str, _: &[u8]) -> Result<(), ()> {
-                    panic!("changed source published");
-                }
-            }
             let study = Study::new();
             fs::write(study.0.join("spec.yaml"), VALID).unwrap();
             fs::write(study.0.join("input.csv"), b"ID\n1\n").unwrap();
@@ -258,11 +252,9 @@ mod file {
                 yamaa_core::json::Value::Object(finding.context.clone()),
                 yamaa_adapters::json!({"dataset":"SRC","path":"input.csv"})
             );
+            let mut domain = Domain::new(result, &prepared, &run_scope);
             for _ in 0..2 {
-                assert!(matches!(
-                    result.save(&mut NoPublication),
-                    Err(yamaa_core::specification_output::SaveError::FailedBuild)
-                ));
+                assert!(domain.save().is_err());
             }
             assert_eq!(
                 fs::read(study.0.join("output.csv")).unwrap(),
@@ -1015,17 +1007,7 @@ mod file {
             assert_eq!(table.row_count(), 2);
             assert_eq!(table.cell(0, 0).unwrap(), ValueRef::Int(1));
             assert_eq!(table.cell(1, 0).unwrap(), ValueRef::Int(2));
-            struct Save(Vec<(String, Vec<u8>)>);
-            impl yamaa_core::specification_output::ArtifactPort for Save {
-                type Error = ();
-                fn publish(&mut self, path: &str, bytes: &[u8]) -> Result<(), ()> {
-                    self.0.push((path.into(), bytes.into()));
-                    Ok(())
-                }
-            }
-            let mut saved = Save(Vec::new());
-            result.save(&mut saved).unwrap();
-            assert_eq!(saved.0, [("output.csv".into(), b"ID\n1\n2\n".to_vec())]);
+            assert_eq!(result.files(), [("output.csv", b"ID\n1\n2\n".as_slice())]);
         }
 
         #[test]

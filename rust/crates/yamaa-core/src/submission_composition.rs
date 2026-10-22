@@ -2072,6 +2072,13 @@ impl<'a> Required<'a> {
     }
 }
 
+/// Whether composing the specification `document` reads the specifications
+/// the study's other sections list: it requests the study's dataset
+/// inventory (CT-11) or names a predecessor's columns (SUB-20).
+pub fn reads_other_sections(document: &Document) -> bool {
+    crate::submission_inventory::requested(document) || origin::names_predecessor(document)
+}
+
 /// Compose the selected section. `others` holds the specifications the study's
 /// other submission sections list: the dataset inventory (CT-11) and the
 /// predecessor columns (SUB-20) span every section, while only `inputs` are

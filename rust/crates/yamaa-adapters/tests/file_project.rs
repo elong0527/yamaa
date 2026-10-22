@@ -3107,7 +3107,6 @@ mod file {
 
         #[test]
         fn selected_ordinary_keeps_complete_report_and_explicit_held_byte_save() {
-            use yamaa_core::specification_output::ArtifactPort;
             let study = Study::new();
             study.write(
                 "root.yaml",
@@ -3180,31 +3179,22 @@ mod file {
             );
             assert_eq!(selected_result.issues(), ordinary_result.issues());
             assert!(!study.0.join("root.csv").exists());
-            struct Save(Vec<(String, Vec<u8>)>);
-            impl ArtifactPort for Save {
-                type Error = ();
-                fn publish(&mut self, path: &str, bytes: &[u8]) -> Result<(), ()> {
-                    self.0.push((path.into(), bytes.into()));
-                    Ok(())
-                }
-            }
             let retained = selected.run();
             fs::remove_dir_all(&study.0).unwrap();
             assert_eq!(
                 retained.document().source().bytes,
                 yaml("{RAW: never-read.csv}", "RAW", "root.csv", false).as_bytes()
             );
-            let mut publisher = Save(vec![]);
             assert_eq!(
-                selected_result.save(&mut publisher).unwrap()["artifacts"]
+                selected_result.saved_observations().unwrap()["artifacts"]
                     .as_array()
                     .unwrap()
                     .len(),
                 1
             );
             assert_eq!(
-                publisher.0,
-                [("root.csv".into(), b"ID,VALUE\n1,alpha\n2,beta\n".to_vec())]
+                selected_result.files(),
+                [("root.csv", b"ID,VALUE\n1,alpha\n2,beta\n".as_slice())]
             );
         }
 
