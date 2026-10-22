@@ -216,6 +216,30 @@ class EquivalenceGateTests(unittest.TestCase):
         for call in run.call_args_list:
             self.assertEqual(call.kwargs["env"]["RUSTUP_TOOLCHAIN"], channel())
 
+    def test_the_python_lane_adds_locked_tooling_without_an_editable_host(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with mock.patch.object(equivalence.subprocess, "run") as run:
+                python = equivalence.install_python(Path(directory), "uv", tooling=True)
+        commands = [call.args[0] for call in run.call_args_list]
+        export = commands[2]
+        self.assertIn("--locked", export)
+        self.assertEqual(export[export.index("--group") + 1], "tooling")
+        self.assertEqual(export[export.index("--no-emit-package") + 1], "yamaa-tools")
+        self.assertEqual(
+            commands[-1],
+            (
+                "uv",
+                "pip",
+                "install",
+                "--python",
+                str(python),
+                "--no-deps",
+                "-e",
+                str(ROOT),
+            ),
+        )
+        self.assertFalse(any("--editable" in command for command in commands[:-1]))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,10 +1,8 @@
 name: CI
 
-# Pull requests are the gate. Main is checked on a schedule rather than after
-# every merge; the scheduled runs also save the Rust caches that pull requests
-# restore. Release branches are checked on each push. This workflow owns the
-# development checks and the equivalence gate; release-compatibility.yml owns
-# compatibility builds.
+# Four stable required checks. Each selects its work before installing tools,
+# while engine/build changes retain both hosts' fresh-install equivalence.
+# Main's scheduled runs save the Rust caches restored by pull requests.
 on:
   pull_request:
   push:
@@ -32,165 +30,133 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # The interface stability check reads each release tag's manifests, but
-      # no history: one commit per yamaa-v* tag costs less than fetch-depth: 0,
-      # which fetches every branch's history. Without the tags, the check fails
-      # wherever it needs a baseline.
-      - name: Fetch the release tags
-        run: git fetch --no-tags --depth=1 origin '+refs/tags/yamaa-v*:refs/tags/yamaa-v*'
-      # The repository check runs the third-party notices generator.
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: ./.github/actions/select-checks
+        id: paths
+      - name: Check every workflow
+        if: steps.paths.outputs.workflow_lint == 'true'
+        run: |
+          curl --fail --location --silent --show-error \
+            https://github.com/rhysd/actionlint/releases/download/v1.7.7/actionlint_1.7.7_linux_amd64.tar.gz \
+            | tar -xz -C "$RUNNER_TEMP" actionlint
+          "$RUNNER_TEMP/actionlint" -color -shellcheck= -pyflakes=
+      # Prose and site assets need neither a Rust toolchain nor a host build.
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+        if: steps.paths.outputs.repository == 'docs'
+        with:
+          version: '0.13.0'
+          python-version: '3.14'
+          enable-cache: true
+      - name: Check documentation without building the engine
+        if: steps.paths.outputs.repository == 'docs'
+        run: |
+          uv sync --project python --locked --extra test --group tooling --no-install-package yamaa
+          uv run --project python --no-sync python -m tools.commands.repository docs
+          make docs-test docs
       - uses: ./.github/actions/setup
+        if: steps.paths.outputs.repository == 'full'
         with:
           notices: 'true'
       - id: lint
-        run: make check-lint
-      # Report repository findings even when lint fails.
-      - if: success() || steps.lint.outcome == 'failure'
+        if: steps.paths.outputs.repository == 'full'
+        run: uv run --project python --no-sync python -m tools.commands.repository lint-python
+      # Report repository findings even when Python lint fails. Rust lint is
+      # in the Rust lane, beside its tests, with the same restored build cache.
+      - if: steps.paths.outputs.repository == 'full' && (success() || steps.lint.outcome == 'failure')
         run: make check-repository
+
   rust:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup
-      - run: make test-rust
-  rust-minimum:
-    # The workspace rust-version is the oldest Rust that builds the engine:
-    # the source packages and embedders build with the caller's toolchain,
-    # and CRAN asks for a cargo at least two years old (#3111). Every other
-    # job builds with the pinned toolchain, many releases newer, so a change
-    # that needs a newer Rust passes them all. This job lints the workspace
-    # with the minimum on every pull request, as Cargo's guide to continuous
-    # integration asks for a declared rust-version; Clippy's pass type-checks
-    # every target as `cargo check` does. The R binding is left out, as the
-    # repository lint leaves it out: its build script runs R, and only the
-    # jobs that check the R host install R. Release compatibility repeats the
-    # check with the R binding, the embedder workspace and the minimal format
-    # builds, and native qualification builds the R source package with the
-    # minimum.
-    name: rust (minimum toolchain)
-    runs-on: ubuntu-24.04
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      # No step imports the Python package.
-      - uses: ./.github/actions/setup
-        with:
-          package: 'false'
-      - name: Activate the workspace rust-version toolchain
-        run: python -m tools.ci.toolchain --minimum --install
-      - name: Lint the workspace, but the R binding, with the minimum toolchain
-        env:
-          RUSTFLAGS: -D warnings
-        run: cargo clippy --locked --manifest-path rust/Cargo.toml --workspace --exclude yamaa-r --all-targets --all-features -- -D warnings
-
-  python:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 35
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup
-      - run: make test-python
-  equivalence-host:
-    # The engine gate, one job per host so that the two halves run in
-    # parallel: a fresh build of each host must reproduce every benchmark's
-    # expected bytes and every negative benchmark's first issue. Run by
-    # default, including new build/configuration inputs. Only changes
-    # confined to the documentation paths below pass without running.
-    # Scheduled runs leave it out: the gate rebuilds both hosts. Its two legs,
-    # equivalence (python) and equivalence (r), are the gate's checks; no job
-    # reports them as one (#3492). The name holds no matrix expression, so
-    # GitHub appends each leg's host to it, and a run that skips the job
-    # shows the plain name rather than an unexpanded expression.
-    name: equivalence
-    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 120
-    strategy:
-      fail-fast: false
-      matrix:
-        host: [python, r]
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
-      - name: Decide whether the diff reaches the gate's paths
+      - uses: ./.github/actions/select-checks
         id: paths
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: |
-          if [ "$EVENT_NAME" != pull_request ]; then
-            echo "run=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          if [ "$(git rev-parse HEAD)" != "$HEAD_SHA" ]; then
-            echo "::error::The equivalence gate must run on the pull-request head."
-            exit 1
-          fi
-          base=$(git merge-base "$BASE_SHA" "$HEAD_SHA")
-          changed=$(git diff --no-renames --name-only "$base" "$HEAD_SHA" -- . \
-            ':(top,exclude)README.md' \
-            ':(top,exclude)CONTRIBUTING.md' \
-            ':(top,exclude)AGENTS.md' \
-            ':(top,exclude,glob)docs/**/*.md')
-          if [ -n "$changed" ]; then
-            echo "run=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "run=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::The diff changes only documentation, so the equivalence gate did not run."
-          fi
-      # Each half builds its host from the checkout. The Python half needs no
-      # R; the R half ends with R CMD check --as-cran, so it needs what the r
-      # job needs.
       - uses: ./.github/actions/setup
-        if: steps.paths.outputs.run == 'true'
+        id: setup
+        if: steps.paths.outputs.rust == 'true'
         with:
-          r: ${{ matrix.host == 'r' && 'check' || 'none' }}
           package: tools
-      - name: Install the programs that CRAN's checks use
-        if: steps.paths.outputs.run == 'true' && matrix.host == 'r'
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends devscripts aspell aspell-en
-      - if: steps.paths.outputs.run == 'true'
+      - id: lint
+        if: steps.paths.outputs.rust == 'true'
+        run: uv run --project python --no-sync python -m tools.commands.repository lint-rust
+      - if: steps.paths.outputs.rust == 'true' && (success() || steps.lint.outcome == 'failure')
+        run: make test-rust
+      # Activate the minimum only after the pinned-toolchain lint and tests.
+      # Still check it if an ordinary test failed, without masking that failure.
+      - name: Activate the workspace rust-version toolchain
+        id: minimum
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' && steps.paths.outputs.minimum == 'true' }}
+        run: python -m tools.ci.toolchain --minimum --install
+      - name: Lint the workspace, but the R binding, with the minimum toolchain
+        if: ${{ !cancelled() && steps.minimum.outcome == 'success' }}
         env:
-          HOSTS: ${{ matrix.host }}
-        run: make check-equivalence HOSTS="$HOSTS"
-  r:
+          RUSTFLAGS: -D warnings
+        run: cargo clippy --locked --manifest-path rust/Cargo.toml --workspace --exclude yamaa-r --all-targets --all-features -- -D warnings
+      - name: No Rust inputs changed
+        if: steps.paths.outputs.rust == 'false'
+        run: echo '::notice::No Rust inputs changed; the Rust checks did not run.'
+
+  python:
     runs-on: ubuntu-24.04
-    timeout-minutes: 40
+    timeout-minutes: 150
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # The R package builds its own engine and no step imports the Python
-      # package, so the development package would go unused.
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: ./.github/actions/select-checks
+        id: paths
+      # The host runner builds one wheel and uses it for pytest, the installed
+      # suites and equivalence; setup does not build a development wheel too.
       - uses: ./.github/actions/setup
+        if: steps.paths.outputs.python == 'true'
+        with:
+          package: tools
+      - name: Check the freshly installed Python host
+        if: steps.paths.outputs.python == 'true'
+        env:
+          EQUIVALENCE: ${{ steps.paths.outputs.equivalence_python }}
+        run: |
+          arguments=(--host python)
+          if [ "$EQUIVALENCE" = true ]; then arguments+=(--equivalence); fi
+          uv run --project python --no-sync python -m tools.commands.host_checks "${arguments[@]}"
+      - name: No Python inputs changed
+        if: steps.paths.outputs.python == 'false'
+        run: echo '::notice::No Python inputs changed; the Python checks did not run.'
+
+  r:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: ./.github/actions/select-checks
+        id: paths
+      - uses: ./.github/actions/setup
+        if: steps.paths.outputs.r == 'true'
         with:
           r: check
           package: tools
-      # `make test-r` runs R CMD check --as-cran; with checkbashisms and aspell
-      # it also checks the configure scripts and DESCRIPTION's spelling, as
-      # CRAN's checks do.
       - name: Install the programs that CRAN's checks use
+        if: steps.paths.outputs.r == 'true'
         run: |
           sudo apt-get update
           sudo apt-get install --yes --no-install-recommends devscripts aspell aspell-en
       - name: Install the minimum supported R saved artifact readers
-        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        if: steps.paths.outputs.r == 'true' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
         run: Rscript --vanilla tools/ci/install_minimum_r_readers.R
       - name: Install the oldest supported R Arrow bridge
-        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        if: steps.paths.outputs.r == 'true' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
         run: |
           curl --fail --location --silent --show-error \
             https://github.com/apache/arrow-nanoarrow/archive/refs/tags/apache-arrow-nanoarrow-0.8.0.tar.gz \
@@ -198,11 +164,18 @@ jobs:
           tar -xzf "$RUNNER_TEMP/nanoarrow-bridge.tar.gz" -C "$RUNNER_TEMP"
           R CMD INSTALL "$RUNNER_TEMP/arrow-nanoarrow-apache-arrow-nanoarrow-0.8.0/r"
           Rscript --vanilla -e 'stopifnot(as.character(packageVersion("nanoarrow")) == "0.8.0")'
-      # The package's two installations, R CMD INSTALL and the one in R CMD
-      # check, build the engine in the directory that the Rust cache restores,
-      # so the second reuses the first's build, and a scheduled run on main
-      # saves the compiled crates for later runs. Unset, as on CRAN and in the
-      # native R lanes, the build stays inside the package.
-      - run: make test-r
+      - id: lint
+        if: steps.paths.outputs.r == 'true'
+        run: uv run --project python --no-sync python -m tools.commands.repository lint-r-binding
+      - name: Check the freshly installed R host
+        if: steps.paths.outputs.r == 'true' && (success() || steps.lint.outcome == 'failure')
         env:
+          EQUIVALENCE: ${{ steps.paths.outputs.equivalence_r }}
           YAMAA_R_CARGO_TARGET_DIR: ${{ github.workspace }}/rust/target
+        run: |
+          arguments=(--host r)
+          if [ "$EQUIVALENCE" = true ]; then arguments+=(--equivalence); fi
+          uv run --project python --no-sync python -m tools.commands.host_checks "${arguments[@]}"
+      - name: No R inputs changed
+        if: steps.paths.outputs.r == 'false'
+        run: echo '::notice::No R inputs changed; the R checks did not run.'

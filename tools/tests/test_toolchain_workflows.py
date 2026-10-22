@@ -5,8 +5,8 @@ Cargo's guide to continuous integration asks a project that declares a
 rust-version to verify it in CI, to test with the toolchains beside stable,
 and to keep testing the latest dependencies. The workspace rust-version is
 the floor that the source packages, CRAN and embedders build with, and every
-other job builds with the pinned toolchain, so CI's minimum-toolchain job is
-the one that fails when a change needs a newer Rust. The Next toolchain
+other job builds with the pinned toolchain, so CI's minimum-toolchain lint is
+the check that fails when a change needs a newer Rust. The Next toolchain
 workflow tests beta, and Dependency graphs resolves the newest graphs, weekly
 on main, where Main health reports a failing run.
 """
@@ -63,16 +63,19 @@ def setup_inputs(job):
 
 
 class MinimumToolchainJobs(unittest.TestCase):
-    def test_ci_lints_the_workspace_with_the_minimum_on_every_pull_request(self):
-        job = workflow("ci.yml")["jobs"]["rust-minimum"]
-        self.assertEqual(job["name"], "rust (minimum toolchain)")
-        # No condition: the job runs on every event that runs the workflow,
-        # pull requests and the main schedule included.
+    def test_the_rust_lane_lints_with_the_minimum_after_its_pinned_tests(self):
+        job = workflow("ci.yml")["jobs"]["rust"]
         self.assertNotIn("if", job)
         self.assertNotIn("needs", job)
         self.assertIn("timeout-minutes", job)
         run = commands(job)
+        self.assertLess(run.index("make test-rust"), run.index(ACTIVATE_MINIMUM))
         self.assertLess(run.index(ACTIVATE_MINIMUM), run.index(CLIPPY_BUT_R))
+        [activate] = [
+            step for step in job["steps"] if step.get("run") == ACTIVATE_MINIMUM
+        ]
+        self.assertIn("steps.paths.outputs.minimum == 'true'", activate["if"])
+        self.assertIn("!cancelled()", activate["if"])
         [lint] = [step for step in job["steps"] if step.get("run") == CLIPPY_BUT_R]
         self.assertEqual(lint["env"], {"RUSTFLAGS": "-D warnings"})
         self.assertNotIn("cargo update", "\n".join(run))
@@ -91,8 +94,8 @@ class MinimumToolchainJobs(unittest.TestCase):
         # development package. CI's job leaves the R binding out and installs
         # no R; the release lane lints the binding too, whose extendr build
         # script runs R.
-        ci = workflow("ci.yml")["jobs"]["rust-minimum"]
-        self.assertEqual(setup_inputs(ci), {"package": "false"})
+        ci = workflow("ci.yml")["jobs"]["rust"]
+        self.assertEqual(setup_inputs(ci), {"package": "tools"})
         release = workflow("release-compatibility.yml")["jobs"]["rust-minimum"]
         self.assertEqual(setup_inputs(release), {"r": "runtime", "package": "false"})
 

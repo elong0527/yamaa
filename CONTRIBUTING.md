@@ -280,16 +280,17 @@ Passing static repository validation does not establish engine release
 qualification.
 
 A change to the executor, such as rewrite 1 (#2785), must leave every result
-unchanged. Each such PR passes ordinary CI and the `equivalence` job's two
-legs below on its exact head. Those jobs are the proof: run
+unchanged. Each such PR passes ordinary CI with equivalence in both the
+`python` and `r` lanes on its exact head. Those checks are the proof: run
 `make check-equivalence` locally only to debug a CI failure of that gate
-(D148 on #3030). CI runs the gate on a pull request
-unless its diff is confined to root `README.md`,
-`CONTRIBUTING.md`, `AGENTS.md` and Markdown files under `docs/`. Such a
-documentation-only pull request passes with a notice without running the
-gate. All other paths, including new
-build configuration, package metadata, checkout attributes and repository
-tools, trigger it. The gate builds the Python and R packages from the exact
+(D148 on #3030). CI selects the affected work with `tools/ci/pr_changes.py`.
+Engine, benchmark, schema, shared build and unrecognized paths qualify both
+hosts. Host-specific changes qualify that host; known repository-test,
+validation and documentation tools run their ordinary tests. Root
+`README.md`, `CONTRIBUTING.md`, `AGENTS.md` and prose/site assets under
+`docs/` need only documentation checks. Deleted paths count, and renames
+count both the old and new paths, so moving code into documentation cannot
+skip qualification. The gate builds the Python and R packages from the exact
 pull-request head and installs both outside the checkout. On each host it
 runs public benchmark
 conformance: every active benchmark must reproduce its expected
@@ -301,9 +302,12 @@ runs the installed Python suites and `R CMD check`, which carry the
 cross-host diagnostic parity truth and the host-fixture families.
 `HOSTS=python` runs the Python half alone: its build, its conformance and the
 installed suites; `HOSTS=r` runs the R half: its build, its conformance and
-`R CMD check`. CI's `equivalence` job runs the two halves in parallel as its
-two legs, `equivalence (python)` and `equivalence (r)`, and those two checks
-are the gate's result: the gate passes only when both pass.
+`R CMD check`. CI runs the two halves in the parallel `python` and `r` lanes,
+sharing each fresh installation with that host's ordinary tests. The installed
+suites and R package check run once. Both lanes must pass for an engine
+change; a unit-test failure does not prevent benchmark qualification from
+reporting its own result. The standalone Make target still runs the gate
+without the ordinary package/tools tests.
 `make probe-executor` times one specification at 10,000, 100,000 and
 1,000,000 rows, with and without one keyed intermediate lookup;
 `examples/executor_probe.rs` in the `yamaa` crate documents its shapes and
@@ -501,7 +505,7 @@ case whose rows or files differ by host gives them under `python`, `r` and
 
 ## CI and release qualification
 
-The ordinary CI workflow runs the same check targets listed above for each PR,
+The ordinary CI workflow selects from the same checks listed above for each PR,
 every two hours on main, and on each push to a `release/**` branch. Merges to
 main do not start workflows other than the documentation site deployment; main
 is checked on those schedules instead. While the newest main run of CI, the
@@ -511,18 +515,29 @@ issue open for it and closes the issue when a later main run succeeds. A
 failing fuzz run on main opens such an issue, or comments on the open one, and
 a person closes it: a later green run does not show that the crash is fixed,
 because the next run may not find the same input again. A PR that changes
-`.github/` also runs actionlint over every workflow.
+`.github/` also runs actionlint over every workflow in the repository lane.
 Keep workflow-specific setup in CI and reusable check logic in `tools/`.
 Pin external actions to complete commit IDs with exact release comments.
 
-PRs and the main schedule run five development jobs: repository checks
-(including lint), the Rust workspace, the Python and R hosts on Linux, and
-`rust (minimum toolchain)`, which lints the workspace with the minimum Rust
-(below). All five checks are required to merge into main.
-The additional checks run the gate on the pull requests described above and
-on dispatch: the `equivalence` job's two legs, `equivalence (python)` and
-`equivalence (r)`. A documentation-only pull request passes both with a skip
-notice.
+PRs report four required checks: `repository`, `rust`, `python` and `r`.
+Every lane checks out the exact head and selects work from the merge base
+before installing tools. An invalid diff or a wrong checkout fails the lane.
+The repository lane runs Python formatting/type checks and repository
+validation; Rust formatting and Clippy run beside the Rust tests. Minimum
+Rust lint runs at the end of the Rust lane, after the pinned-toolchain tests,
+for Rust/build changes. The two host lanes run their tests and any selected
+equivalence on a single fresh installation each.
+
+A documentation-only PR validates rule links, documentation prose and site
+YAML examples, then runs `make docs-test docs`, with locked tooling and
+no installed host or Rust toolchain. The other three checks report a skip
+notice without installing their tools. Known repository-only tools run the
+repository and Python checks. A host-only change runs the affected host;
+shared Python dependency metadata, engine/build changes and unknown paths
+run all four lanes. Fuzzing remains a separate workflow selected by affected
+parsers. There is no separate reporting job or equivalence status to wait for.
+The main schedule and release pushes run all development checks; dispatch
+also qualifies both hosts against benchmark truth.
 
 The `Release compatibility` workflow checks the minimum Rust toolchain, the R
 source package built with it, minimal format builds, Python 3.15 and minimum
@@ -540,21 +555,22 @@ The `Fuzz` workflow fuzzes the readers that parse untrusted input under
 AddressSanitizer, with UndefinedBehaviorSanitizer for the C they compile. A PR
 runs, for three minutes each, the targets whose readers it changes; a nightly
 schedule runs every target for thirty minutes. The repository checks also run
-Clippy over the targets, so a change that breaks one fails on its PR. The
-[fuzz guide](rust/fuzz/README.md) lists the targets and runs them locally with
+Clippy over the targets in the Rust lane, so a change that breaks one fails
+on its PR. The [fuzz guide](rust/fuzz/README.md) lists the targets and runs them locally with
 `python -m tools.ci.fuzz`. Fix a crash with a unit test in the owning crate and
 commit its input as a text regression beside the targets.
 
-CI's `rust (minimum toolchain)` job lints the workspace, with Clippy and
-`RUSTFLAGS=-D warnings`, with its declared `rust-version`, Rust 1.82.0,
-instead of the pinned toolchain that every other job uses, because embedders
+At the end of CI's Rust lane, Clippy with `RUSTFLAGS=-D warnings` checks the
+workspace with its declared `rust-version`, Rust 1.82.0, instead of the pinned
+toolchain that the other checks use, because embedders
 and the source packages build with their own toolchains, and the pinned
-toolchain accepts code that the minimum refuses. It runs on every pull
-request and on the main schedule, as Cargo's guide to continuous integration
+toolchain accepts code that the minimum refuses. It runs for Rust/build
+changes and on the main schedule, as Cargo's guide to continuous integration
 asks for a declared `rust-version`. It leaves the R binding out, as the
 repository lint does: the binding's build script runs R, and only the jobs
-that check the R host install R. The `Release compatibility` workflow's job
-of the same name repeats that lint with the R binding, after `cargo check`,
+that check the R host install R. The `Release compatibility` workflow's
+`rust (minimum toolchain)` job repeats that lint with the R binding, after
+`cargo check`,
 on release branches and adds the builds below, and native qualification
 builds the R source package with the minimum. Rust 1.82.0 was released on
 2024-10-17, so it meets CRAN's request to test with a cargo at least two
@@ -636,8 +652,8 @@ the committed notices equal to those generated from the canonical lock; these
 compatibility lanes supplement [native qualification](rust/qualification/README.md).
 
 Before every merge into `main` or a `release/X.Y.Z` branch, bring the branch up
-to date with its base and wait until CI is green on the exact head, the
-`equivalence` legs included. Never merge while a required job
+to date with its base and wait until CI is green on the exact head, including
+the affected host lanes' equivalence checks. Never merge while a required job
 is queued, running or cancelled (D176 on #3030). Then run a fresh read-only
 review check with an authenticated GitHub CLI, supplying the exact final
 commit:
