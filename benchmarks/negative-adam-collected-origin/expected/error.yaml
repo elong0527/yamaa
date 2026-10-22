@@ -1,0 +1,10 @@
+phase: validation
+condition: origin_source_not_admitted
+spec_paths:
+  - columns.AGE.submission.origins[0]
+rule: SUB-15
+context:
+  column: AGE
+  origin_type: Collected
+  origin_source: Subject
+  model: ADaM

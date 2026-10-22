@@ -1,0 +1,8 @@
+phase: validation
+condition: reserved_metadata_key
+spec_paths:
+  - metadata.label
+rule: SUB-2
+context:
+  key: label
+  level: root

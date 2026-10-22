@@ -29,10 +29,10 @@ use yamaa_core::{
     value::Value,
 };
 
-const PLAIN: &[u8] = b"schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {RAW: {path: raw.csv, types: {ID: int}}}\ncolumns:\n  - {name: ID, type: int, derivation: RAW.ID}\n  - {name: NAME, type: str, derivation: RAW.NAME}\noutput: {path: out.csv, columns: [ID, NAME]}\n";
-const ENVIRONMENT: &[u8] = b"schema_version: '1.0'\n";
-const PRODUCER: &[u8] = b"schema_version: '1.0'\ndomain: PRODUCER\nkeys: [ID]\ninput: {RAW: {path: raw.csv, types: {ID: int}}}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: RAW.ID}\n  - {name: NAME, type: str, label: Name, derivation: RAW.NAME}\noutput: {path: produced.csv, columns: [ID, NAME]}\n";
-const CONSUMER: &[u8] = b"schema_version: '1.0'\ndomain: CONSUMER\nkeys: [ID]\ninput: {P: {path: produced.csv, schema: producer.yaml}}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: P.ID}\n  - {name: NAME, type: str, label: Name, derivation: P.NAME}\noutput: {path: final.csv, columns: [ID, NAME]}\n";
+const PLAIN: &[u8] = b"yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {RAW: {path: raw.csv, types: {ID: int}}}\ncolumns:\n  - {name: ID, type: int, derivation: RAW.ID}\n  - {name: NAME, type: str, derivation: RAW.NAME}\noutput: {path: out.csv, columns: [ID, NAME]}\n";
+const ENVIRONMENT: &[u8] = b"yamaa: \"1.0\"\ntype: project\n";
+const PRODUCER: &[u8] = b"yamaa: \"1.0\"\ntype: spec\ndomain: PRODUCER\nkeys: [ID]\ninput: {RAW: {path: raw.csv, types: {ID: int}}}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: RAW.ID}\n  - {name: NAME, type: str, label: Name, derivation: RAW.NAME}\noutput: {path: produced.csv, columns: [ID, NAME]}\n";
+const CONSUMER: &[u8] = b"yamaa: \"1.0\"\ntype: spec\ndomain: CONSUMER\nkeys: [ID]\ninput: {P: {path: produced.csv, schema: producer.yaml}}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: P.ID}\n  - {name: NAME, type: str, label: Name, derivation: P.NAME}\noutput: {path: final.csv, columns: [ID, NAME]}\n";
 
 const STUDY_A: &[u8] = b"ID,NAME\n1,alpha\n2,beta\n";
 const STUDY_B: &[u8] = b"ID,NAME\n7,gamma\n";

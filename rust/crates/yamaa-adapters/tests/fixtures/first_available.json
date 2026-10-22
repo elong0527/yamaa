@@ -1,7 +1,7 @@
 [
   {
     "case": "filtered_fallback",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      first_available: {\"sources\": [{\"variable\": \"SRC.A\", \"filter\": \"SRC.F = 'Y'\"}, \"SRC.B\"], \"missing\": 99}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      first_available: {\"sources\": [{\"variable\": \"SRC.A\", \"filter\": \"SRC.F = 'Y'\"}, \"SRC.B\"], \"missing\": 99}\n",
     "input": "ID,A,B,F\na,10,20,Y\na,11,20,N\nb,,30,Y\nb,17,30,N\nc,7,40,\nc,7,40,\n",
     "expected": {
       "artifacts": [
@@ -249,7 +249,7 @@
   },
   {
     "case": "skip_later_conflict",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      first_available: {\"sources\": [\"SRC.B\", \"SRC.A\"], \"missing\": 99}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      first_available: {\"sources\": [\"SRC.B\", \"SRC.A\"], \"missing\": 99}\n",
     "input": "ID,A,B,F\na,10,20,Y\na,11,20,N\nb,,30,Y\nb,17,30,N\nc,7,40,\nc,7,40,\n",
     "expected": {
       "artifacts": [
@@ -497,7 +497,7 @@
   },
   {
     "case": "empty_filter",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      first_available: {\"sources\": [{\"variable\": \"SRC.A\", \"filter\": \"SRC.F = 'absent'\"}], \"missing\": 99}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      first_available: {\"sources\": [{\"variable\": \"SRC.A\", \"filter\": \"SRC.F = 'absent'\"}], \"missing\": 99}\n",
     "input": "ID,A,B,F\na,10,20,Y\na,11,20,N\nb,,30,Y\nb,17,30,N\nc,7,40,\nc,7,40,\n",
     "expected": {
       "artifacts": [
@@ -745,7 +745,7 @@
   },
   {
     "case": "null_filter",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      first_available: {\"sources\": [{\"variable\": \"SRC.A\", \"filter\": \"SRC.F IS NULL\"}]}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      first_available: {\"sources\": [{\"variable\": \"SRC.A\", \"filter\": \"SRC.F IS NULL\"}]}\n",
     "input": "ID,A,B,F\na,10,20,Y\na,11,20,N\nb,,30,Y\nb,17,30,N\nc,7,40,\nc,7,40,\n",
     "expected": {
       "artifacts": [
@@ -993,7 +993,7 @@
   },
   {
     "case": "empty_list",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      first_available: {\"sources\": [], \"missing\": 99}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      first_available: {\"sources\": [], \"missing\": 99}\n",
     "input": "ID,A,B,F\na,10,20,Y\na,11,20,N\nb,,30,Y\nb,17,30,N\nc,7,40,\nc,7,40,\n",
     "expected": {
       "artifacts": [
@@ -1241,7 +1241,7 @@
   },
   {
     "case": "missing_list",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      first_available: {\"sources\": []}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      first_available: {\"sources\": []}\n",
     "input": "ID,A,B,F\na,10,20,Y\na,11,20,N\nb,,30,Y\nb,17,30,N\nc,7,40,\nc,7,40,\n",
     "expected": {
       "artifacts": [
@@ -1489,7 +1489,7 @@
   },
   {
     "case": "unknown_later",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      first_available: {\"sources\": [\"SRC.B\", \"SRC.ABSENT\"], \"missing\": 99}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      first_available: {\"sources\": [\"SRC.B\", \"SRC.ABSENT\"], \"missing\": 99}\n",
     "input": "ID,A,B,F\na,10,20,Y\na,11,20,N\nb,,30,Y\nb,17,30,N\nc,7,40,\nc,7,40,\n",
     "expected": {
       "artifacts": [],
@@ -1682,7 +1682,7 @@
   },
   {
     "case": "scalar_filter",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      first_available: {\"sources\": [{\"variable\": \"ID\", \"filter\": \"SRC.F =\"}], \"missing\": 99}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      first_available: {\"sources\": [{\"variable\": \"ID\", \"filter\": \"SRC.F =\"}], \"missing\": 99}\n",
     "input": "ID,A,B,F\na,10,20,Y\na,11,20,N\nb,,30,Y\nb,17,30,N\nc,7,40,\nc,7,40,\n",
     "expected": {
       "artifacts": [],
@@ -1875,7 +1875,7 @@
   },
   {
     "case": "multiple_first",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      first_available: {\"sources\": [\"SRC.A\", \"SRC.B\"], \"missing\": 99}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      first_available: {\"sources\": [\"SRC.A\", \"SRC.B\"], \"missing\": 99}\n",
     "input": "ID,A,B,F\na,10,20,Y\na,11,20,N\nb,,30,Y\nb,17,30,N\nc,7,40,\nc,7,40,\n",
     "expected": {
       "artifacts": [],
@@ -2092,7 +2092,7 @@
   },
   {
     "case": "selected_unconvertible",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      first_available: {\"sources\": [{\"variable\": \"SRC.A\", \"filter\": \"SRC.F = 'Y'\"}, \"SRC.B\"], \"missing\": 99}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      first_available: {\"sources\": [{\"variable\": \"SRC.A\", \"filter\": \"SRC.F = 'Y'\"}, \"SRC.B\"], \"missing\": 99}\n",
     "input": "ID,A,B,F\na,bad,20,Y\na,11,20,N\nb,,30,Y\nb,17,30,N\nc,7,40,\nc,7,40,\n",
     "expected": {
       "artifacts": [],
@@ -2311,7 +2311,7 @@
   },
   {
     "case": "fallback_unconvertible",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      first_available: {\"sources\": [], \"missing\": \"bad\"}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      first_available: {\"sources\": [], \"missing\": \"bad\"}\n",
     "input": "ID,A,B,F\na,10,20,Y\na,11,20,N\nb,,30,Y\nb,17,30,N\nc,7,40,\nc,7,40,\n",
     "expected": {
       "artifacts": [],

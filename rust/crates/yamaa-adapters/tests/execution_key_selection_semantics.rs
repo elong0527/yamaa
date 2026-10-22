@@ -78,7 +78,7 @@ fn keyed(keys: &str, types: &str, columns: &str, rest: &str) -> String {
         format!("{{path: src.csv, types: {{{types}}}}}")
     };
     format!(
-        "schema_version: '1.0'\ndomain: OUT\nkeys: [{keys}]\ninput: {{SRC: {input}}}\n\
+        "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [{keys}]\ninput: {{SRC: {input}}}\n\
          output: {{path: out.csv, columns: [{columns}]{rest}}}\n"
     )
 }
@@ -256,7 +256,7 @@ fn match_values_compare_as_calendar_values_and_exact_numbers() {
     // were collected in full; the float key is negative zero, the donor's
     // positive. Each pair is still equal (VALUE-21, VALUE-19).
     let fixture = Fixture::new(
-        "schema_version: '1.0'\ndomain: OUT\nkeys: [ID]\nbase: SRC\n\
+        "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\nbase: SRC\n\
          input:\n  SRC: {path: src.csv, types: {ID: int, F: float}}\n  \
          TAB: {path: tab.csv, types: {DAY: date, MOMENT: datetime, NUM: float}}\n\
          output: {path: out.csv, columns: [ID, FROM_YEAR, FROM_DAY, FROM_ZERO]}\n\
@@ -264,7 +264,7 @@ fn match_values_compare_as_calendar_values_and_exact_numbers() {
          - id: YEARLY\n    dataset: TAB\n    \
          key: {DAY: {impute: {type: date, source: SRC.YEAR, month: 1, day: first}}}\n  \
          - id: DAILY\n    dataset: TAB\n    \
-         key: {MOMENT: {impute: {type: datetime, source: SRC.DAY, minimum_source_precision: day, time: first}}}\n  \
+         key: {MOMENT: {impute: {type: datetime, source: SRC.DAY, time: first}}}\n  \
          - id: SIGNED\n    dataset: TAB\n    key: {NUM: SRC.F}\n\
          columns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  \
          - {name: FROM_YEAR, type: str, derivation: YEARLY.VAL}\n  \
@@ -288,13 +288,12 @@ fn match_values_compare_as_calendar_values_and_exact_numbers() {
 fn padded(width: &str) -> Fixture {
     Fixture::new(
         &format!(
-            "schema_version: '1.0'\ndomain: OUT\nkeys: [ID]\nbase: SRC\n\
+            "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\nbase: SRC\n\
              input:\n  SRC: {{path: src.csv, types: {{N: int}}}}\n  \
              TAB: {{path: tab.csv, types: {{KINT: int, KNUM: float}}}}\n\
              output: {{path: out.csv, columns: [ID, V, V2]}}\n\
              intermediates:\n  - id: LOOK\n    dataset: TAB\n    \
-             key: {{KNUM: {{literal: null}}, K: {{str_pad: {{source: SRC.N, width: {width}}}}}}}\n    \
-             no_match: {{literal: null}}\n\
+             key: {{KNUM: null, K: {{str_pad: {{source: SRC.N, width: {width}}}}}}}\n\
              columns:\n  - {{name: ID, type: str, derivation: SRC.ID}}\n  \
              - {{name: V, type: str, derivation: LOOK.VAL}}\n  \
              - {{name: V2, type: str, derivation: LOOK.VAL}}\n"
@@ -311,17 +310,17 @@ fn padded(width: &str) -> Fixture {
 
 #[test]
 fn a_missing_first_match_value_does_not_skip_a_later_one() {
-    // A missing match value seeks no record, so every row answers no_match;
+    // A missing match value seeks no record, so every row answers absent;
     // yet each match value is evaluated before any record is read
     // (LOOKUP-25), and padding to a width no text can reach refuses the run.
-    let answered = |path: &str| json!({"spec_path": path, "handler": "no_match", "count": 3});
+    let answered = |path: &str| json!({"spec_path": path, "handler": "absent", "count": 3});
     assert_eq!(
         padded("8").run(),
         Ok((
             "ID,V,V2\na,,\nb,,\nc,,\n".into(),
             json!([
-                answered("columns.V.derivation.source.no_match"),
-                answered("columns.V2.derivation.source.no_match"),
+                answered("columns.V.derivation.source.absent"),
+                answered("columns.V2.derivation.source.absent"),
             ])
         ))
     );

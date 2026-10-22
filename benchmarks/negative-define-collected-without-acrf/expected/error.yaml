@@ -1,0 +1,5 @@
+phase: validation
+condition: origin_document_missing
+spec_paths:
+  - sdtm.specs[0].columns.SEX.submission.origins[0]
+rule: DEFINE-14

@@ -902,10 +902,8 @@ mod table {
         };
         use yamaa_core::application_observer::Scope;
         use yamaa_core::specification::SourceDeclaration;
+        use yamaa_core::specification_run::SpecificationSourcePort;
         use yamaa_core::value::Value;
-        use yamaa_core::{
-            specification_output::SaveError, specification_run::SpecificationSourcePort,
-        };
 
         const SPEC: &str = "yamaa: '1.0'\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {VALUE: float}}}\noutput: {path: output.csv, columns: [ID, VALUE, DOUBLE], decimals: PRECISION}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: float, derivation: SRC.VALUE}\n  - {name: DOUBLE, type: float, derivation: 'VALUE + VALUE'}\n";
         fn prepared(precision: &str, path: &str, expression: &str) -> PreparedRun {
@@ -964,24 +962,6 @@ mod table {
                 base_directory: ".",
             }
         }
-        #[derive(Default)]
-        struct Publisher {
-            bytes: Vec<u8>,
-            calls: usize,
-            reject: bool,
-        }
-        impl specification_report::ArtifactPort for Publisher {
-            type Error = &'static str;
-            fn publish(&mut self, path: &str, content: &[u8]) -> Result<(), Self::Error> {
-                self.calls += 1;
-                assert_eq!(path, "output.csv");
-                if self.reject {
-                    return Err("original publication failure");
-                }
-                self.bytes = content.into();
-                Ok(())
-            }
-        }
 
         #[test]
         fn whole_result_keeps_unrounded_derivation_and_prepares_exact_saved_bytes_once() {
@@ -1011,21 +991,12 @@ mod table {
                 result.observations()["artifacts"],
                 yamaa_adapters::json!([])
             );
-            let mut publisher = Publisher {
-                reject: true,
-                ..Default::default()
-            };
-            assert!(matches!(
-                result.save(&mut publisher),
-                Err(SaveError::Publish("original publication failure"))
-            ));
-            assert!(publisher.bytes.is_empty());
-            publisher.reject = false;
             drop(attempt);
             drop(run);
-            let report = result.save(&mut publisher).unwrap();
+            // The saved bytes belong to the result, not to the run.
             let expected = b"ID,VALUE,DOUBLE\n1,0.13,0.25\n2,1.23,2.47\n3,2.35,4.69\n";
-            assert_eq!(publisher.bytes, expected);
+            assert_eq!(result.files(), [("output.csv", expected.as_slice())]);
+            let report = result.saved_observations().unwrap();
             assert_eq!(
                 report["artifacts"][0]["content"]
                     .as_str()
@@ -1033,8 +1004,6 @@ mod table {
                     .as_bytes(),
                 expected
             );
-            result.save(&mut publisher).unwrap();
-            assert_eq!(publisher.calls, 3);
             assert_eq!(study.0, 1);
         }
 
@@ -1066,12 +1035,7 @@ mod table {
                 assert!(result.output().is_none());
                 assert_eq!(report["diagnostics"].as_array().unwrap().len(), 1);
                 assert_eq!(report["diagnostics"][0]["condition"], condition);
-                let mut publisher = Publisher::default();
-                assert!(matches!(
-                    result.save(&mut publisher),
-                    Err(SaveError::FailedBuild)
-                ));
-                assert_eq!(publisher.calls, 0);
+                assert!(result.files().is_empty());
             }
         }
 
@@ -3277,7 +3241,7 @@ mod table {
         //! Complete original-document outcomes captured independently from Python.
         use std::sync::Arc;
         use yamaa_adapters::{
-            specification_report::{self, ArtifactPort, Identity},
+            specification_report::{self, Identity},
             specification_run::{PreparedRun, SpecificationSourcePort},
             specification_source::Source,
         };
@@ -3310,12 +3274,6 @@ mod table {
                 assert_eq!((&*source.name, &*source.path), ("SRC", "source.csv"));
                 self.captures += 1;
                 Ok(Arc::from(b"ID,V\n1,2\n".as_slice()))
-            }
-        }
-        impl ArtifactPort for Port {
-            type Error = ();
-            fn publish(&mut self, _: &str, _: &[u8]) -> Result<(), ()> {
-                panic!("failed predicate attempt cannot publish")
             }
         }
         #[test]
@@ -3362,13 +3320,9 @@ mod table {
                 assert!(result.output().is_none());
                 drop(attempt);
                 drop(run);
-                for _ in 0..2 {
-                    assert!(matches!(
-                        result.save(&mut port),
-                        Err(yamaa_core::specification_output::SaveError::FailedBuild)
-                    ));
-                    assert_eq!(result.observations(), expected);
-                }
+                // A failed predicate attempt has no file to save.
+                assert!(result.files().is_empty(), "{}", fields[0]);
+                assert_eq!(result.observations(), expected);
                 assert_eq!(port.captures, 1);
                 count += 1;
             }

@@ -193,6 +193,10 @@ pub fn column_diagnostic(
     if let Check::DataType { form, .. } = check {
         context.insert("data_type".into(), JsonValue::String(form.name().into()));
     }
+    // An entry that selects no row names itself, as a run's check does (SUB-13).
+    if let Check::ValueEntryMatch { id, .. } = check {
+        context.insert("entry".into(), JsonValue::String(id.clone()));
+    }
     Some(Diagnostic {
         code,
         spec_paths: vec![path],

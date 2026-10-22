@@ -589,7 +589,7 @@ was removed. Any module not listed here is internal by default.
 | `specification_report` | Facade -- the one result builder behind `Run`; its `Identity` folds into `EngineOptions` (`runtime_name`/`runtime_version`); the module is internal. |
 | `style_values` | Internal -- the value comparison that proves `lint`'s fixes. |
 | `yaml_decode` | Internal -- `DecodeFailure` converts into diagnostics/`Error::Unavailable`. |
-| `yamaa_core::application_observer` | Internal -- the run's measurements and its cancellation probe travel in its `Scope`; there is no public progress port (#3030 D72, #3420). |
+| `yamaa_core::application_observer` | Internal -- the observer port: each build's phase and stage events reach the adapters' measurements, which the facade passes in the build's `Scope` beside its cancellation probe; there is no public progress port (#3030 D72). |
 | `yamaa_core::domain_entry` | Internal -- the observed preparation and build phases behind `Engine`. |
 | `yamaa_core::function_batch` | Facade -- `ProjectFunctions` batch invocation with facade scalar arguments; `BatchFunctionPort` stays internal. |
 | `yamaa_core::function_invocation` | Facade -- `FunctionError` is its public form; `HostError` stays internal. |

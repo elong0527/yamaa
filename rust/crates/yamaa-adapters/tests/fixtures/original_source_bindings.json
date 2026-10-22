@@ -1,7 +1,7 @@
 [
   {
     "case": "filtered_ordered",
-    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\n  DONOR: donor.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      source:\n        variable: DONOR.V\n        filter: \"DONOR.F = 'Y'\"\n        order_by: [DONOR.O]\n        keep: first\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\n  DONOR: {path: donor.csv, key: [ID]}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      source:\n        variable: DONOR.V\n        filter: \"DONOR.F = 'Y'\"\n        order_by: [DONOR.O]\n        keep: first\n",
     "inputs": {
       "DONOR": "ID,V,O,F\na,10,2,Y\na,11,1,Y\nb,20,1,N\nc,30,1,Y\n",
       "SRC": "ID\na\nb\nc\n"
@@ -264,7 +264,7 @@
   },
   {
     "case": "stable_first",
-    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\n  DONOR: donor.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      source:\n        variable: DONOR.V\n        order_by: [DONOR.O]\n        keep: first\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\n  DONOR: {path: donor.csv, key: [ID]}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      source:\n        variable: DONOR.V\n        order_by: [DONOR.O]\n        keep: first\n",
     "inputs": {
       "DONOR": "ID,V,O\na,10,1\na,11,1\n",
       "SRC": "ID\na\n"
@@ -447,7 +447,7 @@
   },
   {
     "case": "stable_last",
-    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\n  DONOR: donor.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      source:\n        variable: DONOR.V\n        order_by: [DONOR.O]\n        keep: last\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\n  DONOR: {path: donor.csv, key: [ID]}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      source:\n        variable: DONOR.V\n        order_by: [DONOR.O]\n        keep: last\n",
     "inputs": {
       "DONOR": "ID,V,O\na,10,1\na,11,1\n",
       "SRC": "ID\na\n"
@@ -630,7 +630,7 @@
   },
   {
     "case": "nulls_first_desc",
-    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\n  DONOR: donor.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      source:\n        variable: DONOR.V\n        order_by: [{variable: DONOR.O, direction: desc, nulls: first}]\n        keep: first\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\n  DONOR: {path: donor.csv, key: [ID]}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      source:\n        variable: DONOR.V\n        order_by: [{variable: DONOR.O, direction: desc, nulls: first}]\n        keep: first\n",
     "inputs": {
       "DONOR": "ID,V,O\na,10,1\na,11,\na,12,2\n",
       "SRC": "ID\na\n"
@@ -827,7 +827,7 @@
   },
   {
     "case": "zero_matches",
-    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\n  DONOR: donor.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      source:\n        variable: DONOR.V\n        filter: \"FALSE\"\n        order_by: [DONOR.ID]\n        keep: last\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\n  DONOR: {path: donor.csv, key: [ID]}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      source:\n        variable: DONOR.V\n        filter: \"FALSE\"\n        order_by: [DONOR.ID]\n        keep: last\n",
     "inputs": {
       "DONOR": "ID,V,O,F\na,10,2,Y\na,11,1,Y\nb,20,1,N\nc,30,1,Y\n",
       "SRC": "ID\na\nb\nc\n"
@@ -1227,7 +1227,7 @@
   },
   {
     "case": "present_missing",
-    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      source: {variable: SRC.V, absent: 7}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      source: {variable: SRC.V, absent: 7}\n",
     "inputs": {
       "SRC": "ID,V\na,\nb,9\n"
     },
@@ -1627,7 +1627,7 @@
   },
   {
     "case": "driver_ordered",
-    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      source:\n        variable: SRC.V\n        order_by: [SRC.O]\n        keep: last\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      source:\n        variable: SRC.V\n        order_by: [SRC.O]\n        keep: last\n",
     "inputs": {
       "SRC": "ID,V,O\na,10,1\na,11,2\nb,20,1\n"
     },
@@ -1798,7 +1798,7 @@
   },
   {
     "case": "lazy_intermediate",
-    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\n  DONOR: donor.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      first_available: {sources: [SRC.V, SEL.V], missing: 99}\nintermediates:\n  - {id: SEL, dataset: DONOR, key: {ID: ID}}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\n  DONOR: donor.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      first_available: {sources: [SRC.V, SEL.V], missing: 99}\nintermediates:\n  - {id: SEL, dataset: DONOR, key: {ID: ID}}\n",
     "inputs": {
       "DONOR": "ID,V\na,10\na,11\nb,7\nc,\n",
       "SRC": "ID,V\na,5\nb,\nc,\n"
@@ -1841,8 +1841,8 @@
         },
         {
           "count": 0,
-          "handler": "no_match",
-          "spec_path": "columns.V.derivation.first_available.sources[1].no_match"
+          "handler": "absent",
+          "spec_path": "columns.V.derivation.first_available.sources[1].absent"
         }
       ],
       "nodes": [
@@ -1856,8 +1856,8 @@
             },
             {
               "count": 0,
-              "handler": "no_match",
-              "spec_path": "columns.V.derivation.first_available.sources[1].no_match"
+              "handler": "absent",
+              "spec_path": "columns.V.derivation.first_available.sources[1].absent"
             }
           ],
           "outcome": "success",
@@ -2039,7 +2039,7 @@
   },
   {
     "case": "secondary_fallback",
-    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\n  DONOR: donor.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      first_available: {sources: [SRC.V, DONOR.V], missing: 99}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\n  DONOR: {path: donor.csv, key: [ID]}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      first_available: {sources: [SRC.V, DONOR.V], missing: 99}\n",
     "inputs": {
       "DONOR": "ID,V\na,10\na,11\nb,7\n",
       "SRC": "ID,V\na,5\nb,\nc,\n"
@@ -2270,7 +2270,7 @@
   },
   {
     "case": "duplicate_equal",
-    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\n  DONOR: donor.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation: DONOR.V\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\n  DONOR: {path: donor.csv, key: [ID]}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation: DONOR.V\n",
     "inputs": {
       "DONOR": "ID,V\na,10\na,10\n",
       "SRC": "ID\na\n"
@@ -2566,7 +2566,7 @@
   },
   {
     "case": "unused_invalid_absent",
-    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      source: {variable: SRC.V, absent: bad}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      source: {variable: SRC.V, absent: bad}\n",
     "inputs": {
       "SRC": "ID,V\na,8\n"
     },
@@ -2811,7 +2811,7 @@
   },
   {
     "case": "numeric_keys_exact",
-    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {ID: int}}\n  DONOR: {path: donor.csv, types: {ID: float, V: int}}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: int, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation: DONOR.V\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {ID: int}}\n  DONOR: {path: donor.csv, key: [ID], types: {ID: float, V: int}}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: int, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation: DONOR.V\n",
     "inputs": {
       "DONOR": "ID,V\n1.0,10\n9007199254740992.0,20\n",
       "SRC": "ID\n1\n9007199254740993\n"

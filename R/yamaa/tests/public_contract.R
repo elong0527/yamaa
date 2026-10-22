@@ -23,9 +23,10 @@ error_text <- function(key, path = NULL, file = NULL) {
 }
 namespace <- asNamespace("yamaa")
 
-expect_identical(as.character(packageVersion("yamaa")), "0.5.0", "the package version")
-expect_identical(yamaa:::.core_version(), as.character(packageVersion("yamaa")),
-  "the engine's version is the package's")
+# An R version cannot mark a release candidate, so the package keeps the final
+# version, and the engine names the candidate in its Cargo spelling (#3030 D53).
+expect_identical(as.character(packageVersion("yamaa")), "1.0.0", "the package version")
+expect_identical(yamaa:::.core_version(), "1.0.0-rc.1", "the engine's version")
 expect_identical(sort(getNamespaceExports("yamaa")),
   c("yamaa_info", "yamaa_lint", "yamaa_project", "yamaa_read_odm", "yamaa_schema",
     "yamaa_selftest", "yamaa_spec"),
@@ -669,11 +670,14 @@ qualify_public_large_text_callback <- function() {
   lock <- charToRaw(paste0('{"R":{"Version":"', getRversion(), '"},"Packages":{"yamaa":{"Version":"',
     utils::packageVersion("yamaa"), '"}}}'))
   writeBin(lock, file.path(directory, "renv.lock"))
-  writeBin(charToRaw("schema_version: '1.0'\nlock: renv.lock\nfunctions:\n  text:\n    function: base::identity\n    description: Return text unchanged.\n    params: [{name: x, type: str}]\n    returns: str\n    tests:\n      - {id: normal, covers: [normal], args: {x: short}, result: short}\n      - {id: empty, covers: [boundary], args: {x: ''}, result: ''}\n      - {id: missing, covers: ['short-circuit-missing:x'], args: {x: null}, result: null}\n"),
-    file.path(directory, "environment.yaml"))
-  writeBin(charToRaw("schema_version: '1.0'\nenvironments: {python: environment.yaml, r: environment.yaml}\nadam: {specs: [domain.yaml]}\n"),
+  # One function file holds the contract and its R callable; the project
+  # names it and the R lock (D8). A section lists only specifications of its
+  # model (SUB-3).
+  writeBin(charToRaw("yamaa: \"1.0\"\ntype: function\nname: text\ndescription: Return text unchanged.\nparams: [{name: x, type: str}]\nreturns: str\nimplementations: {r: base::identity}\ntests:\n  - {id: normal, covers: [normal], args: {x: short}, result: short}\n  - {id: empty, covers: [boundary], args: {x: ''}, result: ''}\n  - {id: missing, covers: ['short-circuit-missing:x'], args: {x: null}, result: null}\n"),
+    file.path(directory, "text.yaml"))
+  writeBin(charToRaw("yamaa: \"1.0\"\ntype: project\nfunctions: [text.yaml]\nenvironments: {r: {lock: renv.lock}}\nadam: {specs: [domain.yaml]}\n"),
     file.path(directory, "project.yaml"))
-  writeBin(charToRaw("schema_version: '1.0'\ndomain: TEXT\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int, V: str}}}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: V, type: str, derivation: {function: {name: text, args: {x: SRC.V}}}}\noutput: {path: held.csv, columns: [ID, V]}\n"),
+  writeBin(charToRaw("yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: TEXT\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int, V: str}}}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: V, type: str, derivation: {function: {name: text, args: {x: SRC.V}}}}\noutput: {path: held.csv, columns: [ID, V]}\n"),
     file.path(directory, "domain.yaml"))
   value <- paste0(strrep("\u00e9", 524289L), "complete")
   expected <- charToRaw(paste0("ID,V\n1,", value, "\n"))
@@ -681,7 +685,7 @@ qualify_public_large_text_callback <- function() {
   built <- yamaa_project(file.path(directory, "project.yaml"))$spec("TEXT")$run()
   stopifnot("the large text run has no issues" = nrow(check_issues(built$issues)) == 0L,
     "the callback returns the whole text" = identical(built$output$V, value))
-  unlink(file.path(directory, c("domain.yaml", "project.yaml", "environment.yaml", "renv.lock", "input.csv")))
+  unlink(file.path(directory, c("domain.yaml", "project.yaml", "text.yaml", "renv.lock", "input.csv")))
   stopifnot("the large text run saves" = returns_paths(built$save()),
     "the saved CSV holds the whole text" =
       identical(readBin(file.path(directory, "held.csv"), "raw", n = length(expected) + 1L), expected))
@@ -746,7 +750,7 @@ qualify_project_refusals <- function() {
     "an absent project's submission of any section carries its issue")
   # A name that is no section of the project raises (PROJECT-14).
   listing <- file.path(root, "project.yaml")
-  writeLines(c("schema_version: '1.0'", "adam:", "  specs: []"), listing)
+  writeLines(c('yamaa: "1.0"', "type: project", "adam:", "  specs: []"), listing)
   project <- yamaa_project(listing)
   for (case in list(list(call = function() project$run("bogus"), message = "unknown_section_run"),
                     list(call = function() project$submission("bogus"), message = "unknown_section_submission"))) {
@@ -765,30 +769,30 @@ qualify_issue_geometry <- function() {
   path <- function(name) file.path(root, name)
   # A literal beyond every 64-bit range is refused before study access; the
   # context text keeps the signed 64-bit bounds and the exact literal.
-  writeLines(c("schema_version: '1.0'", "domain: TEST", "keys: [ID]", "input: {SRC: input.csv}",
+  writeLines(c('yamaa: "1.0"', "type: spec", "domain: TEST", "keys: [ID]", "input: {SRC: input.csv}",
     "columns:", "  - {name: ID, type: str, derivation: SRC.ID}",
-    "  - {name: N, type: int, derivation: {literal: 18446744073709551616}}",
+    "  - {name: N, type: int, derivation: 18446744073709551616}",
     "output: {path: output.csv, columns: [ID, N]}"), path("spec.yaml"))
   frame <- check_issues(yamaa_spec(path("spec.yaml"))$check()$issues)
   expect_identical(as.list(frame[c("phase", "condition", "rule", "spec_paths", "context", "source_span",
     "operand_route")]),
     list(phase = "validation", condition = "integer_overflow", rule = "VALUE-5",
-      spec_paths = list("columns.N.derivation.literal"),
+      spec_paths = list("columns.N.derivation"),
       context = '{"actual":18446744073709551616,"maximum":9223372036854775807,"minimum":-9223372036854775808}',
       source_span = list(NULL), operand_route = list(NULL)),
     "a literal beyond 64 bits keeps its exact digits and has no geometry")
-  # A division by zero fails at one node of the compute expression: the span
+  # A division by zero fails at one node of the expression: the span
   # covers that node's bytes and the route leads to it from the root, so a
   # failure at the root has a present empty route, never NULL.
   writeBin(charToRaw("ID,VALUE,ZERO\na,2.5,0\n"), path("input.csv"))
   for (case in list(list(expression = "1 + VALUE / ZERO", route = "right"),
                     list(expression = "VALUE / ZERO", route = character(0)))) {
-    writeLines(c("schema_version: '1.0'", "domain: TEST", "keys: [ID]",
+    writeLines(c('yamaa: "1.0"', "type: spec", "domain: TEST", "keys: [ID]",
       "input: {SRC: {path: input.csv, types: {ID: str, VALUE: float, ZERO: float}}}",
       "columns:", "  - {name: ID, type: str, derivation: SRC.ID}",
       "  - {name: VALUE, type: float, derivation: SRC.VALUE}",
       "  - {name: ZERO, type: float, derivation: SRC.ZERO}",
-      paste0("  - {name: RATIO, type: float, derivation: {compute: {expr: '", case$expression, "'}}}"),
+      paste0("  - {name: RATIO, type: float, derivation: '", case$expression, "'}"),
       "output: {path: output.csv, columns: [ID, VALUE, ZERO, RATIO]}"), path("spec.yaml"))
     result <- yamaa_spec(path("spec.yaml"))$run()
     frame <- check_issues(result$issues)
@@ -877,7 +881,7 @@ qualify_resolve <- function() {
   on.exit(unlink(root, recursive = TRUE), add = TRUE)
   root <- normalizePath(root, winslash = "/")
   entry <- file.path(root, "spec.yaml")
-  writeLines(c("schema_version: '1.0'", "domain: TEST", "keys: [ID]",
+  writeLines(c('yamaa: "1.0"', "type: spec", "domain: TEST", "keys: [ID]",
     "input: {RAW: {path: missing/raw.csv, types: {ID: int}}}",
     "columns: [{name: ID, type: int, derivation: RAW.ID}]",
     "output: {path: absent/output.csv, columns: [ID]}"), entry)
@@ -899,19 +903,21 @@ qualify_resolve <- function() {
   expect_identical(error$issues$condition, "resource_path_missing", "a removed specification's issue")
 
   # The project supplies the function and names itself; the same file alone
-  # names an unknown function. No callable is activated.
-  writeLines(c("schema_version: '1.0'", "domain: TEST", "keys: [ID]",
+  # lacks that binding (D32, D146). No callable is activated. A section lists
+  # only specifications of its model (SUB-3).
+  writeLines(c('yamaa: "1.0"', "type: spec", "model: ADaM", "domain: TEST", "keys: [ID]",
     "input: {RAW: {path: missing.csv, types: {ID: int, V: str}}}",
     "columns: [{name: ID, type: int, derivation: RAW.ID}, {name: V, type: str, derivation: {function: {name: text, args: {x: RAW.V}}}}]",
     "output: {path: output.csv, columns: [ID, V]}"), entry)
-  writeLines(c("schema_version: '1.0'", "functions:", "  text:",
-    "    function: uninstalledresolvedfixture::identity", "    description: Identity.",
-    "    params: [{name: x, type: str}]", "    returns: str", "    tests:",
-    "      - {id: normal, covers: [normal], args: {x: a}, result: a}",
-    "      - {id: empty, covers: [boundary], args: {x: ''}, result: ''}",
-    "      - {id: missing, covers: ['short-circuit-missing:x'], args: {x: null}, result: null}"),
-    file.path(root, "environment.yaml"))
-  writeLines(c("schema_version: '1.0'", "environments: {python: environment.yaml, r: environment.yaml}",
+  writeLines(c('yamaa: "1.0"', "type: function", "name: text", "description: Identity.",
+    "params: [{name: x, type: str}]", "returns: str",
+    "implementations: {python: uninstalled_resolved_fixture.identity, r: uninstalledresolvedfixture::identity}",
+    "tests:",
+    "  - {id: normal, covers: [normal], args: {x: a}, result: a}",
+    "  - {id: empty, covers: [boundary], args: {x: ''}, result: ''}",
+    "  - {id: missing, covers: ['short-circuit-missing:x'], args: {x: null}, result: null}"),
+    file.path(root, "text.yaml"))
+  writeLines(c('yamaa: "1.0"', "type: project", "functions: [text.yaml]",
     "adam: {specs: [spec.yaml]}"), file.path(root, "project.yaml"))
   refuse <- function(...) stop("unexpected activation")
   facts <- with_capabilities(refuse, refuse,
@@ -920,13 +926,14 @@ qualify_resolve <- function() {
     "a project's specification names the project")
   error <- refusal(yamaa_spec(entry)$resolve())
   expect_identical(as.list(error$issues[c("condition", "rule", "spec_paths", "context")]),
-    list(condition = "unknown_project_function", rule = "FUNC-4",
-      spec_paths = list("columns.V.derivation.function.name"), context = '{"function":"text"}'),
-    "the specification alone names an unknown function")
+    list(condition = "project_binding_missing", rule = "CT-13",
+      spec_paths = list("columns.V.derivation.function.name"),
+      context = '{"binding":"function","function":"text"}'),
+    "the specification alone lacks its project's function")
 
   # A mapping key holding NUL is both text and a name in the facts, and R
   # holds neither: resolve refuses it instead of failing inside R.
-  writeLines(c("schema_version: '1.0'", "domain: TEST", "keys: [ID]",
+  writeLines(c('yamaa: "1.0"', "type: spec", "domain: TEST", "keys: [ID]",
     "input: {RAW: {path: missing.csv, types: {ID: int, V: str}}}",
     "columns: [{name: ID, type: int, derivation: RAW.ID}, {name: W, type: str, derivation: {mapping: {source: RAW.V, dict: {\"L\\0\": LOW}}}}]",
     "output: {path: output.csv, columns: [ID, W]}"), entry)
@@ -943,11 +950,11 @@ qualify_resolved_schema_links <- function() {
   on.exit(unlink(root, recursive = TRUE), add = TRUE)
   root <- normalizePath(root, winslash = "/")
   dir.create(file.path(root, "shared"))
-  writeLines(c("schema_version: '1.0'", "domain: PRODUCER", "keys: [ID]",
+  writeLines(c('yamaa: "1.0"', "type: spec", "domain: PRODUCER", "keys: [ID]",
     "input: {RAW: {path: input/raw.csv, relative_to: entry, types: {ID: int}}}",
     "columns: [{name: ID, type: int, label: Identifier, derivation: RAW.ID}]",
     "output: {path: output/produced.csv, relative_to: entry, columns: [ID]}"), file.path(root, "shared/producer.yaml"))
-  writeLines(c("schema_version: '1.0'", "domain: CONSUMER", "keys: [ID]",
+  writeLines(c('yamaa: "1.0"', "type: spec", "domain: CONSUMER", "keys: [ID]",
     "input: {P: {path: output/produced.csv, schema: producer.yaml, relative_to: entry}}",
     "columns: [{name: ID, type: int, label: Identifier, derivation: P.ID}]",
     "output: {path: output/final.csv, relative_to: entry, columns: [ID]}"), file.path(root, "shared/consumer.yaml"))
@@ -956,8 +963,8 @@ qualify_resolved_schema_links <- function() {
     dir.create(file.path(study, "input"), recursive = TRUE)
     identifier <- if (identical(wrapper, "A")) 17 else 29
     writeLines(c("ID", identifier), file.path(study, "input/raw.csv"))
-    writeLines(c("schema_version: '1.0'", "parent: ../shared/consumer.yaml"), file.path(study, "spec.yaml"))
-    writeLines(c("schema_version: '1.0'", "parent: ../shared/producer.yaml"), file.path(study, "producer.yaml"))
+    writeLines(c('yamaa: "1.0"', "type: spec", "parent: ../shared/consumer.yaml"), file.path(study, "spec.yaml"))
+    writeLines(c('yamaa: "1.0"', "type: spec", "parent: ../shared/producer.yaml"), file.path(study, "producer.yaml"))
     spec <- yamaa_spec(file.path(study, "spec.yaml"))
     entries <- spec$resolve()$entries
     # A linked producer is type metadata, not a resolved entry.
@@ -988,10 +995,10 @@ qualify_resolved_origins <- function() {
   root <- normalizePath(root, winslash = "/")
   base <- file.path(root, "base.yaml")
   child <- file.path(root, "child.yaml")
-  writeLines(c("schema_version: '1.0'", "domain: TEST", "keys: [ID]", "input: {RAW: missing.csv}",
+  writeLines(c('yamaa: "1.0"', "type: spec", "domain: TEST", "keys: [ID]", "input: {RAW: missing.csv}",
     "columns: [{name: ID, type: str, derivation: {mapping: {source: RAW.ID, dict: {A: Alpha}}}}]",
     "output: {path: result.csv, columns: [ID]}"), base)
-  writeLines(c("schema_version: '1.0'", "parent: base.yaml"), child)
+  writeLines(c('yamaa: "1.0"', "type: spec", "parent: base.yaml"), child)
   origins <- function(path) yamaa_spec(path)$resolve()$entries[[1L]]$origins
   direct <- origins(base)
   inherited <- origins(child)
@@ -999,10 +1006,10 @@ qualify_resolved_origins <- function() {
   expect_identical(direct[[pointer]]$source_kind, "schema_default", "a default's origin")
   expect_identical(inherited[[pointer]], direct[[pointer]], "an inherited default keeps its origin")
   stopifnot("a shorthand input is generated" = isTRUE(inherited[["/input/RAW"]]$generated))
-  writeLines(c("schema_version: '1.0'", "domain: TEST", "keys: [ID]", "input: {RAW: missing.csv}",
+  writeLines(c('yamaa: "1.0"', "type: spec", "domain: TEST", "keys: [ID]", "input: {RAW: missing.csv}",
     "windows: {W: {order_by: [RAW.ID]}}", "columns: [{name: ID, type: int, derivation: RAW.ID}]",
     "output: {path: result.csv, columns: [ID]}"), base)
-  writeLines(c("schema_version: '1.0'", "parent: base.yaml",
+  writeLines(c('yamaa: "1.0"', "type: spec", "parent: base.yaml",
     "columns: [{name: N, type: int, derivation: {row_number: {window: W}}}]",
     "output: {path: result.csv, columns: [ID, N]}"), child)
   inherited <- origins(child)
@@ -1012,8 +1019,12 @@ qualify_resolved_origins <- function() {
     "the named window's definition keeps its origin")
   expect_identical(inherited[[paste0(prefix, "/order_by/0/direction")]]$source_kind, "schema_default",
     "the window's default direction")
-  stopifnot("a shorthand source is generated" =
-    isTRUE(inherited[["/columns/0/derivation/value/source/variable"]]$generated))
+  # A 1.0 derivation is one expression (D18): its written value stays
+  # authored, and only the derivation that wraps it is generated.
+  stopifnot("the derivation that wraps an expression is generated" =
+    isTRUE(inherited[["/columns/0/derivation"]]$generated),
+    "the written expression stays authored" =
+    isFALSE(inherited[["/columns/0/derivation/value"]]$generated))
   cat("resolved original origins retain inherited defaults, shorthand and named-window definitions\n")
 }
 qualify_resolved_origins()

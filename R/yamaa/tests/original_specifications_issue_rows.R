@@ -43,12 +43,19 @@ local({
     directory <- new_case("namespace_admission",truth,inputs=FALSE)
     entry <- file.path(directory,"spec.yaml")
     original <- rawfile(entry)
+    # `{entry}` stands for the specification's absolute path as the engine
+    # resolves it, with forward slashes.
+    resolved <- normalizePath(entry,winslash="/",mustWork=TRUE)
+    expected <- lapply(truth$issues,function(issue) {
+      issue$context <- lapply(issue$context,function(value) if (identical(value,"{entry}")) resolved else value)
+      issue
+    })
     # No input file exists: declaration admission must precede source access.
     for (attempt in 1:2) {
       label <- sprintf("namespace admission case %d, attempt %d",index,attempt)
-      expect_issue_rows(check_spec(entry)$issues,truth$issues,paste("the check of",label))
+      expect_issue_rows(check_spec(entry)$issues,expected,paste("the check of",label))
       result <- run_spec(entry)
-      expect_issue_rows(result$issues,truth$issues,paste("the run of",label))
+      expect_issue_rows(result$issues,expected,paste("the run of",label))
       expect_refused_run(result,file.path(directory,"out.csv"),label)
       expect_identical(rawfile(entry),original,paste(label,"leaves its specification"))
     }
