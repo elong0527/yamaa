@@ -2,8 +2,8 @@
 //! `str_replace` through file application: the authored benchmarks, then
 //! bespoke specifications for each binding, handler and failure route.
 use std::{fs, path::Path};
+use yamaa_adapters::file_application;
 use yamaa_adapters::json;
-use yamaa_adapters::{file_application, specification_report::Identity};
 use yamaa_core::domain_entry::Request;
 use yamaa_core::json::Value as Json;
 struct Fixture(crate::support::Scratch);
@@ -46,19 +46,12 @@ impl Fixture {
                 specification: &specification,
                 environment: None,
             },
-            Identity {
-                runtime: "test",
-                runtime_version: "test",
-                engine_version: yamaa_core::VERSION,
-                example: "test",
-                specification: &specification,
-                base_directory: ".",
-            },
+            crate::support::study::identity("test", &specification),
         )
     }
 }
 fn issue_json(issue: &yamaa_core::diagnostic::Diagnostic) -> Json {
-    json!({"phase":issue.phase(),"condition":issue.condition(),"rule":issue.rule(),"spec_paths":issue.spec_paths,"context":issue.context.clone()})
+    crate::support::study::issue_row(issue)
 }
 fn issues(fixture: &Fixture) -> Vec<Json> {
     match fixture.attempt() {

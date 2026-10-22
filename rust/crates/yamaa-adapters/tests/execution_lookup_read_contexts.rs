@@ -5,8 +5,9 @@
 //! rows a dataset verification checks (LOOKUP-2, LOOKUP-5, LOOKUP-8,
 //! LOOKUP-9, LOOKUP-15). A read that names no such value fails once, before
 //! any data is read.
+use crate::support::Edit as _;
 use std::fs;
-use yamaa_adapters::{file_application, specification_report::Identity};
+use yamaa_adapters::file_application;
 use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::{domain_entry::Request, json::Value};
 
@@ -34,14 +35,7 @@ impl Fixture {
                 specification,
                 environment: None,
             },
-            Identity {
-                runtime: "test",
-                runtime_version: "test",
-                engine_version: yamaa_core::VERSION,
-                example: "lookup-read-contexts",
-                specification,
-                base_directory: ".",
-            },
+            crate::support::study::identity("lookup-read-contexts", specification),
         )
         .map_err(|failure| failure.iter().map(issue).collect::<Vec<_>>())?;
         let issues = domain.issues().iter().map(issue).collect::<Vec<_>>();
@@ -56,7 +50,7 @@ impl Fixture {
 }
 
 fn issue(issue: &Diagnostic) -> Value {
-    yamaa_adapters::json!({"phase":issue.phase(),"condition":issue.condition(),"rule":issue.rule(),"spec_paths":issue.spec_paths,"context":issue.context.clone()})
+    crate::support::study::issue_row(issue)
 }
 
 fn run(specification: &str) -> Result<String, Vec<Value>> {
@@ -155,7 +149,7 @@ fn a_grouped_row_template_reads_a_lookup_only_through_its_groups() {
         "W.NAME",
         "  - {name: TOP, type: int}\n",
     )
-    .replace(
+    .edit(
         "      VALUE: W.NAME\n",
         "      TOP: {aggregate: 'MAX(SRC.VAL)'}\n      VALUE: W.NAME\n",
     );
@@ -272,7 +266,7 @@ fn a_correlated_lookup_reads_only_the_driver_of_the_reading_template() {
     );
     // Grouped by donor key, the donor rows hold no single donor value: the
     // finding names the donor template and its input.
-    let grouped = templates(&keyed("DONOR.X"), "", literal, "K.NAME").replace(
+    let grouped = templates(&keyed("DONOR.X"), "", literal, "K.NAME").edit(
         "    dataset: DONOR\n",
         "    dataset: DONOR\n    group_by: [DONOR.KEY]\n",
     );

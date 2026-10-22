@@ -1015,13 +1015,7 @@ fn first_difference(left: &[String], right: &[String]) -> String {
 fn every_converted_benchmark_lowers_to_its_original_tree() {
     let scratch = Scratch::new();
     convert("benchmarks", &scratch.0);
-    let benchmarks = repository().join("benchmarks");
-    let mut cases = fs::read_dir(&benchmarks)
-        .unwrap()
-        .filter_map(|entry| entry.ok().map(|entry| entry.path()))
-        .filter(|case| case.join("benchmark.yaml").is_file())
-        .collect::<Vec<_>>();
-    cases.sort();
+    let cases = crate::support::benchmarks::all();
     let mut compared = 0;
     let mut checked = 0;
     let mut written_1_0 = BTreeSet::new();

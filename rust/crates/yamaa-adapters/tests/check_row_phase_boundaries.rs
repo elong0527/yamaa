@@ -5,7 +5,7 @@
 //! (LOOKUP-2), and a template that names a column whose default is not row
 //! local (SPEC-6). Every case lists the same issues in both routes and hosts.
 use std::fs;
-use yamaa_adapters::{file_application, specification_report::Identity};
+use yamaa_adapters::file_application;
 use yamaa_core::{diagnostic::Diagnostic, domain_entry::Request, project_function::Language};
 
 struct Fixture(crate::support::Scratch);
@@ -33,14 +33,7 @@ impl Fixture {
             specification,
             environment: None,
         };
-        let identity = || Identity {
-            runtime: "test",
-            runtime_version: "test",
-            engine_version: yamaa_core::VERSION,
-            example: "row-phase-boundaries",
-            specification,
-            base_directory: ".",
-        };
+        let identity = || crate::support::study::identity("row-phase-boundaries", specification);
         let checked = file_application::check(host, request(), identity());
         let built = match file_application::domain(host, request(), identity()) {
             Ok(domain) => domain.issues(),
@@ -294,15 +287,7 @@ fn an_aggregate_in_a_case_result_is_not_row_local_in_either_spelling() {
         let json = |issues: Vec<Diagnostic>| {
             issues
                 .iter()
-                .map(|issue| {
-                    yamaa_adapters::json!({
-                        "phase": issue.phase(),
-                        "condition": issue.condition(),
-                        "rule": issue.rule(),
-                        "spec_paths": issue.spec_paths,
-                        "context": issue.context.clone()
-                    })
-                })
+                .map(crate::support::study::issue_row)
                 .collect::<Vec<_>>()
         };
         for host in [Language::Python, Language::R] {

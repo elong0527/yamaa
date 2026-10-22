@@ -630,17 +630,16 @@ mod file {
     #[cfg(feature = "yaml")]
     mod shared_define {
         //! Independent fixed-byte DM and structural AE/VS shared-generation witnesses.
+        use crate::support::Edit as _;
         #[test]
         fn entry_relative_inherited_output_supplies_json_capture_and_publication_targets() {
             let temp = Temp::fixture("sdtm-dm-metadata", false);
             fs::create_dir(temp.0.join("parents")).unwrap();
             fs::create_dir_all(temp.0.join("children/artifacts")).unwrap();
-            let parent = fs::read_to_string(temp.0.join("spec.yaml"))
-                .unwrap()
-                .replace(
-                    "path: dm.csv",
-                    "path: artifacts/dm.csv\n  relative_to: entry",
-                );
+            let parent = fs::read_to_string(temp.0.join("spec.yaml")).unwrap().edit(
+                "path: dm.csv",
+                "path: artifacts/dm.csv\n  relative_to: entry",
+            );
             fs::write(temp.0.join("parents/base.yaml"), parent).unwrap();
             fs::write(
                 temp.0.join("children/spec.yaml"),
@@ -649,8 +648,8 @@ mod file {
             .unwrap();
             let project = fs::read_to_string(temp.0.join("project.yaml"))
                 .unwrap()
-                .replace("  - spec.yaml", "  - children/spec.yaml")
-                .replace(
+                .edit("  - spec.yaml", "  - children/spec.yaml")
+                .edit(
                     "define: define.xml",
                     "define: children/artifacts/define.xml",
                 );
@@ -833,7 +832,7 @@ mod file {
             let temp = Temp::fixture("sdtm-lb-metadata", true);
             let csv = fs::read_to_string(temp.0.join("lb.csv"))
                 .unwrap()
-                .replace("95,mg/dL,95", "95,mmol/L,95");
+                .edit("95,mg/dL,95", "95,mmol/L,95");
             fs::write(temp.0.join("lb.csv"), csv).unwrap();
             let mut run = temp.run("2026-09-11T00:00:00");
             assert!(
@@ -894,13 +893,7 @@ mod file {
         fn records(run: &Define) -> Vec<yamaa_core::json::Value> {
             run.issues()
                 .iter()
-                .map(|issue| {
-                    yamaa_adapters::json!({
-                        "phase": issue.phase(), "condition": issue.condition(),
-                        "rule": issue.rule(), "spec_paths": issue.spec_paths,
-                        "context": issue.context.clone()
-                    })
-                })
+                .map(crate::support::study::issue_row)
                 .collect()
         }
         /// A refused composition holds and writes nothing.
@@ -1059,11 +1052,11 @@ mod file {
                         Some(host),
                         None,
                     );
-                    let actual: Vec<_> = run.issues().iter().map(|issue| yamaa_adapters::json!({
-                "phase": issue.phase(), "condition": issue.condition(), "rule": issue.rule(),
-                "spec_paths": issue.spec_paths,
-                "context": issue.context.clone()
-            })).collect();
+                    let actual: Vec<_> = run
+                        .issues()
+                        .iter()
+                        .map(crate::support::study::issue_row)
+                        .collect();
                     assert_eq!(
                         yamaa_adapters::json!(actual),
                         case["issues"],
@@ -1158,8 +1151,8 @@ mod file {
             let temp = Temp::fixture("sdtm-vs-epoch-from-subject-elements", false);
             let spec = fs::read_to_string(temp.0.join("spec.yaml")).unwrap();
             let spec = spec
-                .replace("VSDTC, EPOCH]", "VSDTC, VSDTM, EPOCH]")
-                .replace(
+                .edit("VSDTC, EPOCH]", "VSDTC, VSDTM, EPOCH]")
+                .edit(
                     "        invalid: null\n",
                     "        invalid: null\n    submission:\n      core: Perm\n      role: Timing\n      origins:\n        - type: Derived\n          source: Sponsor\n      method: VSDTC completed to the start of its day.\n",
                 );
@@ -1242,8 +1235,8 @@ mod file {
                 temp.0.join("second.yaml"),
                 fs::read_to_string(temp.0.join("spec.yaml"))
                     .unwrap()
-                    .replace("domain: DM", "domain: dm")
-                    .replace("path: dm.csv", "path: second.csv"),
+                    .edit("domain: DM", "domain: dm")
+                    .edit("path: dm.csv", "path: second.csv"),
             )
             .unwrap();
             fs::write(temp.0.join("define.xml"), b"original Define sentinel").unwrap();
@@ -1298,7 +1291,7 @@ mod file {
             }
             let parent = fs::read_to_string(temp.0.join("spec.yaml"))
                 .unwrap()
-                .replace("path: dm.csv", "path: ../artifacts/dm.csv");
+                .edit("path: dm.csv", "path: ../artifacts/dm.csv");
             fs::write(temp.0.join("parents/base.yaml"), parent).unwrap();
             fs::write(
                 temp.0.join("children/spec.yaml"),
@@ -1307,8 +1300,8 @@ mod file {
             .unwrap();
             let project = fs::read_to_string(temp.0.join("project.yaml"))
                 .unwrap()
-                .replace("  - spec.yaml", "  - children/spec.yaml")
-                .replace("define: define.xml", "define: artifacts/define.xml");
+                .edit("  - spec.yaml", "  - children/spec.yaml")
+                .edit("define: define.xml", "define: artifacts/define.xml");
             fs::write(temp.0.join("project.yaml"), project).unwrap();
             fs::copy(
                 root().join("benchmarks/sdtm-dm-metadata/expected/dm.csv"),
@@ -1338,7 +1331,7 @@ mod file {
             fs::rename(temp.0.join("dm.csv"), temp.0.join("artifacts/dm.csv")).unwrap();
             let spec = fs::read_to_string(temp.0.join("spec.yaml"))
                 .unwrap()
-                .replace("path: dm.csv", "path: artifacts/dm.csv");
+                .edit("path: dm.csv", "path: artifacts/dm.csv");
             fs::write(temp.0.join("spec.yaml"), spec).unwrap();
             let mut run = temp.run("2026-09-11T00:00:00");
             assert!(run.issues().is_empty(), "{:?}", run.issues());
@@ -1366,7 +1359,7 @@ mod file {
             let csv = fs::read_to_string(temp.0.join("dm.csv")).unwrap();
             fs::write(
                 temp.0.join("dm.csv"),
-                csv.replace("STUDYID,USUBJID", "USUBJID,STUDYID"),
+                csv.edit("STUDYID,USUBJID", "USUBJID,STUDYID"),
             )
             .unwrap();
             let mut run = temp.run("2026-09-11T00:00:00");
@@ -1379,7 +1372,7 @@ mod file {
             assert!(!temp.0.join("define.xml").exists());
             // A missing declared field is the same contract cause, before typed CSV
             // conversion can misclassify the absent field as a scalar/lookup problem.
-            fs::write(temp.0.join("dm.csv"), csv.replace("STUDYID", "WRONG")).unwrap();
+            fs::write(temp.0.join("dm.csv"), csv.edit("STUDYID", "WRONG")).unwrap();
             let mut run = temp.run("2026-09-11T00:00:00");
             assert!(run
                 .issues()
@@ -1388,7 +1381,7 @@ mod file {
             assert!(run.save().is_err());
             assert!(!temp.0.join("define.xml").exists());
             // REQ0957 preserves the verification phase, offending value and row key.
-            fs::write(temp.0.join("dm.csv"), csv.replace(",F,USA", ",Z,USA")).unwrap();
+            fs::write(temp.0.join("dm.csv"), csv.edit(",F,USA", ",Z,USA")).unwrap();
             let mut run = temp.run("2026-09-11T00:00:00");
             let issue = run
                 .issues()
@@ -1411,8 +1404,8 @@ mod file {
             let temp = Temp::fixture("sdtm-dm-metadata", true);
             let spec = fs::read_to_string(temp.0.join("spec.yaml"))
         .unwrap()
-        .replace("name: AGE\n    type: int", "name: AGE\n    type: float")
-        .replace(
+        .edit("name: AGE\n    type: int", "name: AGE\n    type: float")
+        .edit(
             "core: Exp\n      role: Record Qualifier\n      length: 3",
             "core: Exp\n      role: Record Qualifier\n      length: 3\n      significant_digits: 3\n      codelist: AGE_VALUES",
         );
@@ -1496,7 +1489,7 @@ mod file {
                     "codelist: MEDDRA\n      origins:\n        - type: Collected\n          source: Vendor",
                 );
                 if derives {
-                    spec = spec.replace(
+                    spec = spec.edit(
                         "    absent: NOT CODED\n",
                         "    absent: NOT CODED\n    derivations:\n      LLTUPPER: {str_case: {source: LLTNAME, to: upper}}\n",
                     );
@@ -1592,7 +1585,7 @@ mod file {
             let not_available = "codelist: AGEU\n      origins:\n        - type: Not Available\n          description: Age units were not collected.\n";
             // sdtm admits no Not Available origin, with or without a source.
             let sourced =
-                not_available.replace("description", "source: Sponsor\n          description");
+                not_available.edit("description", "source: Sponsor\n          description");
             for origin in [not_available, sourced.as_str()] {
                 let temp = Temp::fixture("sdtm-dm-metadata", false);
                 replace_spec(&temp, assigned, origin);
@@ -1739,7 +1732,7 @@ mod file {
             assert!(run.save().is_err());
             assert!(!temp.0.join("define.xml").exists());
             // A name outside the study's inventory fails the published recheck.
-            let (_, run) = cross_section(STUDY_ADLB, &published.replace(",LB\n", ",XX\n"), true);
+            let (_, run) = cross_section(STUDY_ADLB, &published.edit(",LB\n", ",XX\n"), true);
             assert_eq!(run.issues().len(), 1, "{:?}", run.issues());
             assert_eq!(
                 (run.issues()[0].condition(), run.issues()[0].rule()),

@@ -21,14 +21,7 @@ impl Fixture {
         Self(root)
     }
     fn identity(specification: &str) -> Identity<'_> {
-        Identity {
-            runtime: "test",
-            runtime_version: "test",
-            engine_version: yamaa_core::VERSION,
-            example: "aggregate-key-reads",
-            specification,
-            base_directory: ".",
-        }
+        crate::support::study::identity("aggregate-key-reads", specification)
     }
     /// The saved artifact, or the issues that kept anything from being saved.
     fn run(&self) -> Result<String, Vec<Value>> {
@@ -70,7 +63,7 @@ impl Fixture {
 }
 
 fn issue(issue: &Diagnostic) -> Value {
-    yamaa_adapters::json!({"phase":issue.phase(),"condition":issue.condition(),"rule":issue.rule(),"spec_paths":issue.spec_paths,"context":issue.context.clone()})
+    crate::support::study::issue_row(issue)
 }
 
 /// One `unknown_field` finding at a key pair that names `identifier` (LOOKUP-5).

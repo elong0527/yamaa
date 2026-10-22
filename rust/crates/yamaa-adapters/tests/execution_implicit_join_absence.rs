@@ -5,8 +5,9 @@
 //! while a predicate is evaluated is not counted. `require_match: true` on the
 //! input fails every such read as `unmatched_key`, unless the read declares
 //! its own `absent` answer, and leaves a named intermediate's policy alone.
+use crate::support::Edit as _;
 use std::fs;
-use yamaa_adapters::{file_application, specification_report::Identity};
+use yamaa_adapters::file_application;
 use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::{domain_entry::Request, json::Value};
 
@@ -28,14 +29,7 @@ impl Fixture {
                 specification,
                 environment: None,
             },
-            Identity {
-                runtime: "test",
-                runtime_version: "test",
-                engine_version: yamaa_core::VERSION,
-                example: "implicit-join-absence",
-                specification,
-                base_directory: ".",
-            },
+            crate::support::study::identity("implicit-join-absence", specification),
         )
     }
     /// The saved artifact and the run's handler counts as `(path, count)`.
@@ -275,7 +269,7 @@ const ROWS: &str = "schema_version: \"1.0\"\n\
 
 #[test]
 fn a_row_template_counts_an_operand_read_and_fails_it_when_required() {
-    let fixture = Fixture::new(&ROWS.replace("ADSL_DECLARATION", "adsl.csv"));
+    let fixture = Fixture::new(&ROWS.edit("ADSL_DECLARATION", "adsl.csv"));
     let (csv, counts) = fixture.saved();
     assert_eq!(
         csv,
@@ -288,7 +282,7 @@ fn a_row_template_counts_an_operand_read_and_fails_it_when_required() {
         assert!(counts.contains(&(path.into(), 1)), "{path}: {counts:?}");
     }
     let fixture =
-        Fixture::new(&ROWS.replace("ADSL_DECLARATION", "{path: adsl.csv, require_match: true}"));
+        Fixture::new(&ROWS.edit("ADSL_DECLARATION", "{path: adsl.csv, require_match: true}"));
     let failure = fixture.failure();
     assert_eq!(failure["condition"], "unmatched_key");
     assert_eq!(failure["rule"], "LOOKUP-24");

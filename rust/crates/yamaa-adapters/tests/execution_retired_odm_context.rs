@@ -5,9 +5,10 @@ mod execution {
         //! Original retired ODM-context operands through the shared public file engine.
         //! Generic source reads keep their ordinary relation semantics; only `odm`
         //! expressions select the fixed eleven-field ODM interpretation.
+        use crate::support::Edit as _;
         use std::{fs, path::PathBuf};
+        use yamaa_adapters::file_application;
         use yamaa_adapters::json;
-        use yamaa_adapters::{file_application, specification_report::Identity};
         use yamaa_core::diagnostic::Diagnostic;
         use yamaa_core::domain_entry::Request;
         use yamaa_core::json::Value;
@@ -29,14 +30,7 @@ mod execution {
                         specification,
                         environment: None,
                     },
-                    Identity {
-                        runtime: "test",
-                        runtime_version: "test",
-                        engine_version: yamaa_core::VERSION,
-                        example: "retired-odm-context",
-                        specification,
-                        base_directory: ".",
-                    },
+                    crate::support::study::identity("retired-odm-context", specification),
                 )
             }
             fn saved(&self, expected: &str) -> Value {
@@ -190,7 +184,7 @@ mod execution {
             fixture.saved("SubjectKey,VALUE\n001,2025-01-02\n");
             let fixture = Fixture::new(
                 &specification,
-                &first.replace("2025-01-02,IT.B", "2025-01-03,IT.B"),
+                &first.edit("2025-01-02,IT.B", "2025-01-03,IT.B"),
             );
             let domain = fixture.run().unwrap();
             assert_eq!(
@@ -374,17 +368,14 @@ mod execution {
     mod row_count_lookups {
         //! Original row-count verification lookups and declaration ordering.
         use std::fs;
-        use yamaa_adapters::{file_application, specification_report::Identity};
+        use yamaa_adapters::file_application;
         use yamaa_core::domain_entry::Request;
 
         struct Fixture(crate::support::Scratch);
         fn issues(rows: &[yamaa_core::diagnostic::Diagnostic]) -> yamaa_core::json::Value {
             yamaa_adapters::json!(rows
                 .iter()
-                .map(|row| yamaa_adapters::json!({
-                    "phase":row.phase(),"condition":row.condition(),"rule":row.rule(),
-                    "spec_paths":row.spec_paths,"context":row.context.clone()
-                }))
+                .map(crate::support::study::issue_row)
                 .collect::<Vec<_>>())
         }
         #[test]
@@ -410,14 +401,7 @@ mod execution {
                     specification: path,
                     environment: None,
                 };
-                let identity = || Identity {
-                    runtime: "test",
-                    runtime_version: "test",
-                    engine_version: yamaa_core::VERSION,
-                    example: "row_count_lookups",
-                    specification: path,
-                    base_directory: ".",
-                };
+                let identity = || crate::support::study::identity("row_count_lookups", path);
                 assert_eq!(
                     issues(&file_application::check(
                         yamaa_core::project_function::Language::Python,
@@ -475,7 +459,7 @@ mod execution {
     }
     mod row_derivations {
         use std::{fs, path::Path};
-        use yamaa_adapters::{file_application, specification_report::Identity};
+        use yamaa_adapters::file_application;
         use yamaa_core::domain_entry::Request;
         struct Fixture(crate::support::Scratch);
         impl Fixture {
@@ -501,14 +485,7 @@ mod execution {
             }
             fn run(&self) -> file_application::Domain {
                 let specification = self.0.join("spec.yaml").to_str().unwrap().to_owned();
-                let identity = Identity {
-                    runtime: "test",
-                    runtime_version: "test",
-                    engine_version: yamaa_core::VERSION,
-                    example: "test",
-                    specification: &specification,
-                    base_directory: ".",
-                };
+                let identity = crate::support::study::identity("test", &specification);
                 file_application::domain(
                     yamaa_core::project_function::Language::Python,
                     Request {
@@ -527,14 +504,7 @@ mod execution {
                         specification: &specification,
                         environment: None,
                     },
-                    Identity {
-                        runtime: "test",
-                        runtime_version: "test",
-                        engine_version: yamaa_core::VERSION,
-                        example: "grouped-reducer-check",
-                        specification: &specification,
-                        base_directory: ".",
-                    },
+                    crate::support::study::identity("grouped-reducer-check", &specification),
                 )
             }
         }
@@ -554,14 +524,7 @@ mod execution {
                     specification: &specification,
                     environment: None,
                 },
-                Identity {
-                    runtime: "test",
-                    runtime_version: "test",
-                    engine_version: yamaa_core::VERSION,
-                    example: "test",
-                    specification: &specification,
-                    base_directory: ".",
-                },
+                crate::support::study::identity("test", &specification),
             )
         }
 
@@ -838,7 +801,6 @@ rows:
         use yamaa_adapters::json;
         use yamaa_adapters::{
             file_application, file_preparation::FileSpecification, file_resources::Resources,
-            specification_report::Identity,
         };
         use yamaa_core::diagnostic::Diagnostic;
         use yamaa_core::domain_entry::Request;
@@ -915,13 +877,11 @@ rows:
                         specification: written,
                         environment: None,
                     };
-                    let identity = || Identity {
-                        runtime: "test",
-                        runtime_version: "test",
-                        engine_version: yamaa_core::VERSION,
-                        example: "independent-row-filter-attribution",
-                        specification: written,
-                        base_directory: ".",
+                    let identity = || {
+                        crate::support::study::identity(
+                            "independent-row-filter-attribution",
+                            written,
+                        )
                     };
                     assert_eq!(
                         issues(&file_application::check(
@@ -950,6 +910,7 @@ rows:
         }
     }
     mod row_intermediate_operands {
+        use crate::support::Edit as _;
         use std::fs;
         use yamaa_adapters::{file_application, specification_report::Identity};
         use yamaa_core::domain_entry::Request;
@@ -984,14 +945,7 @@ rows:
             }
         }
         fn identity(path: &str) -> Identity<'_> {
-            Identity {
-                runtime: "test",
-                runtime_version: "test",
-                engine_version: yamaa_core::VERSION,
-                example: "row-intermediate-operands",
-                specification: path,
-                base_directory: ".",
-            }
+            crate::support::study::identity("row-intermediate-operands", path)
         }
         fn specification(expression: &str, kind: &str, row_derivation: bool) -> String {
             let declaration = if row_derivation {
@@ -1079,8 +1033,8 @@ rows:
         fn lookup_scalar_operands_preserve_completed_keys_and_missing_field_findings() {
             let source =
                 specification("{str_case: {source: DOSE.EXROUTE, to: lower}}", "str", true)
-                    .replace("derivations: {X:", "derivations: {USUBJID: PP.USUBJID, X:")
-                    .replace(
+                    .edit("derivations: {X:", "derivations: {USUBJID: PP.USUBJID, X:")
+                    .edit(
                         "  - {name: USUBJID, type: str, derivation: PP.USUBJID}",
                         "  - {name: USUBJID, type: str}",
                     );
@@ -1106,7 +1060,7 @@ rows:
     mod row_join_keys {
         //! Implicit row joins read raw driver keys; column and named lookups retain their own key scope.
         use std::fs;
-        use yamaa_adapters::{file_application, specification_report::Identity};
+        use yamaa_adapters::file_application;
         use yamaa_core::diagnostic::Diagnostic;
         use yamaa_core::domain_entry::Request;
 
@@ -1114,12 +1068,7 @@ rows:
         fn rows(issues: &[Diagnostic]) -> yamaa_core::json::Value {
             issues
                 .iter()
-                .map(|row| {
-                    yamaa_adapters::json!({
-                        "phase": row.phase(), "condition": row.condition(), "rule": row.rule(),
-                        "spec_paths": row.spec_paths, "context": row.context.clone()
-                    })
-                })
+                .map(crate::support::study::issue_row)
                 .collect()
         }
         #[test]
@@ -1140,14 +1089,7 @@ rows:
                     specification: path,
                     environment: None,
                 };
-                let identity = || Identity {
-                    runtime: "test",
-                    runtime_version: "test",
-                    engine_version: yamaa_core::VERSION,
-                    example: "row-join-keys",
-                    specification: path,
-                    base_directory: ".",
-                };
+                let identity = || crate::support::study::identity("row-join-keys", path);
                 assert_eq!(
                     rows(&file_application::check(
                         yamaa_core::project_function::Language::Python,
@@ -1204,11 +1146,12 @@ rows:
         }
     }
     mod scoped_windows_checks {
+        use crate::support::Edit as _;
         use std::{
             fs,
             path::{Path, PathBuf},
         };
-        use yamaa_adapters::{file_application, specification_report::Identity};
+        use yamaa_adapters::file_application;
         use yamaa_core::domain_entry::Request;
         struct Study(crate::support::Scratch);
         impl Study {
@@ -1244,14 +1187,7 @@ rows:
                         specification: &path,
                         environment: None,
                     },
-                    Identity {
-                        runtime: "test",
-                        runtime_version: "test",
-                        engine_version: yamaa_core::VERSION,
-                        example: "scopes",
-                        specification: &path,
-                        base_directory: ".",
-                    },
+                    crate::support::study::identity("scopes", &path),
                 )
                 .unwrap()
             }
@@ -1690,7 +1626,7 @@ columns:
                 assert_eq!(float_column(&result, "PREV"), expected);
             }
             let study = Study::new();
-            let source = original_window_spec("", "", "{order_by: [SEQ]}").replace(
+            let source = original_window_spec("", "", "{order_by: [SEQ]}").edit(
                 "  - id: visits\n",
                 "  - id: a_only\n    filter: \"SRC.G = 'a'\"\n",
             );
@@ -1698,8 +1634,8 @@ columns:
                 .split_once("rows:\n")
                 .unwrap()
                 .1
-                .replace("a_only", "b_only")
-                .replace("SRC.G = 'a'", "SRC.G = 'b'");
+                .edit("a_only", "b_only")
+                .edit("SRC.G = 'a'", "SRC.G = 'b'");
             let result = original_visits(&study, &format!("{source}{second}"));
             assert_eq!(float_column(&result, "PREV"), expected);
         }
@@ -1729,7 +1665,7 @@ columns:
     ] {
         let study = Study::new();
         let source = original_window_spec(columns, derivations, window)
-            .replace("columns: [GRP, SEQ, VAL, PREV]", &format!("columns: [GRP, SEQ, VAL, PREV, {column}]"));
+            .edit("columns: [GRP, SEQ, VAL, PREV]", &format!("columns: [GRP, SEQ, VAL, PREV, {column}]"));
         let result = original_visits(&study, &source);
         assert_eq!(float_column(&result, column), expected);
     }
@@ -1739,14 +1675,14 @@ columns:
         fn original_windows_in_one_case_column_keep_distinct_orderings() {
             let study = Study::new();
             let source = original_window_spec("", "", "{group_by: [GRP], order_by: [SEQ]}")
-        .replace("  - {name: PREV, type: float}", r#"  - name: PREV
+        .edit("  - {name: PREV, type: float}", r#"  - name: PREV
     type: float
     derivation:
       case:
         - when: SEQ = 1
           then: {row_value: {source: VAL, offset: 1, window: {group_by: [GRP], order_by: [SEQ]}}}
         - otherwise: {row_value: {source: VAL, offset: 1, window: {group_by: [GRP], order_by: [{variable: SEQ, direction: desc}]}}}"#)
-        .replace("      PREV: {row_value: {source: VAL, offset: -1, window: {group_by: [GRP], order_by: [SEQ]}}}\n", "");
+        .edit("      PREV: {row_value: {source: VAL, offset: -1, window: {group_by: [GRP], order_by: [SEQ]}}}\n", "");
             let result = original_visits(&study, &source);
             assert_eq!(
                 float_column(&result, "PREV"),
@@ -1781,7 +1717,7 @@ columns:
             let source = fs::read_to_string(study.0.join("spec.yaml")).unwrap();
             let (before, after) = source.split_once("  - name: SOURCE_ORDINAL\n").unwrap();
             let rows = after.split_once("rows:\n").unwrap().1;
-            let source = format!("{before}rows:\n{rows}").replace(", SOURCE_ORDINAL]", "]");
+            let source = format!("{before}rows:\n{rows}").edit(", SOURCE_ORDINAL]", "]");
             fs::write(study.0.join("spec.yaml"), source).unwrap();
             let result = study.build();
             assert!(result.issues().is_empty(), "{:?}", result.issues());
@@ -1846,7 +1782,7 @@ rows:
     mod temporal_arithmetic {
         //! The same authored conformance vectors run through Rust, installed Python and R.
         use std::fs;
-        use yamaa_adapters::{file_application, specification_report::Identity};
+        use yamaa_adapters::file_application;
         use yamaa_core::diagnostic::Diagnostic;
         use yamaa_core::domain_entry::Request;
 
@@ -1888,14 +1824,7 @@ rows:
                 let entry = fixture.0.join("spec.yaml");
                 fs::write(&entry, case["spec"].as_str().unwrap()).unwrap();
                 let specification = entry.to_str().unwrap();
-                let identity = || Identity {
-                    runtime: "test",
-                    runtime_version: "test",
-                    engine_version: yamaa_core::VERSION,
-                    example: name,
-                    specification,
-                    base_directory: ".",
-                };
+                let identity = || crate::support::study::identity(name, specification);
                 let request = || Request {
                     specification,
                     environment: None,
@@ -1947,8 +1876,9 @@ rows:
     }
     mod typed_intermediate_derivations {
         //! Independent YAML, donor bytes and exact saved truth for per-record aggregates.
+        use crate::support::Edit as _;
         use std::fs;
-        use yamaa_adapters::{file_application, specification_report::Identity};
+        use yamaa_adapters::file_application;
         use yamaa_core::domain_entry::Request;
         struct Fixture(crate::support::Scratch);
         impl Fixture {
@@ -1967,14 +1897,7 @@ rows:
                         specification: &specification,
                         environment: None,
                     },
-                    Identity {
-                        runtime: "test",
-                        runtime_version: "test",
-                        engine_version: yamaa_core::VERSION,
-                        example: "test",
-                        specification: &specification,
-                        base_directory: ".",
-                    },
+                    crate::support::study::identity("test", &specification),
                 )
             }
             fn save(&self) -> Vec<u8> {
@@ -2005,14 +1928,7 @@ rows:
                         specification: &specification,
                         environment: None,
                     },
-                    Identity {
-                        runtime: "test",
-                        runtime_version: "test",
-                        engine_version: yamaa_core::VERSION,
-                        example: name,
-                        specification: &specification,
-                        base_directory: ".",
-                    },
+                    crate::support::study::identity(name, &specification),
                 );
                 if let Some(condition) = case["check_condition"].as_str() {
                     assert!(
@@ -2089,11 +2005,11 @@ rows:
             let specification = case["spec"]
         .as_str()
         .unwrap()
-        .replace(
+        .edit(
             "intermediates:\n",
             "intermediates:\n  - id: DEEP\n    dataset: VS\n    key: {USUBJID: VS.USUBJID}\n    derivations:\n      PICK: {type: int, derivation: {literal: bad}, unconvertible: 2}\n    order_by: [VS.VSSEQ]\n    keep: first\n  - id: MIDDLE\n    dataset: VS\n    key: {USUBJID: VS.USUBJID}\n    derivations:\n      PICK: DEEP.PICK\n    order_by: [VS.VSSEQ]\n    keep: first\n",
         )
-        .replace(
+        .edit(
             "  - id: FIRST\n    dataset: VS\n    key: {USUBJID: QS.USUBJID}\n    derivations:\n      PICK: {type: int, derivation: {literal: bad}, unconvertible: 2}",
             "  - id: FIRST\n    dataset: VS\n    key: {USUBJID: QS.USUBJID}\n    derivations:\n      PICK: {type: int, derivation: MIDDLE.PICK, unconvertible: 2}",
         );

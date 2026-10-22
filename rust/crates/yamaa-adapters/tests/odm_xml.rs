@@ -68,12 +68,27 @@ fn rows(document: &str) -> PublicTable {
 /// `message`.
 #[track_caller]
 fn refused(result: Result<PublicTable, odm_items::Error>, expected: &str, message: &str) {
-    let error = result.expect_err("the input must be refused");
-    assert_eq!(condition(&error), expected, "{error}");
+    refused_case("the input", result, expected, message);
+}
+
+/// `case` must be refused with condition `expected` and a message holding
+/// `message`.
+#[track_caller]
+fn refused_case(
+    case: &str,
+    result: Result<PublicTable, odm_items::Error>,
+    expected: &str,
+    message: &str,
+) {
+    let error = match result {
+        Ok(_) => panic!("{case}: the input must be refused"),
+        Err(error) => error,
+    };
+    assert_eq!(condition(&error), expected, "{case}: {error}");
     let text = error.to_string();
     assert!(
         text.contains(message),
-        "{text:?} does not contain {message:?}"
+        "{case}: {text:?} does not contain {message:?}"
     );
 }
 
@@ -90,6 +105,107 @@ fn some(values: &[&str]) -> Vec<Option<String>> {
 
 mod python_reader_suite {
     use super::*;
+
+    /// Each case writes an element or value where ODM's supported layout has
+    /// none; the reader refuses it rather than dropping or misplacing it.
+    #[test]
+    fn elements_and_values_outside_the_supported_layout_are_refused() {
+        // The case, its base document, the edits that place the element, and
+        // the refusal's condition and message.
+        type Case<'a> = (&'a str, &'a str, &'a [(&'a str, &'a str)], &'a str, &'a str);
+        let cases: [Case<'_>; 12] = [
+            (
+                "nested clinical data is rejected",
+                ODM_13,
+                &[(r#"<ClinicalData StudyOID="S.13" MetaDataVersionOID="M.13">"#, r#"<ClinicalData StudyOID="S.13" MetaDataVersionOID="M.13"><ClinicalData StudyOID="EVIL" MetaDataVersionOID="EVIL.M">"#), ("</ClinicalData>\n</ODM>", "</ClinicalData></ClinicalData>\n</ODM>")][..],
+                "source_odm_layout_unsupported",
+                "nested ClinicalData is not supported",
+            ),
+            (
+                "nested study is rejected",
+                ODM_13,
+                &[(r#"<Study OID="S.13">"#, r#"<Study OID="S.13"><Study OID="EVIL">"#), ("</Study>\n  <ClinicalData", "</Study></Study>\n  <ClinicalData")][..],
+                "source_odm_layout_unsupported",
+                "nested Study is not supported",
+            ),
+            (
+                "nested metadata version is rejected",
+                ODM_13,
+                &[(r#"<MetaDataVersion OID="M.13" Name="Metadata">"#, r#"<MetaDataVersion OID="M.13" Name="Metadata"><MetaDataVersion OID="EVIL.M">"#), ("</MetaDataVersion>", "</MetaDataVersion></MetaDataVersion>")][..],
+                "source_odm_layout_unsupported",
+                "nested MetaDataVersion is not supported",
+            ),
+            (
+                "nested study inside clinical data is rejected",
+                ODM_13,
+                &[(r#"<Study OID="S.13">"#, r#"<Study OID="S.13"><ClinicalData StudyOID="S.13" MetaDataVersionOID="M.13"><Study OID="EVIL"></Study></ClinicalData>"#)][..],
+                "source_odm_layout_unsupported",
+                "nested Study is not supported",
+            ),
+            (
+                "nested metadata version inside clinical data is rejected",
+                ODM_13,
+                &[(r#"<MetaDataVersion OID="M.13" Name="Metadata">"#, r#"<MetaDataVersion OID="M.13" Name="Metadata"><ClinicalData StudyOID="S.13" MetaDataVersionOID="M.13"><MetaDataVersion OID="EVIL.M"></MetaDataVersion></ClinicalData>"#)][..],
+                "source_odm_layout_unsupported",
+                "nested MetaDataVersion is not supported",
+            ),
+            (
+                "nested item data is rejected",
+                ODM_13,
+                &[(r#"<ItemData ItemOID="I.DATE" Value="2026-01-02"/>"#, r#"<ItemData ItemOID="I.DATE" Value="outer"><ItemData ItemOID="I.EMPTY" Value="inner"/></ItemData>"#)][..],
+                "source_odm_layout_unsupported",
+                "nested ItemData is not supported",
+            ),
+            (
+                "item data nested below a group inside item data is rejected",
+                ODM_13,
+                &[(r#"<ItemData ItemOID="I.DATE" Value="2026-01-02"/>"#, r#"<ItemData ItemOID="I.DATE" Value="outer"><ItemGroupData ItemGroupOID="G.13"><ItemData ItemOID="I.EMPTY" Value="inner"/></ItemGroupData></ItemData>"#)][..],
+                "source_odm_layout_unsupported",
+                "nested ItemData is not supported",
+            ),
+            (
+                "subject data inside item data is rejected",
+                ODM_13,
+                &[(r#"<SubjectData SubjectKey="SUBJECT-1""#, r#"<ItemData ItemOID="I.DATE" Value="rogue"><SubjectData SubjectKey="ROGUE"/></ItemData><SubjectData SubjectKey="SUBJECT-1""#)][..],
+                "source_odm_layout_unsupported",
+                "SubjectData inside ItemData",
+            ),
+            (
+                "unsupported group depth is rejected",
+                ODM_20,
+                &[(r#"<ItemGroupData ItemGroupOID="IG.20" ItemGroupRepeatKey="3">"#, r#"<ItemGroupData ItemGroupOID="IG.20" ItemGroupRepeatKey="3"><ItemGroupData ItemGroupOID="EXTRA">"#), ("</ItemGroupData>\n        </ItemGroupData>", "</ItemGroupData></ItemGroupData>\n        </ItemGroupData>")][..],
+                "source_odm_layout_unsupported",
+                "requires FormData plus one",
+            ),
+            (
+                "items need subject and event context",
+                ODM_13,
+                &[("<SubjectData SubjectKey=\"SUBJECT-1\" oc:StudySubjectID=\"DISPLAY-1\"\n                 oc:Status=\"Available\">", "<ItemGroupData ItemGroupOID=\"X\"><ItemGroupData ItemGroupOID=\"Y\"><ItemData ItemOID=\"I\" Value=\"v\"/></ItemGroupData></ItemGroupData><SubjectData SubjectKey=\"SUBJECT-1\">")][..],
+                "source_odm_layout_unsupported",
+                "ItemData requires subject and event context",
+            ),
+            (
+                "item cannot be null and contain a value",
+                ODM_13,
+                &[(r#"<ItemData ItemOID="I.NULL" IsNull="Yes"/>"#, r#"<ItemData ItemOID="I.NULL" IsNull="Yes" Value="unexpected"/>"#)][..],
+                "source_odm_value_unsupported",
+                "null and contains a value",
+            ),
+            (
+                "namespaced value attribute is rejected not dropped",
+                ODM_13,
+                &[(r#"<ItemData ItemOID="I.DATE" Value="2026-01-02"/>"#, r#"<ItemData ItemOID="I.DATE" oc:Value="2026-01-02"/>"#)][..],
+                "source_odm_value_unsupported",
+                "Value attribute is in an unsupported namespace",
+            ),
+        ];
+        for (case, base, edits, condition, message) in cases {
+            let document = edits.iter().fold(base.to_owned(), |document, (from, to)| {
+                edit(&document, from, to)
+            });
+            refused_case(case, read_document(&document), condition, message);
+        }
+    }
 
     #[test]
     fn odm13_preserves_values_and_enriches_exact_metadata() {
@@ -181,19 +297,6 @@ mod python_reader_suite {
         for name in ["EventName", "FormName", "ItemGroupName", "ItemName"] {
             assert_eq!(cell(&table, name, 0), None, "{name}");
         }
-    }
-
-    #[test]
-    fn item_cannot_be_null_and_contain_a_value() {
-        refused(
-            read_document(&edit(
-                ODM_13,
-                r#"<ItemData ItemOID="I.NULL" IsNull="Yes"/>"#,
-                r#"<ItemData ItemOID="I.NULL" IsNull="Yes" Value="unexpected"/>"#,
-            )),
-            "source_odm_value_unsupported",
-            "null and contains a value",
-        );
     }
 
     #[test]
@@ -338,19 +441,6 @@ mod python_reader_suite {
     }
 
     #[test]
-    fn namespaced_value_attribute_is_rejected_not_dropped() {
-        refused(
-            read_document(&edit(
-                ODM_13,
-                r#"<ItemData ItemOID="I.DATE" Value="2026-01-02"/>"#,
-                r#"<ItemData ItemOID="I.DATE" oc:Value="2026-01-02"/>"#,
-            )),
-            "source_odm_value_unsupported",
-            "Value attribute is in an unsupported namespace",
-        );
-    }
-
-    #[test]
     fn comment_or_pi_inside_item_data_is_ignored() {
         for annotation in ["<!-- c -->", "<?pi data?>"] {
             let table = rows(&edit(
@@ -414,86 +504,6 @@ mod python_reader_suite {
     }
 
     #[test]
-    fn nested_clinical_data_is_rejected() {
-        let document = edit(
-            &edit(
-                ODM_13,
-                r#"<ClinicalData StudyOID="S.13" MetaDataVersionOID="M.13">"#,
-                r#"<ClinicalData StudyOID="S.13" MetaDataVersionOID="M.13"><ClinicalData StudyOID="EVIL" MetaDataVersionOID="EVIL.M">"#,
-            ),
-            "</ClinicalData>\n</ODM>",
-            "</ClinicalData></ClinicalData>\n</ODM>",
-        );
-        refused(
-            read_document(&document),
-            "source_odm_layout_unsupported",
-            "nested ClinicalData is not supported",
-        );
-    }
-
-    #[test]
-    fn nested_study_is_rejected() {
-        let document = edit(
-            &edit(
-                ODM_13,
-                r#"<Study OID="S.13">"#,
-                r#"<Study OID="S.13"><Study OID="EVIL">"#,
-            ),
-            "</Study>\n  <ClinicalData",
-            "</Study></Study>\n  <ClinicalData",
-        );
-        refused(
-            read_document(&document),
-            "source_odm_layout_unsupported",
-            "nested Study is not supported",
-        );
-    }
-
-    #[test]
-    fn nested_metadata_version_is_rejected() {
-        let document = edit(
-            &edit(
-                ODM_13,
-                r#"<MetaDataVersion OID="M.13" Name="Metadata">"#,
-                r#"<MetaDataVersion OID="M.13" Name="Metadata"><MetaDataVersion OID="EVIL.M">"#,
-            ),
-            "</MetaDataVersion>",
-            "</MetaDataVersion></MetaDataVersion>",
-        );
-        refused(
-            read_document(&document),
-            "source_odm_layout_unsupported",
-            "nested MetaDataVersion is not supported",
-        );
-    }
-
-    #[test]
-    fn nested_study_inside_clinical_data_is_rejected() {
-        refused(
-            read_document(&edit(
-                ODM_13,
-                r#"<Study OID="S.13">"#,
-                r#"<Study OID="S.13"><ClinicalData StudyOID="S.13" MetaDataVersionOID="M.13"><Study OID="EVIL"></Study></ClinicalData>"#,
-            )),
-            "source_odm_layout_unsupported",
-            "nested Study is not supported",
-        );
-    }
-
-    #[test]
-    fn nested_metadata_version_inside_clinical_data_is_rejected() {
-        refused(
-            read_document(&edit(
-                ODM_13,
-                r#"<MetaDataVersion OID="M.13" Name="Metadata">"#,
-                r#"<MetaDataVersion OID="M.13" Name="Metadata"><ClinicalData StudyOID="S.13" MetaDataVersionOID="M.13"><MetaDataVersion OID="EVIL.M"></MetaDataVersion></ClinicalData>"#,
-            )),
-            "source_odm_layout_unsupported",
-            "nested MetaDataVersion is not supported",
-        );
-    }
-
-    #[test]
     fn sequential_clinical_data_blocks_are_read() {
         let table = rows(&edit(
             ODM_13,
@@ -523,50 +533,6 @@ mod python_reader_suite {
     }
 
     #[test]
-    fn unsupported_group_depth_is_rejected() {
-        let document = edit(
-            &edit(
-                ODM_20,
-                r#"<ItemGroupData ItemGroupOID="IG.20" ItemGroupRepeatKey="3">"#,
-                r#"<ItemGroupData ItemGroupOID="IG.20" ItemGroupRepeatKey="3"><ItemGroupData ItemGroupOID="EXTRA">"#,
-            ),
-            "</ItemGroupData>\n        </ItemGroupData>",
-            "</ItemGroupData></ItemGroupData>\n        </ItemGroupData>",
-        );
-        refused(
-            read_document(&document),
-            "source_odm_layout_unsupported",
-            "requires FormData plus one",
-        );
-    }
-
-    #[test]
-    fn nested_item_data_is_rejected() {
-        refused(
-            read_document(&edit(
-                ODM_13,
-                r#"<ItemData ItemOID="I.DATE" Value="2026-01-02"/>"#,
-                r#"<ItemData ItemOID="I.DATE" Value="outer"><ItemData ItemOID="I.EMPTY" Value="inner"/></ItemData>"#,
-            )),
-            "source_odm_layout_unsupported",
-            "nested ItemData is not supported",
-        );
-    }
-
-    #[test]
-    fn item_data_nested_below_a_group_inside_item_data_is_rejected() {
-        refused(
-            read_document(&edit(
-                ODM_13,
-                r#"<ItemData ItemOID="I.DATE" Value="2026-01-02"/>"#,
-                r#"<ItemData ItemOID="I.DATE" Value="outer"><ItemGroupData ItemGroupOID="G.13"><ItemData ItemOID="I.EMPTY" Value="inner"/></ItemGroupData></ItemData>"#,
-            )),
-            "source_odm_layout_unsupported",
-            "nested ItemData is not supported",
-        );
-    }
-
-    #[test]
     fn container_inside_item_data_is_rejected_not_leaked() {
         for (container, message) in [
             (
@@ -593,19 +559,6 @@ mod python_reader_suite {
                 message,
             );
         }
-    }
-
-    #[test]
-    fn subject_data_inside_item_data_is_rejected() {
-        refused(
-            read_document(&edit(
-                ODM_13,
-                r#"<SubjectData SubjectKey="SUBJECT-1""#,
-                r#"<ItemData ItemOID="I.DATE" Value="rogue"><SubjectData SubjectKey="ROGUE"/></ItemData><SubjectData SubjectKey="SUBJECT-1""#,
-            )),
-            "source_odm_layout_unsupported",
-            "SubjectData inside ItemData",
-        );
     }
 
     #[test]
@@ -768,6 +721,7 @@ mod table {
 /// are skipped.
 mod snapshots {
     use super::*;
+    use crate::support::Edit as _;
 
     /// The item rows of the 1.3 fixture, which every skipped element and
     /// every present transaction type below leaves as they are.
@@ -869,7 +823,7 @@ mod snapshots {
         let expected = items(ODM_13);
         for value in ["Insert", "Update", "Upsert", "Context"] {
             let document = ODM_13
-                .replace(
+                .edit(
                     "<SubjectData ",
                     &format!("<SubjectData TransactionType=\"{value}\" "),
                 )
@@ -877,7 +831,7 @@ mod snapshots {
                     r#"TransactionType="Insert""#,
                     &format!("TransactionType=\"{value}\""),
                 )
-                .replace(
+                .edit(
                     r#"<ItemData ItemOID="I.DATE""#,
                     &format!("<ItemData TransactionType=\"{value}\" ItemOID=\"I.DATE\""),
                 );
@@ -1014,7 +968,7 @@ mod snapshots {
         );
         // Whatever the document lacks, a malformed one is refused as XML.
         refused(
-            read_document(&metadata.replace("</ODM>", "")),
+            read_document(&metadata.edit("</ODM>", "")),
             "source_odm_xml_malformed",
             "premature end of data",
         );
@@ -1136,7 +1090,7 @@ mod snapshots {
                 r#"<ItemData ItemOID="I.TEST"><Value>PD-L1</Value></ItemData>"#,
                 "<ItemData ItemOID=\"I.TEST\"><Value>a\r\nb\rc&#13;d<![CDATA[e\r\nf]]></Value></ItemData>",
             )
-            .replace(
+            .edit(
                 r#"<ItemData ItemOID="I.RESULT"><Value/></ItemData>"#,
                 "<ItemData ItemOID=\"I.RESULT\" Value=\"x\ty\r\nz&#9;w&#10;v\"/>",
             ),
@@ -1463,19 +1417,6 @@ mod layout {
     }
 
     #[test]
-    fn items_need_subject_and_event_context() {
-        refused(
-            read_document(&edit(
-                ODM_13,
-                "<SubjectData SubjectKey=\"SUBJECT-1\" oc:StudySubjectID=\"DISPLAY-1\"\n                 oc:Status=\"Available\">",
-                "<ItemGroupData ItemGroupOID=\"X\"><ItemGroupData ItemGroupOID=\"Y\"><ItemData ItemOID=\"I\" Value=\"v\"/></ItemGroupData></ItemGroupData><SubjectData SubjectKey=\"SUBJECT-1\">",
-            )),
-            "source_odm_layout_unsupported",
-            "ItemData requires subject and event context",
-        );
-    }
-
-    #[test]
     fn required_attributes_must_be_present_and_non_empty() {
         for (original, replacement, message) in [
             (
@@ -1563,6 +1504,7 @@ mod layout {
 
 mod xml_strictness {
     use super::*;
+    use crate::support::Edit as _;
 
     /// A 1.3 document holding `body`, then an empty `ClinicalData`, so a body
     /// that is well formed reads as an empty table.
@@ -1736,13 +1678,13 @@ mod xml_strictness {
             assert_eq!(rows(&document).rows(), 3, "{uri}");
         }
         let prefixed = ODM_20
-            .replace(
+            .edit(
                 r#"xmlns="http://www.cdisc.org/ns/odm/v2.0""#,
                 r#"xmlns:odm="http://www.cdisc.org/ns/odm/v2.0""#,
             )
             .replace('<', "<odm:")
             .replace("<odm:/", "</odm:")
-            .replace("<odm:?xml", "<?xml");
+            .edit("<odm:?xml", "<?xml");
         let prefixed = rows(&prefixed);
         assert_eq!(values(&prefixed), some(&["PD-L1", ""]));
     }
@@ -1836,7 +1778,7 @@ mod xml_strictness {
                 .rows(),
             3
         );
-        let lower = ODM_13.replace(r#"encoding="UTF-8""#, r#"encoding="utf8""#);
+        let lower = ODM_13.edit(r#"encoding="UTF-8""#, r#"encoding="utf8""#);
         assert_eq!(rows(&lower).rows(), 3);
         let controls = rows(&edit(
             ODM_13,

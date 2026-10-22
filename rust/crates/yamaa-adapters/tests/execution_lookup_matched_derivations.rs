@@ -6,7 +6,7 @@
 //! window among the derivations, reads every record's derived values, so
 //! every record is augmented as before.
 use std::fs;
-use yamaa_adapters::{file_application, specification_report::Identity};
+use yamaa_adapters::file_application;
 use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::{domain_entry::Request, json::Value};
 
@@ -35,14 +35,7 @@ impl Fixture {
                 specification,
                 environment: None,
             },
-            Identity {
-                runtime: "test",
-                runtime_version: "test",
-                engine_version: yamaa_core::VERSION,
-                example: "lookup-matched-derivations",
-                specification,
-                base_directory: ".",
-            },
+            crate::support::study::identity("lookup-matched-derivations", specification),
         )
         .map_err(|failure| failure.iter().map(issue).collect::<Vec<_>>())?;
         let issues = domain.issues().iter().map(issue).collect::<Vec<_>>();
