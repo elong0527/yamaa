@@ -230,7 +230,7 @@ values, so one name never covers two treatments:
 | Field | Treatment |
 | --- | --- |
 | `filter` | Keeps the rows or records whose result is `TRUE`. |
-| `when` | `TRUE` selects a branch, row, or group; `FALSE` and `UNKNOWN` are treated alike and select nothing (`case`, `assert`, `row_count`). |
+| `when` | `TRUE` selects a branch, row, or group; `FALSE` and `UNKNOWN` are treated alike and select nothing (`case`, `assert`, `not_missing`, `row_count`). |
 | `require` | The result must be `TRUE`; `FALSE` and `UNKNOWN` fail (`assert`). |
 | `condition` | Each of `TRUE`, `FALSE`, and `UNKNOWN` has its own result (`flag`). |
 
