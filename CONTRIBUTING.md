@@ -185,8 +185,11 @@ uv run --project python --no-sync python -m tools.packaging.generate_component_i
 ## Develop and verify
 
 Run `make help` at the repository root for prerequisites, configuration variables
-and supported targets. Its inventory is the command reference. Set
-`CARGO_TARGET_DIR` when separate worktrees need independent Rust build output.
+and supported targets. Its inventory is the command reference. Point every
+worktree on a machine at one shared `CARGO_TARGET_DIR`, as `AGENTS.md` says:
+Cargo serialises concurrent builds with its own lock, and the locked
+dependencies are then built once for every branch. Give a worktree its own
+target only when two builds must run at the same time.
 The R package's build ignores it: `make test-r` installs the package twice,
 each time building the engine inside the package, unless
 `YAMAA_R_CARGO_TARGET_DIR` names an absolute directory for both installations
@@ -671,8 +674,13 @@ head and status immediately before merging. Large PRs require the complete
 bounded proof below through those reads as well. An unavailable CLI does not
 waive review requirements.
 
-This requires CodeRabbit's authentic `Review completed` status on that commit
-and resolved review threads. The PR must have its own authentic summary and
+The merge needs one completed review of the exact head and every thread
+resolved (AGENTS.md, "Complete review before merging"). The review is
+CodeRabbit's, checked by the command above; Codex's completed review of that
+head, when CodeRabbit has not reviewed it; or the maintenance session's own,
+recorded on the pull request as `## Review of <full sha>`. The rest of this
+section states the CodeRabbit path's evidence. It requires CodeRabbit's
+authentic `Review completed` status on that commit and resolved review threads. The PR must have its own authentic summary and
 walkthrough, with a final reviewed footer naming that exact head and no review
 in progress. A later edit of a finished summary, such as an offer to fix
 failing CI, does not start a new review. The reviewed range must end at that
