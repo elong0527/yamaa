@@ -68,7 +68,7 @@ fn spec(dm_key: Option<&[&str]>, columns: Vec<Tree>, extra: Vec<(&str, Tree)>) -
 
 /// The tree `surface`'s front end lowers the document to.
 fn lowered(tree: Tree, surface: ast::Surface) -> ast::Spec {
-    crate::front_end::v0_5::lower_surface(&tree.document(), None, surface).into_spec()
+    crate::front_end::lowering::lower_surface(&tree.document(), None, surface).into_spec()
 }
 
 const V1: ast::Surface = ast::Surface::V1 { minor: 0 };
