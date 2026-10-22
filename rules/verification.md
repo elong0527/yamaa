@@ -392,7 +392,7 @@ registration order, zero counts included; one `column` row per output column in
 evaluated column or dataset verification in execution order. An intermediate's
 verifications have no row, and a check a stopped run never reached has none.
 
-Evidence: `schema-verification-log`, `schema-row-count-fractions`, `rust/crates/yamaa-adapters/tests/scalar_language.rs::failed_runs_report_the_prefix_they_reached_and_no_columns`, `rust/crates/yamaa-adapters/tests/scalar_language.rs::handler_rows_register_every_path_at_zero_in_one_order`.
+Evidence: `schema-verification-log`, `schema-row-count-fractions`, `rust/crates/yamaa-adapters/tests/scalar_language.rs::failed_runs_report_the_prefix_they_reached_and_no_columns`, `rust/crates/yamaa-adapters/tests/scalar_language.rs::handler_rows_register_every_path_at_zero_in_one_order`, `rust/crates/yamaa-adapters/tests/scalar_language.rs::a_row_template_s_handler_rows_name_their_column_and_cite_their_surface_s_rule`.
 
 `SPEC_PATH` names each row's stable specification item and is unique within
 the report:
@@ -401,7 +401,7 @@ the report:
 |---|---|
 | `run` | `output` |
 | `input` | `input.<NAME>` |
-| `rows` | `rows[<i>]`, or `base` without row templates |
+| `rows` | `rows.<id>` in the notation of [LAYER-9](inheritance.md#layer-9), or `base` without row templates |
 | `handler` | the handler path [COLUMN-14](columns.md#column-14) counts |
 | `column` | `columns.<NAME>` |
 | `check` | the check's stable specification path |
@@ -433,7 +433,7 @@ those [Values](values.md) types. A kind leaves missing each column the table
 gives it no value for. The report carries no version and no timestamp: the
 same specification and inputs give the same report bytes.
 
-Evidence: `schema-verification-log`, `schema-parquet`, `schema-adsl-age-quality`, `schema-row-count-fractions`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::date_and_time_data_types_check_each_completed_value_against_their_form`.
+Evidence: `schema-verification-log`, `schema-parquet`, `schema-adsl-age-quality`, `schema-row-count-fractions`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::date_and_time_data_types_check_each_completed_value_against_their_form`, `rust/crates/yamaa-adapters/tests/scalar_language.rs::a_row_template_s_handler_rows_name_their_column_and_cite_their_surface_s_rule`.
 
 | Column | Type | Value |
 |---|---|---|
@@ -467,9 +467,12 @@ is the same whether the check held or was violated; `CONDITION` names that
 condition only on a violated check. A handler answers the condition its
 operation raises without it, and its `RULE` is the rule that condition cites:
 `unconvertible` cites the conversion rule of [VALUE-3](values.md#value-3) and
-`absent` the unknown-name rule of [NAME-3](names.md#name-3). `RULE` is missing
-for a handler whose operation raises no condition without it, such as a
-`missing` handler of `mapping`, `cut` or `str_case`, for a default
+`absent` the absence rule of [LOOKUP-24](lookup.md#lookup-24), whose
+`unmatched_key` a read that requires a match raises instead. A file that
+declares `schema_version` cites the unknown-name rule of
+[NAME-3](names.md#name-3) for `absent`, as at the `yamaa-v0.5.0` tag. `RULE`
+is missing for a handler whose operation raises no condition without it, such
+as a `missing` handler of `mapping`, `cut` or `str_case`, for a default
 substitution and an `impute` `fallback`, which answer no condition, and
 whenever the condition cites no rule.
 

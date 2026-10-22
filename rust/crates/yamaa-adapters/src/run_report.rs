@@ -429,6 +429,7 @@ fn facts(
         .collect();
     Ok(Facts {
         artifact: compiled.output_path().into(),
+        surface: compiled.surface(),
         run: outcome,
         inputs,
         rows,
@@ -668,6 +669,7 @@ mod tests {
     fn facts(checks: Vec<core::Check>) -> Facts {
         Facts {
             artifact: "out.csv".into(),
+            surface: yamaa_core::ast::Surface::V1 { minor: 0 },
             run: core::Run::Succeeded { rows: 8 },
             inputs: vec![core::Input {
                 name: "SRC".into(),

@@ -935,6 +935,95 @@ rows:
             );
         }
 
+        /// One specification written in 0.5 and in 1.0. S-2 has no
+        /// subject-level record and S-3 is outside the safety population, so
+        /// the row template's read of SAFETY answers both and its read of
+        /// ADSL through the implicit join answers S-2. Each handler row names
+        /// the column it derives, whichever way the file writes the row
+        /// template: `rows[0]` in 0.5, `rows.event` in 1.0 (P-CLR-2). A 1.0
+        /// file counts both answers under `absent` (D202), and each cites
+        /// LOOKUP-24 (D204); a 0.5 file counts SAFETY's under `no_match`,
+        /// citing LOOKUP-24, and cites NAME-3 for the join's `absent`, as at
+        /// the `yamaa-v0.5.0` tag (D75).
+        #[test]
+        fn a_row_template_s_handler_rows_name_their_column_and_cite_their_surface_s_rule() {
+            let body = r#"output: {path: out.csv, columns: [USUBJID, ARM, TRTSDT], report: report.csv}
+columns:
+  - {name: USUBJID, type: str}
+  - {name: ARM, type: str}
+  - {name: TRTSDT, type: str}
+rows:
+  - id: event
+    dataset: AE
+    derivations:
+      USUBJID: AE.USUBJID
+      ARM: SAFETY.ARM
+      TRTSDT: ADSL.TRTSDT
+"#;
+            for (surface, header, constructed) in [
+                (
+                    "0.5",
+                    r#"schema_version: '1.0'
+domain: ADAE
+keys: [USUBJID]
+input:
+  AE: input/ae.csv
+  ADSL: input/adsl.csv
+intermediates:
+  - {id: SAFETY, dataset: ADSL, filter: "ADSL.SAFFL = 'Y'"}
+"#,
+                    "out.csv,rows,rows[0],AE,,,,,,,3,3,,{}\n\
+                     out.csv,handler,rows[0].derivations.ARM.source.no_match,no_match,,ARM,LOOKUP-24,,,,2,,,{}\n\
+                     out.csv,handler,rows[0].derivations.TRTSDT.source.absent,absent,,TRTSDT,NAME-3,,,,1,,,{}\n",
+                ),
+                (
+                    "1.0",
+                    r#"yamaa: "1.0"
+type: spec
+domain: ADAE
+keys: [USUBJID]
+input:
+  AE: input/ae.csv
+  ADSL: {path: input/adsl.csv, key: [USUBJID]}
+intermediates:
+  - {id: SAFETY, dataset: ADSL, key: [USUBJID], filter: "ADSL.SAFFL = 'Y'"}
+"#,
+                    "out.csv,rows,rows.event,AE,,,,,,,3,3,,{}\n\
+                     out.csv,handler,rows.event.derivations.ARM.source.absent,absent,,ARM,LOOKUP-24,,,,2,,,{}\n\
+                     out.csv,handler,rows.event.derivations.TRTSDT.source.absent,absent,,TRTSDT,LOOKUP-24,,,,1,,,{}\n",
+                ),
+            ] {
+                let study = Study::new();
+                fs::write(study.0.join("input/ae.csv"), "USUBJID\nS-1\nS-2\nS-3\n").unwrap();
+                fs::write(
+                    study.0.join("input/adsl.csv"),
+                    "USUBJID,ARM,TRTSDT,SAFFL\nS-1,drug a,2025-01-10,Y\nS-3,drug b,2025-02-01,N\n",
+                )
+                .unwrap();
+                let mut result = study.build(&format!("{header}{body}"));
+                assert!(result.issues().is_empty(), "{surface}: {:?}", result.issues());
+                assert!(result.save().unwrap(), "{surface}");
+                assert_eq!(
+                    fs::read_to_string(study.0.join("out.csv")).unwrap(),
+                    "USUBJID,ARM,TRTSDT\nS-1,drug a,2025-01-10\nS-2,,\nS-3,,2025-02-01\n",
+                    "{surface}"
+                );
+                assert_eq!(
+                    saved_report(&study, "report.csv"),
+                    format!(
+                        "{HEADER}out.csv,run,output,,,,,,succeeded,,3,,,{{}}\n\
+                         out.csv,input,input.AE,AE,,,,,,,3,,,\"{{\"\"bytes\"\":20,\"\"path\"\":\"\"input/ae.csv\"\",\"\"profile\"\":\"\"csv\"\"}}\"\n\
+                         out.csv,input,input.ADSL,ADSL,,,,,,,2,,,\"{{\"\"bytes\"\":73,\"\"path\"\":\"\"input/adsl.csv\"\",\"\"profile\"\":\"\"csv\"\"}}\"\n\
+                         {constructed}\
+                         out.csv,column,columns.USUBJID,USUBJID,,,,,,,0,3,,\"{{\"\"max_length\"\":3}}\"\n\
+                         out.csv,column,columns.ARM,ARM,,,,,,,2,3,,\"{{\"\"max_length\"\":6}}\"\n\
+                         out.csv,column,columns.TRTSDT,TRTSDT,,,,,,,1,3,,\"{{\"\"max_length\"\":10}}\"\n"
+                    ),
+                    "{surface}"
+                );
+            }
+        }
+
         /// The report's handler rows and the run's handler counts, as
         /// `(path, count)` pairs in report order.
         fn handler_rows(study: &Study, result: &file_application::Domain) -> Vec<String> {
