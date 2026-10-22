@@ -1,4 +1,7 @@
-//! Project contracts.
+//! Project contracts: project function execution, project function result,
+//! project lock diagnostics, project terminology, specification codelist
+//! execution, specification project codelists and specification project
+//! functions.
 mod project {
     mod project_function_execution {
         //! Shared capture executes compiler-owned calls with already activated bindings.

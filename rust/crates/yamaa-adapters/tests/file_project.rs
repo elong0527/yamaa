@@ -1,5 +1,6 @@
 #![cfg(feature = "yaml")]
-//! File contracts.
+//! File contracts: file project, file publication, file resources and file
+//! workflow.
 mod file {
     mod file_project {
         use crate::support::project_schemas as schemas;

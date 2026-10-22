@@ -1,5 +1,9 @@
 #![cfg(feature = "yaml")]
-//! Execution contracts.
+//! Execution contracts: declarative case predicates, declarative correlated
+//! predicates, declarative flags, declarative intermediate admission,
+//! declarative intermediate single key, declarative intermediate keys,
+//! declarative intermediate ranges, declarative output ordering, declarative
+//! primary intermediates and declarative row intermediates.
 mod execution {
     mod declarative_case_predicates {
         //! Independently authored full case reports and unchanged original CSV truth.
@@ -690,9 +694,11 @@ columns:
             yamaa_adapters::json_wire::decode(include_str!("fixtures/flag_reference.json")).unwrap()
         }
         /// The benchmarks run as they are written, in either language: their
-        /// handler counts and findings are the same in both (#3422), so the
-        /// captured truth holds for each benchmark's own specification and
-        /// the capture's specification text is not compared.
+        /// handler counts and findings are the same in both (#3422), but for
+        /// an intermediate's absence, which a 1.0 file counts under `absent`
+        /// (D202). The captured truth holds for each benchmark's own
+        /// specification, and the capture's specification text is not
+        /// compared.
         #[test]
         fn six_unchanged_original_positive_documents_match_csv_and_full_handlers() {
             let truth = reference();

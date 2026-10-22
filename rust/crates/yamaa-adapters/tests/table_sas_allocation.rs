@@ -1,4 +1,4 @@
-//! Table contracts.
+//! Table contracts: SAS allocation.
 mod table {
     #[cfg(feature = "readstat")]
     mod sas_allocation {

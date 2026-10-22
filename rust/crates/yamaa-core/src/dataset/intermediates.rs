@@ -1,5 +1,6 @@
 //! Pure dataset declarations. No study data or host effects.
 use super::*;
+use crate::numeric_lifecycle::HandlerKind;
 use crate::value::ColumnType;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -95,11 +96,16 @@ pub struct Intermediate {
     pub range: Option<RelationRange>,
     /// Visible selected fields; donor keys, filters and order still see every slot.
     pub columns: Option<Vec<usize>>,
-    /// The declared `no_match` literal; `None` answers absence with missing.
-    /// Either way the answer is counted under `no_match` (LOOKUP-24).
+    /// The declared absence answer, `absent` in 1.0 and `no_match` in 0.5;
+    /// `None` answers absence with missing. Either way each read counts the
+    /// answer under the [`Self::absence`] handler (LOOKUP-24).
     pub no_match: Option<Value>,
+    /// The handler a read counts the absence answer under at its path: on a
+    /// 1.x tree `absent`, on a 0.5 tree `no_match`
+    /// ([`crate::ast::Surface::intermediate_absence`]).
+    pub absence: HandlerKind,
     /// `require_match: true` fails an absence as `unmatched_key` instead;
-    /// the compiler refuses it beside a declared `no_match`.
+    /// the compiler refuses it beside a declared absence answer.
     pub require_match: bool,
     pub unique: Vec<IntermediateUnique>,
     pub derivations: Option<IntermediateDerivations>,
@@ -224,12 +230,14 @@ fn contains_window(expression: &Expression) -> bool {
 
 /// The handlers a read of a named intermediate counts at the reading path:
 /// `multiple_matches` when `keep` chose among several candidates
-/// (LOOKUP-10), and `no_match` when no candidate survived and no
-/// `require_match` fails the read instead (LOOKUP-24).
+/// (LOOKUP-10), and the intermediate's absence handler when no candidate
+/// survived and no `require_match` fails the read instead (LOOKUP-24).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ReadHandlers {
     pub multiple_matches: bool,
-    pub no_match: bool,
+    /// `absent` on a 1.x tree, `no_match` on a 0.5 tree; none when the read
+    /// requires a match.
+    pub absence: Option<HandlerKind>,
 }
 
 /// The handlers a read of each intermediate counts. An intermediate its
@@ -240,7 +248,7 @@ pub fn read_handlers(intermediates: &[Intermediate]) -> Vec<ReadHandlers> {
         .iter()
         .map(|item| ReadHandlers {
             multiple_matches: item.selection.is_some(),
-            no_match: !item.require_match,
+            absence: (!item.require_match).then_some(item.absence),
         })
         .collect()
 }

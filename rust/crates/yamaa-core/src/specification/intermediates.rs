@@ -496,6 +496,7 @@ fn bind_one(
         filter,
         selection: item.keep.map(|keep| SourceSelection { order_by, keep }),
         no_match: item.no_match.clone(),
+        absence: tree.spec().header.surface.intermediate_absence(),
         require_match: item.require_match,
         unique,
         derivations,

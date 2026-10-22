@@ -1,4 +1,4 @@
-//! Project contracts.
+//! Project contracts: specification project rows and specification str pad.
 mod project {
     mod specification_project_rows {
         use crate::support::id_source_schema as source;

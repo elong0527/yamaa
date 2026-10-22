@@ -1,5 +1,7 @@
 #![cfg(feature = "yaml")]
-//! Scalar contracts.
+//! Scalar contracts: declarative rounding, declarative temporal, declarative
+//! temporal imputation, declarative text case, declarative text extract,
+//! declarative text pad, declarative text template and scalar bytes.
 mod scalar {
     mod declarative_rounding {
         use crate::support::Edit as _;

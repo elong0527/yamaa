@@ -1,4 +1,5 @@
-//! Preparation contracts.
+//! Preparation contracts: dictionary preparation, document preparation, file
+//! preparation, inheritance and inheritance capture.
 mod preparation {
     mod dictionary_preparation {
         //! Independent logical arenas and opaque effects exercise capture ownership.

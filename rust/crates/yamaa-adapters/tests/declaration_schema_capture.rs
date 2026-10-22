@@ -1,5 +1,8 @@
 #![cfg(feature = "yaml")]
-//! Declaration contracts.
+//! Declaration contracts: schema capture, schema declaration fixture, schema
+//! diagnostic projection, shipped schema, standalone preparation, static
+//! declarations, string template syntax fixture, structural documents,
+//! structural preparation and validator R declarations.
 mod declaration {
     mod schema_capture {
         use yamaa_adapters::json;
