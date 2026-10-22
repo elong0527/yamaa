@@ -149,9 +149,10 @@ const AE: &str = "USUBJID,AESEQ,AESER,AESTDTC\n\
 // Read by no row template.
 const LB: &str = "USUBJID,LBSEQ\nS1,1\n";
 
-const SUBJECTS: &str = "  - {id: subjects, dataset: DM, derivations: {USUBJID: DM.USUBJID, SRC: {literal: DM}, SEQ: {literal: 0}}}\n";
-const EVENTS: &str = "  - {id: events, dataset: AE, derivations: {USUBJID: AE.USUBJID, SRC: {literal: AE}, SEQ: AE.AESEQ}}\n";
-const SERIOUS: &str = "  - {id: serious, dataset: SER, derivations: {USUBJID: SER.USUBJID, SRC: {literal: SER}, SEQ: SER.AESEQ}}\n";
+const SUBJECTS: &str =
+    "  - {id: subjects, dataset: DM, derivations: {USUBJID: DM.USUBJID, SRC: \"'DM'\", SEQ: 0}}\n";
+const EVENTS: &str = "  - {id: events, dataset: AE, derivations: {USUBJID: AE.USUBJID, SRC: \"'AE'\", SEQ: AE.AESEQ}}\n";
+const SERIOUS: &str = "  - {id: serious, dataset: SER, derivations: {USUBJID: SER.USUBJID, SRC: \"'SER'\", SEQ: SER.AESEQ}}\n";
 /// Two named intermediates select AE's serious and non-serious events.
 const INTERMEDIATES: &str = "intermediates:\n\
     \x20 - {id: SER, dataset: AE, filter: \"AE.AESER = 'Y'\"}\n\
@@ -161,12 +162,13 @@ const INTERMEDIATES: &str = "intermediates:\n\
 /// after `extra` declared columns.
 fn specification(prefix: &str, rows: &[&str], extra: &str, kind: &str, derivation: &str) -> String {
     format!(
-        "schema_version: \"1.0\"\n\
+        "yamaa: \"1.0\"\n\
+         type: spec\n\
          domain: XX\n\
          keys: [USUBJID, SRC, SEQ]\n\
          output: {{path: out.csv, columns: [USUBJID, SRC, SEQ, ORD]}}\n\
          input:\n\
-         \x20 DM: {{path: dm.csv, types: {{AGE: int, RFSTDTC: date}}}}\n\
+         \x20 DM: {{path: dm.csv, key: [USUBJID], types: {{AGE: int, RFSTDTC: date}}}}\n\
          \x20 AE: {{path: ae.csv, types: {{AESEQ: int, AESTDTC: date}}}}\n\
          \x20 LB: {{path: lb.csv, types: {{LBSEQ: int}}}}\n\
          {prefix}\
@@ -256,17 +258,21 @@ fn every_operand_of_every_window_operation_is_checked() {
         ),
         (
             "str",
-            "{baseline_flag: {date: DM.RFSTDTC, reference_date: DM.RFSTDTC, value: DM.AGE, tie_break: [DM.AGE]}}",
+            "{baseline_flag: {date: DM.RFSTDTC, reference: DM.RFSTDTC, source: DM.AGE, window: {order_by: [DM.RFSTDTC, DM.AGE]}}}",
             "",
             vec![
                 (format!("{column}.baseline_flag.date"), "DM.RFSTDTC", "baseline_flag"),
                 (
-                    format!("{column}.baseline_flag.reference_date"),
+                    format!("{column}.baseline_flag.reference"),
                     "DM.RFSTDTC",
                     "baseline_flag",
                 ),
-                (format!("{column}.baseline_flag.value"), "DM.AGE", "baseline_flag"),
-                (format!("{column}.baseline_flag.tie_break[0]"), "DM.AGE", "baseline_flag"),
+                (format!("{column}.baseline_flag.source"), "DM.AGE", "baseline_flag"),
+                (
+                    format!("{column}.baseline_flag.window.order_by[1]"),
+                    "DM.AGE",
+                    "baseline_flag",
+                ),
             ],
         ),
         (
@@ -306,7 +312,7 @@ fn every_operand_of_every_window_operation_is_checked() {
         // So is a window in a case result, even one only events rows select.
         (
             "int",
-            "{case: [{when: \"SRC = 'AE'\", then: {row_number: {window: {order_by: [DM.AGE]}}}}, {otherwise: {literal: 0}}]}",
+            "{case: [{when: \"SRC = 'AE'\", then: {row_number: {window: {order_by: [DM.AGE]}}}}, {otherwise: 0}]}",
             "",
             vec![(
                 format!("{column}.case[0].then.row_number.window.order_by[0]"),
@@ -332,8 +338,8 @@ fn every_operand_of_every_window_operation_is_checked() {
 
 #[test]
 fn grouping_either_template_refuses_the_read_the_same_way() {
-    let grouped_events = "  - {id: events, dataset: AE, group_by: [AE.USUBJID], derivations: {USUBJID: AE.USUBJID, SRC: {literal: AE}, SEQ: {literal: 1}}}\n";
-    let grouped_subjects = "  - {id: subjects, dataset: DM, group_by: [DM.USUBJID], derivations: {USUBJID: DM.USUBJID, SRC: {literal: DM}, SEQ: {literal: 0}}}\n";
+    let grouped_events = "  - {id: events, dataset: AE, group_by: [AE.USUBJID], derivations: {USUBJID: AE.USUBJID, SRC: \"'AE'\", SEQ: 1}}\n";
+    let grouped_subjects = "  - {id: subjects, dataset: DM, group_by: [DM.USUBJID], derivations: {USUBJID: DM.USUBJID, SRC: \"'DM'\", SEQ: 0}}\n";
     for rows in [[SUBJECTS, grouped_events], [grouped_subjects, EVENTS]] {
         numbered("", &rows, "DM.AGE").refused(&[(ORDER, "DM.AGE", &["DM", "AE"], "row_number")]);
     }
@@ -341,8 +347,8 @@ fn grouping_either_template_refuses_the_read_the_same_way() {
 
 #[test]
 fn named_intermediate_drivers_and_the_input_they_read() {
-    let grouped = "  - {id: serious, dataset: SER, group_by: [SER.USUBJID], derivations: {USUBJID: SER.USUBJID, SRC: {literal: SER}, SEQ: {literal: 1}}}\n";
-    let other = "  - {id: other, dataset: NONSER, derivations: {USUBJID: NONSER.USUBJID, SRC: {literal: NONSER}, SEQ: NONSER.AESEQ}}\n";
+    let grouped = "  - {id: serious, dataset: SER, group_by: [SER.USUBJID], derivations: {USUBJID: SER.USUBJID, SRC: \"'SER'\", SEQ: 1}}\n";
+    let other = "  - {id: other, dataset: NONSER, derivations: {USUBJID: NONSER.USUBJID, SRC: \"'NONSER'\", SEQ: NONSER.AESEQ}}\n";
     for (rows, order, drivers) in [
         (vec![SUBJECTS, SERIOUS], "DM.AGE", &["DM", "SER"][..]),
         (vec![SUBJECTS, grouped], "DM.AGE", &["DM", "SER"][..]),
@@ -364,12 +370,12 @@ fn a_window_whose_templates_share_the_driver_builds_unchanged() {
     // Ties keep row-template order, then record order.
     let again = SUBJECTS
         .edit("id: subjects", "id: again")
-        .edit("literal: DM}", "literal: DM2}");
+        .edit("SRC: \"'DM'\"", "SRC: \"'DM2'\"");
     numbered("", &[SUBJECTS, &again], "DM.AGE").saved(
         "USUBJID,SRC,SEQ,ORD\nS1,DM,0,3\nS2,DM,0,1\nS3,DM,0,5\nS1,DM2,0,4\nS2,DM2,0,2\nS3,DM2,0,6\n",
     );
     // A grouped template over the shared driver whose groups hold the field.
-    let grouped = "  - {id: grouped, dataset: DM, group_by: [DM.USUBJID, DM.AGE], derivations: {USUBJID: DM.USUBJID, SRC: {literal: DMG}, SEQ: {literal: 1}}}\n";
+    let grouped = "  - {id: grouped, dataset: DM, group_by: [DM.USUBJID, DM.AGE], derivations: {USUBJID: DM.USUBJID, SRC: \"'DMG'\", SEQ: 1}}\n";
     numbered("", &[SUBJECTS, grouped], "DM.AGE").saved(
         "USUBJID,SRC,SEQ,ORD\nS1,DM,0,3\nS2,DM,0,1\nS3,DM,0,5\nS1,DMG,1,4\nS2,DMG,1,2\nS3,DMG,1,6\n",
     );
@@ -377,7 +383,7 @@ fn a_window_whose_templates_share_the_driver_builds_unchanged() {
     // S2 1 and S1 3, latest sequence number first.
     let again = SERIOUS
         .edit("id: serious", "id: again")
-        .edit("literal: SER}", "literal: SER2}");
+        .edit("SRC: \"'SER'\"", "SRC: \"'SER2'\"");
     numbered(
         INTERMEDIATES,
         &[SERIOUS, &again],
@@ -392,7 +398,7 @@ fn a_window_whose_templates_share_the_driver_builds_unchanged() {
 fn a_grouped_template_over_the_shared_driver_still_reads_only_its_group_keys() {
     // A grouped row holds one value of each group key, not an age, so `check`
     // refuses the read from the declarations, as `domain` does.
-    let grouped = "  - {id: grouped, dataset: DM, group_by: [DM.USUBJID], derivations: {USUBJID: DM.USUBJID, SRC: {literal: DMG}, SEQ: {literal: 1}}}\n";
+    let grouped = "  - {id: grouped, dataset: DM, group_by: [DM.USUBJID], derivations: {USUBJID: DM.USUBJID, SRC: \"'DMG'\", SEQ: 1}}\n";
     numbered("", &[SUBJECTS, grouped], "DM.AGE").reports(&[ungrouped(ORDER, "DM.AGE", "DM")]);
     // So is a window in a case result.
     Fixture::new(&specification(
@@ -400,7 +406,7 @@ fn a_grouped_template_over_the_shared_driver_still_reads_only_its_group_keys() {
         &[SUBJECTS, grouped],
         "",
         "int",
-        "{case: [{when: \"SRC = 'DM'\", then: {row_number: {window: {order_by: [DM.AGE]}}}}, {otherwise: {literal: 0}}]}",
+        "{case: [{when: \"SRC = 'DM'\", then: {row_number: {window: {order_by: [DM.AGE]}}}}, {otherwise: 0}]}",
     ))
     .reports(&[ungrouped(
         "columns.ORD.derivation.case[0].then.row_number.window.order_by[0]",
@@ -408,7 +414,7 @@ fn a_grouped_template_over_the_shared_driver_still_reads_only_its_group_keys() {
         "DM",
     )]);
     // And a window over a named intermediate driver that one template groups.
-    let grouped_serious = "  - {id: grouped, dataset: SER, group_by: [SER.USUBJID], derivations: {USUBJID: SER.USUBJID, SRC: {literal: SERG}, SEQ: {literal: 1}}}\n";
+    let grouped_serious = "  - {id: grouped, dataset: SER, group_by: [SER.USUBJID], derivations: {USUBJID: SER.USUBJID, SRC: \"'SERG'\", SEQ: 1}}\n";
     numbered(INTERMEDIATES, &[SERIOUS, grouped_serious], "SER.AESEQ").reports(&[ungrouped(
         ORDER,
         "SER.AESEQ",
@@ -448,7 +454,7 @@ fn a_read_of_a_dataset_no_row_is_built_from_is_refused_before_any_data_is_read()
     // from SER, so AE is another dataset for them.
     let again = SERIOUS
         .edit("id: serious", "id: again")
-        .edit("literal: SER}", "literal: SER2}");
+        .edit("SRC: \"'SER'\"", "SRC: \"'SER2'\"");
     numbered(INTERMEDIATES, &[SERIOUS, &again], "AE.AESEQ").reports(&[unknown(ORDER, "AE.AESEQ")]);
     // The operands first, then each name of the filter once, in sorted order.
     let filter = "columns.ORD.derivation.row_number.window.filter";
@@ -475,20 +481,14 @@ fn a_window_in_a_row_template_or_without_row_templates_reads_only_its_driver() {
     // template's driver and an input that builds no row are both refused.
     let own = |order: &str| {
         let subjects = format!(
-            "  - {{id: subjects, dataset: DM, derivations: {{USUBJID: DM.USUBJID, SRC: {{literal: DM}}, SEQ: {{literal: 0}}, ORD: {{row_number: {{window: {{order_by: [{order}]}}}}}}}}}}\n"
+            "  - {{id: subjects, dataset: DM, derivations: {{USUBJID: DM.USUBJID, SRC: \"'DM'\", SEQ: 0, ORD: {{row_number: {{window: {{order_by: [{order}]}}}}}}}}}}\n"
         );
-        let events = "  - {id: events, dataset: AE, derivations: {USUBJID: AE.USUBJID, SRC: {literal: AE}, SEQ: AE.AESEQ, ORD: {literal: 0}}}\n";
-        Fixture::new(&specification(
-            "",
-            &[&subjects, events],
-            "",
-            "int",
-            "{literal: 0}",
-        ))
+        let events = "  - {id: events, dataset: AE, derivations: {USUBJID: AE.USUBJID, SRC: \"'AE'\", SEQ: AE.AESEQ, ORD: 0}}\n";
+        Fixture::new(&specification("", &[&subjects, events], "", "int", "0"))
     };
     for order in ["AE.AESEQ", "LB.LBSEQ"] {
         own(order).reports(&[unknown(
-            "rows[0].derivations.ORD.row_number.window.order_by[0]",
+            "rows.subjects.derivations.ORD.row_number.window.order_by[0]",
             order,
         )]);
     }
@@ -498,7 +498,8 @@ fn a_window_in_a_row_template_or_without_row_templates_reads_only_its_driver() {
     // Without row templates, the driver's records build every row.
     let base = |order: &str| {
         Fixture::new(&format!(
-            "schema_version: \"1.0\"\n\
+            "yamaa: \"1.0\"\n\
+             type: spec\n\
              domain: XX\n\
              keys: [USUBJID]\n\
              base: DM\n\

@@ -14,7 +14,8 @@
 //!
 //! Binding admits these after every other finding, over the reads that
 //! bound: a derivation or filter with a finding of its own, and a lookup
-//! whose key types fail, are not admitted.
+//! whose key types fail, are not admitted, nor are the derivations of a
+//! lookup binding binds without them.
 
 use super::*;
 use crate::ast::{Scope, Step};
@@ -43,6 +44,9 @@ pub(super) struct Scopes<'a> {
     pub prepared: &'a PreparedSpecification,
     /// The lookups whose key types fail, which binding does not bind.
     pub refused: &'a BTreeSet<usize>,
+    /// The lookups binding binds without their derivations: one whose
+    /// derivation fails, and every one derived after one it does not bind.
+    pub underived: &'a BTreeSet<usize>,
 }
 
 impl Scopes<'_> {
@@ -384,10 +388,14 @@ impl Scopes<'_> {
 
     /// The current record's fields the derivations of the lookup at `index`
     /// read, each once, with the path of the first derivation that reads it:
-    /// a field of another input than the one the lookup reads.
+    /// a field of another input than the one the lookup reads. A lookup bound
+    /// without its derivations reads none.
     fn current(&self, index: usize) -> Vec<(String, String)> {
         let spec = self.spec;
         let item = &spec.intermediates[index];
+        if self.underived.contains(&index) {
+            return Vec::new();
+        }
         let scan = crate::specification::reads::Scan {
             relation: true,
             windows: true,

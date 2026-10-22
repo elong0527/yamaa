@@ -64,24 +64,27 @@ impl Fixture {
 
 /// Each named column assembles the base's year and month with the day it
 /// names: `DAY` is a keyed intermediate answering absence with missing by
-/// default, `DAYS` one declaring that answer as its `no_match` handler, and
-/// `LK.D` an implicit join answering with missing under `absent`.
+/// default, `DAYS` one declaring that answer as its `absent` handler, and
+/// `LK.D` an implicit join answering with missing under `absent`. The two
+/// intermediates write their key as a mapping, which states a match of its
+/// own beside the key LK declares for the join (LOOKUP-4).
 fn dtc(columns: &[(&str, &str)]) -> String {
     let names: String = columns
         .iter()
         .map(|(name, _)| format!(", {name}"))
         .collect();
     let mut text = format!(
-        "schema_version: \"1.0\"\n\
+        "yamaa: \"1.0\"\n\
+         type: spec\n\
          domain: XX\n\
          keys: [ID]\n\
          input:\n\
          \x20 RAW: {{path: raw.csv, types: {{ID: int}}}}\n\
-         \x20 LK: {{path: lk.csv, types: {{ID: int}}}}\n\
+         \x20 LK: {{path: lk.csv, key: [ID], types: {{ID: int}}}}\n\
          base: RAW\n\
          intermediates:\n\
-         \x20 - {{id: DAY, dataset: LK, key: [ID]}}\n\
-         \x20 - {{id: DAYS, dataset: LK, key: [ID], no_match: {{literal: null}}}}\n\
+         \x20 - {{id: DAY, dataset: LK, key: {{ID: ID}}}}\n\
+         \x20 - {{id: DAYS, dataset: LK, key: {{ID: ID}}, absent: null}}\n\
          output:\n\
          \x20 path: out.csv\n\
          \x20 report: report.csv\n\
@@ -117,7 +120,7 @@ fn a_day_after_a_missing_month_is_never_looked_up() {
     // The read's site is registered before any row and never answers.
     assert_eq!(
         handlers,
-        [("columns.DTC.derivation.dtc.day.no_match".into(), 0)]
+        [("columns.DTC.derivation.dtc.day.absent".into(), 0)]
     );
 }
 
@@ -142,8 +145,8 @@ fn an_absence_answer_after_a_missing_month_is_not_counted() {
     assert_eq!(
         handlers,
         [
-            ("columns.DECL.derivation.dtc.day.no_match".into(), 1),
-            ("columns.DFLT.derivation.dtc.day.no_match".into(), 1),
+            ("columns.DECL.derivation.dtc.day.absent".into(), 1),
+            ("columns.DFLT.derivation.dtc.day.absent".into(), 1),
             ("columns.JOIN.derivation.dtc.day.absent".into(), 1),
         ]
     );
@@ -161,7 +164,7 @@ fn an_absence_answer_after_a_missing_month_is_not_counted() {
     assert_eq!(
         handlers,
         [
-            ("columns.DFLT.derivation.dtc.day.no_match".into(), 0),
+            ("columns.DFLT.derivation.dtc.day.absent".into(), 0),
             ("columns.JOIN.derivation.dtc.day.absent".into(), 0)
         ]
     );
@@ -204,7 +207,8 @@ fn to_date_refuses_an_interval_with_its_source_and_row() {
     // A duration names no single date: the failure reports the operation,
     // the source and the value at the `impute` stage, with the row's keys.
     let fixture = Fixture::new(
-        "schema_version: \"1.0\"\n\
+        "yamaa: \"1.0\"\n\
+         type: spec\n\
          domain: XX\n\
          keys: [ID]\n\
          input:\n\

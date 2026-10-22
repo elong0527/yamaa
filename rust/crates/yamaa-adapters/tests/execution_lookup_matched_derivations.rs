@@ -57,7 +57,8 @@ fn issue(issue: &Diagnostic) -> Value {
 /// shifted day, where the shift reads the current record's `REF`.
 fn specification(intermediate: &str) -> String {
     format!(
-        "schema_version: '1.0'
+        "yamaa: \"1.0\"
+type: spec
 domain: OUT
 keys: [ID]
 base: SRC
@@ -70,7 +71,6 @@ intermediates:
     dataset: LAB
 {intermediate}    order_by: [LAB.SHIFTED]
     keep: first
-    no_match: {{literal: null}}
 columns:
   - {{name: ID, type: int, derivation: SRC.ID}}
   - {{name: NEAR, type: int, derivation: NEAREST.SEQ}}
@@ -80,7 +80,7 @@ columns:
 
 const MATCHED: &str = "    key: [ID]
     derivations:
-      SHIFTED: {compute: {expr: \"DAY + SRC.REF\"}}
+      SHIFTED: \"DAY + SRC.REF\"
 ";
 
 /// The overflow of subject 9's shifted day, at the derivation.
@@ -88,7 +88,7 @@ fn overflow() -> Vec<Value> {
     vec![yamaa_adapters::json!({
         "phase": "derivation",
         "condition": "integer_overflow",
-        "spec_paths": ["intermediates[0].derivations.SHIFTED.compute"],
+        "spec_paths": ["intermediates.NEAREST.derivations.SHIFTED"],
     })]
 }
 
@@ -110,18 +110,18 @@ fn a_matched_record_that_fails_still_stops_the_run() {
 fn a_derived_key_or_bound_or_a_window_augments_every_record() {
     let derived_key = "    key: {KEYN: ID}
     derivations:
-      KEYN: {compute: {expr: \"ID + 0\"}}
-      SHIFTED: {compute: {expr: \"DAY + SRC.REF\"}}
+      KEYN: \"ID + 0\"
+      SHIFTED: \"DAY + SRC.REF\"
 ";
     let derived_bound = "    key: [ID]
     between: {value: SRC.REF, lower: LOW}
     derivations:
-      LOW: {compute: {expr: \"SEQ - 10\"}}
-      SHIFTED: {compute: {expr: \"DAY + SRC.REF\"}}
+      LOW: \"SEQ - 10\"
+      SHIFTED: \"DAY + SRC.REF\"
 ";
     let window = "    key: [ID]
     derivations:
-      SHIFTED: {compute: {expr: \"DAY + SRC.REF\"}}
+      SHIFTED: \"DAY + SRC.REF\"
       ORDINAL: {row_number: {window: {group_by: [LAB.ID], order_by: [LAB.DAY]}}}
 ";
     for intermediate in [derived_key, derived_bound, window] {

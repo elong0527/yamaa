@@ -39,14 +39,14 @@ mod execution {
             }
         }
         fn specification(operation: &str) -> String {
-            format!("schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput:\n  A: {{path: a.csv, types: {{CUT: int}}}}\n  B: {{path: b.csv, types: {{N: int}}}}\nbase: A\noutput: {{path: result.csv, columns: [ID, CUT, TOTAL]}}\ncolumns:\n  - {{name: ID, type: str, derivation: A.ID}}\n  - {{name: CUT, type: int, derivation: A.CUT}}\n  - name: TOTAL\n    type: float\n    derivation:\n      aggregate:\n{operation}")
+            format!("yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput:\n  A: {{path: a.csv, types: {{CUT: int}}}}\n  B: {{path: b.csv, key: [ID], types: {{N: int}}}}\nbase: A\noutput: {{path: result.csv, columns: [ID, CUT, TOTAL]}}\ncolumns:\n  - {{name: ID, type: str, derivation: A.ID}}\n  - {{name: CUT, type: int, derivation: A.CUT}}\n  - name: TOTAL\n    type: float\n    derivation:\n      aggregate:\n{operation}")
         }
         #[test]
         fn ordered_converted_bindings_reduce_only_matched_filtered_inclusive_records() {
             let fixture = Fixture::new();
             fs::write(fixture.0.join("a.csv"), b"ID,CUT\na,3\nb,2\nc,\nd,1\n").unwrap();
             fs::write(fixture.0.join("b.csv"),b"ID,N,V,USE\na,2,1.5,Y\na,3,2,Y\na,4,invalid,Y\na,1,invalid,N\nb,2,bad,Y\nc,1,99,Y\nd,2,99,Y\n").unwrap();
-            fs::write(fixture.0.join("spec.yaml"),specification("        filter: B.USE = 'Y'\n        between: {value: CUT, lower: N}\n        derive:\n          - name: VALUE\n            type: float\n            derivation: {value: {source: B.V}, unconvertible: 0}\n          - name: TWICE\n            type: float\n            derivation: {compute: {expr: 'VALUE * 2'}}\n        expr: SUM(TWICE)\n")).unwrap();
+            fs::write(fixture.0.join("spec.yaml"),specification("        filter: B.USE = 'Y'\n        between: {value: CUT, lower: N}\n        derivations:\n          VALUE:\n            type: float\n            derivation: {value: B.V, unconvertible: 0}\n          TWICE:\n            type: float\n            derivation: 'VALUE * 2'\n        expr: SUM(TWICE)\n")).unwrap();
             assert_eq!(fixture.save(), b"ID,CUT,TOTAL\na,3,7\nb,2,0\nc,,\nd,1,\n");
         }
         #[test]
@@ -58,7 +58,7 @@ mod execution {
             "MAX(V)",
         ),
         (
-            "{case: [{when: \"B.USE = 'Y'\", then: {str_extract: {source: B.V, pattern: '([0-9]+)$', group: 1}}}, {otherwise: {literal: 0}}]}",
+            "{case: [{when: \"B.USE = 'Y'\", then: {str_extract: {source: B.V, pattern: '([0-9]+)$', group: 1}}}, {otherwise: 0}]}",
             "int",
             "MAX(V)",
         ),
@@ -74,7 +74,7 @@ mod execution {
         fs::write(
             fixture.0.join("spec.yaml"),
             specification(&format!(
-                "        derive:\n          - {{name: V, type: {kind}, derivation: {derivation}}}\n        expr: {expression}\n"
+                "        derivations:\n          V: {{type: {kind}, derivation: {derivation}}}\n        expr: {expression}\n"
             )),
         )
         .unwrap();
@@ -136,9 +136,9 @@ mod execution {
         #[test]
         fn derive_and_range_faults_fail_before_any_output_with_registered_causes() {
             for (operation,condition,rule) in [
-        ("        derive: []\n        expr: SUM(V)\n","invalid_derive_step","LOOKUP-22"),
-        ("        derive:\n          - {name: V, type: float, derivation: W}\n        expr: SUM(V)\n","unknown_derive_variable","LOOKUP-22"),
-        ("        derive:\n          - {name: V, type: float, derivation: {literal: 1}}\n        expr: SUM(V)\n","invalid_derive_step","LOOKUP-22"),
+        ("        derivations: {}\n        expr: SUM(V)\n","invalid_derive_step","LOOKUP-22"),
+        ("        derivations:\n          V: {type: float, derivation: W}\n        expr: SUM(V)\n","unknown_derive_variable","LOOKUP-22"),
+        ("        derivations:\n          V: {type: float, derivation: 1}\n        expr: SUM(V)\n","invalid_derive_step","LOOKUP-22"),
         ("        between: {value: CUT, lower: USE}\n        expr: SUM(B.N)\n","incomparable_range_types","LOOKUP-9"),
         ("        between: {value: CUT, lower: ABSENT}\n        expr: SUM(B.N)\n","unknown_field","LOOKUP-9"),
         // A range with neither bound narrows nothing (LOOKUP-9); 0.4.0 refused
@@ -199,8 +199,8 @@ mod execution {
             };
             let inputs = |spec: String| {
                 spec.edit(
-                    "  B: {path: b.csv, types: {N: int}}\n",
-                    "  B: {path: b.csv, types: {N: int}}\n  C: {path: c.csv, types: {LIMIT: int}}\n",
+                    "  B: {path: b.csv, key: [ID], types: {N: int}}\n",
+                    "  B: {path: b.csv, key: [ID], types: {N: int}}\n  C: {path: c.csv, types: {LIMIT: int}}\n",
                 )
             };
             // Without row templates the base input builds every row.
@@ -217,12 +217,12 @@ mod execution {
             // Rows built from A and from C share the aggregate's column, so
             // neither input supplies a record for every row.
             let rows = |value: &str, templates: &str| {
-                format!("schema_version: '1.0'\ndomain: TEST\nkeys: [ID, ORIGIN]\ninput:\n  A: {{path: a.csv, types: {{CUT: int}}}}\n  B: {{path: b.csv, types: {{N: int}}}}\n  C: {{path: c.csv, types: {{LIMIT: int}}}}\noutput: {{path: result.csv, columns: [ID, ORIGIN, TOTAL]}}\ncolumns:\n  - {{name: ID, type: str}}\n  - {{name: ORIGIN, type: str}}\n  - name: TOTAL\n    type: float\n    derivation:\n      aggregate:\n{}rows:\n{templates}", operation(value))
+                format!("yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID, ORIGIN]\ninput:\n  A: {{path: a.csv, types: {{CUT: int}}}}\n  B: {{path: b.csv, key: [ID], types: {{N: int}}}}\n  C: {{path: c.csv, types: {{LIMIT: int}}}}\noutput: {{path: result.csv, columns: [ID, ORIGIN, TOTAL]}}\ncolumns:\n  - {{name: ID, type: str}}\n  - {{name: ORIGIN, type: str}}\n  - name: TOTAL\n    type: float\n    derivation:\n      aggregate:\n{}rows:\n{templates}", operation(value))
             };
             let from_a =
-                "  - id: a\n    dataset: A\n    derivations: {ID: A.ID, ORIGIN: {literal: A}}\n";
+                "  - id: a\n    dataset: A\n    derivations: {ID: A.ID, ORIGIN: \"'A'\"}\n";
             let from_c =
-                "  - id: c\n    dataset: C\n    derivations: {ID: C.ID, ORIGIN: {literal: C}}\n";
+                "  - id: c\n    dataset: C\n    derivations: {ID: C.ID, ORIGIN: \"'C'\"}\n";
             assert_eq!(
                 run(rows("A.CUT", from_a)),
                 Ok("ID,ORIGIN,TOTAL\na,A,1\nb,A,3\n".into())
@@ -239,7 +239,7 @@ mod execution {
             let fixture = Fixture::new();
             fs::write(fixture.0.join("a.csv"), b"ID,CUT\na,2\nb,3\n").unwrap();
             fs::write(fixture.0.join("b.csv"), b"ID,N\nb,10\na,1\na,4\n").unwrap();
-            let operation="        derive:\n          - {name: N, type: int, derivation: B.N}\n          - {name: C, type: int, derivation: CAP.CUT}\n          - {name: VALUE, type: int, derivation: {least: {sources: [N, C]}}}\n        expr: SUM(VALUE)\n";
+            let operation="        derivations:\n          N: {type: int, derivation: B.N}\n          C: {type: int, derivation: CAP.CUT}\n          VALUE: {type: int, derivation: {least: {sources: [N, C]}}}\n        expr: SUM(VALUE)\n";
             let spec=specification(operation).edit("base: A\n","base: A\nintermediates:\n  - {id: CAP, dataset: A, key: {ID: A.ID}, order_by: [A.CUT], keep: first}\n");
             fs::write(fixture.0.join("spec.yaml"), &spec).unwrap();
             assert_eq!(fixture.save(), b"ID,CUT,TOTAL\na,2,3\nb,3,3\n");
@@ -263,7 +263,7 @@ mod execution {
 
         fn original_fieldless_count(expression: &str, key: &str, filter: &str) -> String {
             format!(
-        "schema_version: '1.0'\ndomain: OUT\ninput:\n  SRC: {{path: src.csv, types: {{N: int}}}}\n  OTHER: {{path: other.csv, types: {{N: int}}}}\nbase: SRC\nkeys: [K]\noutput: {{path: out.csv, columns: [K, V]}}\ncolumns:\n  - name: V\n    type: int\n    derivation:\n      aggregate:\n        expr: '{expression}'\n        key: {key}\n{filter}  - {{name: K, type: int, derivation: SRC.N}}\n"
+        "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\ninput:\n  SRC: {{path: src.csv, types: {{N: int}}}}\n  OTHER: {{path: other.csv, types: {{N: int}}}}\nbase: SRC\nkeys: [K]\noutput: {{path: out.csv, columns: [K, V]}}\ncolumns:\n  - name: V\n    type: int\n    derivation:\n      aggregate:\n        expr: '{expression}'\n        key: {key}\n{filter}  - {{name: K, type: int, derivation: SRC.N}}\n"
     )
         }
 
@@ -293,12 +293,7 @@ mod execution {
                 ("COUNT(OTHER.*) + COUNT(OTHER.*)", 4),
                 ("COUNT(OTHER.*) + SUM(OTHER.N)", 4),
             ] {
-                for key in [
-                    "{N: K}",
-                    "{N: {source: K}}",
-                    "{N: {literal: 1}}",
-                    "{N: {greatest: {sources: [K, K]}}}",
-                ] {
+                for key in ["{N: K}", "{N: 1}", "{N: {greatest: {sources: [K, K]}}}"] {
                     let source = original_fieldless_count(expression, key, "");
                     let fixture = fieldless_count_fixture(&source);
                     let result = fixture.run().unwrap_or_else(|issues| panic!("{issues:?}"));
@@ -313,7 +308,13 @@ mod execution {
                     );
                 }
             }
+            // Without a key of its own the aggregate matches on the key OTHER
+            // declares (LOOKUP-5).
             let source = original_fieldless_count("COUNT(OTHER.*)", "{N: K}", "")
+                .edit(
+                    "OTHER: {path: other.csv, types: {N: int}}",
+                    "OTHER: {path: other.csv, key: [N], types: {N: int}}",
+                )
                 .edit("keys: [K]", "keys: [N]")
                 .edit("columns: [K, V]", "columns: [N, V]")
                 .edit(
@@ -343,6 +344,8 @@ mod execution {
                 .collect()
         }
 
+        /// A written 1.0 aggregate key reports a pair whose types cannot compare
+        /// at `key` (D196).
         #[test]
         fn original_fieldless_reduction_type_findings_keep_one_authored_owner() {
             for expression in [
@@ -351,41 +354,40 @@ mod execution {
                 "COUNT(OTHER.*) + COUNT(OTHER.*)",
                 "COUNT(OTHER.*) + SUM(OTHER.N)",
             ] {
-                for (literal, kind) in [("true", "bool"), ("x", "str")] {
+                for (literal, kind) in [("true", "bool"), ("\"'x'\"", "str")] {
                     let fixture = fieldless_count_fixture(&original_fieldless_count(
                         expression,
-                        &format!("{{N: {{literal: {literal}}}}}"),
+                        &format!("{{N: {literal}}}"),
                         "",
                     ));
                     assert_eq!(
                         complete_aggregate_issues(&fixture),
                         vec![yamaa_adapters::json!({
                             "phase": "validation", "condition": "incompatible_input_type",
-                            "rule": "LOOKUP-9", "spec_paths": ["columns.V.derivation.aggregate.expr"],
+                            "rule": "LOOKUP-9", "spec_paths": ["columns.V.derivation.aggregate.key"],
                             "context": {"source": "key[N]", "expected": kind, "actual": "int"}
                         })],
                         "{expression}, {literal}"
                     );
                 }
             }
-            for (expression, path) in [
-                ("COUNT(OTHER.*)", "columns.V.derivation.aggregate.filter"),
-                ("SUM(OTHER.N)", "columns.V.derivation.aggregate.expr"),
-                (
-                    "COUNT(OTHER.*) + SUM(OTHER.N)",
-                    "columns.V.derivation.aggregate.expr",
-                ),
+            // The filter reads the relation too, and the pair is still reported
+            // at `key`.
+            for expression in [
+                "COUNT(OTHER.*)",
+                "SUM(OTHER.N)",
+                "COUNT(OTHER.*) + SUM(OTHER.N)",
             ] {
                 let fixture = fieldless_count_fixture(&original_fieldless_count(
                     expression,
-                    "{N: {literal: true}}",
+                    "{N: true}",
                     "        filter: OTHER.N > 0\n",
                 ));
                 assert_eq!(
                     complete_aggregate_issues(&fixture),
                     vec![yamaa_adapters::json!({
                         "phase": "validation", "condition": "incompatible_input_type",
-                        "rule": "LOOKUP-9", "spec_paths": [path],
+                        "rule": "LOOKUP-9", "spec_paths": ["columns.V.derivation.aggregate.key"],
                         "context": {"source": "key[N]", "expected": "bool", "actual": "int"}
                     })],
                     "{expression}"
@@ -393,12 +395,32 @@ mod execution {
             }
         }
 
+        /// A written 1.0 aggregate key reports a key column the relation lacks
+        /// at `key`, and a match value that reads nothing at its pair (D196).
         #[test]
         fn original_fieldless_reduction_unknown_names_do_not_invent_join_findings() {
-            for (expression, key, identifier, rule) in [
-                ("COUNT(OTHER.*)", "{ABSENT: K}", "OTHER.ABSENT", "LOOKUP-5"),
-                ("COUNT(OTHER.*)", "{N: ABSENT}", "ABSENT", "LOOKUP-5"),
-                ("COUNT(ABSENT.*)", "{N: K}", "ABSENT.*", "NAME-3"),
+            for (expression, key, identifier, rule, path) in [
+                (
+                    "COUNT(OTHER.*)",
+                    "{ABSENT: K}",
+                    "OTHER.ABSENT",
+                    "LOOKUP-5",
+                    "columns.V.derivation.aggregate.key",
+                ),
+                (
+                    "COUNT(OTHER.*)",
+                    "{N: ABSENT}",
+                    "ABSENT",
+                    "LOOKUP-5",
+                    "columns.V.derivation.aggregate.key.N",
+                ),
+                (
+                    "COUNT(ABSENT.*)",
+                    "{N: K}",
+                    "ABSENT.*",
+                    "NAME-3",
+                    "columns.V.derivation.aggregate.expr",
+                ),
             ] {
                 let fixture =
                     fieldless_count_fixture(&original_fieldless_count(expression, key, ""));
@@ -406,7 +428,7 @@ mod execution {
                     complete_aggregate_issues(&fixture),
                     vec![yamaa_adapters::json!({
                         "phase": "validation", "condition": "unknown_field",
-                        "rule": rule, "spec_paths": ["columns.V.derivation.aggregate.expr"],
+                        "rule": rule, "spec_paths": [path],
                         "context": {"identifier": identifier}
                     })],
                     "{expression}, {key}"
@@ -433,14 +455,16 @@ mod execution {
             }
         }
 
+        /// The filter is the only reference to the donor, and the key pair's
+        /// types are reported at `key` (D196).
         #[test]
         fn fieldless_literal_bindings_keep_the_filter_as_the_only_donor_reference() {
             for expression in ["COUNT(OTHER.*)", "SUM(H)"] {
-                for key in ["{N: {literal: true}}", "{N: K}"] {
+                for key in ["{N: true}", "{N: K}"] {
                     let source = original_fieldless_count(expression, key, "        filter: OTHER.N > 0\n")
                 .edit(
                     "        filter: OTHER.N > 0\n",
-                    "        derive:\n          - {name: H, type: int, derivation: {literal: 1}}\n        filter: OTHER.N > 0\n",
+                    "        derivations:\n          H: {type: int, derivation: 1}\n        filter: OTHER.N > 0\n",
                 );
                     let fixture = fieldless_count_fixture(&source);
                     if key == "{N: K}" {
@@ -451,7 +475,7 @@ mod execution {
                             complete_aggregate_issues(&fixture),
                             vec![yamaa_adapters::json!({
                                 "phase": "validation", "condition": "incompatible_input_type",
-                                "rule": "LOOKUP-9", "spec_paths": ["columns.V.derivation.aggregate.filter"],
+                                "rule": "LOOKUP-9", "spec_paths": ["columns.V.derivation.aggregate.key"],
                                 "context": {"source": "key[N]", "expected": "bool", "actual": "int"}
                             })],
                             "{expression}"
@@ -461,7 +485,8 @@ mod execution {
             }
         }
 
-        const ORIGINAL_DERIVE_SPEC: &str = r#"schema_version: "1.0"
+        const ORIGINAL_DERIVE_SPEC: &str = r#"yamaa: "1.0"
+type: spec
 domain: ADQS
 keys: [STUDYID, USUBJID]
 input:
@@ -485,13 +510,12 @@ columns:
       aggregate:
         filter: "QS.QSCAT = 'SCALE'"
         key: [STUDYID, USUBJID]
-        derive:
+        derivations:
 DERIVE_BINDINGS
         expr: "REDUCTION_EXPRESSION"
 rows:
   - id: subscale
     filter: "QS.QSCAT = 'SCALE' AND QS.QSTESTCD = 'PF01'"
-    derivations: {}
 "#;
         const ORIGINAL_QS: &str = r#"STUDYID,USUBJID,QSTESTCD,QSCAT,QSORRES
 S1,001,PF01,SCALE,1
@@ -503,7 +527,8 @@ S1,001,PF01,SCALE,1
 S1,001,PF02,SCALE,N/A
 S1,001,PF03,SCALE,3
 "#;
-        const ORIGINAL_ENUM_DERIVE_SPEC: &str = r#"schema_version: "1.0"
+        const ORIGINAL_ENUM_DERIVE_SPEC: &str = r#"yamaa: "1.0"
+type: spec
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
@@ -526,19 +551,17 @@ columns:
     derivation:
       aggregate:
         key: [STUDYID, USUBJID]
-        derive:
-          - name: H
+        derivations:
+          H:
             type: date
             derivation:
               impute:
                 type: date
                 source: EX.EXENDTC
                 day: last
-                minimum_source_precision: month
         expr: "MAX(H)"
 rows:
   - id: one
-    derivations: {}
 "#;
         const ORIGINAL_EX: &str = r#"STUDYID,USUBJID,EXENDTC
 S1,001,2024-05
@@ -575,6 +598,8 @@ S1,002,2024-06
             }
         }
 
+        /// The duplicate half keeps a 0.5 document: a 1.0 `derivations` map
+        /// cannot repeat a name, since a YAML mapping refuses a repeated key.
         #[test]
         fn original_aggregate_bindings_reject_duplicates_and_forward_references() {
             let binding = "- name: QSNUM\n  type: float\n  derivation: QS.QSORRES";
@@ -583,13 +608,23 @@ S1,002,2024-06
                 "SUM(QSNUM)",
                 ORIGINAL_QS,
             );
+            let path = fixture.0.join("spec.yaml");
+            let legacy = fs::read_to_string(&path)
+                .unwrap()
+                .edit("yamaa: \"1.0\"\ntype: spec\n", "schema_version: \"1.0\"\n")
+                .edit("        derivations:\n", "        derive:\n")
+                .edit(
+                    "QS.QSTESTCD = 'PF01'\"\n",
+                    "QS.QSTESTCD = 'PF01'\"\n    derivations: {}\n",
+                );
+            fs::write(&path, legacy).unwrap();
             let issues = original_derive_issues(&fixture);
             assert_eq!(issues[0].condition(), "invalid_derive_step");
             let context = yamaa_core::json::Value::Object(issues[0].context.clone());
             assert!(context["reason"].as_str().unwrap().contains("unique"));
 
             let fixture = original_derive_fixture(
-                &format!("- name: DOUBLED\n  type: float\n  derivation: QSNUM\n{binding}"),
+                "DOUBLED:\n  type: float\n  derivation: QSNUM\nQSNUM:\n  type: float\n  derivation: QS.QSORRES",
                 "SUM(DOUBLED)",
                 ORIGINAL_QS,
             );
@@ -603,13 +638,13 @@ S1,002,2024-06
         fn original_aggregate_bindings_read_converted_earlier_values_and_recover_once() {
             for (bindings, expression, input, expected) in [
         (
-            "- name: QSNUM\n  type: float\n  derivation: QS.QSORRES\n- name: DOUBLED\n  type: float\n  derivation:\n    compute:\n      expr: 'QSNUM * 2'",
+            "QSNUM:\n  type: float\n  derivation: QS.QSORRES\nDOUBLED:\n  type: float\n  derivation: 'QSNUM * 2'",
             "SUM(DOUBLED)",
             ORIGINAL_QS,
             12.0,
         ),
         (
-            "- name: QSNUM\n  type: float\n  derivation:\n    value:\n      source: QS.QSORRES\n    unconvertible: 0",
+            "QSNUM:\n  type: float\n  derivation:\n    value: QS.QSORRES\n    unconvertible: 0",
             "SUM(QSNUM)",
             ORIGINAL_QS_WITH_TEXT,
             4.0,
@@ -626,7 +661,7 @@ S1,002,2024-06
         assert_eq!(batch.column(2).as_any().downcast_ref::<arrow_array::Float64Array>().unwrap().iter().collect::<Vec<_>>(), [Some(expected)]);
     }
             let fixture = original_derive_fixture(
-                "- name: QSNUM\n  type: float\n  derivation: QS.QSORRES",
+                "QSNUM:\n  type: float\n  derivation: QS.QSORRES",
                 "SUM(QSNUM)",
                 ORIGINAL_QS_WITH_TEXT,
             );
@@ -654,7 +689,7 @@ S1,002,2024-06
         #[test]
         fn original_aggregate_binding_relation_and_field_findings_keep_their_context() {
             let fixture = original_derive_fixture(
-        "- name: A\n  type: float\n  derivation: QS.QSORRES\n- name: B\n  type: float\n  derivation: EX.EXSEQ",
+        "A:\n  type: float\n  derivation: QS.QSORRES\nB:\n  type: float\n  derivation: EX.EXSEQ",
         "SUM(A)",
         ORIGINAL_QS,
     );
@@ -664,7 +699,7 @@ S1,002,2024-06
                 .any(|issue| issue.condition() == "invalid_derive_step"));
 
             let fixture = original_derive_fixture(
-        "- name: A\n  type: float\n  derivation: QS.QSORRES\n- name: B\n  type: float\n  derivation: XX.YY\n- name: CAPNUM\n  type: float\n  derivation: CAP.DSNUM",
+        "A:\n  type: float\n  derivation: QS.QSORRES\nB:\n  type: float\n  derivation: XX.YY\nCAPNUM:\n  type: float\n  derivation: CAP.DSNUM",
         "SUM(A)",
         ORIGINAL_QS,
     );
@@ -680,7 +715,7 @@ S1,002,2024-06
 
             for (source, rule) in [("QS.NOSUCHFIELD", "NAME-3"), ("CAP.NOSUCH", "LOOKUP-11")] {
                 let fixture = original_derive_fixture(
-                    &format!("- name: A\n  type: float\n  derivation: {source}"),
+                    &format!("A:\n  type: float\n  derivation: {source}"),
                     "SUM(A)",
                     ORIGINAL_QS,
                 );
@@ -697,7 +732,7 @@ S1,002,2024-06
             }
 
             let fixture = original_derive_fixture(
-        "- name: QSNUM\n  type: float\n  derivation: QS.QSORRES\n- name: CAPNUM\n  type: float\n  derivation: CAP.DSNUM\n- name: CAPPED\n  type: float\n  derivation: {least: {sources: [QSNUM, CAPNUM]}}",
+        "QSNUM:\n  type: float\n  derivation: QS.QSORRES\nCAPNUM:\n  type: float\n  derivation: CAP.DSNUM\nCAPPED:\n  type: float\n  derivation: {least: {sources: [QSNUM, CAPNUM]}}",
         "SUM(CAPPED)",
         ORIGINAL_QS,
     );
@@ -825,7 +860,7 @@ S1,002,2024-06
                 fs::write(
                     root.join("spec.yaml"),
                     format!(
-                        "schema_version: '1.0'\ndomain: ADSL\nbase: DM\nkeys: [USUBJID]\ninput:\n  DM: {{path: dm.csv, types: {{AGE: int}}}}\n  EX: {{path: ex.csv, types: {{DOSE: float}}}}\noutput: {{path: out.csv, columns: [USUBJID, FL]}}\n{body}"
+                        "yamaa: \"1.0\"\ntype: spec\ndomain: ADSL\nbase: DM\nkeys: [USUBJID]\ninput:\n  DM: {{path: dm.csv, types: {{AGE: int}}}}\n  EX: {{path: ex.csv, types: {{DOSE: float}}}}\noutput: {{path: out.csv, columns: [USUBJID, FL]}}\n{body}"
                     ),
                 )
                 .unwrap();
@@ -885,16 +920,20 @@ S1,002,2024-06
             result
         }
 
-        fn finding(path: &str, expected: &str) -> Value {
+        /// The schema finding of a 1.x specification names the file the run
+        /// loaded, as `source` and `entry` (`support::benchmarks::without_layer`).
+        fn finding(fixture: &Fixture, path: &str, expected: &str) -> Value {
+            let specification = fixture.specification();
             yamaa_adapters::json!({
                 "phase": "validation", "condition": "invalid_field_type", "rule": "EXPR-7",
-                "spec_paths": [path], "context": {"expected": expected}
+                "spec_paths": [path],
+                "context": {"expected": expected, "source": specification, "entry": specification}
             })
         }
 
         const NO_BRANCH: &str = "at least one when/then item";
         const NOT_LAST: &str = "otherwise only as the last item";
-        const ONLY: &str = "{case: [{otherwise: {literal: N}}]}";
+        const ONLY: &str = "{case: [{otherwise: \"'N'\"}]}";
 
         fn column(derivation: &str) -> String {
             format!("columns:\n  - {{name: USUBJID, type: str, derivation: DM.USUBJID}}\n  - {{name: FL, type: str, derivation: {derivation}}}\n")
@@ -906,17 +945,17 @@ S1,002,2024-06
                 (column(ONLY), "columns.FL.derivation.case", NO_BRANCH),
                 (column("{case: []}"), "columns.FL.derivation.case", NO_BRANCH),
                 (
-                    column("{case: [{otherwise: {literal: N}}, {when: 'DM.AGE >= 65', then: {literal: Y}}]}"),
+                    column("{case: [{otherwise: \"'N'\"}, {when: 'DM.AGE >= 65', then: \"'Y'\"}]}"),
                     "columns.FL.derivation.case[0]",
                     NOT_LAST,
                 ),
                 (
-                    column("{case: [{when: 'DM.AGE >= 65', then: {literal: Y}}, {otherwise: {literal: N}}, {otherwise: {literal: U}}]}"),
+                    column("{case: [{when: 'DM.AGE >= 65', then: \"'Y'\"}, {otherwise: \"'N'\"}, {otherwise: \"'U'\"}]}"),
                     "columns.FL.derivation.case[1]",
                     NOT_LAST,
                 ),
                 (
-                    column(&format!("{{case: [{{when: 'DM.AGE >= 65', then: {ONLY}}}, {{otherwise: {{literal: N}}}}]}}")),
+                    column(&format!("{{case: [{{when: 'DM.AGE >= 65', then: {ONLY}}}, {{otherwise: \"'N'\"}}]}}")),
                     "columns.FL.derivation.case[0].then.case",
                     NO_BRANCH,
                 ),
@@ -931,8 +970,8 @@ S1,002,2024-06
                     NO_BRANCH,
                 ),
                 (
-                    column(&format!("{{aggregate: {{key: [USUBJID], filter: 'EX.DOSE > 0', derive: [{{name: LEVEL, type: str, derivation: {ONLY}}}], expr: 'MAX(LEVEL)'}}}}")),
-                    "columns.FL.derivation.aggregate.derive.LEVEL.derivation.case",
+                    column(&format!("{{aggregate: {{key: [USUBJID], filter: 'EX.DOSE > 0', derivations: {{LEVEL: {{type: str, derivation: {ONLY}}}}}, expr: 'MAX(LEVEL)'}}}}")),
+                    "columns.FL.derivation.aggregate.derivations.LEVEL.derivation.case",
                     NO_BRANCH,
                 ),
             ];
@@ -941,7 +980,7 @@ S1,002,2024-06
                 for (route, actual) in issues(&fixture) {
                     assert_eq!(
                         actual,
-                        yamaa_adapters::json!([finding(path, expected)]),
+                        yamaa_adapters::json!([finding(&fixture, path, expected)]),
                         "{route}: {body}"
                     );
                 }
@@ -952,14 +991,14 @@ S1,002,2024-06
         #[test]
         fn case_with_only_otherwise_items_reports_the_case_and_each_misplaced_item() {
             let fixture = Fixture::new(&column(
-                "{case: [{otherwise: {literal: N}}, {otherwise: {literal: U}}]}",
+                "{case: [{otherwise: \"'N'\"}, {otherwise: \"'U'\"}]}",
             ));
             for (route, actual) in issues(&fixture) {
                 assert_eq!(
                     actual,
                     yamaa_adapters::json!([
-                        finding("columns.FL.derivation.case", NO_BRANCH),
-                        finding("columns.FL.derivation.case[0]", NOT_LAST),
+                        finding(&fixture, "columns.FL.derivation.case", NO_BRANCH),
+                        finding(&fixture, "columns.FL.derivation.case[0]", NOT_LAST),
                     ]),
                     "{route}"
                 );
@@ -969,7 +1008,7 @@ S1,002,2024-06
         #[test]
         fn ordered_case_items_still_build() {
             let fixture = Fixture::new(&column(
-                "{case: [{when: 'DM.AGE >= 65', then: {literal: Y}}, {otherwise: {literal: N}}]}",
+                "{case: [{when: 'DM.AGE >= 65', then: \"'Y'\"}, {otherwise: \"'N'\"}]}",
             ));
             for (route, actual) in issues(&fixture) {
                 assert_eq!(actual, yamaa_adapters::json!([]), "{route}");
@@ -1185,7 +1224,7 @@ S1,002,2024-06
                 fs::create_dir(fixture.0.join("input")).unwrap();
                 fs::write(fixture.0.join("input/dm.csv"), "USUBJID,AGE\nS-001,34\n").unwrap();
                 let spec = format!(
-            "schema_version: '1.0'\ndomain: ADSL\nkeys: [USUBJID]\ninput: {{DM: input/dm.csv}}\noutput: {output}\ncolumns:\n  - {{name: USUBJID, type: str, derivation: DM.USUBJID}}\n  - {{name: N, type: float, derivation: DM.AGE}}\n"
+            "yamaa: \"1.0\"\ntype: spec\ndomain: ADSL\nkeys: [USUBJID]\ninput: {{DM: input/dm.csv}}\noutput: {output}\ncolumns:\n  - {{name: USUBJID, type: str, derivation: DM.USUBJID}}\n  - {{name: N, type: float, derivation: DM.AGE}}\n"
         );
                 fs::write(fixture.0.join("spec.yaml"), spec).unwrap();
                 let spec_path = fixture.0.join("spec.yaml").to_str().unwrap().to_owned();
@@ -1515,14 +1554,14 @@ S1,002,2024-06
         /// not a record lookup, then column order over the formulas' reads.
         #[test]
         fn check_reports_formula_qualification_and_column_order() {
-            let qualified = |expr: &str, identifier: &str| yamaa_adapters::json!({"phase":"validation","condition":"qualified_identifier","rule":"FORMULA-9","spec_paths":["columns.A.derivation.compute.expr"],"context":{"expr":expr,"identifier":identifier}});
-            let forward = |dependency: &str| yamaa_adapters::json!({"phase":"validation","condition":"forward_reference","rule":"COLUMN-5","spec_paths":["columns.A.derivation.compute"],"context":{"column":"A","dependency":dependency}});
-            let cycle = yamaa_adapters::json!({"phase":"validation","condition":"dependency_cycle","rule":"COLUMN-6","spec_paths":["columns.A.derivation.compute","columns.B.derivation.compute"],"context":{"cycle":["A","B","A"]}});
+            let qualified = |expr: &str, identifier: &str| yamaa_adapters::json!({"phase":"validation","condition":"qualified_identifier","rule":"FORMULA-9","spec_paths":["columns.A.derivation"],"context":{"expr":expr,"identifier":identifier}});
+            let forward = |dependency: &str| yamaa_adapters::json!({"phase":"validation","condition":"forward_reference","rule":"COLUMN-5","spec_paths":["columns.A.derivation"],"context":{"column":"A","dependency":dependency}});
+            let cycle = yamaa_adapters::json!({"phase":"validation","condition":"dependency_cycle","rule":"COLUMN-6","spec_paths":["columns.A.derivation","columns.B.derivation"],"context":{"cycle":["A","B","A"]}});
             let rows: [(&str, &str, &str, Vec<yamaa_core::json::Value>); 4] = [
                 (
                     "qualified-then-forward",
                     "A, B",
-                    "  - {name: A, type: float, derivation: {compute: {expr: 'B + DM.AGE + DM.WT'}}}\n  - {name: B, type: float, derivation: DM.AGE}\n",
+                    "  - {name: A, type: float, derivation: 'B + DM.AGE + DM.WT'}\n  - {name: B, type: float, derivation: DM.AGE}\n",
                     vec![
                         qualified("B + DM.AGE + DM.WT", "DM.AGE"),
                         qualified("B + DM.AGE + DM.WT", "DM.WT"),
@@ -1532,19 +1571,19 @@ S1,002,2024-06
                 (
                     "forward-in-written-order",
                     "A, B, C",
-                    "  - {name: A, type: float, derivation: {compute: {expr: 'C - B'}}}\n  - {name: B, type: float, derivation: DM.AGE}\n  - {name: C, type: float, derivation: DM.WT}\n",
+                    "  - {name: A, type: float, derivation: 'C - B'}\n  - {name: B, type: float, derivation: DM.AGE}\n  - {name: C, type: float, derivation: DM.WT}\n",
                     vec![forward("C"), forward("B")],
                 ),
                 (
                     "cycle",
                     "A, B",
-                    "  - {name: A, type: float, derivation: {compute: {expr: 'B + 1'}}}\n  - {name: B, type: float, derivation: {compute: {expr: 'A + 1'}}}\n",
+                    "  - {name: A, type: float, derivation: 'B + 1'}\n  - {name: B, type: float, derivation: 'A + 1'}\n",
                     vec![cycle],
                 ),
                 (
                     "earlier-column",
                     "B, A",
-                    "  - {name: B, type: float, derivation: DM.AGE}\n  - {name: A, type: float, derivation: {compute: {expr: 'B * 2'}}}\n",
+                    "  - {name: B, type: float, derivation: DM.AGE}\n  - {name: A, type: float, derivation: 'B * 2'}\n",
                     vec![],
                 ),
             ];
@@ -1559,7 +1598,7 @@ S1,002,2024-06
                 fs::write(
                     fixture.0.join("spec.yaml"),
                     format!(
-                        "schema_version: '1.0'\ndomain: ADSL\nkeys: [USUBJID]\ninput: {{DM: {{path: input/dm.csv, types: {{AGE: float, WT: float}}}}}}\noutput: {{path: out.csv, columns: [USUBJID, {outputs}]}}\ncolumns:\n  - {{name: USUBJID, type: str, derivation: DM.USUBJID}}\n{columns}"
+                        "yamaa: \"1.0\"\ntype: spec\ndomain: ADSL\nkeys: [USUBJID]\ninput: {{DM: {{path: input/dm.csv, types: {{AGE: float, WT: float}}}}}}\noutput: {{path: out.csv, columns: [USUBJID, {outputs}]}}\ncolumns:\n  - {{name: USUBJID, type: str, derivation: DM.USUBJID}}\n{columns}"
                     ),
                 )
                 .unwrap();
@@ -1601,7 +1640,7 @@ S1,002,2024-06
         /// report the same issues in both host routes (#3225).
         #[test]
         fn written_empty_declarations_keep_their_outcomes_in_both_routes() {
-            let header = "schema_version: '1.0'\ndomain: OUT\n";
+            let header = "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\n";
             let driver = |field: &str| {
                 format!(
                     "{header}keys: [ID]\ninput: {{SRC: input/src.csv}}\noutput: {{path: out.csv, columns: [ID]}}\nintermediates:\n  - {{id: DRV, dataset: SRC, filter: \"SRC.ID <> 'z'\", {field}}}\ncolumns:\n  - {{name: ID, type: str}}\nrows:\n  - {{id: all, dataset: DRV, derivations: {{ID: DRV.ID}}}}\n"
@@ -1609,7 +1648,7 @@ S1,002,2024-06
             };
             let lookup = |fields: &str| {
                 format!(
-                    "{header}keys: [X]\ninput: {{SRC: input/src.csv, RIGHT: input/right.csv}}\nbase: SRC\noutput: {{path: out.csv, columns: [X, W]}}\nintermediates:\n  - {{id: LOOK, dataset: RIGHT, {fields}}}\ncolumns:\n  - {{name: X, type: str, derivation: SRC.X}}\n  - {{name: W, type: str, derivation: LOOK.K}}\n"
+                    "{header}keys: [X]\ninput: {{SRC: input/src.csv, RIGHT: {{path: input/right.csv, key: [X]}}}}\nbase: SRC\noutput: {{path: out.csv, columns: [X, W]}}\nintermediates:\n  - {{id: LOOK, dataset: RIGHT, {fields}}}\ncolumns:\n  - {{name: X, type: str, derivation: SRC.X}}\n  - {{name: W, type: str, derivation: LOOK.K}}\n"
                 )
             };
             let odm = |input: &str, age: &str| {
@@ -1622,7 +1661,7 @@ S1,002,2024-06
                     "{header}keys: [ID]\ninput: {{SRC: input/src.csv}}\nbase: SRC\noutput: {{path: out.csv, columns: [ID, A]}}\n{intermediates}columns:\n  - {{name: ID, type: str, derivation: SRC.ID}}\n  - {{name: X, type: str, derivation: SRC.X}}\n{columns}rows: []\n"
                 )
             };
-            let invalid_driver = |field: &str| yamaa_adapters::json!({"phase":"validation","condition":"invalid_intermediate_driver","rule":"ROW-2","spec_paths":["rows[0].dataset"],"context":{"fields":[field],"intermediate":"DRV"}});
+            let invalid_driver = |field: &str| yamaa_adapters::json!({"phase":"validation","condition":"invalid_intermediate_driver","rule":"ROW-2","spec_paths":["rows.all.dataset"],"context":{"fields":[field],"intermediate":"DRV"}});
             let cases: [(&str, String, Option<yamaa_core::json::Value>); 8] = [
                 (
                     "driver-require-match-false",
@@ -1634,12 +1673,12 @@ S1,002,2024-06
                     driver("order_by: []"),
                     Some(invalid_driver("order_by")),
                 ),
-                ("derivations-empty", lookup("derivations: {}"), None),
+                ("derivations-empty", lookup("key: [X], derivations: {}"), None),
                 (
                     "order-by-empty",
                     lookup("key: [X], order_by: []"),
                     Some(
-                        yamaa_adapters::json!({"phase":"validation","condition":"unpaired_fields","rule":"LOOKUP-10","spec_paths":["intermediates[0]"],"context":{"declared":["order_by"],"intermediate":"LOOK","missing":["keep"]}}),
+                        yamaa_adapters::json!({"phase":"validation","condition":"unpaired_fields","rule":"LOOKUP-10","spec_paths":["intermediates.LOOK"],"context":{"declared":["order_by"],"intermediate":"LOOK","missing":["keep"]}}),
                     ),
                 ),
                 (
@@ -1653,7 +1692,7 @@ S1,002,2024-06
                     "odm-under-unconvertible",
                     odm(
                         "input/odm.csv",
-                        "{value: {odm: NOPE.IT.DM.AGE}, unconvertible: {literal: null}}",
+                        "{value: {odm: NOPE.IT.DM.AGE}, unconvertible: null}",
                     ),
                     Some(
                         yamaa_adapters::json!({"phase":"validation","condition":"unknown_field","rule":"NAME-3","spec_paths":["columns.AGE.derivation.odm.item"],"context":{"identifier":"NOPE.IT.DM.AGE"}}),
@@ -1666,7 +1705,7 @@ S1,002,2024-06
                         "intermediates:\n  - {id: PREV, dataset: SELF, key: [ID]}\n",
                     ),
                     Some(
-                        yamaa_adapters::json!({"phase":"validation","condition":"unknown_field","rule":"LOOKUP-7","spec_paths":["intermediates[0].dataset"],"context":{"identifier":"SELF","intermediate":"PREV"}}),
+                        yamaa_adapters::json!({"phase":"validation","condition":"unknown_field","rule":"LOOKUP-7","spec_paths":["intermediates.PREV.dataset"],"context":{"identifier":"SELF","intermediate":"PREV"}}),
                     ),
                 ),
                 (
@@ -1731,7 +1770,7 @@ S1,002,2024-06
         fn precision_specification(decimals: Option<&str>, kind: &str) -> String {
             let precision = decimals.map_or(String::new(), |n| format!(", decimals: {n}"));
             format!(
-        "schema_version: '1.0'\ndomain: ADSL\nkeys: [USUBJID]\ninput: {{DM: input.csv}}\noutput: {{path: out.csv, columns: [USUBJID, N]{precision}}}\ncolumns:\n  - {{name: USUBJID, type: str, derivation: DM.USUBJID}}\n  - {{name: N, type: {kind}, derivation: DM.VALUE}}\n"
+        "yamaa: \"1.0\"\ntype: spec\ndomain: ADSL\nkeys: [USUBJID]\ninput: {{DM: input.csv}}\noutput: {{path: out.csv, columns: [USUBJID, N]{precision}}}\ncolumns:\n  - {{name: USUBJID, type: str, derivation: DM.USUBJID}}\n  - {{name: N, type: {kind}, derivation: DM.VALUE}}\n"
     )
         }
 
@@ -2323,14 +2362,7 @@ S1,002,2024-06
                             intermediates[0].keys,
                             [yamaa_core::dataset::IntermediateKey {
                                 source_column: 0,
-                                // In the notation of the language the
-                                // benchmark is written in (P-CLR-2).
-                                path: if document.legacy_model().is_some() {
-                                    "intermediates[0].key"
-                                } else {
-                                    "intermediates.DEATHEV.key"
-                                }
-                                .into(),
+                                path: "intermediates.DEATHEV.key".into(),
                                 value: yamaa_core::dataset::MatchValue::Variable(
                                     yamaa_core::dataset::MatchRead::Output {
                                         column: 0,
@@ -2343,12 +2375,7 @@ S1,002,2024-06
                             intermediates[1].keys,
                             [yamaa_core::dataset::IntermediateKey {
                                 source_column: 0,
-                                path: if document.legacy_model().is_some() {
-                                    "intermediates[1].key"
-                                } else {
-                                    "intermediates.MEDDRA_PT.key"
-                                }
-                                .into(),
+                                path: "intermediates.MEDDRA_PT.key".into(),
                                 value: yamaa_core::dataset::MatchValue::Variable(
                                     yamaa_core::dataset::MatchRead::Output {
                                         column: 2,
@@ -2608,15 +2635,15 @@ S1,002,2024-06
         }
         #[test]
         fn unused_unique_checks_are_eager_and_retain_all_failed_declarations() {
-            let spec="schema_version: '1.0'\ndomain: OUT\nkeys: [ID]\nbase: SRC\ninput: {SRC: {path: source.csv, types: {ID: int}}, DONOR: {path: donor.csv, types: {ID: int, X: int}}}\noutput: {path: out.csv, columns: [ID]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    verifications:\n      - unique: {columns: [ID], id: donor-id}\n      - unique: [X]\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
+            let spec="yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\nbase: SRC\ninput: {SRC: {path: source.csv, types: {ID: int}}, DONOR: {path: donor.csv, types: {ID: int, X: int}}}\noutput: {path: out.csv, columns: [ID]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    verifications:\n      - unique: {columns: [ID], id: donor-id}\n      - unique: [X]\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
             let (fixture, result) = independent(spec, "ID\n1\n", Some("ID,X\n1,2\n1,2\n"));
             let mut result = result.unwrap();
             let actual = result.issues().iter().map(issue).collect::<Vec<_>>();
             assert_eq!(
                 actual,
                 vec![
-                    yamaa_adapters::json!({"phase":"verification","condition":"duplicate_intermediate_records","rule":"LOOKUP-17","spec_paths":["intermediates[0].verifications[0].unique"],"context":{"intermediate":"P","dataset":"DONOR","columns":["ID"],"duplicate_count":1,"verification_id":"donor-id"}}),
-                    yamaa_adapters::json!({"phase":"verification","condition":"duplicate_intermediate_records","rule":"LOOKUP-17","spec_paths":["intermediates[0].verifications[1].unique"],"context":{"intermediate":"P","dataset":"DONOR","columns":["X"],"duplicate_count":1}})
+                    yamaa_adapters::json!({"phase":"verification","condition":"duplicate_intermediate_records","rule":"LOOKUP-17","spec_paths":["intermediates.P.verifications[0].unique"],"context":{"intermediate":"P","dataset":"DONOR","columns":["ID"],"duplicate_count":1,"verification_id":"donor-id"}}),
+                    yamaa_adapters::json!({"phase":"verification","condition":"duplicate_intermediate_records","rule":"LOOKUP-17","spec_paths":["intermediates.P.verifications[1].unique"],"context":{"intermediate":"P","dataset":"DONOR","columns":["X"],"duplicate_count":1}})
                 ]
             );
             assert!(result.save().is_err());
@@ -2624,20 +2651,21 @@ S1,002,2024-06
         }
         #[test]
         fn unused_donor_derivation_failure_is_not_hidden_by_an_unread_lookup() {
-            let spec="schema_version: '1.0'\ndomain: OUT\nkeys: [ID]\nbase: SRC\ninput: {SRC: {path: source.csv, types: {ID: int}}, DONOR: {path: donor.csv, types: {ID: int, X: int}}}\noutput: {path: out.csv, columns: [ID]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    derivations: {NEXT: {compute: {expr: 'X + 1'}}}\n    verifications: [{unique: [ID]}]\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
+            let spec="yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\nbase: SRC\ninput: {SRC: {path: source.csv, types: {ID: int}}, DONOR: {path: donor.csv, types: {ID: int, X: int}}}\noutput: {path: out.csv, columns: [ID]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    derivations: {NEXT: 'X + 1'}\n    verifications: [{unique: [ID]}]\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
             let (fixture, result) =
                 independent(spec, "ID\n1\n", Some("ID,X\n1,9223372036854775807\n"));
             let mut result = result.unwrap();
             assert_eq!(result.issues().len(), 1);
             assert_eq!(result.issues()[0].condition(), "integer_overflow");
-            assert!(result.issues()[0].spec_paths[0]
-                .starts_with("intermediates[0].derivations.NEXT.compute"));
+            assert!(
+                result.issues()[0].spec_paths[0].starts_with("intermediates.P.derivations.NEXT")
+            );
             assert!(result.save().is_err());
             assert!(!fixture.0.join("out.csv").exists());
         }
         #[test]
         fn current_row_correlation_cannot_turn_a_unique_check_into_a_lazy_check() {
-            let spec="schema_version: '1.0'\ndomain: OUT\nkeys: [ID]\nbase: SRC\ninput: {SRC: {path: source.csv, types: {ID: int}}, DONOR: {path: donor.csv, types: {ID: int, X: int}}}\noutput: {path: out.csv, columns: [ID]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    filter: 'DONOR.X > SRC.ID'\n    derivations: {NEXT: {compute: {expr: 'X + SRC.ID'}}}\n    verifications: [{unique: [ID]}]\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
+            let spec="yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\nbase: SRC\ninput: {SRC: {path: source.csv, types: {ID: int}}, DONOR: {path: donor.csv, types: {ID: int, X: int}}}\noutput: {path: out.csv, columns: [ID]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    filter: 'DONOR.X > SRC.ID'\n    derivations: {NEXT: 'X + SRC.ID'}\n    verifications: [{unique: [ID]}]\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
             let (_fixture, result) = independent(spec, "ID\n1\n", Some("ID,X\n1,2\n"));
             let result = match result {
                 Err(issues) => issues,
@@ -2651,11 +2679,11 @@ S1,002,2024-06
                 vec![
                     (
                         "correlated_filter_with_unique_verification",
-                        "intermediates[0].verifications[0].unique"
+                        "intermediates.P.verifications[0].unique"
                     ),
                     (
                         "correlated_derivation_with_unique_verification",
-                        "intermediates[0].verifications[0].unique"
+                        "intermediates.P.verifications[0].unique"
                     )
                 ]
             );
@@ -2663,25 +2691,22 @@ S1,002,2024-06
 
         #[test]
         fn an_earlier_selector_key_uses_the_later_donor_current_record_owner() {
-            let spec = "schema_version: '1.0'\ndomain: OUT\nkeys: [ID]\nbase: SRC\ninput: {SRC: {path: source.csv, types: {ID: int, VAL: int}}, DONOR: {path: donor.csv, types: {KEY: int}}}\noutput: {path: out.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: EARLIER\n    dataset: SRC\n    key: {ID: DONOR.KEY}\n  - id: LATER\n    dataset: DONOR\n    key: {KEY: ID}\n    derivations: {LOOKED_UP: EARLIER.VAL}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: LATER.LOOKED_UP}\n";
-            for key in ["DONOR.KEY", "{source: DONOR.KEY}"] {
-                let spec = spec.edit("key: {ID: DONOR.KEY}", &format!("key: {{ID: {key}}}"));
-                // Different field names and reversed donor order expose owner/coordinate aliasing.
-                let (fixture, result) =
-                    independent(&spec, "ID,VAL\n1,100\n2,200\n", Some("KEY\n2\n1\n"));
-                let mut result = result.unwrap();
-                assert!(result.issues().is_empty(), "{:?}", result.issues());
-                assert!(result.save().unwrap());
-                assert_eq!(
-                    fs::read(fixture.0.join("out.csv")).unwrap(),
-                    b"ID,VALUE\n1,100\n2,200\n"
-                );
-            }
+            let spec = "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\nbase: SRC\ninput: {SRC: {path: source.csv, types: {ID: int, VAL: int}}, DONOR: {path: donor.csv, types: {KEY: int}}}\noutput: {path: out.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: EARLIER\n    dataset: SRC\n    key: {ID: DONOR.KEY}\n  - id: LATER\n    dataset: DONOR\n    key: {KEY: ID}\n    derivations: {LOOKED_UP: EARLIER.VAL}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: LATER.LOOKED_UP}\n";
+            // Different field names and reversed donor order expose owner/coordinate aliasing.
+            let (fixture, result) =
+                independent(spec, "ID,VAL\n1,100\n2,200\n", Some("KEY\n2\n1\n"));
+            let mut result = result.unwrap();
+            assert!(result.issues().is_empty(), "{:?}", result.issues());
+            assert!(result.save().unwrap());
+            assert_eq!(
+                fs::read(fixture.0.join("out.csv")).unwrap(),
+                b"ID,VALUE\n1,100\n2,200\n"
+            );
         }
 
         #[test]
         fn retained_foreign_key_is_valid_until_it_is_read_in_the_wrong_current_scope() {
-            let declaration = "schema_version: '1.0'\ndomain: OUT\nkeys: [ID]\nbase: SRC\ninput: {SRC: {path: source.csv, types: {ID: int}}, DONOR: {path: donor.csv, types: {KEY: int}}}\noutput: {path: out.csv, columns: [ID]}\nintermediates:\n  - id: P\n    dataset: SRC\n    key: {ID: DONOR.KEY}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
+            let declaration = "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\nbase: SRC\ninput: {SRC: {path: source.csv, types: {ID: int}}, DONOR: {path: donor.csv, types: {KEY: int}}}\noutput: {path: out.csv, columns: [ID]}\nintermediates:\n  - id: P\n    dataset: SRC\n    key: {ID: DONOR.KEY}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
             let (fixture, result) = independent(declaration, "ID\n1\n", Some("KEY\n2\n"));
             let mut result = result.unwrap();
             assert!(result.issues().is_empty(), "{:?}", result.issues());
@@ -2694,7 +2719,7 @@ S1,002,2024-06
             assert_eq!(
                 result.issues().iter().map(issue).collect::<Vec<_>>(),
                 vec![
-                    yamaa_adapters::json!({"phase":"validation","condition":"unknown_field","rule":"LOOKUP-5","spec_paths":["intermediates[0].key"],"context":{"identifier":"DONOR.KEY","intermediate":"P"}})
+                    yamaa_adapters::json!({"phase":"validation","condition":"unknown_field","rule":"LOOKUP-5","spec_paths":["intermediates.P.key"],"context":{"identifier":"DONOR.KEY","intermediate":"P"}})
                 ]
             );
             assert!(result.save().is_err());
@@ -2703,7 +2728,7 @@ S1,002,2024-06
 
         #[test]
         fn a_foreign_row_driver_owns_its_qualified_selector_keys() {
-            let spec = "schema_version: '1.0'\ndomain: OUT\nkeys: [ID]\nbase: SRC\ninput: {SRC: {path: source.csv, types: {ID: int, VAL: int}}, DONOR: {path: donor.csv, types: {KEY: int}}}\noutput: {path: out.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: SRC\n    key: {ID: DONOR.KEY}\ncolumns:\n  - {name: ID, type: int}\n  - {name: VALUE, type: int}\nrows:\n  - id: donor\n    dataset: DONOR\n    derivations: {ID: DONOR.KEY, VALUE: P.VAL}\n";
+            let spec = "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\nbase: SRC\ninput: {SRC: {path: source.csv, types: {ID: int, VAL: int}}, DONOR: {path: donor.csv, types: {KEY: int}}}\noutput: {path: out.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: SRC\n    key: {ID: DONOR.KEY}\ncolumns:\n  - {name: ID, type: int}\n  - {name: VALUE, type: int}\nrows:\n  - id: donor\n    dataset: DONOR\n    derivations: {ID: DONOR.KEY, VALUE: P.VAL}\n";
             let (fixture, result) =
                 independent(spec, "ID,VAL\n1,100\n2,200\n", Some("KEY\n2\n1\n"));
             let mut result = result.unwrap();
@@ -2717,7 +2742,7 @@ S1,002,2024-06
 
         #[test]
         fn an_earlier_selectors_filter_uses_the_reading_donor_current_fields() {
-            let spec = "schema_version: '1.0'\ndomain: OUT\nkeys: [ID]\nbase: SRC\ninput: {SRC: {path: source.csv, types: {ID: int, VAL: int}}, DONOR: {path: donor.csv, types: {KEY: int, MIN: int}}}\noutput: {path: out.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: EARLIER\n    dataset: SRC\n    key: {ID: DONOR.KEY}\n    filter: 'SRC.VAL > DONOR.MIN'\n    no_match: -1\n  - id: LATER\n    dataset: DONOR\n    key: {KEY: ID}\n    derivations: {LOOKED_UP: EARLIER.VAL}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: LATER.LOOKED_UP}\n";
+            let spec = "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\nbase: SRC\ninput: {SRC: {path: source.csv, types: {ID: int, VAL: int}}, DONOR: {path: donor.csv, types: {KEY: int, MIN: int}}}\noutput: {path: out.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: EARLIER\n    dataset: SRC\n    key: {ID: DONOR.KEY}\n    filter: 'SRC.VAL > DONOR.MIN'\n    absent: -1\n  - id: LATER\n    dataset: DONOR\n    key: {KEY: ID}\n    derivations: {LOOKED_UP: EARLIER.VAL}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: LATER.LOOKED_UP}\n";
             let (fixture, result) = independent(
                 spec,
                 "ID,VAL\n1,100\n2,200\n",
@@ -2734,7 +2759,7 @@ S1,002,2024-06
 
         #[test]
         fn named_match_keys_bind_an_earlier_derived_field_of_the_reading_donor() {
-            let spec = "schema_version: '1.0'\ndomain: OUT\nkeys: [ID]\nbase: SRC\ninput: {SRC: {path: source.csv, types: {ID: int, VAL: int}}, DONOR: {path: donor.csv, types: {KEY: int}}}\noutput: {path: out.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: EARLIER\n    dataset: SRC\n    key: {ID: DONOR.NEWKEY}\n  - id: LATER\n    dataset: DONOR\n    key: {KEY: ID}\n    derivations:\n      NEWKEY: KEY\n      LOOKED_UP: EARLIER.VAL\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: LATER.LOOKED_UP}\n";
+            let spec = "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\nbase: SRC\ninput: {SRC: {path: source.csv, types: {ID: int, VAL: int}}, DONOR: {path: donor.csv, types: {KEY: int}}}\noutput: {path: out.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: EARLIER\n    dataset: SRC\n    key: {ID: DONOR.NEWKEY}\n  - id: LATER\n    dataset: DONOR\n    key: {KEY: ID}\n    derivations:\n      NEWKEY: KEY\n      LOOKED_UP: EARLIER.VAL\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: LATER.LOOKED_UP}\n";
             let (fixture, result) =
                 independent(spec, "ID,VAL\n1,100\n2,200\n", Some("KEY\n2\n1\n"));
             let mut result = result.unwrap();
@@ -2748,8 +2773,8 @@ S1,002,2024-06
 
         #[test]
         fn contextual_keys_reject_later_unknown_wrong_owner_and_known_type_at_binding() {
-            let base = "schema_version: '1.0'\ndomain: OUT\nkeys: [ID]\nbase: SRC\ninput: {SRC: {path: source.csv, types: {ID: int, VAL: int}}, DONOR: {path: donor.csv, types: {KEY: int}}}\noutput: {path: out.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: EARLIER\n    dataset: SRC\n    key: {ID: DONOR.NEWKEY}\n  - id: LATER\n    dataset: DONOR\n    key: {KEY: ID}\n    derivations:\n      NEWKEY: KEY\n      LOOKED_UP: EARLIER.VAL\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: LATER.LOOKED_UP}\n";
-            let unknown = |name: &str| yamaa_adapters::json!({"phase":"validation","condition":"unknown_field","rule":"LOOKUP-16","spec_paths":["intermediates[1].derivations.LOOKED_UP.source"],"context":{"identifier":name,"intermediate":"LATER","read":"EARLIER"}});
+            let base = "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\nbase: SRC\ninput: {SRC: {path: source.csv, types: {ID: int, VAL: int}}, DONOR: {path: donor.csv, types: {KEY: int}}}\noutput: {path: out.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: EARLIER\n    dataset: SRC\n    key: {ID: DONOR.NEWKEY}\n  - id: LATER\n    dataset: DONOR\n    key: {KEY: ID}\n    derivations:\n      NEWKEY: KEY\n      LOOKED_UP: EARLIER.VAL\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: LATER.LOOKED_UP}\n";
+            let unknown = |name: &str| yamaa_adapters::json!({"phase":"validation","condition":"unknown_field","rule":"LOOKUP-16","spec_paths":["intermediates.LATER.derivations.LOOKED_UP.source"],"context":{"identifier":name,"intermediate":"LATER","read":"EARLIER"}});
             for (spec, first) in [
                 (
                     base.edit(
@@ -2767,8 +2792,8 @@ S1,002,2024-06
                     unknown("WRONG.NEWKEY"),
                 ),
                 (
-                    base.edit("NEWKEY: KEY", "NEWKEY: {literal: wrong-type}"),
-                    yamaa_adapters::json!({"phase":"validation","condition":"incompatible_input_type","rule":"LOOKUP-9","spec_paths":["intermediates[0].key"],"context":{"intermediate":"EARLIER","source":"DONOR.NEWKEY","expected":"str","actual":"int"}}),
+                    base.edit("NEWKEY: KEY", "NEWKEY: \"'wrong-type'\""),
+                    yamaa_adapters::json!({"phase":"validation","condition":"incompatible_input_type","rule":"LOOKUP-9","spec_paths":["intermediates.EARLIER.key"],"context":{"intermediate":"EARLIER","source":"DONOR.NEWKEY","expected":"str","actual":"int"}}),
                 ),
             ] {
                 let (fixture, result) = independent(&spec, "ID,VAL\n1,100\n", Some("KEY\n2\n"));
@@ -2797,7 +2822,7 @@ S1,002,2024-06
         }
 
         fn self_derivation_spec() -> &'static str {
-            "schema_version: '1.0'\ndomain: OUT\nkeys: [ID, STAGE]\nbase: SRC\ninput: {SRC: {path: source.csv, types: {ID: int, VAL: int}}}\noutput: {path: out.csv, columns: [ID, STAGE, VALUE]}\nintermediates:\n  - id: P\n    dataset: SELF\n    key: [ID]\n    derivations:\n      TWICE: {compute: {expr: 'SELF.VALUE * 2'}}\n      PLUS: {compute: {expr: 'TWICE + 1'}}\n    order_by: [SELF.STAGE]\n    keep: last\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: STAGE, type: int}\n  - {name: VALUE, type: int}\nrows:\n  - id: first\n    derivations: {STAGE: {literal: 1}, VALUE: SRC.VAL}\n  - id: second\n    derivations: {STAGE: {literal: 2}, VALUE: P.PLUS}\n  - id: third\n    derivations: {STAGE: {literal: 3}, VALUE: P.PLUS}\n"
+            "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID, STAGE]\nbase: SRC\ninput: {SRC: {path: source.csv, types: {ID: int, VAL: int}}}\noutput: {path: out.csv, columns: [ID, STAGE, VALUE]}\nintermediates:\n  - id: P\n    dataset: SELF\n    key: [ID]\n    derivations:\n      TWICE: 'SELF.VALUE * 2'\n      PLUS: 'TWICE + 1'\n    order_by: [SELF.STAGE]\n    keep: last\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: STAGE, type: int}\n  - {name: VALUE, type: int}\nrows:\n  - id: first\n    derivations: {STAGE: 1, VALUE: SRC.VAL}\n  - id: second\n    derivations: {STAGE: 2, VALUE: P.PLUS}\n  - id: third\n    derivations: {STAGE: 3, VALUE: P.PLUS}\n"
         }
 
         #[test]
@@ -2810,7 +2835,7 @@ S1,002,2024-06
                     result.issues().iter().map(issue).collect::<Vec<_>>(),
                     vec![yamaa_adapters::json!({
                         "phase":"validation", "condition":"unknown_field", "rule":"LOOKUP-15",
-                        "spec_paths":["intermediates[0].derivations.TWICE.compute.expr"],
+                        "spec_paths":["intermediates.P.derivations.TWICE.source"],
                         "context":{"intermediate":"P", "identifier":reference}
                     })],
                     "{reference}"
@@ -2830,7 +2855,7 @@ S1,002,2024-06
                 result.issues().iter().map(issue).collect::<Vec<_>>(),
                 vec![yamaa_adapters::json!({
                     "phase":"validation", "condition":"duplicate_derivation", "rule":"LOOKUP-15",
-                    "spec_paths":["intermediates[0].derivations.VALUE"],
+                    "spec_paths":["intermediates.P.derivations.VALUE"],
                     "context":{"intermediate":"P", "derivation":"VALUE", "identifier":"SELF.VALUE"}
                 })]
             );
@@ -2844,17 +2869,14 @@ S1,002,2024-06
                     "    key: [ID]",
                     "    key: [ID]\n    verifications: [{unique: [TWICE]}]",
                 )
-                .replace(
-                    "VALUE: P.PLUS",
-                    "VALUE: {compute: {expr: '9223372036854775807 + 1'}}",
-                );
+                .replace("VALUE: P.PLUS", "VALUE: '9223372036854775807 + 1'");
             let (fixture, result) = independent(&spec, "ID,VAL\n1,10\n2,10\n", None);
             let mut result = result.unwrap();
             assert_eq!(
                 result.issues().iter().map(issue).collect::<Vec<_>>(),
                 vec![yamaa_adapters::json!({
                     "phase":"verification", "condition":"duplicate_intermediate_records", "rule":"LOOKUP-17",
-                    "spec_paths":["intermediates[0].verifications[0].unique"],
+                    "spec_paths":["intermediates.P.verifications[0].unique"],
                     "context":{"intermediate":"P", "dataset":"SELF", "columns":["TWICE"], "duplicate_count":1}
                 })]
             );
@@ -2870,7 +2892,10 @@ S1,002,2024-06
                 .expect("the first template is refused at preparation");
             assert_eq!(issues.len(), 1);
             assert_eq!(issues[0].condition(), "phase_boundary");
-            assert_eq!(issues[0].spec_paths, ["rows[0].derivations.VALUE.source"]);
+            assert_eq!(
+                issues[0].spec_paths,
+                ["rows.first.derivations.VALUE.source"]
+            );
             assert!(!fixture.0.join("out.csv").exists());
         }
 
@@ -2882,8 +2907,8 @@ S1,002,2024-06
                     "  - id: INPUT\n    dataset: SRC\n    key: {ID: SELF.NEWKEY}\n  - id: P",
                 )
                 .edit(
-                    "      TWICE: {compute: {expr: 'SELF.VALUE * 2'}}",
-                    "      NEWKEY: ID\n      TWICE: {compute: {expr: 'INPUT.VAL * 2'}}",
+                    "      TWICE: 'SELF.VALUE * 2'",
+                    "      NEWKEY: ID\n      TWICE: 'INPUT.VAL * 2'",
                 );
             let (fixture, result) = independent(&spec, "ID,VAL\n1,10\n", None);
             let mut result = result.unwrap();
@@ -2901,7 +2926,7 @@ S1,002,2024-06
             } else {
                 "dm.csv"
             };
-            format!("schema_version: '1.0'\ndomain: ADPC\nkeys: [USUBJID, PCSEQ]\nbase: PC\ninput:\n  PC: {{path: pc.csv, types: {{PCSEQ: int, PCDTC: datetime}}}}\n  EX: {{path: ex.csv, types: {{EXSTDTC: datetime}}}}\n  DM: {dm}\nintermediates:\n{intermediates}columns:\n  - {{name: USUBJID, type: str, derivation: PC.USUBJID}}\n  - {{name: PCSEQ, type: int, derivation: PC.PCSEQ}}\n  - {{name: ADTM, type: datetime, derivation: PC.PCDTC}}\n  - {{name: LDOSEDTM, type: datetime, derivation: LAST_DOSE.EXSTDTC}}\n  - {{name: X, type: {kind}, derivation: {x}}}\noutput: {{path: out.csv, columns: [USUBJID, PCSEQ, ADTM, LDOSEDTM, X]}}\n")
+            format!("yamaa: \"1.0\"\ntype: spec\ndomain: ADPC\nkeys: [USUBJID, PCSEQ]\nbase: PC\ninput:\n  PC: {{path: pc.csv, types: {{PCSEQ: int, PCDTC: datetime}}}}\n  EX: {{path: ex.csv, types: {{EXSTDTC: datetime}}}}\n  DM: {dm}\nintermediates:\n{intermediates}columns:\n  - {{name: USUBJID, type: str, derivation: PC.USUBJID}}\n  - {{name: PCSEQ, type: int, derivation: PC.PCSEQ}}\n  - {{name: ADTM, type: datetime, derivation: PC.PCDTC}}\n  - {{name: LDOSEDTM, type: datetime, derivation: LAST_DOSE.EXSTDTC}}\n  - {{name: X, type: {kind}, derivation: {x}}}\noutput: {{path: out.csv, columns: [USUBJID, PCSEQ, ADTM, LDOSEDTM, X]}}\n")
         }
         fn between_fixture(spec: &str, donor_time: bool) -> Fixture {
             let fixture = Fixture::new();
@@ -2986,7 +3011,7 @@ S1,002,2024-06
                 result.issues().iter().map(issue).collect::<Vec<_>>(),
                 vec![yamaa_adapters::json!({
                     "phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-16",
-                    "spec_paths": ["intermediates[1].derivations.LD.source"],
+                    "spec_paths": ["intermediates.SUBJ.derivations.LD.source"],
                     "context": {"intermediate": "SUBJ", "identifier": "ADTM", "read": "LAST_DOSE"}
                 })]
             );
@@ -3014,7 +3039,7 @@ S1,002,2024-06
                 result.issues().iter().map(issue).collect::<Vec<_>>(),
                 vec![yamaa_adapters::json!({
                     "phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-16",
-                    "spec_paths": ["intermediates[2].derivations.LD.source"],
+                    "spec_paths": ["intermediates.SUBJ.derivations.LD.source"],
                     "context": {"intermediate": "SUBJ", "identifier": "ADTM", "read": "SECOND"}
                 })]
             );
@@ -3031,10 +3056,10 @@ S1,002,2024-06
         /// names no current-row value, however the intermediate is reached.
         #[test]
         fn a_qualified_between_value_reads_only_its_own_driver_record() {
-            const WINDOW: &str = "  - id: W\n    dataset: WIN\n    key: [USUBJID]\n    between: {value: REF.REFDAY, lower: LO, upper: HI}\n    order_by: [WIN.LO]\n    keep: first\n    no_match: null\n";
+            const WINDOW: &str = "  - id: W\n    dataset: WIN\n    key: [USUBJID]\n    between: {value: REF.REFDAY, lower: LO, upper: HI}\n    order_by: [WIN.LO]\n    keep: first\n";
             let run = |body: &str| {
                 let fixture = Fixture::new();
-                fs::write(fixture.0.join("spec.yaml"), format!("schema_version: '1.0'\ndomain: OUT\ninput:\n  SUBJ: {{path: subj.csv, types: {{SUBJDAY: int}}}}\n  REF: {{path: ref.csv, types: {{REFDAY: int}}}}\n  WIN: {{path: win.csv, types: {{LO: int, HI: int}}}}\n  EVT: {{path: evt.csv, types: {{EVDAY: int}}}}\n{body}")).unwrap();
+                fs::write(fixture.0.join("spec.yaml"), format!("yamaa: \"1.0\"\ntype: spec\ndomain: OUT\ninput:\n  SUBJ: {{path: subj.csv, types: {{SUBJDAY: int}}}}\n  REF: {{path: ref.csv, types: {{REFDAY: int}}}}\n  WIN: {{path: win.csv, types: {{LO: int, HI: int}}}}\n  EVT: {{path: evt.csv, key: [USUBJID], types: {{EVDAY: int}}}}\n{body}")).unwrap();
                 // REF orders subjects the other way and keeps its day in the
                 // column where SUBJ keeps a different day.
                 fs::write(fixture.0.join("subj.csv"), "USUBJID,SUBJDAY\nS1,5\nS2,50\n").unwrap();
@@ -3078,14 +3103,14 @@ S1,002,2024-06
                     "type: int, derivation: {aggregate",
                 )
             };
-            let derived = aggregated("{aggregate: {key: [USUBJID], derive: [{name: DAY, type: int, derivation: EVT.EVDAY}, {name: LOW, type: int, derivation: W.LO}], expr: 'MAX(LOW)'}}");
+            let derived = aggregated("{aggregate: {key: [USUBJID], derivations: {DAY: {type: int, derivation: EVT.EVDAY}, LOW: {type: int, derivation: W.LO}}, expr: 'MAX(LOW)'}}");
             let ranged = aggregated(
                 "{aggregate: {between: {value: W.LO, lower: EVDAY}, expr: 'COUNT(EVT.EVDAY)'}}",
             );
             let refused = |intermediate: &str| {
                 Err(vec![yamaa_adapters::json!({
                     "phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-9",
-                    "spec_paths": ["intermediates[0].between.value"],
+                    "spec_paths": [format!("intermediates.{intermediate}.between.value")],
                     "context": {"intermediate": intermediate, "identifier": "REF.REFDAY"}
                 })])
             };
@@ -3101,7 +3126,7 @@ S1,002,2024-06
             );
             // So does REF's record in the row template it drives, read by the
             // range or by a correlated filter.
-            let rows = "keys: [USUBJID, ORIGIN]\noutput: {path: out.csv, columns: [USUBJID, ORIGIN, WINDOW]}\ncolumns:\n  - {name: USUBJID, type: str}\n  - {name: ORIGIN, type: str}\n  - {name: WINDOW, type: str}\nrows:\n  - id: subj\n    dataset: SUBJ\n    derivations: {USUBJID: SUBJ.USUBJID, ORIGIN: {literal: SUBJ}, WINDOW: {literal: NONE}}\n  - id: ref\n    dataset: REF\n    derivations: {USUBJID: REF.USUBJID, ORIGIN: {literal: REF}, WINDOW: W.NAME}\nintermediates:\n";
+            let rows = "keys: [USUBJID, ORIGIN]\noutput: {path: out.csv, columns: [USUBJID, ORIGIN, WINDOW]}\ncolumns:\n  - {name: USUBJID, type: str}\n  - {name: ORIGIN, type: str}\n  - {name: WINDOW, type: str}\nrows:\n  - id: subj\n    dataset: SUBJ\n    derivations: {USUBJID: SUBJ.USUBJID, ORIGIN: \"'SUBJ'\", WINDOW: \"'NONE'\"}\n  - id: ref\n    dataset: REF\n    derivations: {USUBJID: REF.USUBJID, ORIGIN: \"'REF'\", WINDOW: W.NAME}\nintermediates:\n";
             let filtered = WINDOW.edit(
                 "between: {value: REF.REFDAY, lower: LO, upper: HI}",
                 "filter: 'WIN.LO <= REF.REFDAY AND REF.REFDAY <= WIN.HI'",
@@ -3119,11 +3144,11 @@ S1,002,2024-06
         /// `check` refuses any other input from the declarations alone.
         #[test]
         fn an_aggregate_between_value_reads_only_its_own_driver_record() {
-            const WINDOW: &str = "intermediates:\n  - id: W\n    dataset: WIN\n    key: [USUBJID]\n    between: {value: REF.REFDAY, lower: LO, upper: HI}\n    order_by: [WIN.LO]\n    keep: first\n    no_match: null\n";
+            const WINDOW: &str = "intermediates:\n  - id: W\n    dataset: WIN\n    key: [USUBJID]\n    between: {value: REF.REFDAY, lower: LO, upper: HI}\n    order_by: [WIN.LO]\n    keep: first\n";
             // The check issues, and the domain issues or the saved artifact.
             let run = |body: &str| {
                 let fixture = Fixture::new();
-                fs::write(fixture.0.join("spec.yaml"), format!("schema_version: '1.0'\ndomain: OUT\ninput:\n  SUBJ: {{path: subj.csv, types: {{SUBJDAY: int}}}}\n  REF: {{path: ref.csv, types: {{REFDAY: int}}}}\n  WIN: {{path: win.csv, types: {{LO: int, HI: int}}}}\n  EVT: {{path: evt.csv, types: {{EVDAY: int}}}}\n{body}")).unwrap();
+                fs::write(fixture.0.join("spec.yaml"), format!("yamaa: \"1.0\"\ntype: spec\ndomain: OUT\ninput:\n  SUBJ: {{path: subj.csv, types: {{SUBJDAY: int}}}}\n  REF: {{path: ref.csv, key: [USUBJID], types: {{REFDAY: int}}}}\n  WIN: {{path: win.csv, types: {{LO: int, HI: int}}}}\n  EVT: {{path: evt.csv, key: [USUBJID], types: {{EVDAY: int}}}}\n{body}")).unwrap();
                 // REF orders subjects the other way and keeps its day in the
                 // column where SUBJ keeps a different day.
                 fs::write(fixture.0.join("subj.csv"), "USUBJID,SUBJDAY\nS1,5\nS2,50\n").unwrap();
@@ -3187,7 +3212,7 @@ S1,002,2024-06
             // The base driver's rows name no REF record, read directly or from
             // an alternative of a case.
             let alternative = format!(
-                "{{case: [{{when: 'USUBJID IS NOT NULL', then: {}}}, {{otherwise: {{literal: null}}}}]}}",
+                "{{case: [{{when: 'USUBJID IS NOT NULL', then: {}}}, {{otherwise: null}}]}}",
                 count("REF.REFDAY")
             );
             for (derivation, expected) in [
@@ -3233,7 +3258,7 @@ S1,002,2024-06
                 run(&format!("{WINDOW}{}", base(&count("W.LO")))).1,
                 Err(vec![yamaa_adapters::json!({
                     "phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-9",
-                    "spec_paths": ["intermediates[0].between.value"],
+                    "spec_paths": ["intermediates.W.between.value"],
                     "context": {"intermediate": "W", "identifier": "REF.REFDAY"}
                 })])
             );
@@ -3243,8 +3268,8 @@ S1,002,2024-06
             let rows = |templates: &str, value: &str| {
                 format!("keys: [USUBJID, ORIGIN]\noutput: {{path: out.csv, columns: [USUBJID, ORIGIN, N]}}\ncolumns:\n  - {{name: USUBJID, type: str}}\n  - {{name: ORIGIN, type: str}}\n  - {{name: N, type: int, derivation: {}}}\nrows:\n{templates}", count(value))
             };
-            let subj = "  - id: subj\n    dataset: SUBJ\n    derivations: {USUBJID: SUBJ.USUBJID, ORIGIN: {literal: SUBJ}}\n";
-            let both = format!("{subj}  - id: ref\n    dataset: REF\n    derivations: {{USUBJID: REF.USUBJID, ORIGIN: {{literal: REF}}}}\n");
+            let subj = "  - id: subj\n    dataset: SUBJ\n    derivations: {USUBJID: SUBJ.USUBJID, ORIGIN: \"'SUBJ'\"}\n";
+            let both = format!("{subj}  - id: ref\n    dataset: REF\n    derivations: {{USUBJID: REF.USUBJID, ORIGIN: \"'REF'\"}}\n");
             for value in ["SUBJ.SUBJDAY", "REF.REFDAY"] {
                 assert_eq!(
                     run(&rows(&both, value)),
@@ -3389,7 +3414,8 @@ S1,002,2024-06
                 .unwrap();
             }
         }
-        const BODY: &str = r#"schema_version: '1.0'
+        const BODY: &str = r#"yamaa: "1.0"
+type: spec
 domain: TEST
 base: SRC
 keys: [ID]
@@ -3400,9 +3426,9 @@ output: {path: result.csv, columns: [ID, A, B]}
 intermediates:
   - id: P
     dataset: DONOR
+    key: [ID]
     order_by: [DONOR.SEQ]
     keep: first
-    no_match: {literal: null}
 columns:
   - {name: ID, type: int, derivation: SRC.ID}
   - {name: SELECT, type: str, derivation: SRC.SELECT}
@@ -3412,14 +3438,14 @@ columns:
       case:
         - when: "SELECT = 'Y'"
           then: P.A
-        - otherwise: {literal: skip}
+        - otherwise: "'skip'"
   - name: B
     type: str
     derivation:
       case:
         - when: "SELECT = 'Y'"
           then: P.B
-        - otherwise: {literal: skip}
+        - otherwise: "'skip'"
 "#;
         #[test]
         fn selected_case_fields_share_kept_donors_and_unselected_branches_have_no_handlers() {
@@ -3436,9 +3462,9 @@ columns:
                 result.observations()["handler_counts"],
                 yamaa_adapters::json!([
                     {"spec_path":"columns.A.derivation.case[0].then.source.multiple_matches","handler":"multiple_matches","count":1},
-                    {"spec_path":"columns.A.derivation.case[0].then.source.no_match","handler":"no_match","count":1},
+                    {"spec_path":"columns.A.derivation.case[0].then.source.absent","handler":"absent","count":1},
                     {"spec_path":"columns.B.derivation.case[0].then.source.multiple_matches","handler":"multiple_matches","count":1},
-                    {"spec_path":"columns.B.derivation.case[0].then.source.no_match","handler":"no_match","count":1},
+                    {"spec_path":"columns.B.derivation.case[0].then.source.absent","handler":"absent","count":1},
                 ])
             );
         }
@@ -3474,11 +3500,48 @@ columns:
                 ])
             );
         }
+        /// [`BODY`] in the 0.5 language. A 0.5 file counts P's own absence
+        /// under `no_match`, apart from the binding's `absent`, and answers a
+        /// field P lacks with `absent`; a 1.0 file counts both absences under
+        /// one `absent` row (D202) and refuses the unknown field (D67, D102).
+        const BODY_0_5: &str = r#"schema_version: '1.0'
+domain: TEST
+base: SRC
+keys: [ID]
+input:
+  SRC: {path: src.csv, types: {ID: int}}
+  DONOR: {path: donor.csv, types: {ID: int, SEQ: int}}
+output: {path: result.csv, columns: [ID, A, B]}
+intermediates:
+  - id: P
+    dataset: DONOR
+    order_by: [DONOR.SEQ]
+    keep: first
+    no_match: {literal: null}
+columns:
+  - {name: ID, type: int, derivation: SRC.ID}
+  - {name: SELECT, type: str, derivation: SRC.SELECT}
+  - name: A
+    type: str
+    derivation:
+      case:
+        - when: "SELECT = 'Y'"
+          then: P.A
+        - otherwise: {literal: skip}
+  - name: B
+    type: str
+    derivation:
+      case:
+        - when: "SELECT = 'Y'"
+          then: P.B
+        - otherwise: {literal: skip}
+"#;
+        /// This test keeps its 0.5 document until the 0.5 path goes (#3447).
         #[test]
         fn nested_named_source_absence_handlers_are_lazy_and_preserve_existing_missing_values() {
             let fixture = Fixture::new();
             fixture.populate();
-            let body = BODY.edit(
+            let body = BODY_0_5.edit(
                 "then: P.A",
                 "then: {source: {variable: P.A, absent: fallback}}",
             );
