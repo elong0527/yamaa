@@ -2783,20 +2783,23 @@ impl Checks<'_> {
                     compiled: Ok(plan), ..
                 }) if plan.identifiers().any(foreign))
             });
-            let correlated_derivation = item.bindings.iter().any(|binding| {
-                reads::names(
-                    spec,
-                    binding.derivation.expr,
-                    reads::Scan {
-                        relation: true,
-                        windows: true,
-                    },
-                    self.prepared.project_calls.is_some(),
-                )
-                .unwrap_or_default()
-                .iter()
-                .any(|name| foreign(name))
-            });
+            // A lookup bound without its derivations reads no current record
+            // through them (`finish_item`).
+            let correlated_derivation = !underived.contains(&index)
+                && item.bindings.iter().any(|binding| {
+                    reads::names(
+                        spec,
+                        binding.derivation.expr,
+                        reads::Scan {
+                            relation: true,
+                            windows: true,
+                        },
+                        self.prepared.project_calls.is_some(),
+                    )
+                    .unwrap_or_default()
+                    .iter()
+                    .any(|name| foreign(name))
+                });
             for check in &item.checks {
                 for (correlated, code) in [
                     (correlated_filter, C::IntermediateUniqueCorrelatedFilter),

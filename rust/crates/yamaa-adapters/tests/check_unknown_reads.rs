@@ -942,11 +942,18 @@ fn check_reports_a_read_qualified_by_nothing_declared_as_domain_does() {
 /// whether by a read, an operand's type or a conversion, and when a lookup
 /// derived before it is not bound (`intermediate_derivations::bind`). It
 /// then admits none of their reads for a row that reads the lookup, so a
-/// read of another input's record there is no finding (LOOKUP-15).
+/// read of another input's record there is no finding (LOOKUP-15), and a
+/// uniqueness verification of the lookup depends on no such read
+/// (LOOKUP-17).
 #[test]
 fn check_admits_no_read_of_a_lookup_bound_without_its_derivations_as_domain_does() {
     let lookup = |derivations: &str| {
         format!("  - {{id: P, dataset: PLAN, key: [USUBJID], derivations: {{{derivations}}}}}\n")
+    };
+    let unique = |derivations: &str| {
+        format!(
+            "  - {{id: P, dataset: PLAN, key: [USUBJID], derivations: {{{derivations}}}, verifications: [{{unique: [USUBJID]}}]}}\n"
+        )
     };
     let at = "intermediates.P.derivations.D";
     let current = "unknown_field Some(\"LOOKUP-15\")";
@@ -982,6 +989,17 @@ fn check_admits_no_read_of_a_lookup_bound_without_its_derivations_as_domain_does
             &[PL, "columns.X.derivation.source"],
             KEY_TYPES,
         ),
+        // A uniqueness verification of the lookup.
+        (
+            implicit(&unique("D: \"DM.RFSTDTC + 1\""), "", "P.D", C),
+            &[at],
+            OPERAND,
+        ),
+        (
+            implicit(&unique("E: DM.RFSTDTC"), "", "PL.PLANDOSE", "P.E"),
+            &[PL, "columns.X.derivation.source"],
+            KEY_TYPES,
+        ),
         // Under row templates.
         (
             record("", "      X: P.D\n", X, C).edit(
@@ -1004,6 +1022,14 @@ fn check_admits_no_read_of_a_lookup_bound_without_its_derivations_as_domain_does
             ),
             &["intermediates.P.derivations.E.source"],
             current,
+        ),
+        (
+            implicit(&unique("E: DM.RFSTDTC"), "", X, "P.E"),
+            &[
+                "intermediates.P.verifications[0].unique",
+                "intermediates.P.derivations.E.source",
+            ],
+            "correlated_derivation_with_unique_verification Some(\"LOOKUP-17\")",
         ),
     ]);
 }
