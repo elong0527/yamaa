@@ -32,7 +32,7 @@ columns:
     label: Reference Start Date
     derivation: DM.RFSTDT
     verifications:
-      - not_missing: {}
+      - not_missing
 ```
 
 When two dates truly travel together, keep the pairing and correct the

@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: SDTM
 domain: VS
 keys: [STUDYID, USUBJID, VSTESTCD]
 input:
@@ -25,8 +27,8 @@ columns:
     derivation: VS_RAW.VSTESTCD
     submission:
       codelist: VSTESTCD
-      origin:
-        type: Assigned
+      origins:
+        - type: Assigned
 
   # Each test's results have their own description. The pulse description
   # selects its records by HR, a test code the study's list does not carry.
@@ -35,8 +37,8 @@ columns:
     label: Result or Finding in Original Units
     derivation: VS_RAW.VSORRES
     submission:
-      origin:
-        type: Collected
+      origins:
+        - type: Collected
       value_level:
         - id: SYSBP
           where: {VSTESTCD: [SYSBP]}

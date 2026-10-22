@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
@@ -34,4 +36,3 @@ columns:
 # one row per subject, and the two ages would clash earlier instead.
 rows:
   - id: record
-    derivations: {}

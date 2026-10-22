@@ -25,7 +25,7 @@ Store the study day as an integer, the type every study day has:
   label: Analysis Start Relative Day
   derivation:
     study_day:
-      date: ASTDT
+      source: ASTDT
       reference: TRTSDT
 ```
 

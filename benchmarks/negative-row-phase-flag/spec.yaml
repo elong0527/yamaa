@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADVS
 keys: [STUDYID, USUBJID, PARAMCD, AVISITN]
 input:
@@ -57,14 +59,14 @@ rows:
   # rejected before any data is read.
   - id: systolic
     derivations:
-      PARAMCD: {literal: SYSBP}
+      PARAMCD: "'SYSBP'"
       AVAL: VS_RAW.SYSBP
       ABLFL:
         flag: "AVISITN = 1"
 
   - id: diastolic
     derivations:
-      PARAMCD: {literal: DIABP}
+      PARAMCD: "'DIABP'"
       AVAL: VS_RAW.DIABP
       ABLFL:
         flag: "AVISITN = 1"

@@ -1,4 +1,5 @@
-schema_version: '1.0'
+yamaa: "1.0"
+type: project
 codelists:
   - standard:
       # The defect: CDISC CT is how a dictionary reference names the
@@ -15,6 +16,7 @@ codelists:
           - {value: F, decode: Female, alias: C16576}
           - {value: M, decode: Male, alias: C20197}
           - {value: U, decode: Unknown, alias: C17998}
+
 sdtm:
   specs:
   - spec.yaml

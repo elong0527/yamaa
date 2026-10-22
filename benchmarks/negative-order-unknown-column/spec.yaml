@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: SDTM
 domain: VS
 keys: [STUDYID, USUBJID, VSSEQ]
 input:
