@@ -430,7 +430,9 @@ pub(crate) fn compile(
 /// refuses if it changed. A refused compilation's run returns its held
 /// refusal and performs no resource, activation or study work. A run offers
 /// its `held` artifacts to the inputs whose `schema` links name their
-/// producers.
+/// producers, and polls `token` at every checkpoint of its dataset's
+/// schedule and before each batch of project-function calls (#2822).
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn run(
     shared: &EngineShared,
     specification: &str,
@@ -439,8 +441,10 @@ pub(crate) fn run(
     held: Option<Arc<yamaa_adapters::file_resources::HeldArtifacts>>,
     verify: bool,
     observer: &ObserverBridge<'_>,
+    token: &CancellationToken,
 ) -> Build {
-    let scope = yamaa_core::application_observer::Scope::new(observer);
+    let cancelled = || token.is_cancelled();
+    let scope = yamaa_core::application_observer::Scope::new(observer).cancellable(&cancelled);
     let measurements = Arc::clone(observer.measurements);
     let locator = Arc::clone(compiled.locator());
     let prepared = match compiled {

@@ -749,7 +749,10 @@ pub struct OrderKey {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct StepInfo {
     pub step: Step,
-    /// A cancellation poll before the step (#2822).
+    /// A cancellation poll before the step (#2822). Only dataset steps are
+    /// checkpoints: a donor region runs inside the dataset step that reads
+    /// it, sometimes once per current row (LOOKUP-15), so that step's
+    /// checkpoint covers it.
     pub checkpoint: bool,
     pub partition: PartitionClass,
     pub effects: Effects,

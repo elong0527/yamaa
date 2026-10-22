@@ -1041,7 +1041,7 @@ fn a_save_with_nothing_to_write_prints_its_issue_and_exits_1() {
     let refusal = engine()
         .project_run(&project, Some("send"), &CancellationToken::new())
         .unwrap()
-        .save()
+        .save(&CancellationToken::new())
         .unwrap_err();
     assert_eq!(refusal.diagnostics.len(), 1);
     assert_eq!(
@@ -1091,7 +1091,7 @@ fn a_save_that_cannot_write_its_target_prints_why_and_exits_1() {
         .spec_run(&dm, Some(&project), &CancellationToken::new())
         .unwrap();
     assert!(run.diagnostics().is_empty());
-    let refusal = run.save().unwrap_err();
+    let refusal = run.save(&CancellationToken::new()).unwrap_err();
     assert!(refusal.paths.is_empty());
     let issues = run.diagnostics();
     assert_eq!(issues.len(), 1, "{issues:?}");
