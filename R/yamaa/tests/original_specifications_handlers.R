@@ -35,6 +35,15 @@ reaches <- list(
       issues$phase[i] == expected$phase && issues$condition[i] == expected$condition &&
         issues$rule[i] == expected$rule && identical(issues$spec_paths[[i]], expected$spec_path), logical(1)))
   })
+local({
+  truth <- list(check_condition="unknown_field")
+  for (case in list(
+    list(label="a required first issue is absent", conditions=character(), expected=FALSE),
+    list(label="the required first issue is present", conditions="unknown_field", expected=TRUE))) {
+    issues <- data.frame(condition=case$conditions)
+    expect_identical(reaches$inheritance_nulls(issues,truth,"check"),case$expected,case$label)
+  }
+})
 # Each family's handler and the truth field that counts it, whether a case
 # builds, and the line that reports the family passed.
 families <- list(

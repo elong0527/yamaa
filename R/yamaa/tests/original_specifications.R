@@ -19,6 +19,23 @@ source(file.path(host_fixture_root,"original.R"),local=TRUE)
 
 # The comparisons the suites rely on refuse what they must.
 local({
+  cases <- list(
+    list(label="an issue without spec paths", paths=character(), written='[]'),
+    list(label="an issue with spec paths", paths=c("columns.ID", "keys[0]"),
+      written='["columns.ID","keys[0]"]'))
+  for (case in cases) {
+    expected <- jsonlite::fromJSON(paste0('[{"phase":"validation","condition":"unknown_field",',
+      '"rule":"NAME-3","spec_paths":',case$written,',"context":{}}]'),simplifyVector=FALSE)
+    actual <- data.frame(phase="validation",condition="unknown_field",rule="NAME-3",context="{}")
+    actual$spec_paths <- list(case$paths)
+    expect_issue_rows(actual,expected,case$label)
+    actual$spec_paths <- list("output")
+    failure <- tryCatch(expect_issue_rows(actual,expected,case$label),error=identity)
+    stopifnot_case(case$label,"changed spec paths are refused"=inherits(failure,"error"),
+      "the refusal names the case"=startsWith(conditionMessage(failure),case$label))
+  }
+})
+local({
   decode <- function(text) jsonlite::fromJSON(text,simplifyVector=FALSE)
   actual <- decode('{"keys":[{"B":2,"A":1},null],"dataset":"SRC"}')
   stopifnot("contexts ignore object key order"=context_equal(actual,decode('{"dataset":"SRC","keys":[{"A":1,"B":2},null]}')),
