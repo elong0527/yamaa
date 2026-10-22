@@ -9,7 +9,7 @@
 //! lookup whose key types fail, which binding does not bind. Every case lists
 //! the same issues in both routes and hosts, in the same order.
 use std::fs;
-use yamaa_adapters::{file_application, specification_report::Identity};
+use yamaa_adapters::file_application;
 use yamaa_core::{diagnostic::Diagnostic, domain_entry::Request, project_function::Language};
 
 /// Rendered issues, each with its spec paths.
@@ -48,14 +48,7 @@ impl Fixture {
             specification,
             environment: None,
         };
-        let identity = || Identity {
-            runtime: "test",
-            runtime_version: "test",
-            engine_version: yamaa_core::VERSION,
-            example: "unknown-reads",
-            specification,
-            base_directory: ".",
-        };
+        let identity = || crate::support::study::identity("unknown-reads", specification);
         let render = |issues: &[Diagnostic]| {
             issues
                 .iter()

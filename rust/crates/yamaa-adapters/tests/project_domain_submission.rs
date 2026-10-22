@@ -2,6 +2,7 @@
 //! Project contracts.
 mod project {
     mod domain_submission {
+        use crate::support::Edit as _;
         use std::{fs, path::Path};
         use yamaa_adapters::{file_application, specification_report::Identity};
         use yamaa_core::application_observer::Scope;
@@ -27,14 +28,7 @@ mod project {
             }
         }
         fn identity(path: &str) -> Identity<'_> {
-            Identity {
-                runtime: "test",
-                runtime_version: "test",
-                engine_version: yamaa_core::VERSION,
-                example: "submission",
-                specification: path,
-                base_directory: ".",
-            }
+            crate::support::study::identity("submission", path)
         }
         fn copy(source: &Path, target: &Path) {
             fs::create_dir_all(target).unwrap();
@@ -154,7 +148,7 @@ mod project {
                 "{\"key\":\"label\",\"level\":\"root\"}"
             );
             let issues =
-                study.check(&VALID.replace("length: 3", "length: -99999999999999999999999999999"));
+                study.check(&VALID.edit("length: 3", "length: -99999999999999999999999999999"));
             assert_eq!(issues[0].condition(), "submission_length_invalid");
             assert_eq!(issues[0].rule(), Some("SUB-7"));
             assert_eq!(
@@ -163,7 +157,7 @@ mod project {
             );
             // A bare source admits Derived, which still needs its method.
             let issues =
-                study.check(&VALID.replace("origin: {type: Assigned}", "origin: {type: Derived}"));
+                study.check(&VALID.edit("origin: {type: Assigned}", "origin: {type: Derived}"));
             assert_eq!(
                 issues
                     .iter()
@@ -171,7 +165,7 @@ mod project {
                     .collect::<Vec<_>>(),
                 ["method_missing"]
             );
-            let raw = VALID.replace(
+            let raw = VALID.edit(
                 "submission: {length: 3",
                 "verifications: [{max_length: {max: 4}}]\n    submission: {length: 3",
             );
@@ -338,7 +332,7 @@ mod project {
                 assert!(text.contains("publishing_set: SDTM\n"));
                 fs::write(
                     &project,
-                    text.replace(
+                    text.edit(
                         "publishing_set: SDTM\n",
                         &format!("publishing_set: {set}\n"),
                     ),
@@ -366,9 +360,8 @@ mod project {
         #[test]
         fn a_role_outside_the_nine_fails_where_the_specification_is_read() {
             let study = Study::new();
-            let with_role = |role: &str| {
-                VALID.replace("submission: {", &format!("submission: {{role: {role}, "))
-            };
+            let with_role =
+                |role: &str| VALID.edit("submission: {", &format!("submission: {{role: {role}, "));
             let roles = vocabulary("role");
             assert_eq!(roles.len(), 9);
             for role in &roles {
@@ -498,7 +491,7 @@ mod project {
             // The column's type checks every row: a space is not ISO 8601.
             let run = domain(
                 &study,
-                &SPEC.replace("DTC_TYPE", "partialDatetime"),
+                &SPEC.edit("DTC_TYPE", "partialDatetime"),
                 "ID,DTC,RES\n1,2025-03-04T08:30,2025-03-04\n2,2025-03-04 08:30,2025-03-05\n",
             );
             assert_eq!(run.issues().len(), 1, "{:?}", run.issues());
@@ -528,7 +521,7 @@ mod project {
             // date.
             let run = domain(
                 &study,
-                &SPEC.replace("DTC_TYPE", "partialDatetime"),
+                &SPEC.edit("DTC_TYPE", "partialDatetime"),
                 "ID,DTC,RES\n1,2025-03-04T08:30,5.1\n2,2025-03,2025-03\n",
             );
             assert_eq!(run.issues().len(), 1, "{:?}", run.issues());
@@ -545,7 +538,7 @@ mod project {
             // Every value of its form, and a missing one, passes and saves.
             let mut run = domain(
                 &study,
-                &SPEC.replace("DTC_TYPE", "incompleteDatetime"),
+                &SPEC.edit("DTC_TYPE", "incompleteDatetime"),
                 "ID,DTC,RES\n1,2025---04T08,2025-03-04\n2,,2025-03-05\n",
             );
             assert!(run.issues().is_empty(), "{:?}", run.issues());
@@ -565,10 +558,10 @@ mod project {
             // column must be a declared `str` column (SUB-12).
             let issues = study.check(
                 &SPEC
-                    .replace("DTC_TYPE", "partialDatetime")
-                    .replace("{name: LBTESTCD, type: str}", "{name: LBTESTCD, type: int}")
-                    .replace("{literal: GLUC}", "{literal: '1'}")
-                    .replace("{literal: ONSET}", "{literal: '2'}"),
+                    .edit("DTC_TYPE", "partialDatetime")
+                    .edit("{name: LBTESTCD, type: str}", "{name: LBTESTCD, type: int}")
+                    .edit("{literal: GLUC}", "{literal: '1'}")
+                    .edit("{literal: ONSET}", "{literal: '2'}"),
             );
             assert_eq!(issues.len(), 1, "{issues:?}");
             assert_eq!(
@@ -604,7 +597,7 @@ mod project {
                 ),
             ] {
                 let study = Study::new();
-                let spec = SPEC.replace("ENTRY", entry);
+                let spec = SPEC.edit("ENTRY", entry);
                 let issues = study.check(&spec);
                 assert!(issues.is_empty(), "{entry}: {issues:?}");
                 // The onset row holds a date; the glucose row, which the
@@ -645,11 +638,7 @@ mod project {
         fn tabulation_datasets_refuse_a_datetime_output_column() {
             const SPEC: &str = "schema_version: '1.0'\ndomain: VS\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, OUTPUT]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VSDTM, type: datetime, derivation: SRC.DTC}\n  - {name: OUTPUT, type: str, derivation: SRC.DTC}\nsubmission: {label: Vital Signs, class: CLASS, structure: One record per reading, repeating: true}\n";
             let study = Study::new();
-            let issues = study.check(
-                &SPEC
-                    .replace("OUTPUT]", "VSDTM]")
-                    .replace("CLASS", "FINDINGS"),
-            );
+            let issues = study.check(&SPEC.edit("OUTPUT]", "VSDTM]").edit("CLASS", "FINDINGS"));
             assert_eq!(issues.len(), 1, "{issues:?}");
             assert_eq!(
                 (issues[0].phase(), issues[0].condition(), issues[0].rule()),
@@ -661,10 +650,10 @@ mod project {
                 yamaa_adapters::json!({"column": "VSDTM", "value": "datetime", "class": "FINDINGS", "permitted": ["str", "date"]})
             );
             for spec in [
-                SPEC.replace("CLASS", "FINDINGS"),
-                SPEC.replace("OUTPUT]", "VSDTM]")
-                    .replace("CLASS", "BASIC DATA STRUCTURE"),
-                SPEC.replace("OUTPUT]", "VSDTM]").replace(
+                SPEC.edit("CLASS", "FINDINGS"),
+                SPEC.edit("OUTPUT]", "VSDTM]")
+                    .edit("CLASS", "BASIC DATA STRUCTURE"),
+                SPEC.edit("OUTPUT]", "VSDTM]").edit(
                     "submission: {label: Vital Signs, class: CLASS, structure: One record per reading, repeating: true}\n",
                     "",
                 ),
@@ -884,14 +873,14 @@ mod project {
             }
             // Without dataset metadata, `core` and ADaM's `mandatory` are not
             // yet required, while a declared value is still judged.
-            let partial = ADAM.replace(
+            let partial = ADAM.edit(
                 "submission: {label: Subject Level, class: SUBJECT LEVEL ANALYSIS DATASET, structure: One record per subject, repeating: false}\n",
                 "",
             );
             assert!(study
-                .check(&partial.replace("{core: Perm, mandatory: false, length: 3", "{length: 3"))
+                .check(&partial.edit("{core: Perm, mandatory: false, length: 3", "{length: 3"))
                 .is_empty());
-            let issues = study.check(&partial.replace(
+            let issues = study.check(&partial.edit(
                 "{core: Perm, mandatory: false, length: 3",
                 "{core: Exp, length: 3",
             ));
@@ -900,7 +889,7 @@ mod project {
             // A 0.5 specification declares no model: its section decides
             // these rules when a document composes it.
             assert!(study
-                .check(&VALID.replace("submission: {", "submission: {core: Cond, "))
+                .check(&VALID.edit("submission: {", "submission: {core: Cond, "))
                 .is_empty());
             assert!(!study.0.join("output.csv").exists());
         }
@@ -949,7 +938,7 @@ mod project {
             let study = Study::new();
             fs::write(
                 study.0.join("spec.yaml"),
-                ROW_CT.replace("codelist: GLUCOSE", "codelist: EXT"),
+                ROW_CT.edit("codelist: GLUCOSE", "codelist: EXT"),
             )
             .unwrap();
             fs::write(study.0.join("project.yaml"), CT_PROJECT).unwrap();
@@ -983,7 +972,7 @@ mod project {
             let study = Study::new();
             fs::write(
                 study.0.join("spec.yaml"),
-                ROW_CT.replace("codelist: GLUCOSE", "codelist: DICT"),
+                ROW_CT.edit("codelist: GLUCOSE", "codelist: DICT"),
             )
             .unwrap();
             fs::write(study.0.join("project.yaml"), CT_PROJECT).unwrap();
@@ -1008,7 +997,7 @@ mod project {
                 let study = Study::new();
                 fs::write(
                     study.0.join("spec.yaml"),
-                    ROW_CT.replace("codelist: GLUCOSE", &format!("codelist: {codelist}")),
+                    ROW_CT.edit("codelist: GLUCOSE", &format!("codelist: {codelist}")),
                 )
                 .unwrap();
                 fs::write(study.0.join("project.yaml"), format!("{CT_PROJECT}      - {{id: INT, name: Numeric values, data_type: integer, items: [{{value: 1}}]}}\n")).unwrap();
@@ -1062,7 +1051,7 @@ mod project {
                 (URINE.to_owned(), "GLUCOSE", false),
             ] {
                 let study = Study::new();
-                let spec = SPEC.replace("<binding>", &binding).replace("<code>", code);
+                let spec = SPEC.edit("<binding>", &binding).edit("<code>", code);
                 fs::write(study.0.join("spec.yaml"), spec).unwrap();
                 fs::write(study.0.join("project.yaml"), PROJECT).unwrap();
                 let path = study.0.join("spec.yaml");
@@ -1096,7 +1085,7 @@ mod project {
                 assert!(!study.0.join("input.csv").exists());
             }
             let study = Study::new();
-            let issues = study.check(&SPEC.replace("<binding>", OWN).replace("<code>", "GLUCOSE"));
+            let issues = study.check(&SPEC.edit("<binding>", OWN).edit("<code>", "GLUCOSE"));
             assert!(issues.is_empty(), "{issues:?}");
         }
         /// A float codelist's items compare with the column's values exactly
@@ -1206,7 +1195,7 @@ mod project {
             let bound = "340282366920938463463374607431768211456";
             fs::write(
                 study.0.join("spec.yaml"),
-                VALID.replace("length: 3", &format!("length: {bound}")),
+                VALID.edit("length: 3", &format!("length: {bound}")),
             )
             .unwrap();
             let resources = yamaa_adapters::file_resources::Resources::new(
@@ -1258,7 +1247,7 @@ mod project {
         }
 
         fn inventory_spec() -> String {
-            VALID.replace("length: 3", "inventory_vocabulary: true, length: 10")
+            VALID.edit("length: 3", "inventory_vocabulary: true, length: 10")
         }
         const INVENTORY_PROJECT: &str = "schema_version: '1.0'\nstudy: {id: STUDY, name: Study, description: Study dataset inventory, protocol_name: Protocol}\nsdtm:\n  standard: {name: SDTMIG, version: '3.4', status: Final}\n  specs: [catalog/renamed.yaml]\n  define: define.xml\n";
         /// A run admits a section that lists only its specs: the study and the
@@ -1324,8 +1313,8 @@ mod project {
                 fs::write(
                     study.0.join("catalog/parent.yaml"),
                     VALID
-                        .replace("domain: TEST", "domain: DM")
-                        .replace("input.csv", "never-read.csv"),
+                        .edit("domain: TEST", "domain: DM")
+                        .edit("input.csv", "never-read.csv"),
                 )
                 .unwrap();
                 let path = study.0.join("spec.yaml");
@@ -1372,8 +1361,8 @@ mod project {
         fn value_inventory_override_inherits_base_metadata_and_selects_only_its_test_code() {
             let study = Study::new();
             let raw = ROW_CT
-                .replace("codelist: DEFAULT", "inventory_vocabulary: true")
-                .replace("codelist: GLUCOSE", "inventory_vocabulary: false");
+                .edit("codelist: DEFAULT", "inventory_vocabulary: true")
+                .edit("codelist: GLUCOSE", "inventory_vocabulary: false");
             fs::write(study.0.join("spec.yaml"), raw).unwrap();
             fs::write(study.0.join("input.csv"), "ID,VALUE\n1,DM\n2,\n").unwrap();
             let path = study.0.join("spec.yaml");
@@ -1397,13 +1386,13 @@ mod project {
                 let study = Study::new();
                 fs::write(
                     study.0.join("spec.yaml"),
-                    ROW_CT.replace("path: output.csv", "path: output.csv, report: checks.csv"),
+                    ROW_CT.edit("path: output.csv", "path: output.csv, report: checks.csv"),
                 )
                 .unwrap();
                 let project = if fail {
                     CT_PROJECT.to_owned()
                 } else {
-                    CT_PROJECT.replace("items: [{value: G}]", "items: [{value: D}]")
+                    CT_PROJECT.edit("items: [{value: G}]", "items: [{value: D}]")
                 };
                 fs::write(study.0.join("project.yaml"), project).unwrap();
                 fs::write(study.0.join("input.csv"), "ID,VALUE\n1,D\n2,\n").unwrap();
@@ -1436,8 +1425,8 @@ mod project {
 
         fn value_length_spec(length: &str) -> String {
             ROW_CT
-                .replace("codelist: DEFAULT", "length: 3")
-                .replace("codelist: GLUCOSE", &format!("length: {length}"))
+                .edit("codelist: DEFAULT", "length: 3")
+                .edit("codelist: GLUCOSE", &format!("length: {length}"))
         }
         #[test]
         fn per_value_lengths_replace_inherited_bounds_only_for_their_completed_test_code() {
@@ -1492,7 +1481,7 @@ mod project {
                 fs::write(
                     study.0.join("spec.yaml"),
                     value_length_spec(length)
-                        .replace("path: output.csv", "path: output.csv, report: checks.csv"),
+                        .edit("path: output.csv", "path: output.csv, report: checks.csv"),
                 )
                 .unwrap();
                 fs::write(study.0.join("input.csv"), "ID,VALUE\n1,é字😀\n2,\n").unwrap();
@@ -1528,9 +1517,9 @@ mod project {
         #[test]
         fn entries_over_a_nontext_where_column_fail_before_data() {
             let integer = |raw: String| {
-                raw.replace("{name: LBTESTCD, type: str}", "{name: LBTESTCD, type: int}")
-                    .replace("{literal: GLUC}", "{literal: '1'}")
-                    .replace("{literal: CREAT}", "{literal: '2'}")
+                raw.edit("{name: LBTESTCD, type: str}", "{name: LBTESTCD, type: int}")
+                    .edit("{literal: GLUC}", "{literal: '1'}")
+                    .edit("{literal: CREAT}", "{literal: '2'}")
             };
             let refused = |issues: &[yamaa_core::diagnostic::Diagnostic]| {
                 assert_eq!(issues.len(), 1, "{issues:?}");
@@ -1548,7 +1537,7 @@ mod project {
                 );
             };
             let study = Study::new();
-            let origin_only = ROW_CT.replace("codelist: DEFAULT", "length: 3").replace(
+            let origin_only = ROW_CT.edit("codelist: DEFAULT", "length: 3").edit(
                 "codelist: GLUCOSE",
                 "origin: {type: Collected, source: Vendor}",
             );
@@ -1599,8 +1588,8 @@ mod project {
             ] {
                 let study = Study::new();
                 let raw = ROW_CT
-                    .replace("codelist: DEFAULT", "length: 3")
-                    .replace("codelist: GLUCOSE", declaration);
+                    .edit("codelist: DEFAULT", "length: 3")
+                    .edit("codelist: GLUCOSE", declaration);
                 let issues = study.check(&raw);
                 assert_eq!(issues.len(), 1, "{declaration}: {issues:?}");
                 assert_eq!(issues[0].condition(), condition);
@@ -1608,7 +1597,7 @@ mod project {
                 assert!(!study.0.join("input.csv").exists());
             }
             let study = Study::new();
-            let raw = value_length_spec("4").replace(
+            let raw = value_length_spec("4").edit(
                 "derivation: SRC.VALUE, submission",
                 "derivation: SRC.VALUE, verifications: [{max_length: {max: 3}}], submission",
             );
@@ -1679,7 +1668,7 @@ mod project {
             let missing = "ID,VALUE\n1,abc\n2,\n";
             for (raw, path) in [
                 (
-                    VALID.replace(
+                    VALID.edit(
                         "submission: {length: 3",
                         "submission: {mandatory: true, length: 3",
                     ),
@@ -1688,7 +1677,7 @@ mod project {
                 (
                     format!(
                         "{}{FINDINGS}",
-                        VALID.replace(
+                        VALID.edit(
                             "submission: {length: 3",
                             "submission: {core: Req, length: 3"
                         )
@@ -1715,13 +1704,13 @@ mod project {
             // `core` derives nothing for an analysis class or without a declared
             // class, so the same missing value is admitted.
             for root in [
-                FINDINGS.replace("FINDINGS", "BASIC DATA STRUCTURE"),
+                FINDINGS.edit("FINDINGS", "BASIC DATA STRUCTURE"),
                 String::new(),
             ] {
                 let study = Study::new();
                 let raw = format!(
                     "{}{root}",
-                    VALID.replace(
+                    VALID.edit(
                         "submission: {length: 3",
                         "submission: {core: Req, length: 3"
                     )
@@ -1749,8 +1738,8 @@ mod project {
                 ),
             ] {
                 let raw = ROW_CT
-                    .replace("codelist: DEFAULT", base)
-                    .replace("codelist: GLUCOSE", value);
+                    .edit("codelist: DEFAULT", base)
+                    .edit("codelist: GLUCOSE", value);
                 let study = Study::new();
                 let mut run = domain(&study, &raw, missing);
                 assert_eq!(run.issues().len(), 1, "{path}: {:?}", run.issues());
@@ -1803,7 +1792,7 @@ mod project {
             // Only serum is collected: URINE and ALB select no row, which warns
             // without failing. The warning needs no report file: every run's
             // report carries it, and it is never an issue.
-            let quiet = SELECTED.replace(", report: report.csv", "");
+            let quiet = SELECTED.edit(", report: report.csv", "");
             assert!(study.check(&quiet).is_empty());
             let input = "ID,SPEC,VALUE\n1,SERUM,5\n2,SERUM,toolong\n";
             let mut run = domain(&study, &quiet, input);
@@ -1908,16 +1897,16 @@ mod project {
         }
         #[test]
         fn restated_facts_and_relaxed_keys_fail_validation_before_data() {
-            let key_check = VALID.replace(
+            let key_check = VALID.edit(
                 "{name: ID, type: int, derivation: SRC.ID}",
                 "{name: ID, type: int, derivation: SRC.ID, verifications: [{not_missing: {}}]}",
             );
-            let mandatory_check = VALID.replace(
+            let mandatory_check = VALID.edit(
                 "    submission: {length: 3",
                 "    verifications: [{not_missing: {}}]\n    submission: {mandatory: true, length: 3",
             );
             let key_unique = format!("{VALID}verifications: [{{unique: [ID]}}]\n");
-            let relaxed_key = VALID.replace(
+            let relaxed_key = VALID.edit(
                 "{name: ID, type: int, derivation: SRC.ID}",
                 "{name: ID, type: int, derivation: SRC.ID, submission: {mandatory: false, length: 8, origin: {type: Assigned}}}",
             );
@@ -1969,11 +1958,11 @@ mod project {
             // `mandatory`, and a `unique` over more than the keys is its own claim.
             let study = Study::new();
             let relaxed = ROW_CT
-                .replace(
+                .edit(
                     "submission: {origin: {type: Assigned}, codelist: DEFAULT,",
                     "verifications: [{not_missing: {}}], submission: {origin: {type: Assigned}, mandatory: true,",
                 )
-                .replace("codelist: GLUCOSE", "mandatory: false");
+                .edit("codelist: GLUCOSE", "mandatory: false");
             assert!(study.check(&relaxed).is_empty());
             let wider = format!("{VALID}verifications: [{{unique: [ID, VALUE]}}]\n");
             assert!(study.check(&wider).is_empty());
@@ -1984,7 +1973,7 @@ mod project {
             let root = "\nsubmission: {label: Laboratory Results, class: FINDINGS, structure: One record per test, repeating: true}\n";
             let base = format!(
                 "{}{root}",
-                value_length_spec("3").replace(
+                value_length_spec("3").edit(
                     "origin: {type: Assigned}, length: 3",
                     "core: Perm, origin: {type: Assigned}, length: 3"
                 )
@@ -1996,7 +1985,7 @@ mod project {
                 ("data_type: date", "data_type"),
                 ("significant_digits: 2", "field"),
             ] {
-                let raw = base.replace(
+                let raw = base.edit(
                     "where: {LBTESTCD: [GLUC]}, length: 3}",
                     &format!("where: {{LBTESTCD: [GLUC]}}, {entry}}}"),
                 );
@@ -2171,7 +2160,7 @@ columns:
             }
             // Reading a declared input dataset instead makes AGEGR1 a recode.
             let raw = replace_origin(
-                &ORIGINS.replace("when: \"AGE >= 65\"", "when: \"SRC.AGE >= 65\""),
+                &ORIGINS.edit("when: \"AGE >= 65\"", "when: \"SRC.AGE >= 65\""),
                 "AGEGR1",
                 "Collected, source: Investigator",
             );
@@ -2218,7 +2207,7 @@ rows:
             let study = Study::new();
             let issues = study.check(READS);
             assert!(issues.is_empty(), "{issues:?}");
-            let shorthand = READS.replace(
+            let shorthand = READS.edit(
                 "aggregate:\n          filter: \"ODM.ItemOID = 'IT.LB.GLUC'\"\n          expr: \"ONLY(ODM.Value)\"",
                 "aggregate: \"ONLY(ODM.Value)\"",
             );
@@ -2250,7 +2239,7 @@ rows:
                 );
             }
             // A plain lookup is a bare read, but it is no predecessor's dataset.
-            let issues = study.check(&READS.replace(
+            let issues = study.check(&READS.edit(
                 "{origin: {type: Collected, source: Vendor}}",
                 "{origin: {type: Predecessor, description: RANGE.LOW}}",
             ));
@@ -2317,7 +2306,7 @@ columns:
                 assert_eq!(context["reason"], reason);
             }
             // A description that names no `<dataset>.<column>` is not the form.
-            let issues = study.check(&PREDECESSORS.replace(
+            let issues = study.check(&PREDECESSORS.edit(
                 "description: DM.AGE}",
                 "description: Copied from demographics}",
             ));
@@ -2332,7 +2321,7 @@ columns:
             );
             assert_eq!(issues[0].context["reason"], "predecessor_form");
             // A computed column cannot claim to be a copy.
-            let issues = study.check(&PREDECESSORS.replace(
+            let issues = study.check(&PREDECESSORS.edit(
                 "derivation: DM.AGE",
                 "derivation: {str_template: \"{DM.AGE} years\"}",
             ));
@@ -2366,14 +2355,14 @@ columns:
             fs::create_dir(study.0.join("sdtm")).unwrap();
             fs::write(
                 study.0.join("spec.yaml"),
-                inventory_spec().replace("domain: TEST", "domain: ADAE"),
+                inventory_spec().edit("domain: TEST", "domain: ADAE"),
             )
             .unwrap();
             fs::write(
                 study.0.join("sdtm/ae.yaml"),
                 VALID
-                    .replace("domain: TEST", "domain: AE")
-                    .replace("input.csv", "never-read.csv"),
+                    .edit("domain: TEST", "domain: AE")
+                    .edit("input.csv", "never-read.csv"),
             )
             .unwrap();
             fs::write(
@@ -2407,6 +2396,7 @@ columns:
         }
     }
     mod producer_links {
+        use crate::support::Edit as _;
         use std::sync::Arc;
         use yamaa_adapters::{
             shipped_schema,
@@ -2558,11 +2548,11 @@ columns:
         "schema_version: '1.0'\ninput: {SRC: {path: parent.csv, schema: '../producer.yaml'}}\n";
             let (consumer, consumer_port) = inherited("/consumer.yaml", entry, parent);
             let producer_entry = PRODUCER
-                .replace(
+                .edit(
                     "schema_version: '1.0'",
                     "schema_version: '1.0'\nparent: parent.yaml",
                 )
-                .replace("output: {path: './produced.csv', columns: [ID, VALUE]}", "");
+                .edit("output: {path: './produced.csv', columns: [ID, VALUE]}", "");
             let producer_parent =
                 "schema_version: '1.0'\noutput: {path: '../stored.csv', columns: [ID, VALUE]}\n";
             let (producer, producer_port) =
@@ -2590,7 +2580,7 @@ columns:
         fn explicit_null_schema_is_an_absent_link() {
             // Null clears (LAYER-9): an explicit-null schema is absent, so the
             // input is an ordinary schema-less source.
-            let null = CONSUMER.replace("schema: nested/producer.yaml", "schema: null");
+            let null = CONSUMER.edit("schema: nested/producer.yaml", "schema: null");
             assert!(shipped_schema::capture()
                 .unwrap()
                 .prepare_standalone(Source {

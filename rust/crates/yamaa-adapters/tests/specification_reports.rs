@@ -3,6 +3,7 @@
 mod execution {
     mod specification_run {
         use crate::support::specification_run::*;
+        use crate::support::Edit as _;
         use yamaa_core::application_observer::Scope;
 
         #[test]
@@ -1163,7 +1164,7 @@ mod execution {
             Err(Error::Prepare(PrepareError::Invalid(items)))
                 if items.iter().any(|item| item.diagnostic().definition().condition == "missing_report")));
                 let with_report = raw(first, "warning")
-                    .replace("columns: [ID, V]}", "columns: [ID, V], report: report.csv}");
+                    .edit("columns: [ID, V]}", "columns: [ID, V], report: report.csv}");
                 PreparedRun::prepare(prepare(&schema, with_report.as_bytes()))
                     .expect("the earlier finding remains deferred with a declared report file");
             }

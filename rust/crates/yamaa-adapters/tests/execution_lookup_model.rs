@@ -3,8 +3,9 @@
 //! qualified aggregate match their keys and range (LOOKUP-9), narrow the
 //! matched records by their filter (LOOKUP-8), and select or reduce the
 //! candidates in stored record order (LOOKUP-10).
+use crate::support::Edit as _;
 use std::fs;
-use yamaa_adapters::{file_application, specification_report::Identity};
+use yamaa_adapters::file_application;
 use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::{domain_entry::Request, json::Value};
 
@@ -27,14 +28,7 @@ impl Fixture {
                 specification,
                 environment: None,
             },
-            Identity {
-                runtime: "test",
-                runtime_version: "test",
-                engine_version: yamaa_core::VERSION,
-                example: "lookup-model",
-                specification,
-                base_directory: ".",
-            },
+            crate::support::study::identity("lookup-model", specification),
         )
     }
     /// The saved artifact and the run's handler counts as `(path, count)`.
@@ -90,14 +84,7 @@ impl Fixture {
                 specification,
                 environment: None,
             },
-            Identity {
-                runtime: "test",
-                runtime_version: "test",
-                engine_version: yamaa_core::VERSION,
-                example: "lookup-model",
-                specification,
-                base_directory: ".",
-            },
+            crate::support::study::identity("lookup-model", specification),
         )
         .iter()
         .map(yamaa_adapters::report_storage::diagnostic_value)
@@ -238,7 +225,7 @@ fn a_range_with_a_filter_and_a_selection_keeps_the_four_steps() {
 
 #[test]
 fn a_required_range_match_fails_the_row_without_a_record() {
-    let column = PERIOD.replace(
+    let column = PERIOD.edit(
         "       between:",
         "       require_match: true\n\x20       between:",
     );
@@ -286,9 +273,9 @@ fn a_range_value_names_a_value_of_the_current_row() {
             "columns.APERIOD.derivation.source.between",
         ),
     ] {
-        let column = PERIOD.replace("value: ASTDT", &format!("value: {value}"));
+        let column = PERIOD.edit("value: ASTDT", &format!("value: {value}"));
         let fixture = Fixture::new(
-            &specification("base: AE\n", &column, ", APERIOD").replace(
+            &specification("base: AE\n", &column, ", APERIOD").edit(
                 "input:\n",
                 "input:\n  OTHER: {path: other.csv, types: {REFDT: date}}\n",
             ),
@@ -553,7 +540,8 @@ fn a_per_value_key_type_that_cannot_compare_fails_for_every_kind() {
             \x20   key: {APERIOD: CHOICE}\n";
         let fixture = Fixture::new(
             &specification(
-                &header.replace("CHOICE", choice),
+                &header.edit("CHOICE", choice),
+                // The second case reads the choice through the header alone.
                 &column.replace("CHOICE", choice),
                 ", COUNTED",
             ),
@@ -620,7 +608,7 @@ fn an_aggregate_range_value_reads_the_driver_of_every_template_row() {
     // Day 12 falls in LATE only; day 99 in no window, an empty count.
     assert_eq!(csv, "STUDYID,USUBJID,SEQ,HOLDING\nS,S-1,3,1\nS,S-1,4,\n");
     let fixture = Fixture::new(
-        &specification.replace("value: HOME.DAY", "value: CLINIC.DAY"),
+        &specification.edit("value: HOME.DAY", "value: CLINIC.DAY"),
         &inputs,
     );
     let failure = fixture.failure();
@@ -727,9 +715,9 @@ fn a_range_value_may_read_a_named_intermediate_selection() {
         \x20 - id: REF\n\
         \x20   dataset: OTHER\n\
         \x20   key: [STUDYID, USUBJID]\n";
-    let column = PERIOD.replace("value: ASTDT", "value: REF.REFDT");
+    let column = PERIOD.edit("value: ASTDT", "value: REF.REFDT");
     let fixture = Fixture::new(
-        &specification(header, &column, ", APERIOD").replace(
+        &specification(header, &column, ", APERIOD").edit(
             "input:\n",
             "input:\n  OTHER: {path: other.csv, types: {REFDT: date}}\n",
         ),
@@ -860,7 +848,7 @@ fn a_range_value_qualified_by_its_driver_intermediate_reads_the_row_record() {
             format!(
                 "{}\
                  \x20     APERIOD: {}\n",
-                DOSED_ROWS.replace(
+                DOSED_ROWS.edit(
                     "    derivations:\n",
                     "    group_by: [DOSED.STUDYID, DOSED.USUBJID, DOSED.EXSEQ, DOSED.EXSTDT]\n\
                      \x20   derivations:\n",
@@ -1051,7 +1039,7 @@ fn a_column_lookup_reads_the_driver_of_the_templates_that_leave_the_column() {
 const OTHER: &str = "STUDYID,USUBJID,REFDT\nS,S-1,2025-01-05\nS,S-2,2025-03-10\n";
 
 fn with_other(specification: String) -> String {
-    specification.replace(
+    specification.edit(
         "input:\n",
         "input:\n  OTHER: {path: other.csv, types: {REFDT: date}}\n",
     )
@@ -1269,7 +1257,7 @@ fn check_admits_a_row_template_range_value_against_the_rows_that_read_it() {
     let column_phase = |derivation: &str, header: &str| {
         measurements("NONE", "NONE", header)
             .replace("      WINDOW: NONE\n", "")
-            .replace(
+            .edit(
                 "  - {name: WINDOW, type: str}\n",
                 &format!("  - {{name: WINDOW, type: str, derivation: {derivation}}}\n"),
             )
@@ -1288,7 +1276,7 @@ fn check_admits_a_row_template_range_value_against_the_rows_that_read_it() {
             + "verifications:\n  - assert: {id: windowed, require: 'W.NAME IS NOT NULL'}\n",
         measurements("{literal: x}", "W.NAME", named),
         measurements("{literal: x}", "{str_template: 'in {W.NAME}'}", named),
-        measurements("{literal: x}", "{literal: y}", named).replace(
+        measurements("{literal: x}", "{literal: y}", named).edit(
             "    dataset: HOME\n",
             "    dataset: HOME\n    filter: \"W.NAME IS NOT NULL\"\n",
         ),

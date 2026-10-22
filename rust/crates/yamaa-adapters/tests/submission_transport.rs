@@ -6,6 +6,7 @@
 //! save exactly the bytes of `expected/`; a negative case must fail with the first
 //! issue `expected/error.yaml` asserts and write nothing.
 mod transport {
+    use crate::support::Edit as _;
     use std::{
         fs,
         path::{Path, PathBuf},
@@ -131,16 +132,11 @@ mod transport {
     }
 
     fn define_cases() -> Vec<PathBuf> {
-        let mut cases: Vec<_> = fs::read_dir(benchmarks())
-            .unwrap()
-            .map(|entry| entry.unwrap().path())
-            .filter(|case| {
-                case.join("benchmark.yaml").is_file()
-                    && !yaml(&case.join("benchmark.yaml"))["define"].is_null()
-            })
-            .collect();
-        cases.sort();
-        cases
+        crate::support::benchmarks::all()
+            .into_iter()
+            .filter(|case| !yaml(&case.join("benchmark.yaml"))["define"].is_null())
+            .map(|case| case.canonicalize().unwrap())
+            .collect()
     }
 
     #[test]
@@ -200,13 +196,7 @@ mod transport {
                     let issue = result.issues().first().unwrap_or_else(|| {
                         panic!("{name}: Define reported no issue");
                     });
-                    let got = yamaa_adapters::json!({
-                        "phase": issue.phase(),
-                        "condition": issue.condition(),
-                        "rule": issue.rule(),
-                        "spec_paths": issue.spec_paths,
-                        "context": issue.context.clone(),
-                    });
+                    let got = crate::support::study::issue_row(issue);
                     assert!(subset(&want, &got), "{name}: {got:?} vs {want:?}");
                     assert!(result.save().is_err(), "{name}");
                     for written in fs::read_dir(&temp.0).unwrap() {
@@ -286,8 +276,7 @@ mod transport {
             };
             let table = yamaa_adapters::sas_source::parse(&bytes, &source).unwrap();
             let expected =
-                fs::read_to_string(case.join("expected").join(file.replace(".xpt", ".csv")))
-                    .unwrap();
+                fs::read_to_string(case.join("expected").join(file.edit(".xpt", ".csv"))).unwrap();
             let mut lines = expected.lines();
             let header: Vec<_> = lines.next().unwrap().split(',').collect();
             let names: Vec<_> = table
@@ -331,7 +320,7 @@ mod transport {
         let project = temp.0.join("project.yaml");
         let text = fs::read_to_string(&project)
             .unwrap()
-            .replace("transport: dataset_json", "transport: xpt");
+            .edit("transport: dataset_json", "transport: xpt");
         fs::write(&project, text).unwrap();
         let mut result = run(&case, &temp);
         assert!(result.issues().is_empty(), "{:?}", result.issues());
@@ -382,7 +371,7 @@ mod transport {
         let project = temp.0.join("project.yaml");
         let text = fs::read_to_string(&project)
             .unwrap()
-            .replace("transport: xpt", "transport: dataset_json");
+            .edit("transport: xpt", "transport: dataset_json");
         fs::write(&project, text).unwrap();
         let result = run(&case, &temp);
         assert!(result.issues().is_empty(), "{:?}", result.issues());
@@ -416,14 +405,14 @@ mod transport {
         // USUBJID is shorter than DM's.
         fs::write(
             temp.0.join("ae.yaml"),
-            spec.replace("domain: DM", "domain: AE")
-                .replace("path: dm.csv", "path: ae.csv"),
+            spec.edit("domain: DM", "domain: AE")
+                .edit("path: dm.csv", "path: ae.csv"),
         )
         .unwrap();
         fs::write(
             temp.0.join("suppdm.yaml"),
-            spec.replace("domain: DM", "domain: SUPPDM")
-                .replace("path: dm.csv", "path: suppdm.csv"),
+            spec.edit("domain: DM", "domain: SUPPDM")
+                .edit("path: dm.csv", "path: suppdm.csv"),
         )
         .unwrap();
         let dm = fs::read_to_string(temp.0.join("dm.csv")).unwrap();
@@ -433,10 +422,10 @@ mod transport {
         )
         .unwrap();
         let header = dm.lines().next().unwrap();
-        let first = dm.lines().nth(1).unwrap().replace("CATH-UCSD-0001", "C-1");
+        let first = dm.lines().nth(1).unwrap().edit("CATH-UCSD-0001", "C-1");
         fs::write(temp.0.join("suppdm.csv"), format!("{header}\n{first}\n")).unwrap();
         let project = temp.0.join("project.yaml");
-        let text = fs::read_to_string(&project).unwrap().replace(
+        let text = fs::read_to_string(&project).unwrap().edit(
             "  - spec.yaml",
             "  - spec.yaml\n  - ae.yaml\n  - suppdm.yaml",
         );
@@ -471,9 +460,9 @@ mod transport {
         let spec = fs::read_to_string(temp.0.join("spec.yaml")).unwrap();
         fs::write(
             temp.0.join("ae.yaml"),
-            spec.replace("domain: DM", "domain: AE")
-                .replace("path: dm.csv", "path: ae.csv")
-                .replace(
+            spec.edit("domain: DM", "domain: AE")
+                .edit("path: dm.csv", "path: ae.csv")
+                .edit(
                     "  repeating: false\n",
                     "  repeating: false\n  has_no_data: true\n  comment: No adverse events were collected.\n",
                 ),
@@ -482,7 +471,7 @@ mod transport {
         let project = temp.0.join("project.yaml");
         let text = fs::read_to_string(&project)
             .unwrap()
-            .replace("  - spec.yaml", "  - spec.yaml\n  - ae.yaml");
+            .edit("  - spec.yaml", "  - spec.yaml\n  - ae.yaml");
         fs::write(&project, text).unwrap();
         let mut result = run(&case, &temp);
         assert!(result.issues().is_empty(), "{:?}", result.issues());
@@ -518,12 +507,10 @@ mod transport {
         let case = benchmarks().join("sdtm-dm-xpt");
         let temp = stage(&case);
         fs::rename(temp.0.join("input/dm_raw.csv"), temp.0.join("dm.xpt")).unwrap();
-        let spec = fs::read_to_string(temp.0.join("spec.yaml"))
-            .unwrap()
-            .replace(
-                "DM_RAW: input/dm_raw.csv",
-                "DM_RAW: {path: dm.xpt, encoding: ascii}",
-            );
+        let spec = fs::read_to_string(temp.0.join("spec.yaml")).unwrap().edit(
+            "DM_RAW: input/dm_raw.csv",
+            "DM_RAW: {path: dm.xpt, encoding: ascii}",
+        );
         fs::write(temp.0.join("spec.yaml"), spec).unwrap();
         let mut result = run(&case, &temp);
         let issue = &result.issues()[0];

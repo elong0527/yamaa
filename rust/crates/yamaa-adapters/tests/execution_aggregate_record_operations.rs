@@ -4,8 +4,9 @@
 mod execution {
     mod aggregate_record_operations {
         //! Independent YAML, donor bytes and exact saved truth for per-record aggregates.
+        use crate::support::Edit as _;
         use std::{fs, path::Path};
-        use yamaa_adapters::{file_application, specification_report::Identity};
+        use yamaa_adapters::file_application;
         use yamaa_core::domain_entry::Request;
         struct Fixture(crate::support::Scratch);
         impl Fixture {
@@ -24,14 +25,7 @@ mod execution {
                         specification: &specification,
                         environment: None,
                     },
-                    Identity {
-                        runtime: "test",
-                        runtime_version: "test",
-                        engine_version: yamaa_core::VERSION,
-                        example: "test",
-                        specification: &specification,
-                        base_directory: ".",
-                    },
+                    crate::support::study::identity("test", &specification),
                 )
             }
             fn save(&self) -> Vec<u8> {
@@ -87,14 +81,7 @@ mod execution {
                 specification: &specification,
                 environment: None,
             },
-            Identity {
-                runtime: "test",
-                runtime_version: "test",
-                engine_version: yamaa_core::VERSION,
-                example: "test",
-                specification: &specification,
-                base_directory: ".",
-            },
+            crate::support::study::identity("test", &specification),
         );
         assert!(issues.is_empty(), "{derivation}: {issues:?}");
         assert_eq!(fixture.save(), b"ID,CUT,TOTAL\na,3,2\nb,2,1\n", "{derivation}");
@@ -194,7 +181,7 @@ mod execution {
                 };
                 Err(issues
                     .iter()
-                    .map(|issue| yamaa_adapters::json!({"phase": issue.phase(), "condition": issue.condition(), "rule": issue.rule(), "spec_paths": issue.spec_paths, "context": issue.context.clone()}))
+                    .map(crate::support::study::issue_row)
                     .collect::<Vec<_>>())
             };
             let refused = |identifier: &str| {
@@ -208,7 +195,7 @@ mod execution {
                 format!("        between: {{value: {value}, lower: N}}\n        expr: SUM(B.N)\n")
             };
             let inputs = |spec: String| {
-                spec.replace(
+                spec.edit(
                     "  B: {path: b.csv, types: {N: int}}\n",
                     "  B: {path: b.csv, types: {N: int}}\n  C: {path: c.csv, types: {LIMIT: int}}\n",
                 )
@@ -250,12 +237,12 @@ mod execution {
             fs::write(fixture.0.join("a.csv"), b"ID,CUT\na,2\nb,3\n").unwrap();
             fs::write(fixture.0.join("b.csv"), b"ID,N\nb,10\na,1\na,4\n").unwrap();
             let operation="        derive:\n          - {name: N, type: int, derivation: B.N}\n          - {name: C, type: int, derivation: CAP.CUT}\n          - {name: VALUE, type: int, derivation: {least: {sources: [N, C]}}}\n        expr: SUM(VALUE)\n";
-            let spec=specification(operation).replace("base: A\n","base: A\nintermediates:\n  - {id: CAP, dataset: A, key: {ID: A.ID}, order_by: [A.CUT], keep: first}\n");
+            let spec=specification(operation).edit("base: A\n","base: A\nintermediates:\n  - {id: CAP, dataset: A, key: {ID: A.ID}, order_by: [A.CUT], keep: first}\n");
             fs::write(fixture.0.join("spec.yaml"), &spec).unwrap();
             assert_eq!(fixture.save(), b"ID,CUT,TOTAL\na,2,3\nb,3,3\n");
             fs::write(
                 fixture.0.join("spec.yaml"),
-                spec.replace(", order_by: [A.CUT], keep: first", ""),
+                spec.edit(", order_by: [A.CUT], keep: first", ""),
             )
             .unwrap();
             let issues = match fixture.run() {
@@ -324,13 +311,13 @@ mod execution {
                 }
             }
             let source = original_fieldless_count("COUNT(OTHER.*)", "{N: K}", "")
-                .replace("keys: [K]", "keys: [N]")
-                .replace("columns: [K, V]", "columns: [N, V]")
-                .replace(
+                .edit("keys: [K]", "keys: [N]")
+                .edit("columns: [K, V]", "columns: [N, V]")
+                .edit(
                     "      aggregate:\n        expr: 'COUNT(OTHER.*)'\n        key: {N: K}\n",
                     "      aggregate: 'COUNT(OTHER.*)'\n",
                 )
-                .replace("name: K", "name: N");
+                .edit("name: K", "name: N");
             let fixture = fieldless_count_fixture(&source);
             let result = fixture.run().unwrap_or_else(|issues| panic!("{issues:?}"));
             assert!(result.issues().is_empty(), "{:?}", result.issues());
@@ -349,13 +336,7 @@ mod execution {
             assert!(!fixture.0.join("out.csv").exists());
             issues
                 .iter()
-                .map(|issue| {
-                    yamaa_adapters::json!({
-                        "phase": issue.phase(), "condition": issue.condition(),
-                        "rule": issue.rule(), "spec_paths": issue.spec_paths,
-                        "context": issue.context.clone()
-                    })
-                })
+                .map(crate::support::study::issue_row)
                 .collect()
         }
 
@@ -454,7 +435,7 @@ mod execution {
             for expression in ["COUNT(OTHER.*)", "SUM(H)"] {
                 for key in ["{N: {literal: true}}", "{N: K}"] {
                     let source = original_fieldless_count(expression, key, "        filter: OTHER.N > 0\n")
-                .replace(
+                .edit(
                     "        filter: OTHER.N > 0\n",
                     "        derive:\n          - {name: H, type: int, derivation: {literal: 1}}\n        filter: OTHER.N > 0\n",
                 );
@@ -573,8 +554,8 @@ S1,002,2024-06
             fs::write(
                 fixture.0.join("spec.yaml"),
                 ORIGINAL_DERIVE_SPEC
-                    .replace("DERIVE_BINDINGS", &bindings)
-                    .replace("REDUCTION_EXPRESSION", expression),
+                    .edit("DERIVE_BINDINGS", &bindings)
+                    .edit("REDUCTION_EXPRESSION", expression),
             )
             .unwrap();
             fixture
@@ -737,26 +718,23 @@ S1,002,2024-06
             .unwrap();
             let path = fixture.0.join("spec.yaml");
             let spec = fs::read_to_string(&path).unwrap()
-        .replace("  QS: input/qs.csv", "  QS: input/qs.csv\n  DS: input/ds.csv")
-        .replace("output:\n", &format!("intermediates:\n  - id: CAP\n    dataset: DS\n    key: [STUDYID, USUBJID]{}\noutput:\n", if keep { "\n    order_by: [DS.DSNUM]\n    keep: first" } else { "" }))
-        .replace("  - id: subscale\n", "  - id: subscale\n    dataset: QS\n");
+        .edit("  QS: input/qs.csv", "  QS: input/qs.csv\n  DS: input/ds.csv")
+        .edit("output:\n", &format!("intermediates:\n  - id: CAP\n    dataset: DS\n    key: [STUDYID, USUBJID]{}\noutput:\n", if keep { "\n    order_by: [DS.DSNUM]\n    keep: first" } else { "" }))
+        .edit("  - id: subscale\n", "  - id: subscale\n    dataset: QS\n");
             fs::write(path, spec).unwrap();
         }
     }
     mod baseline_window_types {
         //! Baseline temporal operands retain their typed condition and authored input site.
         use std::fs;
-        use yamaa_adapters::{file_application, specification_report::Identity};
+        use yamaa_adapters::file_application;
         use yamaa_core::domain_entry::Request;
 
         struct Fixture(crate::support::Scratch);
         fn issues(rows: &[yamaa_core::diagnostic::Diagnostic]) -> yamaa_core::json::Value {
             yamaa_adapters::json!(rows
                 .iter()
-                .map(|row| yamaa_adapters::json!({
-                    "phase":row.phase(),"condition":row.condition(),"rule":row.rule(),
-                    "spec_paths":row.spec_paths,"context":row.context.clone()
-                }))
+                .map(crate::support::study::issue_row)
                 .collect::<Vec<_>>())
         }
         #[test]
@@ -782,14 +760,7 @@ S1,002,2024-06
                     specification: path,
                     environment: None,
                 };
-                let identity = || Identity {
-                    runtime: "test",
-                    runtime_version: "test",
-                    engine_version: yamaa_core::VERSION,
-                    example: "baseline_window_types",
-                    specification: path,
-                    base_directory: ".",
-                };
+                let identity = || crate::support::study::identity("baseline_window_types", path);
                 assert_eq!(
                     issues(&file_application::check(
                         yamaa_core::project_function::Language::Python,
@@ -879,12 +850,7 @@ S1,002,2024-06
             Value::Array(
                 issues
                     .iter()
-                    .map(|row| {
-                        yamaa_adapters::json!({
-                            "phase": row.phase(), "condition": row.condition(), "rule": row.rule(),
-                            "spec_paths": row.spec_paths, "context": row.context.clone()
-                        })
-                    })
+                    .map(crate::support::study::issue_row)
                     .collect(),
             )
         }
@@ -1041,7 +1007,7 @@ S1,002,2024-06
         }
 
         fn issue(issue: &yamaa_core::diagnostic::Diagnostic) -> yamaa_core::json::Value {
-            yamaa_adapters::json!({"phase":issue.phase(),"condition":issue.condition(),"rule":issue.rule(),"spec_paths":issue.spec_paths,"context":issue.context.clone()})
+            crate::support::study::issue_row(issue)
         }
 
         fn expected(path: &Path) -> yamaa_core::json::Value {
@@ -1831,6 +1797,7 @@ S1,002,2024-06
         //! Original YAML reaches core compilation; expectations are authored from the
         //! six unchanged documents, not emitted by a compiler or the legacy plan codec.
         use crate::support::table_schema as schema;
+        use crate::support::Edit as _;
         use std::{fs, path::PathBuf};
         use yamaa_adapters::{
             shipped_schema,
@@ -1880,7 +1847,7 @@ S1,002,2024-06
                 if self.unsupported && source.identity == "spec_organization.yaml" {
                     bytes = String::from_utf8(bytes)
                         .unwrap()
-                        .replace("input/lb.csv", "input/lb.xlsx")
+                        .edit("input/lb.csv", "input/lb.xlsx")
                         .into_bytes();
                 }
                 Ok(bytes)
@@ -2435,8 +2402,9 @@ S1,002,2024-06
     }
     mod completed_intermediate_scopes {
         //! Original committed YAML and independent expected artifacts remain the oracle.
+        use crate::support::Edit as _;
         use std::{fs, path::Path};
-        use yamaa_adapters::{file_application, specification_report::Identity};
+        use yamaa_adapters::file_application;
         use yamaa_core::domain_entry::Request;
         struct Fixture(crate::support::Scratch);
         impl Fixture {
@@ -2457,7 +2425,7 @@ S1,002,2024-06
             }
         }
         fn issue(issue: &yamaa_core::diagnostic::Diagnostic) -> yamaa_core::json::Value {
-            yamaa_adapters::json!({"phase":issue.phase(),"condition":issue.condition(),"rule":issue.rule(),"spec_paths":issue.spec_paths,"context":issue.context.clone()})
+            crate::support::study::issue_row(issue)
         }
         fn expected(path: &Path) -> yamaa_core::json::Value {
             let text = fs::read_to_string(path).unwrap();
@@ -2491,14 +2459,7 @@ S1,002,2024-06
             copy(&original.join("input"), &fixture.0.join("input"));
             fs::copy(original.join("spec.yaml"), fixture.0.join("spec.yaml")).unwrap();
             let spec = fixture.0.join("spec.yaml").to_str().unwrap().to_owned();
-            let id = Identity {
-                runtime: "test",
-                runtime_version: "test",
-                engine_version: yamaa_core::VERSION,
-                example: name,
-                specification: &spec,
-                base_directory: ".",
-            };
+            let id = crate::support::study::identity(name, &spec);
             let outcome = file_application::domain(
                 yamaa_core::project_function::Language::Python,
                 Request {
@@ -2584,14 +2545,7 @@ S1,002,2024-06
                 fs::write(fixture.0.join("donor.csv"), donor).unwrap();
             }
             let path = fixture.0.join("spec.yaml").to_str().unwrap().to_owned();
-            let id = Identity {
-                runtime: "test",
-                runtime_version: "test",
-                engine_version: yamaa_core::VERSION,
-                example: "independent-intermediate",
-                specification: &path,
-                base_directory: ".",
-            };
+            let id = crate::support::study::identity("independent-intermediate", &path);
             let result = file_application::domain(
                 yamaa_core::project_function::Language::Python,
                 Request {
@@ -2661,7 +2615,7 @@ S1,002,2024-06
         fn an_earlier_selector_key_uses_the_later_donor_current_record_owner() {
             let spec = "schema_version: '1.0'\ndomain: OUT\nkeys: [ID]\nbase: SRC\ninput: {SRC: {path: source.csv, types: {ID: int, VAL: int}}, DONOR: {path: donor.csv, types: {KEY: int}}}\noutput: {path: out.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: EARLIER\n    dataset: SRC\n    key: {ID: DONOR.KEY}\n  - id: LATER\n    dataset: DONOR\n    key: {KEY: ID}\n    derivations: {LOOKED_UP: EARLIER.VAL}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: LATER.LOOKED_UP}\n";
             for key in ["DONOR.KEY", "{source: DONOR.KEY}"] {
-                let spec = spec.replace("key: {ID: DONOR.KEY}", &format!("key: {{ID: {key}}}"));
+                let spec = spec.edit("key: {ID: DONOR.KEY}", &format!("key: {{ID: {key}}}"));
                 // Different field names and reversed donor order expose owner/coordinate aliasing.
                 let (fixture, result) =
                     independent(&spec, "ID,VAL\n1,100\n2,200\n", Some("KEY\n2\n1\n"));
@@ -2683,7 +2637,7 @@ S1,002,2024-06
             assert!(result.issues().is_empty(), "{:?}", result.issues());
             assert!(result.save().unwrap());
             assert_eq!(fs::read(fixture.0.join("out.csv")).unwrap(), b"ID\n1\n");
-            let used = declaration.replace("columns: [ID]", "columns: [ID, VALUE]")
+            let used = declaration.edit("columns: [ID]", "columns: [ID, VALUE]")
                 + "  - {name: VALUE, type: int, derivation: P.ID}\n";
             let (fixture, result) = independent(&used, "ID\n1\n", Some("KEY\n2\n"));
             let mut result = result.unwrap();
@@ -2748,22 +2702,22 @@ S1,002,2024-06
             let unknown = |name: &str| yamaa_adapters::json!({"phase":"validation","condition":"unknown_field","rule":"LOOKUP-16","spec_paths":["intermediates[1].derivations.LOOKED_UP.source"],"context":{"identifier":name,"intermediate":"LATER","read":"EARLIER"}});
             for (spec, first) in [
                 (
-                    base.replace(
+                    base.edit(
                         "      NEWKEY: KEY\n      LOOKED_UP: EARLIER.VAL",
                         "      LOOKED_UP: EARLIER.VAL\n      NEWKEY: KEY",
                     ),
                     unknown("DONOR.NEWKEY"),
                 ),
                 (
-                    base.replace("ID: DONOR.NEWKEY", "ID: DONOR.ABSENT"),
+                    base.edit("ID: DONOR.NEWKEY", "ID: DONOR.ABSENT"),
                     unknown("DONOR.ABSENT"),
                 ),
                 (
-                    base.replace("ID: DONOR.NEWKEY", "ID: WRONG.NEWKEY"),
+                    base.edit("ID: DONOR.NEWKEY", "ID: WRONG.NEWKEY"),
                     unknown("WRONG.NEWKEY"),
                 ),
                 (
-                    base.replace("NEWKEY: KEY", "NEWKEY: {literal: wrong-type}"),
+                    base.edit("NEWKEY: KEY", "NEWKEY: {literal: wrong-type}"),
                     yamaa_adapters::json!({"phase":"validation","condition":"incompatible_input_type","rule":"LOOKUP-9","spec_paths":["intermediates[0].key"],"context":{"intermediate":"EARLIER","source":"DONOR.NEWKEY","expected":"str","actual":"int"}}),
                 ),
             ] {
@@ -2799,7 +2753,7 @@ S1,002,2024-06
         #[test]
         fn self_derivations_reject_later_and_unknown_fields() {
             for reference in ["SELF.PLUS", "PLUS", "SELF.ABSENT", "ABSENT"] {
-                let spec = self_derivation_spec().replace("SELF.VALUE * 2", reference);
+                let spec = self_derivation_spec().edit("SELF.VALUE * 2", reference);
                 let (fixture, result) = independent(&spec, "ID,VAL\n1,10\n", None);
                 let mut result = result.unwrap();
                 assert_eq!(
@@ -2818,8 +2772,8 @@ S1,002,2024-06
         #[test]
         fn self_derivations_cannot_shadow_completed_stored_fields() {
             let spec = self_derivation_spec()
-                .replace("TWICE:", "VALUE:")
-                .replace("TWICE + 1", "VALUE + 1");
+                .edit("TWICE:", "VALUE:")
+                .edit("TWICE + 1", "VALUE + 1");
             let (fixture, result) = independent(&spec, "ID,VAL\n1,10\n", None);
             let mut result = result.unwrap();
             assert_eq!(
@@ -2836,7 +2790,7 @@ S1,002,2024-06
         #[test]
         fn self_derived_unique_checks_are_eager_after_a_completed_template() {
             let spec = self_derivation_spec()
-                .replace(
+                .edit(
                     "    key: [ID]",
                     "    key: [ID]\n    verifications: [{unique: [TWICE]}]",
                 )
@@ -2859,7 +2813,7 @@ S1,002,2024-06
         }
         #[test]
         fn a_first_template_cannot_read_a_self_derived_field_from_future_rows() {
-            let spec = self_derivation_spec().replace("VALUE: SRC.VAL", "VALUE: P.PLUS");
+            let spec = self_derivation_spec().edit("VALUE: SRC.VAL", "VALUE: P.PLUS");
             let (fixture, result) = independent(&spec, "ID,VAL\n1,10\n", None);
             let issues = result
                 .err()
@@ -2873,11 +2827,11 @@ S1,002,2024-06
         #[test]
         fn a_self_donor_derived_key_can_read_an_input_backed_selector() {
             let spec = self_derivation_spec()
-                .replace(
+                .edit(
                     "  - id: P",
                     "  - id: INPUT\n    dataset: SRC\n    key: {ID: SELF.NEWKEY}\n  - id: P",
                 )
-                .replace(
+                .edit(
                     "      TWICE: {compute: {expr: 'SELF.VALUE * 2'}}",
                     "      NEWKEY: ID\n      TWICE: {compute: {expr: 'INPUT.VAL * 2'}}",
                 );
@@ -2920,14 +2874,7 @@ S1,002,2024-06
                     specification: &path,
                     environment: None,
                 },
-                Identity {
-                    runtime: "test",
-                    runtime_version: "test",
-                    engine_version: yamaa_core::VERSION,
-                    example: "between-donor-scope",
-                    specification: &path,
-                    base_directory: ".",
-                },
+                crate::support::study::identity("between-donor-scope", &path),
             )
             .unwrap_or_else(|issues| panic!("preparation {issues:?}"))
         }
@@ -2941,10 +2888,7 @@ S1,002,2024-06
                 (format!("{LAST_DOSE}{SUBJ}"), "SUBJ.SEXL", ["f", "f", "m"]),
                 (format!("{SUBJ}{LAST_DOSE}"), "SUBJ.SEXL", ["f", "f", "m"]),
                 (
-                    format!(
-                        "{}{SUBJ}",
-                        LAST_DOSE.replace("value: ADTM", "value: PC.PCDTC")
-                    ),
+                    format!("{}{SUBJ}", LAST_DOSE.edit("value: ADTM", "value: PC.PCDTC")),
                     "SUBJ.SEXL",
                     ["f", "f", "m"],
                 ),
@@ -3054,14 +2998,7 @@ S1,002,2024-06
                         specification: &path,
                         environment: None,
                     },
-                    Identity {
-                        runtime: "test",
-                        runtime_version: "test",
-                        engine_version: yamaa_core::VERSION,
-                        example: "between-current-driver",
-                        specification: &path,
-                        base_directory: ".",
-                    },
+                    crate::support::study::identity("between-current-driver", &path),
                 ) {
                     Ok(result) => result,
                     Err(failure) => return Err(failure.iter().map(issue).collect::<Vec<_>>()),
@@ -3082,11 +3019,11 @@ S1,002,2024-06
             // another intermediate's value, from an aggregate's derive step, or
             // through an aggregate's range value.
             let direct = format!("{base}{WINDOW}{}", column("W.NAME"));
-            let chained = WINDOW.replace("id: W\n", "id: W2\n")
-                + &WINDOW.replace("value: REF.REFDAY", "value: W2.LO");
+            let chained = WINDOW.edit("id: W\n", "id: W2\n")
+                + &WINDOW.edit("value: REF.REFDAY", "value: W2.LO");
             let chained = format!("{base}{chained}{}", column("W.NAME"));
             let aggregated = |derivation: &str| {
-                format!("{base}{WINDOW}{}", column(derivation)).replace(
+                format!("{base}{WINDOW}{}", column(derivation)).edit(
                     "type: str, derivation: {aggregate",
                     "type: int, derivation: {aggregate",
                 )
@@ -3115,7 +3052,7 @@ S1,002,2024-06
             // So does REF's record in the row template it drives, read by the
             // range or by a correlated filter.
             let rows = "keys: [USUBJID, ORIGIN]\noutput: {path: out.csv, columns: [USUBJID, ORIGIN, WINDOW]}\ncolumns:\n  - {name: USUBJID, type: str}\n  - {name: ORIGIN, type: str}\n  - {name: WINDOW, type: str}\nrows:\n  - id: subj\n    dataset: SUBJ\n    derivations: {USUBJID: SUBJ.USUBJID, ORIGIN: {literal: SUBJ}, WINDOW: {literal: NONE}}\n  - id: ref\n    dataset: REF\n    derivations: {USUBJID: REF.USUBJID, ORIGIN: {literal: REF}, WINDOW: W.NAME}\nintermediates:\n";
-            let filtered = WINDOW.replace(
+            let filtered = WINDOW.edit(
                 "between: {value: REF.REFDAY, lower: LO, upper: HI}",
                 "filter: 'WIN.LO <= REF.REFDAY AND REF.REFDAY <= WIN.HI'",
             );
@@ -3152,14 +3089,8 @@ S1,002,2024-06
                     specification: &path,
                     environment: None,
                 };
-                let identity = || Identity {
-                    runtime: "test",
-                    runtime_version: "test",
-                    engine_version: yamaa_core::VERSION,
-                    example: "aggregate-between-current-driver",
-                    specification: &path,
-                    base_directory: ".",
-                };
+                let identity =
+                    || crate::support::study::identity("aggregate-between-current-driver", &path);
                 let checked = file_application::check(
                     yamaa_core::project_function::Language::Python,
                     request(),
@@ -3283,7 +3214,7 @@ S1,002,2024-06
     mod completed_lookup_assertions {
         //! Independent completed-row assertion scope, order and whole-record truth.
         use std::fs;
-        use yamaa_adapters::{file_application, specification_report::Identity};
+        use yamaa_adapters::file_application;
         use yamaa_core::diagnostic::Diagnostic;
         use yamaa_core::domain_entry::Request;
         struct Fixture(crate::support::Scratch);
@@ -3313,14 +3244,7 @@ S1,002,2024-06
                         fs::write(fixture.0.join(path), content.as_str().unwrap()).unwrap();
                     }
                     let written = entry.to_str().unwrap();
-                    let identity = || Identity {
-                        runtime: "test",
-                        runtime_version: "test",
-                        engine_version: yamaa_core::VERSION,
-                        example: "completed-assert",
-                        specification: written,
-                        base_directory: ".",
-                    };
+                    let identity = || crate::support::study::identity("completed-assert", written);
                     let request = || Request {
                         specification: written,
                         environment: None,
@@ -3379,8 +3303,9 @@ S1,002,2024-06
     }
     mod declarative_case_intermediates {
         //! Complete case observations use the shared scalar source binder.
+        use crate::support::Edit as _;
         use std::{fs, path::Path};
-        use yamaa_adapters::{file_application, specification_report::Identity};
+        use yamaa_adapters::file_application;
         use yamaa_core::domain_entry::Request;
         struct Fixture(crate::support::Scratch);
         impl Fixture {
@@ -3402,14 +3327,7 @@ S1,002,2024-06
                         specification,
                         environment: None,
                     },
-                    Identity {
-                        runtime: "test",
-                        runtime_version: "test",
-                        engine_version: yamaa_core::VERSION,
-                        example: "independent-case-intermediate",
-                        specification,
-                        base_directory: ".",
-                    },
+                    crate::support::study::identity("independent-case-intermediate", specification),
                 )
             }
             fn populate(&self) {
@@ -3510,7 +3428,7 @@ columns:
         fn nested_named_source_absence_handlers_are_lazy_and_preserve_existing_missing_values() {
             let fixture = Fixture::new();
             fixture.populate();
-            let body = BODY.replace(
+            let body = BODY.edit(
                 "then: P.A",
                 "then: {source: {variable: P.A, absent: fallback}}",
             );
@@ -3521,7 +3439,7 @@ columns:
                     0,
                 ),
                 (
-                    body.replace("variable: P.A,", "variable: P.ABSENT,"),
+                    body.edit("variable: P.A,", "variable: P.ABSENT,"),
                     b"ID,A,B\n1,fallback,\n2,skip,skip\n3,fallback,\n".as_slice(),
                     2,
                 ),

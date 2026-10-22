@@ -391,6 +391,7 @@ mod declaration {
     }
     mod shipped_schema {
         //! Shipped schema identity and raw preparation without host schema interpretation.
+        use crate::support::Edit as _;
 
         use yamaa_adapters::{
             shipped_schema,
@@ -520,8 +521,8 @@ mod declaration {
         #[test]
         fn unsupported_or_missing_version_is_rejected_before_any_parent_authority() {
             for text in [
-                VALID.replace("'1.0'", "'99.0'"),
-                VALID.replace("schema_version: '1.0'\n", ""),
+                VALID.edit("'1.0'", "'99.0'"),
+                VALID.edit("schema_version: '1.0'\n", ""),
             ] {
                 let result =
                     shipped_schema::prepare(source(&text), "domain.yaml".into(), &mut NoParents);
@@ -567,23 +568,23 @@ mod declaration {
             use yamaa_adapters::specification_diagnostics::capture_failure;
             let cases = [
                 (
-                    VALID.replace("'1.0'", "'99.0'"),
+                    VALID.edit("'1.0'", "'99.0'"),
                     json!({"phase":"validation","condition":"schema_version_mismatch","rule":"SCHEMA-2","spec_paths":["schema_version"],"context":{"expected":"1.0","actual":"99.0"}}),
                 ),
                 (
-                    VALID.replace("schema_version: '1.0'\n", ""),
+                    VALID.edit("schema_version: '1.0'\n", ""),
                     json!({"phase":"validation","condition":"schema_version_mismatch","rule":"SCHEMA-2","spec_paths":["schema_version"],"context":{"expected":"1.0","actual":null}}),
                 ),
                 (
-                    VALID.replace("domain: TEST", "domain: bad-name"),
+                    VALID.edit("domain: TEST", "domain: bad-name"),
                     json!({"phase":"validation","condition":"pattern_mismatch","rule":"SCHEMA-12","spec_paths":["domain"],"context":{"value":"bad-name","pattern":"^[A-Za-z_][A-Za-z0-9_]*$"}}),
                 ),
                 (
-                    VALID.replace("type: int", "type: unknown"),
+                    VALID.edit("type: int", "type: unknown"),
                     json!({"phase":"validation","condition":"value_not_permitted","rule":"VALUE-1","spec_paths":["columns.ID.type"],"context":{"value":"unknown","permitted":["str","int","float","date","datetime"]}}),
                 ),
                 (
-                    VALID.replace("path: output.csv", "path: ''"),
+                    VALID.edit("path: output.csv", "path: ''"),
                     json!({"phase":"validation","condition":"minimum_length","rule":"SCHEMA-12","spec_paths":["output.path"],"context":{"minimum":1}}),
                 ),
             ];
@@ -605,7 +606,7 @@ mod declaration {
             let integer = "922337203685477580812345678901234567890";
             let error = shipped_schema::capture()
                 .unwrap()
-                .prepare_standalone(source(&VALID.replace("'1.0'", integer)))
+                .prepare_standalone(source(&VALID.edit("'1.0'", integer)))
                 .unwrap_err();
             let actual = crate::support::findings(capture_failure(&error));
             assert!(yamaa_adapters::json_wire::encode(&actual)
@@ -780,7 +781,7 @@ mod declaration {
                 json!([{"phase":"validation","condition":"pattern_mismatch","rule":"SCHEMA-12","spec_paths":["domain"],"context":{"value":"bad-name","pattern":"^[A-Za-z_][A-Za-z0-9_]*$","source":"parent.yaml","entry":"entry.yaml"}}])
             );
             let empty_parent = "schema_version: '1.0'\n";
-            let missing = inherited_error(&entry.replace("domain: TEST\n", ""), empty_parent);
+            let missing = inherited_error(&entry.edit("domain: TEST\n", ""), empty_parent);
             let InheritanceError::Preparation { error, .. } = &missing else {
                 panic!("expected lifecycle failure");
             };
@@ -794,7 +795,7 @@ mod declaration {
                 json!([{"phase":"validation","condition":"missing_required_field","rule":"SCHEMA-13","spec_paths":["domain"],"context":{"field":"domain","class":"root_class"}}])
             );
             let unknown = inherited_error(
-                &entry.replace(
+                &entry.edit(
                     "derivation: SRC.ID",
                     "derivation: {compute: {expr: UNKNOWN}}",
                 ),
@@ -835,6 +836,7 @@ mod declaration {
     }
     mod standalone_preparation {
         //! Existing YAML representation and independent complete outcomes around engine delegation.
+        use crate::support::Edit as _;
         use std::sync::Arc;
         use yamaa_adapters::json;
         use yamaa_adapters::{
@@ -894,7 +896,7 @@ mod declaration {
 
         #[test]
         fn adapter_moves_source_allocations_and_retains_original_physical_locations_and_defaults() {
-            let text = VALID.replace("domain: X\n", "");
+            let text = VALID.edit("domain: X\n", "");
             let entry = source(&text);
             let bytes = entry.bytes.as_ptr();
             let identity = entry.identity.as_ptr();
@@ -949,7 +951,7 @@ mod declaration {
         #[test]
         fn both_semantic_passes_keep_source_identity_and_independent_complete_reports() {
             let schema = schema();
-            let text = VALID.replace("'1.0'", "92233720368547758081234567890");
+            let text = VALID.edit("'1.0'", "92233720368547758081234567890");
             let entry = source(&text);
             let bytes = entry.bytes.as_ptr();
             let identity = entry.identity.as_ptr();
@@ -993,8 +995,8 @@ mod declaration {
         #[test]
         fn final_model_findings_retain_no_pass_document_and_move_original_source() {
             let text = VALID
-                .replace("domain: X", "domain: 7")
-                .replace("{path: output.csv, columns: []}", "{}");
+                .edit("domain: X", "domain: 7")
+                .edit("{path: output.csv, columns: []}", "{}");
             let entry = source(&text);
             let pointer = entry.bytes.as_ptr();
             let error = schema().prepare_standalone(entry).unwrap_err();
@@ -1047,7 +1049,7 @@ mod declaration {
                 .is_ok());
             let error = schema()
                 .prepare_document(
-                    source(&VALID.replace("'1.0'", "'99.0'")),
+                    source(&VALID.edit("'1.0'", "'99.0'")),
                     "retained/spec.yaml".into(),
                     &mut NoParents,
                 )
@@ -1057,7 +1059,7 @@ mod declaration {
 
         #[test]
         fn schema_default_checkpoint_precedes_authored_version_and_window_errors() {
-            let invalid = SCHEMA.replace(
+            let invalid = SCHEMA.edit(
                 "type: [str, int], default: DEFAULT",
                 "type: str, default: 7",
             );
@@ -2286,7 +2288,11 @@ mod declaration {
             }
         }
         fn issues(rows: Vec<Diagnostic>) -> Value {
-            Value::Array(rows.into_iter().map(|row|json!({"phase":row.phase(),"condition":row.condition(),"rule":row.rule(),"spec_paths":row.spec_paths,"context":row.context.clone()})).collect())
+            Value::Array(
+                rows.into_iter()
+                    .map(|row| crate::support::study::issue_row(&row))
+                    .collect(),
+            )
         }
         fn original_locations(
             actual: &yamaa_adapters::specification_source::CapturedDocument,
@@ -2816,6 +2822,7 @@ mod declaration {
         //! Original R authoring declarations remain typed witnesses when R is absent.
         //! This proves metadata admission only. The mandatory installed R replay owns
         //! lock verification, activation, source binding, values and publication.
+        use crate::support::Edit as _;
         use std::{convert::Infallible, path::PathBuf};
         use yamaa_adapters::{
             project_source::{self, Kind, ProjectCapturePort, Reply, Request},
@@ -2841,7 +2848,7 @@ mod declaration {
                     Kind::Function => {
                         self.functions += 1;
                         Ok(Reply::Document(Source {
-                            identity: self.project.replace("project.yaml", request.written),
+                            identity: self.project.edit("project.yaml", request.written),
                             bytes: std::fs::read(self.case.join(request.written)).unwrap(),
                         }))
                     }

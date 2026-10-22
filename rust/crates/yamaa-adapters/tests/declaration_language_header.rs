@@ -12,6 +12,7 @@
 //! the `yamaa-v0.5.0` tag (D75), so a `yamaa` there is no header.
 mod declaration {
     mod language_header {
+        use crate::support::Edit as _;
         use std::fs;
         use std::path::Path;
 
@@ -20,7 +21,7 @@ mod declaration {
             self, check_references, Closures, Decoded, ReferenceError, SpecificationError,
         };
         use yamaa_adapters::json;
-        use yamaa_adapters::specification_report::Identity;
+
         use yamaa_adapters::specification_source::{
             CapturedSchema, Error, InheritancePort, Source,
         };
@@ -67,14 +68,7 @@ mod declaration {
                         specification: &specification,
                         environment: environment.as_deref(),
                     },
-                    Identity {
-                        runtime: "test",
-                        runtime_version: "test",
-                        engine_version: yamaa_core::VERSION,
-                        example: "test",
-                        specification: &specification,
-                        base_directory: ".",
-                    },
+                    crate::support::study::identity("test", &specification),
                 )
             }
         }
@@ -180,17 +174,17 @@ mod declaration {
             let study = Study::new();
             // A link reads only the producer's output contract, whatever its
             // language: its labelled columns type the stored artifact.
-            let producer = SPEC.replace("path: output.csv", "path: produced.csv");
+            let producer = SPEC.edit("path: output.csv", "path: produced.csv");
             study.write(
                 "producer.yaml",
-                &producer.replace(
+                &producer.edit(
                     "type: int, derivation",
                     "type: int, label: Identifier, derivation",
                 ),
             );
             study.write(
                 "spec.yaml",
-                &LEGACY.replace(
+                &LEGACY.edit(
                     "input: {SRC: input.csv}",
                     "input: {SRC: {path: produced.csv, schema: producer.yaml}}",
                 ),
@@ -395,7 +389,7 @@ mod declaration {
         fn the_calling_function_refuses_an_unread_version_or_another_type() {
             let closures = closures();
             let error = document::decode(
-                source("spec.yaml", &SPEC.replace("\"1.0\"", "\"1.1\"")),
+                source("spec.yaml", &SPEC.edit("\"1.0\"", "\"1.1\"")),
                 FileType::Spec,
                 Some(LANGUAGE_VERSION),
                 &closures,
@@ -444,9 +438,9 @@ mod declaration {
                     let text = std::str::from_utf8(&module.bytes).unwrap();
                     let text = match module.identity.as_str() {
                         "schema_shared.yaml" => {
-                            text.replace("values: [\"1.0\"]", "values: [\"1.0\", \"1.1\"]")
+                            text.edit("values: [\"1.0\"]", "values: [\"1.0\", \"1.1\"]")
                         }
-                        "schema_spec.yaml" => text.replace(
+                        "schema_spec.yaml" => text.edit(
                             "column_class:\n",
                             "column_class:\n    - added: {type: str, since: \"1.1\"}\n",
                         ),
@@ -465,9 +459,9 @@ mod declaration {
         fn a_document_is_admitted_at_the_version_it_declares() {
             let closures = later_closures();
             let reads = LanguageVersion::new(1);
-            let with_added = SPEC.replace("  - {name: ID, type: int, derivation: SRC.ID}\n", ADDED);
+            let with_added = SPEC.edit("  - {name: ID, type: int, derivation: SRC.ID}\n", ADDED);
             // 1.1 admits the field 1.1 introduced.
-            let newer = with_added.replace("\"1.0\"", "\"1.1\"");
+            let newer = with_added.edit("\"1.0\"", "\"1.1\"");
             versioned("spec.yaml", &newer, FileType::Spec, reads, &closures)
                 .admit()
                 .unwrap();
@@ -505,7 +499,7 @@ mod declaration {
             // A field no version declares keeps the plain cause.
             let error = versioned(
                 "spec.yaml",
-                &SPEC.replace("derivation: SRC.ID}", "derivation: SRC.ID, other: x}"),
+                &SPEC.edit("derivation: SRC.ID}", "derivation: SRC.ID, other: x}"),
                 FileType::Spec,
                 reads,
                 &closures,
@@ -581,8 +575,8 @@ mod declaration {
             study.write(
                 "base.yaml",
                 &BASE
-                    .replace("\"1.0\"", "\"1.1\"")
-                    .replace("  - {name: ID, type: int, derivation: SRC.ID}\n", ADDED),
+                    .edit("\"1.0\"", "\"1.1\"")
+                    .edit("  - {name: ID, type: int, derivation: SRC.ID}\n", ADDED),
             );
             let prepared = prepare(&study, "spec.yaml", reads, &closures).unwrap();
             let versions = prepared
@@ -622,7 +616,7 @@ mod declaration {
             let study = Study::new();
             let closures = closures();
             study.write("spec.yaml", CHILD);
-            study.write("base.yaml", &BASE.replace("\"1.0\"", "\"1.2\""));
+            study.write("base.yaml", &BASE.edit("\"1.0\"", "\"1.2\""));
             let finding =
                 traversal(prepare(&study, "spec.yaml", LANGUAGE_VERSION, &closures).unwrap_err());
             assert_eq!(
@@ -720,10 +714,7 @@ mod declaration {
         fn an_empty_parent_fails_schema_admission_in_its_layer() {
             let study = Study::new();
             let closures = closures();
-            study.write(
-                "spec.yaml",
-                &CHILD.replace("parent: base.yaml", "parent: ''"),
-            );
+            study.write("spec.yaml", &CHILD.edit("parent: base.yaml", "parent: ''"));
             let (layer, found) = layer_findings(
                 prepare(&study, "spec.yaml", LANGUAGE_VERSION, &closures).unwrap_err(),
             );
@@ -786,7 +777,7 @@ mod declaration {
             study.write("ct.yaml", "yamaa: \"1.0\"\ntype: codelists\n");
             study.write(
                 "spec.yaml",
-                &SPEC.replace(
+                &SPEC.edit(
                     "input: {SRC: input.csv}",
                     "input: {SRC: {path: dm.csv, schema: dm.yaml}}",
                 ),
@@ -859,7 +850,7 @@ mod declaration {
                     Value::Object(finding.context.into_iter().collect()),
                     json!({"source": study.path(wrong), "type": other, "expected": expected})
                 );
-                study.write(wrong, &original.replace("\"1.0\"", "\"1.3\""));
+                study.write(wrong, &original.edit("\"1.0\"", "\"1.3\""));
                 let finding = reference_refusal(check(name, file_type).unwrap_err());
                 assert_eq!(
                     finding.code,
@@ -922,7 +913,7 @@ mod declaration {
             );
             study.write(
                 "study/spec.yaml",
-                CHILD.replace("base.yaml", "../shared/base.yaml").as_str(),
+                CHILD.edit("base.yaml", "../shared/base.yaml").as_str(),
             );
             study.write("study/dm.yaml", SPEC);
             let base = study.path("shared/base.yaml");
@@ -994,7 +985,7 @@ mod declaration {
             // And as the file a referencing field names.
             study.write(
                 "consumer.yaml",
-                &SPEC.replace(
+                &SPEC.edit(
                     "input: {SRC: input.csv}",
                     "input: {SRC: {path: dm.csv, schema: base.yaml}}",
                 ),

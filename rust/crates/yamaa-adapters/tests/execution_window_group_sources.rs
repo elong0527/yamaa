@@ -4,6 +4,7 @@
 //! grouped row template's window fails under ROW-5, and a column-level
 //! window under NAME-4, before any data is read. The declarations decide
 //! it, so `check` reports the same refusal.
+use crate::support::Edit as _;
 use std::fs;
 use yamaa_adapters::{file_application, specification_report::Identity};
 use yamaa_core::diagnostic::Diagnostic;
@@ -49,18 +50,11 @@ impl Fixture {
 }
 
 fn identity(specification: &str) -> Identity<'_> {
-    Identity {
-        runtime: "test",
-        runtime_version: "test",
-        engine_version: yamaa_core::VERSION,
-        example: "window-group-sources",
-        specification,
-        base_directory: ".",
-    }
+    crate::support::study::identity("window-group-sources", specification)
 }
 
 fn issue(issue: &Diagnostic) -> yamaa_core::json::Value {
-    yamaa_adapters::json!({"phase":issue.phase(),"condition":issue.condition(),"rule":issue.rule(),"spec_paths":issue.spec_paths,"context":issue.context.clone()})
+    crate::support::study::issue_row(issue)
 }
 
 const HEAD: &str = "schema_version: '1.0'\ndomain: OUT\nkeys: [ID]\n\
@@ -101,7 +95,7 @@ fn grouped_windows_read_only_group_keys_of_the_driver() {
     ] {
         // A field outside the groups is refused, by `check` as by `domain`; a
         // group key and a value of the grouped row both build.
-        let fixture = Fixture::new(&specification.replace("ORDER", "SRC.VAL"));
+        let fixture = Fixture::new(&specification.edit("ORDER", "SRC.VAL"));
         let refused = |identifier: &str, path: &str| {
             let mut context = yamaa_adapters::json!({"identifier": identifier, "dataset": "SRC"});
             if let Some(row) = row {
@@ -123,7 +117,7 @@ fn grouped_windows_read_only_group_keys_of_the_driver() {
         assert!(domain.save().is_err());
         assert_eq!(fixture.check(), vec![refused("SRC.VAL", path)]);
         for order in ["SRC.ID", "LOW"] {
-            let fixture = Fixture::new(&specification.replace("ORDER", order));
+            let fixture = Fixture::new(&specification.edit("ORDER", order));
             assert!(fixture.check().is_empty(), "{order}: {:?}", fixture.check());
             let mut domain = fixture.run();
             assert!(domain.issues().is_empty(), "{order}: {:?}", domain.issues());
@@ -139,14 +133,14 @@ fn grouped_windows_read_only_group_keys_of_the_driver() {
         // the unknown field is reported at its own entry in the same pass.
         // Whether the source stores a field is known only once it is read, so
         // to `check` both fields are driver fields outside the groups.
-        let fixture = Fixture::new(&specification.replace("ORDER", "SRC.VAL, SRC.MISSING"));
+        let fixture = Fixture::new(&specification.edit("ORDER", "SRC.VAL, SRC.MISSING"));
         let domain = fixture.run();
         let reported = domain
             .issues()
             .iter()
             .map(|issue| (issue.condition().to_string(), issue.spec_paths.clone()))
             .collect::<Vec<_>>();
-        let missing = path.replace("order_by[0]", "order_by[1]");
+        let missing = path.edit("order_by[0]", "order_by[1]");
         assert!(
             reported.contains(&("ungrouped_driver_field".into(), vec![path.into()])),
             "{reported:?}"
@@ -161,7 +155,7 @@ fn grouped_windows_read_only_group_keys_of_the_driver() {
         );
         // So a field the source does not store at all is outside the groups to
         // `check`, and unknown to `domain`.
-        let fixture = Fixture::new(&specification.replace("ORDER", "SRC.MISSING"));
+        let fixture = Fixture::new(&specification.edit("ORDER", "SRC.MISSING"));
         assert_eq!(fixture.check(), vec![refused("SRC.MISSING", path)]);
         assert_eq!(
             fixture.run().issues().iter().map(issue).collect::<Vec<_>>(),

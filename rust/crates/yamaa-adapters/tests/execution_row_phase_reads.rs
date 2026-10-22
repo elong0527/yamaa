@@ -4,7 +4,7 @@
 //! the column phase reports the same phase boundary at its own operand,
 //! naming the column and the row template, before any data is read.
 use std::fs;
-use yamaa_adapters::{file_application, specification_report::Identity};
+use yamaa_adapters::file_application;
 use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::domain_entry::Request;
 
@@ -25,14 +25,7 @@ impl Fixture {
                 specification,
                 environment: None,
             },
-            Identity {
-                runtime: "test",
-                runtime_version: "test",
-                engine_version: yamaa_core::VERSION,
-                example: "row-phase-reads",
-                specification,
-                base_directory: ".",
-            },
+            crate::support::study::identity("row-phase-reads", specification),
         )
         .unwrap();
         let issues = domain.issues().to_vec();
@@ -49,14 +42,7 @@ impl Fixture {
                 specification,
                 environment: None,
             },
-            Identity {
-                runtime: "test",
-                runtime_version: "test",
-                engine_version: yamaa_core::VERSION,
-                example: "row-phase-reads",
-                specification,
-                base_directory: ".",
-            },
+            crate::support::study::identity("row-phase-reads", specification),
         )
         .unwrap();
         assert!(domain.issues().is_empty(), "{:?}", domain.issues());
@@ -66,7 +52,7 @@ impl Fixture {
 }
 
 fn issue(issue: &Diagnostic) -> yamaa_core::json::Value {
-    yamaa_adapters::json!({"phase":issue.phase(),"condition":issue.condition(),"rule":issue.rule(),"spec_paths":issue.spec_paths,"context":issue.context.clone()})
+    crate::support::study::issue_row(issue)
 }
 
 #[test]

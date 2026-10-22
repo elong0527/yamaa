@@ -14,6 +14,18 @@ pub fn path(name: &str) -> PathBuf {
         .join(name)
 }
 
+/// Every benchmark, in name order: each directory of `benchmarks/` that
+/// holds a `benchmark.yaml`. The corpus tests narrow it to the cases they read.
+pub fn all() -> Vec<PathBuf> {
+    let mut cases: Vec<_> = std::fs::read_dir(path(""))
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .filter(|case| case.join("benchmark.yaml").is_file())
+        .collect();
+    cases.sort();
+    cases
+}
+
 /// The value of the YAML file at `path`, as JSON.
 pub fn yaml(path: &Path) -> Value {
     fn value(d: &Document, id: usize) -> Value {

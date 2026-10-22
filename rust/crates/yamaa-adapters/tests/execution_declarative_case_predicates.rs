@@ -3,8 +3,9 @@
 mod execution {
     mod declarative_case_predicates {
         //! Independently authored full case reports and unchanged original CSV truth.
+        use crate::support::Edit as _;
         use std::{fs, path::Path};
-        use yamaa_adapters::{file_application, specification_report::Identity};
+        use yamaa_adapters::file_application;
         use yamaa_core::domain_entry::Request;
         struct Fixture(crate::support::Scratch);
         impl Fixture {
@@ -26,14 +27,7 @@ mod execution {
                         specification,
                         environment: None,
                     },
-                    Identity {
-                        runtime: "test",
-                        runtime_version: "test",
-                        engine_version: yamaa_core::VERSION,
-                        example: "independent-case-predicates",
-                        specification,
-                        base_directory: ".",
-                    },
+                    crate::support::study::identity("independent-case-predicates", specification),
                 )
             }
         }
@@ -113,13 +107,13 @@ columns:
         #[test]
         fn filtered_case_source_is_shared_by_columns_and_record_rows() {
             let body = SOURCE
-                .replace("        - when: 'FALSE'\n          then: SRC.BAD\n", "")
-                .replace("when: \"SRC.V > 0\"", "when: 'TRUE'")
-                .replace(
+                .edit("        - when: 'FALSE'\n          then: SRC.BAD\n", "")
+                .edit("when: \"SRC.V > 0\"", "when: 'TRUE'")
+                .edit(
                     "then: {literal: 7}",
                     "then: {source: {variable: SRC.ID, filter: 'SRC.V > 0'}}",
                 )
-                .replace("    type: int", "    type: str");
+                .edit("    type: int", "    type: str");
             for (rows, expected) in [
                 ("", b"ID,VALUE\na,a\nb,\n".as_slice()),
                 (
@@ -350,11 +344,11 @@ columns:
             }
             // An omitted `no_match` answers with missing; `require_match` refuses.
             let body = body
-                .replace(
+                .edit(
                     "    no_match: {literal: null}\n",
                     "    require_match: true\n",
                 )
-                .replace("when: 'P.X IS NOT NULL'", "when: 'FALSE'");
+                .edit("when: 'P.X IS NOT NULL'", "when: 'FALSE'");
             let mut result = fixture.run(&body).unwrap();
             assert!(
                 !result.issues().is_empty(),
@@ -379,12 +373,10 @@ columns:
             ] {
                 assert!(body.contains(pattern), "fixture drifted: {pattern}");
             }
-            let body = body
-                .replace("when: 'P.X IS NOT NULL'", "when: 'FALSE'")
-                .replace(
-                    "require: 'VALUE = P.X AND P.X >= 10'",
-                    "require: \"P.X LIKE 'text%'\"",
-                );
+            let body = body.edit("when: 'P.X IS NOT NULL'", "when: 'FALSE'").edit(
+                "require: 'VALUE = P.X AND P.X >= 10'",
+                "require: \"P.X LIKE 'text%'\"",
+            );
             let mut result = fixture.run(&body).unwrap();
             assert!(
                 !result.issues().is_empty(),
@@ -412,12 +404,12 @@ columns:
                     assert!(body.contains(pattern), "fixture drifted: {pattern}");
                 }
                 let body = body
-                    .replace(
+                    .edit(
                         "output: {path: result.csv,",
                         "output: {path: result.csv, report: report.csv,",
                     )
-                    .replace("  - assert:\n", "  - assert:\n      severity: warning\n")
-                    .replace(pattern, &pattern.replace("P.X", "P.MISSING"));
+                    .edit("  - assert:\n", "  - assert:\n      severity: warning\n")
+                    .replace(pattern, &pattern.edit("P.X", "P.MISSING"));
                 let mut result = fixture.run(&body).unwrap();
                 let definition =
                     yamaa_core::diagnostic::ConditionCode::VerificationUnknownReference
@@ -443,8 +435,9 @@ columns:
     }
     mod declarative_correlated_predicates {
         //! Same-input donor selection retains one captured relation across driver scopes.
+        use crate::support::Edit as _;
         use std::fs;
-        use yamaa_adapters::{file_application, specification_report::Identity};
+        use yamaa_adapters::file_application;
         use yamaa_core::domain_entry::Request;
         struct Fixture(crate::support::Scratch);
         impl Fixture {
@@ -466,14 +459,10 @@ columns:
                         specification,
                         environment: None,
                     },
-                    Identity {
-                        runtime: "test",
-                        runtime_version: "test",
-                        engine_version: yamaa_core::VERSION,
-                        example: "independent-correlated-predicate",
+                    crate::support::study::identity(
+                        "independent-correlated-predicate",
                         specification,
-                        base_directory: ".",
-                    },
+                    ),
                 )
             }
         }
@@ -514,7 +503,7 @@ columns:
             fs::write(fixture.0.join("alt.csv"), "ID,SEQ,CUT\n1,1,4\n3,1,2\n").unwrap();
         }
         fn finding(issue: &yamaa_core::diagnostic::Diagnostic) -> yamaa_core::json::Value {
-            yamaa_adapters::json!({"phase":issue.phase(),"condition":issue.condition(),"rule":issue.rule(),"spec_paths":issue.spec_paths,"context":issue.context.clone()})
+            crate::support::study::issue_row(issue)
         }
         #[test]
         fn complete_root_outputs_and_handler_geometry_are_current_row_specific() {
@@ -538,15 +527,15 @@ columns:
             );
         }
         fn secondary_body(filter: &str) -> String {
-            BODY.replace("  D: {path:","  ALT: {path: alt.csv, types: {ID: int, SEQ: int, CUT: int}}\n  D: {path:")
-        .replace("D.TIME < SRC.CUT",filter)
-        .replace("columns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: SEQ, type: int, derivation: SRC.SEQ}\n  - {name: A, type: str, derivation: P.A}\n  - {name: B, type: str, derivation: P.B}","rows:\n  - id: alternate\n    dataset: ALT\n    derivations: {ID: ALT.ID, SEQ: ALT.SEQ, A: P.A, B: P.B}\ncolumns:\n  - {name: ID, type: int}\n  - {name: SEQ, type: int}\n  - {name: A, type: str}\n  - {name: B, type: str}")
+            BODY.edit("  D: {path:","  ALT: {path: alt.csv, types: {ID: int, SEQ: int, CUT: int}}\n  D: {path:")
+        .edit("D.TIME < SRC.CUT",filter)
+        .edit("columns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: SEQ, type: int, derivation: SRC.SEQ}\n  - {name: A, type: str, derivation: P.A}\n  - {name: B, type: str, derivation: P.B}","rows:\n  - id: alternate\n    dataset: ALT\n    derivations: {ID: ALT.ID, SEQ: ALT.SEQ, A: P.A, B: P.B}\ncolumns:\n  - {name: ID, type: int}\n  - {name: SEQ, type: int}\n  - {name: A, type: str}\n  - {name: B, type: str}")
         }
         #[test]
         fn repeated_donor_and_current_identifiers_share_bindings_without_changing_selection() {
             let fixture = Fixture::new();
             populate(&fixture);
-            let body = BODY.replace(
+            let body = BODY.edit(
                 "D.TIME < SRC.CUT",
                 "D.TIME < SRC.CUT AND (D.TIME IS NULL OR D.TIME < SRC.CUT)",
             );
@@ -607,7 +596,7 @@ columns:
             let fixture = Fixture::new();
             populate(&fixture);
             let mut result = fixture
-                .run(&BODY.replace("D.TIME < SRC.CUT", "D.TIME < D.ID"))
+                .run(&BODY.edit("D.TIME < SRC.CUT", "D.TIME < D.ID"))
                 .unwrap();
             assert!(result.issues().is_empty(), "{:?}", result.issues());
             assert!(result.save().unwrap());
@@ -632,8 +621,8 @@ columns:
             let issues = refusal(
                 &fixture,
                 &BODY
-                    .replace("D.TIME < SRC.CUT", "TIME < SRC.CUT")
-                    .replace("derivation: P.B", "derivation: {literal: unused}"),
+                    .edit("D.TIME < SRC.CUT", "TIME < SRC.CUT")
+                    .edit("derivation: P.B", "derivation: {literal: unused}"),
             );
             assert_eq!(
                 issues,
@@ -647,7 +636,7 @@ columns:
     mod declarative_flags {
         //! Unchanged public originals and independently captured authored witnesses.
         use std::{fs, path::Path};
-        use yamaa_adapters::{file_application, specification_report::Identity};
+        use yamaa_adapters::file_application;
         use yamaa_core::domain_entry::Request;
         struct Fixture(crate::support::Scratch);
         impl Fixture {
@@ -687,19 +676,15 @@ columns:
                         specification: &specification,
                         environment: None,
                     },
-                    Identity {
-                        runtime: "test",
-                        runtime_version: "test",
-                        engine_version: yamaa_core::VERSION,
-                        example: name,
-                        specification: &specification,
-                        base_directory: ".",
-                    },
+                    crate::support::study::identity(name, &specification),
                 )
             }
         }
         fn issues(issues: &[yamaa_core::diagnostic::Diagnostic]) -> Vec<yamaa_core::json::Value> {
-            issues.iter().map(|i|yamaa_adapters::json!({"phase":i.phase(),"condition":i.condition(),"rule":i.rule(),"spec_paths":i.spec_paths,"context":i.context.clone()})).collect()
+            issues
+                .iter()
+                .map(crate::support::study::issue_row)
+                .collect()
         }
         fn reference() -> yamaa_core::json::Value {
             yamaa_adapters::json_wire::decode(include_str!("fixtures/flag_reference.json")).unwrap()
@@ -860,8 +845,9 @@ columns:
     }
     mod declarative_intermediate_admission {
         //! Complete independent truth for applicable keys and declaration error precedence.
+        use crate::support::Edit as _;
         use std::fs;
-        use yamaa_adapters::{file_application, specification_report::Identity};
+        use yamaa_adapters::file_application;
         use yamaa_core::domain_entry::Request;
         struct Fixture(crate::support::Scratch);
         impl Fixture {
@@ -883,26 +869,14 @@ columns:
                         specification,
                         environment: None,
                     },
-                    Identity {
-                        runtime: "test",
-                        runtime_version: "test",
-                        engine_version: yamaa_core::VERSION,
-                        example: "independent-intermediate-admission",
+                    crate::support::study::identity(
+                        "independent-intermediate-admission",
                         specification,
-                        base_directory: ".",
-                    },
+                    ),
                 )
             }
         }
-        fn issues(
-            result: Result<file_application::Domain, Vec<yamaa_core::diagnostic::Diagnostic>>,
-        ) -> Vec<yamaa_core::json::Value> {
-            let records = match result {
-                Ok(result) => result.issues().to_vec(),
-                Err(records) => records,
-            };
-            records.iter().map(|issue| yamaa_adapters::json!({"phase":issue.phase(),"condition":issue.condition(),"rule":issue.rule(),"spec_paths":issue.spec_paths,"context":issue.context.clone()})).collect()
-        }
+        use crate::support::study::issues;
         const BODY: &str = r#"schema_version: '1.0'
 domain: TEST
 base: SRC
@@ -952,7 +926,7 @@ columns:
         #[test]
         fn rename_only_precedes_key_types_and_every_study_read() {
             let fixture = Fixture::new();
-            let body = BODY.replace("    order_by: [DONOR.SEQ]\n    keep: first\n", "");
+            let body = BODY.edit("    order_by: [DONOR.SEQ]\n    keep: first\n", "");
             assert_eq!(
                 issues(fixture.run(&body)),
                 vec![
@@ -965,14 +939,14 @@ columns:
         fn unused_rename_only_handler_survives_explicit_composition_and_empty_child() {
             let fixture = Fixture::new();
             let body = BODY
-                .replace("    order_by: [DONOR.SEQ]\n    keep: first\n", "")
-                .replace("derivation: P.A", "derivation: {literal: a}")
-                .replace("derivation: P.B", "derivation: {literal: b}");
+                .edit("    order_by: [DONOR.SEQ]\n    keep: first\n", "")
+                .edit("derivation: P.A", "derivation: {literal: a}")
+                .edit("derivation: P.B", "derivation: {literal: b}");
             fs::write(fixture.0.join("parent.yaml"), &body).unwrap();
             // Explicit composition: the complete declaration in an entry whose
             // parent contributes nothing but the schema version.
             fs::write(fixture.0.join("base.yaml"), "schema_version: '1.0'\n").unwrap();
-            let explicit = body.replace("domain: TEST", "parent: base.yaml\ndomain: TEST");
+            let explicit = body.edit("domain: TEST", "parent: base.yaml\ndomain: TEST");
             for authored in [
                 body,
                 explicit,
@@ -1014,8 +988,8 @@ columns:
             // reports unknown_field as well — the same pair a composed
             // specification (one with a parent) reports.
             let unused = BODY
-                .replace("derivation: P.B", "derivation: {literal: b}")
-                .replace("types: {ID: float, SEQ: int}", "types: {SEQ: int}");
+                .edit("derivation: P.B", "derivation: {literal: b}")
+                .edit("types: {ID: float, SEQ: int}", "types: {SEQ: int}");
             assert_eq!(
                 issues(fixture.run(&unused)),
                 vec![
@@ -1024,7 +998,7 @@ columns:
                 ]
             );
             fs::write(fixture.0.join("donor.csv"), "ID,PARAM,SEQ,A,B\nx,0,0,a,b\n").unwrap();
-            let mismatched = unused.replace("types: {SEQ: int}", "types: {SEQ: int, PARAM: int}");
+            let mismatched = unused.edit("types: {SEQ: int}", "types: {SEQ: int, PARAM: int}");
             assert_eq!(
                 issues(fixture.run(&mismatched)),
                 vec![
@@ -1037,7 +1011,7 @@ columns:
     mod declarative_intermediate_single_key {
         //! LOOKUP-5 single-column key list retains exact integers and shared donor choice.
         use std::fs;
-        use yamaa_adapters::{file_application, specification_report::Identity};
+        use yamaa_adapters::file_application;
         use yamaa_core::domain_entry::Request;
         struct Fixture(crate::support::Scratch);
         impl Fixture {
@@ -1078,14 +1052,7 @@ columns:
                         specification: path,
                         environment: None,
                     },
-                    Identity {
-                        runtime: "test",
-                        runtime_version: "test",
-                        engine_version: yamaa_core::VERSION,
-                        example: "independent-key-shorthand",
-                        specification: path,
-                        base_directory: ".",
-                    },
+                    crate::support::study::identity("independent-key-shorthand", path),
                 )
                 .unwrap()
             }
@@ -1120,8 +1087,9 @@ columns:
     }
     mod declarative_intermediate_keys {
         //! Unchanged public YAML and independent plain-reference outputs/findings.
+        use crate::support::Edit as _;
         use std::fs;
-        use yamaa_adapters::{file_application, specification_report::Identity};
+        use yamaa_adapters::file_application;
         use yamaa_core::domain_entry::Request;
         struct Fixture(crate::support::Scratch);
         impl Fixture {
@@ -1139,14 +1107,7 @@ columns:
                     fs::write(self.0.join(path), input.as_str().unwrap()).unwrap();
                 }
                 let specification = self.0.join("spec.yaml").to_str().unwrap().to_owned();
-                let identity = Identity {
-                    runtime: "test",
-                    runtime_version: "test",
-                    engine_version: yamaa_core::VERSION,
-                    example: name,
-                    specification: &specification,
-                    base_directory: ".",
-                };
+                let identity = crate::support::study::identity(name, &specification);
                 file_application::domain(
                     yamaa_core::project_function::Language::Python,
                     Request {
@@ -1165,19 +1126,12 @@ columns:
                         specification: &specification,
                         environment: None,
                     },
-                    Identity {
-                        runtime: "test",
-                        runtime_version: "test",
-                        engine_version: yamaa_core::VERSION,
-                        example: "source-key-filter-check",
-                        specification: &specification,
-                        base_directory: ".",
-                    },
+                    crate::support::study::identity("source-key-filter-check", &specification),
                 )
             }
         }
         fn issue_json(issue: &yamaa_core::diagnostic::Diagnostic) -> yamaa_core::json::Value {
-            yamaa_adapters::json!({"phase":issue.phase(),"condition":issue.condition(),"rule":issue.rule(),"spec_paths":issue.spec_paths,"context":issue.context.clone()})
+            crate::support::study::issue_row(issue)
         }
         #[test]
         fn independent_original_language_captures_match_all_output_bytes_and_complete_findings() {
@@ -1251,7 +1205,7 @@ columns:
             .unwrap();
             let mut case = cases["dependency_before_bad_filter"].clone();
             case["specification"] =
-                yamaa_adapters::json!(case["specification"].as_str().unwrap().replace(
+                yamaa_adapters::json!(case["specification"].as_str().unwrap().edit(
                     "key: {K: {str_pad: {source: SRC.N, width: 8}}}",
                     "key: {KINT: SRC.N}"
                 ));
@@ -1310,7 +1264,7 @@ columns:
             }
             "boolean_missing" => {
                 case["inputs"]["tab.csv"] = yamaa_adapters::json!("K,KINT,KNUM,VAL\n\"       7\",,7,A\n");
-                case["specification"] = yamaa_adapters::json!(case["specification"].as_str().unwrap().replace("TAB.KINT > 'bad'", "FALSE AND TAB.KINT > 'bad'"));
+                case["specification"] = yamaa_adapters::json!(case["specification"].as_str().unwrap().edit("TAB.KINT > 'bad'", "FALSE AND TAB.KINT > 'bad'"));
             }
             _ => unreachable!(),
         }
@@ -1387,7 +1341,7 @@ columns:
                 case["specification"] = yamaa_adapters::json!(case["specification"]
                     .as_str()
                     .unwrap()
-                    .replace("filter: \"TAB.KINT > 'bad'\"", filter));
+                    .edit("filter: \"TAB.KINT > 'bad'\"", filter));
                 let fixture = Fixture::new();
                 let mut result = fixture.run("valid-expression-key-filter", &case);
                 assert!(fixture.check().is_empty());
@@ -1404,8 +1358,9 @@ columns:
     }
     mod declarative_intermediate_ranges {
         //! Complete independent reports for inclusive ranges and visible donor columns.
+        use crate::support::Edit as _;
         use std::{fs, path::PathBuf};
-        use yamaa_adapters::{file_application, specification_report::Identity};
+        use yamaa_adapters::file_application;
         use yamaa_core::domain_entry::Request;
         struct Fixture(crate::support::Scratch);
         impl Fixture {
@@ -1423,14 +1378,7 @@ columns:
                         specification: path,
                         environment: None,
                     },
-                    Identity {
-                        runtime: "test",
-                        runtime_version: "test",
-                        engine_version: yamaa_core::VERSION,
-                        example: "independent-intermediate-range",
-                        specification: path,
-                        base_directory: ".",
-                    },
+                    crate::support::study::identity("independent-intermediate-range", path),
                 )
                 .unwrap()
             }
@@ -1539,7 +1487,7 @@ columns:
             let f = Fixture::new();
             populate(&f);
             let mut result =
-                f.run(&BODY.replace("value: X, lower: LOW, upper: HIGH", "value: X, upper: HIGH"));
+                f.run(&BODY.edit("value: X, lower: LOW, upper: HIGH", "value: X, upper: HIGH"));
             assert!(result.issues().is_empty(), "{:?}", result.issues());
             assert!(result.save().unwrap());
             assert_eq!(fs::read(f.0.join("result.csv")).unwrap(), b"ID,SEQ,X,A,B\n1,1,3,later,paired\n1,2,4,later,paired\n1,3,,absent,absent\n1,4,6,missing-bound,hidden\n2,1,3,absent,absent\n1,5,2,later,paired\n");
@@ -1557,7 +1505,7 @@ columns:
         fn a_hidden_read_has_the_complete_original_reference_finding_and_no_output() {
             let f = Fixture::new();
             populate(&f);
-            let mut result = f.run(&BODY.replace("derivation: P.W", "derivation: P.LOW"));
+            let mut result = f.run(&BODY.edit("derivation: P.W", "derivation: P.LOW"));
             assert_eq!(
                 result
                     .issues()
@@ -1580,34 +1528,51 @@ columns:
             assert!(!f.0.join("result.csv").exists());
         }
         #[test]
-        fn integer_absence_replacement_retains_full_signed_integer_value_and_ledger() {
-            let f = Fixture::new();
-            fs::write(f.0.join("src.csv"), "ID,SEQ,X\n2,1,3\n").unwrap();
-            fs::write(
-                f.0.join("donor.csv"),
-                "ID,LOW,HIGH,ORD,ELIG,V,W\n1,1,4,1,Y,3,4\n",
-            )
-            .unwrap();
-            let body = BODY
-                .replace("no_match: absent", "no_match: -9223372036854775808")
-                .replace("name: A, type: str", "name: A, type: int")
-                .replace("name: B, type: str", "name: B, type: int");
-            let mut result = f.run(&body);
-            assert!(result.issues().is_empty(), "{:?}", result.issues());
-            assert!(result.save().unwrap());
-            assert_eq!(
-                fs::read(f.0.join("result.csv")).unwrap(),
-                b"ID,SEQ,X,A,B\n2,1,3,-9223372036854775808,-9223372036854775808\n"
-            );
-            assert_eq!(
-                result.observations()["handler_counts"],
-                yamaa_adapters::json!([
-                    {"spec_path":"columns.A.derivation.source.multiple_matches","handler":"multiple_matches","count":0},
-                    {"spec_path":"columns.A.derivation.source.no_match","handler":"no_match","count":1},
-                    {"spec_path":"columns.B.derivation.source.multiple_matches","handler":"multiple_matches","count":0},
-                    {"spec_path":"columns.B.derivation.source.no_match","handler":"no_match","count":1}
-                ])
-            );
+        fn typed_absence_replacements_keep_their_full_value_and_ledger() {
+            for (case, replacement, kind, expected) in [
+                (
+                    "integer",
+                    "-9223372036854775808",
+                    "int",
+                    b"ID,SEQ,X,A,B\n2,1,3,-9223372036854775808,-9223372036854775808\n".as_slice(),
+                ),
+                (
+                    "float",
+                    "0.5",
+                    "float",
+                    b"ID,SEQ,X,A,B\n2,1,3,0.5,0.5\n".as_slice(),
+                ),
+            ] {
+                let f = Fixture::new();
+                fs::write(f.0.join("src.csv"), "ID,SEQ,X\n2,1,3\n").unwrap();
+                fs::write(
+                    f.0.join("donor.csv"),
+                    "ID,LOW,HIGH,ORD,ELIG,V,W\n1,1,4,1,Y,3,4\n",
+                )
+                .unwrap();
+                let body = BODY
+                    .edit("no_match: absent", &format!("no_match: {replacement}"))
+                    .edit("name: A, type: str", &format!("name: A, type: {kind}"))
+                    .edit("name: B, type: str", &format!("name: B, type: {kind}"));
+                let mut result = f.run(&body);
+                assert!(result.issues().is_empty(), "{case}: {:?}", result.issues());
+                assert!(result.save().unwrap(), "{case}");
+                assert_eq!(
+                    fs::read(f.0.join("result.csv")).unwrap(),
+                    expected,
+                    "{case}"
+                );
+                assert_eq!(
+                    result.observations()["handler_counts"],
+                    yamaa_adapters::json!([
+                        {"spec_path":"columns.A.derivation.source.multiple_matches","handler":"multiple_matches","count":0},
+                        {"spec_path":"columns.A.derivation.source.no_match","handler":"no_match","count":1},
+                        {"spec_path":"columns.B.derivation.source.multiple_matches","handler":"multiple_matches","count":0},
+                        {"spec_path":"columns.B.derivation.source.no_match","handler":"no_match","count":1}
+                    ]),
+                    "{case}"
+                );
+            }
         }
 
         #[test]
@@ -1615,9 +1580,9 @@ columns:
             let f = Fixture::new();
             populate(&f);
             let body = BODY
-        .replace("\ncolumns:\n", "\nrows:\n  - id: selected\n    dataset: SRC\n    derivations: {A: P.V, B: P.W}\ncolumns:\n")
-        .replace("name: A, type: str, derivation: P.V", "name: A, type: str")
-        .replace("name: B, type: str, derivation: P.W", "name: B, type: str");
+        .edit("\ncolumns:\n", "\nrows:\n  - id: selected\n    dataset: SRC\n    derivations: {A: P.V, B: P.W}\ncolumns:\n")
+        .edit("name: A, type: str, derivation: P.V", "name: A, type: str")
+        .edit("name: B, type: str, derivation: P.W", "name: B, type: str");
             let mut result = f.run(&body);
             assert!(result.issues().is_empty(), "{:?}", result.issues());
             assert!(result.save().unwrap());
@@ -1634,37 +1599,6 @@ columns:
         }
 
         #[test]
-        fn float_absence_replacement_is_a_value_with_complete_per_read_observations() {
-            let f = Fixture::new();
-            fs::write(f.0.join("src.csv"), "ID,SEQ,X\n2,1,3\n").unwrap();
-            fs::write(
-                f.0.join("donor.csv"),
-                "ID,LOW,HIGH,ORD,ELIG,V,W\n1,1,4,1,Y,3,4\n",
-            )
-            .unwrap();
-            let body = BODY
-                .replace("no_match: absent", "no_match: 0.5")
-                .replace("name: A, type: str", "name: A, type: float")
-                .replace("name: B, type: str", "name: B, type: float");
-            let mut result = f.run(&body);
-            assert!(result.issues().is_empty(), "{:?}", result.issues());
-            assert!(result.save().unwrap());
-            assert_eq!(
-                fs::read(f.0.join("result.csv")).unwrap(),
-                b"ID,SEQ,X,A,B\n2,1,3,0.5,0.5\n"
-            );
-            assert_eq!(
-                result.observations()["handler_counts"],
-                yamaa_adapters::json!([
-                    {"spec_path":"columns.A.derivation.source.multiple_matches","handler":"multiple_matches","count":0},
-                    {"spec_path":"columns.A.derivation.source.no_match","handler":"no_match","count":1},
-                    {"spec_path":"columns.B.derivation.source.multiple_matches","handler":"multiple_matches","count":0},
-                    {"spec_path":"columns.B.derivation.source.no_match","handler":"no_match","count":1}
-                ])
-            );
-        }
-
-        #[test]
         fn boolean_absence_replacement_reaches_a_null_test_without_conversion() {
             let f = Fixture::new();
             fs::write(f.0.join("src.csv"), "ID,SEQ,X\n2,1,3\n").unwrap();
@@ -1673,9 +1607,9 @@ columns:
                 "ID,LOW,HIGH,ORD,ELIG,V,W\n1,1,4,1,Y,3,4\n",
             )
             .unwrap();
-            let body = BODY.replace("no_match: absent", "no_match: true")
-        .replace("derivation: P.V", "derivation: {flag: {condition: 'P.V IS NOT NULL', true_value: Y, false_value: N, missing: {literal: null}}}")
-        .replace("derivation: P.W", "derivation: {flag: {condition: 'P.W IS NOT NULL', true_value: Y, false_value: N, missing: {literal: null}}}");
+            let body = BODY.edit("no_match: absent", "no_match: true")
+        .edit("derivation: P.V", "derivation: {flag: {condition: 'P.V IS NOT NULL', true_value: Y, false_value: N, missing: {literal: null}}}")
+        .edit("derivation: P.W", "derivation: {flag: {condition: 'P.W IS NOT NULL', true_value: Y, false_value: N, missing: {literal: null}}}");
             let mut result = f.run(&body);
             assert!(result.issues().is_empty(), "{:?}", result.issues());
             assert!(result.save().unwrap());
@@ -1707,7 +1641,7 @@ columns:
                 "ID,LOW,HIGH,ORD,ELIG,V,W\n1,9007199254740992,9007199254740992,1,Y,edge,paired\n",
             )
             .unwrap();
-            let body = BODY.replace("LOW: int, HIGH: int", "LOW: float, HIGH: float");
+            let body = BODY.edit("LOW: int, HIGH: int", "LOW: float, HIGH: float");
             let mut result = f.run(&body);
             assert!(result.issues().is_empty(), "{:?}", result.issues());
             assert!(result.save().unwrap());
@@ -1767,8 +1701,9 @@ columns:
     }
     mod declarative_output_ordering {
         //! Authored public-file observations and immutable original benchmark artifacts.
+        use crate::support::Edit as _;
         use std::{fs, path::Path};
-        use yamaa_adapters::{file_application, specification_report::Identity};
+        use yamaa_adapters::file_application;
         use yamaa_core::diagnostic::Diagnostic;
         use yamaa_core::domain_entry::Request;
         struct Fixture(crate::support::Scratch);
@@ -1803,14 +1738,7 @@ columns:
                         specification: &specification,
                         environment: None,
                     },
-                    Identity {
-                        runtime: "test",
-                        runtime_version: "test",
-                        engine_version: yamaa_core::VERSION,
-                        example: "test",
-                        specification: &specification,
-                        base_directory: ".",
-                    },
+                    crate::support::study::identity("test", &specification),
                 )
             }
         }
@@ -1845,7 +1773,7 @@ columns:
             for (source, expected) in [
                 (spec.to_owned(), b"ID\nb\nc\na\n".as_slice()),
                 (
-                    spec.replace(", order_by: [SORT]", ""),
+                    spec.edit(", order_by: [SORT]", ""),
                     b"ID\na\nb\nc\n".as_slice(),
                 ),
             ] {
@@ -2181,8 +2109,9 @@ columns:
     }
     mod declarative_primary_intermediates {
         //! Same-input donor selection retains one captured relation across driver scopes.
+        use crate::support::Edit as _;
         use std::fs;
-        use yamaa_adapters::{file_application, specification_report::Identity};
+        use yamaa_adapters::file_application;
         use yamaa_core::domain_entry::Request;
         struct Fixture(crate::support::Scratch);
         impl Fixture {
@@ -2204,14 +2133,10 @@ columns:
                         specification,
                         environment: None,
                     },
-                    Identity {
-                        runtime: "test",
-                        runtime_version: "test",
-                        engine_version: yamaa_core::VERSION,
-                        example: "independent-primary-intermediate",
+                    crate::support::study::identity(
+                        "independent-primary-intermediate",
                         specification,
-                        base_directory: ".",
-                    },
+                    ),
                 )
             }
         }
@@ -2269,10 +2194,10 @@ columns:
             let fixture = Fixture::new();
             populate(&fixture);
             fs::write(fixture.0.join("alt.csv"), "ID\n1\n3\n2\n").unwrap();
-            let body = BODY.replace("keys: [ID, SEQ]", "keys: [ID]")
-        .replace("  SRC: {path: src.csv, types: {ID: int, SEQ: int}}", "  SRC: {path: src.csv, types: {ID: int, SEQ: int}}\n  ALT: {path: alt.csv, types: {ID: int}}")
-        .replace("output: {path: result.csv, columns: [ID, SEQ, A, B]}", "output: {path: result.csv, columns: [ID, A, B]}")
-        .replace("columns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: SEQ, type: int, derivation: SRC.SEQ}\n  - {name: A, type: str, derivation: P.A}\n  - {name: B, type: str, derivation: P.B}", "rows:\n  - id: alternate\n    dataset: ALT\n    derivations: {ID: ALT.ID, A: P.A, B: P.B}\ncolumns:\n  - {name: ID, type: int}\n  - {name: A, type: str}\n  - {name: B, type: str}");
+            let body = BODY.edit("keys: [ID, SEQ]", "keys: [ID]")
+        .edit("  SRC: {path: src.csv, types: {ID: int, SEQ: int}}", "  SRC: {path: src.csv, types: {ID: int, SEQ: int}}\n  ALT: {path: alt.csv, types: {ID: int}}")
+        .edit("output: {path: result.csv, columns: [ID, SEQ, A, B]}", "output: {path: result.csv, columns: [ID, A, B]}")
+        .edit("columns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: SEQ, type: int, derivation: SRC.SEQ}\n  - {name: A, type: str, derivation: P.A}\n  - {name: B, type: str, derivation: P.B}", "rows:\n  - id: alternate\n    dataset: ALT\n    derivations: {ID: ALT.ID, A: P.A, B: P.B}\ncolumns:\n  - {name: ID, type: int}\n  - {name: A, type: str}\n  - {name: B, type: str}");
             let mut result = fixture.run(&body).unwrap();
             assert!(result.issues().is_empty(), "{:?}", result.issues());
             assert!(result.save().unwrap());
@@ -2294,7 +2219,7 @@ columns:
     mod declarative_row_intermediates {
         //! Unchanged public YAML and independent plain-reference outputs/findings.
         use std::fs;
-        use yamaa_adapters::{file_application, specification_report::Identity};
+        use yamaa_adapters::file_application;
         use yamaa_core::domain_entry::Request;
         struct Fixture(crate::support::Scratch);
         impl Fixture {
@@ -2304,7 +2229,7 @@ columns:
             }
         }
         fn issue_json(issue: &yamaa_core::diagnostic::Diagnostic) -> yamaa_core::json::Value {
-            yamaa_adapters::json!({"phase":issue.phase(),"condition":issue.condition(),"rule":issue.rule(),"spec_paths":issue.spec_paths,"context":issue.context.clone()})
+            crate::support::study::issue_row(issue)
         }
         #[test]
         fn complete_independent_record_contexts_and_unchanged_original() {
@@ -2334,14 +2259,7 @@ columns:
                     fs::write(path, input.as_str().unwrap()).unwrap();
                 }
                 let specification = fixture.0.join("spec.yaml").to_str().unwrap().to_owned();
-                let identity = Identity {
-                    runtime: "test",
-                    runtime_version: "test",
-                    engine_version: yamaa_core::VERSION,
-                    example: name,
-                    specification: &specification,
-                    base_directory: ".",
-                };
+                let identity = crate::support::study::identity(name, &specification);
                 let built = file_application::domain(
                     yamaa_core::project_function::Language::Python,
                     Request {
