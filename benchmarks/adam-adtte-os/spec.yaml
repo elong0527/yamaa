@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADTTE
 keys: [STUDYID, USUBJID, PARAMCD]
 input:
@@ -25,7 +27,6 @@ intermediates:
       AND ADRS.ANL01FL = 'Y' AND ADRS.ADT IS NOT NULL"
     order_by: [ADRS.ADT, ADRS.ASEQ]
     keep: first
-    no_match: {literal: null}
 
 columns:
   - name: STUDYID
@@ -41,12 +42,12 @@ columns:
   - name: PARAMCD
     type: str
     label: Parameter Code
-    derivation: {literal: OS}
+    derivation: "'OS'"
 
   - name: PARAM
     type: str
     label: Parameter
-    derivation: {literal: Overall Survival}
+    derivation: "'Overall Survival'"
 
   - name: STARTDT
     type: date
@@ -89,7 +90,7 @@ columns:
         start: STARTDT
         end: ADT
         unit: day
-        bounds: inclusive
+        closed: both
 
   - name: CNSR
     type: int
@@ -97,8 +98,8 @@ columns:
     derivation:
       case:
         - when: "DEATHDT IS NOT NULL"
-          then: {literal: 0}
-        - otherwise: {literal: 1}
+          then: 0
+        - otherwise: 1
 
   - name: EVNTDESC
     type: str
@@ -106,10 +107,10 @@ columns:
     derivation:
       case:
         - when: "DEATHDT IS NOT NULL"
-          then: {literal: Death}
+          then: "'Death'"
         - when: "CENSORDT1 > STARTDT"
-          then: {literal: Alive}
-        - otherwise: {literal: Randomization}
+          then: "'Alive'"
+        - otherwise: "'Randomization'"
 
   - name: CNSDTDSC
     type: str
@@ -117,9 +118,9 @@ columns:
     derivation:
       case:
         - when: "DEATHDT IS NULL AND CENSORDT1 > STARTDT"
-          then: {literal: Alive During Study}
+          then: "'Alive During Study'"
         - when: "DEATHDT IS NULL"
-          then: {literal: Randomization}
+          then: "'Randomization'"
 
   - name: SRCDOM
     type: str
@@ -127,8 +128,8 @@ columns:
     derivation:
       case:
         - when: "DEATHDT IS NOT NULL"
-          then: {literal: ADRS}
-        - otherwise: {literal: ADSL}
+          then: "'ADRS'"
+        - otherwise: "'ADSL'"
 
   - name: SRCVAR
     type: str
@@ -136,10 +137,10 @@ columns:
     derivation:
       case:
         - when: "DEATHDT IS NOT NULL"
-          then: {literal: ADT}
+          then: "'ADT'"
         - when: "CENSORDT1 > STARTDT"
-          then: {literal: LSTALVDT}
-        - otherwise: {literal: RANDDT}
+          then: "'LSTALVDT'"
+        - otherwise: "'RANDDT'"
 
   - name: SRCSEQ
     type: int

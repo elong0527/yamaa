@@ -1,9 +1,11 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADRS
 keys: [STUDYID, USUBJID, ASEQ]
 input:
   ADRS_RAW: {path: input/adrs_raw.csv, types: {ADT: date}}
-  ADSL: {path: input/adsl.csv, types: {NTXSTDT: date}}
+  ADSL: {path: input/adsl.csv, types: {NTXSTDT: date}, key: [STUDYID, USUBJID]}
 base: ADRS_RAW
 
 output:
@@ -63,20 +65,20 @@ columns:
     derivation:
       case:
         - when: "NTXSTDT IS NOT NULL AND ADT >= NTXSTDT"
-          then: {literal: null}
+          then: null
         - when: "AVALC = 'CR'"
-          then: {literal: CR}
+          then: "'CR'"
         - when: "AVALC = 'PR'"
-          then: {literal: PR}
+          then: "'PR'"
         - when: "AVALC = 'SD' AND RANDDY >= 42"
-          then: {literal: SD}
+          then: "'SD'"
         - when: "AVALC = 'NON-CR/NON-PD' AND RANDDY >= 42"
-          then: {literal: NON-CR/NON-PD}
+          then: "'NON-CR/NON-PD'"
         - when: "AVALC = 'PD'"
-          then: {literal: PD}
+          then: "'PD'"
         - when: "AVALC IN ('SD', 'NON-CR/NON-PD', 'NE')"
-          then: {literal: NE}
-        - otherwise: {literal: null}
+          then: "'NE'"
+        - otherwise: null
     verifications:
       - allowed_values:
           values: [CR, PR, SD, NON-CR/NON-PD, PD, NE]
@@ -94,7 +96,6 @@ columns:
           NON-CR/NON-PD: 4
           PD: 5
           NE: 6
-        missing: {literal: null}
     verifications:
       - range: {min: 1, max: 6}
 

@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
@@ -17,9 +19,9 @@ columns:
       core: Req
       mandatory: true
       length: 20
-      origin:
-        type: Predecessor
-        description: ADSL_RAW.STUDYID
+      origins:
+        - type: Predecessor
+          description: ADSL_RAW.STUDYID
 
   - name: USUBJID
     type: str
@@ -29,9 +31,9 @@ columns:
       core: Req
       mandatory: true
       length: 30
-      origin:
-        type: Predecessor
-        description: ADSL_RAW.USUBJID
+      origins:
+        - type: Predecessor
+          description: ADSL_RAW.USUBJID
 
   - name: TRT01A
     type: str
@@ -41,9 +43,9 @@ columns:
       core: Cond
       mandatory: true
       length: 20
-      origin:
-        type: Predecessor
-        description: ADSL_RAW.TRT01A
+      origins:
+        - type: Predecessor
+          description: ADSL_RAW.TRT01A
 
   - name: AGE
     type: int
@@ -54,9 +56,9 @@ columns:
       mandatory: true
       length: 3
       display_format: "3."
-      origin:
-        type: Predecessor
-        description: ADSL_RAW.AGE
+      origins:
+        - type: Predecessor
+          description: ADSL_RAW.AGE
 
   - name: HEIGHTBL
     type: float
@@ -68,9 +70,9 @@ columns:
       length: 5
       significant_digits: 1
       display_format: "5.1"
-      origin:
-        type: Predecessor
-        description: ADSL_RAW.HEIGHTBL
+      origins:
+        - type: Predecessor
+          description: ADSL_RAW.HEIGHTBL
 
   - name: TRTSDTM
     type: datetime
@@ -79,9 +81,9 @@ columns:
     submission:
       core: Perm
       mandatory: false
-      origin:
-        type: Predecessor
-        description: ADSL_RAW.TRTSDTC
+      origins:
+        - type: Predecessor
+          description: ADSL_RAW.TRTSDTC
 
   - name: TRTSDT
     type: date
@@ -92,8 +94,8 @@ columns:
     submission:
       core: Cond
       mandatory: false
-      origin:
-        type: Derived
+      origins:
+        - type: Derived
       method: Date part of TRTSDTM.
 
 submission:

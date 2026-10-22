@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: SDTM
 domain: LB
 keys: [STUDYID, USUBJID, LBSEQ]
 input:
@@ -13,7 +15,7 @@ columns:
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
-    derivation: {literal: LB}
+    derivation: "'LB'"
 
   - name: STUDYID
     type: str
@@ -28,17 +30,17 @@ columns:
   - name: LBTESTCD
     type: str
     label: Lab Test or Examination Short Name
-    derivation: {literal: IL13}
+    derivation: "'IL13'"
 
   - name: LBTEST
     type: str
     label: Lab Test or Examination Name
-    derivation: {literal: Interleukin 13}
+    derivation: "'Interleukin 13'"
 
   - name: LBSPEC
     type: str
     label: Specimen Material Type
-    derivation: {literal: SKIN}
+    derivation: "'SKIN'"
 
   - name: LBLOC
     type: str
@@ -77,7 +79,7 @@ columns:
     derivation:
       case:
         - when: "LBORRES IS NULL"
-          then: {literal: NOT DONE}
+          then: "'NOT DONE'"
     verifications:
       - allowed_values:
           values: [NOT DONE]
@@ -87,13 +89,13 @@ rows:
   - id: lesional
     filter: "BX_RAW.COHORT <> 'NONAD'"
     derivations:
-      LBLOC: {literal: LESIONAL}
+      LBLOC: "'LESIONAL'"
       LBORRES: BX_RAW.LESRES
 
   # Every subject.
   - id: non_lesional
     derivations:
-      LBLOC: {literal: NON-LESIONAL}
+      LBLOC: "'NON-LESIONAL'"
       LBORRES: BX_RAW.NLESRES
 
 verifications:

@@ -1,10 +1,6 @@
 # Shared Define fixture; fixed creation time is supplied by the public call.
-schema_version: '1.0'
-study:
-  id: YAMAA-01
-  name: YAMAA-01
-  description: Example study demonstrating MedDRA coding terminology
-  protocol_name: YAMAA-01
+yamaa: "1.0"
+type: project
 codelists:
 - codelists:
   - id: MEDDRA
@@ -12,17 +8,25 @@ codelists:
     external:
       dictionary: MedDRA
       version: '26.1'
-    data_type: text
+study:
+  id: YAMAA-01
+  name: YAMAA-01
+  description: Example study demonstrating MedDRA coding terminology
+  protocol_name: YAMAA-01
+
 sdtm:
-  standard:
-    name: SDTMIG
-    version: '3.4'
-    status: Final
   specs:
   - spec.yaml
+  standards:
+  - name: SDTMIG
+    version: '3.4'
+    status: Final
   define: define.xml
-  context: Submission
-  xml_lang: en
+  documents:
+  - id: acrf
+    kind: annotated_crf
+    link: acrf.pdf
+    title: Annotated Case Report Form
   file_oid: www.example.org/YAMAA-01/1/Define-XML_2.1
   metadata_version:
     id: YAMAA-01.1
@@ -30,8 +34,3 @@ sdtm:
     description: Tabulation data definitions for YAMAA-01
   originator: Example Sponsor
   source_system_version: '1.0'
-  documents:
-  - id: acrf
-    kind: annotated_crf
-    link: acrf.pdf
-    title: Annotated Case Report Form

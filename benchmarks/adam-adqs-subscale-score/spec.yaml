@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADQS
 keys: [STUDYID, USUBJID, VISIT, PARAMCD]
 input:
@@ -68,11 +70,9 @@ columns:
     derivation:
       case:
         - when: "PARAMCD = 'PFSCORE' AND ITEMANS >= 3"
-          then:
-            compute:
-              expr: "100 * (ITEMSUM / ITEMANS) / 4"
+          then: "100 * (ITEMSUM / ITEMANS) / 4"
         - when: "PARAMCD = 'PFSCORE'"
-          then: {literal: null}
+          then: null
         - otherwise: ITEMRESN
     verifications:
       - range:
@@ -93,9 +93,9 @@ rows:
   - id: subscale
     filter: "QS.QSCAT = 'PHYSICAL FUNCTIONING SCALE' AND QS.QSTESTCD = 'PF01'"
     derivations:
-      PARAMCD: {literal: PFSCORE}
-      PARAM: {literal: Physical Functioning Subscale Score}
-      ITEMRESN: {literal: null}
+      PARAMCD: "'PFSCORE'"
+      PARAM: "'Physical Functioning Subscale Score'"
+      ITEMRESN: null
 
 verifications:
   - row_count:

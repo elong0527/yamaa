@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADVS
 keys: [STUDYID, USUBJID, PARAMCD, VSSEQ]
 input:
@@ -21,11 +23,11 @@ output:
 intermediates:
   - id: AWIN
     dataset: AWINDOW
+    key: [STUDYID]
     between:
       value: ADY
       lower: AWLO
       upper: AWHI
-    no_match: {literal: null}
 
 columns:
   - name: STUDYID
@@ -86,16 +88,12 @@ columns:
   - name: AWTDIFF
     type: int
     label: Analysis Window Difference
-    derivation:
-      compute:
-        expr: "ADY - AWTARGET"
+    derivation: "ADY - AWTARGET"
 
   - name: AWTABS
     type: int
     label: Absolute Analysis Window Distance
-    derivation:
-      compute:
-        expr: "ABS(AWTDIFF)"
+    derivation: "ABS(AWTDIFF)"
 
   # Within each subject, parameter, and window: closest to the target day
   # first, then the lower sequence number. ANL01FL marks rank 1; a record

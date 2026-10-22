@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADVS
 keys: [STUDYID, USUBJID, VISIT, PARAMCD]
 input:
@@ -57,10 +59,10 @@ rows:
     derivations:
       PARAMCD: ADVS_RAW.PARAMCD
       PARAM: ADVS_RAW.PARAM
-      SYSBP_VAL: {literal: null}
-      DIABP_VAL: {literal: null}
+      SYSBP_VAL: null
+      DIABP_VAL: null
       AVAL: ADVS_RAW.AVAL
-      DTYPE: {literal: null}
+      DTYPE: null
 
   # One MAP record per subject and visit that has both a systolic and a
   # diastolic result; ONLY() fails if the visit has more than one of either.
@@ -68,8 +70,8 @@ rows:
     group_by: [ADVS_RAW.STUDYID, ADVS_RAW.USUBJID, ADVS_RAW.VISIT]
     filter: "SYSBP_VAL IS NOT NULL AND DIABP_VAL IS NOT NULL"
     derivations:
-      PARAMCD: {literal: MAP}
-      PARAM: {literal: Mean Arterial Pressure (mmHg)}
+      PARAMCD: "'MAP'"
+      PARAM: "'Mean Arterial Pressure (mmHg)'"
       SYSBP_VAL:
         aggregate:
           filter: "ADVS_RAW.PARAMCD = 'SYSBP'"
@@ -79,10 +81,8 @@ rows:
           filter: "ADVS_RAW.PARAMCD = 'DIABP'"
           expr: "ONLY(ADVS_RAW.AVAL)"
       # Two-thirds diastolic plus one-third systolic.
-      AVAL:
-        compute:
-          expr: "(2 * DIABP_VAL + SYSBP_VAL) / 3"
-      DTYPE: {literal: CALCULATION}
+      AVAL: "(2 * DIABP_VAL + SYSBP_VAL) / 3"
+      DTYPE: "'CALCULATION'"
 
 verifications:
   - row_count:

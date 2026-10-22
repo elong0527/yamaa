@@ -1,9 +1,11 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADRS
 keys: [STUDYID, USUBJID, PARAMCD, AVISIT]
 input:
   ADRS_RAW: input/adrs_raw.csv
-  ADSL: input/adsl.csv
+  ADSL: {path: input/adsl.csv, key: [STUDYID, USUBJID]}
 
 base: ADRS_RAW
 
@@ -26,12 +28,12 @@ columns:
   - name: PARAMCD
     type: str
     label: Parameter Code
-    derivation: {literal: RESP75}
+    derivation: "'RESP75'"
 
   - name: PARAM
     type: str
     label: Parameter
-    derivation: {literal: EASI-75 Response}
+    derivation: "'EASI-75 Response'"
 
   - name: AVISIT
     type: str
@@ -62,12 +64,12 @@ columns:
     derivation:
       case:
         - when: "SAEFL = 'Y' OR DCSREAS IS NOT NULL"
-          then: {literal: SAFETY}
+          then: "'SAFETY'"
         - when: "PCHG IS NULL"
-          then: {literal: MISSING}
+          then: "'MISSING'"
         - when: "PCHG <= -75"
-          then: {literal: THRESHOLD}
-        - otherwise: {literal: OTHERWISE}
+          then: "'THRESHOLD'"
+        - otherwise: "'OTHERWISE'"
 
   - name: AVALC
     type: str
@@ -81,7 +83,7 @@ columns:
           THRESHOLD: RESPONDER
           OTHERWISE: NON-RESPONDER
     verifications:
-      - not_missing: {}
+      - not_missing
       - allowed_values:
           values: [RESPONDER, NON-RESPONDER, NOT EVALUABLE]
 
@@ -97,7 +99,7 @@ columns:
           THRESHOLD: THRESHOLD MET
           OTHERWISE: THRESHOLD NOT MET
     verifications:
-      - not_missing: {}
+      - not_missing
 
   # No branch for NOT EVALUABLE, so AVAL stays empty there.
   - name: AVAL
@@ -106,9 +108,9 @@ columns:
     derivation:
       case:
         - when: "AVALC = 'RESPONDER'"
-          then: {literal: 1}
+          then: 1
         - when: "AVALC = 'NON-RESPONDER'"
-          then: {literal: 0}
+          then: 0
 
 verifications:
   - row_count:

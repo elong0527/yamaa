@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: SDTM
 domain: LB
 keys: [STUDYID, USUBJID, LBSEQ]
 input:
@@ -6,6 +8,7 @@ input:
   DM:
     path: input/dm.csv
     types: {RFSTDTC: date}
+    key: [STUDYID, USUBJID]
   LB_MAPPING: input/lb_mapping.csv
 base: ODM
 
@@ -18,13 +21,12 @@ intermediates:
   - id: LB_MAP
     dataset: LB_MAPPING
     key: {ItemOID: ODM.ItemOID}
-    no_match: {literal: null}
 
 columns:
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
-    derivation: {literal: LB}
+    derivation: "'LB'"
 
   - name: STUDYID
     type: str

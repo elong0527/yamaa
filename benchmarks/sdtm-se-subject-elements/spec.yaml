@@ -1,10 +1,13 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: SDTM
 domain: SE
 keys: [STUDYID, USUBJID, ETCD]
 input:
   DM:
     path: input/dm.csv
     types: {RFICDTC: date, RFSTDTC: date, RFPENDTC: date}
+    key: [STUDYID, USUBJID]
   ODM: input/odm.csv
 base: ODM
 
@@ -26,7 +29,7 @@ columns:
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
-    derivation: {literal: SE}
+    derivation: "'SE'"
 
   - name: STUDYID
     type: str
@@ -121,7 +124,7 @@ columns:
     label: Study Day of Start of Element
     derivation:
       study_day:
-        date: SESTDTC
+        source: SESTDTC
         reference: DM.RFSTDTC
 
   - name: SEENDY
@@ -129,13 +132,13 @@ columns:
     label: Study Day of End of Element
     derivation:
       study_day:
-        date: SEENDTC
+        source: SEENDTC
         reference: DM.RFSTDTC
 
   - name: SEUPDES
     type: str
     label: Description of Unplanned Element
-    derivation: {literal: null}
+    derivation: null
 
 verifications:
   - row_count:

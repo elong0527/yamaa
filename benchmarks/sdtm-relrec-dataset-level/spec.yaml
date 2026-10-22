@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: SDTM
 domain: RELREC
 # One row per domain per relationship. IDVARVAL is null on dataset-level
 # rows, so the keys cannot name it.
@@ -50,24 +52,24 @@ rows:
     group_by: [TU.STUDYID]
     derivations:
       STUDYID: TU.STUDYID
-      USUBJID: {literal: null}
-      RDOMAIN: {literal: TU}
-      IDVAR: {literal: TULNKID}
-      IDVARVAL: {literal: null}
-      RELTYPE: {literal: ONE}
-      RELID: {literal: "1"}
+      USUBJID: null
+      RDOMAIN: "'TU'"
+      IDVAR: "'TULNKID'"
+      IDVARVAL: null
+      RELTYPE: "'ONE'"
+      RELID: "'1'"
 
   - id: tr_dataset
     dataset: TR
     group_by: [TR.STUDYID]
     derivations:
       STUDYID: TR.STUDYID
-      USUBJID: {literal: null}
-      RDOMAIN: {literal: TR}
-      IDVAR: {literal: TRLNKID}
-      IDVARVAL: {literal: null}
-      RELTYPE: {literal: MANY}
-      RELID: {literal: "1"}
+      USUBJID: null
+      RDOMAIN: "'TR'"
+      IDVAR: "'TRLNKID'"
+      IDVARVAL: null
+      RELTYPE: "'MANY'"
+      RELID: "'1'"
 
   # One record-level row per AE and CM record with a link identifier, which
   # becomes RELID: records sharing it are related. A record without one gets
@@ -78,10 +80,10 @@ rows:
     derivations:
       STUDYID: AE.STUDYID
       USUBJID: AE.USUBJID
-      RDOMAIN: {literal: AE}
-      IDVAR: {literal: AESEQ}
+      RDOMAIN: "'AE'"
+      IDVAR: "'AESEQ'"
       IDVARVAL: AE.AESEQ
-      RELTYPE: {literal: null}
+      RELTYPE: null
       RELID: AE.AELNKID
 
   - id: cm_link
@@ -90,10 +92,10 @@ rows:
     derivations:
       STUDYID: CM.STUDYID
       USUBJID: CM.USUBJID
-      RDOMAIN: {literal: CM}
-      IDVAR: {literal: CMSEQ}
+      RDOMAIN: "'CM'"
+      IDVAR: "'CMSEQ'"
       IDVARVAL: CM.CMSEQ
-      RELTYPE: {literal: null}
+      RELTYPE: null
       RELID: CM.CMLNKID
 
 verifications:

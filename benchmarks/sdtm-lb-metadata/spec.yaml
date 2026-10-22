@@ -1,4 +1,5 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
 domain: LB
 keys: [STUDYID, USUBJID, LBSEQ]
 input:
@@ -13,7 +14,7 @@ columns:
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
-    derivation: {literal: LB}
+    derivation: "'LB'"
 
   - name: STUDYID
     type: str
@@ -42,36 +43,36 @@ columns:
   - name: LBORRESU
     type: str
     label: Original Units
-    derivation: {literal: mg/dL}
+    derivation: "'mg/dL'"
     submission:
-      origin:
-        type: Assigned
+      origins:
+        - type: Assigned
       codelist: CL_LBORRESU
       value_level:
         - id: GLUC
           where: {LBTESTCD: [GLUC]}
-          origin:
-            type: Assigned
-            source: Vendor
+          origins:
+            - type: Assigned
+              source: Vendor
           codelist: CL_GLUCOSE
         - id: CREAT
           where: {LBTESTCD: [CREAT]}
-          origin:
-            type: Assigned
-            source: Investigator
+          origins:
+            - type: Assigned
+              source: Investigator
           codelist: CL_CREATININE
 
   - name: LBSTRESN
     type: float
     label: Numeric Result/Finding in Standard Units
     derivation:
-      value: {source: LBORRES}
-      unconvertible: {literal: null}
+      value: LBORRES
+      unconvertible: null
 
   - name: LBSTRESU
     type: str
     label: Standard Units
-    derivation: {literal: mg/dL}
+    derivation: "'mg/dL'"
 
   - name: LBDTC
     type: date
@@ -96,8 +97,8 @@ rows:
     group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID]
     filter: "LBORRES IS NOT NULL"
     derivations:
-      LBTESTCD: {literal: GLUC}
-      LBTEST: {literal: Glucose}
+      LBTESTCD: "'GLUC'"
+      LBTEST: "'Glucose'"
       LBORRES:
         aggregate:
           filter: "ODM.ItemOID = 'IT.LB.GLUC'"
@@ -112,8 +113,8 @@ rows:
     group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID]
     filter: "LBORRES IS NOT NULL"
     derivations:
-      LBTESTCD: {literal: CREAT}
-      LBTEST: {literal: Creatinine}
+      LBTESTCD: "'CREAT'"
+      LBTEST: "'Creatinine'"
       LBORRES:
         aggregate:
           filter: "ODM.ItemOID = 'IT.LB.CREAT'"

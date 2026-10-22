@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 parent: spec_compound.yaml
 domain: ADLB
 keys: [USUBJID, PARAMCD]

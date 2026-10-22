@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADAE
 keys: [STUDYID, USUBJID, AESEQ]
 input:
@@ -35,14 +37,13 @@ columns:
     derivation:
       case:
         - when: "USUBJID = 'CATH-01-001' AND AESEQ = 2"
-          then: {literal: SEVERE}
+          then: "'SEVERE'"
         - when: "USUBJID = 'CATH-01-003' AND AESEQ = 1"
-          then: {literal: SEVERE}
+          then: "'SEVERE'"
         - otherwise:
             str_case:
               source: AE.AESEV
               to: upper
-              missing: {literal: null}
     verifications:
       - allowed_values:
           values: [MILD, MODERATE, SEVERE, LIFE-THREATENING]
@@ -53,7 +54,6 @@ columns:
     derivation:
       mapping:
         source: ASEV
-        missing: {literal: null}
         dict:
           MILD: 1
           MODERATE: 2

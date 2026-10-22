@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: SDTM
 domain: SUPPDM
 keys: [STUDYID, RDOMAIN, USUBJID, IDVAR, IDVARVAL, QNAM]
 
@@ -31,7 +33,7 @@ columns:
   - name: RDOMAIN
     type: str
     label: Related Domain Abbreviation
-    derivation: {literal: DM}
+    derivation: "'DM'"
 
   - name: USUBJID
     type: str
@@ -40,7 +42,7 @@ columns:
   - name: IDVAR
     type: str
     label: Identifying Variable
-    derivation: {literal: USUBJID}
+    derivation: "'USUBJID'"
 
   - name: IDVARVAL
     type: str
@@ -108,9 +110,8 @@ columns:
           "Other, specify: Fijian": OTHER
           "Not reported": NOT REPORTED
           "Subject refused": UNKNOWN
-        missing: {literal: null}
     verifications:
-      - not_missing: {}
+      - not_missing
       - allowed_values:
           values: [AMERICAN INDIAN OR ALASKA NATIVE, ASIAN,
             BLACK OR AFRICAN AMERICAN,
@@ -120,12 +121,12 @@ columns:
   - name: QORIG
     type: str
     label: Origin
-    derivation: {literal: CRF}
+    derivation: "'CRF'"
 
   - name: QEVAL
     type: str
     label: Evaluator
-    derivation: {literal: null}
+    derivation: null
 
 rows:
   # One candidate per distinct collected value of each subject's items, so a
