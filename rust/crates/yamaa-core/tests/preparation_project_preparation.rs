@@ -1493,7 +1493,7 @@ mod preparation {
                     "root_class",
                     Tree::List(vec![
                         map(vec![("fields_from", text("shared"))]),
-                        map(vec![("schema_version", descriptor("str"))]),
+                        map(vec![("yamaa", descriptor("str"))]),
                     ]),
                 )],
                 &["schema_s.yaml"],
@@ -1627,7 +1627,7 @@ mod preparation {
                         .iter()
                         .map(|f| f.name.as_str())
                         .collect::<Vec<_>>(),
-                    ["id", "label", "schema_version"]
+                    ["id", "label", "yamaa"]
                 );
                 let label = schema.root_class().fields[1].descriptor;
                 let origin = &schema.descriptors()[label];
@@ -1640,11 +1640,9 @@ mod preparation {
                     schema.modules()[0].document.nodes()[default],
                     N::Text("untitled".into())
                 );
-                let input = document(map(vec![
-                    ("schema_version", text("1.0")),
-                    ("id", text("ID01")),
-                ]));
-                let normalized = schema.normalize_document(&input).unwrap();
+                // A complete 1.x document, normalized once its header is read.
+                let input = document(map(vec![("yamaa", text("1.0")), ("id", text("ID01"))]));
+                let normalized = schema.normalize_root(&input).unwrap();
                 let value = normalized
                     .document
                     .field(normalized.document.root(), "label")
@@ -1795,7 +1793,7 @@ mod preparation {
             ));
             let input = document(map(vec![]));
             assert!(matches!(
-                captured.structure().normalize_document(&input),
+                captured.structure().normalize_root(&input),
                 Err(NormalizationError::Defaults(_))
             ));
             assert_eq!(decoder.trace.borrow().len(), 1);
@@ -1909,6 +1907,13 @@ mod preparation {
     }
     mod standalone_preparation {
         //! Independent logical documents exercise the complete standalone application.
+        //!
+        //! Every test here is 0.5 only (#3447): `standalone_preparation::prepare`
+        //! prepares a 0.5 entry without a `parent`, through the 0.5
+        //! normalization and the 0.5 model contract. A 1.x specification is
+        //! a chain of layers, resolved by `prepare_versioned` (LAYER-1); its
+        //! window expansion is `schema_windows`', and its defaults
+        //! `inheritance_capture::complete_effects_defaults_and_distinct_orders_are_engine_owned`.
         use yamaa_core::schema::{
             Document, DocumentNode as N, NormalizationError, SchemaContext as C, SchemaDiagnostic,
             SchemaModule, SchemaOrigin, SchemaSource, SchemaStructure, WindowReference,
@@ -2414,6 +2419,11 @@ mod preparation {
     }
     mod structural_preparation {
         //! Independent logical truth and physical codec effects for live metadata preparation.
+        //!
+        //! Every test here is 0.5 only (#3447): `structural_preparation::prepare`
+        //! admits the files the 0.5 closures read (a 0.5 project, environment
+        //! file, definition file or codelist source). A 1.x file is admitted
+        //! against its type's closure once its header is read (SCHEMA-2).
         use std::rc::Rc;
         use yamaa_core::schema::{
             Document, DocumentNode as N, NormalizationError, SchemaContext as C, SchemaDiagnostic,

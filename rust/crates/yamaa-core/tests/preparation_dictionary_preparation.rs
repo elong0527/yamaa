@@ -424,6 +424,13 @@ mod preparation {
     }
     mod document_preparation {
         //! Independent raw logical arenas and opaque payloads qualify the dispatch service.
+        //!
+        //! Every test here is 0.5 only (#3447): `document_preparation::prepare`
+        //! routes a 0.5 entry by its raw `parent` to the standalone or the
+        //! inherited 0.5 lifecycle, and moves the entry codec's allocations.
+        //! A 1.x entry is a chain of layers that `traverse_versioned` admits
+        //! (LAYER-1); its non-mapping root is
+        //! `inheritance::a_non_mapping_entry_is_a_finding_that_holds_its_raw_arena`.
         use crate::support::document::Tree;
         use std::{collections::BTreeMap, rc::Rc};
         use yamaa_core::schema::{
@@ -1501,8 +1508,13 @@ mod preparation {
         }
     }
     mod inheritance {
+        //! A 1.x specification's parents are followed by `traverse_versioned`,
+        //! which shares its walk with the 0.5 `traverse` (LAYER-2, LAYER-3).
+        //! A test marked 0.5 exercises what only the 0.5 traversal admits, and
+        //! goes with it (#3447).
         use std::collections::BTreeMap;
         use yamaa_core::inheritance::*;
+        use yamaa_core::language::LanguageVersion;
         use yamaa_core::schema::{Document, NormalizationError, SchemaModule, SchemaStructure};
 
         use crate::support::document::Tree as V;
@@ -1516,6 +1528,8 @@ mod preparation {
         fn field(name: &'static str, types: V) -> V {
             V::map(vec![(name, V::map(vec![("type", types)]))])
         }
+        /// The layers of both languages: `yamaa` and `type` head a 1.x layer,
+        /// and `schema_version` a 0.5 one.
         fn schema() -> SchemaStructure {
             SchemaStructure::admit(
                 vec![SchemaModule {
@@ -1526,6 +1540,8 @@ mod preparation {
                             "root_class",
                             V::List(vec![
                                 field("schema_version", text("str")),
+                                field("yamaa", text("str")),
+                                field("type", text("str")),
                                 field("parent", text("str")),
                                 field("label", text("str")),
                             ]),
@@ -1537,7 +1553,20 @@ mod preparation {
             )
             .unwrap()
         }
-        fn layer(version: &str, parent: Option<&str>) -> Document {
+        /// A 1.x layer declaring version 1.0, naming `parent` when given.
+        fn layer(parent: Option<&str>) -> Document {
+            layer_with(parent, vec![])
+        }
+        fn layer_with(parent: Option<&str>, more: Vec<(&'static str, V)>) -> Document {
+            let mut fields = vec![("yamaa", text("1.0")), ("type", text("spec"))];
+            if let Some(parent) = parent {
+                fields.push(("parent", text(parent)));
+            }
+            fields.extend(more);
+            document(V::map(fields))
+        }
+        /// A 0.5 layer declaring `version`.
+        fn layer_v0_5(version: &str, parent: Option<&str>) -> Document {
             let mut fields = vec![("schema_version", text(version))];
             if let Some(parent) = parent {
                 fields.push(("parent", text(parent)));
@@ -1559,8 +1588,9 @@ mod preparation {
             raised: Option<&'static str>,
         }
         impl Port {
+            /// The 1.x layer `name`, naming `parent`.
             fn with(mut self, name: &str, parent: Option<&str>) -> Self {
-                self.documents.insert(name.into(), layer("1.0", parent));
+                self.documents.insert(name.into(), layer(parent));
                 self
             }
         }
@@ -1596,8 +1626,48 @@ mod preparation {
                     .ok_or(SourceError::Unavailable)
             }
         }
-        fn run(input: Document, port: &mut Port) -> Result<Vec<Layer>, Error<(&'static str, u32)>> {
+        /// The 1.x chain from the entry `input`, root ancestor first.
+        fn run(
+            input: Document,
+            port: &mut Port,
+        ) -> Result<Vec<VersionedLayer>, Error<(&'static str, u32)>> {
+            traverse_versioned(
+                &schema(),
+                LanguageVersion::new(0),
+                source("entry"),
+                input,
+                port,
+            )
+            .map(|chain| chain.layers)
+        }
+        /// The 0.5 chain from the entry `input`.
+        fn run_v0_5(
+            input: Document,
+            port: &mut Port,
+        ) -> Result<Vec<Layer>, Error<(&'static str, u32)>> {
             traverse(&schema(), source("entry"), input, port)
+        }
+        /// `error`'s projection: a validation finding of `condition` and
+        /// `rule` at `path`, with each text context value of `fields`.
+        fn check(
+            error: &Error<(&str, u32)>,
+            condition: &str,
+            rule: &str,
+            path: &str,
+            fields: &[(&str, &str)],
+        ) {
+            use yamaa_core::json::Value as C;
+            use yamaa_core::value::Value as S;
+            let diagnostic = error.diagnostic().unwrap().unwrap();
+            let definition = diagnostic.definition();
+            assert_eq!(
+                (definition.phase, definition.condition, definition.rule),
+                ("validation", condition, Some(rule))
+            );
+            assert_eq!(diagnostic.spec_paths, [path]);
+            for &(name, value) in fields {
+                assert_eq!(diagnostic.context[name], C::from(S::Str(value.into())));
+            }
         }
 
         #[test]
@@ -1606,7 +1676,7 @@ mod preparation {
                 .with("a", Some("alias"))
                 .with("common", None);
             port.aliases.insert("alias".into(), "common".into());
-            let layers = run(layer("1.0", Some("a")), &mut port).unwrap();
+            let layers = run(layer(Some("a")), &mut port).unwrap();
             assert_eq!(
                 layers
                     .iter()
@@ -1623,9 +1693,11 @@ mod preparation {
                     "read:common"
                 ]
             );
-            assert_eq!(layers[0].document, layer("1.0", None));
+            assert_eq!(layers[0].document, layer(None));
         }
 
+        /// 0.5 only (#3447): a null `parent` is absent only in a 0.5 layer.
+        /// A 1.x `parent` is a path, and null fails there (LAYER-9).
         #[test]
         fn a_null_parent_is_absent_and_ends_the_chain() {
             let null_parent = |version: &str| {
@@ -1636,11 +1708,11 @@ mod preparation {
             };
             let mut port = Port::default();
             port.documents.insert("a".into(), null_parent("1.0"));
-            let layers = run(layer("1.0", Some("a")), &mut port).unwrap();
+            let layers = run_v0_5(layer_v0_5("1.0", Some("a")), &mut port).unwrap();
             assert_eq!(port.calls, ["resolve:entry:a", "read:a"]);
             assert_eq!(layers.len(), 2);
             let mut port = Port::default();
-            let layers = run(null_parent("1.0"), &mut port).unwrap();
+            let layers = run_v0_5(null_parent("1.0"), &mut port).unwrap();
             assert!(port.calls.is_empty());
             assert_eq!(layers.len(), 1);
         }
@@ -1652,7 +1724,7 @@ mod preparation {
                     .with("a", Some("b"))
                     .with("b", Some("alias"));
                 port.aliases.insert("alias".into(), target.into());
-                let error = run(layer("1.0", Some("a")), &mut port).unwrap_err();
+                let error = run(layer(Some("a")), &mut port).unwrap_err();
                 let names = if target == "entry" {
                     vec!["entry", "a", "b", "entry"]
                 } else {
@@ -1679,12 +1751,8 @@ mod preparation {
         }
 
         #[test]
-        fn layer_findings_precede_version_mismatch_and_all_parent_effects() {
-            let input = document(V::map(vec![
-                ("schema_version", text("0")),
-                ("parent", text("https://bad")),
-                ("unexpected", text("x")),
-            ]));
+        fn layer_findings_precede_all_parent_effects() {
+            let input = layer_with(Some("https://bad"), vec![("unexpected", text("x"))]);
             let mut port = Port::default();
             let Error::Layer {
                 source,
@@ -1701,11 +1769,40 @@ mod preparation {
             assert!(port.calls.is_empty());
         }
 
+        /// 0.5 only (#3447): the 0.5 traversal checks `schema_version` after
+        /// a layer's findings. A 1.x layer's header is read first (SCHEMA-2);
+        /// its findings and parent effects are the test above.
+        #[test]
+        fn layer_findings_precede_version_mismatch_and_all_parent_effects() {
+            let input = document(V::map(vec![
+                ("schema_version", text("0")),
+                ("parent", text("https://bad")),
+                ("unexpected", text("x")),
+            ]));
+            let mut port = Port::default();
+            let Error::Layer {
+                source,
+                entry,
+                input: _,
+                error: NormalizationError::Invalid(findings),
+            } = run_v0_5(input, &mut port).unwrap_err()
+            else {
+                panic!("expected structural findings")
+            };
+            assert_eq!(source, "entry");
+            assert_eq!(entry, "entry");
+            assert_eq!(findings[0].definition().condition, "unknown_field");
+            assert!(port.calls.is_empty());
+        }
+
+        /// 0.5 only (#3447): a 0.5 chain's version must match the schema's
+        /// exactly. A 1.x layer may declare any version the engine reads
+        /// (SCHEMA-2, LAYER-4).
         #[test]
         fn version_checks_stop_before_reading_a_parent() {
             let mut port = Port::default();
             assert_eq!(
-                run(layer("0", Some("a")), &mut port).unwrap_err(),
+                run_v0_5(layer_v0_5("0", Some("a")), &mut port).unwrap_err(),
                 Error::Version {
                     source: "entry".into(),
                     entry: "entry".into(),
@@ -1716,9 +1813,9 @@ mod preparation {
             );
             assert!(port.calls.is_empty());
             port.documents
-                .insert("a".into(), layer("0", Some("unread")));
+                .insert("a".into(), layer_v0_5("0", Some("unread")));
             assert_eq!(
-                run(layer("1.0", Some("a")), &mut port).unwrap_err(),
+                run_v0_5(layer_v0_5("1.0", Some("a")), &mut port).unwrap_err(),
                 Error::Version {
                     source: "a".into(),
                     entry: "entry".into(),
@@ -1730,13 +1827,15 @@ mod preparation {
             assert_eq!(port.calls, ["resolve:entry:a", "read:a"]);
         }
 
+        /// 0.5 only (#3447): `schema_version_mismatch` retires with 0.5. A
+        /// 1.x layer without `yamaa` fails at its header (SCHEMA-2).
         #[test]
         fn missing_version_retains_layer_diagnostics_and_never_reads_parents() {
             let mut port = Port::default();
             let Error::Layer {
                 error: NormalizationError::Invalid(findings),
                 ..
-            } = run(document(V::map(vec![("parent", text("a"))])), &mut port).unwrap_err()
+            } = run_v0_5(document(V::map(vec![("parent", text("a"))])), &mut port).unwrap_err()
             else {
                 panic!("expected missing version")
             };
@@ -1748,18 +1847,48 @@ mod preparation {
         }
 
         #[test]
+        fn a_non_mapping_entry_is_a_finding_that_holds_its_raw_arena() {
+            use yamaa_core::diagnostic::ConditionCode;
+            use yamaa_core::schema::{
+                DocumentKind, DocumentNode as N, SchemaContext as C, SchemaDiagnostic,
+            };
+            let raw = Document::new(vec![N::Integer("7".into())], 0).unwrap();
+            let pointer = raw.nodes().as_ptr();
+            let mut port = Port::default();
+            let Error::Layer {
+                source,
+                entry,
+                input,
+                error: NormalizationError::Invalid(findings),
+            } = run(raw, &mut port).unwrap_err()
+            else {
+                panic!("expected a finding in the entry")
+            };
+            assert_eq!((source.as_str(), entry.as_str()), ("entry", "entry"));
+            assert_eq!(input.nodes().as_ptr(), pointer);
+            assert_eq!(
+                findings,
+                [SchemaDiagnostic {
+                    path: "$".into(),
+                    code: ConditionCode::SchemaInvalidFieldType,
+                    context: vec![
+                        ("expected", C::Text("root_class".into())),
+                        ("actual", C::ValueKind(DocumentKind::Integer)),
+                    ],
+                }]
+            );
+            assert!(port.calls.is_empty());
+        }
+
+        #[test]
         fn malformed_parent_admission_precedes_its_descendants() {
             let mut port = Port::default();
             port.documents.insert(
                 "a".into(),
-                document(V::map(vec![
-                    ("schema_version", text("1.0")),
-                    ("parent", text("unread")),
-                    ("unexpected", text("x")),
-                ])),
+                layer_with(Some("unread"), vec![("unexpected", text("x"))]),
             );
             assert!(
-                matches!(run(layer("1.0", Some("a")), &mut port), Err(Error::Layer { source, .. }) if source == "a")
+                matches!(run(layer(Some("a")), &mut port), Err(Error::Layer { source, .. }) if source == "a")
             );
             assert_eq!(port.calls, ["resolve:entry:a", "read:a"]);
         }
@@ -1776,7 +1905,7 @@ mod preparation {
                 assert!(!is_local_parent(path), "{path}");
                 let mut port = Port::default();
                 assert_eq!(
-                    run(layer("1.0", Some(path)), &mut port).unwrap_err(),
+                    run(layer(Some(path)), &mut port).unwrap_err(),
                     Error::InvalidParent {
                         declaring: "entry".into(),
                         path: path.into()
@@ -1804,7 +1933,7 @@ mod preparation {
                 ..Port::default()
             };
             assert_eq!(
-                run(layer("1.0", Some("missing")), &mut port).unwrap_err(),
+                run(layer(Some("missing")), &mut port).unwrap_err(),
                 Error::Unavailable {
                     declaring: "entry".into(),
                     path: "missing".into()
@@ -1813,7 +1942,7 @@ mod preparation {
             assert_eq!(port.calls, ["resolve:entry:missing"]);
             let mut port = Port::default();
             assert_eq!(
-                run(layer("1.0", Some("missing")), &mut port).unwrap_err(),
+                run(layer(Some("missing")), &mut port).unwrap_err(),
                 Error::Unavailable {
                     declaring: "entry".into(),
                     path: "written/missing".into()
@@ -1825,7 +1954,7 @@ mod preparation {
                 ..Port::default()
             };
             assert_eq!(
-                run(layer("1.0", Some("raise")), &mut port).unwrap_err(),
+                run(layer(Some("raise")), &mut port).unwrap_err(),
                 Error::Host(("opaque", 73))
             );
             assert_eq!(port.calls, ["resolve:entry:raise"]);
@@ -1835,26 +1964,8 @@ mod preparation {
         fn real_traversal_failures_project_canonical_causes_and_original_provenance() {
             use yamaa_core::json::Value as C;
             use yamaa_core::value::Value as S;
-            fn check(
-                error: &Error<(&str, u32)>,
-                condition: &str,
-                rule: &str,
-                path: &str,
-                fields: &[(&str, &str)],
-            ) {
-                let diagnostic = error.diagnostic().unwrap().unwrap();
-                let definition = diagnostic.definition();
-                assert_eq!(
-                    (definition.phase, definition.condition, definition.rule),
-                    ("validation", condition, Some(rule))
-                );
-                assert_eq!(diagnostic.spec_paths, [path]);
-                for &(name, value) in fields {
-                    assert_eq!(diagnostic.context[name], C::from(S::Str(value.into())));
-                }
-            }
             let mut port = Port::default();
-            let error = run(layer("1.0", Some("https://bad")), &mut port).unwrap_err();
+            let error = run(layer(Some("https://bad")), &mut port).unwrap_err();
             check(
                 &error,
                 "invalid_parent_path",
@@ -1872,7 +1983,7 @@ mod preparation {
                 unavailable: Some("missing"),
                 ..Port::default()
             };
-            let error = run(layer("1.0", Some("missing")), &mut port).unwrap_err();
+            let error = run(layer(Some("missing")), &mut port).unwrap_err();
             check(
                 &error,
                 "parent_not_found",
@@ -1887,7 +1998,7 @@ mod preparation {
                     .with("a", Some("b"))
                     .with("b", Some("alias"));
                 port.aliases.insert("alias".into(), target.into());
-                let error = run(layer("1.0", Some("a")), &mut port).unwrap_err();
+                let error = run(layer(Some("a")), &mut port).unwrap_err();
                 check(
                     &error,
                     "inheritance_cycle",
@@ -1930,9 +2041,15 @@ mod preparation {
                     ]
                 );
             }
+        }
 
+        /// 0.5 only (#3447): `schema_version_mismatch` retires with 0.5. A
+        /// 1.x layer's unread version fails at its header (SCHEMA-2,
+        /// LAYER-4).
+        #[test]
+        fn real_version_mismatches_project_canonical_causes_and_original_provenance() {
             let mut port = Port::default();
-            let error = run(layer("0", Some("later")), &mut port).unwrap_err();
+            let error = run_v0_5(layer_v0_5("0", Some("later")), &mut port).unwrap_err();
             check(
                 &error,
                 "schema_version_mismatch",
@@ -1947,8 +2064,8 @@ mod preparation {
             );
             assert!(port.calls.is_empty());
             port.documents
-                .insert("a".into(), layer("0", Some("unread")));
-            let error = run(layer("1.0", Some("a")), &mut port).unwrap_err();
+                .insert("a".into(), layer_v0_5("0", Some("unread")));
+            let error = run_v0_5(layer_v0_5("1.0", Some("a")), &mut port).unwrap_err();
             check(
                 &error,
                 "schema_version_mismatch",
@@ -2031,9 +2148,9 @@ mod preparation {
                 for index in 1..=count {
                     let parent = (index < count).then(|| format!("p{}", index + 1));
                     port.documents
-                        .insert(format!("p{index}"), layer("1.0", parent.as_deref()));
+                        .insert(format!("p{index}"), layer(parent.as_deref()));
                 }
-                let result = run(layer("1.0", Some("p1")), &mut port);
+                let result = run(layer(Some("p1")), &mut port);
                 if count <= Limits::PARENT_OCCURRENCES {
                     let layers = result.unwrap();
                     assert_eq!(layers.len(), count + 1);
@@ -2057,10 +2174,18 @@ mod preparation {
         }
     }
     mod inheritance_capture {
+        //! A 1.x chain's parents are read through the host's port as
+        //! `traverse_versioned` asks for them, and each layer's relative paths
+        //! are respelled through the same port as `prepare_versioned` resolves
+        //! the chain (LAYER-3, LAYER-7, LAYER-10). A test marked 0.5 exercises
+        //! `inheritance_capture::prepare`, the 0.5 capture application with
+        //! its catalog of captured parents, and goes with it (#3447).
         use crate::support::document::Tree;
         use std::{cell::RefCell, collections::BTreeMap, rc::Rc};
+        use yamaa_core::language::LanguageVersion;
         use yamaa_core::schema::{
-            Document, DocumentNode as N, NormalizationError, SchemaModule, SchemaStructure,
+            Document, DocumentNode as N, NormalizationError, SchemaModule, SchemaSource,
+            SchemaStructure,
         };
         use yamaa_core::{
             inheritance as graph, inheritance_capture as app, inheritance_preparation as lifecycle,
@@ -2092,7 +2217,11 @@ mod preparation {
                         (
                             "root_class",
                             seq(vec![
+                                // `yamaa` and `type` head a 1.x layer, and
+                                // `schema_version` a 0.5 one.
                                 field("schema_version", "str"),
+                                field("yamaa", "str"),
+                                field("type", "str"),
                                 field("parent", "str"),
                                 field("domain", "str"),
                                 field("keys", "list[str]"),
@@ -2134,8 +2263,27 @@ mod preparation {
             )
             .unwrap()
         }
+        /// The 1.x layer `name`: its input `SRC` names its own data file and
+        /// schema link, and the entry declares the rest of a specification.
         fn layer(name: &str, parent: Option<&str>, entry: bool) -> Document {
-            let mut fields = vec![("schema_version", text("1.0"))];
+            layer_headed(
+                vec![("yamaa", text("1.0")), ("type", text("spec"))],
+                name,
+                parent,
+                entry,
+            )
+        }
+        /// The same layer in 0.5.
+        fn layer_v0_5(name: &str, parent: Option<&str>, entry: bool) -> Document {
+            layer_headed(vec![("schema_version", text("1.0"))], name, parent, entry)
+        }
+        fn layer_headed(
+            header: Vec<(&'static str, Tree)>,
+            name: &str,
+            parent: Option<&str>,
+            entry: bool,
+        ) -> Document {
+            let mut fields = header;
             if let Some(parent) = parent {
                 fields.push(("parent", text(parent)));
             }
@@ -2307,9 +2455,9 @@ mod preparation {
             let decoder = Decoder {
                 log,
                 documents: [
-                    ("b", layer("b", Some("a"), false)),
-                    ("a", layer("a", Some("alias"), false)),
-                    ("common", layer("common", None, false)),
+                    ("b", layer_v0_5("b", Some("a"), false)),
+                    ("a", layer_v0_5("a", Some("alias"), false)),
+                    ("common", layer_v0_5("common", None, false)),
                 ]
                 .into_iter()
                 .map(|(k, d)| {
@@ -2330,7 +2478,7 @@ mod preparation {
                     bytes: vec![9, 8],
                 },
                 Raw {
-                    document: layer("entry", Some("b"), true),
+                    document: layer_v0_5("entry", Some("b"), true),
                     marker: Box::new(71),
                 },
                 host,
@@ -2379,6 +2527,9 @@ mod preparation {
             }
             events
         }
+        /// 0.5 only (#3447): the catalog of captured parents is the 0.5 capture
+        /// application's. Its effects, layers and defaults on a 1.x chain are
+        /// `complete_effects_defaults_and_distinct_orders_are_engine_owned`.
         #[test]
         fn complete_effects_catalog_allocations_defaults_and_distinct_orders_are_engine_owned() {
             for _ in 0..2 {
@@ -2446,6 +2597,9 @@ mod preparation {
             }
         }
 
+        /// 0.5 only (#3447): the catalog prefix is the 0.5 capture
+        /// application's. Its opaque effect errors on a 1.x chain are
+        /// `every_opaque_effect_error_keeps_original_allocation_and_exact_completed_prefix`.
         #[test]
         fn every_opaque_effect_error_keeps_original_allocation_and_exact_completed_catalog_prefix()
         {
@@ -2485,6 +2639,10 @@ mod preparation {
                 assert_eq!(captured_parents.len(), count);
             }
         }
+        /// 0.5 only (#3447): the decoder is the 0.5 capture application's own
+        /// port. A 1.x port's failed read is a test below, and its
+        /// unavailable parents are
+        /// `inheritance::source_failure_retains_written_spelling_and_stops_later_access`.
         #[test]
         fn original_decoder_failure_and_unavailable_roles_stop_before_later_authority() {
             let (source, raw, mut host, mut decoder) = fixture();
@@ -2533,6 +2691,9 @@ mod preparation {
                 assert_eq!(&*host.log.borrow(), &expected_effects()[..=index]);
             }
         }
+        /// 0.5 only (#3447): the 0.5 capture application keeps each parent it
+        /// decoded in its catalog. A 1.x parent's failed admission is
+        /// `inheritance::malformed_parent_admission_precedes_its_descendants`.
         #[test]
         fn admitted_parent_raw_is_retained_when_later_normalization_fails_before_descendants() {
             let (source, raw, mut host, mut decoder) = fixture();
@@ -2565,6 +2726,219 @@ mod preparation {
             assert_eq!(captured_parents.len(), 1);
             assert_eq!(captured_parents[0].raw().document.nodes().as_ptr(), nodes);
             assert_eq!(&*host.log.borrow(), &expected_effects()[..3]);
+        }
+
+        /// What resolving a 1.x chain asks of its host's port, in order.
+        #[derive(Clone, Debug, PartialEq, Eq)]
+        enum Effect {
+            Resolve(String, String),
+            Read(String),
+            Rebase(String, String, String),
+        }
+        /// A host's port over 1.x layers held by identity. It resolves a
+        /// written parent, reads a parent, and respells a path from the
+        /// entry; one effect may raise an opaque payload instead.
+        struct Chain {
+            log: Vec<Effect>,
+            documents: BTreeMap<String, Document>,
+            aliases: BTreeMap<String, String>,
+            failure: Option<(usize, Payload)>,
+        }
+        impl Chain {
+            /// The entry's parents: `b`, then `a`, whose `alias` resolves to
+            /// the root ancestor `common`.
+            fn new() -> Self {
+                Self {
+                    log: Vec::new(),
+                    documents: [
+                        ("b", layer("b", Some("a"), false)),
+                        ("a", layer("a", Some("alias"), false)),
+                        ("common", layer("common", None, false)),
+                    ]
+                    .into_iter()
+                    .map(|(name, document)| (name.into(), document))
+                    .collect(),
+                    aliases: [("alias".into(), "common".into())].into_iter().collect(),
+                    failure: None,
+                }
+            }
+            /// Record `effect`, and the payload it raises, if any.
+            fn effect(&mut self, effect: Effect) -> Option<Payload> {
+                let index = self.log.len();
+                self.log.push(effect);
+                if self.failure.as_ref().is_some_and(|(at, _)| *at == index) {
+                    self.failure.take().map(|(_, payload)| payload)
+                } else {
+                    None
+                }
+            }
+        }
+        impl graph::InheritanceSourcePort for Chain {
+            type Error = Payload;
+            fn canonicalize(
+                &mut self,
+                declaring: &str,
+                written: &str,
+            ) -> Result<graph::Source, graph::SourceError<Payload>> {
+                if let Some(payload) =
+                    self.effect(Effect::Resolve(declaring.into(), written.into()))
+                {
+                    return Err(graph::SourceError::Raised(payload));
+                }
+                Ok(graph::Source {
+                    identity: self
+                        .aliases
+                        .get(written)
+                        .cloned()
+                        .unwrap_or_else(|| written.into()),
+                    display_path: format!("display/{written}"),
+                })
+            }
+            fn read(
+                &mut self,
+                source: &graph::Source,
+            ) -> Result<Document, graph::SourceError<Payload>> {
+                if let Some(payload) = self.effect(Effect::Read(source.identity.clone())) {
+                    return Err(graph::SourceError::Raised(payload));
+                }
+                Ok(self
+                    .documents
+                    .remove(&source.identity)
+                    .expect("each parent is read once"))
+            }
+        }
+        impl lifecycle::PathPort for Chain {
+            fn rebase(
+                &mut self,
+                layer: &graph::Source,
+                entry: &graph::Source,
+                written: &str,
+            ) -> Result<String, Payload> {
+                match self.effect(Effect::Rebase(
+                    layer.identity.clone(),
+                    entry.identity.clone(),
+                    written.into(),
+                )) {
+                    Some(payload) => Err(payload),
+                    None => Ok(written.into()),
+                }
+            }
+        }
+        /// Why a 1.x chain did not resolve.
+        enum Failure {
+            Traversal(graph::Error<Payload>),
+            Resolution(lifecycle::VersionedError<Payload>),
+        }
+        /// Traverse the entry's chain and resolve it, as a 1.x
+        /// specification's preparation does.
+        fn resolve(
+            chain: &mut Chain,
+        ) -> Result<(graph::VersionedChain, lifecycle::ResolvedVersioned), Failure> {
+            let schema = schema();
+            let entry = graph::Source {
+                identity: "entry".into(),
+                display_path: "written/entry".into(),
+            };
+            let layers = graph::traverse_versioned(
+                &schema,
+                LanguageVersion::new(0),
+                entry,
+                layer("entry", Some("b"), true),
+                chain,
+            )
+            .map_err(Failure::Traversal)?;
+            let resolved = lifecycle::prepare_versioned(&schema, &layers, chain)
+                .map_err(Failure::Resolution)?;
+            Ok((layers, resolved))
+        }
+        /// Every effect of resolving the chain: each parent resolved, then
+        /// read, from the entry up; then each layer's relative paths
+        /// respelled from the entry, root ancestor first (LAYER-10).
+        fn effects() -> Vec<Effect> {
+            let mut effects = vec![
+                Effect::Resolve("entry".into(), "b".into()),
+                Effect::Read("b".into()),
+                Effect::Resolve("b".into(), "a".into()),
+                Effect::Read("a".into()),
+                Effect::Resolve("a".into(), "alias".into()),
+                Effect::Read("common".into()),
+            ];
+            for (layer, paths) in [
+                ("common", vec!["common.csv", "common-source.yaml"]),
+                ("a", vec!["a.csv", "a-source.yaml"]),
+                ("b", vec!["b.csv", "b-source.yaml"]),
+                (
+                    "entry",
+                    vec!["entry.csv", "entry-source.yaml", "output.csv", "report.csv"],
+                ),
+            ] {
+                for path in paths {
+                    effects.push(Effect::Rebase(layer.into(), "entry".into(), path.into()));
+                }
+            }
+            effects
+        }
+
+        #[test]
+        fn complete_effects_defaults_and_distinct_orders_are_engine_owned() {
+            for _ in 0..2 {
+                let mut chain = Chain::new();
+                let Ok((layers, resolved)) = resolve(&mut chain) else {
+                    panic!("the chain resolves")
+                };
+                assert_eq!(chain.log, effects());
+                // Parents are read from the entry up, and the layers
+                // contribute root ancestor first (LAYER-3).
+                assert_eq!(
+                    layers
+                        .layers
+                        .iter()
+                        .map(|layer| layer.source.identity.as_str())
+                        .collect::<Vec<_>>(),
+                    ["common", "a", "b", "entry"]
+                );
+                let d = &resolved.document;
+                let columns = d.field(d.root(), "columns").unwrap();
+                let N::Sequence(columns) = &d.nodes()[columns] else {
+                    panic!()
+                };
+                let label = d.field(columns[0], "label").unwrap();
+                assert_eq!(d.nodes()[label], N::Text("Default label".into()));
+                let origin = resolved.origins[label];
+                assert_eq!(origin.layer, None);
+                assert!(matches!(
+                    origin.origin.source,
+                    SchemaSource::Default { module: 0, .. }
+                ));
+                assert_eq!(resolved.origins.len(), d.nodes().len());
+            }
+        }
+
+        #[test]
+        fn every_opaque_effect_error_keeps_original_allocation_and_exact_completed_prefix() {
+            // Each parent's resolution and read, and the first, second and
+            // last respelling.
+            for index in [0, 1, 2, 3, 4, 5, 6, 7, 15] {
+                let mut chain = Chain::new();
+                let identity = Rc::new(());
+                let allocation = Box::new(99);
+                let pointer = (&*allocation) as *const u32;
+                chain.failure = Some((
+                    index,
+                    Payload {
+                        identity: identity.clone(),
+                        allocation,
+                    },
+                ));
+                let original = match resolve(&mut chain) {
+                    Err(Failure::Traversal(graph::Error::Host(payload)))
+                    | Err(Failure::Resolution(lifecycle::VersionedError::Path(payload))) => payload,
+                    _ => panic!("effect {index} raises its payload"),
+                };
+                assert!(Rc::ptr_eq(&original.identity, &identity));
+                assert_eq!((&*original.allocation) as *const u32, pointer);
+                assert_eq!(chain.log, &effects()[..=index]);
+            }
         }
     }
 }
