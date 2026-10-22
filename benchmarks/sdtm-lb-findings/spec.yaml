@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: SDTM
 domain: LB
 keys: [STUDYID, USUBJID, LBSEQ]
 input:
@@ -13,7 +15,7 @@ columns:
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
-    derivation: {literal: LB}
+    derivation: "'LB'"
 
   - name: STUDYID
     type: str
@@ -40,7 +42,7 @@ columns:
     derivation:
       case:
         - when: "RAWORRES = 'NOT DONE'"
-          then: {literal: null}
+          then: null
         - otherwise: RAWORRES
 
   # Every record carries the same units in both the original and the
@@ -52,8 +54,8 @@ columns:
     derivation:
       case:
         - when: "RAWORRES = 'NOT DONE'"
-          then: {literal: null}
-        - otherwise: {literal: mg/dL}
+          then: null
+        - otherwise: "'mg/dL'"
 
   - name: LBSTRESU
     type: str
@@ -61,8 +63,8 @@ columns:
     derivation:
       case:
         - when: "RAWORRES = 'NOT DONE'"
-          then: {literal: null}
-        - otherwise: {literal: mg/dL}
+          then: null
+        - otherwise: "'mg/dL'"
 
   - name: LBSTAT
     type: str
@@ -70,7 +72,7 @@ columns:
     derivation:
       case:
         - when: "RAWORRES = 'NOT DONE'"
-          then: {literal: NOT DONE}
+          then: "'NOT DONE'"
     verifications:
       - allowed_values:
           values: [NOT DONE]
@@ -87,8 +89,8 @@ columns:
     type: float
     label: Numeric Result/Finding in Standard Units
     derivation:
-      value: {source: LBORRES}
-      unconvertible: {literal: null}
+      value: LBORRES
+      unconvertible: null
 
   - name: LBDTC
     type: date
@@ -113,8 +115,8 @@ rows:
     group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID]
     filter: "RAWORRES IS NOT NULL"
     derivations:
-      LBTESTCD: {literal: CA}
-      LBTEST: {literal: Calcium}
+      LBTESTCD: "'CA'"
+      LBTEST: "'Calcium'"
       RAWORRES:
         aggregate:
           filter: "ODM.ItemOID = 'IT.LB.CALCIUM'"
@@ -129,8 +131,8 @@ rows:
     group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID]
     filter: "RAWORRES IS NOT NULL"
     derivations:
-      LBTESTCD: {literal: CREAT}
-      LBTEST: {literal: Creatinine}
+      LBTESTCD: "'CREAT'"
+      LBTEST: "'Creatinine'"
       RAWORRES:
         aggregate:
           filter: "ODM.ItemOID = 'IT.LB.CREAT'"

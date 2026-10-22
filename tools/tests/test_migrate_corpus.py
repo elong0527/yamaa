@@ -43,24 +43,25 @@ def zero_five_benchmarks():
     ]
 
 
-ZERO_FIVE = zero_five_benchmarks()
-
-
-@unittest.skipUnless(ZERO_FIVE, "every benchmark is written in 1.0")
 class CorpusTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        # The corpus is read when the class runs, not when the module is
+        # imported.
+        cls.zero_five = zero_five_benchmarks()
+        if not cls.zero_five:
+            raise unittest.SkipTest("every benchmark is written in 1.0")
         cls.temporary = tempfile.TemporaryDirectory()
         cls.target = Path(cls.temporary.name) / "first"
-        cls.result = convert(ZERO_FIVE, base=ROOT)
-        write(cls.result, cls.target, ZERO_FIVE)
+        cls.result = convert(cls.zero_five, base=ROOT)
+        write(cls.result, cls.target, cls.zero_five)
 
     @classmethod
     def tearDownClass(cls):
         cls.temporary.cleanup()
 
     def test_every_written_file_parses_and_keeps_its_comments(self):
-        for path in sorted(p for case in ZERO_FIVE for p in case.rglob("*.yaml")):
+        for path in sorted(p for case in self.zero_five for p in case.rglob("*.yaml")):
             relative = path.relative_to(ROOT)
             output = self.target / relative
             if not output.exists():
@@ -77,7 +78,7 @@ class CorpusTests(unittest.TestCase):
     def test_the_follow_up_list_names_what_the_conversion_leaves_to_people(self):
         notes = {(note.file, note.kind) for note in self.result.notes}
         # The expected notes name only the benchmarks still written in 0.5.
-        if BENCHMARKS / "schema-inheritance-clear" in ZERO_FIVE:
+        if BENCHMARKS / "schema-inheritance-clear" in self.zero_five:
             self.assertIn(
                 ("benchmarks/schema-inheritance-clear/spec_study.yaml", "comment"),
                 notes,

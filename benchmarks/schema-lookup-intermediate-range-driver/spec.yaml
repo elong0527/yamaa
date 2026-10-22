@@ -1,4 +1,5 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
 domain: OUT
 keys: [STUDYID, USUBJID, SOURCE, SEQ]
 input:
@@ -23,8 +24,8 @@ intermediates:
   # template that reads this window.
   - id: HOMEWIN
     dataset: WINDOWS
+    key: [STUDYID]
     between: {value: HOME.DAY, lower: LO, upper: HI}
-    no_match: null
 
 columns:
   - name: STUDYID
@@ -58,7 +59,7 @@ rows:
     derivations:
       STUDYID: CLINIC.STUDYID
       USUBJID: CLINIC.USUBJID
-      SOURCE: {literal: CLINIC}
+      SOURCE: "'CLINIC'"
       SEQ: CLINIC.SEQ
       DAY: CLINIC.DAY
       WINDOW: CLINIC.VISIT
@@ -70,7 +71,7 @@ rows:
     derivations:
       STUDYID: HOME.STUDYID
       USUBJID: HOME.USUBJID
-      SOURCE: {literal: HOME}
+      SOURCE: "'HOME'"
       SEQ: HOME.SEQ
       DAY: HOME.DAY
       WINDOW: HOMEWIN.NAME

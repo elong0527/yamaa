@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADVS
 keys: [USUBJID, PARAMCD, AVISITN]
 input:
@@ -27,7 +29,6 @@ intermediates:
       AND OBS.AVISITN <= PLAN.AVISITN
     order_by: [OBS.AVISITN, OBS.QSSEQ]
     keep: last
-    no_match: {literal: null}
 
 columns:
   - name: USUBJID

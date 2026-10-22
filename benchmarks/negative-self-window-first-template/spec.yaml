@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: SDTM
 domain: VS
 keys: [USUBJID, VSDY, VSCAT]
 input:
@@ -16,14 +18,12 @@ intermediates:
     key: [USUBJID]
     order_by: [SELF.VSDY]
     keep: last
-    no_match: null
 
   # The visit window holding the study day of that latest record.
   - id: LATESTWIN
     dataset: WINDOWS
     key: [USUBJID]
     between: {value: LATEST.VSDY, lower: LO, upper: HI}
-    no_match: null
 
 columns:
   - name: USUBJID
@@ -50,7 +50,7 @@ rows:
     dataset: VITALS
     derivations:
       VSDY: VITALS.VSDY
-      VSCAT: {literal: COLLECTED}
+      VSCAT: "'COLLECTED'"
       VSSTRESN: VITALS.SYSBP
       VISIT: LATESTWIN.NAME
 
@@ -62,6 +62,6 @@ rows:
     derivations:
       VSDY:
         aggregate: "MAX(VITALS.VSDY)"
-      VSCAT: {literal: FOLLOW-UP}
-      VSSTRESN: {literal: null}
+      VSCAT: "'FOLLOW-UP'"
+      VSSTRESN: null
       VISIT: LATESTWIN.NAME

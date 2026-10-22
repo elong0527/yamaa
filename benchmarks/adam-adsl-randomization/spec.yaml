@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
@@ -31,7 +33,7 @@ columns:
     label: Randomization Study Day
     derivation:
       study_day:
-        date: DM.RANDDT
+        source: DM.RANDDT
         reference: DM.RFSTDTC
 
   # DM holds the moment as a datetime; written as text it always carries

@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: SDTM
 domain: AE
 keys: [STUDYID, USUBJID, AESEQ]
 input:
@@ -17,7 +19,6 @@ intermediates:
     dataset: MEDDRA
     key: {LLTCD: AE_RAW.AELLTCD}
     filter: "MEDDRA.PRIMARY_SOC = 'Y'"
-    no_match: {literal: null}
     verifications:
       - unique: [LLTCD]
 
@@ -25,7 +26,7 @@ columns:
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
-    derivation: {literal: AE}
+    derivation: "'AE'"
 
   - name: STUDYID
     type: str

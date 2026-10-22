@@ -20,13 +20,15 @@ class LanguageTests(unittest.TestCase):
             [],
             "yamaa",
         ):
-            self.assertFalse(surface.declares_header(document), document)
+            with self.subTest(document=document):
+                self.assertFalse(surface.declares_header(document), document)
 
 
 class ExpressionTests(unittest.TestCase):
     def test_a_bare_or_qualified_name_is_a_reference(self):
         for text in ("AGE", "DM.AGE", "_X1", "DM.NULL", " DM.AGE "):
-            self.assertEqual(surface.expression(text), ("reference", text.strip()))
+            with self.subTest(text=text):
+                self.assertEqual(surface.expression(text), ("reference", text.strip()))
 
     def test_a_reserved_word_is_no_bare_reference(self):
         self.assertEqual(surface.expression("NULL"), ("literal", None))
@@ -52,11 +54,13 @@ class ExpressionTests(unittest.TestCase):
 
     def test_yaml_scalars_are_literals(self):
         for value in (0, 1.5, True, False, None):
-            self.assertEqual(surface.expression(value), ("literal", value))
+            with self.subTest(value=value):
+                self.assertEqual(surface.expression(value), ("literal", value))
 
     def test_other_text_is_a_formula_and_a_mapping_an_operation(self):
         for text in ("A / B", "'A' || 'B'", "-1", "UPPER(DM.SEX)", "'it''s' = X"):
-            self.assertEqual(surface.expression(text), ("formula", text))
+            with self.subTest(text=text):
+                self.assertEqual(surface.expression(text), ("formula", text))
         operation = {"study_day": {"source": "ADT", "reference": "TRTSDT"}}
         self.assertEqual(surface.expression(operation), ("operation", operation))
 

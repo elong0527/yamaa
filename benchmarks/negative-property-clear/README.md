@@ -18,6 +18,6 @@ artifact is accepted.
 
 ## How to fix
 
-Omit `type` to inherit it unchanged, or replace it with a
-complete valid value. Only an optional field may use `null` to
-clear an inherited value.
+Remove `columns.USUBJID.type` from `clear` to inherit the type
+unchanged, or declare `USUBJID` with a complete valid type instead.
+Only an optional field may be listed in `clear`.

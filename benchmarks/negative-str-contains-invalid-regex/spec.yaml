@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADAE
 keys: [STUDYID, USUBJID]
 input:
@@ -28,5 +30,5 @@ columns:
     derivation:
       case:
         - when: "str_contains(AE.AETERM, 'SEVERE[')"
-          then: {literal: SEVERE}
-        - otherwise: {literal: MILD}
+          then: "'SEVERE'"
+        - otherwise: "'MILD'"

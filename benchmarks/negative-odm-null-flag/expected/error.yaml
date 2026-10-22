@@ -1,0 +1,11 @@
+phase: ingest
+condition: source_odm_attribute_invalid
+spec_paths:
+  - input.ODM.path
+rule: ODM-1
+context:
+  dataset: ODM
+  path: input/odm.xml
+  element: ItemData
+  attribute: IsNull
+  value: "Y"

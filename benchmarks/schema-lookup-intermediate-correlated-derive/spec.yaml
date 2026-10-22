@@ -1,4 +1,5 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
 domain: OUT
 keys: [ID, REF]
 input:
@@ -18,9 +19,8 @@ intermediates:
     order_by: [SRC.DIST]
     keep: first
     columns: [VALUE, DIST]
-    no_match: {literal: null}
     derivations:
-      DIST: {compute: {expr: "ABS(DAY - BASE.REF)"}}
+      DIST: "ABS(DAY - BASE.REF)"
 
 columns:
   - name: ID

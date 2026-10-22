@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADVS
 keys: [USUBJID, PARAMCD, ATPT]
 input:
@@ -35,9 +37,9 @@ columns:
     submission:
       length: 8
       significant_digits: 0
-      origin:
-        type: Predecessor
-        description: VS.VSSTRESN
+      origins:
+        - type: Predecessor
+          description: VS.VSSTRESN
       value_level:
         - id: SYSBP
           where: {PARAMCD: [SYSBP]}

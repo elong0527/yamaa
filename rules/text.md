@@ -85,7 +85,7 @@ result is the exact concatenation of literal text and values, the empty string
 when the template is empty.
 
 Fails: `incompatible_input_type`, `missing_input`.
-Evidence: `schema-shorthand`, `sdtm-dm-race-ethnicity`, `schema-expressions`, `rust/crates/yamaa-adapters/tests/fixtures/text_template_reference.json`.
+Evidence: `schema-shorthand`, `sdtm-dm-race-ethnicity`, `schema-expressions`, `rust/crates/yamaa-adapters/tests/fixtures/text_template_reference.json`, `negative-str-template-missing-placeholder`.
 
 `str_template` accepts a bare template as
 [Schema language](reference/schema-language.md) shorthand. The shorthand
@@ -369,7 +369,7 @@ linear in the subject, so no match is refused, and a refusal is never treated
 as an unmatched string or a skipped verification.
 
 Fails: `engine_rejected`.
-Evidence: `rust/crates/yamaa-core/tests/execution_declarative_text_replace.rs::oversized_patterns_report_the_compiled_size_limit_at_the_pattern`, `rust/crates/yamaa-adapters/tests/scalar_declarative_text_replace.rs::a_catastrophic_pattern_without_a_match_leaves_the_value_unchanged`.
+Evidence: `rust/crates/yamaa-core/tests/execution_declarative_text_replace.rs::oversized_patterns_report_the_compiled_size_limit_at_the_pattern`, `rust/crates/yamaa-adapters/tests/scalar_declarative_text_replace.rs::a_catastrophic_pattern_without_a_match_leaves_the_value_unchanged`, `rust/tests/host-fixtures/cases.json::pattern_beyond_the_compiled_size_limit`.
 
 The policy is the [fixed resource policy](../docs/release.md#resource-limits).
 For a column `matches` check, `spec_paths` names its declaring pattern, such as

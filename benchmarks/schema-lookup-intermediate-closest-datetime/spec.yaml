@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADEG
 keys: [STUDYID, USUBJID, EGSEQ]
 input:
@@ -29,14 +31,12 @@ intermediates:
       - PC.PCSEQ
     keep: first
     columns: [PCSEQ, PCDTM, PCSTRESN, DIST]
-    no_match: {literal: null}
     derivations:
       PREC: {precision: {type: datetime, source: PCDTC}}
       PCDTM:
         impute:
           type: datetime
           source: PCDTC
-          minimum_source_precision: day
           time: first
       GAP:
         diff:
@@ -44,7 +44,7 @@ intermediates:
           start: PCDTM
           end: EG.EGDTC
           unit: hour
-      DIST: {compute: {expr: "ABS(GAP)"}}
+      DIST: "ABS(GAP)"
 
 columns:
   - name: STUDYID

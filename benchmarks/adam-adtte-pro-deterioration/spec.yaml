@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADTTE
 keys: [STUDYID, USUBJID, PARAMCD]
 
@@ -11,6 +13,7 @@ input:
   QS:
     path: input/qs.csv
     types: {QSSEQ: int, ADT: date, AVAL: int}
+    key: [STUDYID, USUBJID]
   DS:
     path: input/ds.csv
     types: {DSDTC: date, DSSEQ: int}
@@ -35,7 +38,6 @@ intermediates:
     filter: "QS.ADT IS NOT NULL AND QS.AVAL IS NOT NULL"
     order_by: [QS.ADT, QS.QSSEQ]
     keep: first
-    no_match: {literal: null}
 
   # The first deteriorated assessment: dated after the baseline assessment
   # with a score at least 10 points below the baseline score. The cutoff is
@@ -49,10 +51,9 @@ intermediates:
       AND QS.AVAL <= QS.CUTOFF"
     order_by: [QS.ADT, QS.QSSEQ]
     keep: first
-    no_match: {literal: null}
     derivations:
       BASELINEDT: BASELINE.ADT
-      CUTOFF: {compute: {expr: "BASELINE.AVAL - 10"}}
+      CUTOFF: "BASELINE.AVAL - 10"
 
   # The first censoring reason: progression, discontinuation, or
   # withdrawal. Only the earliest counts; later ones do not move the
@@ -65,7 +66,6 @@ intermediates:
       'STUDY DISCONTINUATION', 'WITHDRAWAL OF CONSENT')"
     order_by: [DS.DSDTC, DS.DSSEQ]
     keep: first
-    no_match: {literal: null}
 
 columns:
   - name: STUDYID
@@ -81,12 +81,12 @@ columns:
   - name: PARAMCD
     type: str
     label: Parameter Code
-    derivation: {literal: TTDGHS}
+    derivation: "'TTDGHS'"
 
   - name: PARAM
     type: str
     label: Parameter
-    derivation: {literal: Time to Deterioration in Global Health Status}
+    derivation: "'Time to Deterioration in Global Health Status'"
 
   - name: STARTDT
     type: date
@@ -193,8 +193,8 @@ columns:
     derivation:
       case:
         - when: "EVENTDT IS NOT NULL"
-          then: {literal: 0}
-        - otherwise: {literal: 1}
+          then: 0
+        - otherwise: 1
 
   # A deterioration and a censoring reason on the same date count as a
   # deterioration: the event always wins over censoring, but only when the
@@ -207,11 +207,11 @@ columns:
         - when: "DETERDT IS NOT NULL AND (DEATHDT IS NULL
             OR DETERDT <= DEATHDT) AND (CENSORRSNDT IS NULL
             OR DETERDT <= CENSORRSNDT)"
-          then: {literal: PRO DETERIORATION}
+          then: "'PRO DETERIORATION'"
         - when: "DEATHDT IS NOT NULL AND (CENSORRSNDT IS NULL
             OR DEATHDT <= CENSORRSNDT)"
-          then: {literal: DEATH}
-        - otherwise: {literal: CENSORED}
+          then: "'DEATH'"
+        - otherwise: "'CENSORED'"
 
   - name: CNSDTDSC
     type: str
@@ -219,10 +219,10 @@ columns:
     derivation:
       case:
         - when: "EVENTDT IS NOT NULL"
-          then: {literal: null}
+          then: null
         - when: "CENSORRSN IS NOT NULL"
           then: CENSORRSN
-        - otherwise: {literal: STUDY COMPLETION}
+        - otherwise: "'STUDY COMPLETION'"
 
   - name: SRCDOM
     type: str
@@ -232,13 +232,13 @@ columns:
         - when: "DETERDT IS NOT NULL AND (DEATHDT IS NULL
             OR DETERDT <= DEATHDT) AND (CENSORRSNDT IS NULL
             OR DETERDT <= CENSORRSNDT)"
-          then: {literal: QS}
+          then: "'QS'"
         - when: "DEATHDT IS NOT NULL AND (CENSORRSNDT IS NULL
             OR DEATHDT <= CENSORRSNDT)"
-          then: {literal: ADSL}
+          then: "'ADSL'"
         - when: "LASTQSLE IS NULL"
-          then: {literal: ADSL}
-        - otherwise: {literal: QS}
+          then: "'ADSL'"
+        - otherwise: "'QS'"
 
   - name: SRCVAR
     type: str
@@ -248,13 +248,13 @@ columns:
         - when: "DETERDT IS NOT NULL AND (DEATHDT IS NULL
             OR DETERDT <= DEATHDT) AND (CENSORRSNDT IS NULL
             OR DETERDT <= CENSORRSNDT)"
-          then: {literal: ADT}
+          then: "'ADT'"
         - when: "DEATHDT IS NOT NULL AND (CENSORRSNDT IS NULL
             OR DEATHDT <= CENSORRSNDT)"
-          then: {literal: DTHDT}
+          then: "'DTHDT'"
         - when: "LASTQSLE IS NULL"
-          then: {literal: RANDDT}
-        - otherwise: {literal: ADT}
+          then: "'RANDDT'"
+        - otherwise: "'ADT'"
 
   - name: SRCSEQ
     type: int

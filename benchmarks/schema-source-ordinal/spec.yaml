@@ -1,4 +1,5 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
 domain: RECORDS
 keys: [GROUP_ID, ROW_SEQUENCE]
 input:
@@ -40,4 +41,3 @@ rows:
   - id: included
     dataset: SOURCE
     filter: "SOURCE.Include = 'Y'"
-    derivations: {}

@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: SDTM
 domain: LB
 keys: [STUDYID, USUBJID, LBSEQ]
 input:
@@ -15,7 +17,7 @@ columns:
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
-    derivation: {literal: LB}
+    derivation: "'LB'"
 
   - name: STUDYID
     type: str
@@ -122,7 +124,6 @@ columns:
                 '1 PLUS': '1+'
                 '2+': '2+'
                 '+2': '2+'
-              missing: {literal: null}
         - otherwise: LBORRES
 
   # A result that is not a plain number (a grade, or a censored value such as
@@ -131,9 +132,8 @@ columns:
     type: float
     label: Numeric Result/Finding in Standard Units
     derivation:
-      value:
-        source: LBSTRESC
-      unconvertible: {literal: null}
+      value: LBSTRESC
+      unconvertible: null
 
   - name: LBSTRESU
     type: str
@@ -147,9 +147,9 @@ columns:
     derivation:
       case:
         - when: "LBSTRESC LIKE '<%'"
-          then: {literal: LOW}
+          then: "'LOW'"
         - when: "LBSTRESC LIKE '>%'"
-          then: {literal: HIGH}
+          then: "'HIGH'"
 
   - name: LBDTC
     type: date

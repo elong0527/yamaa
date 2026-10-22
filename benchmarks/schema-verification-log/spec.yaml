@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADSL
 keys: [USUBJID]
 input:
@@ -22,7 +24,7 @@ columns:
     label: Age
     derivation: DM.AGE
     verifications:
-      - not_missing: {}
+      - not_missing
       # A warning, not an error: an age outside 18-100 is reported and the
       # run still succeeds with every row kept.
       - range:

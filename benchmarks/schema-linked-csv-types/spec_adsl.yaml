@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
@@ -44,4 +46,4 @@ columns:
         start: DM.RFXSTDT
         end: DM.RFXENDT
         unit: day
-        bounds: inclusive
+        closed: both

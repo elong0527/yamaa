@@ -1379,6 +1379,8 @@ dependencies = [
 name = "yamaa-cli"
 version = "0.5.0"
 dependencies = [
+ "libc",
+ "windows-sys",
  "yamaa",
 ]
 

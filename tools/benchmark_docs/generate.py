@@ -1130,7 +1130,7 @@ def render_benchmark(benchmark, previous=None, next=None):
     return result.encode("ascii", "xmlcharrefreplace")
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "benchmarks",
@@ -1156,7 +1156,7 @@ def main():
         default=DESTINATION,
         help="Destination directory (default: docs/benchmark)",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     if args.all and args.benchmarks:
         parser.error("choose --all or explicit benchmark names")
     inventory = plan(BENCHMARKS)

@@ -1,4 +1,5 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
 domain: ADSL
 keys: [USUBJID]
 input:
@@ -13,7 +14,7 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation: {literal: YAMAA-01}
+    derivation: "'YAMAA-01'"
 
   - name: USUBJID
     type: str
@@ -30,10 +31,10 @@ columns:
     derivation:
       case:
         - when: "DM.AGE > 65"
-          then: {literal: HIGH}
+          then: "'HIGH'"
         - when: "DM.AGE >= 40"
-          then: {literal: MEDIUM}
-        - otherwise: {literal: LOW}
+          then: "'MEDIUM'"
+        - otherwise: "'LOW'"
 
   # Y marks a male under 65. NOT UNKNOWN is UNKNOWN, not TRUE: subject
   # 03's missing age skips the first branch and is caught by the explicit
@@ -45,15 +46,15 @@ columns:
     derivation:
       case:
         - when: "NOT (DM.AGE >= 65) AND DM.SEX = 'M'"
-          then: {literal: Y}
+          then: "'Y'"
         - when: "DM.AGE IS NULL"
-          then: {literal: U}
-        - otherwise: {literal: N}
+          then: "'U'"
+        - otherwise: "'N'"
 
   # LIKE is case-sensitive: 'drug-low' matches neither LIKE branch, while
   # 'DRUGX' matches 'DRUG%'. NOT IN over a missing value is UNKNOWN, not
   # TRUE, so subject 04 skips to the IS NULL branch. The first branch
-  # uses the bare-source shorthand, copying the matched value through.
+  # reads the bare name as a reference, copying the matched value through.
   # DRUG is caught by 'DRUG%', so only PLACEBO reaches otherwise.
   - name: TRTCLASS
     type: str
@@ -63,9 +64,9 @@ columns:
         - when: "DM.TRTGRP LIKE 'SCRN%'"
           then: DM.TRTGRP
         - when: "DM.TRTGRP LIKE 'DRUG%'"
-          then: {literal: DRUG_FAMILY}
+          then: "'DRUG_FAMILY'"
         - when: "DM.TRTGRP NOT IN ('DRUG', 'PLACEBO')"
-          then: {literal: OTHER}
+          then: "'OTHER'"
         - when: "DM.TRTGRP IS NULL"
-          then: {literal: MISSING}
-        - otherwise: {literal: STANDARD}
+          then: "'MISSING'"
+        - otherwise: "'STANDARD'"

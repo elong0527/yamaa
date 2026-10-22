@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADPP
 keys: [STUDYID, USUBJID, VISIT, PARAMCD]
 input:
@@ -18,15 +20,13 @@ intermediates:
     dataset: EX
     key: {STUDYID: PP.STUDYID, USUBJID: PP.USUBJID, EXSTDTC: PP.PPRFTDTC}
     columns: [DOSE_MG]
-    no_match: 0
+    absent: 0
     derivations:
       MGDIV:
         mapping:
           source: EXDOSU
           dict: {mg: 1, ug: 1000}
-      DOSE_MG:
-        compute:
-          expr: "EXDOSE / MGDIV"
+      DOSE_MG: "EXDOSE / MGDIV"
     verifications:
       - unique: [STUDYID, USUBJID, EXSTDTC]
 
@@ -77,7 +77,7 @@ rows:
     derivations:
       PARAMCD: PP.PPTESTCD
       PARAM: PP.PPTEST
-      DOSE_MG: {literal: null}
+      DOSE_MG: null
       AVAL: PP.PPSTRESN
       AVALU: PP.PPSTRESU
 
@@ -91,7 +91,7 @@ rows:
         mapping:
           source: PP.PPTESTCD
           dict: {CMAX: CMAXD, AUCLST: AUCLSTD, AUCIFO: AUCIFOD}
-          unmapped: {literal: null}
+          unmapped: null
       PARAM:
         mapping:
           source: PP.PPTESTCD
@@ -99,15 +99,13 @@ rows:
             CMAX: Max Conc Norm by Dose
             AUCLST: AUC to Last Nonzero Conc Norm by Dose
             AUCIFO: AUC Infinity Obs Norm by Dose
-          unmapped: {literal: null}
+          unmapped: null
       DOSE_MG: DOSE.DOSE_MG
-      AVAL:
-        compute:
-          expr: "PP.PPSTRESN / NULLIF(DOSE_MG, 0)"
+      AVAL: "PP.PPSTRESN / NULLIF(DOSE_MG, 0)"
       AVALU:
         str_template:
           template: "{PP.PPSTRESU}/mg"
-          missing: {literal: null}
+          missing: null
 
 verifications:
   - row_count:

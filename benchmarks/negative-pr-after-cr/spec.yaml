@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADRS
 keys: [STUDYID, USUBJID, RSSEQ]
 input:
@@ -27,7 +29,7 @@ columns:
   - name: PARAMCD
     type: str
     label: Parameter Code
-    derivation: {literal: OVR}
+    derivation: "'OVR'"
 
   - name: ADT
     type: date

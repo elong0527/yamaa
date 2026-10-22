@@ -10,6 +10,7 @@ from pathlib import Path
 from unittest import mock
 
 from tools.paths import ROOT
+from tools.tests.support import write
 from tools.validation import check_architecture as architecture
 
 MEMBERS = {
@@ -50,10 +51,7 @@ class ArchitectureTests(unittest.TestCase):
         )
 
     def write(self, relative, text):
-        path = self.root / relative
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(textwrap.dedent(text), encoding="utf-8")
-        return path
+        return write(self.root, relative, textwrap.dedent(text))
 
     def append(self, relative, text):
         path = self.root / relative

@@ -26,7 +26,6 @@ exclude the record before constructing the output rows:
 rows:
   - id: windowed
     filter: "ADVS_RAW.ADY IS NOT NULL"
-    derivations: {}
 ```
 
 If the dataset must retain measurements without a visit, identify rows

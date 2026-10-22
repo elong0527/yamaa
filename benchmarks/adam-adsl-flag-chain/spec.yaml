@@ -1,9 +1,11 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
   DM: {path: input/dm.csv, types: {RANDDT: date}}
-  EX: input/ex.csv
+  EX: {path: input/ex.csv, key: [STUDYID, USUBJID]}
 base: DM
 
 output:
@@ -88,7 +90,6 @@ columns:
         source: AGE
         breaks: [65]
         labels: ["<65", ">=65"]
-        right: false
 
   # 1 for the youngest subject in the study; USUBJID breaks ties.
   - name: AGERNK

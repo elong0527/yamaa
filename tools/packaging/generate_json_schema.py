@@ -214,10 +214,10 @@ def render(file_type):
     return json.dumps(document, indent=2, ensure_ascii=True) + "\n"
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--write", action="store_true")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     expected = {target(file_type): render(file_type) for file_type in FILE_TYPES}
     if args.write:
         TARGET.mkdir(parents=True, exist_ok=True)

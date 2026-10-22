@@ -1,11 +1,13 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
   ADSL_RAW: input/adsl.csv
-  EX: input/ex.csv
-  EC: input/ec.csv
-  FA: input/fa.csv
+  EX: {path: input/ex.csv, key: [STUDYID, USUBJID]}
+  EC: {path: input/ec.csv, key: [STUDYID, USUBJID]}
+  FA: {path: input/fa.csv, key: [STUDYID, USUBJID]}
 base: ADSL_RAW
 
 output:
@@ -78,9 +80,9 @@ columns:
     derivation:
       case:
         - when: "EX_ADJ_CNT > 0 OR EC_ADJ_CNT > 0 OR FA_ADJ_CNT > 0"
-          then: {literal: "Y"}
+          then: "'Y'"
         - when: "EX_ANY_CNT > 0 OR EC_ANY_CNT > 0 OR FA_ANY_CNT > 0"
-          then: {literal: "N"}
+          then: "'N'"
     verifications:
       - allowed_values:
           values: ["Y", "N"]

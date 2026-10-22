@@ -1,9 +1,11 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: SDTM
 domain: VS
 keys: [STUDYID, USUBJID, VSSEQ]
 input:
   VS_RAW: {path: input/vs_raw.csv, types: {VSDTC: date}}
-  DM: {path: input/dm.csv, types: {RFSTDTC: date}}
+  DM: {path: input/dm.csv, types: {RFSTDTC: date}, key: [STUDYID, USUBJID]}
   TV: input/tv.csv
   SE:
     path: input/se.csv
@@ -21,7 +23,6 @@ intermediates:
   - id: PLANNEDVISIT
     dataset: TV
     key: [VISIT]
-    no_match: {literal: null}
 
   # The subject's element whose dates SESTDTC..SEENDTC (both ends included)
   # hold the collection date; a day shared by two elements keeps the later
@@ -35,13 +36,12 @@ intermediates:
       upper: SEENDTC
     order_by: [SE.SESTDTC]
     keep: last
-    no_match: {literal: null}
 
 columns:
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
-    derivation: {literal: VS}
+    derivation: "'VS'"
 
   - name: STUDYID
     type: str
@@ -105,9 +105,7 @@ columns:
   - name: SPONSORNUM
     type: float
     label: Sponsor-Assigned Visit Number
-    derivation:
-      compute:
-        expr: "PREVPLANNED + 0.01"
+    derivation: "PREVPLANNED + 0.01"
 
   # The planned number when the label names a planned visit, otherwise the
   # sponsor-assigned number for the unplanned visit.
@@ -130,7 +128,7 @@ columns:
     label: Study Day of Vital Signs
     derivation:
       study_day:
-        date: VSDTC
+        source: VSDTC
         reference: RFSTDTC
 
   - name: EPOCH

@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
@@ -41,44 +43,34 @@ columns:
   - name: ZERO
     type: int
     label: Zero
-    derivation: {literal: 0}
+    derivation: 0
 
   - name: CEILVAL
     type: int
     label: Ceiling of Analysis Value
-    derivation:
-      compute:
-        expr: "CEIL(AVAL)"
+    derivation: "CEIL(AVAL)"
 
   - name: FLOORVAL
     type: int
     label: Floor of Analysis Value
-    derivation:
-      compute:
-        expr: "FLOOR(AVAL)"
+    derivation: "FLOOR(AVAL)"
 
   # Toward zero: -2.7 gives -2, where FLOOR gives -3.
   - name: TRUNCVAL
     type: int
     label: Truncation of Analysis Value
-    derivation:
-      compute:
-        expr: "TRUNC(AVAL)"
+    derivation: "TRUNC(AVAL)"
 
   - name: EXPVAL
     type: float
     label: Exponential of Analysis Value
-    derivation:
-      compute:
-        expr: "EXP(AVAL)"
+    derivation: "EXP(AVAL)"
 
   # The remainder takes the sign of BVAL, so -7 gives -1 rather than 2.
   - name: MODVAL
     type: int
     label: Remainder of Secondary Value Divided by Three
-    derivation:
-      compute:
-        expr: "MOD(BVAL, 3)"
+    derivation: "MOD(BVAL, 3)"
 
   # Greatest and least skip missing sources, so with ZERO among them
   # neither result is ever missing.

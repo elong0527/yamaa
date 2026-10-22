@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADEX
 keys: [STUDYID, USUBJID]
 input:
@@ -11,7 +13,7 @@ output:
 
 # Each subject's lowest cap: their DS records in ascending CAPDOSE order,
 # first one kept. keep makes it one record per subject, which is what lets
-# the aggregate's derive step below read it.
+# the aggregate's derivations below read it.
 intermediates:
   - id: DOSECAP
     dataset: DS
@@ -39,16 +41,16 @@ columns:
     derivation:
       aggregate:
         key: [STUDYID, USUBJID]
-        derive:
-          - name: DOSE
+        derivations:
+          DOSE:
             type: float
             derivation: EX.EXDOSE
-          - name: CAP
+          CAP:
             type: float
             derivation: DOSECAP.CAPDOSE
           # least skips a missing value: with no cap record the dose is
           # summed uncapped, and a missing dose counts as the full cap.
-          - name: CAPPED
+          CAPPED:
             type: float
             derivation: {least: {sources: [DOSE, CAP]}}
         expr: "SUM(CAPPED)"
@@ -59,4 +61,3 @@ rows:
   - id: exposure
     dataset: EX
     filter: "EX.EXSEQ = 1"
-    derivations: {}

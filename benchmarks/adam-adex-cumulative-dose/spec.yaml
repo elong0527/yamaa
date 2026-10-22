@@ -1,9 +1,12 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADEX
 keys: [STUDYID, USUBJID, EXTRT]
 input:
   TRT: input/subject_treatment.csv
-  EX: {path: input/ex.csv, types: {EXDOSE: float}}
+  EX: {path: input/ex.csv, types: {EXDOSE: float},
+       key: [STUDYID, USUBJID, EXTRT]}
 base: TRT
 
 output:
@@ -61,9 +64,7 @@ columns:
   - name: RDI
     type: float
     label: Relative Dose Intensity
-    derivation:
-      compute:
-        expr: "100 * DOSECUM / NULLIF(PLANDOSE * PLANCYC, 0)"
+    derivation: "100 * DOSECUM / NULLIF(PLANDOSE * PLANCYC, 0)"
 
 verifications:
   - row_count:

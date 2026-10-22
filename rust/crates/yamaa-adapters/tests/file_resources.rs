@@ -7,7 +7,7 @@ mod file {
             use yamaa_adapters::{file_application, specification_report::Identity};
             use yamaa_core::domain_entry::Request;
             let study = Study::new();
-            fs::write(study.0.join("shared/base.yaml"), "schema_version: '1.0'\ndomain: BASE\nkeys: [ID]\ninput: {SRC: {path: input/data.csv, relative_to: entry, types: {ID: int}}}\ncolumns: [{name: ID, type: int, derivation: SRC.ID}]\noutput: {path: output/result.csv, relative_to: entry, columns: [ID], report: output/report.csv}\n").unwrap();
+            fs::write(study.0.join("shared/base.yaml"), "yamaa: \"1.0\"\ntype: spec\ndomain: BASE\nkeys: [ID]\ninput: {SRC: {path: input/data.csv, relative_to: entry, types: {ID: int}}}\ncolumns: [{name: ID, type: int, derivation: SRC.ID}]\noutput: {path: output/result.csv, relative_to: entry, columns: [ID], report: output/report.csv}\n").unwrap();
             fs::create_dir(study.0.join("shared/input")).unwrap();
             fs::write(study.0.join("shared/input/data.csv"), b"ID\n999\n").unwrap();
             let mut results = Vec::new();
@@ -17,7 +17,7 @@ mod file {
                 fs::write(study.0.join(name).join("input/data.csv"), bytes).unwrap();
                 fs::write(
                     study.0.join(name).join("spec.yaml"),
-                    "schema_version: '1.0'\nparent: ../shared/base.yaml\ndomain: STUDY\n",
+                    "yamaa: \"1.0\"\ntype: spec\nparent: ../shared/base.yaml\ndomain: STUDY\n",
                 )
                 .unwrap();
                 let path = study.text(&format!("{name}/spec.yaml"));
@@ -62,15 +62,29 @@ mod file {
         #[test]
         fn composed_relative_input_base_can_change_without_redeclaring_the_inherited_path() {
             let study = Study::new();
-            fs::write(study.0.join("shared/base.yaml"), "schema_version: '1.0'\ndomain: BASE\nkeys: [ID]\ninput: {SRC: {path: data.csv, relative_to: entry}}\noutput: {path: result.csv, relative_to: entry, columns: [ID]}\ncolumns: [{name: ID, type: int, derivation: SRC.ID}]\n").unwrap();
+            fs::write(study.0.join("shared/base.yaml"), "yamaa: \"1.0\"\ntype: spec\ndomain: BASE\nkeys: [ID]\ninput: {SRC: {path: data.csv, relative_to: entry}}\noutput: {path: result.csv, relative_to: entry, columns: [ID]}\ncolumns: [{name: ID, type: int, derivation: SRC.ID}]\n").unwrap();
             fs::write(study.0.join("entry/data.csv"), b"ID\n1\n").unwrap();
             fs::write(study.0.join("shared/data.csv"), b"ID\n9\n").unwrap();
-            for (mode, expected) in [
-                ("entry", "data.csv"),
-                ("declaring", "../shared/data.csv"),
-                ("null", "../shared/data.csv"),
+            // Clearing the inherited base restores its default, the declaring
+            // file (P-CLR-1).
+            for (mode, layer, expected) in [
+                ("entry", "input: {SRC: {relative_to: entry}}", "data.csv"),
+                (
+                    "declaring",
+                    "input: {SRC: {relative_to: declaring}}",
+                    "../shared/data.csv",
+                ),
+                (
+                    "cleared",
+                    "clear: [input.SRC.relative_to]",
+                    "../shared/data.csv",
+                ),
             ] {
-                fs::write(study.0.join("entry/spec.yaml"), format!("schema_version: '1.0'\nparent: ../shared/base.yaml\ninput: {{SRC: {{relative_to: {mode}}}}}\n")).unwrap();
+                fs::write(
+                    study.0.join("entry/spec.yaml"),
+                    format!("yamaa: \"1.0\"\ntype: spec\nparent: ../shared/base.yaml\n{layer}\n"),
+                )
+                .unwrap();
                 let (resources, entry) =
                     file_configuration::resources(&study.text("entry/spec.yaml")).unwrap();
                 let prepared = FileSpecification::prepare(resources, &entry).unwrap();
@@ -133,18 +147,18 @@ mod file {
 
             for inherited_base in ["", "relative_to: entry, "] {
                 let study = Study::new();
-                fs::write(study.0.join("shared/base.yaml"), format!("schema_version: '1.0'\ndomain: BASE\nkeys: [ID]\ninput: {{SRC: {{path: data.csv, types: {{ID: int}}}}}}\ncolumns: [{{name: ID, type: int, derivation: SRC.ID}}]\noutput: {{path: ignored.csv, {inherited_base}columns: [ID], report: ignored-report.csv}}\n")).unwrap();
-                fs::write(study.0.join("shared/replacement.yaml"), "schema_version: '1.0'\nparent: base.yaml\noutput: {path: result.csv, columns: [ID], report: report.csv}\n").unwrap();
+                fs::write(study.0.join("shared/base.yaml"), format!("yamaa: \"1.0\"\ntype: spec\ndomain: BASE\nkeys: [ID]\ninput: {{SRC: {{path: data.csv, types: {{ID: int}}}}}}\ncolumns: [{{name: ID, type: int, derivation: SRC.ID}}]\noutput: {{path: ignored.csv, {inherited_base}columns: [ID], report: ignored-report.csv}}\n")).unwrap();
+                fs::write(study.0.join("shared/replacement.yaml"), "yamaa: \"1.0\"\ntype: spec\nparent: base.yaml\noutput: {path: result.csv, columns: [ID], report: report.csv}\n").unwrap();
                 fs::write(
                     study.0.join("entry/spec.yaml"),
-                    "schema_version: '1.0'\nparent: ../shared/replacement.yaml\n",
+                    "yamaa: \"1.0\"\ntype: spec\nparent: ../shared/replacement.yaml\n",
                 )
                 .unwrap();
                 fs::write(study.0.join("shared/data.csv"), b"ID\n7\n").unwrap();
                 let path = study.text("entry/spec.yaml");
                 let (resources, entry) = file_configuration::resources(&path).unwrap();
                 let prepared = FileSpecification::prepare(resources, &entry).unwrap();
-                let document = prepared.run().document().model().document();
+                let document = prepared.run().document().document();
                 let output = document.field(document.root(), "output").unwrap();
                 for (field, written) in [("path", "result.csv"), ("report", "report.csv")] {
                     let node = document.field(output, field).unwrap();
@@ -208,7 +222,7 @@ mod file {
             use yamaa_core::domain_entry::Request;
 
             let study = Study::new();
-            fs::write(study.0.join("shared/base.yaml"), "schema_version: '1.0'\ndomain: BASE\nkeys: [ID]\ninput: {SRC: data.csv}\ncolumns: [{name: ID, type: int, derivation: SRC.ID}]\noutput: {path: result.csv, relative_to: entry, columns: [ID], report: report.csv}\n").unwrap();
+            fs::write(study.0.join("shared/base.yaml"), "yamaa: \"1.0\"\ntype: spec\ndomain: BASE\nkeys: [ID]\ninput: {SRC: data.csv}\ncolumns: [{name: ID, type: int, derivation: SRC.ID}]\noutput: {path: result.csv, relative_to: entry, columns: [ID], report: report.csv}\n").unwrap();
             for (output, expected) in [
                 (
                     "{relative_to: declaring}",
@@ -219,7 +233,7 @@ mod file {
                 fs::write(
                     study.0.join("entry/spec.yaml"),
                     format!(
-                        "schema_version: '1.0'\nparent: ../shared/base.yaml\noutput: {output}\n"
+                        "yamaa: \"1.0\"\ntype: spec\nparent: ../shared/base.yaml\noutput: {output}\n"
                     ),
                 )
                 .unwrap();
@@ -269,7 +283,7 @@ mod file {
                     } else {
                         format!("'{written}'")
                     };
-                    let spec = format!("schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {{SRC: {source}}}\ncolumns: [{{name: ID, type: int, derivation: SRC.ID}}]\noutput: {{path: output.csv, columns: [ID]}}\n");
+                    let spec = format!("yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {{SRC: {source}}}\ncolumns: [{{name: ID, type: int, derivation: SRC.ID}}]\noutput: {{path: output.csv, columns: [ID]}}\n");
                     fs::write(study.0.join("entry/spec.yaml"), spec).unwrap();
                     let path = study.text("entry/spec.yaml");
                     let request = || Request {
@@ -308,9 +322,11 @@ mod file {
                         assert_eq!(issue.condition(), "resource_path_not_normalized");
                         assert_eq!(issue.rule(), Some(rule));
                         assert_eq!(issue.spec_paths, ["input.SRC.path"]);
+                        // A 1.x specification's finding names the layer that
+                        // writes the path, here the entry itself.
                         assert_eq!(
                             yamaa_core::json::Value::Object(issue.context.clone()),
-                            yamaa_adapters::json!({"dataset":"SRC","path":written})
+                            yamaa_adapters::json!({"dataset":"SRC","entry":path,"path":written,"source":path})
                         );
                     }
                     assert!(!study.0.join("entry/output.csv").exists());
@@ -333,15 +349,19 @@ mod file {
                 study.0.join("entry/link.csv"),
             )
             .unwrap();
-            for (written, condition, rule) in [
+            // The written form is refused where the layer is read, so that
+            // finding names the layer; a link is found when the file is
+            // inspected, after the layers are composed.
+            for (written, condition, rule, names_layer) in [
                 (
                     "https://example.invalid/source.csv",
                     "resource_path_uri_scheme",
                     "FILE-5",
+                    true,
                 ),
-                ("link.csv", "resource_path_symlink", "FILE-8"),
+                ("link.csv", "resource_path_symlink", "FILE-8", false),
             ] {
-                let spec = format!("schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {{SRC: '{written}'}}\ncolumns: [{{name: ID, type: int, derivation: SRC.ID}}]\noutput: {{path: output.csv, columns: [ID]}}\n");
+                let spec = format!("yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {{SRC: '{written}'}}\ncolumns: [{{name: ID, type: int, derivation: SRC.ID}}]\noutput: {{path: output.csv, columns: [ID]}}\n");
                 fs::write(study.0.join("entry/spec.yaml"), spec).unwrap();
                 let path = study.text("entry/spec.yaml");
                 let issues = file_application::domain(
@@ -372,9 +392,15 @@ mod file {
                 assert_eq!(issues[0].condition(), condition);
                 assert_eq!(issues[0].rule(), Some(rule));
                 assert_eq!(issues[0].spec_paths, ["input.SRC.path"]);
+                let context = if names_layer {
+                    yamaa_adapters::json!({"dataset":"SRC","entry":path,"path":written,"source":path})
+                } else {
+                    yamaa_adapters::json!({"dataset":"SRC","path":written})
+                };
                 assert_eq!(
                     yamaa_core::json::Value::Object(issues[0].context.clone()),
-                    yamaa_adapters::json!({"dataset":"SRC","path":written})
+                    context,
+                    "{written}"
                 );
                 assert!(!study.0.join("entry/output.csv").exists());
             }
@@ -383,8 +409,8 @@ mod file {
         #[test]
         fn inherited_parent_keeps_its_own_input_and_output_locations_without_configuration() {
             let study = Study::new();
-            let parent = "schema_version: '1.0'\ndomain: BASE\nkeys: [ID]\ninput: {SRC: data.csv}\noutput: {path: ../outputs/out.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
-            let child = "schema_version: '1.0'\nparent: ../shared/base.yaml\ndomain: CHILD\n";
+            let parent = "yamaa: \"1.0\"\ntype: spec\ndomain: BASE\nkeys: [ID]\ninput: {SRC: data.csv}\noutput: {path: ../outputs/out.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
+            let child = "yamaa: \"1.0\"\ntype: spec\nparent: ../shared/base.yaml\ndomain: CHILD\n";
             fs::write(study.0.join("entry/child.yaml"), child).unwrap();
             fs::write(study.0.join("shared/base.yaml"), parent).unwrap();
             fs::write(study.0.join("entry/data.csv"), b"ID\n999\n").unwrap();
@@ -618,7 +644,7 @@ mod file {
             fs::write(temp.0.join("parents/base.yaml"), parent).unwrap();
             fs::write(
                 temp.0.join("children/spec.yaml"),
-                "schema_version: '1.0'\nparent: ../parents/base.yaml\n",
+                "yamaa: \"1.0\"\ntype: spec\nparent: ../parents/base.yaml\n",
             )
             .unwrap();
             let project = fs::read_to_string(temp.0.join("project.yaml"))
@@ -825,7 +851,8 @@ mod file {
             assert!(!temp.0.join("lb.json").exists());
         }
         /// Drop one YAML mapping entry: its header line and every following
-        /// line indented deeper than the header.
+        /// line indented deeper than the header, or written at its depth as
+        /// an entry of the header's block sequence.
         fn without_entry(text: &str, header: &str) -> String {
             let depth = |line: &str| line.len() - line.trim_start().len();
             let mut kept = String::new();
@@ -836,7 +863,11 @@ mod file {
                     (found, inside) = (true, true);
                     continue;
                 }
-                if inside && (line.trim().is_empty() || depth(line) > depth(header)) {
+                if inside
+                    && (line.trim().is_empty()
+                        || depth(line) > depth(header)
+                        || (depth(line) == depth(header) && line.trim_start().starts_with("- ")))
+                {
                     continue;
                 }
                 inside = false;
@@ -882,13 +913,13 @@ mod file {
         #[test]
         fn define_reports_every_missing_study_guide_and_target_before_reading_specifications() {
             // A run needs only a section's specs; Define requires the study and
-            // the section's standard and define (DEFINE-28).
+            // the section's standards and define (DEFINE-28).
             for (removed, expected) in [
                 (
-                    &["study:", "  standard:", "  define: define.xml"][..],
+                    &["study:", "  standards:", "  define: define.xml"][..],
                     &[
                         ("study", "study"),
-                        ("sdtm.standard", "standard"),
+                        ("sdtm.standards", "standards"),
                         ("sdtm.define", "define"),
                     ][..],
                 ),
@@ -997,8 +1028,8 @@ mod file {
             {
                 for host in [Language::Python, Language::R] {
                     let temp = Temp::fixture("sdtm-dm-metadata", false);
-                    // Only Define-XML is generated: the section omits `datasets`.
-                    temp.edit_project(&[("  datasets: json\n", "")]);
+                    // Only Define-XML is generated: the section omits `transport`.
+                    temp.edit_project(&[("  transport: dataset_json\n", "")]);
                     for (filename, changes) in [
                         ("spec.yaml", "specification_mutations"),
                         ("project.yaml", "project_mutations"),
@@ -1016,7 +1047,7 @@ mod file {
                         fs::rename(temp.0.join("spec.yaml"), temp.0.join("base.yaml")).unwrap();
                         fs::write(
                             temp.0.join("spec.yaml"),
-                            "schema_version: '1.0'\nparent: base.yaml\n",
+                            "yamaa: \"1.0\"\ntype: spec\nparent: base.yaml\n",
                         )
                         .unwrap();
                     }
@@ -1129,8 +1160,8 @@ mod file {
             let spec = spec
                 .replace("VSDTC, EPOCH]", "VSDTC, VSDTM, EPOCH]")
                 .replace(
-                    "        invalid: {literal: null}\n",
-                    "        invalid: {literal: null}\n    submission:\n      core: Perm\n      role: Timing\n      origin:\n        type: Derived\n        source: Sponsor\n      method: VSDTC completed to the start of its day.\n",
+                    "        invalid: null\n",
+                    "        invalid: null\n    submission:\n      core: Perm\n      role: Timing\n      origins:\n        - type: Derived\n          source: Sponsor\n      method: VSDTC completed to the start of its day.\n",
                 );
             fs::write(temp.0.join("spec.yaml"), spec).unwrap();
             let mut run = temp.run("2026-09-30T00:00:00");
@@ -1203,15 +1234,10 @@ mod file {
             fs::write(&target, b"original publication sentinel").unwrap();
             // Under Other a lower-case dataset name is admitted, and its
             // transport file is named for it in lower case beside the document.
-            let project = temp.0.join("project.yaml");
-            fs::write(
-                &project,
-                fs::read_to_string(&project)
-                    .unwrap()
-                    .replace("  - spec.yaml", "  - spec.yaml\n  - second.yaml")
-                    .replace("context: Submission", "context: Other"),
-            )
-            .unwrap();
+            temp.edit_project(&[
+                ("  - spec.yaml", "  - spec.yaml\n  - second.yaml"),
+                ("sdtm:\n", "sdtm:\n  context: Other\n"),
+            ]);
             fs::write(
                 temp.0.join("second.yaml"),
                 fs::read_to_string(temp.0.join("spec.yaml"))
@@ -1276,7 +1302,7 @@ mod file {
             fs::write(temp.0.join("parents/base.yaml"), parent).unwrap();
             fs::write(
                 temp.0.join("children/spec.yaml"),
-                "schema_version: '1.0'\nparent: ../parents/base.yaml\n",
+                "yamaa: \"1.0\"\ntype: spec\nparent: ../parents/base.yaml\n",
             )
             .unwrap();
             let project = fs::read_to_string(temp.0.join("project.yaml"))
@@ -1323,11 +1349,10 @@ mod file {
             assert!(!temp.0.join("artifacts/dm.json").exists());
             // Without a transport the leaf names the artifact, which must stay
             // inside the document's directory (DEFINE-16).
-            let environment = fs::read_to_string(temp.0.join("project.yaml"))
-                .unwrap()
-                .replace("  datasets: json\n", "")
-                .replace("define: define.xml", "define: package/define.xml");
-            fs::write(temp.0.join("project.yaml"), environment).unwrap();
+            temp.edit_project(&[
+                ("  transport: dataset_json\n", ""),
+                ("define: define.xml", "define: package/define.xml"),
+            ]);
             let mut run = temp.run("2026-09-11T00:00:00");
             assert!(run
                 .issues()
@@ -1392,8 +1417,10 @@ mod file {
             "core: Exp\n      role: Record Qualifier\n      length: 3\n      significant_digits: 3\n      codelist: AGE_VALUES",
         );
             fs::write(temp.0.join("spec.yaml"), spec).unwrap();
-            let project = fs::read_to_string(temp.0.join("project.yaml")).unwrap().replace("sdtm:\n", "- codelists:\n  - id: AGE_VALUES\n    name: Ages\n    data_type: float\n    items: [{value: 34}, {value: 67}, {value: 52}]\nsdtm:\n");
-            fs::write(temp.0.join("project.yaml"), project).unwrap();
+            temp.edit_project(&[(
+                "study:\n",
+                "- codelists:\n  - id: AGE_VALUES\n    name: Ages\n    data_type: float\n    items: [{value: 34}, {value: 67}, {value: 52}]\nstudy:\n",
+            )]);
             let result = temp.run("2026-09-11T00:00:00");
             assert!(result.issues().is_empty(), "{:?}", result.issues());
             let data: yamaa_core::json::Value =
@@ -1406,8 +1433,8 @@ mod file {
         fn unused_terminology_is_omitted_and_missing_document_links_do_not_read_study_files() {
             let temp = Temp::fixture("sdtm-dm-metadata", false);
             temp.edit_project(&[
-                ("  datasets: json\n", ""),
-                ("sdtm:\n", "- codelists:\n  - id: UNUSED\n    name: Used only in another submission\n    data_type: text\n    items: [{value: OTHER}]\nsdtm:\n"),
+                ("  transport: dataset_json\n", ""),
+                ("study:\n", "- codelists:\n  - id: UNUSED\n    name: Used only in another submission\n    data_type: text\n    items: [{value: OTHER}]\nstudy:\n"),
             ]);
             let result = temp.run("2026-09-11T00:00:00");
             assert!(result.issues().is_empty(), "{:?}", result.issues());
@@ -1465,13 +1492,13 @@ mod file {
                 let mut spec = fs::read_to_string(temp.0.join("spec.yaml"))
                     .unwrap()
                     .replace(
-                    "codelist: MEDDRA\n      origin:\n        type: Assigned\n        source: Sponsor",
-                    "codelist: MEDDRA\n      origin:\n        type: Collected\n        source: Vendor",
+                    "codelist: MEDDRA\n      origins:\n        - type: Assigned\n          source: Sponsor",
+                    "codelist: MEDDRA\n      origins:\n        - type: Collected\n          source: Vendor",
                 );
                 if derives {
                     spec = spec.replace(
-                        "    no_match: NOT CODED\n",
-                        "    no_match: NOT CODED\n    derivations:\n      LLTUPPER: {str_case: {source: LLTNAME, to: upper}}\n",
+                        "    absent: NOT CODED\n",
+                        "    absent: NOT CODED\n    derivations:\n      LLTUPPER: {str_case: {source: LLTNAME, to: upper}}\n",
                     );
                 }
                 fs::write(temp.0.join("spec.yaml"), spec).unwrap();
@@ -1488,24 +1515,25 @@ mod file {
                 );
             }
         }
-        /// Rewrite the DM fixture's metadata-only environment for one section.
+        /// Rewrite the DM fixture's project to compose Define-XML alone for
+        /// one section under `context`. A send section lists a specification
+        /// of its own model (SUB-23).
         fn metadata_only(temp: &Temp, section: &str, context: &str) {
-            let environment = fs::read_to_string(temp.0.join("project.yaml"))
-                .unwrap()
-                .replace("  datasets: json\n", "")
-                .replace("context: Submission", &format!("context: {context}"))
-                .replace(
-                    "sdtm:\n  standard:\n    name: SDTMIG",
-                    &format!(
-                        "{section}:\n  standard:\n    name: {}",
-                        if section == "send" {
-                            "SENDIG"
-                        } else {
-                            "SDTMIG"
-                        }
-                    ),
-                );
-            fs::write(temp.0.join("project.yaml"), environment).unwrap();
+            let guide = if section == "send" {
+                "SENDIG"
+            } else {
+                "SDTMIG"
+            };
+            let header = format!("{section}:\n  context: {context}\n");
+            let standard = format!("  - name: {guide}\n");
+            temp.edit_project(&[
+                ("  transport: dataset_json\n", ""),
+                ("sdtm:\n", header.as_str()),
+                ("  - name: SDTMIG\n", standard.as_str()),
+            ]);
+            if section == "send" {
+                replace_spec(temp, "model: SDTM\n", "model: SEND\n");
+            }
         }
         fn replace_spec(temp: &Temp, from: &str, to: &str) {
             let spec = fs::read_to_string(temp.0.join("spec.yaml")).unwrap();
@@ -1519,15 +1547,15 @@ mod file {
         #[test]
         fn collected_origins_name_their_form_page_under_submission() {
             // SITEID is collected by the investigator on the first form page.
-            let paged = "role: Record Qualifier\n      length: 10\n      origin:\n        type: Collected\n        source: Investigator\n        documents:\n          - document: acrf\n            pages: {type: PhysicalRef, refs: \"1\"}\n";
-            let pageless = "role: Record Qualifier\n      length: 10\n      origin:\n        type: Collected\n        source: Investigator\n";
-            let unpaged = format!("{pageless}        documents: [acrf]\n");
+            let paged = "role: Record Qualifier\n      length: 10\n      origins:\n        - type: Collected\n          source: Investigator\n          documents:\n            - document: acrf\n              pages: {type: PhysicalRef, refs: \"1\"}\n";
+            let pageless = "role: Record Qualifier\n      length: 10\n      origins:\n        - type: Collected\n          source: Investigator\n";
+            let unpaged = format!("{pageless}          documents: [acrf]\n");
             for (replacement, context, path) in [
-                (pageless, "Submission", Some("SITEID.submission.origin")),
+                (pageless, "Submission", Some("SITEID.submission.origins[0]")),
                 (
                     unpaged.as_str(),
                     "Submission",
-                    Some("SITEID.submission.origin.documents"),
+                    Some("SITEID.submission.origins[0].documents"),
                 ),
                 (pageless, "Other", None),
                 (unpaged.as_str(), "Other", None),
@@ -1560,36 +1588,25 @@ mod file {
         #[test]
         fn not_available_and_send_sources_follow_the_family_pairs() {
             let assigned =
-                "codelist: AGEU\n      origin:\n        type: Assigned\n        source: Sponsor\n";
-            let not_available = "codelist: AGEU\n      origin:\n        type: Not Available\n        description: Age units were not collected.\n";
-            // An sdtm Not Available declares no source and says why.
-            let temp = Temp::fixture("sdtm-dm-metadata", false);
-            replace_spec(&temp, assigned, not_available);
-            metadata_only(&temp, "sdtm", "Submission");
-            let run = temp.run("2026-09-11T00:00:00");
-            assert!(run.issues().is_empty(), "{:?}", run.issues());
-            let xml = std::str::from_utf8(run.artifacts().next().unwrap().1).unwrap();
-            let ageu = item(xml, "IT.DM.AGEU");
-            assert!(
-                ageu.contains("<def:Origin Type=\"Not Available\">"),
-                "{ageu}"
-            );
-            assert!(ageu.contains(">Age units were not collected.</TranslatedText>"));
-            let temp = Temp::fixture("sdtm-dm-metadata", false);
-            replace_spec(
-                &temp,
-                assigned,
-                &not_available.replace("description", "source: Sponsor\n        description"),
-            );
-            metadata_only(&temp, "sdtm", "Submission");
-            let run = temp.run("2026-09-11T00:00:00");
-            assert_eq!(run.issues().len(), 1, "{:?}", run.issues());
-            assert_eq!(run.issues()[0].condition(), "origin_source_not_admitted");
-            assert_eq!(
-                run.issues()[0].spec_paths,
-                ["sdtm.specs[0].columns.AGEU.submission.origin"]
-            );
-            // send takes the sources the sdtm table admits, or none.
+                "codelist: AGEU\n      origins:\n        - type: Assigned\n          source: Sponsor\n";
+            let not_available = "codelist: AGEU\n      origins:\n        - type: Not Available\n          description: Age units were not collected.\n";
+            // sdtm admits no Not Available origin, with or without a source.
+            let sourced =
+                not_available.replace("description", "source: Sponsor\n          description");
+            for origin in [not_available, sourced.as_str()] {
+                let temp = Temp::fixture("sdtm-dm-metadata", false);
+                replace_spec(&temp, assigned, origin);
+                metadata_only(&temp, "sdtm", "Submission");
+                let run = temp.run("2026-09-11T00:00:00");
+                assert_eq!(run.issues().len(), 1, "{:?}", run.issues());
+                assert_eq!(run.issues()[0].condition(), "origin_source_not_admitted");
+                assert_eq!(
+                    run.issues()[0].spec_paths,
+                    ["sdtm.specs[0].columns.AGEU.submission.origins[0]"]
+                );
+            }
+            // send takes the sources the sdtm table admits, or none, and keeps
+            // a Not Available origin that declares no source and says why.
             let send = |temp: &Temp| {
                 Define::prepare(
                     temp.0.join("project.yaml").to_str().unwrap(),
@@ -1601,10 +1618,17 @@ mod file {
                 )
             };
             let temp = Temp::fixture("sdtm-dm-metadata", false);
+            replace_spec(&temp, assigned, not_available);
             metadata_only(&temp, "send", "Submission");
             let run = send(&temp);
             assert!(run.issues().is_empty(), "{:?}", run.issues());
             let xml = std::str::from_utf8(run.artifacts().next().unwrap().1).unwrap();
+            let ageu = item(xml, "IT.DM.AGEU");
+            assert!(
+                ageu.contains("<def:Origin Type=\"Not Available\">"),
+                "{ageu}"
+            );
+            assert!(ageu.contains(">Age units were not collected.</TranslatedText>"));
             assert!(item(xml, "IT.DM.SITEID")
                 .contains("<def:Origin Type=\"Collected\" Source=\"Investigator\">"));
             let temp = Temp::fixture("sdtm-dm-metadata", false);
@@ -1612,15 +1636,15 @@ mod file {
             replace_spec(
                 &temp,
                 assigned,
-                "codelist: AGEU\n      origin:\n        type: Assigned\n",
+                "codelist: AGEU\n      origins:\n        - type: Assigned\n",
             );
             let run = send(&temp);
             assert!(run.issues().is_empty(), "{:?}", run.issues());
             let xml = std::str::from_utf8(run.artifacts().next().unwrap().1).unwrap();
             assert!(item(xml, "IT.DM.AGEU").contains("<def:Origin Type=\"Assigned\"/>"));
             for origin in [
-                "codelist: AGEU\n      origin:\n        type: Assigned\n        source: Investigator\n",
-                not_available.replace("description", "source: Sponsor\n        description").as_str(),
+                "codelist: AGEU\n      origins:\n        - type: Assigned\n          source: Investigator\n",
+                sourced.as_str(),
             ] {
                 let temp = Temp::fixture("sdtm-dm-metadata", false);
                 metadata_only(&temp, "send", "Submission");
@@ -1630,14 +1654,14 @@ mod file {
                 assert_eq!(run.issues()[0].condition(), "origin_source_not_admitted");
                 assert_eq!(
                     run.issues()[0].spec_paths,
-                    ["send.specs[0].columns.AGEU.submission.origin"]
+                    ["send.specs[0].columns.AGEU.submission.origins[0]"]
                 );
             }
         }
-        const STUDY_LB: &str = "schema_version: '1.0'\ndomain: LB\nkeys: [USUBJID, LBTESTCD]\ninput: {RAW: raw.csv}\noutput: {path: lb.csv, columns: [USUBJID, LBTESTCD]}\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: RAW.USUBJID\n    submission: {core: Req, length: 20, origin: {type: Assigned, source: Sponsor}}\n  - name: LBTESTCD\n    type: str\n    label: Lab Test or Examination Short Name\n    derivation: RAW.LBTESTCD\n    submission: {core: Req, length: 8, origin: {type: Assigned, source: Sponsor}}\nsubmission: {label: Laboratory Test Results, class: FINDINGS, structure: One record per lab test per subject, repeating: true}\n";
-        const STUDY_ADLB: &str = "schema_version: '1.0'\ndomain: ADLB\nkeys: [USUBJID, PARAMCD]\ninput: {LB: lb.csv}\noutput: {path: adlb.csv, columns: [USUBJID, PARAMCD, SRCDOM]}\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: LB.USUBJID\n    submission: {core: Req, mandatory: true, length: 20, origin: {type: Predecessor, description: LB.USUBJID}}\n  - name: PARAMCD\n    type: str\n    label: Parameter Code\n    derivation: LB.LBTESTCD\n    submission: {core: Req, mandatory: true, length: 8, origin: {type: Predecessor, description: LB.LBTESTCD}}\n  - name: SRCDOM\n    type: str\n    label: Source Data\n    derivation: {literal: LB}\n    submission: {core: Perm, mandatory: false, length: 8, inventory_vocabulary: true, origin: {type: Assigned}}\nsubmission: {label: Laboratory Analysis Dataset, class: BASIC DATA STRUCTURE, structure: One record per subject per parameter, repeating: true}\n";
-        const STUDY_SDTM: &str = "sdtm:\n  standard: {name: SDTMIG, version: '3.4', status: Final}\n  specs: [sdtm/lb.yaml]\n  define: sdtm/define.xml\n";
-        const STUDY_ADAM: &str = "schema_version: '1.0'\nstudy: {id: STUDY, name: Study, description: Cross-section witness, protocol_name: Protocol}\nadam:\n  standard: {name: ADaMIG, version: '1.3', status: Final}\n  specs: [adlb.yaml]\n  define: define.xml\n  datasets: json\n  source_system_version: '1.0'\n";
+        const STUDY_LB: &str = "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: LB\nkeys: [USUBJID, LBTESTCD]\ninput: {RAW: raw.csv}\noutput: {path: lb.csv, columns: [USUBJID, LBTESTCD]}\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: RAW.USUBJID\n    submission: {core: Req, length: 20, origins: [{type: Assigned, source: Sponsor}]}\n  - name: LBTESTCD\n    type: str\n    label: Lab Test or Examination Short Name\n    derivation: RAW.LBTESTCD\n    submission: {core: Req, length: 8, origins: [{type: Assigned, source: Sponsor}]}\nsubmission: {label: Laboratory Test Results, class: FINDINGS, structure: One record per lab test per subject, repeating: true}\n";
+        const STUDY_ADLB: &str = "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: ADLB\nkeys: [USUBJID, PARAMCD]\ninput: {LB: lb.csv}\noutput: {path: adlb.csv, columns: [USUBJID, PARAMCD, SRCDOM]}\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: LB.USUBJID\n    submission: {core: Req, mandatory: true, length: 20, origins: [{type: Predecessor, description: LB.USUBJID}]}\n  - name: PARAMCD\n    type: str\n    label: Parameter Code\n    derivation: LB.LBTESTCD\n    submission: {core: Req, mandatory: true, length: 8, origins: [{type: Predecessor, description: LB.LBTESTCD}]}\n  - name: SRCDOM\n    type: str\n    label: Source Data\n    derivation: \"'LB'\"\n    submission: {core: Perm, mandatory: false, length: 8, inventory_vocabulary: true, origins: [{type: Assigned}]}\nsubmission: {label: Laboratory Analysis Dataset, class: BASIC DATA STRUCTURE, structure: One record per subject per parameter, repeating: true}\n";
+        const STUDY_SDTM: &str = "sdtm:\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  specs: [sdtm/lb.yaml]\n  define: sdtm/define.xml\n";
+        const STUDY_ADAM: &str = "yamaa: \"1.0\"\ntype: project\nstudy: {id: STUDY, name: Study, description: Cross-section witness, protocol_name: Protocol}\nadam:\n  standards: [{name: ADaMIG, version: '1.3', status: Final}]\n  specs: [adlb.yaml]\n  define: define.xml\n  transport: dataset_json\n  source_system_version: '1.0'\n";
         fn cross_section(adlb: &str, published: &str, sdtm: bool) -> (Temp, Define) {
             let temp = Temp::new();
             fs::create_dir(temp.0.join("sdtm")).unwrap();

@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
@@ -36,5 +38,5 @@ columns:
     label: Study Day of Death
     derivation:
       study_day:
-        date: DTHDTM
+        source: DTHDTM
         reference: RFSTD

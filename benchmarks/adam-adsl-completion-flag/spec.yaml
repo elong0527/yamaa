@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
@@ -17,9 +19,9 @@ output:
 intermediates:
   - id: COMPLT
     dataset: DS
+    key: [STUDYID, USUBJID]
     filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.EPOCH = 'FOLLOW-UP'
       AND DS.DSDECOD = 'COMPLETED'"
-    no_match: {literal: null}
 
 columns:
   - name: STUDYID

@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
@@ -25,6 +27,6 @@ columns:
     derivation: ADSL_RAW.AGEGR1N
     submission:
       codelist: AGEGR1N
-      origin:
-        type: Predecessor
-        description: ADSL_RAW.AGEGR1N
+      origins:
+        - type: Predecessor
+          description: ADSL_RAW.AGEGR1N
