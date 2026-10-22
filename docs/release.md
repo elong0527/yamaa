@@ -395,12 +395,12 @@ the public project submission API.
 ## Supported dependency combinations
 
 The Rust workspace declares MSRV 1.82 and builds with Rust 1.99.1, the
-toolchain that `rust/rust-toolchain.toml` pins; CI lints it with Rust 1.82.0
-on every pull request, a release lane checks and lints it and builds and
-checks the R source package with it, native qualification builds both source
-archives on Linux with it, installed from its standalone installer, and a
-weekly lane lints and tests it with the beta toolchain, the next stable
-release, before the pin moves.
+toolchain that `rust/rust-toolchain.toml` pins; CI lints every crate but the
+R binding with Rust 1.82.0 on every pull request, a release lane checks and
+lints the whole workspace and builds and checks the R source package with
+it, native qualification builds both source archives on Linux with it,
+installed from its standalone installer, and a weekly lane lints and tests
+it with the beta toolchain, the next stable release, before the pin moves.
 Rust 1.82.0 was released on 2024-10-17, so it is at least the two-year-old
 Cargo that CRAN's guidance for packages using Rust asks to test with, on any
 submission date (#3111). The source packages carry no toolchain file, so they

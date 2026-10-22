@@ -66,8 +66,12 @@ jobs:
     # that needs a newer Rust passes them all. This job lints the workspace
     # with the minimum on every pull request, as Cargo's guide to continuous
     # integration asks for a declared rust-version; Clippy's pass type-checks
-    # every target as `cargo check` does. Release compatibility repeats the
-    # check with the embedder workspace and the minimal format builds.
+    # every target as `cargo check` does. The R binding is left out, as the
+    # repository lint leaves it out: its build script runs R, and only the
+    # jobs that check the R host install R. Release compatibility repeats the
+    # check with the R binding, the embedder workspace and the minimal format
+    # builds, and native qualification builds the R source package with the
+    # minimum.
     name: rust (minimum toolchain)
     runs-on: ubuntu-24.04
     timeout-minutes: 45
@@ -75,18 +79,16 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # The R binding's build script runs R, and no step imports the Python
-      # package.
+      # No step imports the Python package.
       - uses: ./.github/actions/setup
         with:
-          r: runtime
           package: 'false'
       - name: Activate the workspace rust-version toolchain
         run: python -m tools.ci.toolchain --minimum --install
-      - name: Lint the workspace with the minimum toolchain
+      - name: Lint the workspace, but the R binding, with the minimum toolchain
         env:
           RUSTFLAGS: -D warnings
-        run: cargo clippy --locked --manifest-path rust/Cargo.toml --workspace --all-targets --all-features -- -D warnings
+        run: cargo clippy --locked --manifest-path rust/Cargo.toml --workspace --exclude yamaa-r --all-targets --all-features -- -D warnings
 
   python:
     runs-on: ubuntu-24.04

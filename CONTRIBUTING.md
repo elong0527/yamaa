@@ -544,17 +544,20 @@ instead of the pinned toolchain that every other job uses, because embedders
 and the source packages build with their own toolchains, and the pinned
 toolchain accepts code that the minimum refuses. It runs on every pull
 request and on the main schedule, as Cargo's guide to continuous integration
-asks for a declared `rust-version`. The `Release compatibility` workflow's
-job of the same name repeats that lint, after `cargo check`, on release
-branches and adds the builds below. Rust 1.82.0 was released on 2024-10-17,
-so it meets CRAN's request to test with a cargo at least two years old on any
-submission date.
-Run the lint locally from `rust/`, with R installed:
+asks for a declared `rust-version`. It leaves the R binding out, as the
+repository lint does: the binding's build script runs R, and only the jobs
+that check the R host install R. The `Release compatibility` workflow's job
+of the same name repeats that lint with the R binding, after `cargo check`,
+on release branches and adds the builds below, and native qualification
+builds the R source package with the minimum. Rust 1.82.0 was released on
+2024-10-17, so it meets CRAN's request to test with a cargo at least two
+years old on any submission date.
+Run the lint locally from `rust/`; with R installed, drop `--exclude yamaa-r`
+to cover the R binding as the release lane does:
 
 ```sh
 rustup toolchain install 1.82.0 --profile minimal --component clippy
-RUSTFLAGS='-D warnings' cargo +1.82.0 check --locked --workspace --all-targets --all-features
-RUSTFLAGS='-D warnings' cargo +1.82.0 clippy --locked --workspace --all-targets --all-features -- -D warnings
+RUSTFLAGS='-D warnings' cargo +1.82.0 clippy --locked --workspace --exclude yamaa-r --all-targets --all-features -- -D warnings
 ```
 
 The same job builds the facade from the outside workspace in

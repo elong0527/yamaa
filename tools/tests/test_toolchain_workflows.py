@@ -26,6 +26,10 @@ CLIPPY = (
     "cargo clippy --locked --manifest-path rust/Cargo.toml --workspace "
     "--all-targets --all-features -- -D warnings"
 )
+# The same command without the R binding, whose build script runs R. CI's
+# job runs it, as the repository lint does, because only the jobs that check
+# the R host install R (test_host_bindings).
+CLIPPY_BUT_R = CLIPPY.replace("--workspace ", "--workspace --exclude yamaa-r ")
 # Workflows that run on main on a schedule without an issue from Main health:
 # the README's Release checks badge shows the weekly native run.
 BADGED = {"Native qualification"}
@@ -68,8 +72,8 @@ class MinimumToolchainJobs(unittest.TestCase):
         self.assertNotIn("needs", job)
         self.assertIn("timeout-minutes", job)
         run = commands(job)
-        self.assertLess(run.index(ACTIVATE_MINIMUM), run.index(CLIPPY))
-        [lint] = [step for step in job["steps"] if step.get("run") == CLIPPY]
+        self.assertLess(run.index(ACTIVATE_MINIMUM), run.index(CLIPPY_BUT_R))
+        [lint] = [step for step in job["steps"] if step.get("run") == CLIPPY_BUT_R]
         self.assertEqual(lint["env"], {"RUSTFLAGS": "-D warnings"})
         self.assertNotIn("cargo update", "\n".join(run))
 
@@ -82,15 +86,15 @@ class MinimumToolchainJobs(unittest.TestCase):
         [lint] = [step for step in job["steps"] if CLIPPY in step.get("run", "")]
         self.assertEqual(lint["env"], {"RUSTFLAGS": "-D warnings"})
 
-    def test_the_minimum_jobs_install_r_for_the_binding_and_no_package(self):
-        # extendr's build script runs R, and no step imports the Python
-        # package, so neither job builds the development package.
-        for name in ("ci.yml", "release-compatibility.yml"):
-            with self.subTest(workflow=name):
-                job = workflow(name)["jobs"]["rust-minimum"]
-                self.assertEqual(
-                    setup_inputs(job), {"r": "runtime", "package": "false"}
-                )
+    def test_the_ci_job_installs_no_r_and_the_release_lane_installs_r(self):
+        # No step imports the Python package, so neither job builds the
+        # development package. CI's job leaves the R binding out and installs
+        # no R; the release lane lints the binding too, whose extendr build
+        # script runs R.
+        ci = workflow("ci.yml")["jobs"]["rust-minimum"]
+        self.assertEqual(setup_inputs(ci), {"package": "false"})
+        release = workflow("release-compatibility.yml")["jobs"]["rust-minimum"]
+        self.assertEqual(setup_inputs(release), {"r": "runtime", "package": "false"})
 
 
 class NextToolchainWorkflow(unittest.TestCase):
