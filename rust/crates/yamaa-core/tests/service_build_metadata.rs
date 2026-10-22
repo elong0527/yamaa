@@ -1,4 +1,5 @@
-//! Service contracts.
+//! Service contracts: build metadata, build ports, Define-XML service, domain
+//! entry and specification ODM.
 mod service {
     mod build_metadata {
         //! Independent original-entry and admission-order controls for the shared Build boundary.

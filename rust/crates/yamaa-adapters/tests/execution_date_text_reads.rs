@@ -6,7 +6,7 @@
 //! before. `to_date` refuses an interval or duration as `impute` and
 //! `precision` do (TIME-2, TIME-13).
 use std::fs;
-use yamaa_adapters::{file_application, specification_report::Identity};
+use yamaa_adapters::file_application;
 use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::{domain_entry::Request, json::Value};
 
@@ -29,14 +29,7 @@ impl Fixture {
                 specification,
                 environment: None,
             },
-            Identity {
-                runtime: "test",
-                runtime_version: "test",
-                engine_version: yamaa_core::VERSION,
-                example: "date-text-reads",
-                specification,
-                base_directory: ".",
-            },
+            crate::support::study::identity("date-text-reads", specification),
         )
     }
     /// The saved artifact and the run report's handler rows as

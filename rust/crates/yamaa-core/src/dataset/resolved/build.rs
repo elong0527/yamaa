@@ -1106,8 +1106,9 @@ impl<'p> Builder<'p> {
         Ok(())
     }
 
-    /// A named read counts its own `multiple_matches` and `no_match` at the
-    /// reading path.
+    /// A named read counts its own `multiple_matches` and absence at the
+    /// reading path: `absent` on a 1.x tree, as an implicit join read counts
+    /// its absence, and `no_match` on a 0.5 tree.
     fn observed(
         &mut self,
         node: &mut Node,
@@ -1124,8 +1125,10 @@ impl<'p> Builder<'p> {
         let site = format!("{path}.multiple_matches");
         let multiple = handlers.multiple_matches;
         self.site(node, multiple, site, HandlerKind::MultipleMatches);
-        let site = format!("{path}.no_match");
-        self.site(node, handlers.no_match, site, HandlerKind::NoMatch);
+        if let Some(kind) = handlers.absence {
+            let site = format!("{path}.{}", kind.name());
+            self.site(node, true, site, kind);
+        }
         Ok(())
     }
 

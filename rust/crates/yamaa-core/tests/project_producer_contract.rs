@@ -1,4 +1,4 @@
-//! Project contracts.
+//! Project contracts: producer contract.
 mod project {
     mod producer_contract {
         use yamaa_core::{

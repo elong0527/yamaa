@@ -1,4 +1,6 @@
-//! Scalar contracts.
+//! Scalar contracts: aggregate reduction, arithmetic, conversion, declarative
+//! rounding, declarative temporal, declarative temporal imputation, evaluation,
+//! integral, predicate, predicate contains, reduction and scalar language.
 mod scalar {
     mod aggregate_reduction {
         use yamaa_core::{

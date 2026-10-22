@@ -1,4 +1,5 @@
-//! Table contracts.
+//! Table contracts: Arrow table, CSV artifact, CSV precision, CSV source,
+//! parquet artifact, parquet source, predicate diagnostics and public table.
 mod table {
     mod arrow_table {
         use crate::support::table_schema as logical_schema;
@@ -892,6 +893,7 @@ mod table {
     }
     #[cfg(feature = "yaml")]
     mod csv_precision {
+        use crate::support::Edit as _;
         use std::{convert::Infallible, sync::Arc};
         use yamaa_adapters::{
             specification_report::{self, Identity},
@@ -909,9 +911,9 @@ mod table {
         fn prepared(precision: &str, path: &str, expression: &str) -> PreparedRun {
             let schema = yamaa_adapters::shipped_schema::capture().unwrap();
             let bytes = SPEC
-                .replace("PRECISION", precision)
-                .replace("output.csv", path)
-                .replace("VALUE + VALUE", expression);
+                .edit("PRECISION", precision)
+                .edit("output.csv", path)
+                .edit("VALUE + VALUE", expression);
             let document = schema
                 .prepare_standalone(Source {
                     identity: "spec.yaml".into(),
@@ -1076,7 +1078,7 @@ mod table {
             let document = schema
                 .prepare_standalone(Source {
                     identity: "spec.yaml".into(),
-                    bytes: SPEC.replace("PRECISION", &precision).into_bytes(),
+                    bytes: SPEC.edit("PRECISION", &precision).into_bytes(),
                 })
                 .unwrap();
             let compiled = PreparedSpecification::prepare(document.model()).unwrap();

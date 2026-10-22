@@ -9,6 +9,7 @@
 //! project prepares through them, on every public route (#3030 D76).
 mod declaration {
     mod project_files {
+        use crate::support::Edit as _;
         use std::fmt::Debug;
         use std::fs;
         use std::path::{Component, Path, PathBuf};
@@ -476,7 +477,7 @@ mod declaration {
         #[test]
         fn a_codelist_integer_outside_the_int_range_fails_as_any_literal_does() {
             let study = converted_study();
-            let wide = CODELISTS.replace("rank: 2", "rank: 99999999999999999999");
+            let wide = CODELISTS.edit("rank: 2", "rank: 99999999999999999999");
             // Written inline, in the project file itself.
             let project = fs::read_to_string(study.path("project.yaml")).unwrap();
             let inline = wide.replace('\n', "\n    ");
@@ -606,11 +607,11 @@ mod declaration {
             study.write(
                 "project.yaml",
                 project
-                    .replace(
+                    .edit(
                         "environments:\n  r:",
                         "environments:\n  python:\n    lock: r/renv.lock\n  r:",
                     )
-                    .replace(
+                    .edit(
                         "- functions/bmi.yaml",
                         "- functions/bmi.yaml\n- functions/copy.yaml",
                     )
@@ -678,7 +679,7 @@ mod declaration {
             // A Python spelling of the R callable.
             study.write(
                 "functions/bmi.yaml",
-                bmi.replace("yamaabenchmarks::bmi", "yamaabenchmarks.bmi")
+                bmi.edit("yamaabenchmarks::bmi", "yamaabenchmarks.bmi")
                     .as_bytes(),
             );
             let Err(Failure::Rejected(rejected)) =
@@ -714,7 +715,7 @@ mod declaration {
             // keeping the text it is written as (P-FN-1).
             study.write(
                 "functions/bmi.yaml",
-                bmi.replace("weight_kg\n  type: float", "weight_kg\n  type: date")
+                bmi.edit("weight_kg\n  type: float", "weight_kg\n  type: date")
                     .replacen("weight_kg: 70.0", "weight_kg: '2024-02-30'", 1)
                     .as_bytes(),
             );
@@ -749,6 +750,7 @@ mod declaration {
     /// activation findings are reported in that file, its lock's in the
     /// project file (FUNC-2, FUNC-3, FUNC-12).
     mod project_reads {
+        use crate::support::Edit as _;
         use std::fs;
 
         use std::sync::Arc;
@@ -1029,7 +1031,7 @@ mod declaration {
                 let study = Study::new();
                 study.write(
                     "project.yaml",
-                    &PROJECT.replace("[functions/id.yaml]", &format!("['{written}']")),
+                    &PROJECT.edit("[functions/id.yaml]", &format!("['{written}']")),
                 );
                 let project = study.identity("project.yaml");
                 assert_eq!(
@@ -1128,18 +1130,18 @@ mod declaration {
             // another type, listed after an inline source.
             study.write(
                 "functions/id.yaml",
-                &FUNCTION.replace("yamaa: \"1.0\"", "yamaa: \"1.1\""),
+                &FUNCTION.edit("yamaa: \"1.0\"", "yamaa: \"1.1\""),
             );
             study.write(
                 "project.yaml",
-                &PROJECT.replace(
+                &PROJECT.edit(
                     "codelists: [ct.yaml]",
                     "codelists:\n  - codelists: [{id: AGE, name: Age, data_type: integer, items: [{value: 1}]}]\n  - ct.yaml",
                 ),
             );
             study.write(
                 "ct.yaml",
-                &CODELISTS.replace("type: codelists", "type: function"),
+                &CODELISTS.edit("type: codelists", "type: function"),
             );
             assert_eq!(
                 rows(&study.issues(Language::Python)),
@@ -1173,7 +1175,7 @@ mod declaration {
             // A file without the header is a finding in that file.
             study.write(
                 "functions/id.yaml",
-                &FUNCTION.replace("yamaa: \"1.0\"\ntype: function\n", ""),
+                &FUNCTION.edit("yamaa: \"1.0\"\ntype: function\n", ""),
             );
             let issues = study.issues(Language::Python);
             let [issue] = issues.as_slice() else {
@@ -1203,7 +1205,7 @@ mod declaration {
             let codelists = study.identity("ct.yaml");
             study.write(
                 "project.yaml",
-                &PROJECT.replace(
+                &PROJECT.edit(
                     "codelists: [ct.yaml]",
                     "codelists:\n  - codelists: [{id: SEX, name: Sex, format_name: SEXF, items: [{value: F}, {value: M}]}]\n  - ct.yaml",
                 ),

@@ -1,9 +1,10 @@
 #![cfg(feature = "yaml")]
-//! Scalar contracts.
+//! Scalar contracts: scalar language, secondary scalar operands and run report.
 mod scalar {
     mod scalar_language {
+        use crate::support::Edit as _;
         use std::{fs, path::Path};
-        use yamaa_adapters::{file_application, specification_report::Identity};
+        use yamaa_adapters::file_application;
         use yamaa_core::domain_entry::Request;
         struct Fixture(crate::support::Scratch);
         impl Fixture {
@@ -29,14 +30,7 @@ mod scalar {
             }
             fn run(&self) -> file_application::Domain {
                 let specification = self.0.join("spec.yaml").to_str().unwrap().to_owned();
-                let identity = Identity {
-                    runtime: "test",
-                    runtime_version: "test",
-                    engine_version: yamaa_core::VERSION,
-                    example: "test",
-                    specification: &specification,
-                    base_directory: ".",
-                };
+                let identity = crate::support::study::identity("test", &specification);
                 file_application::domain(
                     yamaa_core::project_function::Language::Python,
                     Request {
@@ -78,7 +72,7 @@ mod scalar {
         }
 
         fn issue_json(issue: &yamaa_core::diagnostic::Diagnostic) -> yamaa_core::json::Value {
-            yamaa_adapters::json!({"phase":issue.phase(),"condition":issue.condition(),"rule":issue.rule(),"spec_paths":issue.spec_paths,"context":issue.context.clone()})
+            crate::support::study::issue_row(issue)
         }
         fn bespoke(source: &str, input: &[u8]) -> Fixture {
             let fixture = Fixture::new("adam-adae-text-cleanup");
@@ -96,14 +90,7 @@ mod scalar {
                     specification: &specification,
                     environment: None,
                 },
-                Identity {
-                    runtime: "test",
-                    runtime_version: "test",
-                    engine_version: yamaa_core::VERSION,
-                    example: "test",
-                    specification: &specification,
-                    base_directory: ".",
-                },
+                crate::support::study::identity("test", &specification),
             )
         }
         #[test]
@@ -251,21 +238,14 @@ mod scalar {
         for typed in [false, true] {
             let source = spec(expression, "str");
             let source = if typed {
-                source.replace("I: int, F: float, D: date", "I: int, F: float, D: date, TEXT: str")
+                source.edit("I: int, F: float, D: date", "I: int, F: float, D: date, TEXT: str")
             } else {
                 source
             };
             let fixture = bespoke(&source, b"ID,I,F,D,TEXT\na,1,1,2025-01-01,ab\n");
             fs::remove_file(fixture.0.join("input.csv")).unwrap();
             let path = fixture.0.join("spec.yaml").to_str().unwrap().to_owned();
-            let identity = Identity {
-                runtime: "test",
-                runtime_version: "test",
-                engine_version: yamaa_core::VERSION,
-                example: "regex-preflight",
-                specification: &path,
-                base_directory: ".",
-            };
+            let identity = crate::support::study::identity("regex-preflight", &path);
             let checked = file_application::check(yamaa_core::project_function::Language::Python,
                 Request { specification: &path, environment: None },
                 identity,
@@ -299,8 +279,9 @@ mod scalar {
     }
     mod secondary_scalar_operands {
         //! Implicit joins bind completed keys, preserve laziness and keep source scopes.
+        use crate::support::Edit as _;
         use std::{fs, path::Path};
-        use yamaa_adapters::{file_application, specification_report::Identity};
+        use yamaa_adapters::file_application;
         use yamaa_core::domain_entry::Request;
         struct Fixture(crate::support::Scratch);
         impl Fixture {
@@ -319,14 +300,7 @@ mod scalar {
                         specification: &specification,
                         environment: None,
                     },
-                    Identity {
-                        runtime: "test",
-                        runtime_version: "test",
-                        engine_version: yamaa_core::VERSION,
-                        example: "test",
-                        specification: &specification,
-                        base_directory: ".",
-                    },
+                    crate::support::study::identity("test", &specification),
                 )
             }
             fn saved(&self) -> Vec<u8> {
@@ -381,7 +355,7 @@ mod scalar {
             let original = fs::read_to_string(fixture.0.join("spec.yaml")).unwrap();
             fs::write(
                 fixture.0.join("spec.yaml"),
-                original.replace(
+                original.edit(
                     "{str_case: {source: B.TEXT, to: upper, missing: {literal: null}}}",
                     "{first_available: {sources: [B.TEXT], missing: NONE}}",
                 ),
@@ -441,7 +415,7 @@ mod scalar {
             fs::write(fixture.0.join("spec.yaml"),"schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {A: a.csv, B: {path: b.csv, types: {N: int}}}\nbase: A\noutput: {path: result.csv, columns: [ID, TEXT, FLAG]}\ncolumns:\n  - {name: ID, type: str}\n  - {name: TEXT, type: str}\n  - {name: FLAG, type: str, derivation: {flag: \"A.USE = 'Y'\"}}\nrows:\n  - id: beta\n    dataset: B\n    derivations:\n      ID: B.ID\n      TEXT: {str_case: {source: A.TEXT, to: upper, missing: {literal: null}}}\n").unwrap();
             assert_eq!(fixture.saved(), b"ID,TEXT,FLAG\nb,MIXED,\na,LOWER,Y\nc,,\n");
             let original = fs::read_to_string(fixture.0.join("spec.yaml")).unwrap();
-            fs::write(fixture.0.join("spec.yaml"),original.replace("TEXT: {str_case: {source: A.TEXT, to: upper, missing: {literal: null}}}",
+            fs::write(fixture.0.join("spec.yaml"),original.edit("TEXT: {str_case: {source: A.TEXT, to: upper, missing: {literal: null}}}",
         "TEXT: {source: {variable: A.TEXT, filter: \"A.USE = 'Y'\", order_by: [A.ID], keep: first}}" )).unwrap();
             assert_eq!(fixture.saved(), b"ID,TEXT,FLAG\nb,,\na,lower,Y\nc,,\n");
         }
@@ -486,7 +460,7 @@ mod scalar {
             ] {
                 fs::write(
                     fixture.0.join("spec.yaml"),
-                    original.replace("compute: {expr: 'B.N + 1'}", operation),
+                    original.edit("compute: {expr: 'B.N + 1'}", operation),
                 )
                 .unwrap();
                 let issues = match fixture.run() {
@@ -599,7 +573,7 @@ rows:
                 );
             }
             let original = fs::read_to_string(fixture.0.join("spec.yaml")).unwrap();
-            fs::write(fixture.0.join("spec.yaml"),original.replace("then: {source: {variable: B.TEXT, filter: \"B.USE = 'Y'\", order_by: [B.SEQ], keep: last}}",
+            fs::write(fixture.0.join("spec.yaml"),original.edit("then: {source: {variable: B.TEXT, filter: \"B.USE = 'Y'\", order_by: [B.SEQ], keep: last}}",
         "then: {source: {variable: B.TEXT, filter: \"B.USE = 'Y'\", order_by: [B.SEQ], keep: first}}" )).unwrap();
             assert_eq!(
         fixture.saved(),
@@ -656,7 +630,7 @@ rows:
                 b"ID,RN,PRIMARY,SECONDARY\na,1,primary,\nb,2,,beta\nc,3,,gamma\n"
             );
             let body = fs::read_to_string(fixture.0.join("spec.yaml")).unwrap();
-            fs::write(fixture.0.join("spec.yaml"),body.replace("then: A.TEXT","then: {source: {variable: A.TEXT, filter: \"A.ID = 'a'\", order_by: [A.ID], keep: first}}" )).unwrap();
+            fs::write(fixture.0.join("spec.yaml"),body.edit("then: A.TEXT","then: {source: {variable: A.TEXT, filter: \"A.ID = 'a'\", order_by: [A.ID], keep: first}}" )).unwrap();
             assert_eq!(
                 fixture.saved(),
                 b"ID,RN,PRIMARY,SECONDARY\na,1,primary,\nb,2,,beta\nc,3,,gamma\n"
@@ -664,8 +638,9 @@ rows:
         }
     }
     mod run_report {
+        use crate::support::Edit as _;
         use std::{fs, path::PathBuf};
-        use yamaa_adapters::{file_application, specification_report::Identity};
+        use yamaa_adapters::file_application;
         use yamaa_core::domain_entry::Request;
         struct Study(crate::support::Scratch);
         impl Study {
@@ -694,14 +669,7 @@ rows:
                         specification: &path,
                         environment: None,
                     },
-                    Identity {
-                        runtime: "test",
-                        runtime_version: "test",
-                        engine_version: yamaa_core::VERSION,
-                        example: "report",
-                        specification: &path,
-                        base_directory: ".",
-                    },
+                    crate::support::study::identity("report", &path),
                 )
             }
             fn build(&self, raw: &str) -> file_application::Domain {
@@ -770,7 +738,7 @@ rows:
         #[test]
         fn failed_save_publishes_only_the_report_and_preserves_the_primary() {
             let (study, raw) = Study::benchmark();
-            let mut result = study.build(&raw.replace("severity: warning", "severity: error"));
+            let mut result = study.build(&raw.edit("severity: warning", "severity: error"));
             assert!(result.output().is_none());
             // The run, its input and base rows, then the two column checks it reached.
             assert_eq!(result.report_table().rows(), 5);
@@ -803,7 +771,7 @@ rows:
         #[test]
         fn whole_target_preflight_precedes_the_first_report_write_and_can_retry_held_bytes() {
             let (study, raw) = Study::benchmark();
-            let mut result = study.build(&raw.replace("path: adsl.csv", "path: absent/adsl.csv"));
+            let mut result = study.build(&raw.edit("path: adsl.csv", "path: absent/adsl.csv"));
             fs::write(study.0.join("adsl-checks.csv"), "old checks").unwrap();
             assert!(!result.save().unwrap());
             assert_eq!(
@@ -843,7 +811,7 @@ rows:
             );
             assert!(!study.0.join("report.csv").exists());
             let mut declared =
-                study.build(&raw.replace("columns: [ID]}", "columns: [ID], report: report.csv}"));
+                study.build(&raw.edit("columns: [ID]}", "columns: [ID], report: report.csv}"));
             assert_eq!(declared.run_report(), undeclared.run_report());
             fs::write(study.0.join("report.csv"), "stale").unwrap();
             assert!(declared.save().unwrap());
@@ -866,8 +834,8 @@ rows:
             // (LAYER-11); a dead column's division failure would be
             // discarded with it.
             let raw = crate::support::benchmarks::converted("schema-verification-log")
-                .replace("\nverifications:\n", "\n  - name: FAIL\n    type: float\n    derivation: '1 / 0'\n\nverifications:\n")
-                .replace("columns: [USUBJID, AGE]", "columns: [USUBJID, AGE, FAIL]");
+                .edit("\nverifications:\n", "\n  - name: FAIL\n    type: float\n    derivation: '1 / 0'\n\nverifications:\n")
+                .edit("columns: [USUBJID, AGE]", "columns: [USUBJID, AGE, FAIL]");
             let mut result = study.build(&raw);
             assert!(result.output().is_none());
             assert_eq!(result.issues().len(), 1);
@@ -1335,7 +1303,7 @@ columns:
         #[cfg(feature = "parquet")]
         fn parquet_reports_preserve_governed_logical_rows_and_integer_columns() {
             let (study, raw) = Study::benchmark();
-            let mut result = study.build(&raw.replace("adsl-checks.csv", "checks.parquet"));
+            let mut result = study.build(&raw.edit("adsl-checks.csv", "checks.parquet"));
             assert!(result.issues().is_empty());
             assert!(result.save().unwrap());
             let report = result.observations();

@@ -174,6 +174,18 @@ impl Surface {
     pub fn one_meaning_per_form(self) -> bool {
         matches!(self, Self::V1 { .. })
     }
+    /// The run report's handler for a named intermediate's absence answer,
+    /// counted at each read's path (LOOKUP-14): in 1.0 `absent`, the name the
+    /// answer is written under (P-HND-1), as an implicit join's absence is
+    /// counted (D202); in a 0.5 file `no_match`, as at the `yamaa-v0.5.0` tag
+    /// (D75).
+    pub fn intermediate_absence(self) -> crate::numeric_lifecycle::HandlerKind {
+        use crate::numeric_lifecycle::HandlerKind;
+        match self {
+            Self::V0_5 => HandlerKind::NoMatch,
+            Self::V1 { .. } => HandlerKind::Absent,
+        }
+    }
 }
 
 /// `model: SDTM | SEND | ADaM` (P-MODEL-1); no 0.5 form.
