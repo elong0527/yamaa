@@ -110,10 +110,6 @@ class HostBindings(unittest.TestCase):
             "r": ["check"],
             # The equivalence gate checks R in its R host job only.
             "equivalence-host": ["${{ matrix.host == 'r' && 'check' || 'none' }}"],
-            # The conversion gate checks R only when it runs both hosts.
-            "conversion": [
-                "${{ steps.paths.outputs.hosts == 'python' && 'none' || 'check' }}"
-            ],
         }
         for name, job in workflow["jobs"].items():
             setups = [

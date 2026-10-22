@@ -1,82 +1,28 @@
 """Require authored failure coverage beside benchmark and shared fixtures.
 
-Every expression registered in yaml/schema_expression_*.yaml and every
-verification registered in yaml/schema_verification.yaml must name negative
-examples or shared installed refusal cases.
-A benchmark entry must point at real negative examples:
+Every expression registered in yaml/v1/schema_expression_*.yaml and every
+verification registered in yaml/v1/schema_verification.yaml, the 1.0 schema
+the corpus is written in, must name negative examples or shared installed
+refusal cases. A benchmark entry must point at real negative examples:
 each directory exists, carries expected/error.yaml, and either the error
-spec_paths or the spec itself names the operation. A spec in the 1.0 surface
-writes `compute` and `literal` as grammar text in the expression field (#3030
-D18), so there the field an error path names must hold a formula or a literal.
-Shared cases use the independent owner exercised by Rust, installed Python
-and R; successful cases cannot satisfy failure coverage.
+spec_paths or the spec itself names the operation. A formula and a literal
+are grammar text in an expression field, no registered operation (#3030
+D18), so no coverage names them. Shared cases use the independent owner
+exercised by Rust, installed Python and R; successful cases cannot satisfy
+failure coverage.
 """
 
 import json
-import re
 import sys
 
 import yaml
-from tools import surface
 from tools.benchmark import directories, load_metadata
 from tools.paths import ROOT
 
 REPO = ROOT
 EXAMPLES = REPO / "benchmarks"
+SCHEMAS = REPO / "yaml" / "v1"
 SHARED = REPO / "rust/tests/host-fixtures/cases.json"
-# The operations 1.0 writes as grammar text in an expression field, and what
-# that text is (D18; the rename table's compute_to_text and
-# literal_to_expression transforms).
-MERGED = {"compute": "formula", "literal": "literal"}
-# Keyed members a spec path addresses by identity (P-CLR-2); any other list
-# is addressed by [N].
-IDENTITY = {"columns": "name", "intermediates": "id", "rows": "id"}
-SEGMENT = re.compile(r"\.?([^.\[\]]+)|\[(\d+)\]")
-# What `resolve` returns for a path that names no node; YAML null is a node.
-UNRESOLVED = object()
-
-
-def resolve(document, path):
-    """The node a diagnostic spec path names in a parsed document, or
-    UNRESOLVED."""
-    node, owner = document, None
-    for name, index in SEGMENT.findall(path):
-        if index:
-            if not isinstance(node, list) or int(index) >= len(node):
-                return UNRESOLVED
-            node, owner = node[int(index)], None
-        elif isinstance(node, dict) and name in node:
-            node, owner = node[name], name
-        elif isinstance(node, list) and owner in IDENTITY:
-            node = next(
-                (
-                    item
-                    for item in node
-                    if isinstance(item, dict) and item.get(IDENTITY[owner]) == name
-                ),
-                None,
-            )
-            if node is None:
-                return UNRESOLVED
-            owner = None
-        else:
-            return UNRESOLVED
-    return node
-
-
-def names_merged(operation, spec, paths):
-    """Whether a 1.0 spec holds `operation` as grammar text at an error path."""
-    try:
-        document = yaml.safe_load(spec.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, yaml.YAMLError):
-        return False
-    if operation not in MERGED or not surface.declares_header(document):
-        return False
-    return any(
-        surface.expression(node)[0] == MERGED[operation]
-        for node in (resolve(document, path) for path in paths)
-        if node is None or isinstance(node, (str, int, float, bool))
-    )
 
 
 def check_shared(operation, names):
@@ -122,12 +68,12 @@ def check_shared(operation, names):
 
 def registered_operations():
     operations = {}
-    for path in sorted((REPO / "yaml").glob("schema_expression_*.yaml")):
+    for path in sorted(SCHEMAS.glob("schema_expression_*.yaml")):
         document = yaml.safe_load(path.read_text(encoding="utf-8"))
         for name in document.get("expressions") or {}:
             operations[name] = path.name
     verification = yaml.safe_load(
-        (REPO / "yaml" / "schema_verification.yaml").read_text(encoding="utf-8")
+        (SCHEMAS / "schema_verification.yaml").read_text(encoding="utf-8")
     )
     for group in ("column_verifications", "dataset_verifications"):
         for name in verification.get(group) or {}:
@@ -153,11 +99,7 @@ def check(operation, names):
         contract = yaml.safe_load(error.read_text(encoding="utf-8"))
         paths = contract.get("spec_paths") or []
         body = spec.read_text(encoding="utf-8") if spec.is_file() else ""
-        if (
-            plain not in " ".join(paths)
-            and plain not in body
-            and not (spec.is_file() and names_merged(plain, spec, paths))
-        ):
+        if plain not in " ".join(paths) and plain not in body:
             errors.append(f"ERROR: coverage.{operation}: {name} never names {plain}")
     return errors
 

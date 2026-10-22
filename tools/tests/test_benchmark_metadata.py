@@ -33,9 +33,8 @@ class BenchmarkMetadata(unittest.TestCase):
         from tools.paths import ROOT
         from tools.staging.stage_project_inputs import stage_case
 
-        # The project names its Python lock at python/uv.lock in either
-        # language: a 0.5 environment file's `lock: uv.lock` beside it, or a
-        # 1.x project's environments.python.lock.
+        # The project names its Python lock at python/uv.lock, in its
+        # environments.python.lock.
         source = ROOT / "benchmarks/schema-functions"
         staged = self.case / "runtime"
         stage_case(
@@ -55,32 +54,6 @@ class BenchmarkMetadata(unittest.TestCase):
             (staged / "input/source.csv").read_bytes(),
             (source / "input/source.csv").read_bytes(),
         )
-
-    def test_runtime_staging_follows_the_python_environment_the_project_links(self):
-        from tools.paths import ROOT
-        from tools.staging.stage_project_inputs import stage_case
-
-        source = self.case / "study"
-        (source / "code/py").mkdir(parents=True)
-        (source / "spec.yaml").write_text("domain: TEST\n")
-        (source / "benchmark.yaml").write_text(yaml.safe_dump(self.metadata))
-        (source / "project.yaml").write_text(
-            "schema_version: '1.0'\n"
-            "environments: {python: code/py/environment.yaml, r: r/environment.yaml}\n"
-        )
-        (source / "code/py/environment.yaml").write_text("schema_version: '1.0'\n")
-        staged = self.case / "staged"
-        stage_case(source, staged)
-        self.assertEqual(
-            (staged / "code/py/uv.lock").read_bytes(),
-            (ROOT / "python/uv.lock").read_bytes(),
-        )
-        self.assertFalse((staged / "uv.lock").exists())
-        self.assertFalse((staged / "r").exists())
-        (source / "project.yaml").write_text("schema_version: '1.0'\n")
-        shutil.rmtree(staged)
-        stage_case(source, staged)
-        self.assertFalse((staged / "code/py/uv.lock").exists())
 
     def test_runtime_staging_supplies_the_lock_a_1_x_project_names(self):
         from tools.paths import ROOT
@@ -227,7 +200,7 @@ class BenchmarkMetadata(unittest.TestCase):
                     benchmark.entries(self.case)
 
     def test_define_call_declares_its_project_section_and_created_time(self):
-        (self.case / "project.yaml").write_text("schema_version: '1.0'\n")
+        (self.case / "project.yaml").write_text('yamaa: "1.0"\ntype: project\n')
         define = {
             "environment": "project.yaml",
             "standard": "adam",
@@ -310,7 +283,6 @@ class BenchmarkMetadata(unittest.TestCase):
         for spec, agrees in (
             (header + "model: ADaM\ndomain: TEST\n", True),
             (header + "domain: TEST\n", True),
-            ("schema_version: '1.0'\ndomain: TEST\n", True),
             (header + "model: SDTM\ndomain: TEST\n", False),
         ):
             (self.case / "spec.yaml").write_text(spec)

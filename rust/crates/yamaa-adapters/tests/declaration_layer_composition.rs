@@ -690,7 +690,7 @@ columns:
             assert_eq!(ResolvedArtifact::from_json(&json).unwrap(), artifact);
         }
 
-        /// The converted `negative-property-clear`, as `tools/migrate` writes it.
+        /// The converted `negative-property-clear`, as the converter wrote it.
         const CONVERTED_PARENT: &str = "yamaa: \"1.0\"\ntype: spec\ninput:\n  DM: ../input/dm.csv\nbase: DM\n\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: DM.USUBJID\n";
         const CONVERTED_ENTRY: &str = "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\nparent: layers/parent.yaml\nclear:\n  # null clears the type inherited from layers/parent.yaml, but a column\n  # must have a type, so it cannot be cleared.\n  - columns.USUBJID.type\ndomain: ADSL\nkeys: [USUBJID]\n\noutput:\n  path: adsl.csv\n  columns: [USUBJID]\n";
 
@@ -744,7 +744,7 @@ columns:
                 resolved_artifact::resolve(&source, None, Some(Language::Python), None).unwrap();
             let legacy = &artifact.entries()[0].specification;
             // The converter's output for the benchmark: its YAML values are
-            // the example's (`tools/tests/test_migrate.py`).
+            // the example's, as the converter's tests checked.
             let entry = repository_file(
                 "docs/design/interface-1.0/examples/schema-inheritance-clear/spec_study.yaml",
             );

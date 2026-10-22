@@ -129,14 +129,12 @@ record fails its benchmark, and the gate requires every benchmark that the
 command line runs.
 
 The binary dispatches on the type a PATH declares in its `type:` header and
-reads only 1.x files (#3030 D122, D125), so until the corpus moves to 1.0
-(P2-5 to P2-8) the runner runs converted copies.
-`tools.commands.cli_conformance` writes every benchmark as 1.0, as the
-conversion gate does, excludes each benchmark the gate excepts, plans the
-converted corpus, runs the runner over it and judges the records against the
-converted expected files into `inventory.json`, keeping the copies, the plan
-and the records under its output directory. It exits 1 unless every
-benchmark that the command line runs passes:
+reads only 1.x files (#3030 D122, D125), the language the corpus is written
+in. `tools.commands.cli_conformance` copies the corpus, plans the copies,
+runs the runner over them and judges the records against the expected files
+into `inventory.json`, keeping the copies, the plan and the records under its
+output directory. It exits 1 unless every benchmark that the command line
+runs passes:
 
 ```sh
 python -m tools.commands.cli_conformance --binary rust/target/debug/yamaa --output /tmp/public-cli

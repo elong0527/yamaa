@@ -30,7 +30,7 @@ from tools.benchmark import directories as benchmark_directories
 from tools.benchmark import entries as benchmark_entries
 from tools.benchmark import layered_field, load_metadata
 from tools.paths import ROOT
-from tools.surface import declares_header, expression
+from tools.surface import expression
 
 PROTOCOL = "public-conformance/1"
 FIELD_REFERENCE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*$")
@@ -77,10 +77,9 @@ def plan(fixtures):
 
 
 def supplies_functions(case, entries):
-    """True when a call's project supplies project functions: a 0.5 project
-    links the host environment files that declare them, and a 1.0 project
-    lists function files, its `environments` holding only locks (D8). A
-    project that cannot be read supplies none; the hosts report why."""
+    """True when a call's project supplies project functions: it lists
+    function files, its `environments` holding only locks (D8). A project
+    that cannot be read supplies none; the hosts report why."""
     projects = {
         entry["environment"]
         for calls in entries.values()
@@ -92,10 +91,8 @@ def supplies_functions(case, entries):
             document = load_yaml(case / project)
         except Exception:  # noqa: BLE001 -- an unreadable project supplies no functions
             continue
-        if isinstance(document, dict):
-            key = "functions" if declares_header(document) else "environments"
-            if document.get(key):
-                return True
+        if isinstance(document, dict) and document.get("functions"):
+            return True
     return False
 
 
@@ -150,22 +147,17 @@ def json_round_trippable(value):
     return False
 
 
-def reads_a_field_or_literal(derivation, v1):
+def reads_a_field_or_literal(derivation):
     """Whether a derivation reads one qualified input field or is a literal.
 
-    In a 1.x file an expression field holds grammar text, where a bare name
-    is a reference and quoted text a literal, or a YAML number, Boolean or
-    null literal (EXPR-5); a 0.5 file writes the field as text and the
-    literal as `{literal: X}`.
+    An expression field holds grammar text, where a bare name is a reference
+    and quoted text a literal, or a YAML number, Boolean or null literal
+    (EXPR-5).
     """
-    if v1:
-        kind, value = expression(derivation)
-        return kind == "literal" or (
-            kind == "reference" and bool(FIELD_REFERENCE.fullmatch(value))
-        )
-    if isinstance(derivation, str):
-        return bool(FIELD_REFERENCE.fullmatch(derivation))
-    return isinstance(derivation, dict) and set(derivation) == {"literal"}
+    kind, value = expression(derivation)
+    return kind == "literal" or (
+        kind == "reference" and bool(FIELD_REFERENCE.fullmatch(value))
+    )
 
 
 def key_order_texts(document):
@@ -174,7 +166,7 @@ def key_order_texts(document):
     Eligible documents have no `rows` and no `parent`, at least two keys,
     and every key column reading one input field or a literal, so key columns
     may be declared in any order (COLUMN-5, OUTPUT-1, OUTPUT-2). The texts
-    keep the document's language.
+    keep the document's header.
     """
     if (
         not isinstance(document, dict)
@@ -193,10 +185,9 @@ def key_order_texts(document):
         if not isinstance(column, dict) or not isinstance(column.get("name"), str):
             return None
         by_name.setdefault(column["name"], column)
-    v1 = declares_header(document)
     for key in keys:
         column = by_name.get(key)
-        if column is None or not reads_a_field_or_literal(column.get("derivation"), v1):
+        if column is None or not reads_a_field_or_literal(column.get("derivation")):
             return None
     control = json.dumps(document, indent=2, ensure_ascii=True) + "\n"
     permuted = json.loads(control)
@@ -207,12 +198,10 @@ def key_order_texts(document):
     return control, json.dumps(permuted, indent=2, ensure_ascii=True) + "\n"
 
 
-def empty_child(document, parent):
-    """An empty child layer of `parent`, written in its parent's language: a
-    1.x parent declares `yamaa`, which its child declares too (LAYER-4)."""
-    if declares_header(document):
-        return f'yamaa: "1.0"\ntype: spec\nparent: {parent}\n'
-    return f'schema_version: "1.0"\nparent: {parent}\n'
+def empty_child(parent):
+    """An empty child layer of `parent`, which declares the 1.x header its
+    parent declares (LAYER-4)."""
+    return f'yamaa: "1.0"\ntype: spec\nparent: {parent}\n'
 
 
 def example_variants(fixtures, example):
@@ -243,7 +232,7 @@ def example_variants(fixtures, example):
             descriptors[runtime].append(
                 {"kind": "empty_child", "entry": index, "specification": child}
             )
-            contents[child] = empty_child(document, spec.name)
+            contents[child] = empty_child(spec.name)
             if negative:
                 continue
             texts = key_order_texts(document)
@@ -363,25 +352,23 @@ def load_yaml(path):
 def declarations(path, active=()):
     """Read independent declared types/output paths, never derivations.
 
-    A 1.x child layer removes an inherited output field by listing its path
-    in `clear` (LAYER-9), where a 0.5 child writes the field as YAML null.
-    A 1.x copy entry declares each column it lists with the type its
-    producer declares: the specification that the input's `schema` link, as
-    the resolved specification keeps it, names from the base its
+    A child layer removes an inherited output field by listing its path in
+    `clear` (LAYER-9). A copy entry declares each column it lists with the
+    type its producer declares: the specification that the input's `schema`
+    link, as the resolved specification keeps it, names from the base its
     `relative_to` selects, whichever layer writes them (SPEC-9).
     """
     layers = chain(path, active)
     output, links = {}, {}
     # Every layer's input links and bases compose before any copy is typed.
     for layer, data in layers:
-        if declares_header(data):
-            for cleared in data.get("clear") or []:
-                head, _, field = str(cleared).partition(".")
-                if head == "output":
-                    output.pop(field, None)
-                elif head == "input":
-                    name, _, rest = field.partition(".")
-                    links.get(name, {}).pop(rest, None)
+        for cleared in data.get("clear") or []:
+            head, _, field = str(cleared).partition(".")
+            if head == "output":
+                output.pop(field, None)
+            elif head == "input":
+                name, _, rest = field.partition(".")
+                links.get(name, {}).pop(rest, None)
         for name, declaration in (data.get("input") or {}).items():
             if isinstance(declaration, dict):
                 link = links.setdefault(name, {})

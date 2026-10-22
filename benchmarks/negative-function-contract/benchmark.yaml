@@ -1,3 +1,5 @@
 lifecycle: reviewed
 standard: TEST
 domain: TEST
+covers:
+- function

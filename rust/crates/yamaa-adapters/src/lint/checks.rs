@@ -46,12 +46,6 @@ pub(super) struct Layout {
     pub(super) specification: bool,
 }
 
-static LEGACY: Layout = Layout {
-    orders: fields::LEGACY_SPEC,
-    sections: "output",
-    spaced: &["intermediates", "columns", "rows"],
-    specification: true,
-};
 static SPEC: Layout = Layout {
     orders: fields::SPEC,
     sections: "output",
@@ -77,14 +71,9 @@ static FUNCTION: Layout = Layout {
     specification: false,
 };
 
-/// The layout `document` is written in. A root that declares the 1.x header,
-/// `yamaa` and no `schema_version` as the engine reads it (SCHEMA-2), follows
-/// the 1.0 schema of the type it declares, a missing or unknown type that of
-/// a specification. Any other root is a 0.5 specification.
+/// The layout `document` is written in: the 1.0 schema of the type its root
+/// declares (SCHEMA-2), a missing or unknown type that of a specification.
 pub(super) fn layout(document: &Document) -> &'static Layout {
-    if !document.versioned {
-        return &LEGACY;
-    }
     let declared = document
         .member(document.root, "type")
         .and_then(|value| document.scalar(value))

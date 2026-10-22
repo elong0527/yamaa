@@ -110,7 +110,7 @@ class FakeCheckout(unittest.TestCase):
 
     def test_a_declared_submission_is_written_with_its_creation_time(self):
         case = self.root / "benchmarks/adam-xpt"
-        (case / "project.yaml").write_text("schema_version: '1.0'\n")
+        (case / "project.yaml").write_text('yamaa: "1.0"\ntype: project\n')
         define = {
             "environment": "project.yaml",
             "standard": "adam",

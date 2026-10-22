@@ -26,7 +26,6 @@ from pathlib import Path
 import yaml
 from evaluations.harbor import scaffold
 from evaluations.harbor.grade import HOLDOUT_INPUT_SUBJECTS
-from tools.surface import declares_header
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
@@ -87,10 +86,9 @@ def functions(benchmark: Path) -> dict[str, str]:
     """Project function declarations without their tests, by file name, and
     the Python source that implements them.
 
-    Each file is read by its own header (#3030 D120). A 1.x project lists its
-    function files under `functions`; each is written as `<name>.yaml`, and
-    its `implementations.python` names the module. A 0.5 benchmark's
-    environment files are written as `<host>.yaml` until #3443 removes them.
+    A project lists its function files under `functions` (#3030 D8); each is
+    written as `<name>.yaml`, and its `implementations.python` names the
+    module.
     """
     project = benchmark / "project.yaml"
     document = (
@@ -98,10 +96,11 @@ def functions(benchmark: Path) -> dict[str, str]:
         if project.is_file()
         else None
     )
-    if declares_header(document):
-        found, modules = _function_files(project, document)
-    else:
-        found, modules = _environment_files(benchmark)
+    found, modules = (
+        _function_files(project, document)
+        if isinstance(document, dict)
+        else ({}, set())
+    )
     for module in sorted(modules):
         source = PROGRAMS / module / "__init__.py"
         if source.is_file():
@@ -110,8 +109,8 @@ def functions(benchmark: Path) -> dict[str, str]:
 
 
 def _function_files(project: Path, document: dict) -> tuple[dict[str, str], set]:
-    """A 1.x project's function files without their tests, and the Python
-    modules their implementations name."""
+    """A project's function files without their tests, and the Python modules
+    their implementations name."""
     found, modules = {}, set()
     for listed in document.get("functions") or []:
         function = yaml.safe_load((project.parent / listed).read_text(encoding="utf-8"))
@@ -122,27 +121,6 @@ def _function_files(project: Path, document: dict) -> tuple[dict[str, str], set]
         python = (function.get("implementations") or {}).get("python")
         if python:
             modules.add(python.partition(".")[0])
-    return found, modules
-
-
-def _environment_files(benchmark: Path) -> tuple[dict[str, str], set]:
-    """A 0.5 benchmark's environment files without their tests, and the
-    Python modules they name."""
-    found, modules = {}, set()
-    for host in ("python", "r"):
-        path = benchmark / host / "environment.yaml"
-        if not path.is_file():
-            continue
-        environment = yaml.safe_load(path.read_text(encoding="utf-8"))
-        declared = {
-            name: {k: v for k, v in function.items() if k != "tests"}
-            for name, function in (environment.get("functions") or {}).items()
-        }
-        found[f"{host}.yaml"] = yaml.safe_dump(
-            {"functions": declared}, sort_keys=False, allow_unicode=True
-        )
-        if host == "python":
-            modules |= {f["function"].partition(".")[0] for f in declared.values()}
     return found, modules
 
 

@@ -233,8 +233,8 @@ fn absent_answers_a_variable_the_input_does_not_hold_only_in_0_5() {
 }
 
 /// A 1.0 project whose `sdtm` section composes one dataset, published as
-/// `dm.csv`. Every benchmark's Define documents, converted to 1.0, are
-/// compared with their expected bytes by `make check-conversion`.
+/// `dm.csv`. Every benchmark's Define documents are compared with their
+/// expected bytes by the installed host suites.
 fn define_study() -> Study {
     let study = Study::new();
     study.write(

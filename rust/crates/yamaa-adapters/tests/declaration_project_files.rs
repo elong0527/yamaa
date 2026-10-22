@@ -255,8 +255,8 @@ mod declaration {
 
         #[test]
         fn the_converted_project_files_lower_to_the_roots_of_their_sources() {
-            // The converter's output for two benchmarks, which
-            // `tools/tests/test_migrate.py` checks it reproduces: one with a
+            // The converter's output for two benchmarks, which its tests
+            // checked it reproduced: one with a
             // function both hosts implement and an R lock only, and one with
             // inline codelists, a study and a section. Their 0.5 sources are
             // frozen as they were written before the benchmarks moved to 1.0.

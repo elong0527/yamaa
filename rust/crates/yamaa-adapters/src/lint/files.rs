@@ -7,7 +7,7 @@ use yamaa_core::language::FileType;
 
 use super::checks::{check, suppressed};
 use super::document::{Document, Value};
-use super::{fields, fix, Error, Finding, Linted};
+use super::{fix, Error, Finding, Linted};
 use crate::yaml_decode::DecodeFailure;
 
 /// The findings that remain in `text` once suppressions apply, one-based.
@@ -85,10 +85,9 @@ pub(super) fn lint(paths: &[String], fix: bool) -> Result<Vec<Linted>, Error> {
 /// A named file is always linted. A directory names the `.yaml` files beneath
 /// it, outside hidden directories, in sorted path order, that are yamaa
 /// files: a root that declares the 1.x header with a `type` naming a file
-/// type (`spec`, `project`, `codelists` or `function`), or a 0.5
-/// specification, a root mapping holding `schema_version` and only 0.5 root
-/// fields. A mapping dictionary, a 0.5 project or environment file and any
-/// other YAML file are left out.
+/// type (`spec`, `project`, `codelists` or `function`). A mapping dictionary,
+/// a file that declares `schema_version` and any other YAML file are left
+/// out.
 fn expand(path: &Path) -> Result<Vec<File>, Error> {
     if !path.is_dir() {
         return Ok(vec![File::new(path.to_path_buf())]);
@@ -194,17 +193,14 @@ fn is_yamaa_file(path: &Path) -> Result<bool, Error> {
         names.push(name);
     }
     let declares = |name| names.contains(&name);
-    if declares("yamaa") && !declares("schema_version") {
-        // A 1.x document declares its own type (SCHEMA-2).
-        let declared = document
-            .member(document.root, "type")
-            .and_then(|value| document.scalar(value));
-        return Ok(declared.and_then(FileType::parse).is_some());
+    if !declares("yamaa") || declares("schema_version") {
+        return Ok(false);
     }
-    Ok(declares("schema_version")
-        && names
-            .iter()
-            .all(|name| fields::LEGACY_SPEC.fields.contains(name)))
+    // A 1.x document declares its own type (SCHEMA-2).
+    let declared = document
+        .member(document.root, "type")
+        .and_then(|value| document.scalar(value));
+    Ok(declared.and_then(FileType::parse).is_some())
 }
 
 /// Capture a file once through the local file resolver: its parent is

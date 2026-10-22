@@ -384,14 +384,9 @@ class StagingTests(unittest.TestCase):
                 output.add(destination, arcname="yamaa")
             self.assertEqual(check_cargo_lock.check_bundle_archive(built), ("r", kept))
 
-    def test_r_callables_are_read_from_either_project_language(self):
+    def test_r_callables_are_read_from_the_function_files_a_project_lists(self):
         with tempfile.TemporaryDirectory() as directory:
             case = Path(directory)
-            (case / "project.yaml").write_text(
-                'schema_version: "1.0"\n'
-                "environments: {python: py/environment.yaml, r: code/r.yaml}\n"
-            )
-            self.assertEqual(staging.r_callables(case), [case / "code/r.yaml"])
             (case / "project.yaml").write_text(
                 'yamaa: "1.0"\ntype: project\n'
                 "functions: [functions/a.yaml, functions/b.yaml]\n"

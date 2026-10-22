@@ -360,40 +360,6 @@ fn a_1_0_specification_follows_the_1_0_field_order() {
     }
 }
 
-#[test]
-fn a_0_5_file_keeps_the_0_5_orders() {
-    // `model` is no 0.5 field, so it opens a section of its own.
-    let text = legacy().replace("domain: ADSL\n", "model: ADaM\ndomain: ADSL\n");
-    assert_eq!(
-        findings(&text)
-            .iter()
-            .map(|item| (item.finding, item.message.as_str()))
-            .collect::<Vec<_>>(),
-        [("root_spacing", "leave one blank line before `model`")]
-    );
-    // A root that declares `schema_version` is read by the 0.5 orders even
-    // beside `yamaa`, as the engine reads it.
-    let both = legacy().replace(
-        "domain: ADSL\n",
-        "yamaa: \"1.0\"\ntype: spec\ndomain: ADSL\n",
-    );
-    assert_eq!(
-        paths(&both),
-        [
-            ("root_spacing", "yamaa".to_owned()),
-            ("root_spacing", "type".to_owned())
-        ]
-    );
-    // And the 1.0 orders do not reach a 0.5 input or intermediate.
-    let fields = legacy()
-        .replace(
-            "  DM: input/dm.csv\n",
-            "  DM:\n    key: [USUBJID]\n    path: input/dm.csv\n",
-        )
-        .replace("    keep: first\n", "    absent: NONE\n    keep: first\n");
-    assert!(names(&fields).is_empty());
-}
-
 /// A 1.0 project file in canonical form: its header together, then one blank
 /// line before each submission section.
 const PROJECT: &str = r#"yamaa: "1.0"
@@ -2560,7 +2526,7 @@ mod files {
     fn directories_expand_to_every_1_0_file_type_by_its_header() {
         let directory = Directory::new("expand-versioned");
         let broken = VERSIONED.replace("base: DM\n\noutput:", "base: DM\noutput:");
-        let legacy = directory.write(
+        let specification = directory.write(
             "adae.yaml",
             &CANONICAL.replace("base: DM\n\noutput:", "base: DM\noutput:"),
         );
@@ -2582,8 +2548,10 @@ mod files {
         directory.write("study.yaml", "yamaa: \"1.0\"\ntype: study\nsdtm: {}\n");
         directory.write("untyped.yaml", &broken.replace("type: spec\n", ""));
         directory.write("dictionaries/sex.yaml", "F: Female\nM: Male\n");
-        // `schema_version` beside `yamaa` keeps the 0.5 path, where `yamaa`
-        // and `type` are no root fields.
+        // SCHEMA-2, #3443: directory discovery admits only the 1.x header.
+        directory.write("legacy.yaml", &super::legacy());
+        // A root that declares `schema_version` beside `yamaa` is no 1.x
+        // file, as the engine reads it.
         directory.write(
             "both.yaml",
             &broken.replace(
@@ -2604,7 +2572,7 @@ mod files {
                 ))
                 .collect::<Vec<_>>(),
             [
-                (display(&legacy), vec![("root_spacing", "output")]),
+                (display(&specification), vec![("root_spacing", "output")]),
                 (display(&entry), vec![("root_spacing", "output")]),
                 (display(&codelists), vec![("root_spacing", "codelists")]),
                 (display(&function), vec![("root_spacing", "tests")]),
