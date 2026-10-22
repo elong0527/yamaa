@@ -17,8 +17,9 @@ at the facade's crate root, where an embedder finds it.
 
 ``records`` and ``cli`` are validated against their grammar alone: a record's
 fields are what a host builds, as ``info()`` and a selftest's ``info`` do from
-the facade's ``Info``, and ``cli`` stays empty until the command line's
-commands are implemented (#3060).
+the facade's ``Info``. ``cli`` declares the ``yamaa`` binary (#3060), whose
+own vocabularies, such as the output formats, no facade constant owns;
+``tools/tests/test_bindings_cli.py`` keeps it true to the binary's parser.
 """
 
 import re
@@ -270,7 +271,7 @@ _CLI_REQUIRED = {
     "exit_status",
     "commands",
 }
-_CLI_OPTIONAL = {"depends_on", "inputs", "streams", "interrupt", "json"}
+_CLI_OPTIONAL = {"depends_on", "inputs", "values", "streams", "interrupt", "json"}
 _FLAG_OPTIONAL = {
     "value",
     "values",
@@ -282,7 +283,7 @@ _FLAG_OPTIONAL = {
     "meaning",
 }
 _ARGUMENT_OPTIONAL = {"type", "values", "valid_when", "repeat", "meaning"}
-_COMMAND_OPTIONAL = {"args", "flags", "effect", "text"}
+_COMMAND_OPTIONAL = {"args", "flags", "effect", "text", "refusal_keys"}
 
 
 def _flags(flags, what, values):
@@ -322,8 +323,10 @@ def _arguments(arguments, what, values):
                 _text(entry[key], f"{what}.{name}.{key}")
 
 
-def _json_keys(keys, what):
-    if isinstance(keys, str):
+def _json_keys(keys, what, *, prose=True):
+    """A list of JSON keys, or, where `prose` allows, text naming a document
+    that has no fixed keys, such as the JSON Schema `schema` prints."""
+    if prose and isinstance(keys, str):
         return _text(keys, what)
     for key in _sequence(keys, what):
         if not isinstance(key, str) or not _IDENTIFIER.fullmatch(key):
@@ -333,11 +336,30 @@ def _json_keys(keys, what):
     return keys
 
 
+def _cli_values(entry, values):
+    """The vocabularies a flag or argument may name: those of `values`, and
+    the command line's own in `cli.values`, which no facade constant owns, so
+    each lists its values alone."""
+    own = _mapping(entry.get("values", {}), "cli.values")
+    for name, listed in own.items():
+        if not isinstance(name, str) or not _IDENTIFIER.fullmatch(name):
+            raise ValueError(f"invalid cli.values name: {name!r}")
+        if name in values:
+            raise ValueError(f"cli.values.{name} shadows values.{name}")
+        for value in _sequence(listed, f"cli.values.{name}"):
+            if not isinstance(value, str) or not _IDENTIFIER.fullmatch(value):
+                raise ValueError(f"cli.values.{name} has an invalid value: {value!r}")
+        if len(listed) != len(set(listed)):
+            raise ValueError(f"cli.values.{name} lists a value twice")
+    return {**values, **own}
+
+
 def validate_cli(cli, values, operations):
-    """Check the command line's grammar; an empty mapping declares none yet."""
+    """Check the command line's grammar; an empty mapping declares none."""
     if not _mapping(cli, "cli"):
         return
     entry = _keys(cli, "cli", _CLI_REQUIRED, _CLI_OPTIONAL)
+    values = _cli_values(entry, values)
     if entry["binary"] != "yamaa":
         raise ValueError("cli.binary must be yamaa")
     if entry["crate"] != "rust/crates/yamaa-cli":
@@ -388,6 +410,9 @@ def validate_cli(cli, values, operations):
             if key in item:
                 _text(item[key], f"{what}.{key}")
         _json_keys(item["json_keys"], f"{what}.json_keys")
+        # A refusal prints the command's own document, so its keys are named.
+        if "refusal_keys" in item:
+            _json_keys(item["refusal_keys"], f"{what}.refusal_keys", prose=False)
         commands.append(name)
     if len(commands) != len(set(commands)):
         raise ValueError("cli names a command twice")
@@ -445,6 +470,8 @@ def manifest_lines(definition):
     if not cli:
         return lines
     lines.extend(f"cli.synopsis: {line}" for line in cli["synopsis"])
+    for name, listed in cli.get("values", {}).items():
+        lines.extend(f"cli.values.{name}.{value}" for value in listed)
     lines.extend(
         f"cli.global_flags.{flag['name']}: {_flag_facts(flag)}"
         for flag in cli["global_flags"]
@@ -468,6 +495,9 @@ def manifest_lines(definition):
         keys = command["json_keys"]
         if isinstance(keys, list):
             lines.extend(f"{prefix}.json_keys.{key}" for key in keys)
+        lines.extend(
+            f"{prefix}.refusal_keys.{key}" for key in command.get("refusal_keys", [])
+        )
     for name, keys in cli.get("json", {}).items():
         if isinstance(keys, list):
             lines.extend(f"cli.json.{name}.{key}" for key in keys)
