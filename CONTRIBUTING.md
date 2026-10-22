@@ -243,7 +243,8 @@ Portable numerical behavior has independently authored controls in
 `rust/crates/yamaa-core/tests/fixtures/portable_math.tsv`.
 
 The Python and R READMEs describe user installation, and the
-[R and Python API](docs/articles/api.md) page describes both host APIs.
+[R, Python and command-line API](docs/articles/api.md) page describes both
+host APIs and the command line.
 Installed-host
 [qualification](rust/qualification/README.md) owns distribution checks: tests
 run outside the checkout against an installed package, with independent inputs

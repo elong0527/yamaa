@@ -47,6 +47,26 @@ returns_paths <- function(paths) is.character(paths) && length(paths) > 0L && !a
 # The exact bytes of a file.
 rawfile <- function(path) readBin(path, "raw", n = file.info(path)$size)
 
+# An issue's file as its printed location names it (rule 3 of P-PRINT-1):
+# relative to the working directory when the file is beneath it, and absolute
+# otherwise. Beneath is a matter of directories, not spellings: the engine
+# names the file canonically, in its own spelling, while the working directory
+# or normalizePath() may spell a directory another way, such as with Windows
+# 8.3 short names. So each directory above the file is compared with the
+# working directory as normalizePath() spells both, for both callers.
+printed_file <- function(file) {
+  here <- normalizePath(getwd(), winslash = "/")
+  parts <- strsplit(file, "/", fixed = TRUE)[[1L]]
+  for (depth in rev(seq_len(length(parts) - 1L))) {
+    # The first part is the root: "" for "/", or a drive such as "C:".
+    directory <- paste(parts[seq_len(depth)], collapse = "/")
+    if (depth == 1L) directory <- paste0(directory, "/")
+    if (identical(normalizePath(directory, winslash = "/", mustWork = FALSE), here))
+      return(paste(parts[-seq_len(depth)], collapse = "/"))
+  }
+  file
+}
+
 # D39's line for the first of `issues`: `<message> [<condition>, <rule>]`,
 # without the rule when it has none, then the count of the other issues.
 issue_line <- function(issues) {

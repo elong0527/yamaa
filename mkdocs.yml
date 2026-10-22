@@ -95,7 +95,7 @@ nav:
   - Home: index.md
   - Start:
       - Introduction: articles/intro.md
-      - R and Python API: articles/api.md
+      - R, Python and command-line API: articles/api.md
       - Restricted environments: articles/restricted-environments.md
       - Principles: articles/principles.md
       - Derivation: articles/derive.md

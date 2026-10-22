@@ -18,9 +18,9 @@
 //!   keyless qualified aggregates match on (D23, D63);
 //! - `model` lowers as declared, which [`checks`] requires beside submission
 //!   metadata and the submission rules read (SUB-3, SUB-23);
-//! - a dataset's `standard`, several origins and a value-level comparator
-//!   are stored for the pull requests that build them (P1-13, P1-14); until
-//!   then the switch refuses what is not built (P1-9).
+//! - a dataset's `standard`, a column's several origins and a value-level
+//!   comparator lower as written, which the section's standards (DEFINE-6),
+//!   the declared origins (SUB-19) and the value-level entries (SUB-12) read.
 //!
 //! Every node carries the position of the deepest node its layer wrote
 //! (P-ISSUE-1), and paths render in the 1.0 notation (P-CLR-2).
