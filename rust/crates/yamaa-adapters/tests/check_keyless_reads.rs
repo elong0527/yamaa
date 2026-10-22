@@ -89,7 +89,7 @@ impl Fixture {
                 .collect::<Vec<_>>()
         };
         let checked = render(&file_application::check(host, request(), identity()));
-        let built = match file_application::domain(host, request(), identity()) {
+        let built = match crate::support::study::domain(host, request(), identity()) {
             Ok(domain) => render(&domain.issues()),
             Err(issues) => render(&issues),
         };

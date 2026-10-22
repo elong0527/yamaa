@@ -5,8 +5,7 @@ use std::{collections::BTreeMap, convert::Infallible, sync::Arc};
 use yamaa_core::{
     function_invocation::{Argument, HostError},
     function_signature::{LogicalSignature, ProjectFunctionIdentity},
-    project_activation::ActivationPort,
-    project_environment::LockReference,
+    host_functions::{HostFunctions, Lock},
     project_function::Language,
     resource::ResourceFailure,
     specification::SourceDeclaration,
@@ -14,17 +13,22 @@ use yamaa_core::{
     value::Value,
 };
 
-/// An activation port a run must never reach: a specification that selects
-/// no project function verifies no lock, binds nothing and calls nothing.
-pub struct NoActivation;
+/// The host-functions port's empty double: like the empty port it keeps no
+/// project functions, so a build that calls one is refused before entering
+/// it, and a specification that selects none verifies no lock, binds
+/// nothing and calls nothing. A run that enters it fails the test.
+pub struct NoFunctions;
 
-impl ActivationPort for NoActivation {
+impl HostFunctions for NoFunctions {
     type Handle = ();
     type Error = Infallible;
+    fn is_empty(&self) -> bool {
+        true
+    }
     fn verify_lock(
         &mut self,
         _: Language,
-        _: &LockReference,
+        _: Lock<'_>,
         _: &[ProjectFunctionIdentity],
     ) -> Result<(), Infallible> {
         panic!("a run without project functions verified a lock")

@@ -31,12 +31,16 @@
 //! - Chunked invocation checks cancellation before each chunk and between
 //!   chunks; a cancelled run discards every previously accepted chunk and
 //!   reports `BatchFailureKind::Cancelled` instead of partial output.
+//!
+//! The batch reaches the host through the host-functions port's
+//! [`HostFunctions::call_batch`], whose provided method is the scalar
+//! reference a native vectorized callable must match.
 use crate::{
     function_invocation::{FailureKind, HostError},
     function_signature::{
         LogicalSignature, Presence, ProjectFunctionIdentity, ProjectInvocationPlan,
     },
-    table::ValueRef,
+    host_functions::HostFunctions,
     value::{ColumnType, Value, ValueType},
 };
 use std::collections::BTreeMap;
@@ -47,73 +51,6 @@ use std::collections::BTreeMap;
 pub struct BatchArgument {
     pub name: String,
     pub values: Vec<Value>,
-}
-
-/// A host capability that invokes one bound callable once per batch.
-///
-/// Implementations own all host array conversion. They must return one
-/// owned logical value per input row, in input order, or fail the whole
-/// call; the core re-validates length and exact result types regardless.
-/// Implementations must not short-circuit missing rows themselves: the
-/// core has already removed rows the signature short-circuits, and every
-/// row supplied here must reach the callable (accepting-missing parameters
-/// receive explicit missing values).
-pub trait BatchFunctionPort {
-    type Handle;
-    type Error;
-    /// Hosts classify user interrupts; their payload is propagated immediately.
-    fn is_interrupt(&self, _error: &Self::Error) -> bool {
-        false
-    }
-    /// `rows` is the number of rows the callback is given; it is explicit
-    /// because a function with no parameters has no columns to infer it
-    /// from, and ports must not guess it.
-    fn call_batch(
-        &mut self,
-        handle: &Self::Handle,
-        rows: usize,
-        arguments: &[BatchArgument],
-    ) -> Result<Vec<Value>, HostError<Self::Error>>;
-}
-
-/// Adapt any scalar callable to the batch port by invoking it once per row.
-///
-/// This is the reference batch implementation: its results are scalar
-/// results by construction, and hosts with a native vectorized callable
-/// must prove equivalence against it (or against scalar invocation).
-pub struct ScalarBatchAdapter<F> {
-    call: F,
-}
-impl<F> ScalarBatchAdapter<F> {
-    pub fn new(call: F) -> Self {
-        Self { call }
-    }
-}
-impl<E, F> BatchFunctionPort for ScalarBatchAdapter<F>
-where
-    F: FnMut(&[crate::function_invocation::Argument<'_>]) -> Result<Value, HostError<E>>,
-{
-    type Handle = ();
-    type Error = E;
-    fn call_batch(
-        &mut self,
-        _handle: &(),
-        rows: usize,
-        arguments: &[BatchArgument],
-    ) -> Result<Vec<Value>, HostError<E>> {
-        let mut results = Vec::with_capacity(rows);
-        for row in 0..rows {
-            let borrowed: Vec<crate::function_invocation::Argument<'_>> = arguments
-                .iter()
-                .map(|argument| crate::function_invocation::Argument {
-                    name: &argument.name,
-                    value: ValueRef::from(&argument.values[row]),
-                })
-                .collect();
-            results.push((self.call)(&borrowed)?);
-        }
-        Ok(results)
-    }
 }
 
 /// A batch failure retains the function identity and, when the failure is
@@ -278,7 +215,7 @@ fn prepare<E>(
 }
 
 /// Invoke one batch. See the module contract for the exact semantics.
-pub fn invoke_batch<P: BatchFunctionPort>(
+pub fn invoke_batch<P: HostFunctions>(
     plan: &ProjectInvocationPlan,
     handle: &P::Handle,
     rows: &[BTreeMap<String, Value>],
@@ -336,7 +273,7 @@ pub fn invoke_batch<P: BatchFunctionPort>(
 /// discards all previously accepted chunks: the caller receives either the
 /// complete scattered result or one failure, never partial output. An
 /// interrupt or exception inside a chunk likewise aborts the whole run.
-pub fn invoke_batch_chunked<P: BatchFunctionPort>(
+pub fn invoke_batch_chunked<P: HostFunctions>(
     plan: &ProjectInvocationPlan,
     handle: &P::Handle,
     rows: &[BTreeMap<String, Value>],

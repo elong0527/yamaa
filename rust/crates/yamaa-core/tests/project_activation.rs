@@ -6,9 +6,8 @@ mod project {
         use crate::support::roots::{Case, Definition, Parameter};
         use yamaa_core::{
             function_invocation::{Argument, HostError},
-            project_activation::{
-                activate, ActivatedFunction, ActivationPort, Failure, TestFailure,
-            },
+            host_functions::{HostFunctions, Lock},
+            project_activation::{activate, ActivatedFunction, Failure, TestFailure},
         };
         use yamaa_core::{
             function_signature::{LogicalSignature, ProjectFunctionIdentity},
@@ -43,17 +42,17 @@ mod project {
                 }
             }
         }
-        impl ActivationPort for Port {
+        impl HostFunctions for Port {
             type Handle = Handle;
             type Error = Payload;
             fn verify_lock(
                 &mut self,
                 language: Language,
-                lock: &LockReference,
+                lock: Lock<'_>,
                 functions: &[ProjectFunctionIdentity],
             ) -> Result<(), Payload> {
                 assert_eq!(language, Language::Python);
-                assert_eq!(lock.written, "../uv.lock");
+                assert_eq!(lock.reference.written, "../uv.lock");
                 assert!(functions
                     .iter()
                     .all(|f| f.call == format!("program.{}", f.name)));
@@ -149,10 +148,16 @@ mod project {
             )
             .unwrap()
         }
-        fn lock() -> LockReference {
-            LockReference {
-                written: "../uv.lock".into(),
-                kind: LockKind::Uv,
+        /// The declared uv lock each activation verifies, with no captured bytes.
+        fn lock() -> Lock<'static> {
+            static REFERENCE: std::sync::LazyLock<LockReference> =
+                std::sync::LazyLock::new(|| LockReference {
+                    written: "../uv.lock".into(),
+                    kind: LockKind::Uv,
+                });
+            Lock {
+                reference: &REFERENCE,
+                bytes: b"",
             }
         }
 
@@ -166,7 +171,7 @@ mod project {
             port.lock_failure = true;
             let mut observations = Observations::default();
             let activated = activate_references_observed(
-                Language::Python,
+                Some(Language::Python),
                 None,
                 &[&function],
                 &mut port,
@@ -184,7 +189,7 @@ mod project {
             port.bind_failure = Some("identity".into());
             assert!(matches!(
                 activate_references_observed(
-                    Language::Python,
+                    Some(Language::Python),
                     None,
                     &[&function],
                     &mut port,
@@ -200,7 +205,7 @@ mod project {
             port.mismatch = true;
             assert!(matches!(
                 activate_references_observed(
-                    Language::Python,
+                    Some(Language::Python),
                     None,
                     &[&function],
                     &mut port,
@@ -214,7 +219,7 @@ mod project {
             functions: &[Function],
             port: &mut Port,
         ) -> Result<Vec<ActivatedFunction<Handle>>, Failure<Payload>> {
-            let bindings = activate(Language::Python, &lock(), functions, port)?;
+            let bindings = activate(Language::Python, lock(), functions, port)?;
             port.trace.push("study.read".into());
             Ok(bindings)
         }
@@ -426,13 +431,13 @@ mod project {
         #[test]
         fn no_calls_do_no_activation_work_and_duplicate_selection_has_no_effects() {
             let mut port = Port::new();
-            assert!(activate(Language::Python, &lock(), &[], &mut port)
+            assert!(activate(Language::Python, lock(), &[], &mut port)
                 .unwrap()
                 .is_empty());
             assert!(port.trace.is_empty());
             let functions = [function("duplicate"), function("duplicate")];
             assert!(matches!(
-                activate(Language::Python, &lock(), &functions, &mut port),
+                activate(Language::Python, lock(), &functions, &mut port),
                 Err(Failure::DuplicateSelection { function: 1 })
             ));
             assert!(port.trace.is_empty());
@@ -447,7 +452,15 @@ mod project {
                 kind: LockKind::Renv,
             };
             assert!(matches!(
-                activate(Language::Python, &wrong_lock, &functions, &mut port),
+                activate(
+                    Language::Python,
+                    Lock {
+                        reference: &wrong_lock,
+                        bytes: b"",
+                    },
+                    &functions,
+                    &mut port,
+                ),
                 Err(Failure::LockKindMismatch {
                     language: Language::Python,
                     actual: LockKind::Renv
@@ -461,13 +474,71 @@ mod project {
             let rfunction = Function::admit(Language::R, definition).unwrap();
             assert_eq!(rfunction.language(), Some(Language::R));
             assert!(matches!(
-                activate(Language::Python, &lock(), &[rfunction], &mut port),
+                activate(Language::Python, lock(), &[rfunction], &mut port),
                 Err(Failure::FunctionLanguageMismatch {
                     function: 0,
                     declared: Some(Language::R),
-                    selected: Language::Python
+                    selected: Some(Language::Python)
                 })
             ));
+            assert!(port.trace.is_empty());
+        }
+
+        /// The empty port keeps no project functions (#3030 D110), and an
+        /// engine that claims no host language selects none (D123): either
+        /// refuses the first function before any port effect. A function such
+        /// an engine admits declares no host language, so a port that runs one
+        /// language refuses it too.
+        #[test]
+        fn without_a_host_language_the_first_function_is_refused_before_any_port() {
+            use yamaa_core::host_functions::Empty;
+            use yamaa_core::project_activation::activate_references;
+            use yamaa_core::project_environment::{Draft, Environment};
+            let functions = [function("first"), function("second")];
+            let neutral = Environment::admit(
+                None,
+                Draft {
+                    surface: yamaa_core::ast::Surface::V1 { minor: 0 },
+                    language: None,
+                    lock: None,
+                    functions: Some(vec![Definition::of(functions[0].definition())
+                        .file(&[(Language::Python, "program.first")])]),
+                    codelists: vec![],
+                },
+            )
+            .unwrap()
+            .into_execution();
+            let mismatch = |declared, selected| Failure::FunctionLanguageMismatch {
+                function: 0,
+                declared,
+                selected,
+            };
+            let mut port = Port::new();
+            for (actual, expected, label) in [
+                (
+                    activate(Language::Python, lock(), &functions, &mut Empty::new()).unwrap_err(),
+                    mismatch(Some(Language::Python), None),
+                    "through the empty port",
+                ),
+                (
+                    activate_references(
+                        None,
+                        Some(lock()),
+                        &functions.iter().collect::<Vec<_>>(),
+                        &mut port,
+                    )
+                    .unwrap_err(),
+                    mismatch(Some(Language::Python), None),
+                    "with no host language selected",
+                ),
+                (
+                    activate(Language::Python, lock(), neutral.functions(), &mut port).unwrap_err(),
+                    mismatch(None, Some(Language::Python)),
+                    "a function of no host language",
+                ),
+            ] {
+                assert_eq!(actual, expected, "{label}");
+            }
             assert!(port.trace.is_empty());
         }
 
@@ -485,7 +556,7 @@ mod project {
             port.bind_failure = Some("first".into());
             for _ in 0..2 {
                 let activated =
-                    activate_references(Language::Python, Some(&lock()), &selected, &mut port)
+                    activate_references(Some(Language::Python), Some(lock()), &selected, &mut port)
                         .unwrap();
                 assert_eq!(
                     activated
@@ -517,8 +588,9 @@ mod project {
             );
             port.trace.clear();
             port.bind_failure = Some("second".into());
-            let error = activate_references(Language::Python, Some(&lock()), &selected, &mut port)
-                .unwrap_err();
+            let error =
+                activate_references(Some(Language::Python), Some(lock()), &selected, &mut port)
+                    .unwrap_err();
             assert_eq!(
                 error,
                 Failure::Bindings(vec![yamaa_core::project_activation::BindingFailure {
@@ -539,15 +611,15 @@ mod project {
             let mut port = Port::new();
             port.lock_failure = true;
             assert!(
-                activate_references(Language::Python, Some(&lock()), &[], &mut port)
+                activate_references(Some(Language::Python), Some(lock()), &[], &mut port)
                     .unwrap()
                     .is_empty()
             );
             assert!(port.trace.is_empty());
             assert_eq!(
                 activate_references(
-                    Language::Python,
-                    Some(&lock()),
+                    Some(Language::Python),
+                    Some(lock()),
                     &[&environment[0], &environment[0]],
                     &mut port
                 )
@@ -577,13 +649,13 @@ mod project {
                     }
                 }
             }
-            impl ActivationPort for ObservedPort {
+            impl HostFunctions for ObservedPort {
                 type Handle = Handle;
                 type Error = Payload;
                 fn verify_lock(
                     &mut self,
                     language: Language,
-                    lock: &LockReference,
+                    lock: Lock<'_>,
                     functions: &[ProjectFunctionIdentity],
                 ) -> Result<(), Payload> {
                     assert_ne!(self.panic_stage, "lock", "original lock panic");
@@ -631,8 +703,8 @@ mod project {
                 observations: &mut Observations,
             ) -> Result<Vec<ActivatedFunction<Handle>>, Failure<Payload>> {
                 activate_references_observed(
-                    Language::Python,
-                    Some(&lock()),
+                    Some(Language::Python),
+                    Some(lock()),
                     &functions.iter().collect::<Vec<_>>(),
                     port,
                     observations,

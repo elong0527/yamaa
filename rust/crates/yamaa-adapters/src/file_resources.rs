@@ -1113,7 +1113,7 @@ mod default_resolver_tests {
         let mut run = prepared.run_scope(None);
         let attempt = prepared.build(
             &mut run,
-            &mut crate::specification_run::NoActivation,
+            &mut yamaa_core::host_functions::Empty::<std::convert::Infallible>::new(),
             yamaa_core::application_observer::Scope::default(),
         );
         std::fs::remove_dir_all(&directory).unwrap();

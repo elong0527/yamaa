@@ -3,6 +3,7 @@
 mod project {
     mod domain_submission {
         use crate::support::issues::assert_issues;
+        use crate::support::ports::NoFunctions;
         use crate::support::Edit as _;
         use std::{fs, path::Path};
         use yamaa_adapters::{file_application, specification_report::Identity};
@@ -458,7 +459,7 @@ mod project {
             fs::write(study.0.join("input.csv"), "ID,VALUE\n1,é字😀\n2,abcd\n").unwrap();
             let path = study.0.join("spec.yaml");
             let path = path.to_str().unwrap();
-            let mut run = file_application::domain(
+            let mut run = crate::support::study::domain(
                 yamaa_core::project_function::Language::Python,
                 Request {
                     specification: path,
@@ -489,7 +490,7 @@ mod project {
                 fs::write(study.0.join("input.csv"), input).unwrap();
                 let path = study.0.join("spec.yaml");
                 let path = path.to_str().unwrap();
-                file_application::domain(
+                crate::support::study::domain(
                     yamaa_core::project_function::Language::Python,
                     Request {
                         specification: path,
@@ -1144,36 +1145,8 @@ mod project {
             );
         }
 
-        struct NoActivation;
-        impl yamaa_core::project_activation::ActivationPort for NoActivation {
-            type Handle = ();
-            type Error = ();
-            fn verify_lock(
-                &mut self,
-                _: yamaa_core::project_function::Language,
-                _: &yamaa_core::project_environment::LockReference,
-                _: &[yamaa_core::function_signature::ProjectFunctionIdentity],
-            ) -> Result<(), ()> {
-                panic!("no callable definitions")
-            }
-            fn bind(
-                &mut self,
-                _: &yamaa_core::function_signature::ProjectFunctionIdentity,
-                _: &yamaa_core::function_signature::LogicalSignature,
-            ) -> Result<(), ()> {
-                panic!("no callable definitions")
-            }
-            fn invoke(
-                &mut self,
-                _: &(),
-                _: &[yamaa_core::function_invocation::Argument<'_>],
-            ) -> Result<yamaa_core::value::Value, yamaa_core::function_invocation::HostError<()>>
-            {
-                panic!("no callable definitions")
-            }
-        }
         /// Build one specification on the project route; its run calls no
-        /// project function, so the activation port is never entered.
+        /// project function, so the host-functions port is never entered.
         fn project_domain(path: &str, project_path: &str) -> file_application::Domain {
             let project = yamaa_adapters::file_workflow::select(
                 path,
@@ -1187,7 +1160,7 @@ mod project {
                 )
             });
             let mut run_scope = project.run_scope(None);
-            let attempt = project.build(&mut run_scope, &mut NoActivation, Scope::default());
+            let attempt = project.build(&mut run_scope, &mut NoFunctions, Scope::default());
             let result = yamaa_adapters::specification_report::build_result(
                 project.run(),
                 &attempt,
@@ -1352,7 +1325,7 @@ mod project {
                 assert!(!study.0.join("input.csv").exists());
                 fs::write(study.0.join("input.csv"), "ID,VALUE\n1,DM\n2,renamed\n3,\n").unwrap();
                 let mut run_scope = project.run_scope(None);
-                let attempt = project.build(&mut run_scope, &mut NoActivation, Scope::default());
+                let attempt = project.build(&mut run_scope, &mut NoFunctions, Scope::default());
                 let result = yamaa_adapters::specification_report::build_result(
                     project.run(),
                     &attempt,
@@ -1454,7 +1427,7 @@ mod project {
                 fs::write(study.0.join("input.csv"), input).unwrap();
                 let path = study.0.join("spec.yaml");
                 let path = path.to_str().unwrap();
-                let mut run = file_application::domain(
+                let mut run = crate::support::study::domain(
                     yamaa_core::project_function::Language::Python,
                     Request {
                         specification: path,
@@ -1490,7 +1463,7 @@ mod project {
                 fs::write(study.0.join("input.csv"), "ID,VALUE\n1,é字😀\n2,\n").unwrap();
                 let path = study.0.join("spec.yaml");
                 let path = path.to_str().unwrap();
-                let mut run = file_application::domain(
+                let mut run = crate::support::study::domain(
                     yamaa_core::project_function::Language::Python,
                     Request {
                         specification: path,
@@ -1613,7 +1586,7 @@ mod project {
             fs::write(study.0.join("input.csv"), input).unwrap();
             let path = study.0.join("spec.yaml");
             let path = path.to_str().unwrap();
-            file_application::domain(
+            crate::support::study::domain(
                 yamaa_core::project_function::Language::Python,
                 Request {
                     specification: path,

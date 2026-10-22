@@ -17,7 +17,8 @@ use std::{
     any::Any,
     panic::{catch_unwind, AssertUnwindSafe},
 };
-use yamaa_core::project_activation::{ActivationPort, Failure, Observations};
+use yamaa_core::host_functions::HostFunctions;
+use yamaa_core::project_activation::{Failure, Observations};
 use yamaa_core::project_domain::{self, CheckedOwnedProject, RejectedOwnedProject};
 use yamaa_core::project_environment::ExecutionEnvironment;
 use yamaa_core::specification::{
@@ -93,48 +94,6 @@ pub struct Attempt<C, E> {
     pub boundary: Result<(), BoundaryFailure<E>>,
     pub activation: Observations,
     pub dataset: CapturedAttempt<C, E>,
-}
-
-/// The activation port of an adapter-level run that has no project functions
-/// to call, for the adapters' own tests ([`PreparedRun::execute`],
-/// `file_application::domain`): it activates nothing, so a specification
-/// that calls a project function fails at its lock or binding. A
-/// specification without a project never enters it, because it calls no
-/// project function. The facade runs every member through its one
-/// host-functions port instead, empty when the embedder supplies no
-/// functions.
-pub struct NoActivation;
-/// The failure [`NoActivation`] reports for every request.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Unavailable;
-impl ActivationPort for NoActivation {
-    type Handle = ();
-    type Error = Unavailable;
-    fn verify_lock(
-        &mut self,
-        _: yamaa_core::project_function::Language,
-        _: &yamaa_core::project_environment::LockReference,
-        _: &[yamaa_core::function_signature::ProjectFunctionIdentity],
-    ) -> Result<(), Unavailable> {
-        Err(Unavailable)
-    }
-    fn bind(
-        &mut self,
-        _: &yamaa_core::function_signature::ProjectFunctionIdentity,
-        _: &yamaa_core::function_signature::LogicalSignature,
-    ) -> Result<(), Unavailable> {
-        Err(Unavailable)
-    }
-    fn invoke(
-        &mut self,
-        _: &(),
-        _: &[yamaa_core::function_invocation::Argument<'_>],
-    ) -> Result<yamaa_core::value::Value, yamaa_core::function_invocation::HostError<Unavailable>>
-    {
-        Err(yamaa_core::function_invocation::HostError::Raised(
-            Unavailable,
-        ))
-    }
 }
 
 impl PreparedRun {
@@ -260,10 +219,11 @@ impl PreparedRun {
     /// Own evidence outside the host boundary before granting activation or
     /// study authority. No prior attempt, binding or successful test is
     /// reused here. A specification that calls no project function never
-    /// enters `activation`.
-    pub fn execute_with_ports<A: ActivationPort, P: SpecificationSourcePort>(
+    /// enters `functions`, the build's host-functions port; the empty port
+    /// refuses one that does before it binds anything or reads any input.
+    pub fn execute_with_ports<A: HostFunctions, P: SpecificationSourcePort>(
         &self,
-        activation: &mut A,
+        functions: &mut A,
         source: &mut P,
         scope: yamaa_core::application_observer::Scope<'_>,
     ) -> Attempt<P::Error, A::Error> {
@@ -272,9 +232,14 @@ impl PreparedRun {
             activation: Observations::default(),
             dataset: application::CapturedAttempt::new(self.compiled().source()),
         };
+        let lock = self
+            .captured
+            .lock()
+            .map_or(&[][..], |lock| &lock.source.bytes[..]);
         attempt.boundary = match catch_unwind(AssertUnwindSafe(|| {
             self.checked.build_into(
-                activation,
+                functions,
+                lock,
                 source,
                 &mut Decoder::<A::Error>::default(),
                 &mut attempt.dataset,
@@ -286,14 +251,6 @@ impl PreparedRun {
             Err(payload) => Err(BoundaryFailure::Unwind(payload)),
         };
         attempt
-    }
-    /// One build with no project functions to call; see [`NoActivation`].
-    pub fn execute<P: SpecificationSourcePort>(
-        &self,
-        source: &mut P,
-        scope: yamaa_core::application_observer::Scope<'_>,
-    ) -> Attempt<P::Error, Unavailable> {
-        self.execute_with_ports(&mut NoActivation, source, scope)
     }
 }
 

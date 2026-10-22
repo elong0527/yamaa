@@ -2,6 +2,7 @@
 //! Native specification run assertions.
 mod execution {
     mod specification_run {
+        use crate::support::ports::NoFunctions;
         use crate::support::specification_run::*;
         use crate::support::Edit as _;
         use yamaa_core::application_observer::Scope;
@@ -32,7 +33,7 @@ output: {{path: output.csv, columns: [I, S]}}
                 let run = PreparedRun::prepare(prepare(&schema, raw.as_bytes())).unwrap();
                 let content = crate::support::parquet_files::file("text");
                 let mut port = Sources::by_path([("input.PARQUET", content.as_slice())]);
-                let attempt = run.execute(&mut port, Scope::default());
+                let attempt = run.execute_with_ports(&mut NoFunctions, &mut port, Scope::default());
                 assert_eq!(port.reads(), 1);
                 drop(port);
                 drop(run);
@@ -718,7 +719,7 @@ output: {{path: output.csv, columns: [I, S]}}
                 fail: false,
             };
             for created in [1, 0] {
-                let attempt = run.execute(&mut port, Scope::default());
+                let attempt = run.execute_with_ports(&mut NoFunctions, &mut port, Scope::default());
                 let sources = &attempt.dataset.sources;
                 assert!(sources[0].read.captured);
                 assert_eq!(sources[0].read.snapshots_created, Some(created));
@@ -735,14 +736,14 @@ output: {{path: output.csv, columns: [I, S]}}
             assert_eq!(port.requests, 2);
             let invalid = raw.edit("100 * (AVAL - BASE) / BASE", "AVAL +");
             let run = PreparedRun::prepare(prepare(&schema, invalid.as_bytes())).unwrap();
-            let attempt = run.execute(&mut port, Scope::default());
+            let attempt = run.execute_with_ports(&mut NoFunctions, &mut port, Scope::default());
             assert!(attempt.dataset.sources[0].table.is_some());
             assert!(matches!(
                 attempt.dataset.result,
                 Err(PortError::Run(RunError::Bind(_)))
             ));
             port.content = Arc::from(b"A\n\"bad".as_slice());
-            let attempt = run.execute(&mut port, Scope::default());
+            let attempt = run.execute_with_ports(&mut NoFunctions, &mut port, Scope::default());
             assert!(attempt.dataset.sources[0].snapshot.is_some());
             assert!(attempt.dataset.sources[0].table.is_none());
             assert!(matches!(
@@ -751,7 +752,7 @@ output: {{path: output.csv, columns: [I, S]}}
                     if matches!(errors[..], [(0, Error::Source(_))])
             ));
             port.fail = true;
-            let attempt = run.execute(&mut port, Scope::default());
+            let attempt = run.execute_with_ports(&mut NoFunctions, &mut port, Scope::default());
             let sources = &attempt.dataset.sources;
             assert!(!sources[0].read.captured);
             assert_eq!(sources[0].read.snapshots_created, Some(0));
@@ -827,7 +828,7 @@ output: {{path: output.csv, columns: [I, S]}}
                     base: case,
                     reads: 0,
                 };
-                let attempt = run.execute(&mut port, Scope::default());
+                let attempt = run.execute_with_ports(&mut NoFunctions, &mut port, Scope::default());
                 assert_eq!(port.reads, 1);
                 // Independently authored complete failure truth; benchmark source and
                 // diagnostic declarations also receive a separate reference comparison.
@@ -1129,14 +1130,14 @@ output: {{path: output.csv, columns: [I, S]}}
                 "fixtures/specs/adam-adlb-ordered-sum.json"
             ))
             .unwrap();
-            let attempt = run.execute(&mut port, Scope::default());
+            let attempt = run.execute_with_ports(&mut NoFunctions, &mut port, Scope::default());
             let result = specification_report::build_result(&run, &attempt, id(), &[]).unwrap();
             let artifact = std::fs::read(case.join("expected/adlb.csv")).unwrap();
             assert_eq!(result.files(), [("adlb.csv", &artifact[..])]);
             assert_eq!(result.saved_observations().unwrap(), expected);
             // An output failure has no file to save.
             let saved = |run: &PreparedRun, port: &mut Captured| {
-                let attempt = run.execute(port, Scope::default());
+                let attempt = run.execute_with_ports(&mut NoFunctions, port, Scope::default());
                 let result = specification_report::build_result(run, &attempt, id(), &[]).unwrap();
                 assert!(result.files().is_empty());
                 result.saved_observations().unwrap()
@@ -1287,7 +1288,8 @@ output: {{path: output.csv, columns: [I, S]}}
                     let written = format!("{prefix}verifications:\n  - row_count: {{id: \"a'b\", min: {minimum}}}\n  - {declaration}\n  - row_count: {{min: 0}}\n");
                     let run = PreparedRun::prepare(prepare(&schema, written.as_bytes())).unwrap();
                     let mut host = Sources::any(&bytes);
-                    let attempt = run.execute(&mut host, Scope::default());
+                    let attempt =
+                        run.execute_with_ports(&mut NoFunctions, &mut host, Scope::default());
                     let result =
                         specification_report::build_result(&run, &attempt, id(), &[]).unwrap();
                     // An invalid verification has no file to save.
@@ -1319,7 +1321,7 @@ output: {{path: output.csv, columns: [I, S]}}
             let invalid_formula = written.edit("SUM(LB.LBSTRESN)", "SUM(");
             let run = PreparedRun::prepare(prepare(&schema, invalid_formula.as_bytes())).unwrap();
             let mut host = Sources::any(&bytes);
-            let attempt = run.execute(&mut host, Scope::default());
+            let attempt = run.execute_with_ports(&mut NoFunctions, &mut host, Scope::default());
             let actual = specification_report::build_result(&run, &attempt, id(), &[])
                 .unwrap()
                 .saved_observations()
@@ -1337,7 +1339,7 @@ output: {{path: output.csv, columns: [I, S]}}
                     .as_bytes(),
             ))
             .unwrap();
-            let attempt = run.execute(&mut host, Scope::default());
+            let attempt = run.execute_with_ports(&mut NoFunctions, &mut host, Scope::default());
             let actual = specification_report::build_result(&run, &attempt, id(), &[])
                 .unwrap()
                 .saved_observations()
@@ -1485,7 +1487,7 @@ output: {{path: output.csv, columns: [I, S]}}
                 }
                 let mut host = Sources::any(source.as_bytes());
                 let run = PreparedRun::prepare(prepare(&schema, raw.as_bytes())).unwrap();
-                let attempt = run.execute(&mut host, Scope::default());
+                let attempt = run.execute_with_ports(&mut NoFunctions, &mut host, Scope::default());
                 let result = specification_report::build_result(&run, &attempt, id(), &[]).unwrap();
                 let actual = result.saved_observations().unwrap();
                 if all_missing {
@@ -1555,7 +1557,7 @@ output: {{path: output.csv, columns: [I, S]}}
             let bytes = std::fs::read(case.join("input/lb.csv")).unwrap();
             let mut host = Sources::any(&bytes);
             let run = PreparedRun::prepare(prepare(&schema, written.as_bytes())).unwrap();
-            let attempt = run.execute(&mut host, Scope::default());
+            let attempt = run.execute_with_ports(&mut NoFunctions, &mut host, Scope::default());
             let result = specification_report::build_result(
                 &run,
                 &attempt,
@@ -1787,7 +1789,8 @@ output: {{path: output.csv, columns: [I, S]}}
             };
             let artifact = std::fs::read(case.join("expected/adsl.csv")).unwrap();
             for created in [1, 0] {
-                let attempt = prepared.execute(&mut host, Scope::default());
+                let attempt =
+                    prepared.execute_with_ports(&mut NoFunctions, &mut host, Scope::default());
                 assert_eq!(attempt.dataset.sources.len(), 3);
                 let id = Identity {
                     runtime: "python",
@@ -1873,7 +1876,7 @@ output: {{path: output.csv, columns: [I, S]}}
                     case: case.clone(),
                     requests: vec![],
                 };
-                let attempt = run.execute(&mut host, Scope::default());
+                let attempt = run.execute_with_ports(&mut NoFunctions, &mut host, Scope::default());
                 let result = specification_report::build_result(
                     &run,
                     &attempt,
@@ -2090,7 +2093,7 @@ output: {{path: output.csv, columns: [I, S]}}
             };
             let artifact = std::fs::read(case.join("expected/advs.csv")).unwrap();
             for created in [1, 0] {
-                let attempt = run.execute(&mut host, Scope::default());
+                let attempt = run.execute_with_ports(&mut NoFunctions, &mut host, Scope::default());
                 let result = specification_report::build_result(
                     &run,
                     &attempt,

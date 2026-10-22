@@ -81,11 +81,10 @@ mod declaration {
                 };
                 let identity = || crate::support::study::identity("test", &specification);
                 let checked = yamaa_adapters::file_application::check(host, request(), identity());
-                let built =
-                    match yamaa_adapters::file_application::domain(host, request(), identity()) {
-                        Ok(domain) => domain.issues(),
-                        Err(issues) => issues,
-                    };
+                let built = match crate::support::study::domain(host, request(), identity()) {
+                    Ok(domain) => domain.issues(),
+                    Err(issues) => issues,
+                };
                 [checked, built]
             }
             /// The issues a submission of the `sdtm` section of the project

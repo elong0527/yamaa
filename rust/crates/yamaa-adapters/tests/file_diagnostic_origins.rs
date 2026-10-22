@@ -193,7 +193,7 @@ mod file {
             }
             fn build(&self) -> file_application::Domain {
                 let path = self.text("spec.yaml");
-                file_application::domain(
+                crate::support::study::domain(
                     yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &path,
@@ -226,7 +226,7 @@ mod file {
             let mut run_scope = prepared.run_scope(None);
             let attempt = prepared.build(
                 &mut run_scope,
-                &mut yamaa_adapters::specification_run::NoActivation,
+                &mut crate::support::ports::NoFunctions,
                 Scope::default(),
             );
             assert!(matches!(
@@ -289,7 +289,7 @@ mod file {
             )
             .unwrap();
             let path = study.text("spec.yaml");
-            let issues = file_application::domain(
+            let issues = crate::support::study::domain(
                 yamaa_core::project_function::Language::Python,
                 Request {
                     specification: &path,
@@ -340,7 +340,7 @@ mod file {
             )
             .unwrap();
             let path = study.text("spec.yaml");
-            let issues = file_application::domain(
+            let issues = crate::support::study::domain(
                 yamaa_core::project_function::Language::Python,
                 Request {
                     specification: &path,
@@ -359,7 +359,7 @@ mod file {
             );
             fs::remove_dir(study.0.join("input.unknown")).unwrap();
             fs::write(study.0.join("input.unknown"), b"ID\n1\n").unwrap();
-            let issues = file_application::domain(
+            let issues = crate::support::study::domain(
                 yamaa_core::project_function::Language::Python,
                 Request {
                     specification: &path,
@@ -450,7 +450,7 @@ mod file {
             assert!(prepared
                 .build(
                     &mut run_scope,
-                    &mut yamaa_adapters::specification_run::NoActivation,
+                    &mut crate::support::ports::NoFunctions,
                     Scope::default()
                 )
                 .dataset
@@ -462,7 +462,7 @@ mod file {
             assert!(prepared
                 .build(
                     &mut run_scope,
-                    &mut yamaa_adapters::specification_run::NoActivation,
+                    &mut crate::support::ports::NoFunctions,
                     Scope::default()
                 )
                 .dataset
@@ -472,7 +472,7 @@ mod file {
             assert!(prepared
                 .build(
                     &mut run_scope,
-                    &mut yamaa_adapters::specification_run::NoActivation,
+                    &mut crate::support::ports::NoFunctions,
                     Scope::default()
                 )
                 .dataset
@@ -502,7 +502,7 @@ mod file {
                 )
                 .unwrap();
                 let path = study.text("entry/spec.yaml");
-                let mut result = file_application::domain(
+                let mut result = crate::support::study::domain(
                     yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &path,
@@ -532,7 +532,7 @@ mod file {
             )
             .unwrap();
             let path = study.text("entry/spec.yaml");
-            let mut result = file_application::domain(
+            let mut result = crate::support::study::domain(
                 yamaa_core::project_function::Language::Python,
                 Request {
                     specification: &path,
@@ -653,7 +653,7 @@ mod file {
             fs::write(root.join("input.csv"), b"ID\n1\n").unwrap();
             let path = root.join("spec.yaml");
             let path = path.to_str().unwrap();
-            let mut result = file_application::domain(
+            let mut result = crate::support::study::domain(
                 yamaa_core::project_function::Language::Python,
                 Request {
                     specification: path,
@@ -780,7 +780,7 @@ mod file {
                             request(),
                             identity(&spec),
                         ),
-                        file_application::domain(
+                        crate::support::study::domain(
                             yamaa_core::project_function::Language::Python,
                             request(),
                             identity(&spec),
@@ -820,7 +820,7 @@ mod file {
                         )
                         .is_empty());
                     }
-                    let mut domain = file_application::domain(
+                    let mut domain = crate::support::study::domain(
                         yamaa_core::project_function::Language::Python,
                         Request {
                             specification: &spec,
@@ -868,7 +868,7 @@ mod file {
                         request(),
                         identity(&spec),
                     ),
-                    file_application::domain(
+                    crate::support::study::domain(
                         yamaa_core::project_function::Language::Python,
                         request(),
                         identity(&spec),
@@ -928,7 +928,7 @@ mod file {
                 )
                 .is_empty());
             }
-            let mut domain = file_application::domain(
+            let mut domain = crate::support::study::domain(
                 yamaa_core::project_function::Language::Python,
                 Request {
                     specification: &spec,
@@ -952,7 +952,7 @@ mod file {
             .unwrap();
             let attempt = project.build(
                 &mut project.run_scope(None),
-                &mut crate::support::ports::NoActivation,
+                &mut crate::support::ports::NoFunctions,
                 Scope::default(),
             );
             assert!(attempt.boundary.is_ok());
@@ -1010,7 +1010,7 @@ mod file {
                 )
                 .is_empty());
             }
-            let mut result = file_application::domain(
+            let mut result = crate::support::study::domain(
                 yamaa_core::project_function::Language::Python,
                 Request {
                     specification: &spec,
@@ -1049,7 +1049,7 @@ mod file {
                         request(),
                         identity(&spec),
                     ),
-                    file_application::domain(
+                    crate::support::study::domain(
                         yamaa_core::project_function::Language::Python,
                         request(),
                         identity(&spec),
@@ -1692,7 +1692,7 @@ mod file {
             assert!(prepared
                 .build(
                     &mut run_scope,
-                    &mut yamaa_adapters::specification_run::NoActivation,
+                    &mut crate::support::ports::NoFunctions,
                     Scope::default()
                 )
                 .dataset
@@ -1702,7 +1702,7 @@ mod file {
             assert!(prepared
                 .build(
                     &mut run_scope,
-                    &mut yamaa_adapters::specification_run::NoActivation,
+                    &mut crate::support::ports::NoFunctions,
                     Scope::default()
                 )
                 .dataset
@@ -1734,7 +1734,7 @@ mod file {
             assert!(prepared
                 .build(
                     &mut run_scope,
-                    &mut yamaa_adapters::specification_run::NoActivation,
+                    &mut crate::support::ports::NoFunctions,
                     Scope::default()
                 )
                 .dataset
@@ -1816,7 +1816,7 @@ mod file {
             assert!(prepared
                 .build(
                     &mut run_scope,
-                    &mut yamaa_adapters::specification_run::NoActivation,
+                    &mut crate::support::ports::NoFunctions,
                     Scope::default()
                 )
                 .dataset
@@ -1826,7 +1826,7 @@ mod file {
             assert!(prepared
                 .build(
                     &mut run_scope,
-                    &mut yamaa_adapters::specification_run::NoActivation,
+                    &mut crate::support::ports::NoFunctions,
                     Scope::default()
                 )
                 .dataset
@@ -1958,7 +1958,7 @@ mod file {
                     }
                     let attempt = prepared.build(
                         &mut run_scope,
-                        &mut yamaa_adapters::specification_run::NoActivation,
+                        &mut crate::support::ports::NoFunctions,
                         Scope::default(),
                     );
                     let result = specification_report::build_result(

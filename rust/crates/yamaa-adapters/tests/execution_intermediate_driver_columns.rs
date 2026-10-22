@@ -32,7 +32,7 @@ impl Fixture {
     }
     fn domain(&self) -> Result<file_application::Domain, Vec<Diagnostic>> {
         let specification = self.specification();
-        file_application::domain(
+        crate::support::study::domain(
             yamaa_core::project_function::Language::Python,
             Request {
                 specification: &specification,

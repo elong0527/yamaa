@@ -1,46 +1,19 @@
-//! One build's called-function activation: locks, bindings, then every test.
-//! There is no activation cache and this service owns no study-data port.
+//! One build's called-function activation through the host-functions port:
+//! locks, bindings, then every test. There is no activation cache and this
+//! service owns no study-data port.
 use crate::function_invocation::{
     invoke_project, Argument, FailureKind, FunctionPort, HostError, InvocationFailure,
 };
 use crate::{
-    function_signature::{
-        LogicalSignature, PlanError, ProjectFunctionIdentity, ProjectInvocationPlan,
-    },
-    project_environment::{LockKind, LockReference},
+    function_signature::{PlanError, ProjectFunctionIdentity, ProjectInvocationPlan},
+    host_functions::{HostFunctions, Lock},
+    project_environment::LockKind,
     project_function::{Function, Language},
     project_function_result::results_match,
     value::Value,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
-/// Installed metadata, callable resolution and scalar host invocation are ports.
-/// Lock checking covers yamaa and only packages of the selected called functions;
-/// each host identifies its standard-library exemptions without importing code.
-pub trait ActivationPort {
-    type Handle;
-    type Error;
-    fn verify_lock(
-        &mut self,
-        language: Language,
-        lock: &LockReference,
-        functions: &[ProjectFunctionIdentity],
-    ) -> Result<(), Self::Error>;
-    fn bind(
-        &mut self,
-        identity: &ProjectFunctionIdentity,
-        signature: &LogicalSignature,
-    ) -> Result<Self::Handle, Self::Error>;
-    /// Hosts classify user interrupts; their payload is propagated immediately.
-    fn is_interrupt(&self, _error: &Self::Error) -> bool {
-        false
-    }
-    fn invoke(
-        &mut self,
-        handle: &Self::Handle,
-        arguments: &[Argument<'_>],
-    ) -> Result<Value, HostError<Self::Error>>;
-}
 #[derive(Debug, PartialEq, thiserror::Error)]
 pub enum Failure<E> {
     #[error("project activation lock kind mismatch: language={language:?}, actual={actual:?}")]
@@ -48,11 +21,15 @@ pub enum Failure<E> {
         language: Language,
         actual: LockKind,
     },
+    /// A selected function does not run in the language the build selects.
+    /// No language is selected through the empty port, which keeps no
+    /// project functions (#3030 D110), nor by an engine that claims no host
+    /// language (D123): the build is refused at its first function.
     #[error("project activation function language mismatch: function={function:?}, declared={declared:?}, selected={selected:?}")]
     FunctionLanguageMismatch {
         function: usize,
         declared: Option<Language>,
-        selected: Language,
+        selected: Option<Language>,
     },
     #[error("project activation duplicate selection: function={function:?}")]
     DuplicateSelection { function: usize },
@@ -168,16 +145,16 @@ pub struct ActivatedFunction<H> {
 }
 /// Borrow successful activation handles for this run. Dataset execution never
 /// resolves namespaces, verifies versions or re-runs conformance cases here.
-pub struct Bindings<'a, P: ActivationPort> {
+pub struct Bindings<'a, P: HostFunctions> {
     functions: &'a [ActivatedFunction<P::Handle>],
     port: &'a mut P,
 }
-impl<'a, P: ActivationPort> Bindings<'a, P> {
+impl<'a, P: HostFunctions> Bindings<'a, P> {
     pub fn new(functions: &'a [ActivatedFunction<P::Handle>], port: &'a mut P) -> Self {
         Self { functions, port }
     }
 }
-impl<P: ActivationPort> crate::function_invocation::FunctionPort for Bindings<'_, P> {
+impl<P: HostFunctions> crate::function_invocation::FunctionPort for Bindings<'_, P> {
     type Error = P::Error;
     fn signature(&self, _: usize) -> Option<&crate::function_signature::InvocationPlan> {
         None
@@ -199,13 +176,13 @@ impl<P: ActivationPort> crate::function_invocation::FunctionPort for Bindings<'_
         self.port.invoke(&function.handle, arguments)
     }
 }
-struct BoundPort<'a, P: ActivationPort> {
+struct BoundPort<'a, P: HostFunctions> {
     port: &'a mut P,
     handle: &'a P::Handle,
     calls: usize,
     observed_invocation: Option<&'a mut bool>,
 }
-impl<P: ActivationPort> FunctionPort for BoundPort<'_, P> {
+impl<P: HostFunctions> FunctionPort for BoundPort<'_, P> {
     type Error = P::Error;
     fn call(
         &mut self,
@@ -225,21 +202,23 @@ impl<P: ActivationPort> FunctionPort for BoundPort<'_, P> {
 /// resolve before any test invokes code. Ordinary binding/test failures collect
 /// in declaration order; user interrupts abort immediately with original payloads.
 /// No failure grants study authority, and every later build repeats all gates.
-pub fn activate<P: ActivationPort>(
+pub fn activate<P: HostFunctions>(
     language: Language,
-    lock: &LockReference,
+    lock: Lock<'_>,
     functions: &[Function],
     port: &mut P,
 ) -> Result<Vec<ActivatedFunction<P::Handle>>, Failure<P::Error>> {
     let selected = functions.iter().collect::<Vec<_>>();
-    activate_references(language, Some(lock), &selected, port)
+    activate_references(Some(language), Some(lock), &selected, port)
 }
 
-/// Activate compiler-selected definitions borrowed from the one owned environment.
-/// Selection order defines stable dataset slots; no test collection is recopied.
-pub fn activate_references<P: ActivationPort>(
-    language: Language,
-    lock: Option<&LockReference>,
+/// Activate compiler-selected definitions borrowed from the one owned
+/// environment, in the host `language` the build selects: none for an engine
+/// that claims no host language. Selection order defines stable dataset
+/// slots; no test collection is recopied.
+pub fn activate_references<P: HostFunctions>(
+    language: Option<Language>,
+    lock: Option<Lock<'_>>,
     functions: &[&Function],
     port: &mut P,
 ) -> Result<Vec<ActivatedFunction<P::Handle>>, Failure<P::Error>> {
@@ -248,9 +227,9 @@ pub fn activate_references<P: ActivationPort>(
 
 /// Retain the attempted lock, every binding and every attempted case even when
 /// later activation fails. Each call resets prior evidence before any host port.
-pub fn activate_references_observed<P: ActivationPort>(
-    language: Language,
-    lock: Option<&LockReference>,
+pub fn activate_references_observed<P: HostFunctions>(
+    language: Option<Language>,
+    lock: Option<Lock<'_>>,
     functions: &[&Function],
     port: &mut P,
     observations: &mut Observations,
@@ -259,9 +238,28 @@ pub fn activate_references_observed<P: ActivationPort>(
     activate_observed(language, lock, functions, port, Some(observations))
 }
 
-fn activate_observed<P: ActivationPort>(
-    language: Language,
-    lock: Option<&LockReference>,
+/// The host language a build's functions run in: the language its
+/// environment selects, through a port that keeps project functions. The
+/// empty port keeps none (#3030 D110), and an engine that claims no host
+/// language selects none (D123): either refuses the first function before
+/// anything is bound.
+pub(crate) fn selected_language<P: HostFunctions>(
+    language: Option<Language>,
+    functions: &[&Function],
+    port: &P,
+) -> Result<Language, Failure<P::Error>> {
+    language
+        .filter(|_| !port.is_empty())
+        .ok_or_else(|| Failure::FunctionLanguageMismatch {
+            function: 0,
+            declared: functions.first().and_then(|function| function.language()),
+            selected: None,
+        })
+}
+
+fn activate_observed<P: HostFunctions>(
+    language: Option<Language>,
+    lock: Option<Lock<'_>>,
     functions: &[&Function],
     port: &mut P,
     mut observations: Option<&mut Observations>,
@@ -269,25 +267,27 @@ fn activate_observed<P: ActivationPort>(
     if functions.is_empty() {
         return Ok(Vec::new());
     }
+    let language = selected_language(language, functions, port)?;
     if let Some(lock) = lock {
         if !matches!(
-            (language, lock.kind),
+            (language, lock.reference.kind),
             (Language::Python, LockKind::Uv) | (Language::R, LockKind::Renv)
         ) {
             return Err(Failure::LockKindMismatch {
                 language,
-                actual: lock.kind,
+                actual: lock.reference.kind,
             });
         }
     }
     let mut names = BTreeSet::new();
     let mut plans = Vec::with_capacity(functions.len());
     for (function, definition) in functions.iter().enumerate() {
+        // A function of no host language runs in none.
         if definition.language() != Some(language) {
             return Err(Failure::FunctionLanguageMismatch {
                 function,
                 declared: definition.language(),
-                selected: language,
+                selected: Some(language),
             });
         }
         if !names.insert(definition.name()) {

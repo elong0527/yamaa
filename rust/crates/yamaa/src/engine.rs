@@ -84,10 +84,10 @@ impl EngineOptions {
     }
 
     /// Activate project functions through a caller-supplied capability.
-    /// Without one, a build that calls a project function reports
-    /// unsupported before it reads data; every other build runs, with or
-    /// without a project. An engine that claims no host language never calls
-    /// them.
+    /// Without one, the engine's host-functions port is the empty one: a build
+    /// that calls a project function reports unsupported before it reads data,
+    /// and every other build runs, with or without a project. An engine that
+    /// claims no host language never calls them.
     pub fn with_functions(mut self, functions: Arc<dyn ProjectFunctions>) -> Self {
         self.functions = Some(functions);
         self
