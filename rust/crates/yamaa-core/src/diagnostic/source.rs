@@ -191,9 +191,11 @@ impl SourceFinding<'_> {
                         context.insert("field".into(), text(field));
                         context.insert("stored_type".into(), text(stored_type));
                     }
+                    // The position of an input record is its `record`, as
+                    // a CSV or ODM failure names it (PARQUET-9, #3030 D200).
                     ParquetFinding::Value { field, row, value } => {
                         context.insert("field".into(), text(field));
-                        context.insert("row".into(), V::from(row));
+                        context.insert("record".into(), V::from(row));
                         context.insert("value".into(), V::from(value));
                     }
                 }

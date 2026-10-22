@@ -183,7 +183,8 @@ fails.
 Fails: `source_field_value_invalid`.
 Evidence: `adam-adsl-randomization`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::independently_authored_parquet_schemas_keep_exact_spelling_and_raw_value`, `rust/crates/yamaa-adapters/src/parquet_source/profile.rs::temporal_edges_are_integral_and_never_rounded_into_range`, `negative-source-fractional-second`.
 
-The failure reports the field, the record and the stored integer value.
+The failure reports the field as `field`, the record as `record`, counted
+from one, and the stored integer value as `value`.
 
 <a id="parquet-10"></a>
 
