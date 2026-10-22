@@ -61,7 +61,7 @@ fn row_operands_reading_a_column_phase_column_report_its_phase_boundary() {
     // template leaves it to the column phase.
     let specification = |operand: &str| {
         format!(
-            "schema_version: '1.0'\ndomain: OUT\nkeys: [ID, SEQ]\n\
+            "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID, SEQ]\n\
              input: {{SRC: {{path: source.csv, types: {{ID: int, VAL: int}}}}}}\n\
              output: {{path: out.csv, columns: [ID, SEQ, VALUE]}}\n\
              columns:\n  - {{name: ID, type: int}}\n\
@@ -72,25 +72,22 @@ fn row_operands_reading_a_column_phase_column_report_its_phase_boundary() {
         )
     };
     for (operand, path) in [
-        (
-            "{compute: {expr: 'SEQ * 10'}}",
-            "rows[0].derivations.VALUE.compute.expr",
-        ),
+        ("'SEQ * 10'", "rows.record.derivations.VALUE"),
         (
             "{flag: {condition: 'SEQ = 1', true_value: 1, false_value: 0, missing: 0}}",
-            "rows[0].derivations.VALUE.flag.condition",
+            "rows.record.derivations.VALUE.flag.condition",
         ),
         (
             "{round_half_away_from_zero: {source: SEQ, digits: 0}}",
-            "rows[0].derivations.VALUE.round_half_away_from_zero.source",
+            "rows.record.derivations.VALUE.round_half_away_from_zero.source",
         ),
         (
             "{row_number: {window: {group_by: [ID], order_by: [SEQ]}}}",
-            "rows[0].derivations.VALUE.row_number.window.order_by[0]",
+            "rows.record.derivations.VALUE.row_number.window.order_by[0]",
         ),
         (
-            "{case: [{when: 'SEQ = 1', then: {literal: 1}}, {otherwise: {literal: 0}}]}",
-            "rows[0].derivations.VALUE.case[0].when",
+            "{case: [{when: 'SEQ = 1', then: 1}, {otherwise: 0}]}",
+            "rows.record.derivations.VALUE.case[0].when",
         ),
     ] {
         let fixture = Fixture::new(&specification(operand));
@@ -120,15 +117,15 @@ fn a_lookup_matching_on_a_column_phase_column_reports_its_phase_boundary() {
     // (LOOKUP-2).
     let specification = |row: &str, filter: &str, column: &str| {
         format!(
-            "schema_version: '1.0'\ndomain: OUT\nkeys: [ID, VAL]\n\
+            "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID, VAL]\n\
              input:\n  SRC: {{path: source.csv, types: {{ID: int, VAL: int}}}}\n  \
              WIN: {{path: win.csv, types: {{ONE: int, LO: int, HI: int}}}}\n\
              output: {{path: out.csv, columns: [ID, VAL, SEQ, VALUE]}}\n\
-             intermediates:\n  - id: K\n    dataset: WIN\n    key: {{LO: SEQ}}\n    \
-             no_match: null\n  - id: W\n    dataset: WIN\n    \
-             between: {{value: SEQ, lower: LO, upper: HI}}\n    key: {{ONE: {{literal: 1}}}}\n    \
-             no_match: null\n  - id: W2\n    dataset: WIN\n    key: {{ONE: {{literal: 1}}}}\n    \
-             between: {{value: W.LO, lower: LO, upper: HI}}\n    no_match: null\n\
+             intermediates:\n  - id: K\n    dataset: WIN\n    key: {{LO: SEQ}}\n  \
+             - id: W\n    dataset: WIN\n    \
+             between: {{value: SEQ, lower: LO, upper: HI}}\n    key: {{ONE: 1}}\n  \
+             - id: W2\n    dataset: WIN\n    key: {{ONE: 1}}\n    \
+             between: {{value: W.LO, lower: LO, upper: HI}}\n\
              columns:\n  - {{name: ID, type: int}}\n  - {{name: VAL, type: int}}\n\
              \x20 - name: SEQ\n    type: int\n    derivation:\n      row_number:\n        \
              window: {{group_by: [ID], order_by: [VAL]}}\n\
@@ -157,13 +154,13 @@ fn a_lookup_matching_on_a_column_phase_column_reports_its_phase_boundary() {
         (
             "      VALUE: K.NAME\n",
             "",
-            vec!["rows[0].derivations.VALUE.source"],
+            vec!["rows.record.derivations.VALUE.source"],
             "K",
         ),
         (
             "      VALUE: W.NAME\n",
             "",
-            vec!["rows[0].derivations.VALUE.source"],
+            vec!["rows.record.derivations.VALUE.source"],
             "W",
         ),
         // Reached through W's range value, the finding also names each
@@ -173,32 +170,32 @@ fn a_lookup_matching_on_a_column_phase_column_reports_its_phase_boundary() {
             "      VALUE: W2.NAME\n",
             "",
             vec![
-                "rows[0].derivations.VALUE.source",
-                "intermediates[1].between.value",
-                "intermediates[0].between.value",
+                "rows.record.derivations.VALUE.source",
+                "intermediates.W2.between.value",
+                "intermediates.W.between.value",
             ],
             "W2",
         ),
         // One site that reads the lookup twice is reported once.
         (
-            "      VALUE: {literal: x}\n",
+            "      VALUE: \"'x'\"\n",
             "    filter: 'K.NAME IS NOT NULL AND K.LO > 0'\n",
-            vec!["rows[0].filter"],
+            vec!["rows.record.filter"],
             "K",
         ),
         (
-            "      VALUE: {literal: x}\n",
+            "      VALUE: \"'x'\"\n",
             "    filter: 'W.NAME IS NOT NULL AND W.HI > 0'\n",
-            vec!["rows[0].filter"],
+            vec!["rows.record.filter"],
             "W",
         ),
         (
-            "      VALUE: {compute: {expr: 'W2.LO + W2.HI'}}\n",
+            "      VALUE: 'W2.LO + W2.HI'\n",
             "",
             vec![
-                "rows[0].derivations.VALUE.compute.expr",
-                "intermediates[1].between.value",
-                "intermediates[0].between.value",
+                "rows.record.derivations.VALUE",
+                "intermediates.W2.between.value",
+                "intermediates.W.between.value",
             ],
             "W2",
         ),
@@ -232,14 +229,14 @@ fn a_chained_lookup_promotes_the_default_its_range_values_read() {
     // directly (W) or through another lookup's range value (W2).
     let specification = |value: &str| {
         format!(
-            "schema_version: '1.0'\ndomain: OUT\nkeys: [ID, VAL]\n\
+            "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID, VAL]\n\
              input:\n  SRC: {{path: source.csv, types: {{ID: int, VAL: int}}}}\n  \
              WIN: {{path: win.csv, types: {{ONE: int, LO: int, HI: int}}}}\n\
              output: {{path: out.csv, columns: [ID, VAL, VALUE]}}\n\
              intermediates:\n  - id: W\n    dataset: WIN\n    \
-             between: {{value: POS, lower: LO, upper: HI}}\n    key: {{ONE: {{literal: 1}}}}\n    \
-             no_match: null\n  - id: W2\n    dataset: WIN\n    key: {{ONE: {{literal: 1}}}}\n    \
-             between: {{value: W.LO, lower: LO, upper: HI}}\n    no_match: null\n\
+             between: {{value: POS, lower: LO, upper: HI}}\n    key: {{ONE: 1}}\n  \
+             - id: W2\n    dataset: WIN\n    key: {{ONE: 1}}\n    \
+             between: {{value: W.LO, lower: LO, upper: HI}}\n\
              columns:\n  - {{name: ID, type: int}}\n  - {{name: VAL, type: int}}\n\
              \x20 - {{name: POS, type: int, derivation: SRC.VAL}}\n\
              \x20 - {{name: VALUE, type: str}}\n\

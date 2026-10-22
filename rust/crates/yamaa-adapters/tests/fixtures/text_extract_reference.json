@@ -60,7 +60,8 @@
   },
   "missing": {
     "specification": {
-      "schema_version": "1.0",
+      "yamaa": "1.0",
+      "type": "spec",
       "domain": "TEST",
       "keys": [
         "ID"
@@ -113,7 +114,8 @@
   },
   "no-match": {
     "specification": {
-      "schema_version": "1.0",
+      "yamaa": "1.0",
+      "type": "spec",
       "domain": "TEST",
       "keys": [
         "ID"
@@ -183,7 +185,8 @@
   },
   "non-string": {
     "specification": {
-      "schema_version": "1.0",
+      "yamaa": "1.0",
+      "type": "spec",
       "domain": "TEST",
       "keys": [
         "ID"
@@ -243,7 +246,8 @@
   },
   "invalid-pattern": {
     "specification": {
-      "schema_version": "1.0",
+      "yamaa": "1.0",
+      "type": "spec",
       "domain": "TEST",
       "keys": [
         "ID"
@@ -302,7 +306,8 @@
   },
   "negative-group": {
     "specification": {
-      "schema_version": "1.0",
+      "yamaa": "1.0",
+      "type": "spec",
       "domain": "TEST",
       "keys": [
         "ID"
@@ -362,7 +367,8 @@
   },
   "wide-group": {
     "specification": {
-      "schema_version": "1.0",
+      "yamaa": "1.0",
+      "type": "spec",
       "domain": "TEST",
       "keys": [
         "ID"
@@ -422,7 +428,8 @@
   },
   "optional-unentered": {
     "specification": {
-      "schema_version": "1.0",
+      "yamaa": "1.0",
+      "type": "spec",
       "domain": "TEST",
       "keys": [
         "ID"
@@ -480,7 +487,8 @@
   },
   "entered-empty": {
     "specification": {
-      "schema_version": "1.0",
+      "yamaa": "1.0",
+      "type": "spec",
       "domain": "TEST",
       "keys": [
         "ID"
@@ -538,7 +546,8 @@
   },
   "whole-empty": {
     "specification": {
-      "schema_version": "1.0",
+      "yamaa": "1.0",
+      "type": "spec",
       "domain": "TEST",
       "keys": [
         "ID"
@@ -595,7 +604,8 @@
   },
   "leftmost-alternative": {
     "specification": {
-      "schema_version": "1.0",
+      "yamaa": "1.0",
+      "type": "spec",
       "domain": "TEST",
       "keys": [
         "ID"
@@ -647,7 +657,8 @@
   },
   "last-repeated-capture": {
     "specification": {
-      "schema_version": "1.0",
+      "yamaa": "1.0",
+      "type": "spec",
       "domain": "TEST",
       "keys": [
         "ID"
@@ -699,7 +710,8 @@
   },
   "literal-null": {
     "specification": {
-      "schema_version": "1.0",
+      "yamaa": "1.0",
+      "type": "spec",
       "domain": "TEST",
       "keys": [
         "ID"
@@ -734,12 +746,7 @@
               "source": "TEXT",
               "pattern": "(a)",
               "group": 1,
-              "missing": {
-                "literal": null
-              },
-              "no_match": {
-                "literal": null
-              }
+              "no_match": null
             }
           }
         }
@@ -762,7 +769,8 @@
   },
   "one-final-conversion": {
     "specification": {
-      "schema_version": "1.0",
+      "yamaa": "1.0",
+      "type": "spec",
       "domain": "TEST",
       "keys": [
         "ID"
@@ -867,7 +875,8 @@
   },
   "combined-nonstring-group": {
     "specification": {
-      "schema_version": "1.0",
+      "yamaa": "1.0",
+      "type": "spec",
       "domain": "TEST",
       "keys": [
         "ID"
@@ -926,7 +935,8 @@
   },
   "combined-unknown-group": {
     "specification": {
-      "schema_version": "1.0",
+      "yamaa": "1.0",
+      "type": "spec",
       "domain": "TEST",
       "keys": [
         "ID"
@@ -983,7 +993,8 @@
   },
   "combined-nonstring-invalid-pattern": {
     "specification": {
-      "schema_version": "1.0",
+      "yamaa": "1.0",
+      "type": "spec",
       "domain": "TEST",
       "keys": [
         "ID"
@@ -1042,7 +1053,8 @@
   },
   "combined-unknown-invalid-pattern": {
     "specification": {
-      "schema_version": "1.0",
+      "yamaa": "1.0",
+      "type": "spec",
       "domain": "TEST",
       "keys": [
         "ID"
@@ -1104,7 +1116,7 @@
         "phase": "validation",
         "condition": "ungrouped_driver_field",
         "spec_paths": [
-          "rows[0].derivations.TEXT.str_extract.source"
+          "rows.grouped.derivations.TEXT.str_extract.source"
         ],
         "rule": "ROW-5",
         "context": {
@@ -1115,7 +1127,8 @@
       }
     ],
     "specification": {
-      "schema_version": "1.0",
+      "yamaa": "1.0",
+      "type": "spec",
       "domain": "TEST",
       "keys": [
         "ID"
@@ -1187,7 +1200,8 @@
     ],
     "csv": "ID,TEXT,RESULT\nrow1,abc,a\nrow2,x,\"\"\n",
     "specification": {
-      "schema_version": "1.0",
+      "yamaa": "1.0",
+      "type": "spec",
       "domain": "TEST",
       "keys": [
         "ID"
@@ -1230,17 +1244,12 @@
                           "source": "TEXT",
                           "pattern": "(.)",
                           "group": 1,
-                          "missing": {
-                            "literal": null
-                          },
                           "no_match": "wrong"
                         }
                       }
                     },
                     {
-                      "otherwise": {
-                        "literal": "never"
-                      }
+                      "otherwise": "'never'"
                     }
                   ]
                 }
@@ -1251,9 +1260,6 @@
                     "source": "TEXT",
                     "pattern": "()",
                     "group": 0,
-                    "missing": {
-                      "literal": null
-                    },
                     "no_match": "wrong"
                   }
                 }
@@ -1268,12 +1274,12 @@
   "row-extract": {
     "handler_counts": [
       {
-        "spec_path": "rows[0].derivations.TEXT.str_extract.missing",
+        "spec_path": "rows.records.derivations.TEXT.str_extract.missing",
         "handler": "missing",
         "count": 1
       },
       {
-        "spec_path": "rows[0].derivations.TEXT.str_extract.no_match",
+        "spec_path": "rows.records.derivations.TEXT.str_extract.no_match",
         "handler": "no_match",
         "count": 0
       },
@@ -1290,7 +1296,8 @@
     ],
     "csv": "ID,TEXT,RESULT\nrow1,a,a\nrow2,MiXeD,M\n",
     "specification": {
-      "schema_version": "1.0",
+      "yamaa": "1.0",
+      "type": "spec",
       "domain": "TEST",
       "keys": [
         "ID"
@@ -1323,9 +1330,6 @@
               "source": "TEXT",
               "pattern": "(.)",
               "group": 1,
-              "missing": {
-                "literal": null
-              },
               "no_match": "wrong"
             }
           }
@@ -1343,9 +1347,7 @@
                 "pattern": "(.)",
                 "group": 1,
                 "missing": "MiXeD",
-                "no_match": {
-                  "literal": null
-                }
+                "no_match": null
               }
             }
           }

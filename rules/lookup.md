@@ -278,7 +278,8 @@ handling ([COLUMN-14](columns.md#column-14)).
 
 The `order_by` terms sort under [VALUE-22](values.md#value-22) and name fields
 of the lookup's relation, in the scopes of [LOOKUP-8](#lookup-8). A lookup
-whose key is verified unique needs neither `order_by` nor `keep`
+whose key is verified unique at `error` severity needs neither `order_by` nor
+`keep`, and one whose uniqueness check only warns declares both
 ([LOOKUP-17](#lookup-17)). An aggregate reduces its candidates in stored order
 ([FORMULA-19](formulas.md#formula-19)).
 
@@ -1194,17 +1195,19 @@ no output column takes is a field of the driver's record
 
 <a id="lookup-17"></a>
 
-### LOOKUP-17. An intermediate's unique verification asserts that no donor column combination repeats
+### LOOKUP-17. An intermediate's unique verification asserts that no donor column combination repeats, warning instead only where keep and order_by choose
 
 An intermediate may declare `verifications:`, a list of `unique` checks, each
 asserting that its non-empty column combination is unique across the
 intermediate's source-only filtered donor records with `derivations:`
 computed. Input-backed checks run before any row is built, and `SELF` checks
-run after each completed template. A repeated combination fails the run, and
-there is no warning severity. A lookup whose key is verified unique needs
+run after each completed template. A repeated combination fails the run,
+except under `severity: warning`, which only an intermediate declaring `keep`
+and `order_by` may declare: the repeated combinations are reported and the
+selection chooses. A lookup whose key is verified unique at `error` needs
 neither `keep` nor `order_by`.
 
-Fails: `duplicate_intermediate_records`, `unknown_field`, `correlated_filter_with_unique_verification`, `correlated_derivation_with_unique_verification`.
+Fails: `duplicate_intermediate_records`, `unknown_field`, `correlated_filter_with_unique_verification`, `correlated_derivation_with_unique_verification`, `value_not_permitted`.
 Evidence: `schema-lookup-intermediate-unique`, `negative-lookup-duplicate-intermediate`.
 
 ```yaml
@@ -1216,17 +1219,45 @@ Evidence: `schema-lookup-intermediate-unique`, `negative-lookup-duplicate-interm
     - unique: [STUDYID, USUBJID]
 ```
 
-The mapping form `unique: {columns: [STUDYID, USUBJID], id: donor-key}` names a
-check when an explicit ID is useful, and both forms test the same donor
-records; a mapping holding only `columns` restates the list and fails as
-`redundant_long_form` under
+The mapping form `unique: {columns: [STUDYID, USUBJID], id: donor-key}` also
+admits an optional `severity`, and it is written only to declare one of them;
+both forms test the same donor records, and a mapping holding only `columns`
+restates the list and fails as `redundant_long_form` under
 [SCHEMA-15](reference/schema-language.md#schema-15). Each check may declare an
 optional `id`, governed by
 [CHECK-3](verification.md#check-3). [LOOKUP-10](#lookup-10) already rejects
 multiple surviving matches without a selection rule.
 
-A repeated combination fails as `duplicate_intermediate_records` at the
-`intermediates[i].verifications[j].unique` path. Each `unique` column must name
+`severity` is `error` or `warning`, defaulting to `error`, as for a column or
+dataset verification ([CHECK-2](verification.md#check-2)). On an intermediate
+that does not declare both `keep` and `order_by`, `severity: warning` fails
+validation before any input is read, as `value_not_permitted` at the check's
+`severity`, with context `intermediate` (its id), `value` (`warning`) and
+`permitted` (`[error]`). A violated `warning` check fails nothing and changes
+no donor record. The run continues as [CHECK-2](verification.md#check-2)
+describes, and every read of the intermediate selects one candidate by its
+`keep` and `order_by` ([LOOKUP-10](#lookup-10)).
+
+```yaml
+- id: LAST_EX
+  dataset: EX
+  key: [STUDYID, USUBJID]
+  order_by: [EX.EXSTDTC, EX.EXSEQ]
+  keep: last
+  verifications:
+    - unique: {columns: [STUDYID, USUBJID], severity: warning}
+```
+
+A subject with several exposure records is reported, and its latest record is
+read. A `warning` check is a row of the run report
+([CHECK-23](verification.md#check-23)), holding a violated check's repeated
+combinations ([CHECK-24](verification.md#check-24)), and its specification
+must declare `output.report` ([CHECK-22](verification.md#check-22)).
+
+A repeated combination fails an `error` check as
+`duplicate_intermediate_records` at the
+`intermediates.<id>.verifications[<j>].unique` path, and a violated `warning`
+check's report row names the same condition. Each `unique` column must name
 a stored field or a derived name, or fail as `unknown_field`. A `filter` or
 `derivations:` entry that fails to materialize fails the run here as well. A
 `filter` that references the current input record is evaluated per record and

@@ -830,7 +830,7 @@ class PublicDomains(unittest.TestCase):
                 "phase": "validation",
                 "condition": "incompatible_input_type",
                 "rule": "FORMULA-5",
-                "spec_paths": ["intermediates[0].filter"],
+                "spec_paths": ["intermediates.LOOK.filter"],
                 "context": {"left_type": "int", "right_type": "str"},
             }
         ]
@@ -866,12 +866,12 @@ class PublicDomains(unittest.TestCase):
                     case["inputs"]["tab.csv"] = 'K,KINT,KNUM,VAL\n"       7",,7,A\n'
                 elif variant == "unused":
                     case["specification"] = case["specification"].replace(
-                        "derivation: LOOK.VAL", "derivation: {literal: ok}"
+                        "derivation: LOOK.VAL", "derivation: \"'ok'\""
                     )
                 elif variant == "unread_branch":
                     case["specification"] = case["specification"].replace(
                         "derivation: LOOK.VAL",
-                        "derivation: {case: [{when: 'FALSE', then: LOOK.VAL}, {otherwise: {literal: ok}}]}",
+                        "derivation: {case: [{when: 'FALSE', then: LOOK.VAL}, {otherwise: \"'ok'\"}]}",
                     )
                 if variant == "boolean_missing":
                     case["specification"] = case["specification"].replace(

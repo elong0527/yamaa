@@ -57,6 +57,25 @@ impl Error {
             error => error,
         }
     }
+    /// A finding in the 1.x header of a file a referencing field names, which
+    /// that file's preparation reports as its entry's, names the file as
+    /// `source` and `entry`, as a finding further into it does (SCHEMA-2).
+    /// A file that declares `schema_version` keeps its findings as at the
+    /// `yamaa-v0.5.0` tag (D75).
+    fn named_header(mut self) -> Self {
+        if let Self::Preparation(InheritanceError::Entry(
+            crate::specification_source::Error::Findings(captured),
+        )) = &mut self
+        {
+            if captured
+                .document()
+                .is_some_and(yamaa_core::language::declares_header)
+            {
+                captured.name_file();
+            }
+        }
+        self
+    }
 }
 
 /// One prepared specification, alone or with its project, and its
@@ -428,7 +447,7 @@ pub(crate) fn capture_links(
                 link.written,
                 schema.cloned(),
             )
-            .map_err(|error| error.entry_field(&field, link.written))?;
+            .map_err(|error| error.entry_field(&field, link.written).named_header())?;
             prepared_any = true;
             if prepared.source().identity != identity {
                 return Err(Error::resource_at(

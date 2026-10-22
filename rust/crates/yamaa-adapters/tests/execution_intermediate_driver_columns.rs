@@ -2,7 +2,7 @@
 //! A column-level derivation completed only for rows a named intermediate
 //! drives (ROW-2). The column binds against that driver the way its row
 //! template does: the driver qualifier reads the record that built the row,
-//! another input is an implicit join on the output keys (LOOKUP-1), and a
+//! another input is an implicit join on the key it declares (LOOKUP-1), and a
 //! named lookup selects through its key, while a qualified aggregate still
 //! reduces its declared input (LOOKUP-18). The column phase reads each row
 //! through its own template's driver port (#2829), so an intermediate over
@@ -98,20 +98,23 @@ const DM: &str = "USUBJID,SEX\nS1,F\nS2,M\n";
 const TERMS: &str = "USUBJID,AESEQ,R\nS1,1,HEADACHE\nS2,1,RASH\nS1,3,DIZZINESS\n";
 
 /// One record-driven template over the serious events derives the keys; the
-/// column-level derivation of `R` completes every row after construction.
+/// column-level derivation of `R` completes every row after construction. AE
+/// and DM declare the keys their implicit joins match on, and SUBJ writes its
+/// key as a mapping, which states a match of its own beside DM's (LOOKUP-4).
 fn records(head: &str, kind: &str, derivation: &str) -> String {
     format!(
-        "schema_version: \"1.0\"\n\
+        "yamaa: \"1.0\"\n\
+         type: spec\n\
          domain: XX\n\
          keys: [USUBJID, AESEQ]\n\
          {head}\
          output: {{path: out.csv, columns: [USUBJID, AESEQ, R]}}\n\
          input:\n\
-         \x20 AE: {{path: ae.csv, types: {{AESEQ: int}}}}\n\
-         \x20 DM: dm.csv\n\
+         \x20 AE: {{path: ae.csv, key: [USUBJID, AESEQ], types: {{AESEQ: int}}}}\n\
+         \x20 DM: {{path: dm.csv, key: [USUBJID]}}\n\
          intermediates:\n\
          \x20 - {{id: SER, dataset: AE, filter: \"AE.AESER = 'Y'\"}}\n\
-         \x20 - {{id: SUBJ, dataset: DM, key: [USUBJID]}}\n\
+         \x20 - {{id: SUBJ, dataset: DM, key: {{USUBJID: USUBJID}}}}\n\
          rows:\n\
          \x20 - id: serious\n\
          \x20   dataset: SER\n\
@@ -133,8 +136,7 @@ fn serious(declaration: &str, kind: &str, derivation: &str) -> String {
 
 #[test]
 fn literal_completes_every_intermediate_driven_row() {
-    Fixture::new(&records("", "str", "{literal: X}"))
-        .saved("USUBJID,AESEQ,R\nS1,1,X\nS2,1,X\nS1,3,X\n");
+    Fixture::new(&records("", "str", "\"'X'\"")).saved("USUBJID,AESEQ,R\nS1,1,X\nS2,1,X\nS1,3,X\n");
 }
 
 #[test]
@@ -144,13 +146,13 @@ fn driver_qualifier_reads_the_record_that_built_the_row() {
 
 #[test]
 fn underlying_input_is_an_implicit_join_on_the_output_keys() {
-    // AE carries both keys, so each row matches its own event.
+    // AE declares both output keys, so each row matches its own event.
     Fixture::new(&records("", "str", "AE.AETERM")).saved(TERMS);
 }
 
 #[test]
 fn another_input_joins_on_the_keys_it_carries() {
-    // DM carries USUBJID only, so each row matches its subject.
+    // DM declares USUBJID only, so each row matches its subject.
     Fixture::new(&records("", "str", "DM.SEX")).saved("USUBJID,AESEQ,R\nS1,1,F\nS2,1,M\nS1,3,F\n");
 }
 
@@ -159,7 +161,7 @@ fn case_reads_the_driver_record_in_conditions_and_branches() {
     Fixture::new(&records(
         "",
         "str",
-        "{case: [{when: \"SER.AETERM = 'RASH'\", then: {literal: SKIN}}, {otherwise: SER.AETERM}]}",
+        "{case: [{when: \"SER.AETERM = 'RASH'\", then: \"'SKIN'\"}, {otherwise: SER.AETERM}]}",
     ))
     .saved("USUBJID,AESEQ,R\nS1,1,HEADACHE\nS2,1,SKIN\nS1,3,DIZZINESS\n");
 }
@@ -172,7 +174,7 @@ fn keyed_lookup_selects_through_its_key() {
 
 #[test]
 fn declared_base_keeps_the_intermediate_driver() {
-    Fixture::new(&records("base: AE\n", "str", "{literal: X}"))
+    Fixture::new(&records("base: AE\n", "str", "\"'X'\""))
         .saved("USUBJID,AESEQ,R\nS1,1,X\nS2,1,X\nS1,3,X\n");
 }
 
@@ -201,7 +203,8 @@ fn columns_list_limits_the_driver_fields() {
 /// One template over the serious events grouped by subject derives the key.
 fn grouped(derivation: &str) -> String {
     format!(
-        "schema_version: \"1.0\"\n\
+        "yamaa: \"1.0\"\n\
+         type: spec\n\
          domain: XX\n\
          keys: [USUBJID]\n\
          output: {{path: out.csv, columns: [USUBJID, R]}}\n\
@@ -224,7 +227,7 @@ fn grouped(derivation: &str) -> String {
 fn grouped_intermediate_driver_reads_its_group_key() {
     // S1's two serious events are one group; its key is a single value
     // (NAME-4), never a lookup that could match both events.
-    Fixture::new(&grouped("{literal: X}")).saved("USUBJID,R\nS1,X\nS2,X\n");
+    Fixture::new(&grouped("\"'X'\"")).saved("USUBJID,R\nS1,X\nS2,X\n");
     Fixture::new(&grouped("SER.USUBJID")).saved("USUBJID,R\nS1,S1\nS2,S2\n");
 }
 
@@ -245,7 +248,8 @@ fn grouped_driver_field_outside_the_groups_fails_validation() {
 /// template completes it from the column-level derivation.
 fn mixed(derivation: &str) -> String {
     format!(
-        "schema_version: \"1.0\"\n\
+        "yamaa: \"1.0\"\n\
+         type: spec\n\
          domain: XX\n\
          keys: [USUBJID, AESEQ, SRC]\n\
          output: {{path: out.csv, columns: [USUBJID, AESEQ, SRC, R]}}\n\
@@ -256,10 +260,10 @@ fn mixed(derivation: &str) -> String {
          rows:\n\
          \x20 - id: all\n\
          \x20   dataset: AE\n\
-         \x20   derivations: {{USUBJID: AE.USUBJID, AESEQ: AE.AESEQ, SRC: {{literal: ALL}}, R: {{literal: OWN}}}}\n\
+         \x20   derivations: {{USUBJID: AE.USUBJID, AESEQ: AE.AESEQ, SRC: \"'ALL'\", R: \"'OWN'\"}}\n\
          \x20 - id: serious\n\
          \x20   dataset: SER\n\
-         \x20   derivations: {{USUBJID: SER.USUBJID, AESEQ: SER.AESEQ, SRC: {{literal: SER}}}}\n\
+         \x20   derivations: {{USUBJID: SER.USUBJID, AESEQ: SER.AESEQ, SRC: \"'SER'\"}}\n\
          columns:\n\
          \x20 - {{name: USUBJID, type: str}}\n\
          \x20 - {{name: AESEQ, type: int}}\n\
@@ -271,7 +275,7 @@ fn mixed(derivation: &str) -> String {
 #[test]
 fn mixed_specification_completes_only_the_intermediate_rows() {
     let all = "S1,1,ALL,OWN\nS1,2,ALL,OWN\nS2,1,ALL,OWN\nS1,3,ALL,OWN\n";
-    Fixture::new(&mixed("{literal: X}")).saved(&format!(
+    Fixture::new(&mixed("\"'X'\"")).saved(&format!(
         "USUBJID,AESEQ,SRC,R\n{all}S1,1,SER,X\nS2,1,SER,X\nS1,3,SER,X\n"
     ));
     Fixture::new(&mixed("SER.AETERM")).saved(&format!(
@@ -284,11 +288,12 @@ fn mixed_specification_completes_only_the_intermediate_rows() {
 /// other completes it from the column-level derivation.
 fn grouped_mixed(derivation: &str, own: &str) -> String {
     let (all, subjects) = match own {
-        "all" => (", R: {literal: OWN}", ""),
-        _ => ("", ", R: {literal: OWN}"),
+        "all" => (", R: \"'OWN'\"", ""),
+        _ => ("", ", R: \"'OWN'\""),
     };
     format!(
-        "schema_version: \"1.0\"\n\
+        "yamaa: \"1.0\"\n\
+         type: spec\n\
          domain: XX\n\
          keys: [USUBJID, AESEQ, SRC]\n\
          output: {{path: out.csv, columns: [USUBJID, AESEQ, SRC, R]}}\n\
@@ -299,11 +304,11 @@ fn grouped_mixed(derivation: &str, own: &str) -> String {
          rows:\n\
          \x20 - id: all\n\
          \x20   dataset: AE\n\
-         \x20   derivations: {{USUBJID: AE.USUBJID, AESEQ: AE.AESEQ, SRC: {{literal: ALL}}{all}}}\n\
+         \x20   derivations: {{USUBJID: AE.USUBJID, AESEQ: AE.AESEQ, SRC: \"'ALL'\"{all}}}\n\
          \x20 - id: subjects\n\
          \x20   dataset: SER\n\
          \x20   group_by: [SER.USUBJID]\n\
-         \x20   derivations: {{USUBJID: SER.USUBJID, AESEQ: {{aggregate: 'MIN(SER.AESEQ)'}}, SRC: {{literal: SER}}{subjects}}}\n\
+         \x20   derivations: {{USUBJID: SER.USUBJID, AESEQ: {{aggregate: 'MIN(SER.AESEQ)'}}, SRC: \"'SER'\"{subjects}}}\n\
          columns:\n\
          \x20 - {{name: USUBJID, type: str}}\n\
          \x20 - {{name: AESEQ, type: int}}\n\
@@ -367,7 +372,7 @@ fn derived_field_read_in_the_template_feeds_a_column() {
         &serious(
             LOWER,
             "str",
-            "{case: [{when: \"TERM = 'rash'\", then: {literal: SKIN}}, {otherwise: TERM}]}",
+            "{case: [{when: \"TERM = 'rash'\", then: \"'SKIN'\"}, {otherwise: TERM}]}",
         )
         .edit(
             "derivations: {USUBJID: SER.USUBJID, AESEQ: SER.AESEQ}",
@@ -387,7 +392,7 @@ fn derived_field_in_an_imputation_bound_is_refused() {
         &records(
             "",
             "date",
-            "{impute: {type: date, source: SER.AEDTC, day: 15, minimum_source_precision: month, not_before: SER.FLOOR}}",
+            "{impute: {type: date, source: SER.AEDTC, day: 15, not_before: SER.FLOOR}}",
         )
         .edit("types: {AESEQ: int}", "types: {AESEQ: int, AESTDT: date}")
         .edit(
@@ -435,9 +440,7 @@ fn driver_read_beside_an_aggregate_is_refused() {
     Fixture::new(&records(
         "",
         "int",
-        &format!(
-            "{{case: [{{when: \"SER.AETERM = 'RASH'\", then: {COUNT}}}, {{otherwise: {{literal: 0}}}}]}}"
-        ),
+        &format!("{{case: [{{when: \"SER.AETERM = 'RASH'\", then: {COUNT}}}, {{otherwise: 0}}]}}"),
     ))
     .refused("columns.R.derivation.case");
 }
@@ -446,22 +449,23 @@ fn driver_read_beside_an_aggregate_is_refused() {
 /// from an input other than the one that drives the first template.
 fn secondary(derivation: &str) -> String {
     format!(
-        "schema_version: \"1.0\"\n\
+        "yamaa: \"1.0\"\n\
+         type: spec\n\
          domain: XX\n\
          keys: [USUBJID, AESEQ, SRC]\n\
          output: {{path: out.csv, columns: [USUBJID, AESEQ, SRC, R]}}\n\
          input:\n\
          \x20 DM: dm.csv\n\
-         \x20 AE: {{path: ae.csv, types: {{AESEQ: int}}}}\n\
+         \x20 AE: {{path: ae.csv, key: [USUBJID, AESEQ], types: {{AESEQ: int}}}}\n\
          intermediates:\n\
          \x20 - {{id: SER, dataset: AE, filter: \"AE.AESER = 'Y'\"}}\n\
          rows:\n\
          \x20 - id: subjects\n\
          \x20   dataset: DM\n\
-         \x20   derivations: {{USUBJID: DM.USUBJID, AESEQ: {{literal: 0}}, SRC: {{literal: DM}}, R: {{literal: OWN}}}}\n\
+         \x20   derivations: {{USUBJID: DM.USUBJID, AESEQ: 0, SRC: \"'DM'\", R: \"'OWN'\"}}\n\
          \x20 - id: serious\n\
          \x20   dataset: SER\n\
-         \x20   derivations: {{USUBJID: SER.USUBJID, AESEQ: SER.AESEQ, SRC: {{literal: SER}}}}\n\
+         \x20   derivations: {{USUBJID: SER.USUBJID, AESEQ: SER.AESEQ, SRC: \"'SER'\"}}\n\
          columns:\n\
          \x20 - {{name: USUBJID, type: str}}\n\
          \x20 - {{name: AESEQ, type: int}}\n\
@@ -473,7 +477,7 @@ fn secondary(derivation: &str) -> String {
 #[test]
 fn driver_over_another_input_completes_reads_it_can_address() {
     let subjects = "S1,0,DM,OWN\nS2,0,DM,OWN\n";
-    Fixture::new(&secondary("{literal: X}")).saved(&format!(
+    Fixture::new(&secondary("\"'X'\"")).saved(&format!(
         "USUBJID,AESEQ,SRC,R\n{subjects}S1,1,SER,X\nS2,1,SER,X\nS1,3,SER,X\n"
     ));
     Fixture::new(&secondary("AE.AETERM")).saved(&format!(
@@ -496,15 +500,14 @@ fn driver_over_another_input_reads_the_record_that_built_the_row() {
 fn failed_driver_intermediate_reports_only_its_own_finding() {
     // The intermediate's filter names a field AE lacks. Its template is
     // skipped, and so is the column completed for that template's rows.
-    let issue = Fixture::new(
-        &records("", "str", "{literal: X}").edit("AE.AESER = 'Y'", "AE.SERIOUS = 'Y'"),
-    )
-    .issue();
+    let issue =
+        Fixture::new(&records("", "str", "\"'X'\"").edit("AE.AESER = 'Y'", "AE.SERIOUS = 'Y'"))
+            .issue();
     assert_eq!(
         (issue.condition(), issue.spec_paths.as_slice()),
         (
             "unknown_field",
-            ["intermediates[0].filter".to_owned()].as_slice()
+            ["intermediates.SER.filter".to_owned()].as_slice()
         )
     );
 }

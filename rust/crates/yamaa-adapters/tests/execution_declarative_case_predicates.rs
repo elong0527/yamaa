@@ -47,7 +47,8 @@ mod execution {
                 })
                 .collect()
         }
-        const SOURCE: &str = r#"schema_version: '1.0'
+        const SOURCE: &str = r#"yamaa: "1.0"
+type: spec
 domain: TEST
 keys: [ID]
 input: {SRC: {path: input.csv, types: {V: int}}}
@@ -59,10 +60,10 @@ columns:
     derivation:
       case:
         - when: "SRC.V > 0"
-          then: {literal: 7}
+          then: 7
         - when: 'FALSE'
           then: SRC.BAD
-        - otherwise: {literal: 8}
+        - otherwise: 8
 "#;
         #[test]
         fn implicit_case_predicates_reduce_feeding_values_and_only_true_selects() {
@@ -114,14 +115,14 @@ columns:
                 .edit("        - when: 'FALSE'\n          then: SRC.BAD\n", "")
                 .edit("when: \"SRC.V > 0\"", "when: 'TRUE'")
                 .edit(
-                    "then: {literal: 7}",
+                    "then: 7",
                     "then: {source: {variable: SRC.ID, filter: 'SRC.V > 0'}}",
                 )
                 .edit("    type: int", "    type: str");
             for (rows, expected) in [
                 ("", b"ID,VALUE\na,a\nb,\n".as_slice()),
                 (
-                    "rows:\n  - id: records\n    dataset: SRC\n    derivations: {}\n",
+                    "rows:\n  - id: records\n    dataset: SRC\n",
                     b"ID,VALUE\na,a\nb,\n".as_slice(),
                 ),
             ] {
@@ -140,11 +141,11 @@ columns:
 
         #[test]
         fn qualified_case_predicate_and_full_pattern_capture_execute_in_each_expression_position() {
-            let expression = "{case: [{when: 'SRC.V > 0', then: {str_extract: {source: SRC.TEXT, pattern: 'prefix:([A-Z]+)$', group: 1}}}, {otherwise: {literal: none}}]}";
-            let prefix = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n";
+            let expression = "{case: [{when: 'SRC.V > 0', then: {str_extract: {source: SRC.TEXT, pattern: 'prefix:([A-Z]+)$', group: 1}}}, {otherwise: \"'none'\"}]}";
+            let prefix = "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n";
             for (position, tail) in [
         ("column-case", format!("  - {{name: VALUE, type: str, derivation: {expression}}}\n")),
-        ("record-default-case", format!("  - {{name: VALUE, type: str, derivation: {expression}}}\nrows: [{{id: records, dataset: SRC, derivations: {{}}}}]\n")),
+        ("record-default-case", format!("  - {{name: VALUE, type: str, derivation: {expression}}}\nrows: [{{id: records, dataset: SRC}}]\n")),
         ("record-local-case", format!("  - {{name: VALUE, type: str}}\nrows: [{{id: records, dataset: SRC, derivations: {{VALUE: {expression}}}}}]\n")),
         ("grouped-local-case", format!("  - {{name: VALUE, type: str}}\nrows: [{{id: groups, dataset: SRC, group_by: [SRC.ID, SRC.V, SRC.TEXT], derivations: {{VALUE: {expression}}}}}]\n")),
     ] {
@@ -159,9 +160,8 @@ columns:
 
         #[test]
         fn verification_predicate_and_literals_check_completed_column_case_and_row_outputs() {
-            let prefix = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - name: VALUE\n    type: int\n    verifications:\n      - allowed_values: {values: [0, 1.0]}\n      - range: {min: 0.0, max: 1.5}\n";
-            let expression =
-                "{case: [{when: 'SRC.V > 0', then: {literal: 1}}, {otherwise: {literal: 0}}]}";
+            let prefix = "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - name: VALUE\n    type: int\n    verifications:\n      - allowed_values: {values: [0, 1.0]}\n      - range: {min: 0.0, max: 1.5}\n";
+            let expression = "{case: [{when: 'SRC.V > 0', then: 1}, {otherwise: 0}]}";
             for tail in [
         format!("    derivation: {expression}\n"),
         format!("rows: [{{id: records, dataset: SRC, derivations: {{VALUE: {expression}}}}}]\n"),
@@ -335,7 +335,7 @@ columns:
                 result.observations()["handler_counts"],
                 yamaa_adapters::json!([
                     {"spec_path":"columns.VALUE.derivation.source.multiple_matches","handler":"multiple_matches","count":1},
-                    {"spec_path":"columns.VALUE.derivation.source.no_match","handler":"no_match","count":1}
+                    {"spec_path":"columns.VALUE.derivation.source.absent","handler":"absent","count":1}
                 ])
             );
         }
@@ -343,14 +343,14 @@ columns:
         #[test]
         fn false_when_still_resolves_require_lookup_and_refuses_a_required_match() {
             let (fixture, body) = lookup_fixture("assert_lookup_only");
-            for pattern in ["    no_match: {literal: null}\n", "when: 'P.X IS NOT NULL'"] {
+            for pattern in ["    keep: last\n", "when: 'P.X IS NOT NULL'"] {
                 assert!(body.contains(pattern), "fixture drifted: {pattern}");
             }
-            // An omitted `no_match` answers with missing; `require_match` refuses.
+            // An omitted `absent` answers with missing; `require_match` refuses.
             let body = body
                 .edit(
-                    "    no_match: {literal: null}\n",
-                    "    require_match: true\n",
+                    "    keep: last\n",
+                    "    keep: last\n    require_match: true\n",
                 )
                 .edit("when: 'P.X IS NOT NULL'", "when: 'FALSE'");
             let mut result = fixture.run(&body).unwrap();
@@ -390,7 +390,7 @@ columns:
                 result.observations()["handler_counts"],
                 yamaa_adapters::json!([
                     {"spec_path":"columns.VALUE.derivation.source.multiple_matches","handler":"multiple_matches","count":0},
-                    {"spec_path":"columns.VALUE.derivation.source.no_match","handler":"no_match","count":0}
+                    {"spec_path":"columns.VALUE.derivation.source.absent","handler":"absent","count":0}
                 ])
             );
             assert!(result.output().is_none());
@@ -471,7 +471,8 @@ columns:
             }
         }
 
-        const BODY: &str = r#"schema_version: '1.0'
+        const BODY: &str = r#"yamaa: "1.0"
+type: spec
 domain: TEST
 base: SRC
 keys: [ID, SEQ]
@@ -486,7 +487,6 @@ intermediates:
     filter: "D.TIME < SRC.CUT"
     order_by: [D.TIME]
     keep: last
-    no_match: {literal: null}
 columns:
   - {name: ID, type: int, derivation: SRC.ID}
   - {name: SEQ, type: int, derivation: SRC.SEQ}
@@ -524,9 +524,9 @@ columns:
                 result.observations()["handler_counts"],
                 yamaa_adapters::json!([
                     {"spec_path":"columns.A.derivation.source.multiple_matches","handler":"multiple_matches","count":1},
-                    {"spec_path":"columns.A.derivation.source.no_match","handler":"no_match","count":2},
+                    {"spec_path":"columns.A.derivation.source.absent","handler":"absent","count":2},
                     {"spec_path":"columns.B.derivation.source.multiple_matches","handler":"multiple_matches","count":1},
-                    {"spec_path":"columns.B.derivation.source.no_match","handler":"no_match","count":2}
+                    {"spec_path":"columns.B.derivation.source.absent","handler":"absent","count":2}
                 ])
             );
         }
@@ -565,10 +565,10 @@ columns:
             assert_eq!(
                 result.observations()["handler_counts"],
                 yamaa_adapters::json!([
-                    {"spec_path":"rows[0].derivations.A.source.multiple_matches","handler":"multiple_matches","count":1},
-                    {"spec_path":"rows[0].derivations.A.source.no_match","handler":"no_match","count":1},
-                    {"spec_path":"rows[0].derivations.B.source.multiple_matches","handler":"multiple_matches","count":1},
-                    {"spec_path":"rows[0].derivations.B.source.no_match","handler":"no_match","count":1}
+                    {"spec_path":"rows.alternate.derivations.A.source.multiple_matches","handler":"multiple_matches","count":1},
+                    {"spec_path":"rows.alternate.derivations.A.source.absent","handler":"absent","count":1},
+                    {"spec_path":"rows.alternate.derivations.B.source.multiple_matches","handler":"multiple_matches","count":1},
+                    {"spec_path":"rows.alternate.derivations.B.source.absent","handler":"absent","count":1}
                 ])
             );
         }
@@ -590,7 +590,7 @@ columns:
             assert_eq!(
                 issues,
                 [
-                    yamaa_adapters::json!({"phase":"validation","condition":"unknown_field","rule":"LOOKUP-7","spec_paths":["intermediates[0].filter"],"context":{"identifier":"SRC.CUT","intermediate":"P"}})
+                    yamaa_adapters::json!({"phase":"validation","condition":"unknown_field","rule":"LOOKUP-7","spec_paths":["intermediates.P.filter"],"context":{"identifier":"SRC.CUT","intermediate":"P"}})
                 ]
             );
             assert!(!fixture.0.join("result.csv").exists());
@@ -612,9 +612,9 @@ columns:
                 result.observations()["handler_counts"],
                 yamaa_adapters::json!([
                     {"spec_path":"columns.A.derivation.source.multiple_matches","handler":"multiple_matches","count":0},
-                    {"spec_path":"columns.A.derivation.source.no_match","handler":"no_match","count":4},
+                    {"spec_path":"columns.A.derivation.source.absent","handler":"absent","count":4},
                     {"spec_path":"columns.B.derivation.source.multiple_matches","handler":"multiple_matches","count":0},
-                    {"spec_path":"columns.B.derivation.source.no_match","handler":"no_match","count":4}
+                    {"spec_path":"columns.B.derivation.source.absent","handler":"absent","count":4}
                 ])
             );
             // Only B is neutralised: A still derives P.A, so pruning
@@ -626,12 +626,12 @@ columns:
                 &fixture,
                 &BODY
                     .edit("D.TIME < SRC.CUT", "TIME < SRC.CUT")
-                    .edit("derivation: P.B", "derivation: {literal: unused}"),
+                    .edit("derivation: P.B", "derivation: \"'unused'\""),
             );
             assert_eq!(
                 issues,
                 [
-                    yamaa_adapters::json!({"phase":"validation","condition":"unknown_field","rule":"LOOKUP-7","spec_paths":["intermediates[0].filter"],"context":{"identifier":"TIME","intermediate":"P","suggestion":"D.TIME"}}),
+                    yamaa_adapters::json!({"phase":"validation","condition":"unknown_field","rule":"LOOKUP-7","spec_paths":["intermediates.P.filter"],"context":{"identifier":"TIME","intermediate":"P","suggestion":"D.TIME"}}),
                     yamaa_adapters::json!({"phase":"validation","condition":"unknown_field","rule":"NAME-3","spec_paths":["columns.A.derivation.source"],"context":{"identifier":"P.A"}})
                 ]
             );
@@ -809,10 +809,14 @@ columns:
                 }
                 let mut expected = case["findings"].clone();
                 if case["result_type"] == "SpecificationError" {
+                    // A schema finding names the files its run loaded: the
+                    // capture names its own, and this run loads spec.yaml.
+                    let loaded =
+                        yamaa_adapters::json!(fixture.0.join("spec.yaml").to_str().unwrap());
                     for d in expected.as_array_mut().unwrap() {
                         let c = d["context"].as_object_mut().unwrap();
-                        assert!(c.remove("source").is_some());
-                        assert!(c.remove("entry").is_some());
+                        assert!(c.insert("source".into(), loaded.clone()).is_some());
+                        assert!(c.insert("entry".into(), loaded.clone()).is_some());
                     }
                 }
                 match fixture.run(name) {
@@ -851,6 +855,8 @@ columns:
     }
     mod declarative_intermediate_admission {
         //! Complete independent truth for applicable keys and declaration error precedence.
+        //! Every key here is inferred, which only a 0.5 file does (D23, D75), so
+        //! these documents stay 0.5 until the 0.5 path goes (#3447).
         use crate::support::Edit as _;
         use std::fs;
         use yamaa_adapters::file_application;
@@ -1029,7 +1035,8 @@ columns:
                 let path = self.0.join("spec.yaml");
                 fs::write(
                     &path,
-                    r#"schema_version: '1.0'
+                    r#"yamaa: "1.0"
+type: spec
 domain: TEST
 base: SRC
 keys: [ID]
@@ -1043,7 +1050,6 @@ intermediates:
     key: [ID]
     order_by: [D.SEQ]
     keep: first
-    no_match: {literal: null}
 columns:
   - {name: ID, type: int, derivation: SRC.ID}
   - {name: A, type: str, derivation: P.V}
@@ -1084,9 +1090,9 @@ columns:
                 result.observations()["handler_counts"],
                 yamaa_adapters::json!([
                     {"spec_path":"columns.A.derivation.source.multiple_matches","handler":"multiple_matches","count":1},
-                    {"spec_path":"columns.A.derivation.source.no_match","handler":"no_match","count":1},
+                    {"spec_path":"columns.A.derivation.source.absent","handler":"absent","count":1},
                     {"spec_path":"columns.B.derivation.source.multiple_matches","handler":"multiple_matches","count":1},
-                    {"spec_path":"columns.B.derivation.source.no_match","handler":"no_match","count":1}
+                    {"spec_path":"columns.B.derivation.source.absent","handler":"absent","count":1}
                 ])
             );
         }
@@ -1191,7 +1197,7 @@ columns:
                     "phase": "validation",
                     "condition": "incompatible_input_type",
                     "rule": "FORMULA-5",
-                    "spec_paths": ["intermediates[0].filter"],
+                    "spec_paths": ["intermediates.LOOK.filter"],
                     "context": {"left_type": "int", "right_type": "str"},
                 }])
                 .as_array()
@@ -1225,7 +1231,7 @@ columns:
         result.issues().iter().map(issue_json).collect::<Vec<_>>(),
         yamaa_adapters::json!([{
             "phase": "validation", "condition": "incompatible_input_type", "rule": "FORMULA-5",
-            "spec_paths": ["intermediates[0].filter"], "context": {"left_type": "int", "right_type": "str"},
+            "spec_paths": ["intermediates.LOOK.filter"], "context": {"left_type": "int", "right_type": "str"},
         }]).as_array().unwrap().as_slice()
     );
             assert!(result.output().is_none());
@@ -1260,13 +1266,13 @@ columns:
                 case["specification"] = yamaa_adapters::json!(case["specification"]
                     .as_str()
                     .unwrap()
-                    .replace("derivation: LOOK.VAL", "derivation: {literal: ok}"))
+                    .replace("derivation: LOOK.VAL", "derivation: \"'ok'\""))
             }
             "unread_branch" => {
                 case["specification"] = yamaa_adapters::json!(case["specification"]
                     .as_str()
                     .unwrap()
-                    .replace("derivation: LOOK.VAL", "derivation: {case: [{when: 'FALSE', then: LOOK.VAL}, {otherwise: {literal: ok}}]}"))
+                    .replace("derivation: LOOK.VAL", "derivation: {case: [{when: 'FALSE', then: LOOK.VAL}, {otherwise: \"'ok'\"}]}"))
             }
             "boolean_missing" => {
                 case["inputs"]["tab.csv"] = yamaa_adapters::json!("K,KINT,KNUM,VAL\n\"       7\",,7,A\n");
@@ -1291,7 +1297,7 @@ columns:
                     assert!(fixture.check().is_empty(), "check without data: {variant}");
                     continue;
                 }
-                let expected = yamaa_adapters::json!([{"phase":"validation","condition":"incompatible_input_type","rule":"FORMULA-5","spec_paths":["intermediates[0].filter"],"context":{"left_type":"int","right_type":"str"}}]);
+                let expected = yamaa_adapters::json!([{"phase":"validation","condition":"incompatible_input_type","rule":"FORMULA-5","spec_paths":["intermediates.LOOK.filter"],"context":{"left_type":"int","right_type":"str"}}]);
                 assert_eq!(
                     result.issues().iter().map(issue_json).collect::<Vec<_>>(),
                     expected.as_array().unwrap().as_slice(),
@@ -1389,7 +1395,8 @@ columns:
                 .unwrap()
             }
         }
-        const BODY: &str = r#"schema_version: '1.0'
+        const BODY: &str = r#"yamaa: "1.0"
+type: spec
 domain: TEST
 base: SRC
 keys: [ID, SEQ]
@@ -1406,7 +1413,7 @@ intermediates:
     columns: [V, W, V]
     order_by: [D.ORD]
     keep: first
-    no_match: absent
+    absent: absent
 columns:
   - {name: ID, type: int, derivation: SRC.ID}
   - {name: SEQ, type: int, derivation: SRC.SEQ}
@@ -1436,7 +1443,8 @@ columns:
         "ID,VSDTC,WEIGHT\nS01,2030-01-05T08:00,70\nS01,2030-01-10T07:30,71\nS01,2030-01-15T09:00,72\nS02,2030-02-02T08:00,80\nS03,2030-01-03,60\n",
     )
     .unwrap();
-            let body = r#"schema_version: '1.0'
+            let body = r#"yamaa: "1.0"
+type: spec
 domain: TEST
 base: SRC
 keys: [ID]
@@ -1447,12 +1455,12 @@ output: {path: result.csv, columns: [ID, TRTSDT, WEIGHTBL]}
 intermediates:
   - id: BL
     dataset: VS
+    key: [ID]
     derivations:
       ADT: {to_date: {source: VSDTC}}
     between: {value: TRTSDT, lower: ADT}
     order_by: [VS.ADT]
     keep: last
-    no_match: {literal: null}
 columns:
   - {name: ID, type: str, derivation: SRC.ID}
   - {name: TRTSDT, type: date, derivation: SRC.TRTSDT}
@@ -1482,9 +1490,9 @@ columns:
                 result.observations()["handler_counts"],
                 yamaa_adapters::json!([
                     {"spec_path":"columns.A.derivation.source.multiple_matches","handler":"multiple_matches","count":1},
-                    {"spec_path":"columns.A.derivation.source.no_match","handler":"no_match","count":3},
+                    {"spec_path":"columns.A.derivation.source.absent","handler":"absent","count":3},
                     {"spec_path":"columns.B.derivation.source.multiple_matches","handler":"multiple_matches","count":1},
-                    {"spec_path":"columns.B.derivation.source.no_match","handler":"no_match","count":3}
+                    {"spec_path":"columns.B.derivation.source.absent","handler":"absent","count":3}
                 ])
             );
         }
@@ -1501,9 +1509,9 @@ columns:
                 result.observations()["handler_counts"],
                 yamaa_adapters::json!([
                     {"spec_path":"columns.A.derivation.source.multiple_matches","handler":"multiple_matches","count":3},
-                    {"spec_path":"columns.A.derivation.source.no_match","handler":"no_match","count":2},
+                    {"spec_path":"columns.A.derivation.source.absent","handler":"absent","count":2},
                     {"spec_path":"columns.B.derivation.source.multiple_matches","handler":"multiple_matches","count":3},
-                    {"spec_path":"columns.B.derivation.source.no_match","handler":"no_match","count":2}
+                    {"spec_path":"columns.B.derivation.source.absent","handler":"absent","count":2}
                 ])
             );
         }
@@ -1557,7 +1565,7 @@ columns:
                 )
                 .unwrap();
                 let body = BODY
-                    .edit("no_match: absent", &format!("no_match: {replacement}"))
+                    .edit("absent: absent", &format!("absent: {replacement}"))
                     .edit("name: A, type: str", &format!("name: A, type: {kind}"))
                     .edit("name: B, type: str", &format!("name: B, type: {kind}"));
                 let mut result = f.run(&body);
@@ -1572,9 +1580,9 @@ columns:
                     result.observations()["handler_counts"],
                     yamaa_adapters::json!([
                         {"spec_path":"columns.A.derivation.source.multiple_matches","handler":"multiple_matches","count":0},
-                        {"spec_path":"columns.A.derivation.source.no_match","handler":"no_match","count":1},
+                        {"spec_path":"columns.A.derivation.source.absent","handler":"absent","count":1},
                         {"spec_path":"columns.B.derivation.source.multiple_matches","handler":"multiple_matches","count":0},
-                        {"spec_path":"columns.B.derivation.source.no_match","handler":"no_match","count":1}
+                        {"spec_path":"columns.B.derivation.source.absent","handler":"absent","count":1}
                     ]),
                     "{case}"
                 );
@@ -1596,10 +1604,10 @@ columns:
             assert_eq!(
                 result.observations()["handler_counts"],
                 yamaa_adapters::json!([
-                    {"spec_path":"rows[0].derivations.A.source.multiple_matches","handler":"multiple_matches","count":1},
-                    {"spec_path":"rows[0].derivations.A.source.no_match","handler":"no_match","count":3},
-                    {"spec_path":"rows[0].derivations.B.source.multiple_matches","handler":"multiple_matches","count":1},
-                    {"spec_path":"rows[0].derivations.B.source.no_match","handler":"no_match","count":3}
+                    {"spec_path":"rows.selected.derivations.A.source.multiple_matches","handler":"multiple_matches","count":1},
+                    {"spec_path":"rows.selected.derivations.A.source.absent","handler":"absent","count":3},
+                    {"spec_path":"rows.selected.derivations.B.source.multiple_matches","handler":"multiple_matches","count":1},
+                    {"spec_path":"rows.selected.derivations.B.source.absent","handler":"absent","count":3}
                 ])
             );
         }
@@ -1613,9 +1621,9 @@ columns:
                 "ID,LOW,HIGH,ORD,ELIG,V,W\n1,1,4,1,Y,3,4\n",
             )
             .unwrap();
-            let body = BODY.edit("no_match: absent", "no_match: true")
-        .edit("derivation: P.V", "derivation: {flag: {condition: 'P.V IS NOT NULL', true_value: Y, false_value: N, missing: {literal: null}}}")
-        .edit("derivation: P.W", "derivation: {flag: {condition: 'P.W IS NOT NULL', true_value: Y, false_value: N, missing: {literal: null}}}");
+            let body = BODY.edit("absent: absent", "absent: true")
+        .edit("derivation: P.V", "derivation: {flag: {condition: 'P.V IS NOT NULL', true_value: Y, false_value: N, missing: null}}")
+        .edit("derivation: P.W", "derivation: {flag: {condition: 'P.W IS NOT NULL', true_value: Y, false_value: N, missing: null}}");
             let mut result = f.run(&body);
             assert!(result.issues().is_empty(), "{:?}", result.issues());
             assert!(result.save().unwrap());
@@ -1659,9 +1667,9 @@ columns:
                 result.observations()["handler_counts"],
                 yamaa_adapters::json!([
                     {"spec_path":"columns.A.derivation.source.multiple_matches","handler":"multiple_matches","count":0},
-                    {"spec_path":"columns.A.derivation.source.no_match","handler":"no_match","count":1},
+                    {"spec_path":"columns.A.derivation.source.absent","handler":"absent","count":1},
                     {"spec_path":"columns.B.derivation.source.multiple_matches","handler":"multiple_matches","count":0},
-                    {"spec_path":"columns.B.derivation.source.no_match","handler":"no_match","count":1}
+                    {"spec_path":"columns.B.derivation.source.absent","handler":"absent","count":1}
                 ])
             );
         }
@@ -1767,7 +1775,8 @@ columns:
         }
         #[test]
         fn internal_working_columns_order_the_projection_and_omission_keeps_construction_order() {
-            let spec = r#"schema_version: '1.0'
+            let spec = r#"yamaa: "1.0"
+type: spec
 domain: TEST
 keys: [ID]
 input: {SRC: {path: source.csv, types: {SORT: int}}}
@@ -1841,7 +1850,8 @@ columns:
         #[test]
         fn csv_present_empty_is_rejected_before_study_bytes_are_requested() {
             let fixture = authored(
-                r#"schema_version: '1.0'
+                r#"yamaa: "1.0"
+type: spec
 domain: TEST
 keys: [ID]
 input: {SRC: {path: absent.csv, empty_string: present}}
@@ -1872,7 +1882,8 @@ columns: [{name: ID, type: str, derivation: SRC.ID}]
         #[test]
         fn root_filter_reads_raw_driver_values_before_key_derivation() {
             let fixture = authored(
-                r#"schema_version: '1.0'
+                r#"yamaa: "1.0"
+type: spec
 domain: TEST
 keys: [ID]
 input: {SRC: source.csv}
@@ -1893,7 +1904,8 @@ columns:
             );
             // A raw string comparison would fail if the filter read the completed integer key.
             let raw = authored(
-                r#"schema_version: '1.0'
+                r#"yamaa: "1.0"
+type: spec
 domain: TEST
 keys: [ID]
 input: {SRC: source.csv}
@@ -1911,7 +1923,8 @@ columns: [{name: ID, type: int, derivation: SRC.ID}]
         #[test]
         fn root_filter_uses_explicit_base_independently_of_input_declaration_order() {
             let fixture = authored(
-                r#"schema_version: '1.0'
+                r#"yamaa: "1.0"
+type: spec
 domain: TEST
 keys: [ID]
 input: {OTHER: other.csv, SRC: source.csv}
@@ -1931,7 +1944,8 @@ columns: [{name: ID, type: str, derivation: SRC.ID}]
         #[test]
         fn root_filter_forbids_constructed_columns_and_conflicting_row_templates() {
             let fixture = authored(
-                r#"schema_version: '1.0'
+                r#"yamaa: "1.0"
+type: spec
 domain: TEST
 keys: [ID]
 input: {SRC: source.csv}
@@ -1955,7 +1969,7 @@ columns: [{name: ID, type: str, derivation: SRC.ID}]
                 yamaa_adapters::json!({"identifier":"ID", "available_phase":"column_derivation", "required_phase":"row_filter"})
             );
             let mut spec = fs::read_to_string(fixture.0.join("spec.yaml")).unwrap();
-            spec.push_str("rows: [{id: records, dataset: SRC, derivations: {}}]\n");
+            spec.push_str("rows: [{id: records, dataset: SRC}]\n");
             fs::write(fixture.0.join("spec.yaml"), spec).unwrap();
             fs::remove_file(fixture.0.join("source.csv")).unwrap();
             let issues = fixture
@@ -1971,7 +1985,8 @@ columns: [{name: ID, type: str, derivation: SRC.ID}]
 
         #[test]
         fn source_ordinals_precede_filtering_and_count_multiline_records_once() {
-            let spec = r#"schema_version: '1.0'
+            let spec = r#"yamaa: "1.0"
+type: spec
 domain: TEST
 keys: [ID]
 input: {SRC: {path: source.csv, ordinal: REC}}
@@ -2014,7 +2029,8 @@ columns:
             );
 
             let fixture = authored(
-                r#"schema_version: '1.0'
+                r#"yamaa: "1.0"
+type: spec
 domain: TEST
 keys: [ID]
 input: {SRC: {path: absent.parquet, ordinal: REC}}
@@ -2042,7 +2058,8 @@ columns: [{name: ID, type: str, derivation: {odm: SRC.ITEM}}]
         #[test]
         fn metadata_odm_spelling_does_not_turn_an_ordinal_source_into_odm() {
             let fixture = authored(
-                r#"schema_version: '1.0'
+                r#"yamaa: "1.0"
+type: spec
 domain: TEST
 keys: [ID]
 input: {SRC: {path: source.csv, ordinal: REC}}
@@ -2065,11 +2082,11 @@ columns:
         #[test]
         fn nested_column_and_row_odm_derivations_still_reject_ordinals_before_capture() {
             for declarations in [
-        "columns:\n  - name: ID\n    type: str\n    derivation:\n      case:\n        - when: \"1 = 1\"\n          then: {odm: SRC.ITEM}\n        - otherwise: {literal: x}\n",
+        "columns:\n  - name: ID\n    type: str\n    derivation:\n      case:\n        - when: \"1 = 1\"\n          then: {odm: SRC.ITEM}\n        - otherwise: \"'x'\"\n",
         "columns: [{name: ID, type: str, derivation: SRC.ID}]\nrows:\n  - id: records\n    derivations:\n      ID: {odm: SRC.ITEM}\n",
     ] {
         let fixture = authored(
-            &format!("schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {{SRC: {{path: absent.parquet, ordinal: REC}}}}\noutput: {{path: result.csv, columns: [ID]}}\n{declarations}"),
+            &format!("yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {{SRC: {{path: absent.parquet, ordinal: REC}}}}\noutput: {{path: result.csv, columns: [ID]}}\n{declarations}"),
             b"unused\n",
         );
         let issues = fixture.run().err().expect("ODM ordinal admission before capture");
@@ -2084,7 +2101,8 @@ columns:
         fn parquet_records_expose_identical_ordinal_policy_without_changing_stored_fields() {
             use yamaa_adapters::{parquet_artifact, typed_csv};
             let fixture = authored(
-                r#"schema_version: '1.0'
+                r#"yamaa: "1.0"
+type: spec
 domain: TEST
 keys: [ID]
 input: {SRC: {path: source.parquet, ordinal: REC}}
@@ -2146,7 +2164,8 @@ columns:
                 )
             }
         }
-        const BODY: &str = r#"schema_version: '1.0'
+        const BODY: &str = r#"yamaa: "1.0"
+type: spec
 domain: TEST
 base: SRC
 keys: [ID, SEQ]
@@ -2160,7 +2179,6 @@ intermediates:
     filter: "SRC.ELIG = 'Y'"
     order_by: [SRC.SEQ]
     keep: last
-    no_match: {literal: null}
 columns:
   - {name: ID, type: int, derivation: SRC.ID}
   - {name: SEQ, type: int, derivation: SRC.SEQ}
@@ -2189,9 +2207,9 @@ columns:
                 result.observations()["handler_counts"],
                 yamaa_adapters::json!([
                     {"spec_path":"columns.A.derivation.source.multiple_matches","handler":"multiple_matches","count":2},
-                    {"spec_path":"columns.A.derivation.source.no_match","handler":"no_match","count":1},
+                    {"spec_path":"columns.A.derivation.source.absent","handler":"absent","count":1},
                     {"spec_path":"columns.B.derivation.source.multiple_matches","handler":"multiple_matches","count":2},
-                    {"spec_path":"columns.B.derivation.source.no_match","handler":"no_match","count":1},
+                    {"spec_path":"columns.B.derivation.source.absent","handler":"absent","count":1},
                 ])
             );
         }
@@ -2214,10 +2232,10 @@ columns:
             assert_eq!(
                 result.observations()["handler_counts"],
                 yamaa_adapters::json!([
-                    {"spec_path":"rows[0].derivations.A.source.multiple_matches","handler":"multiple_matches","count":1},
-                    {"spec_path":"rows[0].derivations.A.source.no_match","handler":"no_match","count":2},
-                    {"spec_path":"rows[0].derivations.B.source.multiple_matches","handler":"multiple_matches","count":1},
-                    {"spec_path":"rows[0].derivations.B.source.no_match","handler":"no_match","count":2},
+                    {"spec_path":"rows.alternate.derivations.A.source.multiple_matches","handler":"multiple_matches","count":1},
+                    {"spec_path":"rows.alternate.derivations.A.source.absent","handler":"absent","count":2},
+                    {"spec_path":"rows.alternate.derivations.B.source.multiple_matches","handler":"multiple_matches","count":1},
+                    {"spec_path":"rows.alternate.derivations.B.source.absent","handler":"absent","count":2},
                 ])
             );
         }

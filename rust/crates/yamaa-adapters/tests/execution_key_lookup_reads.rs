@@ -50,7 +50,8 @@ const VS: &str = "USUBJID,VSSEQ,VSTESTCD,VSDTC,VSSTRESN\n\
 
 // LAST: the latest record with a result for the subject and test; a match
 // is required.
-const HEAD: &str = "schema_version: \"1.0\"\n\
+const HEAD: &str = "yamaa: \"1.0\"\n\
+    type: spec\n\
     domain: ADVS\n\
     input:\n\
     \x20 VS: {path: vs.csv, types: {VSSEQ: int, VSSTRESN: float}}\n\
