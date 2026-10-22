@@ -67,9 +67,6 @@ function_spec <- c("schema_version: '1.0'", "domain: TEST", "keys: [ID]",
   "  - {name: ID, type: str, derivation: SRC.ID}",
   "  - {name: VALUE, type: float, derivation: {function: {name: project_value, args: {x: SRC.VALUE}}}}",
   "output: {path: output.csv, columns: [ID, VALUE]}")
-adam_project <- function(environment = "r/environment.yaml", specs = "spec.yaml") c(
-  "schema_version: '1.0'", paste0("environments: {r: ", environment, "}"),
-  paste0("adam: {specs: [", specs, "]}"))
 
 qualify_metadata_failure_locations <- function() {
   previous <- getwd(); on.exit(setwd(previous))
@@ -352,20 +349,21 @@ for (context in fixture_strings(host_truth[["quota_modes"]])) {
   target <- file.path(work, paste0("math-", context)); dir.create(target)
   stopifnot_case(context, "the case is copied" = file.copy(file.path(root, name), target, recursive = TRUE))
   setwd(file.path(target, name))
-  text <- c('schema_version: "1.0"', 'domain: TEST', 'keys: [ID]',
+  # The project lists the specification under `adam` (SUB-3).
+  text <- c('yamaa: "1.0"', 'type: spec', 'model: ADaM', 'domain: TEST', 'keys: [ID]',
     'input: {SOURCE: {path: input/source.csv, types: {VALUE: float}}}',
     'output: {path: test.csv, columns: [ID, RESULT]}', 'columns:',
     '  - {name: ID, type: str, label: Identifier, derivation: SOURCE.ID}',
     '  - name: RESULT', '    type: float', '    label: Result')
   expr <- 'EXP(0) + LN(1) + POWER(2, 3)'
-  if (context == "column") text <- c(text, paste0('    derivation: {compute: {expr: "', expr, '"}}'))
+  if (context == "column") text <- c(text, paste0('    derivation: "', expr, '"'))
   if (context == "row") text <- c(text, 'rows:', '  - id: records', '    dataset: SOURCE',
-    paste0('    derivations: {RESULT: {compute: {expr: "', expr, '"}}}'))
+    paste0('    derivations: {RESULT: "', expr, '"}'))
   if (context == "case") text <- c(text, '    derivation:', '      case:',
     '        - when: "ID = \'01\'"', '          then:', '            case:',
     '              - when: "ID = \'01\'"',
-    paste0('                then: {compute: {expr: "', expr, '"}}'),
-    '              - otherwise: {literal: 99.0}', '        - otherwise: {literal: 98.0}')
+    paste0('                then: "', expr, '"'),
+    '              - otherwise: 99.0', '        - otherwise: 98.0')
   writeLines(text, 'spec.yaml')
   result <- yamaa_project('project.yaml')$spec('TEST')$run()
   stopifnot_case(paste("math in a", context, "context"), "the run has no issues" = nrow(result$issues) == 0L,
@@ -379,13 +377,13 @@ precision_study <- function(decimals = "2", path = "rounded.csv") {
   writeLines(c("ID,VALUE,INT", "1,0.125,7", "2,-0.125,-7", "3,2.675,0",
     "4,-0.004,9", "5,1.234,1", "6,2.345,2", "7,,3", "8,25,4"), "input.csv")
   precision <- if (is.null(decimals)) "" else paste0(", decimals: ", decimals)
-  writeLines(c("schema_version: '1.0'", "domain: TEST", "keys: [ID]",
+  writeLines(c('yamaa: "1.0"', "type: spec", "domain: TEST", "keys: [ID]",
     "input: {SRC: {path: input.csv, types: {ID: int, VALUE: float, INT: int}}}",
     paste0("output: {path: ", path, host_truth[["callback_projection"]], precision, "}"),
     "columns:", "  - {name: ID, type: int, derivation: SRC.ID}",
     "  - {name: VALUE, type: float, derivation: SRC.VALUE}",
-    "  - {name: DOUBLE, type: float, derivation: {compute: {expr: 'VALUE + VALUE'}}}",
-    "  - {name: EMPTY, type: str, derivation: {literal: ''}}",
+    "  - {name: DOUBLE, type: float, derivation: 'VALUE + VALUE'}",
+    "  - {name: EMPTY, type: str, derivation: \"''\"}",
     "  - {name: INT, type: int, derivation: SRC.INT}",
     "verifications: [{assert: {when: 'ID = 5', require: 'DOUBLE = 2.468'}}]"), "spec.yaml")
   yamaa_spec("spec.yaml")
@@ -459,11 +457,11 @@ stopifnot("a failed run has no output" = is.null(failed$output),
 cat("public R CSV precision preserves unrounded tables, exact saved bytes and failure gates\n")
 graph_dir <- file.path(work, "linked-artifact-refusal"); dir.create(graph_dir)
 setwd(graph_dir)
-writeLines(c("schema_version: '1.0'", "domain: PROD", "keys: [ID]",
+writeLines(c('yamaa: "1.0"', "type: spec", "domain: PROD", "keys: [ID]",
   "input: {RAW: never-read.csv}",
   "columns: [{name: ID, type: int, label: Identifier, derivation: RAW.ID}]",
   "output: {path: produced.csv, columns: [ID], decimals: 2}"), "producer.yaml")
-writeLines(c("schema_version: '1.0'", "domain: CONS", "keys: [ID]",
+writeLines(c('yamaa: "1.0"', "type: spec", "domain: CONS", "keys: [ID]",
   "input: {P: {path: produced.csv, schema: producer.yaml}}",
   "columns: [{name: ID, type: int, label: Identifier, derivation: P.ID}]",
   "output: {path: consumer.csv, columns: [ID]}"), "spec.yaml")
@@ -485,7 +483,7 @@ stopifnot("a failed run has no output" = is.null(failed$output),
   "its save signals yamaa_error" = inherits(tryCatch(failed$save(), error = identity), "yamaa_error"))
 cat("public R functionless link reads its missing artifact without running the producer\n")
 graph_document <- function(input, base, output, invalid = FALSE) c(
-  "schema_version: '1.0'", "domain: TEST", "keys: [ID]", paste0("base: ", base),
+  'yamaa: "1.0"', "type: spec", "domain: TEST", "keys: [ID]", paste0("base: ", base),
   paste0("input: ", input), "columns:",
   paste0("  - {name: ID, type: int, label: Identifier, derivation: ", base, ".ID}"),
   "  - name: VALUE", "    type: str", "    label: Value", paste0("    derivation: ", base, ".VALUE"),
@@ -493,7 +491,7 @@ graph_document <- function(input, base, output, invalid = FALSE) c(
   paste0("output: {path: ", output, ", columns: [ID, VALUE]}"))
 dir.create("parents")
 writeLines(graph_document("{RAW: ../never-read.csv}", "RAW", "../leaf.csv", TRUE), "parents/base.yaml")
-writeLines(c("schema_version: '1.0'", "parent: parents/base.yaml", "domain: LEAF"), "leaf.yaml")
+writeLines(c('yamaa: "1.0"', "type: spec", "parent: parents/base.yaml", "domain: LEAF"), "leaf.yaml")
 writeLines(graph_document(host_truth[["aliased_leaf_reference"]], "P", "left.csv"), "left.yaml")
 writeLines(graph_document(host_truth[["leaf_reference"]], "P", "right.csv"), "right.yaml")
 writeLines(graph_document(host_truth[["diamond_reference"]], "L", "consumer.csv", TRUE), "spec.yaml")
@@ -522,11 +520,13 @@ local_paths <- file.path(work, "declaring-file-paths"); dir.create(local_paths)
 setwd(local_paths)
 for (name in fixture_strings(host_truth[["inherited_directories"]])) dir.create(name)
 writeLines("[invalid configuration", "yamaa-project.yaml")
-writeLines("schema_version: '1.0'", "shared/environment.yaml")
-writeLines(c("schema_version: '1.0'", "environments: {python: environment.yaml, r: environment.yaml}",
-  "adam: {specs: [../entry/spec.yaml]}"), "shared/project.yaml")
-writeLines(c("schema_version: '1.0'", "parent: ../shared/base.yaml", "domain: CHILD"), "entry/spec.yaml")
-writeLines(c("schema_version: '1.0'", "domain: BASE", "keys: [ID]", "input: {SRC: data.csv}",
+# A project without project functions names no host environment (D110).
+writeLines(c('yamaa: "1.0"', "type: project", "adam: {specs: [../entry/spec.yaml]}"),
+  "shared/project.yaml")
+writeLines(c('yamaa: "1.0"', "type: spec", "parent: ../shared/base.yaml", "domain: CHILD"),
+  "entry/spec.yaml")
+writeLines(c('yamaa: "1.0"', "type: spec", "model: ADaM", "domain: BASE", "keys: [ID]",
+  "input: {SRC: data.csv}",
   "columns: [{name: ID, type: int, derivation: SRC.ID}]",
   "output: {path: ../outputs/held.csv, columns: [ID]}"), "shared/base.yaml")
 writeLines(c("ID", "999"), "entry/data.csv"); writeLines(c("ID", "7"), "shared/data.csv")
@@ -545,7 +545,7 @@ expect_identical(rawfile("outputs/held.csv"), charToRaw("ID\n7\n"), "the held ru
 writeLines(c("ID", "7"), "shared/data.csv")
 source <- paste0(normalizePath("shared", winslash = "/"), "/../shared/./data.csv")
 output <- paste0(normalizePath("outputs", winslash = "/"), "/absolute.csv")
-local_document <- function(input) c("schema_version: '1.0'", "domain: TEST", "keys: [ID]",
+local_document <- function(input) c('yamaa: "1.0"', "type: spec", "domain: TEST", "keys: [ID]",
   "columns: [{name: ID, type: int, derivation: SRC.ID}]",
   paste0("input: {SRC: '", input, "'}"), paste0("output: {path: '", output, "', columns: [ID]}"))
 writeLines(local_document(source), "entry/spec.yaml")
@@ -576,16 +576,20 @@ cat("public R declaring-file inheritance, absolute paths, held bytes and no conf
 ct_paths <- file.path(work, "codelist-paths"); dir.create(ct_paths); setwd(ct_paths)
 for (name in fixture_strings(host_truth[["terminology_directories"]])) dir.create(name)
 writeLines("[ignored configuration", "yamaa-project.yaml")
-writeLines(c("schema_version: '1.0'", "domain: TEST", "keys: [ID]",
+# The specification declares its model (SUB-3), whose origin pairs SUB-15
+# checks: an SDTM `Assigned` origin names its source.
+writeLines(c('yamaa: "1.0"', "type: spec", "model: SDTM", "domain: TEST", "keys: [ID]",
   "input: {SRC: {path: data.csv, types: {ID: str}}}",
-  "columns: [{name: ID, type: str, derivation: SRC.ID, submission: {codelist: IDENTIFIERS, origin: {type: Assigned}}}]",
+  paste0("columns: [{name: ID, type: str, derivation: SRC.ID, submission: ",
+    "{codelist: IDENTIFIERS, origins: [{type: Assigned, source: Sponsor}]}}]"),
   "output: {path: ../outputs/ids.csv, columns: [ID]}"), "entry/spec.yaml")
 writeLines(c("ID", "01"), "entry/data.csv")
-terminology <- "codelists: [{id: IDENTIFIERS, name: Identifiers, items: [{value: '01'}]}]"
+terminology <- c('yamaa: "1.0"', "type: codelists",
+  "codelists: [{id: IDENTIFIERS, name: Identifiers, items: [{value: '01'}]}]")
 writeLines(terminology, "terminology/ids.yaml"); writeLines("[unrelated document", "entry/ids.yaml")
 project <- yamaa_project("project/project.yaml")
 for (written in c("../terminology/ids.yaml", normalizePath("terminology/ids.yaml", winslash = "/"))) {
-  writeLines(c("schema_version: '1.0'", paste0("codelists: ['", written, "']"),
+  writeLines(c('yamaa: "1.0"', "type: project", paste0("codelists: ['", written, "']"),
     "sdtm: {specs: [../entry/spec.yaml]}"), "project/project.yaml")
   label <- paste("a codelist listed as", written)
   stopifnot_case(label, "the project checks" = nrow(project$check()$issues) == 0L)
@@ -601,13 +605,15 @@ for (written in c("../terminology/ids.yaml", normalizePath("terminology/ids.yaml
     "the saved CSV is exact" = identical(rawfile("outputs/ids.csv"), charToRaw("ID\n01\n")))
   unlink("outputs/ids.csv")
 }
-writeLines(c("schema_version: '1.0'", "codelists: [ids.yaml]", "sdtm: {specs: [../entry/spec.yaml]}"),
-  "project/project.yaml")
+writeLines(c('yamaa: "1.0"', "type: project", "codelists: [ids.yaml]",
+  "sdtm: {specs: [../entry/spec.yaml]}"), "project/project.yaml")
 writeLines(terminology, "ids.yaml"); writeLines(terminology, "entry/ids.yaml")
 checked <- refuse_activation(project$check())$issues
 runs <- refuse_activation(project$run())
+# A listed file that cannot be read fails as any file a run reads, at its
+# listing (D107).
 expect_identical(as.list(checked[c("condition", "spec_paths")]),
-  list(condition = "project_environment_invalid", spec_paths = list("codelists[0]")),
+  list(condition = "resource_path_missing", spec_paths = list("codelists[0]")),
   "a codelist missing beside the project")
 stopifnot("the finding names the listed path" = grepl('"path":"ids.yaml"', checked$context, fixed = TRUE),
   "the refused project builds nothing" = identical(runs$names, character()),
@@ -625,16 +631,18 @@ qualify_submission_versions <- function() {
   directory <- tempfile("submission-version-"); dir.create(directory)
   on.exit({ setwd(old); unlink(directory, recursive = TRUE) }, add = TRUE)
   setwd(directory)
-  writeLines(c("schema_version: '1.0'", "domain: TEST", "keys: [ID]",
-    "input: {SRC: absent.csv}", "columns: [{name: ID, type: int, derivation: SRC.ID}]",
-    "output: {path: result.csv, columns: [ID]}"), "spec.yaml")
   project <- yamaa_project("project.yaml")
   for (family in c("sdtm", "adam", "send")) {
     guide <- switch(family, sdtm = "SDTMIG", adam = "ADaMIG", send = "SENDIG")
-    prefix <- c("schema_version: '1.0'",
+    model <- switch(family, sdtm = "SDTM", adam = "ADaM", send = "SEND")
+    # A section lists only specifications of its model (SUB-3).
+    writeLines(c('yamaa: "1.0"', "type: spec", paste0("model: ", model), "domain: TEST",
+      "keys: [ID]", "input: {SRC: absent.csv}", "columns: [{name: ID, type: int, derivation: SRC.ID}]",
+      "output: {path: result.csv, columns: [ID]}"), "spec.yaml")
+    prefix <- c('yamaa: "1.0"', "type: project",
       "study: {id: STUDY, name: Study, description: Study, protocol_name: Protocol}",
       paste0(family, ":"),
-      paste0("  standard: {name: ", guide, ", version: '1.0', status: Final}"),
+      paste0("  standards: [{name: ", guide, ", version: '1.0', status: Final}]"),
       "  specs: [spec.yaml]", "  define: absent/define.xml")
     for (declared in list(NULL, "'1.0'", "'future package build'")) {
       field <- if (is.null(declared)) character() else paste0("  source_system_version: ", declared)
@@ -671,7 +679,7 @@ qualify_aggregate_callback <- function() {
   on.exit(setwd(previous))
   project <- callback_study("aggregate-callback-")
   spec <- paste(c(
-    "schema_version: '1.0'", "domain: TEST", "input:",
+    'yamaa: "1.0"', "type: spec", "model: ADaM", "domain: TEST", "input:",
     "  SRC: {path: input.csv, types: {ID: int, N: float}}",
     "  B: {path: input.csv, types: {ID: int, N: str}}",
     "base: SRC", "keys: [ID, N]", "intermediates:",
@@ -679,9 +687,9 @@ qualify_aggregate_callback <- function() {
     "columns:", "  - {name: ID, type: int, derivation: SRC.ID}",
     "  - {name: N, type: float, derivation: SRC.N}",
     "  - name: VALUE", "    type: float", "    derivation:", "      aggregate:",
-    "        key: {ID: ID}", "        derive:",
-    "          - {name: BASE, type: float, derivation: B.N}",
-    "          - {name: V, type: float, derivation: {function: {name: project_value, args: {x: CAP.N}}}}",
+    "        key: {ID: ID}", "        derivations:",
+    "          BASE: {type: float, derivation: B.N}",
+    "          V: {type: float, derivation: {function: {name: project_value, args: {x: CAP.N}}}}",
     "        expr: SUM(V)", "output: {path: output.csv, columns: [ID, N, VALUE]}"
   ), collapse = "\n")
   writeLines(spec, "spec.yaml"); writeLines(c("ID,N", "1,10", "1,30", "2,40"), "input.csv")
@@ -708,8 +716,11 @@ qualify_row_callback_joins <- function() {
   writeLines(c("ID,N", "2,40", "1,50"), "b.csv")
   for (driver in c("SRC", "B")) {
     other <- if (driver == "SRC") "B" else "SRC"
-    spec <- paste(c("schema_version: '1.0'", "domain: TEST", "input:",
-      "  SRC: {path: a.csv, types: {ID: int, N: float}}", "  B: {path: b.csv, types: {ID: int, N: float}}",
+    # The driver's partner is read through an implicit join, on the key each
+    # input declares (D23, D111).
+    spec <- paste(c('yamaa: "1.0"', "type: spec", "model: ADaM", "domain: TEST", "input:",
+      "  SRC: {path: a.csv, types: {ID: int, N: float}, key: [ID]}",
+      "  B: {path: b.csv, types: {ID: int, N: float}, key: [ID]}",
       "base: SRC", "keys: [ID]", "columns:", "  - {name: ID, type: int}", "  - {name: VALUE, type: float}",
       "rows:", "  - id: records", paste0("    dataset: ", driver), "    derivations:",
       paste0("      ID: ", driver, ".ID"), paste0("      VALUE: {function: {name: project_value, args: {x: ", other, ".N}}}"),
@@ -735,7 +746,7 @@ qualify_intermediate_callback <- function() {
   project <- callback_study("intermediate-callback-")
   writeLines(c("ID,N", "1,10", "1,30", "2,40"), "a.csv")
   writeLines(c("ID,N", "1,one", "2,two"), "b.csv")
-  writeLines(c("schema_version: '1.0'", "domain: TEST", "input:",
+  writeLines(c('yamaa: "1.0"', "type: spec", "model: ADaM", "domain: TEST", "input:",
     "  SRC: {path: a.csv, types: {ID: int, N: float}}", "  B: {path: b.csv, types: {ID: int, N: str}}",
     "base: SRC", "keys: [ID, N]", "intermediates:",
     "  - {id: CAP, dataset: SRC, key: [ID], order_by: [SRC.N], keep: first}",
@@ -760,10 +771,12 @@ qualify_catastrophic_pattern <- function() {
   previous <- getwd(); on.exit(setwd(previous))
   work <- tempfile("catastrophic-pattern-"); dir.create(work); setwd(work)
   truth <- host_truth[["catastrophic_pattern"]]
-  writeChar(truth$specification, "spec.yaml", eos = NULL, useBytes = TRUE)
+  # A section lists only specifications of its model (SUB-3).
+  specification <- sub("type: spec\n", "type: spec\nmodel: ADaM\n", truth$specification, fixed = TRUE)
+  writeChar(specification, "spec.yaml", eos = NULL, useBytes = TRUE)
   writeChar(truth$source, "input.csv", eos = NULL, useBytes = TRUE)
-  writeLines("schema_version: '1.0'", "environment.yaml")
-  writeLines(adam_project("environment.yaml"), "project.yaml")
+  # A project without project functions names no host environment (D110).
+  writeLines(c('yamaa: "1.0"', "type: project", "adam: {specs: [spec.yaml]}"), "project.yaml")
   specs <- list(alone = yamaa_spec("spec.yaml"), project = yamaa_project("project.yaml")$spec("TEST"))
   for (route in names(specs)) {
     failed <- specs[[route]]$run()

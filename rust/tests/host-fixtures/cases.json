@@ -4320,8 +4320,7 @@
       "inherited_source_files": [
         "entry/spec.yaml",
         "shared/base.yaml",
-        "shared/project.yaml",
-        "shared/environment.yaml"
+        "shared/project.yaml"
       ],
       "terminology_directories": [
         "entry",
@@ -4365,7 +4364,7 @@
       "incompatible_leaf_reference": "{P: {path: leaf.csv, schema: leaf.yaml, types: {ID: int}}}",
       "verification_pattern_path": "columns.VALUE.verifications[0].matches.pattern",
       "catastrophic_pattern": {
-        "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, TERM]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - name: TERM\n    type: str\n    derivation: SRC.TERM\n    verifications: [{matches: {pattern: '(a+)+b'}}]\n",
+        "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, TERM]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - name: TERM\n    type: str\n    derivation: SRC.TERM\n    verifications: [{matches: {pattern: '(a+)+b'}}]\n",
         "source": "ID,TERM\n1,aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
         "condition": "matches_failed",
         "paths": [

@@ -348,21 +348,22 @@ class PublicEnvironment(unittest.TestCase):
         self,
     ):
         os.chdir(self.directory)
-        Path("spec.yaml").write_text(
-            "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\n"
-            "input: {SRC: absent.csv}\ncolumns: [{name: ID, type: int, derivation: SRC.ID}]\n"
-            "output: {path: result.csv, columns: [ID]}\n"
-        )
         project = self.project()
-        for family, guide in (
-            ("sdtm", "SDTMIG"),
-            ("adam", "ADaMIG"),
-            ("send", "SENDIG"),
+        for family, guide, model in (
+            ("sdtm", "SDTMIG", "SDTM"),
+            ("adam", "ADaMIG", "ADaM"),
+            ("send", "SENDIG", "SEND"),
         ):
+            # A section lists only specifications of its model (SUB-3).
+            Path("spec.yaml").write_text(
+                f'yamaa: "1.0"\ntype: spec\nmodel: {model}\ndomain: TEST\nkeys: [ID]\n'
+                "input: {SRC: absent.csv}\ncolumns: [{name: ID, type: int, derivation: SRC.ID}]\n"
+                "output: {path: result.csv, columns: [ID]}\n"
+            )
             prefix = (
-                "schema_version: '1.0'\n"
+                'yamaa: "1.0"\ntype: project\n'
                 "study: {id: STUDY, name: Study, description: Study, protocol_name: Protocol}\n"
-                f"{family}:\n  standard: {{name: {guide}, version: '1.0', status: Final}}\n"
+                f"{family}:\n  standards: [{{name: {guide}, version: '1.0', status: Final}}]\n"
                 "  specs: [spec.yaml]\n  define: absent/define.xml\n"
             )
             with no_activation():
@@ -395,13 +396,13 @@ class PublicEnvironment(unittest.TestCase):
     ):
         os.chdir(self.directory)
         (self.directory / "producer.yaml").write_text(
-            "schema_version: '1.0'\ndomain: PROD\nkeys: [ID]\n"
+            'yamaa: "1.0"\ntype: spec\ndomain: PROD\nkeys: [ID]\n'
             "input: {RAW: never-read.csv}\n"
             "columns: [{name: ID, type: int, label: Identifier, derivation: RAW.ID}]\n"
             "output: {path: produced.csv, columns: [ID], decimals: 2}\n"
         )
         (self.directory / "spec.yaml").write_text(
-            "schema_version: '1.0'\ndomain: CONS\nkeys: [ID]\n"
+            'yamaa: "1.0"\ntype: spec\ndomain: CONS\nkeys: [ID]\n'
             "input: {P: {path: produced.csv, schema: producer.yaml}}\n"
             "columns: [{name: ID, type: int, label: Identifier, derivation: P.ID}]\n"
             "output: {path: consumer.csv, columns: [ID]}\n"
@@ -438,7 +439,7 @@ class PublicEnvironment(unittest.TestCase):
                 else ""
             )
             return (
-                f"schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\nbase: {base}\ninput: {input}\n"
+                f'yamaa: "1.0"\ntype: spec\ndomain: TEST\nkeys: [ID]\nbase: {base}\ninput: {input}\n'
                 f"columns:\n  - {{name: ID, type: int, label: Identifier, derivation: {base}.ID}}\n"
                 f"  - name: VALUE\n    type: str\n    label: Value\n    derivation: {base}.VALUE{checks}\n"
                 f"output: {{path: {output}, columns: [ID, VALUE]}}\n"
@@ -449,7 +450,7 @@ class PublicEnvironment(unittest.TestCase):
             document("{RAW: ../never-read.csv}", "RAW", "../leaf.csv", True)
         )
         Path("leaf.yaml").write_text(
-            "schema_version: '1.0'\nparent: parents/base.yaml\ndomain: LEAF\n"
+            'yamaa: "1.0"\ntype: spec\nparent: parents/base.yaml\ndomain: LEAF\n'
         )
         Path("left.yaml").write_text(
             document(TRUTH["aliased_leaf_reference"], "P", "left.csv")
@@ -501,17 +502,16 @@ class PublicEnvironment(unittest.TestCase):
         for name in tuple(TRUTH["inherited_directories"]):
             Path(name).mkdir()
         Path("yamaa-project.yaml").write_text("[invalid configuration")
-        Path("shared/environment.yaml").write_text("schema_version: '1.0'\n")
+        # A project without project functions names no host environment (D110).
         Path("shared/project.yaml").write_text(
-            "schema_version: '1.0'\n"
-            "environments: {python: environment.yaml, r: environment.yaml}\n"
-            "adam: {specs: [../entry/spec.yaml]}\n"
+            'yamaa: "1.0"\ntype: project\nadam: {specs: [../entry/spec.yaml]}\n'
         )
         Path("entry/spec.yaml").write_text(
-            "schema_version: '1.0'\nparent: ../shared/base.yaml\ndomain: CHILD\n"
+            'yamaa: "1.0"\ntype: spec\nparent: ../shared/base.yaml\ndomain: CHILD\n'
         )
         Path("shared/base.yaml").write_text(
-            "schema_version: '1.0'\ndomain: BASE\nkeys: [ID]\ninput: {SRC: data.csv}\n"
+            'yamaa: "1.0"\ntype: spec\nmodel: ADaM\n'
+            "domain: BASE\nkeys: [ID]\ninput: {SRC: data.csv}\n"
             "columns: [{name: ID, type: int, derivation: SRC.ID}]\n"
             "output: {path: ../outputs/held.csv, columns: [ID]}\n"
         )
@@ -547,7 +547,7 @@ class PublicEnvironment(unittest.TestCase):
         source = (self.directory / "shared/../shared/./data.csv").as_posix()
         output = (self.directory / "outputs/absolute.csv").as_posix()
         document = (
-            "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\n"
+            'yamaa: "1.0"\ntype: spec\ndomain: TEST\nkeys: [ID]\n'
             "columns: [{name: ID, type: int, derivation: SRC.ID}]\n"
             "input: {SRC: %s}\noutput: {path: %s, columns: [ID]}\n"
         )
@@ -593,15 +593,20 @@ class PublicEnvironment(unittest.TestCase):
         for name in tuple(TRUTH["terminology_directories"]):
             Path(name).mkdir()
         Path("yamaa-project.yaml").write_text("[ignored configuration")
+        # The specification declares its model (SUB-3), whose origin pairs
+        # SUB-15 checks: an SDTM `Assigned` origin names its source.
         Path("entry/spec.yaml").write_text(
-            "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\n"
+            'yamaa: "1.0"\ntype: spec\nmodel: SDTM\ndomain: TEST\nkeys: [ID]\n'
             "input: {SRC: {path: data.csv, types: {ID: str}}}\n"
-            "columns: [{name: ID, type: str, derivation: SRC.ID, "
-            "submission: {codelist: IDENTIFIERS, origin: {type: Assigned}}}]\n"
+            "columns: [{name: ID, type: str, derivation: SRC.ID, submission: "
+            "{codelist: IDENTIFIERS, origins: [{type: Assigned, source: Sponsor}]}}]\n"
             "output: {path: ../outputs/ids.csv, columns: [ID]}\n"
         )
         Path("entry/data.csv").write_text("ID\n01\n")
-        terminology = "codelists: [{id: IDENTIFIERS, name: Identifiers, items: [{value: '01'}]}]\n"
+        terminology = (
+            'yamaa: "1.0"\ntype: codelists\n'
+            "codelists: [{id: IDENTIFIERS, name: Identifiers, items: [{value: '01'}]}]\n"
+        )
         Path("terminology/ids.yaml").write_text(terminology)
         # An unrelated same-name document cannot change which codelist is used.
         Path("entry/ids.yaml").write_text("[unrelated document")
@@ -612,7 +617,7 @@ class PublicEnvironment(unittest.TestCase):
         ):
             with self.subTest(written=written):
                 Path("project/project.yaml").write_text(
-                    "schema_version: '1.0'\ncodelists: ["
+                    'yamaa: "1.0"\ntype: project\ncodelists: ['
                     + json.dumps(written)
                     + "]\nsdtm: {specs: [../entry/spec.yaml]}\n"
                 )
@@ -631,7 +636,7 @@ class PublicEnvironment(unittest.TestCase):
                 self.assertEqual(Path("outputs/ids.csv").read_bytes(), b"ID\n01\n")
                 Path("outputs/ids.csv").unlink()
         Path("project/project.yaml").write_text(
-            "schema_version: '1.0'\ncodelists: [ids.yaml]\n"
+            'yamaa: "1.0"\ntype: project\ncodelists: [ids.yaml]\n'
             "sdtm: {specs: [../entry/spec.yaml]}\n"
         )
         # Even a valid codelist at the process/entry location must not rescue it.
@@ -640,9 +645,11 @@ class PublicEnvironment(unittest.TestCase):
         with no_activation():
             checked = project.check().issues.to_pylist()
             runs = project.run()
+        # A listed file that cannot be read fails as any file a run reads, at
+        # its listing (D107).
         self.assertEqual(
             [(row["condition"], row["spec_paths"]) for row in checked],
-            [("project_environment_invalid", ["codelists[0]"])],
+            [("resource_path_missing", ["codelists[0]"])],
         )
         self.assertEqual(json.loads(checked[0]["context"])["path"], "ids.yaml")
         self.assertEqual(runs.names, [])
@@ -656,13 +663,14 @@ class PublicEnvironment(unittest.TestCase):
         # ordinary verification failure, not an exhausted step budget.
         os.chdir(self.directory)
         truth = TRUTH["catastrophic_pattern"]
-        Path("spec.yaml").write_text(truth["specification"])
+        # A section lists only specifications of its model (SUB-3).
+        Path("spec.yaml").write_text(
+            truth["specification"].replace("type: spec\n", "type: spec\nmodel: ADaM\n")
+        )
         Path("input.csv").write_text(truth["source"])
-        Path("environment.yaml").write_text("schema_version: '1.0'\n")
+        # A project without project functions names no host environment (D110).
         Path("project.yaml").write_text(
-            "schema_version: '1.0'\n"
-            "environments: {python: environment.yaml, r: environment.yaml}\n"
-            "adam: {specs: [spec.yaml]}\n"
+            'yamaa: "1.0"\ntype: project\nadam: {specs: [spec.yaml]}\n'
         )
         for spec in (yamaa.spec("spec.yaml"), self.project().spec("TEST")):
             failed = spec.run()
@@ -684,14 +692,14 @@ class PublicEnvironment(unittest.TestCase):
         )
         precision = "" if decimals is None else ", decimals: " + decimals
         (self.directory / "spec.yaml").write_text(
-            "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\n"
+            'yamaa: "1.0"\ntype: spec\ndomain: TEST\nkeys: [ID]\n'
             "input: {SRC: {path: input.csv, types: {ID: int, VALUE: float, INT: int}}}\n"
             f"output: {{path: {output}, columns: [ID, VALUE, DOUBLE, EMPTY, INT]{precision}}}\n"
             "columns:\n"
             "  - {name: ID, type: int, derivation: SRC.ID}\n"
             "  - {name: VALUE, type: float, derivation: SRC.VALUE}\n"
-            "  - {name: DOUBLE, type: float, derivation: {compute: {expr: 'VALUE + VALUE'}}}\n"
-            "  - {name: EMPTY, type: str, derivation: {literal: ''}}\n"
+            "  - {name: DOUBLE, type: float, derivation: 'VALUE + VALUE'}\n"
+            "  - {name: EMPTY, type: str, derivation: \"''\"}\n"
             "  - {name: INT, type: int, derivation: SRC.INT}\n"
             "verifications: [{assert: {when: 'ID = 5', require: 'DOUBLE = 2.468'}}]\n"
         )
@@ -1319,7 +1327,9 @@ class PublicEnvironment(unittest.TestCase):
 
     def test_aggregate_callback_keeps_original_current_types_and_selected_record(self):
         case = self.study("negative-function-contract")
-        spec = """schema_version: '1.0'
+        spec = """yamaa: "1.0"
+type: spec
+model: ADaM
 domain: TEST
 input:
   SRC: {path: input.csv, types: {ID: int, N: float}}
@@ -1336,9 +1346,9 @@ columns:
     derivation:
       aggregate:
         key: {ID: ID}
-        derive:
-          - {name: BASE, type: float, derivation: B.N}
-          - {name: V, type: float, derivation: {function: {name: project_value, args: {x: CAP.N}}}}
+        derivations:
+          BASE: {type: float, derivation: B.N}
+          V: {type: float, derivation: {function: {name: project_value, args: {x: CAP.N}}}}
         expr: SUM(V)
 output: {path: output.csv, columns: [ID, N, VALUE]}
 """
@@ -1390,11 +1400,15 @@ output: {path: output.csv, columns: [ID, N, VALUE]}
             ),
             ("B", "SRC", [(2, 20.0), (1, 10.0)], b"ID,VALUE\n2,20\n1,10\n"),
         ):
-            spec = f"""schema_version: '1.0'
+            # The driver's partner is read through an implicit join, on the
+            # key each input declares (D23, D111).
+            spec = f"""yamaa: "1.0"
+type: spec
+model: ADaM
 domain: TEST
 input:
-  SRC: {{path: a.csv, types: {{ID: int, N: float}}}}
-  B: {{path: b.csv, types: {{ID: int, N: float}}}}
+  SRC: {{path: a.csv, types: {{ID: int, N: float}}, key: [ID]}}
+  B: {{path: b.csv, types: {{ID: int, N: float}}, key: [ID]}}
 base: SRC
 keys: [ID]
 columns:
@@ -1426,7 +1440,9 @@ output: {{path: output.csv, columns: [ID, VALUE]}}
         case = self.study("negative-function-contract")
         (case / "a.csv").write_text("ID,N\n1,10\n1,30\n2,40\n")
         (case / "b.csv").write_text("ID,N\n1,one\n2,two\n")
-        (case / "spec.yaml").write_text("""schema_version: '1.0'
+        (case / "spec.yaml").write_text("""yamaa: "1.0"
+type: spec
+model: ADaM
 domain: TEST
 input:
   SRC: {path: a.csv, types: {ID: int, N: float}}
