@@ -93,6 +93,19 @@ class Blocks(unittest.TestCase):
                     ),
                 ),
                 (
+                    "an indented root does not parse",
+                    page(
+                        '  yamaa: "1.0"\n  type: spec\n  columns:\n    - name: A\n     x: 1\n'
+                    ),
+                    (
+                        [
+                            f"{PAGE}:8: the block does not parse as YAML: expected "
+                            "<block end>, but found '<block mapping start>'"
+                        ],
+                        0,
+                    ),
+                ),
+                (
                     "no type",
                     page('yamaa: "1.0"\ncolumns: []\n'),
                     (
@@ -128,6 +141,11 @@ class Blocks(unittest.TestCase):
                     ([], 0),
                 ),
                 ("excerpt", page("columns:\n  - label: Value\n"), ([], 0)),
+                (
+                    "a malformed excerpt with a nested header",
+                    page('outer:\n  yamaa: "1.0"\n  values: [\n'),
+                    ([], 0),
+                ),
                 ("elision", page("...\n"), ([], 0)),
             )
         )
@@ -163,6 +181,13 @@ class Blocks(unittest.TestCase):
                     ([], 0),
                 ),
                 ("another language", f"# Page\n\n```python\n{INVALID}```\n", ([], 0)),
+                (
+                    "an indented fence is YAML content",
+                    page(
+                        'yamaa: "1.0"\ntype: spec\ncolumns:\n- name: |\n    ```\ndomian: ADSL\n'
+                    ),
+                    ([f"{PAGE}:4: {UNEXPECTED}"], 1),
+                ),
             )
         )
 

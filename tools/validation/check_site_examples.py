@@ -58,6 +58,25 @@ YAML_LANGUAGES = ("yaml", "yml")
 HEADER_LINE = re.compile(r"^yamaa *:", re.MULTILINE)
 
 
+def declares_header(text):
+    """An unparsed block's header at its root mapping's indentation.
+
+    Comments and document markers can precede an indented root. A nested
+    `yamaa` key in an excerpt is not that root's header.
+    """
+    lines = [
+        line
+        for line in text.splitlines()
+        if line.strip()
+        and not line.lstrip().startswith("#")
+        and line.strip() not in ("---", "...")
+    ]
+    if not lines:
+        return False
+    indent = len(lines[0]) - len(lines[0].lstrip(" "))
+    return any(HEADER_LINE.match(line[indent:]) for line in lines)
+
+
 def fenced_blocks(text):
     """Each fenced YAML block of Markdown text: the line its text starts on,
     counted from 1, and its text without the fence's indentation."""
@@ -73,8 +92,14 @@ def fenced_blocks(text):
         while index < len(lines):
             line = lines[index]
             index += 1
-            closing = line.strip()
-            if closing.startswith(fence) and closing == fence[0] * len(closing):
+            closing = FENCE.fullmatch(line)
+            if (
+                closing is not None
+                and len(closing["indent"]) <= indent + 3
+                and closing["fence"][0] == fence[0]
+                and len(closing["fence"]) >= len(fence)
+                and not closing["info"].strip()
+            ):
                 break
             body.append(line[min(indent, len(line) - len(line.lstrip(" "))) :])
         words = opening["info"].split()
@@ -144,7 +169,7 @@ def check(root, refuse_schema_version=REFUSE_SCHEMA_VERSION):
         try:
             document = yaml.load(text, Loader=UniqueKeyLoader)
         except yaml.YAMLError as error:
-            if not fragment and HEADER_LINE.search(text):
+            if not fragment and declares_header(text):
                 mark = getattr(error, "problem_mark", None)
                 problem = getattr(error, "problem", None) or str(error)
                 errors.append(
