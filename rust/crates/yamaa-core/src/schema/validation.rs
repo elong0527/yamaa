@@ -195,6 +195,18 @@ pub(super) fn diagnostic(
     }
 }
 
+/// The hint for a list of parents: a layer names at most one, so its layers
+/// compose as a chain (LAYER-2). An undeclared `parents` key carries it, and
+/// so does a list written at a 1.x specification's `parent`.
+pub(super) fn one_parent_hint() -> (&'static str, SchemaContext) {
+    (
+        "hint",
+        SchemaContext::Text(
+            "write at most one parent per file; replace parents: [organization.yaml, compound.yaml] with parent: compound.yaml in the entry and parent: organization.yaml in compound.yaml; organization.yaml has no parent".into(),
+        ),
+    )
+}
+
 /// Shared context for an undeclared field, including a retired parent list.
 pub(super) fn unknown_field_context(
     field: &str,
@@ -205,12 +217,7 @@ pub(super) fn unknown_field_context(
         ("class", SchemaContext::Text(class.into())),
     ];
     if class == "root_class" && field == "parents" {
-        context.push((
-            "hint",
-            SchemaContext::Text(
-                "write at most one parent per file; replace parents: [organization.yaml, compound.yaml] with parent: compound.yaml in the entry and parent: organization.yaml in compound.yaml; organization.yaml has no parent".into(),
-            ),
-        ));
+        context.push(one_parent_hint());
     }
     context
 }
