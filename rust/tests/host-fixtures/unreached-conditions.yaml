@@ -51,7 +51,6 @@ not_covered:
     - core_mandatory_conflict
     - declared_length_conflict
     - duplicate_dataset_entry
-    - function_implementation_missing
     - method_missing
     - origin_contradicts_derivation
     - origin_description_missing
@@ -64,7 +63,6 @@ not_covered:
     - reference_data_repeating_conflict
     - refuted_value_origin
     - reserved_metadata_key
-    - runtime_artifact_mismatch
     - schema_version_mismatch
     - source_system_incomplete
     - submission_data_type_not_admitted
