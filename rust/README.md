@@ -17,9 +17,9 @@ schema-owner controls are described in the [contributor guide](../CONTRIBUTING.m
 [Installed package checks](qualification/README.md) compare actual Python and R
 results with authored expected data. The workflow recipes in
 [.github/workflows/](../.github/workflows/) define the platform matrix and
-packaging checks. Python and R usage lives in the
-[R and Python API](../docs/articles/api.md) page, and the installation commands
-in [python/README.md](../python/README.md) and
+packaging checks. Python, R and command-line usage lives in the
+[R, Python and command-line API](../docs/articles/api.md) page, and the
+installation commands in [python/README.md](../python/README.md) and
 [R/yamaa/README.md](../R/yamaa/README.md).
 
 Expected benchmark data is authored truth. Preserve its bytes when changing

@@ -1,4 +1,4 @@
-# R and Python API
+# R, Python and command-line API
 
 yamaa has the same small API in R and Python. Use it to create, verify and save
 SDTM and ADaM datasets and define.xml files. Both packages run the same Rust
@@ -6,7 +6,9 @@ engine, so the same files give the same results, printed in the same words,
 provided that host-specific project functions are equivalent. Each language
 calls its own implementation, and the function file's tests check both on the
 same cases
-([Project configuration](#project-configuration)).
+([Project configuration](#project-configuration)). The
+[command line](#command-line) runs the same engine from a shell, except for
+project functions.
 
 ## Quick reference
 
@@ -914,8 +916,8 @@ canonical JSON in either format, and `read-odm` prints the path it wrote.
 then a summary line such as `3 lint findings in 2 of 5 files`, to which
 `--fix` adds `; fixed 1 file`. `selftest` prints the report that R and Python
 print. A call that cannot complete prints the message of the error that R and
-Python raise, which carries the first issue, then each other issue's line and
-the paths written before it.
+Python raise ([Errors](#errors)), which carries the first issue, then each
+other issue's line and the paths written before it.
 
 With `--format json`, a command prints one canonical JSON document instead:
 one line, with its members in key order ([JSON documents](#json-documents)).
@@ -938,9 +940,13 @@ A file problem the engine reports as an issue, such as a missing input,
 exits 1, since R and Python return the same issue.
 
 Press Ctrl+C, and `check`, `run` and `submission` stop at the engine's next
-checkpoint, as a call in R or Python does: the command prints nothing, and a
-save writes every file it planned or none. The other commands stop at once.
-Either way, an interrupted command ends with none of the statuses above.
+checkpoint, as a call in R or Python does ([Interrupts](#interrupts)): the
+command prints nothing, and a save writes every file it planned or none. The
+other commands stop at once, so an interrupted `lint --fix`, which replaces
+each file whole, can leave some files fixed and others not. Either way, the
+process then ends as an interrupted program does, with none of the statuses
+above: on Linux and macOS by the interrupt signal, which a shell reports as
+status 130, and on Windows with the exit code `STATUS_CONTROL_C_EXIT`.
 
 ### JSON documents
 

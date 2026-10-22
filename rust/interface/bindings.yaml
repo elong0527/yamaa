@@ -699,7 +699,15 @@ cli:
       facade cannot take, a PATH whose declared type the command does not
       take, or a failed write to standard output; a file problem the engine
       reports as an issue exits 1
-  interrupt: "Ctrl+C ends the process by the signal and publishes nothing (D46); POSIX shells report status 130"
+  # D203: an interrupt is not one of exit_status's statuses (D98).
+  interrupt: >-
+    Ctrl+C stops check, run and submission at the engine's next cancellation
+    checkpoint, so they print nothing and a save writes every file it planned
+    or none (D46, D74), and it stops the other commands at once, so an
+    interrupted lint --fix, which replaces each file atomically, can leave
+    some files fixed and others not; the process then ends the native way: on
+    POSIX it re-raises SIGINT, which shells report as status 130, falling back
+    to exit(130), and on Windows it exits with STATUS_CONTROL_C_EXIT (D203)
   # Each command's JSON document has its json_keys, which canonical JSON
   # prints sorted. A refusal prints the same keys, or its refusal_keys where
   # they differ. The paths a command wrote, printed one per line and in

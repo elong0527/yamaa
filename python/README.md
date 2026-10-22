@@ -31,8 +31,9 @@ its rows. `to_polars()`, `to_pandas()` and `to_arrow()` convert it when
 Polars, pandas or PyArrow is installed. `save()` returns the absolute paths of
 the files it wrote, in the order it wrote them.
 
-The [R and Python API](https://elong0527.github.io/yamaa/articles/api/) page
-describes every call, and the
+The
+[R, Python and command-line API](https://elong0527.github.io/yamaa/articles/api/)
+page describes every call, and the
 [introduction](https://elong0527.github.io/yamaa/articles/intro/) explains the
 specification language.
 
