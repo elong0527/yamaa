@@ -25,11 +25,18 @@ ISOLATION_ENV = @ISOLATION_ENV@
 ISOLATION_CONFIG = @ISOLATION_CONFIG@
 CARGO_HOME_DIR = $(CARGO_TARGET_DIR)/cargo-home
 RUST_LIB = $(CARGO_TARGET_DIR)/$(RUST_TARGET)/release/libyamaa_r.a
+OBJCOPY ?= $(BINPREF)objcopy
 PKG_LIBS = "$(RUST_LIB)" -lws2_32 -ladvapi32 -luserenv -lbcrypt -lntdll
 
 all: $(SHLIB) rust_clean
 
-$(SHLIB): $(RUST_LIB)
+$(SHLIB): $(RUST_LIB) rust_exports
+
+# Rtools42's linker cannot read Rust's COFF auto-export exclusions. The DLL's
+# exports belong to yamaa-win.def, so remove the object directives before R
+# links, retaining the archive's code, data, symbols and debug information.
+rust_exports: $(RUST_LIB)
+	$(OBJCOPY) --remove-section=.drectve "$(RUST_LIB)"
 
 # Match upstream extendr's GNU/Rtools library discovery: the temporary
 # gcc_eh placeholder belongs to the build tree and is removed after linking.
@@ -41,7 +48,7 @@ $(RUST_LIB): FORCE
 	cp rust/vendor-config.toml "$(CARGO_HOME_DIR)/config.toml"
 	MAKEFLAGS= MFLAGS= CARGO_MAKEFLAGS= RUSTUP_AUTO_INSTALL=0 $(ISOLATION_ENV) CARGO_HOME="$(CARGO_HOME_DIR)" LIBRARY_PATH="$(LIBRARY_PATH);$(CARGO_TARGET_DIR)/libgcc_mock" CC_x86_64_pc_windows_gnu="$(CC)" AR_x86_64_pc_windows_gnu="$(AR)" CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER="$(CC)" RUSTFLAGS="$(RUSTFLAGS) --print=native-static-libs" CARGO_TARGET_DIR="$(CARGO_TARGET_DIR)" RUSTC="$(RUSTC)" "$(CARGO)" build --locked --offline -j 2 --release --target $(RUST_TARGET) --manifest-path rust/Cargo.toml -p yamaa-r $(ISOLATION_CONFIG)
 
-.PHONY: clean rust_clean FORCE
+.PHONY: clean rust_clean rust_exports FORCE
 FORCE:
 
 rust_clean: $(SHLIB)
