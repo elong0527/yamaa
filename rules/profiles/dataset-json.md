@@ -73,7 +73,7 @@ artifact has no rows and that does not declare `has_no_data` fails, reporting
 the dataset and the artifact.
 
 Fails: `transport_dataset_empty`.
-Evidence: `rust/crates/yamaa-adapters/tests/submission_transport.rs::datasets_without_data_have_no_file_and_empty_ones_must_declare_it`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionTransportEmpty`.
+Evidence: `rust/crates/yamaa-adapters/tests/submission_transport.rs::datasets_without_data_have_no_file_and_empty_ones_must_declare_it`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionTransportEmpty`, `negative-transport-empty-dataset`.
 
 The document still describes a dataset with no data, with `def:HasNoData`; it
 names no file for it ([DEFINE-15](define-xml.md#define-15)). The failure

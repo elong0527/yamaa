@@ -1,0 +1,9 @@
+phase: ingest
+condition: source_field_type_unsupported
+spec_paths:
+  - input.RND.path
+rule: PARQUET-7
+context:
+  dataset: RND
+  path: input/rand.parquet
+  field: RANDFL

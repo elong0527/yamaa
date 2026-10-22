@@ -96,13 +96,19 @@ unknown_section <- function(error, section, sections) {
     identical(issue$message, paste("the project declares no section", section)) &&
     identical(issue$context, paste0('{"section":"', section, '","sections":', sections, "}"))
 }
-# The one issue of a save with nothing to write, under `rule`.
-nothing_to_save <- function(error, rule) {
+# The one issue of a save with nothing to write: the shared truth under `key`,
+# which Python compares too. It has no location and no geometry.
+nothing_to_save <- function(error, key) {
   issue <- error$issues
-  nrow(issue) == 1L && identical(issue$phase, "output") &&
-    identical(issue$condition, "nothing_to_save") && identical(issue$rule, rule) &&
-    identical(issue$spec_paths, list(character())) &&
-    identical(issue$message, "there is nothing to save") && identical(issue$context, "{}")
+  row <- host_truth[["nothing_to_save_issues"]][[key]]
+  nrow(issue) == 1L && is.null(row$file) && is.null(row$line) && is.null(row$column) &&
+    is.null(row$source_span) && is.null(row$operand_route) &&
+    identical(list(issue$severity, issue$phase, issue$condition, issue$rule, issue$spec_paths,
+      issue$file, issue$line, issue$column, issue$message, issue$context, issue$source_span,
+      issue$operand_route),
+      list(row$severity, row$phase, row$condition, row$rule,
+        list(as.character(unlist(row$spec_paths))), NA_character_, NA_real_, NA_real_,
+        row$message, row$context, list(NULL), list(NULL)))
 }
 # Argument mistakes are ordinary errors, never yamaa_error.
 argument_failure <- function(code) {
@@ -494,11 +500,11 @@ qualify_project_run_members <- function() {
   cat("sdtm:\n  specs: []\n", file = listing, append = TRUE)
   error <- refusal(project$run("sdtm")$save())
   stopifnot(identical(conditionMessage(error), error_text("empty_project_run_save", listing)),
-    nothing_to_save(error, "PROJECT-12"))
+    nothing_to_save(error, "empty_project_run_save"))
   submission <- project$submission()
   error <- refusal(submission$save())
   stopifnot(identical(conditionMessage(error), error_text("empty_submission_save", listing)),
-    nothing_to_save(error, "PROJECT-13"),
+    nothing_to_save(error, "empty_submission_save"),
     # Without a creation time the submission reads the clock once and reports
     # the time it gave every section (D129).
     grepl("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}$", submission$created),
@@ -734,6 +740,40 @@ qualify_issue_parity <- function() {
   cat("issue rows equal the shared parity truth field for field\n")
 }
 qualify_issue_parity()
+
+# A value-level entry that selects no row is a warning in the run's report,
+# never an issue (SUB-13); Python compares the same rows. COUNT and TOTAL are
+# doubles in R, and a missing cell is NA.
+qualify_value_level_report <- function() {
+  root <- tempfile("yamaa-value-level-"); dir.create(root)
+  on.exit(unlink(root, recursive = TRUE))
+  case <- host_truth[["value_level_report"]]
+  spec <- file.path(root, "spec.yaml")
+  writeBin(charToRaw(enc2utf8(case$specification_yaml)), spec)
+  writeBin(charToRaw(enc2utf8(case$input_csv)), file.path(root, "input.csv"))
+  run <- yamaa_spec(spec)$run()
+  stopifnot(nrow(check_issues(run$issues)) == 0L)
+  report <- run$report
+  checks <- report[!is.na(report$NAME) & report$NAME == "value_level", , drop = FALSE]
+  columns <- fixture_strings(host_truth[["report_columns"]])
+  cells <- function(name) lapply(case$checks, `[[`, name)
+  expected <- lapply(columns, function(name) {
+    if (name %in% c("COUNT", "TOTAL")) {
+      vapply(cells(name), function(value) if (is.null(value)) NA_real_ else as.double(value), 0)
+    } else {
+      vapply(cells(name), function(value) if (is.null(value)) NA_character_ else value, "")
+    }
+  })
+  actual <- lapply(columns, function(name) checks[[name]])
+  names(expected) <- names(actual) <- columns
+  if (!identical(actual, expected)) {
+    str(actual); str(expected)
+    stop("value-level report rows differ from the shared truth")
+  }
+  stopifnot(identical(checks$CONDITION[checks$OUTCOME == "violated"], case$condition))
+  cat("a value-level entry that selects no row warns in the run's report\n")
+}
+qualify_value_level_report()
 
 qualify_resolve <- function() {
   root <- tempfile("yamaa-resolve-"); dir.create(root)

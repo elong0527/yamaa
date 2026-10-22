@@ -1,0 +1,28 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  # The randomization export stores RANDFL as a Boolean true or false.
+  RND: input/rand.parquet
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, RANDFL]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: RND.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: RND.USUBJID
+
+  - name: RANDFL
+    type: str
+    label: Randomized Population Flag
+    derivation: RND.RANDFL

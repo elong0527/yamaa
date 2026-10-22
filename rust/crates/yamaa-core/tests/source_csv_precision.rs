@@ -1851,7 +1851,10 @@ mod source {
                     "PARQUET-9",
                     vec![
                         ("field", text("DT")),
-                        ("row", V::Number(("2").parse().expect("canonical integer"))),
+                        (
+                            "record",
+                            V::Number(("2").parse().expect("canonical integer")),
+                        ),
                         ("value", V::from(i64::MAX)),
                     ],
                 ),
@@ -1952,7 +1955,7 @@ mod source {
                 path: "data.parquet",
             }
             .diagnostic();
-            assert_eq!(actual.context["row"], V::from(usize::MAX));
+            assert_eq!(actual.context["record"], V::from(usize::MAX));
             assert_eq!(actual.context["value"], V::from(i64::MIN));
             assert!(csv_source::Error::Limit {
                 resource: "source_bytes",
