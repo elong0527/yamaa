@@ -152,7 +152,7 @@ cli.commands.check.json_keys.issues
 cli.commands.run: yamaa run PATH [--spec NAME | --section SECTION]
 cli.commands.run.args[0]: PATH: path
 cli.commands.run.flags.--spec: NAME
-cli.commands.run.flags.--section: SECTION
+cli.commands.run.flags.--section: SECTION; values section
 cli.commands.run.json_keys.command
 cli.commands.run.json_keys.path
 cli.commands.run.json_keys.spec
@@ -163,7 +163,7 @@ cli.commands.run.json_keys.issues
 cli.commands.run.json_keys.paths
 cli.commands.submission: yamaa submission PATH [--section SECTION] [--created TIME]
 cli.commands.submission.args[0]: PATH: path
-cli.commands.submission.flags.--section: SECTION
+cli.commands.submission.flags.--section: SECTION; values section
 cli.commands.submission.flags.--created: TIME
 cli.commands.submission.json_keys.command
 cli.commands.submission.json_keys.path

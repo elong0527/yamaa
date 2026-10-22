@@ -10,10 +10,10 @@
 #   public                    the user-facing surface of each host
 #   cli                       the command line
 #   python, r                 native registrations (private)
-#   operations, host_only     each operation's counterpart in every host
+#   operations, host_only     each operation's Python and R exports
 #
-# This file declares today's surface only. The 1.0 surface drafted in
-# bindings-1.0.yaml moves here with the pull request that implements it.
+# It declares the whole host surface that the hosts and the command line
+# implement; the stability contract freezes its manifest from 1.0.0.
 format: yamaa.host-interface
 format_version: 2
 boundary: rust_generated_host_glue
@@ -730,6 +730,7 @@ cli:
           host: Project.spec(name)
         - name: --section
           value: SECTION
+          values: section
           valid_when: "PATH declares type: project, without --spec"
           host: Project.run(section)
       operations: [spec_run, run_save, project_spec, project_run, project_run_save]
@@ -743,7 +744,7 @@ cli:
       args:
         - {name: PATH, type: path, valid_when: "PATH declares type: project"}
       flags:
-        - {name: --section, value: SECTION, host: Project.submission(section)}
+        - {name: --section, value: SECTION, values: section, host: Project.submission(section)}
         - name: --created
           value: TIME
           meaning: the ISO 8601 creation time the documents carry

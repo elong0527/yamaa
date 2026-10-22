@@ -68,10 +68,9 @@ only argument-default syntax is `type = literal`, with `None` for optional
 values, `false`/`true` for booleans and nonnegative integers; generators parse
 these literals without eval.
 
-The definition declares today's surface only. The 1.0 surface is drafted in
-[bindings-1.0.yaml](bindings-1.0.yaml), which nothing reads; each pull request
-that implements part of it moves that part here, and the last deletes the
-draft.
+The definition declares the whole host surface that the hosts and the command
+line implement, and nothing they do not; the stability contract freezes its
+manifest from 1.0.0 (`docs/release.md`).
 
 ### Vocabularies, tables and records
 
@@ -190,8 +189,9 @@ prints, or text naming a document with no fixed keys, such as the JSON Schema
 that `schema` prints. It may have `args`, `flags`, `effect`, `text` and
 `refusal_keys`, the keys of the document a refusal prints when they differ
 from `json_keys`. A flag's name starts with `--`; a flag or argument may name
-the vocabulary its values come from, in either `values`. An operation's `cli`
-list, and `host_only.cli`, may name only declared commands and global flags.
+the vocabulary its values come from, in either `values`. A command's
+`operations` are the only record of what the command line reaches:
+`operations` and `host_only` pair Python and R exports alone.
 `tools/tests/test_bindings_cli.py` reads the binary's parser table and usage
 text, and keeps the commands, their arguments and flags, the global flags, the
 output formats and the exit statuses equal to them.
