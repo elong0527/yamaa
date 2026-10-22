@@ -5,7 +5,6 @@ parity case or an entry in the unreached list, and every entry is needed
 import contextlib
 import io
 import json
-import sys
 import tempfile
 import textwrap
 import unittest
@@ -13,6 +12,7 @@ from pathlib import Path
 from unittest import mock
 
 from tools.paths import ROOT
+from tools.tests.support import write
 from tools.validation import check_diagnostics as guard
 
 CONDITIONS = """\
@@ -80,10 +80,7 @@ class ParityGateTests(unittest.TestCase):
         self.write(LIST, UNREACHED)
 
     def write(self, relative, text):
-        path = self.root / relative
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(textwrap.dedent(text), encoding="utf-8")
-        return path
+        return write(self.root, relative, textwrap.dedent(text))
 
     def errors(self):
         return guard.parity_errors(self.root)
@@ -219,16 +216,15 @@ class ParityGateTests(unittest.TestCase):
         self.assertEqual(self.errors(), [])
 
     def test_the_command_line_runs_the_gate(self):
-        arguments = ["check_diagnostics", "--root", str(self.root)]
+        arguments = ["--root", str(self.root)]
         output = io.StringIO()
         with (
             mock.patch.object(guard, "violations", return_value=[]),
-            mock.patch.object(sys, "argv", arguments),
             contextlib.redirect_stdout(output),
         ):
-            self.assertEqual(guard.main(), 0)
+            self.assertEqual(guard.main(arguments), 0)
             self.register("newly_registered")
-            self.assertEqual(guard.main(), 1)
+            self.assertEqual(guard.main(arguments), 1)
         lines = output.getvalue().splitlines()
         self.assertTrue(lines[0].startswith("PASS: "), lines)
         self.assertEqual(lines[1:], [NO_CASE.format("newly_registered")])

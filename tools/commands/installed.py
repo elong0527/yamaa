@@ -80,7 +80,7 @@ def stage(runtime, destination):
         stage_r_package.stage_test_inputs(destination)
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
     staging = subparsers.add_parser(
@@ -101,7 +101,7 @@ def main():
     running.add_argument("--artifact-reference", required=True)
     running.add_argument("--host-artifact-reference")
     running.add_argument("--evidence", required=True)
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     staged = outside_checkout(args.staged_root)
     if args.command == "stage":
         stage(args.runtime, staged)

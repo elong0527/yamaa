@@ -1,11 +1,11 @@
 """The shared rules model reads cards and citations once."""
 
-import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 
 from tools.rules import model
+from tools.tests import support
 from tools.tests.rules_fixture import write, write_repository
 
 
@@ -97,7 +97,8 @@ class MarkdownTests(unittest.TestCase):
             "a----b",
             "chosen",
         ):
-            self.assertIn(anchor, found)
+            with self.subTest(anchor=anchor):
+                self.assertIn(anchor, found)
         self.assertNotIn("fenced", found)
 
     def test_words_count_link_text_once(self):
@@ -208,24 +209,9 @@ class RuleFileTests(unittest.TestCase):
         self.assertEqual(list(model.parse({}).citations("LAYER-1")), [])
 
     def test_load_ref_reads_a_revision(self):
-        def git(*arguments):
-            subprocess.run(
-                ["git", "-C", str(self.root), *arguments],
-                check=True,
-                capture_output=True,
-            )
-
-        git("init", "-q")
-        git("add", "-A")
-        git(
-            "-c",
-            "user.name=t",
-            "-c",
-            "user.email=t@example.org",
-            "commit",
-            "-qm",
-            "base",
-        )
+        support.init(self.root)
+        support.git(self.root, "add", "-A")
+        support.git(self.root, "commit", "-qm", "base")
         (self.root / "rules/inheritance.md").unlink()
         rules = model.load_ref(self.root, "HEAD")
         self.assertIn("LAYER-1", rules.cards)
@@ -261,7 +247,8 @@ class RuleFileTests(unittest.TestCase):
             "yamaa.egg-info/x.md",
             "rules/reference/rule-index.md",
         ):
-            self.assertNotIn(skipped, found)
+            with self.subTest(skipped=skipped):
+                self.assertNotIn(skipped, found)
 
 
 if __name__ == "__main__":

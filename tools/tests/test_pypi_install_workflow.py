@@ -10,10 +10,8 @@ installed from PyPI.
 
 import unittest
 
-import yaml
 from tools.ci import native
-from tools.paths import ROOT
-from tools.validation._repository_yaml import UniqueKeyLoader
+from tools.tests import support
 
 
 def version_key(version):
@@ -23,10 +21,7 @@ def version_key(version):
 class PypiInstallWorkflow(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.jobs = yaml.load(
-            (ROOT / ".github/workflows/pypi-install.yml").read_text(encoding="utf-8"),
-            Loader=UniqueKeyLoader,
-        )["jobs"]
+        cls.jobs = support.workflow("pypi-install.yml")["jobs"]
 
     def test_each_wheel_platform_installs_with_the_oldest_and_newest_python(self):
         matrix = self.jobs["wheel"]["strategy"]["matrix"]

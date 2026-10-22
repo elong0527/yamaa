@@ -10,6 +10,7 @@ from unittest import mock
 
 from tools.packaging import generate_component_inventory as inventory
 from tools.packaging import generate_third_party_notices as notices
+from tools.tests import support
 
 PARSER_COMMIT = "1583482c4f08f3c14caea0e2f1a8526950fb0eff"
 READSTAT_COMMIT = "104ba03a8da116eb8c094abc18bc2530b733eda9"
@@ -503,7 +504,6 @@ class CheckTest(Checkout):
         )
 
     def run_main(self, *arguments):
-        output, errors = io.StringIO(), io.StringIO()
         with (
             mock.patch.object(inventory, "generate", return_value=self.generated),
             mock.patch.object(inventory, "committed", return_value=self.paths),
@@ -515,15 +515,8 @@ class CheckTest(Checkout):
                 "locked_metadata",
                 return_value=self.checkout.metadata(),
             ),
-            mock.patch("sys.argv", ["generate_component_inventory", *arguments]),
-            contextlib.redirect_stdout(output),
-            contextlib.redirect_stderr(errors),
         ):
-            try:
-                inventory.main()
-            except SystemExit as stopped:
-                return stopped.code, output.getvalue(), errors.getvalue()
-        return 0, output.getvalue(), errors.getvalue()
+            return support.run_main(inventory.main, *arguments)
 
     def test_main_checks_writes_or_prints_the_inventories(self):
         code, output, _ = self.run_main()
@@ -564,10 +557,9 @@ class CheckTest(Checkout):
                 "locked_metadata",
                 return_value=self.checkout.metadata(),
             ),
-            mock.patch("sys.argv", ["generate_component_inventory", "--host", "r"]),
             contextlib.redirect_stdout(printed),
         ):
-            inventory.main()
+            inventory.main(["--host", "r"])
         printed.flush()
         self.assertEqual(printed.buffer.getvalue(), self.generated["r"].encode())
         generate.assert_called_once_with(["r"], self.checkout.metadata())
