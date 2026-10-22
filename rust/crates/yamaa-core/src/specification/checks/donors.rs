@@ -133,6 +133,20 @@ impl<'a> DonorReads<'a> {
             && self.named(owner).is_none()
     }
 
+    /// A lookup's derivation names each read binding finds unknown there,
+    /// such as a filter's field of a record nothing declares, as its own
+    /// (LOOKUP-15, `intermediate_derivations::donor_scope_findings`).
+    pub(super) fn name_unknown(&self, findings: &mut [BindFinding]) {
+        if self.reader.is_none() {
+            return;
+        }
+        for finding in findings {
+            if let BindFinding::UnknownReference { path, name } = finding {
+                *finding = self.refusal(C::IntermediateDerivationReference, path, name);
+            }
+        }
+    }
+
     /// A lookup derivation's refusal at `path` of a read of `name`, with
     /// `code`: LOOKUP-15, or LOOKUP-16 for a window's read of a lookup.
     fn refusal(&self, code: C, path: &str, name: &str) -> BindFinding {

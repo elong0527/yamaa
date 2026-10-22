@@ -30,8 +30,11 @@
 //!   but another input through its implicit join (LOOKUP-24, LOOKUP-9);
 //! - a row filter's read of a column its template does not derive, a
 //!   grouped filter's qualified read, and an ungrouped filter's read of a
-//!   window result, directly or through a lookup's match (ROW-6); and an
-//!   ungrouped filter's field qualified by nothing declared (NAME-3).
+//!   window result, directly or through a lookup's match (ROW-6);
+//! - a field qualified by nothing declared, no input, lookup or driver,
+//!   which binds nothing whatever any input stores: unknown at the read
+//!   (NAME-3), to a `case` predicate (FORMULA-9), and as a structured
+//!   source's range value no value of the row (LOOKUP-9).
 //!
 //! Binding keeps what the declarations alone cannot decide: a field an
 //! input no producer links does not store, a lookup whose keys are inferred
@@ -171,6 +174,12 @@ impl<'a> Reads<'a> {
             .any(|source| source.name == owner)
     }
 
+    /// Whether `owner` qualifies nothing declared: no input, lookup or
+    /// driver. A field it qualifies binds nothing, whatever any input stores.
+    fn undeclared(&self, owner: &str) -> bool {
+        !self.input(owner) && self.named(owner).is_none() && !self.drivers.contains(&owner)
+    }
+
     /// Whether a read qualified by `owner` reads the row's own record: the
     /// driver's, when the rows read it directly.
     fn record(&self, owner: &str) -> bool {
@@ -223,14 +232,22 @@ impl<'a> Reads<'a> {
     /// through its implicit join ([`Self::join`]). In the column phase a
     /// lookup or an input that drives the rows of some bindings is a lookup
     /// or a join for the others, each binding in turn, and without a record
-    /// owner the driver is read through its join too. True when the read
-    /// binds, as far as the declarations decide.
+    /// owner the driver is read through its join too. A field qualified by
+    /// nothing declared is unknown (NAME-3, `reference_scope::validate`).
+    /// True when the read binds, as far as the declarations decide.
     pub(super) fn read(&self, path: &str, name: &str, findings: &mut Vec<BindFinding>) -> bool {
         let Some((owner, _)) = name.split_once('.') else {
             return self.bare(path, name, findings);
         };
         if let Some(index) = self.lookup(owner) {
             return self.lookup_read(index, path, name, findings);
+        }
+        if self.undeclared(owner) {
+            findings.push(BindFinding::UnknownReference {
+                path: path.into(),
+                name: name.into(),
+            });
+            return false;
         }
         if !self.record(owner) {
             return !self.input(owner) || self.join(path, owner, findings);
@@ -455,11 +472,13 @@ impl<'a> Reads<'a> {
                         types(findings);
                     }
                 }
-                // A lookup binding does not bind gives no value (LOOKUP-9).
+                // A lookup binding does not bind gives no value, nor does a
+                // record nothing declared names (LOOKUP-9).
                 Some((owner, _))
-                    if self
-                        .named(owner)
-                        .is_some_and(|index| self.refused.contains(&index)) =>
+                    if self.undeclared(owner)
+                        || self
+                            .named(owner)
+                            .is_some_and(|index| self.refused.contains(&index)) =>
                 {
                     findings.push(super::unknown_range_value(
                         spec,
