@@ -40,10 +40,17 @@ class SharedBuild(unittest.TestCase):
         workspace, _, target = cache["with"]["workspaces"].partition("->")
         directory = f"{workspace.strip()}/{target.strip() or 'target'}"
         steps = load(".github/workflows/ci.yml")["jobs"]["r"]["steps"]
-        (test,) = [step for step in steps if step.get("run") == "make test-r"]
+        (test,) = [
+            step
+            for step in steps
+            if "tools.commands.host_checks" in step.get("run", "")
+        ]
         self.assertEqual(
             test.get("env"),
-            {"YAMAA_R_CARGO_TARGET_DIR": "${{ github.workspace }}/" + directory},
+            {
+                "EQUIVALENCE": "${{ steps.paths.outputs.equivalence_r }}",
+                "YAMAA_R_CARGO_TARGET_DIR": "${{ github.workspace }}/" + directory,
+            },
         )
 
     def test_an_installation_that_finds_the_build_complete_passes(self):

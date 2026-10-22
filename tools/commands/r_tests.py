@@ -87,7 +87,7 @@ def check_shared_build(log):
     )
 
 
-def main():
+def test_configure():
     # The package's configure step runs in R, so its tests run here, beside
     # the package check, rather than with the Python tests.
     subprocess.run(
@@ -102,13 +102,22 @@ def main():
         cwd=ROOT,
         check=True,
     )
+
+
+def check_install(archive, environment, work):
+    """Check a fresh archive, including the shared engine-build assertion."""
+    check(archive, work, environment)
+    if os.environ.get("YAMAA_R_CARGO_TARGET_DIR"):
+        (log,) = work.glob("*.Rcheck/00install.out")
+        check_shared_build(log.read_text(encoding="utf-8"))
+
+
+def main():
+    test_configure()
     with tempfile.TemporaryDirectory(prefix="yamaa-r-check-") as directory:
         work = Path(directory)
         archive, environment = install(work)
-        check(archive, work / "check", environment)
-        if os.environ.get("YAMAA_R_CARGO_TARGET_DIR"):
-            (log,) = (work / "check").glob("*.Rcheck/00install.out")
-            check_shared_build(log.read_text(encoding="utf-8"))
+        check_install(archive, environment, work / "check")
 
 
 if __name__ == "__main__":

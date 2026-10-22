@@ -33,7 +33,7 @@ jobs:
           package: 'false'
       # The other jobs build with the pinned toolchain. Embedders build with
       # their own, so the workspace rust-version must keep building. CI's
-      # rust (minimum toolchain) job lints the workspace with it on every
+      # Rust lane lints the workspace with it for Rust/build changes on a
       # pull request; this lane repeats that check on a release branch and
       # adds the embedder workspace and the minimal format builds below.
       - name: Activate the workspace rust-version toolchain
