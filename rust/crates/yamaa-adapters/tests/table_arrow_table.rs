@@ -1,4 +1,5 @@
-//! Table contracts.
+//! Table contracts: Arrow table, CSV artifact, CSV precision, CSV source,
+//! parquet artifact, parquet source, predicate diagnostics and public table.
 mod table {
     mod arrow_table {
         use crate::support::table_schema as logical_schema;

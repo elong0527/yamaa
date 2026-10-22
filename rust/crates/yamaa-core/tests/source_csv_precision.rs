@@ -1,4 +1,6 @@
-//! Source contracts.
+//! Source contracts: CSV precision, CSV source, mapping cut, mapping dictionary
+//! resources, ODM source, resource scheme, source diagnostics, table and typed
+//! CSV.
 mod source {
     mod csv_precision {
         use yamaa_core::{csv_precision::fixed_point, value::FiniteFloat};

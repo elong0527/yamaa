@@ -1,4 +1,4 @@
-//! Project contracts.
+//! Project contracts: function invocation and producer links.
 mod project {
     mod function_invocation {
         use std::collections::BTreeMap;

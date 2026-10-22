@@ -1,5 +1,11 @@
 #![cfg(feature = "yaml")]
-//! Execution contracts.
+//! Execution contracts: declarative SELF, declarative source selection,
+//! diagnostic sites, empty child condition, inherited aggregate bindings,
+//! inherited identifier collision, inherited intermediate verification,
+//! inherited lookup keys, integer literal overflow, intermediate dependencies,
+//! intermediate row drivers, key expressions, namespace admission, nested
+//! windows, original named windows, original verification, predicate
+//! suggestions, missing order and baseline operands.
 
 mod execution {
     mod declarative_self {

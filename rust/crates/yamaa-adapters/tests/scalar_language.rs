@@ -1,5 +1,5 @@
 #![cfg(feature = "yaml")]
-//! Scalar contracts.
+//! Scalar contracts: scalar language, secondary scalar operands and run report.
 mod scalar {
     mod scalar_language {
         use crate::support::Edit as _;

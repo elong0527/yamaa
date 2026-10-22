@@ -1,5 +1,5 @@
 #![cfg(feature = "yaml")]
-//! File contracts.
+//! File contracts: producer links.
 mod file {
     mod producer_links {
         //! A `schema` link types a stored artifact from its producing

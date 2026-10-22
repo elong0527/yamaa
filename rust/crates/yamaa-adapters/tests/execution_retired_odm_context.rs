@@ -1,5 +1,8 @@
 #![cfg(feature = "yaml")]
-//! Execution contracts.
+//! Execution contracts: retired ODM context, row count lookups, row
+//! derivations, row filter paths, row intermediate operands, row join keys,
+//! scoped windows checks, temporal arithmetic and typed intermediate
+//! derivations.
 mod execution {
     mod retired_odm_context {
         //! Original retired ODM-context operands through the shared public file engine.

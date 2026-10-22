@@ -1,4 +1,4 @@
-//! Execution contracts.
+//! Execution contracts: numeric lifecycle and row intermediate context.
 mod execution {
     mod numeric_lifecycle {
         use std::{collections::BTreeMap, convert::Infallible};

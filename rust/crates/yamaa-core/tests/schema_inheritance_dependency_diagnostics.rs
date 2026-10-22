@@ -1,4 +1,6 @@
-//! Schema contracts.
+//! Schema contracts: inheritance dependency diagnostics, scalar submission
+//! rules, schema bundle, schema composition, schema descriptor, schema
+//! diagnostic projection and schema document.
 mod schema {
     mod inheritance_dependency_diagnostics {
         use yamaa_core::json::Value as JsonValue;

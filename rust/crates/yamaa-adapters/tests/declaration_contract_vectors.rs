@@ -1,5 +1,7 @@
 #![cfg(feature = "yaml")]
-//! Declaration contracts.
+//! Declaration contracts: contract vectors, inheritance capture, ODM
+//! declaration fixture, original intermediate verifications and preparation
+//! dispatch.
 mod declaration {
     mod contract_vectors {
         //! Direct native checks of unchanged authored grammar, regex and rounding truth.

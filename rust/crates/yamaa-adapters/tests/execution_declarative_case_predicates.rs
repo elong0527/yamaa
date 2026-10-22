@@ -1,5 +1,9 @@
 #![cfg(feature = "yaml")]
-//! Execution contracts.
+//! Execution contracts: declarative case predicates, declarative correlated
+//! predicates, declarative flags, declarative intermediate admission,
+//! declarative intermediate single key, declarative intermediate keys,
+//! declarative intermediate ranges, declarative output ordering, declarative
+//! primary intermediates and declarative row intermediates.
 mod execution {
     mod declarative_case_predicates {
         //! Independently authored full case reports and unchanged original CSV truth.

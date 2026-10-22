@@ -1,4 +1,4 @@
-//! Execution contracts.
+//! Execution contracts: dataset diagnostic.
 mod execution {
     mod dataset_diagnostic {
         mod borrowed {
