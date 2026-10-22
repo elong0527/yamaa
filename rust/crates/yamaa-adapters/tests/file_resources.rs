@@ -2,6 +2,7 @@
 mod file {
     #[cfg(feature = "yaml")]
     mod local_paths {
+        use crate::support::issues::assert_issues;
         #[test]
         fn entry_relative_shared_program_uses_each_study_input_and_saves_held_artifacts() {
             use yamaa_adapters::{file_application, specification_report::Identity};
@@ -387,20 +388,17 @@ mod file {
                         result.issues()
                     },
                 );
-                assert_eq!(issues.len(), 1);
-                assert_eq!(issues[0].phase(), "validation");
-                assert_eq!(issues[0].condition(), condition);
-                assert_eq!(issues[0].rule(), Some(rule));
-                assert_eq!(issues[0].spec_paths, ["input.SRC.path"]);
                 let context = if names_layer {
                     yamaa_adapters::json!({"dataset":"SRC","entry":path,"path":written,"source":path})
                 } else {
                     yamaa_adapters::json!({"dataset":"SRC","path":written})
                 };
-                assert_eq!(
-                    yamaa_core::json::Value::Object(issues[0].context.clone()),
-                    context,
-                    "{written}"
+                assert_issues(
+                    &issues,
+                    &[
+                        yamaa_adapters::json!({"phase":"validation","condition":condition,"rule":rule,"spec_paths":["input.SRC.path"],"context":context}),
+                    ],
+                    written,
                 );
                 assert!(!study.0.join("entry/output.csv").exists());
             }

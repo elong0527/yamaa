@@ -1715,6 +1715,7 @@ columns:
     }
     mod declarative_output_ordering {
         //! Authored public-file observations and immutable original benchmark artifacts.
+        use crate::support::issues::assert_issues;
         use crate::support::Edit as _;
         use std::{fs, path::Path};
         use yamaa_adapters::file_application;
@@ -1861,19 +1862,12 @@ columns: [{name: ID, type: str, derivation: SRC.ID}]
                 b"unused\n",
             );
             let issues = fixture.run().err().expect("static declaration");
-            assert_eq!(issues.len(), 1);
-            assert_eq!(
-                (issues[0].phase(), issues[0].condition(), issues[0].rule()),
-                (
-                    "validation",
-                    "empty_string_present_unsupported",
-                    Some("INPUT-9")
-                )
-            );
-            assert_eq!(issues[0].spec_paths, ["input.SRC.empty_string"]);
-            assert_eq!(
-                yamaa_core::json::Value::Object(issues[0].context.clone()),
-                yamaa_adapters::json!({"dataset":"SRC"})
+            assert_issues(
+                &issues,
+                &[
+                    yamaa_adapters::json!({"phase":"validation","condition":"empty_string_present_unsupported","rule":"INPUT-9","spec_paths":["input.SRC.empty_string"],"context":{"dataset":"SRC"}}),
+                ],
+                "empty_string: present on a delimited input",
             );
             assert!(!fixture.0.join("result.csv").exists());
         }
@@ -2017,15 +2011,12 @@ columns:
             let result = fixture.run().unwrap();
             assert!(result.output().is_none());
             let issues = result.issues();
-            assert_eq!(issues.len(), 1);
-            assert_eq!(
-                (issues[0].phase(), issues[0].condition(), issues[0].rule()),
-                ("validation", "ordinal_field_collision", Some("INPUT-4"))
-            );
-            assert_eq!(issues[0].spec_paths, ["input.SOURCE.ordinal"]);
-            assert_eq!(
-                yamaa_core::json::Value::Object(issues[0].context.clone()),
-                yamaa_adapters::json!({"dataset":"SOURCE", "field":"SourceOrdinal"})
+            assert_issues(
+                &issues,
+                &[
+                    yamaa_adapters::json!({"phase":"validation","condition":"ordinal_field_collision","rule":"INPUT-4","spec_paths":["input.SOURCE.ordinal"],"context":{"dataset":"SOURCE","field":"SourceOrdinal"}}),
+                ],
+                "negative-source-ordinal-collision",
             );
 
             let fixture = authored(
@@ -2043,15 +2034,12 @@ columns: [{name: ID, type: str, derivation: {odm: SRC.ITEM}}]
                 .run()
                 .err()
                 .expect("fixed schema rejects ordinal before capture");
-            assert_eq!(issues.len(), 1);
-            assert_eq!(
-                (issues[0].phase(), issues[0].condition(), issues[0].rule()),
-                ("validation", "odm_schema_field_type", Some("INPUT-4"))
-            );
-            assert_eq!(issues[0].spec_paths, ["input.SRC.ordinal"]);
-            assert_eq!(
-                yamaa_core::json::Value::Object(issues[0].context.clone()),
-                yamaa_adapters::json!({"dataset":"SRC", "declared":"ordinal"})
+            assert_issues(
+                &issues,
+                &[
+                    yamaa_adapters::json!({"phase":"validation","condition":"odm_schema_field_type","rule":"INPUT-4","spec_paths":["input.SRC.ordinal"],"context":{"dataset":"SRC","declared":"ordinal"}}),
+                ],
+                "an ordinal on the fixed ODM schema",
             );
         }
 

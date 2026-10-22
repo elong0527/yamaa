@@ -1328,6 +1328,7 @@ mod project {
         }
     }
     mod project_report {
+        use crate::support::ports::NoActivation;
         use crate::support::project_schemas as schemas;
         use std::{collections::BTreeMap, convert::Infallible, path::PathBuf, sync::Arc};
         use yamaa_adapters::{
@@ -1337,18 +1338,8 @@ mod project {
             specification_source::Source,
         };
         use yamaa_core::application_observer::Scope;
-        use yamaa_core::{
-            function_invocation::{Argument, HostError},
-            project_activation::ActivationPort,
-            specification_run::SpecificationSourcePort,
-        };
-        use yamaa_core::{
-            function_signature::{LogicalSignature, ProjectFunctionIdentity},
-            project_environment::LockReference,
-            project_function::Language,
-            specification::SourceDeclaration,
-            value::Value,
-        };
+        use yamaa_core::specification_run::SpecificationSourcePort;
+        use yamaa_core::{project_function::Language, specification::SourceDeclaration};
         fn source(identity: &str, bytes: &[u8]) -> Source {
             Source {
                 identity: identity.into(),
@@ -1375,33 +1366,6 @@ mod project {
             )
             .unwrap()
             .into_owned()
-        }
-        struct NoActivation;
-        impl ActivationPort for NoActivation {
-            type Error = Infallible;
-            type Handle = ();
-            fn verify_lock(
-                &mut self,
-                _: Language,
-                _: &LockReference,
-                _: &[ProjectFunctionIdentity],
-            ) -> Result<(), Infallible> {
-                panic!("no selected functions")
-            }
-            fn bind(
-                &mut self,
-                _: &ProjectFunctionIdentity,
-                _: &LogicalSignature,
-            ) -> Result<(), Infallible> {
-                panic!("no selected functions")
-            }
-            fn invoke(
-                &mut self,
-                _: &(),
-                _: &[Argument<'_>],
-            ) -> Result<Value, HostError<Infallible>> {
-                panic!("no selected functions")
-            }
         }
         struct Study {
             root: PathBuf,
