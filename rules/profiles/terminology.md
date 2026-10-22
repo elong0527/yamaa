@@ -56,8 +56,7 @@ Evidence: `sdtm-dm-metadata`, `sdtm-ae-coding`, `sdtm-vs-epoch-from-subject-elem
 
 Both aliases are optional here; [DEFINE-4](define-xml.md#define-4) states when a
 document requires an alias, and [CT-6](#ct-6) refuses one on a sponsor-extended
-item, which has no published identifier. A `standard` naming a declared
-standard whose type is not `CT` fails validation.
+item, which has no published identifier.
 
 The name takes the closed list an implementation guide's name takes, the eleven
 standard names of Define-XML 2.1, which `yaml/vocabulary/cdisc.yaml` holds. It
