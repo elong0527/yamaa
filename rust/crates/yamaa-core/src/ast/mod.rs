@@ -186,6 +186,18 @@ impl Surface {
             Self::V1 { .. } => HandlerKind::Absent,
         }
     }
+    /// The condition an `absent` handler answers, whose rule the run report's
+    /// `absent` rows cite (CHECK-24): in 1.0 `unmatched_key`, since `absent`
+    /// answers only a lookup without a candidate, as LOOKUP-24 states (D67,
+    /// D204); in a 0.5 file `unknown_field`, the unknown-name rule of NAME-3,
+    /// as at the `yamaa-v0.5.0` tag (D75).
+    pub fn absent_condition(self) -> crate::diagnostic::ConditionCode {
+        use crate::diagnostic::ConditionCode;
+        match self {
+            Self::V0_5 => ConditionCode::SourceUnknownReference,
+            Self::V1 { .. } => ConditionCode::LookupUnmatchedKey,
+        }
+    }
 }
 
 /// `model: SDTM | SEND | ADaM` (P-MODEL-1); no 0.5 form.
