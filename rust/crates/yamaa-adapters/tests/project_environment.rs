@@ -1438,15 +1438,6 @@ mod project {
                 Ok(Arc::clone(bytes))
             }
         }
-        #[derive(Default)]
-        struct Publisher(Vec<(String, Vec<u8>)>);
-        impl yamaa_core::specification_output::ArtifactPort for Publisher {
-            type Error = Infallible;
-            fn publish(&mut self, path: &str, bytes: &[u8]) -> Result<(), Infallible> {
-                self.0.push((path.into(), bytes.into()));
-                Ok(())
-            }
-        }
         fn id(example: &str) -> Identity<'_> {
             Identity {
                 runtime: "python",
@@ -1515,22 +1506,18 @@ mod project {
                     &std::fs::read(truth.join(format!("{example}.json"))).unwrap(),
                 )
                 .unwrap();
-                let mut publisher = Publisher::default();
                 if expected["outcome"] == "success" {
-                    let saved = result.save(&mut publisher).unwrap();
-                    observed["artifacts"] = saved["artifacts"].clone();
-                    assert_eq!(publisher.0.len(), 1);
+                    observed["artifacts"] =
+                        result.saved_observations().unwrap()["artifacts"].clone();
+                    let files = result.files();
+                    assert_eq!(files.len(), 1);
                     assert_eq!(
-                        publisher.0[0].1,
-                        std::fs::read(case.join("expected").join(&publisher.0[0].0)).unwrap(),
+                        files[0].1,
+                        std::fs::read(case.join("expected").join(files[0].0)).unwrap(),
                         "{example}"
                     );
                 } else {
-                    assert!(matches!(
-                        result.save(&mut publisher),
-                        Err(yamaa_core::specification_output::SaveError::FailedBuild)
-                    ));
-                    assert!(publisher.0.is_empty());
+                    assert!(result.files().is_empty());
                     assert_eq!(result.output(), None);
                 }
                 assert_eq!(observed, expected, "{example}");
@@ -1586,12 +1573,7 @@ mod project {
                 .observations(),
                 observed
             );
-            let mut publisher = Publisher::default();
-            assert!(matches!(
-                result.save(&mut publisher),
-                Err(yamaa_core::specification_output::SaveError::FailedBuild)
-            ));
-            assert!(publisher.0.is_empty());
+            assert!(result.files().is_empty());
             assert_eq!(study.cached.len(), 1);
         }
 
@@ -1684,12 +1666,7 @@ mod project {
                             }
                         );
                         assert_eq!(result.output(), None);
-                        let mut publisher = Publisher::default();
-                        assert!(matches!(
-                            result.save(&mut publisher),
-                            Err(yamaa_core::specification_output::SaveError::FailedBuild)
-                        ));
-                        assert!(publisher.0.is_empty());
+                        assert!(result.files().is_empty());
                     } else {
                         // An unclassified failure refuses the result without
                         // a finding; the attempt keeps the original payload.
@@ -1753,12 +1730,7 @@ mod project {
                 yamaa_adapters::json!([{"phase":"validation","condition":"invalid_regex","rule":"TEXT-6","spec_paths":["columns.LATE.verifications[0].matches.pattern"],"context":{"pattern":"("}}])
             );
             assert_eq!(result.output(), None);
-            let mut publisher = Publisher::default();
-            assert!(matches!(
-                result.save(&mut publisher),
-                Err(yamaa_core::specification_output::SaveError::FailedBuild)
-            ));
-            assert!(publisher.0.is_empty());
+            assert!(result.files().is_empty());
         }
     }
     mod project_run {
@@ -2609,22 +2581,6 @@ functions:
                 base_directory: "study",
             }
         }
-        #[derive(Default)]
-        struct Publication {
-            calls: Vec<(String, Vec<u8>)>,
-            reject: bool,
-        }
-        impl yamaa_core::specification_output::ArtifactPort for Publication {
-            type Error = Rc<()>;
-            fn publish(&mut self, path: &str, bytes: &[u8]) -> Result<(), Self::Error> {
-                self.calls.push((path.into(), bytes.into()));
-                if self.reject {
-                    Err(Rc::new(()))
-                } else {
-                    Ok(())
-                }
-            }
-        }
 
         #[test]
         fn complete_project_output_and_save_borrow_the_exact_attempt_without_reactivation() {
@@ -2668,23 +2624,11 @@ functions:
             );
             assert!(result.output().is_some());
             assert!(result.issues().is_empty());
-            let mut publisher = Publication {
-                reject: true,
-                ..Default::default()
-            };
-            assert!(matches!(
-                result.save(&mut publisher),
-                Err(yamaa_core::specification_output::SaveError::Publish(_))
-            ));
-            publisher.reject = false;
-            let saved = result.save(&mut publisher).unwrap();
             assert_eq!(
-                publisher.calls,
-                [
-                    ("output.csv".into(), b"ID,VALUE\n1,1\n".to_vec()),
-                    ("output.csv".into(), b"ID,VALUE\n1,1\n".to_vec())
-                ]
+                result.files(),
+                [("output.csv", b"ID,VALUE\n1,1\n".as_slice())]
             );
+            let saved = result.saved_observations().unwrap();
             assert_eq!(saved["artifacts"][0]["content"], "ID,VALUE\n1,1\n");
             assert_eq!(saved["artifacts"][0]["row_count"], 1);
             assert_eq!(result.observations(), report);
@@ -2768,12 +2712,7 @@ functions:
                     } else {
                         assert_eq!(observed["source_reads"], yamaa_adapters::json!([]));
                     }
-                    let mut publisher = Publication::default();
-                    assert!(matches!(
-                        result.save(&mut publisher),
-                        Err(yamaa_core::specification_output::SaveError::FailedBuild)
-                    ));
-                    assert!(publisher.calls.is_empty());
+                    assert!(result.files().is_empty());
                     assert!(Rc::ptr_eq(&held.original, &activation.original));
                 }
                 assert_eq!(*activation.trace.borrow(), trace);
@@ -2986,12 +2925,7 @@ functions:
                 "passed"
             );
             assert_eq!(result.output(), None);
-            let mut publisher = Publication::default();
-            assert!(matches!(
-                result.save(&mut publisher),
-                Err(yamaa_core::specification_output::SaveError::FailedBuild)
-            ));
-            assert!(publisher.calls.is_empty());
+            assert!(result.files().is_empty());
             assert_eq!(study.capture_reads(), 0);
             assert_eq!(*activation.trace.borrow(), ["lock", "bind", "case", "case"]);
         }

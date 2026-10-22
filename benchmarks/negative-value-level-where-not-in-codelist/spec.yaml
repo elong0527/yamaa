@@ -29,6 +29,7 @@ columns:
       codelist: VSTESTCD
       origins:
         - type: Assigned
+          source: Sponsor
 
   # Each test's results have their own description. The pulse description
   # selects its records by HR, a test code the study's list does not carry.
@@ -39,6 +40,7 @@ columns:
     submission:
       origins:
         - type: Collected
+          source: Investigator
       value_level:
         - id: SYSBP
           where: {VSTESTCD: [SYSBP]}

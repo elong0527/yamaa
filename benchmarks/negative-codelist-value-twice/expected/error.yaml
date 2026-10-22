@@ -1,0 +1,8 @@
+phase: validation
+condition: codelist_duplicate_value
+spec_paths:
+  - codelists[0].codelists[0].items[2].value
+rule: CT-4
+context:
+  codelist: SEX
+  value: F

@@ -1,0 +1,7 @@
+phase: validation
+condition: unknown_codelist
+spec_paths:
+  - columns.SEX.submission.codelist
+rule: CT-1
+context:
+  column: SEX

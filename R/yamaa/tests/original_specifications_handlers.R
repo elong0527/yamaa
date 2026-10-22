@@ -1,4 +1,4 @@
-# Installed original specifications, handler family: {literal: null} handlers
+# Installed original specifications, handler family: missing-value handlers
 # and inherited clears, typed intermediate conversions and temporal
 # arithmetic, each with its reached handler count, shared with the Rust
 # adapter controls and Python.
@@ -44,16 +44,18 @@ local({
     expect_identical(reaches$inheritance_nulls(issues,truth,"check"),case$expected,case$label)
   }
 })
-# Each family's handler and the truth field that counts it, whether a case
-# builds, and the line that reports the family passed.
+# Each family's handler, whose count a case names as `<handler>_count`,
+# whether a case builds, and the line that reports the family passed. A 1.x
+# file counts an intermediate's absence under `absent`, a 0.5 file under
+# `no_match` (D202), so an inheritance case names the one it reaches.
 families <- list(
-  inheritance_nulls = list(handler = "no_match", count = "no_match_count",
+  inheritance_nulls = list(handler = c("absent", "no_match"),
     builds = function(truth) is.null(truth$run_condition),
     passed = "introducing missing handlers and inherited clears agree across public host boundaries"),
-  typed_intermediates = list(handler = "unconvertible", count = "unconvertible_count",
+  typed_intermediates = list(handler = "unconvertible",
     builds = function(truth) is.null(truth$run_condition),
     passed = "typed intermediate results convert before numeric matching and retain conversion handlers without Python"),
-  temporal_arithmetic = list(handler = "invalid", count = "invalid_count",
+  temporal_arithmetic = list(handler = "invalid",
     builds = function(truth) !is.null(truth$csv),
     passed = "shared temporal arithmetic conformance preserves civil values and duration handlers without Python"))
 
@@ -85,10 +87,12 @@ for (family in names(families)) local({
     }
     observations <- domain_observations(result)
     if (!is.null(observations)) {
-      reached <- reached_count(observations, setting$handler)
-      if (!isTRUE(reached == truth[[setting$count]]))
-        fail_expectation(paste(label, "reaches its", setting$handler, "handler the authored number of times"),
-          reached, truth[[setting$count]])
+      handler <- Filter(function(name) !is.null(truth[[paste0(name, "_count")]]), setting$handler)[[1]]
+      expected <- truth[[paste0(handler, "_count")]]
+      reached <- reached_count(observations, handler)
+      if (!isTRUE(reached == expected))
+        fail_expectation(paste(label, "reaches its", handler, "handler the authored number of times"),
+          reached, expected)
     }
     unlink(directory, recursive = TRUE)
   }

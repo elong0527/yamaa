@@ -68,8 +68,12 @@ tests:
   - {id: normal, covers: [normal, boundary], args: {text: '  a'}, result: a}
   - {id: missing, covers: ['short-circuit-missing:text'], args: {text: null}, result: null}
 """
+# A section lists only specifications of its model (SUB-3); a 0.5 project
+# lists a 1.0 specification as it lists a 0.5 one (D115).
 SPEC = """\
-schema_version: '1.0'
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: TEST
 keys: [ID]
 input: {SRC: {path: input.csv, types: {ID: int, TEXT: str}}}

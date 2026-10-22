@@ -1,5 +1,6 @@
-//! Native capture, file geometry, codecs, encoders and publication for the
-//! engine Define service.
+//! One submission section's composition, as both public hosts compose it:
+//! the Define service, the reads it makes through the engine's resolver, and
+//! the files a save of it publishes.
 use crate::{
     file_configuration, file_preparation, file_project, file_publication,
     file_resources::{self, Resources},
@@ -9,15 +10,11 @@ use crate::{
 };
 use std::path::Path;
 use yamaa_core::{
-    ast::Transport,
-    diagnostic::Diagnostic,
-    project_environment::Submission,
-    project_function::Language,
-    submission_composition::{Dataset, Finding, Study},
-    table::TableAccess,
+    define, diagnostic::Diagnostic, project_environment::Submission, project_function::Language,
+    submission_composition::Finding,
 };
 
-use yamaa_core::define::{self as service, Ports};
+mod service;
 #[derive(Debug)]
 pub enum Failure {
     Project(project_application::Error),
@@ -28,7 +25,7 @@ pub enum Failure {
     },
     ClassifiedResource {
         error: file_resources::Error,
-        diagnostic: Diagnostic,
+        diagnostic: Box<Diagnostic>,
     },
     Metadata(Vec<Finding>),
     Diagnostic(Vec<Diagnostic>),
@@ -44,8 +41,8 @@ pub enum Failure {
 pub use service::PublicationState;
 /// Representation and original opaque failure owner for both public hosts.
 pub struct Define {
-    ports: NativePorts,
-    application: service::Application<NativePorts>,
+    reads: Reads,
+    application: service::Application,
     /// The section composed, whose `define` decides where its files go.
     section: Submission,
     failure: Option<Failure>,
@@ -66,7 +63,7 @@ impl Define {
         host: Option<Language>,
         resolver: Option<std::sync::Arc<dyn crate::host_resources::Resolver>>,
     ) -> Self {
-        let mut ports = NativePorts {
+        let mut reads = Reads {
             resources: None,
             resolver,
             host,
@@ -75,7 +72,7 @@ impl Define {
             specifications: Vec::new(),
         };
         let attempt = service::Application::prepare(
-            &mut ports,
+            &mut reads,
             service::Request {
                 environment,
                 section,
@@ -84,14 +81,14 @@ impl Define {
             },
         );
         let mut result = Self {
-            ports,
+            reads,
             application: attempt.application,
             section,
             failure: None,
             issues: Vec::new(),
         };
         if let Err(failure) = attempt.outcome {
-            result.refuse(native_failure(failure));
+            result.refuse(failure);
         }
         result
     }
@@ -107,17 +104,17 @@ impl Define {
     /// linked from the listing that names it (`sdtm.specs[0]`).
     pub fn locator(&self) -> crate::issue_location::Locator {
         crate::issue_location::project(
-            self.ports
+            self.reads
                 .environment
                 .as_deref()
                 .map(Into::into)
                 .unwrap_or_default(),
-            self.ports
+            self.reads
                 .specifications
                 .iter()
                 .map(|(path, _, document)| (path.as_str(), &**document)),
             &self
-                .ports
+                .reads
                 .resources
                 .as_ref()
                 .map(Resources::retain_metadata_sources)
@@ -131,7 +128,7 @@ impl Define {
         self.application.artifacts()
     }
     pub fn capture_reads(&self) -> usize {
-        self.ports
+        self.reads
             .resources
             .as_ref()
             .map_or(0, Resources::capture_reads)
@@ -172,23 +169,17 @@ impl Define {
                 .map_or("", |(written, _, _)| written)
         };
         let failure = stopped.map(|(index, cause)| match cause {
-            Cause::Target(error) => service::Failure::TargetAdmission { index, error },
-            Cause::Collision { earlier } => {
-                service::Failure::Metadata(vec![service::shared_target(
-                    written(earlier),
-                    written(index),
-                )])
-            }
-            Cause::Stage(error) | Cause::Commit(error) => {
-                service::Failure::Publication { index, error }
-            }
-            Cause::Unwind(_) => {
-                service::Failure::Diagnostic(vec![service::publication_diagnostic(
-                    index,
-                    service::PublicationFailure::Publication,
-                    "publication unwound".into(),
-                )])
-            }
+            Cause::Target(error) => Failure::TargetAdmission { index, error },
+            Cause::Collision { earlier } => Failure::Metadata(vec![define::shared_target(
+                written(earlier),
+                written(index),
+            )]),
+            Cause::Stage(error) | Cause::Commit(error) => Failure::Publication { index, error },
+            Cause::Unwind(_) => Failure::Diagnostic(vec![define::publication_diagnostic(
+                index,
+                define::PublicationFailure::Publication,
+                "publication unwound".into(),
+            )]),
         });
         // A target the walk cannot reach fails with its file rule's condition
         // at the section's `define`, which places every file of the section,
@@ -196,8 +187,7 @@ impl Define {
         // original error.
         let unreached = match &failure {
             Some(
-                service::Failure::TargetAdmission { index, error }
-                | service::Failure::Publication { index, error },
+                Failure::TargetAdmission { index, error } | Failure::Publication { index, error },
             ) => match error {
                 file_publication::Error::Unreachable(cause) => cause.target_diagnostic(
                     Some(&format!(
@@ -212,7 +202,7 @@ impl Define {
         };
         self.application.record(committed, failure.as_ref());
         if let Some(failure) = failure {
-            self.refuse(native_failure(failure));
+            self.refuse(failure);
             if let Some(issue) = unreached {
                 self.issues = vec![issue];
             }
@@ -221,9 +211,9 @@ impl Define {
     /// A save that stopped at this composition for `issues` of its own,
     /// before any of its files was written.
     pub fn refuse_save(&mut self, issues: Vec<Diagnostic>) {
-        let failure = service::Failure::Diagnostic(issues);
+        let failure = Failure::Diagnostic(issues);
         self.application.record(0, Some(&failure));
-        self.refuse(native_failure(failure));
+        self.refuse(failure);
     }
     /// Save this composition alone, as an outcome of one member saves it.
     pub fn save(&mut self) -> Result<bool, SaveError> {
@@ -269,18 +259,11 @@ fn utc_seconds() -> Option<u64> {
         .map(|duration| duration.as_secs())
 }
 
-fn native_failure(failure: service::Failure<Failure, file_publication::Error>) -> Failure {
-    match failure {
-        service::Failure::Port(failure) => failure,
-        service::Failure::Metadata(findings) => Failure::Metadata(findings),
-        service::Failure::Diagnostic(findings) => Failure::Diagnostic(findings),
-        service::Failure::TargetAdmission { index, error } => {
-            Failure::TargetAdmission { index, error }
-        }
-        service::Failure::Publication { index, error } => Failure::Publication { index, error },
-    }
-}
-struct NativePorts {
+/// What a composition reads: the project file, the specifications its
+/// sections list and the files they declare, captured through the caller's
+/// resolver or the local file resolver, with the written paths they resolve
+/// to and the targets a save writes.
+struct Reads {
     resources: Option<Resources>,
     /// The caller's resolver, which serves the project file under the name
     /// it is given; the local file resolver reads a caller path without one.
@@ -291,7 +274,7 @@ struct NativePorts {
     environment_written: String,
     specifications: Vec<(String, String, std::sync::Arc<PreparedDocument>)>,
 }
-impl NativePorts {
+impl Reads {
     fn resources(&self) -> &Resources {
         self.resources.as_ref().expect("selected resource owner")
     }
@@ -326,21 +309,10 @@ impl NativePorts {
             R::ContentChanged,
         )
     }
-}
-impl Ports for NativePorts {
-    type Environment = std::sync::Arc<OwnedEnvironment>;
-    type Specification = std::sync::Arc<PreparedDocument>;
-    type Error = Failure;
-    type PublicationError = file_publication::Error;
-    type Bytes = std::sync::Arc<[u8]>;
-    type Parquet = crate::arrow_table::ArrowTable;
-    type ParquetError = crate::parquet_source::Error;
-    type Target = crate::publication::AnchoredTarget;
-    type Publisher = crate::publication::Publisher;
-    fn utc_seconds(&mut self) -> Option<u64> {
-        utc_seconds()
-    }
-    fn capture_environment(&mut self, written: &str) -> Result<Self::Environment, Failure> {
+    fn capture_environment(
+        &mut self,
+        written: &str,
+    ) -> Result<std::sync::Arc<OwnedEnvironment>, Failure> {
         // A project file that cannot be read is the caller's own path, named
         // as given (FILE-7, FILE-8, FILE-11).
         let unreadable = |error: &file_resources::Error| {
@@ -372,7 +344,7 @@ impl Ports for NativePorts {
         self.environment = Some(std::sync::Arc::clone(&environment));
         Ok(environment)
     }
-    fn environment(environment: &Self::Environment) -> service::EnvironmentView<'_> {
+    fn environment(environment: &std::sync::Arc<OwnedEnvironment>) -> service::EnvironmentView<'_> {
         service::EnvironmentView {
             project: environment
                 .project()
@@ -386,7 +358,7 @@ impl Ports for NativePorts {
         path: &str,
         declaring: &str,
         written: &str,
-    ) -> Result<Self::Specification, Failure> {
+    ) -> Result<std::sync::Arc<PreparedDocument>, Failure> {
         // A 1.0 project reads the header of a specification it lists at the
         // listing, as reading the project does (SCHEMA-2).
         let versioned = self
@@ -425,7 +397,7 @@ impl Ports for NativePorts {
                 | file_resources::Error::Symlink),
             ) => match file_resources::resource_failure(&error) {
                 Some(failure) => Failure::ClassifiedResource {
-                    diagnostic: failure.field_diagnostic(path, written),
+                    diagnostic: Box::new(failure.field_diagnostic(path, written)),
                     error,
                 },
                 None => Failure::Project(project_application::Error::Project(
@@ -444,7 +416,9 @@ impl Ports for NativePorts {
         ));
         Ok(document)
     }
-    fn specification(document: &Self::Specification) -> service::SpecificationView<'_> {
+    fn specification(
+        document: &std::sync::Arc<PreparedDocument>,
+    ) -> service::SpecificationView<'_> {
         use yamaa_core::schema::DocumentNode as N;
         let model = document.document();
         let inputs = model
@@ -508,7 +482,10 @@ impl Ports for NativePorts {
             .map_err(|(identity, error)| {
                 if error == file_resources::Error::Changed {
                     if let Some(diagnostic) = self.metadata_diagnostic(&identity) {
-                        return Failure::ClassifiedResource { error, diagnostic };
+                        return Failure::ClassifiedResource {
+                            error,
+                            diagnostic: Box::new(diagnostic),
+                        };
                     }
                     // Keep the original cause opaque when no retained authored
                     // occurrence can supply its required diagnostic context.
@@ -525,14 +502,11 @@ impl Ports for NativePorts {
         path: &str,
         declaring: &str,
         written: &str,
-    ) -> Result<Self::Bytes, Failure> {
+    ) -> Result<std::sync::Arc<[u8]>, Failure> {
         self.resources_mut()
             .capture_from(declaring, written)
             .map(|(bytes, _)| bytes)
             .map_err(|error| resource(path, written, error))
-    }
-    fn decode_parquet(&mut self, bytes: &[u8]) -> Result<Self::Parquet, Self::ParquetError> {
-        read_parquet(bytes)
     }
     fn read_report(
         &mut self,
@@ -546,78 +520,15 @@ impl Ports for NativePorts {
             .map_err(|error| resource(path, written, error))?;
         Ok(crate::run_report::recorded(&bytes, written))
     }
-    fn count_records(
-        &mut self,
-        source: &yamaa_core::specification::SourceDeclaration,
-        bytes: &[u8],
-    ) -> Option<usize> {
-        crate::specification_run::decode_source(
-            source,
-            bytes,
-            yamaa_core::specification::SourceInterpretation::Ordinary,
-            None,
-        )
-        .ok()
-        .map(|table| table.row_count())
-    }
-    fn render_define(&mut self, study: &Study) -> Result<Vec<u8>, Finding> {
-        crate::submission_xml::render(study)
-    }
-    fn admit_transport<T: TableAccess>(
-        &mut self,
-        transport: Transport,
-        study: &Study,
-        dataset: &Dataset,
-        table: &T,
-    ) -> Result<(), Finding> {
-        match transport {
-            Transport::Xpt => crate::submission_xpt::admit(
-                &crate::submission_xpt::document(study, dataset),
-                dataset,
-                table,
-            ),
-            // Dataset-JSON refuses no file as a whole; its writer bounds the
-            // output bytes as it encodes.
-            Transport::DatasetJson => Ok(()),
-        }
-    }
-    fn render_transport<T: TableAccess>(
-        &mut self,
-        transport: Transport,
-        study: &Study,
-        dataset: &Dataset,
-        table: &T,
-        define: &str,
-    ) -> Result<Vec<u8>, Finding> {
-        match transport {
-            Transport::Xpt => crate::submission_xpt::render(
-                &crate::submission_xpt::document(study, dataset),
-                table,
-            ),
-            Transport::DatasetJson => crate::submission_json::render(
-                &crate::submission_json::document(study, dataset, define),
-                table,
-            ),
-        }
-    }
-    fn target(&self, path: &str, declaring: &str, written: &str) -> Result<Self::Target, Failure> {
+    fn target(
+        &self,
+        path: &str,
+        declaring: &str,
+        written: &str,
+    ) -> Result<crate::publication::AnchoredTarget, Failure> {
         self.resources()
             .publication_target_from(declaring, written)
             .map_err(|error| resource(path, written, error))
-    }
-    fn publisher(
-        &mut self,
-        target: &Self::Target,
-        written: &str,
-    ) -> Result<Self::Publisher, Self::PublicationError> {
-        target.publisher(written)
-    }
-    fn same_target(
-        &mut self,
-        left: &Self::Publisher,
-        right: &Self::Publisher,
-    ) -> Result<bool, Self::PublicationError> {
-        left.same_target(right)
     }
 }
 fn same_location(left: &Path, right: &Path) -> bool {
@@ -669,7 +580,7 @@ fn issues(failure: &Failure) -> Vec<Diagnostic> {
             })
             .collect(),
         Failure::Diagnostic(findings) => findings.clone(),
-        Failure::ClassifiedResource { diagnostic, .. } => vec![diagnostic.clone()],
+        Failure::ClassifiedResource { diagnostic, .. } => vec![(**diagnostic).clone()],
         Failure::Resource {
             path,
             written,
@@ -678,8 +589,8 @@ fn issues(failure: &Failure) -> Vec<Diagnostic> {
             if let file_resources::Error::WrittenForm(failure) = error {
                 return vec![failure.field_diagnostic(path, written)];
             }
+            use define::ResourceObservation as R;
             use file_resources::Error as E;
-            use service::ResourceObservation as R;
             let observation = match error {
                 E::Host(_) => R::Unreadable,
                 E::Missing => R::Missing,
@@ -694,26 +605,21 @@ fn issues(failure: &Failure) -> Vec<Diagnostic> {
                 E::Changed => R::Changed,
                 E::Limit(error) => R::Limit(*error),
             };
-            vec![service::resource_diagnostic(path, written, observation)]
+            vec![define::resource_diagnostic(path, written, observation)]
         }
-        Failure::TargetAdmission { index, error } => vec![service::publication_diagnostic(
+        Failure::TargetAdmission { index, error } => vec![define::publication_diagnostic(
             *index,
-            service::PublicationFailure::TargetAdmission(
+            define::PublicationFailure::TargetAdmission(
                 crate::file_application::publication_fault(error),
             ),
             error.message(),
         )],
-        Failure::Publication { index, error } => vec![service::publication_diagnostic(
+        Failure::Publication { index, error } => vec![define::publication_diagnostic(
             *index,
-            service::PublicationFailure::Publication,
+            define::PublicationFailure::Publication,
             error.message(),
         )],
     }
-}
-fn read_parquet(
-    bytes: &[u8],
-) -> Result<crate::arrow_table::ArrowTable, crate::parquet_source::Error> {
-    crate::parquet_source::parse(bytes)
 }
 
 #[cfg(feature = "yaml")]

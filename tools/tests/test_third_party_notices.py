@@ -1248,7 +1248,9 @@ class LockedClosure(unittest.TestCase):
         )
         # The R binding's BSD-3-Clause crate is not linked into the wheels.
         self.assertEqual(
-            notices.license_expression(metadata, closures["python"], selected.values()),
+            notices.license_expression(
+                metadata, closures["python"], selected.values(), LIBRARY
+            ),
             "MIT AND Apache-2.0 AND Unicode-3.0",
         )
         rendered = notices.render(list(selected.values()), LIBRARY, "python")
@@ -1479,6 +1481,40 @@ class LockedClosure(unittest.TestCase):
             "    Texts: [",
             rendered,
         )
+
+    def test_the_expression_covers_the_crates_that_the_standard_library_links(self):
+        # The wheels link the standard library, whose compiler_builtins is
+        # relied on under MIT AND Apache-2.0 WITH LLVM-exception, so the
+        # expression names Apache-2.0 WITH LLVM-exception too (#3030 D185).
+        metadata, closures = self.built()
+        builtins = notices.Notice(
+            "compiler_builtins",
+            "0.1.160",
+            "in-tree, compiler-builtins/compiler-builtins",
+            ("MIT", "Apache-2.0 WITH LLVM-exception"),
+            (("compiler-builtins/LICENSE.txt", BUILTINS),),
+            (),
+        )
+        library = dataclasses.replace(LIBRARY, crates=(*LIBRARY.crates, builtins))
+        expression = (
+            "MIT AND Apache-2.0 AND Unicode-3.0 AND Apache-2.0 WITH LLVM-exception"
+        )
+        selected = notices.notices_for(metadata, closures["python"])
+        self.assertEqual(
+            notices.license_expression(metadata, closures["python"], selected, library),
+            expression,
+        )
+        # The check refuses a project license that leaves it out.
+        notices.write(metadata, closures, library)
+        self.assertEqual(
+            notices.check(metadata, closures, library)[1],
+            [
+                f"python/pyproject.toml: license must be {expression!r} to cover "
+                "the linked crates, not 'MIT AND Apache-2.0 AND Unicode-3.0'"
+            ],
+        )
+        self.project(license=expression)
+        self.assertEqual(notices.check(metadata, closures, library)[1], [])
 
     def test_the_command_line_notices_name_musl_for_the_musl_targets(self):
         metadata, closures = self.built()

@@ -23,7 +23,7 @@ mod declaration {
         use yamaa_core::ast::{
             FileId, FileRef, Function, FunctionSource, Notation, Project, Span, Surface,
         };
-        use yamaa_core::front_end::{v0_5, v1};
+        use yamaa_core::front_end::{lowering, v0_5, v1};
         use yamaa_core::json::Value;
         use yamaa_core::language::{FileType, LANGUAGE_VERSION};
         use yamaa_core::project_function::Language;
@@ -56,9 +56,9 @@ mod declaration {
         }
 
         /// The written position of each node of an admitted 1.0 file.
-        fn positions(document: &AdmittedDocument) -> v0_5::Positions {
+        fn positions(document: &AdmittedDocument) -> lowering::Positions {
             let locations = &document.raw().locations;
-            v0_5::Positions {
+            lowering::Positions {
                 files: vec![FileRef {
                     identity: document.source().identity.clone(),
                 }],

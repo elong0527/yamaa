@@ -1163,9 +1163,9 @@ mod schema {
         //! tree, and every closed-shape refusal keeps its exact document nodes.
         use yamaa_core::{
             ast::{self, Notation},
-            front_end::v0_5::{
-                project::project as lower_project,
-                sections::{self, sections, Cause},
+            front_end::{
+                lowering::sections::{self, Cause},
+                v0_5::{project::project as lower_project, sections::sections},
             },
             project_environment::Submission,
             schema::{Document, DocumentNode as N},
