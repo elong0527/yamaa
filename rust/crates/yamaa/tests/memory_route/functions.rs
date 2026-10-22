@@ -1,6 +1,6 @@
 //! The benchmarks' project functions as a Rust port that claims R.
 //!
-//! The function benchmarks call five functions of an installed R package,
+//! The function benchmarks call six functions of an installed R package,
 //! `yamaabenchmarks` (`rust/tests/project-programs/r`), which every R
 //! environment file names and every renv.lock pins. [`Benchmarks`] is a
 //! [`ProjectFunctions`] port that does what the R host does with that
@@ -92,7 +92,7 @@ impl Function {
 }
 
 /// The exported functions of the package (its NAMESPACE).
-pub const FUNCTIONS: [Function; 5] = [
+pub const FUNCTIONS: [Function; 6] = [
     Function {
         name: "bmi",
         formals: &[
@@ -174,6 +174,22 @@ pub const FUNCTIONS: [Function; 5] = [
         name: "project_value",
         formals: &[("x", None)],
         body: |values| Ok(values[0].clone()),
+    },
+    Function {
+        name: "dose_per_kg",
+        formals: &[("dose_mg", None), ("weight_kg", None)],
+        body: |values| {
+            let weight = double(&values[1])?
+                .filter(|value| !value.is_nan())
+                .ok_or("missing value where TRUE/FALSE needed")?;
+            if weight <= 0.0 {
+                return Err("weight_kg must be positive".to_owned());
+            }
+            Ok(match double(&values[0])? {
+                Some(dose) => Plain::Double(dose / weight),
+                None => Plain::Na,
+            })
+        },
     },
 ];
 
