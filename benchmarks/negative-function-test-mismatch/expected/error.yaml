@@ -1,0 +1,9 @@
+phase: validation
+condition: function_conformance_failed
+spec_paths:
+  - tests[0]
+rule: FUNC-12
+context:
+  function: project_value
+  case: ordinary
+  environment_path: functions[0]

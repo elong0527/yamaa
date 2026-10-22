@@ -1371,14 +1371,25 @@ class PublicConformance(unittest.TestCase):
         names = {e["name"] for e in corpus["examples"]}
         # #2190 fixes the 40 missing-handler empty children. The reviewed
         # forward-reference ordering exceptions remain permanent: LAYER-13
-        # composes the empty child's columns in dependency order.
-        forward = {
+        # composes the empty child's columns in dependency order. So does the
+        # link to its consuming specification, which from the empty child
+        # names the parent, whose output file the child writes (OUTPUT-9).
+        # Two differences stay open under their issues.
+        permanent = {
             ("negative-forward-key-reference", "empty_child"),
             ("negative-forward-reference", "empty_child"),
+            ("negative-link-to-itself", "empty_child"),
         }
-        self.assertEqual(set(expectations), forward)
-        for key in forward:
+        tracked = {
+            ("negative-aggregate-unbound-variable", "empty_child"): "#3593",
+            ("negative-copy-producer-cycle", "empty_child"): "#3594",
+        }
+        self.assertEqual(set(expectations), permanent | set(tracked))
+        for key in permanent:
             self.assertTrue(expectations[key]["permanent"])
+        for key, issue in tracked.items():
+            self.assertEqual(expectations[key]["issue"], issue)
+            self.assertFalse(expectations[key].get("permanent", False))
         for (benchmark, check), item in expectations.items():
             self.assertIn(benchmark, names)
             self.assertIn(check, {"empty_child", "key_order"})
