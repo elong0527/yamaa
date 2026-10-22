@@ -722,8 +722,17 @@ mod schema {
         }
     }
     mod schema_composition {
+        //! The normalized layers of a 1.x specification compose by
+        //! `compose_versioned_layers`, root ancestor first, and the resolved
+        //! specification's normalization materializes defaults once (LAYER-5
+        //! to LAYER-9). A test marked 0.5 exercises the 0.5 composition, in
+        //! which YAML null clears (`compose_descriptor`,
+        //! `compose_layer_fragments`, `compose_layers`), and goes with it
+        //! (#3447).
+        use yamaa_core::language::LanguageVersion;
         use yamaa_core::schema::{
-            Document, DocumentNode as N, NormalizationError, SchemaModule, SchemaStructure,
+            ComposedLayers, Document, DocumentNode as N, NormalizationError, NormalizedDocument,
+            SchemaModule, SchemaOrigin, SchemaSource, SchemaStructure,
         };
 
         use crate::support::document::Tree as V;
@@ -753,7 +762,12 @@ mod schema {
                             "root_class",
                             V::List(vec![
                                 field("value", "patch"),
-                                required("schema_version", "str"),
+                                // A 0.5 layer is headed by `schema_version`,
+                                // whose null the 0.5 composition refuses by
+                                // name, and a 1.x layer by `yamaa`.
+                                field("schema_version", "str"),
+                                required("yamaa", "str"),
+                                field("type", "str"),
                                 field("parent", "str"),
                                 field("input", "dict[str, dataset_class]"),
                                 field("columns", "list[column_class]"),
@@ -785,6 +799,11 @@ mod schema {
                                 field("options", "options_class"),
                                 field("metadata", "dict[str, str]"),
                                 field("items", "list[str]"),
+                                // A 1.x member merges recursively, so a
+                                // column carries every kind a patch holds.
+                                field("key", "match_key"),
+                                field("expression", "expression"),
+                                field("window", "window_selection"),
                             ]),
                         ),
                         (
@@ -905,7 +924,49 @@ mod schema {
             let expected = document(expected);
             same(actual, actual.root(), &expected, expected.root());
         }
-        fn compose(old: V, new: V) -> yamaa_core::schema::ComposedValue {
+        /// The schema at language version 1.0, which every 1.x layer here
+        /// declares.
+        fn versioned() -> SchemaStructure {
+            schema().at_version(LanguageVersion::new(0))
+        }
+        /// A 1.x layer as `normalize_versioned_layer` leaves it, each node
+        /// its own written occurrence.
+        fn normalized(value: V) -> NormalizedDocument {
+            let document = document(value);
+            let origins = (0..document.nodes().len())
+                .map(|node| SchemaOrigin {
+                    source: SchemaSource::Input,
+                    node,
+                    generated: false,
+                })
+                .collect();
+            NormalizedDocument { document, origins }
+        }
+        fn compose_versioned(layers: Vec<V>) -> ComposedLayers {
+            let layers = layers.into_iter().map(normalized).collect::<Vec<_>>();
+            versioned().compose_versioned_layers(&layers).unwrap()
+        }
+        /// The column `A` holding `patch`'s fields, a keyed member whose
+        /// fields compose recursively (LAYER-6).
+        fn member(patch: V) -> V {
+            let V::Map(mut fields) = patch else {
+                panic!("a patch is a mapping")
+            };
+            fields.insert(0, ("name".into(), V::text("A")));
+            V::Map(fields)
+        }
+        fn columns(patch: V) -> V {
+            V::map(vec![("columns", V::List(vec![member(patch)]))])
+        }
+        /// Two layers that each write the column `A`, composed.
+        fn compose(old: V, new: V) -> ComposedLayers {
+            compose_versioned(vec![columns(old), columns(new)])
+        }
+        fn check_member(actual: &Document, patch: V) {
+            check(actual, columns(patch));
+        }
+        /// The 0.5 composition of one field's value, in which a null clears.
+        fn compose_v0_5(old: V, new: V) -> yamaa_core::schema::ComposedValue {
             let s = schema();
             s.compose_descriptor(
                 s.root_class().fields[0].descriptor,
@@ -941,7 +1002,7 @@ mod schema {
                     ("key", V::map(vec![("b", V::text("new B"))])),
                 ]),
             );
-            check(
+            check_member(
                 &value.document,
                 V::map(vec![
                     ("label", V::text("parent")),
@@ -965,9 +1026,12 @@ mod schema {
                 ]),
             );
         }
+        /// 0.5 only (#3447): a null that clears is the 0.5 clear marker. In
+        /// a 1.x layer null is the missing value, and `clear` lists what a
+        /// layer clears (LAYER-9).
         #[test]
         fn a_null_at_any_depth_clears_the_inherited_value_and_is_never_retained() {
-            let value = compose(
+            let value = compose_v0_5(
                 V::map(vec![
                     ("label", V::text("parent")),
                     (
@@ -1000,7 +1064,7 @@ mod schema {
                 ]),
             );
             // A first declaration drops its nulls at every depth.
-            let value = compose(
+            let value = compose_v0_5(
                 V::map(vec![]),
                 V::map(vec![
                     (
@@ -1031,7 +1095,7 @@ mod schema {
                     V::map(vec![("select", V::map(vec![("right", V::text("R"))]))]),
                 )]),
             );
-            check(
+            check_member(
                 &value.document,
                 V::map(vec![(
                     "expression",
@@ -1048,7 +1112,7 @@ mod schema {
                     V::map(vec![("literal", V::Scalar(N::Null))]),
                 )]),
             );
-            check(
+            check_member(
                 &value.document,
                 V::map(vec![(
                     "expression",
@@ -1066,62 +1130,72 @@ mod schema {
                 V::map(vec![("window", inline.clone())]),
                 V::map(vec![("window", V::text("W"))]),
             );
-            check(&value.document, V::map(vec![("window", V::text("W"))]));
+            check_member(&value.document, V::map(vec![("window", V::text("W"))]));
             let value = compose(
                 V::map(vec![("window", V::text("W"))]),
                 V::map(vec![("window", inline.clone())]),
             );
-            check(&value.document, V::map(vec![("window", inline)]));
+            check_member(&value.document, V::map(vec![("window", inline)]));
         }
         #[test]
         fn retained_and_replaced_leaves_point_to_their_original_occurrences() {
-            let old = document(V::map(vec![(
+            let old = normalized(columns(V::map(vec![(
                 "options",
                 V::map(vec![("left", V::text("L")), ("right", V::text("old"))]),
-            )]));
-            let new = document(V::map(vec![(
+            )])));
+            let new = normalized(columns(V::map(vec![(
                 "options",
                 V::map(vec![("right", V::text("new"))]),
-            )]));
+            )])));
             let originals = [old.clone(), new.clone()];
-            let s = schema();
-            let value = s
-                .compose_descriptor(s.root_class().fields[0].descriptor, &old, &new)
+            let value = versioned()
+                .compose_versioned_layers(&[old.clone(), new.clone()])
                 .unwrap();
             assert_eq!(old, originals[0]);
             assert_eq!(new, originals[1]);
-            assert_eq!(value.origins.len(), value.document.nodes().len());
-            let options = value
-                .document
-                .field(value.document.root(), "options")
-                .unwrap();
+            assert_eq!(value.node_origins.len(), value.document.nodes().len());
+            // The options of the first column, in `document`.
+            let options = |document: &Document| {
+                let columns = document.field(document.root(), "columns").unwrap();
+                let N::Sequence(members) = &document.nodes()[columns] else {
+                    panic!("columns are a list")
+                };
+                document.field(members[0], "options").unwrap()
+            };
             for (name, input) in [("left", 0), ("right", 1)] {
-                let result = value.document.field(options, name).unwrap();
-                let origin = value.origins[result];
-                assert_eq!(origin.input, input);
-                let source = &originals[input];
-                let parent = source.field(source.root(), "options").unwrap();
-                assert_eq!(origin.node, source.field(parent, name).unwrap());
-                assert_eq!(value.document.nodes()[result], source.nodes()[origin.node]);
+                let result = value
+                    .document
+                    .field(options(&value.document), name)
+                    .unwrap();
+                let origin = value.node_origins[result];
+                assert_eq!(origin.layer, Some(input));
+                let source = &originals[input].document;
+                assert_eq!(
+                    origin.origin.node,
+                    source.field(options(source), name).unwrap()
+                );
+                assert_eq!(
+                    value.document.nodes()[result],
+                    source.nodes()[origin.origin.node]
+                );
             }
         }
         #[test]
         fn independent_compositions_preserve_the_written_override() {
-            let old = document(V::map(vec![("label", V::text("old"))]));
-            let new = document(V::map(vec![("label", V::text("new"))]));
-            let schema = schema();
-            let id = schema.root_class().fields[0].descriptor;
-            let first = schema.compose_descriptor(id, &old, &new).unwrap();
-            let second = schema.compose_descriptor(id, &old, &new).unwrap();
+            let old = V::map(vec![("label", V::text("old"))]);
+            let new = V::map(vec![("label", V::text("new"))]);
+            let first = compose(old.clone(), new.clone());
+            let second = compose(old, new);
             assert_eq!(first, second);
-            check(&first.document, V::map(vec![("label", V::text("new"))]));
+            check_member(&first.document, V::map(vec![("label", V::text("new"))]));
         }
 
         #[test]
         fn layers_keep_keyed_order_replace_ordinary_fields_and_track_written_provenance() {
             let layers = vec![
-                document(V::map(vec![
-                    ("schema_version", V::text("1.0")),
+                normalized(V::map(vec![
+                    ("yamaa", V::text("1.0")),
+                    ("type", V::text("spec")),
                     ("parent", V::text("parent.yaml")),
                     ("keys", V::List(vec![V::text("A")])),
                     ("metadata", V::map(vec![("old", V::text("old"))])),
@@ -1169,7 +1243,7 @@ mod schema {
                         ])]),
                     ),
                 ])),
-                document(V::map(vec![
+                normalized(V::map(vec![
                     ("metadata", V::map(vec![("new", V::text("new"))])),
                     (
                         "input",
@@ -1203,8 +1277,10 @@ mod schema {
                         ])]),
                     ),
                 ])),
-                document(V::map(vec![
-                    ("keys", V::Scalar(N::Null)),
+                // A 1.x layer clears an inherited field by listing it
+                // (LAYER-9, D18).
+                normalized(V::map(vec![
+                    ("clear", V::List(vec![V::text("keys")])),
                     (
                         "columns",
                         V::List(vec![V::map(vec![
@@ -1215,13 +1291,14 @@ mod schema {
                 ])),
             ];
             let original = layers.clone();
-            let result = schema().compose_layer_fragments(&layers).unwrap();
+            let result = versioned().compose_versioned_layers(&layers).unwrap();
             assert!(result.diagnostics.is_empty());
             assert_eq!(layers, original);
             check(
                 &result.document,
                 V::map(vec![
-                    ("schema_version", V::text("1.0")),
+                    ("yamaa", V::text("1.0")),
+                    ("type", V::text("spec")),
                     ("metadata", V::map(vec![("new", V::text("new"))])),
                     (
                         "input",
@@ -1307,12 +1384,15 @@ mod schema {
                     "{path}"
                 );
             }
-            assert!(!result
-                .provenance
-                .iter()
-                .any(|p| p.path == "keys" || p.path == "metadata.new" || p.path == "parent"));
+            assert!(!result.provenance.iter().any(|p| p.path == "keys"
+                || p.path == "metadata.new"
+                || p.path == "parent"
+                || p.path == "clear"));
         }
 
+        /// 0.5 only (#3447): a null that clears is the 0.5 clear marker. A
+        /// 1.x layer clears through `clear`, and its null is a value
+        /// (LAYER-9).
         #[test]
         fn first_declaration_nulls_are_absent_and_required_clears_fail() {
             let layers = vec![document(V::map(vec![
@@ -1349,6 +1429,7 @@ mod schema {
             );
         }
 
+        /// 0.5 only (#3447): the 0.5 clear marker, as above.
         #[test]
         fn first_declaration_nulls_are_absent_at_every_boundary_but_a_literal_payload_is_a_value() {
             let first = document(V::map(vec![
@@ -1440,6 +1521,7 @@ mod schema {
                 .any(|p| p.path == "intermediates.LOOK.no_match"));
         }
 
+        /// 0.5 only (#3447): the 0.5 clear marker, as above.
         #[test]
         fn inherited_handler_is_cleared_a_repeated_null_stays_absent_and_a_value_returns() {
             for inherited in [V::text("UNKNOWN"), V::Scalar(N::Null)] {
@@ -1515,6 +1597,7 @@ mod schema {
             }
         }
 
+        /// 0.5 only (#3447): the 0.5 clear marker, as above.
         #[test]
         fn null_collections_are_absent_and_a_later_layer_supplies_them() {
             let first = document(V::map(vec![
@@ -1546,7 +1629,7 @@ mod schema {
 
         #[test]
         fn malformed_collection_shapes_and_duplicate_identifiers_are_refused() {
-            let schema = schema();
+            let schema = versioned();
             for value in [
                 V::map(vec![("columns", V::text("not a sequence"))]),
                 V::map(vec![(
@@ -1565,71 +1648,96 @@ mod schema {
                     V::List(vec![V::map(vec![("label", V::text("no identity"))])]),
                 )]),
             ] {
-                assert!(schema.compose_layer_fragments(&[document(value)]).is_err());
+                assert!(schema
+                    .compose_versioned_layers(&[normalized(value)])
+                    .is_err());
             }
         }
 
         #[test]
         fn independent_layer_requests_keep_the_same_version_and_occurrences() {
-            let layers = [document(V::map(vec![("schema_version", V::text("1.0"))]))];
-            let schema = schema();
-            let first = schema.compose_layer_fragments(&layers).unwrap();
-            let second = schema.compose_layer_fragments(&layers).unwrap();
+            let layers = [normalized(V::map(vec![("yamaa", V::text("1.0"))]))];
+            let schema = versioned();
+            let first = schema.compose_versioned_layers(&layers).unwrap();
+            let second = schema.compose_versioned_layers(&layers).unwrap();
             assert_eq!(first, second);
         }
 
         #[test]
         fn complete_composition_materializes_defaults_once_and_keeps_written_provenance() {
-            let layers = vec![
-                document(V::map(vec![(
-                    "columns",
-                    V::List(vec![V::map(vec![
-                        ("name", V::text("A")),
-                        ("options", V::map(vec![("defaulted", V::text("AUTHORED"))])),
-                    ])]),
-                )])),
-                document(V::map(vec![(
+            // The layers write every field the resolved specification
+            // requires, since requiredness applies to it (LAYER-7).
+            let result = compose_versioned(vec![
+                V::map(vec![
+                    ("yamaa", V::text("1.0")),
+                    ("type", V::text("spec")),
+                    ("output", V::map(vec![])),
+                    (
+                        "columns",
+                        V::List(vec![V::map(vec![
+                            ("name", V::text("A")),
+                            ("type", V::text("int")),
+                            ("options", V::map(vec![("defaulted", V::text("AUTHORED"))])),
+                        ])]),
+                    ),
+                ]),
+                V::map(vec![(
                     "columns",
                     V::List(vec![
                         V::map(vec![
                             ("name", V::text("A")),
                             ("options", V::map(vec![("left", V::text("L"))])),
                         ]),
-                        V::map(vec![("name", V::text("B")), ("options", V::map(vec![]))]),
+                        V::map(vec![
+                            ("name", V::text("B")),
+                            ("type", V::text("str")),
+                            ("options", V::map(vec![])),
+                        ]),
                     ]),
-                )])),
-                document(V::map(vec![(
+                )]),
+                V::map(vec![(
                     "columns",
                     V::List(vec![V::map(vec![
                         ("name", V::text("A")),
                         ("options", V::map(vec![("right", V::text("R"))])),
                     ])]),
-                )])),
-            ];
-            let result = schema().compose_layers(&layers).unwrap();
-            assert!(result.diagnostics.is_empty());
-            check(
-                &result.document,
-                V::map(vec![(
-                    "columns",
-                    V::List(vec![
-                        V::map(vec![
-                            ("name", V::text("A")),
-                            (
-                                "options",
-                                V::map(vec![
-                                    ("left", V::text("L")),
-                                    ("right", V::text("R")),
-                                    ("defaulted", V::text("AUTHORED")),
-                                ]),
-                            ),
-                        ]),
-                        V::map(vec![
-                            ("name", V::text("B")),
-                            ("options", V::map(vec![("defaulted", V::text("DEFAULT"))])),
-                        ]),
-                    ]),
                 )]),
+            ]);
+            assert!(result.diagnostics.is_empty());
+            // Composition materializes no default; the resolved
+            // specification's normalization does, once, in schema order.
+            let resolved = versioned()
+                .normalize_resolved_root(&result.document)
+                .unwrap();
+            check(
+                &resolved.document,
+                V::map(vec![
+                    ("yamaa", V::text("1.0")),
+                    ("type", V::text("spec")),
+                    (
+                        "columns",
+                        V::List(vec![
+                            V::map(vec![
+                                ("name", V::text("A")),
+                                ("type", V::text("int")),
+                                (
+                                    "options",
+                                    V::map(vec![
+                                        ("left", V::text("L")),
+                                        ("right", V::text("R")),
+                                        ("defaulted", V::text("AUTHORED")),
+                                    ]),
+                                ),
+                            ]),
+                            V::map(vec![
+                                ("name", V::text("B")),
+                                ("type", V::text("str")),
+                                ("options", V::map(vec![("defaulted", V::text("DEFAULT"))])),
+                            ]),
+                        ]),
+                    ),
+                    ("output", V::map(vec![])),
+                ]),
             );
             assert_eq!(
                 result
@@ -1646,6 +1754,9 @@ mod schema {
                 .any(|p| p.path == "columns.B.options.defaulted"));
         }
 
+        /// 0.5 only (#3447): `compose_layers` materializes member defaults
+        /// beside the 0.5 clear markers' findings. A 1.x composition
+        /// materializes none (LAYER-7).
         #[test]
         fn materialization_failure_precedes_collected_clear_diagnostics_without_partial_output() {
             let layers = [document(V::map(vec![
@@ -2471,7 +2582,7 @@ mod schema {
                             "root_class",
                             Authored::List(vec![
                                 Authored::map(vec![(
-                                    "schema_version",
+                                    "yamaa",
                                     Authored::map(vec![("type", Authored::text("str"))]),
                                 )]),
                                 Authored::map(vec![(
@@ -2499,11 +2610,9 @@ mod schema {
                 "root_class",
             )
             .unwrap();
-            let raw = document(Authored::map(vec![(
-                "schema_version",
-                Authored::text("1.0"),
-            )]));
-            let normalized = schema.normalize_document(&raw).unwrap();
+            // A complete 1.x document, normalized once its header is read.
+            let raw = document(Authored::map(vec![("yamaa", Authored::text("1.0"))]));
+            let normalized = schema.normalize_root(&raw).unwrap();
             let value = normalized
                 .document
                 .field(normalized.document.root(), "value")
