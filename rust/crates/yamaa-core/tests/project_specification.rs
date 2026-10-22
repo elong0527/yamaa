@@ -4,7 +4,8 @@ mod project {
         use crate::support::id_source_schema as source;
         use crate::support::project_call_compiler as support;
         use crate::support::resolved;
-        use support::{call, function, specification_with_rows, Tree};
+        use crate::support::specification::{prepare, prepare_in};
+        use support::{call, environment, file, project, specification_with_rows, Tree};
         use yamaa_core::json::Value as JsonValue;
         use yamaa_core::{
             bound_expression::Read,
@@ -13,30 +14,20 @@ mod project {
                 FunctionInput,
             },
             schema::DocumentNode as N,
-            specification::{BindError, PrepareError, PreparedSpecification},
+            specification::{BindError, PrepareError},
             table::{Column, TableSchema},
             value::{ColumnType, Value},
         };
+        /// A number is a literal as YAML writes it (D18).
         fn literal(value: i64) -> Tree {
-            Tree::map(vec![(
-                "literal",
-                Tree::Scalar(N::Integer(value.to_string())),
-            )])
+            Tree::Scalar(N::Integer(value.to_string()))
         }
+        /// Text is a literal quoted in the expression (D18).
         fn text_literal(value: &str) -> Tree {
-            Tree::map(vec![("literal", Tree::text(value))])
+            Tree::text(format!("'{}'", value.replace('\'', "''")))
         }
         fn row(id: &str, mut derivations: Vec<(&str, Tree)>, groups: Option<Vec<&str>>) -> Tree {
-            derivations.insert(
-                0,
-                (
-                    "ID",
-                    Tree::map(vec![(
-                        "source",
-                        Tree::map(vec![("variable", Tree::text("SRC.ID"))]),
-                    )]),
-                ),
-            );
+            derivations.insert(0, ("ID", Tree::text("SRC.ID")));
             let mut fields = vec![
                 ("id", Tree::text(id)),
                 (
@@ -78,7 +69,7 @@ mod project {
             };
             fields.push(("filter".into(), Tree::text("SEQ > 1")));
             let spec = specification_with_rows(vec![("SEQ", "int", literal(0))], vec![template]);
-            let prepared = PreparedSpecification::prepare(&spec).unwrap();
+            let prepared = prepare(&spec).unwrap();
             // Grouped filters gate completed groups under ROW-1.
             assert!(prepared.bind(&source()).is_ok());
         }
@@ -108,11 +99,7 @@ mod project {
                     ),
                 ],
             );
-            let prepared = PreparedSpecification::prepare_with_project(
-                &spec,
-                &[function("unused"), function("id")],
-            )
-            .unwrap();
+            let prepared = prepare_in(&spec, &environment(&["unused", "id"])).unwrap();
             assert_eq!(prepared.called_functions(), [1]);
             let plan = prepared.bind(&source()).unwrap();
             assert!(resolved::columns(&plan).is_empty());
@@ -147,8 +134,7 @@ mod project {
                     row("second", vec![("A", literal(9))], None),
                 ],
             );
-            let prepared =
-                PreparedSpecification::prepare_with_project(&spec, &[function("id")]).unwrap();
+            let prepared = prepare_in(&spec, &environment(&["id"])).unwrap();
             assert!(prepared.called_functions().is_empty());
             assert!(prepared.project_calls().unwrap().plans().is_empty());
             assert_eq!(prepared.project_calls().unwrap().calls()[0].slot(), None);
@@ -164,8 +150,7 @@ mod project {
                     row("second", vec![("A", literal(9))], None),
                 ],
             );
-            let Err(PrepareError::Invalid(findings)) =
-                PreparedSpecification::prepare_with_project(&invalid, &[function("id")])
+            let Err(PrepareError::Invalid(findings)) = prepare_in(&invalid, &environment(&["id"]))
             else {
                 panic!("unused default still checked")
             };
@@ -190,8 +175,7 @@ mod project {
                     None,
                 )],
             );
-            let prepared =
-                PreparedSpecification::prepare_with_project(&spec, &[function("id")]).unwrap();
+            let prepared = prepare_in(&spec, &environment(&["id"])).unwrap();
             let Err(BindError::Invalid(findings)) = prepared.bind(&source()) else {
                 panic!("cycle")
             };
@@ -240,8 +224,7 @@ mod project {
                     row("second", vec![("B", literal(3)), ("C", literal(4))], None),
                 ],
             );
-            let Err(PrepareError::Invalid(findings)) =
-                PreparedSpecification::prepare_with_project(&spec, &[function("id")])
+            let Err(PrepareError::Invalid(findings)) = prepare_in(&spec, &environment(&["id"]))
             else {
                 panic!("duplicate defaults")
             };
@@ -298,8 +281,7 @@ mod project {
                     ],
                     rows,
                 );
-                let prepared =
-                    PreparedSpecification::prepare_with_project(&spec, &[function("id")]).unwrap();
+                let prepared = prepare_in(&spec, &environment(&["id"])).unwrap();
                 let Err(BindError::Invalid(findings)) = prepared.bind(&source()) else {
                     panic!("cycles")
                 };
@@ -321,7 +303,7 @@ mod project {
                     assert_eq!(
                         diagnostics[1].spec_paths,
                         [
-                            "rows[2].derivations.A.function",
+                            "rows.local.derivations.A.function",
                             "columns.B.derivation.function"
                         ]
                     );
@@ -353,8 +335,7 @@ mod project {
                 .collect();
             let id = "r".repeat(200_000);
             let spec = specification_with_rows(columns, vec![row(&id, overrides, None)]);
-            let Err(PrepareError::Invalid(findings)) =
-                PreparedSpecification::prepare_with_project(&spec, &[function("id")])
+            let Err(PrepareError::Invalid(findings)) = prepare_in(&spec, &environment(&["id"]))
             else {
                 panic!("complete semantic default conflicts");
             };
@@ -384,8 +365,7 @@ mod project {
                     Some(vec!["SRC.ID"]),
                 )],
             );
-            let prepared =
-                PreparedSpecification::prepare_with_project(&spec, &[function("id")]).unwrap();
+            let prepared = prepare_in(&spec, &environment(&["id"])).unwrap();
             let plan = prepared.bind(&source()).unwrap();
             let Op::ProjectFunction(bound) = resolved::op(&plan, resolved::row(&plan, 0)[1].expr)
             else {
@@ -403,8 +383,7 @@ mod project {
                     Some(vec!["SRC.ID"]),
                 )],
             );
-            let prepared =
-                PreparedSpecification::prepare_with_project(&bad, &[function("id")]).unwrap();
+            let prepared = prepare_in(&bad, &environment(&["id"])).unwrap();
             let source = TableSchema::new(vec![
                 Column {
                     name: "ID".into(),
@@ -438,7 +417,7 @@ mod project {
             );
             assert!(diagnostics
                 .iter()
-                .all(|d| d.spec_paths == ["rows[0].derivations.A.function.args.x"]));
+                .all(|d| d.spec_paths == ["rows.group.derivations.A.function.args.x"]));
         }
 
         #[test]
@@ -450,8 +429,7 @@ mod project {
                 ],
                 vec![row("record", vec![], None)],
             );
-            let prepared =
-                PreparedSpecification::prepare_with_project(&spec, &[function("id")]).unwrap();
+            let prepared = prepare_in(&spec, &environment(&["id"])).unwrap();
             let plan = prepared.bind(&source()).unwrap();
             assert_eq!(resolved::row(&plan, 0).len(), 1);
             let columns = resolved::columns(&plan);
@@ -470,8 +448,7 @@ mod project {
                 ],
                 vec![row("record", vec![], None)],
             );
-            let prepared =
-                PreparedSpecification::prepare_with_project(&forward, &[function("id")]).unwrap();
+            let prepared = prepare_in(&forward, &environment(&["id"])).unwrap();
             let Err(BindError::Invalid(findings)) = prepared.bind(&source()) else {
                 panic!("column forward reference")
             };
@@ -508,8 +485,7 @@ mod project {
                     None,
                 )],
             );
-            let Err(PrepareError::Invalid(findings)) =
-                PreparedSpecification::prepare_with_project(&spec, &[function("id")])
+            let Err(PrepareError::Invalid(findings)) = prepare_in(&spec, &environment(&["id"]))
             else {
                 panic!("row phase findings")
             };
@@ -520,7 +496,7 @@ mod project {
                 assert_eq!(diagnostic.definition().rule, Some("COLUMN-4"));
                 assert_eq!(
                     diagnostic.spec_paths,
-                    [format!("rows[0].derivations.{column}.function.args.x")]
+                    [format!("rows.record.derivations.{column}.function.args.x")]
                 );
             }
         }
@@ -539,8 +515,7 @@ mod project {
                 ],
                 vec![grouped],
             );
-            let prepared =
-                PreparedSpecification::prepare_with_project(&spec, &[function("id")]).unwrap();
+            let prepared = prepare_in(&spec, &environment(&["id"])).unwrap();
             let plan = prepared.bind(&source()).unwrap();
             assert!(resolved::columns(&plan).is_empty());
             assert_eq!(resolved::completed(&resolved::row(&plan, 0)), [0, 1, 2]);
@@ -553,8 +528,7 @@ mod project {
                     None,
                 )],
             );
-            let prepared =
-                PreparedSpecification::prepare_with_project(&spec, &[function("id")]).unwrap();
+            let prepared = prepare_in(&spec, &environment(&["id"])).unwrap();
             let source = TableSchema::new(vec![
                 Column {
                     name: "ID".into(),
@@ -574,10 +548,9 @@ mod project {
         #[test]
         fn every_function_argument_keeps_the_complete_long_row_context() {
             use crate::support::roots::{Case, Parameter};
-            use yamaa_core::project_function::{Function, Language};
             use yamaa_core::value::ValueType;
             let parameters = (0..8).map(|n| format!("p{n}")).collect::<Vec<_>>();
-            let mut definition = function("id").definition().clone();
+            let mut definition = file("id");
             definition.params = parameters
                 .iter()
                 .map(|name| {
@@ -618,7 +591,6 @@ mod project {
                 }
                 .root()
             }));
-            let function = Function::admit(Language::Python, definition).unwrap();
             let names = (0..63).map(|n| format!("C{n}")).collect::<Vec<_>>();
             let columns = names
                 .iter()
@@ -642,7 +614,7 @@ mod project {
             let id = "r".repeat(200_000);
             let spec =
                 specification_with_rows(columns, vec![row(&id, derivations, Some(vec!["SRC.ID"]))]);
-            let prepared = PreparedSpecification::prepare_with_project(&spec, &[function]).unwrap();
+            let prepared = prepare_in(&spec, &project(vec![definition])).unwrap();
             assert_eq!(prepared.project_calls().unwrap().calls().len(), 63);
         }
 
@@ -662,13 +634,7 @@ mod project {
                         }
                         Tree::map(fields)
                     };
-                    let mut derivations = vec![(
-                        "B",
-                        Tree::map(vec![(
-                            "source",
-                            Tree::map(vec![("variable", Tree::text("A"))]),
-                        )]),
-                    )];
+                    let mut derivations = vec![("B", Tree::text("A"))];
                     if overridden {
                         derivations.push(("A", literal(7)));
                     }
@@ -679,7 +645,7 @@ mod project {
                         ],
                         vec![row("record", derivations, None)],
                     );
-                    let prepared = PreparedSpecification::prepare_with_project(&spec, &[]);
+                    let prepared = prepare_in(&spec, &environment(&[]));
                     if operation != "first_available" {
                         let Err(PrepareError::Invalid(findings)) = prepared else {
                             panic!("column windows stay in the column phase");
@@ -737,12 +703,7 @@ mod project {
         #[test]
         fn bare_row_reads_of_nonlocal_outputs_keep_complete_phase_diagnostics_without_function_context(
         ) {
-            let bare = || {
-                Tree::map(vec![(
-                    "source",
-                    Tree::map(vec![("variable", Tree::text("A"))]),
-                )])
-            };
+            let bare = || Tree::text("A");
             let spec = specification_with_rows(
                 vec![
                     (
@@ -758,9 +719,7 @@ mod project {
                 ],
                 vec![row("record", vec![("B", bare()), ("C", bare())], None)],
             );
-            let Err(PrepareError::Invalid(findings)) =
-                PreparedSpecification::prepare_with_project(&spec, &[])
-            else {
+            let Err(PrepareError::Invalid(findings)) = prepare_in(&spec, &environment(&[])) else {
                 panic!("complete bare row phase findings before lowering")
             };
             assert_eq!(findings.len(), 2);
@@ -776,7 +735,7 @@ mod project {
                 );
                 assert_eq!(
                     diagnostic.spec_paths,
-                    [format!("rows[0].derivations.{column}.source")]
+                    [format!("rows.record.derivations.{column}.source")]
                 );
                 assert_eq!(
                     diagnostic.context,
@@ -801,15 +760,13 @@ mod project {
 
         #[test]
         fn nested_row_case_calls_share_activation_and_dependency_order() {
-            use yamaa_core::project_function::{Function, Language};
-            let mut definition = function("format").definition().clone();
+            let mut definition = file("format");
             definition.returns = ColumnType::Str;
             for case in &mut definition.tests {
                 if let Value::Int(value) = case.result {
                     case.result = Value::Str(value.to_string());
                 }
             }
-            let formatter = Function::admit(Language::Python, definition).unwrap();
             let case = |then: Tree, otherwise: Tree| {
                 Tree::map(vec![(
                     "case",
@@ -832,9 +789,9 @@ mod project {
                 ],
                 vec![row("one", vec![("D", formatted), ("A", identity)], None)],
             );
-            let prepared = PreparedSpecification::prepare_with_project(
+            let prepared = prepare_in(
                 &spec,
-                &[function("id"), formatter, function("unused")],
+                &project(vec![file("id"), definition, file("unused")]),
             )
             .unwrap();
             assert_eq!(prepared.called_functions(), [0, 1]);
@@ -899,7 +856,7 @@ mod project {
                 ],
                 templates,
             );
-            let prepared = PreparedSpecification::prepare(&spec).unwrap();
+            let prepared = prepare(&spec).unwrap();
             // Binding is per template and per bind call: repeated binds of
             // the shared preparation must reproduce the same independently
             // expected assignments, paths and grouping modes.
@@ -911,31 +868,31 @@ mod project {
                 };
                 let big = |template: usize| bound_assignment(&plan, template, 1);
                 assert_eq!(literal(big(0)), Op::Literal(Value::Str(large.clone())));
-                assert_eq!(&*big(0).path, "columns.BIG.derivation.literal");
+                assert_eq!(&*big(0).path, "columns.BIG.derivation");
                 assert_eq!(
                     literal(big(1)),
                     Op::Literal(Value::Str("big-override".into()))
                 );
-                assert_eq!(&*big(1).path, "rows[1].derivations.BIG.literal");
+                assert_eq!(&*big(1).path, "rows.override.derivations.BIG");
                 assert_eq!(literal(big(2)), Op::Literal(Value::Str(large.clone())));
-                assert_eq!(&*big(2).path, "columns.BIG.derivation.literal");
+                assert_eq!(&*big(2).path, "columns.BIG.derivation");
                 assert!(matches!(
                     resolved::grain(resolved::templates(&plan)[2]),
                     Grain::Groups(_)
                 ));
                 let note = |template: usize| bound_assignment(&plan, template, 2);
                 assert_eq!(literal(note(0)), Op::Literal(Value::Str("note-a".into())));
-                assert_eq!(&*note(0).path, "rows[0].derivations.NOTE.literal");
+                assert_eq!(&*note(0).path, "rows.records.derivations.NOTE");
                 assert_eq!(
                     literal(note(1)),
                     Op::Literal(Value::Str("note-default".into()))
                 );
-                assert_eq!(&*note(1).path, "columns.NOTE.derivation.literal");
+                assert_eq!(&*note(1).path, "columns.NOTE.derivation");
                 assert_eq!(
                     literal(note(2)),
                     Op::Literal(Value::Str("note-default".into()))
                 );
-                assert_eq!(&*note(2).path, "columns.NOTE.derivation.literal");
+                assert_eq!(&*note(2).path, "columns.NOTE.derivation");
             }
         }
 
@@ -944,12 +901,7 @@ mod project {
             // Three admitted drivers: the second template reads ALT, the
             // third groups GRP; both inherit the same authored defaults.
             let large = "shared-authored-default ".repeat(256);
-            let source_value = |variable: &str| {
-                Tree::map(vec![(
-                    "source",
-                    Tree::map(vec![("variable", Tree::text(variable))]),
-                )])
-            };
+            let source_value = |variable: &str| Tree::text(variable);
             let derivation = |value: Tree| Tree::map(vec![("value", value)]);
             let column = |name: &str, kind: &str, value: Tree| {
                 Tree::map(vec![
@@ -986,7 +938,8 @@ mod project {
                 Tree::map(fields)
             };
             let root = Tree::map(vec![
-                ("schema_version", Tree::text("1.0")),
+                ("yamaa", Tree::text("1.0")),
+                ("type", Tree::text("spec")),
                 ("domain", Tree::text("TEST")),
                 (
                     "input",
@@ -1049,11 +1002,7 @@ mod project {
                     ]),
                 ),
             ]);
-            let document = root.document();
-            let spec = yamaa_core::schema::SpecificationDocument::admit(document)
-                .unwrap()
-                .unwrap();
-            let prepared = PreparedSpecification::prepare(&spec).unwrap();
+            let prepared = prepare(&root.document()).unwrap();
             let schema = crate::support::table_schema(&[("ID", ColumnType::Int)]);
             let plan = prepared.bind_sources(&[&schema, &schema, &schema]).unwrap();
             let src_table = crate::support::dataset::table(
@@ -1112,11 +1061,12 @@ mod project {
     mod specification_str_pad {
         //! Independent captured reference ordering for positive-width admission failures.
         use crate::support::project_call_compiler as support;
+        use crate::support::specification::prepare;
         use support::{specification, specification_with_rows, Tree};
         use yamaa_core::{
             diagnostic::ConditionCode,
-            schema::DocumentNode as N,
-            specification::{BindError, PreparedSpecification},
+            schema::{Document, DocumentNode as N},
+            specification::BindError,
             table::{Column, TableSchema},
             value::ColumnType,
         };
@@ -1139,10 +1089,8 @@ mod project {
                 ]),
             )])
         }
-        fn findings(
-            spec: &yamaa_core::schema::SpecificationDocument,
-        ) -> Vec<(ConditionCode, String)> {
-            let prepared = PreparedSpecification::prepare(spec).unwrap();
+        fn findings(spec: &Document) -> Vec<(ConditionCode, String)> {
+            let prepared = prepare(spec).unwrap();
             let source = TableSchema::new(vec![Column {
                 name: "ID".into(),
                 kind: ColumnType::Int,
@@ -1237,16 +1185,8 @@ mod project {
         fn row_substitutions_report_all_widths_before_reference_binding() {
             let spec = specification_with_rows(
                 vec![
-                    (
-                        "A",
-                        "str",
-                        Tree::map(vec![("literal", Tree::text("unused"))]),
-                    ),
-                    (
-                        "B",
-                        "str",
-                        Tree::map(vec![("literal", Tree::text("unused"))]),
-                    ),
+                    ("A", "str", Tree::text("'unused'")),
+                    ("B", "str", Tree::text("'unused'")),
                 ],
                 vec![Tree::map(vec![
                     ("id", Tree::text("records")),
@@ -1265,10 +1205,10 @@ mod project {
                     .map(|(_, path)| path)
                     .collect::<Vec<_>>(),
                 widths_and_sources(&[
-                    "rows[0].derivations.A.str_pad.width",
-                    "rows[0].derivations.B.str_pad.width",
-                    "rows[0].derivations.A.str_pad.source",
-                    "rows[0].derivations.B.str_pad.source",
+                    "rows.records.derivations.A.str_pad.width",
+                    "rows.records.derivations.B.str_pad.width",
+                    "rows.records.derivations.A.str_pad.source",
+                    "rows.records.derivations.B.str_pad.source",
                 ])
             );
         }
@@ -1295,18 +1235,13 @@ mod project {
 
         #[test]
         fn numeric_grammar_and_widths_keep_authored_order_before_reference_binding() {
-            let invalid_numeric = || {
-                Tree::map(vec![(
-                    "compute",
-                    Tree::map(vec![("expr", Tree::text("ID +"))]),
-                )])
-            };
+            let invalid_numeric = || Tree::text("ID +");
             for (first, otherwise, expected) in [
                 (
                     invalid_numeric(),
                     pad("SRC.ABSENT", "0"),
                     widths_and_sources(&[
-                        "columns.A.derivation.case[0].then.compute.expr",
+                        "columns.A.derivation.case[0].then",
                         "columns.A.derivation.case[1].otherwise.str_pad.width",
                         "columns.A.derivation.case[0].when",
                         "columns.A.derivation.case[1].otherwise.str_pad.source",
@@ -1317,7 +1252,7 @@ mod project {
                     invalid_numeric(),
                     widths_and_sources(&[
                         "columns.A.derivation.case[0].then.str_pad.width",
-                        "columns.A.derivation.case[1].otherwise.compute.expr",
+                        "columns.A.derivation.case[1].otherwise",
                         "columns.A.derivation.case[0].when",
                         "columns.A.derivation.case[0].then.str_pad.source",
                     ]),

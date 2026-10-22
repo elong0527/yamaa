@@ -3065,10 +3065,16 @@ columns:
                 })
             }
         }
+        /// The 1.0 specification, prepared against its project as the 1.0
+        /// front end lowers it.
         fn compiled() -> PreparedSpecification {
-            PreparedSpecification::prepare_with_environment(
-                &spec("SEX", "str", None, false, None),
-                &environment(false),
+            let document = spec("SEX", "str", None, false, None);
+            let tree = yamaa_core::front_end::v1::spec::lower(&document, None).into_spec();
+            PreparedSpecification::prepare_tree_linked(
+                tree,
+                &document,
+                Some(&environment(false)),
+                Default::default(),
             )
             .unwrap()
         }

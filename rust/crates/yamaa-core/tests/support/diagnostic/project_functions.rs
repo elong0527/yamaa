@@ -1,14 +1,15 @@
 use super::rendered;
 use crate::support::project_call_compiler as support;
+use crate::support::specification::prepare_in;
 use std::collections::BTreeSet;
-use support::{call, definition, function, specification, specification_with_rows, Tree};
+use support::{call, definition, environment, specification, specification_with_rows, Tree};
 use yamaa_core::json::Value as JsonValue;
 use yamaa_core::{
     diagnostic::ConditionCode,
     project_environment::{Draft, Environment},
     project_function::Language,
     schema::DocumentNode as N,
-    specification::{PrepareError, PreparedSpecification},
+    specification::PrepareError,
 };
 pub fn reached() -> BTreeSet<ConditionCode> {
     let mut reached = BTreeSet::new();
@@ -24,7 +25,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         (
             "id",
             N::Float(7.0),
-            vec![function("id")],
+            vec!["id"],
             "invalid_function_argument",
             "FUNC-5",
             "columns.VALUE.derivation.function.args.x",
@@ -35,8 +36,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             "int",
             call(name, vec![("x", Tree::Scalar(value))]),
         )]);
-        let Err(PrepareError::Invalid(findings)) =
-            PreparedSpecification::prepare_with_project(&spec, &functions)
+        let Err(PrepareError::Invalid(findings)) = prepare_in(&spec, &environment(&functions))
         else {
             panic!("compiler-owned function cause")
         };
@@ -80,8 +80,10 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         }
         reached.insert(rendered(&diagnostic));
     }
-    // A supplied project that names no environment file for the host reports
-    // each call against that absent environment rather than the function name.
+    // A supplied 0.5 project that names no environment file for the host
+    // reports each call against that absent environment rather than the
+    // function name. Only a 0.5 project links environment files, so the cause
+    // stays until #3448 deletes them (D8).
     let undeclared = Environment::admit(
         Some(Language::R),
         Draft {
@@ -99,9 +101,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         "int",
         call("id", vec![("x", Tree::Scalar(N::Integer("7".into())))]),
     )]);
-    let Err(PrepareError::Invalid(findings)) =
-        PreparedSpecification::prepare_with_environment(&spec, &undeclared)
-    else {
+    let Err(PrepareError::Invalid(findings)) = prepare_in(&spec, &undeclared) else {
         panic!("undeclared environment cause")
     };
     assert_eq!(findings.len(), 1);
@@ -144,9 +144,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     )
     .unwrap()
     .into_execution();
-    let Err(PrepareError::Invalid(findings)) =
-        PreparedSpecification::prepare_with_environment(&spec, &unimplemented)
-    else {
+    let Err(PrepareError::Invalid(findings)) = prepare_in(&spec, &unimplemented) else {
         panic!("missing implementation cause")
     };
     assert_eq!(findings.len(), 1);
@@ -178,7 +176,8 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     reached.insert(rendered(&diagnostic));
     // An engine that claims no host language reads no 0.5 environment file,
     // so it knows no function a 0.5 project declares: each call is refused as
-    // unsupported before any data is read (#3030 section 2.10, D110).
+    // unsupported before any data is read (#3030 section 2.10, D110). The 0.5
+    // project stays until #3448 deletes environment files (D8).
     let neutral = Environment::admit(
         None,
         Draft {
@@ -191,9 +190,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     )
     .unwrap()
     .into_execution();
-    let Err(PrepareError::Invalid(findings)) =
-        PreparedSpecification::prepare_with_environment(&spec, &neutral)
-    else {
+    let Err(PrepareError::Invalid(findings)) = prepare_in(&spec, &neutral) else {
         panic!("no host language cause")
     };
     assert_eq!(findings.len(), 1);
@@ -235,14 +232,10 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     )
     .unwrap()
     .into_execution();
-    let compiled = PreparedSpecification::prepare_with_environment(&spec, &neutral)
-        .expect("a call compiles without a host language");
+    let compiled = prepare_in(&spec, &neutral).expect("a call compiles without a host language");
     assert_eq!(compiled.called_functions(), [0]);
     assert_eq!(neutral.functions()[0].call(), "");
-    let source = Tree::map(vec![(
-        "source",
-        Tree::map(vec![("variable", Tree::text("SRC.ID"))]),
-    )]);
+    let source = Tree::text("SRC.ID");
     let spec = specification_with_rows(
         vec![
             (
@@ -253,11 +246,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
                     Tree::map(vec![("expr", Tree::text("SUM(SRC.ID)"))]),
                 )]),
             ),
-            (
-                "B",
-                "int",
-                Tree::map(vec![("literal", Tree::Scalar(N::Integer("0".into())))]),
-            ),
+            ("B", "int", Tree::Scalar(N::Integer("0".into()))),
         ],
         vec![Tree::map(vec![
             ("id", Tree::text("record")),
@@ -273,9 +262,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             ),
         ])],
     );
-    let Err(PrepareError::Invalid(findings)) =
-        PreparedSpecification::prepare_with_project(&spec, &[function("id")])
-    else {
+    let Err(PrepareError::Invalid(findings)) = prepare_in(&spec, &environment(&["id"])) else {
         panic!("row phase cause")
     };
     assert_eq!(findings.len(), 1);
@@ -290,7 +277,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     );
     assert_eq!(
         diagnostic.spec_paths,
-        ["rows[0].derivations.B.function.args.x"]
+        ["rows.record.derivations.B.function.args.x"]
     );
     for (key, value) in [
         ("function", "id"),
@@ -312,23 +299,14 @@ pub fn reached() -> BTreeSet<ConditionCode> {
 /// one selected record (LOOKUP-22). The declarations decide it, so
 /// preparation reports it, and `check()` with it.
 pub fn donor_keep_reached() -> BTreeSet<ConditionCode> {
-    use yamaa_core::{
-        schema::{Document, SpecificationDocument},
-        specification::PreflightFinding,
-    };
-    let source = |name: &str| {
-        Tree::map(vec![(
-            "value",
-            Tree::map(vec![(
-                "source",
-                Tree::map(vec![("variable", Tree::text(name))]),
-            )]),
-        )])
-    };
+    use yamaa_core::specification::PreflightFinding;
+    let source = |name: &str| Tree::map(vec![("value", Tree::text(name))]);
     let input = |path: &str| Tree::map(vec![("path", Tree::text(path))]);
-    let mut nodes = vec![];
-    let root = Tree::map(vec![
-        ("schema_version", Tree::text("1.0")),
+    // Each intermediate a derivation reads declares the key 0.5 inferred
+    // (D23, D111); the keep finding precedes binding.
+    let spec = Tree::map(vec![
+        ("yamaa", Tree::text("1.0")),
+        ("type", Tree::text("spec")),
         ("domain", Tree::text("TEST")),
         ("base", Tree::text("SRC")),
         (
@@ -346,11 +324,13 @@ pub fn donor_keep_reached() -> BTreeSet<ConditionCode> {
                 Tree::map(vec![
                     ("id", Tree::text("SUBJ")),
                     ("dataset", Tree::text("DONOR")),
+                    ("key", Tree::List(vec![Tree::text("ID")])),
                     ("filter", Tree::text("DONOR.N > 0")),
                 ]),
                 Tree::map(vec![
                     ("id", Tree::text("FIRST")),
                     ("dataset", Tree::text("OBS")),
+                    ("key", Tree::List(vec![Tree::text("ID")])),
                     (
                         "derivations",
                         Tree::map(vec![(
@@ -395,13 +375,8 @@ pub fn donor_keep_reached() -> BTreeSet<ConditionCode> {
             ]),
         ),
     ])
-    .append(&mut nodes);
-    let spec = SpecificationDocument::admit(Document::new(nodes, root).unwrap())
-        .unwrap()
-        .unwrap();
-    let Err(PrepareError::Invalid(findings)) =
-        PreparedSpecification::prepare_with_project(&spec, &[function("id")])
-    else {
+    .document();
+    let Err(PrepareError::Invalid(findings)) = prepare_in(&spec, &environment(&["id"])) else {
         panic!("a donor function argument over an unkept intermediate must fail")
     };
     let [PreflightFinding::Scalar(diagnostic)] = findings.as_slice() else {
@@ -417,7 +392,7 @@ pub fn donor_keep_reached() -> BTreeSet<ConditionCode> {
     );
     assert_eq!(
         diagnostic.spec_paths,
-        ["intermediates[1].derivations.NV.function.args.x"]
+        ["intermediates.FIRST.derivations.NV.function.args.x"]
     );
     let text = |value: &str| JsonValue::String(value.into());
     assert_eq!(

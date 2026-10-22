@@ -1374,21 +1374,15 @@ class PublicConformance(unittest.TestCase):
         # composes the empty child's columns in dependency order. So does the
         # link to its consuming specification, which from the empty child
         # names the parent, whose output file the child writes (OUTPUT-9).
-        # One difference stays open under its issue.
+        # The tracked differences under #3593 and #3594 are fixed.
         permanent = {
             ("negative-forward-key-reference", "empty_child"),
             ("negative-forward-reference", "empty_child"),
             ("negative-link-to-itself", "empty_child"),
         }
-        tracked = {
-            ("negative-copy-producer-cycle", "empty_child"): "#3594",
-        }
-        self.assertEqual(set(expectations), permanent | set(tracked))
+        self.assertEqual(set(expectations), permanent)
         for key in permanent:
             self.assertTrue(expectations[key]["permanent"])
-        for key, issue in tracked.items():
-            self.assertEqual(expectations[key]["issue"], issue)
-            self.assertFalse(expectations[key].get("permanent", False))
         for (benchmark, check), item in expectations.items():
             self.assertIn(benchmark, names)
             self.assertIn(check, {"empty_child", "key_order"})

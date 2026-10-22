@@ -2,19 +2,20 @@
 //! any record is read, a declared type no result of the expression can take.
 use super::rendered;
 use crate::support::document::Tree;
+use crate::support::specification::{header, prepare};
 use std::collections::BTreeSet;
 use yamaa_core::{
     diagnostic::{ConditionCode as C, Diagnostic},
     json::Value as V,
-    schema::{Document, SpecificationDocument},
-    specification::{BindError, PreparedSpecification},
+    schema::{Document, DocumentNode as N},
+    specification::BindError,
     table::{Column, TableSchema},
     value::ColumnType,
 };
 
 /// One output column besides the key, derived by `derivation` and optionally
 /// answered by an `unconvertible` literal.
-fn document(kind: &str, value: Tree, unconvertible: Option<Tree>) -> SpecificationDocument {
+fn document(kind: &str, value: Tree, unconvertible: Option<Tree>) -> Document {
     let mut derivation = vec![("value", value)];
     if let Some(handler) = unconvertible {
         derivation.push(("unconvertible", handler));
@@ -26,8 +27,8 @@ fn document(kind: &str, value: Tree, unconvertible: Option<Tree>) -> Specificati
             ("derivation", derivation),
         ])
     };
-    let tree = Tree::map(vec![
-        ("schema_version", Tree::text("1.0")),
+    let mut fields = header();
+    fields.extend([
         ("domain", Tree::text("TEST")),
         (
             "input",
@@ -46,13 +47,7 @@ fn document(kind: &str, value: Tree, unconvertible: Option<Tree>) -> Specificati
                 column(
                     "ID",
                     "int",
-                    Tree::map(vec![(
-                        "value",
-                        Tree::map(vec![(
-                            "source",
-                            Tree::map(vec![("variable", Tree::text("SRC.ID"))]),
-                        )]),
-                    )]),
+                    Tree::map(vec![("value", Tree::text("SRC.ID"))]),
                 ),
                 column("VALUE", kind, Tree::map(derivation)),
             ]),
@@ -68,11 +63,7 @@ fn document(kind: &str, value: Tree, unconvertible: Option<Tree>) -> Specificati
             ]),
         ),
     ]);
-    let mut nodes = Vec::new();
-    let root = tree.append(&mut nodes);
-    SpecificationDocument::admit(Document::new(nodes, root).unwrap())
-        .unwrap()
-        .unwrap()
+    Tree::map(fields).document()
 }
 
 fn source() -> TableSchema {
@@ -85,7 +76,7 @@ fn source() -> TableSchema {
 
 /// `check` and binding report one finding, the same before and after capture.
 fn refused(kind: &str, value: Tree) -> Diagnostic {
-    let prepared = PreparedSpecification::prepare(&document(kind, value, None)).unwrap();
+    let prepared = prepare(&document(kind, value, None)).unwrap();
     let checked = prepared.check_declaration_diagnostics();
     let Err(BindError::Invalid(findings)) = prepared.bind(&source()) else {
         panic!("a result type its column cannot take is refused at binding")
@@ -114,17 +105,9 @@ pub fn reached() -> BTreeSet<C> {
         // A fixed result type: a row number is a count.
         ("datetime", window.clone(), "int"),
         // A result type from what is read: an integer literal.
-        (
-            "date",
-            Tree::map(vec![("literal", Tree::integer(5))]),
-            "int",
-        ),
+        ("date", Tree::integer(5), "int"),
         // Boolean values convert to no column type.
-        (
-            "str",
-            Tree::map(vec![("literal", Tree::boolean(true))]),
-            "bool",
-        ),
+        ("str", Tree::boolean(true), "bool"),
     ] {
         let diagnostic = refused(kind, value);
         assert_eq!(
@@ -149,22 +132,11 @@ pub fn reached() -> BTreeSet<C> {
     // A declared `unconvertible` answers each value, so the derivation stands;
     // a text result may parse; and an always-missing result converts.
     for (kind, value, handler) in [
-        (
-            "date",
-            Tree::map(vec![("literal", Tree::integer(5))]),
-            Some(Tree::map(vec![(
-                "literal",
-                Tree::Scalar(yamaa_core::schema::DocumentNode::Null),
-            )])),
-        ),
-        (
-            "date",
-            Tree::map(vec![("literal", Tree::text("2025-01-02"))]),
-            None,
-        ),
+        ("date", Tree::integer(5), Some(Tree::Scalar(N::Null))),
+        ("date", Tree::text("'2025-01-02'"), None),
         ("int", window, None),
     ] {
-        let prepared = PreparedSpecification::prepare(&document(kind, value, handler)).unwrap();
+        let prepared = prepare(&document(kind, value, handler)).unwrap();
         assert!(prepared.check_declaration_diagnostics().is_empty());
         prepared.bind(&source()).unwrap();
     }
