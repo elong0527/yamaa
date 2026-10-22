@@ -2,6 +2,7 @@
 
 import contextlib
 import copy
+import functools
 import importlib.util
 import io
 import os
@@ -25,6 +26,13 @@ columns:
 """
 
 METADATA = "lifecycle: draft\nstandard: TEST\ndomain: TEST\n"
+
+
+@functools.cache
+def corpus_plan():
+    """The plan of this repository's benchmarks, made once for the tests that
+    read it; none of them changes it."""
+    return judge.plan(ROOT / "benchmarks")
 
 
 def installed_runner():
@@ -1296,7 +1304,7 @@ class PublicConformance(unittest.TestCase):
 
     def test_corpus_inventory_has_all_entries_and_approved_exclusions(self):
         fixtures = ROOT / "benchmarks"
-        corpus = judge.plan(fixtures)
+        corpus = corpus_plan()
         names = {e["name"]: e for e in corpus["examples"]}
         # Every authored directory is planned; no count to edit per addition.
         self.assertEqual(
@@ -1331,7 +1339,7 @@ class PublicConformance(unittest.TestCase):
         self.assertEqual({n for n, e in names.items() if e["excluded"]}, set())
 
     def test_corpus_metamorphic_plan_and_expectations_follow_each_entry(self):
-        corpus = judge.plan(ROOT / "benchmarks")
+        corpus = corpus_plan()
         pairs = 0
         for example in corpus["examples"]:
             variants = example["variants"]["python"]
@@ -1373,7 +1381,7 @@ class PublicConformance(unittest.TestCase):
             self.assertTrue(item.get("issue") or item.get("permanent"))
 
     def test_corpus_command_line_plan_excludes_only_project_function_benchmarks(self):
-        corpus = judge.plan(ROOT / "benchmarks")
+        corpus = corpus_plan()
         names = {example["name"]: example for example in corpus["examples"]}
         for name in ("adam-adsl-bmi", "schema-functions"):
             self.assertEqual(

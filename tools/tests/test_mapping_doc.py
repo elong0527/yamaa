@@ -1,5 +1,6 @@
 """Tests for mapping_doc.py: the "Mapping spec" pane of a benchmark dashboard."""
 
+import functools
 import unittest
 from pathlib import Path
 
@@ -449,10 +450,22 @@ if __name__ == "__main__":
     unittest.main()
 
 
+@functools.cache
+def spec_sheets(path):
+    """A specification file and its sheets, read and rendered once per module:
+    the corpus scans below read every benchmark's sheets, and none changes
+    them."""
+    spec = yaml.safe_load(path.read_text(encoding="utf-8"))
+    return spec, mapping_doc.mapping_sheets(spec)
+
+
+@functools.cache
 def method_column(name):
     """The Conversion Definition / Computational Method cell, by variable name."""
-    spec = load_spec(name)
-    headers, rows = mapping_sheet(name)
+    spec, sheets = spec_sheets(BENCHMARKS / name / "spec.yaml")
+    [(headers, rows)] = [
+        (headers, rows) for tab_id, _, headers, rows in sheets if tab_id == "mapping"
+    ]
     index = headers.index(
         "Computational Method" if mapping_doc.is_adam(spec) else "Conversion Definition"
     )
@@ -596,8 +609,7 @@ class DerivationShapeTests(unittest.TestCase):
         raw = []
         for benchmark in sorted(BENCHMARKS.iterdir()):
             for path in generate.benchmark_spec_files(benchmark):
-                spec = yaml.safe_load(path.read_text(encoding="utf-8"))
-                for _, _, _, rows in mapping_doc.mapping_sheets(spec):
+                for _, _, _, rows in spec_sheets(path)[1]:
                     for row in rows:
                         for cell in row:
                             if any("{'" + verb + "'" in str(cell) for verb in verbs):
