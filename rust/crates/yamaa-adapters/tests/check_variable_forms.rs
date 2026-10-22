@@ -51,7 +51,11 @@ impl Fixture {
     /// The issues of `check` and of `domain` in `host`, as the run report
     /// renders them.
     fn issues(&self, host: Language) -> (Vec<Value>, Vec<Value>) {
-        let specification = self.specification();
+        self.issues_of("spec.yaml", host)
+    }
+    /// [`Self::issues`] of the specification `file` beside it.
+    fn issues_of(&self, file: &str, host: Language) -> (Vec<Value>, Vec<Value>) {
+        let specification = self.0.path().join(file).to_str().unwrap().to_owned();
         let request = || Request {
             specification: &specification,
             environment: None,
@@ -884,5 +888,33 @@ fn a_0_5_donor_read_and_range_type_keep_the_0_5_rules() {
         let fixture = Fixture::new(&specification);
         let (_, built) = fixture.issues(Language::Python);
         assert_eq!(built, [expected], "{specification}");
+    }
+}
+
+/// Read through an empty child layer, a specification reports what it reports
+/// alone (LAYER-5): a bare match value or range value that no column takes is
+/// left to its lookup's own refusal, never an unknown column it depends on
+/// (COLUMN-5).
+#[test]
+fn a_child_layer_reports_a_bare_match_or_range_value_as_its_parent_does() {
+    for column in [
+        "{aggregate: {expr: 'MAX(CAL.CALDY)', key: {SID: DAY}}}",
+        "{aggregate: {expr: 'MAX(WIN.NAME)', between: {value: DAY, lower: LO, upper: HI}}}",
+        "{source: {variable: WIN.NAME, between: {value: DAY, lower: LO, upper: HI}}}",
+    ] {
+        let fixture = Fixture::new(&base("", column));
+        fixture.0.write(
+            "child.yaml",
+            "yamaa: \"1.0\"\ntype: spec\nparent: spec.yaml\n",
+        );
+        for host in [Language::Python, Language::R] {
+            let alone = fixture.issues(host);
+            assert_ne!(alone, (Vec::new(), Vec::new()), "{column} ({host:?})");
+            assert_eq!(
+                fixture.issues_of("child.yaml", host),
+                alone,
+                "{column} ({host:?})"
+            );
+        }
     }
 }
