@@ -23,22 +23,29 @@ def record(failed, label, check):
         if result:
             failed.append(label)
             print(f"{label} failed: {result}", flush=True)
-    except (subprocess.CalledProcessError, RuntimeError) as error:
+    except (subprocess.CalledProcessError, RuntimeError, ValueError) as error:
         failed.append(label)
         print(f"{label} failed: {error}", flush=True)
+
+
+def benchmark(work, check):
+    """Plan and judge benchmarks inside their check, after ordinary tests.
+
+    A malformed benchmark plan must not prevent the package tests from running.
+    """
+    revision = subprocess.check_output(
+        ["git", "-C", str(ROOT), "rev-parse", "HEAD"], text=True
+    ).strip()
+    plan = work / "plan"
+    status = public_conformance.main(
+        ["plan", "--fixtures", str(equivalence.FIXTURES), "--output", str(plan)]
+    )
+    return status or check(plan, revision)
 
 
 def run(host, work, uv, qualify):
     """Return every failed check for the selected host."""
     failed = []
-    if qualify:
-        revision = subprocess.check_output(
-            ["git", "-C", str(ROOT), "rev-parse", "HEAD"], text=True
-        ).strip()
-        plan = work / "plan"
-        public_conformance.main(
-            ["plan", "--fixtures", str(equivalence.FIXTURES), "--output", str(plan)]
-        )
     if host == "python":
         python = equivalence.install_python(work / "install", uv, tooling=True)
         record(
@@ -50,8 +57,11 @@ def run(host, work, uv, qualify):
             record(
                 failed,
                 "Python equivalence",
-                lambda: equivalence.python_conformance(
-                    work / "equivalence", python, plan, revision
+                lambda: benchmark(
+                    work,
+                    lambda plan, revision: equivalence.python_conformance(
+                        work / "equivalence", python, plan, revision
+                    ),
                 ),
             )
     else:
@@ -66,8 +76,11 @@ def run(host, work, uv, qualify):
             record(
                 failed,
                 "R equivalence",
-                lambda: equivalence.r_conformance(
-                    work / "equivalence", environment, plan, revision
+                lambda: benchmark(
+                    work,
+                    lambda plan, revision: equivalence.r_conformance(
+                        work / "equivalence", environment, plan, revision
+                    ),
                 ),
             )
     return failed

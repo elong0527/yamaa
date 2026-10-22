@@ -118,6 +118,19 @@ class HostChecks(unittest.TestCase):
             host_checks.main(["--host", "python"])
         self.assertEqual(stopped.exception.code, 1)
 
+    def test_a_malformed_benchmark_plan_still_allows_the_ordinary_tests(self):
+        self.plan.side_effect = ValueError("invalid benchmark metadata")
+        for host, label in (("python", "Python"), ("r", "R")):
+            with self.subTest(host=host), contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(
+                    host_checks.run(host, self.work, "uv", True),
+                    [f"{label} equivalence"],
+                )
+        self.python_tests.assert_called_once()
+        self.r_check.assert_called_once()
+        self.python_equivalence.assert_not_called()
+        self.r_equivalence.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()
