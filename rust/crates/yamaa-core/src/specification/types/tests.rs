@@ -1,16 +1,22 @@
 use super::*;
 use crate::{
     diagnostic::ConditionCode as C,
-    schema::{Document, DocumentNode as N, SpecificationDocument},
+    schema::{Document, DocumentNode as N},
 };
 
 use crate::test_document::Tree;
+use crate::test_specification::prepare;
 
 fn operation<'a>(name: &'a str, fields: Vec<(&'a str, Tree)>) -> Tree {
     Tree::map(vec![(name, Tree::map(fields))])
 }
+/// The expression a YAML scalar writes: text is quoted, and any other scalar
+/// is itself a literal (D18).
 fn literal(value: N) -> Tree {
-    Tree::map(vec![("literal", Tree::Scalar(value))])
+    match value {
+        N::Text(text) => Tree::text(format!("'{}'", text.replace('\'', "''"))),
+        value => Tree::Scalar(value),
+    }
 }
 fn column<'a>(name: &'a str, kind: &'a str, value: Tree) -> Tree {
     Tree::map(vec![
@@ -19,9 +25,10 @@ fn column<'a>(name: &'a str, kind: &'a str, value: Tree) -> Tree {
         ("derivation", Tree::map(vec![("value", value)])),
     ])
 }
-fn document(value: Tree, verification: Option<Tree>) -> SpecificationDocument {
+fn document(value: Tree, verification: Option<Tree>) -> Document {
     let mut fields = vec![
-        ("schema_version", Tree::text("1.0")),
+        ("yamaa", Tree::text("1.0")),
+        ("type", Tree::text("spec")),
         ("domain", Tree::text("TEST")),
         (
             "input",
@@ -34,11 +41,7 @@ fn document(value: Tree, verification: Option<Tree>) -> SpecificationDocument {
         (
             "columns",
             Tree::List(vec![
-                column(
-                    "ID",
-                    "int",
-                    operation("source", vec![("variable", Tree::text("SRC.ID"))]),
-                ),
+                column("ID", "int", Tree::text("SRC.ID")),
                 column("TERM", "str", literal(N::Text("alpha".into()))),
                 column("DAY", "date", literal(N::Null)),
                 column("COUNT", "int", literal(N::Integer("1".into()))),
@@ -59,11 +62,7 @@ fn document(value: Tree, verification: Option<Tree>) -> SpecificationDocument {
     if let Some(verification) = verification {
         fields.push(("verifications", Tree::List(vec![verification])));
     }
-    let mut nodes = Vec::new();
-    let root = Tree::map(fields).append(&mut nodes);
-    SpecificationDocument::admit(Document::new(nodes, root).unwrap())
-        .unwrap()
-        .unwrap()
+    Tree::map(fields).document()
 }
 fn source() -> TableSchema {
     TableSchema::new(vec![Column {
@@ -73,7 +72,7 @@ fn source() -> TableSchema {
     .unwrap()
 }
 fn binding_codes(value: Tree, verification: Option<Tree>) -> Vec<C> {
-    let spec = PreparedSpecification::prepare(&document(value, verification)).unwrap();
+    let spec = prepare(&document(value, verification)).unwrap();
     let BindError::Invalid(findings) = spec.bind(&source()).unwrap_err() else {
         panic!("typed binding findings")
     };
@@ -122,17 +121,14 @@ fn predicate_arithmetic_operands_are_typed_as_in_compute() {
         ),
         vec![C::NumericInputType, C::NumericInputType]
     );
-    let spec = PreparedSpecification::prepare(&document(case("COUNT * 2 > ID - 1"), None)).unwrap();
+    let spec = prepare(&document(case("COUNT * 2 > ID - 1"), None)).unwrap();
     assert!(spec.bind(&source()).is_ok());
 }
 
 #[test]
 fn compute_and_reduction_reject_known_text_without_evaluation() {
     assert_eq!(
-        binding_codes(
-            operation("compute", vec![("expr", Tree::text("TERM + 1"))]),
-            None
-        ),
+        binding_codes(Tree::text("TERM + 1"), None),
         vec![C::NumericInputType]
     );
     assert_eq!(
@@ -249,9 +245,7 @@ fn independent_calendar_findings_keep_first_error_priority() {
             ("day", Tree::Scalar(N::Integer("0".into()))),
         ],
     );
-    let PrepareError::Invalid(findings) =
-        PreparedSpecification::prepare(&document(invalid, None)).unwrap_err()
-    else {
+    let PrepareError::Invalid(findings) = prepare(&document(invalid, None)).unwrap_err() else {
         panic!("two declaration findings")
     };
     assert_eq!(
@@ -296,9 +290,7 @@ fn independent_cut_findings_keep_first_error_priority() {
             ("labels", Tree::List(vec![Tree::text("a")])),
         ],
     );
-    let PrepareError::Invalid(findings) =
-        PreparedSpecification::prepare(&document(invalid, None)).unwrap_err()
-    else {
+    let PrepareError::Invalid(findings) = prepare(&document(invalid, None)).unwrap_err() else {
         panic!("two declaration findings")
     };
     assert_eq!(findings.len(), 2);
@@ -340,13 +332,10 @@ fn repeated_type_findings_keep_the_complete_ordered_context() {
     }
 }
 
-fn phase_document(
-    columns: Vec<Tree>,
-    intermediates: Vec<Tree>,
-    rows: Vec<Tree>,
-) -> SpecificationDocument {
+fn phase_document(columns: Vec<Tree>, intermediates: Vec<Tree>, rows: Vec<Tree>) -> Document {
     let mut fields = vec![
-        ("schema_version", Tree::text("1.0")),
+        ("yamaa", Tree::text("1.0")),
+        ("type", Tree::text("spec")),
         ("domain", Tree::text("TEST")),
         (
             "input",
@@ -371,11 +360,7 @@ fn phase_document(
     if !rows.is_empty() {
         fields.push(("rows", Tree::List(rows)));
     }
-    let mut nodes = Vec::new();
-    let root = Tree::map(fields).append(&mut nodes);
-    SpecificationDocument::admit(Document::new(nodes, root).unwrap())
-        .unwrap()
-        .unwrap()
+    Tree::map(fields).document()
 }
 fn empty_column(name: &str) -> Tree {
     Tree::map(vec![
@@ -383,8 +368,9 @@ fn empty_column(name: &str) -> Tree {
         ("type", Tree::text("int")),
     ])
 }
+/// A read of `name`, an expression field's text.
 fn source_value(name: &str) -> Tree {
-    operation("source", vec![("variable", Tree::text(name))])
+    Tree::text(name)
 }
 fn row_value(value: Tree) -> Tree {
     Tree::map(vec![("value", value)])
@@ -432,7 +418,7 @@ fn only_ungrouped_filters_refuse_direct_and_transitive_window_reads() {
         if grouped {
             row.push(("group_by", Tree::List(vec![Tree::text("SRC.ID")])));
         }
-        let spec = PreparedSpecification::prepare(&phase_document(
+        let spec = prepare(&phase_document(
             vec![
                 empty_column("ID"),
                 empty_column("SEQ"),
@@ -486,7 +472,7 @@ fn a_deferred_lookup_match_has_its_authored_filter_phase_witness() {
             .collect(),
     )
     .unwrap();
-    let spec = PreparedSpecification::prepare(&phase_document(
+    let spec = prepare(&phase_document(
         vec![empty_column("ID"), empty_column("SEQ"), empty_column("VAL")],
         vec![intermediate],
         vec![row],
@@ -554,7 +540,7 @@ fn input_backed_defaults_join_self_donors_while_self_backed_columns_stay_late() 
                 ),
             ])
         };
-        let spec = PreparedSpecification::prepare(&phase_document(
+        let spec = prepare(&phase_document(
             vec![
                 empty_column("ID"),
                 empty_column("SEQ"),
@@ -643,7 +629,7 @@ fn input_backed_defaults_join_self_donors_while_self_backed_columns_stay_late() 
                 .collect::<Vec<_>>();
             assert_eq!(excluded.len(), 2);
             for (finding, name) in excluded.into_iter().zip(["SELF.LATE", "SELF.ALIAS"]) {
-                assert_eq!(finding.spec_paths, ["intermediates[0].filter"]);
+                assert_eq!(finding.spec_paths, ["intermediates.PRIOR_SAE.filter"]);
                 assert_eq!(
                     finding.context["identifier"],
                     crate::json::Value::String(name.into())
@@ -655,22 +641,18 @@ fn input_backed_defaults_join_self_donors_while_self_backed_columns_stay_late() 
 
 #[test]
 fn donor_filter_observes_the_computed_intermediate_type() {
+    // The lookup declares the key 0.5 inferred, the output key ID (D23).
     let intermediate = Tree::map(vec![
         ("id", Tree::text("EOT")),
         ("dataset", Tree::text("SRC")),
+        ("key", Tree::List(vec![Tree::text("ID")])),
         ("filter", Tree::text("SRC.EOT_FALLBACK = 'x'")),
         (
             "derivations",
-            Tree::map(vec![(
-                "EOT_FALLBACK",
-                row_value(operation(
-                    "compute",
-                    vec![("expr", Tree::text("SEQ + VAL / 1000"))],
-                )),
-            )]),
+            Tree::map(vec![("EOT_FALLBACK", Tree::text("SEQ + VAL / 1000"))]),
         ),
     ]);
-    let spec = PreparedSpecification::prepare(&phase_document(
+    let spec = prepare(&phase_document(
         vec![column("ID", "int", source_value("SRC.ID"))],
         vec![intermediate],
         vec![],
@@ -691,7 +673,7 @@ fn donor_filter_observes_the_computed_intermediate_type() {
     assert_eq!(findings[0].code, C::PredicateIncompatiblePair);
     assert_eq!(
         findings[0].spec_paths,
-        [String::from("intermediates[0].filter")]
+        [String::from("intermediates.EOT.filter")]
     );
 }
 
@@ -712,7 +694,7 @@ fn explicit_named_row_reads_still_promote_their_local_match_defaults() {
             ]),
         ),
     ]);
-    let spec = PreparedSpecification::prepare(&phase_document(
+    let spec = prepare(&phase_document(
         vec![
             empty_column("ID"),
             column("CURRENT", "int", source_value("SRC.SEQ")),
@@ -741,20 +723,14 @@ fn linked_document(
     inputs: Vec<(&str, Tree)>,
     base: &str,
     columns: Vec<(&str, &str, Tree)>,
-) -> SpecificationDocument {
+) -> Document {
     let mut declared = vec![Tree::map(vec![
         ("name", Tree::text("ID")),
         ("type", Tree::text("int")),
         ("label", Tree::text("Identifier")),
         (
             "derivation",
-            Tree::map(vec![(
-                "value",
-                operation(
-                    "source",
-                    vec![("variable", Tree::text(format!("{base}.ID")))],
-                ),
-            )]),
+            Tree::map(vec![("value", Tree::text(format!("{base}.ID")))]),
         ),
     ])];
     let mut names = vec![Tree::text("ID")];
@@ -768,7 +744,8 @@ fn linked_document(
         ]));
     }
     let root = Tree::map(vec![
-        ("schema_version", Tree::text("1.0")),
+        ("yamaa", Tree::text("1.0")),
+        ("type", Tree::text("spec")),
         ("domain", Tree::text("TEST")),
         ("base", Tree::text(base)),
         ("input", Tree::map(inputs)),
@@ -782,24 +759,11 @@ fn linked_document(
             ]),
         ),
     ]);
-    let mut nodes = Vec::new();
-    let root = root.append(&mut nodes);
-    SpecificationDocument::admit(Document::new(nodes, root).unwrap())
-        .unwrap()
-        .unwrap()
+    root.document()
 }
 /// The producing spec: its artifact holds `ID` and the dates `START` and `END`.
-fn producer() -> SpecificationDocument {
-    let date = |name: &'static str| {
-        (
-            name,
-            "date",
-            operation(
-                "source",
-                vec![("variable", Tree::text(format!("RAW.{name}")))],
-            ),
-        )
-    };
+fn producer() -> Document {
+    let date = |name: &'static str| (name, "date", Tree::text(format!("RAW.{name}")));
     linked_document(
         vec![(
             "RAW",
@@ -828,15 +792,16 @@ fn linked() -> (&'static str, Tree) {
     )
 }
 fn prepare_linked(
-    consumer: &SpecificationDocument,
-    producer: &SpecificationDocument,
+    consumer: &Document,
+    producer: &Document,
 ) -> Result<PreparedSpecification, PrepareError> {
     let links = [crate::producer_contract::Link {
         dataset: "SRC",
         identity: "/producer.yaml",
-        document: producer.document(),
+        document: producer,
     }];
-    PreparedSpecification::prepare_linked(
+    PreparedSpecification::prepare_tree_linked(
+        crate::front_end::v1::spec::lower(consumer, None).into_spec(),
         consumer,
         None,
         crate::producer_contract::Links {
@@ -855,7 +820,7 @@ fn a_linked_csv_input_has_its_producers_types_before_capture() {
     let study_day = operation(
         "study_day",
         vec![
-            ("date", Tree::text("SRC.END")),
+            ("source", Tree::text("SRC.END")),
             ("reference", Tree::text("SRC.START")),
         ],
     );
@@ -870,11 +835,7 @@ fn a_linked_csv_input_has_its_producers_types_before_capture() {
         vec![linked()],
         "SRC",
         vec![
-            (
-                "FIRST",
-                "date",
-                operation("source", vec![("variable", Tree::text("SRC.START"))]),
-            ),
+            ("FIRST", "date", Tree::text("SRC.START")),
             ("DAY", "int", study_day),
             ("LATEST", "date", latest),
         ],
@@ -912,7 +873,7 @@ fn a_linked_csv_input_has_its_producers_types_before_capture() {
 #[test]
 fn declared_types_follow_each_inputs_type_authority() {
     let producer = producer();
-    let contract = crate::producer_contract::prepare(&producer).unwrap();
+    let contract = crate::producer_contract::prepare_document(&producer).unwrap();
     let input = |path: &str, types: Vec<(&str, Tree)>| {
         let mut fields = vec![("path", Tree::text(path))];
         if !types.is_empty() {
@@ -930,7 +891,7 @@ fn declared_types_follow_each_inputs_type_authority() {
         "SRC",
         vec![("DT", "date", literal(N::Null))],
     );
-    let lowered = crate::front_end::v0_5::lower(&consumer, None);
+    let lowered = crate::front_end::v1::spec::lower(&consumer, None);
     let declared = DeclaredTypes::new(lowered.spec(), [("SRC", &contract)]);
     for (name, expected) in [
         ("SRC.END", ResultType::DATE),

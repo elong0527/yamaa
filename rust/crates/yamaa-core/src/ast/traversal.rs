@@ -427,13 +427,11 @@ impl Spec {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::front_end::v0_5::tests::{admit, column, derivation, document, op};
     use crate::test_document::Tree;
+    use crate::test_specification::{column, derivation, document, lower, op};
 
     fn lowered(columns: Vec<Tree>, extra: Vec<(&str, Tree)>) -> Spec {
-        crate::front_end::v0_5::lower(&admit(document(columns, extra)), None)
-            .spec()
-            .clone()
+        lower(document(columns, extra))
     }
     fn names(spec: &Spec, root: ExprId, scope: Scope) -> Vec<(String, Scope)> {
         spec.reads(root, scope)
@@ -449,9 +447,9 @@ mod tests {
             Tree::list(vec![
                 Tree::map(vec![
                     ("when", Tree::text("AGE >= 65")),
-                    ("then", op("literal", Tree::text("Y"))),
+                    ("then", Tree::text("'Y'")),
                 ]),
-                Tree::map(vec![("otherwise", op("source", source("SRC.FLAG")))]),
+                Tree::map(vec![("otherwise", Tree::text("SRC.FLAG"))]),
             ]),
         );
         let spec = lowered(vec![column("FLAG", "str", derivation(case))], vec![]);
@@ -479,12 +477,14 @@ mod tests {
             Tree::map(vec![
                 ("filter", Tree::text("EX.EXDOSE > 0")),
                 (
-                    "derive",
-                    Tree::list(vec![Tree::map(vec![
-                        ("name", Tree::text("DOSE")),
-                        ("type", Tree::text("float")),
-                        ("derivation", derivation(op("source", source("EX.EXDOSE")))),
-                    ])]),
+                    "derivations",
+                    Tree::map(vec![(
+                        "DOSE",
+                        Tree::map(vec![
+                            ("type", Tree::text("float")),
+                            ("derivation", derivation(Tree::text("EX.EXDOSE"))),
+                        ]),
+                    )]),
                 ),
                 ("expr", Tree::text("SUM(DOSE) + COUNT(EX.*) + BASE")),
             ]),
@@ -497,7 +497,8 @@ mod tests {
         let ExprKind::Aggregate(node) = &spec.expr(root).kind else {
             panic!("an aggregate");
         };
-        assert_eq!(node.key, Some(crate::ast::JoinKey::Applicable));
+        // Without its own `key`, it matches on its input's declared key (D63).
+        assert_eq!(node.key, Some(crate::ast::JoinKey::FromInput));
         let relation = Scope::Relation(root);
         assert_eq!(
             names(&spec, root, Scope::Row),
@@ -555,9 +556,9 @@ mod tests {
             Tree::list(vec![
                 Tree::map(vec![
                     ("when", Tree::text("A > 1")),
-                    ("then", op("source", source("B"))),
+                    ("then", Tree::text("B")),
                 ]),
-                Tree::map(vec![("otherwise", op("source", source("C")))]),
+                Tree::map(vec![("otherwise", Tree::text("C"))]),
             ]),
         );
         let spec = lowered(vec![column("OUT", "str", derivation(case))], vec![]);
@@ -595,16 +596,7 @@ mod tests {
             ("keep", Tree::text("last")),
             (
                 "derivations",
-                Tree::map(vec![(
-                    "DOUBLE",
-                    Tree::map(vec![(
-                        "value",
-                        op(
-                            "compute",
-                            Tree::map(vec![("expr", Tree::text("SRC.DAY * 2"))]),
-                        ),
-                    )]),
-                )]),
+                Tree::map(vec![("DOUBLE", Tree::text("SRC.DAY * 2"))]),
             ),
         ]);
         let check = op(
@@ -615,11 +607,7 @@ mod tests {
             ]),
         );
         let spec = lowered(
-            vec![column(
-                "FLAG",
-                "str",
-                derivation(op("source", source("LAST.DOUBLE"))),
-            )],
+            vec![column("FLAG", "str", derivation(Tree::text("LAST.DOUBLE")))],
             vec![
                 ("intermediates", Tree::list(vec![intermediate])),
                 ("verifications", Tree::list(vec![check])),
@@ -656,9 +644,5 @@ mod tests {
             names(&spec, sites[4].root, sites[4].scope),
             [("SRC.DAY".to_string(), Scope::Donor(0))]
         );
-    }
-
-    fn source(variable: &str) -> Tree {
-        Tree::map(vec![("variable", Tree::text(variable))])
     }
 }

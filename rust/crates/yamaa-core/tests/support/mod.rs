@@ -10,6 +10,7 @@ pub mod project_call_compiler;
 pub mod project_codelist_compiler;
 pub mod project_environment;
 pub mod roots;
+pub mod specification;
 
 /// Construct an ordered schema independently of plan compilation.
 pub fn table_schema(columns: &[(&str, ColumnType)]) -> TableSchema {

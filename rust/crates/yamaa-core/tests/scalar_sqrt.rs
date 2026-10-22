@@ -956,7 +956,8 @@ mod scalar {
         fn static_check_retains_first_bad_width_with_complete_long_source_names() {
             use yamaa_core::{
                 domain,
-                schema::{Document, DocumentNode as N, SpecificationDocument},
+                front_end::v1::spec as front_end,
+                schema::{Document, DocumentNode as N},
             };
             fn text(nodes: &mut Vec<N>, value: &str) -> usize {
                 let id = nodes.len();
@@ -1010,11 +1011,13 @@ mod scalar {
             let input_item = map(&mut nodes, vec![("path", input_path)]);
             let input = map(&mut nodes, vec![("SRC", input_item)]);
             let version = text(&mut nodes, "1.0");
+            let file_type = text(&mut nodes, "spec");
             let domain = text(&mut nodes, "TEST");
             let root = map(
                 &mut nodes,
                 vec![
-                    ("schema_version", version),
+                    ("yamaa", version),
+                    ("type", file_type),
                     ("domain", domain),
                     ("keys", keys),
                     ("columns", columns),
@@ -1023,8 +1026,8 @@ mod scalar {
                 ],
             );
             let raw = Document::new(nodes, root).unwrap();
-            let document = SpecificationDocument::admit(raw).unwrap().unwrap();
-            let checked = domain::check(&document).unwrap();
+            let tree = front_end::lower(&raw, None).into_spec();
+            let checked = domain::check_tree_linked(tree, &raw, None, Default::default()).unwrap();
             let findings = checked.check_diagnostics();
             assert_eq!(findings.len(), 1);
             let finding = &findings[0];

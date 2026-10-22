@@ -4,20 +4,26 @@ use yamaa_adapters::{
     json,
     report_storage::diagnostic_value,
     shipped_schema,
-    specification_diagnostics::{capture_failure, Rejection},
+    specification_diagnostics::{inheritance_failure_ref, Rejection},
     specification_source::Source,
 };
 use yamaa_core::json::Value;
+use yamaa_core::language::{FileType, LANGUAGE_VERSION};
+
+/// The 1.0 header a specification starts with.
+const HEADER: &str = "yamaa: \"1.0\"\ntype: spec\n";
 
 fn diagnostics(text: &str) -> Vec<Value> {
-    let error = shipped_schema::capture()
-        .unwrap()
-        .prepare_standalone(Source {
+    let error = shipped_schema::prepare(
+        Source {
             identity: "spec.yaml".into(),
             bytes: text.as_bytes().to_vec(),
-        })
-        .unwrap_err();
-    match capture_failure(&error) {
+        },
+        "spec.yaml".into(),
+        &mut crate::support::inheritance::Files,
+    )
+    .unwrap_err();
+    match inheritance_failure_ref(&error).unwrap() {
         Rejection::Invalid(findings) => findings.iter().map(diagnostic_value).collect(),
         other => panic!("expected authored findings, got {other:?}"),
     }
@@ -25,8 +31,8 @@ fn diagnostics(text: &str) -> Vec<Value> {
 
 #[test]
 fn a_retired_parent_list_names_the_chain_without_missing_root_fields() {
-    let raw = "schema_version: '1.0'\nparents: [organization.yaml, compound.yaml]\n";
-    let findings = diagnostics(raw);
+    let raw = format!("{HEADER}parents: [organization.yaml, compound.yaml]\n");
+    let findings = diagnostics(&raw);
     assert_eq!(findings.len(), 1, "{findings:?}");
     assert_eq!(findings[0]["condition"], "unknown_field");
     assert_eq!(findings[0]["spec_paths"], json!(["parents"]));
@@ -39,14 +45,12 @@ fn a_retired_parent_list_names_the_chain_without_missing_root_fields() {
 
     // Inheritance admission reports the same hint before following a parent.
     let decoded = yamaa_adapters::yaml_decode::decode_yaml(raw.as_bytes()).unwrap();
-    let error = shipped_schema::capture()
+    let layer_findings = shipped_schema::capture_versioned(FileType::Spec)
         .unwrap()
         .structure()
-        .normalize_layer(&decoded.document)
-        .unwrap_err();
-    let yamaa_core::schema::NormalizationError::Invalid(layer_findings) = error else {
-        panic!("expected a layer finding: {error:?}")
-    };
+        .at_version(LANGUAGE_VERSION)
+        .validate_layer(&decoded.document)
+        .unwrap();
     assert_eq!(layer_findings.len(), 1);
     assert_eq!(layer_findings[0].path, "parents");
     assert_eq!(layer_findings[0].definition().condition, "unknown_field");
@@ -54,8 +58,16 @@ fn a_retired_parent_list_names_the_chain_without_missing_root_fields() {
         *key == "hint" && *value == yamaa_core::schema::SchemaContext::Text(hint.into())
     }));
 
-    // The wrong parent spelling does not suppress faults in written values.
+    // The wrong parent spelling does not suppress the layer's other faults.
     let findings = diagnostics(&format!("{raw}unrelated: 1\ncolumns: [{{type: str}}]\n"));
+    assert!(findings
+        .iter()
+        .any(|f| f["spec_paths"] == json!(["unrelated"])));
+    // A 0.5 file also reports a written column's missing name in the same
+    // pass. 0.5-only until #3447: a 1.0 layer leaves requiredness to the
+    // composed member (LAYER-7).
+    let legacy = raw.replacen(HEADER, "schema_version: '1.0'\n", 1);
+    let findings = diagnostics(&format!("{legacy}unrelated: 1\ncolumns: [{{type: str}}]\n"));
     assert!(findings
         .iter()
         .any(|f| f["spec_paths"] == json!(["unrelated"])));
@@ -68,11 +80,20 @@ fn a_retired_parent_list_names_the_chain_without_missing_root_fields() {
         .all(|f| { f["spec_paths"][0].as_str().unwrap().starts_with("columns") }));
 
     // An ordinary incomplete specification still asks for its root fields.
-    for parents in ["", "parents: []\n", "parents: null\n"] {
-        let findings = diagnostics(&format!("schema_version: '1.0'\n{parents}"));
-        assert!(findings.iter().any(|f| {
+    let asks_for_domain = |findings: &[Value]| {
+        findings.iter().any(|f| {
             f["condition"] == "missing_required_field" && f["spec_paths"] == json!(["domain"])
-        }));
+        })
+    };
+    assert!(asks_for_domain(&diagnostics(HEADER)));
+    // A 0.5 file asks for them beside an empty retired list too. 0.5-only
+    // until #3447: a 1.0 layer defers its root fields' requiredness to the
+    // resolved specification, which a layer that writes an unknown field
+    // never reaches (LAYER-4).
+    for parents in ["parents: []\n", "parents: null\n"] {
+        assert!(asks_for_domain(&diagnostics(&format!(
+            "schema_version: '1.0'\n{parents}"
+        ))));
     }
 }
 
@@ -90,7 +111,7 @@ fn retired_temporal_verbs_name_the_operation_and_declared_type() {
     ] {
         // The retired payload is not interpreted, nor is missing.csv opened.
         let raw = format!(
-            "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {{SRC: missing.csv}}\noutput: {{path: out.csv, columns: [ID]}}\ncolumns:\n  - name: ID\n    type: str\n    derivation: {{{old}: {{source: SRC.VALUE}}}}\n"
+            "{HEADER}domain: TEST\nkeys: [ID]\ninput: {{SRC: missing.csv}}\noutput: {{path: out.csv, columns: [ID]}}\ncolumns:\n  - name: ID\n    type: str\n    derivation: {{{old}: {{source: SRC.VALUE}}}}\n"
         );
         let findings = diagnostics(&raw);
         assert_eq!(findings.len(), 1, "{old}: {findings:?}");

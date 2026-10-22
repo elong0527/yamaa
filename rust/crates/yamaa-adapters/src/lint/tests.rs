@@ -4,7 +4,8 @@
 
 use super::{check_text, fix_text, Finding};
 
-const CANONICAL: &str = r#"schema_version: "1.0"
+const CANONICAL: &str = r#"yamaa: "1.0"
+type: spec
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
@@ -19,6 +20,7 @@ output:
 intermediates:
   - id: FIRSTDOSE
     dataset: EX
+    key: [STUDYID, USUBJID]
     order_by: [EX.EXSTDTC]
     keep: first
 
@@ -40,7 +42,7 @@ columns:
     derivation:
       case:
         - when: "FIRSTDOSE.EXSTDTC IS NULL"
-          then: {literal: null}
+          then: null
         - otherwise: FIRSTDOSE.EXSTDTC
 
 verifications:
@@ -89,6 +91,18 @@ fn packed() -> String {
     )
 }
 
+/// CANONICAL written in 0.5, for the 0.5-only tests that #3447 deletes.
+fn legacy() -> String {
+    CANONICAL
+        .replacen(
+            "yamaa: \"1.0\"\ntype: spec\n",
+            "schema_version: \"1.0\"\n",
+            1,
+        )
+        .replacen("    key: [STUDYID, USUBJID]\n", "", 1)
+        .replacen("then: null", "then: {literal: null}", 1)
+}
+
 #[test]
 fn canonical_specification_has_no_findings() {
     assert!(findings(CANONICAL).is_empty());
@@ -99,7 +113,7 @@ fn a_finding_carries_its_line_column_and_name() {
     let text = CANONICAL.replace("    dataset: EX\n", "    dataset: EX\n\n\n");
     let first = &findings(&text)[0];
     assert_eq!(first.finding, "blank_lines");
-    assert_eq!((first.line, first.column), (17, 1));
+    assert_eq!((first.line, first.column), (18, 1));
     assert_eq!(first.message, "remove the second blank line");
 }
 
@@ -125,7 +139,8 @@ fn root_fields_follow_the_schema_order() {
 
 #[test]
 fn parent_and_filter_belong_to_the_header() {
-    let text = r#"schema_version: "1.0"
+    let text = r#"yamaa: "1.0"
+type: spec
 domain: ADSL
 parent: base.yaml
 keys: [USUBJID]
@@ -149,7 +164,7 @@ filter: "DM.ARMCD IS NOT NULL"
     let (after, remaining) = fix(text);
     assert!(remaining.is_empty());
     assert!(after.starts_with(
-        "schema_version: \"1.0\"\nparent: base.yaml\ndomain: ADSL\nkeys: [USUBJID]\ninput:\n  \
+        "yamaa: \"1.0\"\ntype: spec\nparent: base.yaml\ndomain: ADSL\nkeys: [USUBJID]\ninput:\n  \
          DM: input/dm.csv\nfilter: \"DM.ARMCD IS NOT NULL\"\n\noutput:\n"
     ));
 }
@@ -184,7 +199,7 @@ fn multiline_entries_are_separated_by_one_blank_line() {
     let first = &findings(&text)[0];
     assert_eq!(
         (first.finding, first.spec_path.as_str(), first.line),
-        ("entry_spacing", "columns[1]", 25)
+        ("entry_spacing", "columns.USUBJID", 27)
     );
     assert_eq!(
         first.message,
@@ -348,7 +363,7 @@ fn a_1_0_specification_follows_the_1_0_field_order() {
 #[test]
 fn a_0_5_file_keeps_the_0_5_orders() {
     // `model` is no 0.5 field, so it opens a section of its own.
-    let text = CANONICAL.replace("domain: ADSL\n", "model: ADaM\ndomain: ADSL\n");
+    let text = legacy().replace("domain: ADSL\n", "model: ADaM\ndomain: ADSL\n");
     assert_eq!(
         findings(&text)
             .iter()
@@ -358,7 +373,7 @@ fn a_0_5_file_keeps_the_0_5_orders() {
     );
     // A root that declares `schema_version` is read by the 0.5 orders even
     // beside `yamaa`, as the engine reads it.
-    let both = CANONICAL.replace(
+    let both = legacy().replace(
         "domain: ADSL\n",
         "yamaa: \"1.0\"\ntype: spec\ndomain: ADSL\n",
     );
@@ -370,7 +385,7 @@ fn a_0_5_file_keeps_the_0_5_orders() {
         ]
     );
     // And the 1.0 orders do not reach a 0.5 input or intermediate.
-    let fields = CANONICAL
+    let fields = legacy()
         .replace(
             "  DM: input/dm.csv\n",
             "  DM:\n    key: [USUBJID]\n    path: input/dm.csv\n",
@@ -694,7 +709,7 @@ fn blank_lines_inside_a_block_scalar_are_value_text() {
 
 #[test]
 fn a_block_scalar_ends_on_its_last_line_under_every_ending() {
-    let text = "schema_version: \"1.0\"\nname: demo\nnotes: |\n  first\n\n  # not a comment\n  last\nafter: 1\n";
+    let text = "yamaa: \"1.0\"\ntype: spec\nname: demo\nnotes: |\n  first\n\n  # not a comment\n  last\nafter: 1\n";
     let positions = |text: &str| {
         findings(text)
             .into_iter()
@@ -771,8 +786,7 @@ fn long_predicates_continue_after_a_comma_or_before_a_connective() {
 #[test]
 fn long_flow_mappings_become_blocks_but_literals_stay() {
     let derivation =
-        "{impute: {type: date, source: FIRSTDOSE.EXSTDTC, month: 1, day: last, invalid: \
-                      {literal: null}}}";
+        "{impute: {type: date, source: FIRSTDOSE.EXSTDTC, month: 1, day: last, invalid: null}}";
     let text = CANONICAL.replace(
         "    derivation: DM.USUBJID\n",
         &format!("    derivation: {derivation}\n"),
@@ -785,7 +799,7 @@ fn long_flow_mappings_become_blocks_but_literals_stay() {
                 "    derivation:\n      impute:\n        type: date\n        source: FIRSTDOSE.EXSTDTC\n"
             )
     );
-    assert!(after.contains("then: {literal: null}"));
+    assert!(after.contains("then: null"));
 }
 
 #[test]
@@ -819,7 +833,12 @@ fn the_line_width_boundary_is_seventy_nine() {
         .collect::<Vec<_>>();
     assert_eq!(
         found,
-        [("line_width", label_line, 80, "columns[0].label".to_owned())]
+        [(
+            "line_width",
+            label_line,
+            80,
+            "columns.STUDYID.label".to_owned()
+        )]
     );
 }
 
@@ -838,7 +857,7 @@ fn a_long_block_scalar_at_the_end_is_left_to_its_author() {
 #[test]
 fn the_block_form_of_a_literal_is_not_a_finding() {
     // `literal_form` retires with `{literal: X}` in 1.0; the lint names no
-    // spelling of a literal.
+    // spelling of a literal. 0.5-only until #3447.
     for block in [
         "    derivation:\n      literal: DM\n",
         "    derivation:\n      literal: [1, 2]\n",
@@ -847,7 +866,7 @@ fn the_block_form_of_a_literal_is_not_a_finding() {
         "    derivation:\n      literal: DM\n      note: x\n",
         "    derivation: {}\n",
     ] {
-        let text = CANONICAL.replace("    derivation: DM.USUBJID\n", block);
+        let text = legacy().replace("    derivation: DM.USUBJID\n", block);
         assert!(names(&text).is_empty(), "{block}");
     }
 }
@@ -855,7 +874,7 @@ fn the_block_form_of_a_literal_is_not_a_finding() {
 #[test]
 fn source_spellings_are_left_to_the_language() {
     // The language itself refuses {source: X} where the bare string is the
-    // shorthand, so the lint names no source spelling.
+    // shorthand, so the lint names no source spelling. 0.5-only until #3447.
     for (from, to) in [
         (
             "    derivation: DM.USUBJID\n",
@@ -870,7 +889,7 @@ fn source_spellings_are_left_to_the_language() {
             "    derivation:\n      source: {variable: DM.STUDYID, filter: \"DM.X = 1\"}\n",
         ),
     ] {
-        assert!(names(&CANONICAL.replace(from, to)).is_empty(), "{to}");
+        assert!(names(&legacy().replace(from, to)).is_empty(), "{to}");
     }
 }
 
@@ -2288,7 +2307,8 @@ fn an_equality_with_a_current_row_value_in_a_lookup_filter_is_a_key_pair() {
     );
 }
 
-const MISSING_LABEL: &str = r#"schema_version: "1.0"
+const MISSING_LABEL: &str = r#"yamaa: "1.0"
+type: spec
 domain: ADSL
 keys: [STUDYID]
 input:
@@ -2322,15 +2342,15 @@ fn output_columns_without_a_label_are_reported() {
                 item.column
             ))
             .collect::<Vec<_>>(),
-        [("missing_label", "columns[1]", 17, 5)]
+        [("missing_label", "columns.AGE", 18, 5)]
     );
     assert_eq!(
         found[0].message,
         "output column `AGE` has no label; declare `label:`"
     );
     assert_eq!(fixed(MISSING_LABEL), MISSING_LABEL);
-    // A stray entry keeps the written index; the finding is at the column's
-    // own name.
+    // A stray entry leaves the column named by its name, and the finding is
+    // at the column's own name.
     let stray = MISSING_LABEL.replace(
         "columns:\n  - name: STUDYID\n",
         "columns:\n  - stray\n\n  - name: STUDYID\n",
@@ -2341,7 +2361,7 @@ fn output_columns_without_a_label_are_reported() {
             .iter()
             .map(|item| (item.spec_path.as_str(), item.line))
             .collect::<Vec<_>>(),
-        [("columns[2]", 19)]
+        [("columns.AGE", 20)]
     );
     // A column the output lists twice has one label departure.
     let repeated = MISSING_LABEL.replace(
@@ -2350,7 +2370,7 @@ fn output_columns_without_a_label_are_reported() {
     );
     assert_eq!(
         paths(&repeated),
-        [("missing_label", "columns[1]".to_owned())]
+        [("missing_label", "columns.AGE".to_owned())]
     );
 }
 
@@ -2359,13 +2379,15 @@ fn internal_and_inherited_columns_need_no_label() {
     let internal = MISSING_LABEL.replace("  columns: [STUDYID, AGE]", "  columns: [STUDYID]");
     assert!(names(&internal).is_empty());
     let inherited = MISSING_LABEL.replace(
-        "schema_version: \"1.0\"\ndomain: ADSL",
-        "schema_version: \"1.0\"\nparent: base.yaml\ndomain: ADSL",
+        "type: spec\ndomain: ADSL",
+        "type: spec\nparent: base.yaml\ndomain: ADSL",
     );
     assert!(!names(&inherited).contains(&"missing_label"));
-    // A null parent names no parent: the standalone file owns its labels.
+    // A 0.5 null parent names no parent: the standalone file owns its labels.
+    // 0.5-only until #3447: a 1.0 layer without a parent omits the field
+    // (LAYER-2).
     let standalone = MISSING_LABEL.replace(
-        "schema_version: \"1.0\"\ndomain: ADSL",
+        "yamaa: \"1.0\"\ntype: spec\ndomain: ADSL",
         "schema_version: \"1.0\"\nparent: null\ndomain: ADSL",
     );
     assert!(names(&standalone).contains(&"missing_label"));

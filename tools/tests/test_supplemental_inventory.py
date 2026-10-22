@@ -1,6 +1,7 @@
 """Regression gates for honest supplemental inventories and executable evidence."""
 
 import json
+import re
 import subprocess
 import tempfile
 import unittest
@@ -31,6 +32,50 @@ class RepositoryCatalog(unittest.TestCase):
         )
         self.assertTrue(catalog["contracts"])
         self.assertTrue(catalog["support_files"])
+
+    def test_every_family_of_the_shared_truth_has_a_suite_in_each_host(self):
+        # `make test-python` runs every discovered Python suite and `make
+        # test-r` every R suite, so a family that a suite of each host reads
+        # runs in both ordinary lanes (#3624). The R suites also read a family
+        # through the helpers beside the truth that they source.
+        root = Path(__file__).resolve().parents[2]
+        truth = root / "rust/tests/host-fixtures/cases.json"
+        families = json.loads(truth.read_text(encoding="utf-8"))["families"]
+        r_readers = set(root.glob("R/yamaa/tests/*.R"))
+        pending = list(r_readers)
+        while pending:
+            # Only helpers reached from an executable suite count. In
+            # particular, leaving original.R on disk must not cover its
+            # family after the last suite stops sourcing it.
+            source = pending.pop().read_text(encoding="utf-8")
+            source = re.sub(r"(?m)^\s*#.*$", "", source)
+            for helper in re.findall(
+                r'\bsource\s*\(\s*file\.path\s*\(\s*host_fixture_root\s*,\s*"([^"/]+\.R)"\s*\)',
+                source,
+            ):
+                path = root / "rust/tests/host-fixtures" / helper
+                if path not in r_readers:
+                    r_readers.add(path)
+                    pending.append(path)
+        readers = {
+            "python": (
+                root.glob("python/tests/installed/installed_*.py"),
+                r'load_truth\(__file__, "([a-z-]+)"\)',
+            ),
+            "r": (
+                r_readers,
+                r'read_host_fixture\(host_fixture_root, ?"([a-z-]+)"\)',
+            ),
+        }
+        unread = {}
+        for host, (paths, call) in readers.items():
+            read = {
+                family
+                for path in paths
+                for family in re.findall(call, path.read_text(encoding="utf-8"))
+            }
+            unread[host] = sorted(set(families) - read)
+        self.assertEqual(unread, {"python": [], "r": []})
 
     def test_an_r_binary_installation_records_its_package_form(self):
         # Native qualification also runs the suites through the R binary

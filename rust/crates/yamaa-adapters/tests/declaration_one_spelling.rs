@@ -6,16 +6,39 @@ mod declaration {
         use crate::support::Edit as _;
         use yamaa_adapters::json;
         use yamaa_adapters::{
-            shipped_schema, specification_diagnostics::capture_failure,
+            shipped_schema,
+            specification_diagnostics::{capture_failure, inheritance_failure_ref, Rejection},
             specification_source::Source,
         };
         use yamaa_core::json::Value;
 
-        const HEAD: &str = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\nbase: DM\noutput: {path: out.csv, columns: [ID, V]}\n";
+        const HEAD: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\nbase: DM\noutput: {path: out.csv, columns: [ID, V]}\n";
+        /// [`HEAD`] written in 0.5, for the 0.5-only spellings #3447 deletes.
+        const LEGACY_HEAD: &str = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\nbase: DM\noutput: {path: out.csv, columns: [ID, V]}\n";
         const INPUT: &str = "input: {DM: dm.csv, EX: ex.csv}\n";
 
-        /// The ordered diagnostics of a standalone preparation, empty when it succeeds.
+        /// The ordered diagnostics of a preparation, empty when it succeeds.
         fn diagnostics(text: &str) -> Vec<Value> {
+            let Err(error) = shipped_schema::prepare(
+                Source {
+                    identity: "spec.yaml".into(),
+                    bytes: text.as_bytes().to_vec(),
+                },
+                "spec.yaml".into(),
+                &mut crate::support::inheritance::Files,
+            ) else {
+                return Vec::new();
+            };
+            match inheritance_failure_ref(&error).unwrap() {
+                Rejection::Invalid(findings) => findings
+                    .iter()
+                    .map(yamaa_adapters::report_storage::diagnostic_value)
+                    .collect(),
+                other => panic!("expected diagnostics, got {other:?}"),
+            }
+        }
+        /// The ordered diagnostics of a 0.5 standalone preparation.
+        fn legacy_diagnostics(text: &str) -> Vec<Value> {
             let schema = shipped_schema::capture().unwrap();
             let Err(error) = schema.prepare_standalone(Source {
                 identity: "spec.yaml".into(),
@@ -24,7 +47,7 @@ mod declaration {
                 return Vec::new();
             };
             match capture_failure(&error) {
-                yamaa_adapters::specification_diagnostics::Rejection::Invalid(findings) => findings
+                Rejection::Invalid(findings) => findings
                     .iter()
                     .map(yamaa_adapters::report_storage::diagnostic_value)
                     .collect(),
@@ -34,7 +57,19 @@ mod declaration {
         fn column(derivation: &str) -> String {
             format!("{HEAD}{INPUT}columns:\n  - {{name: ID, type: str, derivation: DM.ID}}\n  - name: V\n    type: int\n    derivation: {derivation}\n")
         }
+        fn legacy_column(derivation: &str) -> String {
+            column(derivation).replacen(HEAD, LEGACY_HEAD, 1)
+        }
+        /// A 1.0 refusal, naming the layer that writes it and the entry
+        /// (LAYER-4, LAYER-12).
         fn restated(path: &str, field: &str, shorthand: Value) -> Value {
+            json!({
+                "phase": "validation", "condition": "redundant_long_form",
+                "rule": "SCHEMA-15", "spec_paths": [path],
+                "context": {"field": field, "shorthand": shorthand, "source": "spec.yaml", "entry": "spec.yaml"},
+            })
+        }
+        fn legacy_restated(path: &str, field: &str, shorthand: Value) -> Value {
             json!({
                 "phase": "validation", "condition": "redundant_long_form",
                 "rule": "SCHEMA-15", "spec_paths": [path],
@@ -52,29 +87,12 @@ mod declaration {
                     json!("COUNT(EX.*)"),
                 ),
                 (
-                    "{source: DM.V}",
-                    "columns.V.derivation",
-                    "source",
-                    json!("DM.V"),
-                ),
-                (
-                    "{source: {variable: DM.V}}",
-                    "columns.V.derivation.source",
-                    "variable",
-                    json!("DM.V"),
-                ),
-                (
-                    "{value: {source: DM.V}}",
+                    "{value: DM.V}",
                     "columns.V.derivation",
                     "value",
                     json!("DM.V"),
                 ),
-                (
-                    "{value: {literal: 1}}",
-                    "columns.V.derivation",
-                    "value",
-                    json!("{\"literal\": 1}"),
-                ),
+                ("{value: 1}", "columns.V.derivation", "value", json!(1)),
                 (
                     "{flag: {condition: 'DM.V > 1'}}",
                     "columns.V.derivation.flag",
@@ -94,12 +112,6 @@ mod declaration {
                     json!("DM.IT.SEX"),
                 ),
                 (
-                    "{case: [{when: 'TRUE', then: {source: DM.V}}]}",
-                    "columns.V.derivation.case[0].then",
-                    "source",
-                    json!("DM.V"),
-                ),
-                (
                     "{first_available: {sources: [{variable: DM.V}]}}",
                     "columns.V.derivation.first_available.sources[0]",
                     "variable",
@@ -115,6 +127,28 @@ mod declaration {
                 assert_eq!(
                     diagnostics(&column(derivation)),
                     [restated(path, field, shorthand)],
+                    "{derivation}"
+                );
+            }
+            // 0.5-only until #3447: 1.0 writes a reference as the bare
+            // expression and `source:` only as the structured binding (D18),
+            // so 1.0 has no source shorthand for these to restate.
+            for (derivation, path, field) in [
+                ("{source: DM.V}", "columns.V.derivation", "source"),
+                (
+                    "{source: {variable: DM.V}}",
+                    "columns.V.derivation.source",
+                    "variable",
+                ),
+                (
+                    "{case: [{when: 'TRUE', then: {source: DM.V}}]}",
+                    "columns.V.derivation.case[0].then",
+                    "source",
+                ),
+            ] {
+                assert_eq!(
+                    legacy_diagnostics(&legacy_column(derivation)),
+                    [legacy_restated(path, field, json!("DM.V"))],
                     "{derivation}"
                 );
             }
@@ -141,20 +175,33 @@ mod declaration {
                     "text",
                     json!("Collected"),
                 ),
+            ] {
+                assert_eq!(
+                    diagnostics(&text),
+                    [restated(path, field, shorthand)],
+                    "{text}"
+                );
+            }
+            // 0.5-only until #3447: a 1.0 `derivations` entry holds the bare
+            // expression, and its typed binding has no `value` wrapper.
+            let valid = legacy_column("DM.V");
+            for (text, path, field) in [
                 (
                     format!("{valid}intermediates:\n  - id: P\n    dataset: EX\n    key: [ID]\n    derivations: {{N: {{source: EX.N}}}}\n    no_match: {{literal: null}}\n"),
                     "intermediates.P.derivations.N",
                     "source",
-                    json!("EX.N"),
                 ),
                 (
                     format!("{valid}intermediates:\n  - id: P\n    dataset: EX\n    key: [ID]\n    derivations: {{N: {{type: int, derivation: {{value: {{source: EX.N}}}}}}}}\n    no_match: {{literal: null}}\n"),
                     "intermediates.P.derivations.N.derivation",
                     "value",
-                    json!("EX.N"),
                 ),
             ] {
-                assert_eq!(diagnostics(&text), [restated(path, field, shorthand)], "{text}");
+                assert_eq!(
+                    legacy_diagnostics(&text),
+                    [legacy_restated(path, field, json!("EX.N"))],
+                    "{text}"
+                );
             }
         }
 
@@ -163,11 +210,11 @@ mod declaration {
             for derivation in [
                 "{aggregate: {expr: 'COUNT(EX.*)', key: [ID]}}",
                 "{source: {variable: DM.V, absent: 0}}",
-                "{value: {source: DM.V}, unconvertible: 0}",
+                "{value: DM.V, unconvertible: 0}",
                 // An explicit default and an explicit null are both written.
                 "{flag: {condition: 'DM.V > 1', true_value: 'Y'}}",
                 "{flag: {condition: 'DM.V > 1', false_value: null}}",
-                "{str_template: {template: '{DM.ID}', missing: {literal: null}}}",
+                "{str_template: {template: '{DM.ID}', missing: null}}",
                 "{row_number: {window: {order_by: [{variable: DM.ID, direction: desc}]}}}",
             ] {
                 assert_eq!(
@@ -203,7 +250,7 @@ mod declaration {
                     "list",
                 ),
                 (
-                    format!("{valid}intermediates:\n  - {{id: P, dataset: EX, key: ID, no_match: {{literal: null}}}}\n"),
+                    format!("{valid}intermediates:\n  - {{id: P, dataset: EX, key: ID}}\n"),
                     "intermediates.P.key",
                     "match_key",
                 ),
@@ -281,7 +328,7 @@ mod declaration {
         fn every_layer_is_held_to_the_shorthand_it_writes() {
             let entry = format!("{HEAD}parent: parent.yaml\n");
             let parent = |columns: &str| {
-                format!("schema_version: '1.0'\n{INPUT}columns:\n  - {{name: ID, type: str, derivation: DM.ID}}\n{columns}")
+                format!("yamaa: \"1.0\"\ntype: spec\n{INPUT}columns:\n  - {{name: ID, type: str, derivation: DM.ID}}\n{columns}")
             };
             // The parent's canonical expansion is composed and validated again,
             // and only what a layer wrote is held to its shorthand.
@@ -320,8 +367,9 @@ mod declaration {
         fn a_bare_derivation_string_is_only_a_source_reference() {
             // Text spelled like a call is not dispatched to the operation it
             // names; it fails as a source variable name (EXPR-5).
+            // 0.5-only until #3447: 1.0 reads such text as a formula (D18).
             for derivation in ["to_date(DM.D)", "'upper(DM.ID)'", "'DM.V + 1'"] {
-                let found = diagnostics(&column(derivation));
+                let found = legacy_diagnostics(&legacy_column(derivation));
                 assert_eq!(found.len(), 1, "{derivation}: {found:?}");
                 assert_eq!(
                     found[0]["condition"],
