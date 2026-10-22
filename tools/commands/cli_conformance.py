@@ -61,8 +61,8 @@ def main(argv=None):
     )
     args = parser.parse_args(argv)
     output = args.output.resolve()
-    if output.exists():
-        parser.error("output must be a fresh directory")
+    if output.exists() or output.is_relative_to(FIXTURES.resolve()):
+        parser.error("output must be a fresh directory outside the fixture tree")
     if args.prepare_only:
         if args.source_revision is not None or args.evidence is not None:
             parser.error(
