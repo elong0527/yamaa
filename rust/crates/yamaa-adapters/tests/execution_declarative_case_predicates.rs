@@ -1,7 +1,5 @@
 #![cfg(feature = "yaml")]
 //! Execution contracts.
-#[allow(dead_code)]
-mod support;
 mod execution {
     mod declarative_case_predicates {
         //! Independently authored full case reports and unchanged original CSV truth.

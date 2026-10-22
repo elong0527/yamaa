@@ -4,13 +4,13 @@ use crate::{
     schema_outcomes as errors,
     specification_source::{InheritanceError, SourceFailure},
 };
-use yamaa_core::application_issue::{Fault, Stage};
+use yamaa_core::application_issue::{Fault, Step};
 use yamaa_core::json::Value;
 use yamaa_core::schema::{Document, NormalizationError, SchemaStructure};
 use yamaa_core::{inheritance as graph, inheritance_preparation::Error as E};
 
 fn rejected(code: Fault) -> Rejection {
-    fault(Stage::Inheritance, code)
+    fault(Step::Inheritance, code)
 }
 fn context_failure(error: captured_schema::Error) -> Rejection {
     rejected(match error {
@@ -30,7 +30,7 @@ fn normalized(
                 Err(error) => context_failure(error),
             }
         }
-        error => errors::normalization(error, Stage::Prepare)
+        error => errors::normalization(error, Step::Prepare)
             .unwrap_or_else(|_| rejected(Fault::Normalization)),
     }
 }
@@ -54,7 +54,7 @@ fn traversal_outcome<E>(schema: &SchemaStructure, error: graph::Error<E>) -> Res
     Ok(match error {
         graph::Error::Host(error) => return Err(error),
         graph::Error::Resource(error) => bound(
-            Stage::Prepare,
+            Step::Prepare,
             "inheritance",
             error.resource,
             error.limit,
@@ -63,7 +63,7 @@ fn traversal_outcome<E>(schema: &SchemaStructure, error: graph::Error<E>) -> Res
         // An unsupported control field reports the projection fault of the
         // preparation stage it has always reported.
         graph::Error::UnsupportedControlField { .. } => {
-            fault(Stage::Prepare, Fault::IssueProjection)
+            fault(Step::Prepare, Fault::IssueProjection)
         }
         graph::Error::Layer {
             source,
@@ -103,7 +103,7 @@ fn dictionary_failure_ref<'a, T>(
                 match error {
                     graph::SourceError::Raised(error) => return Err(error),
                     graph::SourceError::Unavailable => {
-                        fault(Stage::Dictionary, Fault::ResourceUnavailable)
+                        fault(Step::Dictionary, Fault::ResourceUnavailable)
                     }
                 }
             }
@@ -123,11 +123,11 @@ fn dictionary_failure_ref<'a, T>(
                 }
                 Rejection::Invalid(rows)
             } else if let DecodeFailure::Unavailable = error {
-                fault(Stage::Dictionary, Fault::YamlReaderUnavailable)
+                fault(Step::Dictionary, Fault::YamlReaderUnavailable)
             } else if let DecodeFailure::Limit(limit) = error {
-                super::decoder_limit(limit, Stage::Dictionary)
+                super::decoder_limit(limit, Step::Dictionary)
             } else {
-                fault(Stage::Dictionary, Fault::YamlDecode)
+                fault(Step::Dictionary, Fault::YamlDecode)
             }
         }
         Cause::Admission {
@@ -143,7 +143,7 @@ fn dictionary_failure_ref<'a, T>(
         Cause::Materialize(error) => {
             normalized(document.schema().structure(), None, error.clone(), &[])
         }
-        Cause::MissingOrigin(_) => fault(Stage::Dictionary, Fault::DeclaringOrigin),
+        Cause::MissingOrigin(_) => fault(Step::Dictionary, Fault::DeclaringOrigin),
     })
 }
 
@@ -258,15 +258,15 @@ pub fn failure_ref<T>(error: &InheritanceError<T>) -> Result<Rejection, &T> {
         E::Traversal(error) => return traversal(schema, error),
         E::ParentRequired => rejected(Fault::ParentRequired),
         E::Document(error) => {
-            errors::document(*error, Stage::Prepare).unwrap_or_else(|_| rejected(Fault::Document))
+            errors::document(*error, Step::Prepare).unwrap_or_else(|_| rejected(Fault::Document))
         }
         E::Normalize(failure) => {
             normalized(schema, failure.input.as_ref(), failure.error.clone(), &[])
         }
-        E::Validation(error) => errors::validation(*error, Stage::Prepare)
+        E::Validation(error) => errors::validation(*error, Step::Prepare)
             .unwrap_or_else(|_| rejected(Fault::ValidationPolicy)),
         E::Dependencies(error) => {
-            errors::inheritance_dependencies(error.as_ref().clone(), Stage::Prepare)
+            errors::inheritance_dependencies(error.as_ref().clone(), Step::Prepare)
                 .unwrap_or_else(|_| rejected(Fault::DependencyPolicy))
         }
         E::Model(findings) => normalized(

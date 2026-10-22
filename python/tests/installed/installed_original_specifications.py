@@ -2185,8 +2185,10 @@ columns:
             entry.write_bytes(b"[changed")
             with self.assertRaises(yamaa.Error):
                 built.save()
+            # The output directory does not exist (FILE-7).
             self.assertEqual(
-                built.issues.to_polars()["condition"].to_list(), ["engine_rejected"]
+                built.issues.to_polars()["condition"].to_list(),
+                ["resource_path_missing"],
             )
             (root / "absent").mkdir()
             built.save()
@@ -2222,9 +2224,14 @@ columns:
                         link.symlink_to(outside, target_is_directory=True)
                     with self.assertRaises(yamaa.Error):
                         built.save()
+                    # A link on the way to the target (FILE-8).
+                    self.assertEqual(
+                        built.issues.to_polars()["condition"].to_list(),
+                        ["resource_path_symlink"],
+                    )
                     self.assertEqual(
                         json.loads(built.issues.to_polars()["context"][0]),
-                        {"code": "invalid_target", "stage": "output"},
+                        {"path": "link/output.csv"},
                     )
                     self.assertEqual(
                         sorted(p.name for p in outside.iterdir()),
@@ -2242,17 +2249,15 @@ columns:
         import yamaa
 
         project = yamaa.project("absent-project.yaml")
+        # The caller's own path, named as given at no field (FILE-7).
         expected = [
             {
                 "phase": "validation",
-                "condition": "project_environment_missing",
-                "rule": "FUNC-1",
-                "spec_paths": ["environment"],
+                "condition": "resource_path_missing",
+                "rule": "FILE-7",
+                "spec_paths": [],
                 "context": json.dumps(
-                    {
-                        "cause": "missing",
-                        "path": Path("absent-project.yaml").resolve().as_posix(),
-                    },
+                    {"path": "absent-project.yaml"},
                     ensure_ascii=False,
                     separators=(",", ":"),
                 ),

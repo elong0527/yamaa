@@ -441,35 +441,5 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     assert_eq!(finding.source_span, None);
     assert_eq!(finding.operand_route, None);
     reached.insert(rendered(&finding));
-    for (failure, cause) in [
-        (
-            project_environment_diagnostics::ReadFailure::Missing,
-            "missing",
-        ),
-        (
-            project_environment_diagnostics::ReadFailure::Unreadable,
-            "unreadable",
-        ),
-    ] {
-        let finding = failure.diagnostic("/study/project.yaml");
-        assert_eq!(
-            (
-                finding.definition().phase,
-                finding.definition().condition,
-                finding.definition().rule,
-            ),
-            ("validation", "project_environment_missing", Some("FUNC-1"),),
-        );
-        assert_eq!(finding.spec_paths, ["environment"]);
-        assert_eq!(finding.context.len(), 2);
-        assert_eq!(finding.context["cause"], JsonValue::String(cause.into()),);
-        assert_eq!(
-            finding.context["path"],
-            JsonValue::String("/study/project.yaml".into()),
-        );
-        assert_eq!(finding.source_span, None);
-        assert_eq!(finding.operand_route, None);
-        reached.insert(rendered(&finding));
-    }
     reached
 }

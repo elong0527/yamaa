@@ -266,10 +266,10 @@ fn refusal(error: &yamaa_adapters::lint::Error, paths: &[String]) -> Failure {
     let directory = text::current_directory();
     let path = match error.file() {
         Some(file) => text::relative(file, &directory),
-        None => paths.first().map_or("", String::as_str),
+        None => paths.first().map_or("", String::as_str).into(),
     };
     Failure::new(
-        Action::Lint(path),
+        Action::Lint(&path),
         &Report::from_issues(&error.diagnostics()),
     )
 }

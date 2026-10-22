@@ -1,8 +1,7 @@
 #![cfg(feature = "odm")]
 //! ODM XML clinical-item contracts. Every case of the retained Python reader
 //! suite is ported here, followed by refusals that suite did not cover.
-#[allow(dead_code)]
-mod support;
+use crate::support;
 
 use support::odm_files::{cell, column, edit, gzip, ordinals, Header, Scratch, Tar};
 use yamaa_adapters::{

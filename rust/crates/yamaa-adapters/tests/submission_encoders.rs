@@ -1,8 +1,6 @@
 //! Encoder contracts: the Define-XML document and the transport files the
 //! adapters write over a composed study, and the refusals only an encoder
 //! raises (DEFINE-24, DEFINE-25, XPT-10).
-#[allow(dead_code)]
-mod support;
 mod submission_encoders {
     /// Studies composed from independently authored trees, as core's
     /// composition tests compose them.

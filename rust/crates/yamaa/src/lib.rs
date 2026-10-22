@@ -112,6 +112,10 @@ pub fn style_same_value(before: &[u8], after: &[u8]) -> bool {
     yamaa_adapters::style_values::same_value(before, after)
 }
 
+#[cfg(all(test, unix))]
+#[path = "../tests/support/scratch.rs"]
+mod test_scratch;
+
 #[cfg(test)]
 mod tests {
     #[test]

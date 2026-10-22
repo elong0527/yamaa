@@ -1,6 +1,4 @@
 //! Table contracts.
-#[allow(dead_code)]
-mod support;
 mod table {
     #[cfg(feature = "readstat")]
     mod sas_allocation {

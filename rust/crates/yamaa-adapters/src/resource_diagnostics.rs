@@ -1,6 +1,6 @@
 //! Typed resource policies retain their applied bounds and authored owners.
 use crate::{csv_source::TextTableError, specification_run::Error};
-use yamaa_core::application_issue::{Fault, Stage};
+use yamaa_core::application_issue::{Fault, Step};
 use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::{dataset::Resource, specification::SourceDeclaration};
 
@@ -25,9 +25,9 @@ impl Refusal {
             spec_paths,
         }
     }
-    pub fn diagnostic(&self, stage: Stage, fault: Fault) -> Diagnostic {
+    pub fn diagnostic(&self, step: Step, fault: Fault) -> Diagnostic {
         yamaa_core::application_issue::resource_rejected(
-            stage,
+            step,
             fault,
             self.resource,
             self.limit,
@@ -35,8 +35,8 @@ impl Refusal {
             self.spec_paths.clone(),
         )
     }
-    pub fn issues(&self, stage: Stage, fault: Fault) -> Vec<Diagnostic> {
-        vec![self.diagnostic(stage, fault)]
+    pub fn issues(&self, step: Step, fault: Fault) -> Vec<Diagnostic> {
+        vec![self.diagnostic(step, fault)]
     }
 }
 pub(crate) fn resource_name(resource: Resource) -> &'static str {
@@ -139,7 +139,7 @@ pub(crate) fn source_findings(
         } else if let Error::Sources(errors) = error {
             pending.extend(errors.iter().rev().map(|(source, error)| (source, error)));
         } else if let Some(refusal) = self::source(error, source) {
-            findings.push(refusal.diagnostic(Stage::Ingest, Fault::SourceLimit));
+            findings.push(refusal.diagnostic(Step::Ingest, Fault::SourceLimit));
         } else {
             return Ok(None);
         }
@@ -270,7 +270,7 @@ mod tests {
         else {
             panic!("a fixed source bound is an engine fault");
         };
-        assert_eq!(projected.context["stage"], "ingest");
+        assert_eq!(projected.context["step"], "ingest");
         assert_eq!(projected.context["code"], "sas_limit");
         assert_eq!(projected.context["resource"], "table_rows");
         assert_eq!(projected.context["limit"], 10_000_000);
@@ -359,7 +359,7 @@ mod tests {
                 refusal,
                 Refusal::new(resource, limit, Some(actual), vec!["input.XW".into()])
             );
-            let finding = refusal.diagnostic(Stage::Ingest, Fault::SourceLimit);
+            let finding = refusal.diagnostic(Step::Ingest, Fault::SourceLimit);
             assert_eq!(finding.context["resource"], resource);
             assert_eq!(finding.context["limit"], Value::from(limit));
             assert_eq!(finding.context["actual"], Value::from(actual));

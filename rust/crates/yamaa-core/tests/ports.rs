@@ -1,6 +1,5 @@
 //! Strict private port controls for effects, payload identity and owned snapshots.
-#[allow(dead_code)]
-mod support;
+use crate::support;
 use support::ports::*;
 use yamaa_core::project_preparation as metadata;
 

@@ -29,21 +29,21 @@ impl Finding {
             context: [("detail".into(), crate::json::Value::String(detail.into()))].into(),
         }
     }
-    /// An engine fault at `path`, naming its stage and closed code (D73).
-    pub fn fault(path: &str, stage: issue::Stage, fault: issue::Fault) -> Self {
-        Self::refused(path, issue::rejected(stage, fault))
+    /// An engine fault at `path`, naming its step and closed code (D73).
+    pub fn fault(path: &str, step: issue::Step, fault: issue::Fault) -> Self {
+        Self::refused(path, issue::rejected(step, fault))
     }
     /// The bound an engine pass hit at `path`, with its resource facts.
     pub fn limit(
         path: &str,
-        stage: issue::Stage,
+        step: issue::Step,
         fault: issue::Fault,
         bound: crate::limits::LimitExceeded,
     ) -> Self {
         Self::refused(
             path,
             issue::resource_rejected(
-                stage,
+                step,
                 fault,
                 bound.resource,
                 bound.limit,
@@ -2337,7 +2337,7 @@ mod tests {
         assert_eq!(source_version(&section, "0.3.0"), None);
     }
 
-    /// An engine refusal at a submission path names its stage and closed
+    /// An engine refusal at a submission path names its step and closed
     /// code; a bound adds its resource facts, without an unknown size.
     #[test]
     fn engine_refusals_name_their_stage_code_and_bound() {
@@ -2346,7 +2346,7 @@ mod tests {
         let text = |value: &str| V::String(value.into());
         let fault = Finding::fault(
             "define",
-            issue::Stage::Define,
+            issue::Step::Define,
             issue::Fault::OutputProjection,
         );
         assert_eq!(fault.code, ConditionCode::ApplicationRejected);
@@ -2355,7 +2355,7 @@ mod tests {
             fault.context,
             [
                 ("code".into(), text("output_projection")),
-                ("stage".into(), text("define")),
+                ("step".into(), text("define")),
             ]
             .into()
         );
@@ -2374,14 +2374,14 @@ mod tests {
             (unsized_output, issue::Fault::OutputLimit, None),
         ] {
             let finding =
-                Finding::limit("datasets.DM.transport", issue::Stage::Define, fault, bound);
+                Finding::limit("datasets.DM.transport", issue::Step::Define, fault, bound);
             assert_eq!(finding.code, ConditionCode::ApplicationRejected);
             assert_eq!(finding.path, "datasets.DM.transport");
             let mut expected: crate::diagnostic::Context = [
                 ("code".into(), text(fault.as_str())),
                 ("limit".into(), V::from(bound.limit)),
                 ("resource".into(), text(bound.resource)),
-                ("stage".into(), text("define")),
+                ("step".into(), text("define")),
             ]
             .into();
             if let Some(actual) = actual {
