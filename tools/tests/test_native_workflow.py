@@ -1430,7 +1430,7 @@ class NativeWorkflowContract(unittest.TestCase):
                 self.assertTrue(run.rstrip().endswith('"${yamaa[@]}" selftest'))
 
     def test_each_cli_archive_runs_the_corpus_written_as_1_0_after_its_selftest(self):
-        # #3060: while the network is up, the repository's tools convert the
+        # #3060: while the network is up, the repository's tools copy the
         # corpus (D122) and plan it; after the selftest, the command line's
         # runner runs it through the unpacked binary and the comparator judges
         # the records. No Rust.

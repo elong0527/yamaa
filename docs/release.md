@@ -170,10 +170,10 @@ archive with `tools/packaging/cli_archive.py` and
 unpack and run each archive on a fresh runner of its platform with the
 network disabled. While the network is up, each job checks out the
 repository and sets up Python, but no Rust, and
-`tools.commands.cli_conformance` prepares the conformance corpus. The binary
-reads only 1.x files, so the converter writes every benchmark as 1.0 (#3030
-D122), leaving out those that the 1.0 conversion gate excepts and those
-whose project supplies project functions, which the binary cannot call.
+`tools.commands.cli_conformance` prepares the conformance corpus: it copies
+every benchmark, which the binary reads as 1.x files (#3030 D122), and plans
+the copies, leaving out those whose project supplies project functions,
+which the binary cannot call.
 Then the job unpacks the archive and runs `yamaa --version`, whose first
 line must name the archive's version, and `yamaa selftest`, which must
 succeed; the log keeps both reports. It then runs the corpus through the
