@@ -25,10 +25,9 @@ from unittest import mock
 
 from jsonschema import Draft202012Validator
 
-import yaml
 from tools.packaging import generate_json_schema as generator
 from tools.paths import ROOT
-from tools.validation._repository_yaml import UniqueKeyLoader
+from tools.tests import support
 from tools.validation.repository_schema import SchemaSourceError
 from tools.validation.schema_bundle import Bundle, parse_type, type_text
 
@@ -37,12 +36,8 @@ EXAMPLES = ROOT / "docs/design/interface-1.0/examples"
 ABSENT = object()
 
 
-def load(path):
-    return yaml.load(path.read_text(encoding="utf-8"), Loader=UniqueKeyLoader)
-
-
-TABLE = load(ROOT / "tools/migrate/renames.yaml")
-VOCABULARIES = load(ROOT / "yaml/vocabulary/cdisc.yaml")["vocabularies"]
+TABLE = support.load_yaml(ROOT / "tools/migrate/renames.yaml")
+VOCABULARIES = support.load_yaml(ROOT / "yaml/vocabulary/cdisc.yaml")["vocabularies"]
 BUNDLE = Bundle(V1)
 OWNERS = BUNDLE.owners()
 FIELDS = {(owner, item.name): item for owner, items in OWNERS.items() for item in items}
@@ -621,7 +616,7 @@ class RenameTableTests(unittest.TestCase):
 def example_files():
     """Each converted example file, its file type, and whether it is complete."""
     paths = sorted(EXAMPLES.rglob("*.yaml"))
-    documents = {path: load(path) for path in paths}
+    documents = {path: support.load_yaml(path) for path in paths}
     parents = {
         (path.parent / document["parent"]).resolve()
         for path, document in documents.items()
@@ -724,7 +719,9 @@ class JsonSchemaTests(unittest.TestCase):
     def test_a_layer_defers_requiredness_only_inside_keyed_members(self):
         layer = validator("spec")
         complete = validator("spec", "root_class")
-        organization = load(EXAMPLES / "schema-inheritance/spec_organization.yaml")
+        organization = support.load_yaml(
+            EXAMPLES / "schema-inheritance/spec_organization.yaml"
+        )
         self.assertEqual(messages(layer, organization), [])
         self.assertIn(
             ": 'domain' is a required property", messages(complete, organization)
@@ -746,7 +743,7 @@ class JsonSchemaTests(unittest.TestCase):
                 )
 
     def test_0_5_spellings_are_refused(self):
-        spec = load(EXAMPLES / "adam-adtte-pfs/spec.yaml")
+        spec = support.load_yaml(EXAMPLES / "adam-adtte-pfs/spec.yaml")
         layer = validator("spec")
         aval = next(
             index
@@ -769,7 +766,7 @@ class JsonSchemaTests(unittest.TestCase):
             document = copy.deepcopy(spec)
             mutate(document)
             self.assertNotEqual(messages(layer, document), [])
-        project = load(EXAMPLES / "sdtm-dm-metadata/project.yaml")
+        project = support.load_yaml(EXAMPLES / "sdtm-dm-metadata/project.yaml")
         for mutate in (
             lambda d: d["sdtm"].update(datasets="json"),
             lambda d: d["sdtm"].update(
@@ -931,8 +928,8 @@ RESERVED_VALUES = {("where_comparison_class", "comparator"): ("LT", "LE", "GT", 
 class ReservedSpellingTests(unittest.TestCase):
     def setUp(self):
         self.documents = {
-            "spec": load(EXAMPLES / "sdtm-dm-metadata/spec.yaml"),
-            "project": load(EXAMPLES / "sdtm-dm-metadata/project.yaml"),
+            "spec": support.load_yaml(EXAMPLES / "sdtm-dm-metadata/spec.yaml"),
+            "project": support.load_yaml(EXAMPLES / "sdtm-dm-metadata/project.yaml"),
         }
 
     def test_every_reserved_spelling_has_a_check(self):

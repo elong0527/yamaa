@@ -9,8 +9,8 @@ from pathlib import Path
 
 import yaml
 from tools.paths import ROOT
+from tools.tests import support
 from tools.validation import check_cdisc_vocabulary as OWNER
-from tools.validation._repository_yaml import UniqueKeyLoader
 
 
 class CdiscVocabularyTests(unittest.TestCase):
@@ -29,8 +29,7 @@ class CdiscVocabularyTests(unittest.TestCase):
         self.temporary.cleanup()
 
     def vocabulary(self):
-        path = self.root / OWNER.VOCABULARY
-        return yaml.load(path.read_text(encoding="utf-8"), Loader=UniqueKeyLoader)
+        return support.load_yaml(self.root / OWNER.VOCABULARY)
 
     def write(self, document):
         (self.root / OWNER.VOCABULARY).write_text(

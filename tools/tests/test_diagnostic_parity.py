@@ -13,6 +13,7 @@ from pathlib import Path
 from unittest import mock
 
 from tools.paths import ROOT
+from tools.tests.support import write
 from tools.validation import check_diagnostics as guard
 
 CONDITIONS = """\
@@ -80,10 +81,7 @@ class ParityGateTests(unittest.TestCase):
         self.write(LIST, UNREACHED)
 
     def write(self, relative, text):
-        path = self.root / relative
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(textwrap.dedent(text), encoding="utf-8")
-        return path
+        return write(self.root, relative, textwrap.dedent(text))
 
     def errors(self):
         return guard.parity_errors(self.root)

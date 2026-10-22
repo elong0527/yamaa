@@ -6,11 +6,10 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-import yaml
 from tools.ci import toolchain
 from tools.commands import repository
 from tools.paths import ROOT
-from tools.validation._repository_yaml import UniqueKeyLoader
+from tools.tests import support
 
 # The commands that run the third-party notices generator, which reads the
 # toolchain's rust-src: the generator itself, the Make targets whose
@@ -28,17 +27,11 @@ def release(version):
     return tuple(map(int, version.split(".")))
 
 
-def load(relative):
-    return yaml.load(
-        (ROOT / relative).read_text(encoding="utf-8"), Loader=UniqueKeyLoader
-    )
-
-
 def workflow_jobs():
     """Yield each workflow job, as workflow:job, with its steps."""
     for path in sorted((ROOT / ".github/workflows").iterdir()):
         if path.suffix in (".yml", ".yaml"):
-            for name, job in load(path.relative_to(ROOT))["jobs"].items():
+            for name, job in support.load_yaml(path)["jobs"].items():
                 yield f"{path.name}:{name}", job.get("steps", [])
 
 
@@ -181,7 +174,7 @@ class ToolchainTest(unittest.TestCase):
         )
 
     def test_the_setup_action_adds_rust_src_only_when_given_notices(self):
-        steps = load(".github/actions/setup/action.yml")["runs"]["steps"]
+        steps = support.load_yaml(".github/actions/setup/action.yml")["runs"]["steps"]
         activate = {step.get("name"): step for step in steps}[
             "Activate the workspace toolchain"
         ]

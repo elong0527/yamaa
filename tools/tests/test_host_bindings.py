@@ -12,10 +12,9 @@ import tomllib
 import unittest
 from unittest import mock
 
-import yaml
 from tools.commands import repository, rust_tests
 from tools.paths import ROOT, WORKSPACE
-from tools.validation._repository_yaml import UniqueKeyLoader
+from tools.tests import support
 
 
 def members():
@@ -107,10 +106,7 @@ class HostBindings(unittest.TestCase):
         )
 
     def test_only_jobs_that_check_the_r_host_install_r(self):
-        workflow = yaml.load(
-            (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8"),
-            Loader=UniqueKeyLoader,
-        )
+        workflow = support.workflow("ci.yml")
         installs = {
             "r": ["check"],
             # The equivalence gate checks R in its R host job only.

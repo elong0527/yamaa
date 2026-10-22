@@ -11,12 +11,7 @@ from tools.benchmark import load_metadata
 from tools.commands import conversion
 from tools.migrate.excepted import EXCEPTED
 from tools.paths import ROOT
-
-
-def write(path, text):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text, encoding="utf-8")
-
+from tools.tests.support import write
 
 ERROR = (
     "phase: validation\ncondition: unpaired_fields\nspec_paths:\n  - {path}\n"
@@ -68,16 +63,19 @@ class HelperTests(unittest.TestCase):
             original = Path(directory) / "original"
             converted = Path(directory) / "converted"
             write(
-                original / "kept/expected/error.yaml",
+                original,
+                "kept/expected/error.yaml",
                 ERROR.format(path="intermediates[0]"),
             )
             write(
-                converted / "kept/expected/error.yaml",
+                converted,
+                "kept/expected/error.yaml",
                 ERROR.format(path="intermediates.LASTDOSE"),
             )
-            write(original / "moved/expected/error.yaml", ERROR.format(path="a"))
+            write(original, "moved/expected/error.yaml", ERROR.format(path="a"))
             write(
-                converted / "moved/expected/error.yaml",
+                converted,
+                "moved/expected/error.yaml",
                 ERROR.format(path="a").replace("unpaired_fields", "other"),
             )
             with mock.patch.object(conversion, "FIXTURES", original):
@@ -92,7 +90,8 @@ class HelperTests(unittest.TestCase):
             fixtures = Path(directory)
             for name in EXCEPTED:
                 write(
-                    fixtures / name / "benchmark.yaml",
+                    fixtures,
+                    f"{name}/benchmark.yaml",
                     "lifecycle: draft\nstandard: TEST\ndomain: DM\n",
                 )
             conversion.except_benchmarks(fixtures)
@@ -115,17 +114,19 @@ class HelperTests(unittest.TestCase):
                 ("positive", ("dm.csv", "dm.xpt", "define.xml")),
                 ("negative", ("dm.csv", "error.yaml")),
             ):
-                write(fixtures / name / "benchmark.yaml", define)
-                write(fixtures / name / "project.yaml", "yamaa: '1.0'\n")
+                write(fixtures, f"{name}/benchmark.yaml", define)
+                write(fixtures, f"{name}/project.yaml", "yamaa: '1.0'\n")
                 for file in expected:
                     write(
-                        fixtures / name / "expected" / file,
+                        fixtures,
+                        f"{name}/expected/{file}",
                         ERROR.format(path="sdtm.specs[0]")
                         if file == "error.yaml"
                         else "x",
                     )
             write(
-                fixtures / "plain" / "benchmark.yaml",
+                fixtures,
+                "plain/benchmark.yaml",
                 "lifecycle: draft\nstandard: SDTM\ndomain: DM\n",
             )
             cases = conversion.define_manifest(fixtures)["cases"]

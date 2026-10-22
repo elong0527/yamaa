@@ -8,10 +8,9 @@ import tomllib
 import unittest
 from pathlib import Path
 
-import yaml
 from tools.ci import fuzz
 from tools.paths import ROOT
-from tools.validation._repository_yaml import UniqueKeyLoader
+from tools.tests import support
 
 
 class FuzzTargets(unittest.TestCase):
@@ -175,10 +174,7 @@ class RegressionInputs(unittest.TestCase):
 
 
 def workflow():
-    return yaml.load(
-        (ROOT / ".github/workflows/fuzz.yml").read_text(encoding="utf-8"),
-        Loader=UniqueKeyLoader,
-    )
+    return support.workflow("fuzz.yml")
 
 
 if __name__ == "__main__":

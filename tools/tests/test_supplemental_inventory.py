@@ -9,6 +9,7 @@ from unittest.mock import patch
 
 from tools.commands import installed
 from tools.conformance import supplemental_inventory as module
+from tools.tests.support import write
 
 
 class RepositoryCatalog(unittest.TestCase):
@@ -383,9 +384,7 @@ class SupplementalEvidence(unittest.TestCase):
         }
 
     def write(self, name, contents):
-        path = self.root / name
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(contents)
+        write(self.root, name, contents)
 
     def save_catalog_file(self):
         self.catalog_path.write_text(json.dumps(self.catalog_file))

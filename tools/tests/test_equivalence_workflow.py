@@ -9,6 +9,7 @@ runs on both. The equivalence gate runs one job per host, in parallel
 (#3492).
 """
 
+import functools
 import os
 import re
 import subprocess
@@ -16,9 +17,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-import yaml
 from tools.paths import ROOT
-from tools.validation._repository_yaml import UniqueKeyLoader
+from tools.tests import support
 
 # Changes to the engine, the hosts, the benchmarks, the repository tools, the
 # build or either gate's own inputs: each runs both gates.
@@ -81,11 +81,11 @@ EVENTS = (
 )
 
 
+@functools.cache
 def workflow():
-    return yaml.load(
-        (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8"),
-        Loader=UniqueKeyLoader,
-    )
+    """The CI workflow, read once: the path decisions read their step from it
+    for each case."""
+    return support.workflow("ci.yml")
 
 
 def paths_step(job):
@@ -106,15 +106,84 @@ def diff_command(job):
     return command
 
 
+# Each commit of a case's history; the fixed time keeps the revisions of one
+# history the same whichever case writes it.
+COMMITTER = "committer yamaa test <test@example.invalid> 0 +0000"
+
+
+def history_stream(paths, *, base_path=None, merge=False, rename_from=None):
+    """A `git fast-import` stream that writes a case's history and checks out
+    its last commit on main, then prints the base and the head revision.
+
+    Each changed path holds "changed". The history starts at an empty commit;
+    a renamed path is committed first and becomes the base; each path then
+    takes a commit of its own. A base path is a commit on the base, beside the
+    head, and a merge is a synthetic merge of the head into the base.
+    """
+    lines = ["feature get-mark"]
+    marks = 0
+
+    def commit(parents, tree, message):
+        nonlocal marks
+        marks += 1
+        if not parents:
+            lines.append("reset refs/heads/case")
+        lines.extend(
+            [
+                "commit refs/heads/case",
+                f"mark :{marks}",
+                COMMITTER,
+                f"data {len(message)}",
+                message,
+            ]
+        )
+        lines.extend(
+            f"{'from' if index == 0 else 'merge'} {parent}"
+            for index, parent in enumerate(parents)
+        )
+        lines.append("deleteall")
+        for path in sorted(tree):
+            lines.extend([f"M 100644 inline {path}", "data 8", "changed"])
+        return f":{marks}"
+
+    base = commit([], set(), "Base")
+    base_tree = {rename_from} if rename_from else set()
+    if rename_from:
+        base = commit([base], base_tree, "Change a path")
+    head, tree = base, set()
+    for changed in paths:
+        tree = tree | {changed}
+        head = commit([head], tree, "Change a path")
+    if base_path:
+        base = commit([base], base_tree | {base_path}, "Change a path")
+    checkout = commit([base, head], tree, "Synthetic merge") if merge else head
+    lines.extend(["reset refs/heads/main", f"from {checkout}", "", f"get-mark {base}"])
+    lines.append(f"get-mark {head}")
+    return "\n".join(lines) + "\n"
+
+
 class PathDecision:
     """The cases each gate's path decision passes. A subclass names its job,
     the gate its messages name, and what its decision outputs beside `run`,
-    on a pull request and on a dispatch."""
+    on a pull request and on a dispatch.
+
+    The cases share one repository: each writes its history into it with one
+    `git fast-import` and points main, the branch checked out, at the commit
+    the step runs on. The step reads only commits and HEAD, so the work tree
+    is never checked out."""
 
     job = ""
     gate = ""
     pull_request_outputs = {}
     dispatch_outputs = {}
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        directory = tempfile.TemporaryDirectory()
+        cls.addClassCleanup(directory.cleanup)
+        cls.work = support.init(Path(directory.name) / "work")
+        cls.output = Path(directory.name) / "github-output"
 
     def decide(
         self,
@@ -125,78 +194,45 @@ class PathDecision:
         merge=False,
         rename_from=None,
     ):
-        step = paths_step(self.job)
-        with tempfile.TemporaryDirectory() as directory:
-            work = Path(directory)
-
-            def git(*arguments):
-                return subprocess.check_output(
-                    ["git", "-c", "user.name=Test", "-c", "user.email=test@example.org"]
-                    + list(arguments),
-                    cwd=work,
-                    text=True,
-                    stderr=subprocess.PIPE,
-                ).strip()
-
-            def commit(changed):
-                file = work / changed
-                file.parent.mkdir(parents=True, exist_ok=True)
-                file.write_text("changed\n", encoding="utf-8")
-                git("add", "--", changed)
-                git("commit", "--quiet", "-m", "Change a path")
-                return git("rev-parse", "HEAD")
-
-            git("init", "--quiet")
-            git("commit", "--quiet", "--allow-empty", "-m", "Base")
-            base = git("rev-parse", "HEAD")
-            if rename_from:
-                base = commit(rename_from)
-                (work / path).parent.mkdir(parents=True, exist_ok=True)
-                git("mv", rename_from, path)
-            for changed in (path,) if isinstance(path, str) else path:
-                head = commit(changed)
-            if base_path:
-                git("checkout", "--quiet", "--detach", base)
-                base = commit(base_path)
-            checkout = head
-            if merge:
-                checkout = git(
-                    "commit-tree",
-                    git("rev-parse", f"{head}^{{tree}}"),
-                    "-p",
-                    base,
-                    "-p",
-                    head,
-                    "-m",
-                    "Synthetic merge",
-                )
-            git("checkout", "--quiet", "--detach", checkout)
-            output = work / "github-output"
-            result = subprocess.run(
-                [
-                    "bash",
-                    "--noprofile",
-                    "--norc",
-                    "-e",
-                    "-o",
-                    "pipefail",
-                    "-c",
-                    step["run"],
-                ],
-                cwd=work,
-                env=os.environ
-                | {
-                    "EVENT_NAME": event,
-                    "BASE_SHA": base,
-                    "HEAD_SHA": head,
-                    "GITHUB_OUTPUT": str(output),
-                },
-                capture_output=True,
-                text=True,
-                check=True,
-            )
-            lines = output.read_text(encoding="utf-8").splitlines()
-            return dict(line.split("=", 1) for line in lines), result.stdout
+        stream = history_stream(
+            (path,) if isinstance(path, str) else path,
+            base_path=base_path,
+            merge=merge,
+            rename_from=rename_from,
+        )
+        base, head = subprocess.run(
+            ["git", "-C", str(self.work), "fast-import", "--quiet", "--force"],
+            input=stream,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.split()
+        self.output.write_text("", encoding="utf-8")
+        result = subprocess.run(
+            [
+                "bash",
+                "--noprofile",
+                "--norc",
+                "-e",
+                "-o",
+                "pipefail",
+                "-c",
+                paths_step(self.job)["run"],
+            ],
+            cwd=self.work,
+            env=os.environ
+            | {
+                "EVENT_NAME": event,
+                "BASE_SHA": base,
+                "HEAD_SHA": head,
+                "GITHUB_OUTPUT": str(self.output),
+            },
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        lines = self.output.read_text(encoding="utf-8").splitlines()
+        return dict(line.split("=", 1) for line in lines), result.stdout
 
     def on_pull_request(self, run):
         """The whole decision for a pull request whose gate runs or not."""

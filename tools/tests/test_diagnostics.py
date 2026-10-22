@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 from tools.paths import ROOT
+from tools.tests.support import write
 from tools.validation import check_diagnostics as guard
 
 
@@ -40,10 +41,7 @@ class DiagnosticGuardTests(unittest.TestCase):
         )
 
     def write(self, relative, text):
-        path = self.root / relative
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text, encoding="utf-8")
-        return path
+        return write(self.root, relative, text)
 
     def errors(self):
         return guard.violations(self.root)

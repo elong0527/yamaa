@@ -2,6 +2,7 @@
 
 import contextlib
 import copy
+import functools
 import io
 import os
 import re
@@ -17,7 +18,6 @@ import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
-import yaml
 from tools.ci import publish_release as publisher
 from tools.ci import release_assets, toolchain
 from tools.ci import select_release_artifacts as release
@@ -25,7 +25,7 @@ from tools.packaging import cli_archive, release_identity
 from tools.packaging import generate_component_inventory as inventory
 from tools.packaging.release_identity import Identity
 from tools.paths import ROOT
-from tools.validation._repository_yaml import UniqueKeyLoader
+from tools.tests import support
 
 MATRIX = release.native
 PROJECT = tomllib.loads((ROOT / "python/pyproject.toml").read_text(encoding="utf-8"))[
@@ -127,23 +127,14 @@ def tagged_repository(root, messages):
 
     A message makes an annotated tag; None makes a lightweight one.
     """
-    for arguments in (
-        ("init", "-b", "main"),
-        ("config", "user.name", "release test"),
-        ("config", "user.email", "release-test@example.invalid"),
-        ("commit", "--allow-empty", "-m", "qualified"),
-        ("update-ref", "refs/remotes/origin/main", "HEAD"),
-        *(
-            ("tag", name) if message is None else ("tag", "-a", name, "-m", message)
-            for name, message in messages.items()
-        ),
-    ):
-        subprocess.run(
-            ["git", "-C", str(root), *arguments],
-            check=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
+    support.init(root)
+    support.git(root, "commit", "--allow-empty", "-m", "qualified")
+    support.git(root, "update-ref", "refs/remotes/origin/main", "HEAD")
+    for name, message in messages.items():
+        if message is None:
+            support.git(root, "tag", name)
+        else:
+            support.git(root, "tag", "-a", name, "-m", message)
 
 
 def tar(path, members):
@@ -985,16 +976,7 @@ class PublicationBoundary(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
 
-            def git(*args):
-                return subprocess.check_output(
-                    ["git", "-C", str(root), *args],
-                    text=True,
-                    stderr=subprocess.DEVNULL,
-                ).strip()
-
-            git("init", "-b", "main")
-            git("config", "user.name", "release test")
-            git("config", "user.email", "release-test@example.invalid")
+            git = functools.partial(support.git, support.init(root))
             (root / "file").write_text("main")
             git("add", "file")
             git("commit", "-m", "main")
@@ -1025,16 +1007,7 @@ class PublicationBoundary(unittest.TestCase):
         checkout = root / "checkout"
         checkout.mkdir()
 
-        def git(*args):
-            return subprocess.check_output(
-                ["git", "-C", str(checkout), *args],
-                text=True,
-                stderr=subprocess.DEVNULL,
-            ).strip()
-
-        git("init", "-b", "main")
-        git("config", "user.name", "release test")
-        git("config", "user.email", "release-test@example.invalid")
+        git = functools.partial(support.git, support.init(checkout))
         declaration = checkout / release_identity.DECLARATION
         declaration.parent.mkdir(parents=True)
         declaration.write_text(
@@ -1534,7 +1507,7 @@ class PublicationBoundary(unittest.TestCase):
 class ReleaseWorkflow(unittest.TestCase):
     def setUp(self):
         self.text = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
-        self.jobs = yaml.load(self.text, Loader=UniqueKeyLoader)["jobs"]
+        self.jobs = support.workflow("release.yml")["jobs"]
 
     def test_the_tag_publishes_the_github_release_and_nothing_else(self):
         # The owner uploads Python packages to PyPI from the release assets;
@@ -1584,12 +1557,7 @@ class ReleaseWorkflow(unittest.TestCase):
 
 class ReleaseRehearsalWorkflow(unittest.TestCase):
     def test_the_rehearsal_selects_with_its_read_only_token_and_never_publishes(self):
-        workflow = yaml.load(
-            (ROOT / ".github/workflows/release-rehearsal.yml").read_text(
-                encoding="utf-8"
-            ),
-            Loader=UniqueKeyLoader,
-        )
+        workflow = support.workflow("release-rehearsal.yml")
         self.assertEqual(
             workflow["permissions"], {"contents": "read", "actions": "read"}
         )
@@ -1693,14 +1661,7 @@ def candidate_tree(root, identity, tags=(), notes=True):
     Each earlier tag gets its own commit, so it is an ancestor of the tree.
     """
 
-    def git(*args):
-        return subprocess.check_output(
-            ["git", "-C", str(root), *args], text=True, stderr=subprocess.DEVNULL
-        ).strip()
-
-    git("init", "-b", "main")
-    git("config", "user.name", "release test")
-    git("config", "user.email", "release-test@example.invalid")
+    git = functools.partial(support.git, support.init(root))
     for name in tags:
         git("commit", "--allow-empty", "-m", name)
         git("tag", "-a", name, "-m", name)
