@@ -29,7 +29,7 @@ qualify_entry_relative_programs <- function(producer) {
     writeBin(charToRaw(truth$studies[[name]]),file.path(study,"input/data.csv"))
     entry <- file.path(study,"spec.yaml")
     program <- if(producer) "consumer" else "ordinary"
-    writeLines(c("schema_version: '1.0'",paste0("parent: ../shared/",program,".yaml")),entry)
+    writeLines(c('yamaa: "1.0"',"type: spec",paste0("parent: ../shared/",program,".yaml")),entry)
     writeBin(charToRaw(truth$producer_entry),file.path(study,"producer.yaml"))
     if(producer) {
       # A link only types the stored artifact: callers build and save each
@@ -196,7 +196,7 @@ expect_identical(held$DTHDY,c(150,80,NA_real_,NA_real_),"an output view outlives
 unlink(owner$directory,recursive=TRUE)
 cat("original complete lookup owner and exact held save after files disappear passed\n")
 
-simple <- function(input) paste0("schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\n",
+simple <- function(input) paste0('yamaa: "1.0"\ntype: spec\ndomain: TEST\nkeys: [ID]\n',
   "input: {SRC: ",json_text(input),"}\n",
   "columns: [{name: ID, type: int, derivation: SRC.ID}]\n",
   "output: {path: result.csv, columns: [ID]}\n")

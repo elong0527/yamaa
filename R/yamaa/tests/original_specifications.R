@@ -148,7 +148,7 @@ for(case_name in names(issue_frame_truth)[!startsWith(names(issue_frame_truth),"
 }
 directory <- tempfile("public-check-");dir.create(directory)
 entry <- file.path(directory,"spec.yaml")
-writeLines(c("schema_version: '1.0'","domain: TEST","keys: [ID]","input: {SRC: input.csv}",
+writeLines(c('yamaa: "1.0"',"type: spec","domain: TEST","keys: [ID]","input: {SRC: input.csv}",
              "output: {path: absent/output.csv, columns: [ID]}","columns:",
              "  - {name: ID, type: int, derivation: SRC.ID}"),entry)
 stopifnot("a check reads no study data"=nrow(check_spec(entry)$issues)==0L)
@@ -216,7 +216,7 @@ for(late in c(FALSE,TRUE)) for(existing in c(FALSE,TRUE)) {
   sentinel_bytes <- charToRaw("outside sentinel")
   writeBin(sentinel_bytes,sentinel)
   entry <- file.path(directory,"spec.yaml")
-  writeLines(c("schema_version: '1.0'","domain: TEST","keys: [ID]","input: {SRC: input.csv}",
+  writeLines(c('yamaa: "1.0"',"type: spec","domain: TEST","keys: [ID]","input: {SRC: input.csv}",
                "output: {path: link/output.csv, columns: [ID]}","columns:",
                "  - {name: ID, type: int, derivation: SRC.ID}"),entry)
   writeBin(charToRaw("ID\n1\n"),file.path(directory,"input.csv"))

@@ -32,7 +32,7 @@ the held bytes.
 
 | Paired family | Shared data and existing owners |
 | --- | --- |
-| original-specifications | Original case selection, lookup/ordering/casing inputs and exact CSV; existing independent TSV/JSON reports |
+| original-specifications | Original case selection, lookup/ordering/casing inputs and exact CSV; existing independent TSV/JSON reports; `{entry}` in a namespace case's context stands for the specification's absolute path as the engine resolves it, with forward slashes |
 | file-resources | Named lookup paths, issue columns, exact alias context and entry-relative programs that declare `output.report`; existing inspection/capture reports |
 | public-environment | Original case selection, schema link references, quota/version inputs, exact callback CSV and the project-relative inherited and codelist files |
 | verification-logs | `specification-original/schema-verification-log`, evaluated counts and fatal outcomes, now checked in the run report |
@@ -208,9 +208,20 @@ The `original-specifications.temporal_arithmetic` vectors likewise share
 PK relative times, civil shifts, duration parsing, static refusals,
 range failures and reached `invalid` handler counts across Rust, Python and R.
 The `original-specifications.inheritance_nulls` cases share authored layers,
-missing-lookup CSV bytes, reached `no_match` counts and refusal conditions for
-`{literal: null}` handlers, nulls that leave a field absent, empty children and
-inherited clears in both hosts.
+missing-lookup CSV bytes, reached absence counts and refusal conditions for
+missing answers written as YAML null, empty children, `clear:` entries and
+rename-only intermediates in both hosts. Each case names the count it
+reaches: `absent_count` for a 1.x file and `no_match_count` for a 0.5 file,
+the handler each surface counts an intermediate's absence under (D202).
+
+Cases whose subject only the 0.5 surface has keep their 0.5 documents until
+the 0.5 path goes (#3447, #3448): the inheritance cases of a null parent and
+of nulls that leave a field absent, the row drivers whose lookup keys 0.5
+inferred, the baseline whose `window.order_by` 0.5 forbade, the wide
+`schema_version` probes of `column-ceilings`, the 0.5 halves of the
+`issue-locations` surface pairs, and `lookup_fallback_0_5_yaml`, the body of
+the structured-binding fallback probes, whose `absent` a 0.5 file reads as
+the answer to a variable the lookup does not hold (D67).
 
 ## Conditions no case reaches
 

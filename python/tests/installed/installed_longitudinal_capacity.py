@@ -68,7 +68,8 @@ class LongitudinalCapacity(unittest.TestCase):
                     pq.write_table(table, source)
                     del table
                 document = {
-                    "schema_version": "1.0",
+                    "yamaa": "1.0",
+                    "type": "spec",
                     "domain": "WIDE",
                     "keys": [TRUTH["id_column"]],
                     # A typed csv source is a mapping; an untyped parquet

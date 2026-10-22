@@ -36,7 +36,7 @@ def compiled(run):
 
 
 PLAIN = (
-    "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\n"
+    'yamaa: "1.0"\ntype: spec\ndomain: TEST\nkeys: [ID]\n'
     "input: {SRC: {path: input.csv, types: {ID: int}}}\n"
     "output: {path: out.csv, columns: [ID]}\n"
     "columns:\n  - {name: ID, type: int, label: Identifier, derivation: SRC.ID}\n"
@@ -99,7 +99,7 @@ class PlanReuse(unittest.TestCase):
         self.assertFalse(compiled(self.run_study(spec, changed)))
         # A specification the engine refuses keeps nothing: the run reports
         # the refusal, and once it is fixed the next run compiles it.
-        self.write("spec.yaml", "schema_version: '1.0'\ndomain: TEST\n")
+        self.write("spec.yaml", 'yamaa: "1.0"\ntype: spec\ndomain: TEST\n')
         refused = spec.run()
         self.assertIsNone(refused.output)
         self.assertGreater(refused.issues.num_rows, 0)
@@ -150,8 +150,9 @@ class PlanReuse(unittest.TestCase):
         self.assertFalse(compiled(spec.run()))
 
     def test_a_project_object_reuses_its_plans_and_runs_every_change(self):
+        # A section lists only specifications of its model (SUB-3).
         dm = (
-            "schema_version: '1.0'\ndomain: DM\nkeys: [USUBJID]\n"
+            'yamaa: "1.0"\ntype: spec\nmodel: SDTM\ndomain: DM\nkeys: [USUBJID]\n'
             "input: {RAW: {path: ../raw/dm.csv, types: {AGE: int}}}\n"
             "columns:\n"
             "  - {name: USUBJID, type: str, label: Subject, derivation: RAW.USUBJID}\n"
@@ -159,7 +160,7 @@ class PlanReuse(unittest.TestCase):
             "output: {path: ../out/dm.csv, columns: [USUBJID, AGE]}\n"
         )
         adsl = (
-            "schema_version: '1.0'\ndomain: ADSL\nkeys: [USUBJID]\n"
+            'yamaa: "1.0"\ntype: spec\nmodel: ADaM\ndomain: ADSL\nkeys: [USUBJID]\n'
             "input: {DM: {path: ../out/dm.csv, schema: ../sdtm/dm.yaml}}\n"
             "columns:\n"
             "  - {name: USUBJID, type: str, label: Subject, derivation: DM.USUBJID}\n"
@@ -171,7 +172,7 @@ class PlanReuse(unittest.TestCase):
         self.write("adam/adsl.yaml", adsl)
         self.write(
             "project.yaml",
-            "schema_version: '1.0'\nsdtm:\n  specs: [sdtm/dm.yaml]\n"
+            'yamaa: "1.0"\ntype: project\nsdtm:\n  specs: [sdtm/dm.yaml]\n'
             "adam:\n  specs: [adam/adsl.yaml]\n",
         )
         (self.root / "out").mkdir()
@@ -201,15 +202,16 @@ class PlanReuse(unittest.TestCase):
         """Studies A and B with the same file names; B has one more row."""
         for name, rows in (("a", "1\n2\n"), ("b", "1\n2\n3\n")):
             self.write(f"{name}/spec.yaml", PLAIN)
+            # A section lists only specifications of its model (SUB-3).
             self.write(
                 f"{name}/dm.yaml",
-                PLAIN.replace("domain: TEST", "domain: DM").replace(
+                PLAIN.replace("domain: TEST", "model: SDTM\ndomain: DM").replace(
                     "out.csv", "dm.csv"
                 ),
             )
             self.write(
                 f"{name}/project.yaml",
-                "schema_version: '1.0'\nsdtm:\n  specs: [dm.yaml]\n",
+                'yamaa: "1.0"\ntype: project\nsdtm:\n  specs: [dm.yaml]\n',
             )
             self.write(f"{name}/input.csv", "ID\n" + rows)
         previous = Path.cwd()
@@ -275,12 +277,15 @@ class PlanReuse(unittest.TestCase):
         self.write("input.csv", "ID\n1\n")
         project = yamaa.project(
             self.write(
-                "project.yaml", "schema_version: '1.0'\nsdtm:\n  specs: [dm.yaml]\n"
+                "project.yaml",
+                'yamaa: "1.0"\ntype: project\nsdtm:\n  specs: [dm.yaml]\n',
             )
         )
         self.write(
             "dm.yaml",
-            PLAIN.replace("domain: TEST", "domain: DM").replace("out.csv", "dm.csv"),
+            PLAIN.replace("domain: TEST", "model: SDTM\ndomain: DM").replace(
+                "out.csv", "dm.csv"
+            ),
         )
         self.assertEqual(plan_of(spec.run()), "compiled")
         for clone in (

@@ -32,12 +32,12 @@ local({
   writeBin(charToRaw("ID,K,SEQ,V\na,x,2,5\nb,x,1,9\n"),file.path(directory,"src.csv"))
   writeBin(charToRaw("ID,K\nc,x\nd,x\n"),file.path(directory,"other.csv"))
   expect_lookup_run(run_spec(entry),directory,fixture_bytes(host_truth[["section_order_csv"]]),
-    "[{\"spec_path\":\"rows[1].derivations.V.compute.multiple_matches\",\"handler\":\"multiple_matches\",\"count\":1},{\"spec_path\":\"rows[1].derivations.V.compute.no_match\",\"handler\":\"no_match\",\"count\":0},{\"spec_path\":\"rows[2].derivations.V.compute.multiple_matches\",\"handler\":\"multiple_matches\",\"count\":2},{\"spec_path\":\"rows[2].derivations.V.compute.no_match\",\"handler\":\"no_match\",\"count\":0},{\"spec_path\":\"columns.FINAL.derivation.source.multiple_matches\",\"handler\":\"multiple_matches\",\"count\":5},{\"spec_path\":\"columns.FINAL.derivation.source.no_match\",\"handler\":\"no_match\",\"count\":0},{\"spec_path\":\"columns.FIRST.derivation.source.multiple_matches\",\"handler\":\"multiple_matches\",\"count\":5},{\"spec_path\":\"columns.FIRST.derivation.source.no_match\",\"handler\":\"no_match\",\"count\":0}]",
+    "[{\"spec_path\":\"rows.grouped.derivations.V.multiple_matches\",\"handler\":\"multiple_matches\",\"count\":1},{\"spec_path\":\"rows.grouped.derivations.V.absent\",\"handler\":\"absent\",\"count\":0},{\"spec_path\":\"rows.added.derivations.V.multiple_matches\",\"handler\":\"multiple_matches\",\"count\":2},{\"spec_path\":\"rows.added.derivations.V.absent\",\"handler\":\"absent\",\"count\":0},{\"spec_path\":\"columns.FINAL.derivation.source.multiple_matches\",\"handler\":\"multiple_matches\",\"count\":5},{\"spec_path\":\"columns.FINAL.derivation.source.absent\",\"handler\":\"absent\",\"count\":0},{\"spec_path\":\"columns.FIRST.derivation.source.multiple_matches\",\"handler\":\"multiple_matches\",\"count\":5},{\"spec_path\":\"columns.FIRST.derivation.source.absent\",\"handler\":\"absent\",\"count\":0}]",
     "completed-template SELF borrowing")
 
   unlink(file.path(directory,fixture_strings(host_truth[["section_case_files"]])))
-  writeBin(charToRaw(sub("SECTION: {literal: first}","SECTION: P.K",body,fixed=TRUE)),entry)
-  expected <- list(phase="validation",condition="phase_boundary",rule="LOOKUP-7",spec_paths=list("rows[0].derivations.SECTION.source"),context="{\"available_phase\":\"completed_prior_row_template\",\"identifier\":\"P.K\",\"required_phase\":\"row_construction\"}")
+  writeBin(charToRaw(sub("SECTION: \"'first'\"","SECTION: P.K",body,fixed=TRUE)),entry)
+  expected <- list(phase="validation",condition="phase_boundary",rule="LOOKUP-7",spec_paths=list("rows.collected.derivations.SECTION.source"),context="{\"available_phase\":\"completed_prior_row_template\",\"identifier\":\"P.K\",\"required_phase\":\"row_construction\"}")
   check_issue_frame(check_spec(entry)$issues,expected,"the check of a phase boundary")
   rejected <- run_spec(entry);check_issue_frame(rejected$issues,expected,"the run of a phase boundary")
   stopifnot("a refused run has no output"=is.null(rejected$output),
@@ -56,8 +56,8 @@ local({
   writeBin(charToRaw("ID\n2\n1\n3\n"),file.path(directory,"src.csv"))
   writeBin(fixture_bytes(host_truth[["duplicate_donor_csv"]]),file.path(directory,"donor.csv"))
   expect_lookup_run(run_spec(entry),directory,fixture_bytes(host_truth[["duplicate_lookup_csv"]]),
-    '[{"spec_path":"columns.A.derivation.source.multiple_matches","handler":"multiple_matches","count":1},{"spec_path":"columns.A.derivation.source.no_match","handler":"no_match","count":1},{"spec_path":"columns.B.derivation.source.multiple_matches","handler":"multiple_matches","count":1},{"spec_path":"columns.B.derivation.source.no_match","handler":"no_match","count":1}]',
-    "inferred intermediate keys")
+    '[{"spec_path":"columns.A.derivation.source.multiple_matches","handler":"multiple_matches","count":1},{"spec_path":"columns.A.derivation.source.absent","handler":"absent","count":1},{"spec_path":"columns.B.derivation.source.multiple_matches","handler":"multiple_matches","count":1},{"spec_path":"columns.B.derivation.source.absent","handler":"absent","count":1}]',
+    "declared intermediate keys")
   unlink(c(file.path(directory,"src.csv"),file.path(directory,"donor.csv"),file.path(directory,"result.csv")))
   cases <- list(
     list(remove=host_truth[["lookup_first_clause"]],condition="rename_only_intermediate",rule="LOOKUP-4",context='{"dataset":"DONOR","intermediate":"P"}'),
@@ -67,14 +67,14 @@ local({
     label <- paste("an intermediate without",deparse(case$remove))
     writeBin(charToRaw(sub(case$remove,"",body,fixed=TRUE)),entry)
     expected <- list(phase="validation",condition=case$condition,rule=case$rule,
-      spec_paths=list("intermediates[0]"),context=case$context)
+      spec_paths=list("intermediates.P"),context=case$context)
     checked <- check_spec(entry);check_issue_frame(checked$issues,expected,paste("the check of",label))
     rejected <- run_spec(entry);check_issue_frame(rejected$issues,expected,paste("the run of",label))
     stopifnot_case(label,"a refused run has no output"=is.null(rejected$output),
       "a static refusal has no observations"=is.null(domain_observations(rejected)),
       "its save is refused"=save_refused(rejected),"no input is created"=!file.exists(file.path(directory,"src.csv")))
   }
-  cat("inferred applicable intermediate keys, stable shared selection and complete declaration failures passed without Python\n")
+  cat("declared intermediate keys, stable shared selection and complete declaration failures passed without Python\n")
 })
 
 local({
@@ -86,7 +86,7 @@ local({
   writeBin(fixture_bytes(host_truth[["filtered_donor_csv"]]),file.path(directory,"src.csv"))
   stopifnot("the donor grain checks"=nrow(check_spec(entry)$issues)==0L)
   expect_lookup_run(run_spec(entry),directory,fixture_bytes(host_truth[["filtered_lookup_csv"]]),
-    '[{"spec_path":"columns.A.derivation.source.multiple_matches","handler":"multiple_matches","count":2},{"spec_path":"columns.A.derivation.source.no_match","handler":"no_match","count":1},{"spec_path":"columns.B.derivation.source.multiple_matches","handler":"multiple_matches","count":2},{"spec_path":"columns.B.derivation.source.no_match","handler":"no_match","count":1}]',
+    '[{"spec_path":"columns.A.derivation.source.multiple_matches","handler":"multiple_matches","count":2},{"spec_path":"columns.A.derivation.source.absent","handler":"absent","count":1},{"spec_path":"columns.B.derivation.source.multiple_matches","handler":"multiple_matches","count":2},{"spec_path":"columns.B.derivation.source.absent","handler":"absent","count":1}]',
     "same-input donor grain")
   cat("same-input donor grain, shared missing field and complete handler accounting passed without Python\n")
 })
@@ -100,17 +100,17 @@ local({
   writeBin(charToRaw("ID,SEQ,CUT\n1,1,4\n3,1,2\n"),file.path(directory,"alt.csv"))
   writeBin(fixture_bytes(host_truth[["lookup_cutoff_yaml"]]),entry)
   expect_lookup_run(run_spec(entry),directory,fixture_bytes(host_truth[["lookup_cutoff_csv"]]),
-    "[{\"spec_path\":\"columns.A.derivation.source.multiple_matches\",\"handler\":\"multiple_matches\",\"count\":1},{\"spec_path\":\"columns.A.derivation.source.no_match\",\"handler\":\"no_match\",\"count\":2},{\"spec_path\":\"columns.B.derivation.source.multiple_matches\",\"handler\":\"multiple_matches\",\"count\":1},{\"spec_path\":\"columns.B.derivation.source.no_match\",\"handler\":\"no_match\",\"count\":2}]",
+    "[{\"spec_path\":\"columns.A.derivation.source.multiple_matches\",\"handler\":\"multiple_matches\",\"count\":1},{\"spec_path\":\"columns.A.derivation.source.absent\",\"handler\":\"absent\",\"count\":2},{\"spec_path\":\"columns.B.derivation.source.multiple_matches\",\"handler\":\"multiple_matches\",\"count\":1},{\"spec_path\":\"columns.B.derivation.source.absent\",\"handler\":\"absent\",\"count\":2}]",
     "a correlated donor cutoff")
   unlink(file.path(directory,"result.csv"))
   writeBin(fixture_bytes(host_truth[["lookup_alternative_yaml"]]),entry)
   expect_lookup_run(run_spec(entry),directory,charToRaw("ID,SEQ,A,B\n1,1,three,\n3,1,,\n"),
-    "[{\"spec_path\":\"rows[0].derivations.A.source.multiple_matches\",\"handler\":\"multiple_matches\",\"count\":1},{\"spec_path\":\"rows[0].derivations.A.source.no_match\",\"handler\":\"no_match\",\"count\":1},{\"spec_path\":\"rows[0].derivations.B.source.multiple_matches\",\"handler\":\"multiple_matches\",\"count\":1},{\"spec_path\":\"rows[0].derivations.B.source.no_match\",\"handler\":\"no_match\",\"count\":1}]",
+    "[{\"spec_path\":\"rows.alternate.derivations.A.source.multiple_matches\",\"handler\":\"multiple_matches\",\"count\":1},{\"spec_path\":\"rows.alternate.derivations.A.source.absent\",\"handler\":\"absent\",\"count\":1},{\"spec_path\":\"rows.alternate.derivations.B.source.multiple_matches\",\"handler\":\"multiple_matches\",\"count\":1},{\"spec_path\":\"rows.alternate.derivations.B.source.absent\",\"handler\":\"absent\",\"count\":1}]",
     "a correlated donor of the current row driver")
   unlink(file.path(directory,"result.csv"))
-  writeBin(charToRaw("schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID, SEQ]\ninput:\n  SRC: {path: src.csv, types: {ID: int, SEQ: int, CUT: int}}\n  ALT: {path: alt.csv, types: {ID: int, SEQ: int, CUT: int}}\n  D: {path: donor.csv, types: {ID: int, TIME: int}}\noutput: {path: result.csv, columns: [ID, SEQ, A, B]}\nintermediates:\n  - id: P\n    dataset: D\n    key: [ID]\n    filter: \"D.TIME < SRC.CUT\"\n    order_by: [D.TIME]\n    keep: last\n    no_match: {literal: null}\nrows:\n  - id: alternate\n    dataset: ALT\n    derivations: {ID: ALT.ID, SEQ: ALT.SEQ, A: P.A, B: P.B}\ncolumns:\n  - {name: ID, type: int}\n  - {name: SEQ, type: int}\n  - {name: A, type: str}\n  - {name: B, type: str}\n"),entry)
+  writeBin(charToRaw(sub("D.TIME < ALT.CUT","D.TIME < SRC.CUT",host_truth[["lookup_alternative_yaml"]],fixed=TRUE)),entry)
   rejected <- run_spec(entry)
-  check_issue_frame(rejected$issues,list(phase="validation",condition="unknown_field",rule="LOOKUP-7",spec_paths=list("intermediates[0].filter"),context='{"identifier":"SRC.CUT","intermediate":"P"}'),
+  check_issue_frame(rejected$issues,list(phase="validation",condition="unknown_field",rule="LOOKUP-7",spec_paths=list("intermediates.P.filter"),context='{"identifier":"SRC.CUT","intermediate":"P"}'),
     "a filter naming another driver's field")
   stopifnot("a refused run has no output"=is.null(rejected$output),"its save is refused"=save_refused(rejected),
     "nothing is written"=!file.exists(file.path(directory,"result.csv")))
@@ -126,10 +126,14 @@ local({
   writeBin(charToRaw("ID,SELECT\n1,Y\n2,N\n3,Y\n"),file.path(directory,"src.csv"))
   writeBin(fixture_bytes(host_truth[["fallback_donor_csv"]]),file.path(directory,"donor.csv"))
   expect_lookup_run(run_spec(entry),directory,charToRaw("ID,A,B\n1,first,\n2,skip,skip\n3,,\n"),
-    "[{\"spec_path\":\"columns.A.derivation.case[0].then.source.multiple_matches\",\"handler\":\"multiple_matches\",\"count\":1},{\"spec_path\":\"columns.A.derivation.case[0].then.source.no_match\",\"handler\":\"no_match\",\"count\":1},{\"spec_path\":\"columns.B.derivation.case[0].then.source.multiple_matches\",\"handler\":\"multiple_matches\",\"count\":1},{\"spec_path\":\"columns.B.derivation.case[0].then.source.no_match\",\"handler\":\"no_match\",\"count\":1}]",
+    "[{\"spec_path\":\"columns.A.derivation.case[0].then.source.multiple_matches\",\"handler\":\"multiple_matches\",\"count\":1},{\"spec_path\":\"columns.A.derivation.case[0].then.source.absent\",\"handler\":\"absent\",\"count\":1},{\"spec_path\":\"columns.B.derivation.case[0].then.source.multiple_matches\",\"handler\":\"multiple_matches\",\"count\":1},{\"spec_path\":\"columns.B.derivation.case[0].then.source.absent\",\"handler\":\"absent\",\"count\":1}]",
     "a nested case intermediate source")
+  # 0.5 only, until #3447 deletes the 0.5 path: a 0.5 `absent` answers a
+  # variable the lookup does not hold, and a donor without a record is the
+  # intermediate's own `no_match` (D67).
+  legacy <- host_truth[["lookup_fallback_0_5_yaml"]]
   for (variable in c("P.A", "P.ABSENT")) {
-    writeBin(charToRaw(sub("then: P.A",paste0("then: {source: {variable: ",variable,", absent: fallback}}"),body,fixed=TRUE)),entry)
+    writeBin(charToRaw(sub("then: P.A",paste0("then: {source: {variable: ",variable,", absent: fallback}}"),legacy,fixed=TRUE)),entry)
     admitted <- run_spec(entry)
     expected <- if (variable == "P.A") "ID,A,B\n1,first,\n2,skip,skip\n3,,\n" else host_truth[["fallback_lookup_csv"]]
     count <- if (variable == "P.A") "0" else "2"
@@ -138,6 +142,22 @@ local({
     handler <- paste0('{"count":',count,',"handler":"absent","spec_path":"columns.A.derivation.case[0].then.source.absent"}')
     stopifnot_case(label,"the absent handler is counted"=grepl(handler,domain_observations(admitted),fixed=TRUE))
   }
+  # On a 1.x file the intermediate answers the donor without a record, and its
+  # answer counts under `absent` at the read, the binding's own row (D202); a
+  # variable the lookup does not hold fails (D67, LOOKUP-11).
+  writeBin(charToRaw(sub("then: P.A","then: {source: {variable: P.A, absent: fallback}}",body,fixed=TRUE)),entry)
+  admitted <- run_spec(entry)
+  label <- "an absent fallback for P.A in a 1.x file"
+  expect_lookup_run(admitted,directory,charToRaw("ID,A,B\n1,first,\n2,skip,skip\n3,,\n"),NULL,label)
+  stopifnot_case(label,"the intermediate's answer counts at the binding's absent row"=grepl(
+    '{"count":1,"handler":"absent","spec_path":"columns.A.derivation.case[0].then.source.absent"}',
+    domain_observations(admitted),fixed=TRUE))
+  writeBin(charToRaw(sub("then: P.A","then: {source: {variable: P.ABSENT, absent: fallback}}",body,fixed=TRUE)),entry)
+  refused <- run_spec(entry)
+  check_issue_frame(refused$issues,list(phase="validation",condition="unknown_field",rule="LOOKUP-11",
+    spec_paths=list("columns.A.derivation.case[0].then.source"),context='{"identifier":"P.ABSENT"}'),
+    "an absent fallback for a variable the lookup does not hold in a 1.x file")
+  stopifnot("a refused run has no output"=is.null(refused$output))
   cat("nested case intermediate source shares lazy kept selection and complete handler accounting without Python\n")
 })
 

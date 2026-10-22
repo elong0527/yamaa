@@ -19,7 +19,7 @@ local({
   directory <- tempfile("public-source-positions-");dir.create(directory)
   on.exit(unlink(directory,recursive=TRUE))
   entry <- file.path(directory,"spec.yaml");data <- file.path(directory,"input.csv");output <- file.path(directory,"output.csv")
-  writeLines(c("schema_version: '1.0'","domain: TEST","keys: [ID]",
+  writeLines(c('yamaa: "1.0"',"type: spec","domain: TEST","keys: [ID]",
     "input: {SRC: {path: input.csv, ordinal: REC}}", "filter: \"SRC.KEEP = 'Y'\"",
     "output: {path: output.csv, columns: [ID, POSITION], order_by: [SORT]}", "columns:",
     "  - {name: ID, type: str, derivation: SRC.ID}",
