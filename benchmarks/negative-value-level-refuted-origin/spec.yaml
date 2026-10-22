@@ -91,6 +91,7 @@ rows:
     derivations:
       LBTESTCD: "'GLUC'"
       LBSTRESN: LAB.GLUC
+
   - id: creatinine
     dataset: LAB
     derivations:

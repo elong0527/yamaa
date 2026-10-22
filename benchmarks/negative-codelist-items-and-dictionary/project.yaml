@@ -6,12 +6,12 @@ codelists:
       # pasted in as a list.
       - id: MEDDRA
         name: Medical Dictionary for Regulatory Activities
-        external:
-          dictionary: MedDRA
-          version: "27.1"
         items:
           - value: Headache
           - value: Nausea
+        external:
+          dictionary: MedDRA
+          version: "27.1"
 
 sdtm:
   specs:
