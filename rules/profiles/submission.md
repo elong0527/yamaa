@@ -592,7 +592,7 @@ row its where clause selects, and against every derivation of the column when
 that cannot be known.
 
 Fails: `value_level_multiple_matches`, `value_level_unmatched`, `refuted_value_origin`.
-Evidence: `negative-value-level-ambiguous-row`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::a_row_two_entries_select_fails_with_its_keys_and_both_entries`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::an_entry_that_matches_no_row_is_a_warning_and_scoped_checks_read_their_rows`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::predecessor_columns_copy_the_column_their_description_names`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionValueOriginRefuted`.
+Evidence: `negative-value-level-ambiguous-row`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::a_row_two_entries_select_fails_with_its_keys_and_both_entries`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::an_entry_that_matches_no_row_is_a_warning_and_scoped_checks_read_their_rows`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::predecessor_columns_copy_the_column_their_description_names`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionValueOriginRefuted`, `rust/tests/host-fixtures/cases.json::value_level_report`.
 
 Both checks run where [Verification](../verification.md) runs a column
 verification, after the column's declared verifications and before its other

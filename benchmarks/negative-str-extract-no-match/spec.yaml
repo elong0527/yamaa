@@ -1,0 +1,32 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  # One site was entered by its name, without its site number.
+  DM: input/dm.csv
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, SITEID]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM.USUBJID
+
+  - name: SITEID
+    type: str
+    label: Study Site Identifier
+    derivation:
+      str_extract:
+        source: DM.SITE
+        pattern: 'Site ([0-9]{3})'
+        group: 1
