@@ -559,6 +559,70 @@ fn a_project_path_locates_in_the_project_or_the_file_it_lists() {
     assert_eq!(location(&issues), Some((study.file("spec.yaml"), 3, 1)));
 }
 
+/// Rule 5: a finding in the header of the producer a `schema` link names
+/// names that producer as `source`, so where the consumer writes the same
+/// field it is located in the producer: a malformed version under a 1.0
+/// consumer, and a version the engine does not read under a 0.5 one, on the
+/// check and run routes of each host (SCHEMA-2, #3581).
+#[test]
+fn a_linked_producer_s_header_finding_locates_in_the_producer() {
+    let token = CancellationToken::new();
+    let body = [
+        "domain: DM",
+        "keys: [USUBJID]",
+        "input: {SRC: {path: produced.csv, schema: producer.yaml}}",
+        "columns:",
+        "  - {name: USUBJID, type: str, label: Subject, derivation: SRC.USUBJID}",
+        "output: {path: dm.csv, columns: [USUBJID]}",
+    ];
+    for (header, producer, condition) in [
+        (
+            SURFACES[1],
+            ["yamaa: 1.0", "type: spec"],
+            "invalid_field_type",
+        ),
+        (
+            SURFACES[0],
+            ["yamaa: \"1.4\"", "type: spec"],
+            "unsupported_language_version",
+        ),
+    ] {
+        let study = Study::new();
+        let (consumer, _) = spec(header, &body);
+        write(&study, "dm.yaml", &consumer);
+        study.write("producer.yaml", &producer);
+        for host in [HostLanguage::Python, HostLanguage::R] {
+            let engine = Engine::new(EngineOptions::new(
+                host,
+                "issue-locations".into(),
+                "0".into(),
+            ));
+            let entry = study.path("dm.yaml");
+            let checked = engine.spec_check(&entry, None, &token).unwrap();
+            let run = engine.spec_run(&entry, None, &token).unwrap();
+            for issues in [checked.diagnostics(), run.diagnostics()] {
+                let first = issues.first().expect("an issue");
+                assert_eq!(
+                    (
+                        first.code.as_str(),
+                        first.spec_path.as_slice(),
+                        first.context.get("source"),
+                        location(&issues),
+                    ),
+                    (
+                        condition,
+                        ["yamaa".to_string()].as_slice(),
+                        Some(&ContextValue::Text(study.file("producer.yaml"))),
+                        // The producer's `yamaa` key, line 1.
+                        Some((study.file("producer.yaml"), 1, 1)),
+                    ),
+                    "{host:?}, {header:?}: {issues:?}"
+                );
+            }
+        }
+    }
+}
+
 /// Rule 6: a position never points into a data file. AGE is `NA` in the
 /// second record of the input: the issue is located at the declaration of
 /// AGE's type in the specification, and the record stays in the context.
