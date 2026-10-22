@@ -1,0 +1,9 @@
+phase: validation
+condition: declared_length_conflict
+spec_paths:
+  - columns.USUBJID.submission
+rule: SUB-8
+context:
+  column: USUBJID
+  length: 12
+  max_length: 20

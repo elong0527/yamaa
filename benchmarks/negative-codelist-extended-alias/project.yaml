@@ -1,0 +1,26 @@
+yamaa: "1.0"
+type: project
+codelists:
+  - standard:
+      name: CDISC/NCI
+      publishing_set: SDTM
+      version: "2023-12-15"
+    codelists:
+      # The extension epoch is a sponsor addition, yet it carries the code
+      # of the treatment epoch, copied from the line above.
+      - id: EPOCH
+        name: Epoch
+        extensible: true
+        alias: C99079
+        items:
+          - value: SCREENING
+            alias: C48262
+          - value: TREATMENT
+            alias: C101526
+          - value: EXTENSION
+            alias: C101526
+            extended: true
+
+sdtm:
+  specs:
+    - spec.yaml

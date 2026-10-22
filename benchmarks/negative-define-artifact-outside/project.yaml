@@ -1,0 +1,19 @@
+# Fixed creation time is supplied by the submission call in benchmark.yaml.
+yamaa: "1.0"
+type: project
+study:
+  id: PAR01
+  name: PAR01
+  description: Example study submitting its subject-level analysis dataset
+  protocol_name: PAR-01
+
+adam:
+  specs:
+    - spec.yaml
+  standards:
+    - name: ADaMIG
+      version: "1.3"
+      status: Final
+  # The data definition goes into a package folder, while the dataset stays
+  # beside the project.
+  define: package/define.xml

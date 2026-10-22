@@ -3,8 +3,8 @@
 //! leaves the column to the column phase, each row from the record that built
 //! it (#2829). The column binds once for each driver those templates read,
 //! against that driver's own record (LOOKUP-1): its qualifier reads the
-//! record that built the row, and another input joins on the output keys it
-//! carries. The bindings run one driver after another, in the order of the
+//! record that built the row, and another input joins on the key it
+//! declares. The bindings run one driver after another, in the order of the
 //! first template each completes. A column holding a qualified aggregate
 //! keeps the whole-dataset scope (LOOKUP-18).
 use std::fs;
@@ -84,11 +84,13 @@ const AE: &str = "USUBJID,AESEQ,AETERM,AESER,CODE\n\
 const DM: &str = "USUBJID,SEX,ARM,CODE\nS1,F,A,1\nS2,M,B,bad-dm\nS3,F,A,3\n";
 const CM: &str = "USUBJID,CMSEQ,CMTRT\nS1,1,ASPIRIN\nS3,1,IBUPROFEN\n";
 
-const HEAD: &str = "schema_version: \"1.0\"\n\
+// AE and DM declare the key that the rows of another driver join them on.
+const HEAD: &str = "yamaa: \"1.0\"\n\
+    type: spec\n\
     domain: XX\n\
     input:\n\
-    \x20 AE: {path: ae.csv, types: {AESEQ: int}}\n\
-    \x20 DM: dm.csv\n\
+    \x20 AE: {path: ae.csv, key: [USUBJID], types: {AESEQ: int}}\n\
+    \x20 DM: {path: dm.csv, key: [USUBJID]}\n\
     \x20 CM: {path: cm.csv, types: {CMSEQ: int}}\n\
     keys: [USUBJID, SRC, SEQ]\n\
     output: {path: out.csv, columns: [USUBJID, SRC, SEQ, X]}\n";
@@ -112,17 +114,17 @@ fn templates(order: &[&str], own: &[&str]) -> String {
         let (driver, seq) = match template {
             "ae" => ("AE", "AE.AESEQ"),
             "cm" => ("CM", "CM.CMSEQ"),
-            _ => ("DM", "{literal: 0}"),
+            _ => ("DM", "0"),
         };
         let x = if own.contains(&template) {
-            ", X: {literal: OWN}"
+            ", X: \"'OWN'\""
         } else {
             ""
         };
         rows.push_str(&format!(
             "\x20 - id: {template}\n\
              \x20   dataset: {driver}\n\
-             \x20   derivations: {{USUBJID: {driver}.USUBJID, SRC: {{literal: {driver}}}, \
+             \x20   derivations: {{USUBJID: {driver}.USUBJID, SRC: \"'{driver}'\", \
              SEQ: {seq}{x}}}\n"
         ));
     }
@@ -180,7 +182,7 @@ fn second_template_driver_reads_its_own_record_in_a_case_condition() {
     // Without an otherwise, S2's DM row matches no branch and is missing.
     Fixture::new(&specification(
         "str",
-        "{case: [{when: \"DM.SEX = 'F'\", then: {literal: Y}}]}",
+        "{case: [{when: \"DM.SEX = 'F'\", then: \"'Y'\"}]}",
         &["ae", "dm"],
         &["ae"],
     ))
@@ -192,8 +194,7 @@ fn second_template_driver_reads_its_own_record_in_a_case_condition() {
 #[test]
 fn each_driver_reads_its_own_record_and_joins_the_other() {
     // AE and DM both leave X to the column; CM states it. The AE rows join DM
-    // on USUBJID, the one output key DM carries; the DM rows read their own
-    // record.
+    // on USUBJID, the key DM declares; the DM rows read their own record.
     Fixture::new(&specification(
         "str",
         "DM.SEX",
@@ -255,9 +256,9 @@ fn column_bindings_run_one_driver_after_another() {
     // comes first.
     let fixture = Fixture::new(&format!(
         "{HEAD}{}rows:\n\
-         \x20 - {{id: arm_a, dataset: DM, filter: \"DM.ARM = 'A'\", derivations: {{USUBJID: DM.USUBJID, SRC: {{literal: A}}, SEQ: {{literal: 0}}}}}}\n\
-         \x20 - {{id: events, dataset: AE, derivations: {{USUBJID: AE.USUBJID, SRC: {{literal: AE}}, SEQ: AE.AESEQ}}}}\n\
-         \x20 - {{id: arm_b, dataset: DM, filter: \"DM.ARM = 'B'\", derivations: {{USUBJID: DM.USUBJID, SRC: {{literal: B}}, SEQ: {{literal: 0}}}}}}\n",
+         \x20 - {{id: arm_a, dataset: DM, filter: \"DM.ARM = 'A'\", derivations: {{USUBJID: DM.USUBJID, SRC: \"'A'\", SEQ: 0}}}}\n\
+         \x20 - {{id: events, dataset: AE, derivations: {{USUBJID: AE.USUBJID, SRC: \"'AE'\", SEQ: AE.AESEQ}}}}\n\
+         \x20 - {{id: arm_b, dataset: DM, filter: \"DM.ARM = 'B'\", derivations: {{USUBJID: DM.USUBJID, SRC: \"'B'\", SEQ: 0}}}}\n",
         columns(
             "int",
             "{case: [{when: \"SRC = 'AE'\", then: AE.CODE}, {otherwise: DM.CODE}]}"
@@ -287,7 +288,7 @@ fn a_column_holding_an_aggregate_keeps_the_whole_dataset() {
     // completes the rows of all three drivers.
     Fixture::new(&specification(
         "int",
-        "{case: [{when: \"DM.SEX = 'F'\", then: {aggregate: {expr: \"COUNT(AE.AESEQ)\", key: [USUBJID]}}}, {otherwise: {literal: 0}}]}",
+        "{case: [{when: \"DM.SEX = 'F'\", then: {aggregate: {expr: \"COUNT(AE.AESEQ)\", key: [USUBJID]}}}, {otherwise: 0}]}",
         &["ae", "dm", "cm"],
         &[],
     ))
@@ -319,23 +320,43 @@ fn serious(derivation: &str, intermediate: &str) -> String {
         "{HEAD}intermediates:\n\
          \x20 - {{id: SER, dataset: AE, filter: \"AE.AESER = 'Y'\"{intermediate}}}\n\
          {}rows:\n\
-         \x20 - {{id: cm, dataset: CM, derivations: {{USUBJID: CM.USUBJID, SRC: {{literal: CM}}, SEQ: CM.CMSEQ, X: {{literal: OWN}}}}}}\n\
-         \x20 - {{id: ser, dataset: SER, derivations: {{USUBJID: SER.USUBJID, SRC: {{literal: SER}}, SEQ: SER.AESEQ}}}}\n\
-         \x20 - {{id: dm, dataset: DM, derivations: {{USUBJID: DM.USUBJID, SRC: {{literal: DM}}, SEQ: {{literal: 0}}}}}}\n",
+         \x20 - {{id: cm, dataset: CM, derivations: {{USUBJID: CM.USUBJID, SRC: \"'CM'\", SEQ: CM.CMSEQ, X: \"'OWN'\"}}}}\n\
+         \x20 - {{id: ser, dataset: SER, derivations: {{USUBJID: SER.USUBJID, SRC: \"'SER'\", SEQ: SER.AESEQ}}}}\n\
+         \x20 - {{id: dm, dataset: DM, derivations: {{USUBJID: DM.USUBJID, SRC: \"'DM'\", SEQ: 0}}}}\n",
         columns("str", derivation),
     )
 }
 
+/// The DM rows bind SER.AETERM as a lookup of SER, by the key a 0.5 file
+/// infers. A 1.0 row driver declares no key (ROW-2), so a 1.0 file refuses
+/// that read at SER's `key` (LOOKUP-3, D159): this test keeps its 0.5
+/// document until the 0.5 path goes (#3447).
 #[test]
 fn an_intermediate_driver_over_another_input_reads_its_own_record() {
     // The SER rows read the serious event that built them in AE, which is not
     // the input behind the first template; the DM rows read their own SEX.
     let own = "USUBJID,SRC,SEQ,X\nS1,CM,1,OWN\nS3,CM,1,OWN\n";
-    Fixture::new(&serious(
-        "{case: [{when: \"SRC = 'SER'\", then: SER.AETERM}, {otherwise: DM.SEX}]}",
-        "",
-    ))
-    .saved(&format!(
+    let specification = format!(
+        "schema_version: \"1.0\"\n\
+         domain: XX\n\
+         input:\n\
+         \x20 AE: {{path: ae.csv, types: {{AESEQ: int}}}}\n\
+         \x20 DM: dm.csv\n\
+         \x20 CM: {{path: cm.csv, types: {{CMSEQ: int}}}}\n\
+         keys: [USUBJID, SRC, SEQ]\n\
+         output: {{path: out.csv, columns: [USUBJID, SRC, SEQ, X]}}\n\
+         intermediates:\n\
+         \x20 - {{id: SER, dataset: AE, filter: \"AE.AESER = 'Y'\"}}\n\
+         {}rows:\n\
+         \x20 - {{id: cm, dataset: CM, derivations: {{USUBJID: CM.USUBJID, SRC: {{literal: CM}}, SEQ: CM.CMSEQ, X: {{literal: OWN}}}}}}\n\
+         \x20 - {{id: ser, dataset: SER, derivations: {{USUBJID: SER.USUBJID, SRC: {{literal: SER}}, SEQ: SER.AESEQ}}}}\n\
+         \x20 - {{id: dm, dataset: DM, derivations: {{USUBJID: DM.USUBJID, SRC: {{literal: DM}}, SEQ: {{literal: 0}}}}}}\n",
+        columns(
+            "str",
+            "{case: [{when: \"SRC = 'SER'\", then: SER.AETERM}, {otherwise: DM.SEX}]}"
+        ),
+    );
+    Fixture::new(&specification).saved(&format!(
         "{own}S1,SER,1,HEADACHE\nS2,SER,1,RASH\nS1,DM,0,F\nS2,DM,0,M\nS3,DM,0,F\n"
     ));
 }

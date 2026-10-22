@@ -43,7 +43,8 @@
   },
   "literal-only": {
     "specification": {
-      "schema_version": "1.0",
+      "yamaa": "1.0",
+      "type": "spec",
       "domain": "TEST",
       "keys": [
         "ID"
@@ -99,7 +100,8 @@
   },
   "empty-template": {
     "specification": {
-      "schema_version": "1.0",
+      "yamaa": "1.0",
+      "type": "spec",
       "domain": "TEST",
       "keys": [
         "ID"
@@ -155,7 +157,8 @@
   },
   "escaped-braces": {
     "specification": {
-      "schema_version": "1.0",
+      "yamaa": "1.0",
+      "type": "spec",
       "domain": "TEST",
       "keys": [
         "ID"
@@ -211,7 +214,8 @@
   },
   "brace-pair-precedence": {
     "specification": {
-      "schema_version": "1.0",
+      "yamaa": "1.0",
+      "type": "spec",
       "domain": "TEST",
       "keys": [
         "ID"
@@ -267,7 +271,8 @@
   },
   "repeated-placeholder": {
     "specification": {
-      "schema_version": "1.0",
+      "yamaa": "1.0",
+      "type": "spec",
       "domain": "TEST",
       "keys": [
         "ID"
@@ -323,7 +328,8 @@
   },
   "qualified-placeholder": {
     "specification": {
-      "schema_version": "1.0",
+      "yamaa": "1.0",
+      "type": "spec",
       "domain": "TEST",
       "keys": [
         "ID"
@@ -379,7 +385,8 @@
   },
   "missing-first": {
     "specification": {
-      "schema_version": "1.0",
+      "yamaa": "1.0",
+      "type": "spec",
       "domain": "TEST",
       "keys": [
         "ID"
@@ -452,7 +459,8 @@
   },
   "missing-later": {
     "specification": {
-      "schema_version": "1.0",
+      "yamaa": "1.0",
+      "type": "spec",
       "domain": "TEST",
       "keys": [
         "ID"
@@ -525,7 +533,8 @@
   },
   "missing-null": {
     "specification": {
-      "schema_version": "1.0",
+      "yamaa": "1.0",
+      "type": "spec",
       "domain": "TEST",
       "keys": [
         "ID"
@@ -572,9 +581,7 @@
           "derivation": {
             "str_template": {
               "template": "{A}:{B}",
-              "missing": {
-                "literal": null
-              }
+              "missing": null
             }
           }
         }
@@ -592,7 +599,8 @@
   },
   "missing-literal": {
     "specification": {
-      "schema_version": "1.0",
+      "yamaa": "1.0",
+      "type": "spec",
       "domain": "TEST",
       "keys": [
         "ID"
@@ -657,7 +665,8 @@
   },
   "missing-then-present": {
     "specification": {
-      "schema_version": "1.0",
+      "yamaa": "1.0",
+      "type": "spec",
       "domain": "TEST",
       "keys": [
         "ID"
@@ -722,7 +731,8 @@
   },
   "non-string": {
     "specification": {
-      "schema_version": "1.0",
+      "yamaa": "1.0",
+      "type": "spec",
       "domain": "TEST",
       "keys": [
         "ID"
@@ -792,7 +802,8 @@
   },
   "qualified-non-string": {
     "specification": {
-      "schema_version": "1.0",
+      "yamaa": "1.0",
+      "type": "spec",
       "domain": "TEST",
       "keys": [
         "ID"
@@ -862,7 +873,8 @@
   },
   "unknown": {
     "specification": {
-      "schema_version": "1.0",
+      "yamaa": "1.0",
+      "type": "spec",
       "domain": "TEST",
       "keys": [
         "ID"
@@ -930,7 +942,8 @@
   },
   "unknown-qualified": {
     "specification": {
-      "schema_version": "1.0",
+      "yamaa": "1.0",
+      "type": "spec",
       "domain": "TEST",
       "keys": [
         "ID"
@@ -998,7 +1011,8 @@
   },
   "unknown-qualified-field": {
     "specification": {
-      "schema_version": "1.0",
+      "yamaa": "1.0",
+      "type": "spec",
       "domain": "TEST",
       "keys": [
         "ID"
@@ -1066,7 +1080,8 @@
   },
   "repeated-unknown": {
     "specification": {
-      "schema_version": "1.0",
+      "yamaa": "1.0",
+      "type": "spec",
       "domain": "TEST",
       "keys": [
         "ID"
@@ -1134,7 +1149,8 @@
   },
   "repeated-type": {
     "specification": {
-      "schema_version": "1.0",
+      "yamaa": "1.0",
+      "type": "spec",
       "domain": "TEST",
       "keys": [
         "ID"
@@ -1204,7 +1220,8 @@
   },
   "unknown-then-type": {
     "specification": {
-      "schema_version": "1.0",
+      "yamaa": "1.0",
+      "type": "spec",
       "domain": "TEST",
       "keys": [
         "ID"
@@ -1285,7 +1302,8 @@
   },
   "type-then-unknown": {
     "specification": {
-      "schema_version": "1.0",
+      "yamaa": "1.0",
+      "type": "spec",
       "domain": "TEST",
       "keys": [
         "ID"
@@ -1366,7 +1384,8 @@
   },
   "invalid-placeholder": {
     "specification": {
-      "schema_version": "1.0",
+      "yamaa": "1.0",
+      "type": "spec",
       "domain": "TEST",
       "keys": [
         "ID"
@@ -1435,7 +1454,8 @@
   },
   "invalid-placeholder-whitespace": {
     "specification": {
-      "schema_version": "1.0",
+      "yamaa": "1.0",
+      "type": "spec",
       "domain": "TEST",
       "keys": [
         "ID"
@@ -1504,7 +1524,8 @@
   },
   "empty-placeholder": {
     "specification": {
-      "schema_version": "1.0",
+      "yamaa": "1.0",
+      "type": "spec",
       "domain": "TEST",
       "keys": [
         "ID"
@@ -1573,7 +1594,8 @@
   },
   "format-directive": {
     "specification": {
-      "schema_version": "1.0",
+      "yamaa": "1.0",
+      "type": "spec",
       "domain": "TEST",
       "keys": [
         "ID"
@@ -1642,7 +1664,8 @@
   },
   "nested-placeholder": {
     "specification": {
-      "schema_version": "1.0",
+      "yamaa": "1.0",
+      "type": "spec",
       "domain": "TEST",
       "keys": [
         "ID"
@@ -1711,7 +1734,8 @@
   },
   "unmatched-opening": {
     "specification": {
-      "schema_version": "1.0",
+      "yamaa": "1.0",
+      "type": "spec",
       "domain": "TEST",
       "keys": [
         "ID"
@@ -1779,7 +1803,8 @@
   },
   "unmatched-closing": {
     "specification": {
-      "schema_version": "1.0",
+      "yamaa": "1.0",
+      "type": "spec",
       "domain": "TEST",
       "keys": [
         "ID"
@@ -1847,7 +1872,8 @@
   },
   "unknown-before-invalid-suffix": {
     "specification": {
-      "schema_version": "1.0",
+      "yamaa": "1.0",
+      "type": "spec",
       "domain": "TEST",
       "keys": [
         "ID"
@@ -1916,7 +1942,8 @@
   },
   "type-before-invalid-suffix": {
     "specification": {
-      "schema_version": "1.0",
+      "yamaa": "1.0",
+      "type": "spec",
       "domain": "TEST",
       "keys": [
         "ID"
@@ -1985,7 +2012,8 @@
   },
   "unicode-json-surrogate-escape": {
     "specification": {
-      "schema_version": "1.0",
+      "yamaa": "1.0",
+      "type": "spec",
       "domain": "TEST",
       "keys": [
         "ID"
@@ -2014,16 +2042,12 @@
         {
           "name": "A",
           "type": "str",
-          "derivation": {
-            "literal": "e\u0301\ud83d\ude42"
-          }
+          "derivation": "'e\u0301\ud83d\ude42'"
         },
         {
           "name": "B",
           "type": "str",
-          "derivation": {
-            "literal": "\u00e9"
-          }
+          "derivation": "'\u00e9'"
         },
         {
           "name": "N",
@@ -2045,19 +2069,20 @@
         "phase": "validation",
         "condition": "invalid_text",
         "spec_paths": [
-          "$.columns[1].derivation.literal"
+          "$.columns[1].derivation"
         ],
         "rule": "VALUE-11",
         "context": {
           "code_point": "U+D83D",
-          "offset": 2
+          "offset": 3
         }
       }
     ]
   },
   "unicode-exact": {
     "specification": {
-      "schema_version": "1.0",
+      "yamaa": "1.0",
+      "type": "spec",
       "domain": "TEST",
       "keys": [
         "ID"
@@ -2113,7 +2138,8 @@
   },
   "empty-string-value": {
     "specification": {
-      "schema_version": "1.0",
+      "yamaa": "1.0",
+      "type": "spec",
       "domain": "TEST",
       "keys": [
         "ID"
@@ -2142,9 +2168,7 @@
         {
           "name": "A",
           "type": "str",
-          "derivation": {
-            "literal": ""
-          }
+          "derivation": "''"
         },
         {
           "name": "B",
@@ -2171,7 +2195,8 @@
   },
   "nul-value": {
     "specification": {
-      "schema_version": "1.0",
+      "yamaa": "1.0",
+      "type": "spec",
       "domain": "TEST",
       "keys": [
         "ID"
@@ -2200,9 +2225,7 @@
         {
           "name": "A",
           "type": "str",
-          "derivation": {
-            "literal": "\u0000"
-          }
+          "derivation": "'\u0000'"
         },
         {
           "name": "B",
@@ -2229,7 +2252,8 @@
   },
   "one-final-conversion": {
     "specification": {
-      "schema_version": "1.0",
+      "yamaa": "1.0",
+      "type": "spec",
       "domain": "TEST",
       "keys": [
         "ID"
@@ -2313,7 +2337,8 @@
   },
   "nested-case": {
     "specification": {
-      "schema_version": "1.0",
+      "yamaa": "1.0",
+      "type": "spec",
       "domain": "TEST",
       "keys": [
         "ID"
@@ -2369,9 +2394,7 @@
                 "otherwise": {
                   "str_template": {
                     "template": "{B}",
-                    "missing": {
-                      "literal": null
-                    }
+                    "missing": null
                   }
                 }
               }
@@ -2392,7 +2415,8 @@
   },
   "row-template": {
     "specification": {
-      "schema_version": "1.0",
+      "yamaa": "1.0",
+      "type": "spec",
       "domain": "TEST",
       "keys": [
         "ID"
@@ -2459,7 +2483,7 @@
     "input": "ID,A,B,N\nrow1,,beta,7\nrow2,alpha,beta,8\n",
     "handler_counts": [
       {
-        "spec_path": "rows[0].derivations.RESULT.str_template.missing",
+        "spec_path": "rows.records.derivations.RESULT.str_template.missing",
         "handler": "missing",
         "count": 1
       }
@@ -2468,7 +2492,8 @@
   },
   "group-scope": {
     "specification": {
-      "schema_version": "1.0",
+      "yamaa": "1.0",
+      "type": "spec",
       "domain": "TEST",
       "keys": [
         "ID"
@@ -2507,9 +2532,7 @@
         {
           "name": "N",
           "type": "int",
-          "derivation": {
-            "literal": 7
-          }
+          "derivation": 7
         },
         {
           "name": "RESULT",
@@ -2538,7 +2561,7 @@
         "phase": "validation",
         "condition": "ungrouped_driver_field",
         "spec_paths": [
-          "rows[0].derivations.RESULT.str_template.template"
+          "rows.grouped.derivations.RESULT.str_template.template"
         ],
         "rule": "ROW-5",
         "context": {
@@ -2551,7 +2574,8 @@
   },
   "type-before-later-invalid-declaration": {
     "specification": {
-      "schema_version": "1.0",
+      "yamaa": "1.0",
+      "type": "spec",
       "domain": "TEST",
       "keys": [
         "ID"
@@ -2641,7 +2665,8 @@
   },
   "unknown-before-later-invalid-declaration": {
     "specification": {
-      "schema_version": "1.0",
+      "yamaa": "1.0",
+      "type": "spec",
       "domain": "TEST",
       "keys": [
         "ID"

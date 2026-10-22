@@ -164,7 +164,7 @@ pub(crate) fn independent_failed_reports(
     content: &[u8],
 ) {
     pub(crate) use yamaa_adapters::{
-        specification_report::{self, ArtifactPort, Identity},
+        specification_report::{self, Identity},
         specification_run::{PreparedRun, SpecificationSourcePort},
     };
     pub(crate) use yamaa_core::json::Value;
@@ -193,12 +193,6 @@ pub(crate) fn independent_failed_reports(
             assert_eq!((&*source.name, &*source.path), ("SRC", "source.csv"));
             self.0 += 1;
             Ok(Arc::clone(&self.1))
-        }
-    }
-    impl ArtifactPort for Port {
-        type Error = ();
-        fn publish(&mut self, _: &str, _: &[u8]) -> Result<(), ()> {
-            panic!("failed output published")
         }
     }
     let schema = yamaa_adapters::shipped_schema::capture().unwrap();
@@ -261,13 +255,8 @@ pub(crate) fn independent_failed_reports(
         drop(attempt);
         assert_eq!(result.observations(), *expected, "{}", case);
         assert!(result.output().is_none());
-        for _ in 0..2 {
-            assert!(matches!(
-                result.save(&mut port),
-                Err(yamaa_core::specification_output::SaveError::FailedBuild)
-            ));
-            assert_eq!(result.observations(), *expected);
-        }
+        // A failed build declares no report file, so a save writes nothing.
+        assert!(result.files().is_empty(), "{}", case);
         assert_eq!(port.0, expected["source_reads"].as_array().unwrap().len());
         findings += expected["diagnostics"].as_array().unwrap().len();
         cases += 1;
@@ -277,13 +266,12 @@ pub(crate) fn independent_failed_reports(
 
 pub(crate) fn independent_scalar_reports(fixture: &str, prefix: &str, expected_cases: usize) {
     pub(crate) use yamaa_adapters::{
-        specification_report::{self, ArtifactPort, Identity},
+        specification_report::{self, Identity},
         specification_run::{PreparedRun, SpecificationSourcePort},
     };
     pub(crate) use yamaa_core::specification::SourceDeclaration;
     pub(crate) struct Port {
         pub(crate) reads: usize,
-        pub(crate) saves: usize,
         pub(crate) expected: Vec<u8>,
     }
     impl SpecificationSourcePort for Port {
@@ -311,22 +299,11 @@ pub(crate) fn independent_scalar_reports(fixture: &str, prefix: &str, expected_c
             Ok(Arc::from(&b"ID\n1\n"[..]))
         }
     }
-    impl ArtifactPort for Port {
-        type Error = ();
-        fn publish(&mut self, path: &str, content: &[u8]) -> Result<(), ()> {
-            assert!(!self.expected.is_empty(), "failed literal build published");
-            assert_eq!(path, "result.csv");
-            assert_eq!(content, self.expected);
-            self.saves += 1;
-            Ok(())
-        }
-    }
     let schema = yamaa_adapters::shipped_schema::capture().unwrap();
     let mut cases = 0;
     for row in fixture_rows(fixture) {
         let mut port = Port {
             reads: 0,
-            saves: 0,
             expected: fixture_bytes(&row["output"]),
         };
         let run =
@@ -360,23 +337,13 @@ pub(crate) fn independent_scalar_reports(fixture: &str, prefix: &str, expected_c
             row["case"].as_str().unwrap()
         );
         if port.expected.is_empty() {
+            // A failed literal build has no file to save.
             assert!(result.output().is_none());
-            for _ in 0..2 {
-                assert!(matches!(
-                    result.save(&mut port),
-                    Err(yamaa_core::specification_output::SaveError::FailedBuild)
-                ));
-            }
-            assert_eq!(port.saves, 0);
+            assert!(result.files().is_empty());
         } else {
             assert!(result.output().is_some());
-            for _ in 0..2 {
-                assert_eq!(
-                    result.save(&mut port).unwrap().observations_value(false),
-                    expected
-                );
-            }
-            assert_eq!(port.saves, 2);
+            assert_eq!(result.files(), [("result.csv", &port.expected[..])]);
+            assert_eq!(result.saved_observations().unwrap(), expected);
         }
         assert_eq!(result.observations(), unsaved);
         assert_eq!(port.reads, 1);
@@ -394,7 +361,6 @@ pub(crate) fn replay_source_selection_truth(truth: &str, prefix: &str, cases: us
         pub(crate) content: Arc<[u8]>,
         pub(crate) reads: usize,
         pub(crate) expected: Vec<u8>,
-        pub(crate) saves: usize,
     }
     impl SpecificationSourcePort for Port {
         fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
@@ -421,16 +387,6 @@ pub(crate) fn replay_source_selection_truth(truth: &str, prefix: &str, cases: us
             Ok(Arc::clone(&self.content))
         }
     }
-    impl specification_report::ArtifactPort for Port {
-        type Error = ();
-        fn publish(&mut self, path: &str, bytes: &[u8]) -> Result<(), ()> {
-            assert!(!self.expected.is_empty(), "failed filter result published");
-            assert_eq!(path, "result.csv");
-            assert_eq!(bytes, self.expected);
-            self.saves += 1;
-            Ok(())
-        }
-    }
     let schema = yamaa_adapters::shipped_schema::capture().unwrap();
     let mut count = 0;
     for row in fixture_rows(truth) {
@@ -441,7 +397,6 @@ pub(crate) fn replay_source_selection_truth(truth: &str, prefix: &str, cases: us
             content: fixture_bytes(&row["input"]).into(),
             reads: 0,
             expected: fixture_bytes(&row["artifact"]),
-            saves: 0,
         };
         let attempt = run.execute(&mut port, Scope::default());
         let example = format!("{prefix}-{}", case);
@@ -473,15 +428,15 @@ pub(crate) fn replay_source_selection_truth(truth: &str, prefix: &str, cases: us
         });
         let expected: yamaa_core::json::Value = row["expected"].clone();
         // Require the captured row-filter citations without changing any finding.
-        if prefix == "row-filter"
-            && matches!(
-                case,
-                "grouped_source_phase"
-                    | "grouped_unknown_phase"
-                    | "record_unknown_phase"
-                    | "group_and_filter_order"
-            )
-        {
+        let cited = match (prefix, case) {
+            (
+                "row-filter",
+                "grouped_source_phase" | "grouped_unknown_phase" | "group_and_filter_order",
+            ) => Some("rows.grouped.filter"),
+            ("row-filter", "record_unknown_phase") => Some("rows.records0.filter"),
+            _ => None,
+        };
+        if let Some(cited) = cited {
             for diagnostics in ["diagnostics", "nodes"] {
                 let values = if diagnostics == "nodes" {
                     &expected["nodes"][0]["diagnostics"]
@@ -492,10 +447,7 @@ pub(crate) fn replay_source_selection_truth(truth: &str, prefix: &str, cases: us
                 for finding in values.as_array().unwrap() {
                     if finding["condition"] == "phase_boundary" {
                         assert_eq!(finding["rule"], yamaa_adapters::json!("ROW-6"));
-                        assert_eq!(
-                            finding["spec_paths"],
-                            yamaa_adapters::json!(["rows[0].filter"])
-                        );
+                        assert_eq!(finding["spec_paths"], yamaa_adapters::json!([cited]));
                         phase_boundaries += 1;
                     }
                 }
@@ -506,20 +458,18 @@ pub(crate) fn replay_source_selection_truth(truth: &str, prefix: &str, cases: us
         unsaved["artifacts"] = yamaa_adapters::json!([]);
         assert_eq!(result.observations(), unsaved, "{}", case);
         if port.expected.is_empty() {
+            // A failed filter result has no file to save.
             assert!(result.output().is_none());
-            assert!(matches!(
-                result.save(&mut port),
-                Err(yamaa_core::specification_output::SaveError::FailedBuild)
-            ));
+            assert!(result.files().is_empty(), "{}", case);
         } else {
             assert!(result.output().is_some());
-            for _ in 0..2 {
-                assert_eq!(
-                    result.save(&mut port).unwrap().observations_value(false),
-                    expected
-                );
-            }
-            assert_eq!(port.saves, 2);
+            assert_eq!(
+                result.files(),
+                [("result.csv", &port.expected[..])],
+                "{}",
+                case
+            );
+            assert_eq!(result.saved_observations().unwrap(), expected, "{}", case);
         }
         assert_eq!(port.reads, 1);
         count += 1;

@@ -1,5 +1,8 @@
-//! Trusted stage observations, separate from semantic reports and source authority.
-//! Clocks, retained measurement storage and panic containment belong to adapters.
+//! The observer port: an operation's phase and stage events, separate from
+//! semantic reports and source authority. It is internal (#3030 D72): the
+//! adapters' measurements, which own clocks, retained storage and panic
+//! containment, observe each build the facade runs, its compilation and its
+//! run, and [`Noop`] observes an operation nothing measures.
 use crate::{
     dataset::ExecutionPhase,
     function_invocation::{Argument, FunctionPort, HostError},

@@ -1,0 +1,8 @@
+phase: validation
+condition: xpt_display_format_invalid
+spec_paths:
+  - sdtm.specs[0].columns.AGE.submission.display_format
+rule: XPT-9
+context:
+  column: AGE
+  display_format: "3,0"

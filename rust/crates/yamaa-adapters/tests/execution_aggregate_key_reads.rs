@@ -115,19 +115,19 @@ fn an_aggregate_key_reads_the_driver_of_every_row_that_evaluates_it() {
     // add derivations to each template.
     let specification = |ncal: &str, clinic: &str, home: Option<&str>| {
         let mut text = format!(
-            "schema_version: '1.0'\ndomain: VS\nkeys: [ID, ORIGIN]\n\
+            "yamaa: \"1.0\"\ntype: spec\ndomain: VS\nkeys: [ID, ORIGIN]\n\
              input:\n  CLINIC: clinic.csv\n  HOME: home.csv\n  \
              CALIB: {{path: calib.csv, types: {{DAY: int}}}}\n\
              output: {{path: out.csv, columns: [ID, ORIGIN, NCAL]}}\n\
              columns:\n  - {{name: ID, type: str}}\n  - {{name: ORIGIN, type: str}}\n  \
              - {{name: DEVICE, type: str}}\n{ncal}\
              rows:\n  - id: clinic\n    dataset: CLINIC\n    derivations:\n      \
-             ID: CLINIC.ID\n      ORIGIN: {{literal: CLINIC}}\n      DEVICE: CLINIC.DEVICE\n{clinic}"
+             ID: CLINIC.ID\n      ORIGIN: \"'CLINIC'\"\n      DEVICE: CLINIC.DEVICE\n{clinic}"
         );
         if let Some(home) = home {
             text.push_str(&format!(
                 "  - id: home\n    dataset: HOME\n    derivations:\n      ID: HOME.ID\n      \
-                 ORIGIN: {{literal: HOME}}\n      DEVICE: {{literal: null}}\n{home}"
+                 ORIGIN: \"'HOME'\"\n      DEVICE: null\n{home}"
             ));
         }
         text
@@ -146,7 +146,7 @@ fn an_aggregate_key_reads_the_driver_of_every_row_that_evaluates_it() {
              expr: 'COUNT(CALIB.DAY)'\n              key: {{DEVICE: {key}}}\n"
         )
     };
-    let own = "      NCAL: {literal: 0}\n";
+    let own = "      NCAL: 0\n";
     let run = |text: String| Fixture::new(&text, &DEVICES).run();
     // Home rows have no clinic record to read the device from, and clinic
     // rows no home record; either key is reported at its pair.
@@ -209,7 +209,7 @@ fn an_aggregate_key_reads_the_driver_of_every_row_that_evaluates_it() {
 fn without_row_templates_an_aggregate_key_reads_the_base_record() {
     let specification = |key: &str| {
         format!(
-            "schema_version: '1.0'\ndomain: VS\nkeys: [ID]\nbase: CLINIC\n\
+            "yamaa: \"1.0\"\ntype: spec\ndomain: VS\nkeys: [ID]\nbase: CLINIC\n\
              input:\n  CLINIC: clinic.csv\n  HOME: home.csv\n  \
              CALIB: {{path: calib.csv, types: {{DAY: int}}}}\n\
              output: {{path: out.csv, columns: [ID, NCAL]}}\n\
@@ -237,17 +237,17 @@ fn without_row_templates_an_aggregate_key_reads_the_base_record() {
 fn an_aggregate_over_the_first_input_serves_rows_another_input_builds() {
     // Only home rows evaluate NCAL: it counts the clinic records of the
     // row's subject, a reduction of the first template's input.
-    let specification = "schema_version: '1.0'\ndomain: VS\nkeys: [ID, ORIGIN]\n\
+    let specification = "yamaa: \"1.0\"\ntype: spec\ndomain: VS\nkeys: [ID, ORIGIN]\n\
         input:\n  CLINIC: clinic.csv\n  HOME: home.csv\n\
         output: {path: out.csv, columns: [ID, ORIGIN, NCAL]}\n\
         columns:\n  - {name: ID, type: str}\n  - {name: ORIGIN, type: str}\n\
         \x20 - name: NCAL\n    type: int\n    derivation:\n      case:\n        \
         - when: ORIGIN = 'HOME'\n          then:\n            aggregate:\n              \
-        expr: 'COUNT(CLINIC.DEVICE)'\n              key: {ID: ID}\n        - otherwise: {literal: 0}\n\
+        expr: 'COUNT(CLINIC.DEVICE)'\n              key: {ID: ID}\n        - otherwise: 0\n\
         rows:\n  - id: clinic\n    dataset: CLINIC\n    derivations:\n      \
-        ID: CLINIC.ID\n      ORIGIN: {literal: CLINIC}\n\
+        ID: CLINIC.ID\n      ORIGIN: \"'CLINIC'\"\n\
         \x20 - id: home\n    dataset: HOME\n    derivations:\n      ID: HOME.ID\n      \
-        ORIGIN: {literal: HOME}\n";
+        ORIGIN: \"'HOME'\"\n";
     assert_eq!(
         Fixture::new(specification, &DEVICES).run(),
         Ok("ID,ORIGIN,NCAL\na,CLINIC,0\nb,CLINIC,0\na,HOME,1\n".into())
@@ -255,11 +255,12 @@ fn an_aggregate_over_the_first_input_serves_rows_another_input_builds() {
 }
 
 /// Without row templates, the window key SEQ gives each record its own row;
-/// `columns` follows ID and SEQ and holds the keys.
+/// `columns` follows ID and SEQ and holds the keys. SRC declares the key that
+/// an aggregate over it without a key of its own matches on.
 fn window_key(keys: &str, intermediates: &str, columns: &str) -> String {
     format!(
-        "schema_version: '1.0'\ndomain: OUT\nkeys: [ID, SEQ, {keys}]\nbase: SRC\n\
-         input:\n  SRC: {{path: source.csv, types: {{ID: int, VAL: int, LO: int, HI: int, W: int}}}}\n  \
+        "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID, SEQ, {keys}]\nbase: SRC\n\
+         input:\n  SRC: {{path: source.csv, key: [ID], types: {{ID: int, VAL: int, LO: int, HI: int, W: int}}}}\n  \
          CAL: {{path: cal.csv, types: {{SEQN: int, LO: int, HI: int, W: int}}}}\n\
          output: {{path: out.csv, columns: [ID, SEQ, {keys}]}}\n{intermediates}\
          columns:\n  - {{name: ID, type: int, derivation: SRC.ID}}\n\
@@ -294,8 +295,8 @@ fn an_aggregate_range_read_before_its_window_completes_is_unsupported() {
             "columns.WT.derivation.aggregate.between.value"
         ))
     );
-    // WT sums the weights of the records of the row's ID (the applicable
-    // output key) whose bounds hold the range value. A value the record holds
+    // WT sums the weights of the records of the row's ID (the key SRC
+    // declares) whose bounds hold the range value. A value the record holds
     // before the window pass builds: ID 1's VAL 3 and VAL 5 fall in 2..9
     // (20), not in 1..1, and ID 2's VAL 4 in 1..9 (30).
     assert_eq!(
@@ -327,10 +328,10 @@ fn an_aggregate_derive_read_before_its_window_completes_is_unsupported() {
     // row's ID contributes the greater of its weight and K's.
     let intermediate = "intermediates:\n  - id: K\n    dataset: CAL\n    key: {SEQN: SEQ}\n    \
         order_by: [CAL.W]\n    keep: first\n";
-    let aggregate = "aggregate:\n  key: [ID]\n  derive:\n    \
-        - {name: D, type: int, derivation: SRC.W}\n    \
-        - {name: V, type: int, derivation: K.W}\n    \
-        - {name: T, type: int, derivation: {greatest: {sources: [D, V]}}}\n  \
+    let aggregate = "aggregate:\n  key: [ID]\n  derivations:\n    \
+        D: {type: int, derivation: SRC.W}\n    \
+        V: {type: int, derivation: K.W}\n    \
+        T: {type: int, derivation: {greatest: {sources: [D, V]}}}\n  \
         expr: 'SUM(T)'\n";
     let indented = |text: &str, depth: usize| -> String {
         text.lines()
@@ -347,7 +348,7 @@ fn an_aggregate_derive_read_before_its_window_completes_is_unsupported() {
         run(direct),
         Err(unsupported(
             "aggregate_derive_window_read",
-            "columns.WT.derivation.aggregate.derive[1].derivation.source"
+            "columns.WT.derivation.aggregate.derivations.V.derivation.source"
         ))
     );
     // Behind a `case` condition that reads SEQ, WT is computed in the window

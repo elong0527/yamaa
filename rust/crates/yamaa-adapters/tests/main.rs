@@ -76,9 +76,11 @@ mod specification_sources;
 // paths when each file was its own binary.
 #[allow(clippy::module_inception)]
 mod submission_encoders;
+mod submission_service;
 mod submission_staleness;
 mod submission_transport;
 mod table_arrow_table;
+mod table_parquet_bytes;
 mod table_sas_allocation;
 mod table_sas_source;
 mod uv_lock;

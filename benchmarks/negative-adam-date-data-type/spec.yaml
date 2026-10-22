@@ -1,0 +1,56 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  DM: {path: input/dm.csv, types: {RFXSTDT: date}}
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, TRTSDT]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DM.STUDYID
+    submission:
+      core: Req
+      mandatory: true
+      length: 8
+      origins:
+        - type: Predecessor
+          description: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM.USUBJID
+    submission:
+      core: Req
+      mandatory: true
+      length: 12
+      origins:
+        - type: Predecessor
+          description: DM.USUBJID
+
+  # The first dose date, described for the data definition as an ISO 8601
+  # date rather than the number the analysis model submits.
+  - name: TRTSDT
+    type: date
+    label: Date of First Exposure to Treatment
+    derivation: DM.RFXSTDT
+    submission:
+      core: Cond
+      mandatory: false
+      data_type: date
+      origins:
+        - type: Predecessor
+          description: DM.RFXSTDT
+
+submission:
+  label: Subject-Level Analysis Dataset
+  class: SUBJECT LEVEL ANALYSIS DATASET
+  structure: One record per subject
+  repeating: false

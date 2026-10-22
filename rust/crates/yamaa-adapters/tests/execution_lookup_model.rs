@@ -108,14 +108,16 @@ const PERIODS: &str = "STUDYID,USUBJID,APERIOD,APERSDT,APEREDT\n\
     S,S-1,2,2025-02-01,2025-02-28\n\
     S,S-2,1,2025-03-01,\n";
 
+/// PERIODS declares the key its implicit joins and keyless aggregates match on.
 fn specification(header: &str, columns: &str, output: &str) -> String {
     format!(
-        "schema_version: \"1.0\"\n\
+        "yamaa: \"1.0\"\n\
+         type: spec\n\
          domain: OUT\n\
          keys: [STUDYID, USUBJID, AESEQ]\n\
          input:\n\
          \x20 AE: {{path: ae.csv, types: {{AESEQ: int, ASTDT: date}}}}\n\
-         \x20 PERIODS: {{path: periods.csv, types: {{APERIOD: int, APERSDT: date, APEREDT: date}}}}\n\
+         \x20 PERIODS: {{path: periods.csv, key: [STUDYID, USUBJID], types: {{APERIOD: int, APERSDT: date, APEREDT: date}}}}\n\
          {header}\
          output:\n\
          \x20 path: out.csv\n\
@@ -372,15 +374,17 @@ const CLINIC: &str = "STUDYID,USUBJID,SEQ,DAY\nS,S-1,1,3\nS,S-1,2,40\n";
 const HOME: &str = "STUDYID,USUBJID,SEQ,DAY\nS,S-1,3,12\nS,S-1,4,99\n";
 const WINDOWS: &str = "STUDYID,NAME,LO,HI\nS,EARLY,1,10\nS,LATE,11,50\n";
 
+/// WINDOWS declares the key its implicit joins match on.
 fn measurements(clinic: &str, home: &str, header: &str) -> String {
     format!(
-        "schema_version: \"1.0\"\n\
+        "yamaa: \"1.0\"\n\
+         type: spec\n\
          domain: OUT\n\
          keys: [STUDYID, USUBJID, SEQ]\n\
          input:\n\
          \x20 CLINIC: {{path: clinic.csv, types: {{SEQ: int, DAY: int}}}}\n\
          \x20 HOME: {{path: home.csv, types: {{SEQ: int, DAY: int}}}}\n\
-         \x20 WINDOWS: {{path: windows.csv, types: {{LO: int, HI: int}}}}\n\
+         \x20 WINDOWS: {{path: windows.csv, key: [STUDYID], types: {{LO: int, HI: int}}}}\n\
          {header}\
          output:\n\
          \x20 path: out.csv\n\
@@ -441,7 +445,7 @@ fn a_range_value_reads_the_record_of_the_driver_of_its_own_row() {
     assert_eq!(failure["rule"], "LOOKUP-9");
     assert_eq!(
         failure["spec_paths"],
-        yamaa_adapters::json!(["rows[1].derivations.WINDOW.source.between.value"])
+        yamaa_adapters::json!(["rows.home.derivations.WINDOW.source.between.value"])
     );
     assert_eq!(
         failure["context"],
@@ -460,9 +464,9 @@ fn a_range_value_reads_the_record_of_the_driver_of_its_own_row() {
     assert_eq!(failure["rule"], "LOOKUP-9");
     assert_eq!(
         failure["spec_paths"],
-        yamaa_adapters::json!(["intermediates[0].between.value"])
+        yamaa_adapters::json!(["intermediates.W.between.value"])
     );
-    let fixture = Fixture::new(&measurements("W.NAME", "{literal: x}", named), &inputs);
+    let fixture = Fixture::new(&measurements("W.NAME", "\"'x'\"", named), &inputs);
     let (csv, _) = fixture.saved();
     assert_eq!(
         csv,
@@ -484,12 +488,13 @@ fn a_grouped_row_range_reads_a_group_key_of_its_driver() {
         \x20         variable: WINDOWS.NAME\n\
         \x20         between: {value: CLINIC.DAY, lower: LO, upper: HI}\n";
     let specification = format!(
-        "schema_version: \"1.0\"\n\
+        "yamaa: \"1.0\"\n\
+         type: spec\n\
          domain: OUT\n\
          keys: [STUDYID, USUBJID]\n\
          input:\n\
          \x20 CLINIC: {{path: clinic.csv, types: {{SEQ: int, DAY: int}}}}\n\
-         \x20 WINDOWS: {{path: windows.csv, types: {{LO: int, HI: int}}}}\n\
+         \x20 WINDOWS: {{path: windows.csv, key: [STUDYID], types: {{LO: int, HI: int}}}}\n\
          output: {{path: out.csv, columns: [STUDYID, USUBJID, WINDOW]}}\n\
          columns:\n\
          \x20 - {{name: STUDYID, type: str}}\n\
@@ -505,7 +510,7 @@ fn a_grouped_row_range_reads_a_group_key_of_its_driver() {
     assert_eq!(failure["condition"], "ungrouped_driver_field");
     assert_eq!(
         failure["spec_paths"],
-        yamaa_adapters::json!(["rows[0].derivations.WINDOW.source.between.value"])
+        yamaa_adapters::json!(["rows.days.derivations.WINDOW.source.between.value"])
     );
 }
 
@@ -530,7 +535,7 @@ fn a_per_value_key_type_that_cannot_compare_fails_for_every_kind() {
         ),
         (
             "  - {name: COUNTED, type: int, derivation: P.APERIOD}\n",
-            "intermediates[0].key.APERIOD",
+            "intermediates.P.key.APERIOD",
         ),
     ] {
         let header = "base: AE\n\
@@ -573,13 +578,14 @@ fn a_per_value_key_type_that_cannot_compare_fails_for_every_kind() {
 /// clinic record is not a value of those rows.
 #[test]
 fn an_aggregate_range_value_reads_the_driver_of_every_template_row() {
-    let specification = "schema_version: \"1.0\"\n\
+    let specification = "yamaa: \"1.0\"\n\
+        type: spec\n\
         domain: OUT\n\
         keys: [STUDYID, USUBJID, SEQ]\n\
         input:\n\
         \x20 CLINIC: {path: clinic.csv, types: {SEQ: int, DAY: int}}\n\
         \x20 HOME: {path: home.csv, types: {SEQ: int, DAY: int}}\n\
-        \x20 WINDOWS: {path: windows.csv, types: {LO: int, HI: int}}\n\
+        \x20 WINDOWS: {path: windows.csv, key: [STUDYID], types: {LO: int, HI: int}}\n\
         output: {path: out.csv, columns: [STUDYID, USUBJID, SEQ, HOLDING]}\n\
         columns:\n\
         \x20 - {name: STUDYID, type: str}\n\
@@ -641,12 +647,13 @@ fn a_row_template_range_value_cannot_read_a_column_phase_column() {
         \x20         between: {value: ASTDT, lower: APERSDT, upper: APEREDT}\n";
     let specification = |start: &str| {
         format!(
-            "schema_version: \"1.0\"\n\
+            "yamaa: \"1.0\"\n\
+             type: spec\n\
              domain: OUT\n\
              keys: [STUDYID, USUBJID, AESEQ]\n\
              input:\n\
-             \x20 AE: {{path: ae.csv, types: {{AESEQ: int, ASTDT: date}}}}\n\
-             \x20 PERIODS: {{path: periods.csv, types: {{APERIOD: int, APERSDT: date, APEREDT: date}}}}\n\
+             \x20 AE: {{path: ae.csv, key: [STUDYID, USUBJID, AESEQ], types: {{AESEQ: int, ASTDT: date}}}}\n\
+             \x20 PERIODS: {{path: periods.csv, key: [STUDYID, USUBJID], types: {{APERIOD: int, APERSDT: date, APEREDT: date}}}}\n\
              output: {{path: out.csv, columns: [STUDYID, USUBJID, AESEQ, APERIOD]}}\n\
              columns:\n\
              \x20 - {{name: STUDYID, type: str}}\n\
@@ -693,7 +700,7 @@ fn a_row_template_range_value_cannot_read_a_column_phase_column() {
         [yamaa_adapters::json!({
             "phase": "validation",
             "condition": "phase_boundary",
-            "spec_paths": ["rows[0].derivations.APERIOD.source.between.value"],
+            "spec_paths": ["rows.events.derivations.APERIOD.source.between.value"],
             "context": {
                 "identifier": "ASTDT",
                 "row": "events",
@@ -757,13 +764,14 @@ const DOSES: &str = "STUDYID,USUBJID,EXSEQ,EXDOSE,EXSTDT\n\
 /// intermediate, and `TEMPLATES` the row templates.
 fn doses(inputs: &str, dosed: &str, templates: &str, period: &str) -> String {
     format!(
-        "schema_version: \"1.0\"\n\
+        "yamaa: \"1.0\"\n\
+         type: spec\n\
          domain: OUT\n\
          keys: [STUDYID, USUBJID, ASEQ]\n\
          input:\n\
          {inputs}\
          \x20 EX: {{path: ex.csv, types: {{EXSEQ: int, EXDOSE: int, EXSTDT: date}}}}\n\
-         \x20 PERIODS: {{path: periods.csv, types: {{APERIOD: int, APERSDT: date, APEREDT: date}}}}\n\
+         \x20 PERIODS: {{path: periods.csv, key: [STUDYID, USUBJID], types: {{APERIOD: int, APERSDT: date, APEREDT: date}}}}\n\
          output: {{path: out.csv, columns: [STUDYID, USUBJID, ASEQ, APERIOD]}}\n\
          intermediates:\n\
          \x20 - id: DOSED\n\
@@ -810,8 +818,8 @@ fn a_range_value_qualified_by_its_driver_intermediate_reads_the_row_record() {
          \x20   derivations:\n\
          \x20     STUDYID: SUBJ.STUDYID\n\
          \x20     USUBJID: SUBJ.USUBJID\n\
-         \x20     ASEQ: {{literal: 0}}\n\
-         \x20     APERIOD: {{literal: null}}\n\
+         \x20     ASEQ: 0\n\
+         \x20     APERIOD: null\n\
          {DOSED_ROWS}\
          \x20     APERIOD: {}\n",
         dosed_period("DOSED.EXSTDT")
@@ -840,7 +848,7 @@ fn a_range_value_qualified_by_its_driver_intermediate_reads_the_row_record() {
          S,S-2,1,\n"
     );
     // S-2's dose finds no period with a last day, answered and counted.
-    assert!(counts.contains(&("rows[1].derivations.APERIOD.source.absent".into(), 1)));
+    assert!(counts.contains(&("rows.dosed.derivations.APERIOD.source.absent".into(), 1)));
     // A grouped template reads the group key of the records that built the
     // row, and a column derived for the intermediate's rows reads their record.
     for (templates, period) in [
@@ -905,7 +913,7 @@ fn a_range_value_naming_a_field_its_driver_intermediate_derives_is_unsupported()
     );
     assert_eq!(
         failure["spec_paths"],
-        yamaa_adapters::json!(["rows[0].derivations.APERIOD.source.between.value"])
+        yamaa_adapters::json!(["rows.dosed.derivations.APERIOD.source.between.value"])
     );
     assert_eq!(
         failure["context"]["operation"],
@@ -923,13 +931,14 @@ fn a_range_value_naming_a_field_its_driver_intermediate_derives_is_unsupported()
 fn a_column_lookup_reads_the_driver_of_the_templates_that_leave_the_column() {
     let specification = |header: &str, derivation: &str, clinic: &str| {
         format!(
-            "schema_version: \"1.0\"\n\
+            "yamaa: \"1.0\"\n\
+             type: spec\n\
              domain: OUT\n\
              keys: [STUDYID, USUBJID, SEQ]\n\
              input:\n\
              \x20 CLINIC: {{path: clinic.csv, types: {{SEQ: int, DAY: int}}}}\n\
              \x20 HOME: {{path: home.csv, types: {{SEQ: int, DAY: int}}}}\n\
-             \x20 WINDOWS: {{path: windows.csv, types: {{LO: int, HI: int}}}}\n\
+             \x20 WINDOWS: {{path: windows.csv, key: [STUDYID], types: {{LO: int, HI: int}}}}\n\
              {header}\
              output: {{path: out.csv, columns: [STUDYID, USUBJID, SEQ, WINDOW]}}\n\
              columns:\n\
@@ -955,7 +964,7 @@ fn a_column_lookup_reads_the_driver_of_the_templates_that_leave_the_column() {
     };
     // A window that starts on the home day 12, for a key match on LO.
     let starts = "STUDYID,NAME,LO,HI\nS,EARLY,1,10\nS,LATE,12,50\n";
-    let own = "      WINDOW: {literal: CLINIC}\n";
+    let own = "      WINDOW: \"'CLINIC'\"\n";
     // `check` admits each range value against the same rows (LOOKUP-9); the
     // filter and the key are admitted by binding alone.
     for (header, derivation, path, windows, owner) in [
@@ -974,7 +983,7 @@ fn a_column_lookup_reads_the_driver_of_the_templates_that_leave_the_column() {
              \x20   between: {value: HOME.DAY, lower: LO, upper: HI}\n"
                 .to_owned(),
             "W.NAME".to_owned(),
-            "intermediates[0].between.value",
+            "intermediates.W.between.value",
             WINDOWS,
             Some(("intermediate", "W")),
         ),
@@ -986,7 +995,7 @@ fn a_column_lookup_reads_the_driver_of_the_templates_that_leave_the_column() {
              \x20   filter: \"WINDOWS.LO <= HOME.DAY AND HOME.DAY <= WINDOWS.HI\"\n"
                 .to_owned(),
             "W.NAME".to_owned(),
-            "intermediates[0].filter",
+            "intermediates.W.filter",
             WINDOWS,
             None,
         ),
@@ -997,7 +1006,7 @@ fn a_column_lookup_reads_the_driver_of_the_templates_that_leave_the_column() {
              \x20   key: {STUDYID: STUDYID, LO: HOME.DAY}\n"
                 .to_owned(),
             "W.NAME".to_owned(),
-            "intermediates[0].key",
+            "intermediates.W.key",
             starts,
             None,
         ),
@@ -1110,15 +1119,15 @@ fn check_reports_an_intermediate_range_value_of_another_input_wherever_binding_d
         ("other.csv", OTHER),
     ];
     let refused = refusal(
-        "intermediates[0].between.value",
+        "intermediates.P.between.value",
         "OTHER.REFDT",
         ("intermediate", "P"),
     );
     for read in [
         "{name: READ, type: int, derivation: P.APERIOD}",
-        "{name: READ, type: int, derivation: {compute: {expr: 'P.APERIOD + 1'}}}",
+        "{name: READ, type: int, derivation: 'P.APERIOD + 1'}",
         "{name: READ, type: str, derivation: {flag: 'P.APERIOD > 1'}}",
-        "{name: READ, type: int, derivation: {case: [{when: 'P.APERIOD > 1', then: {literal: 1}}]}}",
+        "{name: READ, type: int, derivation: {case: [{when: 'P.APERIOD > 1', then: 1}]}}",
         "{name: READ, type: int, derivation: {case: [{when: 'AESEQ > 1', then: P.APERIOD}]}}",
         "{name: READ, type: int, derivation: {first_available: {sources: [P.APERIOD, AESEQ]}}}",
         "{name: READ, type: int, derivation: {greatest: {sources: [P.APERIOD, AESEQ]}}}",
@@ -1128,7 +1137,7 @@ fn check_reports_an_intermediate_range_value_of_another_input_wherever_binding_d
         "{name: READ, type: int, derivation: {aggregate: {between: {value: P.APERSDT, upper: APEREDT}, expr: 'COUNT(PERIODS.*)'}}}",
         "{name: READ, type: int, derivation: {source: {variable: PERIODS.APERIOD, between: {value: P.APERSDT, lower: APERSDT}, order_by: [PERIODS.APERIOD], keep: first}}}",
         // A derive binding reads P's selection for the row.
-        "{name: READ, type: int, derivation: {aggregate: {derive: [{name: START, type: date, derivation: PERIODS.APERSDT}, {name: FIRST, type: date, derivation: P.APERSDT}], expr: 'COUNT(FIRST)'}}}",
+        "{name: READ, type: int, derivation: {aggregate: {derivations: {START: {type: date, derivation: PERIODS.APERSDT}, FIRST: {type: date, derivation: P.APERSDT}}, expr: 'COUNT(FIRST)'}}}",
     ] {
         let fixture = Fixture::new(
             &with_other(specification(
@@ -1144,7 +1153,7 @@ fn check_reports_an_intermediate_range_value_of_another_input_wherever_binding_d
     let fixture = Fixture::new(
         &with_other(specification(
             &named_ranges("OTHER.REFDT"),
-            "  - {name: READ, type: int, derivation: {literal: 1}}\n\
+            "  - {name: READ, type: int, derivation: 1}\n\
              verifications:\n\
              \x20 - assert: {id: dated, require: 'P.APERIOD IS NOT NULL'}\n",
             ", READ",
@@ -1154,7 +1163,7 @@ fn check_reports_an_intermediate_range_value_of_another_input_wherever_binding_d
     assert_eq!(agreeing(&fixture), std::slice::from_ref(&refused));
     // A range no row reads, and a value of the base driver's record, are
     // admitted.
-    for (value, read) in [("OTHER.REFDT", "{literal: 1}"), ("AE.ASTDT", "P.APERIOD")] {
+    for (value, read) in [("OTHER.REFDT", "1"), ("AE.ASTDT", "P.APERIOD")] {
         let fixture = Fixture::new(
             &with_other(specification(
                 &named_ranges(value),
@@ -1263,7 +1272,7 @@ fn check_admits_a_row_template_range_value_against_the_rows_that_read_it() {
             )
     };
     let refused = refusal(
-        "intermediates[0].between.value",
+        "intermediates.W.between.value",
         "CLINIC.DAY",
         ("intermediate", "W"),
     );
@@ -1272,11 +1281,11 @@ fn check_admits_a_row_template_range_value_against_the_rows_that_read_it() {
     // template's derivations or filter.
     for specification in [
         column_phase("W.NAME", named),
-        measurements("{literal: x}", "{literal: y}", named)
+        measurements("\"'x'\"", "\"'y'\"", named)
             + "verifications:\n  - assert: {id: windowed, require: 'W.NAME IS NOT NULL'}\n",
-        measurements("{literal: x}", "W.NAME", named),
-        measurements("{literal: x}", "{str_template: 'in {W.NAME}'}", named),
-        measurements("{literal: x}", "{literal: y}", named).edit(
+        measurements("\"'x'\"", "W.NAME", named),
+        measurements("\"'x'\"", "{str_template: 'in {W.NAME}'}", named),
+        measurements("\"'x'\"", "\"'y'\"", named).edit(
             "    dataset: HOME\n",
             "    dataset: HOME\n    filter: \"W.NAME IS NOT NULL\"\n",
         ),
@@ -1289,7 +1298,7 @@ fn check_admits_a_row_template_range_value_against_the_rows_that_read_it() {
         );
     }
     // Read by the clinic template alone, W reads each row's own record.
-    let fixture = Fixture::new(&measurements("W.NAME", "{literal: y}", named), &inputs);
+    let fixture = Fixture::new(&measurements("W.NAME", "\"'y'\"", named), &inputs);
     assert_eq!(fixture.checked(), Vec::<Value>::new());
     let (csv, _) = fixture.saved();
     assert_eq!(
@@ -1300,8 +1309,8 @@ fn check_admits_a_row_template_range_value_against_the_rows_that_read_it() {
     // rows of both templates.
     for (specification, path, value) in [
         (
-            measurements("{literal: x}", &window("CLINIC.DAY"), ""),
-            "rows[1].derivations.WINDOW.source.between.value",
+            measurements("\"'x'\"", &window("CLINIC.DAY"), ""),
+            "rows.home.derivations.WINDOW.source.between.value",
             "CLINIC.DAY",
         ),
         (

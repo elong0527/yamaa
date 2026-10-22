@@ -71,8 +71,12 @@ class ColumnCeilings(unittest.TestCase):
         source = path
         if typed:
             source = {"path": path, "types": {field: "str" for field in header}}
+        # A section lists only specifications of its model (SUB-3), so each
+        # case declares one for the project route.
         document = {
-            "schema_version": "1.0",
+            "yamaa": "1.0",
+            "type": "spec",
+            "model": "ADaM",
             "domain": "TEST",
             "keys": ["ID"],
             "input": {"SRC": source},
@@ -83,7 +87,7 @@ class ColumnCeilings(unittest.TestCase):
                         "name": field,
                         "type": "str",
                         "label": field,
-                        "derivation": {"literal": "x"},
+                        "derivation": "'x'",
                     }
                     for field in names[1:]
                 ],
@@ -99,14 +103,11 @@ class ColumnCeilings(unittest.TestCase):
 
     @staticmethod
     def project_file(spec):
-        """A project beside spec that lists it and links an empty environment."""
-        spec.with_name("environment.yaml").write_text(
-            "schema_version: '1.0'\n", encoding="ascii"
-        )
+        """A project beside spec that lists it; it calls no project function,
+        so it names no environment (D110)."""
         project = spec.with_name("project.yaml")
         project.write_text(
-            "schema_version: '1.0'\nenvironments: {python: environment.yaml}\n"
-            f"adam: {{specs: [{spec.name}]}}\n",
+            f'yamaa: "1.0"\ntype: project\nadam: {{specs: [{spec.name}]}}\n',
             encoding="ascii",
         )
         return project
@@ -292,11 +293,11 @@ class ColumnCeilings(unittest.TestCase):
         # being pruned away.
         spec = self.write_case("incomplete-checks", columns=truth["columns"])
         document = json.loads(spec.read_text())
-        document["columns"][1].update(type="int", derivation={"literal": 1})
+        document["columns"][1].update(type="int", derivation=1)
         document["columns"][2]["derivation"] = {
             "str_case": {"source": "C0001", "to": "upper"}
         }
-        # The same refusal with a project that links an empty environment.
+        # The same refusal through a project that lists the specification.
         project = self.project_file(spec)
         for route in (None, project):
             spec.write_text(json.dumps(document))
@@ -349,45 +350,63 @@ class ColumnCeilings(unittest.TestCase):
             root.mkdir()
             (root / "input.csv").write_text(truth["input_csv"], encoding="ascii")
             names = ["ID", *[truth["column_name"] % index for index in range(1, width)]]
-            document = {
-                "schema_version": "1.0",
-                "domain": "TEST",
-                "keys": ["ID"],
-                "input": {"SRC": "input.csv"},
-                "columns": [
-                    {"name": "ID", "type": "str", "derivation": "SRC.ID"},
-                    *[
-                        {
-                            "name": name,
-                            "type": "str",
-                            "derivation": {
-                                "case": [
-                                    {
-                                        "when": f"SRC.A = 'x' AND SRC.B = '{index % 3}'",
-                                        "then": {"literal": "P"},
-                                    },
-                                    {
-                                        "when": "SRC.A IS NULL",
-                                        "then": {"literal": "Q"},
-                                    },
-                                    {"otherwise": "SRC.A"},
-                                ]
-                            },
-                        }
-                        for index, name in enumerate(names[1:], 1)
+
+            def document(legacy):
+                """The wide specification; a 0.5 file writes its header as
+                `schema_version` and a text constant as a `literal` (D18)."""
+
+                def text(value):
+                    return {"literal": value} if legacy else f"'{value}'"
+
+                header = (
+                    {"schema_version": "1.0"}
+                    if legacy
+                    else {"yamaa": "1.0", "type": "spec"}
+                )
+                return {
+                    **header,
+                    "domain": "TEST",
+                    "keys": ["ID"],
+                    "input": {"SRC": "input.csv"},
+                    "columns": [
+                        {"name": "ID", "type": "str", "derivation": "SRC.ID"},
+                        *[
+                            {
+                                "name": name,
+                                "type": "str",
+                                "derivation": {
+                                    "case": [
+                                        {
+                                            "when": f"SRC.A = 'x' AND SRC.B = '{index % 3}'",
+                                            "then": text("P"),
+                                        },
+                                        {
+                                            "when": "SRC.A IS NULL",
+                                            "then": text("Q"),
+                                        },
+                                        {"otherwise": "SRC.A"},
+                                    ]
+                                },
+                            }
+                            for index, name in enumerate(names[1:], 1)
+                        ],
                     ],
-                ],
-                "output": {"path": "out.csv", "columns": names},
-            }
-            (root / "parent.yaml").write_text(json.dumps(document), encoding="ascii")
-            # A null parent names no parent: the entry stays standalone.
-            document["parent"] = None
-            (root / "explicit.yaml").write_text(json.dumps(document), encoding="ascii")
+                    "output": {"path": "out.csv", "columns": names},
+                }
+
+            (root / "parent.yaml").write_text(
+                json.dumps(document(False)), encoding="ascii"
+            )
+            # 0.5 only, until #3447 deletes the 0.5 path: a null parent names
+            # no parent, so the entry stays standalone. A 1.0 file admits YAML
+            # null only in value and expression fields (P-NULL-1).
+            explicit = {**document(True), "parent": None}
+            (root / "explicit.yaml").write_text(json.dumps(explicit), encoding="ascii")
             (root / "child.yaml").write_text(
-                "schema_version: '1.0'\nparent: parent.yaml\n", encoding="ascii"
+                'yamaa: "1.0"\ntype: spec\nparent: parent.yaml\n', encoding="ascii"
             )
             (root / "grandchild.yaml").write_text(
-                "schema_version: '1.0'\nparent: child.yaml\n", encoding="ascii"
+                'yamaa: "1.0"\ntype: spec\nparent: child.yaml\n', encoding="ascii"
             )
             expected = [
                 (
@@ -428,9 +447,9 @@ class ColumnCeilings(unittest.TestCase):
             for index in range(depth):
                 parent = f"layer-{index + 1}.yaml" if index < depth - 1 else "base.yaml"
                 spec.with_name(f"layer-{index}.yaml").write_text(
-                    f"schema_version: '1.0'\nparent: {parent}\n", encoding="ascii"
+                    f'yamaa: "1.0"\ntype: spec\nparent: {parent}\n', encoding="ascii"
                 )
-            spec.write_text("schema_version: '1.0'\nparent: layer-0.yaml\n")
+            spec.write_text('yamaa: "1.0"\ntype: spec\nparent: layer-0.yaml\n')
             routed = self.project_file(spec) if project else None
             output = spec.with_name("out.csv")
             with self.subTest(case=f"{depth} layers on the {route} route"):
@@ -451,13 +470,13 @@ class ColumnCeilings(unittest.TestCase):
             # reach the base.
             for index in range(1, bound + 1):
                 spec.with_name(f"chain-{index}.yaml").write_text(
-                    f"schema_version: '1.0'\nparent: chain-{index + 1}.yaml\n",
+                    f'yamaa: "1.0"\ntype: spec\nparent: chain-{index + 1}.yaml\n',
                     encoding="ascii",
                 )
             spec.with_name(f"chain-{bound + 1}.yaml").write_text(
                 spec.with_name("base.yaml").read_text()
             )
-            spec.write_text("schema_version: '1.0'\nparent: chain-1.yaml\n")
+            spec.write_text('yamaa: "1.0"\ntype: spec\nparent: chain-1.yaml\n')
             with self.subTest(case=f"a chain of {bound} layers on the {route} route"):
                 if not project:
                     for result in self.routes(spec):

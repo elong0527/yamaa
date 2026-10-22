@@ -65,10 +65,10 @@ mod file {
         /// Seven authored records of one subject, counted into one record.
         const RAW: &str = "ID,VALUE\n1,1\n1,2\n1,3\n1,4\n1,5\n1,6\n1,7\n";
         fn producer(profile: &str, value: &str) -> String {
-            format!("schema_version: '1.0'\ndomain: COUNTED\nkeys: [ID]\ninput: {{RAW: {{path: ../raw/raw.csv, types: {{ID: int, VALUE: int}}}}}}\nrows:\n  - id: counted\n    dataset: RAW\n    group_by: [RAW.ID]\n    derivations: {{ID: RAW.ID, VALUE: {value}}}\ncolumns:\n  - {{name: ID, type: int, label: Identifier}}\n  - {{name: VALUE, type: int, label: Count}}\noutput: {{path: ../generated/producer.{profile}, columns: [ID, VALUE]}}\n")
+            format!("yamaa: \"1.0\"\ntype: spec\ndomain: COUNTED\nkeys: [ID]\ninput: {{RAW: {{path: ../raw/raw.csv, types: {{ID: int, VALUE: int}}}}}}\nrows:\n  - id: counted\n    dataset: RAW\n    group_by: [RAW.ID]\n    derivations: {{ID: RAW.ID, VALUE: {value}}}\ncolumns:\n  - {{name: ID, type: int, label: Identifier}}\n  - {{name: VALUE, type: int, label: Count}}\noutput: {{path: ../generated/producer.{profile}, columns: [ID, VALUE]}}\n")
         }
         fn consumer(profile: &str, extra: &str) -> String {
-            format!("schema_version: '1.0'\ndomain: ROOT\nkeys: [ID]\ninput: {{FIRST: {{path: ../generated/producer.{profile}, schema: ../producer/p.yaml{extra}}}}}\nrows:\n  - id: counted\n    dataset: FIRST\n    group_by: [FIRST.ID, FIRST.VALUE]\n    derivations: {{ID: FIRST.ID, SOURCE_COUNT: FIRST.VALUE, VALUE: {{aggregate: 'COUNT(FIRST.*)'}}}}\ncolumns:\n  - {{name: ID, type: int, label: Identifier}}\n  - {{name: SOURCE_COUNT, type: int, label: Original source count}}\n  - {{name: VALUE, type: int, label: Count}}\noutput: {{path: ../generated/root.csv, columns: [ID, SOURCE_COUNT, VALUE]}}\n")
+            format!("yamaa: \"1.0\"\ntype: spec\ndomain: ROOT\nkeys: [ID]\ninput: {{FIRST: {{path: ../generated/producer.{profile}, schema: ../producer/p.yaml{extra}}}}}\nrows:\n  - id: counted\n    dataset: FIRST\n    group_by: [FIRST.ID, FIRST.VALUE]\n    derivations: {{ID: FIRST.ID, SOURCE_COUNT: FIRST.VALUE, VALUE: {{aggregate: 'COUNT(FIRST.*)'}}}}\ncolumns:\n  - {{name: ID, type: int, label: Identifier}}\n  - {{name: SOURCE_COUNT, type: int, label: Original source count}}\n  - {{name: VALUE, type: int, label: Count}}\noutput: {{path: ../generated/root.csv, columns: [ID, SOURCE_COUNT, VALUE]}}\n")
         }
         fn profiles() -> Vec<&'static str> {
             vec![
@@ -223,7 +223,7 @@ mod file {
             // Another specification stores VALUE as text at the linked path.
             study.write(
                 "producer/text.yaml",
-                producer("parquet", "{literal: '7'}").edit(
+                producer("parquet", "\"'7'\"").edit(
                     "{name: VALUE, type: int, label: Count}",
                     "{name: VALUE, type: str, label: Count}",
                 ),
@@ -255,7 +255,7 @@ mod file {
             study.write("generated/producer.csv", "ID,VALUE\n1,7\n2,7\n");
             study.write(
                 "consumer/root.yaml",
-                "schema_version: '1.0'\ndomain: ROOT\nkeys: [ID]\nbase: FIRST\ninput: {FIRST: {path: ../generated/producer.csv, schema: ../producer/p.yaml, ordinal: REC}}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: FIRST.ID}\n  - {name: POSITION, type: int, label: Position, derivation: FIRST.REC}\noutput: {path: ../generated/root.csv, columns: [ID, POSITION]}\n",
+                "yamaa: \"1.0\"\ntype: spec\ndomain: ROOT\nkeys: [ID]\nbase: FIRST\ninput: {FIRST: {path: ../generated/producer.csv, schema: ../producer/p.yaml, ordinal: REC}}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: FIRST.ID}\n  - {name: POSITION, type: int, label: Position, derivation: FIRST.REC}\noutput: {path: ../generated/root.csv, columns: [ID, POSITION]}\n",
             );
             let mut result = study.build("consumer/root.yaml");
             assert!(result.issues().is_empty(), "{:?}", result.issues());

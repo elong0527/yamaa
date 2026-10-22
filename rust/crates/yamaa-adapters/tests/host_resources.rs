@@ -135,7 +135,7 @@ impl Resolver for InterruptStage {
 #[test]
 fn interrupted_stage_leaves_no_provisional_output() {
     let backend = Arc::new(InterruptStage(MemoryResolver::default()));
-    let spec = b"schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {RAW: raw.csv}\ncolumns: [{name: ID, type: int, derivation: RAW.ID}]\noutput: {path: out.csv, columns: [ID]}\n";
+    let spec = b"yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {RAW: raw.csv}\ncolumns: [{name: ID, type: int, derivation: RAW.ID}]\noutput: {path: out.csv, columns: [ID]}\n";
     backend
         .0
         .insert("/", "spec.yaml", "object:spec-1", Arc::from(&spec[..]));
@@ -287,8 +287,8 @@ impl Resolver for Located {
 /// entry, where a parent step through the entry's root would lead.
 #[cfg(feature = "yaml")]
 fn parent_elsewhere(entry: &str, parent: &str) -> Located {
-    const ENTRY: &[u8] = b"schema_version: '1.0'\nparent: P:/std/base.yaml\ndomain: CHILD\n";
-    const PARENT: &[u8] = b"schema_version: '1.0'\ndomain: BASE\nkeys: [ID]\ninput: {SRC: {path: input/src.csv, types: {ID: int}}}\noutput: {path: out.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
+    const ENTRY: &[u8] = b"yamaa: \"1.0\"\ntype: spec\nparent: P:/std/base.yaml\ndomain: CHILD\n";
+    const PARENT: &[u8] = b"yamaa: \"1.0\"\ntype: spec\ndomain: BASE\nkeys: [ID]\ninput: {SRC: {path: input/src.csv, types: {ID: int}}}\noutput: {path: out.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
     let mut resolver = Located::default();
     resolver.insert("/", "child.yaml", entry, ENTRY);
     resolver.insert(entry, "P:/std/base.yaml", parent, PARENT);

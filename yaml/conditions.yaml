@@ -36,7 +36,7 @@ conditions:
     message: "the case-insensitive mapping keys {entries} all fold to {folded_key}"
   artifact_outside_document:
     phases: [validation]
-    message: "{spec_path} names a file outside the directory of define.xml"
+    message: "the artifact {artifact} of {dataset} is outside the directory of {define}"
   artifact_path_collision:
     phases: [validation]
     message: "{spec_path} would write a file that another output also writes"
@@ -692,7 +692,7 @@ conditions:
     message: "the value-level entries {entries} of column {column} overlap"
   value_level_unmatched:
     phases: [verification]
-    message: "no value-level entry of column {column} selects {failure_count} of the rows"
+    message: "value-level entry {entry} of column {column} selects no row"
   value_level_where_invalid:
     phases: [validation]
     message: "the where clause of value-level entry {entry} of column {column} is invalid ({reason})"

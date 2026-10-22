@@ -1,0 +1,19 @@
+yamaa: "1.0"
+type: project
+codelists:
+  - codelists:
+      - id: AGEGR1
+        name: Pooled Age Group 1
+        items:
+          - value: "<65"
+          - value: ">=65"
+      - id: AGEGR1N
+        name: Pooled Age Group 1 (N)
+        data_type: integer
+        items:
+          - value: 1
+          - value: 2
+
+adam:
+  specs:
+    - spec.yaml

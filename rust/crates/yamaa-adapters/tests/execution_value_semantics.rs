@@ -90,7 +90,7 @@ const SAVED: [&str; 5] = [
 
 fn ordered(term: &str) -> String {
     format!(
-        "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\n\
+        "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\n\
          input: {{SRC: {{path: input.csv, types: {{ID: int, I: int, F: float}}}}}}\n\
          output: {{path: out.csv, columns: [ID, S, I, F, D, T], order_by: [{term}]}}\n\
          columns:\n\
@@ -150,7 +150,7 @@ fn output_order_sorts_every_type_places_missing_by_nulls_and_keeps_ties_in_const
 #[test]
 fn unique_counts_missing_values_as_one_repeated_combination() {
     let fixture = Fixture::new(
-        "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\n\
+        "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\n\
          input: {SRC: {path: input.csv, types: {ID: int, X: int}}}\n\
          output: {path: out.csv, report: report.csv, columns: [ID, X]}\n\
          columns:\n\
@@ -180,26 +180,26 @@ fn unique_counts_missing_values_as_one_repeated_combination() {
     );
 }
 
-/// A float VALUE holding `literal` beside a text key ID. The row template
+/// A float VALUE holding the text constant `literal` beside a text key ID. The row template
 /// derives VALUE when `row_phase`, and otherwise the column does; it builds
 /// one row per record, or one per group of records when `grouped`.
 fn literal(literal: &str, grouped: bool, row_phase: bool) -> String {
     let group = if grouped { ", group_by: [SRC.ID]" } else { "" };
     let (row, column) = if row_phase {
-        (format!("VALUE: {{literal: {literal}}}"), String::new())
-    } else {
         (
+            format!(", derivations: {{VALUE: \"'{literal}'\"}}"),
             String::new(),
-            format!(", derivation: {{literal: {literal}}}"),
         )
+    } else {
+        (String::new(), format!(", derivation: \"'{literal}'\""))
     };
     format!(
-        "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {{SRC: input.csv}}\n\
+        "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {{SRC: input.csv}}\n\
          output: {{path: out.csv, columns: [ID, VALUE]}}\n\
          columns:\n\
          \x20 - {{name: ID, type: str, derivation: SRC.ID}}\n\
          \x20 - {{name: VALUE, type: float{column}}}\n\
-         rows:\n  - {{id: values{group}, derivations: {{{row}}}}}\n"
+         rows:\n  - {{id: values{group}{row}}}\n"
     )
 }
 
@@ -280,7 +280,7 @@ const COLLECTED: &str = "ID,I,F,S\n\
 
 fn collected(columns: &str) -> String {
     format!(
-        "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\n\
+        "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\n\
          input: {{SRC: {{path: input.csv, types: {{ID: int, I: int, F: float}}}}}}\n\
          output: {{path: out.csv, columns: [ID, {columns}]}}\n\
          columns:\n\
@@ -324,7 +324,7 @@ fn equal_extremes_take_a_zeros_sign_from_the_first_present_operand() {
         format!("\x20 - {{name: {name}, type: float, derivation: {{{operation}: {{sources: [{sources}]}}}}}}\n")
     };
     let specification = format!(
-        "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\n\
+        "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\n\
          input: {{SRC: {{path: input.csv, types: {{I: int, F: float, M: float}}}}}}\n\
          output: {{path: out.csv, columns: [ID, G1, G2, L1, L2]}}\n\
          columns:\n\
@@ -347,9 +347,9 @@ fn equal_extremes_take_a_zeros_sign_from_the_first_present_operand() {
 /// keeps the 1. The record of ID 2 enters neither reduction.
 #[test]
 fn sum_adds_matched_donor_records_in_stored_order_and_mean_divides_that_sum() {
-    let specification = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\n\
+    let specification = "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\n\
         input:\n  SRC: {path: input.csv, types: {ID: int}}\n  \
-        S: {path: donor.csv, types: {ID: int, V: float}}\n\
+        S: {path: donor.csv, key: [ID], types: {ID: int, V: float}}\n\
         base: SRC\n\
         output: {path: out.csv, columns: [ID, SUM, MEAN]}\n\
         columns:\n\

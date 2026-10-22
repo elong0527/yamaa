@@ -15,7 +15,7 @@
         "input.csv"
       ],
       "handlers": [],
-      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID, SECTION, SEQ]\ninput: {SRC: {path: input.csv, types: {SEQ: int}}}\noutput: {path: result.csv, columns: [ID, SECTION, SEQ, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: SECTION, type: str}\n  - {name: SEQ, type: int}\n  - {name: VALUE, type: str, derivation: {case: [{when: 'TRUE', then: {source: {variable: SRC.ID, filter: 'SRC.SEQ > 0'}}}, {otherwise: {literal: unused}}]}}\nrows:\n  - {id: grouped, dataset: SRC, group_by: [SRC.ID], derivations: {SECTION: {literal: grouped}, SEQ: {literal: 0}}}\n  - {id: records, dataset: SRC, derivations: {SECTION: {literal: record}, SEQ: SRC.SEQ}}\n",
+      "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID, SECTION, SEQ]\ninput: {SRC: {path: input.csv, types: {SEQ: int}}}\noutput: {path: result.csv, columns: [ID, SECTION, SEQ, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: SECTION, type: str}\n  - {name: SEQ, type: int}\n  - {name: VALUE, type: str, derivation: {case: [{when: 'TRUE', then: {source: {variable: SRC.ID, filter: 'SRC.SEQ > 0'}}}, {otherwise: \"'unused'\"}]}}\nrows:\n  - {id: grouped, dataset: SRC, group_by: [SRC.ID], derivations: {SECTION: \"'grouped'\", SEQ: 0}}\n  - {id: records, dataset: SRC, derivations: {SECTION: \"'record'\", SEQ: SRC.SEQ}}\n",
       "issues": [
         {
           "phase": "validation",
@@ -57,7 +57,7 @@
           "count": 0
         }
       ],
-      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID, SECTION, SEQ]\ninput: {SRC: {path: input.csv, types: {SEQ: int}}}\noutput: {path: result.csv, columns: [ID, SECTION, SEQ, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: SECTION, type: str}\n  - {name: SEQ, type: int}\n  - {name: VALUE, type: str, derivation: {source: {variable: SRC.ID, order_by: [SRC.SEQ], keep: last}}}\nrows:\n  - {id: grouped, dataset: SRC, group_by: [SRC.ID], derivations: {SECTION: {literal: grouped}, SEQ: {literal: 0}}}\n  - {id: records, dataset: SRC, derivations: {SECTION: {literal: record}, SEQ: SRC.SEQ}}\n",
+      "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID, SECTION, SEQ]\ninput: {SRC: {path: input.csv, types: {SEQ: int}}}\noutput: {path: result.csv, columns: [ID, SECTION, SEQ, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: SECTION, type: str}\n  - {name: SEQ, type: int}\n  - {name: VALUE, type: str, derivation: {source: {variable: SRC.ID, order_by: [SRC.SEQ], keep: last}}}\nrows:\n  - {id: grouped, dataset: SRC, group_by: [SRC.ID], derivations: {SECTION: \"'grouped'\", SEQ: 0}}\n  - {id: records, dataset: SRC, derivations: {SECTION: \"'record'\", SEQ: SRC.SEQ}}\n",
       "issues": [],
       "check_issues": [],
       "table": {
@@ -122,7 +122,7 @@
         "input.csv"
       ],
       "handlers": [],
-      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID, SECTION, SEQ]\ninput: {SRC: {path: input.csv, types: {SEQ: int}}}\noutput: {path: result.csv, columns: [ID, SECTION, SEQ, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: SECTION, type: str}\n  - {name: SEQ, type: int}\n  - {name: VALUE, type: str, derivation: {case: [{when: 'TRUE', then: {source: {variable: SRC.SEQ, filter: 'TRUE'}}}, {otherwise: {literal: unused}}]}}\nrows:\n  - {id: grouped, dataset: SRC, group_by: [SRC.ID], derivations: {SECTION: {literal: grouped}, SEQ: {literal: 0}}}\n  - {id: records, dataset: SRC, derivations: {SECTION: {literal: record}, SEQ: SRC.SEQ}}\n",
+      "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID, SECTION, SEQ]\ninput: {SRC: {path: input.csv, types: {SEQ: int}}}\noutput: {path: result.csv, columns: [ID, SECTION, SEQ, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: SECTION, type: str}\n  - {name: SEQ, type: int}\n  - {name: VALUE, type: str, derivation: {case: [{when: 'TRUE', then: {source: {variable: SRC.SEQ, filter: 'TRUE'}}}, {otherwise: \"'unused'\"}]}}\nrows:\n  - {id: grouped, dataset: SRC, group_by: [SRC.ID], derivations: {SECTION: \"'grouped'\", SEQ: 0}}\n  - {id: records, dataset: SRC, derivations: {SECTION: \"'record'\", SEQ: SRC.SEQ}}\n",
       "issues": [
         {
           "phase": "validation",

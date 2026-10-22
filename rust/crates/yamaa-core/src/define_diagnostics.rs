@@ -25,7 +25,6 @@ pub fn creation_refusal(detail: &str) -> Finding {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TargetRelation {
     Independent,
-    ArtifactOutsidePackage,
     ArtifactCollision,
     TransportCollision,
 }
@@ -34,11 +33,36 @@ pub enum TargetRelation {
 pub fn admit_relation(relation: TargetRelation, path: &str, detail: &str) -> Result<(), Finding> {
     let code = match relation {
         TargetRelation::Independent => return Ok(()),
-        TargetRelation::ArtifactOutsidePackage => ConditionCode::DefineArtifactOutsidePackage,
         TargetRelation::ArtifactCollision => ConditionCode::DefineArtifactCollision,
         TargetRelation::TransportCollision => ConditionCode::DefineTransportCollision,
     };
     Err(Finding::cause(code, path, detail))
+}
+/// DEFINE-16: the listing at `path` publishes the artifact of `dataset`, its
+/// `output.path` as written, outside the directory of the document whose
+/// path the project writes as `define`, so no leaf can name it without a
+/// parent traversal.
+pub fn artifact_outside_document(
+    path: &str,
+    dataset: &str,
+    artifact: &str,
+    define: &str,
+) -> Finding {
+    let mut finding = Finding::cause(
+        ConditionCode::DefineArtifactOutsidePackage,
+        path,
+        "artifact must be inside the Define package",
+    );
+    for (key, text) in [
+        ("dataset", dataset),
+        ("artifact", artifact),
+        ("define", define),
+    ] {
+        finding
+            .context
+            .insert(key.into(), JsonValue::String(text.into()));
+    }
+    finding
 }
 /// DEFINE-24: generated text at `path` holds a carriage return or a tab, or an
 /// attribute value holds a line feed.

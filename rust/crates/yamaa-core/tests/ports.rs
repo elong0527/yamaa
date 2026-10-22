@@ -94,7 +94,6 @@ mod boundary {
     use function_invocation::FailureKind;
     use function_invocation::FunctionPort;
     use function_invocation::HostError;
-    use output::{OutputReport, SaveError};
     use run::{CapturedAttempt, PortError, RunError};
     use std::{collections::BTreeMap, rc::Rc, sync::Arc, vec};
     use yamaa_core::function_signature::FunctionIdentity;
@@ -103,12 +102,10 @@ mod boundary {
     use yamaa_core::function_signature::Presence;
     use yamaa_core::function_signature::ProjectFunctionIdentity;
     use yamaa_core::function_signature::ProjectInvocationPlan;
-    use yamaa_core::{
-        dataset, function_invocation, specification_output as output, specification_run as run,
-    };
+    use yamaa_core::{function_invocation, specification_run as run};
     use yamaa_core::{
         schema::{Document, SpecificationDocument},
-        specification::{OutputFinding, PreparedSpecification, SourceDeclaration},
+        specification::{PreparedSpecification, SourceDeclaration},
         table::{CellError, Column, TableAccess, TableSchema},
         value::{ColumnType, Value, ValueType},
     };
@@ -348,163 +345,6 @@ mod boundary {
             assert_eq!(&*log.events(), expected);
             assert!(port.captures.is_empty() && decoder.steps.is_empty());
         }
-    }
-
-    struct Report(EventLog);
-    impl OutputReport for Report {
-        type Error = Opaque;
-        type Report = &'static str;
-        fn failure(&mut self) -> Result<Self::Report, Opaque> {
-            self.0.record(Event::Observation("failure"));
-            Ok("failure")
-        }
-        fn begin(&mut self, _: &dataset::Execution) -> Result<(), Opaque> {
-            self.0.record(Event::Observation("begin"));
-            Ok(())
-        }
-        fn rejected(&mut self, _: &[OutputFinding]) -> Result<Self::Report, Opaque> {
-            self.0.record(Event::Observation("rejected"));
-            Ok("rejected")
-        }
-        fn success(
-            &mut self,
-            _: &dataset::Execution,
-            _: &[usize],
-            _: &[u8],
-        ) -> Result<Self::Report, Opaque> {
-            self.0.record(Event::Observation("report"));
-            Ok("success")
-        }
-    }
-    fn execution(log: EventLog) -> (PreparedSpecification, dataset::Execution) {
-        let prepared = prepared("ID + 1");
-        let mut port = source(
-            log.clone(),
-            prepared.source(),
-            Ok(Arc::from(b"captured\n".as_slice())),
-        );
-        let mut decoder = decoder(log.clone(), prepared.source(), Ok(table(log)));
-        let mut attempt = CapturedAttempt::new(prepared.source());
-        run::execute_into(
-            &prepared,
-            &mut port,
-            &mut decoder,
-            &mut yamaa_core::function_invocation::NoFunctions::new(),
-            &mut attempt,
-            yamaa_core::application_observer::Scope::new(&yamaa_core::application_observer::Noop),
-        );
-        let execution = attempt.result.unwrap().result.unwrap();
-        assert_eq!(
-            execution.dataset.rows(),
-            [vec![Value::Int(7), Value::Int(8)]]
-        );
-        (prepared, execution)
-    }
-
-    #[test]
-    fn held_output_publishes_exact_bytes_only_on_explicit_save_without_retry() {
-        let log = EventLog::default();
-        let (prepared, execution) = execution(log.clone());
-        let captured = log.events().len();
-        assert!(matches!(
-            &log.events()[..3],
-            [
-                Event::Inspect(_),
-                Event::Capture { .. },
-                Event::Decode { .. }
-            ]
-        ));
-        let mut codec = ScriptedEncoder::<Opaque>::new(log.clone());
-        codec.steps.push_back(EncodeStep {
-            projection: vec![1, 0],
-            outcome: Ok(b"VALUE,ID\n8,7\n".to_vec()),
-        });
-        let mut report = Report(log.clone());
-        let result = output::prepare(&prepared, Some(&execution), &mut report, &mut codec).unwrap();
-        assert_eq!(
-            &log.events()[captured..],
-            [
-                Event::Observation("begin"),
-                Event::Encode {
-                    projection: vec![1, 0],
-                },
-                Event::Observation("report")
-            ]
-        );
-        drop(prepared);
-        drop(execution);
-        drop(codec);
-        drop(report);
-        let mut publisher = ScriptedPublisher::new(log.clone());
-        let (error, identity) = failure();
-        for outcome in [Err(error), Ok(())] {
-            publisher.steps.push_back(PublishStep {
-                path: "result.csv".into(),
-                bytes: b"VALUE,ID\n8,7\n".to_vec(),
-                outcome,
-            });
-        }
-        let Err(SaveError::Publish(error)) = result.save(&mut publisher) else {
-            panic!("publication failure");
-        };
-        assert_identity(error, identity);
-        assert_eq!(publisher.steps.len(), 1, "no implicit retry after failure");
-        assert_eq!(*result.save(&mut publisher).unwrap(), "success");
-        assert!(publisher.steps.is_empty());
-        assert_eq!(
-            &log.events()[captured + 3..],
-            [
-                Event::Publish {
-                    path: "result.csv".into(),
-                    bytes: b"VALUE,ID\n8,7\n".to_vec()
-                },
-                Event::Publish {
-                    path: "result.csv".into(),
-                    bytes: b"VALUE,ID\n8,7\n".to_vec()
-                }
-            ]
-        );
-    }
-
-    #[test]
-    fn encoding_failure_and_failed_build_never_reach_publication() {
-        let log = EventLog::default();
-        let (prepared, execution) = execution(log.clone());
-        log.clear();
-        let mut report = Report(log.clone());
-        let mut codec = ScriptedEncoder::new(log.clone());
-        let (error, identity) = failure();
-        codec.steps.push_back(EncodeStep {
-            projection: vec![1, 0],
-            outcome: Err(error),
-        });
-        let mut publisher = ScriptedPublisher::<Opaque>::new(log.clone());
-        let Err(output::CompleteError::Encode(error)) = output::complete(
-            &prepared,
-            Some(&execution),
-            &mut report,
-            &mut codec,
-            &mut publisher,
-        ) else {
-            panic!("encoding failure");
-        };
-        assert_identity(error, identity);
-        assert_eq!(
-            &*log.events(),
-            [
-                Event::Observation("begin"),
-                Event::Encode {
-                    projection: vec![1, 0],
-                }
-            ]
-        );
-        log.clear();
-        let failed = output::prepare(&prepared, None, &mut report, &mut codec).unwrap();
-        assert!(matches!(
-            failed.save(&mut publisher),
-            Err(SaveError::FailedBuild)
-        ));
-        assert_eq!(&*log.events(), [Event::Observation("failure")]);
     }
 
     #[test]

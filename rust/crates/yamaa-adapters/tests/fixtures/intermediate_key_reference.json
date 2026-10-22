@@ -1,17 +1,17 @@
 {
   "padding_output_operand": {
-    "specification": "schema_version: '1.0'\ndomain: OUT\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\n  TAB: {path: tab.csv, types: {KINT: int, KNUM: float}}\nbase: SRC\noutput: {path: out.csv, columns: [ID, N, V, V2]}\nintermediates:\n  - id: LOOK\n    dataset: TAB\n    key: {K: {str_pad: {source: N, width: 8}}}\n    no_match: {literal: null}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: N, type: int, derivation: SRC.N}\n  - {name: V, type: str, derivation: LOOK.VAL}\n  - {name: V2, type: str, derivation: LOOK.VAL}\n",
+    "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\n  TAB: {path: tab.csv, types: {KINT: int, KNUM: float}}\nbase: SRC\noutput: {path: out.csv, columns: [ID, N, V, V2]}\nintermediates:\n  - id: LOOK\n    dataset: TAB\n    key: {K: {str_pad: {source: N, width: 8}}}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: N, type: int, derivation: SRC.N}\n  - {name: V, type: str, derivation: LOOK.VAL}\n  - {name: V2, type: str, derivation: LOOK.VAL}\n",
     "issues": [],
     "result_type": "ExecutionSuccess",
     "handlers": [
       {
-        "spec_path": "columns.V.derivation.source.no_match",
-        "handler": "no_match",
+        "spec_path": "columns.V.derivation.source.absent",
+        "handler": "absent",
         "count": 1
       },
       {
-        "spec_path": "columns.V2.derivation.source.no_match",
-        "handler": "no_match",
+        "spec_path": "columns.V2.derivation.source.absent",
+        "handler": "absent",
         "count": 1
       }
     ],
@@ -22,18 +22,18 @@
     }
   },
   "padding_raw_operand": {
-    "specification": "schema_version: '1.0'\ndomain: OUT\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\n  TAB: {path: tab.csv, types: {KINT: int, KNUM: float}}\nbase: SRC\noutput: {path: out.csv, columns: [ID, N, V, V2]}\nintermediates:\n  - id: LOOK\n    dataset: TAB\n    key: {K: {str_pad: {source: SRC.N, width: 8}}}\n    no_match: {literal: null}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: N, type: int, derivation: SRC.N}\n  - {name: V, type: str, derivation: LOOK.VAL}\n  - {name: V2, type: str, derivation: LOOK.VAL}\n",
+    "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\n  TAB: {path: tab.csv, types: {KINT: int, KNUM: float}}\nbase: SRC\noutput: {path: out.csv, columns: [ID, N, V, V2]}\nintermediates:\n  - id: LOOK\n    dataset: TAB\n    key: {K: {str_pad: {source: SRC.N, width: 8}}}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: N, type: int, derivation: SRC.N}\n  - {name: V, type: str, derivation: LOOK.VAL}\n  - {name: V2, type: str, derivation: LOOK.VAL}\n",
     "issues": [],
     "result_type": "ExecutionSuccess",
     "handlers": [
       {
-        "spec_path": "columns.V.derivation.source.no_match",
-        "handler": "no_match",
+        "spec_path": "columns.V.derivation.source.absent",
+        "handler": "absent",
         "count": 1
       },
       {
-        "spec_path": "columns.V2.derivation.source.no_match",
-        "handler": "no_match",
+        "spec_path": "columns.V2.derivation.source.absent",
+        "handler": "absent",
         "count": 1
       }
     ],
@@ -44,14 +44,14 @@
     }
   },
   "unknown_source_and_width": {
-    "specification": "schema_version: '1.0'\ndomain: OUT\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\n  TAB: {path: tab.csv, types: {KINT: int, KNUM: float}}\nbase: SRC\noutput: {path: out.csv, columns: [ID, N, V, V2]}\nintermediates:\n  - id: LOOK\n    dataset: TAB\n    key: {K: {str_pad: {source: SRC.ABSENT, width: 0}}}\n    no_match: {literal: null}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: N, type: int, derivation: SRC.N}\n  - {name: V, type: str, derivation: LOOK.VAL}\n  - {name: V2, type: str, derivation: LOOK.VAL}\n",
+    "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\n  TAB: {path: tab.csv, types: {KINT: int, KNUM: float}}\nbase: SRC\noutput: {path: out.csv, columns: [ID, N, V, V2]}\nintermediates:\n  - id: LOOK\n    dataset: TAB\n    key: {K: {str_pad: {source: SRC.ABSENT, width: 0}}}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: N, type: int, derivation: SRC.N}\n  - {name: V, type: str, derivation: LOOK.VAL}\n  - {name: V2, type: str, derivation: LOOK.VAL}\n",
     "issues": [
       {
         "severity": "error",
         "phase": "validation",
         "condition": "invalid_field_type",
         "spec_paths": [
-          "intermediates[0].key.K.str_pad.width"
+          "intermediates.LOOK.key.K.str_pad.width"
         ],
         "context": "{\"expected\":\"a positive integer width\"}"
       },
@@ -60,7 +60,7 @@
         "phase": "validation",
         "condition": "unknown_field",
         "spec_paths": [
-          "intermediates[0].key.K"
+          "intermediates.LOOK.key.K"
         ],
         "context": "{\"identifier\":\"SRC.ABSENT\",\"intermediate\":\"LOOK\"}"
       },
@@ -89,7 +89,7 @@
         "phase": "validation",
         "condition": "invalid_field_type",
         "spec_paths": [
-          "intermediates[0].key.K.str_pad.width"
+          "intermediates.LOOK.key.K.str_pad.width"
         ],
         "rule": "TEXT-2",
         "context": {
@@ -100,7 +100,7 @@
         "phase": "validation",
         "condition": "unknown_field",
         "spec_paths": [
-          "intermediates[0].key.K"
+          "intermediates.LOOK.key.K"
         ],
         "rule": "LOOKUP-5",
         "context": {
@@ -138,14 +138,14 @@
     }
   },
   "static_type_then_width_then_unknown": {
-    "specification": "schema_version: '1.0'\ndomain: OUT\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\n  TAB: {path: tab.csv, types: {KINT: int, KNUM: float}}\nbase: SRC\noutput: {path: out.csv, columns: [ID, N, V, V2]}\nintermediates:\n  - id: LOOK\n    dataset: TAB\n    key: {KINT: {str_pad: {source: SRC.ABSENT, width: 0}}}\n    no_match: {literal: null}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: N, type: int, derivation: SRC.N}\n  - {name: V, type: str, derivation: LOOK.VAL}\n  - {name: V2, type: str, derivation: LOOK.VAL}\n",
+    "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\n  TAB: {path: tab.csv, types: {KINT: int, KNUM: float}}\nbase: SRC\noutput: {path: out.csv, columns: [ID, N, V, V2]}\nintermediates:\n  - id: LOOK\n    dataset: TAB\n    key: {KINT: {str_pad: {source: SRC.ABSENT, width: 0}}}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: N, type: int, derivation: SRC.N}\n  - {name: V, type: str, derivation: LOOK.VAL}\n  - {name: V2, type: str, derivation: LOOK.VAL}\n",
     "issues": [
       {
         "severity": "error",
         "phase": "validation",
         "condition": "incompatible_input_type",
         "spec_paths": [
-          "intermediates[0].key"
+          "intermediates.LOOK.key"
         ],
         "context": "{\"actual\":\"int\",\"expected\":\"str\",\"intermediate\":\"LOOK\",\"source\":\"key[KINT]\"}"
       },
@@ -154,7 +154,7 @@
         "phase": "validation",
         "condition": "invalid_field_type",
         "spec_paths": [
-          "intermediates[0].key.KINT.str_pad.width"
+          "intermediates.LOOK.key.KINT.str_pad.width"
         ],
         "context": "{\"expected\":\"a positive integer width\"}"
       },
@@ -163,7 +163,7 @@
         "phase": "validation",
         "condition": "unknown_field",
         "spec_paths": [
-          "intermediates[0].key.KINT"
+          "intermediates.LOOK.key.KINT"
         ],
         "context": "{\"identifier\":\"SRC.ABSENT\",\"intermediate\":\"LOOK\"}"
       },
@@ -192,7 +192,7 @@
         "phase": "validation",
         "condition": "incompatible_input_type",
         "spec_paths": [
-          "intermediates[0].key"
+          "intermediates.LOOK.key"
         ],
         "rule": "LOOKUP-9",
         "context": {
@@ -206,7 +206,7 @@
         "phase": "validation",
         "condition": "invalid_field_type",
         "spec_paths": [
-          "intermediates[0].key.KINT.str_pad.width"
+          "intermediates.LOOK.key.KINT.str_pad.width"
         ],
         "rule": "TEXT-2",
         "context": {
@@ -217,7 +217,7 @@
         "phase": "validation",
         "condition": "unknown_field",
         "spec_paths": [
-          "intermediates[0].key.KINT"
+          "intermediates.LOOK.key.KINT"
         ],
         "rule": "LOOKUP-5",
         "context": {
@@ -255,14 +255,14 @@
     }
   },
   "donor_unknown_then_width_then_unknown": {
-    "specification": "schema_version: '1.0'\ndomain: OUT\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\n  TAB: {path: tab.csv, types: {KINT: int, KNUM: float}}\nbase: SRC\noutput: {path: out.csv, columns: [ID, N, V, V2]}\nintermediates:\n  - id: LOOK\n    dataset: TAB\n    key: {ABSENT: {str_pad: {source: SRC.ABSENT, width: 0}}}\n    no_match: {literal: null}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: N, type: int, derivation: SRC.N}\n  - {name: V, type: str, derivation: LOOK.VAL}\n  - {name: V2, type: str, derivation: LOOK.VAL}\n",
+    "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\n  TAB: {path: tab.csv, types: {KINT: int, KNUM: float}}\nbase: SRC\noutput: {path: out.csv, columns: [ID, N, V, V2]}\nintermediates:\n  - id: LOOK\n    dataset: TAB\n    key: {ABSENT: {str_pad: {source: SRC.ABSENT, width: 0}}}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: N, type: int, derivation: SRC.N}\n  - {name: V, type: str, derivation: LOOK.VAL}\n  - {name: V2, type: str, derivation: LOOK.VAL}\n",
     "issues": [
       {
         "severity": "error",
         "phase": "validation",
         "condition": "unknown_field",
         "spec_paths": [
-          "intermediates[0].key"
+          "intermediates.LOOK.key"
         ],
         "context": "{\"identifier\":\"TAB.ABSENT\",\"intermediate\":\"LOOK\"}"
       },
@@ -271,7 +271,7 @@
         "phase": "validation",
         "condition": "invalid_field_type",
         "spec_paths": [
-          "intermediates[0].key.ABSENT.str_pad.width"
+          "intermediates.LOOK.key.ABSENT.str_pad.width"
         ],
         "context": "{\"expected\":\"a positive integer width\"}"
       },
@@ -280,7 +280,7 @@
         "phase": "validation",
         "condition": "unknown_field",
         "spec_paths": [
-          "intermediates[0].key.ABSENT"
+          "intermediates.LOOK.key.ABSENT"
         ],
         "context": "{\"identifier\":\"SRC.ABSENT\",\"intermediate\":\"LOOK\"}"
       },
@@ -309,7 +309,7 @@
         "phase": "validation",
         "condition": "unknown_field",
         "spec_paths": [
-          "intermediates[0].key"
+          "intermediates.LOOK.key"
         ],
         "rule": "LOOKUP-5",
         "context": {
@@ -321,7 +321,7 @@
         "phase": "validation",
         "condition": "invalid_field_type",
         "spec_paths": [
-          "intermediates[0].key.ABSENT.str_pad.width"
+          "intermediates.LOOK.key.ABSENT.str_pad.width"
         ],
         "rule": "TEXT-2",
         "context": {
@@ -332,7 +332,7 @@
         "phase": "validation",
         "condition": "unknown_field",
         "spec_paths": [
-          "intermediates[0].key.ABSENT"
+          "intermediates.LOOK.key.ABSENT"
         ],
         "rule": "LOOKUP-5",
         "context": {
@@ -370,14 +370,14 @@
     }
   },
   "self_match_source_suggestion": {
-    "specification": "schema_version: '1.0'\ndomain: OUT\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\n  TAB: {path: tab.csv, types: {KINT: int, KNUM: float}}\nbase: SRC\noutput: {path: out.csv, columns: [ID, N, V, V2]}\nintermediates:\n  - id: LOOK\n    dataset: TAB\n    key: {K: {str_pad: {source: SELF.N, width: 8}}}\n    no_match: {literal: null}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: N, type: int, derivation: SRC.N}\n  - {name: V, type: str, derivation: LOOK.VAL}\n  - {name: V2, type: str, derivation: LOOK.VAL}\n",
+    "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\n  TAB: {path: tab.csv, types: {KINT: int, KNUM: float}}\nbase: SRC\noutput: {path: out.csv, columns: [ID, N, V, V2]}\nintermediates:\n  - id: LOOK\n    dataset: TAB\n    key: {K: {str_pad: {source: SELF.N, width: 8}}}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: N, type: int, derivation: SRC.N}\n  - {name: V, type: str, derivation: LOOK.VAL}\n  - {name: V2, type: str, derivation: LOOK.VAL}\n",
     "issues": [
       {
         "severity": "error",
         "phase": "validation",
         "condition": "unknown_field",
         "spec_paths": [
-          "intermediates[0].key.K"
+          "intermediates.LOOK.key.K"
         ],
         "context": "{\"identifier\":\"SELF.N\",\"intermediate\":\"LOOK\",\"suggestion\":\"N\"}"
       },
@@ -406,7 +406,7 @@
         "phase": "validation",
         "condition": "unknown_field",
         "spec_paths": [
-          "intermediates[0].key.K"
+          "intermediates.LOOK.key.K"
         ],
         "rule": "LOOKUP-5",
         "context": {
@@ -445,18 +445,18 @@
     }
   },
   "missing_result": {
-    "specification": "schema_version: '1.0'\ndomain: OUT\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\n  TAB: {path: tab.csv, types: {KINT: int, KNUM: float}}\nbase: SRC\noutput: {path: out.csv, columns: [ID, N, V, V2]}\nintermediates:\n  - id: LOOK\n    dataset: TAB\n    key: {K: {literal: null}}\n    no_match: {literal: null}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: N, type: int, derivation: SRC.N}\n  - {name: V, type: str, derivation: LOOK.VAL}\n  - {name: V2, type: str, derivation: LOOK.VAL}\n",
+    "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\n  TAB: {path: tab.csv, types: {KINT: int, KNUM: float}}\nbase: SRC\noutput: {path: out.csv, columns: [ID, N, V, V2]}\nintermediates:\n  - id: LOOK\n    dataset: TAB\n    key: {K: null}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: N, type: int, derivation: SRC.N}\n  - {name: V, type: str, derivation: LOOK.VAL}\n  - {name: V2, type: str, derivation: LOOK.VAL}\n",
     "issues": [],
     "result_type": "ExecutionSuccess",
     "handlers": [
       {
-        "spec_path": "columns.V.derivation.source.no_match",
-        "handler": "no_match",
+        "spec_path": "columns.V.derivation.source.absent",
+        "handler": "absent",
         "count": 3
       },
       {
-        "spec_path": "columns.V2.derivation.source.no_match",
-        "handler": "no_match",
+        "spec_path": "columns.V2.derivation.source.absent",
+        "handler": "absent",
         "count": 3
       }
     ],
@@ -467,18 +467,18 @@
     }
   },
   "numeric_int_float_key": {
-    "specification": "schema_version: '1.0'\ndomain: OUT\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\n  TAB: {path: tab.csv, types: {KINT: int, KNUM: float}}\nbase: SRC\noutput: {path: out.csv, columns: [ID, N, V, V2]}\nintermediates:\n  - id: LOOK\n    dataset: TAB\n    key: {KNUM: {literal: 7}}\n    no_match: {literal: null}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: N, type: int, derivation: SRC.N}\n  - {name: V, type: str, derivation: LOOK.VAL}\n  - {name: V2, type: str, derivation: LOOK.VAL}\n",
+    "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\n  TAB: {path: tab.csv, types: {KINT: int, KNUM: float}}\nbase: SRC\noutput: {path: out.csv, columns: [ID, N, V, V2]}\nintermediates:\n  - id: LOOK\n    dataset: TAB\n    key: {KNUM: 7}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: N, type: int, derivation: SRC.N}\n  - {name: V, type: str, derivation: LOOK.VAL}\n  - {name: V2, type: str, derivation: LOOK.VAL}\n",
     "issues": [],
     "result_type": "ExecutionSuccess",
     "handlers": [
       {
-        "spec_path": "columns.V.derivation.source.no_match",
-        "handler": "no_match",
+        "spec_path": "columns.V.derivation.source.absent",
+        "handler": "absent",
         "count": 0
       },
       {
-        "spec_path": "columns.V2.derivation.source.no_match",
-        "handler": "no_match",
+        "spec_path": "columns.V2.derivation.source.absent",
+        "handler": "absent",
         "count": 0
       }
     ],
@@ -489,18 +489,18 @@
     }
   },
   "numeric_large_int_float_key": {
-    "specification": "schema_version: '1.0'\ndomain: OUT\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\n  TAB: {path: tab.csv, types: {KINT: int, KNUM: float}}\nbase: SRC\noutput: {path: out.csv, columns: [ID, N, V, V2]}\nintermediates:\n  - id: LOOK\n    dataset: TAB\n    key: {KNUM: {literal: 9007199254740993}}\n    no_match: {literal: null}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: N, type: int, derivation: SRC.N}\n  - {name: V, type: str, derivation: LOOK.VAL}\n  - {name: V2, type: str, derivation: LOOK.VAL}\n",
+    "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\n  TAB: {path: tab.csv, types: {KINT: int, KNUM: float}}\nbase: SRC\noutput: {path: out.csv, columns: [ID, N, V, V2]}\nintermediates:\n  - id: LOOK\n    dataset: TAB\n    key: {KNUM: 9007199254740993}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: N, type: int, derivation: SRC.N}\n  - {name: V, type: str, derivation: LOOK.VAL}\n  - {name: V2, type: str, derivation: LOOK.VAL}\n",
     "issues": [],
     "result_type": "ExecutionSuccess",
     "handlers": [
       {
-        "spec_path": "columns.V.derivation.source.no_match",
-        "handler": "no_match",
+        "spec_path": "columns.V.derivation.source.absent",
+        "handler": "absent",
         "count": 3
       },
       {
-        "spec_path": "columns.V2.derivation.source.no_match",
-        "handler": "no_match",
+        "spec_path": "columns.V2.derivation.source.absent",
+        "handler": "absent",
         "count": 3
       }
     ],
@@ -511,18 +511,18 @@
     }
   },
   "literal_text_not_reference": {
-    "specification": "schema_version: '1.0'\ndomain: OUT\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\n  TAB: {path: tab.csv, types: {KINT: int, KNUM: float}}\nbase: SRC\noutput: {path: out.csv, columns: [ID, N, V, V2]}\nintermediates:\n  - id: LOOK\n    dataset: TAB\n    key: {K: {literal: SRC.ABSENT}}\n    no_match: {literal: null}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: N, type: int, derivation: SRC.N}\n  - {name: V, type: str, derivation: LOOK.VAL}\n  - {name: V2, type: str, derivation: LOOK.VAL}\n",
+    "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\n  TAB: {path: tab.csv, types: {KINT: int, KNUM: float}}\nbase: SRC\noutput: {path: out.csv, columns: [ID, N, V, V2]}\nintermediates:\n  - id: LOOK\n    dataset: TAB\n    key: {K: \"'SRC.ABSENT'\"}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: N, type: int, derivation: SRC.N}\n  - {name: V, type: str, derivation: LOOK.VAL}\n  - {name: V2, type: str, derivation: LOOK.VAL}\n",
     "issues": [],
     "result_type": "ExecutionSuccess",
     "handlers": [
       {
-        "spec_path": "columns.V.derivation.source.no_match",
-        "handler": "no_match",
+        "spec_path": "columns.V.derivation.source.absent",
+        "handler": "absent",
         "count": 0
       },
       {
-        "spec_path": "columns.V2.derivation.source.no_match",
-        "handler": "no_match",
+        "spec_path": "columns.V2.derivation.source.absent",
+        "handler": "absent",
         "count": 0
       }
     ],
@@ -533,7 +533,7 @@
     }
   },
   "raw_pad_without_output": {
-    "specification": "schema_version: '1.0'\ndomain: OUT\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\n  TAB: {path: tab.csv, types: {KINT: int, KNUM: float}}\nbase: SRC\noutput: {path: out.csv, columns: [ID, V, V2]}\nintermediates:\n  - id: LOOK\n    dataset: TAB\n    key: {K: {str_pad: {source: SRC.N, width: 8}}}\n    no_match: {literal: null}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: V, type: str, derivation: LOOK.VAL}\n  - {name: V2, type: str, derivation: LOOK.VAL}\n",
+    "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\n  TAB: {path: tab.csv, types: {KINT: int, KNUM: float}}\nbase: SRC\noutput: {path: out.csv, columns: [ID, V, V2]}\nintermediates:\n  - id: LOOK\n    dataset: TAB\n    key: {K: {str_pad: {source: SRC.N, width: 8}}}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: V, type: str, derivation: LOOK.VAL}\n  - {name: V2, type: str, derivation: LOOK.VAL}\n",
     "inputs": {
       "src.csv": "ID,N\na,7\nb,259\nc,\n",
       "tab.csv": "K,KINT,KNUM,VAL\n\"       7\",7,7,A\n\"     259\",259,259,B\n\"SRC.ABSENT\",9007199254740992,9007199254740992,TEXT\n"
@@ -541,20 +541,20 @@
     "result_type": "ExecutionSuccess",
     "handlers": [
       {
-        "spec_path": "columns.V.derivation.source.no_match",
-        "handler": "no_match",
+        "spec_path": "columns.V.derivation.source.absent",
+        "handler": "absent",
         "count": 1
       },
       {
-        "spec_path": "columns.V2.derivation.source.no_match",
-        "handler": "no_match",
+        "spec_path": "columns.V2.derivation.source.absent",
+        "handler": "absent",
         "count": 1
       }
     ],
     "csv": "ID,V,V2\na,A,A\nb,B,B\nc,,\n"
   },
   "source_key_raw": {
-    "specification": "schema_version: '1.0'\ndomain: OUT\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\n  TAB: {path: tab.csv, types: {KINT: int, KNUM: float}}\nbase: SRC\noutput: {path: out.csv, columns: [ID, N, V, V2]}\nintermediates:\n  - id: LOOK\n    dataset: TAB\n    key: {KNUM: {source: SRC.N}}\n    no_match: {literal: null}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: N, type: int, derivation: SRC.N}\n  - {name: V, type: str, derivation: LOOK.VAL}\n  - {name: V2, type: str, derivation: LOOK.VAL}\n",
+    "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\n  TAB: {path: tab.csv, types: {KINT: int, KNUM: float}}\nbase: SRC\noutput: {path: out.csv, columns: [ID, N, V, V2]}\nintermediates:\n  - id: LOOK\n    dataset: TAB\n    key: {KNUM: SRC.N}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: N, type: int, derivation: SRC.N}\n  - {name: V, type: str, derivation: LOOK.VAL}\n  - {name: V2, type: str, derivation: LOOK.VAL}\n",
     "inputs": {
       "src.csv": "ID,N\na,7\nb,259\nc,\n",
       "tab.csv": "K,KINT,KNUM,VAL\n\"       7\",7,7,A\n\"     259\",259,259,B\n\"SRC.ABSENT\",9007199254740992,9007199254740992,TEXT\n"
@@ -562,20 +562,20 @@
     "result_type": "ExecutionSuccess",
     "handlers": [
       {
-        "spec_path": "columns.V.derivation.source.no_match",
-        "handler": "no_match",
+        "spec_path": "columns.V.derivation.source.absent",
+        "handler": "absent",
         "count": 1
       },
       {
-        "spec_path": "columns.V2.derivation.source.no_match",
-        "handler": "no_match",
+        "spec_path": "columns.V2.derivation.source.absent",
+        "handler": "absent",
         "count": 1
       }
     ],
     "csv": "ID,N,V,V2\na,7,A,A\nb,259,B,B\nc,,,\n"
   },
   "width_invalid_source_valid": {
-    "specification": "schema_version: '1.0'\ndomain: OUT\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\n  TAB: {path: tab.csv, types: {KINT: int, KNUM: float}}\nbase: SRC\noutput: {path: out.csv, columns: [ID, N, V, V2]}\nintermediates:\n  - id: LOOK\n    dataset: TAB\n    key: {K: {str_pad: {source: SRC.N, width: 0}}}\n    no_match: {literal: null}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: N, type: int, derivation: SRC.N}\n  - {name: V, type: str, derivation: LOOK.VAL}\n  - {name: V2, type: str, derivation: LOOK.VAL}\n",
+    "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\n  TAB: {path: tab.csv, types: {KINT: int, KNUM: float}}\nbase: SRC\noutput: {path: out.csv, columns: [ID, N, V, V2]}\nintermediates:\n  - id: LOOK\n    dataset: TAB\n    key: {K: {str_pad: {source: SRC.N, width: 0}}}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: N, type: int, derivation: SRC.N}\n  - {name: V, type: str, derivation: LOOK.VAL}\n  - {name: V2, type: str, derivation: LOOK.VAL}\n",
     "inputs": {
       "src.csv": "ID,N\na,7\nb,259\nc,\n",
       "tab.csv": "K,KINT,KNUM,VAL\n\"       7\",7,7,A\n\"     259\",259,259,B\n\"SRC.ABSENT\",9007199254740992,9007199254740992,TEXT\n"
@@ -587,7 +587,7 @@
         "phase": "validation",
         "condition": "invalid_field_type",
         "spec_paths": [
-          "intermediates[0].key.K.str_pad.width"
+          "intermediates.LOOK.key.K.str_pad.width"
         ],
         "rule": "TEXT-2",
         "context": {
@@ -597,7 +597,7 @@
     ]
   },
   "dependency_before_bad_filter": {
-    "specification": "schema_version: '1.0'\ndomain: OUT\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\n  TAB: {path: tab.csv, types: {KINT: int, KNUM: float}}\nbase: SRC\noutput: {path: out.csv, columns: [ID, V, V2]}\nintermediates:\n  - id: LOOK\n    dataset: TAB\n    key: {K: {str_pad: {source: SRC.N, width: 8}}}\n    filter: \"TAB.KINT > 'bad'\"\n    no_match: {literal: null}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: V, type: str, derivation: LOOK.VAL}\n  - {name: V2, type: str, derivation: LOOK.VAL}\n",
+    "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\n  TAB: {path: tab.csv, types: {KINT: int, KNUM: float}}\nbase: SRC\noutput: {path: out.csv, columns: [ID, V, V2]}\nintermediates:\n  - id: LOOK\n    dataset: TAB\n    key: {K: {str_pad: {source: SRC.N, width: 8}}}\n    filter: \"TAB.KINT > 'bad'\"\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: V, type: str, derivation: LOOK.VAL}\n  - {name: V2, type: str, derivation: LOOK.VAL}\n",
     "inputs": {
       "src.csv": "ID,N\na,7\na,8\n",
       "tab.csv": "K,KINT,KNUM,VAL\n\"       7\",7,7,A\n\"     259\",259,259,B\n\"SRC.ABSENT\",9007199254740992,9007199254740992,TEXT\n"
@@ -605,13 +605,13 @@
     "result_type": "ExecutionFailure",
     "handlers": [
       {
-        "spec_path": "columns.V.derivation.source.no_match",
-        "handler": "no_match",
+        "spec_path": "columns.V.derivation.source.absent",
+        "handler": "absent",
         "count": 0
       },
       {
-        "spec_path": "columns.V2.derivation.source.no_match",
-        "handler": "no_match",
+        "spec_path": "columns.V2.derivation.source.absent",
+        "handler": "absent",
         "count": 0
       }
     ],
@@ -620,7 +620,7 @@
         "phase": "derivation",
         "condition": "multiple_values_per_key",
         "spec_paths": [
-          "intermediates[0]"
+          "intermediates.LOOK"
         ],
         "rule": "COLUMN-2",
         "context": {
@@ -636,7 +636,7 @@
     ]
   },
   "dependency_before_unknown_filter": {
-    "specification": "schema_version: '1.0'\ndomain: OUT\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\n  TAB: {path: tab.csv, types: {KINT: int, KNUM: float}}\nbase: SRC\noutput: {path: out.csv, columns: [ID, V, V2]}\nintermediates:\n  - id: LOOK\n    dataset: TAB\n    key: {K: {str_pad: {source: SRC.N, width: 8}}}\n    filter: 'TAB.ABSENT > 0'\n    no_match: {literal: null}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: V, type: str, derivation: LOOK.VAL}\n  - {name: V2, type: str, derivation: LOOK.VAL}\n",
+    "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\n  TAB: {path: tab.csv, types: {KINT: int, KNUM: float}}\nbase: SRC\noutput: {path: out.csv, columns: [ID, V, V2]}\nintermediates:\n  - id: LOOK\n    dataset: TAB\n    key: {K: {str_pad: {source: SRC.N, width: 8}}}\n    filter: 'TAB.ABSENT > 0'\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: V, type: str, derivation: LOOK.VAL}\n  - {name: V2, type: str, derivation: LOOK.VAL}\n",
     "inputs": {
       "src.csv": "ID,N\na,7\na,8\n",
       "tab.csv": "K,KINT,KNUM,VAL\n\"       7\",7,7,A\n\"     259\",259,259,B\n\"SRC.ABSENT\",9007199254740992,9007199254740992,TEXT\n"
@@ -648,7 +648,7 @@
         "phase": "validation",
         "condition": "unknown_field",
         "spec_paths": [
-          "intermediates[0].filter"
+          "intermediates.LOOK.filter"
         ],
         "rule": "LOOKUP-7",
         "context": {
@@ -681,7 +681,7 @@
     ]
   },
   "filter_before_padding_evaluation": {
-    "specification": "schema_version: '1.0'\ndomain: OUT\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\n  TAB: {path: tab.csv, types: {KINT: int, KNUM: float}}\nbase: SRC\noutput: {path: out.csv, columns: [ID, V, V2]}\nintermediates:\n  - id: LOOK\n    dataset: TAB\n    key: {K: {str_pad: {source: SRC.N, width: 1000000}}}\n    filter: \"TAB.KINT > 'bad'\"\n    no_match: {literal: null}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: V, type: str, derivation: LOOK.VAL}\n  - {name: V2, type: str, derivation: LOOK.VAL}\n",
+    "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\n  TAB: {path: tab.csv, types: {KINT: int, KNUM: float}}\nbase: SRC\noutput: {path: out.csv, columns: [ID, V, V2]}\nintermediates:\n  - id: LOOK\n    dataset: TAB\n    key: {K: {str_pad: {source: SRC.N, width: 1000000}}}\n    filter: \"TAB.KINT > 'bad'\"\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: V, type: str, derivation: LOOK.VAL}\n  - {name: V2, type: str, derivation: LOOK.VAL}\n",
     "inputs": {
       "src.csv": "ID,N\na,7\nb,259\nc,\n",
       "tab.csv": "K,KINT,KNUM,VAL\n\"       7\",7,7,A\n\"     259\",259,259,B\n\"SRC.ABSENT\",9007199254740992,9007199254740992,TEXT\n"
@@ -689,13 +689,13 @@
     "result_type": "ExecutionFailure",
     "handlers": [
       {
-        "spec_path": "columns.V.derivation.source.no_match",
-        "handler": "no_match",
+        "spec_path": "columns.V.derivation.source.absent",
+        "handler": "absent",
         "count": 0
       },
       {
-        "spec_path": "columns.V2.derivation.source.no_match",
-        "handler": "no_match",
+        "spec_path": "columns.V2.derivation.source.absent",
+        "handler": "absent",
         "count": 0
       }
     ],
@@ -704,7 +704,7 @@
         "phase": "validation",
         "condition": "incompatible_input_type",
         "spec_paths": [
-          "intermediates[0].filter"
+          "intermediates.LOOK.filter"
         ],
         "rule": "FORMULA-5",
         "context": {
@@ -715,7 +715,7 @@
     ]
   },
   "width_and_bad_filter_binding": {
-    "specification": "schema_version: '1.0'\ndomain: OUT\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\n  TAB: {path: tab.csv, types: {KINT: int, KNUM: float}}\nbase: SRC\noutput: {path: out.csv, columns: [ID, V, V2]}\nintermediates:\n  - id: LOOK\n    dataset: TAB\n    key: {K: {str_pad: {source: SRC.N, width: 0}}}\n    filter: 'TAB.ABSENT > 0'\n    no_match: {literal: null}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: V, type: str, derivation: LOOK.VAL}\n  - {name: V2, type: str, derivation: LOOK.VAL}\n",
+    "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\n  TAB: {path: tab.csv, types: {KINT: int, KNUM: float}}\nbase: SRC\noutput: {path: out.csv, columns: [ID, V, V2]}\nintermediates:\n  - id: LOOK\n    dataset: TAB\n    key: {K: {str_pad: {source: SRC.N, width: 0}}}\n    filter: 'TAB.ABSENT > 0'\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: V, type: str, derivation: LOOK.VAL}\n  - {name: V2, type: str, derivation: LOOK.VAL}\n",
     "inputs": {
       "src.csv": "ID,N\na,7\nb,259\nc,\n",
       "tab.csv": "K,KINT,KNUM,VAL\n\"       7\",7,7,A\n\"     259\",259,259,B\n\"SRC.ABSENT\",9007199254740992,9007199254740992,TEXT\n"
@@ -727,7 +727,7 @@
         "phase": "validation",
         "condition": "invalid_field_type",
         "spec_paths": [
-          "intermediates[0].key.K.str_pad.width"
+          "intermediates.LOOK.key.K.str_pad.width"
         ],
         "rule": "TEXT-2",
         "context": {
@@ -738,7 +738,7 @@
         "phase": "validation",
         "condition": "unknown_field",
         "spec_paths": [
-          "intermediates[0].filter"
+          "intermediates.LOOK.filter"
         ],
         "rule": "LOOKUP-7",
         "context": {
@@ -771,7 +771,7 @@
     ]
   },
   "all_keys_after_missing": {
-    "specification": "schema_version: '1.0'\ndomain: OUT\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\n  TAB: {path: tab.csv, types: {KINT: int, KNUM: float}}\nbase: SRC\noutput: {path: out.csv, columns: [ID, V, V2]}\nintermediates:\n  - id: LOOK\n    dataset: TAB\n    key: {KNUM: {literal: null}, K: {str_pad: {source: SRC.N, width: 8}}}\n    no_match: {literal: null}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: V, type: str, derivation: LOOK.VAL}\n  - {name: V2, type: str, derivation: LOOK.VAL}\n",
+    "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\n  TAB: {path: tab.csv, types: {KINT: int, KNUM: float}}\nbase: SRC\noutput: {path: out.csv, columns: [ID, V, V2]}\nintermediates:\n  - id: LOOK\n    dataset: TAB\n    key: {KNUM: null, K: {str_pad: {source: SRC.N, width: 8}}}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: V, type: str, derivation: LOOK.VAL}\n  - {name: V2, type: str, derivation: LOOK.VAL}\n",
     "inputs": {
       "src.csv": "ID,N\na,7\nb,259\nc,\n",
       "tab.csv": "K,KINT,KNUM,VAL\n\"       7\",7,7,A\n\"     259\",259,259,B\n\"SRC.ABSENT\",9007199254740992,9007199254740992,TEXT\n"
@@ -779,20 +779,20 @@
     "result_type": "ExecutionSuccess",
     "handlers": [
       {
-        "spec_path": "columns.V.derivation.source.no_match",
-        "handler": "no_match",
+        "spec_path": "columns.V.derivation.source.absent",
+        "handler": "absent",
         "count": 3
       },
       {
-        "spec_path": "columns.V2.derivation.source.no_match",
-        "handler": "no_match",
+        "spec_path": "columns.V2.derivation.source.absent",
+        "handler": "absent",
         "count": 3
       }
     ],
     "csv": "ID,V,V2\na,,\nb,,\nc,,\n"
   },
   "both_key_type_findings": {
-    "specification": "schema_version: '1.0'\ndomain: OUT\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\n  TAB: {path: tab.csv, types: {KINT: int, KNUM: float}}\nbase: SRC\noutput: {path: out.csv, columns: [ID, V, V2]}\nintermediates:\n  - id: LOOK\n    dataset: TAB\n    key: {KINT: {str_pad: {source: SRC.ABSENT, width: 0}}, K: {literal: 7}}\n    no_match: {literal: null}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: V, type: str, derivation: LOOK.VAL}\n  - {name: V2, type: str, derivation: LOOK.VAL}\n",
+    "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\n  TAB: {path: tab.csv, types: {KINT: int, KNUM: float}}\nbase: SRC\noutput: {path: out.csv, columns: [ID, V, V2]}\nintermediates:\n  - id: LOOK\n    dataset: TAB\n    key: {KINT: {str_pad: {source: SRC.ABSENT, width: 0}}, K: 7}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: V, type: str, derivation: LOOK.VAL}\n  - {name: V2, type: str, derivation: LOOK.VAL}\n",
     "inputs": {
       "src.csv": "ID,N\na,7\nb,259\nc,\n",
       "tab.csv": "K,KINT,KNUM,VAL\n\"       7\",7,7,A\n\"     259\",259,259,B\n\"SRC.ABSENT\",9007199254740992,9007199254740992,TEXT\n"
@@ -804,7 +804,7 @@
         "phase": "validation",
         "condition": "incompatible_input_type",
         "spec_paths": [
-          "intermediates[0].key"
+          "intermediates.LOOK.key"
         ],
         "rule": "LOOKUP-9",
         "context": {
@@ -818,7 +818,7 @@
         "phase": "validation",
         "condition": "incompatible_input_type",
         "spec_paths": [
-          "intermediates[0].key"
+          "intermediates.LOOK.key"
         ],
         "rule": "LOOKUP-9",
         "context": {
@@ -832,7 +832,7 @@
         "phase": "validation",
         "condition": "invalid_field_type",
         "spec_paths": [
-          "intermediates[0].key.KINT.str_pad.width"
+          "intermediates.LOOK.key.KINT.str_pad.width"
         ],
         "rule": "TEXT-2",
         "context": {
@@ -843,7 +843,7 @@
         "phase": "validation",
         "condition": "unknown_field",
         "spec_paths": [
-          "intermediates[0].key.KINT"
+          "intermediates.LOOK.key.KINT"
         ],
         "rule": "LOOKUP-5",
         "context": {

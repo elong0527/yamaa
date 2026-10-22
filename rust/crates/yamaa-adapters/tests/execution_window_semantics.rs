@@ -59,7 +59,7 @@ impl Fixture {
 /// that partitions by `G` and orders by `order`; `V` holds `kind` values.
 fn numbering(kind: &str, order: &str) -> String {
     format!(
-        "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\n\
+        "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\n\
          input: {{SRC: {{path: input.csv, types: {{ID: int, V: {kind}}}}}}}\n\
          windows:\n\
          \x20 ORDER: {{group_by: [G], order_by: [{order}]}}\n\
@@ -119,7 +119,7 @@ fn numbering_and_rank_keep_exact_order_null_placement_and_ties_within_partitions
 #[test]
 fn window_filter_evaluates_both_operands_of_and() {
     let fixture = Fixture::new(
-        "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\n\
+        "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\n\
          input: {SRC: {path: input.csv, types: {ID: int, V: int}}}\n\
          columns:\n\
          \x20 - {name: ID, type: int, derivation: SRC.ID}\n\
@@ -146,7 +146,7 @@ fn window_filter_evaluates_both_operands_of_and() {
 /// `ID`; `window` is its window mapping.
 fn eligibility(window: &str) -> String {
     format!(
-        "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\n\
+        "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\n\
          input: {{SRC: {{path: input.csv, types: {{ID: int, ELIGIBLE: int, ADT: date, TRTSDT: date}}}}}}\n\
          columns:\n\
          \x20 - {{name: ID, type: int, derivation: SRC.ID}}\n\
@@ -157,13 +157,13 @@ fn eligibility(window: &str) -> String {
          \x20 - name: BLFL\n\
          \x20   type: str\n\
          \x20   derivation:\n\
-         \x20     baseline_flag: {{date: ADT, reference_date: TRTSDT, value: ID, window: {window}}}\n\
+         \x20     baseline_flag: {{date: ADT, reference: TRTSDT, source: ID, window: {window}}}\n\
          output: {{path: out.csv, columns: [ID, BLFL]}}\n"
     )
 }
 
 /// A row is eligible for baseline_flag only when its date is present and
-/// falls at or before its own `reference_date`; a missing reference leaves it
+/// falls at or before its own `reference`; a missing reference leaves it
 /// ineligible. A window filter removes a later row or a same-date twin from
 /// the search, and the row it removes stays in the output with a missing
 /// flag (WINDOW-9, WINDOW-4).
@@ -219,10 +219,11 @@ fn baseline_flag_judges_each_row_by_its_own_reference_and_skips_filtered_rows() 
     }
 }
 
-/// A baseline flag within `G` whose same-date rows are ordered by `terms`.
+/// A baseline flag within `G` whose same-date rows are ordered by `terms`,
+/// the window order's terms after its date.
 fn tie_break(terms: &str) -> String {
     format!(
-        "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\n\
+        "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\n\
          input: {{SRC: {{path: input.csv, types: {{ID: int, ADT: date, TRTSDT: date, TM: int, SEQ: int}}}}}}\n\
          columns:\n\
          \x20 - {{name: ID, type: int, derivation: SRC.ID}}\n\
@@ -234,8 +235,8 @@ fn tie_break(terms: &str) -> String {
          \x20 - name: BLFL\n\
          \x20   type: str\n\
          \x20   derivation:\n\
-         \x20     baseline_flag: {{date: ADT, reference_date: TRTSDT, value: ID, \
-         tie_break: {terms}, window: {{group_by: [G]}}}}\n\
+         \x20     baseline_flag: {{date: ADT, reference: TRTSDT, source: ID, \
+         window: {{group_by: [G], order_by: [ADT, {terms}]}}}}\n\
          output: {{path: out.csv, columns: [ID, BLFL]}}\n"
     )
 }
@@ -262,15 +263,15 @@ fn baseline_tie_break_terms_pick_the_last_same_date_row_or_fail_when_still_tied(
     };
     for (terms, id) in [
         // The latest time wins; a missing time sorts lowest.
-        ("[TM]", 1),
+        ("TM", 1),
         // Descending prefers the smallest time, and missing stays lowest,
         // which is now last.
-        ("[{variable: TM, direction: desc}]", 3),
+        ("{variable: TM, direction: desc}", 3),
         // A declared placement puts the missing time last.
-        ("[{variable: TM, nulls: last}]", 3),
+        ("{variable: TM, nulls: last}", 3),
         // A sequence number instead of a time.
-        ("[SEQ]", 1),
-        ("[{variable: SEQ, direction: desc}]", 3),
+        ("SEQ", 1),
+        ("{variable: SEQ, direction: desc}", 3),
     ] {
         let fixture = Fixture::new(&tie_break(terms), &rows(["900", "800", ""]));
         assert_eq!(fixture.saved(), flagged(id), "{terms}");
@@ -278,7 +279,7 @@ fn baseline_tie_break_terms_pick_the_last_same_date_row_or_fail_when_still_tied(
     // Rows 1 and 2 are equal on the time; the sequence breaks the tie in
     // favour of row 1.
     let tied = rows(["900", "900", "800"]);
-    let mut issue = Fixture::new(&tie_break("[TM]"), &tied).issue();
+    let mut issue = Fixture::new(&tie_break("TM"), &tied).issue();
     // The facts WINDOW-9 names: the shared date, the number of tied rows and
     // the partition.
     let context = issue["context"].clone();
@@ -295,7 +296,7 @@ fn baseline_tie_break_terms_pick_the_last_same_date_row_or_fail_when_still_tied(
         })
     );
     assert_eq!(
-        Fixture::new(&tie_break("[TM, SEQ]"), &tied).saved(),
+        Fixture::new(&tie_break("TM, SEQ"), &tied).saved(),
         flagged(1)
     );
 }
@@ -307,20 +308,18 @@ fn wide(width: usize) -> String {
         .map(|index| format!("C{index}"))
         .collect::<Vec<_>>();
     let mut specification = format!(
-        "schema_version: '1.0'\ndomain: TEST\nkeys: [C0]\n\
+        "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [C0]\n\
          input: {{SRC: {{path: input.csv, types: {{V: int}}}}}}\n\
          output: {{path: out.csv, columns: [{}, W]}}\n\
          columns:\n",
         fillers.join(", ")
     );
     for name in &fillers {
-        specification.push_str(&format!(
-            "  - {{name: {name}, type: int, derivation: {{literal: 1}}}}\n"
-        ));
+        specification.push_str(&format!("  - {{name: {name}, type: int, derivation: 1}}\n"));
     }
     specification.push_str(
         "  - {name: W, type: int, derivation: {row_number: {window: {order_by: [SRC.V]}}}}\n\
-         rows: [{id: records, dataset: SRC, derivations: {}}]\n",
+         rows: [{id: records, dataset: SRC}]\n",
     );
     specification
 }

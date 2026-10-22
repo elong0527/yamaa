@@ -1,0 +1,105 @@
+yamaa: "1.0"
+type: spec
+model: SDTM
+domain: LB
+keys: [STUDYID, USUBJID, LBTESTCD]
+input:
+  LAB: {path: input/lab.csv, types: {GLUC: float, CREATMG: float}}
+
+output:
+  path: lb.csv
+  columns: [DOMAIN, STUDYID, USUBJID, LBTESTCD, LBSTRESN]
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'LB'"
+    submission:
+      core: Req
+      role: Identifier
+      length: 2
+      origins:
+        - type: Assigned
+          source: Sponsor
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: LAB.STUDYID
+    submission:
+      core: Req
+      role: Identifier
+      length: 8
+      origins:
+        - type: Protocol
+          source: Sponsor
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: LAB.USUBJID
+    submission:
+      core: Req
+      role: Identifier
+      length: 12
+      origins:
+        - type: Assigned
+          source: Sponsor
+
+  - name: LBTESTCD
+    type: str
+    label: Lab Test or Examination Short Name
+    submission:
+      core: Req
+      role: Topic
+      length: 5
+      origins:
+        - type: Assigned
+          source: Sponsor
+
+  # Each test's standard result is described as delivered by the laboratory,
+  # but the creatinine row converts milligrams per decilitre to micromoles
+  # per litre.
+  - name: LBSTRESN
+    type: float
+    label: Numeric Result/Finding in Standard Units
+    submission:
+      core: Exp
+      role: Result Qualifier
+      length: 8
+      significant_digits: 1
+      origins:
+        - type: Derived
+          source: Sponsor
+      method: Result in standard units
+      value_level:
+        - id: GLUC
+          where: {LBTESTCD: [GLUC]}
+          origins:
+            - type: Collected
+              source: Vendor
+        - id: CREAT
+          where: {LBTESTCD: [CREAT]}
+          origins:
+            - type: Collected
+              source: Vendor
+
+rows:
+  - id: glucose
+    dataset: LAB
+    derivations:
+      LBTESTCD: "'GLUC'"
+      LBSTRESN: LAB.GLUC
+
+  - id: creatinine
+    dataset: LAB
+    derivations:
+      LBTESTCD: "'CREAT'"
+      LBSTRESN: "LAB.CREATMG * 88.42"
+
+submission:
+  label: Laboratory Test Results
+  class: FINDINGS
+  structure: One record per lab test per subject
+  repeating: true

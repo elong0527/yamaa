@@ -5,6 +5,17 @@ former per-fixture notes in #2416. Fixtures converted from hex-encoded TSV are
 now plain JSON with the same rows; staging re-encodes the legacy TSV bytes for
 the installed hosts, so staged output is unchanged.
 
+The specifications in the JSON fixtures are written in 1.0: `tools/migrate`
+converted the captured 0.5 text (#3436). Where 1.0 declares a key that 0.5
+inferred, names a row or intermediate by its id, or counts an absence under
+`absent`, the document and its expectations follow the recorded decision. A
+case whose behaviour only 0.5 has keeps its captured text until the engine
+stops reading 0.5 specifications. So do
+`inheritance_preparation_reference.json`, which pins the 0.5 model, and the
+specification text of the `originals` in `flag_reference.json`, which no test
+runs: each benchmark runs as it is written, and only its captured handlers and
+findings are compared.
+
 ## binding_diagnostics
 # Original-document binding findings
 
@@ -406,6 +417,32 @@ The installed Python and R tests compare the complete reports, retain each
 failed result after the compiled handle is released, and require repeated save
 attempts to fail without publication or recapture. This covers the private
 original-document use case; it does not qualify the replacement public API.
+
+## parquet_bytes
+# Saved Parquet bytes
+
+`parquet_bytes/` holds two Parquet files as base64 text, since binary files
+live only under `benchmarks/`. The artifact encoder saved them with the 1.0
+writer, `parquet-rs version 55.2.0`. `table.parquet.b64` (37,776 bytes) is a
+fixed table of 1,030 rows in two row groups, with a column of each type that
+PARQUET-1 maps and a missing value in each; `empty.parquet.b64` (157 bytes)
+has the same columns and no rows. `table_parquet_bytes.rs` saves both tables
+again and compares every byte, and requires the footer's `created_by` to name
+that writer (D160 on #3030, #3475). Before they were committed, pyarrow read
+both back as the tables that the test builds, every float bit for bit.
+
+The encoder wrote these bytes, so they are a regression control, not
+independently authored truth. The stability contract in `docs/release.md`
+keeps them through every 1.x release: a release replaces them only for a
+defect fix that names the rule it restores, and a move to another Parquet
+release must leave them unchanged.
+
+No test writes them, in CI or anywhere else. To replace one, run
+`cargo test --locked -p yamaa-adapters --test main table_parquet_bytes::`
+from `rust/`. Its failure prints the saved bytes of each fixture that differs
+as base64 lines of 76 characters, between `-----BEGIN <fixture>-----` and
+`-----END <fixture>-----`; those lines, without the two markers, are the new
+fixture. `created_by` stays an authored literal in the test.
 
 ## predicate_diagnostics
 # Original predicate diagnostic truth

@@ -79,25 +79,6 @@ impl yamaa_adapters::host_resources::Resolver for ResolverBridge {
     }
 }
 
-/// One observed operation's measurements, which the build keeps. Progress
-/// reporting is not part of the 1.0 facade (#3030 D72); #3420 replaces this
-/// bridge with an internal observer port.
-pub(crate) struct ObserverBridge<'a> {
-    measurements: &'a Arc<Measurements>,
-}
-
-impl<'a> ObserverBridge<'a> {
-    pub(crate) fn new(measurements: &'a Arc<Measurements>) -> Self {
-        Self { measurements }
-    }
-}
-
-impl yamaa_core::application_observer::Observer for ObserverBridge<'_> {
-    fn observe(&self, event: yamaa_core::application_observer::Event) {
-        self.measurements.observe(event);
-    }
-}
-
 pub(crate) struct EngineShared {
     pub resolver: Option<Arc<ResolverBridge>>,
     /// The host language, or none for an engine that claims no host language
@@ -400,8 +381,8 @@ pub(crate) fn compile(
 }
 
 /// The Build and Finished half: one run of a compiled request in its own
-/// resource scope, observed by `observer`, whose measurements the build
-/// keeps. A refused compilation's run returns its held refusal and performs
+/// resource scope, whose phase and stage events reach `measurements`, which
+/// the build keeps. A refused compilation's run returns its held refusal and performs
 /// no resource, activation or study work. A run offers its `held` artifacts
 /// to the inputs whose `schema` links name their producers, and polls
 /// `token` at every checkpoint of its dataset's schedule and before each
@@ -411,12 +392,13 @@ pub(crate) fn run(
     specification: &str,
     compiled: &Compiled,
     held: Option<Arc<yamaa_adapters::file_resources::HeldArtifacts>>,
-    observer: &ObserverBridge<'_>,
+    measurements: &Arc<Measurements>,
     token: &CancellationToken,
 ) -> Build {
     let cancelled = || token.is_cancelled();
-    let scope = yamaa_core::application_observer::Scope::new(observer).cancellable(&cancelled);
-    let measurements = Arc::clone(observer.measurements);
+    let scope =
+        yamaa_core::application_observer::Scope::new(&**measurements).cancellable(&cancelled);
+    let measurements = Arc::clone(measurements);
     let locator = Arc::clone(compiled.locator());
     let prepared = match compiled {
         Compiled::Ready(prepared, _) => prepared,
