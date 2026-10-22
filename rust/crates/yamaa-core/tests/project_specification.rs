@@ -1,6 +1,4 @@
 //! Project contracts.
-#[allow(dead_code)]
-mod support;
 mod project {
     mod specification_project_rows {
         use crate::support::id_source_schema as source;

@@ -1,6 +1,4 @@
 //! Execution contracts.
-#[allow(dead_code)]
-mod support;
 mod execution {
     mod numeric_lifecycle {
         use std::{collections::BTreeMap, convert::Infallible};

@@ -97,3 +97,12 @@ pub fn retained_resource_message(error: yamaa_adapters::file_preparation::Error)
         error => panic!("expected a retained resource error: {error:?}"),
     }
 }
+
+/// The host that each runtime name in these tests stands for.
+pub fn host(runtime: &str) -> yamaa_core::project_function::Language {
+    match runtime {
+        "python" => yamaa_core::project_function::Language::Python,
+        "r" => yamaa_core::project_function::Language::R,
+        other => panic!("no host for test runtime {other}"),
+    }
+}

@@ -605,15 +605,19 @@ class PublicDefine(unittest.TestCase):
         self.assertTrue(
             caught.exception.issues.to_polars().equals(result.issues.to_polars())
         )
-        self.assertEqual(result.issues.to_polars()["phase"].to_list(), ["engine"])
+        # A directory where define.xml goes is refused at the section's
+        # `define`, naming the file as written (FILE-7).
+        self.assertEqual(result.issues.to_polars()["phase"].to_list(), ["output"])
         self.assertEqual(
-            result.issues.to_polars()["condition"].to_list(), ["engine_rejected"]
+            result.issues.to_polars()["condition"].to_list(),
+            ["resource_path_not_regular_file"],
         )
-        self.assertEqual(result.issues.to_polars()["rule"].to_list(), [None])
+        self.assertEqual(result.issues.to_polars()["rule"].to_list(), ["FILE-7"])
+        self.assertEqual(
+            result.issues.to_polars()["spec_paths"].to_list(), [["sdtm.define"]]
+        )
         context = json.loads(result.issues.to_polars()["context"][0])
-        self.assertEqual(context["stage"], "publication_target_admission")
-        self.assertEqual(context["code"], "invalid_target")
-        self.assertIn("cause", context)
+        self.assertEqual(context, {"path": "define.xml"})
 
     def test_source_version_defaults_and_schema_facet_failures(self):
         directory = self.fixture("sdtm-dm-metadata", published=True)

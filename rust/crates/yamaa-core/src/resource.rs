@@ -43,7 +43,7 @@ impl ResourceFailure {
     pub fn field_diagnostic(self, field: &str, written_path: &str) -> Diagnostic {
         if let Self::Boundary(error) = self {
             let mut diagnostic = crate::application_issue::resource_rejected(
-                crate::application_issue::Stage::Capture,
+                crate::application_issue::Step::Capture,
                 crate::application_issue::Fault::ResourceLimit,
                 error.resource,
                 error.limit,
@@ -86,6 +86,29 @@ impl ResourceFailure {
             source_span: None,
             operand_route: None,
         }
+    }
+
+    /// A save's refusal of a target whose walk stops here: a directory on its
+    /// way that is missing, is not a directory or is a link, or a target that
+    /// is a link or another entry that is not a regular file (FILE-7,
+    /// FILE-8). It is decided while publishing, so it reports under `output`,
+    /// at the field that declares the file, or at none for a path the caller
+    /// passes, naming the file as written or given (FILE-11). Any other
+    /// failure is no walk's, and has no such finding.
+    pub fn target_diagnostic(self, field: Option<&str>, written_path: &str) -> Option<Diagnostic> {
+        let code = match self {
+            Self::Missing => ConditionCode::PublicationTargetMissing,
+            Self::NotRegularFile => ConditionCode::PublicationTargetNotRegularFile,
+            Self::Symlink => ConditionCode::PublicationTargetSymlink,
+            _ => return None,
+        };
+        Some(Diagnostic {
+            code,
+            spec_paths: field.map(String::from).into_iter().collect(),
+            context: [(String::from("path"), JsonValue::String(written_path.into()))].into(),
+            source_span: None,
+            operand_route: None,
+        })
     }
 }
 

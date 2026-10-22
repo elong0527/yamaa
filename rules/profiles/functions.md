@@ -41,9 +41,10 @@ In a project file that declares `schema_version`, the project's `environments`
 entry for the host language links the one environment file the host reads
 ([PROJECT-2](project.md#project-2)), and every path it declares resolves
 relative to it under the admitted resource policy of
-[File resolution](../reference/files.md). A supplied project file that cannot
-be read fails with `project_environment_missing`, and so does each call, with
-the host language, when the project links no environment for it. A
+[File resolution](../reference/files.md). Each call fails with
+`project_environment_missing`, with the host language, when the project links
+no environment for it; a supplied project file that cannot be read fails as
+any path the caller passes ([FILE-1](../reference/files.md#file-1)). A
 specification that declares `schema_version`, checked or run without a project
 file, names no declared function in a call under [FUNC-4](#func-4).
 

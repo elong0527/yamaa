@@ -6,6 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 publish.workspace = true
+autotests = false
 
 [features]
 default = ["yaml", "parquet", "readstat", "odm"]
@@ -30,3 +31,21 @@ arrow-schema = { version = "=55.2.0", default-features = false }
 
 [lints]
 workspace = true
+
+# The integration tests are one binary: tests/main.rs declares each family
+# file under tests/ as a module and checks that none is left out (#3556).
+[[test]]
+name = "main"
+path = "tests/main.rs"
+
+# plan_identity.rs changes the process's working directory, so it runs in its own
+# process.
+[[test]]
+name = "plan_identity"
+path = "tests/plan_identity.rs"
+
+# save_table_relative.rs changes the process's working directory, so it runs in its own
+# process.
+[[test]]
+name = "save_table_relative"
+path = "tests/save_table_relative.rs"

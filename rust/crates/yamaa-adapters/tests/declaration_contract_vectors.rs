@@ -1,7 +1,5 @@
 #![cfg(feature = "yaml")]
 //! Declaration contracts.
-#[allow(dead_code)]
-mod support;
 mod declaration {
     mod contract_vectors {
         //! Direct native checks of unchanged authored grammar, regex and rounding truth.
@@ -1312,7 +1310,7 @@ mod declaration {
             assert_eq!(
                 crate::support::rows(&rejection.into_issues()),
                 [
-                    json!({"phase":"engine","condition":"engine_rejected","rule":null,"spec_paths":[],"context":{"stage":"capture","code":"resource_limit","phase":"yaml_decode","resource":"spec_bytes","limit":yamaa_core::limits::Limits::SPEC_BYTES,"actual":yamaa_core::limits::Limits::SPEC_BYTES + 1}})
+                    json!({"phase":"engine","condition":"engine_rejected","rule":null,"spec_paths":[],"context":{"step":"capture","code":"resource_limit","phase":"yaml_decode","resource":"spec_bytes","limit":yamaa_core::limits::Limits::SPEC_BYTES,"actual":yamaa_core::limits::Limits::SPEC_BYTES + 1}})
                 ]
             );
             assert_eq!(host.calls.len(), 2);

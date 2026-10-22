@@ -1,6 +1,5 @@
 //! `str_replace` execution contracts.
-#[allow(dead_code)]
-mod support;
+use crate::support;
 
 #[test]
 fn oversized_patterns_report_the_compiled_size_limit_at_the_pattern() {

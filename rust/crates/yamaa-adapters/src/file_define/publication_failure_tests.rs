@@ -40,7 +40,7 @@ fn target_admission_keeps_typed_publication_fault_and_original_error_in_both_hos
             assert_eq!(
                 yamaa_core::json::Value::Object(finding.context.clone()),
                 crate::json!({
-                    "stage": "publication_target_admission",
+                    "step": "publication_target_admission",
                     "code": code,
                     "artifact": usize::MAX,
                     "cause": cause,
@@ -77,7 +77,7 @@ fn public_define_issue_prefix_keeps_complete_raw_metadata_and_diagnostics_in_bot
             let diagnostics = (0..length)
                 .map(|index| {
                     let mut finding = application_issue::rejected(
-                        application_issue::Stage::Define,
+                        application_issue::Step::Define,
                         application_issue::Fault::Internal,
                     );
                     finding.spec_paths = vec![format!("datasets.D{index}.artifact")];
@@ -318,14 +318,23 @@ fn later_publication_failure_preserves_prior_bytes_original_cause_and_stopped_re
         panic!("lost original publication failure")
     };
     assert_eq!(*index, 1);
-    assert!(matches!(error, file_publication::Error::InvalidTarget));
+    assert!(matches!(
+        error,
+        file_publication::Error::Unreachable(yamaa_core::resource::ResourceFailure::NotRegularFile)
+    ));
+    // A target that became a directory is refused as the walk refuses it, at
+    // the section's `define`, naming the file as written (#3030 D189).
+    assert_eq!(result.issues().len(), 1);
     assert_eq!(result.issues()[0].phase(), "output");
-    assert_eq!(result.issues()[0].condition(), "publication_failed");
-    assert_eq!(result.issues()[0].rule(), Some("OUTPUT-8"));
-    assert_eq!(result.issues()[0].spec_paths, ["define"]);
+    assert_eq!(
+        result.issues()[0].condition(),
+        "resource_path_not_regular_file"
+    );
+    assert_eq!(result.issues()[0].rule(), Some("FILE-7"));
+    assert_eq!(result.issues()[0].spec_paths, ["sdtm.define"]);
     assert_eq!(
         yamaa_core::json::Value::Object(result.issues()[0].context.clone()),
-        crate::json!({"artifact":1,"cause":error.message()})
+        crate::json!({"path":"dm2.json"})
     );
     assert_eq!(result.capture_reads(), reads);
     assert!(result.save().is_err());
