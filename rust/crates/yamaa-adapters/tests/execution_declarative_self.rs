@@ -1826,8 +1826,7 @@ rows:
         struct Fixture(crate::support::Scratch);
         impl Fixture {
             fn new() -> Self {
-                let fixture = Self(crate::support::Scratch::new("key-expressions"));
-                fixture
+                Self(crate::support::Scratch::new("key-expressions"))
             }
         }
         fn rows(issues: &[Diagnostic]) -> yamaa_core::json::Value {
