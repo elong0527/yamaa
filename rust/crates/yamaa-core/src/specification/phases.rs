@@ -551,8 +551,8 @@ impl<'a> Phases<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::front_end::v0_5::tests::{admit, column, derivation, document, op};
     use crate::test_document::Tree;
+    use crate::test_specification::{column, derivation, document, lower, op};
 
     /// Columns after `ID` (read from `SRC.ID`), with row templates and any
     /// other fields.
@@ -560,17 +560,17 @@ mod tests {
         columns: Vec<Tree>,
         extra: Vec<(&str, Tree)>,
     ) -> Result<Vec<Vec<usize>>, PrepareError> {
-        let spec = crate::front_end::v0_5::lower(&admit(document(columns, extra)), None);
-        row_phases(spec.spec(), "SRC")
+        row_phases(&lower(document(columns, extra)), "SRC")
     }
+    /// A derivation of the text `value`, quoted as an expression's literal.
     fn literal(value: &str) -> Tree {
-        derivation(op("literal", Tree::text(value)))
+        derivation(constant(value))
     }
     fn compute(expr: &str) -> Tree {
-        derivation(op("compute", Tree::map(vec![("expr", Tree::text(expr))])))
+        derivation(Tree::text(expr))
     }
     fn source(variable: &str) -> Tree {
-        derivation(op("source", Tree::text(variable)))
+        derivation(Tree::text(variable))
     }
     fn declared(name: &str) -> Tree {
         Tree::map(vec![
@@ -641,9 +641,9 @@ mod tests {
     fn sum() -> Tree {
         op("aggregate", Tree::text("SUM(SRC.ID)"))
     }
-    /// A `literal` operation, as a `case` result holds it.
+    /// Quoted text, as an expression field writes a literal (D18).
     fn constant(value: &str) -> Tree {
-        op("literal", Tree::text(value))
+        Tree::text(format!("'{value}'"))
     }
     /// A `case` that gives `result` when `ID > 0`, and `fallback` otherwise.
     fn positive(result: Tree, fallback: Tree) -> Tree {

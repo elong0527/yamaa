@@ -189,13 +189,11 @@ impl Literal {
 mod tests {
     use super::*;
     use crate::ast::{ExprKind, Scope};
-    use crate::front_end::v0_5::tests::{admit, column, derivation, document, op};
     use crate::test_document::Tree;
+    use crate::test_specification::{column, derivation, document, lower, op};
 
     fn spec(columns: Vec<Tree>) -> Spec {
-        crate::front_end::v0_5::lower(&admit(document(columns, vec![])), None)
-            .spec()
-            .clone()
+        lower(document(columns, vec![]))
     }
     fn root(spec: &Spec, column: usize) -> ExprId {
         spec.columns[column].derivation.as_ref().unwrap().expr
@@ -255,7 +253,7 @@ mod tests {
                     op(
                         "study_day",
                         fields(vec![
-                            ("date", Tree::text("SRC.D")),
+                            ("source", Tree::text("SRC.D")),
                             ("reference", Tree::text("SRC.D")),
                         ]),
                     ),
@@ -316,18 +314,14 @@ mod tests {
 
     #[test]
     fn selections_take_every_type_they_can_select() {
-        let literal = |value: Tree| op("literal", value);
         let case = op(
             "case",
             Tree::list(vec![
                 fields(vec![
                     ("when", Tree::text("SRC.A > 1")),
-                    ("then", literal(Tree::integer(1))),
+                    ("then", Tree::integer(1)),
                 ]),
-                fields(vec![(
-                    "otherwise",
-                    op("source", fields(vec![("variable", Tree::text("SRC.B"))])),
-                )]),
+                fields(vec![("otherwise", Tree::text("SRC.B"))]),
             ]),
         );
         let first = op(
@@ -374,11 +368,9 @@ mod tests {
         );
         assert_eq!(
             types(vec![
-                value(
-                    "MISSING",
-                    literal(Tree::Scalar(crate::schema::DocumentNode::Null))
-                ),
-                value("TRUE", literal(Tree::boolean(true))),
+                // A YAML null or Boolean is itself a literal (D18).
+                value("MISSING", Tree::Scalar(crate::schema::DocumentNode::Null)),
+                value("TRUE", Tree::boolean(true)),
                 value("CASE", case),
                 value("FIRST", first),
                 value("FLAG", flag),
@@ -407,31 +399,21 @@ mod tests {
             "aggregate",
             fields(vec![
                 (
-                    "derive",
-                    Tree::list(vec![fields(vec![
-                        ("name", Tree::text("T")),
-                        ("type", Tree::text("float")),
-                        (
-                            "derivation",
-                            derivation(op(
-                                "source",
-                                fields(vec![("variable", Tree::text("EX.B"))]),
-                            )),
-                        ),
-                    ])]),
+                    "derivations",
+                    fields(vec![(
+                        "T",
+                        fields(vec![
+                            ("type", Tree::text("float")),
+                            ("derivation", derivation(Tree::text("EX.B"))),
+                        ]),
+                    )]),
                 ),
                 ("expr", Tree::text("SUM(T) + COUNT(EX.*)")),
             ]),
         );
         let spec = spec(vec![
-            value(
-                "SUMMED",
-                op("compute", fields(vec![("expr", Tree::text("A + SRC.A"))])),
-            ),
-            value(
-                "HALF",
-                op("compute", fields(vec![("expr", Tree::text("A / 2"))])),
-            ),
+            value("SUMMED", Tree::text("A + SRC.A")),
+            value("HALF", Tree::text("A / 2")),
             value("TOTAL", aggregate),
         ]);
         let typed = |column| result_type(&spec, root(&spec, column), Scope::Row, &Env);

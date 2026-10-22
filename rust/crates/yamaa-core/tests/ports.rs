@@ -107,7 +107,6 @@ mod boundary {
         dataset, function_invocation, specification_output as output, specification_run as run,
     };
     use yamaa_core::{
-        schema::{Document, SpecificationDocument},
         specification::{OutputFinding, PreparedSpecification, SourceDeclaration},
         table::{CellError, Column, TableAccess, TableSchema},
         value::{ColumnType, Value, ValueType},
@@ -136,10 +135,12 @@ mod boundary {
     }
 
     use crate::support::document::Tree;
+    use crate::support::specification::prepare;
 
     fn prepared(expression: &str) -> PreparedSpecification {
         let tree = Tree::map(vec![
-            ("schema_version", Tree::text("1.0")),
+            ("yamaa", Tree::text("1.0")),
+            ("type", Tree::text("spec")),
             ("domain", Tree::text("TEST")),
             (
                 "input",
@@ -167,13 +168,7 @@ mod boundary {
                         ("type", Tree::text("int")),
                         (
                             "derivation",
-                            Tree::map(vec![(
-                                "value",
-                                Tree::map(vec![(
-                                    "source",
-                                    Tree::map(vec![("variable", Tree::text("SRC.ID"))]),
-                                )]),
-                            )]),
+                            Tree::map(vec![("value", Tree::text("SRC.ID"))]),
                         ),
                     ]),
                     Tree::map(vec![
@@ -181,23 +176,13 @@ mod boundary {
                         ("type", Tree::text("int")),
                         (
                             "derivation",
-                            Tree::map(vec![(
-                                "value",
-                                Tree::map(vec![(
-                                    "compute",
-                                    Tree::map(vec![("expr", Tree::text(expression))]),
-                                )]),
-                            )]),
+                            Tree::map(vec![("value", Tree::text(expression))]),
                         ),
                     ]),
                 ]),
             ),
         ]);
-        let mut nodes = Vec::new();
-        let root = tree.append(&mut nodes);
-        let document = Document::new(nodes, root).unwrap();
-        let document = SpecificationDocument::admit(document).unwrap().unwrap();
-        PreparedSpecification::prepare(&document).unwrap()
+        prepare(&tree.document()).unwrap()
     }
 
     fn table(log: EventLog) -> FixtureTable<Opaque> {

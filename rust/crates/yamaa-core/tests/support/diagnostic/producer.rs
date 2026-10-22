@@ -1,5 +1,6 @@
 use super::rendered;
 use crate::support::producer as support;
+use crate::support::specification::prepare_linked;
 use std::collections::BTreeSet;
 use support::{consumer, document, link, links, producer, Tree};
 use yamaa_core::{
@@ -31,7 +32,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     };
     let source = producer();
     reached.insert(check(
-        first(PreparedSpecification::prepare_linked(
+        first(prepare_linked(
             &consumer(Some(Tree::map(vec![]))),
             None,
             links(&[link(&source)]),
@@ -50,7 +51,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         false,
     );
     reached.insert(check(
-        first(PreparedSpecification::prepare_linked(
+        first(prepare_linked(
             &consumer(None),
             None,
             links(&[link(&invalid)]),
@@ -59,7 +60,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         "INPUT-10",
         &["input.SRC.schema.columns.ID.label"],
     ));
-    let contract = producer_contract::prepare(&source).unwrap();
+    let contract = producer_contract::prepare_document(&source).unwrap();
     reached.insert(check(
         contract
             .validate_header("SRC", &["VALUE", "ID"])

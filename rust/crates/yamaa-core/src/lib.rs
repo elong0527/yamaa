@@ -153,3 +153,5 @@ use crate::schema as document_schema;
 #[allow(dead_code)]
 #[path = "../tests/support/document.rs"]
 mod test_document;
+#[cfg(test)]
+mod test_specification;

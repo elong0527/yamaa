@@ -1074,9 +1074,9 @@ pub(super) fn bind_catalog_join(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::front_end::v0_5::tests::{admit, column, derivation, document, op};
-    use crate::schema::Document;
+    use crate::front_end::v0_5::tests::{admit, document as legacy};
     use crate::test_document::Tree;
+    use crate::test_specification::{column, derivation, document, lower, op};
 
     /// `V` reads `SRC.UNKNOWN`, a field the input does not hold, with
     /// `absent: 7`. The 0.5 surface answers the missing variable with the
@@ -1085,7 +1085,7 @@ mod tests {
     /// (D67, D102).
     #[test]
     fn absent_answers_a_missing_variable_only_on_the_0_5_surface() {
-        let tree = document(
+        let columns = || {
             vec![column(
                 "V",
                 "int",
@@ -1096,23 +1096,18 @@ mod tests {
                         ("absent", Tree::integer(7)),
                     ]),
                 )),
-            )],
-            vec![],
-        );
+            )]
+        };
         let source = TableSchema::new(vec![crate::table::Column {
             name: "ID".into(),
             kind: ColumnType::Int,
         }])
         .unwrap();
-        let prepared = PreparedSpecification::prepare(&admit(tree.clone())).unwrap();
+        // The 0.5 surface, 0.5-only until #3447.
+        let prepared = PreparedSpecification::prepare(&admit(legacy(columns(), vec![]))).unwrap();
         assert!(prepared.bind(&source).is_ok());
 
-        let mut nodes = Vec::new();
-        let root = tree.append(&mut nodes);
-        let document = Document::new(nodes, root).unwrap();
-        let spec =
-            crate::front_end::v0_5::lower_surface(&document, None, ast::Surface::V1 { minor: 0 })
-                .into_spec();
+        let spec = lower(document(columns(), vec![]));
         let prepared =
             PreparedSpecification::from_tree(spec, Vec::new(), None, None, None, None).unwrap();
         let Err(BindError::Invalid(findings)) = prepared.bind(&source) else {
@@ -1145,7 +1140,7 @@ mod tests {
     /// not report the filter (D67, D102).
     #[test]
     fn check_reports_a_filtered_unknown_name_only_where_absent_answers_it() {
-        let tree = document(
+        let columns = || {
             vec![column(
                 "V",
                 "int",
@@ -1157,12 +1152,8 @@ mod tests {
                         ("absent", Tree::integer(7)),
                     ]),
                 )),
-            )],
-            vec![],
-        );
-        let mut nodes = Vec::new();
-        let root = tree.append(&mut nodes);
-        let document = Document::new(nodes, root).unwrap();
+            )]
+        };
         let identity = |diagnostic: crate::diagnostic::Diagnostic| diagnostic.code;
         let source = TableSchema::new(vec![crate::table::Column {
             name: "ID".into(),
@@ -1170,8 +1161,7 @@ mod tests {
         }])
         .unwrap();
         // What `check()` reports, and the first finding of binding.
-        let outcome = |surface| {
-            let spec = crate::front_end::v0_5::lower_surface(&document, None, surface).into_spec();
+        let outcome = |spec: ast::Spec| {
             let prepared =
                 PreparedSpecification::from_tree(spec, Vec::new(), None, None, None, None).unwrap();
             let Err(BindError::Invalid(findings)) = prepared.bind(&source) else {
@@ -1192,9 +1182,12 @@ mod tests {
         };
         // LOOKUP-8's filter of a single value, and NAME-3's unknown field.
         let filter = crate::diagnostic::ConditionCode::SourceFilterSingleValue;
-        assert_eq!(outcome(ast::Surface::V0_5), (vec![filter], filter));
+        // The 0.5 surface, 0.5-only until #3447.
+        let legacy = legacy(columns(), vec![]).document();
+        let spec = crate::front_end::v0_5::lower_document(&legacy, None).into_spec();
+        assert_eq!(outcome(spec), (vec![filter], filter));
         assert_eq!(
-            outcome(ast::Surface::V1 { minor: 0 }),
+            outcome(lower(document(columns(), vec![]))),
             (
                 vec![],
                 crate::diagnostic::ConditionCode::OutputUnknownReference

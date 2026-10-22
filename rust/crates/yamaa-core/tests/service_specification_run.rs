@@ -11,38 +11,47 @@ mod service {
             },
         };
         use yamaa_core::{
-            schema::{Document, DocumentNode as N, SpecificationDocument},
+            schema::Document,
             specification::{PreparedSpecification, SourceDeclaration},
             table::{CellError, Column, TableAccess, TableSchema, ValueRef},
             value::{ColumnType, Value},
         };
 
         use crate::support::document::Tree;
+        use crate::support::specification::{header, prepare};
 
-        fn document(expression: &str, input_path: &str) -> SpecificationDocument {
-            document_output(expression, input_path, "result.csv", &["ID", "VALUE"])
+        /// A 1.0 specification over `SRC`, read from `input_path`, whose
+        /// `VALUE` derives `expression`.
+        fn document(expression: &str, input_path: &str) -> Document {
+            tree(expression, input_path, "result.csv", &["ID", "VALUE"]).document()
         }
         fn document_output(
             expression: &str,
             input_path: &str,
             output_path: &str,
             projection: &[&str],
-        ) -> SpecificationDocument {
-            let column = |name, op, field, value| {
+        ) -> Document {
+            tree(expression, input_path, output_path, projection).document()
+        }
+        /// The tree of [`document_output`].
+        fn tree(
+            expression: &str,
+            input_path: &str,
+            output_path: &str,
+            projection: &[&str],
+        ) -> Tree {
+            let column = |name, derivation| {
                 Tree::map(vec![
                     ("name", Tree::text(name)),
                     ("type", Tree::text("int")),
                     (
                         "derivation",
-                        Tree::map(vec![(
-                            "value",
-                            Tree::map(vec![(op, Tree::map(vec![(field, Tree::text(value))]))]),
-                        )]),
+                        Tree::map(vec![("value", Tree::text(derivation))]),
                     ),
                 ])
             };
-            let tree = Tree::map(vec![
-                ("schema_version", Tree::text("1.0")),
+            let mut fields = header();
+            fields.extend([
                 ("domain", Tree::text("TEST")),
                 (
                     "input",
@@ -54,10 +63,7 @@ mod service {
                 ("keys", Tree::List(vec![Tree::text("ID")])),
                 (
                     "columns",
-                    Tree::List(vec![
-                        column("ID", "source", "variable", "SRC.ID"),
-                        column("VALUE", "compute", "expr", expression),
-                    ]),
+                    Tree::List(vec![column("ID", "SRC.ID"), column("VALUE", expression)]),
                 ),
                 (
                     "output",
@@ -70,10 +76,7 @@ mod service {
                     ]),
                 ),
             ]);
-            let mut nodes = Vec::new();
-            let root = tree.append(&mut nodes);
-            let document = Document::new(nodes, root).unwrap();
-            SpecificationDocument::admit(document).unwrap().unwrap()
+            Tree::map(fields)
         }
 
         fn source() -> TableSchema {
@@ -274,8 +277,7 @@ mod service {
                 }
             }
             use yamaa_core::limits::Limits;
-            let prepared =
-                PreparedSpecification::prepare(&document("ID + 1", "input.csv")).unwrap();
+            let prepared = prepare(&document("ID + 1", "input.csv")).unwrap();
             for (rows, columns, resource) in [
                 (Limits::TABLE_ROWS + 1, 1, "table_rows"),
                 (3_575_419, 179, "table_cells"),
@@ -349,8 +351,7 @@ mod service {
                     Ok(Oversized(source()))
                 }
             }
-            let prepared =
-                PreparedSpecification::prepare(&document("ID + 1", "input.csv")).unwrap();
+            let prepared = prepare(&document("ID + 1", "input.csv")).unwrap();
             let attempt = run::execute_bytes(&prepared, b"held snapshot", &mut OversizedDecoder);
             assert!(
                 attempt.table.is_some(),
@@ -371,8 +372,7 @@ mod service {
 
         #[test]
         fn reuse_repeats_effects_and_reports_actual_cached_captures() {
-            let prepared =
-                PreparedSpecification::prepare(&document("ID + 1", "input.csv")).unwrap();
+            let prepared = prepare(&document("ID + 1", "input.csv")).unwrap();
             let (mut port, mut decoder) = fixtures();
             let mut attempt = CapturedAttempt::new(prepared.source());
             for created in [1, 0] {
@@ -409,8 +409,7 @@ mod service {
         }
         #[test]
         fn capture_decode_and_binding_failures_stop_later_effects_without_losing_payloads() {
-            let prepared =
-                PreparedSpecification::prepare(&document("ID + 1", "input.csv")).unwrap();
+            let prepared = prepare(&document("ID + 1", "input.csv")).unwrap();
             let (mut port, mut decoder) = fixtures();
             let mut attempt = CapturedAttempt::new(prepared.source());
             port.fail = true;
@@ -462,7 +461,7 @@ mod service {
             assert_eq!(*decoder.trace.borrow(), ["capture", "decode"]);
             decoder.fail = false;
             decoder.trace.borrow_mut().clear();
-            let invalid = PreparedSpecification::prepare(&document("ID +", "input.csv")).unwrap();
+            let invalid = prepare(&document("ID +", "input.csv")).unwrap();
             run::execute_into(
                 &invalid,
                 &mut port,
@@ -485,8 +484,7 @@ mod service {
         }
         #[test]
         fn regressing_capture_reads_preserve_the_snapshot_and_precede_decoding() {
-            let prepared =
-                PreparedSpecification::prepare(&document("ID + 1", "input.csv")).unwrap();
+            let prepared = prepare(&document("ID + 1", "input.csv")).unwrap();
             let (mut port, mut decoder) = fixtures();
             let mut attempt = CapturedAttempt::new(prepared.source());
             port.regress = true;
@@ -509,8 +507,7 @@ mod service {
 
         #[test]
         fn runtime_errors_and_panic_boundaries_keep_the_observed_source() {
-            let prepared =
-                PreparedSpecification::prepare(&document("ID + 1", "input.csv")).unwrap();
+            let prepared = prepare(&document("ID + 1", "input.csv")).unwrap();
             let (mut port, mut decoder) = fixtures();
             let mut attempt = CapturedAttempt::new(prepared.source());
             decoder.fail_cell = true;
@@ -668,13 +665,7 @@ mod service {
                 (new(), new(), new())
             }
             fn prepared(path: &str, projection: &[&str]) -> PreparedSpecification {
-                PreparedSpecification::prepare(&document_output(
-                    "ID + 1",
-                    "input.csv",
-                    path,
-                    projection,
-                ))
-                .unwrap()
+                prepare(&document_output("ID + 1", "input.csv", path, projection)).unwrap()
             }
             fn execution(prepared: &PreparedSpecification) -> Execution {
                 let (_, mut decoder) = fixtures();
@@ -819,52 +810,15 @@ mod service {
         mod source_collection {
             use super::*;
             fn prepared() -> PreparedSpecification {
-                let original = document("ID + 1", "input.csv");
-                let d = original.document();
-                let root = d.root();
-                let input = d.field(root, "input").unwrap();
-                let mut nodes = d.nodes().to_vec();
+                let mut tree = tree("ID + 1", "input.csv", "result.csv", &["ID", "VALUE"]);
                 for (name, path) in [("SECOND", "second.csv"), ("THIRD", "third.csv")] {
-                    let name = Tree::text(name).append(&mut nodes);
-                    let value = Tree::map(vec![("path", Tree::text(path))]).append(&mut nodes);
-                    let N::Mapping(fields) = &mut nodes[input] else {
-                        unreachable!()
-                    };
-                    fields.push((name, value));
+                    tree.set(
+                        &["input", name],
+                        Tree::map(vec![("path", Tree::text(path))]),
+                    );
                 }
-                let base = Tree::text("base").append(&mut nodes);
-                let driver = Tree::text("SRC").append(&mut nodes);
-                let N::Mapping(fields) = &mut nodes[root] else {
-                    unreachable!()
-                };
-                fields.push((base, driver));
-                fn reorder(id: usize, source: &[N], ordered: &mut Vec<N>) -> usize {
-                    let node = match &source[id] {
-                        N::Mapping(fields) => N::Mapping(
-                            fields
-                                .iter()
-                                .map(|&(a, b)| {
-                                    (reorder(a, source, ordered), reorder(b, source, ordered))
-                                })
-                                .collect(),
-                        ),
-                        N::Sequence(items) => N::Sequence(
-                            items
-                                .iter()
-                                .map(|&id| reorder(id, source, ordered))
-                                .collect(),
-                        ),
-                        node => node.clone(),
-                    };
-                    let id = ordered.len();
-                    ordered.push(node);
-                    id
-                }
-                let mut ordered = Vec::new();
-                let root = reorder(root, &nodes, &mut ordered);
-                let d = Document::new(ordered, root).unwrap();
-                let model = SpecificationDocument::admit(d).unwrap().unwrap();
-                PreparedSpecification::prepare(&model).unwrap()
+                tree.set(&["base"], Tree::text("SRC"));
+                prepare(&tree.document()).unwrap()
             }
             struct Capture {
                 trace: Trace,
@@ -1341,32 +1295,44 @@ mod service {
         }
 
         mod domain_usecase {
+            //! The check and build use cases over a 1.0 specification its front
+            //! end lowered, as the engine checks one (`domain::check_tree_linked`).
             use super::*;
-            use yamaa_core::domain;
+            use yamaa_core::domain::{self, BuildResult, CheckedSpecification};
+            use yamaa_core::front_end::v1::spec as front_end;
             use yamaa_core::specification::PrepareError;
+
+            fn check(document: &Document) -> Result<CheckedSpecification, PrepareError> {
+                let tree = front_end::lower(document, None).into_spec();
+                domain::check_tree_linked(tree, document, None, Default::default())
+            }
+            /// Check, then build once without project functions, in one operation.
+            fn build(
+                document: &Document,
+                port: &mut Port,
+                decoder: &mut Decoder,
+            ) -> BuildResult<Payload, Payload, Table> {
+                let checked = check(document)?;
+                let mut attempt = CapturedAttempt::new(checked.compiled().source());
+                checked.build_into(
+                    port,
+                    decoder,
+                    &mut yamaa_core::function_invocation::NoFunctions::new(),
+                    &mut attempt,
+                    yamaa_core::application_observer::Scope::default(),
+                );
+                Ok(attempt)
+            }
 
             #[test]
             fn known_verification_findings_need_no_data_and_do_not_move_build_failures() {
-                let original = document("ID / 0", "input.csv");
-                let raw = original.document();
-                assert_eq!(raw.root() + 1, raw.nodes().len());
-                let mut nodes = raw.nodes()[..raw.root()].to_vec();
-                let N::Mapping(fields) = &raw.nodes()[raw.root()] else {
-                    panic!("mapping")
-                };
-                let mut fields = fields.clone();
-                let name = nodes.len();
-                nodes.push(N::Text("verifications".into()));
-                let verification =
-                    Tree::List(vec![Tree::map(vec![("row_count", Tree::map(vec![]))])])
-                        .append(&mut nodes);
-                fields.push((name, verification));
-                let root = nodes.len();
-                nodes.push(N::Mapping(fields));
-                let model = SpecificationDocument::admit(Document::new(nodes, root).unwrap())
-                    .unwrap()
-                    .unwrap();
-                let checked = domain::check(&model).unwrap();
+                let mut tree = tree("ID / 0", "input.csv", "result.csv", &["ID", "VALUE"]);
+                tree.set(
+                    &["verifications"],
+                    Tree::List(vec![Tree::map(vec![("row_count", Tree::map(vec![]))])]),
+                );
+                let model = tree.document();
+                let checked = check(&model).unwrap();
                 let (mut port, mut decoder) = fixtures();
                 for _ in 0..2 {
                     let findings = checked.verification_declaration_diagnostics();
@@ -1382,7 +1348,7 @@ mod service {
                     assert!(port.trace.borrow().is_empty());
                     assert_eq!((port.requests, port.reads), (0, 0));
                 }
-                let attempt = domain::build(&model, &mut port, &mut decoder).unwrap();
+                let attempt = build(&model, &mut port, &mut decoder).unwrap();
                 let execution = attempt.result.unwrap();
                 let ExecutionError::Numeric { error, .. } = *execution.result.unwrap_err() else {
                     panic!("arithmetic precedes the deferred declaration")
@@ -1397,11 +1363,11 @@ mod service {
             fn unknown_source_profile_precedes_every_study_effect() {
                 let (mut port, mut decoder) = fixtures();
                 let document = document("ID + 1", "input.unknown");
-                let Err(PrepareError::Invalid(check_findings)) = domain::check(&document) else {
+                let Err(PrepareError::Invalid(check_findings)) = check(&document) else {
                     panic!("check must reject unknown source profile");
                 };
                 let Err(PrepareError::Invalid(build_findings)) =
-                    domain::build(&document, &mut port, &mut decoder)
+                    build(&document, &mut port, &mut decoder)
                 else {
                     panic!("build must reject unknown source profile");
                 };
@@ -1429,7 +1395,7 @@ mod service {
 
             #[test]
             fn check_does_not_evaluate_and_reused_builds_have_fresh_attempts() {
-                let checked = domain::check(&document("ID + 1", "input.csv")).unwrap();
+                let checked = check(&document("ID + 1", "input.csv")).unwrap();
                 let (mut port, mut decoder) = fixtures();
                 let mut attempt = CapturedAttempt::new(checked.compiled().source());
                 for created in [1, 0] {
@@ -1462,8 +1428,8 @@ mod service {
                 assert_eq!((port.requests, port.reads), (2, 1));
                 // An admitted arithmetic expression is not evaluated by check.
                 let zero = document("ID / 0", "input.csv");
-                domain::check(&zero).unwrap();
-                let attempt = domain::build(&zero, &mut port, &mut decoder).unwrap();
+                check(&zero).unwrap();
+                let attempt = build(&zero, &mut port, &mut decoder).unwrap();
                 assert!(attempt.result.unwrap().result.is_err());
             }
 
@@ -1472,8 +1438,7 @@ mod service {
                 let (mut port, mut decoder) = fixtures();
                 port.fail = true;
                 let attempt =
-                    domain::build(&document("ID + 1", "input.csv"), &mut port, &mut decoder)
-                        .unwrap();
+                    build(&document("ID + 1", "input.csv"), &mut port, &mut decoder).unwrap();
                 let Err(PortError::Capture(Payload(payload))) = attempt.result else {
                     panic!("original capture failure");
                 };
@@ -1485,7 +1450,7 @@ mod service {
 
             #[test]
             fn checked_build_keeps_partial_evidence_across_the_host_panic_fence() {
-                let checked = domain::check(&document("ID + 1", "input.csv")).unwrap();
+                let checked = check(&document("ID + 1", "input.csv")).unwrap();
                 let (mut port, mut decoder) = fixtures();
                 decoder.panic_cell = true;
                 let mut attempt = CapturedAttempt::new(checked.compiled().source());

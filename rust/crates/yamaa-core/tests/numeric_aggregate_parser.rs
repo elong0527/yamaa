@@ -220,7 +220,7 @@ mod numeric {
 
         fn numeric(text: &str, bindings: Vec<Binding>) -> Result<BoundNumeric, BindingError> {
             BoundNumeric::new(
-                compile(text, Context::Compute, "columns.RESULT.compute").unwrap(),
+                compile(text, Context::Compute, "columns.RESULT").unwrap(),
                 bindings,
             )
         }
@@ -302,7 +302,7 @@ mod numeric {
                         .unwrap_err();
                     assert_eq!(reads.0, ["A", "A"]);
                     assert_eq!(error.expression, text);
-                    assert_eq!(admitted.expression().spec_path(), "columns.RESULT.compute");
+                    assert_eq!(admitted.expression().spec_path(), "columns.RESULT");
                 }
             }
             // An integer literal outside int64 is refused before any binding.
@@ -310,7 +310,7 @@ mod numeric {
                 compile(
                     "A + A + 9223372036854775808",
                     Context::Compute,
-                    "columns.RESULT.compute"
+                    "columns.RESULT"
                 ),
                 Err(CompileError::Invalid {
                     failure: Failure::IntegerOverflow,
@@ -382,7 +382,7 @@ mod numeric {
         use yamaa_core::numeric::Number;
         use yamaa_core::value::{Selection, Value};
 
-        const PATH: &str = "columns.RESULT.derivation.compute";
+        const PATH: &str = "columns.RESULT.derivation";
 
         /// Compile a test expression through the public source-to-plan entry point.
         fn compute(text: &str) -> CompiledExpression {
@@ -559,19 +559,19 @@ mod numeric {
                     };
                     let Err(CompileError::Invalid {
                         position, failure, ..
-                    }) = compile(&expression, field, "columns.V.derivation.compute")
+                    }) = compile(&expression, field, "columns.V.derivation")
                     else {
                         panic!("retired call must fail before resolving A or B: {expression}")
                     };
                     let finding = failure.diagnostic(
                         field,
-                        "columns.V.derivation.compute",
+                        "columns.V.derivation",
                         &expression,
                         position.character,
                     );
                     assert_eq!(finding.definition().condition, "prohibited_function");
                     assert_eq!(finding.definition().rule, Some("FORMULA-13"));
-                    assert_eq!(finding.spec_paths, ["columns.V.derivation.compute"]);
+                    assert_eq!(finding.spec_paths, ["columns.V.derivation"]);
                     assert_eq!(finding.context["function"], V::String(function.into()));
                     assert_eq!(finding.context["hint"], V::String(hint.into()));
                     assert_eq!(
@@ -585,13 +585,13 @@ mod numeric {
             for expression in ["mystery(A)", "ABS(A, B)", "SUM(A)"] {
                 let Err(CompileError::Invalid {
                     position, failure, ..
-                }) = compile(expression, Context::Compute, "columns.V.derivation.compute")
+                }) = compile(expression, Context::Compute, "columns.V.derivation")
                 else {
                     panic!("invalid call must still fail: {expression}")
                 };
                 let finding = failure.diagnostic(
                     Context::Compute,
-                    "columns.V.derivation.compute",
+                    "columns.V.derivation",
                     expression,
                     position.character,
                 );
@@ -676,7 +676,7 @@ mod numeric {
         use yamaa_core::limits::Limits;
 
         fn compute(text: &str) -> Result<CompiledExpression, CompileError> {
-            compile(text, Context::Compute, "columns.RESULT.derivation.compute")
+            compile(text, Context::Compute, "columns.RESULT.derivation")
         }
 
         /// Read language findings independently of their human-readable formatting.
