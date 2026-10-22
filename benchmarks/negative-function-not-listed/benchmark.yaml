@@ -1,3 +1,5 @@
 lifecycle: draft
 standard: ADaM
 domain: ADSL
+covers:
+- function
