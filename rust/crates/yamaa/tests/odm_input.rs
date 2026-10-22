@@ -6,25 +6,15 @@
 //! profile's refusals name the input at `input.<dataset>.path`.
 #![cfg(all(feature = "yaml", feature = "odm"))]
 
-use std::path::PathBuf;
-use std::sync::atomic::{AtomicUsize, Ordering};
-
 use arrow_array::{Array, ListArray, StringArray};
 use yamaa::{CancellationToken, Engine, EngineOptions, HostLanguage, Table};
 use yamaa_core::json::Value;
 
-static NEXT: AtomicUsize = AtomicUsize::new(0);
-
-struct Study(PathBuf);
+struct Study(crate::support::Scratch);
 impl Study {
     fn new() -> Self {
-        let root = std::env::temp_dir().join(format!(
-            "yamaa-odm-input-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
-        std::fs::create_dir_all(&root).unwrap();
-        Self(yamaa_adapters::canonical_path::canonicalize(root).unwrap())
+        let root = crate::support::Scratch::new("odm-input");
+        Self(root)
     }
     fn write(&self, name: &str, contents: impl AsRef<[u8]>) {
         std::fs::write(self.0.join(name), contents).unwrap();
@@ -37,11 +27,6 @@ impl Study {
         #[cfg(windows)]
         let path = path.replace('\\', "/");
         path
-    }
-}
-impl Drop for Study {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
     }
 }
 

@@ -6,8 +6,6 @@
 //! as a run's is.
 #![cfg(all(feature = "yaml", feature = "odm"))]
 
-use std::path::PathBuf;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
 use yamaa::{
@@ -15,18 +13,11 @@ use yamaa::{
     OdmOptions, Status, Table,
 };
 
-static NEXT: AtomicUsize = AtomicUsize::new(0);
-
-struct Study(PathBuf);
+struct Study(crate::support::Scratch);
 impl Study {
     fn new() -> Self {
-        let root = std::env::temp_dir().join(format!(
-            "yamaa-save-table-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
-        std::fs::create_dir_all(&root).unwrap();
-        Self(yamaa_adapters::canonical_path::canonicalize(root).unwrap())
+        let root = crate::support::Scratch::new("save-table");
+        Self(root)
     }
     fn write(&self, name: &str, contents: &str) {
         std::fs::write(self.0.join(name), contents).unwrap();
@@ -50,11 +41,6 @@ impl Study {
             .collect::<Vec<_>>();
         names.sort();
         names
-    }
-}
-impl Drop for Study {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
     }
 }
 

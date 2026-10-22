@@ -7,8 +7,7 @@
 //! path as given (D134). Nothing is written, and a later save retries.
 #![cfg(feature = "yaml")]
 
-use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::path::Path;
 use std::sync::Arc;
 
 use yamaa::{
@@ -17,18 +16,11 @@ use yamaa::{
     ResourceResolver,
 };
 
-static NEXT: AtomicUsize = AtomicUsize::new(0);
-
-struct Study(PathBuf);
+struct Study(crate::support::Scratch);
 impl Study {
     fn new() -> Self {
-        let root = std::env::temp_dir().join(format!(
-            "yamaa-save-targets-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
-        std::fs::create_dir_all(&root).unwrap();
-        let study = Self(yamaa_adapters::canonical_path::canonicalize(root).unwrap());
+        let root = crate::support::Scratch::new("save-targets");
+        let study = Self(root);
         study.write("raw.csv", "USUBJID\nS1\n");
         study
     }
@@ -54,11 +46,6 @@ impl Study {
             ),
         );
         self.path("spec.yaml")
-    }
-}
-impl Drop for Study {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
     }
 }
 

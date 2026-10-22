@@ -23,19 +23,12 @@ fn engine() -> Engine {
     )
 }
 
-static NEXT: AtomicUsize = AtomicUsize::new(0);
-
-struct Study(PathBuf);
+struct Study(crate::support::Scratch);
 impl Study {
     fn new() -> Self {
-        let root = std::env::temp_dir().join(format!(
-            "yamaa-project-operations-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
-        std::fs::create_dir_all(&root).unwrap();
+        let root = crate::support::Scratch::new("project-operations");
         // The engine's spelling: no Windows verbatim prefix.
-        Self(yamaa_adapters::canonical_path::canonicalize(root).unwrap())
+        Self(root)
     }
     fn write(&self, name: &str, contents: impl AsRef<[u8]>) {
         let path = self.0.join(name);
@@ -57,11 +50,6 @@ impl Study {
     }
     fn project(&self) -> String {
         self.path("project.yaml")
-    }
-}
-impl Drop for Study {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
     }
 }
 

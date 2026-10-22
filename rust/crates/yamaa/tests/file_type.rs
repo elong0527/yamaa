@@ -6,8 +6,6 @@
 //! refuses it (FILE-7, FILE-8, FILE-11), each as `cannot read <path>` (D39).
 #![cfg(feature = "yaml")]
 
-use std::path::PathBuf;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use yamaa::{
@@ -16,18 +14,11 @@ use yamaa::{
     ResourceResolver,
 };
 
-static NEXT: AtomicUsize = AtomicUsize::new(0);
-
-struct Study(PathBuf);
+struct Study(crate::support::Scratch);
 impl Study {
     fn new() -> Self {
-        let root = std::env::temp_dir().join(format!(
-            "yamaa-file-type-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
-        std::fs::create_dir_all(&root).unwrap();
-        Self(yamaa_adapters::canonical_path::canonicalize(root).unwrap())
+        let root = crate::support::Scratch::new("file-type");
+        Self(root)
     }
     fn write(&self, name: &str, contents: &str) -> String {
         std::fs::write(self.0.join(name), contents).unwrap();
@@ -38,11 +29,6 @@ impl Study {
         #[cfg(windows)]
         let path = path.replace('\\', "/");
         path
-    }
-}
-impl Drop for Study {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
     }
 }
 
