@@ -107,9 +107,9 @@ assert_build <- function(spec, width = 1L, project = FALSE) {
 assert_refusal <- function(result, label, compiler = FALSE) {
   issues <- result$issues
   if (!(nrow(issues) > 0L && any(issues$condition == "engine_rejected")))
-    fail(paste(label, "is refused as engine_rejected"), issues, "engine_rejected")
+    fail_expectation(paste(label, "is refused as engine_rejected"), issues, "engine_rejected")
   if (compiler && !any(grepl('"code":"compiler_limit"', issues$context, fixed = TRUE)))
-    fail(paste(label, "is refused at a compiler limit"), issues$context, '"code":"compiler_limit"')
+    fail_expectation(paste(label, "is refused at a compiler limit"), issues$context, '"code":"compiler_limit"')
   # A refused run has no output; its save signals the run's own issues.
   if (inherits(result, "yamaa_run")) {
     failure <- tryCatch(result$save(), error = identity)
@@ -216,7 +216,7 @@ run_column_ceilings <- function() {
         !grepl("incomplete_checks_from", issue$context, fixed = TRUE) &&
         grepl('"actual":1025', issue$context, fixed = TRUE) &&
         grepl('"limit":1024', issue$context, fixed = TRUE)))
-        fail(paste("1,025 columns on the", route, "give one ruleless capacity issue of 1,025 against 1,024"),
+        fail_expectation(paste("1,025 columns on the", route, "give one ruleless capacity issue of 1,025 against 1,024"),
           issue, '"actual":1025 and "limit":1024 without incomplete_checks_from')
     }
     repaired <- lines[!grepl("name: C1024,", lines, fixed = TRUE)]

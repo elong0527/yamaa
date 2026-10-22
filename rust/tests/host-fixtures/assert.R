@@ -8,7 +8,7 @@
 
 # A value as the text a failure prints: its deparsed form, cut to `limit`
 # characters so that a large table or report still gives a readable message.
-shown <- function(value, limit = 3000L) {
+shown_value <- function(value, limit = 3000L) {
   text <- paste(deparse(value, width.cutoff = 100L, nlines = 200L), collapse = "\n")
   size <- nchar(text, type = "chars", allowNA = TRUE)
   if (!is.na(size) && size > limit)
@@ -16,14 +16,14 @@ shown <- function(value, limit = 3000L) {
   text
 }
 # Fail with `label`, the case and what it expects, and both values.
-fail <- function(label, actual, expected) {
-  stop(sprintf("%s\nactual:\n%s\nexpected:\n%s", label, shown(actual), shown(expected)),
+fail_expectation <- function(label, actual, expected) {
+  stop(sprintf("%s\nactual:\n%s\nexpected:\n%s", label, shown_value(actual), shown_value(expected)),
     call. = FALSE)
 }
 # `actual` is identical to `expected`; otherwise the failure names `label`
 # and shows both values. Returns `actual`.
 expect_identical <- function(actual, expected, label) {
-  if (!identical(actual, expected)) fail(label, actual, expected)
+  if (!identical(actual, expected)) fail_expectation(label, actual, expected)
   invisible(actual)
 }
 # stopifnot() for one case of a loop: each clause is named for what it
@@ -35,7 +35,7 @@ stopifnot_case <- function(case, ...) {
 # Two decoded JSON contexts are equal with object key order ignored at every
 # level (context.R); otherwise the failure names `label` and shows both.
 expect_context <- function(actual, expected, label) {
-  if (!context_equal(actual, expected)) fail(label, actual, expected)
+  if (!context_equal(actual, expected)) fail_expectation(label, actual, expected)
   invisible(actual)
 }
 

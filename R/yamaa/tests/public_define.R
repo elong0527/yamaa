@@ -46,7 +46,7 @@ check_issues <- function(result, empty = TRUE) {
     "spec paths are a list column" = is.list(frame$spec_paths),
     "a submission issue has no span" = all(vapply(frame$source_span, is.null, logical(1))),
     "a submission issue has no route" = all(vapply(frame$operand_route, is.null, logical(1))))
-  if (empty && nrow(frame) != 0L) fail("the submission has no issues", as.list(frame[c("condition", "context")]), NULL)
+  if (empty && nrow(frame) != 0L) fail_expectation("the submission has no issues", as.list(frame[c("condition", "context")]), NULL)
 }
 refused <- function(result) tryCatch({ result$save(); FALSE }, yamaa_error = function(e) {
   expect_identical(e$issues, result$issues, "a refused save carries the submission's issues"); TRUE
