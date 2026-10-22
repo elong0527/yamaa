@@ -4,6 +4,7 @@
 //! declarative text pad, declarative text template and scalar bytes.
 mod scalar {
     mod declarative_rounding {
+        use crate::support::issues::assert_issues;
         use crate::support::Edit as _;
         use std::fs;
         use yamaa_adapters::json;
@@ -276,15 +277,12 @@ mod scalar {
                 },
                 identity(&path),
             );
-            assert_eq!(findings.len(), 1, "{findings:?}");
-            assert_eq!(findings[0].rule(), Some("FORMULA-16"));
-            assert_eq!(
-                findings[0].spec_paths,
-                ["columns.RNDVAL.derivation.case[0].then.round_half_away_from_zero.source"]
-            );
-            assert_eq!(
-                yamaa_core::json::Value::Object(findings[0].context.clone()),
-                json!({"source":"SEX","expected":"numeric","actual":"str"})
+            assert_issues(
+                &findings,
+                &[
+                    json!({"phase":"validation","condition":"incompatible_input_type","rule":"FORMULA-16","spec_paths":["columns.RNDVAL.derivation.case[0].then.round_half_away_from_zero.source"],"context":{"source":"SEX","expected":"numeric","actual":"str"}}),
+                ],
+                "a text source under a rounding verb in a case result",
             );
             assert!(!study.0.join("input").exists());
         }

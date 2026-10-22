@@ -1,5 +1,6 @@
 #![cfg(feature = "yaml")]
 //! Untyped donor expressions retain their scalar kind before later reads.
+use crate::support::issues::assert_issues;
 use crate::support::Edit as _;
 use std::fs;
 use yamaa_adapters::{file_application, specification_report::Identity};
@@ -286,13 +287,12 @@ fn unknown_choices_report_the_actual_integer_when_date_sources_are_missing() {
         )
         .unwrap();
         let issues = result.issues();
-        assert_eq!(issues.len(), 1, "{expression}: {issues:?}");
-        assert_eq!(issues[0].condition(), "incompatible_input_type");
-        assert_eq!(issues[0].rule(), Some("FORMULA-5"));
-        assert_eq!(issues[0].spec_paths, ["intermediates.EXP.filter"]);
-        assert_eq!(
-            yamaa_core::json::Value::Object(issues[0].context.clone()),
-            yamaa_adapters::json!({"left_type":"int","right_type":"date"})
+        assert_issues(
+            &issues,
+            &[
+                yamaa_adapters::json!({"phase":"validation","condition":"incompatible_input_type","rule":"FORMULA-5","spec_paths":["intermediates.EXP.filter"],"context":{"left_type":"int","right_type":"date"}}),
+            ],
+            expression,
         );
         assert!(result.output().is_none());
         assert!(!study.0.join("out.csv").exists());
@@ -349,16 +349,12 @@ fn assert_integer_day_count(expression: &str, integer_row: &str, float_row: &str
     )
     .unwrap();
     let issues = result.issues();
-    assert_eq!(issues.len(), 1, "{expression}: {issues:?}");
-    assert_eq!(issues[0].condition(), "incompatible_input_type");
-    assert_eq!(issues[0].rule(), Some("TIME-14"));
-    assert_eq!(
-        issues[0].spec_paths,
-        ["intermediates.EXP.derivations.EXENDT.shift.days"]
-    );
-    assert_eq!(
-        yamaa_core::json::Value::Object(issues[0].context.clone()),
-        yamaa_adapters::json!({"source":"SELECTED","expected":"int","actual":"float"})
+    assert_issues(
+        &issues,
+        &[
+            yamaa_adapters::json!({"phase":"validation","condition":"incompatible_input_type","rule":"TIME-14","spec_paths":["intermediates.EXP.derivations.EXENDT.shift.days"],"context":{"source":"SELECTED","expected":"int","actual":"float"}}),
+        ],
+        expression,
     );
     assert!(result.output().is_none());
 }
@@ -393,16 +389,12 @@ fn nullif_over_an_int_and_a_float_is_refused_as_integer_days_when_bound() {
         environment: None,
     };
     let assert_refused = |issues: &[yamaa_core::diagnostic::Diagnostic]| {
-        assert_eq!(issues.len(), 1, "{issues:?}");
-        assert_eq!(issues[0].condition(), "incompatible_input_type");
-        assert_eq!(issues[0].rule(), Some("TIME-14"));
-        assert_eq!(
-            issues[0].spec_paths,
-            ["intermediates.EXP.derivations.EXENDT.shift.days"]
-        );
-        assert_eq!(
-            yamaa_core::json::Value::Object(issues[0].context.clone()),
-            yamaa_adapters::json!({"source":"SELECTED","expected":"int","actual":"float"})
+        assert_issues(
+            issues,
+            &[
+                yamaa_adapters::json!({"phase":"validation","condition":"incompatible_input_type","rule":"TIME-14","spec_paths":["intermediates.EXP.derivations.EXENDT.shift.days"],"context":{"source":"SELECTED","expected":"int","actual":"float"}}),
+            ],
+            "a float shift operand of an intermediate derivation",
         );
     };
     // Shift operands of an intermediate derivation are typed when bound.
@@ -623,12 +615,12 @@ fn unknown_numeric_operands_do_not_invent_an_integer_result_kind() {
     )
     .unwrap();
     let issues = result.issues();
-    assert_eq!(issues.len(), 1, "{issues:?}");
-    assert_eq!(issues[0].condition(), "incompatible_input_type");
-    assert_eq!(issues[0].spec_paths, ["intermediates.EXP.filter"]);
-    assert_eq!(
-        yamaa_core::json::Value::Object(issues[0].context.clone()),
-        yamaa_adapters::json!({"left_type":"float","right_type":"str"})
+    assert_issues(
+        &issues,
+        &[
+            yamaa_adapters::json!({"phase":"validation","condition":"incompatible_input_type","rule":"FORMULA-5","spec_paths":["intermediates.EXP.filter"],"context":{"left_type":"float","right_type":"str"}}),
+        ],
+        "a filter that compares a float with text",
     );
     assert!(result.output().is_none());
 }
@@ -731,15 +723,12 @@ fn assert_nested_lookup_type_error(
     )
     .unwrap();
     let issues = result.issues();
-    assert_eq!(issues.len(), 1, "{issues:?}");
-    assert_eq!(issues[0].condition(), "incompatible_input_type");
-    assert_eq!(issues[0].rule(), Some("LOOKUP-9"));
-    assert_eq!(issues[0].spec_paths, [expected_path]);
-    assert_eq!(
-        yamaa_core::json::Value::Object(issues[0].context.clone()),
-        yamaa_adapters::json!({
-            "intermediate":"DATES", "source":expected_source, "expected":"int", "actual":"date"
-        })
+    assert_issues(
+        &issues,
+        &[
+            yamaa_adapters::json!({"phase":"validation","condition":"incompatible_input_type","rule":"LOOKUP-9","spec_paths":[expected_path],"context":{"intermediate":"DATES","source":expected_source,"expected":"int","actual":"date"}}),
+        ],
+        expected_path,
     );
     assert!(result.output().is_none());
     assert!(!study.0.join("out.csv").exists());

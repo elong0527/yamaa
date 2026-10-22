@@ -1594,6 +1594,7 @@ mod file {
         }
     }
     mod file_workflow {
+        use crate::support::ports::NoActivation;
         use crate::support::Edit as _;
         use std::fs;
         use yamaa_adapters::{
@@ -3064,34 +3065,6 @@ mod file {
                     Err(error) => error,
                     Ok(_) => panic!("expected selected preparation rejection"),
                 }
-            }
-        }
-        struct NoActivation;
-        impl yamaa_core::project_activation::ActivationPort for NoActivation {
-            type Handle = ();
-            type Error = ();
-            fn verify_lock(
-                &mut self,
-                _: Language,
-                _: &yamaa_core::project_environment::LockReference,
-                _: &[yamaa_core::function_signature::ProjectFunctionIdentity],
-            ) -> Result<(), ()> {
-                panic!("functionless workflow must not activate")
-            }
-            fn bind(
-                &mut self,
-                _: &yamaa_core::function_signature::ProjectFunctionIdentity,
-                _: &yamaa_core::function_signature::LogicalSignature,
-            ) -> Result<(), ()> {
-                panic!("functionless workflow must not bind")
-            }
-            fn invoke(
-                &mut self,
-                _: &(),
-                _: &[yamaa_core::function_invocation::Argument<'_>],
-            ) -> Result<yamaa_core::value::Value, yamaa_core::function_invocation::HostError<()>>
-            {
-                panic!("functionless workflow must not call")
             }
         }
         fn ordinary_report_id() -> yamaa_adapters::specification_report::Identity<'static> {
