@@ -212,9 +212,10 @@ the patterns and helpers of each language; these are the rules.
   such as `case_otherwise_reports_inside_the_otherwise_member`, under
   the modules or classes that give it a path; a test a rule card cites
   as evidence keeps its name. A file holds one family, named in its
-  first comment, and nothing registers a file: a new family is a new
-  `tests/<area>.rs`, `test_<area>.py` or `<area>.R`. Installed Python
-  suites use `python/tests/installed/installed_<area>.py` instead.
+  first comment: a new family is a new `tests/<area>.rs` with its `mod`
+  line in the crate's `tests/main.rs`, a new `test_<area>.py` or a new
+  `<area>.R`. Installed Python suites use
+  `python/tests/installed/installed_<area>.py` instead.
 - **Use the owned helpers.** Build inputs with the crate's
   `tests/support/` factories, `tools/tests/rules_fixture.py` and the
   readers beside `rust/tests/host-fixtures/cases.json`. The second file

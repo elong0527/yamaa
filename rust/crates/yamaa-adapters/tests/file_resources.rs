@@ -1,6 +1,4 @@
 //! File contracts.
-#[allow(dead_code)]
-mod support;
 mod file {
     #[cfg(feature = "yaml")]
     mod local_paths {

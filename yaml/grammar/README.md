@@ -140,7 +140,7 @@ From the repository root, with Rust 1.82.0 or later and `py-yaml12==0.2.0` insta
 
 ```bash
 python3 -m tools.validation.validate_repository --root .
-cd rust && cargo test --locked -p yamaa-adapters --test declaration_contract_vectors
+cd rust && cargo test --locked -p yamaa-adapters --test main declaration_contract_vectors::
 ```
 
 The first checks the rule blocks and contract structure. The second replays

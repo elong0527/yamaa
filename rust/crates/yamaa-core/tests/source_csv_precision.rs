@@ -1,6 +1,4 @@
 //! Source contracts.
-#[allow(dead_code)]
-mod support;
 mod source {
     mod csv_precision {
         use yamaa_core::{csv_precision::fixed_point, value::FiniteFloat};

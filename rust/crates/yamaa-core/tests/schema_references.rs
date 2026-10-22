@@ -1,6 +1,4 @@
 //! Schema contracts.
-#[allow(dead_code)]
-mod support;
 mod schema {
     mod resolution_pruning {
         //! LAYER-11 pruning and the LAYER-13 order on the AST (#3134), over

@@ -228,11 +228,17 @@ runs Clippy over the Python binding as well; building the R binding runs R, so
 its Clippy runs in `make test-r`. Ordinary CI runs the workspace tests in the
 development profile, with Clippy, on Linux; native qualification runs them on
 Linux, macOS and Windows with the optimized `release-test` profile alone.
-Cargo discovers integration tests in each crate's `tests/*.rs` files. Add a
-feature file there to run new cases with the workspace command; no harness
-registration is needed. Keep test bodies in those files and shared private
-helpers under that crate's `tests/support/`. Test helpers belong to their owning
-crate; do not import another crate's source into tests.
+Each crate's integration tests are one binary, `tests/main.rs`, which
+declares every family file under `tests/` as a module (#3556): the support
+tree compiles once and the families link into one executable. Add a family as
+a `tests/<family>.rs` file and its `mod` line in `tests/main.rs`; a test there
+fails while a file is left out. A family is instead its own `[[test]]` in the
+crate's manifest when it changes process-wide state, such as the working
+directory that yamaa's `plan_identity.rs` and `save_table_relative.rs` change,
+since every other family shares its process, or when a job builds it alone, as
+the minimal format builds build the adapters' `format_features.rs`. Keep test bodies in those files and
+shared private helpers under that crate's `tests/support/`. Test helpers belong
+to their owning crate; do not import another crate's source into tests.
 Portable numerical behavior has independently authored controls in
 `rust/crates/yamaa-core/tests/fixtures/portable_math.tsv`.
 
@@ -361,11 +367,13 @@ test.
 
 ### Rust
 
-Integration tests live in `tests/<family>.rs`, which Cargo discovers;
-nested `mod` blocks give a test its path, so a failure reads as
-`schema::schema_validation::case_otherwise_reports_inside_the_otherwise_member`.
-Each crate's `tests/support/` is its one helper tree, declared once per
-file as `#[allow(dead_code)] mod support;`. Reach for its factories
+Integration tests live in `tests/<family>.rs`, each a module of the
+crate's one test binary, `tests/main.rs`; the file and its nested `mod`
+blocks give a test its path, so a failure reads as
+`schema_references::schema::schema_validation::case_otherwise_reports_inside_the_otherwise_member`.
+Families share one process, so a temporary name carries its family's own
+prefix. Each crate's `tests/support/` is its one helper tree, declared once
+in `tests/main.rs` and reached as `crate::support`. Reach for its factories
 before writing a local one: `support::document::Tree` builds a document
 by hand, `support::roots` lowers project functions and codelists into
 the AST roots a project file produces, `support::ports` (core) holds the
@@ -410,8 +418,8 @@ change to one is made to both.
   does, and `Command::new` runs only the program under test: the
   `yamaa-cli` binary, the shell whose quoting a path test proves, or the
   converter a front-end comparison reads.
-- Run one file with `cargo test --locked -p <crate> --test <family>`,
-  and one test by appending its path.
+- Run one family with `cargo test --locked -p <crate> --test main
+  <family>::`, and one test with its whole path and `--exact`.
 
 ### Python
 

@@ -1,6 +1,4 @@
 //! Independently authored native diagnostic contexts.
-#[allow(dead_code)]
-mod support;
 mod diagnostics {
     mod diagnostic {
         mod aggregate {

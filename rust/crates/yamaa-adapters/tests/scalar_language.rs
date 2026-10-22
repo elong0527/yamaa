@@ -1,7 +1,5 @@
 #![cfg(feature = "yaml")]
 //! Scalar contracts.
-#[allow(dead_code)]
-mod support;
 mod scalar {
     mod scalar_language {
         use std::{
