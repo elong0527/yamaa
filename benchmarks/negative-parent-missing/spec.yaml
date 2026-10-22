@@ -1,0 +1,20 @@
+yamaa: "1.0"
+type: spec
+# The study's shared identifier columns were never copied into this study's
+# folder, so the file this one builds on does not exist.
+parent: layers/study.yaml
+model: ADaM
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  DM: input/dm.csv
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, AGE]
+
+columns:
+  - name: AGE
+    type: int
+    label: Age
+    derivation: DM.AGE

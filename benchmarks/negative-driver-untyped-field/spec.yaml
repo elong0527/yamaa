@@ -1,0 +1,52 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADEX
+keys: [STUDYID, USUBJID, EXSEQ]
+input:
+  EX: {path: input/ex.csv, types: {EXSEQ: int, EXDOSE: float}}
+
+intermediates:
+  # Administrations with a dose, each given a dose group. The high group is
+  # written as the number 1 and the low group as the text 'low', so the
+  # group has no single type.
+  - id: DOSED
+    dataset: EX
+    filter: "EX.EXDOSE > 0"
+    derivations:
+      DOSEGRP:
+        case:
+          - when: "EXDOSE >= 100"
+            then: 1
+          - otherwise: "'low'"
+
+output:
+  path: adex.csv
+  columns: [STUDYID, USUBJID, EXSEQ, DOSEGRP]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+
+  - name: EXSEQ
+    type: int
+    label: Sequence Number
+
+  - name: DOSEGRP
+    type: str
+    label: Dose Group
+
+rows:
+  # One record per administration with a dose.
+  - id: administration
+    dataset: DOSED
+    derivations:
+      STUDYID: DOSED.STUDYID
+      USUBJID: DOSED.USUBJID
+      EXSEQ: DOSED.EXSEQ
+      DOSEGRP: DOSED.DOSEGRP

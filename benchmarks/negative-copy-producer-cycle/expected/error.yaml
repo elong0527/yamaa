@@ -1,0 +1,7 @@
+phase: validation
+condition: producer_workflow_cycle
+spec_paths:
+  - input.ADSL.schema
+rule: SPEC-9
+context:
+  dataset: ADSL
