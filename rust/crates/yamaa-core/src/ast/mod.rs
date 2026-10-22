@@ -161,6 +161,19 @@ impl Surface {
     pub fn infers_join_keys(self) -> bool {
         matches!(self, Self::V0_5)
     }
+    /// Whether each form of a `variable` field that names a current-row
+    /// value has one meaning, as 1.0 gives it (#2934, #3414): in a row's
+    /// read a bare name is an output column (NAME-3), a driver-qualified name
+    /// reads the row's driver record and a lookup-qualified name that
+    /// lookup's column for the row (LOOKUP-9); in a donor read a bare or
+    /// donor-qualified name reads the donor record (LOOKUP-16); and an
+    /// aggregate's key refusals report at its `key` (LOOKUP-5). A 0.5 file
+    /// keeps the meanings at the `yamaa-v0.5.0` tag (D75), where a named
+    /// intermediate's bare `between.value` that no column takes reads a field
+    /// of the driver's record.
+    pub fn one_meaning_per_form(self) -> bool {
+        matches!(self, Self::V1 { .. })
+    }
 }
 
 /// `model: SDTM | SEND | ADaM` (P-MODEL-1); no 0.5 form.
