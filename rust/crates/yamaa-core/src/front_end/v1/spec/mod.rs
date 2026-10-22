@@ -25,8 +25,9 @@
 //! Every node carries the position of the deepest node its layer wrote
 //! (P-ISSUE-1), and paths render in the 1.0 notation (P-CLR-2).
 //!
-//! The construct lowering is shared with [`crate::front_end::v0_5`], which
-//! reads the spelling of the surface it was started for where the two differ.
+//! The construct lowering is shared with the 0.5 front end, in
+//! [`crate::front_end::lowering`], which reads the spelling of the surface it
+//! was started for where the two differ.
 
 pub mod checks;
 
@@ -34,12 +35,12 @@ use crate::ast::Surface;
 use crate::language::LanguageVersion;
 use crate::schema::{Document, DocumentNode as N};
 
-pub use crate::front_end::v0_5::{Lowered, Positions};
+pub use crate::front_end::lowering::{Lowered, Positions};
 
 /// Lower one resolved 1.0 specification. Without positions every span is
 /// [`crate::ast::Span::UNKNOWN`].
 pub fn lower(resolved: &Document, positions: Option<&Positions>) -> Lowered {
-    crate::front_end::v0_5::lower_surface(resolved, positions, surface(resolved))
+    crate::front_end::lowering::lower_surface(resolved, positions, surface(resolved))
 }
 
 /// The surface a 1.x document's `yamaa` declares; a document that declares
