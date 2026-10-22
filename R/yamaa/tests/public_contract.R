@@ -14,7 +14,8 @@ source(file.path(host_fixture_root,"assert.R"),local=TRUE)
 host_truth <- read_host_fixture(host_fixture_root,"public-contract")
 messages <- host_truth[["messages"]]
 # D39's error text the fixture authors under `key`, naming the path given
-# and `file`, the file its first issue is located in.
+# and `file`, the file its first issue is located in, as its location names
+# it (printed_file()).
 error_text <- function(key, path = NULL, file = NULL) {
   text <- messages[[key]]
   if (!is.null(file)) text <- sub("{file}", file, text, fixed = TRUE)
@@ -207,6 +208,42 @@ qualify_signatures <- function() {
 }
 qualify_signatures()
 
+# printed_file() judges "beneath" by directory, not by spelling. The study
+# directory is spelled canonically, through `..`, and through a link on Unix
+# or with its 8.3 short names on Windows. Whichever spelling is the working
+# directory, a file below the study, spelled through any of them, prints
+# relative to it. A sibling whose name starts with the study's, and the
+# parent's own file, print whole.
+qualify_printed_file <- function() {
+  root <- tempfile("yamaa-printed-file-")
+  dir.create(file.path(root, "study", "adam"), recursive = TRUE)
+  dir.create(file.path(root, "studyx"))
+  home <- getwd()
+  on.exit({ setwd(home); unlink(root, recursive = TRUE) })
+  root <- normalizePath(root, winslash = "/")
+  study <- file.path(root, "study")
+  spellings <- c(study, file.path(study, "adam", ".."))
+  if (.Platform$OS.type == "windows") {
+    short <- utils::shortPathName(normalizePath(study, winslash = "\\"))
+    spellings <- c(spellings, gsub("\\", "/", short, fixed = TRUE))
+  } else if (file.symlink(study, file.path(root, "link"))) {
+    spellings <- c(spellings, file.path(root, "link"))
+  }
+  outside <- file.path(root, c("studyx/dm.yaml", "dm.yaml"))
+  for (working in spellings) {
+    setwd(working)
+    actual <- vapply(c(file.path(spellings, "adam/adae.yaml"), file.path(spellings, "dm.yaml"), outside),
+      printed_file, "", USE.NAMES = FALSE)
+    expected <- c(rep(c("adam/adae.yaml", "dm.yaml"), each = length(spellings)), outside)
+    if (!identical(actual, expected)) {
+      str(actual); str(expected)
+      stop("printed_file() does not judge files beneath the working directory by directory: ", working)
+    }
+  }
+  cat("an issue's file prints relative to the working directory however either is spelled\n")
+}
+qualify_printed_file()
+
 run_contract <- function() {
   root <- tempfile("yamaa-public-contract-"); dir.create(root)
   on.exit(unlink(root, recursive = TRUE))
@@ -320,8 +357,6 @@ run_contract <- function() {
   failed_spec <- sub("output: {", host_truth[["unreached_row_count_yaml"]], failed_spec, fixed = TRUE)
   failed_spec <- sub("columns: [ID, VALUE]}", host_truth[["report_output_yaml"]], failed_spec, fixed = TRUE)
   write("spec.yaml", failed_spec); write("input.csv", host_truth[["failed_input_csv"]])
-  # The file the failed run's issue is located in, as a location names it.
-  failed_file <- normalizePath(path("spec.yaml"), winslash = "/", mustWork = TRUE)
   for (name in c("output.csv", "checks.csv")) write(name, "sentinel")
   failed <- yamaa_spec(path("spec.yaml"))$run(); issues <- check_issues(failed$issues)
   report <- failed$report
@@ -330,6 +365,13 @@ run_contract <- function() {
     list(phase = "verification", condition = "range_failed", rule = "CHECK-7",
       context = '{"column":"VALUE","failure_count":1,"keys":[{"ID":"b"}],"verification_id":"fatal"}'),
     "the failed run's one issue")
+  # The issue names the specification by its absolute, forward-slash path.
+  # Compare file identity because R and the engine may spell it differently.
+  stopifnot("the issue's file is absolute" = grepl("^(/|[[:alpha:]]:/)", issues$file),
+    "the issue's file uses forward slashes" = !grepl("\\", issues$file, fixed = TRUE))
+  expect_identical(normalizePath(issues$file, winslash = "/", mustWork = TRUE),
+    normalizePath(path("spec.yaml"), winslash = "/", mustWork = TRUE),
+    "the issue is located in the specification")
   stopifnot("a failed run has no output" = is.null(failed$output))
   expect_identical(names(report), fixture_strings(host_truth[["report_columns"]]), "the failed run's report columns")
   expect_identical(report$KIND, c("run", "input", "rows", "check", "check"), "the failed run's report rows")
@@ -337,6 +379,8 @@ run_contract <- function() {
     list(ID = c("warn", "fatal"), OUTCOME = c("violated", "violated"), COUNT = c(1, 1),
       TOTAL = c(3, 3), RULE = c("CHECK-7", "CHECK-7")),
     "the failed run's check rows")
+  # The file the failed run's issue is located in, as its location names it.
+  failed_file <- printed_file(issues$file)
   unlink(path(c("spec.yaml", "input.csv"))); invisible(gc())
   # Every save rewrites the report, then raises: a deleted report comes back
   # unchanged and the stale output is never touched.
