@@ -1,3 +1,9 @@
 lifecycle: draft
 standard: ADaM
 domain: ADSL
+conformance:
+  metamorphic:
+    empty_child:
+      reason: 'the empty child orders its composed columns first and reads the
+        unbound reducer name as a column, reporting unknown_reference (COLUMN-5)'
+      issue: '#3593'
