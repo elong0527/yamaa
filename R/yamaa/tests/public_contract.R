@@ -247,10 +247,11 @@ run_contract <- function() {
   checked <- check_issues(absent$check()$issues)
   run <- absent$run()
   # The caller's own path, named as given at no field (FILE-7).
-  expect_identical(as.list(checked[c("condition", "rule", "spec_paths", "context")]),
-    list(condition = "resource_path_missing", rule = "FILE-7", spec_paths = list(character()),
-      context = paste0('{"path":"', path("absent.yaml"), '"}')),
+  expect_identical(as.list(checked[c("condition", "rule", "spec_paths")]),
+    list(condition = "resource_path_missing", rule = "FILE-7", spec_paths = list(character())),
     "an absent specification's one issue")
+  expect_identical(jsonlite::fromJSON(checked$context, simplifyVector = FALSE), list(path = path("absent.yaml")),
+    "an absent specification's issue names the path given")
   stopifnot("a run of an absent specification has no output" = is.null(run$output),
     "a run of an absent specification has no report" = is.null(run$report))
   expect_identical(run$issues, checked, "the run's issues are the check's")
@@ -651,10 +652,11 @@ qualify_project_refusals <- function() {
   # The caller's own path, named as given at no field (FILE-7).
   expect_identical(conditionMessage(error), error_text("unread_project", absent),
     "selecting from an absent project gives D39's text")
-  expect_identical(as.list(unread[c("condition", "spec_paths", "context")]),
-    list(condition = "resource_path_missing", spec_paths = list(character()),
-      context = paste0('{"path":"', absent, '"}')),
+  expect_identical(as.list(unread[c("condition", "spec_paths")]),
+    list(condition = "resource_path_missing", spec_paths = list(character())),
     "an absent project's one issue")
+  expect_identical(jsonlite::fromJSON(unread$context, simplifyVector = FALSE), list(path = absent),
+    "an absent project's issue names the path given")
   expect_identical(check_issues(project$check()$issues), unread, "an absent project's check")
   error <- refusal(project$names)
   expect_identical(conditionMessage(error), error_text("unread_project_names", absent),

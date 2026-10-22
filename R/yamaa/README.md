@@ -60,7 +60,7 @@ install.packages("yamaa_<version>-4.6.tgz", repos = NULL)  # R 4.6
 install.packages("yamaa_<version>-4.5.tgz", repos = NULL)  # R 4.5
 ```
 
-On Linux, with any other R series, such as R 4.4, and for 0.5.0 and
+On Linux, with any other R series, such as R 4.2, and for 0.5.0 and
 earlier, install the source package `yamaa_<version>.tar.gz` from the same
 release:
 
@@ -71,13 +71,14 @@ install.packages("yamaa_<version>.tar.gz", repos = NULL, type = "source")
 Once CRAN accepts 1.0.0, `install.packages("yamaa")` installs it from there
 too.
 
-Installing the source package compiles the Rust engine, so it needs R 4.4.0
+Installing the source package compiles the Rust engine, so it needs R 4.2.0
 or later, a C compiler, and Cargo and rustc 1.82 or later, from
 [rustup](https://rustup.rs/) or from system packages that are that recent.
 The build uses your default Rust toolchain, found on the PATH or in
 `~/.cargo/bin`, and rustup installs none; installation stops first, with
 advice, when Cargo or rustc is missing or older. On Windows, also install
-Rtools45 and the `x86_64-pc-windows-gnu` target:
+the Rtools version for your R series (Rtools42 for R 4.2) and the
+`x86_64-pc-windows-gnu` target:
 `rustup target add x86_64-pc-windows-gnu`. The archive carries the locked
 Rust crates, so installation needs no network; it compiles with two jobs and
 writes nothing outside its build directory and the temporary directory. A
@@ -141,7 +142,7 @@ A successful repository check is not a CRAN acceptance decision. Before a
 submission, run `R CMD check --as-cran` on the built tarball with current R
 release and R-devel, and validate Windows and macOS as well as Linux. Native
 qualification's `native-cran` jobs do so on every run, for the tarball that a
-release publishes: with R-devel, R-release and R 4.4 on all three platforms
+release publishes: with R-devel, R-release and R 4.2.0 on all three platforms
 and Rust 1.82, with R-devel on Linux and none of the suggested packages, as
 CRAN's noSuggests check runs, and in R-hub's Fedora `gcc16` container with
 Fedora's Rust.
@@ -156,8 +157,8 @@ minimum, builds the full locked dependency graph, not only our workspace.
 `cran-comments.md` explains the notes that a submission reports, and
 `make test-r` fails on any other.
 
-The package declares `R (>= 4.4.0)` after an audit of the R C API that the
-binding calls ([#3058](https://github.com/elong0527/yamaa/issues/3058)).
+The package declares `R (>= 4.2.0)`, qualified on the oldest admitted patch
+with the minimum Rust ([#3561](https://github.com/elong0527/yamaa/issues/3561)).
 The shared object imports `abort` through the Rust standard library, which
 R's compiled-code check does not attribute to the package's own code. It is
 reached only on fatal conditions of the Rust runtime, such as a failed

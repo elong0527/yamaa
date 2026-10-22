@@ -1,4 +1,12 @@
-"""Activate the Rust toolchain declared by the workspace."""
+"""Activate the Rust toolchain declared by the workspace, or another one.
+
+Without options, the channel that rust/rust-toolchain.toml pins; with
+--minimum, the workspace rust-version, the oldest Rust that builds the
+engine; with --channel, another rustup channel, such as beta, the next
+stable release. With --install, rustup installs the selected toolchain with
+the components that repository checks use. In CI, the selection is written
+to GITHUB_ENV as RUSTUP_TOOLCHAIN for the steps that follow.
+"""
 
 import argparse
 import os
@@ -68,6 +76,11 @@ def main(argv=None):
         help="use the workspace rust-version instead of the pinned channel",
     )
     parser.add_argument(
+        "--channel",
+        metavar="CHANNEL",
+        help="use this rustup channel, such as beta, instead of the pinned one",
+    )
+    parser.add_argument(
         "--notices",
         action="store_true",
         help="with --install, also add the components that the third-party "
@@ -75,8 +88,12 @@ def main(argv=None):
     )
     arguments = parser.parse_args(argv)
     toolchain = declaration()
+    if arguments.minimum and arguments.channel:
+        parser.error("--minimum and --channel each select the toolchain; give one")
     if arguments.minimum:
         toolchain["channel"] = minimum()
+    elif arguments.channel:
+        toolchain["channel"] = arguments.channel
     if arguments.install:
         subprocess.run(install_command(toolchain, arguments.notices), check=True)
     if github_environment := os.environ.get("GITHUB_ENV"):

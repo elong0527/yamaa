@@ -1,0 +1,8 @@
+phase: validation
+condition: unknown_field
+spec_paths:
+  - intermediates.WINDOW.between.value
+rule: LOOKUP-9
+context:
+  identifier: LBDY
+  intermediate: WINDOW
