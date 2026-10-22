@@ -1,0 +1,8 @@
+lifecycle: draft
+standard: ADaM
+domain: ADAE
+entries:
+  python:
+    - specification: spec.yaml
+  r:
+    - specification: spec.yaml
