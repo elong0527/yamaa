@@ -1,0 +1,8 @@
+phase: validation
+condition: submission_length_invalid
+spec_paths:
+  - columns.SITEID.submission
+rule: SUB-7
+context:
+  column: SITEID
+  length: 0

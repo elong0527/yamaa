@@ -1,0 +1,7 @@
+phase: validation
+condition: submission_not_output_column
+spec_paths:
+  - columns.HEIGHTM.submission
+rule: SUB-1
+context:
+  column: HEIGHTM
