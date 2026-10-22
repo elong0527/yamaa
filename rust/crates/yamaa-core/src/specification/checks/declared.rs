@@ -9,7 +9,11 @@
 //! read ([`super::scopes`]). Every read of a lookup whose key types fail is
 //! refused where it is read, as binding binds nothing of that lookup, and so
 //! is every read of a field qualified by nothing declared; a lookup bound
-//! without its derivations admits none of their reads for a row. Under
+//! without its derivations admits none of their reads for a row. An
+//! aggregate's filter reads only what the aggregate reduces, and binding
+//! binds nothing of a lookup whose filter reads a field qualified by nothing
+//! declared (LOOKUP-7), which this reports where the declarations decide the
+//! finding's suggestion (D220). Under
 //! row templates each derivation is checked node by node in binding's order,
 //! with what binding decides of each read ([`super::boundaries`]), and so is
 //! each lookup's own derivation and each aggregate's derive binding, over the
@@ -614,15 +618,9 @@ impl Checks<'_> {
             .is_some_and(|(owner, _)| self.prepared.intermediates.contains(owner))
     }
 
-    /// Whether `owner` qualifies nothing declared, no input or lookup, so a
-    /// field it qualifies binds nothing, whatever any input stores.
+    /// Whether `owner` qualifies nothing declared ([`undeclared`]).
     fn undeclared(&self, owner: &str) -> bool {
-        !self.prepared.intermediates.contains(owner)
-            && !self
-                .prepared
-                .sources
-                .iter()
-                .any(|input| input.name == owner)
+        undeclared(self.prepared, owner)
     }
 
     /// Without row templates, a read at `path`: of a lookup binding does not
@@ -835,8 +833,9 @@ impl Checks<'_> {
     }
 
     /// An aggregate's expression grammar and header, then its filter's
-    /// grammar, the key a column aggregate matches on, and its derive
-    /// bindings, each followed by its conversion once it binds (VALUE-24).
+    /// grammar and reads ([`Self::aggregate_filter`]), the key a column
+    /// aggregate matches on, and its derive bindings, each followed by its
+    /// conversion once it binds (VALUE-24).
     /// Binding binds nothing more of a column or row aggregate whose
     /// expression or header fails, and binds its derive steps only when
     /// nothing else of it failed.
@@ -874,6 +873,9 @@ impl Checks<'_> {
         };
         if let Some(filter) = aggregate.filter {
             self.grammar(filter, findings)?;
+            if scope.is_some() {
+                self.aggregate_filter(filter, relation, findings);
+            }
         }
         // Without `key` of its own a column aggregate matches the relation it
         // reduces on that input's declared `key` (D63), which a 1.0 input
@@ -1005,6 +1007,40 @@ impl Checks<'_> {
             }
         }
         Ok(())
+    }
+
+    /// Each name an aggregate's filter reads outside what the aggregate
+    /// reduces, which binding refuses as unknown (NAME-3) at the filter, once
+    /// in written order (`aggregates::bind_filter`): the filter of a qualified
+    /// aggregate reads only fields of its relation, and the filter of one
+    /// that reduces the output rows only output columns. Whether the relation
+    /// stores a field of it is left to its records.
+    fn aggregate_filter(
+        &self,
+        filter: ExprId,
+        relation: Option<&str>,
+        findings: &mut Vec<BindFinding>,
+    ) {
+        let ExprKind::Formula(ast::Formula {
+            compiled: Ok(plan), ..
+        }) = &self.spec.expr(filter).kind
+        else {
+            return;
+        };
+        let mut seen = BTreeSet::new();
+        for name in plan.identifiers().filter(|&name| seen.insert(name)) {
+            let outside = match (relation, name.split_once('.')) {
+                (Some(relation), Some((owner, _))) => owner != relation,
+                (Some(_), None) => true,
+                (None, _) => !self.column(name),
+            };
+            if outside {
+                findings.push(BindFinding::UnknownReference {
+                    path: plan.spec_path().into(),
+                    name: name.into(),
+                });
+            }
+        }
     }
 
     /// A qualified column aggregate without `key` of its own pairs each
@@ -2582,6 +2618,94 @@ impl Checks<'_> {
         Ok(())
     }
 
+    /// Each name an intermediate's filter qualifies by nothing declared
+    /// ([`unknown_filter_qualifiers`]) binds nothing whatever any input
+    /// stores: binding refuses it as unknown (LOOKUP-7) at the filter, with a
+    /// `suggestion` naming the donor's same-named field when the donor record
+    /// has one, and binds nothing of the intermediate. Each is reported only
+    /// when the declarations decide that suggestion ([`Self::donor_field`]);
+    /// otherwise it is left to `run()`, so the issues stay a subsequence of
+    /// `run()`'s (D220). Whether the filter reads such a name, and whether
+    /// one was reported.
+    fn filter_qualifiers(
+        &self,
+        donor: &Donor<'_>,
+        findings: &mut Vec<BindFinding>,
+    ) -> (bool, bool) {
+        let (names, path) = unknown_filter_qualifiers(self.spec, self.prepared, donor.item);
+        let dataset = donor.item.dataset.name.as_str();
+        let mut reported = false;
+        for &(name, field) in &names {
+            let Some(stored) = self.donor_field(donor, field) else {
+                continue;
+            };
+            reported = true;
+            findings.push(BindFinding::Lookup(LookupFinding::reference(
+                path,
+                name,
+                Some(&donor.item.id.name),
+                ReferenceCause::Selection,
+                stored.then(|| format!("{dataset}.{field}")),
+            )));
+        }
+        (!names.is_empty(), reported)
+    }
+
+    /// Whether an intermediate's donor record has the field `field`, as far
+    /// as the declarations decide: a field the intermediate derives, whether
+    /// or not its derivation binds; over SELF, a column every row template
+    /// derives in the row phase; over an input, its generated ordinal
+    /// (INPUT-3), an output column of the producer it links (INPUT-10), or a
+    /// field its `types` names. Only the records decide any other field of
+    /// an input.
+    fn donor_field(&self, donor: &Donor<'_>, field: &str) -> Option<bool> {
+        let item = donor.item;
+        if item
+            .bindings
+            .iter()
+            .any(|binding| binding.name.name == field)
+        {
+            return Some(true);
+        }
+        let dataset = item.dataset.name.as_str();
+        if dataset == "SELF" {
+            let rows::Rows::Templates(templates) = &self.prepared.rows else {
+                return Some(false);
+            };
+            let completed = templates.self_columns();
+            return Some(
+                self.spec
+                    .columns
+                    .iter()
+                    .position(|column| column.name.name == field)
+                    .is_some_and(|column| completed.contains(&column)),
+            );
+        }
+        let index = self
+            .prepared
+            .sources
+            .iter()
+            .position(|source| source.name == dataset)?;
+        if self.prepared.sources[index].ordinal.as_deref() == Some(field) {
+            return Some(true);
+        }
+        if let Some(contract) = self.prepared.source_contract(index) {
+            return Some(contract.fields().iter().any(|stored| stored.name == field));
+        }
+        self.spec
+            .inputs
+            .iter()
+            .find(|input| input.name.name == dataset)
+            .is_some_and(|input| {
+                input
+                    .source
+                    .types
+                    .iter()
+                    .any(|(declared, _)| declared.name == field)
+            })
+            .then_some(true)
+    }
+
     /// The static type faults of an intermediate's filter over its donor
     /// record and the record it is read from (FORMULA-5).
     fn filter_types(
@@ -2762,8 +2886,16 @@ impl Checks<'_> {
             if self.key_values(index, findings)? {
                 refused.insert(index);
             }
+            // A name qualified by nothing declared fails the filter, and
+            // binding then binds nothing of the lookup (LOOKUP-7).
+            let mut filtered = true;
             if let Some(filter) = item.filter {
                 self.grammar(filter, findings)?;
+                let (fails, reported) = self.filter_qualifiers(donor, findings);
+                filtered = !fails;
+                if reported {
+                    refused.insert(index);
+                }
             }
             findings.extend(
                 self.filter_types(donor, &stored, &current)
@@ -2778,11 +2910,13 @@ impl Checks<'_> {
                     owner != relation && spec.inputs.iter().any(|input| input.name.name == owner)
                 })
             };
-            let correlated_filter = item.filter.is_some_and(|filter| {
-                matches!(&spec.expr(filter).kind, ExprKind::Formula(ast::Formula {
-                    compiled: Ok(plan), ..
-                }) if plan.identifiers().any(foreign))
-            });
+            // Only a filter binding binds is correlated (`finish_item`).
+            let correlated_filter = filtered
+                && item.filter.is_some_and(|filter| {
+                    matches!(&spec.expr(filter).kind, ExprKind::Formula(ast::Formula {
+                        compiled: Ok(plan), ..
+                    }) if plan.identifiers().any(foreign))
+                });
             // A lookup bound without its derivations reads no current record
             // through them (`finish_item`).
             let correlated_derivation = !underived.contains(&index)

@@ -280,6 +280,8 @@ pub(super) fn matches_member(
             fragment,
             root: false,
             members: false,
+            keyed: None,
+            identity: None,
         },
     )?
     .is_empty())
@@ -295,6 +297,11 @@ struct Site<'a> {
     root: bool,
     /// A mapping whose entries are keyed members rather than clearable fields.
     members: bool,
+    /// A keyed list, each of whose members carries this identity field.
+    keyed: Option<&'static str>,
+    /// A member of a keyed list, which carries this identity field even
+    /// where requiredness is deferred (LAYER-4).
+    identity: Option<&'static str>,
 }
 impl<'a> Site<'a> {
     fn child(self, value: usize, path: &str) -> Site<'_> {
@@ -305,6 +312,8 @@ impl<'a> Site<'a> {
             fragment: self.fragment,
             root: false,
             members: false,
+            keyed: None,
+            identity: None,
         }
     }
     fn deeper(self) -> Self {
@@ -401,10 +410,14 @@ pub enum SiteRole {
     Alias { name: String },
     /// A long form that restates the shorthand of its union (SCHEMA-15): the
     /// field it writes and the node of the shorthand to write instead, or no
-    /// node when the shorthand is the bare keyword `field`.
+    /// node when the shorthand is the bare keyword `field`. When the long
+    /// form is the payload of an operation, `operation` is that operation's
+    /// mapping, which the shorthand replaces whole: a bare read replaces
+    /// `{source: {variable: X}}` (EXPR-5).
     LongForm {
         field: String,
         shorthand: Option<usize>,
+        operation: Option<usize>,
     },
 }
 
@@ -566,6 +579,19 @@ impl Run<'_> {
         let N::Mapping(items) = &self.input.nodes()[site.value] else {
             return self.invalid(site, name);
         };
+        // A member of a keyed list carries, in the layer that writes it, the
+        // identity composition matches it by (LAYER-4). A member read as a
+        // class without that field, a copy entry, expands before the layers
+        // compose, so nothing completes it later: it is complete where it is
+        // written (SPEC-9).
+        let site = match site.identity {
+            Some(identity) if !fields.iter().any(|field| field.name == identity) => Site {
+                fragment: false,
+                identity: None,
+                ..site
+            },
+            _ => site,
+        };
         let mut diagnostics = Vec::new();
         // A retired parent list may supply the absent root fields. Report its
         // spelling before asking for those fields; written values, including
@@ -612,7 +638,7 @@ impl Run<'_> {
                     );
                     diagnostics.extend(self.descriptor(field.descriptor, child)?)
                 }
-                None if !site.fragment
+                None if (!site.fragment || site.identity == Some(field.name.as_str()))
                     && !retired_parent
                     && self.schema.descriptors()[field.descriptor]
                         .descriptor
@@ -850,6 +876,7 @@ impl Run<'_> {
                 SiteRole::LongForm {
                     field: field.clone(),
                     shorthand: None,
+                    operation: None,
                 },
             );
             let keyword = Self::text(field);
@@ -867,6 +894,7 @@ impl Run<'_> {
             SiteRole::LongForm {
                 field: field.clone(),
                 shorthand: Some(shorthand),
+                operation: None,
             },
         );
         let shorthand = match &self.input.nodes()[shorthand] {
@@ -881,6 +909,52 @@ impl Run<'_> {
                 ("shorthand", shorthand),
             ],
         )])
+    }
+    /// SCHEMA-15 on a 1.x tree: a written `source` operation, at `operation`,
+    /// whose payload holds only `variable` restates the bare read of an
+    /// expression field, which is that variable's text (EXPR-5). Text the
+    /// grammar reads as anything but that one name, such as an unqualified
+    /// reserved word, is no read of it, so its long form restates nothing.
+    fn restated_read(&mut self, operation: Site<'_>, payload: Site<'_>) -> Vec<SchemaDiagnostic> {
+        if !self.written || self.surface != Surface::Versioned {
+            return Vec::new();
+        }
+        let N::Mapping(items) = &self.input.nodes()[payload.value] else {
+            return Vec::new();
+        };
+        let &[(key, value)] = items.as_slice() else {
+            return Vec::new();
+        };
+        let (N::Text(field), N::Text(variable)) =
+            (&self.input.nodes()[key], &self.input.nodes()[value])
+        else {
+            return Vec::new();
+        };
+        let read = field == "variable"
+            && crate::expression::parse(variable).is_ok_and(|parsed| {
+                let root = parsed.root();
+                parsed.nodes()[root].kind == crate::expression::NodeKind::Identifier
+                    && parsed.text(root) == variable
+            });
+        if !read {
+            return Vec::new();
+        }
+        self.record(
+            payload,
+            SiteRole::LongForm {
+                field: field.clone(),
+                shorthand: Some(value),
+                operation: Some(operation.value),
+            },
+        );
+        vec![self.diagnostic(
+            payload,
+            ConditionCode::SchemaRedundantLongForm,
+            vec![
+                ("field", Self::text("variable")),
+                ("shorthand", SchemaContext::InputValue(value)),
+            ],
+        )]
     }
     /// Whether `member`, a registry, matched an entry `{keyword: {}}` whose
     /// empty payload another member of the union writes as the bare
@@ -1032,21 +1106,20 @@ impl Run<'_> {
                             context,
                         )]);
                     };
-                    match &entry.shape {
-                        SchemaShape::Class(fields) => {
-                            self.class(fields, &entry.name, site.child(payload, &path))
-                        }
+                    let payload = site.child(payload, &path);
+                    let diagnostics = match &entry.shape {
+                        SchemaShape::Class(fields) => self.class(fields, &entry.name, payload)?,
                         SchemaShape::Descriptor(descriptor) => {
-                            let payload = site.child(payload, &path);
-                            let diagnostics = self.descriptor(*descriptor, payload)?;
-                            if diagnostics.is_empty()
-                                && registry.name == "expressions"
-                                && entry.name == "case"
-                            {
-                                return self.case_items(payload);
-                            }
-                            Ok(diagnostics)
+                            self.descriptor(*descriptor, payload)?
                         }
+                    };
+                    if !diagnostics.is_empty() || registry.name != "expressions" {
+                        return Ok(diagnostics);
+                    }
+                    match entry.name.as_str() {
+                        "case" => self.case_items(payload),
+                        "source" => Ok(self.restated_read(site, payload)),
+                        _ => Ok(diagnostics),
                     }
                 }
                 SchemaAliasKind::Descriptor(descriptor) => {
@@ -1178,11 +1251,9 @@ impl Run<'_> {
                         None => (index.to_string(), true),
                     };
                     let path = self.keyed(site.path, &suffix, index)?;
-                    diagnostics.extend(self.single(
-                        expression,
-                        *inner,
-                        site.child(value, &path),
-                    )?);
+                    let mut member = site.child(value, &path);
+                    member.identity = site.keyed;
+                    diagnostics.extend(self.single(expression, *inner, member)?);
                 }
                 Ok(diagnostics)
             }
@@ -1310,6 +1381,8 @@ impl SchemaStructure {
                 fragment,
                 root: false,
                 members: false,
+                keyed: None,
+                identity: None,
             },
         )
     }
@@ -1359,6 +1432,8 @@ impl SchemaStructure {
             fragment: false,
             root: true,
             members: false,
+            keyed: None,
+            identity: None,
         };
         if !matches!(&input.nodes()[input.root()],N::Mapping(items) if !items.is_empty()) {
             return run.invalid(site, &self.root_class().name);
@@ -1427,6 +1502,8 @@ impl SchemaStructure {
     }
     /// Interpret a descriptor over a 1.x document as its author wrote it, in
     /// which YAML null is an ordinary value its type admits or refuses.
+    /// `keyed` names the identity field each member of a keyed list carries
+    /// (LAYER-4).
     pub(super) fn validate_versioned_descriptor(
         &self,
         descriptor: usize,
@@ -1434,17 +1511,11 @@ impl SchemaStructure {
         value: usize,
         path: &str,
         fragment: bool,
+        keyed: Option<&'static str>,
     ) -> Result<Vec<SchemaDiagnostic>, ValidationError> {
-        self.validate_descriptor_mode(
-            descriptor,
-            input,
-            value,
-            path,
-            fragment,
-            NullPolicy::Value,
-            true,
-            Surface::Versioned,
-        )
+        let (found, _) =
+            self.versioned_walk(descriptor, input, (value, path), fragment, keyed, false)?;
+        Ok(found)
     }
     /// [`SchemaStructure::validate_versioned_descriptor`], keeping each
     /// written site the walk reads under the structure it chooses.
@@ -1455,6 +1526,20 @@ impl SchemaStructure {
         value: usize,
         path: &str,
         fragment: bool,
+        keyed: Option<&'static str>,
+    ) -> Result<(Vec<SchemaDiagnostic>, Vec<WrittenSite>), ValidationError> {
+        self.versioned_walk(descriptor, input, (value, path), fragment, keyed, true)
+    }
+    /// The 1.x walk of one descriptor value, with its written sites when
+    /// `sites` asks for them.
+    fn versioned_walk(
+        &self,
+        descriptor: usize,
+        input: &Document,
+        (value, path): (usize, &str),
+        fragment: bool,
+        keyed: Option<&'static str>,
+        sites: bool,
     ) -> Result<(Vec<SchemaDiagnostic>, Vec<WrittenSite>), ValidationError> {
         if descriptor >= self.descriptors().len() || value >= input.nodes().len() {
             return Err(ValidationError::InvalidDescriptor);
@@ -1467,7 +1552,7 @@ impl SchemaStructure {
             nulls: NullPolicy::Value,
             written: true,
             surface: Surface::Versioned,
-            sites: Some(Vec::new()),
+            sites: sites.then(Vec::new),
         };
         let found = run.descriptor(
             descriptor,
@@ -1478,6 +1563,8 @@ impl SchemaStructure {
                 fragment,
                 root: false,
                 members: false,
+                keyed,
+                identity: None,
             },
         )?;
         Ok((found, run.sites.unwrap_or_default()))
@@ -1510,6 +1597,8 @@ impl SchemaStructure {
                 fragment: false,
                 root: false,
                 members: false,
+                keyed: None,
+                identity: None,
             },
         )?;
         Ok((found, run.sites.unwrap_or_default()))
@@ -1570,6 +1659,8 @@ impl SchemaStructure {
                 fragment,
                 root: false,
                 members: false,
+                keyed: None,
+                identity: None,
             },
         )
     }

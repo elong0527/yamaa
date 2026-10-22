@@ -21,6 +21,15 @@ pub(super) const COLLECTIONS: [&str; 5] = ["input", "windows", "intermediates", 
 pub(super) const IDENTITIES: [(&str, &str); 3] =
     [("columns", "name"), ("rows", "id"), ("intermediates", "id")];
 
+/// The field each member of the root field `field` carries when it is a
+/// keyed list (LAYER-4).
+fn identity(field: &str) -> Option<&'static str> {
+    IDENTITIES
+        .iter()
+        .find(|&&(collection, _)| collection == field)
+        .map(|&(_, identity)| identity)
+}
+
 impl SchemaStructure {
     /// The findings of one 1.x specification layer, checked against this view
     /// of the 1.0 closure: the one its declared version selects
@@ -29,9 +38,13 @@ impl SchemaStructure {
     ///
     /// A layer need not be complete: a root field may be absent, and inside a
     /// member of a keyed collection requiredness waits for the resolved
-    /// specification. Every other value a layer writes is checked where it is
-    /// written: a root field replaces the value it inherits whole, so it is
-    /// complete. YAML null is an ordinary value, admitted only where a field's
+    /// specification. A member of a keyed list still carries the identity,
+    /// `name` or `id`, that composition matches it by, at
+    /// `<collection>[i].<identity>` when it does not, and a copy entry, which
+    /// has none, is complete (SPEC-9). Every other value a layer writes is
+    /// checked where it is written: a root field replaces the value it
+    /// inherits whole, so it is complete. YAML null is an ordinary value,
+    /// admitted only where a field's
     /// type admits it: a value or expression field (P-NULL-1). Two members of
     /// one keyed collection must not share an identifier (LAYER-4). Each
     /// `clear` entry is a spec path, and no entry covers another; a fault
@@ -71,6 +84,7 @@ impl SchemaStructure {
                 value,
                 &field.name,
                 fragment,
+                identity(&field.name),
             )?;
             if found.is_empty() && field.name == "clear" {
                 findings.extend(clear_entries(input, value));
@@ -151,6 +165,7 @@ impl SchemaStructure {
                 value,
                 &field.name,
                 fragment,
+                identity(&field.name),
             )?;
             sites.extend(found);
         }
@@ -502,7 +517,9 @@ mod tests {
         let label = |site: &WrittenSite| match &site.role {
             SiteRole::Field { owner, field, .. } => format!("{} field {owner}.{field}", site.path),
             SiteRole::Alias { name } => format!("{} alias {name}", site.path),
-            SiteRole::LongForm { field, shorthand } => format!(
+            SiteRole::LongForm {
+                field, shorthand, ..
+            } => format!(
                 "{} long form {field} {}",
                 site.path,
                 shorthand.map_or("keyword".into(), |node| format!(

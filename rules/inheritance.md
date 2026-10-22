@@ -107,14 +107,19 @@ invalid values fail in the layer that writes them. Two members of one keyed
 collection in one layer must not share an identifier.
 
 Fails: `unsupported_language_version`, `unexpected_file_type`, `duplicate_identifier`, `schema_version_mismatch`.
-Evidence: `negative-version-mismatch`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::each_layer_is_admitted_at_its_own_version_and_the_chain_needs_the_newest`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_parent_naming_an_unread_version_or_another_type_fails_at_parent`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_layer_is_a_fragment_and_a_single_layer_is_complete`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_0_5_chain_reads_a_1_x_parent_under_the_0_5_rules`.
+Evidence: `negative-version-mismatch`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::each_layer_is_admitted_at_its_own_version_and_the_chain_needs_the_newest`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_parent_naming_an_unread_version_or_another_type_fails_at_parent`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_layer_is_a_fragment_and_a_single_layer_is_complete`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_0_5_chain_reads_a_1_x_parent_under_the_0_5_rules`, `rust/crates/yamaa-adapters/tests/declaration_layer_composition.rs::a_keyed_list_member_carries_its_identity_in_the_layer_that_writes_it`.
 
 Requiredness is deferred for every root field and at every depth inside a
 member of `input`, `intermediates`, `columns`, `rows` and `windows`. An entry
 file may therefore omit `output` and inherit it. The mapping key identifies an
 `input` or `windows` member; a member of `intermediates`, `columns` or `rows`
-carries its `id`, `name` or `id`. A layer whose version the engine does not
-read fails before composition, reporting the file and its version, at the
+carries its `id`, `name` or `id` in the layer that writes it, and one without
+it fails as `missing_required_field` under
+[SCHEMA-13](reference/schema-language.md#schema-13). A `copy` entry carries no
+`name`: it expands before the layers compose
+([SPEC-9](specification.md#spec-9)), so it is complete where it is written. A
+layer whose version the engine does not read fails before composition,
+reporting the file and its version, at the
 entry's `yamaa` or at the `parent` naming the layer. A layer that declares a
 type other than `spec` fails as `unexpected_file_type`, at the entry's `type`
 or at that `parent`. Layers may declare different versions, each admitted at

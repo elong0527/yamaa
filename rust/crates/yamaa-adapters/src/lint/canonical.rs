@@ -291,14 +291,21 @@ impl<'a> Read<'a> {
     }
 
     /// `redundant_long_form`: a long form that holds only what its shorthand
-    /// fills, which validation refuses (SCHEMA-15).
+    /// fills, which validation refuses (SCHEMA-15). The shorthand replaces
+    /// the long form, or the whole operation whose payload it is.
     fn long_forms(&self) -> Vec<Departure> {
         let mut found = Vec::new();
         for site in &self.sites {
-            let SiteRole::LongForm { field, shorthand } = &site.role else {
+            let SiteRole::LongForm {
+                field,
+                shorthand,
+                operation,
+            } = &site.role
+            else {
                 continue;
             };
             let node = self.nodes[site.node];
+            let replaced = operation.map_or(node, |operation| self.nodes[operation]);
             let shorthand = shorthand.map(|value| self.nodes[value]);
             let written = shorthand.map_or(field.as_str(), |value| self.document.source(value));
             let start = self.document.node(node).start;
@@ -313,7 +320,7 @@ impl<'a> Read<'a> {
                     ),
                 )
                 .with_fix(Rewrite::Shorthand {
-                    node,
+                    node: replaced,
                     shorthand,
                     keyword: field.clone(),
                 }),

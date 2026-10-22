@@ -40,7 +40,7 @@ the held bytes.
 | public-define | Existing Define input/XML/JSON owners, creation time, issue columns, column schemas, numeric metadata variants, spec/project text mutations and the issue row of a lower-cased transport name collision (its context compared by the file name both writers would write) |
 | public-contract | Shared YAML, issue and report columns, argument/member/read-only view names and defaults, shared messages (D39's error text, written from `docs/design/interface-1.0/api.md` and the templates of `yaml/conditions.yaml`; `{path}` stands for the specification or project path the test gave, and `{file}` for the file the first issue is located in, as its location names it), typed plain values, the failed run's report bytes, the issue rows of a save with nothing to write, and the value-level check rows of a run whose entry selects no row (SUB-13); distinct host i64 vectors |
 | public-grammar | Shared condition families; existing `grammar-original/cases.tsv` decisions |
-| diagnostic-parity | Refusal cases with their complete expected issue rows; `{path}` in a row's message and context stands for the specification path the test gave |
+| diagnostic-parity | Refusal cases with their complete expected issue rows; `{path}` in a row's message and context stands for the specification path the test gave, and `{entry}` in its context for that specification's absolute path as the engine resolves it, with forward slashes |
 | read-odm | The two reader documents (the adapters' `odm` fixtures), all 30 columns and cells, archive member selection, the authored sources two refusals read, and each refusal's one issue row and error text (`{source}` stands for the source path the test gave) |
 | parquet-containment | A Parquet file that makes the native decoder panic, its issue row, and a readable file with its saved CSV |
 | plan-reuse | One specification run A, B, A on one object with exact output CSV and issue rows; a changed specification's output; a changed function default's output |
@@ -78,7 +78,9 @@ two hosts equal each other. The context is the canonical JSON text both hosts
 return (sorted keys, no whitespace, exact integer tokens), compared as text, so
 no JSON reader chooses a host number type. A case whose specification is
 absent names the path the test gave, so its rows write `{path}`, which each
-suite replaces, as JSON text in the context. Together the cases cover every
+suite replaces, as JSON text in the context; a finding in a layer names the
+layer and the entry by the path the engine resolves, which the rows write
+`{entry}`. Together the cases cover every
 value shape a context holds: integers at and beyond 2^53, the signed 64-bit
 bounds and a wider literal, fractional and whole floats, null, non-ASCII text,
 text holding NUL (escaped), nested and empty objects and arrays, absent and

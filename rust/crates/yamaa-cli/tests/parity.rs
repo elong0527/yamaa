@@ -315,12 +315,17 @@ fn each_diagnostic_parity_case_prints_the_issue_rows_both_hosts_return() {
             directory.write("input.csv", bytes(&case["input_csv"]));
         }
         let document = document(&directory, &[text(case, "call"), "spec.yaml"], name);
+        // `{entry}` stands for the specification's absolute path as the
+        // engine resolves it.
         assert_eq!(
             printed_rows(&document, name),
             truth_rows(
                 &case["issues"],
                 &directory,
-                &[("{path}", "spec.yaml".to_owned())]
+                &[
+                    ("{path}", "spec.yaml".to_owned()),
+                    ("{entry}", directory.spelled("spec.yaml")),
+                ]
             ),
             "{name}"
         );
