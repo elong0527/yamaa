@@ -27,8 +27,8 @@ impl Study {
     }
 }
 
-const PRODUCER: &str = "schema_version: '1.0'\ndomain: PRODUCER\nkeys: [ID]\ninput: {RAW: {path: input/raw.csv, relative_to: entry, types: {ID: int}}}\ncolumns: [{name: ID, type: int, label: Identifier, derivation: RAW.ID}]\noutput: {path: output/produced.csv, relative_to: entry, columns: [ID]}\n";
-const CONSUMER: &str = "schema_version: '1.0'\ndomain: CONSUMER\nkeys: [ID]\ninput: {P: {path: output/produced.csv, schema: producer.yaml, relative_to: entry}}\ncolumns: [{name: ID, type: int, label: Identifier, derivation: P.ID}]\noutput: {path: output/final.csv, relative_to: entry, columns: [ID], report: output/report.csv}\n";
+const PRODUCER: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: PRODUCER\nkeys: [ID]\ninput: {RAW: {path: input/raw.csv, relative_to: entry, types: {ID: int}}}\ncolumns: [{name: ID, type: int, label: Identifier, derivation: RAW.ID}]\noutput: {path: output/produced.csv, relative_to: entry, columns: [ID]}\n";
+const CONSUMER: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: CONSUMER\nkeys: [ID]\ninput: {P: {path: output/produced.csv, schema: producer.yaml, relative_to: entry}}\ncolumns: [{name: ID, type: int, label: Identifier, derivation: P.ID}]\noutput: {path: output/final.csv, relative_to: entry, columns: [ID], report: output/report.csv}\n";
 
 #[test]
 fn two_studies_and_their_schema_links_match_the_actual_direct_preparation() {
@@ -38,11 +38,11 @@ fn two_studies_and_their_schema_links_match_the_actual_direct_preparation() {
     for wrapper in ["A", "B"] {
         study.write(
             &format!("{wrapper}/spec.yaml"),
-            "schema_version: '1.0'\nparent: ../shared/consumer.yaml\n",
+            "yamaa: \"1.0\"\ntype: spec\nparent: ../shared/consumer.yaml\n",
         );
         study.write(
             &format!("{wrapper}/producer.yaml"),
-            "schema_version: '1.0'\nparent: ../shared/producer.yaml\n",
+            "yamaa: \"1.0\"\ntype: spec\nparent: ../shared/producer.yaml\n",
         );
         let path = study.path(&format!("{wrapper}/spec.yaml"));
         let prepared = file_workflow::select_request(
@@ -59,7 +59,7 @@ fn two_studies_and_their_schema_links_match_the_actual_direct_preparation() {
         assert_eq!(artifact.entries().len(), 1);
         let consumer = &artifact.entries()[0];
         let (specification, order) =
-            specification_value(prepared.run().document().model().document()).unwrap();
+            specification_value(prepared.run().document().document()).unwrap();
         assert_eq!(consumer.specification, specification);
         assert_eq!(consumer.mapping_order, order);
         for resource in &consumer.resources {
@@ -126,8 +126,8 @@ fn two_studies_and_their_schema_links_match_the_actual_direct_preparation() {
 #[test]
 fn selector_only_overrides_and_atomic_output_keep_original_paths_and_selected_roots() {
     let study = Study::new();
-    study.write("shared/base.yaml", "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {RAW: {path: ../data/raw.csv, types: {ID: int}}}\ncolumns: [{name: ID, type: int, label: Original, derivation: RAW.ID}]\noutput: {path: ../data/base.csv, columns: [ID]}\n");
-    study.write("study/spec.yaml", "schema_version: '1.0'\nparent: ../shared/base.yaml\ninput: {RAW: {relative_to: entry}}\ncolumns: [{name: ID, label: Override}]\noutput: {path: ../result/final.csv, columns: [ID], relative_to: entry, report: ../result/report.csv}\n");
+    study.write("shared/base.yaml", "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {RAW: {path: ../data/raw.csv, types: {ID: int}}}\ncolumns: [{name: ID, type: int, label: Original, derivation: RAW.ID}]\noutput: {path: ../data/base.csv, columns: [ID]}\n");
+    study.write("study/spec.yaml", "yamaa: \"1.0\"\ntype: spec\nparent: ../shared/base.yaml\ninput: {RAW: {relative_to: entry}}\ncolumns: [{name: ID, label: Override}]\noutput: {path: ../result/final.csv, columns: [ID], relative_to: entry, report: ../result/report.csv}\n");
     let artifact = study.resolve("study/spec.yaml");
     let entry = &artifact.entries()[0];
     let input = entry
@@ -165,7 +165,7 @@ fn selector_only_overrides_and_atomic_output_keep_original_paths_and_selected_ro
     // Default declaring resolution is different from the selector-only override.
     study.write(
         "study/default.yaml",
-        "schema_version: '1.0'\nparent: ../shared/base.yaml\n",
+        "yamaa: \"1.0\"\ntype: spec\nparent: ../shared/base.yaml\n",
     );
     let default = study.resolve("study/default.yaml");
     let resource = default.entries()[0]
@@ -251,7 +251,7 @@ fn held_facts_round_trip_after_sources_are_deleted_without_recompilation() {
 fn named_dictionaries_and_mapping_order_are_retained_without_changing_the_compilation_model() {
     let study = Study::new();
     study.write("dict.yaml", "A: Alpha\nB: Beta\n");
-    study.write("spec.yaml", "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\nbase: Z\ninput: {Z: z.csv, A: a.csv}\ncolumns: [{name: ID, type: str, derivation: Z.ID}, {name: X, type: str, derivation: {mapping: {source: Z.CODE, dict: dict.yaml}}}]\noutput: {path: result.csv, columns: [ID, X]}\n");
+    study.write("spec.yaml", "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\nbase: Z\ninput: {Z: z.csv, A: a.csv}\ncolumns: [{name: ID, type: str, derivation: Z.ID}, {name: X, type: str, derivation: {mapping: {source: Z.CODE, dict: dict.yaml}}}]\noutput: {path: result.csv, columns: [ID, X]}\n");
     let artifact = study.resolve("spec.yaml");
     let entry = &artifact.entries()[0];
     // Input A is read by nothing, so pruning (LAYER-11) discards it from
@@ -389,10 +389,10 @@ fn wire_validation_rejects_incomplete_or_invented_ledgers_and_preserves_large_nu
 #[test]
 fn inherited_defaults_and_shorthand_keep_the_original_normalization_origins() {
     let study = Study::new();
-    study.write("mapping.yaml", "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {RAW: missing.csv}\ncolumns: [{name: ID, type: str, derivation: {mapping: {source: RAW.ID, dict: {A: Alpha}}}}]\noutput: {path: result.csv, columns: [ID]}\n");
+    study.write("mapping.yaml", "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {RAW: missing.csv}\ncolumns: [{name: ID, type: str, derivation: {mapping: {source: RAW.ID, dict: {A: Alpha}}}}]\noutput: {path: result.csv, columns: [ID]}\n");
     study.write(
         "mapping-child.yaml",
-        "schema_version: '1.0'\nparent: mapping.yaml\n",
+        "yamaa: \"1.0\"\ntype: spec\nparent: mapping.yaml\n",
     );
     let direct = study.resolve("mapping.yaml");
     let inherited = study.resolve("mapping-child.yaml");
@@ -406,20 +406,20 @@ fn inherited_defaults_and_shorthand_keep_the_original_normalization_origins() {
         .contains("schema_expression_mapping"));
     assert_eq!(&inherited.entries()[0].origins[pointer], expected);
 
-    study.write("shorthand.yaml", "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {RAW: missing.csv}\ncolumns: [{name: ID, type: str, derivation: RAW.ID}]\noutput: {path: result.csv, columns: [ID]}\n");
+    study.write("shorthand.yaml", "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {RAW: missing.csv}\ncolumns: [{name: ID, type: str, derivation: RAW.ID}]\noutput: {path: result.csv, columns: [ID]}\n");
     study.write(
         "shorthand-child.yaml",
-        "schema_version: '1.0'\nparent: shorthand.yaml\n",
+        "yamaa: \"1.0\"\ntype: spec\nparent: shorthand.yaml\n",
     );
     let direct = study.resolve("shorthand.yaml");
     let inherited = study.resolve("shorthand-child.yaml");
+    // A 1.0 name is an expression's text, so the shorthands that expand are
+    // the dataset's path and the derivation's long form (D18).
     for pointer in [
         "/input/RAW",
         "/input/RAW/path",
         "/columns/0/derivation",
         "/columns/0/derivation/value",
-        "/columns/0/derivation/value/source",
-        "/columns/0/derivation/value/source/variable",
     ] {
         assert_eq!(
             inherited.entries()[0].origins[pointer],
@@ -428,16 +428,14 @@ fn inherited_defaults_and_shorthand_keep_the_original_normalization_origins() {
         );
     }
     assert!(inherited.entries()[0].origins["/input/RAW"].generated);
-    assert!(
-        inherited.entries()[0].origins["/columns/0/derivation/value/source/variable"].generated
-    );
+    assert!(inherited.entries()[0].origins["/columns/0/derivation"].generated);
 }
 
 #[test]
 fn named_window_descendants_keep_the_definition_origin_and_root_keeps_the_use_site() {
     let study = Study::new();
-    study.write("base.yaml", "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {RAW: {path: missing.csv, types: {ID: int}}}\nwindows: {W: {order_by: [RAW.ID]}}\ncolumns: [{name: ID, type: int, derivation: RAW.ID}]\noutput: {path: result.csv, columns: [ID]}\n");
-    study.write("child.yaml", "schema_version: '1.0'\nparent: base.yaml\ncolumns: [{name: N, type: int, derivation: {row_number: {window: W}}}]\noutput: {path: result.csv, columns: [ID, N]}\n");
+    study.write("base.yaml", "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {RAW: {path: missing.csv, types: {ID: int}}}\nwindows: {W: {order_by: [RAW.ID]}}\ncolumns: [{name: ID, type: int, derivation: RAW.ID}]\noutput: {path: result.csv, columns: [ID]}\n");
+    study.write("child.yaml", "yamaa: \"1.0\"\ntype: spec\nparent: base.yaml\ncolumns: [{name: N, type: int, derivation: {row_number: {window: W}}}]\noutput: {path: result.csv, columns: [ID, N]}\n");
     let artifact = study.resolve("child.yaml");
     let origins = &artifact.entries()[0].origins;
     let prefix = "/columns/1/derivation/value/row_number/window";

@@ -682,36 +682,28 @@ mod relations {
         }
     }
     mod intermediate_match_values {
-        //! Independent normalized-document admission, with no engine or host effects.
+        //! Independent 1.0 lowering and preparation, with no engine or host effects.
         use crate::support::document::Tree;
         use crate::support::resolved;
+        use crate::support::specification::{header, prepare};
         use yamaa_core::{
             dataset::{MatchRead, MatchValue},
-            schema::{Document, DocumentNode as N, SpecificationDocument},
-            specification::{BindError, PrepareError, PreparedSpecification},
+            schema::{Document, DocumentNode as N},
+            specification::{BindError, PrepareError},
             table::{Column, TableSchema, ValueRef},
             value::{compare_present_refs, ColumnType as T, Value},
         };
 
-        fn doc(key: Tree) -> SpecificationDocument {
-            let column = |name, kind, variable| {
+        fn doc(key: Tree) -> Document {
+            let column = |name, kind, read| {
                 Tree::map(vec![
                     ("name", Tree::text(name)),
                     ("type", Tree::text(kind)),
-                    (
-                        "derivation",
-                        Tree::map(vec![(
-                            "value",
-                            Tree::map(vec![(
-                                "source",
-                                Tree::map(vec![("variable", Tree::text(variable))]),
-                            )]),
-                        )]),
-                    ),
+                    ("derivation", Tree::map(vec![("value", Tree::text(read))])),
                 ])
             };
-            let tree = Tree::map(vec![
-                ("schema_version", Tree::text("1.0")),
+            let mut fields = header();
+            fields.extend([
                 ("domain", Tree::text("OUT")),
                 ("base", Tree::text("SRC")),
                 (
@@ -734,10 +726,7 @@ mod relations {
                         ("id", Tree::text("LOOK")),
                         ("dataset", Tree::text("TAB")),
                         ("key", key),
-                        (
-                            "no_match",
-                            Tree::map(vec![("literal", Tree::Scalar(N::Null))]),
-                        ),
+                        ("absent", Tree::Scalar(N::Null)),
                     ])]),
                 ),
                 (
@@ -759,11 +748,7 @@ mod relations {
                     ]),
                 ),
             ]);
-            let mut nodes = Vec::new();
-            let root = tree.append(&mut nodes);
-            SpecificationDocument::admit(Document::new(nodes, root).unwrap())
-                .unwrap()
-                .unwrap()
+            Tree::map(fields).document()
         }
         fn schemas() -> (TableSchema, TableSchema) {
             let schema = |fields: &[(&str, T)]| {
@@ -798,7 +783,7 @@ mod relations {
             )])
         }
         fn finding_ids(key: Tree) -> Vec<(String, Vec<String>)> {
-            let prepared = PreparedSpecification::prepare(&doc(key)).unwrap();
+            let prepared = prepare(&doc(key)).unwrap();
             let (src, tab) = schemas();
             let Err(BindError::Invalid(findings)) = prepared.bind_sources(&[&src, &tab]) else {
                 panic!("invalid")
@@ -812,15 +797,13 @@ mod relations {
         #[test]
         fn padding_and_source_values_have_no_destination_and_preserve_dependency_scope() {
             for source in ["N", "SRC.N"] {
-                let prepared =
-                    PreparedSpecification::prepare(&doc(Tree::map(vec![("K", pad(source, "8"))])))
-                        .unwrap();
+                let prepared = prepare(&doc(Tree::map(vec![("K", pad(source, "8"))]))).unwrap();
                 let (src, tab) = schemas();
                 let plan = prepared.bind_sources(&[&src, &tab]).unwrap();
                 let keys = &resolved::intermediates(&plan)[0].keys;
                 assert_eq!(keys.len(), 1);
                 assert_eq!(keys[0].source_column, 0);
-                assert_eq!(keys[0].path, "intermediates[0].key.K");
+                assert_eq!(keys[0].path, "intermediates.LOOK.key.K");
                 let MatchValue::StrPad {
                     read,
                     operation: Some(op),
@@ -835,16 +818,14 @@ mod relations {
                 );
                 assert_eq!(resolved::output(&plan).columns().len(), 3);
             }
-            let prepared = PreparedSpecification::prepare(&doc(Tree::map(vec![(
-                "KNUM",
-                Tree::map(vec![("source", Tree::text("SRC.N"))]),
-            )])))
-            .unwrap();
+            // A name written alone reads the current record's field; 1.0 has
+            // no separate source wrapper (D18).
+            let prepared = prepare(&doc(Tree::map(vec![("KNUM", Tree::text("SRC.N"))]))).unwrap();
             let (src, tab) = schemas();
             let plan = prepared.bind_sources(&[&src, &tab]).unwrap();
             assert!(matches!(
                 &resolved::intermediates(&plan)[0].keys[0].value,
-                MatchValue::Source(MatchRead::Record { column: 1, .. })
+                MatchValue::Variable(MatchRead::Record { column: 1, .. })
             ));
         }
         #[test]
@@ -857,16 +838,16 @@ mod relations {
                 let actual = finding_ids(Tree::map(vec![(field, pad("SRC.ABSENT", "0"))]));
                 let mut expected = Vec::new();
                 if let Some(id) = first {
-                    expected.push((id.into(), vec!["intermediates[0].key".into()]));
+                    expected.push((id.into(), vec!["intermediates.LOOK.key".into()]));
                 }
                 expected.extend([
                     (
                         "TEXT-2".into(),
-                        vec![format!("intermediates[0].key.{field}.str_pad.width")],
+                        vec![format!("intermediates.LOOK.key.{field}.str_pad.width")],
                     ),
                     (
                         "LOOKUP-5".into(),
-                        vec![format!("intermediates[0].key.{field}")],
+                        vec![format!("intermediates.LOOK.key.{field}")],
                     ),
                     ("NAME-3".into(), vec!["columns.V.derivation.source".into()]),
                 ]);
@@ -876,7 +857,7 @@ mod relations {
                 finding_ids(Tree::map(vec![("K", pad("SRC.N", "0"))])),
                 [(
                     "TEXT-2".into(),
-                    vec!["intermediates[0].key.K.str_pad.width".into()]
+                    vec!["intermediates.LOOK.key.K.str_pad.width".into()]
                 )]
             );
         }
@@ -885,12 +866,7 @@ mod relations {
         /// alike, and a type decided per value at run time.
         #[test]
         fn key_expressions_compare_by_their_one_result_type_before_matching() {
-            let compute = |expr: &str| {
-                Tree::map(vec![(
-                    "compute",
-                    Tree::map(vec![("expr", Tree::text(expr))]),
-                )])
-            };
+            let compute = |expr: &str| Tree::text(expr);
             let mapping = |entries: Vec<(&str, Tree)>| {
                 Tree::map(vec![(
                     "mapping",
@@ -910,8 +886,7 @@ mod relations {
                 )])
             };
             let refused = |field: &str, value: Tree| {
-                let prepared =
-                    PreparedSpecification::prepare(&doc(Tree::map(vec![(field, value)]))).unwrap();
+                let prepared = prepare(&doc(Tree::map(vec![(field, value)]))).unwrap();
                 let (src, tab) = schemas();
                 let Err(BindError::Invalid(findings)) = prepared.bind_sources(&[&src, &tab]) else {
                     panic!("{field}: a key whose type cannot compare is refused")
@@ -940,7 +915,7 @@ mod relations {
                     refused(field, value),
                     (
                         "incompatible_input_type",
-                        vec!["intermediates[0].key".to_string()],
+                        vec!["intermediates.LOOK.key".to_string()],
                         text(expected),
                         text(if field == "K" { "str" } else { "int" }),
                     ),
@@ -957,8 +932,7 @@ mod relations {
                     mapping(vec![("one", Tree::integer(1)), ("two", Tree::text("2"))]),
                 ),
             ] {
-                let prepared =
-                    PreparedSpecification::prepare(&doc(Tree::map(vec![(field, value)]))).unwrap();
+                let prepared = prepare(&doc(Tree::map(vec![(field, value)]))).unwrap();
                 let (src, tab) = schemas();
                 prepared
                     .bind_sources(&[&src, &tab])
@@ -967,11 +941,8 @@ mod relations {
         }
         #[test]
         fn literal_text_is_not_a_reference_and_boolean_family_is_not_coerced() {
-            let prepared = PreparedSpecification::prepare(&doc(Tree::map(vec![(
-                "K",
-                Tree::map(vec![("literal", Tree::text("SRC.ABSENT"))]),
-            )])))
-            .unwrap();
+            let prepared =
+                prepare(&doc(Tree::map(vec![("K", Tree::text("'SRC.ABSENT'"))]))).unwrap();
             let (src, tab) = schemas();
             let plan = prepared.bind_sources(&[&src, &tab]).unwrap();
             assert_eq!(
@@ -979,11 +950,7 @@ mod relations {
                 MatchValue::Literal(Value::Str("SRC.ABSENT".into()))
             );
             assert_eq!(
-                finding_ids(Tree::map(vec![(
-                    "KINT",
-                    Tree::map(vec![("literal", Tree::Scalar(N::Boolean(true)))])
-                )]))[0]
-                    .0,
+                finding_ids(Tree::map(vec![("KINT", Tree::Scalar(N::Boolean(true)))]))[0].0,
                 "LOOKUP-9"
             );
         }
@@ -998,30 +965,20 @@ mod relations {
                     } else {
                         Tree::map(
                             selected
-                                .map(|name| {
-                                    (
-                                        name.as_str(),
-                                        Tree::map(vec![(
-                                            "literal",
-                                            Tree::Scalar(N::Integer("1".into())),
-                                        )]),
-                                    )
-                                })
+                                .map(|name| (name.as_str(), Tree::Scalar(N::Integer("1".into()))))
                                 .collect(),
                         )
                     };
                     doc(key)
                 };
-                PreparedSpecification::prepare(&document(64)).unwrap();
-                let Err(PrepareError::Limit(refusal)) =
-                    PreparedSpecification::prepare(&document(65))
-                else {
+                prepare(&document(64)).unwrap();
+                let Err(PrepareError::Limit(refusal)) = prepare(&document(65)) else {
                     panic!("fixed intermediate key boundary")
                 };
                 assert_eq!(refusal.resource, "intermediate_keys");
                 assert_eq!(refusal.limit, 64);
                 assert_eq!(refusal.actual, Some(65));
-                assert_eq!(refusal.spec_paths, ["intermediates[0].key"]);
+                assert_eq!(refusal.spec_paths, ["intermediates.LOOK.key"]);
             }
         }
 
@@ -1033,11 +990,9 @@ mod relations {
                     Tree::map(vec![("vendor_extension", Tree::text("unrecognized"))]),
                 )]),
                 "vendor_extension",
-                "intermediates[0].key.K.vendor_extension",
+                "intermediates.LOOK.key.K.vendor_extension",
             );
-            let Err(PrepareError::Unsupported(features)) =
-                PreparedSpecification::prepare(&doc(key))
-            else {
+            let Err(PrepareError::Unsupported(features)) = prepare(&doc(key)) else {
                 panic!("explicit unsupported gate")
             };
             assert!(features
@@ -1077,7 +1032,7 @@ mod relations {
         #[test]
         fn scalar_keys_retain_all_current_operands_without_synthetic_dependencies_or_destinations()
         {
-            let prepared = PreparedSpecification::prepare(&doc(Tree::map(vec![(
+            let prepared = prepare(&doc(Tree::map(vec![(
                 "KINT",
                 Tree::map(vec![(
                     "greatest",
@@ -1118,7 +1073,7 @@ mod relations {
             );
             assert_eq!(
                 expression.assignment.path,
-                "intermediates[0].key.KINT.greatest"
+                "intermediates.LOOK.key.KINT.greatest"
             );
             assert_eq!(
                 expression.result_type,

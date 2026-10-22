@@ -1770,7 +1770,7 @@ mod scalar {
         use yamaa_core::numeric::{ArithmeticErrorKind, Number};
         use yamaa_core::value::{Selection, Value, ValueType};
 
-        const SPEC_PATH: &str = "columns.A.derivation.compute";
+        const SPEC_PATH: &str = "columns.A.derivation";
 
         /// Decode fixture values without coercion or inference from the destination type.
         fn value(token: &str) -> Value {

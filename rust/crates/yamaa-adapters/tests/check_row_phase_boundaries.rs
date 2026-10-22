@@ -64,20 +64,21 @@ impl Fixture {
 
 /// Two templates over VS, each deriving `derivation` (one YAML line under
 /// `derivations`), with the lookups `intermediates` declares. AVISITN is a
-/// window, which only the column phase completes.
+/// window, which only the column phase completes. PLAN declares its key, the
+/// output key it stores, for the reads that join it (D23).
 fn specification(intermediates: &str, derivation: &str) -> String {
     let template = |id: &str, field: &str| {
         format!(
-            "  - id: {id}\n    dataset: VS\n    derivations:\n      PARAMCD: {{literal: {field}}}\n      AVAL: VS.{field}\n      {derivation}\n"
+            "  - id: {id}\n    dataset: VS\n    derivations:\n      PARAMCD: \"'{field}'\"\n      AVAL: VS.{field}\n      {derivation}\n"
         )
     };
     format!(
-        "schema_version: \"1.0\"\n\
+        "yamaa: \"1.0\"\ntype: spec\n\
          domain: ADVS\n\
          keys: [STUDYID, USUBJID, PARAMCD, AVISITN]\n\
          input:\n\
          \x20 VS: {{path: vs.csv, types: {{VSDTC: date, SYSBP: float, DIABP: float}}}}\n\
-         \x20 PLAN: {{path: plan.csv, types: {{DOSENUM: int, PLANDOSE: float, FIRST: int, LAST: int, REF: int}}}}\n\
+         \x20 PLAN: {{path: plan.csv, key: [STUDYID], types: {{DOSENUM: int, PLANDOSE: float, FIRST: int, LAST: int, REF: int}}}}\n\
          {intermediates}\
          output: {{path: out.csv, columns: [STUDYID, USUBJID, PARAMCD, AVISITN, AVAL, X, C]}}\n\
          columns:\n\
@@ -89,27 +90,26 @@ fn specification(intermediates: &str, derivation: &str) -> String {
          \x20   type: int\n\
          \x20   derivation: {{rank: {{method: dense, window: {{group_by: [STUDYID, USUBJID], order_by: [ADT]}}}}}}\n\
          \x20 - {{name: AVAL, type: float}}\n\
-         \x20 - {{name: X, type: float, derivation: {{literal: 0.0}}}}\n\
-         \x20 - {{name: C, type: str, derivation: {{literal: none}}}}\n\
+         \x20 - {{name: X, type: float, derivation: 0.0}}\n\
+         \x20 - {{name: C, type: str, derivation: \"'none'\"}}\n\
          rows:\n{}{}",
         template("systolic", "SYSBP"),
         template("diastolic", "DIABP"),
     )
 }
 
-const PLANNED: &str =
-    "intermediates:\n  - {id: PLANNED, dataset: PLAN, key: {DOSENUM: AVISITN}, no_match: null}\n";
-const PERIOD: &str = "intermediates:\n  - {id: PERIOD, dataset: PLAN, key: [STUDYID], between: {value: AVISITN, lower: FIRST, upper: LAST}, no_match: null}\n";
-const CHAIN: &str = "intermediates:\n  - {id: FIRSTREF, dataset: PLAN, key: {DOSENUM: AVISITN}, no_match: null}\n  - {id: PERIOD, dataset: PLAN, key: [STUDYID], between: {value: FIRSTREF.REF, lower: FIRST, upper: LAST}, no_match: null}\n";
+const PLANNED: &str = "intermediates:\n  - {id: PLANNED, dataset: PLAN, key: {DOSENUM: AVISITN}}\n";
+const PERIOD: &str = "intermediates:\n  - {id: PERIOD, dataset: PLAN, key: [STUDYID], between: {value: AVISITN, lower: FIRST, upper: LAST}}\n";
+const CHAIN: &str = "intermediates:\n  - {id: FIRSTREF, dataset: PLAN, key: {DOSENUM: AVISITN}}\n  - {id: PERIOD, dataset: PLAN, key: [STUDYID], between: {value: FIRSTREF.REF, lower: FIRST, upper: LAST}}\n";
 
 #[test]
 fn check_reports_each_row_phase_boundary_as_domain_does() {
     let cases = [
         ("", "C: {flag: \"AVISITN = 1\"}"),
-        ("", "X: {compute: {expr: \"AVISITN + AVAL * AVISITN\"}}"),
+        ("", "X: \"AVISITN + AVAL * AVISITN\""),
         (
             "",
-            "X: {case: [{when: \"AVISITN = 1\", then: {literal: 1.0}}, {otherwise: AVISITN}]}",
+            "X: {case: [{when: \"AVISITN = 1\", then: 1.0}, {otherwise: AVISITN}]}",
         ),
         ("", "X: {round_half_away_from_zero: {source: AVISITN, digits: 0}}"),
         ("", "X: {greatest: {sources: [AVISITN, AVAL]}}"),
@@ -124,7 +124,7 @@ fn check_reports_each_row_phase_boundary_as_domain_does() {
         ),
         ("", "X: {row_number: {window: {order_by: [AVISITN]}}}"),
         (PLANNED, "X: PLANNED.PLANDOSE"),
-        (PLANNED, "X: {compute: {expr: \"PLANNED.PLANDOSE + AVISITN\"}}"),
+        (PLANNED, "X: \"PLANNED.PLANDOSE + AVISITN\""),
         (PERIOD, "X: PERIOD.PLANDOSE"),
         // Each range value followed to the key value that reads AVISITN.
         (CHAIN, "X: PERIOD.PLANDOSE"),

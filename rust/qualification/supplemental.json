@@ -1012,6 +1012,7 @@
         "R/yamaa/tests/issue_locations.R",
         "python/tests/installed/installed_project_parity.py",
         "R/yamaa/tests/project_parity.R",
+        "rust/crates/yamaa-cli/tests/parity.rs",
         "R/yamaa/tests/run_report.R",
         "python/tests/installed/installed_compact_yaml.py",
         "R/yamaa/tests/compact_yaml.R",

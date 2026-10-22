@@ -4887,7 +4887,7 @@
         }
       },
       "value_level_report": {
-        "specification_yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: ADVS\nkeys: [USUBJID, PARAMCD]\ninput:\n  VS: {path: input.csv, types: {AVAL: float}}\noutput:\n  path: output.csv\n  columns: [USUBJID, PARAMCD, AVAL]\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: VS.USUBJID\n  - name: PARAMCD\n    type: str\n    label: Parameter Code\n    derivation: VS.PARAMCD\n  - name: AVAL\n    type: float\n    label: Analysis Value\n    derivation: VS.AVAL\n    submission:\n      core: Cond\n      mandatory: true\n      length: 8\n      origins:\n        - type: Predecessor\n          description: VS.AVAL\n      value_level:\n        - {id: SYSBP, where: {PARAMCD: [SYSBP]}}\n        - {id: PULSE, where: {PARAMCD: [PULSE]}}\n",
+        "specification_yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: ADVS\nkeys: [USUBJID, PARAMCD]\ninput:\n  VS: {path: input.csv, types: {AVAL: float}}\noutput:\n  path: output.csv\n  report: report.csv\n  columns: [USUBJID, PARAMCD, AVAL]\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: VS.USUBJID\n  - name: PARAMCD\n    type: str\n    label: Parameter Code\n    derivation: VS.PARAMCD\n  - name: AVAL\n    type: float\n    label: Analysis Value\n    derivation: VS.AVAL\n    submission:\n      core: Cond\n      mandatory: true\n      length: 8\n      origins:\n        - type: Predecessor\n          description: VS.AVAL\n      value_level:\n        - {id: SYSBP, where: {PARAMCD: [SYSBP]}}\n        - {id: PULSE, where: {PARAMCD: [PULSE]}}\n",
         "input_csv": "USUBJID,PARAMCD,AVAL\nS-001,SYSBP,128\nS-002,SYSBP,135\n",
         "condition": "value_level_unmatched",
         "checks": [
@@ -6548,6 +6548,9 @@
             },
             "r": {
               "functions/project_value.yaml": "yamaa: \"1.0\"\ntype: function\nname: project_value\ndescription: Return the supplied numeric value.\nparams:\n- {name: x, type: float}\nreturns: float\nimplementations:\n  python: operator.pos\ntests:\n- {id: ordinary, covers: [normal, numeric-comparison], args: {x: 1.5}, result: 1.5}\n- {id: zero-boundary, covers: [boundary, numeric-comparison], args: {x: 0.0}, result: 0.0}\n- {id: missing-short-circuits, covers: ['short-circuit-missing:x'], args: {x: null}, result: null}\n"
+            },
+            "cli": {
+              "functions/project_value.yaml": "yamaa: \"1.0\"\ntype: function\nname: project_value\ndescription: Return the supplied numeric value.\nparams:\n- {name: x, type: float}\nreturns: float\nimplementations:\n  python: operator.pos\n  r: base::identity\ntests:\n- {id: ordinary, covers: [normal, numeric-comparison], args: {x: 1.5}, result: 1.5}\n- {id: zero-boundary, covers: [boundary, numeric-comparison], args: {x: 0.0}, result: 0.0}\n- {id: missing-short-circuits, covers: ['short-circuit-missing:x'], args: {x: null}, result: null}\n"
             }
           },
           "call": {"operation": "spec_run", "path": "project.yaml", "name": "TEST"},
@@ -6580,6 +6583,22 @@
                 "column": 29,
                 "message": "project function project_value has no implementation for r",
                 "context": "{\"function\":\"project_value\",\"language\":\"r\"}",
+                "source_span": null,
+                "operand_route": null
+              }
+            ],
+            "cli": [
+              {
+                "severity": "error",
+                "phase": "planning",
+                "condition": "unsupported_operation",
+                "rule": null,
+                "spec_paths": ["environment"],
+                "file": null,
+                "line": null,
+                "column": null,
+                "message": "environment is not supported by this engine",
+                "context": "{\"operation\":\"environment\"}",
                 "source_span": null,
                 "operand_route": null
               }
@@ -6626,6 +6645,22 @@
                 "column": 5,
                 "message": "the installed package yamaa does not match the lock",
                 "context": "{\"actual\":\"{version}\",\"entry\":\"{root}/project.yaml\",\"expected\":[\"999999.0\"],\"lock\":\"r/renv.lock\",\"lock_source\":\"{root}/r/renv.lock\",\"package\":\"yamaa\",\"reason\":\"version_mismatch\",\"source\":\"{root}/project.yaml\"}",
+                "source_span": null,
+                "operand_route": null
+              }
+            ],
+            "cli": [
+              {
+                "severity": "error",
+                "phase": "planning",
+                "condition": "unsupported_operation",
+                "rule": null,
+                "spec_paths": ["environment"],
+                "file": null,
+                "line": null,
+                "column": null,
+                "message": "environment is not supported by this engine",
+                "context": "{\"operation\":\"environment\"}",
                 "source_span": null,
                 "operand_route": null
               }

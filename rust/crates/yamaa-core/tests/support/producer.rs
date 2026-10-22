@@ -1,7 +1,7 @@
 pub use crate::support::document::Tree;
 use yamaa_core::{
     producer_contract::{Link, Links},
-    schema::{Document, SpecificationDocument},
+    schema::Document,
 };
 
 pub const CONSUMER: &str = "/consumer.yaml";
@@ -11,14 +11,15 @@ pub fn document(
     columns: &[(&str, &str, Option<&str>)],
     output: &[&str],
     unsupported_parent: bool,
-) -> SpecificationDocument {
+) -> Document {
     let first = match &input {
         Tree::Map(fields) => fields[0].0.as_str(),
         _ => panic!("input mapping"),
     };
     let variable = format!("{first}.ID");
     let mut fields = vec![
-        ("schema_version", Tree::text("1.0")),
+        ("yamaa", Tree::text("1.0")),
+        ("type", Tree::text("spec")),
         ("domain", Tree::text("TEST")),
         ("base", Tree::text(first)),
         ("input", input),
@@ -34,13 +35,7 @@ pub fn document(
                             ("type", Tree::text(kind)),
                             (
                                 "derivation",
-                                Tree::map(vec![(
-                                    "value",
-                                    Tree::map(vec![(
-                                        "source",
-                                        Tree::map(vec![("variable", Tree::text(&variable))]),
-                                    )]),
-                                )]),
+                                Tree::map(vec![("value", Tree::text(&variable))]),
                             ),
                         ];
                         if let Some(label) = label {
@@ -65,13 +60,9 @@ pub fn document(
     if unsupported_parent {
         fields.push(("parent", Tree::text("parent.yaml")));
     }
-    let mut nodes = Vec::new();
-    let root = Tree::map(fields).append(&mut nodes);
-    SpecificationDocument::admit(Document::new(nodes, root).unwrap())
-        .unwrap()
-        .unwrap()
+    Tree::map(fields).document()
 }
-pub fn producer() -> SpecificationDocument {
+pub fn producer() -> Document {
     document(
         Tree::map(vec![(
             "RAW",
@@ -86,7 +77,7 @@ pub fn producer() -> SpecificationDocument {
         false,
     )
 }
-pub fn consumer(types: Option<Tree>) -> SpecificationDocument {
+pub fn consumer(types: Option<Tree>) -> Document {
     let mut fields = vec![
         ("path", Tree::text("produced.csv")),
         ("schema", Tree::text("nested/producer.yaml")),
@@ -102,11 +93,11 @@ pub fn consumer(types: Option<Tree>) -> SpecificationDocument {
     )
 }
 /// The `SRC` link to the producing specification held at `/producer.yaml`.
-pub fn link(document: &SpecificationDocument) -> Link<'_> {
+pub fn link(document: &Document) -> Link<'_> {
     Link {
         dataset: "SRC",
         identity: "/producer.yaml",
-        document: document.document(),
+        document,
     }
 }
 /// Links of the consuming specification held at [`CONSUMER`].

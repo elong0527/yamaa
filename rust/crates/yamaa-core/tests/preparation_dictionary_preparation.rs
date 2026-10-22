@@ -2,13 +2,12 @@
 //! preparation, inheritance and inheritance capture.
 mod preparation {
     mod dictionary_preparation {
-        //! Independent logical arenas and opaque effects exercise capture ownership.
+        //! Independent logical arenas and opaque effects exercise capture ownership, over a 1.0
+        //! document (`prepare_document`).
         use crate::support::document::Tree as V;
         use std::rc::Rc;
         use yamaa_core::resource::ResourceFailure;
-        use yamaa_core::schema::{
-            Document, DocumentNode as N, SchemaModule, SchemaStructure, SpecificationDocument,
-        };
+        use yamaa_core::schema::{Document, DocumentNode as N, SchemaModule, SchemaStructure};
         use yamaa_core::{
             dictionary_preparation as app,
             inheritance::{Source as Identity, SourceError},
@@ -37,7 +36,8 @@ mod preparation {
                         (
                             "root_class",
                             V::List(vec![
-                                field("schema_version", "str"),
+                                field("yamaa", "str"),
+                                field("type", "str"),
                                 field("domain", "str"),
                                 field("input", "dict"),
                                 field("keys", "list[str]"),
@@ -136,7 +136,8 @@ mod preparation {
         }
         fn input(columns: Vec<V>, rows: Vec<V>) -> V {
             V::map(vec![
-                ("schema_version", V::text("1.0")),
+                ("yamaa", V::text("1.0")),
+                ("type", V::text("spec")),
                 ("domain", V::text("DM")),
                 (
                     "input",
@@ -259,25 +260,24 @@ mod preparation {
                 raw
             }
         }
-        fn model(paths: &[&'static str]) -> SpecificationDocument {
-            let doc = document(input(
+        fn model(paths: &[&'static str]) -> Document {
+            document(input(
                 paths
                     .iter()
                     .enumerate()
                     .map(|(i, path)| column(if i == 0 { "X" } else { "Y" }, mapping(V::text(path))))
                     .collect(),
                 vec![],
-            ));
-            SpecificationDocument::admit(doc).unwrap().unwrap()
+            ))
         }
         #[test]
         fn aliases_resolve_in_use_order_but_capture_and_parse_once_without_mutating_original() {
             let schema = schema();
             let model = model(&["dict.yaml", "./dict.yaml"]);
-            let original = model.document().clone();
+            let original = model.clone();
             let mut port = Port::new();
             let mut decoder = Decoder::new();
-            let prepared = app::prepare(
+            let prepared = app::prepare_document(
                 &schema,
                 &model,
                 app::Origins::Standalone("parent/base.yaml"),
@@ -298,8 +298,8 @@ mod preparation {
             assert_eq!(decoder.events, vec!["dictionary:[1]"]);
             assert_eq!(prepared.captures.len(), 1);
             assert_eq!(prepared.captures[0].source().bytes, [1]);
-            assert_eq!(model.document(), &original);
-            assert_ne!(prepared.model.document(), model.document());
+            assert_eq!(model, original);
+            assert_ne!(prepared.document, model);
         }
         #[test]
         fn already_decoded_seed_identity_is_reused_without_capture_or_decode() {
@@ -312,7 +312,7 @@ mod preparation {
                 bytes: vec![1],
             };
             let raw = document(V::map(vec![("A", V::text("answer"))]));
-            let prepared = app::prepare(
+            let prepared = app::prepare_document(
                 &schema,
                 &model,
                 app::Origins::Standalone("entry"),
@@ -339,7 +339,7 @@ mod preparation {
                 let mut port = Port::new();
                 port.fail = Some(tag);
                 let mut decoder = Decoder::new();
-                let rejected = app::prepare(
+                let rejected = app::prepare_document(
                     &schema(),
                     &model(&["dict.yaml", "later.yaml"]),
                     app::Origins::Standalone("entry"),
@@ -370,7 +370,7 @@ mod preparation {
         fn dictionary_contract_failure_retains_exact_first_capture_prefix_and_arena() {
             let mut port = Port::new();
             let mut decoder = Decoder::new();
-            let rejected = app::prepare(
+            let rejected = app::prepare_document(
                 &schema(),
                 &model(&["dict.yaml", "later.yaml"]),
                 app::Origins::Standalone("entry"),
@@ -400,7 +400,7 @@ mod preparation {
             let mut port = Port::new();
             let mut decoder = Decoder::new();
             decoder.invalid = true;
-            let rejected = app::prepare(
+            let rejected = app::prepare_document(
                 &schema(),
                 &model(&["dict.yaml", "later.yaml"]),
                 app::Origins::Standalone("entry"),

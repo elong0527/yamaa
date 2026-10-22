@@ -817,7 +817,7 @@ mod source {
     mod mapping_dictionary_resources {
         use yamaa_core::schema::{
             admit_schema_diagnostics, Document, DocumentNode as N, NormalizationError,
-            SchemaModule, SchemaStructure, SpecificationDocument,
+            SchemaModule, SchemaStructure,
         };
 
         use crate::support::document::Tree as V;
@@ -843,7 +843,8 @@ mod source {
                         (
                             "root_class",
                             V::List(vec![
-                                field("schema_version", "str"),
+                                field("yamaa", "str"),
+                                field("type", "str"),
                                 field("domain", "str"),
                                 field("input", "dict"),
                                 field("keys", "list[str]"),
@@ -943,7 +944,8 @@ mod source {
         }
         fn input(columns: Vec<V>, rows: Vec<V>) -> V {
             V::map(vec![
-                ("schema_version", V::text("1.0")),
+                ("yamaa", V::text("1.0")),
+                ("type", V::text("spec")),
                 ("domain", V::text("DM")),
                 (
                     "input",
@@ -1098,12 +1100,8 @@ mod source {
                 ],
                 vec![],
             ));
-            let model = SpecificationDocument::admit(original.clone())
-                .unwrap()
-                .unwrap();
-            let references = schema
-                .mapping_dictionary_references(model.document())
-                .unwrap();
+            let unchanged = original.clone();
+            let references = schema.mapping_dictionary_references(&original).unwrap();
             let dictionary = document(V::map(vec![
                 ("A", V::text("mapped")),
                 ("B", V::boolean(false)),
@@ -1117,12 +1115,12 @@ mod source {
                         .unwrap()
                 })
                 .collect::<Vec<_>>();
-            let compiled = schema
-                .materialize_mapping_dictionaries(&model, &admitted)
+            let (compiled, _) = schema
+                .materialize_mapping_dictionary_document(&original, &admitted)
                 .unwrap();
             assert_eq!(
-                compiled.document(),
-                &document(input(
+                compiled,
+                document(input(
                     vec![
                         column(
                             "X",
@@ -1142,17 +1140,17 @@ mod source {
                     vec![]
                 ))
             );
-            assert_eq!(model.document(), &original);
+            assert_eq!(original, unchanged);
             assert!(schema
-                .mapping_dictionary_references(compiled.document())
+                .mapping_dictionary_references(&compiled)
                 .unwrap()
                 .is_empty());
             assert!(schema
-                .materialize_mapping_dictionaries(&model, &admitted[..1])
+                .materialize_mapping_dictionary_document(&original, &admitted[..1])
                 .is_err());
             assert!(schema
-                .materialize_mapping_dictionaries(
-                    &model,
+                .materialize_mapping_dictionary_document(
+                    &original,
                     &[admitted[0].clone(), admitted[0].clone()]
                 )
                 .is_err());

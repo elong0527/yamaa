@@ -373,8 +373,8 @@ mod execution {
         use std::{cell::RefCell, rc::Rc};
 
         use yamaa_core::{
-            schema::{Document, DocumentNode as N, SpecificationDocument},
-            specification::{PreparedSpecification, SourceDeclaration},
+            schema::{Document, DocumentNode as N},
+            specification::SourceDeclaration,
             table::{CellError, TableAccess, TableSchema, ValueRef},
             value::{ColumnType as T, Value},
         };
@@ -436,22 +436,15 @@ mod execution {
         }
 
         use crate::support::document::Tree;
+        use crate::support::specification::prepare;
 
         fn port_document(
             reordered: bool,
             drivers: [Option<&str>; 2],
             grouped: bool,
             field: &str,
-        ) -> SpecificationDocument {
-            let source = |name| {
-                Tree::map(vec![(
-                    "value",
-                    Tree::map(vec![(
-                        "source",
-                        Tree::map(vec![("variable", Tree::text(name))]),
-                    )]),
-                )])
-            };
+        ) -> Document {
+            let source = |name| Tree::map(vec![("value", Tree::text(name))]);
             let mut inputs = vec![
                 ("SRC", Tree::map(vec![("path", Tree::text("src.csv"))])),
                 ("DONOR", Tree::map(vec![("path", Tree::text("donor.csv"))])),
@@ -474,7 +467,8 @@ mod execution {
                 rows.push(Tree::map(fields));
             }
             let tree = Tree::map(vec![
-                ("schema_version", Tree::text("1.0")),
+                ("yamaa", Tree::text("1.0")),
+                ("type", Tree::text("spec")),
                 ("domain", Tree::text("TEST")),
                 ("input", Tree::map(inputs)),
                 ("keys", Tree::List(vec![Tree::text("ID")])),
@@ -484,10 +478,7 @@ mod execution {
                         ("id", Tree::text("P")),
                         ("dataset", Tree::text("DONOR")),
                         ("key", Tree::map(vec![("K", Tree::text("KEY"))])),
-                        (
-                            "no_match",
-                            Tree::map(vec![("literal", Tree::Scalar(N::Null))]),
-                        ),
+                        ("absent", Tree::Scalar(N::Null)),
                     ])]),
                 ),
                 (
@@ -531,11 +522,7 @@ mod execution {
                     ]),
                 ),
             ]);
-            let mut nodes = Vec::new();
-            let root = tree.append(&mut nodes);
-            SpecificationDocument::admit(Document::new(nodes, root).unwrap())
-                .unwrap()
-                .unwrap()
+            tree.document()
         }
 
         #[test]
@@ -615,7 +602,7 @@ mod execution {
                     Ok(if source.name == "SRC" { src } else { donor })
                 }
             }
-            let prepared = PreparedSpecification::prepare(&port_document(
+            let prepared = prepare(&port_document(
                 true,
                 [Some("SRC"), Some("SRC")],
                 false,
