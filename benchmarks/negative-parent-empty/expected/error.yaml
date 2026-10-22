@@ -1,0 +1,7 @@
+phase: validation
+condition: minimum_length
+spec_paths:
+  - parent
+rule: SCHEMA-12
+context:
+  minimum: 1

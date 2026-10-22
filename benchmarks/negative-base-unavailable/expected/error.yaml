@@ -1,0 +1,7 @@
+phase: validation
+condition: driver_unavailable
+spec_paths:
+  - base
+rule: ROW-8
+context:
+  row: null

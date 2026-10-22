@@ -1,0 +1,7 @@
+phase: validation
+condition: correlated_derivation_with_unique_verification
+spec_paths:
+  - intermediates.DISP.verifications[0].unique
+rule: LOOKUP-17
+context:
+  intermediate: DISP

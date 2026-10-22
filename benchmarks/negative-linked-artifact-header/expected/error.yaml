@@ -1,0 +1,12 @@
+phase: validation
+condition: producer_contract_mismatch
+spec_paths:
+  - input.ADSL.schema
+  - input.ADSL.path
+rule: INPUT-11
+context:
+  dataset: ADSL
+  expected: [STUDYID, USUBJID, AGE, TRTSDT]
+  missing: [TRTSDT]
+  extra: []
+  reordered: false

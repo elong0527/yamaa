@@ -1,0 +1,7 @@
+phase: validation
+condition: unknown_derive_variable
+spec_paths:
+  - columns.TOTDOSE.derivation.aggregate.expr
+rule: LOOKUP-22
+context:
+  variable: DOSE_MG

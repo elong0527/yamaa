@@ -1,0 +1,44 @@
+yamaa: "1.0"
+type: spec
+model: SDTM
+# The questionnaire records of one instrument, split into a dataset of their
+# own and named with a hyphen.
+domain: QS-PHQ9
+keys: [STUDYID, USUBJID, QSSEQ]
+input:
+  QS: {path: input/qs.csv, types: {QSSEQ: int}}
+
+output:
+  path: qsph.csv
+  columns: [DOMAIN, STUDYID, USUBJID, QSSEQ, QSTESTCD, QSORRES]
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'QS'"
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: QS.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: QS.USUBJID
+
+  - name: QSSEQ
+    type: int
+    label: Sequence Number
+    derivation: QS.QSSEQ
+
+  - name: QSTESTCD
+    type: str
+    label: Question Short Name
+    derivation: QS.QSTESTCD
+
+  - name: QSORRES
+    type: str
+    label: Finding in Original Units
+    derivation: QS.QSORRES

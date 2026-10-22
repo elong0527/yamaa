@@ -4949,6 +4949,36 @@
           "issues",
           "save"
         ]
+      },
+      "unknown_section_issues": {
+        "sdtm": {
+          "severity": "error",
+          "phase": "validation",
+          "condition": "unknown_section",
+          "rule": "PROJECT-14",
+          "spec_paths": [],
+          "file": null,
+          "line": null,
+          "column": null,
+          "message": "the project declares no section sdtm",
+          "context": "{\"section\":\"sdtm\",\"sections\":[\"adam\"]}",
+          "source_span": null,
+          "operand_route": null
+        },
+        "bogus": {
+          "severity": "error",
+          "phase": "validation",
+          "condition": "unknown_section",
+          "rule": "PROJECT-14",
+          "spec_paths": [],
+          "file": null,
+          "line": null,
+          "column": null,
+          "message": "the project declares no section bogus",
+          "context": "{\"section\":\"bogus\",\"sections\":[\"adam\"]}",
+          "source_span": null,
+          "operand_route": null
+        }
       }
     },
     "public-grammar": {
@@ -6348,6 +6378,159 @@
             "file": null,
             "line": null,
             "column": null
+          }
+        }
+      ]
+    },
+    "project-parity": {
+      "cases": [
+        {
+          "name": "an_input_that_reads_a_listed_artifact_without_a_link",
+          "files": {
+            "project.yaml": "yamaa: \"1.0\"\ntype: project\n\nsdtm:\n  specs:\n  - dm.yaml\n\nadam:\n  specs:\n  - adsl.yaml\n",
+            "dm.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: DM\nkeys: [USUBJID]\ninput: {RAW: raw.csv}\noutput: {path: dm.csv, columns: [USUBJID]}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: RAW.USUBJID}\n",
+            "adsl.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: ADSL\nkeys: [USUBJID]\ninput: {DM: dm.csv}\noutput: {path: adsl.csv, columns: [USUBJID]}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: DM.USUBJID}\n",
+            "raw.csv": "USUBJID\n01\n"
+          },
+          "call": {"operation": "project_run", "path": "project.yaml", "member": "ADSL"},
+          "issues": [
+            {
+              "severity": "error",
+              "phase": "validation",
+              "condition": "unlinked_producer",
+              "rule": "PROJECT-10",
+              "spec_paths": ["input.DM.path"],
+              "file": "adsl.yaml",
+              "line": 6,
+              "column": 9,
+              "message": "input DM reads dm.csv, the artifact of another specification, without a schema link",
+              "context": "{\"dataset\":\"DM\",\"entry\":\"{root}/adsl.yaml\",\"path\":\"dm.csv\",\"producer\":\"{root}/dm.yaml\",\"source\":\"{root}/adsl.yaml\"}",
+              "source_span": null,
+              "operand_route": null
+            }
+          ]
+        },
+        {
+          "name": "a_consumer_of_a_producer_that_failed_does_not_run",
+          "files": {
+            "project.yaml": "yamaa: \"1.0\"\ntype: project\n\nsdtm:\n  specs:\n  - dm.yaml\n\nadam:\n  specs:\n  - adsl.yaml\n",
+            "dm.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: DM\nkeys: [USUBJID]\ninput: {RAW: raw.csv}\noutput: {path: dm.csv, columns: [USUBJID, AGE]}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: RAW.USUBJID}\n",
+            "adsl.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: ADSL\nkeys: [USUBJID]\ninput: {DM: {path: dm.csv, schema: dm.yaml}}\noutput: {path: adsl.csv, columns: [USUBJID]}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: DM.USUBJID}\n",
+            "raw.csv": "USUBJID\n01\n"
+          },
+          "call": {"operation": "project_run", "path": "project.yaml", "member": "ADSL"},
+          "issues": [
+            {
+              "severity": "error",
+              "phase": "validation",
+              "condition": "producer_not_completed",
+              "rule": "PROJECT-11",
+              "spec_paths": ["input.DM.schema"],
+              "file": "adsl.yaml",
+              "line": 6,
+              "column": 28,
+              "message": "this specification did not run because the producer of its input DM did not complete",
+              "context": "{\"dataset\":\"DM\",\"entry\":\"{root}/adsl.yaml\",\"producer\":\"{root}/dm.yaml\",\"source\":\"{root}/adsl.yaml\"}",
+              "source_span": null,
+              "operand_route": null
+            }
+          ]
+        },
+        {
+          "name": "a_function_the_running_host_does_not_implement",
+          "files": {
+            "project.yaml": "yamaa: \"1.0\"\ntype: project\nfunctions:\n- functions/project_value.yaml\n\nadam:\n  specs:\n  - spec.yaml\n",
+            "spec.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {VALUE: float}}}\noutput: {path: test.csv, columns: [ID, RESULT]}\ncolumns:\n  - {name: ID, type: str, label: Identifier, derivation: SRC.ID}\n  - name: RESULT\n    type: float\n    label: Result\n    derivation: {function: {name: project_value, args: {x: SRC.VALUE}}}\n",
+            "input.csv": "ID,VALUE\n01,1.5\n"
+          },
+          "host_files": {
+            "python": {
+              "functions/project_value.yaml": "yamaa: \"1.0\"\ntype: function\nname: project_value\ndescription: Return the supplied numeric value.\nparams:\n- {name: x, type: float}\nreturns: float\nimplementations:\n  r: base::identity\ntests:\n- {id: ordinary, covers: [normal, numeric-comparison], args: {x: 1.5}, result: 1.5}\n- {id: zero-boundary, covers: [boundary, numeric-comparison], args: {x: 0.0}, result: 0.0}\n- {id: missing-short-circuits, covers: ['short-circuit-missing:x'], args: {x: null}, result: null}\n"
+            },
+            "r": {
+              "functions/project_value.yaml": "yamaa: \"1.0\"\ntype: function\nname: project_value\ndescription: Return the supplied numeric value.\nparams:\n- {name: x, type: float}\nreturns: float\nimplementations:\n  python: operator.pos\ntests:\n- {id: ordinary, covers: [normal, numeric-comparison], args: {x: 1.5}, result: 1.5}\n- {id: zero-boundary, covers: [boundary, numeric-comparison], args: {x: 0.0}, result: 0.0}\n- {id: missing-short-circuits, covers: ['short-circuit-missing:x'], args: {x: null}, result: null}\n"
+            }
+          },
+          "call": {"operation": "spec_run", "path": "project.yaml", "name": "TEST"},
+          "issues": {
+            "python": [
+              {
+                "severity": "error",
+                "phase": "validation",
+                "condition": "function_implementation_missing",
+                "rule": "FUNC-1",
+                "spec_paths": ["columns.RESULT.derivation.function.name"],
+                "file": "spec.yaml",
+                "line": 13,
+                "column": 29,
+                "message": "project function project_value has no implementation for python",
+                "context": "{\"function\":\"project_value\",\"language\":\"python\"}",
+                "source_span": null,
+                "operand_route": null
+              }
+            ],
+            "r": [
+              {
+                "severity": "error",
+                "phase": "validation",
+                "condition": "function_implementation_missing",
+                "rule": "FUNC-1",
+                "spec_paths": ["columns.RESULT.derivation.function.name"],
+                "file": "spec.yaml",
+                "line": 13,
+                "column": 29,
+                "message": "project function project_value has no implementation for r",
+                "context": "{\"function\":\"project_value\",\"language\":\"r\"}",
+                "source_span": null,
+                "operand_route": null
+              }
+            ]
+          }
+        },
+        {
+          "name": "a_locked_version_the_installed_package_does_not_match",
+          "files": {
+            "project.yaml": "yamaa: \"1.0\"\ntype: project\nfunctions:\n- functions/project_value.yaml\nenvironments:\n  python:\n    lock: python/uv.lock\n  r:\n    lock: r/renv.lock\n\nadam:\n  specs:\n  - spec.yaml\n",
+            "functions/project_value.yaml": "yamaa: \"1.0\"\ntype: function\nname: project_value\ndescription: Return the supplied numeric value.\nparams:\n- {name: x, type: float}\nreturns: float\nimplementations:\n  python: operator.pos\n  r: base::identity\ntests:\n- {id: ordinary, covers: [normal, numeric-comparison], args: {x: 1.5}, result: 1.5}\n- {id: zero-boundary, covers: [boundary, numeric-comparison], args: {x: 0.0}, result: 0.0}\n- {id: missing-short-circuits, covers: ['short-circuit-missing:x'], args: {x: null}, result: null}\n",
+            "spec.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {VALUE: float}}}\noutput: {path: test.csv, columns: [ID, RESULT]}\ncolumns:\n  - {name: ID, type: str, label: Identifier, derivation: SRC.ID}\n  - name: RESULT\n    type: float\n    label: Result\n    derivation: {function: {name: project_value, args: {x: SRC.VALUE}}}\n",
+            "input.csv": "ID,VALUE\n01,1.5\n",
+            "python/uv.lock": "version = 1\nrevision = 5\nrequires-python = \">=3.12\"\n\n[[package]]\nname = \"yamaa\"\nversion = \"999999.0\"\nsource = { editable = \".\" }\n",
+            "r/renv.lock": "{\n  \"R\": {\n    \"Version\": \"4.6.1\"\n  },\n  \"Packages\": {\n    \"yamaa\": {\n      \"Package\": \"yamaa\",\n      \"Version\": \"999999.0\"\n    }\n  }\n}\n"
+          },
+          "call": {"operation": "spec_run", "path": "project.yaml", "name": "TEST"},
+          "issues": {
+            "python": [
+              {
+                "severity": "error",
+                "phase": "validation",
+                "condition": "runtime_artifact_mismatch",
+                "rule": "FUNC-3",
+                "spec_paths": ["environments.python.lock"],
+                "file": "project.yaml",
+                "line": 7,
+                "column": 5,
+                "message": "the installed package yamaa does not match the lock",
+                "context": "{\"actual\":\"{version}\",\"entry\":\"{root}/project.yaml\",\"expected\":[\"999999.0\"],\"lock\":\"python/uv.lock\",\"lock_source\":\"{root}/python/uv.lock\",\"package\":\"yamaa\",\"reason\":\"version_mismatch\",\"source\":\"{root}/project.yaml\"}",
+                "source_span": null,
+                "operand_route": null
+              }
+            ],
+            "r": [
+              {
+                "severity": "error",
+                "phase": "validation",
+                "condition": "runtime_artifact_mismatch",
+                "rule": "FUNC-3",
+                "spec_paths": ["environments.r.lock"],
+                "file": "project.yaml",
+                "line": 9,
+                "column": 5,
+                "message": "the installed package yamaa does not match the lock",
+                "context": "{\"actual\":\"{version}\",\"entry\":\"{root}/project.yaml\",\"expected\":[\"999999.0\"],\"lock\":\"r/renv.lock\",\"lock_source\":\"{root}/r/renv.lock\",\"package\":\"yamaa\",\"reason\":\"version_mismatch\",\"source\":\"{root}/project.yaml\"}",
+                "source_span": null,
+                "operand_route": null
+              }
+            ]
           }
         }
       ]

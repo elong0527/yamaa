@@ -1,0 +1,6 @@
+phase: validation
+condition: conflicting_row_construction
+spec_paths:
+  - filter
+  - rows
+rule: ROW-9
