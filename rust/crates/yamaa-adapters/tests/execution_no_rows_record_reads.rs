@@ -3,7 +3,7 @@
 //! (COLUMN-7). A key derived by a window gives each record its own row, so
 //! every column then reads that one record (ROW-8); otherwise a key that
 //! reads other records, an aggregate or an `odm` read, fails before any data
-//! is read.
+//! is read, as does a key that reads a non-key column.
 use crate::support::Edit as _;
 use std::fs;
 use yamaa_adapters::file_application;
@@ -251,4 +251,33 @@ fn a_key_that_reads_other_records_fails_before_data() {
         fixture.run(),
         Ok("ID,SEQ,TOP\n1,1,5\n1,2,5\n2,1,4\n".into())
     );
+}
+
+/// A key that reads a non-key column fails before any data is read, at its
+/// derivation whatever its operation: a 1.0 formula, which writes no
+/// operation segment of its own, also under `value`, reports where a bare
+/// name's source binding does, as its 0.5 `compute` did (COLUMN-7, D18).
+#[test]
+fn a_key_that_reads_a_non_key_column_fails_at_its_derivation() {
+    let refused = vec![yamaa_adapters::json!({
+        "phase": "validation",
+        "condition": "key_dependency",
+        "rule": "COLUMN-7",
+        "spec_paths": ["columns.ID.derivation"],
+        "context": {"column": "ID", "dependency": "VALUE"}
+    })];
+    for derivation in ["VALUE + 1", "{value: VALUE + 1, unconvertible: 0}", "VALUE"] {
+        let fixture = Fixture::new(
+            &format!(
+                "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\n\
+                 input: {{SRC: {{path: source.csv, types: {{ID: int, VAL: int}}}}}}\n\
+                 output: {{path: out.csv, columns: [ID, VALUE]}}\n\
+                 columns:\n  - {{name: VALUE, type: int, derivation: SRC.VAL}}\n  \
+                 - {{name: ID, type: int, derivation: {derivation}}}\n"
+            ),
+            &[("source.csv", SOURCE)],
+        );
+        assert_eq!(fixture.run(), Err(refused.clone()), "{derivation}");
+        assert_eq!(fixture.check(), refused, "{derivation}");
+    }
 }

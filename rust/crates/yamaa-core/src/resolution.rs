@@ -411,14 +411,17 @@ impl<'a> Live<'a> {
         }
         // Every column and intermediate that carries its own verification. A
         // complete rename-only intermediate also reaches its refusal
-        // (LOOKUP-4) when nothing reads it.
+        // (LOOKUP-4) when nothing reads it, and so does a 1.x intermediate
+        // that drives no row template and declares no `key` (LOOKUP-3, D219).
         for column in &spec.columns {
             if !column.checks.is_empty() {
                 self.columns.insert(column.name.name.clone());
             }
         }
         for item in &spec.intermediates {
-            if !item.checks.is_empty() || (rename_only(spec, item) && !item.dataset.name.is_empty())
+            if !item.checks.is_empty()
+                || spec.lacks_key(item)
+                || (rename_only(spec, item) && !item.dataset.name.is_empty())
             {
                 self.intermediates.insert(item.id.name.clone());
             }
@@ -664,8 +667,7 @@ impl<'a> Live<'a> {
 /// Without a relation change or `require_match`, an intermediate whose
 /// absence answer is missing reads what the implicit join reads (LOOKUP-4):
 /// in 0.5 one that writes no `key`, in 1.0 one whose `key` lists the columns
-/// of its input's declared key (D23, D71). A 1.0 one that writes no `key`
-/// stays a root too, for its `missing_required_field` (LOOKUP-3).
+/// of its input's declared key (D23, D71).
 fn rename_only(spec: &Spec, item: &Intermediate) -> bool {
     let joins_as_input = match &item.key {
         Some(JoinKey::Columns { .. }) => spec.keys_as_input(item),
