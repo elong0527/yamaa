@@ -399,6 +399,72 @@ output: {path: out.csv, columns: [CODE, REASON]}
         }
 
         #[test]
+        fn a_keyed_list_member_carries_its_identity_in_the_layer_that_writes_it() {
+            // Inside a member of `columns`, `rows` or `intermediates`
+            // requiredness waits for the resolved specification, but the
+            // member carries the `name` or `id` that composition matches it
+            // by (LAYER-4). Without it the member fails where it is written,
+            // named by its index (P-CLR-2), as a missing required field
+            // (SCHEMA-13), not as an engine fault (D73).
+            let study = Study::new();
+            const HEAD: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID]}\n";
+            let alone = format!(
+                "{HEAD}columns:\n  - {{name: ID, type: str, label: Identifier, derivation: SRC.ID}}\n"
+            );
+            let missing = |path: &str, field: &str, class: &str| -> Finding {
+                (
+                    ConditionCode::SchemaMissingRequiredField,
+                    path.into(),
+                    vec![
+                        ("field", C::Text(field.into())),
+                        ("class", C::Text(class.into())),
+                    ],
+                )
+            };
+            for (text, expected) in [
+                (
+                    format!("{alone}  - {{type: str, label: Nameless, derivation: \"'X'\"}}\n"),
+                    missing("columns[1].name", "name", "column_class"),
+                ),
+                (
+                    format!("{alone}  - {{}}\n"),
+                    missing("columns[1].name", "name", "column_class"),
+                ),
+                (
+                    format!("{alone}intermediates:\n  - {{dataset: SRC, key: [ID]}}\n"),
+                    missing("intermediates[0].id", "id", "intermediate_class"),
+                ),
+                (
+                    format!(
+                        "{HEAD}columns:\n  - {{name: ID, type: str, label: Identifier}}\nrows:\n  - {{dataset: SRC, derivations: {{ID: SRC.ID}}}}\n"
+                    ),
+                    missing("rows[0].id", "id", "row_class"),
+                ),
+            ] {
+                study.write("spec.yaml", &text);
+                assert_eq!(
+                    layer_findings(prepare(&study.path("spec.yaml")).unwrap_err()),
+                    (study.path("spec.yaml"), vec![expected]),
+                    "{text}"
+                );
+            }
+            // A child layer's member is matched with the one it inherits by
+            // that identity too.
+            study.write("base.yaml", BASE);
+            study.write(
+                "spec.yaml",
+                &entry(&[], "columns:\n  - {label: Nameless}\n"),
+            );
+            assert_eq!(
+                layer_findings(prepare(&study.path("spec.yaml")).unwrap_err()),
+                (
+                    study.path("spec.yaml"),
+                    vec![missing("columns[0].name", "name", "column_class")]
+                )
+            );
+        }
+
+        #[test]
         fn a_clear_that_names_what_it_cannot_clear_fails_at_its_entry() {
             let study = Study::new();
             study.write("base.yaml", BASE);

@@ -5428,6 +5428,54 @@
               "operand_route": null
             }
           ]
+        },
+        {
+          "name": "structured_source_holding_only_its_variable",
+          "call": "check",
+          "specification_yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: V, type: str, derivation: {source: {variable: SRC.V}}}\noutput: {path: output.csv, columns: [ID, V]}\n",
+          "input_csv": "ID,V\na,b\n",
+          "issues": [
+            {
+              "severity": "error",
+              "phase": "validation",
+              "condition": "redundant_long_form",
+              "rule": "SCHEMA-15",
+              "spec_paths": [
+                "columns.V.derivation.source"
+              ],
+              "file": "spec.yaml",
+              "line": 8,
+              "column": 39,
+              "message": "the long form of variable only restates its shorthand SRC.V",
+              "context": "{\"entry\":\"{entry}\",\"field\":\"variable\",\"shorthand\":\"SRC.V\",\"source\":\"{entry}\"}",
+              "source_span": null,
+              "operand_route": null
+            }
+          ]
+        },
+        {
+          "name": "column_without_its_name",
+          "call": "check",
+          "specification_yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {type: str, derivation: \"'X'\"}\noutput: {path: output.csv, columns: [ID]}\n",
+          "input_csv": "ID\na\n",
+          "issues": [
+            {
+              "severity": "error",
+              "phase": "validation",
+              "condition": "missing_required_field",
+              "rule": "SCHEMA-13",
+              "spec_paths": [
+                "columns[1].name"
+              ],
+              "file": "spec.yaml",
+              "line": 8,
+              "column": 5,
+              "message": "columns[1].name lacks a field it requires",
+              "context": "{\"class\":\"column_class\",\"entry\":\"{entry}\",\"field\":\"name\",\"source\":\"{entry}\"}",
+              "source_span": null,
+              "operand_route": null
+            }
+          ]
         }
       ]
     },

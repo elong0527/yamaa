@@ -824,12 +824,16 @@ qualify_issue_parity <- function() {
     }
     frame <- check_issues(yamaa_spec(spec)[[case$call]]()$issues)
     expected <- case$issues
-    # `{path}` stands for the specification path given, as JSON text in the
-    # context.
+    # `{path}` stands for the specification path given, and `{entry}` for its
+    # absolute path as the engine resolves it, with forward slashes, each as
+    # JSON text in the context.
     given <- c(message = spec, context = gsub("\\", "\\\\", spec, fixed = TRUE))
+    entry <- normalizePath(spec, winslash = "/", mustWork = FALSE)
     expected <- lapply(expected, function(issue) {
       for (field in names(given)) if (!is.null(issue[[field]]))
         issue[[field]] <- gsub("{path}", given[[field]], issue[[field]], fixed = TRUE)
+      if (!is.null(issue$context))
+        issue$context <- gsub("{entry}", entry, issue$context, fixed = TRUE)
       issue
     })
     # A truth row names its file relative to the case's directory; a

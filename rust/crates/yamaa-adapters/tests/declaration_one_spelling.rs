@@ -132,7 +132,8 @@ mod declaration {
             }
             // 0.5-only until #3447: 1.0 writes a reference as the bare
             // expression and `source:` only as the structured binding (D18),
-            // so 1.0 has no source shorthand for these to restate.
+            // so 1.0 has no `{source: X}` to restate, and refuses the binding
+            // that holds only its variable as below.
             for (derivation, path, field) in [
                 ("{source: DM.V}", "columns.V.derivation", "source"),
                 (
@@ -201,6 +202,53 @@ mod declaration {
                     legacy_diagnostics(&text),
                     [legacy_restated(path, field, json!("EX.N"))],
                     "{text}"
+                );
+            }
+        }
+
+        #[test]
+        fn a_structured_source_holding_only_its_variable_restates_the_bare_read() {
+            // An expression field reads a name as its bare text (EXPR-5), so
+            // the binding that holds nothing else restates it, where it is
+            // written: a derivation, a handled wrapper's value, a case result.
+            for (derivation, path, variable) in [
+                (
+                    "{source: {variable: DM.V}}",
+                    "columns.V.derivation.source",
+                    "DM.V",
+                ),
+                (
+                    "{value: {source: {variable: DM.V}}, unconvertible: 0}",
+                    "columns.V.derivation.value.source",
+                    "DM.V",
+                ),
+                (
+                    "{case: [{when: 'DM.V > 1', then: {source: {variable: DM.V}}}, {otherwise: 0}]}",
+                    "columns.V.derivation.case[0].then.source",
+                    "DM.V",
+                ),
+                // A qualified field may spell a keyword (FORMULA-2).
+                (
+                    "{source: {variable: DM.NOT}}",
+                    "columns.V.derivation.source",
+                    "DM.NOT",
+                ),
+            ] {
+                assert_eq!(
+                    diagnostics(&column(derivation)),
+                    [restated(path, "variable", json!(variable))],
+                    "{derivation}"
+                );
+            }
+            // Text the grammar reads as no name, an unqualified reserved
+            // word in any case, is no read of the variable it spells, so the
+            // binding restates nothing.
+            for variable in ["NULL", "true", "In"] {
+                let derivation = format!("{{source: {{variable: '{variable}'}}}}");
+                assert_eq!(
+                    diagnostics(&column(&derivation)),
+                    [] as [Value; 0],
+                    "{derivation}"
                 );
             }
         }
