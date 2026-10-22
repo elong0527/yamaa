@@ -41,22 +41,37 @@ class RepositoryCatalog(unittest.TestCase):
         root = Path(__file__).resolve().parents[2]
         truth = root / "rust/tests/host-fixtures/cases.json"
         families = json.loads(truth.read_text(encoding="utf-8"))["families"]
+        r_readers = set(root.glob("R/yamaa/tests/*.R"))
+        pending = list(r_readers)
+        while pending:
+            # Only helpers reached from an executable suite count. In
+            # particular, leaving original.R on disk must not cover its
+            # family after the last suite stops sourcing it.
+            source = pending.pop().read_text(encoding="utf-8")
+            source = re.sub(r"(?m)^\s*#.*$", "", source)
+            for helper in re.findall(
+                r'\bsource\s*\(\s*file\.path\s*\(\s*host_fixture_root\s*,\s*"([^"/]+\.R)"\s*\)',
+                source,
+            ):
+                path = root / "rust/tests/host-fixtures" / helper
+                if path not in r_readers:
+                    r_readers.add(path)
+                    pending.append(path)
         readers = {
             "python": (
-                ["python/tests/installed/installed_*.py"],
+                root.glob("python/tests/installed/installed_*.py"),
                 r'load_truth\(__file__, "([a-z-]+)"\)',
             ),
             "r": (
-                ["R/yamaa/tests/*.R", "rust/tests/host-fixtures/*.R"],
+                r_readers,
                 r'read_host_fixture\(host_fixture_root, ?"([a-z-]+)"\)',
             ),
         }
         unread = {}
-        for host, (patterns, call) in readers.items():
+        for host, (paths, call) in readers.items():
             read = {
                 family
-                for pattern in patterns
-                for path in root.glob(pattern)
+                for path in paths
                 for family in re.findall(call, path.read_text(encoding="utf-8"))
             }
             unread[host] = sorted(set(families) - read)
