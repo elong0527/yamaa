@@ -12,7 +12,7 @@
       "phase": "validation",
       "rule": "FORMULA-27",
       "spec_paths": [
-        "columns.HIFL.derivation.compute.expr"
+        "columns.HIFL.derivation"
       ]
     }
   ],
@@ -32,7 +32,7 @@
           "phase": "validation",
           "rule": "FORMULA-27",
           "spec_paths": [
-            "columns.HIFL.derivation.compute.expr"
+            "columns.HIFL.derivation"
           ]
         }
       ],

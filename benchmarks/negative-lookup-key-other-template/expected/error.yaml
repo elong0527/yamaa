@@ -1,7 +1,7 @@
 phase: validation
 condition: unknown_field
 spec_paths:
-  - intermediates[0].key
+  - intermediates.DEVICE.key
 rule: LOOKUP-5
 context:
   identifier: CLINIC.DEVICEID

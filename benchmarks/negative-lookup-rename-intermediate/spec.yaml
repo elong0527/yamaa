@@ -1,9 +1,11 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: SDTM
 domain: CM
 keys: [STUDYID, USUBJID, CMSEQ]
 input:
   CM_RAW: input/cm_raw.csv
-  CODING: input/coding.csv
+  CODING: {path: input/coding.csv, key: [STUDYID, USUBJID, CMSEQ]}
   WHODRUG: input/whodrug.csv
 base: CM_RAW
 
@@ -16,7 +18,7 @@ intermediates:
   # projection, so the spec is rejected before any data is read.
   - id: CODED
     dataset: CODING
-    no_match: {literal: null}
+    key: [STUDYID, USUBJID, CMSEQ]
 
   - id: WHODRUG_LOOKUP
     dataset: WHODRUG
