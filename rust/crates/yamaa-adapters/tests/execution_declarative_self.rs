@@ -891,6 +891,17 @@ rows:
                 "validation | unknown_field | Some(\"LOOKUP-5\")",
             );
         }
+
+        /// The child orders its columns before binding (LAYER-13), and an
+        /// unbound reducer name of an aggregate with bindings is no column
+        /// that ordering could miss (#3593).
+        #[test]
+        fn empty_child_of_negative_aggregate_unbound_variable_reports_unknown_derive_variable() {
+            assert_empty_child_matches_parent(
+                "negative-aggregate-unbound-variable",
+                "validation | unknown_derive_variable | Some(\"LOOKUP-22\")",
+            );
+        }
     }
     mod inherited_aggregate_bindings {
         //! Aggregate derive bindings remain local when specifications are inherited.

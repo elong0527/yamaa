@@ -474,12 +474,14 @@ impl<P: Ports> Application<P> {
                     let href = ports
                         .package_reference(&artifact, &define_location)
                         .ok_or_else(|| {
-                            Failure::Metadata(vec![crate::define_diagnostics::admit_relation(
-                                crate::define_diagnostics::TargetRelation::ArtifactOutsidePackage,
-                                &path,
-                                "artifact must be inside the Define package",
-                            )
-                            .unwrap_err()])
+                            Failure::Metadata(vec![
+                                crate::define_diagnostics::artifact_outside_document(
+                                    &path,
+                                    &id,
+                                    origin.written,
+                                    &define.text,
+                                ),
+                            ])
                         })?;
                     (Some(href), None)
                 }

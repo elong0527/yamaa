@@ -1066,12 +1066,6 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     .is_ok());
     for (relation, code, condition, rule) in [
         (
-            TargetRelation::ArtifactOutsidePackage,
-            DefineArtifactOutsidePackage,
-            "artifact_outside_document",
-            "DEFINE-16",
-        ),
-        (
             TargetRelation::ArtifactCollision,
             DefineArtifactCollision,
             "artifact_path_collision",
@@ -1108,6 +1102,46 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             rule,
         );
     }
+    // DEFINE-16: an artifact outside the document's directory names its
+    // dataset, its path as written and the document's path as written.
+    let finding = define_diagnostics::artifact_outside_document(
+        "adam.specs[0]",
+        "ADSL",
+        "outside/adsl.csv",
+        "package/define.xml",
+    );
+    let text = |value: &str| JsonValue::String(value.into());
+    assert_eq!(
+        (
+            finding.path.as_str(),
+            &finding.context,
+            super::Record::record(&finding).message()
+        ),
+        (
+            "adam.specs[0]",
+            &[
+                ("artifact".into(), text("outside/adsl.csv")),
+                ("dataset".into(), text("ADSL")),
+                ("define".into(), text("package/define.xml")),
+                (
+                    "detail".into(),
+                    text("artifact must be inside the Define package")
+                ),
+            ]
+            .into(),
+            "the artifact outside/adsl.csv of ADSL is outside the directory of package/define.xml"
+                .to_owned()
+        ),
+        "artifact_outside_document"
+    );
+    reached_finding(
+        &mut reached,
+        &[finding],
+        DefineArtifactOutsidePackage,
+        "validation",
+        "artifact_outside_document",
+        "DEFINE-16",
+    );
     // SUB-3 (D25, D58): a section lists only 1.x specifications of its model,
     // each at its listed `model`, and composes no further dataset metadata
     // for one that fails.

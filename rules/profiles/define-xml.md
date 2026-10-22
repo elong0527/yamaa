@@ -477,14 +477,16 @@ is the path's final component. The href must not begin with a parent
 traversal. A dataset with no data and no transport file has no leaf.
 
 Fails: `artifact_outside_document`.
-Evidence: `sdtm-dm-metadata`, `sdtm-dm-xpt`, `rust/crates/yamaa-adapters/tests/file_resources.rs::inherited_original_output_supplies_both_json_capture_and_publication_target`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::DefineArtifactOutsidePackage`.
+Evidence: `sdtm-dm-metadata`, `sdtm-dm-xpt`, `rust/crates/yamaa-adapters/tests/file_resources.rs::inherited_original_output_supplies_both_json_capture_and_publication_target`, `rust/crates/yamaa-adapters/tests/file_resources.rs::mutual_references_and_published_contract_fail_before_any_publication`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::DefineArtifactOutsidePackage`.
 
 A document that pointed outside its own directory would describe a file that is
 not in the package it belongs to. Without a transport, an artifact path that
 cannot be expressed relative to the document's directory without a parent
-traversal fails with `artifact_outside_document`, reporting the dataset and
-both paths. A transport file is the document's sibling, so its href is its file
-name wherever the artifact is published.
+traversal fails with `artifact_outside_document` at the dataset's `specs`
+entry, reporting the dataset as `dataset`, the artifact's `output.path` as its
+specification writes it as `artifact`, and the document's path as the project
+writes it as `define`. A transport file is the document's sibling, so its href
+is its file name wherever the artifact is published.
 
 The leaf names a file this language produced: the artifact
 [Output](../output.md) publishes, the Dataset-JSON file

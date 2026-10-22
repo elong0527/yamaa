@@ -246,7 +246,9 @@ fn a_check_reads_only_metadata_through_the_resolver() {
 /// D45: a project's names come from the project file and its
 /// specifications' metadata alone. On every project benchmark they capture no
 /// input data, and they are the names of a run of every section, which reads
-/// the inputs; a project that the names refuse runs nothing.
+/// the inputs; a project that the names refuse runs nothing. A run that a
+/// collision refuses names nothing too, while the names stay its listings',
+/// each of which selects (D180).
 #[test]
 fn project_names_read_no_input_data_and_name_what_a_run_builds() {
     let benchmarks = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../benchmarks");
@@ -276,6 +278,21 @@ fn project_names_read_no_input_data_and_name_what_a_run_builds() {
         let runs = engine.project_run(project, None, &token).unwrap();
         reading += usize::from(!case.inputs().is_empty());
         match names {
+            // A name shared by two listings refuses the names too, so only
+            // the collisions refuse this run (D180).
+            Ok(names) if runs.names().is_empty() && !names.is_empty() => {
+                let codes: Vec<_> = runs.diagnostics().into_iter().map(|d| d.code).collect();
+                assert!(
+                    !codes.is_empty() && codes.iter().all(|code| code == "artifact_path_collision"),
+                    "{benchmark}: {codes:?}"
+                );
+                for name in &names {
+                    assert!(
+                        engine.project_spec(project, name).is_ok(),
+                        "{benchmark}: {name}"
+                    );
+                }
+            }
             Ok(names) => assert_eq!(names, runs.names(), "{benchmark}"),
             Err(failure) => {
                 assert!(runs.names().is_empty(), "{benchmark}");
