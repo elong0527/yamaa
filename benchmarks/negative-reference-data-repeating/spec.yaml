@@ -1,0 +1,69 @@
+yamaa: "1.0"
+type: spec
+model: SDTM
+domain: TE
+keys: [STUDYID, ETCD]
+input:
+  RAW: input/te_raw.csv
+
+output:
+  path: te.csv
+  columns: [DOMAIN, STUDYID, ETCD, ELEMENT]
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'TE'"
+    submission:
+      core: Req
+      role: Identifier
+      length: 2
+      origins:
+        - type: Assigned
+          source: Sponsor
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: RAW.STUDYID
+    submission:
+      core: Req
+      role: Identifier
+      length: 8
+      origins:
+        - type: Protocol
+          source: Sponsor
+
+  - name: ETCD
+    type: str
+    label: Element Code
+    derivation: RAW.ETCD
+    submission:
+      core: Req
+      role: Topic
+      length: 4
+      origins:
+        - type: Protocol
+          source: Sponsor
+
+  - name: ELEMENT
+    type: str
+    label: Description of Element
+    derivation: RAW.ELEMENT
+    submission:
+      core: Req
+      role: Synonym Qualifier
+      length: 9
+      origins:
+        - type: Protocol
+          source: Sponsor
+
+# The trial elements are reference data, one record per element, yet the
+# dataset is declared to repeat.
+submission:
+  label: Trial Elements
+  class: TRIAL DESIGN
+  structure: One record per planned Element
+  repeating: true
+  reference_data: true

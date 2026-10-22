@@ -85,7 +85,7 @@ class FileResources(unittest.TestCase):
                 entry = study / "spec.yaml"
                 program = "consumer" if producer else "ordinary"
                 entry.write_text(
-                    f"schema_version: '1.0'\nparent: ../shared/{program}.yaml\n",
+                    f'yamaa: "1.0"\ntype: spec\nparent: ../shared/{program}.yaml\n',
                     encoding="ascii",
                 )
                 (study / "producer.yaml").write_text(
@@ -353,7 +353,7 @@ class FileResources(unittest.TestCase):
 
     def simple_document(self, source):
         return (
-            "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\n"
+            'yamaa: "1.0"\ntype: spec\ndomain: TEST\nkeys: [ID]\n'
             f"input: {{SRC: {json.dumps(source)}}}\n"
             "columns: [{name: ID, type: int, derivation: SRC.ID}]\n"
             "output: {path: result.csv, columns: [ID]}\n"

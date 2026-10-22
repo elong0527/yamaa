@@ -1,0 +1,10 @@
+phase: validation
+condition: predecessor_label_mismatch
+spec_paths:
+  - adam.specs[0].columns.AGE.label
+rule: SUB-20
+context:
+  detail: AGE
+  predecessor: DM.AGE
+  label: Age at Informed Consent
+  predecessor_label: Age

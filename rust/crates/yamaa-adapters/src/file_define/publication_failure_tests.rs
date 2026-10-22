@@ -27,10 +27,10 @@ fn target_admission_keeps_typed_publication_fault_and_original_error_in_both_hos
         ] {
             let cause = error.message();
             let mut result = Define::prepare("", Submission::Sdtm, None, "0.4.0", Some(host), None);
-            result.refuse(native_failure(service::Failure::TargetAdmission {
+            result.refuse(Failure::TargetAdmission {
                 index: usize::MAX,
                 error,
-            }));
+            });
             assert_eq!(result.issues().len(), 1);
             let finding = &result.issues()[0];
             assert_eq!(finding.phase(), "engine");
@@ -193,7 +193,7 @@ fn changed_define_metadata_uses_original_project_environment_spec_parent_and_dic
         fs::write(directory.join("spec.yaml"), &spec).unwrap();
         let environment_written =
             crate::file_resolver::caller_path(&directory.join("project.yaml")).unwrap();
-        let mut ports = NativePorts {
+        let mut reads = Reads {
             resources: None,
             resolver: None,
             host: Some(Language::Python),
@@ -201,8 +201,8 @@ fn changed_define_metadata_uses_original_project_environment_spec_parent_and_dic
             environment_written: String::new(),
             specifications: Vec::new(),
         };
-        let environment = ports.capture_environment(&environment_written).unwrap();
-        let specification = ports
+        let environment = reads.capture_environment(&environment_written).unwrap();
+        let specification = reads
             .capture_specification(
                 "sdtm.specs[0]",
                 &environment.root().source().identity,
@@ -210,9 +210,9 @@ fn changed_define_metadata_uses_original_project_environment_spec_parent_and_dic
             )
             .unwrap();
         let original_environment = environment.root().source().bytes.clone();
-        let reads = ports.resources().capture_reads();
+        let captured = reads.resources().capture_reads();
         fs::write(directory.join(changed), b"invalid replacement").unwrap();
-        let failure = ports
+        let failure = reads
             .verify_metadata("sdtm", &environment.root().source().identity)
             .unwrap_err();
         assert!(matches!(
@@ -240,12 +240,12 @@ fn changed_define_metadata_uses_original_project_environment_spec_parent_and_dic
             yamaa_core::json::Value::Object(findings[0].context.clone()),
             crate::json!({"path":written})
         );
-        assert_eq!(ports.resources().capture_reads(), reads);
+        assert_eq!(reads.resources().capture_reads(), captured);
         assert_eq!(specification.source().bytes, spec.as_bytes());
         assert_eq!(environment.root().source().bytes, original_environment);
         assert!(!directory.join("never-read.csv").exists());
         assert!(!directory.join("never-written.csv").exists());
-        drop(ports);
+        drop(reads);
         fs::remove_dir_all(directory).unwrap();
     }
 }
@@ -370,10 +370,10 @@ fn define_caps_only_the_public_issue_prefix_and_retains_every_original_finding()
                 Failure::Diagnostic(
                     (0..10_001)
                         .map(|index| {
-                            service::resource_diagnostic(
+                            define::resource_diagnostic(
                                 &format!("findings[{index}]"),
                                 "missing.csv",
-                                service::ResourceObservation::Missing,
+                                define::ResourceObservation::Missing,
                             )
                         })
                         .collect(),

@@ -1,0 +1,8 @@
+phase: validation
+condition: origin_contradicts_derivation
+spec_paths:
+  - columns.AGE.submission
+rule: SUB-19
+context:
+  column: AGE
+  origin_type: Collected

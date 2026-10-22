@@ -139,7 +139,7 @@ local({
   stopifnot("the int32 input is copied"=
     file.copy(file.path(root,"pq","unsupported-int32.parquet"),file.path(directory,"input.parquet"),overwrite=TRUE))
   int32 <- file.path(directory,"int32.yaml")
-  writeBin(charToRaw('{"schema_version":"1.0","domain":"TEST","input":{"SRC":"input.parquet"},"keys":["FIELD"],"columns":[{"name":"FIELD","type":"int","derivation":"SRC.FIELD"}],"output":{"path":"output.csv","columns":["FIELD"]}}'),int32)
+  writeBin(charToRaw('{"yamaa":"1.0","type":"spec","domain":"TEST","input":{"SRC":"input.parquet"},"keys":["FIELD"],"columns":[{"name":"FIELD","type":"int","derivation":"SRC.FIELD"}],"output":{"path":"output.csv","columns":["FIELD"]}}'),int32)
   result <- run_spec(int32)
   stopifnot("an int32 field reads without issues"=nrow(result$issues)==0L)
   expect_identical(result$output$FIELD,1,"an int32 field reads as int")
@@ -152,7 +152,7 @@ local({
   for (policy in c("missing","present")) {
     label <- paste("the empty-string policy",policy)
     entry <- file.path(directory,"spec.yaml")
-    source <- paste0('{"schema_version":"1.0","domain":"TEST","input":{"SRC":{"path":"input.PARQUET","empty_string":"',policy,'"}},"keys":["I"],"columns":[{"name":"I","type":"int","derivation":"SRC.I"},{"name":"S","type":"str","derivation":"SRC.S"}],"output":{"path":"output.csv","columns":["I","S"]}}')
+    source <- paste0('{"yamaa":"1.0","type":"spec","domain":"TEST","input":{"SRC":{"path":"input.PARQUET","empty_string":"',policy,'"}},"keys":["I"],"columns":[{"name":"I","type":"int","derivation":"SRC.I"},{"name":"S","type":"str","derivation":"SRC.S"}],"output":{"path":"output.csv","columns":["I","S"]}}')
     writeBin(charToRaw(source),entry)
     stopifnot_case(label,"the input is copied"=
       file.copy(file.path(root,"pq","text.parquet"),file.path(directory,"input.PARQUET"),overwrite=TRUE))
@@ -189,7 +189,7 @@ local({
   stopifnot("arrow stores a factor as a dictionary"=inherits(stored$FACTOR$type,"DictionaryType"),
     "arrow stores an ordered factor as a dictionary"=inherits(stored$ORDERED$type,"DictionaryType"))
   entry <- file.path(directory,"spec.yaml")
-  writeBin(charToRaw('{"schema_version":"1.0","domain":"TEST","input":{"SRC":{"path":"input.parquet","empty_string":"present"}},"keys":["ID"],"columns":[{"name":"ID","type":"str","derivation":"SRC.ID"},{"name":"FACTOR","type":"str","derivation":"SRC.FACTOR"},{"name":"ORDERED","type":"str","derivation":"SRC.ORDERED"}],"output":{"path":"output.csv","columns":["ID","FACTOR","ORDERED"]}}'),entry)
+  writeBin(charToRaw('{"yamaa":"1.0","type":"spec","domain":"TEST","input":{"SRC":{"path":"input.parquet","empty_string":"present"}},"keys":["ID"],"columns":[{"name":"ID","type":"str","derivation":"SRC.ID"},{"name":"FACTOR","type":"str","derivation":"SRC.FACTOR"},{"name":"ORDERED","type":"str","derivation":"SRC.ORDERED"}],"output":{"path":"output.csv","columns":["ID","FACTOR","ORDERED"]}}'),entry)
   result <- run_spec(entry)
   stopifnot("dictionary columns read without issues"=nrow(result$issues)==0L)
   expect_identical(as.list(result$output),list(ID=as.character(1:6),FACTOR=text,ORDERED=text),

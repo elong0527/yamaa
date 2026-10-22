@@ -1285,13 +1285,23 @@ class PublicationBoundary(unittest.TestCase):
             (destination / "asset-paths.txt").read_text().splitlines(),
             [str(path.resolve()) for path in assets],
         )
-        # The evidence follows the committed notes as a section of its own.
+        # The evidence follows the committed notes of the final version as a
+        # section of its own. A candidate's introduction, whose text
+        # CandidateReleaseBody pins, comes first.
         attempt = "https://github.com/elong0527/yamaa/actions/runs/7/attempts/2"
-        self.assertEqual(
-            (destination / "release-notes.md").read_text(encoding="utf-8"),
-            (ROOT / f"docs/releases/{VERSION}.md")
+        notes = (
+            (ROOT / f"docs/releases/{IDENTITY.version}.md")
             .read_text(encoding="utf-8")
             .rstrip("\n")
+        )
+        if IDENTITY.candidate is not None:
+            introduction = release.candidate_introduction(
+                ROOT, IDENTITY, REPOSITORY["full_name"]
+            )
+            notes = introduction + "\n\n" + notes
+        self.assertEqual(
+            (destination / "release-notes.md").read_text(encoding="utf-8"),
+            notes
             + "\n\n## Qualified native artifacts\n\n"
             + f"Native qualification run: [{attempt}]({attempt}).\n\n"
             + "".join(

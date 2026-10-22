@@ -51,7 +51,9 @@ def test_runtime_without_optional_python_readers(tmp_path):
         root = Path(sys.argv[1])
         source = "ID,VALUE\\na,-9223372036854775808\\nb,9223372036854775807\\nc,\\n"
         (root / "input.csv").write_text(source)
-        specification = """schema_version: '1.0'
+        specification = """yamaa: "1.0"
+        type: spec
+        model: ADaM
         domain: TEST
         keys: [ID]
         input: {SRC: input.csv}

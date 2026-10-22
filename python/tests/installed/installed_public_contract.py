@@ -224,8 +224,9 @@ class PublicContract(unittest.TestCase):
                 "_spec_summary",
             ],
         )
-        self.assertEqual(yamaa.__version__, "0.5.0")
-        self.assertEqual(_native._CORE_VERSION, yamaa.__version__)
+        # A release candidate's Python and Cargo spellings differ (#3030 D53).
+        self.assertEqual(yamaa.__version__, "1.0.0rc1")
+        self.assertEqual(_native._CORE_VERSION, "1.0.0-rc.1")
 
     def test_signatures_members_and_argument_types(self):
         expected = TRUTH["arguments"]
@@ -912,7 +913,7 @@ class PublicContract(unittest.TestCase):
         # A name that is no section of the project raises (PROJECT-14).
         listing = self.root / "project.yaml"
         listing.write_text(
-            "schema_version: '1.0'\nadam:\n  specs: []\n", encoding="utf-8"
+            'yamaa: "1.0"\ntype: project\nadam:\n  specs: []\n', encoding="utf-8"
         )
         project = yamaa.project(listing)
         for call, expected in (
@@ -936,9 +937,9 @@ class PublicContract(unittest.TestCase):
         # A literal beyond every 64-bit range is refused before study access;
         # its context carries the signed 64-bit bounds and the exact literal.
         self.spec.write_text(
-            "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\n"
+            'yamaa: "1.0"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\n'
             "columns:\n  - {name: ID, type: str, derivation: SRC.ID}\n"
-            "  - {name: N, type: int, derivation: {literal: 18446744073709551616}}\n"
+            "  - {name: N, type: int, derivation: 18446744073709551616}\n"
             "output: {path: output.csv, columns: [ID, N]}\n",
             encoding="utf-8",
         )
@@ -949,7 +950,7 @@ class PublicContract(unittest.TestCase):
                 "validation",
                 "integer_overflow",
                 "VALUE-5",
-                ["columns.N.derivation.literal"],
+                ["columns.N.derivation"],
             ),
         )
         context = json.loads(row["context"])
@@ -961,7 +962,7 @@ class PublicContract(unittest.TestCase):
         self.assertIsNone(row["source_span"])
         self.assertIsNone(row["operand_route"])
 
-        # A division by zero fails at one node of the compute expression: the
+        # A division by zero fails at one node of the expression: the
         # span covers that node's bytes and the route leads to it from the
         # root, so a failure at the root has a present empty route.
         (self.root / "input.csv").write_bytes(b"ID,VALUE,ZERO\na,2.5,0\n")
@@ -971,12 +972,12 @@ class PublicContract(unittest.TestCase):
         ):
             with self.subTest(expression=expression):
                 self.spec.write_text(
-                    "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\n"
+                    'yamaa: "1.0"\ntype: spec\ndomain: TEST\nkeys: [ID]\n'
                     "input: {SRC: {path: input.csv, types: {ID: str, VALUE: float, ZERO: float}}}\n"
                     "columns:\n  - {name: ID, type: str, derivation: SRC.ID}\n"
                     "  - {name: VALUE, type: float, derivation: SRC.VALUE}\n"
                     "  - {name: ZERO, type: float, derivation: SRC.ZERO}\n"
-                    f"  - {{name: RATIO, type: float, derivation: {{compute: {{expr: '{expression}'}}}}}}\n"
+                    f"  - {{name: RATIO, type: float, derivation: '{expression}'}}\n"
                     "output: {path: output.csv, columns: [ID, VALUE, ZERO, RATIO]}\n",
                     encoding="utf-8",
                 )
@@ -1041,12 +1042,14 @@ class Resolve(unittest.TestCase):
         base = self.root / "base.yaml"
         child = self.root / "child.yaml"
         base.write_text(
-            "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {RAW: missing.csv}\n"
+            'yamaa: "1.0"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {RAW: missing.csv}\n'
             "columns: [{name: ID, type: str, derivation: {mapping: {source: RAW.ID, dict: {A: Alpha}}}}]\n"
             "output: {path: result.csv, columns: [ID]}\n",
             encoding="utf-8",
         )
-        child.write_text("schema_version: '1.0'\nparent: base.yaml\n", encoding="utf-8")
+        child.write_text(
+            'yamaa: "1.0"\ntype: spec\nparent: base.yaml\n', encoding="utf-8"
+        )
         direct = yamaa.spec(base).resolve()["entries"][0]["origins"]
         inherited = yamaa.spec(child).resolve()["entries"][0]["origins"]
         pointer = "/columns/0/derivation/value/mapping/case_sensitive"
@@ -1054,14 +1057,14 @@ class Resolve(unittest.TestCase):
         self.assertEqual(inherited[pointer], direct[pointer])
         self.assertTrue(inherited["/input/RAW"]["generated"])
         base.write_text(
-            "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {RAW: missing.csv}\n"
+            'yamaa: "1.0"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {RAW: missing.csv}\n'
             "windows: {W: {order_by: [RAW.ID]}}\n"
             "columns: [{name: ID, type: int, derivation: RAW.ID}]\n"
             "output: {path: result.csv, columns: [ID]}\n",
             encoding="utf-8",
         )
         child.write_text(
-            "schema_version: '1.0'\nparent: base.yaml\n"
+            'yamaa: "1.0"\ntype: spec\nparent: base.yaml\n'
             "columns: [{name: N, type: int, derivation: {row_number: {window: W}}}]\n"
             "output: {path: result.csv, columns: [ID, N]}\n",
             encoding="utf-8",
@@ -1076,34 +1079,38 @@ class Resolve(unittest.TestCase):
         self.assertEqual(
             origins[prefix + "/order_by/0/direction"]["source_kind"], "schema_default"
         )
-        self.assertTrue(
-            origins["/columns/0/derivation/value/source/variable"]["generated"]
-        )
+        # A 1.0 derivation is one expression (D18): its written value stays
+        # authored, and only the derivation that wraps it is generated.
+        self.assertTrue(origins["/columns/0/derivation"]["generated"])
+        self.assertFalse(origins["/columns/0/derivation/value"]["generated"])
 
     def test_project_spec_resolves_without_activating_its_callable(self):
         source = self.root / "spec.yaml"
+        # A section lists only specifications of its model (SUB-3).
         source.write_text(
-            "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\n"
+            'yamaa: "1.0"\ntype: spec\nmodel: ADaM\ndomain: TEST\nkeys: [ID]\n'
             "input: {RAW: {path: missing.csv, types: {ID: int, V: str}}}\n"
             "columns: [{name: ID, type: int, derivation: RAW.ID}, "
             "{name: V, type: str, derivation: {function: {name: text, args: {x: RAW.V}}}}]\n"
             "output: {path: output.csv, columns: [ID, V]}\n",
             encoding="utf-8",
         )
-        (self.root / "environment.yaml").write_text(
-            "schema_version: '1.0'\nfunctions:\n"
-            "  text:\n    function: uninstalled_resolved_fixture.identity\n"
-            "    description: Identity.\n    params: [{name: x, type: str}]\n"
-            "    returns: str\n    tests:\n"
-            "      - {id: normal, covers: [normal], args: {x: a}, result: a}\n"
-            "      - {id: empty, covers: [boundary], args: {x: ''}, result: ''}\n"
-            "      - {id: missing, covers: ['short-circuit-missing:x'], args: {x: null}, result: null}\n",
+        # One function file holds the contract and both hosts' callables;
+        # the project names it (D8).
+        (self.root / "text.yaml").write_text(
+            'yamaa: "1.0"\ntype: function\nname: text\n'
+            "description: Identity.\nparams: [{name: x, type: str}]\nreturns: str\n"
+            "implementations: {python: uninstalled_resolved_fixture.identity,"
+            " r: uninstalledresolvedfixture::identity}\n"
+            "tests:\n"
+            "  - {id: normal, covers: [normal], args: {x: a}, result: a}\n"
+            "  - {id: empty, covers: [boundary], args: {x: ''}, result: ''}\n"
+            "  - {id: missing, covers: ['short-circuit-missing:x'], args: {x: null}, result: null}\n",
             encoding="utf-8",
         )
         project = self.root / "project.yaml"
         project.write_text(
-            "schema_version: '1.0'\n"
-            "environments: {python: environment.yaml, r: environment.yaml}\n"
+            'yamaa: "1.0"\ntype: project\nfunctions: [text.yaml]\n'
             "adam: {specs: [spec.yaml]}\n",
             encoding="utf-8",
         )
@@ -1122,8 +1129,8 @@ class Resolve(unittest.TestCase):
             facts = yamaa.project(project).spec("TEST").resolve()
         self.assertEqual(facts["project"], project.as_posix())
         self.assertEqual(facts["entry"], source.as_posix())
-        # The project supplies the function: the same file alone names an
-        # unknown one.
+        # The project supplies the function: the same file alone lacks that
+        # binding (D32, D146).
         with self.assertRaises(yamaa.Error) as caught:
             yamaa.spec(source).resolve()
         self.assertEqual(
@@ -1132,10 +1139,10 @@ class Resolve(unittest.TestCase):
             .rows(),
             [
                 (
-                    "unknown_project_function",
-                    "FUNC-4",
+                    "project_binding_missing",
+                    "CT-13",
                     ["columns.V.derivation.function.name"],
-                    '{"function":"text"}',
+                    '{"binding":"function","function":"text"}',
                 )
             ],
         )
@@ -1143,14 +1150,14 @@ class Resolve(unittest.TestCase):
     def test_two_studies_keep_schema_link_bindings_used_by_run(self):
         (self.root / "shared").mkdir()
         (self.root / "shared/producer.yaml").write_text(
-            "schema_version: '1.0'\ndomain: PRODUCER\nkeys: [ID]\n"
+            'yamaa: "1.0"\ntype: spec\ndomain: PRODUCER\nkeys: [ID]\n'
             "input: {RAW: {path: input/raw.csv, relative_to: entry, types: {ID: int}}}\n"
             "columns: [{name: ID, type: int, label: Identifier, derivation: RAW.ID}]\n"
             "output: {path: output/produced.csv, relative_to: entry, columns: [ID]}\n",
             encoding="utf-8",
         )
         (self.root / "shared/consumer.yaml").write_text(
-            "schema_version: '1.0'\ndomain: CONSUMER\nkeys: [ID]\n"
+            'yamaa: "1.0"\ntype: spec\ndomain: CONSUMER\nkeys: [ID]\n'
             "input: {P: {path: output/produced.csv, schema: producer.yaml, relative_to: entry}}\n"
             "columns: [{name: ID, type: int, label: Identifier, derivation: P.ID}]\n"
             "output: {path: output/final.csv, relative_to: entry, columns: [ID]}\n",
@@ -1163,11 +1170,11 @@ class Resolve(unittest.TestCase):
                 f"ID\n{identifier}\n", encoding="utf-8"
             )
             (study / "spec.yaml").write_text(
-                "schema_version: '1.0'\nparent: ../shared/consumer.yaml\n",
+                'yamaa: "1.0"\ntype: spec\nparent: ../shared/consumer.yaml\n',
                 encoding="utf-8",
             )
             (study / "producer.yaml").write_text(
-                "schema_version: '1.0'\nparent: ../shared/producer.yaml\n",
+                'yamaa: "1.0"\ntype: spec\nparent: ../shared/producer.yaml\n',
                 encoding="utf-8",
             )
             spec = yamaa.spec(study / "spec.yaml")
@@ -1199,7 +1206,7 @@ class Resolve(unittest.TestCase):
     def test_resolve_returns_owned_facts_and_raises_for_an_unreadable_spec(self):
         spec = self.root / "spec.yaml"
         spec.write_text(
-            "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\n"
+            'yamaa: "1.0"\ntype: spec\ndomain: TEST\nkeys: [ID]\n'
             "input: {RAW: {path: missing/raw.csv, types: {ID: int}}}\n"
             "columns: [{name: ID, type: int, derivation: RAW.ID}]\n"
             "output: {path: absent/output.csv, columns: [ID]}\n",
