@@ -346,7 +346,12 @@ major, its candidates included, it lists every break against the newest final
 release of the previous major, for that release's notes, and passes. Since
 those benchmarks keep their expected files and CI compares each result with
 them, a 1.x release reproduces 1.0's results and saved bytes. CI compares a
-Parquet file by what it reads back as; #3475 adds a control for its bytes.
+Parquet file by what it reads back as, so a control keeps its bytes:
+`rust/crates/yamaa-adapters/tests/table_parquet_bytes.rs` saves fixed tables
+and compares every byte with the files that the 1.0 writer saved, and
+requires `created_by` to be `parquet-rs version 55.2.0` (#3475). A move to
+another Parquet release must pass it without changing those files
+(#3030 D160).
 
 ## Saved artifact readers
 
