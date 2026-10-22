@@ -40,7 +40,7 @@ parent path. Two spellings that reach the same file, after symbolic links are
 resolved, are one layer.
 
 Fails: `invalid_parent_path`, `parent_not_found`.
-Evidence: `negative-remote-parent`, `schema-inheritance-project-root`, `rust/crates/yamaa-adapters/tests/host_resources.rs::a_malformed_parent_spelling_is_refused_as_written_on_every_route`, `rust/crates/yamaa-adapters/tests/host_resources.rs::a_linked_parent_is_refused_at_parent_on_every_route`, `rust/crates/yamaa-adapters/tests/file_diagnostic_origins.rs::an_empty_parent_fails_schema_admission_before_it_is_resolved`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::an_empty_parent_fails_schema_admission_in_its_layer`.
+Evidence: `negative-remote-parent`, `schema-inheritance-project-root`, `rust/crates/yamaa-adapters/tests/host_resources.rs::a_malformed_parent_spelling_is_refused_as_written_on_every_route`, `rust/crates/yamaa-adapters/tests/host_resources.rs::a_linked_parent_is_refused_at_parent_on_every_route`, `rust/crates/yamaa-adapters/tests/file_diagnostic_origins.rs::an_empty_parent_fails_schema_admission_before_it_is_resolved`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::an_empty_parent_fails_schema_admission_in_its_layer`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_list_of_parents_carries_the_one_parent_hint`.
 
 A URL, URI or other non-local reference fails with `invalid_parent_path`,
 reporting the declaring file and its `parent`. An empty `parent` fails schema
@@ -50,7 +50,12 @@ one, so it fails with `minimum_length`
 resolved. A missing, unreadable or non-regular parent fails with
 `parent_not_found`, reporting the declaring file and path. `parent` is a path,
 so YAML null is not a parent: it fails as `invalid_field_type`
-([LAYER-9](#layer-9)), and a layer without a parent omits the field.
+([LAYER-9](#layer-9)), and a layer without a parent omits the field. Nor is a
+list: a layer names at most one parent, so a list written at `parent` fails as
+`invalid_field_type` at `parent`, and its context adds a `hint` to write the
+layers as a chain, one `parent` per file. An undeclared `parents` key fails as
+`unknown_field` ([SCHEMA-13](reference/schema-language.md#schema-13)) with the
+same hint.
 
 A non-empty local `parent` keeps the written form of every declared path
 ([FILE-4](reference/files.md#file-4), [FILE-5](reference/files.md#file-5)).
