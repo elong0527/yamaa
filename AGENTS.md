@@ -108,8 +108,10 @@ The whole of this guide is the contract; this list is the order of work.
   closing keyword only for an issue the pull request completes, and name
   every other issue without one.
 - Branch from and target `main`; `release/1.0.0` is cut only to qualify
-  release candidates. The planning issue is #3030, for 1.0.0; #2848 tracks
-  the 0.5.0 GitHub release.
+  release candidates. The planning issue is #3673, for 1.0.0 (wave 3, from
+  the candidate 1 tag to the CRAN submission); #3030, closed, holds the
+  design and the decisions D1 to D230, which stay the record and keep their
+  citations.
 - **Open ready for review**, not as a draft, once it builds and its nearest
   tests pass (D148). The one exception is a pull request that cannot merge
   until another one merges: it stays a draft, with `[hold: after #N]` at
@@ -163,12 +165,13 @@ merge steps and the review gate.
 
 ## Decisions
 
-The planning issue #3030 holds the owner's decisions as D-numbers. Three
-kinds of choice reach it; everything else is recorded where the work is.
+The owner's decisions are D-numbers: D1 to D230 on #3030, and D231 onward
+on the planning issue #3673, which continues the sequence. Three kinds of
+choice reach it; everything else is recorded where the work is.
 
 - **Ask the owner** before building a new user-facing concept, reversing a
   D-decision, or changing a golden file no D-decision covers.
-- **Record on #3030, as the next D-number**, a routine decision that
+- **Record on #3673, as the next D-number**, a routine decision that
   changes what a user sees: a condition, context key, spelling, saved byte,
   printed text or host surface settled under the owner's standing
   instruction. One short paragraph: what, why, and the pull request. A
@@ -176,7 +179,7 @@ kinds of choice reach it; everything else is recorded where the work is.
   session numbers it.
 - **Record in the pull request body** everything else: how an internal
   behaviour was built, which option an issue's question took, what a
-  refactor left out. The pull request is the record; a comment on #3030 is
+  refactor left out. The pull request is the record; a comment on #3673 is
   not needed and the log stays readable. The 1.0 session folds a decision
   into the log only when a later issue cites it.
 
@@ -276,6 +279,9 @@ the patterns and helpers of each language; these are the rules.
 
 ## Pointers
 
+- Subagent definitions for the 1.0 orchestration (an engineer, a release
+  engineer, a writer and a reviewer, each deferring to this guide):
+  `.claude/agents/`
 - Language contracts and terminology: `rules/README.md`
 - Schemas, grammars, and conformance fixtures: `yaml/README.md`
 - Benchmark authoring: `benchmarks/AGENTS.md`
