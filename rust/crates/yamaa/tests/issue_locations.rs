@@ -560,10 +560,11 @@ fn a_project_path_locates_in_the_project_or_the_file_it_lists() {
 }
 
 /// Rule 5: a finding in the header of the producer a `schema` link names
-/// names that producer as `source`, so where the consumer writes the same
-/// field it is located in the producer: a malformed version under a 1.0
-/// consumer, and a version the engine does not read under a 0.5 one, on the
-/// check and run routes of each host (SCHEMA-2, #3581).
+/// names that producer as `source`, so it is located in the producer even
+/// where the consumer writes the same field: a malformed version under a 1.0
+/// consumer, whose own `yamaa` ties with the producer's, and a version the
+/// engine does not read under a 0.5 one, on the check and run routes of each
+/// host (SCHEMA-2, #3581).
 #[test]
 fn a_linked_producer_s_header_finding_locates_in_the_producer() {
     let token = CancellationToken::new();
