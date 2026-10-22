@@ -31,7 +31,7 @@ intermediates:
 ```
 
 If a missing limit is acceptable, keep only the answer, or omit both: an
-intermediate without `no_match` answers with a missing limit, and the run
+intermediate without `absent` answers with a missing limit, and the run
 counts each such result. When only some results must find a limit, keep
 `require_match: true` and read the limit under a condition that selects those
 results; a result that never reads the limit never fails:

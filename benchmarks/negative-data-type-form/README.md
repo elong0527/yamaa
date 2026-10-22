@@ -25,8 +25,9 @@ and its submission type says so:
 submission:
   core: Perm
   data_type: partialDate
-  origin:
-    type: Collected
+  origins:
+    - type: Collected
+      source: Investigator
 ```
 
 When every birth date was in fact collected in full, correct the record

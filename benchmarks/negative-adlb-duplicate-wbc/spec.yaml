@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADLB
 keys: [STUDYID, USUBJID, VISIT, PARAMCD]
 input:
@@ -57,11 +59,11 @@ rows:
     derivations:
       PARAMCD: ADLB_RAW.PARAMCD
       PARAM: ADLB_RAW.PARAM
-      WBCVAL: {literal: null}
-      LYMLEVAL: {literal: null}
-      EXISTING_ABS_COUNT: {literal: null}
+      WBCVAL: null
+      LYMLEVAL: null
+      EXISTING_ABS_COUNT: null
       AVAL: ADLB_RAW.AVAL
-      DTYPE: {literal: null}
+      DTYPE: null
 
   # One new LYMPH record per subject and visit, kept only when both a WBC
   # count and a LYMLE fraction are present and no LYMPH record was collected.
@@ -72,8 +74,8 @@ rows:
       AND LYMLEVAL IS NOT NULL
       AND EXISTING_ABS_COUNT IS NULL
     derivations:
-      PARAMCD: {literal: LYMPH}
-      PARAM: {literal: Lymphocytes Abs (10^9/L)}
+      PARAMCD: "'LYMPH'"
+      PARAM: "'Lymphocytes Abs (10^9/L)'"
       # ONLY takes the one WBC (or LYMLE) result at the visit; a second
       # record stops the run instead of one being picked.
       WBCVAL:
@@ -90,10 +92,8 @@ rows:
         aggregate:
           filter: "ADLB_RAW.PARAMCD = 'LYMPH'"
           expr: "COUNT(ADLB_RAW.*)"
-      AVAL:
-        compute:
-          expr: "WBCVAL * LYMLEVAL"
-      DTYPE: {literal: CALCULATION}
+      AVAL: "WBCVAL * LYMLEVAL"
+      DTYPE: "'CALCULATION'"
 
 verifications:
   - unique: [USUBJID, VISIT, PARAMCD]

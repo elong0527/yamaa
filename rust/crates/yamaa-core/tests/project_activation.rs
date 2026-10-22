@@ -1,6 +1,4 @@
 //! Project contracts.
-#[allow(dead_code)]
-mod support;
 mod project {
     mod project_activation {
         use crate::support::roots::{Case, Definition, Parameter};

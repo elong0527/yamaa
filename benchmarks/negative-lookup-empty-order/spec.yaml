@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
@@ -16,9 +18,9 @@ intermediates:
   # any data is read.
   - id: LASTDOSE
     dataset: EX
+    key: [STUDYID, USUBJID]
     order_by: []
     keep: last
-    no_match: null
 
 columns:
   - name: STUDYID

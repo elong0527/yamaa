@@ -39,4 +39,4 @@ month count stands on its own with no endpoint adjustment:
 ```
 
 When the study counts days with both endpoints included, keep `unit: day`
-beside `bounds: inclusive` instead.
+beside `closed: both` instead.

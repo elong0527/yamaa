@@ -36,7 +36,7 @@ compare that value with the integer bounds:
   type: int
   derivation:
     study_day:
-      date: VSDTC
+      source: VSDTC
       reference: RFSTDTC
 ```
 

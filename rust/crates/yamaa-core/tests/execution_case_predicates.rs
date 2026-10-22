@@ -1,6 +1,4 @@
 //! Execution contracts.
-#[allow(dead_code)]
-mod support;
 mod execution {
     mod dataset_diagnostic {
         mod borrowed {

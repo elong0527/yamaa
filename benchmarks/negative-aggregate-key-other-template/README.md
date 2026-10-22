@@ -41,5 +41,5 @@ NCAL:
 ```
 
 The clinic template derives `DEVICEID: CLINIC.DEVICEID` and the home template
-`DEVICEID: {literal: null}`. A home record then matches no calibration and
-its count is blank.
+`DEVICEID: null`. A home record then matches no calibration and its count is
+blank.

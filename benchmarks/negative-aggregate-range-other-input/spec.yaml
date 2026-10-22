@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
@@ -6,9 +8,11 @@ input:
   EXF:
     path: input/exfirst.csv
     types: {TRTSDT: date}
+    key: [STUDYID, USUBJID]
   AE:
     path: input/ae.csv
     types: {AESEQ: int, AESTDT: date}
+    key: [STUDYID, USUBJID]
 base: DM
 
 output:

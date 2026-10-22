@@ -27,9 +27,7 @@ State the analysis policy for an undetectable value. If it should produce a
 missing transformed result, guard zero explicitly:
 
 ```yaml
-derivation:
-  compute:
-    expr: "LN(NULLIF(AVAL, 0))"
+derivation: "LN(NULLIF(AVAL, 0))"
 ```
 
 If the study instead substitutes a value related to the assay limit, derive

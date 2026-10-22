@@ -1,6 +1,4 @@
 //! Preparation contracts.
-#[allow(dead_code)]
-mod support;
 mod preparation {
     mod project_preparation {
         //! Independent application truth over native captures and normalized document fixtures.

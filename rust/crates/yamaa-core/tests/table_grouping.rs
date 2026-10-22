@@ -1,6 +1,5 @@
 //! Stable, exact partitioning of a table snapshot by its bound columns.
-#[allow(dead_code)]
-mod support;
+use crate::support;
 use support::dataset::{schema, table};
 use yamaa_core::{
     table::{CellError, TableAccess, TableSchema, ValueRef},

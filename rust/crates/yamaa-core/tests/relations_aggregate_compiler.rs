@@ -1,6 +1,4 @@
 //! Relations contracts.
-#[allow(dead_code)]
-mod support;
 mod relations {
     mod aggregate_expressions {
         use yamaa_core::{

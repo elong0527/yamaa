@@ -1,7 +1,7 @@
 phase: validation
 condition: duplicate_identifier
 spec_paths:
-  - intermediates[0].id
+  - intermediates.EX.id
   - input.EX
 rule: LOOKUP-3
 context:

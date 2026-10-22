@@ -33,9 +33,8 @@ conversion, and count from that column:
 - name: ASTDT
   type: date
   derivation:
-    value:
-      source: EX.EXSTDT
-    unconvertible: {literal: null}
+    value: EX.EXSTDT
+    unconvertible: null
 
 - name: EXSTDY
   type: int
