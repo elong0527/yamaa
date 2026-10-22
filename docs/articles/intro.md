@@ -62,7 +62,7 @@ agreement to the planning stage.
 |---|---|---|
 | Schema | Declares what each file type may contain; anything it does not declare is rejected before execution. | [Schema introduction](schema-intro.md) |
 | Rules | Fix the meaning of every written item, so no host can read the same spec in two ways. | [Rules](rules.md) |
-| Engine | Runs specifications from Python, R and the command line; the same specification with the same inputs produces the same output dataset. | [R and Python API](api.md) |
+| Engine | Runs specifications from Python, R and the command line; the same specification with the same inputs produces the same output dataset. | [R, Python and command-line API](api.md) |
 | Benchmark | Runnable specifications with input data and byte-exact expected outputs. | [Benchmark](../benchmark/index.md) |
 
 ## What a specification looks like
@@ -169,8 +169,8 @@ reads study data:
   where each field came from.
 
 Sign-off happens on the YAML diff, with comments carrying the rationale next
-to the fields they explain. The [R and Python API](api.md) describes the R
-and Python calls, and `yamaa --help` the command line.
+to the fields they explain. The [R, Python and command-line API](api.md)
+describes the R and Python calls and [the command line](api.md#command-line).
 
 ## Programs in a study submission
 

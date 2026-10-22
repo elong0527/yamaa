@@ -13,7 +13,8 @@ Derive ADaM datasets from SDTM with one specification per output dataset. The
 - keep orchestration small: list every spec in the `adam` section of the
   study's `project.yaml` and build them with one project run,
   `project.run("adam")` or `yamaa run project.yaml --section adam`, not one
-  call per dataset; see the [R and Python API](api.md#project-execution)
+  call per dataset; see the
+  [R, Python and command-line API](api.md#project-execution)
 - keep study-owned orchestration and comparison code beside the study
 - verify equivalence of all data with a tolerance at 1e-10.
 - Equivalence means 100% of columns and 100% of cells match, with zero validation issues.

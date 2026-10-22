@@ -34,8 +34,9 @@ project$run("adam")$save()           # every ADaM dataset
 `save()` returns, invisibly, the absolute paths of the files it wrote, in the
 order it wrote them.
 
-The [R and Python API](https://elong0527.github.io/yamaa/articles/api/) page
-describes every call, the
+The
+[R, Python and command-line API](https://elong0527.github.io/yamaa/articles/api/)
+page describes every call, the
 [introduction](https://elong0527.github.io/yamaa/articles/intro/) explains the
 model in five minutes, and the
 [rules](https://elong0527.github.io/yamaa/articles/rules/) define what every

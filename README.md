@@ -193,6 +193,9 @@ license notices and the component inventory, or put that directory on your
 `PATH`. The Linux binaries are static, so they run on any Linux of their
 architecture. `yamaa --version` names the engine, and `yamaa selftest` runs
 the self-test above.
+The API page's
+[command line](https://elong0527.github.io/yamaa/articles/api/#command-line)
+section lists every command and flag, the exit statuses and the JSON output.
 
 The binaries are not signed. On macOS, a binary that a browser downloaded
 carries the quarantine attribute, and Gatekeeper refuses to run it, saying
@@ -210,7 +213,7 @@ download mark first with `Unblock-File` in PowerShell.
 ## Where to go next
 
 - New here? [Introduction](https://elong0527.github.io/yamaa/articles/intro/) explains the model in five minutes.
-- Running specifications? [R and Python API](https://elong0527.github.io/yamaa/articles/api/) shows every call in both languages.
+- Running specifications? [R, Python and command-line API](https://elong0527.github.io/yamaa/articles/api/) shows every call in both languages and every command.
 - Building on yamaa? The [stability contract](https://elong0527.github.io/yamaa/release/#stability-contract) lists what every 1.x release keeps from 1.0.0.
 - Coming from Excel specs? [Excel to yamaa](https://elong0527.github.io/yamaa/articles/excel/) translates what you already know.
 - Looking for worked examples? [Benchmarks](https://elong0527.github.io/yamaa/benchmark/) illustrate the ideas.
