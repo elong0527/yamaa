@@ -2,15 +2,13 @@
 
 `selftest` runs a few existing benchmarks through the installed engine, so
 their expected bytes stay independently authored; the list names them, and
-every package ships them. A listed case must run without project code and
-keep its expected files through the 1.0 conversion, so this check refuses:
+every package ships them. A listed case must run without project code, so
+this check refuses:
 
 - a name that is not a benchmark under `benchmarks/`;
 - a benchmark that calls a project function: it carries
   `python/environment.yaml` or `r/environment.yaml`, or a project it passes
-  links environments or function files (benchmarks/AGENTS.md);
-- a benchmark the 1.0 conversion gate excepts (`tools/migrate/excepted.py`);
-  this refusal goes when that list empties.
+  links environments or function files (benchmarks/AGENTS.md).
 
 The set needs a negative case, so that selftest runs the issue path as well
 as the bytes. Its adapter claims are checked against the cases' files: each
@@ -25,7 +23,6 @@ from pathlib import Path
 
 import yaml
 from tools.benchmark import entries, load_metadata
-from tools.migrate.excepted import EXCEPTED
 from tools.paths import ROOT
 from tools.validation._repository_yaml import UniqueKeyLoader
 
@@ -146,11 +143,6 @@ def check(root):
         if not (NAME.fullmatch(name) and (case / "benchmark.yaml").is_file()):
             errors.append(f"ERROR: {LIST}.cases: no benchmark named {name!r}")
             continue
-        if name in EXCEPTED:
-            errors.append(
-                f"ERROR: {LIST}.cases: {name} is excepted from the 1.0 "
-                f"conversion gate ({EXCEPTED[name]})"
-            )
         try:
             code = project_code(case)
         except READ_ERRORS as error:

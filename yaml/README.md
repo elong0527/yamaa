@@ -57,8 +57,7 @@ and moves `v1/` up into this folder (P2-13):
   embeds each file type's closure beside the 0.5 ones, and a file that
   declares `yamaa` selects it by its header
   ([SCHEMA-2](../rules/reference/schema-language.md#schema-2)). Public calls
-  read 1.0 files; `make check-conversion` runs every benchmark converted to
-  1.0.
+  read 1.0 files, and every benchmark is written in 1.0.
 
 `v1/` has one entry module per 1.0 file type, holding the root class a file
 of that type is checked against:

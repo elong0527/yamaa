@@ -215,7 +215,6 @@ that job's own target below. Run `make setup` again after changing `rust/` or
 | `make test-python` | Run package/tool tests and standalone installed-host suites. |
 | `make test-r` | Lint the R binding, then build, install and strictly check a fresh R source package. |
 | `make check-equivalence` | Require unchanged results from fresh builds of both hosts (executor gate). |
-| `make check-conversion` | Require every benchmark, converted to 1.0, to give its expected result on a fresh build (conversion gate). |
 | `make probe-executor` | Time the executor probe on a release build; not part of CI. |
 | `make docs-test docs` | Test page ownership, generate dashboards and build the strict site. |
 
@@ -280,10 +279,10 @@ Passing static repository validation does not establish engine release
 qualification.
 
 A change to the executor, such as rewrite 1 (#2785), must leave every result
-unchanged. Each such PR passes ordinary CI, the `equivalence` job's two legs
-and the `conversion` job below on its exact head. Those jobs are the proof: run
-`make check-equivalence` or `make check-conversion` locally only to debug a
-CI failure of that gate (D148 on #3030). CI runs the gate on a pull request
+unchanged. Each such PR passes ordinary CI and the `equivalence` job's two
+legs below on its exact head. Those jobs are the proof: run
+`make check-equivalence` locally only to debug a CI failure of that gate
+(D148 on #3030). CI runs the gate on a pull request
 unless its diff is confined to root `README.md`,
 `CONTRIBUTING.md`, `AGENTS.md` and Markdown files under `docs/`. Such a
 documentation-only pull request passes with a notice without running the
@@ -304,26 +303,6 @@ installed suites; `HOSTS=r` runs the R half: its build, its conformance and
 `R CMD check`. CI's `equivalence` job runs the two halves in parallel as its
 two legs, `equivalence (python)` and `equivalence (r)`, and those two checks
 are the gate's result: the gate passes only when both pass.
-While the 0.5 and 1.0 surfaces coexist (#3030 P1-9 to P2-13), `make
-check-conversion` proves the 1.0 front end against the same truth. The
-converter (`tools/migrate`) writes every benchmark as 1.0 into a temporary
-directory, rewriting each negative's `expected/error.yaml` spec paths through
-the rename table's `paths` block and nothing else, which the gate checks
-first. It then builds the Python package from the checkout and runs public
-benchmark conformance on the conversion, as the equivalence gate does on the
-originals, and composes each Define benchmark's documents at its fixed time.
-`HOSTS=python,r` adds the R host. A benchmark whose expected files a decided
-item changes is excepted in `tools/migrate/excepted.py`, with its reason, and
-the gate lists each one. CI's `conversion` job runs the gate on Python on
-every pull request that the equivalence gate runs on, by the same rule
-(#3030 D124), and a documentation-only pull request passes it with a notice;
-a weekly schedule and a dispatch run it on both hosts.
-The repository tools that read benchmarks read each file by its own header,
-as the engine does (`tools/surface.py`): the benchmark runner, project and
-input staging, the conformance planner, the dashboard renderer and the
-vocabulary coverage check. `tools/tests/test_both_surfaces.py` converts the
-corpus and requires each of them to read the original and the conversion
-alike, so the corpus can move to 1.0 one prefix at a time (P2-5 to P2-8).
 `make probe-executor` times one specification at 10,000, 100,000 and
 1,000,000 rows, with and without one keyed intermediate lookup;
 `examples/executor_probe.rs` in the `yamaa` crate documents its shapes and
@@ -536,10 +515,10 @@ PRs and the main schedule run five development jobs: repository checks
 (including lint), the Rust workspace, the Python and R hosts on Linux, and
 `rust (minimum toolchain)`, which lints the workspace with the minimum Rust
 (below). All five checks are required to merge into main.
-The additional checks run the gates on the pull requests described above and
+The additional checks run the gate on the pull requests described above and
 on dispatch: the `equivalence` job's two legs, `equivalence (python)` and
-`equivalence (r)`, and `conversion`, which also runs weekly. A
-documentation-only pull request passes all three with a skip notice.
+`equivalence (r)`. A documentation-only pull request passes both with a skip
+notice.
 
 The `Release compatibility` workflow checks the minimum Rust toolchain, the R
 source package built with it, minimal format builds, Python 3.15 and minimum
@@ -654,7 +633,7 @@ compatibility lanes supplement [native qualification](rust/qualification/README.
 
 Before every merge into `main` or a `release/X.Y.Z` branch, bring the branch up
 to date with its base and wait until CI is green on the exact head, the
-`equivalence` legs and `conversion` included. Never merge while a required job
+`equivalence` legs included. Never merge while a required job
 is queued, running or cancelled (D176 on #3030). Then run a fresh read-only
 review check with an authenticated GitHub CLI, supplying the exact final
 commit:

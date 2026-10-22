@@ -1,12 +1,10 @@
-"""Exercise the workflow's gate jobs: their path decisions against real Git
-histories, and the equivalence gate's host jobs.
+"""Exercise the workflow's equivalence gate: its path decision against real
+Git histories, and its host jobs.
 
-The equivalence host jobs and the conversion job decide by the same diff
-whether a pull request runs their gate: every change but documentation runs
-both (D124 on #3030). Each job holds its own copy of the step, so every case
-runs on both. The equivalence gate runs one job per host, in parallel
-(#3386), and those two jobs are its checks: no job reports them as one
-(#3492).
+The equivalence host jobs decide by the diff whether a pull request runs the
+gate: every change but documentation runs it. The gate runs one job per host,
+in parallel (#3386), and those two jobs are its checks: no job reports them
+as one (#3492).
 """
 
 import functools
@@ -20,7 +18,7 @@ from pathlib import Path
 from tools.tests import support
 
 # Changes to the engine, the hosts, the benchmarks, the repository tools, the
-# build or either gate's own inputs: each runs both gates.
+# build or the gate's own inputs: each runs the gate.
 GATE_INPUTS = (
     "rust/crates/example/src/lib.rs",
     "rust/crates/yamaa-core/src/front_end/v1/spec/checks.rs",
@@ -31,20 +29,16 @@ GATE_INPUTS = (
     "benchmarks/example/expected/data.csv",
     "python/src/yamaa/__init__.py",
     "python/tests/installed/example.py",
-    "python/tests/installed/conversion_define.py",
     "python/tests/installed/public_conformance.py",
     "python/pyproject.toml",
     "python/uv.lock",
     "python/README.md",
     "rust/README.md",
     "R/yamaa/DESCRIPTION",
-    "tools/migrate/example.py",
-    "tools/migrate/excepted.py",
     "tools/conformance/example.py",
     "tools/conformance/public_conformance.py",
     "tools/surface.py",
     "tools/commands/equivalence.py",
-    "tools/commands/conversion.py",
     "tools/commands/r_tests.py",
     "tools/commands/check_r.py",
     "tools/commands/python_tests.py",
@@ -66,7 +60,7 @@ GATE_INPUTS = (
     ".github/workflows/ci.yml",
     ".github/actions/setup/action.yml",
 )
-# Changes confined to documentation: neither gate runs.
+# Changes confined to documentation: the gate does not run.
 DOCUMENTATION = (
     "README.md",
     "CONTRIBUTING.md",
@@ -162,9 +156,8 @@ def history_stream(paths, *, base_path=None, merge=False, rename_from=None):
 
 
 class PathDecision:
-    """The cases each gate's path decision passes. A subclass names its job,
-    the gate its messages name, and what its decision outputs beside `run`,
-    on a pull request and on a dispatch.
+    """The cases the gate's path decision passes. A subclass names its job
+    and the gate its messages name.
 
     The cases share one repository: each writes its history into it with one
     `git fast-import` and points main, the branch checked out, at the commit
@@ -173,8 +166,6 @@ class PathDecision:
 
     job = ""
     gate = ""
-    pull_request_outputs = {}
-    dispatch_outputs = {}
 
     @classmethod
     def setUpClass(cls):
@@ -235,7 +226,7 @@ class PathDecision:
 
     def on_pull_request(self, run):
         """The whole decision for a pull request whose gate runs or not."""
-        return {"run": run} | self.pull_request_outputs
+        return {"run": run}
 
     def test_engine_and_gate_inputs_run_the_gate(self):
         for path in GATE_INPUTS:
@@ -275,7 +266,7 @@ class PathDecision:
     def test_dispatch_runs_even_without_engine_changes(self):
         self.assertEqual(
             self.decide("CONTRIBUTING.md", event="workflow_dispatch")[0],
-            {"run": "true"} | self.dispatch_outputs,
+            {"run": "true"},
         )
 
     def test_a_synthetic_merge_cannot_pass_as_exact_head_evidence(self):
@@ -343,37 +334,6 @@ class EquivalenceCheckTests(unittest.TestCase):
                 self.assertNotIn(
                     "equivalence-host", [needs] if isinstance(needs, str) else needs
                 )
-
-
-class ConversionWorkflowTests(PathDecision, unittest.TestCase):
-    """The conversion job runs on Python for each pull request that runs the
-    equivalence gate (D124), and on both hosts on dispatch or its weekly
-    schedule."""
-
-    job = "conversion"
-    gate = "conversion"
-    pull_request_outputs = {"hosts": "python"}
-    dispatch_outputs = {"hosts": "python,r"}
-
-    def test_the_two_gates_read_the_same_diff(self):
-        self.assertEqual(diff_command("conversion"), diff_command("equivalence-host"))
-
-    def test_the_weekly_schedule_runs_both_hosts(self):
-        self.assertEqual(
-            self.decide("README.md", event="schedule")[0],
-            {"run": "true", "hosts": "python,r"},
-        )
-
-    def test_the_weekly_schedule_alone_runs_the_job(self):
-        parsed = workflow()
-        triggers = parsed.get("on", parsed.get(True))
-        schedules = [entry["cron"] for entry in triggers["schedule"]]
-        self.assertIn("23 4 * * 1", schedules)
-        self.assertIn(
-            "github.event.schedule == '23 4 * * 1'",
-            parsed["jobs"]["conversion"]["if"],
-        )
-        self.assertNotIn("schedule", parsed["jobs"]["equivalence-host"]["if"])
 
 
 if __name__ == "__main__":

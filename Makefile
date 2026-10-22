@@ -1,7 +1,7 @@
 # Local checks and PR jobs use these same targets from the repository root.
 .DEFAULT_GOAL := help
 .PHONY: help setup quick check check-lint check-repository test-rust test-python \
-        test-r check-equivalence check-conversion probe-executor docs-test docs-generate \
+        test-r check-equivalence probe-executor docs-test docs-generate \
         docs-build docs
 
 UV ?= uv
@@ -46,12 +46,6 @@ test-r:
 check-equivalence: HOSTS = python,r
 check-equivalence:
 	$(TOOLS) tools.commands.equivalence --uv "$(UV)" --hosts "$(HOSTS)"
-
-# The 1.0 conversion gate: every benchmark converted to 1.0 and run on fresh
-# installs. HOSTS=python,r runs both hosts, as the weekly CI run does.
-HOSTS ?= python
-check-conversion:
-	$(TOOLS) tools.commands.conversion --uv "$(UV)" --hosts "$(HOSTS)"
 
 probe-executor:
 	$(TOOLS) tools.commands.executor_probe

@@ -130,11 +130,10 @@ steps and the review gate.
   on #3030). The one exception is a pull request that cannot merge until
   another one merges: it stays a draft, with `[hold: after #N]` at the
   start of its title (owner decision of 2026-10-20, recorded on #3030).
-- **Prove engine changes on the exact head.** CI's `equivalence` and
-  `conversion` jobs, green on the exact head, are the proof for every
-  session, and no session needs to run them locally (D148 on #3030).
-  The `equivalence` job means its two legs, `equivalence (python)` and
-  `equivalence (r)`, both green.
+- **Prove engine changes on the exact head.** CI's `equivalence` job,
+  green on the exact head, is the proof for every session, and no session
+  needs to run it locally (D148 on #3030). The job means its two legs,
+  `equivalence (python)` and `equivalence (r)`, both green.
 - **Get CI green on the exact head, then stop.** Once its pull request is
   open, the author gets CI green on its exact head and stops there. It
   neither reviews nor merges the pull request: the owner's maintenance
@@ -154,8 +153,7 @@ steps and the review gate.
 ## Before a push
 
 Run `make setup` once. Pull request CI runs the complete `make check` and
-the `equivalence` and `conversion` jobs, so run only these locally (D148
-on #3030):
+the `equivalence` job, so run only these locally (D148 on #3030):
 
 - the tests nearest the change, listed below;
 - after a Rust change, `cargo fmt --all --check` and Clippy on each
@@ -166,8 +164,8 @@ on #3030):
   checks CI runs, leaving out only the R binding's Clippy, and no test
   suite, so it needs no R.
 
-Never run `make check-equivalence` or `make check-conversion` locally,
-except to debug a CI failure of that job. Pull request CI runs only on
+Never run `make check-equivalence` locally, except to debug a CI failure
+of that job. Pull request CI runs only on
 Linux, so a change to paths, file handling, `cfg`-gated code or
 packaging also gets one native qualification run on its branch before
 merge: `gh workflow run native.yml --ref <branch>`.
