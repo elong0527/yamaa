@@ -427,6 +427,149 @@ columns:
     );
 }
 
+/// A subject-level dataset that copies `TRTSDT` from the exposure summary
+/// its input `EXSUM` links.
+const CYCLE_ADSL: &str = "yamaa: \"1.0\"
+type: spec
+domain: ADSL
+keys: [STUDYID, USUBJID]
+base: DM
+input:
+  DM: dm.csv
+  EXSUM: {path: adexsum.csv, schema: spec_exsum.yaml, key: [STUDYID, USUBJID]}
+output: {path: adsl.csv, columns: [STUDYID, USUBJID, AGE, TRTSDT]}
+columns:
+  - {name: STUDYID, type: str, label: Study Identifier, derivation: DM.STUDYID}
+  - {name: USUBJID, type: str, label: Unique Subject Identifier, derivation: DM.USUBJID}
+  - {name: AGE, type: int, label: Age, derivation: DM.AGE}
+  - copy: {dataset: EXSUM, columns: [TRTSDT]}
+";
+
+/// An exposure summary that copies `AGE` from the specification `adsl`,
+/// which its input `ADSL` links.
+fn cycle_exsum(adsl: &str) -> String {
+    format!(
+        "yamaa: \"1.0\"
+type: spec
+domain: EXSUM
+keys: [STUDYID, USUBJID]
+base: EX
+input:
+  EX: {{path: ex.csv, types: {{TRTSDT: date}}}}
+  ADSL: {{path: adsl.csv, schema: {adsl}, key: [STUDYID, USUBJID]}}
+output: {{path: adexsum.csv, columns: [STUDYID, USUBJID, TRTSDT, AGE]}}
+columns:
+  - {{name: STUDYID, type: str, label: Study Identifier, derivation: EX.STUDYID}}
+  - {{name: USUBJID, type: str, label: Unique Subject Identifier, derivation: EX.USUBJID}}
+  - {{name: TRTSDT, type: date, label: Date of First Exposure to Treatment, derivation: EX.TRTSDT}}
+  - copy: {{dataset: ADSL, columns: [AGE]}}
+"
+    )
+}
+
+/// While a producer is read, the entry and each layer up the chain to the
+/// last one with a copy entry that reads it count as being resolved (SPEC-9,
+/// D214 on #3030). So an empty child of a specification on a copy cycle
+/// reports what its parent reports: the link that closes the cycle, with the
+/// parent's `cycle` (#3594).
+#[test]
+fn an_empty_child_reports_the_copy_cycle_its_parent_reports() {
+    let study = study();
+    study.write("spec_adsl.yaml", CYCLE_ADSL);
+    study.write(
+        "mid.yaml",
+        "yamaa: \"1.0\"\ntype: spec\nparent: spec_adsl.yaml\n",
+    );
+    let engine = engine();
+    let token = CancellationToken::new();
+    for (parent, cycle, case) in [
+        (
+            "spec_adsl.yaml",
+            &["spec_adsl.yaml", "spec_exsum.yaml", "spec_adsl.yaml"][..],
+            "the summary copies from the layer whose copy entry reads it",
+        ),
+        (
+            "mid.yaml",
+            &["mid.yaml", "spec_adsl.yaml", "spec_exsum.yaml", "mid.yaml"],
+            "the summary copies from a layer between that one and the entry",
+        ),
+    ] {
+        study.write("spec_exsum.yaml", &cycle_exsum(parent));
+        study.write(
+            "child.yaml",
+            &format!("yamaa: \"1.0\"\ntype: spec\nparent: {parent}\n"),
+        );
+        let cycle = cycle
+            .iter()
+            .map(|name| Value::String(study.path(name)))
+            .collect::<Vec<_>>();
+        for spec in [parent, "child.yaml"] {
+            let issues = engine
+                .spec_check(&study.path(spec), None, &token)
+                .unwrap()
+                .diagnostics()
+                .into_iter()
+                .map(|issue| {
+                    (
+                        issue.phase,
+                        issue.code,
+                        issue.rule,
+                        issue.spec_path,
+                        yamaa_adapters::json_wire::decode(issue.context.to_json()).unwrap(),
+                        issue.source_span,
+                        issue.operand_route,
+                    )
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(
+                issues,
+                [(
+                    "validation".to_owned(),
+                    "producer_workflow_cycle".to_owned(),
+                    Some("SPEC-9".to_owned()),
+                    vec!["input.ADSL.schema".to_owned()],
+                    yamaa_adapters::json!({"cycle": Value::Array(cycle.clone()), "dataset": "ADSL"}),
+                    None,
+                    None,
+                )],
+                "{case}: {spec}"
+            );
+        }
+    }
+}
+
+/// A layer up the chain from every copy entry that reads a producer does not
+/// count as being resolved, so the producer may copy from it: that layer
+/// resolves without the producer.
+#[test]
+fn a_producer_may_copy_from_a_layer_up_the_chain_from_the_copy_entries_that_read_it() {
+    let study = study();
+    study.write(
+        "spec_adsl.yaml",
+        &CYCLE_ADSL
+            .replace(
+                "  EXSUM: {path: adexsum.csv, schema: spec_exsum.yaml, key: [STUDYID, USUBJID]}\n",
+                "",
+            )
+            .replace("AGE, TRTSDT]}", "AGE]}")
+            .replace("  - copy: {dataset: EXSUM, columns: [TRTSDT]}\n", ""),
+    );
+    study.write("spec_exsum.yaml", &cycle_exsum("spec_adsl.yaml"));
+    study.write(
+        "child.yaml",
+        "yamaa: \"1.0\"
+type: spec
+parent: spec_adsl.yaml
+input:
+  EXSUM: {path: adexsum.csv, schema: spec_exsum.yaml, key: [STUDYID, USUBJID]}
+output: {path: adsl.csv, columns: [STUDYID, USUBJID, AGE, TRTSDT]}
+columns:
+  - copy: {dataset: EXSUM, columns: [TRTSDT]}
+",
+    );
+    assert_eq!(checked(&study, "child.yaml"), []);
+}
+
 #[test]
 fn each_copy_refusal_names_what_it_refuses() {
     let study = study();

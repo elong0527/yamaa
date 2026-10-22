@@ -43,6 +43,11 @@ CHECKS = (
     "tools.validation.check_test_support",
     "tools.validation.check_interface_stability",
 )
+DOCS_CHECKS = (
+    "tools.rules.check",
+    "tools.validation.check_documentation",
+    "tools.validation.check_site_examples",
+)
 
 
 def run(*arguments, cwd=ROOT):
@@ -53,11 +58,14 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "command",
-        choices=("lint", "lint-r-binding", "check"),
+        choices=("lint", "lint-python", "lint-rust", "lint-r-binding", "check", "docs"),
         help="lint-r-binding runs Clippy over the R binding alone, which needs R",
     )
     args = parser.parse_args(argv)
-    if args.command == "lint-r-binding":
+    if args.command == "docs":
+        for module in DOCS_CHECKS:
+            run(sys.executable, "-m", module)
+    elif args.command == "lint-r-binding":
         # Building the R binding needs R, so `make test-r` runs this beside
         # the R package check, rather than `lint`. `--no-deps` leaves the
         # workspace crates that it depends on to `lint`.
@@ -74,14 +82,17 @@ def main(argv=None):
             "warnings",
             cwd=WORKSPACE,
         )
-    elif args.command == "lint":
-        for arguments in (("format", "--check"), ("check",)):
-            run(sys.executable, "-m", "ruff", *arguments, *LINT_PATHS)
-        # Type-check the package with the configuration in python/pyproject.toml.
-        run(sys.executable, "-m", "pyrefly", "check", cwd=ROOT / "python")
+    elif args.command in ("lint", "lint-python", "lint-rust"):
+        if args.command != "lint-rust":
+            for arguments in (("format", "--check"), ("check",)):
+                run(sys.executable, "-m", "ruff", *arguments, *LINT_PATHS)
+            # Use the configuration in python/pyproject.toml.
+            run(sys.executable, "-m", "pyrefly", "check", cwd=ROOT / "python")
+        if args.command == "lint-python":
+            return
         run("cargo", "fmt", "--all", "--check", cwd=WORKSPACE)
         # The outside-workspace check and the fuzz targets are workspaces of
-        # their own, out of reach of `--all`. CI's minimum-toolchain job builds
+        # their own, out of reach of `--all`. Release compatibility builds
         # and tests the first; the Fuzz workflow builds and runs the second,
         # and Clippy below also lints it on every pull request.
         for manifest in ("tests/embedder/Cargo.toml", "fuzz/Cargo.toml"):

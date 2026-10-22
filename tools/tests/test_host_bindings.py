@@ -108,12 +108,6 @@ class HostBindings(unittest.TestCase):
         workflow = support.workflow("ci.yml")
         installs = {
             "r": ["check"],
-            # The equivalence gate checks R in its R host job only.
-            "equivalence-host": ["${{ matrix.host == 'r' && 'check' || 'none' }}"],
-            # The conversion gate checks R only when it runs both hosts.
-            "conversion": [
-                "${{ steps.paths.outputs.hosts == 'python' && 'none' || 'check' }}"
-            ],
         }
         for name, job in workflow["jobs"].items():
             setups = [
@@ -123,8 +117,28 @@ class HostBindings(unittest.TestCase):
             ]
             with self.subTest(job=name):
                 self.assertEqual(setups, installs.get(name, ["none"]))
-        self.assertIn(
-            "make test-r", [step.get("run") for step in workflow["jobs"]["r"]["steps"]]
+        commands = [step.get("run", "") for step in workflow["jobs"]["r"]["steps"]]
+        self.assertTrue(any("tools.commands.host_checks" in line for line in commands))
+        self.assertTrue(any("lint-r-binding" in line for line in commands))
+
+    def test_split_lint_keeps_all_local_checks_without_building_rust_for_python_lint(
+        self,
+    ):
+        python = repository_commands("lint-python")
+        rust = repository_commands("lint-rust")
+        self.assertEqual(repository_commands("lint"), python + rust)
+        self.assertFalse(any(command[0] == "cargo" for command in python))
+        self.assertTrue(any(command[:2] == ("cargo", "clippy") for command in rust))
+
+    def test_documentation_validation_uses_no_compiler_or_installed_host(self):
+        commands = repository_commands("docs")
+        self.assertEqual(
+            [command[2] for command in commands],
+            [
+                "tools.rules.check",
+                "tools.validation.check_documentation",
+                "tools.validation.check_site_examples",
+            ],
         )
 
 

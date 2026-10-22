@@ -810,9 +810,9 @@ columns:
                 let mut expected = case["findings"].clone();
                 if case["result_type"] == "SpecificationError" {
                     // A schema finding names the files its run loaded: the
-                    // capture names its own, and this run loads spec.yaml.
-                    let loaded =
-                        yamaa_adapters::json!(fixture.0.join("spec.yaml").to_str().unwrap());
+                    // capture names its own, and this run loads spec.yaml,
+                    // named by its identity.
+                    let loaded = yamaa_adapters::json!(fixture.0.identity("spec.yaml"));
                     for d in expected.as_array_mut().unwrap() {
                         let c = d["context"].as_object_mut().unwrap();
                         assert!(c.insert("source".into(), loaded.clone()).is_some());

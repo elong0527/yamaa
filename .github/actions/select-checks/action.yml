@@ -1,0 +1,37 @@
+name: Select affected PR checks
+description: Select work from the exact PR head, or full development checks on other events
+outputs:
+  repository:
+    description: Repository check mode, docs or full
+    value: ${{ steps.paths.outputs.repository }}
+  rust:
+    description: Run Rust tests and lint
+    value: ${{ steps.paths.outputs.rust }}
+  minimum:
+    description: Run minimum Rust toolchain lint
+    value: ${{ steps.paths.outputs.minimum }}
+  python:
+    description: Run Python tests
+    value: ${{ steps.paths.outputs.python }}
+  r:
+    description: Run R tests
+    value: ${{ steps.paths.outputs.r }}
+  equivalence_python:
+    description: Qualify Python against authored benchmark truth
+    value: ${{ steps.paths.outputs.equivalence_python }}
+  equivalence_r:
+    description: Qualify R against authored benchmark truth
+    value: ${{ steps.paths.outputs.equivalence_r }}
+  workflow_lint:
+    description: Lint every workflow
+    value: ${{ steps.paths.outputs.workflow_lint }}
+runs:
+  using: composite
+  steps:
+    - id: paths
+      shell: bash
+      env:
+        EVENT_NAME: ${{ github.event_name }}
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      run: python -m tools.ci.pr_changes >> "$GITHUB_OUTPUT"

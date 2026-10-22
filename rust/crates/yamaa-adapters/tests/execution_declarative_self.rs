@@ -1240,7 +1240,7 @@ rows:
                 fs::write(
             fixture.0.join("parent.yaml"),
             format!(
-                "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\nbase: OBS\ninput: {{OBS: obs.csv, UNUSED: absent.csv}}\noutput: {{path: result.csv, columns: [ID]}}\nintermediates:\n  - id: UNREAD\n    dataset: UNUSED\n    require_match: true\n{verifications}columns:\n  - {{name: ID, type: str, derivation: OBS.ID}}\n"
+                "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\nbase: OBS\ninput: {{OBS: obs.csv, UNUSED: absent.csv}}\noutput: {{path: result.csv, columns: [ID]}}\nintermediates:\n  - id: UNREAD\n    dataset: UNUSED\n    key: [ID]\n    require_match: true\n{verifications}columns:\n  - {{name: ID, type: str, derivation: OBS.ID}}\n"
             ),
         )
         .unwrap();

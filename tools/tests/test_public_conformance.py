@@ -15,7 +15,8 @@ from pathlib import Path
 from tools.conformance import public_conformance as judge
 from tools.paths import ROOT
 
-SPEC = """schema_version: "1.0"
+SPEC = """yamaa: "1.0"
+type: spec
 domain: TEST
 keys: [ID]
 input: {SRC: input.csv}
@@ -251,13 +252,13 @@ class PublicConformance(unittest.TestCase):
     def test_the_python_runner_names_a_listed_layer_by_the_domain_it_inherits(self):
         domain_of = installed_runner().domain_of
         (self.case / "spec_child.yaml").write_text(
-            'schema_version: "1.0"\nparent: spec.yaml\n'
+            'yamaa: "1.0"\ntype: spec\nparent: spec.yaml\n'
         )
         self.assertEqual(domain_of(self.case / "spec.yaml"), "TEST")
         self.assertEqual(domain_of(self.case / "spec_child.yaml"), "TEST")
         # The layer nearest the entry that writes the domain supplies it.
         (self.case / "spec_child.yaml").write_text(
-            'schema_version: "1.0"\nparent: spec.yaml\ndomain: CHILD\n'
+            'yamaa: "1.0"\ntype: spec\nparent: spec.yaml\ndomain: CHILD\n'
         )
         self.assertEqual(domain_of(self.case / "spec_child.yaml"), "CHILD")
 
@@ -342,7 +343,7 @@ class PublicConformance(unittest.TestCase):
             self.assertFalse((tree / "run.R").exists())
             self.assertEqual(
                 (tree / "__child_spec.yaml").read_text(),
-                'schema_version: "1.0"\nparent: spec.yaml\n',
+                'yamaa: "1.0"\ntype: spec\nparent: spec.yaml\n',
             )
         (staged / "result.csv").write_bytes(b"original\n")
         (variants / "result.csv").write_bytes(b"variant\n")
@@ -355,24 +356,12 @@ class PublicConformance(unittest.TestCase):
         self.assertTrue((moved / "input/linked.csv").is_symlink())
         self.assertEqual(os.readlink(moved / "input/linked.csv"), "target.csv")
 
-    def test_an_empty_child_is_written_in_its_parent_s_language(self):
-        """A 1.0 parent's empty child declares the 1.x header (LAYER-4), and
-        any other parent's declares schema_version, as every 0.5 layer does."""
+    def test_an_empty_child_declares_the_1_x_header(self):
+        """An empty child layer declares the 1.x header (LAYER-4)."""
         self.assertEqual(
-            judge.empty_child({"yamaa": "1.0", "type": "spec"}, "spec.yaml"),
+            judge.empty_child("spec.yaml"),
             'yamaa: "1.0"\ntype: spec\nparent: spec.yaml\n',
         )
-        for document in (
-            {"schema_version": "1.0"},
-            {"schema_version": "1.0", "yamaa": "1.0"},
-            None,
-            [],
-        ):
-            with self.subTest(document=document):
-                self.assertEqual(
-                    judge.empty_child(document, "spec.yaml"),
-                    'schema_version: "1.0"\nparent: spec.yaml\n',
-                )
 
     def test_quoted_empty_is_distinct_from_missing_and_csv_bytes_are_exact(self):
         self.build["tables"]["output"]["rows"][0][1] = None
@@ -472,7 +461,9 @@ class PublicConformance(unittest.TestCase):
         self.assertEqual(self.verdict()["verdict"], "mismatch")
 
     def test_define_and_resolved_spec_have_explicit_dispositions(self):
-        (self.case / "submission-project.yaml").write_text("schema_version: '1.0'\n")
+        (self.case / "submission-project.yaml").write_text(
+            'yamaa: "1.0"\ntype: project\n'
+        )
         (self.case / "benchmark.yaml").write_text(
             METADATA
             + "define:\n  environment: submission-project.yaml\n  standard: sdtm\n"
@@ -644,7 +635,7 @@ class PublicConformance(unittest.TestCase):
         # same probes, COUNT=2 included, to an independently written report.
         primary_truth = ROOT / "benchmarks/schema-parquet/expected/adsl.parquet"
         (self.case / "spec.yaml").write_text(
-            'schema_version: "1.0"\n'
+            'yamaa: "1.0"\ntype: spec\n'
             "domain: ADSL\n"
             "keys: [STUDYID, USUBJID]\n"
             "input: {DM: input/dm.parquet}\n"
@@ -911,7 +902,7 @@ class PublicConformance(unittest.TestCase):
         )
         # With a project, the call names its specification by `domain` (D68).
         (self.case / "project.yaml").write_text(
-            'schema_version: "1.0"\nsdtm:\n  specs: [spec.yaml]\n'
+            'yamaa: "1.0"\ntype: project\nsdtm:\n  specs: [spec.yaml]\n'
         )
         self.assertEqual(
             self.command_line()["calls"][0]["arguments"],
@@ -923,10 +914,10 @@ class PublicConformance(unittest.TestCase):
         # A layer the project lists is named by the domain it inherits.
         (self.case / "spec.yaml").write_text(SPEC)
         (self.case / "spec_child.yaml").write_text(
-            'schema_version: "1.0"\nparent: spec.yaml\n'
+            'yamaa: "1.0"\ntype: spec\nparent: spec.yaml\n'
         )
         (self.case / "project.yaml").write_text(
-            'schema_version: "1.0"\nsdtm:\n  specs: [spec_child.yaml]\n'
+            'yamaa: "1.0"\ntype: project\nsdtm:\n  specs: [spec_child.yaml]\n'
         )
         (self.case / "benchmark.yaml").write_text(
             METADATA
@@ -943,19 +934,15 @@ class PublicConformance(unittest.TestCase):
 
     def test_command_line_excludes_benchmarks_whose_project_supplies_functions(self):
         project = self.case / "project.yaml"
-        # A 0.5 project links the environment files that declare the
-        # functions; a 1.0 project lists function files (D8).
-        for text in (
-            'schema_version: "1.0"\nenvironments:\n  python: python/environment.yaml\n',
-            'yamaa: "1.0"\ntype: project\nfunctions: [functions/bmi.yaml]\n',
-        ):
-            with self.subTest(text=text):
-                project.write_text(text)
-                self.assertEqual(
-                    self.command_line(),
-                    {"excluded": judge.CLI_FUNCTION_EXCLUSION, "calls": []},
-                )
-        # A 1.0 project's environments hold only locks, and an unreadable
+        # A project lists the function files that declare the functions (D8).
+        project.write_text(
+            'yamaa: "1.0"\ntype: project\nfunctions: [functions/bmi.yaml]\n'
+        )
+        self.assertEqual(
+            self.command_line(),
+            {"excluded": judge.CLI_FUNCTION_EXCLUSION, "calls": []},
+        )
+        # A project's environments hold only locks, and an unreadable
         # project supplies nothing; the hosts report why it cannot be read.
         for text in (
             'yamaa: "1.0"\ntype: project\nenvironments:\n  python: {lock: uv.lock}\n',
@@ -1033,7 +1020,7 @@ class PublicConformance(unittest.TestCase):
                     "phase": "validation",
                     "condition": "invalid_clear",
                     "rule": "LAYER-9",
-                    "spec_paths": ["intermediates.X.no_match"],
+                    "spec_paths": ["intermediates.X.absent"],
                     "context": {},
                 }
             ],
@@ -1049,11 +1036,13 @@ class PublicConformance(unittest.TestCase):
 
     def test_key_order_texts_move_key_columns_to_the_front_reversed(self):
         document = {
+            "yamaa": "1.0",
+            "type": "spec",
             "keys": ["ID", "VALUE"],
             "columns": [
                 {"name": "OTHER", "derivation": "SRC.OTHER"},
                 {"name": "ID", "derivation": "SRC.ID"},
-                {"name": "VALUE", "derivation": {"literal": "x"}},
+                {"name": "VALUE", "derivation": "'x'"},
             ],
         }
         control, permuted = judge.key_order_texts(document)
@@ -1074,7 +1063,7 @@ class PublicConformance(unittest.TestCase):
             {
                 **document,
                 "columns": [
-                    {"name": "ID", "derivation": {"compute": {"expr": "1"}}},
+                    {"name": "ID", "derivation": "SRC.ID + 1"},
                     {"name": "VALUE", "derivation": "SRC.VALUE"},
                 ],
             },
@@ -1107,38 +1096,29 @@ class PublicConformance(unittest.TestCase):
                 ineligible = copy.deepcopy(document)
                 ineligible["columns"][2]["derivation"] = derivation
                 self.assertIsNone(judge.key_order_texts(ineligible), derivation)
-        # A 0.5 document reads text as a field and `{literal: X}` as a literal.
-        legacy = copy.deepcopy(document)
-        del legacy["yamaa"], legacy["type"]
-        self.assertIsNone(judge.key_order_texts(legacy))
-        for column, derivation in ((1, {"literal": "DM"}), (3, {"literal": 1})):
-            legacy["columns"][column]["derivation"] = derivation
-        legacy["columns"][4]["derivation"] = {"literal": None}
-        self.assertIsNotNone(judge.key_order_texts(legacy))
 
     def test_declarations_follow_the_single_parent_chain(self):
         (self.case / "layers").mkdir()
         (self.case / "layers/base.yaml").write_text(SPEC)
         (self.case / "middle.yaml").write_text(
-            'schema_version: "1.0"\nparent: layers/base.yaml\n'
+            'yamaa: "1.0"\ntype: spec\nparent: layers/base.yaml\n'
             "columns:\n  - {name: VALUE, type: int}\n"
         )
         (self.case / "entry.yaml").write_text(
-            'schema_version: "1.0"\nparent: middle.yaml\noutput: {decimals: 2}\n'
+            'yamaa: "1.0"\ntype: spec\nparent: middle.yaml\noutput: {decimals: 2}\n'
         )
         types, output = judge.declarations(self.case / "entry.yaml")
         self.assertEqual(types, {"ID": "int", "VALUE": "int"})
         self.assertEqual((output["path"], output["decimals"]), ("result.csv", 2))
         (self.case / "layers/base.yaml").write_text(
-            'schema_version: "1.0"\nparent: ../entry.yaml\n'
+            'yamaa: "1.0"\ntype: spec\nparent: ../entry.yaml\n'
         )
         with self.assertRaisesRegex(ValueError, "cyclic declarations"):
             judge.declarations(self.case / "entry.yaml")
 
     def test_a_1_x_child_clears_an_inherited_output_field(self):
         """A 1.x child removes an inherited field by listing it in `clear`
-        (LAYER-9), as a 0.5 child writes it as null; its own value applies
-        after the clear."""
+        (LAYER-9); its own value applies after the clear."""
         (self.case / "base.yaml").write_text(
             'yamaa: "1.0"\ntype: spec\ndomain: TEST\nkeys: [ID]\n'
             "output: {path: result.csv, report: checks.csv, decimals: 2}\n"
@@ -1152,12 +1132,6 @@ class PublicConformance(unittest.TestCase):
         types, output = judge.declarations(self.case / "entry.yaml")
         self.assertEqual(types, {"ID": "int"})
         self.assertEqual(output, {"path": "result.csv", "decimals": 3})
-        self.assertEqual(judge.declared_paths("entry.yaml", output), ["result.csv"])
-        # In a 0.5 child, `clear` is no field, and null removes the field.
-        (self.case / "entry.yaml").write_text(
-            'schema_version: "1.0"\nparent: base.yaml\noutput: {report: null}\n'
-        )
-        _, output = judge.declarations(self.case / "entry.yaml")
         self.assertEqual(judge.declared_paths("entry.yaml", output), ["result.csv"])
 
     def test_a_copy_entry_declares_the_types_its_producer_declares(self):
@@ -1374,21 +1348,15 @@ class PublicConformance(unittest.TestCase):
         # composes the empty child's columns in dependency order. So does the
         # link to its consuming specification, which from the empty child
         # names the parent, whose output file the child writes (OUTPUT-9).
-        # One difference stays open under its issue.
+        # The tracked differences under #3593 and #3594 are fixed.
         permanent = {
             ("negative-forward-key-reference", "empty_child"),
             ("negative-forward-reference", "empty_child"),
             ("negative-link-to-itself", "empty_child"),
         }
-        tracked = {
-            ("negative-copy-producer-cycle", "empty_child"): "#3594",
-        }
-        self.assertEqual(set(expectations), permanent | set(tracked))
+        self.assertEqual(set(expectations), permanent)
         for key in permanent:
             self.assertTrue(expectations[key]["permanent"])
-        for key, issue in tracked.items():
-            self.assertEqual(expectations[key]["issue"], issue)
-            self.assertFalse(expectations[key].get("permanent", False))
         for (benchmark, check), item in expectations.items():
             self.assertIn(benchmark, names)
             self.assertIn(check, {"empty_child", "key_order"})
@@ -1628,7 +1596,7 @@ class CommandLineJudgement(unittest.TestCase):
         functions = self.fixtures / "functions"
         shutil.copytree(self.case, functions)
         (functions / "project.yaml").write_text(
-            'schema_version: "1.0"\nenvironments:\n  python: python/environment.yaml\n'
+            'yamaa: "1.0"\ntype: project\nfunctions: [functions/bmi.yaml]\n'
         )
         judge.write_json(self.observed / "records/simple.json", self.record)
         judge.write_json(

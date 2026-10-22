@@ -1,19 +1,15 @@
-"""Run the benchmark corpus, written as 1.0, through a `yamaa` binary (#3060).
+"""Run the benchmark corpus through a `yamaa` binary (#3060).
 
-The command line reads only 1.x files: it refuses a file that declares
-`schema_version` as `unsupported_language_version` (#3030 D122, D125). Until
-the corpus moves to 1.0 (P2-5 to P2-8), its conformance runs converted
-copies, as the 1.0 conversion gate does (`tools.commands.conversion`). This
-writes every benchmark as 1.0 under OUTPUT/benchmarks, excludes each
-benchmark the gate excepts, with the gate's reason, plans the converted
-corpus into OUTPUT/plan, runs the command line's runner,
-`rust/tests/public_conformance_cli.py`, over it into OUTPUT/observed, and
-judges the records against the converted expected files into
+The command line reads only 1.x files (#3030 D122, D125), the language the
+whole corpus is written in. This copies every benchmark under
+OUTPUT/benchmarks, plans the copies into OUTPUT/plan, runs the command line's
+runner, `rust/tests/public_conformance_cli.py`, over them into
+OUTPUT/observed, and judges the records against the expected files into
 OUTPUT/inventory.json. It exits 1 unless every benchmark the command line
-runs passes. Unlike the gate, it keeps what it writes, so the records and the
-converted cases they ran can be read afterwards.
+runs passes. It keeps what it writes, so the records and the cases they ran
+can be read afterwards.
 
-With --prepare-only it writes the converted copies and their plan, and stops.
+With --prepare-only it writes the copies and their plan, and stops.
 Native qualification prepares them while the network is up, then runs the
 runner over them with the network disabled and judges the records itself with
 `python -m tools.conformance.public_conformance compare`
@@ -21,23 +17,24 @@ runner over them with the network disabled and judges the records itself with
 """
 
 import argparse
+import shutil
 import subprocess
 import sys
 from pathlib import Path
 
-from tools.commands import conversion
 from tools.conformance import public_conformance
 from tools.paths import ROOT
 
+FIXTURES = ROOT / "benchmarks"
 RUNNER = ROOT / "rust/tests/public_conformance_cli.py"
 
 
 def prepare(output):
-    """Write the corpus as 1.0 under `output`, excluding what the conversion
-    gate excepts, and plan it; return the converted benchmarks directory and
-    the plan's directory."""
-    fixtures = conversion.convert(output)
-    conversion.except_benchmarks(fixtures)
+    """Copy the corpus under `output` and plan it; return the copied
+    benchmarks directory and the plan's directory. The corpus's symbolic
+    links are copied as links."""
+    fixtures = output / "benchmarks"
+    shutil.copytree(FIXTURES, fixtures, symlinks=True)
     plan = output / "plan"
     public_conformance.main(
         ["plan", "--fixtures", str(fixtures), "--output", str(plan)]
@@ -52,7 +49,7 @@ def main(argv=None):
     mode.add_argument(
         "--prepare-only",
         action="store_true",
-        help="write the converted copies and their plan, and run nothing",
+        help="write the copies and their plan, and run nothing",
     )
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument(
@@ -64,8 +61,8 @@ def main(argv=None):
     )
     args = parser.parse_args(argv)
     output = args.output.resolve()
-    if output.exists():
-        parser.error("output must be a fresh directory")
+    if output.exists() or output.is_relative_to(FIXTURES.resolve()):
+        parser.error("output must be a fresh directory outside the fixture tree")
     if args.prepare_only:
         if args.source_revision is not None or args.evidence is not None:
             parser.error(

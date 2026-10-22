@@ -2,15 +2,12 @@
 
 `selftest` runs a few existing benchmarks through the installed engine, so
 their expected bytes stay independently authored; the list names them, and
-every package ships them. A listed case must run without project code and
-keep its expected files through the 1.0 conversion, so this check refuses:
+every package ships them. A listed case must run without project code, so
+this check refuses:
 
 - a name that is not a benchmark under `benchmarks/`;
-- a benchmark that calls a project function: it carries
-  `python/environment.yaml` or `r/environment.yaml`, or a project it passes
-  links environments or function files (benchmarks/AGENTS.md);
-- a benchmark the 1.0 conversion gate excepts (`tools/migrate/excepted.py`);
-  this refusal goes when that list empties.
+- a benchmark that calls a project function: a project it passes lists
+  function files (#3030 D8, benchmarks/AGENTS.md).
 
 The set needs a negative case, so that selftest runs the issue path as well
 as the bytes. Its adapter claims are checked against the cases' files: each
@@ -25,16 +22,11 @@ from pathlib import Path
 
 import yaml
 from tools.benchmark import entries, load_metadata
-from tools.migrate.excepted import EXCEPTED
 from tools.paths import ROOT
 from tools.validation._repository_yaml import UniqueKeyLoader
 
 LIST = "benchmarks/selftest.yaml"
 NAME = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
-ENVIRONMENT_FILES = ("python/environment.yaml", "r/environment.yaml")
-# A project's links to project code: in 0.5, `environments` names each host's
-# environment file; in 1.0, `functions` names the function files.
-PROJECT_CODE = ("environments", "functions")
 # The adapters #3062 names, each with the files that show a case exercising
 # it: a reader by an input, a writer by an expected file. `odm`, `parquet`
 # and `readstat` are the optional features `info()` reports.
@@ -76,9 +68,9 @@ def adapters(case):
 
 
 def project_code(case):
-    """Why a case calls a project function: its environment files, and each
-    project it passes, in an entry or its submission, that links code."""
-    found = [name for name in ENVIRONMENT_FILES if (case / name).is_file()]
+    """Why a case calls a project function: each project it passes, in an
+    entry or its submission, that lists function files."""
+    found = []
     metadata = load_metadata(case)
     projects = {
         call["environment"]
@@ -90,12 +82,8 @@ def project_code(case):
         projects.add(metadata["define"]["environment"])
     for project in sorted(projects):
         document = load(case / project)
-        if isinstance(document, dict):
-            found.extend(
-                f"{project} links {field}"
-                for field in PROJECT_CODE
-                if document.get(field)
-            )
+        if isinstance(document, dict) and document.get("functions"):
+            found.append(f"{project} links functions")
     return found
 
 
@@ -146,11 +134,6 @@ def check(root):
         if not (NAME.fullmatch(name) and (case / "benchmark.yaml").is_file()):
             errors.append(f"ERROR: {LIST}.cases: no benchmark named {name!r}")
             continue
-        if name in EXCEPTED:
-            errors.append(
-                f"ERROR: {LIST}.cases: {name} is excepted from the 1.0 "
-                f"conversion gate ({EXCEPTED[name]})"
-            )
         try:
             code = project_code(case)
         except READ_ERRORS as error:

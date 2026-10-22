@@ -17,8 +17,8 @@ Building fresh means the gate never judges a stale development extension.
 `--hosts python` runs the Python half alone: its build, its conformance and
 the installed suites; `--hosts r` the R half: its build, its conformance and
 `R CMD check`. Together the halves are the whole gate, which runs by default.
-CI runs the two halves as parallel jobs and reports them as one check
-(#3386).
+CI runs each half in its corresponding host lane, sharing the fresh install
+and installed suites with the ordinary host tests.
 """
 
 import argparse
@@ -39,7 +39,7 @@ FIXTURES = ROOT / "benchmarks"
 HOSTS = ("python", "r")
 
 
-def install_python(work, uv):
+def install_python(work, uv, *, tooling=False):
     """Install wheels built from the checkout, with the locked test
     requirements, into a new environment; return its interpreter."""
     environment = os.environ | {"RUSTUP_TOOLCHAIN": channel()}
@@ -78,6 +78,11 @@ def install_python(work, uv):
         "--no-dev",
         "--no-emit-project",
         "--no-hashes",
+        *(
+            ("--group", "tooling", "--no-emit-package", "yamaa-tools")
+            if tooling
+            else ()
+        ),
         "--output-file",
         str(requirements),
     )
@@ -94,6 +99,10 @@ def install_python(work, uv):
         str(requirements),
         *sorted(map(str, distributions.glob("*.whl"))),
     )
+    if tooling:
+        # Pytest's repository-tool tests need the locked tooling dependencies
+        # and editable tools. The host itself remains the freshly built wheel.
+        run(uv, "pip", "install", "--python", str(python), "--no-deps", "-e", str(ROOT))
     return python
 
 

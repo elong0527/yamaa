@@ -48,21 +48,19 @@ def run_installed_suites(python, work, workers=None):
         raise RuntimeError(f"installed suites failed: {', '.join(failed)}")
 
 
-def main():
+def run_tests(python, work):
+    """Run pytest and the installed suites on one interpreter; return failures."""
     failed = []
-    with (
-        tempfile.TemporaryDirectory(prefix="yamaa-python-tests-") as directory,
-        ThreadPoolExecutor(max_workers=1) as background,
-    ):
+    with ThreadPoolExecutor(max_workers=1) as background:
         # The suites run beside pytest; one core stays with pytest.
         suites = background.submit(
             run_installed_suites,
-            sys.executable,
-            Path(directory),
+            python,
+            work,
             max(1, (os.cpu_count() or 2) - 1),
         )
         tests = subprocess.run(
-            [sys.executable, "-m", "pytest", "python/tests", "tools/tests"],
+            [str(python), "-m", "pytest", "python/tests", "tools/tests"],
             cwd=ROOT,
         )
         if tests.returncode:
@@ -71,6 +69,12 @@ def main():
             suites.result()
         except RuntimeError as error:
             failed.append(str(error))
+    return failed
+
+
+def main():
+    with tempfile.TemporaryDirectory(prefix="yamaa-python-tests-") as directory:
+        failed = run_tests(sys.executable, Path(directory))
     if failed:
         sys.exit(f"failed: {'; '.join(failed)}")
 

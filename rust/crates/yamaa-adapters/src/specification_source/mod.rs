@@ -609,8 +609,9 @@ pub(crate) fn prepare_versioned<P: InheritancePort>(
     prepare_versioned_within(source, display_path, port, &[])
 }
 
-/// [`prepare_versioned`] for the producer a copy entry of each specification
-/// `resolving` names, entry first, copies from (SPEC-9).
+/// [`prepare_versioned`] for a producer that a copy entry copies from while
+/// the specifications and layers `resolving` names, entry first, are being
+/// resolved (SPEC-9).
 pub(crate) fn prepare_versioned_within<P: InheritancePort>(
     source: Source,
     display_path: String,

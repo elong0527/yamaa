@@ -72,12 +72,6 @@ jobs:
         run: |
           python -m pip install pyyaml==6.0.3
           python -m tools.ci.toolchain --install
-      # The front-end comparison test runs tools/migrate through
-      # `uv run --project python --no-sync`, so it needs the locked tooling
-      # environment and its PyYAML. Like the other tool-only jobs, the sync
-      # leaves out the extension.
-      - name: Install the converter's tooling environment
-        run: uv sync --project python --locked --group tooling --no-install-package yamaa
       # CI runs the development-profile workspace tests and Clippy on Linux, for
       # every pull request and on main's schedule; this lane runs the workspace
       # tests with the optimized release-test profile alone, on each platform.
@@ -2356,10 +2350,9 @@ jobs:
           python -m pip install --no-deps -e .
           python -m pip install py-yaml12==0.2.0 pyyaml==6.0.3 pyarrow==25.0.1
       # While the network is up. The binary reads only 1.x files (#3030 D122,
-      # D125), so the converter writes every benchmark as 1.0 and excludes
-      # each one that the 1.0 conversion gate excepts, and the plan gives the
-      # command line its calls. On Linux the image of the containers below is
-      # pulled now.
+      # D125), as the corpus is written: the step copies every benchmark, and
+      # the plan gives the command line its calls. On Linux the image of the
+      # containers below is pulled now.
       - name: Prepare the command-line conformance corpus
         working-directory: ${{ runner.temp }}/offline
         run: |
@@ -2431,8 +2424,8 @@ jobs:
           "${yamaa[@]}" selftest
       # The command line's runner makes each call that the plan gives the
       # command line through the unpacked binary, and the comparator judges
-      # the records against the converted expected files: the step fails on
-      # any difference. On Linux the runner, which needs Python's standard
+      # the records against the expected files: the step fails on any
+      # difference. On Linux the runner, which needs Python's standard
       # library alone, runs with the image's CPython, and the runner's user
       # then compares and uploads the files that the binary saves: the engine
       # publishes each file readable by its owner alone.

@@ -69,7 +69,7 @@ mod service {
             function_signature::{LogicalSignature, ProjectFunctionIdentity},
             project_environment::{ExecutionEnvironment, LockKind, LockReference},
             project_function::Language,
-            schema::{Document, DocumentNode as N, SpecificationDocument},
+            schema::{Document, DocumentNode as N},
             specification::PrepareError,
             table::{Column, TableSchema},
             value::{ColumnType, Value},
@@ -93,7 +93,7 @@ mod service {
             Activation(project_activation::Failure<Opaque>),
         }
         struct Entry {
-            model: SpecificationDocument,
+            model: Document,
             environment: ExecutionEnvironment,
         }
         struct Activation {
@@ -131,52 +131,54 @@ mod service {
         fn document(tree: Tree) -> Document {
             tree.document()
         }
-        /// The project links the Python environment file; an invalid link is a
-        /// project scalar failure that precedes every capture.
+        /// The 1.0 project lists its function file and holds the Python lock
+        /// (D8); an invalid lock path is a project scalar failure that
+        /// precedes every capture.
         fn project(invalid: bool) -> Document {
-            document(Tree::map(vec![(
-                "environments",
-                Tree::map(vec![(
-                    "python",
-                    if invalid {
-                        Tree::boolean(true)
-                    } else {
-                        Tree::text("python/environment.yaml")
-                    },
-                )]),
-            )]))
-        }
-        fn environment() -> Document {
+            let lock = if invalid {
+                Tree::boolean(true)
+            } else {
+                Tree::text("uv.lock")
+            };
             document(Tree::map(vec![
-                ("lock", Tree::text("uv.lock")),
+                ("yamaa", Tree::text("1.0")),
+                ("type", Tree::text("project")),
                 (
                     "functions",
-                    Tree::map(vec![(
-                        "constant",
-                        Tree::map(vec![
-                            ("function", Tree::text("project.constant")),
-                            ("description", Tree::text("A constant")),
-                            ("params", Tree::List(vec![])),
-                            ("returns", Tree::text("int")),
-                            ("may_return_missing", Tree::Scalar(N::Boolean(false))),
-                            ("comparison_decimals", Tree::Scalar(N::Integer("4".into()))),
-                            (
-                                "tests",
-                                Tree::List(vec![Tree::map(vec![
-                                    ("id", Tree::text("ordinary")),
-                                    (
-                                        "covers",
-                                        Tree::List(vec![
-                                            Tree::text("normal"),
-                                            Tree::text("boundary"),
-                                        ]),
-                                    ),
-                                    ("args", Tree::map(vec![])),
-                                    ("result", Tree::Scalar(N::Integer("7".into()))),
-                                ])]),
-                            ),
-                        ]),
-                    )]),
+                    Tree::List(vec![Tree::text("functions/constant.yaml")]),
+                ),
+                (
+                    "environments",
+                    Tree::map(vec![("python", Tree::map(vec![("lock", lock)]))]),
+                ),
+            ]))
+        }
+        /// The function file, which names its function and its Python callable.
+        fn function() -> Document {
+            document(Tree::map(vec![
+                ("yamaa", Tree::text("1.0")),
+                ("type", Tree::text("function")),
+                ("name", Tree::text("constant")),
+                ("description", Tree::text("A constant")),
+                ("params", Tree::List(vec![])),
+                ("returns", Tree::text("int")),
+                ("may_return_missing", Tree::Scalar(N::Boolean(false))),
+                ("comparison_decimals", Tree::Scalar(N::Integer("4".into()))),
+                (
+                    "implementations",
+                    Tree::map(vec![("python", Tree::text("project.constant"))]),
+                ),
+                (
+                    "tests",
+                    Tree::List(vec![Tree::map(vec![
+                        ("id", Tree::text("ordinary")),
+                        (
+                            "covers",
+                            Tree::List(vec![Tree::text("normal"), Tree::text("boundary")]),
+                        ),
+                        ("args", Tree::map(vec![])),
+                        ("result", Tree::Scalar(N::Integer("7".into()))),
+                    ])]),
                 ),
             ]))
         }
@@ -267,9 +269,9 @@ mod service {
                     identity: "/study/project.yaml".into(),
                     bytes: b"held project".to_vec(),
                 };
-                let linked = metadata::Source {
-                    identity: "/study/python/environment.yaml".into(),
-                    bytes: b"held environment".to_vec(),
+                let file = metadata::Source {
+                    identity: "/study/functions/constant.yaml".into(),
+                    bytes: b"held function".to_vec(),
                 };
                 let mut decoder = ScriptedMetadataDecoder::<Opaque>::new(self.log.clone());
                 decoder.steps.push_back(MetadataDecodeStep {
@@ -278,29 +280,29 @@ mod service {
                     outcome: Ok(project(matches!(self.scenario, Scenario::Environment))),
                 });
                 decoder.steps.push_back(MetadataDecodeStep {
-                    source: linked.clone(),
-                    target: metadata::DecodeTarget::Environment,
-                    outcome: Ok(environment()),
+                    source: file.clone(),
+                    target: metadata::DecodeTarget::FunctionFile,
+                    outcome: Ok(function()),
                 });
+                // The lock and function paths resolve from the project file (D8).
                 let mut port = ScriptedMetadata::<Opaque>::new(self.log.clone());
                 port.steps.push_back(MetadataCaptureStep {
-                    kind: metadata::Kind::Environment,
-                    declaring_source: source.identity.clone(),
-                    written: "python/environment.yaml".into(),
-                    outcome: Ok(metadata::Reply::Document(linked.clone())),
-                });
-                // The lock path resolves from the linked environment file.
-                port.steps.push_back(MetadataCaptureStep {
                     kind: metadata::Kind::Lock,
-                    declaring_source: linked.identity.clone(),
+                    declaring_source: source.identity.clone(),
                     written: "uv.lock".into(),
                     outcome: Ok(metadata::Reply::Lock {
                         source: metadata::Source {
-                            identity: "/study/python/uv.lock".into(),
+                            identity: "/study/uv.lock".into(),
                             bytes: b"lock".to_vec(),
                         },
                         kind: LockKind::Uv,
                     }),
+                });
+                port.steps.push_back(MetadataCaptureStep {
+                    kind: metadata::Kind::Function,
+                    declaring_source: source.identity.clone(),
+                    written: "functions/constant.yaml".into(),
+                    outcome: Ok(metadata::Reply::Document(file.clone())),
                 });
                 let environment =
                     metadata::prepare(&mut decoder, source, Some(Language::Python), &mut port)
@@ -319,8 +321,14 @@ mod service {
             }
             fn compile(&mut self, entry: Entry) -> Result<CheckedOwnedProject, Failure> {
                 self.log.record(Event::Observation("compile"));
-                project_domain::check_owned(&entry.model, entry.environment)
-                    .map_err(|rejection| Failure::Compile(rejection.error))
+                let tree = yamaa_core::front_end::v1::spec::lower(&entry.model, None).into_spec();
+                project_domain::check_owned_tree_linked(
+                    tree,
+                    &entry.model,
+                    entry.environment,
+                    Default::default(),
+                )
+                .map_err(|rejection| Failure::Compile(rejection.error))
             }
             fn prepare(&mut self, request: Request<'_>) -> Result<CheckedOwnedProject, Failure> {
                 let entry = self.capture(request)?;

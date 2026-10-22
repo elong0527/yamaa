@@ -32,7 +32,6 @@ from tools.conformance import supplemental_inventory as inventory
 from tools.packaging import generate_third_party_notices as notices
 from tools.paths import ROOT, WORKSPACE
 from tools.staging import engine_bundle, vendor_crates
-from tools.surface import declares_header
 
 REPOSITORY = ROOT
 VENDOR_ARCHIVE = "src/rust/vendor.tar.xz"
@@ -238,12 +237,10 @@ def authors_text(metadata, crates, listed, locked):
 
 
 def r_callables(case: Path) -> list[Path]:
-    """The files that name a study's R callables: the function files a 1.x
-    project lists (#3030 D8), or the R environment file a 0.5 project links."""
+    """The files that name a study's R callables: the function files its
+    project lists (#3030 D8)."""
     project = yaml.safe_load((case / "project.yaml").read_text(encoding="utf-8"))
-    if declares_header(project):
-        return [case / path for path in project.get("functions") or []]
-    return [case / project["environments"]["r"]]
+    return [case / path for path in project.get("functions") or []]
 
 
 def stage_projects(projects: Path) -> None:

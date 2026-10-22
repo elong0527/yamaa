@@ -409,7 +409,7 @@ input's declared `key`. A lookup names at least one pair, every column must
 exist, and every match value must read a known current-row value.
 
 Fails: `invalid_field_type`, `no_applicable_keys`, `unknown_field`, `invalid_aggregate_context`.
-Evidence: `negative-lookup-mismatched`, `negative-lookup-unknown-key`, `negative-lookup-repeated-key`, `negative-lookup-key-other-template`, `negative-lookup-key-lookup-qualified`, `negative-aggregate-key-other-template`, `negative-aggregate-key-bare-field`, `negative-verification-lookup-key`, `negative-row-aggregate-keys`, `sdtm-lb-lab-specific-ranges`, `rust/crates/yamaa-adapters/tests/fixtures/intermediate_key_reference.json`, `rust/crates/yamaa-adapters/tests/fixtures/correlated_aggregates.json`, `rust/crates/yamaa-adapters/tests/execution_lookup_read_contexts.rs`, `rust/crates/yamaa-adapters/tests/execution_aggregate_key_reads.rs`, `rust/crates/yamaa-core/src/specification/declared_keys.rs`, `rust/crates/yamaa-core/src/key_relation.rs::a_declared_key_pairs_every_column_it_names`, `rust/crates/yamaa-adapters/tests/front_end_comparison.rs`, `rust/crates/yamaa-adapters/tests/check_variable_forms.rs`.
+Evidence: `negative-lookup-mismatched`, `negative-lookup-unknown-key`, `negative-lookup-repeated-key`, `negative-lookup-key-other-template`, `negative-lookup-key-lookup-qualified`, `negative-aggregate-key-other-template`, `negative-aggregate-key-bare-field`, `negative-verification-lookup-key`, `negative-row-aggregate-keys`, `sdtm-lb-lab-specific-ranges`, `rust/crates/yamaa-adapters/tests/fixtures/intermediate_key_reference.json`, `rust/crates/yamaa-adapters/tests/fixtures/correlated_aggregates.json`, `rust/crates/yamaa-adapters/tests/execution_lookup_read_contexts.rs`, `rust/crates/yamaa-adapters/tests/execution_aggregate_key_reads.rs`, `rust/crates/yamaa-core/src/specification/declared_keys.rs`, `rust/crates/yamaa-core/src/key_relation.rs::a_declared_key_pairs_every_column_it_names`, `rust/crates/yamaa-adapters/tests/check_variable_forms.rs`.
 
 ```yaml
 intermediates:
@@ -674,7 +674,7 @@ naming list with dataset identifiers, other lookup ids and the output
 `key` fails as `missing_required_field`.
 
 Fails: `duplicate_identifier`, `missing_required_field`.
-Evidence: `negative-lookup-id-collision`, `negative-lookup-unknown-key`, `schema-lookup`, `rust/crates/yamaa-core/src/specification/declared_keys.rs::an_intermediate_read_as_a_lookup_requires_its_key`, `rust/crates/yamaa-core/src/specification/declared_keys.rs::a_row_driver_read_as_a_lookup_is_refused_at_its_key`, `rust/crates/yamaa-adapters/tests/declaration_v1_lowering.rs::an_intermediate_without_key_is_refused_unless_it_drives_rows`.
+Evidence: `negative-lookup-id-collision`, `negative-lookup-unknown-key`, `schema-lookup`, `rust/crates/yamaa-core/src/specification/declared_keys.rs::an_intermediate_read_as_a_lookup_requires_its_key`, `rust/crates/yamaa-core/src/specification/declared_keys.rs::a_row_driver_read_as_a_lookup_is_refused_at_its_key`, `rust/crates/yamaa-adapters/tests/declaration_v1_lowering.rs::an_intermediate_without_key_is_refused_unless_it_drives_rows`, `rust/tests/host-fixtures/cases.json::ordinary_lookup_without_keys`.
 
 For a named intermediate, `dataset: SELF` instead reads the specification's
 completed derived rows ([LOOKUP-7](#lookup-7)). The current row is the output
@@ -686,10 +686,11 @@ survive `filter` ([LOOKUP-25](#lookup-25)).
 An `id` collision fails as `duplicate_identifier`. The schema requires `id`
 and `dataset`: omitting either fails as `missing_required_field` with no
 rule cited. An intermediate that drives no row template and declares no `key`
-fails as `missing_required_field` at its `key` before any input is read, its
-context naming the field and its class as the schema's does; a row template's
-driver read as a lookup by the rows another template builds fails the same
-way. An intermediate never falls back to its input's `key`.
+fails as `missing_required_field` at its `key` before any input is read, even
+when nothing reads it, its context naming the field and its class as the
+schema's does; a row template's driver read as a lookup by the rows another
+template builds fails the same way. An intermediate never falls back to its
+input's `key`.
 
 ```yaml
 intermediates:

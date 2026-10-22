@@ -273,26 +273,30 @@ pub fn reached() -> BTreeSet<ConditionCode> {
 }
 
 pub(crate) fn derive_reached() -> BTreeSet<ConditionCode> {
+    use crate::support::specification::prepare;
     pub(crate) use specification_support::Tree as T;
     pub(crate) use yamaa_core::{
-        schema::{Document, DocumentNode as N, SpecificationDocument},
-        specification::{PreflightFinding, PrepareError, PreparedSpecification},
+        schema::{Document, DocumentNode as N},
+        specification::{PreflightFinding, PrepareError},
     };
+    // An aggregate's bindings are a map keyed by name (P-BIND-1).
     let binding = |value| {
-        T::map(vec![
-            ("name", T::text("V")),
-            ("type", T::text("float")),
-            ("derivation", T::map(vec![("value", value)])),
-        ])
+        (
+            "V",
+            T::map(vec![
+                ("type", T::text("float")),
+                ("derivation", T::map(vec![("value", value)])),
+            ]),
+        )
     };
-    let specification = |bindings| {
+    let specification = |bindings: Vec<(&str, T)>| {
         specification_support::specification(vec![(
             "RESULT",
             "float",
             T::map(vec![(
                 "aggregate",
                 T::map(vec![
-                    ("derive", T::List(bindings)),
+                    ("derivations", T::map(bindings)),
                     ("expr", T::text("SUM(V)")),
                 ]),
             )]),
@@ -307,26 +311,20 @@ pub(crate) fn derive_reached() -> BTreeSet<ConditionCode> {
             "LOOKUP-22",
         ),
         (
-            vec![binding(T::map(vec![(
-                "literal",
-                T::Scalar(N::Integer("1".into())),
-            )]))],
+            vec![binding(T::Scalar(N::Integer("1".into())))],
             ConditionCode::AggregateDeriveRelation,
             "invalid_derive_step",
             "LOOKUP-22",
         ),
         (
-            vec![binding(T::map(vec![(
-                "compute",
-                T::map(vec![("expr", T::text("W"))]),
-            )]))],
+            vec![binding(T::text("W"))],
             ConditionCode::AggregateDeriveVariable,
             "unknown_derive_variable",
             "LOOKUP-22",
         ),
     ] {
         let document = specification(bindings);
-        let Err(PrepareError::Invalid(findings)) = PreparedSpecification::prepare(&document) else {
+        let Err(PrepareError::Invalid(findings)) = prepare(&document) else {
             panic!("invalid derive declaration was admitted");
         };
         let diagnostic = findings
@@ -347,17 +345,18 @@ pub(crate) fn derive_reached() -> BTreeSet<ConditionCode> {
         assert!(diagnostic.spec_paths[0].starts_with("columns.RESULT.derivation.aggregate"));
         reached.insert(rendered(&diagnostic));
     }
-    let source = |name| T::map(vec![("source", T::map(vec![("variable", T::text(name))]))]);
     let document = specification(vec![
-        binding(source("SRC.ID")),
-        T::map(vec![
-            ("name", T::text("C")),
-            ("type", T::text("int")),
-            ("derivation", T::map(vec![("value", source("CAP.ID"))])),
-        ]),
+        binding(T::text("SRC.ID")),
+        (
+            "C",
+            T::map(vec![
+                ("type", T::text("int")),
+                ("derivation", T::map(vec![("value", T::text("CAP.ID"))])),
+            ]),
+        ),
     ]);
-    let root = document.document().root();
-    let mut nodes = document.document().nodes().to_vec();
+    let root = document.root();
+    let mut nodes = document.nodes().to_vec();
     assert_eq!(root, nodes.len() - 1);
     let Some(N::Mapping(mut fields)) = nodes.pop() else {
         unreachable!()
@@ -377,10 +376,8 @@ pub(crate) fn derive_reached() -> BTreeSet<ConditionCode> {
     fields.push((key, value));
     let root = nodes.len();
     nodes.push(N::Mapping(fields));
-    let document = SpecificationDocument::admit(Document::new(nodes, root).unwrap())
-        .unwrap()
-        .unwrap();
-    let Err(PrepareError::Invalid(findings)) = PreparedSpecification::prepare(&document) else {
+    let document = Document::new(nodes, root).unwrap();
+    let Err(PrepareError::Invalid(findings)) = prepare(&document) else {
         panic!("derive read without keep was admitted");
     };
     let diagnostic = findings

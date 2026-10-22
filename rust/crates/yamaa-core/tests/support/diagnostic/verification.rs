@@ -1,6 +1,7 @@
 #![allow(unused_imports)]
 use super::rendered;
 pub(crate) use crate::support::project_call_compiler as support;
+use crate::support::specification::prepare;
 pub(crate) use std::collections::BTreeSet;
 pub(crate) use support::Tree as T;
 pub(crate) use yamaa_core::{
@@ -20,14 +21,7 @@ pub(crate) fn compiled() -> PreparedSpecification {
 pub(crate) fn compiled_with(severity: &str) -> PreparedSpecification {
     let list = || T::List(vec![T::text("VAL"), T::text("ID")]);
     let spec = support::specification_with_verifications(
-        vec![(
-            "VAL",
-            "int",
-            T::map(vec![(
-                "source",
-                T::map(vec![("variable", T::text("SRC.VAL"))]),
-            )]),
-        )],
+        vec![("VAL", "int", T::text("SRC.VAL"))],
         vec![],
         vec![
             T::map(vec![(
@@ -56,7 +50,7 @@ pub(crate) fn compiled_with(severity: &str) -> PreparedSpecification {
         ],
         Some("warnings.csv"),
     );
-    PreparedSpecification::prepare(&spec).unwrap()
+    prepare(&spec).unwrap()
 }
 pub(crate) fn record(code: ConditionCode, path: &str, rows: &[Row]) -> CheckRecord {
     CheckRecord {

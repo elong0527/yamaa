@@ -6,7 +6,8 @@ mod project {
         //! Execute compiler-selected row/default calls without a host-authored plan.
         use crate::support::project_call_compiler as support;
         use std::cell::RefCell;
-        use support::{call, function, specification_with_rows, Tree};
+        // The 0.5 document this family keeps until #3447 (#3435).
+        use support::{call, function, v0_5::specification_with_rows, Tree};
         use yamaa_core::function_invocation::{Argument, FunctionPort, HostError};
         use yamaa_core::{
             function_signature::{InvocationPlan, ProjectInvocationPlan},

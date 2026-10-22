@@ -1949,13 +1949,13 @@ columns:
                         assert_eq!(issues.len(), 1);
                         let mut expected = case["findings"][0].clone();
                         // The capture names the file its loader read; a 1.x
-                        // schema finding names the file this run loaded.
+                        // schema finding names the file this run loaded, by
+                        // its identity.
+                        let loaded = yamaa_adapters::json!(fixture.0.identity("spec.yaml"));
                         let context = expected["context"].as_object_mut().unwrap();
                         for field in ["source", "entry"] {
                             assert_eq!(
-                                context
-                                    .insert(field.into(), yamaa_adapters::json!(specification))
-                                    .unwrap(),
+                                context.insert(field.into(), loaded.clone()).unwrap(),
                                 "/private/tmp/yamaa-root-text-pad-audit/width-noninteger/spec.yaml"
                             );
                         }

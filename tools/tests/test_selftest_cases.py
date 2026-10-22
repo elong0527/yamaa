@@ -2,14 +2,11 @@
 
 import contextlib
 import io
-import shutil
 import tempfile
 import unittest
 from pathlib import Path
 
 import yaml
-from tools.migrate.excepted import EXCEPTED
-from tools.paths import ROOT
 from tools.validation import check_selftest_cases as SELFTEST
 
 LIST = SELFTEST.LIST
@@ -23,14 +20,6 @@ class CommittedList(unittest.TestCase):
             self.assertEqual(SELFTEST.main([]), 0)
         # A listed case covers every adapter.
         self.assertIn("not covered: none", output.getvalue())
-
-    def test_every_excepted_name_is_a_benchmark(self):
-        # A retired or renamed case leaves the shared exception list with it.
-        for name in EXCEPTED:
-            with self.subTest(name=name):
-                self.assertTrue(
-                    (ROOT / "benchmarks" / name / "benchmark.yaml").is_file()
-                )
 
 
 class Refusals(unittest.TestCase):
@@ -92,40 +81,23 @@ class Refusals(unittest.TestCase):
                     [f"ERROR: {LIST}.cases: no benchmark named {name!r}"],
                 )
 
-    def test_a_host_environment_file_marks_a_project_function(self):
-        for path in ("python/environment.yaml", "r/environment.yaml"):
-            with self.subTest(path=path):
-                environment = self.root / "benchmarks/adam-json" / path
-                environment.parent.mkdir()
-                environment.write_text("schema_version: '1.0'\n")
-                self.assertEqual(
-                    self.errors(),
-                    [
-                        f"ERROR: {LIST}.cases: adam-json calls a project function: {path}"
-                    ],
-                )
-                shutil.rmtree(environment.parent)
-
     def test_a_project_that_links_code_marks_a_project_function(self):
         project = self.root / "benchmarks/adam-json/project.yaml"
-        for field, text in (
-            ("environments", "environments: {python: code/environment.yaml}\n"),
-            ("functions", "type: project\nfunctions: [functions/bmi.yaml]\n"),
-        ):
-            with self.subTest(field=field):
-                project.write_text(text)
-                self.assertEqual(
-                    self.errors(),
-                    [
-                        f"ERROR: {LIST}.cases: adam-json calls a project function: "
-                        f"project.yaml links {field}"
-                    ],
-                )
+        project.write_text(
+            'yamaa: "1.0"\ntype: project\nfunctions: [functions/bmi.yaml]\n'
+        )
+        self.assertEqual(
+            self.errors(),
+            [
+                f"ERROR: {LIST}.cases: adam-json calls a project function: "
+                "project.yaml links functions"
+            ],
+        )
 
     def test_a_submission_project_that_links_code_marks_a_project_function(self):
         case = self.root / "benchmarks/adam-json"
         (case / "submission-project.yaml").write_text(
-            "environments: {r: r/environment.yaml}\n"
+            'yamaa: "1.0"\ntype: project\nfunctions: [functions/bmi.yaml]\n'
         )
         define = {
             "environment": "submission-project.yaml",
@@ -139,22 +111,9 @@ class Refusals(unittest.TestCase):
             self.errors(),
             [
                 f"ERROR: {LIST}.cases: adam-json calls a project function: "
-                "submission-project.yaml links environments"
+                "submission-project.yaml links functions"
             ],
         )
-
-    def test_a_case_the_conversion_gate_excepts_is_refused(self):
-        for name, reason in EXCEPTED.items():
-            with self.subTest(name=name):
-                self.case(name, "input/raw.csv", "expected/error.yaml")
-                self.document["cases"] = self.listing(name)
-                self.assertEqual(
-                    self.errors(),
-                    [
-                        f"ERROR: {LIST}.cases: {name} is excepted from the 1.0 "
-                        f"conversion gate ({reason})"
-                    ],
-                )
 
     def test_a_list_without_a_negative_case_is_refused(self):
         self.document["cases"].remove("negative-parquet")

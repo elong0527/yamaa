@@ -476,9 +476,10 @@ impl VersionedDocument {
         self.prepare_sources_within(display_path, port, &[])
     }
 
-    /// [`VersionedDocument::prepare_sources`] for a producer a copy entry of
-    /// each specification `resolving` names, entry first, copies from: a
-    /// copy that leads back to one of them fails (SPEC-9).
+    /// [`VersionedDocument::prepare_sources`] for a producer that a copy
+    /// entry copies from while the specifications and layers `resolving`
+    /// names, entry first, are being resolved: a copy that leads back to one
+    /// of them fails (SPEC-9).
     pub(crate) fn prepare_sources_within<P: InheritancePort>(
         self,
         display_path: String,
@@ -662,7 +663,8 @@ struct Parents<'a, P: InheritancePort> {
     port: &'a mut P,
     captured: Vec<CapturedParent>,
     /// The specifications whose copies are being resolved, entry first,
-    /// ending with this one.
+    /// ending with this one. Each one that a producer is being read for is
+    /// followed by its layers that count as being resolved (SPEC-9).
     resolving: Vec<String>,
     /// Why the last producer the port could not read was not read.
     producer: Option<ProducerFailure<P::Error>>,
@@ -671,14 +673,18 @@ struct Parents<'a, P: InheritancePort> {
 impl<P: InheritancePort> Parents<'_, P> {
     /// The output contract of the producer that input `dataset`'s link,
     /// `written` in `declaring`, names, read and resolved as a specification
-    /// of either language (INPUT-10, D115). A producer that copies from its
-    /// own producers reads them in turn; a link back to a specification
-    /// being resolved fails.
+    /// of either language (INPUT-10, D115). `layers` are this
+    /// specification's layers that count as being resolved while it is read,
+    /// entry first. A producer that copies from its own producers reads them
+    /// in turn; a link back to a specification or layer being resolved
+    /// fails, as a link to the consuming specification when it names one of
+    /// `layers`.
     fn read_producer(
         &mut self,
         declaring: &graph::Source,
         written: &str,
         dataset: &str,
+        layers: &[&graph::Source],
     ) -> Result<yamaa_core::producer_contract::Contract, ProducerFailure<P::Error>> {
         use yamaa_core::producer_contract::{self as contract, Error as Invalid};
         use yamaa_core::resource::ResourceFailure;
@@ -698,12 +704,24 @@ impl<P: InheritancePort> Parents<'_, P> {
             .port
             .canonicalize_resource(&declaring.identity, written)
             .map_err(|error| failed(self.port, error))?;
-        if let Some(entered) = self.resolving.iter().position(|id| *id == source.identity) {
+        // This specification's layers that count as being resolved begin
+        // with its entry, which they replace (SPEC-9).
+        let own = self.resolving.len() - 1;
+        debug_assert_eq!(
+            layers.first().map(|layer| &layer.identity),
+            self.resolving.last()
+        );
+        let resolving = self.resolving[..own]
+            .iter()
+            .cloned()
+            .chain(layers.iter().map(|layer| layer.identity.clone()))
+            .collect::<Vec<_>>();
+        if let Some(entered) = resolving.iter().position(|id| *id == source.identity) {
             return Err(ProducerFailure::Findings(vec![
-                if entered + 1 == self.resolving.len() {
+                if resolving[own..].contains(&source.identity) {
                     contract::self_reference(dataset)
                 } else {
-                    let mut cycle = self.resolving[entered..]
+                    let mut cycle = resolving[entered..]
                         .iter()
                         .map(String::as_str)
                         .collect::<Vec<_>>();
@@ -727,7 +745,7 @@ impl<P: InheritancePort> Parents<'_, P> {
                 captured,
                 written.into(),
                 &mut *self.port,
-                &self.resolving,
+                &resolving,
             )
         } else {
             shipped_schema::prepare(captured, written.into(), &mut *self.port)
@@ -775,8 +793,9 @@ impl<P: InheritancePort> lifecycle::PathPort for Parents<'_, P> {
         declaring: &graph::Source,
         written: &str,
         dataset: &str,
+        resolving: &[&graph::Source],
     ) -> Option<yamaa_core::producer_contract::Contract> {
-        self.read_producer(declaring, written, dataset)
+        self.read_producer(declaring, written, dataset, resolving)
             .map_err(|failure| self.producer = Some(failure))
             .ok()
     }

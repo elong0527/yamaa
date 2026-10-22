@@ -9,7 +9,7 @@ HELP = """yamaa repository commands (run from the repository root)
   quick             check-lint, then check-repository. Runs no test suite and needs
                     no R. Before a push, run it only for a change to generated files,
                     rule cards, schemas, docs generators or Python.
-  check             Run the five PR checks below, in the same order locally.
+  check             Run lint, repository checks and the three language suites locally.
   check-lint        Ruff, cargo fmt, Clippy over the workspace except the R binding
                     and over the fuzz targets. Needs Clippy and rustfmt added to the
                     pinned Rust toolchain, and a C++ compiler for libFuzzer.
@@ -28,11 +28,7 @@ HELP = """yamaa repository commands (run from the repository root)
                     public benchmark conformance, installed Python suites, R CMD check.
                     HOSTS=python or HOSTS=r runs one host's half. Needs what
                     test-python and test-r need; the Python half needs no R. CI runs
-                    each half as its own job on qualifying PRs.
-  check-conversion  1.0 conversion gate: every benchmark converted to 1.0 and run on a
-                    Python host built from the checkout, Define benchmarks included;
-                    HOSTS=python,r adds R. Needs what test-python needs, and test-r
-                    with R. CI runs it on qualifying PRs and weekly on both hosts.
+                    each half in its corresponding host lane on qualifying PRs.
   probe-executor    Time the executor probe on a release build. Not part of CI.
   docs-test         Canonical page and benchmark dashboard tests.
   docs-generate     Generate benchmark dashboards from current authored data.
@@ -40,7 +36,8 @@ HELP = """yamaa repository commands (run from the repository root)
   docs              Generate dashboards and build the strict site.
 
 Run setup first, and again after changing rust/ or python/src/ before running
-Python tests: they import the installed package. Pull request CI runs check, so
+Python tests: they import the installed package. Pull request CI selects the
+affected checks in four lanes, so
 before a push run the tests nearest the change and, after a Rust change,
 cargo fmt and Clippy on the touched crates (D148 on #3030). Reproduce a red CI
 job with its own target. Native installation qualification is a separate full

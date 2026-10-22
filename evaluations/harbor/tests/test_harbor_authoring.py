@@ -120,22 +120,11 @@ def test_the_sources_hold_no_checks_prompts_or_solutions(tmp_path):
     assert _tree(out / "input") == _tree(task / "environment" / "input")
 
 
-def _converted(tmp_path: Path, benchmark: str) -> Path:
-    """A copy of a benchmark written in 1.0, as `python -m tools.migrate`
-    writes it; a benchmark already written in 1.0 is copied unchanged."""
-    from tools.migrate import convert, write
-
-    source = BENCHMARKS / benchmark
-    write(convert([source]), tmp_path / "converted", [source])
-    return tmp_path / "converted" / benchmark
-
-
 def test_a_1_0_project_hands_over_each_function_file_without_its_tests(tmp_path):
     # A 1.x project lists its function files; each reaches the writer as
     # `<name>.yaml` without its tests, beside the Python module that
-    # `implementations.python` names (#3030 D8, D120).
-    case = _converted(tmp_path, "adam-adsl-bmi")
-    assert not (case / "python" / "environment.yaml").exists()
+    # `implementations.python` names (#3030 D8).
+    case = BENCHMARKS / "adam-adsl-bmi"
     functions = packet.write(case, tmp_path / "packet") / "sources" / "functions"
     assert sorted(p.name for p in functions.iterdir()) == [
         "bmi.yaml",
@@ -147,70 +136,6 @@ def test_a_1_0_project_hands_over_each_function_file_without_its_tests(tmp_path)
         "python": "yamaa_benchmarks.bmi",
         "r": "yamaabenchmarks::bmi",
     }
-
-
-def test_a_0_5_benchmark_hands_over_its_environment_files_by_host(tmp_path):
-    # A 0.5 study, written inline since the corpus has none: its environment
-    # files reach the writer by host, without their tests, until the 0.5
-    # branch goes with them.
-    case = tmp_path / "adam-adsl-bmi"
-    shutil.copytree(BENCHMARKS / "adam-adsl-bmi", case)
-    shutil.rmtree(case / "functions")
-    (case / "project.yaml").write_text(
-        "schema_version: '1.0'\n"
-        "environments: {python: python/environment.yaml, r: r/environment.yaml}\n"
-        "adam: {specs: [spec.yaml]}\n"
-    )
-    for host, callable_ in (
-        ("python", "yamaa_benchmarks.bmi"),
-        ("r", "yamaabenchmarks::bmi"),
-    ):
-        (case / host).mkdir(exist_ok=True)
-        (case / host / "environment.yaml").write_text(
-            "schema_version: '1.0'\nfunctions:\n  bmi:\n"
-            f"    function: {callable_}\n"
-            "    description: Body mass index.\n"
-            "    params: [{name: weight_kg, type: float}, {name: height_cm, type: float}]\n"
-            "    returns: float\n    tests:\n"
-            "    - {id: normal, covers: [normal], result: 22.857142857142858,\n"
-            "       args: {weight_kg: 70.0, height_cm: 175.0}}\n"
-        )
-    functions = packet.write(case, tmp_path / "packet") / "sources" / "functions"
-    assert sorted(p.name for p in functions.iterdir()) == [
-        "python.yaml",
-        "r.yaml",
-        "yamaa_benchmarks.py",
-    ]
-    for host in ("python", "r"):
-        declared = yaml.safe_load((functions / f"{host}.yaml").read_text())
-        assert list(declared["functions"]["bmi"]) == [
-            "function",
-            "description",
-            "params",
-            "returns",
-        ]
-
-
-@pytest.mark.parametrize("benchmark", CASES)
-def test_a_converted_copy_gives_the_same_skeleton_and_graded_outputs(
-    tmp_path, benchmark
-):
-    # The build, the scaffold and the checks read output paths and columns,
-    # keys, the domain, column names and types, and benchmark.yaml, which
-    # the 1.0 conversion keeps.
-    original, converted = BENCHMARKS / benchmark, _converted(tmp_path, benchmark)
-    assert scaffold.skeleton(converted) == scaffold.skeleton(original)
-    data = packet.check_data(original)
-    assert {
-        key: value
-        for key, value in packet.check_data(converted).items()
-        if key not in ("specification", "unsaid")
-    } == {k: v for k, v in data.items() if k not in ("specification", "unsaid")}
-    try:
-        graded = [s["output"] for s in build.output_specs(original)]
-    except build.BuildError:
-        pytest.skip("not graded yet")
-    assert [s["output"] for s in build.output_specs(converted)] == graded
 
 
 def test_writing_the_sources_replaces_only_what_it_writes(tmp_path):

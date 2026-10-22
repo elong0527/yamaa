@@ -31,7 +31,8 @@ def benchmark_page():
 # the qualified cutover, so the dashboard test stages this content itself in
 # a copied benchmark folder.
 SCHEMA_INHERITANCE_RESOLVED_SPEC = """\
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
 domain: ADLB
 keys:
   - USUBJID

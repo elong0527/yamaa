@@ -1957,6 +1957,7 @@ mod project {
     }
     mod project_codelist_diagnostics {
         use crate::support::project_codelist_compiler as support;
+        use crate::support::specification::prepare_in;
         use yamaa_core::{
             dataset::{CheckRecord, CodelistObservation, RowIdentity},
             diagnostic::ConditionCode,
@@ -1966,7 +1967,7 @@ mod project {
             value::Value,
         };
         fn compiled() -> PreparedSpecification {
-            PreparedSpecification::prepare_with_environment(
+            prepare_in(
                 &support::spec("SEX", "str", None, false, None),
                 &support::environment(false),
             )
