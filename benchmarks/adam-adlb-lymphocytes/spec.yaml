@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADLB
 keys: [USUBJID, VISIT, PARAMCD]
 input:
@@ -60,11 +62,11 @@ rows:
     derivations:
       PARAMCD: LB.LBTESTCD
       PARAM: LB.LBTEST
-      WBCVAL: {literal: null}
-      FRACVAL: {literal: null}
-      EXISTING_ABS_COUNT: {literal: null}
+      WBCVAL: null
+      FRACVAL: null
+      EXISTING_ABS_COUNT: null
       AVAL: LB.LBSTRESN
-      DTYPE: {literal: null}
+      DTYPE: null
 
   # One absolute record per subject, visit, and differential that has a WBC
   # count and a fraction result and no absolute record yet. ONLY() stops the
@@ -79,8 +81,8 @@ rows:
       AND FRACVAL IS NOT NULL
       AND EXISTING_ABS_COUNT IS NULL
     derivations:
-      PARAMCD: {literal: LYMPH}
-      PARAM: {literal: Lymphocytes Abs (10^9/L)}
+      PARAMCD: "'LYMPH'"
+      PARAM: "'Lymphocytes Abs (10^9/L)'"
       WBCVAL:
         aggregate:
           filter: "LB.LBTESTCD = 'WBC'"
@@ -93,10 +95,8 @@ rows:
         aggregate:
           filter: "LB.LBTESTCD = 'LYMPH'"
           expr: "COUNT(LB.*)"
-      AVAL:
-        compute:
-          expr: "WBCVAL * FRACVAL"
-      DTYPE: {literal: CALCULATION}
+      AVAL: "WBCVAL * FRACVAL"
+      DTYPE: "'CALCULATION'"
 
   - id: derived_neut
     group_by: [LB.USUBJID, LB.VISIT]
@@ -105,8 +105,8 @@ rows:
       AND FRACVAL IS NOT NULL
       AND EXISTING_ABS_COUNT IS NULL
     derivations:
-      PARAMCD: {literal: NEUT}
-      PARAM: {literal: Neutrophils Abs (10^9/L)}
+      PARAMCD: "'NEUT'"
+      PARAM: "'Neutrophils Abs (10^9/L)'"
       WBCVAL:
         aggregate:
           filter: "LB.LBTESTCD = 'WBC'"
@@ -119,10 +119,8 @@ rows:
         aggregate:
           filter: "LB.LBTESTCD = 'NEUT'"
           expr: "COUNT(LB.*)"
-      AVAL:
-        compute:
-          expr: "WBCVAL * FRACVAL"
-      DTYPE: {literal: CALCULATION}
+      AVAL: "WBCVAL * FRACVAL"
+      DTYPE: "'CALCULATION'"
 
   - id: derived_mono
     group_by: [LB.USUBJID, LB.VISIT]
@@ -131,8 +129,8 @@ rows:
       AND FRACVAL IS NOT NULL
       AND EXISTING_ABS_COUNT IS NULL
     derivations:
-      PARAMCD: {literal: MONO}
-      PARAM: {literal: Monocytes Abs (10^9/L)}
+      PARAMCD: "'MONO'"
+      PARAM: "'Monocytes Abs (10^9/L)'"
       WBCVAL:
         aggregate:
           filter: "LB.LBTESTCD = 'WBC'"
@@ -145,10 +143,8 @@ rows:
         aggregate:
           filter: "LB.LBTESTCD = 'MONO'"
           expr: "COUNT(LB.*)"
-      AVAL:
-        compute:
-          expr: "WBCVAL * FRACVAL"
-      DTYPE: {literal: CALCULATION}
+      AVAL: "WBCVAL * FRACVAL"
+      DTYPE: "'CALCULATION'"
 
   - id: derived_eos
     group_by: [LB.USUBJID, LB.VISIT]
@@ -157,8 +153,8 @@ rows:
       AND FRACVAL IS NOT NULL
       AND EXISTING_ABS_COUNT IS NULL
     derivations:
-      PARAMCD: {literal: EOS}
-      PARAM: {literal: Eosinophils Abs (10^9/L)}
+      PARAMCD: "'EOS'"
+      PARAM: "'Eosinophils Abs (10^9/L)'"
       WBCVAL:
         aggregate:
           filter: "LB.LBTESTCD = 'WBC'"
@@ -171,10 +167,8 @@ rows:
         aggregate:
           filter: "LB.LBTESTCD = 'EOS'"
           expr: "COUNT(LB.*)"
-      AVAL:
-        compute:
-          expr: "WBCVAL * FRACVAL"
-      DTYPE: {literal: CALCULATION}
+      AVAL: "WBCVAL * FRACVAL"
+      DTYPE: "'CALCULATION'"
 
   - id: derived_baso
     group_by: [LB.USUBJID, LB.VISIT]
@@ -183,8 +177,8 @@ rows:
       AND FRACVAL IS NOT NULL
       AND EXISTING_ABS_COUNT IS NULL
     derivations:
-      PARAMCD: {literal: BASO}
-      PARAM: {literal: Basophils Abs (10^9/L)}
+      PARAMCD: "'BASO'"
+      PARAM: "'Basophils Abs (10^9/L)'"
       WBCVAL:
         aggregate:
           filter: "LB.LBTESTCD = 'WBC'"
@@ -197,10 +191,8 @@ rows:
         aggregate:
           filter: "LB.LBTESTCD = 'BASO'"
           expr: "COUNT(LB.*)"
-      AVAL:
-        compute:
-          expr: "WBCVAL * FRACVAL"
-      DTYPE: {literal: CALCULATION}
+      AVAL: "WBCVAL * FRACVAL"
+      DTYPE: "'CALCULATION'"
 
 verifications:
   - row_count:

@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+from tools.tests.support import write
+
 INDEX = """\
 # Rules
 
@@ -85,13 +87,6 @@ FILES = {
     "yaml/conditions.yaml": CONDITIONS,
     "benchmarks/schema-inheritance/README.md": "# Schema inheritance\n",
 }
-
-
-def write(root, relative, text):
-    path = Path(root) / relative
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text, encoding="utf-8")
-    return path
 
 
 def write_repository(root):

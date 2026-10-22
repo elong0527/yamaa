@@ -1,7 +1,7 @@
 phase: join
 condition: multiple_matches
 spec_paths:
-  - intermediates[0]
+  - intermediates.SMQ1
 rule: LOOKUP-10
 context:
   intermediate: SMQ1

@@ -1,10 +1,13 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
 domain: TIMELINE
 keys: [DOMAIN, USUBJID, SEQ]
 input:
   DM: {path: input/dm.csv, types: {RFSTDTC: date}}
-  AE: {path: input/ae.csv, types: {AESEQ: int, AESTDTC: date}}
-  CM: {path: input/cm.csv, types: {CMSEQ: int, CMSTDTC: date}}
+  AE: {path: input/ae.csv, types: {AESEQ: int, AESTDTC: date},
+       key: [DOMAIN, USUBJID]}
+  CM: {path: input/cm.csv, types: {CMSEQ: int, CMSTDTC: date},
+       key: [DOMAIN, USUBJID]}
 
 output:
   path: timeline.csv
@@ -46,8 +49,8 @@ rows:
     derivations:
       DOMAIN: DM.DOMAIN
       USUBJID: DM.USUBJID
-      SEQ: {literal: 1}
-      TERM: {literal: REFERENCE START}
+      SEQ: 1
+      TERM: "'REFERENCE START'"
       STDT: DM.RFSTDTC
 
   - id: adverse_events

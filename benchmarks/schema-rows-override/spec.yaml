@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADVS
 keys: [STUDYID, USUBJID, AVISIT, PARAMCD]
 input:
@@ -8,6 +10,7 @@ input:
   ADSL:
     path: input/adsl.csv
     types: {HEIGHTBL: float}
+    key: [STUDYID, USUBJID]
 
 output:
   path: advs.csv
@@ -57,7 +60,7 @@ rows:
     derivations:
       PARAMCD: VS.VSTESTCD
       PARAM: VS.VSTEST
-      HEIGHTBL: {literal: null}
+      HEIGHTBL: null
 
   # This template names AVAL, overriding the default for its rows only
   # (SPEC-6). The override reads HEIGHTBL in this template's scope
@@ -67,12 +70,10 @@ rows:
     dataset: VS
     filter: "VS.VSTESTCD = 'WEIGHT'"
     derivations:
-      PARAMCD: {literal: BMI}
-      PARAM: {literal: Body Mass Index (kg/m^2)}
+      PARAMCD: "'BMI'"
+      PARAM: "'Body Mass Index (kg/m^2)'"
       HEIGHTBL: ADSL.HEIGHTBL
-      AVAL:
-        compute:
-          expr: "VS.VSSTRESN / NULLIF(HEIGHTBL * HEIGHTBL / 10000, 0)"
+      AVAL: "VS.VSSTRESN / NULLIF(HEIGHTBL * HEIGHTBL / 10000, 0)"
 
 verifications:
   - row_count:

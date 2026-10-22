@@ -2,6 +2,7 @@
 
 import contextlib
 import copy
+import functools
 import io
 import os
 import re
@@ -17,7 +18,6 @@ import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
-import yaml
 from tools.ci import publish_release as publisher
 from tools.ci import release_assets, toolchain
 from tools.ci import select_release_artifacts as release
@@ -25,7 +25,7 @@ from tools.packaging import cli_archive, release_identity
 from tools.packaging import generate_component_inventory as inventory
 from tools.packaging.release_identity import Identity
 from tools.paths import ROOT
-from tools.validation._repository_yaml import UniqueKeyLoader
+from tools.tests import support
 
 MATRIX = release.native
 PROJECT = tomllib.loads((ROOT / "python/pyproject.toml").read_text(encoding="utf-8"))[
@@ -127,23 +127,14 @@ def tagged_repository(root, messages):
 
     A message makes an annotated tag; None makes a lightweight one.
     """
-    for arguments in (
-        ("init", "-b", "main"),
-        ("config", "user.name", "release test"),
-        ("config", "user.email", "release-test@example.invalid"),
-        ("commit", "--allow-empty", "-m", "qualified"),
-        ("update-ref", "refs/remotes/origin/main", "HEAD"),
-        *(
-            ("tag", name) if message is None else ("tag", "-a", name, "-m", message)
-            for name, message in messages.items()
-        ),
-    ):
-        subprocess.run(
-            ["git", "-C", str(root), *arguments],
-            check=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
+    support.init(root)
+    support.git(root, "commit", "--allow-empty", "-m", "qualified")
+    support.git(root, "update-ref", "refs/remotes/origin/main", "HEAD")
+    for name, message in messages.items():
+        if message is None:
+            support.git(root, "tag", name)
+        else:
+            support.git(root, "tag", "-a", name, "-m", message)
 
 
 def tar(path, members):
@@ -347,10 +338,11 @@ class QualificationSelection(unittest.TestCase):
             ("workflow_dispatch", "main"),
             ("push", "qualification/issue-2456-final"),
         ]:
-            run = dict(self.run, event=event, head_branch=branch)
-            self.assertEqual(
-                release.run_coverage(run, REPOSITORY, REVISION), self.coverage
-            )
+            with self.subTest(event=event, branch=branch):
+                run = dict(self.run, event=event, head_branch=branch)
+                self.assertEqual(
+                    release.run_coverage(run, REPOSITORY, REVISION), self.coverage
+                )
 
     def test_wrong_run_source_authority_workflow_event_or_attempt_cannot_release(self):
         mutations = [
@@ -502,18 +494,19 @@ class QualificationSelection(unittest.TestCase):
 
     def test_paginated_jobs_artifacts_and_releases_keep_all_pages(self):
         for field in ("jobs", "artifacts", "workflow_runs", None):
-            values = [[{"id": 1}], [{"id": 2}]]
-            pages = [{field: page} for page in values] if field else values
-            with patch.object(release, "gh_json", return_value=pages) as gh:
-                self.assertEqual(
-                    release.paginated(
-                        REPOSITORY["full_name"], "collection?per_page=100", field
-                    ),
-                    values[0] + values[1],
-                )
-                self.assertEqual(
-                    gh.call_args.args[:3], ("api", "--paginate", "--slurp")
-                )
+            with self.subTest(field=field):
+                values = [[{"id": 1}], [{"id": 2}]]
+                pages = [{field: page} for page in values] if field else values
+                with patch.object(release, "gh_json", return_value=pages) as gh:
+                    self.assertEqual(
+                        release.paginated(
+                            REPOSITORY["full_name"], "collection?per_page=100", field
+                        ),
+                        values[0] + values[1],
+                    )
+                    self.assertEqual(
+                        gh.call_args.args[:3], ("api", "--paginate", "--slurp")
+                    )
         with (
             patch.object(release, "gh_json", return_value=[{"wrong": []}]),
             self.assertRaises(ValueError),
@@ -985,16 +978,7 @@ class PublicationBoundary(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
 
-            def git(*args):
-                return subprocess.check_output(
-                    ["git", "-C", str(root), *args],
-                    text=True,
-                    stderr=subprocess.DEVNULL,
-                ).strip()
-
-            git("init", "-b", "main")
-            git("config", "user.name", "release test")
-            git("config", "user.email", "release-test@example.invalid")
+            git = functools.partial(support.git, support.init(root))
             (root / "file").write_text("main")
             git("add", "file")
             git("commit", "-m", "main")
@@ -1025,16 +1009,7 @@ class PublicationBoundary(unittest.TestCase):
         checkout = root / "checkout"
         checkout.mkdir()
 
-        def git(*args):
-            return subprocess.check_output(
-                ["git", "-C", str(checkout), *args],
-                text=True,
-                stderr=subprocess.DEVNULL,
-            ).strip()
-
-        git("init", "-b", "main")
-        git("config", "user.name", "release test")
-        git("config", "user.email", "release-test@example.invalid")
+        git = functools.partial(support.git, support.init(checkout))
         declaration = checkout / release_identity.DECLARATION
         declaration.parent.mkdir(parents=True)
         declaration.write_text(
@@ -1303,7 +1278,9 @@ class PublicationBoundary(unittest.TestCase):
                 for artifact in expected
             },
         )
-        self.assertTrue(any("/attempts/2/jobs?" in request[-1] for request in requests))
+        self.assertIn(
+            "/attempts/2/jobs?", "\n".join(request[-1] for request in requests)
+        )
         self.assertEqual(
             (destination / "asset-paths.txt").read_text().splitlines(),
             [str(path.resolve()) for path in assets],
@@ -1333,25 +1310,26 @@ class PublicationBoundary(unittest.TestCase):
 
     def test_existing_release_or_missing_qualification_never_downloads(self):
         for existing in (True, False):
-            with tempfile.TemporaryDirectory() as directory:
-                destination = Path(directory) / "selected"
-                replies = [
-                    dict(REPOSITORY),
-                    [[{"tag_name": TAG}]] if existing else [[]],
-                    dict(native_run(), conclusion="failure"),
-                ]
-                with (
-                    patch.object(release, "tagged_revision", return_value=REVISION),
-                    patch.object(release, "qualified_run", return_value=7),
-                    patch.object(release, "gh_json", side_effect=replies),
-                    patch.object(release.subprocess, "run") as download,
-                    self.assertRaises(ValueError),
-                ):
-                    release.select_release(
-                        ROOT, REPOSITORY["full_name"], TAG, destination
-                    )
-                download.assert_not_called()
-                self.assertFalse(destination.exists())
+            with self.subTest(existing=existing):
+                with tempfile.TemporaryDirectory() as directory:
+                    destination = Path(directory) / "selected"
+                    replies = [
+                        dict(REPOSITORY),
+                        [[{"tag_name": TAG}]] if existing else [[]],
+                        dict(native_run(), conclusion="failure"),
+                    ]
+                    with (
+                        patch.object(release, "tagged_revision", return_value=REVISION),
+                        patch.object(release, "qualified_run", return_value=7),
+                        patch.object(release, "gh_json", side_effect=replies),
+                        patch.object(release.subprocess, "run") as download,
+                        self.assertRaises(ValueError),
+                    ):
+                        release.select_release(
+                            ROOT, REPOSITORY["full_name"], TAG, destination
+                        )
+                    download.assert_not_called()
+                    self.assertFalse(destination.exists())
 
     def test_a_named_run_that_cannot_qualify_is_refused_before_its_artifacts(self):
         name = REPOSITORY["full_name"]
@@ -1480,7 +1458,6 @@ class PublicationBoundary(unittest.TestCase):
 
     def test_the_command_takes_a_tag_or_a_rehearsal_run_id(self):
         command = [
-            "select_release_artifacts",
             "--repository",
             REPOSITORY["full_name"],
             "--destination",
@@ -1489,12 +1466,11 @@ class PublicationBoundary(unittest.TestCase):
         for extra in ([], ["--tag", TAG, "--run-id", "7"], ["--run-id", "latest"]):
             with (
                 self.subTest(extra=extra),
-                patch("sys.argv", command + extra),
                 patch.object(release, "select_release") as select,
                 contextlib.redirect_stderr(io.StringIO()),
                 self.assertRaises(SystemExit) as stop,
             ):
-                release.main()
+                release.main(command + extra)
             self.assertEqual(stop.exception.code, 2)
             select.assert_not_called()
         for extra, tag, run_id in [
@@ -1503,11 +1479,10 @@ class PublicationBoundary(unittest.TestCase):
         ]:
             with (
                 self.subTest(extra=extra),
-                patch("sys.argv", command + extra),
                 patch.object(release, "select_release", return_value=[]) as select,
                 contextlib.redirect_stdout(io.StringIO()),
             ):
-                release.main()
+                release.main(command + extra)
             select.assert_called_once_with(
                 ROOT, REPOSITORY["full_name"], tag, Path("selected"), run_id
             )
@@ -1534,7 +1509,7 @@ class PublicationBoundary(unittest.TestCase):
 class ReleaseWorkflow(unittest.TestCase):
     def setUp(self):
         self.text = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
-        self.jobs = yaml.load(self.text, Loader=UniqueKeyLoader)["jobs"]
+        self.jobs = support.workflow("release.yml")["jobs"]
 
     def test_the_tag_publishes_the_github_release_and_nothing_else(self):
         # The owner uploads Python packages to PyPI from the release assets;
@@ -1584,12 +1559,7 @@ class ReleaseWorkflow(unittest.TestCase):
 
 class ReleaseRehearsalWorkflow(unittest.TestCase):
     def test_the_rehearsal_selects_with_its_read_only_token_and_never_publishes(self):
-        workflow = yaml.load(
-            (ROOT / ".github/workflows/release-rehearsal.yml").read_text(
-                encoding="utf-8"
-            ),
-            Loader=UniqueKeyLoader,
-        )
+        workflow = support.workflow("release-rehearsal.yml")
         self.assertEqual(
             workflow["permissions"], {"contents": "read", "actions": "read"}
         )
@@ -1602,7 +1572,8 @@ class ReleaseRehearsalWorkflow(unittest.TestCase):
         self.assertIn("python -m tools.ci.select_release_artifacts", script)
         self.assertIn("--run-id", script)
         for publication in ("publish_release", "gh release"):
-            self.assertNotIn(publication, script)
+            with self.subTest(publication=publication):
+                self.assertNotIn(publication, script)
 
 
 class ImmutableArtifactDownload(unittest.TestCase):
@@ -1693,14 +1664,7 @@ def candidate_tree(root, identity, tags=(), notes=True):
     Each earlier tag gets its own commit, so it is an ancestor of the tree.
     """
 
-    def git(*args):
-        return subprocess.check_output(
-            ["git", "-C", str(root), *args], text=True, stderr=subprocess.DEVNULL
-        ).strip()
-
-    git("init", "-b", "main")
-    git("config", "user.name", "release test")
-    git("config", "user.email", "release-test@example.invalid")
+    git = functools.partial(support.git, support.init(root))
     for name in tags:
         git("commit", "--allow-empty", "-m", name)
         git("tag", "-a", name, "-m", name)

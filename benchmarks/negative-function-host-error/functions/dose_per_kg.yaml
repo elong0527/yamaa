@@ -1,0 +1,49 @@
+yamaa: "1.0"
+type: function
+name: dose_per_kg
+description: Divide a dose in milligrams by the body weight in kilograms,
+  refusing a weight that is not positive.
+params:
+- name: dose_mg
+  type: float
+- name: weight_kg
+  type: float
+returns: float
+implementations:
+  python: yamaa_benchmarks.dose_per_kg
+  r: yamaabenchmarks::dose_per_kg
+
+tests:
+- id: ordinary
+  covers:
+  - normal
+  - numeric-comparison
+  args:
+    dose_mg: 150.0
+    weight_kg: 60.0
+  result: 2.5
+
+- id: zero-dose-boundary
+  covers:
+  - boundary
+  - numeric-comparison
+  args:
+    dose_mg: 0.0
+    weight_kg: 75.0
+  result: 0.0
+
+- id: missing-dose-short-circuits
+  covers:
+  - short-circuit-missing:dose_mg
+  args:
+    dose_mg: null
+    weight_kg: 60.0
+  result: null
+
+- id: missing-weight-short-circuits
+  covers:
+  - short-circuit-missing:weight_kg
+  args:
+    dose_mg: 150.0
+    weight_kg: null
+  result: null

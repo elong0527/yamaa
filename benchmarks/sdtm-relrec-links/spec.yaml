@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: SDTM
 domain: RELREC
 keys: [STUDYID, USUBJID, RDOMAIN, IDVAR, IDVARVAL, RELID]
 input:
@@ -40,7 +42,7 @@ columns:
   - name: RELTYPE
     type: str
     label: Relationship Type
-    derivation: {literal: null}
+    derivation: null
 
   - name: RELID
     type: str
@@ -60,8 +62,8 @@ rows:
     derivations:
       STUDYID: AE.STUDYID
       USUBJID: AE.USUBJID
-      RDOMAIN: {literal: AE}
-      IDVAR: {literal: AESEQ}
+      RDOMAIN: "'AE'"
+      IDVAR: "'AESEQ'"
       IDVARVAL: AE.AESEQ
       RELID: AE.AELNKID1
       SEQNUM: AE.AESEQ
@@ -72,8 +74,8 @@ rows:
     derivations:
       STUDYID: AE.STUDYID
       USUBJID: AE.USUBJID
-      RDOMAIN: {literal: AE}
-      IDVAR: {literal: AESEQ}
+      RDOMAIN: "'AE'"
+      IDVAR: "'AESEQ'"
       IDVARVAL: AE.AESEQ
       RELID: AE.AELNKID2
       SEQNUM: AE.AESEQ
@@ -84,8 +86,8 @@ rows:
     derivations:
       STUDYID: CM.STUDYID
       USUBJID: CM.USUBJID
-      RDOMAIN: {literal: CM}
-      IDVAR: {literal: CMSEQ}
+      RDOMAIN: "'CM'"
+      IDVAR: "'CMSEQ'"
       IDVARVAL: CM.CMSEQ
       RELID: CM.CMLNKID1
       SEQNUM: CM.CMSEQ
@@ -96,8 +98,8 @@ rows:
     derivations:
       STUDYID: CM.STUDYID
       USUBJID: CM.USUBJID
-      RDOMAIN: {literal: CM}
-      IDVAR: {literal: CMSEQ}
+      RDOMAIN: "'CM'"
+      IDVAR: "'CMSEQ'"
       IDVARVAL: CM.CMSEQ
       RELID: CM.CMLNKID2
       SEQNUM: CM.CMSEQ

@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADRS
 keys: [STUDYID, USUBJID, PARAMCD]
 input:
@@ -16,12 +18,12 @@ intermediates:
   # read; keep: first picks one when there are several.
   - id: TU_TARGET
     dataset: TU
+    key: [STUDYID, USUBJID]
     filter: >-
       TU.TUTESTCD = 'TUMIDENT' AND TU.VISIT = 'SCREENING'
       AND TU.TUSTRESC = 'TARGET'
     order_by: [TU.TUSEQ]
     keep: first
-    no_match: {literal: null}
 
 columns:
   - name: STUDYID
@@ -37,12 +39,12 @@ columns:
   - name: PARAMCD
     type: str
     label: Parameter Code
-    derivation: {literal: MDIS}
+    derivation: "'MDIS'"
 
   - name: PARAM
     type: str
     label: Parameter
-    derivation: {literal: Measurable Disease at Baseline}
+    derivation: "'Measurable Disease at Baseline'"
 
   - name: AVALC
     type: str
@@ -53,7 +55,7 @@ columns:
         false_value: "N"
         missing: "N"
     verifications:
-      - not_missing: {}
+      - not_missing
       - allowed_values:
           values: [Y, N]
 
@@ -67,7 +69,7 @@ columns:
           Y: 1
           N: 0
     verifications:
-      - not_missing: {}
+      - not_missing
       - range:
           min: 0
           max: 1

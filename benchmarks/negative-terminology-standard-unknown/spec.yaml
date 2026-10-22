@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: SDTM
 domain: DM
 keys: [STUDYID, USUBJID]
 input:
@@ -25,5 +27,5 @@ columns:
     derivation: DM_RAW.SEX
     submission:
       codelist: SEX
-      origin:
-        type: Collected
+      origins:
+        - type: Collected

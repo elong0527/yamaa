@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADEG
 keys: [STUDYID, USUBJID, PARAMCD, APERIOD, APERDAY, ATPTN]
 input:
@@ -33,9 +35,9 @@ intermediates:
     key: [STUDYID, USUBJID, APERIOD, APERDAY, ATPTN]
     filter: "ADPC.PARAMCD = 'DRGX'"
     columns: [AVAL, SAMPLED]
-    no_match: 0
+    absent: 0
     derivations:
-      SAMPLED: {literal: 1}
+      SAMPLED: 1
     verifications:
       - unique: [STUDYID, USUBJID, APERIOD, APERDAY, ATPTN]
 
@@ -136,7 +138,7 @@ columns:
         - when: "PARENT_PK.SAMPLED = 1 AND PARENT_PK.AVAL IS NOT NULL"
           then: PARENT_PK.AVAL
         - when: "TRTA = 'Placebo'"
-          then: {literal: 0.0}
+          then: 0.0
 
   # Used in the concentration-QT analysis: a change from baseline paired
   # with a concentration.

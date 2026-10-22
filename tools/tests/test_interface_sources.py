@@ -13,7 +13,8 @@ from pathlib import Path
 from unittest import mock
 
 import yaml
-from tools.packaging import release_identity
+from tools.tests import support
+from tools.tests.support import git
 from tools.validation import check_interface_stability as STABILITY
 from tools.validation import interface_sources as SOURCES
 from tools.validation.interface_manifests import ManifestError, Tree
@@ -53,65 +54,22 @@ BENCHMARK = {
 TAG = "yamaa-v1.0.0"
 
 
-def git(root, *arguments):
-    return subprocess.run(
-        [
-            *("git", "-C", str(root)),
-            *("-c", "user.name=test", "-c", "user.email=test@example.invalid"),
-            *("-c", "commit.gpgSign=false", "-c", "tag.gpgSign=false"),
-            *arguments,
-        ],
-        check=True,
-        capture_output=True,
-    ).stdout
-
-
-class Repository:
+class Repository(support.Repository):
     """A git repository holding the core registry, a rule file, the release
     identity and an empty exception list."""
 
     def __init__(self, root):
-        self.root = root
-        root.mkdir(parents=True)
-        git(root, "init", "-q", "-b", "main")
+        super().__init__(root)
         self.write(REGISTRY, SOURCE)
         self.write("rules/terms.md", CARDS)
         self.write(STABILITY.EXCEPTIONS, "exceptions: []\n")
-
-    def write(self, path, data):
-        file = self.root / path
-        file.parent.mkdir(parents=True, exist_ok=True)
-        if isinstance(data, bytes):
-            file.write_bytes(data)
-        else:
-            file.write_text(data, encoding="utf-8")
-
-    def edit(self, path, old, new):
-        text = (self.root / path).read_text(encoding="utf-8")
-        assert text.count(old) == 1, (path, old)
-        self.write(path, text.replace(old, new))
-
-    def remove(self, path):
-        (self.root / path).unlink()
 
     def benchmark(self, directory, files=BENCHMARK):
         for path, data in files.items():
             self.write(f"{directory}/{path}", data)
 
-    def release(self, version, candidate=None):
-        self.write(
-            release_identity.DECLARATION,
-            f'version = "{version}"\n'
-            + ("" if candidate is None else f"candidate = {candidate}\n"),
-        )
-
     def tag(self, name=TAG):
-        """Commit the tree as the release the tag names, and tag it."""
-        identity = release_identity.from_tag(name)
-        self.release(identity.version, identity.candidate)
-        git(self.root, "add", "-A")
-        git(self.root, "commit", "-q", "--allow-empty", "-m", name)
-        git(self.root, "tag", "-a", name, "-m", name)
+        super().tag(name)
 
     def changes(self, compare, tag=TAG):
         """`(manifest, element, what, breaking)` of each change since the tag."""
@@ -326,7 +284,7 @@ class Benchmarks(Temporary):
         self.repo.write(path, "reference/lbref.csv")
         file.chmod(0o755)
         self.repo.tag()
-        self.assertIn(b"100755 blob", git(self.repo.root, "ls-tree", TAG, path))
+        self.assertIn("100755 blob", git(self.repo.root, "ls-tree", TAG, path))
         file.chmod(0o644)
         self.assertEqual(self.repo.changes(compare_benchmarks), [])
         # A link that Git stores with the file's bytes is no regular file.

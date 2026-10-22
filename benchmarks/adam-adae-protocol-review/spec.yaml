@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADAE
 keys: [STUDYID, USUBJID, AESEQ]
 input:
@@ -52,8 +54,8 @@ columns:
               OR AE.AESTDTM >= DATETIME '2025-02-01T09:30')
             AND AE.AETERM LIKE 'INF!_%' ESCAPE '!'
             AND AE.SCORE >= -1.5
-          then: {literal: Y}
-        - otherwise: {literal: N}
+          then: "'Y'"
+        - otherwise: "'N'"
     verifications:
       - allowed_values: {values: [Y, N]}
 

@@ -1,9 +1,11 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
   DM: input/dm.csv
-  DS: {path: input/ds.csv, types: {DSSEQ: int}}
+  DS: {path: input/ds.csv, types: {DSSEQ: int}, key: [STUDYID, USUBJID]}
 base: DM
 
 output:
@@ -22,7 +24,6 @@ intermediates:
       AND DS.DSSTDTC IS NOT NULL"
     order_by: [DS.DSSTDTC, DS.DSSEQ]
     keep: last
-    no_match: {literal: null}
 
 columns:
   - name: STUDYID
@@ -80,10 +81,10 @@ columns:
     derivation:
       case:
         - when: "EOSDECOD = 'COMPLETED'"
-          then: {literal: COMPLETED}
+          then: "'COMPLETED'"
         - when: "EOSDECOD IS NOT NULL"
-          then: {literal: DISCONTINUED}
-        - otherwise: {literal: ONGOING}
+          then: "'DISCONTINUED'"
+        - otherwise: "'ONGOING'"
     verifications:
       - allowed_values:
           values: [COMPLETED, DISCONTINUED, ONGOING]
@@ -114,10 +115,10 @@ columns:
     derivation:
       case:
         - when: "LASTTRT.DSDECOD = 'COMPLETED'"
-          then: {literal: COMPLETED}
+          then: "'COMPLETED'"
         - when: "EOTDT IS NOT NULL"
-          then: {literal: DISCONTINUED}
-        - otherwise: {literal: ONGOING}
+          then: "'DISCONTINUED'"
+        - otherwise: "'ONGOING'"
     verifications:
       - allowed_values:
           values: [COMPLETED, DISCONTINUED, ONGOING]

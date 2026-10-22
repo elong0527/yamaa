@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
@@ -34,8 +36,8 @@ columns:
     derivation:
       case:
         - when: "CMNT IS NULL"
-          then: {literal: "N"}
-        - otherwise: {literal: "Y"}
+          then: "'N'"
+        - otherwise: "'Y'"
 
 verifications:
   - row_count:

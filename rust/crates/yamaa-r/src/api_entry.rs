@@ -367,7 +367,14 @@ fn read_odm(
             options = options.with_archive_member(member);
         }
         let source = text(&source)?;
-        let items = yamaa::read_odm(std::path::Path::new(&source), &options)
+        // The read needs no host capability, so the engine names no R version.
+        let engine = Engine::new(EngineOptions::new(
+            HostLanguage::R,
+            "r".into(),
+            String::new(),
+        ));
+        let items = engine
+            .read_odm(&source, &options)
             .map_err(|error| from_error(Action::Read(&source), &error))?;
         Ok(crate::public_table::frame(&items)?)
     })
@@ -473,7 +480,6 @@ fn run_observations(handle: Robj, include_measurements: bool) -> List {
         let run = run(&handle)?;
         let run = run.try_borrow().map_err(|_| "run handle in use")?;
         Ok(run
-            .build()
             .observations(include_measurements)
             .map_or_else(|| NULL.into_robj(), |value| r!(value.as_str())))
     })

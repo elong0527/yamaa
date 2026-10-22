@@ -41,7 +41,7 @@ study day from that date:
   label: Study Day of Death
   derivation:
     study_day:
-      date: DTHDT
+      source: DTHDT
       reference: RFSTD
 ```
 

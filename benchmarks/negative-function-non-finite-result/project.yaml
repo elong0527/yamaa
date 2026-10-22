@@ -1,0 +1,13 @@
+yamaa: "1.0"
+type: project
+functions:
+- functions/numeric_constant.yaml
+environments:
+  python:
+    lock: python/uv.lock
+  r:
+    lock: r/renv.lock
+
+adam:
+  specs:
+  - spec.yaml

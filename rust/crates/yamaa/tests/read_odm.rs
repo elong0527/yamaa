@@ -1,8 +1,17 @@
-//! ODM XML clinical items through the public [`yamaa::read_odm`] facade.
+//! ODM XML clinical items of a local file through the public
+//! [`yamaa::Engine::read_odm`], with no resolver.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
-use yamaa::{read_odm, DataType, Error, OdmOptions, StringArray, ODM_COLUMNS};
+#[cfg(feature = "odm")]
+use yamaa::{DataType, StringArray, ODM_COLUMNS};
+use yamaa::{Engine, EngineOptions, Error, OdmOptions, Table};
+
+/// The items of the local file `path`, read as the command line reads them.
+fn read_odm(path: &Path, options: &OdmOptions) -> Result<Table, Error> {
+    Engine::new(EngineOptions::neutral("test".into(), String::new()))
+        .read_odm(path.to_str().unwrap(), options)
+}
 
 const DOCUMENT: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
 <ODM xmlns="http://www.cdisc.org/ns/odm/v2.0" ODMVersion="2.0">

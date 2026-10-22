@@ -1864,13 +1864,13 @@ mod table {
                     "utf8-time",
                     "source_field_value_invalid",
                     "PARQUET-9",
-                    json!({"field":"OTHER","row":1,"value":1}),
+                    json!({"field":"OTHER","record":1,"value":1}),
                 ),
                 (
                     "bad-date",
                     "source_field_value_invalid",
                     "PARQUET-9",
-                    json!({"field":"D","row":1,"value":-719163}),
+                    json!({"field":"D","record":1,"value":-719163}),
                 ),
             ] {
                 let bytes = if fixture.is_empty() {

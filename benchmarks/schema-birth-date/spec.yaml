@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
@@ -50,8 +52,7 @@ columns:
         source: DOBTC
         month: 6
         day: first
-        minimum_source_precision: year
-        invalid: {literal: null}
+        invalid: null
 
   # The same completion, to the last day of the month the date lands in
   # (28 or 29 in a February, by year).
@@ -64,8 +65,7 @@ columns:
         source: DOBTC
         month: 6
         day: last
-        minimum_source_precision: year
-        invalid: {literal: null}
+        invalid: null
 
   # year, month or day: how much of a date the collected text carries.
   - name: DOB_PREC_TX
@@ -75,7 +75,7 @@ columns:
       precision:
         type: date
         source: DOBTC
-        invalid: {literal: null}
+        invalid: null
 
   # The completed date keeps the precision of the text it came from, so
   # this reads the same word as DOB_PREC_TX. A date value is never invalid
@@ -102,7 +102,7 @@ columns:
     label: Study Day of Birth Completion
     derivation:
       study_day:
-        date: DOB_FIRST
+        source: DOB_FIRST
         reference: REFDT
 
 verifications:

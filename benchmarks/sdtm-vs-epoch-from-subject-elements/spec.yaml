@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: SDTM
 domain: VS
 keys: [STUDYID, USUBJID, VSSEQ]
 input:
@@ -28,20 +30,19 @@ intermediates:
       upper: SEENDTC
     order_by: [SE.SESTDTC]
     keep: last
-    no_match: {literal: null}
 
 columns:
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
-    derivation: {literal: VS}
+    derivation: "'VS'"
     submission:
       core: Req
       role: Identifier
       length: 2
-      origin:
-        type: Assigned
-        source: Sponsor
+      origins:
+        - type: Assigned
+          source: Sponsor
 
   - name: STUDYID
     type: str
@@ -51,9 +52,9 @@ columns:
       core: Req
       role: Identifier
       length: 20
-      origin:
-        type: Protocol
-        source: Sponsor
+      origins:
+        - type: Protocol
+          source: Sponsor
 
   - name: USUBJID
     type: str
@@ -63,9 +64,9 @@ columns:
       core: Req
       role: Identifier
       length: 30
-      origin:
-        type: Assigned
-        source: Sponsor
+      origins:
+        - type: Assigned
+          source: Sponsor
 
   - name: VSSEQ
     type: int
@@ -75,9 +76,9 @@ columns:
       core: Req
       role: Identifier
       length: 8
-      origin:
-        type: Assigned
-        source: Sponsor
+      origins:
+        - type: Assigned
+          source: Sponsor
 
   - name: VSTESTCD
     type: str
@@ -87,9 +88,9 @@ columns:
       core: Req
       role: Topic
       length: 8
-      origin:
-        type: Assigned
-        source: Sponsor
+      origins:
+        - type: Assigned
+          source: Sponsor
 
   # The result and its date-time are recorded on the case report form. Under
   # the project's Other context, their reference to the annotated form is
@@ -102,9 +103,9 @@ columns:
       core: Exp
       role: Result Qualifier
       length: 20
-      origin:
-        type: Collected
-        source: Investigator
+      origins:
+        - type: Collected
+          source: Investigator
 
   # Collected to the minute, the day or the month, so a partial date-time.
   - name: VSDTC
@@ -115,9 +116,9 @@ columns:
       core: Exp
       role: Timing
       data_type: partialDatetime
-      origin:
-        type: Collected
-        source: Investigator
+      origins:
+        - type: Collected
+          source: Investigator
 
   # The element lookup compares moments, so the collected text becomes a
   # datetime: a full date-time passes through, a date-only collection is
@@ -130,9 +131,8 @@ columns:
       impute:
         type: datetime
         source: VSDTC
-        minimum_source_precision: day
         time: first
-        invalid: {literal: null}
+        invalid: null
 
   - name: EPOCH
     type: str
@@ -143,9 +143,9 @@ columns:
       role: Timing
       length: 10
       codelist: EPOCH
-      origin:
-        type: Derived
-        source: Sponsor
+      origins:
+        - type: Derived
+          source: Sponsor
       method: Take EPOCH from the last SE record matching on STUDYID and
         USUBJID, where VSDTM falls within SESTDTC to SEENDTC, ordered by
         SE.SESTDTC, and no match yields blank.

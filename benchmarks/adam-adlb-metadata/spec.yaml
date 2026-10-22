@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADLB
 keys: [STUDYID, USUBJID, PARAMCD]
 input:
@@ -19,9 +21,9 @@ columns:
       core: Req
       mandatory: true
       length: 20
-      origin:
-        type: Predecessor
-        description: LB.STUDYID
+      origins:
+        - type: Predecessor
+          description: LB.STUDYID
 
   - name: USUBJID
     type: str
@@ -31,9 +33,9 @@ columns:
       core: Req
       mandatory: true
       length: 30
-      origin:
-        type: Predecessor
-        description: LB.USUBJID
+      origins:
+        - type: Predecessor
+          description: LB.USUBJID
 
   - name: PARAMCD
     type: str
@@ -43,9 +45,9 @@ columns:
       core: Req
       mandatory: true
       length: 8
-      origin:
-        type: Predecessor
-        description: LB.LBTESTCD
+      origins:
+        - type: Predecessor
+          description: LB.LBTESTCD
 
   - name: PARAM
     type: str
@@ -61,8 +63,8 @@ columns:
       core: Req
       mandatory: true
       length: 40
-      origin:
-        type: Assigned
+      origins:
+        - type: Assigned
 
   # Each numeric parameter states its own precision and description and
   # requires a value on its records; the pregnancy test has none.
@@ -75,9 +77,9 @@ columns:
       mandatory: false
       length: 8
       significant_digits: 1
-      origin:
-        type: Predecessor
-        description: LB.LBSTRESN
+      origins:
+        - type: Predecessor
+          description: LB.LBSTRESN
       value_level:
         - id: GLUC
           where: {PARAMCD: [GLUC]}
@@ -98,9 +100,9 @@ columns:
       core: Cond
       mandatory: false
       length: 8
-      origin:
-        type: Predecessor
-        description: LB.LBSTRESC
+      origins:
+        - type: Predecessor
+          description: LB.LBSTRESC
       value_level:
         - id: HCG
           where: {PARAMCD: [HCG]}
@@ -117,9 +119,9 @@ columns:
       core: Perm
       mandatory: false
       length: 8
-      origin:
-        type: Predecessor
-        description: LB.LBSTRESU
+      origins:
+        - type: Predecessor
+          description: LB.LBSTRESU
       value_level:
         - id: NUMERIC
           where: {PARAMCD: [GLUC, CREAT]}

@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: SDTM
 domain: PR
 keys: [STUDYID, USUBJID, PRSEQ]
 input:
@@ -14,7 +16,7 @@ columns:
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
-    derivation: {literal: PR}
+    derivation: "'PR'"
     verifications:
       - allowed_values:
           values: [PR]
@@ -43,13 +45,13 @@ columns:
     type: str
     label: Reported Name of the Procedure
     verifications:
-      - not_missing: {}
+      - not_missing
 
   - name: PRCAT
     type: str
     label: Category for Procedures
     verifications:
-      - not_missing: {}
+      - not_missing
 
   - name: ANSWER
     type: str
@@ -117,10 +119,10 @@ rows:
         aggregate:
           filter: "ODM.ItemOID = 'IT.PR.PRTRT'"
           expr: "ONLY(ODM.Value)"
-      PRCAT: {literal: PRIOR CANCER SURGERY}
-      ANSWER: {literal: null}
-      PRPRESP: {literal: null}
-      PROCCUR: {literal: null}
+      PRCAT: "'PRIOR CANCER SURGERY'"
+      ANSWER: null
+      PRPRESP: null
+      PROCCUR: null
       PRLOC:
         aggregate:
           filter: "ODM.ItemOID = 'IT.PR.PRLOC'"
@@ -129,8 +131,8 @@ rows:
         aggregate:
           filter: "ODM.ItemOID = 'IT.PR.PRLAT'"
           expr: "ONLY(ODM.Value)"
-      PRDOSE: {literal: null}
-      PRDOSU: {literal: null}
+      PRDOSE: null
+      PRDOSU: null
       PRSTDTC:
         aggregate:
           filter: "ODM.ItemOID = 'IT.PR.PRSTDTC'"
@@ -151,21 +153,21 @@ rows:
         aggregate:
           filter: "ODM.ItemOID = 'IT.PR.PRTRT'"
           expr: "ONLY(ODM.Value)"
-      PRCAT: {literal: PRIOR RADIOTHERAPY}
+      PRCAT: "'PRIOR RADIOTHERAPY'"
       ANSWER:
         aggregate:
           filter: "ODM.ItemOID = 'IT.PR.RTPRSP'"
           expr: "ONLY(ODM.Value)"
-      PRPRESP: {literal: Y}
+      PRPRESP: "'Y'"
       PROCCUR:
         case:
           - when: "ANSWER = 'Y'"
-            then: {literal: Y}
+            then: "'Y'"
           - when: "ANSWER = 'N'"
-            then: {literal: N}
-          - otherwise: {literal: null}
-      PRLOC: {literal: null}
-      PRLAT: {literal: null}
+            then: "'N'"
+          - otherwise: null
+      PRLOC: null
+      PRLAT: null
       PRDOSE:
         case:
           - when: "PROCCUR = 'Y'"
@@ -173,7 +175,7 @@ rows:
               aggregate:
                 filter: "ODM.ItemOID = 'IT.PR.PRDOSE'"
                 expr: "ONLY(ODM.Value)"
-          - otherwise: {literal: null}
+          - otherwise: null
       PRDOSU:
         case:
           - when: "PROCCUR = 'Y'"
@@ -181,7 +183,7 @@ rows:
               aggregate:
                 filter: "ODM.ItemOID = 'IT.PR.PRDOSU'"
                 expr: "ONLY(ODM.Value)"
-          - otherwise: {literal: null}
+          - otherwise: null
       PRSTDTC:
         aggregate:
           filter: "ODM.ItemOID = 'IT.PR.PRSTDTC'"

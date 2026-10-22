@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: SDTM
 domain: LB
 keys: [STUDYID, USUBJID, LBSEQ]
 input:
@@ -20,13 +22,12 @@ intermediates:
   - id: CONV_LOOKUP
     dataset: CONV
     key: {TESTCD: LBTESTCD, UNIT: LBORRESU}
-    no_match: {literal: null}
 
 columns:
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
-    derivation: {literal: LB}
+    derivation: "'LB'"
 
   - name: STUDYID
     type: str
@@ -96,9 +97,7 @@ columns:
   - name: LBSTRESN
     type: float
     label: Numeric Result/Finding in Standard Units
-    derivation:
-      compute:
-        expr: "RESN * FACTOR"
+    derivation: "RESN * FACTOR"
 
   - name: LBSTRESC
     type: str
@@ -108,21 +107,17 @@ columns:
   - name: LBSTRESU
     type: str
     label: Standard Units
-    derivation: {literal: g/dL}
+    derivation: "'g/dL'"
 
   - name: LBSTNRLO
     type: float
     label: Reference Range Lower Limit in Standard Units
-    derivation:
-      compute:
-        expr: "LO_RESN * FACTOR"
+    derivation: "LO_RESN * FACTOR"
 
   - name: LBSTNRHI
     type: float
     label: Reference Range Upper Limit in Standard Units
-    derivation:
-      compute:
-        expr: "HI_RESN * FACTOR"
+    derivation: "HI_RESN * FACTOR"
 
 verifications:
   # A result with no factor keeps its standard unit while its standardized

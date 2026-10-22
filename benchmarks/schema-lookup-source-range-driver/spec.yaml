@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADEX
 keys: [STUDYID, USUBJID, ASEQ]
 input:
@@ -8,6 +10,7 @@ input:
   PERIODS:
     path: input/periods.csv
     types: {APERIOD: int, APERSDT: date, APEREDT: date}
+    key: [STUDYID, USUBJID]
 
 output:
   path: adex.csv

@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADEG
 keys: [STUDYID, USUBJID, PARAMCD, AVISIT]
 input:
@@ -79,7 +81,7 @@ columns:
     derivation:
       case:
         - when: "PARAMCD = 'QTCF' AND ONTRTFL = 'Y' AND AVAL IS NOT NULL"
-          then: {literal: "QTcF > 450 ms"}
+          then: "'QTcF > 450 ms'"
 
   # Strictly greater than the limit, compared unrounded: exactly 450 is N.
   - name: CRIT1FL
@@ -88,10 +90,10 @@ columns:
     derivation:
       case:
         - when: "CRIT1 IS NULL"
-          then: {literal: null}
+          then: null
         - when: "AVAL > 450"
-          then: {literal: "Y"}
-        - otherwise: {literal: "N"}
+          then: "'Y'"
+        - otherwise: "'N'"
     verifications:
       - allowed_values:
           values: [Y, N]
@@ -102,7 +104,7 @@ columns:
     derivation:
       case:
         - when: "PARAMCD = 'QTCF' AND ONTRTFL = 'Y' AND AVAL IS NOT NULL"
-          then: {literal: "QTcF > 480 ms"}
+          then: "'QTcF > 480 ms'"
 
   - name: CRIT2FL
     type: str
@@ -110,10 +112,10 @@ columns:
     derivation:
       case:
         - when: "CRIT2 IS NULL"
-          then: {literal: null}
+          then: null
         - when: "AVAL > 480"
-          then: {literal: "Y"}
-        - otherwise: {literal: "N"}
+          then: "'Y'"
+        - otherwise: "'N'"
     verifications:
       - allowed_values:
           values: [Y, N]
@@ -124,7 +126,7 @@ columns:
     derivation:
       case:
         - when: "PARAMCD = 'QTCF' AND ONTRTFL = 'Y' AND AVAL IS NOT NULL"
-          then: {literal: "QTcF > 500 ms"}
+          then: "'QTcF > 500 ms'"
 
   - name: CRIT3FL
     type: str
@@ -132,10 +134,10 @@ columns:
     derivation:
       case:
         - when: "CRIT3 IS NULL"
-          then: {literal: null}
+          then: null
         - when: "AVAL > 500"
-          then: {literal: "Y"}
-        - otherwise: {literal: "N"}
+          then: "'Y'"
+        - otherwise: "'N'"
     verifications:
       - allowed_values:
           values: [Y, N]
@@ -148,7 +150,7 @@ columns:
     derivation:
       case:
         - when: "PARAMCD = 'QTCF' AND ONTRTFL = 'Y' AND CHG IS NOT NULL"
-          then: {literal: "QTcF increase from baseline > 30 ms"}
+          then: "'QTcF increase from baseline > 30 ms'"
 
   # An increase strictly greater than the limit; a decrease is never met.
   - name: CRIT4FL
@@ -157,10 +159,10 @@ columns:
     derivation:
       case:
         - when: "CRIT4 IS NULL"
-          then: {literal: null}
+          then: null
         - when: "CHG > 30"
-          then: {literal: "Y"}
-        - otherwise: {literal: "N"}
+          then: "'Y'"
+        - otherwise: "'N'"
     verifications:
       - allowed_values:
           values: [Y, N]
@@ -171,7 +173,7 @@ columns:
     derivation:
       case:
         - when: "PARAMCD = 'QTCF' AND ONTRTFL = 'Y' AND CHG IS NOT NULL"
-          then: {literal: "QTcF increase from baseline > 60 ms"}
+          then: "'QTcF increase from baseline > 60 ms'"
 
   - name: CRIT5FL
     type: str
@@ -179,10 +181,10 @@ columns:
     derivation:
       case:
         - when: "CRIT5 IS NULL"
-          then: {literal: null}
+          then: null
         - when: "CHG > 60"
-          then: {literal: "Y"}
-        - otherwise: {literal: "N"}
+          then: "'Y'"
+        - otherwise: "'N'"
     verifications:
       - allowed_values:
           values: [Y, N]

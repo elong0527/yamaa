@@ -1505,8 +1505,9 @@ class LockedClosure(unittest.TestCase):
             " ".join(cli.split()),
         )
         for host in ("python", "r"):
-            selected = notices.notices_for(metadata, closures[host])
-            self.assertNotIn("musl", notices.render(selected, LIBRARY, host))
+            with self.subTest(host=host):
+                selected = notices.notices_for(metadata, closures[host])
+                self.assertNotIn("musl", notices.render(selected, LIBRARY, host))
         # Another toolchain's musl needs reviewing first.
         newer = dataclasses.replace(LIBRARY, release="1.100.0")
         with self.assertRaisesRegex(
@@ -1712,7 +1713,8 @@ class LockedClosure(unittest.TestCase):
             "rust/crates/yamaa-cli/LICENSE-YAML.txt: the command line keeps only "
             "its own LICENSE-THIRD-PARTY.txt, COMPONENTS.tsv and LICENSE-MUSL.txt",
         ):
-            self.assertIn(expected, errors)
+            with self.subTest(expected=expected):
+                self.assertIn(expected, errors)
 
     def test_only_the_notices_and_the_component_inventory_differ_between_hosts(self):
         # Each host's packages carry the notices and the inventory of their own
@@ -1788,7 +1790,8 @@ class ReleaseBuilds(unittest.TestCase):
             tuple(maturin.get("features", ())), notices.BUILD_FEATURES["python"]
         )
         for option in ("no-default-features", "all-features"):
-            self.assertFalse(maturin.get(option, False), option)
+            with self.subTest(option=option):
+                self.assertFalse(maturin.get(option, False), option)
         # The R package: the one cargo build of each Makevars template.
         for name in ("Makevars.in", "Makevars.win.in"):
             text = (notices.ROOT / "R/yamaa/src" / name).read_text(encoding="utf-8")

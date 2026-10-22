@@ -425,7 +425,7 @@ local({
 cases <- list(
   c("utf8","source_parquet_invalid","PARQUET-5",'"dataset":"SRC","path":"input.parquet"'),
   c("utf8-bool","source_field_type_unsupported","PARQUET-7",'"dataset":"SRC","field":"OTHER","path":"input.parquet","stored_type":"bool"'),
-  c("utf8-time","source_field_value_invalid","PARQUET-9",'"dataset":"SRC","field":"OTHER","path":"input.parquet","row":1,"value":1'),
+  c("utf8-time","source_field_value_invalid","PARQUET-9",'"dataset":"SRC","field":"OTHER","path":"input.parquet","record":1,"value":1'),
   c("empty-name","source_field_name_empty","PARQUET-6",'"dataset":"SRC","field":1,"path":"input.parquet"'),
   c("duplicate","source_field_name_duplicate","PARQUET-6",'"dataset":"SRC","field":"I","path":"input.parquet"'),
   c("mixed-struct","source_field_type_unsupported","PARQUET-7",'"dataset":"SRC","field":"S","path":"input.parquet","stored_type":"struct<left: int64, right: string>"'),

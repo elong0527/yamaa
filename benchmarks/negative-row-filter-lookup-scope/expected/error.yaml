@@ -1,7 +1,7 @@
 phase: validation
 condition: unknown_field
 spec_paths:
-  - intermediates[0].filter
+  - intermediates.RANDOMIZED.filter
 rule: LOOKUP-7
 context:
   identifier: DM.RFSTDTC

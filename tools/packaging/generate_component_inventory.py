@@ -538,7 +538,7 @@ def notice_problems(generated, metadata):
     return errors
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     actions = parser.add_mutually_exclusive_group()
     actions.add_argument(
@@ -549,7 +549,7 @@ def main():
         choices=sorted(engine_bundle.BINDINGS),
         help="write this host's inventory to standard output instead",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     errors, unlisted = [], []
     try:
         metadata = notices.locked_metadata()

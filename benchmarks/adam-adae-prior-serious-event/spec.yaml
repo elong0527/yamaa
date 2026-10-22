@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADAE
 keys: [STUDYID, USUBJID, AESEQ]
 input:
@@ -28,7 +30,6 @@ intermediates:
     order_by:
       - {variable: SELF.AESEQ, direction: desc}
     keep: first
-    no_match: {literal: null}
 
   # The subject's first serious event. The donor records are checked
   # for unique event sequences after each completed row template.
@@ -39,7 +40,6 @@ intermediates:
     order_by:
       - SELF.AESEQ
     keep: first
-    no_match: {literal: null}
     verifications:
       - unique: [STUDYID, USUBJID, AESEQ]
 
@@ -54,7 +54,6 @@ intermediates:
     order_by:
       - {variable: AESEQ, direction: desc}
     keep: first
-    no_match: {literal: null}
 
 columns:
   # Each is copied from the event record the same way in both row
@@ -117,11 +116,11 @@ rows:
   - id: serious
     filter: "AE.AESER = 'Y'"
     derivations:
-      PRIOR_SAEFL: {literal: null}
-      PRIOR_SAEDECOD: {literal: null}
-      PRIOR_SAESEQ: {literal: null}
-      FIRST_SAEDECOD: {literal: null}
-      FIRST_SAESEQ: {literal: null}
+      PRIOR_SAEFL: null
+      PRIOR_SAEDECOD: null
+      PRIOR_SAESEQ: null
+      FIRST_SAEDECOD: null
+      FIRST_SAESEQ: null
 
   # One record per non-serious event, carrying the subject's most
   # recent earlier serious event and first serious event, read through
@@ -134,8 +133,8 @@ rows:
       PRIOR_SAEFL:
         case:
           - when: "PRIOR_SAE.AESEQ IS NOT NULL"
-            then: {literal: "Y"}
-          - otherwise: {literal: null}
+            then: "'Y'"
+          - otherwise: null
       PRIOR_SAEDECOD: PRIOR_SAE.AEDECOD
       PRIOR_SAESEQ: PRIOR_SAE.AESEQ
       FIRST_SAEDECOD: FIRST_SAE.AEDECOD

@@ -505,6 +505,7 @@ impl Resources {
     /// The caller's own file `name` in the selected entry directory, opened
     /// for reading; see [`FileResolver::open_named`]. Only the local file
     /// resolver opens a file.
+    #[cfg(feature = "odm")]
     pub(crate) fn open_named(&self, name: &str) -> Result<std::fs::File, Error> {
         let file = self.file.as_ref().ok_or(Error::InvalidPath)?;
         file.open_named(&self.store.base, name)
@@ -512,6 +513,7 @@ impl Resources {
     }
     /// The caller's own file `name` in the selected entry directory, captured
     /// under `maximum` bytes; see [`FileResolver::capture_named`].
+    #[cfg(feature = "odm")]
     pub(crate) fn capture_named(&self, name: &str, maximum: usize) -> Result<Arc<[u8]>, Error> {
         let file = self.file.as_ref().ok_or(Error::InvalidPath)?;
         file.capture_named(&self.store.base, name, maximum)

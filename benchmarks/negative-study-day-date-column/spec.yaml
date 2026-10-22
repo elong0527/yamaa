@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADAE
 keys: [STUDYID, USUBJID, AESEQ]
 input:
@@ -43,5 +45,5 @@ columns:
     label: Analysis Start Relative Day
     derivation:
       study_day:
-        date: ASTDT
+        source: ASTDT
         reference: TRTSDT

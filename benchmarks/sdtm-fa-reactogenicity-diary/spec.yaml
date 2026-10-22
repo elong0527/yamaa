@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: SDTM
 domain: FA
 keys: [STUDYID, USUBJID, FASEQ]
 input:
@@ -20,7 +22,7 @@ columns:
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
-    derivation: {literal: FA}
+    derivation: "'FA'"
 
   - name: STUDYID
     type: str
@@ -48,11 +50,11 @@ columns:
     derivation:
       case:
         - when: "FATESTCD = 'OCCUR'"
-          then: {literal: 1}
+          then: 1
         - when: "FATESTCD = 'SEV'"
-          then: {literal: 2}
+          then: 2
         - when: "FATESTCD = 'LDIAM'"
-          then: {literal: 3}
+          then: 3
 
   - name: FASEQ
     type: int
@@ -71,7 +73,7 @@ columns:
   - name: FACAT
     type: str
     label: Category for Findings About
-    derivation: {literal: REACTOGENICITY}
+    derivation: "'REACTOGENICITY'"
 
   - name: FASCAT
     type: str
@@ -79,8 +81,8 @@ columns:
     derivation:
       case:
         - when: "DIARY.CATSRC = 'LOCAL'"
-          then: {literal: ADMINISTRATION SITE}
-        - otherwise: {literal: SYSTEMIC}
+          then: "'ADMINISTRATION SITE'"
+        - otherwise: "'SYSTEMIC'"
 
   - name: FAORRES
     type: str
@@ -118,7 +120,7 @@ columns:
     derivation:
       case:
         - when: "DIARY.COMPLETED = 'N'"
-          then: {literal: NOT DONE}
+          then: "'NOT DONE'"
 
   - name: FATPT
     type: str
@@ -135,8 +137,8 @@ rows:
   # a missed day its result is blank.
   - id: occurrence
     derivations:
-      FATESTCD: {literal: OCCUR}
-      FATEST: {literal: Occurrence Indicator}
+      FATESTCD: "'OCCUR'"
+      FATEST: "'Occurrence Indicator'"
       FAORRES:
         case:
           - when: "DIARY.COMPLETED = 'Y'"
@@ -146,19 +148,19 @@ rows:
   - id: severity
     filter: "DIARY.COMPLETED = 'Y'"
     derivations:
-      FATESTCD: {literal: SEV}
-      FATEST: {literal: Severity/Intensity}
+      FATESTCD: "'SEV'"
+      FATEST: "'Severity/Intensity'"
       FAORRES:
         case:
           - when: "DIARY.OCCUR = 'Y'"
             then: DIARY.SEV
-          - otherwise: {literal: NONE}
+          - otherwise: "'NONE'"
 
   # Only redness or swelling that occurred on a completed day.
   - id: longest-diameter
     filter: "DIARY.COMPLETED = 'Y' AND DIARY.OCCUR = 'Y'
       AND DIARY.REACTION IN ('REDNESS', 'SWELLING')"
     derivations:
-      FATESTCD: {literal: LDIAM}
-      FATEST: {literal: Longest Diameter}
+      FATESTCD: "'LDIAM'"
+      FATEST: "'Longest Diameter'"
       FAORRES: DIARY.DIAMETER
