@@ -24,6 +24,11 @@ unreachable:
   month_required: >-
     only the 0.5 path raises it, until P2-13 removes that path: 1.0 drops
     minimum_source_precision, and #3030 D61 retired its benchmarks
+  resource_path_content_changed: >-
+    only a file that changes while one call reads it raises it (FILE-10):
+    a host compiles a spec or project object again once a file it holds has
+    changed (#3069), so no case can change a file mid-call; the facade's
+    plan tests reach it (rust/crates/yamaa/tests/plan_contracts.rs)
 not_covered:
   "#3423":
     - artifact_outside_document
@@ -94,25 +99,6 @@ not_covered:
     - unknown_standard_family
     - unlinked_producer
     - xpt_display_format_invalid
-  "#3424":
-    - resource_path_content_changed
-    - source_carriage_return
-    - source_field_type_unsupported
-    - source_field_value_invalid
-    - source_header_absent
-    - source_odm_archive_invalid
-    - source_odm_attribute_ambiguous
-    - source_odm_attribute_invalid
-    - source_odm_attribute_missing
-    - source_odm_compression_unsupported
-    - source_odm_document_unsupported
-    - source_odm_layout_unsupported
-    - source_odm_metadata_conflict
-    - source_odm_value_unsupported
-    - source_odm_xml_malformed
-    - source_odm_xml_unsupported
-    - source_quote_in_bare_field
-    - source_text_after_quote
   "#3428":
     - function_call_failed
     - invalid_function_result

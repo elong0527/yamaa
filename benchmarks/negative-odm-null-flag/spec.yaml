@@ -1,0 +1,33 @@
+yamaa: "1.0"
+type: spec
+model: SDTM
+domain: DM
+keys: [STUDYID, USUBJID]
+input:
+  # One item marks its missing answer with IsNull="Y".
+  ODM: input/odm.xml
+
+output:
+  path: dm.csv
+  columns: [DOMAIN, STUDYID, USUBJID, SEX]
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'DM'"
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: ODM.StudyOID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: {str_template: "{ODM.StudyOID}-{ODM.SubjectKey}"}
+
+  - name: SEX
+    type: str
+    label: Sex
+    derivation: {odm: ODM.IT.DM.SEX}
