@@ -207,6 +207,7 @@ class PublicContract(unittest.TestCase):
                 "_SelfTest",
                 "_Submission",
                 "_info",
+                "_interface_handshake",
                 "_lint",
                 "_plans",
                 "_project_check",

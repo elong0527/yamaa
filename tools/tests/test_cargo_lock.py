@@ -87,14 +87,16 @@ class BundleArchiveTests(unittest.TestCase):
         ("yamaa-core", "0.5.0", False, []),
         ("parser", "1.0.0", True, []),
     ]
+    # The boundary crate, which both bindings depend on.
+    BOUNDARY = [("yamaa-boundary", "0.5.0", False, [])]
     BINDINGS = {
         "python": [
-            ("yamaa-python", "0.5.0", False, ["pyo3", "yamaa"]),
+            ("yamaa-python", "0.5.0", False, ["pyo3", "yamaa", "yamaa-boundary"]),
             ("pyo3", "0.27.2", True, []),
         ],
         "r": [
             ("extendr", "0.9.0", True, []),
-            ("yamaa-r", "0.5.0", False, ["extendr", "yamaa"]),
+            ("yamaa-r", "0.5.0", False, ["extendr", "yamaa", "yamaa-boundary"]),
         ],
     }
     # Each host's vendored crates, by directory, with their files.
@@ -114,7 +116,14 @@ class BundleArchiveTests(unittest.TestCase):
         self.addCleanup(directory.cleanup)
         self.root = Path(directory.name)
         self.workspace = self.root / "rust"
-        crates = ("yamaa-core", "yamaa-adapters", "yamaa", "yamaa-python", "yamaa-r")
+        crates = (
+            "yamaa-core",
+            "yamaa-adapters",
+            "yamaa",
+            "yamaa-boundary",
+            "yamaa-python",
+            "yamaa-r",
+        )
         for crate in crates:
             (self.workspace / "crates" / crate / "src").mkdir(parents=True)
             (self.workspace / "crates" / crate / "Cargo.toml").write_text(
@@ -127,7 +136,7 @@ class BundleArchiveTests(unittest.TestCase):
             f'[workspace]\nmembers = [{listed}]\nresolver = "2"\n' + DIST
         )
         self.canonical = lock_text(
-            self.ENGINE + self.BINDINGS["python"] + self.BINDINGS["r"]
+            self.ENGINE + self.BOUNDARY + self.BINDINGS["python"] + self.BINDINGS["r"]
         )
         (self.workspace / "Cargo.lock").write_text(self.canonical)
         # One selftest case, whose files each bundle stages in the facade.
@@ -158,7 +167,7 @@ class BundleArchiveTests(unittest.TestCase):
         layout = guard.LAYOUTS[host]
         entries = dict(guard.bundle_files(host, self.workspace))
         entries[layout.workspace + "Cargo.lock"] = lock_text(
-            self.ENGINE + self.BINDINGS[host]
+            self.ENGINE + self.BOUNDARY + self.BINDINGS[host]
         ).encode()
         if vendored is None:
             vendored = self.vendored(self.CRATES[host])
@@ -191,7 +200,9 @@ class BundleArchiveTests(unittest.TestCase):
                     sorted((name, version) for name, version, _ in kept),
                     sorted(
                         (name, version)
-                        for name, version, _, _ in self.ENGINE + self.BINDINGS[host]
+                        for name, version, _, _ in self.ENGINE
+                        + self.BOUNDARY
+                        + self.BINDINGS[host]
                     ),
                 )
                 layout = guard.LAYOUTS[host]

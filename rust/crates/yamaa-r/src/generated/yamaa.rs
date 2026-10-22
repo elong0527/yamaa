@@ -4,4 +4,5 @@ extendr_module! {
     mod yamaa;
     fn core_version;
     use api_entry;
+    use interface;
 }

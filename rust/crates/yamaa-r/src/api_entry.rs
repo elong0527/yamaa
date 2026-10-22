@@ -5,7 +5,8 @@
 //! Every function replies `list(value, error)`. `error` is `NULL` on success,
 //! otherwise `list(message, issues, paths)`, where `issues` is the issues data
 //! frame (empty when the refusal carries none) and `paths` the files a refused
-//! save wrote before it stopped.
+//! save wrote before it stopped. Every function replies behind the interface
+//! gate, so it refuses until the handshake succeeds (`crate::interface`).
 use crate::handle::address;
 use extendr_api::prelude::*;
 use std::{
@@ -18,7 +19,7 @@ use std::{
 use yamaa::{Action, Engine, EngineOptions, Error, Failure, HostLanguage, Report};
 
 /// Why a call could not return its value.
-enum Refusal {
+pub(crate) enum Refusal {
     Failure(Failure),
     Message(String),
 }
@@ -59,7 +60,18 @@ fn refused(error: Refusal) -> List {
     }
 }
 
-fn reply(run: impl FnOnce() -> std::result::Result<Robj, Refusal>) -> List {
+/// Reply with `run`'s value or refusal, behind the interface gate: until the
+/// handshake succeeds, the reply refuses with no issues.
+pub(crate) fn reply(run: impl FnOnce() -> std::result::Result<Robj, Refusal>) -> List {
+    answer(|| {
+        crate::interface::gate()?;
+        run()
+    })
+}
+
+/// Reply with `run`'s value or refusal, containing a panic and keeping an
+/// interrupt the call observed. Only the handshake replies without the gate.
+pub(crate) fn answer(run: impl FnOnce() -> std::result::Result<Robj, Refusal>) -> List {
     let scope = crate::interrupt::Scope::new();
     let result = catch_unwind(AssertUnwindSafe(run));
     if let Some(condition) = scope.take() {
