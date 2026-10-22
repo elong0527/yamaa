@@ -1341,17 +1341,26 @@ mod file {
             assert!(temp.0.join("dm.json").is_file());
             assert!(!temp.0.join("artifacts/dm.json").exists());
             // Without a transport the leaf names the artifact, which must stay
-            // inside the document's directory (DEFINE-16).
+            // inside the document's directory (DEFINE-16). The finding names
+            // the dataset and both paths as their files write them.
             temp.edit_project(&[
                 ("  transport: dataset_json\n", ""),
                 ("define: define.xml", "define: package/define.xml"),
             ]);
             let mut run = temp.run("2026-09-11T00:00:00");
-            assert!(run
-                .issues()
-                .iter()
-                .any(|i| i.condition() == "artifact_outside_document"
-                    && i.rule() == Some("DEFINE-16")));
+            assert_eq!(
+                records(&run),
+                [yamaa_adapters::json!({
+                    "phase": "validation", "condition": "artifact_outside_document",
+                    "rule": "DEFINE-16", "spec_paths": ["sdtm.specs[0]"],
+                    "context": {
+                        "artifact": "artifacts/dm.csv", "dataset": "DM",
+                        "define": "package/define.xml",
+                        "detail": "artifact must be inside the Define package"
+                    }
+                })],
+                "an artifact outside the document's directory"
+            );
             assert!(run.save().is_err());
             assert!(!temp.0.join("package").exists());
             // REQ1230 assigns a stale output contract to REQ0535, before JSON schema.
