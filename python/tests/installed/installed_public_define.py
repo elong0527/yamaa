@@ -852,12 +852,12 @@ class PublicDefine(unittest.TestCase):
         # two files by their absolute paths, so it is compared by the file
         # name both writers would write.
         expected = dict(TRUTH["transport_name_collision_issue"])
-        names = expected.pop("context_names")
+        shared = expected.pop("context_names")
         expected["file"] = (directory.resolve() / expected["file"]).as_posix()
         [row] = result.issues.to_pylist()
         context = row.pop("context")
         self.assertEqual(row, expected)
-        self.assertIn(names, context)
+        self.assertIn(shared, context)
         self.refused(result)
         self.assertEqual(sentinel.read_bytes(), b"original publication sentinel")
         self.assertEqual(define_sentinel.read_bytes(), b"original Define sentinel")
