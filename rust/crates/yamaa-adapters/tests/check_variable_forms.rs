@@ -15,11 +15,8 @@
 //! read of a lookup its own key refused included; it leaves out only what the
 //! declarations cannot decide, such as a field a relation does not store. A
 //! 0.5 file keeps the rules at the `yamaa-v0.5.0` tag (D75).
-#[allow(dead_code)]
-mod support;
-
+use crate::support::scratch::Scratch;
 use std::fs;
-use support::scratch::Scratch;
 use yamaa_adapters::{file_application, specification_report::Identity};
 use yamaa_core::{
     diagnostic::Diagnostic, domain_entry::Request, json::Value, project_function::Language,
