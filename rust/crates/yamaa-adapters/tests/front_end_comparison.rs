@@ -1195,10 +1195,9 @@ fn every_converted_benchmark_lowers_to_its_original_tree() {
 }
 
 /// A value-level comparator has no 0.5 form, so no benchmark converts to one.
-/// A converted case that writes one keeps it on the tree: `NE` as `NotIn`
-/// with its one value, as `EQ` is `In` with one, and `NOTIN` as `NotIn`,
-/// never read as a list it selects and never dropped (P-VLM-1). The switch
-/// refuses either until P1-14 builds them (P1-9, D66).
+/// A converted case that writes one keeps it on the tree: `NE` as `Ne` with
+/// its one value and `NOTIN` as `NotIn` with its values, beside a bare list's
+/// `In`, never read as a list it selects and never dropped (P-VLM-1, D187).
 #[test]
 fn a_converted_value_level_comparator_stays_on_the_tree() {
     let scratch = Scratch::new();
