@@ -340,8 +340,8 @@ shortened to one issue:
 ```
 
 In JSON an issue's `context` is an object, not text. Each command's keys are
-listed in the draft's `cli.commands[].json_keys`; they freeze like table
-columns.
+listed in `rust/interface/bindings.yaml`'s `cli.commands[].json_keys`, with
+`refusal_keys` where a refusal's keys differ; they freeze like table columns.
 
 ## The issues table (D28)
 

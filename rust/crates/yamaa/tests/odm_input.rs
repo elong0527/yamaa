@@ -170,7 +170,7 @@ fn odm_reads_bind_the_item_table_of_an_xml_input() {
     let mut run = engine.spec_run(&spec, None, &token).unwrap();
     let ran = issues(&run.issues());
     assert!(ran.is_empty(), "{ran:?}");
-    run.save().unwrap();
+    run.save(&token).unwrap();
     // The audit record is skipped, an update reads as the present value and
     // an explicit null reads as missing.
     assert_eq!(
@@ -202,7 +202,7 @@ fn an_xml_input_no_odm_read_names_reads_every_column() {
         .unwrap();
     let ran = issues(&run.issues());
     assert!(ran.is_empty(), "{ran:?}");
-    run.save().unwrap();
+    run.save(&CancellationToken::new()).unwrap();
     assert_eq!(
         study.read("items.csv"),
         "SEQ,ITEM,VALUE,NAME,TRANSACTION,ISNULL\n\
@@ -230,7 +230,7 @@ fn an_xml_input_no_odm_read_names_may_declare_an_ordinal() {
         .unwrap();
     let ran = issues(&run.issues());
     assert!(ran.is_empty(), "{ran:?}");
-    run.save().unwrap();
+    run.save(&token).unwrap();
     assert_eq!(
         study.read("items.csv"),
         "POSITION,SEQ\n1,1\n2,2\n3,3\n4,4\n"

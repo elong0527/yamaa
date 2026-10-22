@@ -26,13 +26,16 @@ pub(super) fn admit<E>(
     Ok(())
 }
 
-/// One callback node over rows, invoked row by row.
+/// One callback node over rows, invoked row by row. The run polls its
+/// cancellation before each such batch of calls (#2822): a unit with
+/// callbacks runs in row mode, so between the calls of successive rows.
 pub(super) fn evaluate<E>(
     run: &mut Run<'_, '_, E>,
     cx: &Cx<'_, E>,
     expr: ExprId,
     rows: &[usize],
 ) -> Result<Values, Fail<E>> {
+    run.stop_if_cancelled()?;
     let plan = run.plan;
     let node = plan.expr(expr);
     let mut values = Values::missing(0);

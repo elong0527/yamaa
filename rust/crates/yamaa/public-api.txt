@@ -170,7 +170,7 @@ yamaa::api::ProjectRun::member: pub fn member(&self, name: &str) -> Result<&Run,
 yamaa::api::ProjectRun::members: pub fn members(&self) -> Vec<(&str, &Run)>
 yamaa::api::ProjectRun::names: pub fn names(&self) -> Vec<String>
 yamaa::api::ProjectRun::report: pub fn report(&self) -> Table
-yamaa::api::ProjectRun::save: pub fn save(&mut self) -> Result<Vec<String>, Failure>
+yamaa::api::ProjectRun::save: pub fn save(&mut self, token: &CancellationToken) -> Result<Vec<String>, Failure>
 yamaa::api::ProjectRun::status: pub fn status(&self) -> Status
 yamaa::api::ProjectRun::summary: pub fn summary(&self) -> Summary
 yamaa::api::Run: impl Run
@@ -180,7 +180,7 @@ yamaa::api::Run::diagnostics: pub fn diagnostics(&self) -> Vec<yamaa::diagnostic
 yamaa::api::Run::issues: pub fn issues(&self) -> Table
 yamaa::api::Run::output: pub fn output(&self) -> Option<&Table>
 yamaa::api::Run::report: pub fn report(&self) -> Option<&Table>
-yamaa::api::Run::save: pub fn save(&mut self) -> Result<Vec<String>, Failure>
+yamaa::api::Run::save: pub fn save(&mut self, token: &CancellationToken) -> Result<Vec<String>, Failure>
 yamaa::api::Run::status: pub fn status(&self) -> Status
 yamaa::api::Run::summary: pub fn summary(&self) -> Summary
 yamaa::api::STATUSES: pub const STATUSES: [&str; 3]
@@ -195,14 +195,16 @@ yamaa::api::Submission: pub struct Submission
 yamaa::api::Submission::created: pub fn created(&self) -> &str
 yamaa::api::Submission::diagnostics: pub fn diagnostics(&self) -> Vec<yamaa::diagnostic::Diagnostic>
 yamaa::api::Submission::issues: pub fn issues(&self) -> Table
-yamaa::api::Submission::save: pub fn save(&mut self) -> Result<Vec<String>, Failure>
+yamaa::api::Submission::save: pub fn save(&mut self, token: &CancellationToken) -> Result<Vec<String>, Failure>
 yamaa::api::Submission::status: pub fn status(&self) -> Status
 yamaa::api::Submission::summary: pub fn summary(&self) -> Summary
 yamaa::cancel::CancellationToken: impl CancellationToken
-yamaa::cancel::CancellationToken: pub struct CancellationToken [derive(Clone, Debug, Default)] [non_exhaustive]
+yamaa::cancel::CancellationToken: impl std::fmt::Debug for CancellationToken
+yamaa::cancel::CancellationToken: pub struct CancellationToken [derive(Clone, Default)] [non_exhaustive]
 yamaa::cancel::CancellationToken::cancel: pub fn cancel(&self)
 yamaa::cancel::CancellationToken::is_cancelled: pub fn is_cancelled(&self) -> bool
 yamaa::cancel::CancellationToken::new: pub fn new() -> Self
+yamaa::cancel::CancellationToken::with_probe: pub fn with_probe(probe: impl Fn() -> bool + Send + Sync + 'static) -> Self
 yamaa::decode_renv_lock: pub use yamaa::functions::decode_renv_lock
 yamaa::diagnostic::ContextValue: impl ContextValue
 yamaa::diagnostic::ContextValue: pub enum ContextValue [derive(Clone, Debug, PartialEq)] [non_exhaustive]
@@ -268,7 +270,6 @@ yamaa::engine::AttemptFailure::error: pub error: FunctionError
 yamaa::engine::AttemptFailure::stage: pub stage: &'static str
 yamaa::engine::Build: impl Build
 yamaa::engine::Build: pub struct Build
-yamaa::engine::Build::interrupt: pub fn interrupt(&self) -> Option<&FunctionError>
 yamaa::engine::Build::observations: pub fn observations(&self, include_measurements: bool) -> Option<String>
 yamaa::engine::Build::output: pub fn output(&self) -> Option<&Table>
 yamaa::engine::Build::output_bytes: pub fn output_bytes(&self) -> Option<&[u8]>
@@ -277,7 +278,7 @@ yamaa::engine::Build::project_failures: pub fn project_failures(&self) -> Option
 yamaa::engine::Build::report: pub fn report(&self) -> &Report
 yamaa::engine::Build::run_report: pub fn run_report(&self) -> Option<&Table>
 yamaa::engine::Build::run_report_bytes: pub fn run_report_bytes(&self) -> Option<&[u8]>
-yamaa::engine::Build::save: pub fn save(&mut self) -> Result<Vec<String>, Failure>
+yamaa::engine::Build::save: pub fn save(&mut self, token: &CancellationToken) -> Result<Vec<String>, Failure>
 yamaa::engine::Engine: impl Engine
 yamaa::engine::Engine: pub struct Engine [derive(Clone)]
 yamaa::engine::Engine::build: pub fn build(&self, request: &Request<'_>, token: &CancellationToken) -> Result<Build, Error>

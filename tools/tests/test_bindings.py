@@ -72,7 +72,9 @@ class BindingsTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "without an R counterpart"):
             generator._validate_operations(candidate)
         candidate = copy.deepcopy(definition)
-        candidate["host_only"]["r"].remove("run_interrupt")
+        candidate["r"]["groups"][0]["functions"].append(
+            {"name": "unpaired", "args": {}, "returns": "r_reply"}
+        )
         with self.assertRaisesRegex(ValueError, "without a Python counterpart"):
             generator._validate_operations(candidate)
         candidate = copy.deepcopy(definition)
@@ -261,8 +263,10 @@ class BindingsTests(unittest.TestCase):
                 lambda d: d["operations"]["run_observations"].update(r=[]),
             ),
             (
-                "R exports without a Python counterpart: run_interrupt",
-                lambda d: d["host_only"]["r"].remove("run_interrupt"),
+                "R exports without a Python counterpart: unpaired",
+                lambda d: d["r"]["groups"][0]["functions"].append(
+                    {"name": "unpaired", "args": {}, "returns": "r_reply"}
+                ),
             ),
             (
                 "Python exports without an R counterpart: Table.__arrow_c_stream__",
@@ -292,10 +296,10 @@ class BindingsTests(unittest.TestCase):
     def test_format_2_is_a_closed_grammar(self):
         cases = [
             ("format_version: 2", "format_version: 1", "format_version"),
-            ("\ncli: {}\n", "\ncli: {}\nstatus: draft\n", "unknown top-level keys"),
-            ("\ncli: {}\n", "\n", "missing top-level keys"),
-            ("\ncli: {}\n", "\ncli: {1: x}\n", "keys must be text"),
-            ("\ncli: {}\n", "\ncli: {exit_status: {0: done}}\n", "cli is missing"),
+            ("\ncli:\n", "\nstatus: draft\ncli:\n", "unknown top-level keys"),
+            ("\ncontract: README.md\n", "\n", "missing top-level keys"),
+            ("\ncli:\n", "\ncli:\n  1: x\n", "keys must be text"),
+            ("\n  binary: yamaa\n", "\n", "cli is missing"),
         ]
         for old, new, message in cases:
             with self.subTest(message=message):
@@ -315,11 +319,16 @@ class BindingsTests(unittest.TestCase):
         definition = generator._load_definition()
         candidate = copy.deepcopy(definition)
         candidate["operations"]["spec_check"]["cli"] = ["check"]
-        with self.assertRaisesRegex(ValueError, "absent command check"):
+        candidate["operations"]["info"]["cli"] = ["--version"]
+        candidate["host_only"]["cli"] = ["lint"]
+        generator._validate_operations(candidate)
+        candidate = copy.deepcopy(definition)
+        candidate["operations"]["spec_check"]["cli"] = ["verify"]
+        with self.assertRaisesRegex(ValueError, "absent command verify"):
             generator._validate_operations(candidate)
         candidate = copy.deepcopy(definition)
-        candidate["host_only"]["cli"] = ["lint"]
-        with self.assertRaisesRegex(ValueError, "absent command lint"):
+        candidate["host_only"]["cli"] = ["--verbose"]
+        with self.assertRaisesRegex(ValueError, "absent command --verbose"):
             generator._validate_operations(candidate)
 
     def test_read_only_check_rejects_stale_public_layers_and_manifest(self):

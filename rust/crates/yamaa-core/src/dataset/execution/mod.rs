@@ -291,6 +291,10 @@ pub enum ExecutionError<E> {
     KeyFailures(Vec<CheckRecord>),
     VerificationFailures(Vec<CheckRecord>),
     OutputGrouping(GroupingError<Infallible>),
+    /// The run was cancelled (#2822): its probe answered true at a
+    /// checkpoint of the schedule or before a batch of project-function
+    /// calls. The attempt keeps no output and no evidence.
+    Cancelled,
 }
 
 impl<E: std::fmt::Debug> std::fmt::Display for ExecutionError<E> {

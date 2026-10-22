@@ -109,8 +109,8 @@ result and lazy objects, S3 methods and private accessors) and
 `R/yamaa/NAMESPACE`. The handwritten rest stays beside them:
 `python/src/yamaa/_support.py` holds path conversion, lazy-object pickling and
 the version lookup, and `R/yamaa/R/api.R`
-holds the reply and argument conversions, the host-function capabilities, the
-interrupt rethrow and the locked-object helpers. Docstrings come from `doc`;
+holds the reply and argument conversions, the host-function capabilities and
+the locked-object helpers. Docstrings come from `doc`;
 R's help pages stay handwritten under `R/yamaa/man/`.
 
 Generated code only delegates, and the delegation is declared, never written:
@@ -143,9 +143,7 @@ formats a result or a lazy object, which prints from the path it holds; D37)
 and `private` (a qualification accessor such as R's `.run_observations(run)`,
 which Python reaches through the handle; the manifest leaves it out). A member
 that returns a record token (`info`) names the record it returns as `record`.
-A class's `interrupt` names the R host-only export it asks for a retained
-project interrupt before it is returned, which `.rethrow_interrupt` signals
-again; Python checks inside the native call. An R object keeps each held value
+An R object keeps each held value
 that an S3 method or a private accessor reaches in a hidden binding: its
 handle in `.handle`, and any other value under its own name with a leading
 dot, such as a lazy object's `.path` or a project-run member's `.name`.
@@ -175,18 +173,26 @@ or `optional<T>`.
 
 ### Command line
 
-`cli` is empty until the `yamaa-cli` commands are implemented (#3060): the
-binary checks every command's arguments but refuses to run one yet, and this
-file declares only implemented surface. Its grammar follows the draft. A
-nonempty `cli` has `binary` (`yamaa`), `crate`
-(`rust/crates/yamaa-cli`), `synopsis`, `global_flags`, `exit_status` (integer
-statuses 0 to 125 and what each means) and `commands`, and may have
-`depends_on`, `inputs`, `streams`, `interrupt` and `json` (named lists of JSON
-keys). A command has a `name`, a `synopsis` starting with `yamaa <name>`, the
-`operations` it reaches and its `json_keys`, and may have `args`, `flags`,
-`effect` and `text`. A flag's name starts with `--`; a flag or argument may
-name the vocabulary its values come from. An operation's `cli` list, and
-`host_only.cli`, may name only declared commands and global flags.
+`cli` declares the `yamaa` binary of `rust/crates/yamaa-cli` (#3060), which
+calls the facade directly and so pairs no native export. It has `binary`
+(`yamaa`), `crate` (`rust/crates/yamaa-cli`), `synopsis`, `global_flags`,
+`exit_status` (integer statuses 0 to 125 and what each means) and `commands`,
+and may have `depends_on`, `inputs`, `values`, `streams`, `interrupt` and
+`json` (named lists of JSON keys: those of the objects the documents hold,
+such as an issue). `values` holds the command line's own closed vocabularies,
+which no facade constant owns, such as the output formats: each lists its
+values, and none shares a name with a vocabulary of the top-level `values`. A
+command has a `name`, a `synopsis` starting with `yamaa <name>`, the
+`operations` it reaches and its `json_keys`, the keys of the JSON document it
+prints, or text naming a document with no fixed keys, such as the JSON Schema
+that `schema` prints. It may have `args`, `flags`, `effect`, `text` and
+`refusal_keys`, the keys of the document a refusal prints when they differ
+from `json_keys`. A flag's name starts with `--`; a flag or argument may name
+the vocabulary its values come from, in either `values`. An operation's `cli`
+list, and `host_only.cli`, may name only declared commands and global flags.
+`tools/tests/test_bindings_cli.py` reads the binary's parser table and usage
+text, and keeps the commands, their arguments and flags, the global flags, the
+output formats and the exit statuses equal to them.
 
 ### Native registrations
 
@@ -224,11 +230,10 @@ counterpart, such as `_project_run` and `project_run`. Every Python export,
 each class method included, and every R function names its counterpart under
 `operations` unless `host_only` declares it host transport. The generator
 refuses an export that has neither and an operation that names only one host.
-`host_only` holds the methods of Python's `Table` and R's two interrupt
-helpers, `run_interrupt` and `project_run_interrupt`. Python
-checks for a host interrupt inside each native call; R asks a returned run or
-project run handle for the interrupt it retained and rethrows that original
-condition. extendr-generated `wrap__*`, metadata, registration and finalizer functions are
+`host_only` holds the methods of Python's `Table`; R has no host-only
+exports. Both hosts check interrupts inside their native calls and retain
+original callback interrupts until the call returns. extendr-generated
+`wrap__*`, metadata, registration and finalizer functions are
 framework machinery, not additional engine operations.
 
 ### Outputs and the manifest
@@ -254,9 +259,11 @@ same comparison beside the shipped-schema check.
 each value, each column and record field with its position and type, each
 public type projection, function, class, member and argument with its
 position, default and result, the refusal, each exported name and S3 method,
-and each command, flag, exit status and JSON key. It leaves out the private
-native sections, documentation and implementation details such as `holds` and
-`calls`. The interface check of
+and the command line's synopses, output formats, global flags and exit
+statuses, each command with its arguments, flags and JSON keys, a refusal's
+included, and the keys of each object its documents hold. It leaves out the
+private native sections, documentation and implementation details such as
+`holds` and `calls`. The interface check of
 [the stability contract](../../docs/release.md#stability-contract) compares
 these lines with the newest final release of the same major: a removed or
 changed line is a break, and an added line an addition. A stale manifest fails
@@ -407,9 +414,12 @@ callbacks for all native uses and contain exceptions/conditions before Rust
 resumes. Finalizers do not invoke project code or start publication.
 
 Cancellation is control flow, distinct from a semantic finding. Retain the
-original Python interrupt/SystemExit or R interrupt on the current attempt,
-stop new work when observed, unwind native temporaries normally, and rethrow the
-original object after returning to the host. A resolver's `Cancelled` result
+original Python interrupt/SystemExit or R interrupt for the current native
+call, stop new work when observed, unwind native temporaries normally, and
+rethrow the original object after returning to the host. Each host installs a
+probe on the call's cancellation token: Python checks pending signals; R
+checks under `R_tryCatch`, at most every 20 ms and once more as the call
+returns. A nested call restores its enclosing call's interrupt state. A resolver's `Cancelled` result
 stops work without fabricating a host exception when none exists. No background
 kill, asynchronous cancellation token or new public cancel API is promised.
 

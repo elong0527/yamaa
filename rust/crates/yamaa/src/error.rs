@@ -26,7 +26,10 @@ pub enum Error {
     Table(TableError),
     /// A format feature is not compiled in.
     Unavailable { feature: &'static str },
-    /// The cancellation token was cancelled.
+    /// The operation was cancelled: its token was cancelled, or a project
+    /// function raised the host's interrupt, as
+    /// [`ProjectFunctions::is_interrupt`](crate::ProjectFunctions::is_interrupt)
+    /// classifies it (D46). The operation returns no result and no issue.
     Cancelled,
     /// A stable internal code with no internal payload.
     Internal { code: &'static str },
