@@ -210,8 +210,8 @@ local files are just the default resolver.
 
 ### Operations and signatures
 
-An embedder configures one `Engine` and calls its use cases, the verbs of
-#3030 section 2.8, beside a few free functions. The options are a
+An embedder configures one `Engine` and calls its use cases, the verbs in
+section 2.8 of #3030, beside a few free functions. The options are a
 `#[non_exhaustive]` struct so fields can be added without breaking callers.
 There is no public compile-once plan handle and no progress port (#3030 D22,
 D72): a host's lazy object keeps its compiled plans in a `Plans` holder, and
