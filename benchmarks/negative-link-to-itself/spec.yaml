@@ -1,0 +1,38 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  DM: input/dm.csv
+  # The dataset saved at the first data cut, typed by this very file.
+  PREV:
+    path: input/adsl_cut1.csv
+    schema: spec.yaml
+    key: [STUDYID, USUBJID]
+base: DM
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, AGE, AGECUT1]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM.USUBJID
+
+  - name: AGE
+    type: int
+    label: Age
+    derivation: DM.AGE
+
+  - name: AGECUT1
+    type: int
+    label: Age at First Data Cut
+    derivation: PREV.AGE

@@ -1,0 +1,8 @@
+phase: validation
+condition: nested_reduction
+spec_paths:
+  - columns.MAXDDOSE.derivation.aggregate.expr
+rule: FORMULA-21
+context:
+  outer: MAX
+  inner: SUM

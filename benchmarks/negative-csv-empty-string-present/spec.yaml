@@ -1,0 +1,35 @@
+yamaa: "1.0"
+type: spec
+model: SDTM
+domain: DM
+keys: [STUDYID, USUBJID]
+input:
+  # An empty race text is meant to be kept as collected text, distinct from
+  # a value that was never collected. A comma-separated file cannot tell
+  # the two apart.
+  RAW: {path: input/dm_raw.csv, empty_string: present}
+
+output:
+  path: dm.csv
+  columns: [DOMAIN, STUDYID, USUBJID, RACEOTH]
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'DM'"
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: RAW.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: RAW.USUBJID
+
+  - name: RACEOTH
+    type: str
+    label: Race, Other
+    derivation: RAW.RACEOTH

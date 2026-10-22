@@ -1171,6 +1171,7 @@ S1,002,2024-06
                     "negative-order-repeated",
                     "negative-order-unknown-column",
                     "negative-output-transport",
+                    "negative-report-same-file",
                 ],
                 "output-validation benchmark denominator changed"
             );
@@ -1271,6 +1272,10 @@ S1,002,2024-06
         /// report fails until it leaves this list.
         const NOT_REPORTED_BY_CHECK: &[(&str, &str)] = &[
             (
+                "negative-linked-artifact-header",
+                "the fields stored in the linked artifact",
+            ),
+            (
                 "negative-odm-schema-ambiguous",
                 "the fields stored in the ODM input",
             ),
@@ -1302,7 +1307,7 @@ S1,002,2024-06
         ];
 
         /// Validation negatives this harness does not run, with the reason.
-        const NOT_BUILT_HERE: [(&str, &str); 7] = [
+        const NOT_BUILT_HERE: [(&str, &str); 10] = [
             (
                 "negative-allowed-values-beside-codelist",
                 "the bound codelist's items come from its host environment, which this harness does not pass",
@@ -1317,6 +1322,18 @@ S1,002,2024-06
             ),
             (
                 "negative-function-contract",
+                "domain activates its project functions only in a host",
+            ),
+            (
+                "negative-function-name-twice",
+                "the project file lists the function files, which this harness does not pass",
+            ),
+            (
+                "negative-function-not-listed",
+                "this harness passes no project file, so its project function is unknown",
+            ),
+            (
+                "negative-function-test-mismatch",
                 "domain activates its project functions only in a host",
             ),
             (
