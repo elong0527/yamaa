@@ -1,4 +1,5 @@
-schema_version: '1.0'
+yamaa: "1.0"
+type: project
 codelists:
   - standard:
       # The defect: CDISC CT is how a dictionary reference names the

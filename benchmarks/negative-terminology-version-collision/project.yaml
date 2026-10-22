@@ -1,5 +1,6 @@
 # Fixed creation time is supplied by the submission call in benchmark.yaml.
-schema_version: '1.0'
+yamaa: "1.0"
+type: project
 study:
   id: CATH
   name: CATH
@@ -38,8 +39,8 @@ codelists:
       alias: C29848
     data_type: text
 sdtm:
-  standard:
-    name: SDTMIG
+  standards:
+  - name: SDTMIG
     version: '3.4'
     status: Final
   specs:
