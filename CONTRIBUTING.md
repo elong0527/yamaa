@@ -767,7 +767,12 @@ package index, URLs and the clock) stay off unless the caller sets
 have `checkbashisms`, and those of CI, native qualification and R-CMD-check
 also `aspell`, so the check covers the configure scripts and the spelling of
 `DESCRIPTION` as CRAN's does; elsewhere R warns that it lacks
-`checkbashisms`, and that one warning passes.
+`checkbashisms`, and that one warning passes. With R 4.2.x on Windows,
+Rtools42's older binutils mis-parse the `.drectve` sections of the Rust static
+library, and the one installation warning that R reports from them,
+`corrupt .drectve at end of def file`, passes too: the package installs, loads
+and passes every test, and CRAN no longer checks R 4.2 (#3030 D216). #3644
+removes the cause, and then this exception.
 
 The R tests use the package's suggested packages, `arrow` and `jsonlite`,
 only where they are installed, as "Writing R Extensions" asks: a part that

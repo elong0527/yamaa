@@ -3,8 +3,10 @@
 `R CMD check --as-cran` must report nothing beyond the notes that
 R/yamaa/cran-comments.md explains to CRAN. EXPECTED_NOTES lists them, with
 the lines that each may print; any other NOTE, any WARNING or ERROR, or an
-unexpected line under a listed NOTE fails the check. INFO findings, which R
-does not count in its status, are printed and pass.
+unexpected line under a listed NOTE fails the check. The exceptions are two
+warnings that come from the checking machine, not the package, which
+NO_CHECKBASHISMS and RTOOLS42_DRECTVE describe. INFO findings, which R does
+not count in its status, are printed and pass.
 
     python -m tools.commands.check_r --archive <yamaa_X.Y.Z.tar.gz> --work-dir <new dir>
     python -m tools.commands.check_r --log <yamaa.Rcheck/00check.log>
@@ -64,6 +66,26 @@ NO_CHECKBASHISMS = (
         r"See section .Configure and cleanup. in the .Writing R Extensions.(?: manual\.)?",
         r"manual\.",
     ),
+)
+# R 4.2 on Windows links with Rtools42, whose older binutils mis-parse the
+# .drectve sections of the Rust static library's objects, and R's
+# installation check reports this one warning from what they log. The
+# package still installs, loads and passes every test, and CRAN no longer
+# checks R 4.2. In a check that R 4.2.x ran on Windows, as the log's header
+# says, this warning, alone under its check, is reported and passes (#3030
+# D216). #3644 removes the cause, and then this exception.
+RTOOLS42_DRECTVE = (
+    "whether package 'yamaa' can be installed",
+    (
+        r"Found the following significant warnings:",
+        r"Warning: corrupt \.drectve at end of def file",
+        r"See .+00install\.out. for details\.",
+    ),
+)
+# The header lines of a check log that name R 4.2.x and Windows.
+RTOOLS42_HEADER = (
+    re.compile(r"^\* using R version 4\.2\.\d+\b", re.MULTILINE),
+    re.compile(r"^\* using platform: \S+-w64-mingw32\b", re.MULTILINE),
 )
 # What CRAN's checks set beyond --as-cran: its incoming checks
 # (check_CRAN_incoming.R) and, for the CPU limits, its regular checks
@@ -147,18 +169,38 @@ def lacks_checkbashisms(finding):
     )
 
 
+def uses_rtools42(log):
+    """Whether R 4.2.x ran the check on Windows, as the log's header says."""
+    return all(pattern.search(log) for pattern in RTOOLS42_HEADER)
+
+
+def corrupt_drectve(finding):
+    """Whether a finding is Rtools42's .drectve warning, and nothing else."""
+    check, patterns = RTOOLS42_DRECTVE
+    return (
+        finding.status == "WARNING"
+        and finding.check == check
+        and len(finding.lines) == len(patterns)
+        and all(map(re.fullmatch, patterns, finding.lines))
+    )
+
+
 def unexpected(log, expected=EXPECTED_NOTES, checkbashisms=True):
     """Describe every finding of a check log that `expected` does not allow.
 
     `checkbashisms` says whether the check could run that script; without it,
-    the warning that NO_CHECKBASHISMS describes is allowed.
+    the warning that NO_CHECKBASHISMS describes is allowed. In a check that
+    R 4.2.x ran on Windows, so is the warning that RTOOLS42_DRECTVE describes.
     """
     found, counts = findings(log)
+    rtools42 = uses_rtools42(log)
     problems = []
     for finding in found:
         if finding.status not in COUNTED:
             continue
         if not checkbashisms and lacks_checkbashisms(finding):
+            continue
+        if rtools42 and corrupt_drectve(finding):
             continue
         patterns = expected.get(finding.check) if finding.status == "NOTE" else None
         if patterns is None:
@@ -205,6 +247,11 @@ def report(log, checkbashisms=True):
     if any(map(lacks_checkbashisms, found)):
         print(
             "checkbashisms is not installed, so R did not check configure and cleanup"
+        )
+    if any(map(corrupt_drectve, found)):
+        print(
+            "Rtools42's binutils mis-parse the .drectve sections of the Rust "
+            "library, so R 4.2 warned at installation; #3644 removes the cause"
         )
     print("R CMD check --as-cran: every finding is one that cran-comments.md explains")
 

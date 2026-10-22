@@ -33,8 +33,11 @@ package for that platform. `tools.validation.check_supported_platforms`, which
   admitted patch with the minimum Rust (#3561). On Linux x86_64, macOS arm64 and
   Windows x64 it passes `R CMD check --as-cran` with only the notes that
   `R/yamaa/cran-comments.md` explains: with R 4.6.1, and in CRAN's incoming
-  checks with R-devel, R-release and R 4.2.0 and the minimum Rust. The separate
-  R-CMD-check workflow also checks the latest R 4.2 patch on Linux.
+  checks with R-devel, R-release and R 4.2.0 and the minimum Rust. With R 4.2
+  on Windows, the check also accepts the one installation warning that R
+  reports from Rtools42's binutils, `corrupt .drectve at end of def file`
+  (#3030 D216), until #3644 removes its cause. The separate R-CMD-check
+  workflow also checks the latest R 4.2 patch on Linux.
 - On Linux aarch64, native qualification uses R-release alone. With the
   network disabled, it builds and installs the R source package that a
   release publishes and runs the conformance corpus with it: its

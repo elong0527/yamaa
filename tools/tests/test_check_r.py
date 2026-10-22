@@ -46,10 +46,44 @@ A complete check needs the 'checkbashisms' script.
 See section 'Configure and cleanup' in the 'Writing R Extensions'
 manual.
 """
+# The platform of a check with R 4.2 on Windows, the one warning that its
+# installation check reports from Rtools42's binutils, and the line after it
+# (#3030 D216).
+WINDOWS = "x86_64-w64-mingw32 (64-bit)"
+CORRUPT = "Warning: corrupt .drectve at end of def file"
+SEE = "See 'D:/a/_temp/cran-check/yamaa.Rcheck/00install.out' for details."
 
 
 def log(*parts, status):
     return "".join(parts) + TAIL.format(status=status)
+
+
+def checked_with(r, platform):
+    """HEAD as the log of a check that `r` ran on `platform` begins."""
+    return HEAD.replace(
+        "* using R version 4.4.3 (2025-02-28)\n",
+        f"* using {r}\n* using platform: {platform}\n",
+    )
+
+
+def installation(*warnings):
+    """The installation check's WARNING, with these significant warnings."""
+    return (
+        "* checking whether package 'yamaa' can be installed ... WARNING\n"
+        "Found the following significant warnings:\n"
+        + "".join(f"  {warning}\n" for warning in warnings)
+        + f"{SEE}\n"
+    )
+
+
+def installation_problems(*warnings):
+    """What the check reports for that WARNING when it does not pass."""
+    return [
+        "WARNING: checking whether package 'yamaa' can be installed",
+        "    Found the following significant warnings:",
+        *(f"    {warning}" for warning in warnings),
+        f"    {SEE}",
+    ]
 
 
 class FindingsTests(unittest.TestCase):
@@ -160,6 +194,115 @@ class FindingsTests(unittest.TestCase):
     def test_the_report_fails_on_unexplained_findings(self):
         with self.assertRaisesRegex(RuntimeError, "does not explain"):
             check_r.report(log(HEAD, BASHISMS, status="1 WARNING, 1 NOTE"))
+
+
+class Rtools42Tests(unittest.TestCase):
+    """Rtools42's corrupt .drectve warning passes only with R 4.2.x on Windows."""
+
+    def test_the_drectve_warning_alone_passes_with_r_4_2_on_windows(self):
+        for case in (
+            "R version 4.2.0 (2022-04-22 ucrt)",
+            "R version 4.2.3 (2023-03-15 ucrt)",
+        ):
+            with self.subTest(case=case):
+                text = log(
+                    checked_with(case, WINDOWS),
+                    installation(CORRUPT),
+                    SIZE.format(status="NOTE"),
+                    status="1 WARNING, 2 NOTEs",
+                )
+                self.assertEqual(check_r.unexpected(text), [], case)
+                printed = io.StringIO()
+                with contextlib.redirect_stdout(printed):
+                    check_r.report(text)
+                self.assertEqual(
+                    printed.getvalue(),
+                    "NOTE: checking CRAN incoming feasibility\n"
+                    "    Maintainer: 'Yilong Zhang <elong0527@gmail.com>'\n"
+                    "    New submission\n"
+                    "    Size of tarball: 14539245 bytes\n"
+                    "WARNING: checking whether package 'yamaa' can be installed\n"
+                    "    Found the following significant warnings:\n"
+                    "    Warning: corrupt .drectve at end of def file\n"
+                    f"    {SEE}\n"
+                    "NOTE: checking installed package size\n"
+                    "    installed size is 24.2Mb\n"
+                    "    sub-directories of 1Mb or more:\n"
+                    "    libs  23.6Mb\n"
+                    "Rtools42's binutils mis-parse the .drectve sections of the Rust "
+                    "library, so R 4.2 warned at installation; #3644 removes the cause\n"
+                    "R CMD check --as-cran: every finding is one that cran-comments.md "
+                    "explains\n",
+                    case,
+                )
+
+    def test_the_drectve_warning_fails_with_any_other_r_or_platform(self):
+        for case, head in (
+            (
+                "R 4.3.0 on Windows",
+                checked_with("R version 4.3.0 (2023-04-21 ucrt)", WINDOWS),
+            ),
+            (
+                "R-devel on Windows",
+                checked_with(
+                    "R Under development (unstable) (2026-10-21 r89000 ucrt)", WINDOWS
+                ),
+            ),
+            (
+                "R 4.2.0 on Linux",
+                checked_with(
+                    "R version 4.2.0 (2022-04-22)", "x86_64-pc-linux-gnu (64-bit)"
+                ),
+            ),
+            (
+                "R 4.2.0 on macOS",
+                checked_with(
+                    "R version 4.2.0 (2022-04-22)", "aarch64-apple-darwin20 (64-bit)"
+                ),
+            ),
+            ("a log that names no platform", HEAD),
+        ):
+            with self.subTest(case=case):
+                text = log(head, installation(CORRUPT), status="1 WARNING, 1 NOTE")
+                self.assertEqual(
+                    check_r.unexpected(text), installation_problems(CORRUPT), case
+                )
+
+    def test_any_other_installation_warning_fails_with_r_4_2_on_windows(self):
+        head = checked_with("R version 4.2.0 (2022-04-22 ucrt)", WINDOWS)
+        unrecognized = "Warning: .drectve `-exclude-symbols:anon.0' unrecognized"
+        unused = "entrypoint.c:12:7: warning: unused variable 'x' [-Wunused-variable]"
+        for case, warnings in (
+            ("another warning instead", (unrecognized,)),
+            ("another warning beside it", (unused, CORRUPT)),
+            ("the warning with more text", (f"{CORRUPT} at line 3",)),
+        ):
+            with self.subTest(case=case):
+                text = log(head, installation(*warnings), status="1 WARNING, 1 NOTE")
+                self.assertEqual(
+                    check_r.unexpected(text), installation_problems(*warnings), case
+                )
+
+    def test_a_second_warning_beside_the_drectve_warning_fails(self):
+        undocumented = (
+            "* checking for missing documentation entries ... WARNING\n"
+            "Undocumented code objects:\n"
+            "  'spec'\n"
+        )
+        text = log(
+            checked_with("R version 4.2.0 (2022-04-22 ucrt)", WINDOWS),
+            installation(CORRUPT),
+            undocumented,
+            status="2 WARNINGs, 1 NOTE",
+        )
+        self.assertEqual(
+            check_r.unexpected(text),
+            [
+                "WARNING: checking for missing documentation entries",
+                "    Undocumented code objects:",
+                "    'spec'",
+            ],
+        )
 
 
 class TarballTests(unittest.TestCase):
