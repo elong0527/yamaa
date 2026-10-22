@@ -1,7 +1,7 @@
 [
   {
     "case": "column_invalid_context",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [STUDYID, USUBJID]\ninput: {SRC: source.csv, DM: absent.csv}\nbase: DM\noutput: {path: result.csv, columns: [STUDYID, USUBJID, VAL]}\ncolumns:\n  - {name: STUDYID, type: str, label: Study, derivation: SRC.StudyOID}\n  - {name: USUBJID, type: str, label: Subject, derivation: SRC.SubjectKey}\n  - {name: VAL, type: str, label: Value, derivation: {odm: SRC.IT.TEST.OID}}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [STUDYID, USUBJID]\ninput: {SRC: source.csv, DM: absent.csv}\nbase: DM\noutput: {path: result.csv, columns: [STUDYID, USUBJID, VAL]}\ncolumns:\n  - {name: STUDYID, type: str, label: Study, derivation: SRC.StudyOID}\n  - {name: USUBJID, type: str, label: Subject, derivation: SRC.SubjectKey}\n  - {name: VAL, type: str, label: Value, derivation: {odm: SRC.IT.TEST.OID}}\n",
     "expected": {
       "outcome": {
         "diagnostics": [
@@ -25,7 +25,7 @@
   },
   {
     "case": "row_invalid_context",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [STUDYID, USUBJID]\ninput: {SRC: source.csv, DM: absent.csv}\noutput: {path: result.csv, columns: [STUDYID, USUBJID, VAL]}\ncolumns:\n  - {name: STUDYID, type: str, label: Study, derivation: SRC.StudyOID}\n  - {name: USUBJID, type: str, label: Subject, derivation: SRC.SubjectKey}\n  - {name: VAL, type: str, label: Value, derivation: {literal: U}}\nrows:\n  - id: subjects\n    dataset: DM\n    derivations:\n      STUDYID: SRC.StudyOID\n      USUBJID: SRC.SubjectKey\n      VAL: {odm: SRC.IT.TEST.OID}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [STUDYID, USUBJID]\ninput: {SRC: source.csv, DM: absent.csv}\noutput: {path: result.csv, columns: [STUDYID, USUBJID, VAL]}\ncolumns:\n  - {name: STUDYID, type: str, label: Study, derivation: SRC.StudyOID}\n  - {name: USUBJID, type: str, label: Subject, derivation: SRC.SubjectKey}\n  - {name: VAL, type: str, label: Value, derivation: \"'U'\"}\nrows:\n  - id: subjects\n    dataset: DM\n    derivations:\n      STUDYID: SRC.StudyOID\n      USUBJID: SRC.SubjectKey\n      VAL: {odm: SRC.IT.TEST.OID}\n",
     "expected": {
       "outcome": {
         "diagnostics": [
@@ -38,7 +38,7 @@
             "phase": "validation",
             "rule": "NAME-11",
             "spec_paths": [
-              "rows[0].derivations.VAL.odm"
+              "rows.subjects.derivations.VAL.odm"
             ]
           }
         ],
@@ -49,7 +49,7 @@
   },
   {
     "case": "intermediate_invalid_context",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [STUDYID, USUBJID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [STUDYID, USUBJID, VAL, AUX]}\ncolumns:\n  - {name: STUDYID, type: str, label: Study, derivation: SRC.StudyOID}\n  - {name: USUBJID, type: str, label: Subject, derivation: SRC.SubjectKey}\n  - {name: VAL, type: str, label: Value, derivation: {odm: SRC.IT.TEST.OID}}\n  - {name: AUX, type: str, label: Auxiliary, derivation: DONOR.V}\nintermediates:\n  - id: DONOR\n    dataset: SRC\n    derivations:\n      V: {odm: SRC.IT.TEST.OID}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [STUDYID, USUBJID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [STUDYID, USUBJID, VAL, AUX]}\ncolumns:\n  - {name: STUDYID, type: str, label: Study, derivation: SRC.StudyOID}\n  - {name: USUBJID, type: str, label: Subject, derivation: SRC.SubjectKey}\n  - {name: VAL, type: str, label: Value, derivation: {odm: SRC.IT.TEST.OID}}\n  - {name: AUX, type: str, label: Auxiliary, derivation: DONOR.V}\nintermediates:\n  - id: DONOR\n    dataset: SRC\n    key: {StudyOID: STUDYID, SubjectKey: USUBJID}\n    derivations:\n      V: {odm: SRC.IT.TEST.OID}\n",
     "expected": {
       "outcome": {
         "diagnostics": [
@@ -62,7 +62,7 @@
             "phase": "validation",
             "rule": "NAME-11",
             "spec_paths": [
-              "intermediates[0].derivations.V.odm"
+              "intermediates.DONOR.derivations.V.odm"
             ]
           }
         ],
@@ -73,7 +73,7 @@
   },
   {
     "case": "derive_invalid_context",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [STUDYID, USUBJID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [STUDYID, USUBJID, VAL]}\ncolumns:\n  - {name: STUDYID, type: str, label: Study, derivation: SRC.StudyOID}\n  - {name: USUBJID, type: str, label: Subject, derivation: SRC.SubjectKey}\n  - {name: VAL, type: str, label: Value, derivation: {aggregate: {derive: [{name: D, type: str, derivation: {odm: SRC.IT.TEST.OID}}], expr: 'MAX(D)'}}}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [STUDYID, USUBJID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [STUDYID, USUBJID, VAL]}\ncolumns:\n  - {name: STUDYID, type: str, label: Study, derivation: SRC.StudyOID}\n  - {name: USUBJID, type: str, label: Subject, derivation: SRC.SubjectKey}\n  - {name: VAL, type: str, label: Value, derivation: {aggregate: {derivations: {D: {type: str, derivation: {odm: SRC.IT.TEST.OID}}}, expr: 'MAX(D)'}}}\n",
     "expected": {
       "outcome": {
         "diagnostics": [
@@ -86,7 +86,7 @@
             "phase": "validation",
             "rule": "NAME-11",
             "spec_paths": [
-              "columns.VAL.derivation.aggregate.derive[0].derivation.odm"
+              "columns.VAL.derivation.aggregate.derivations.D.derivation.odm"
             ]
           }
         ],
@@ -97,7 +97,7 @@
   },
   {
     "case": "unknown_input",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [STUDYID, USUBJID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [STUDYID, USUBJID, VAL]}\ncolumns:\n  - {name: STUDYID, type: str, label: Study, derivation: SRC.StudyOID}\n  - {name: USUBJID, type: str, label: Subject, derivation: SRC.SubjectKey}\n  - {name: VAL, type: str, label: Value, derivation: {odm: ABSENT.IT.TEST.OID}}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [STUDYID, USUBJID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [STUDYID, USUBJID, VAL]}\ncolumns:\n  - {name: STUDYID, type: str, label: Study, derivation: SRC.StudyOID}\n  - {name: USUBJID, type: str, label: Subject, derivation: SRC.SubjectKey}\n  - {name: VAL, type: str, label: Value, derivation: {odm: ABSENT.IT.TEST.OID}}\n",
     "expected": {
       "outcome": {
         "diagnostics": [
@@ -120,7 +120,7 @@
   },
   {
     "case": "filter_vendor",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [STUDYID, USUBJID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [STUDYID, USUBJID, VAL]}\ncolumns:\n  - {name: STUDYID, type: str, label: Study, derivation: SRC.StudyOID}\n  - {name: USUBJID, type: str, label: Subject, derivation: SRC.SubjectKey}\n  - {name: VAL, type: str, label: Value, derivation: {odm: {item: SRC.IT.TEST.OID, filter: \"SRC.VENDOR = 'Y'\"}}}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [STUDYID, USUBJID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [STUDYID, USUBJID, VAL]}\ncolumns:\n  - {name: STUDYID, type: str, label: Study, derivation: SRC.StudyOID}\n  - {name: USUBJID, type: str, label: Subject, derivation: SRC.SubjectKey}\n  - {name: VAL, type: str, label: Value, derivation: {odm: {item: SRC.IT.TEST.OID, filter: \"SRC.VENDOR = 'Y'\"}}}\n",
     "expected": {
       "outcome": {
         "diagnostics": [
@@ -144,7 +144,7 @@
   },
   {
     "case": "declared_types",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [STUDYID, USUBJID]\ninput: {SRC: {path: source.csv, types: {Value: int}}}\noutput: {path: result.csv, columns: [STUDYID, USUBJID, VAL]}\ncolumns:\n  - {name: STUDYID, type: str, label: Study, derivation: SRC.StudyOID}\n  - {name: USUBJID, type: str, label: Subject, derivation: SRC.SubjectKey}\n  - {name: VAL, type: str, label: Value, derivation: {odm: SRC.IT.TEST.OID}}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [STUDYID, USUBJID]\ninput: {SRC: {path: source.csv, types: {Value: int}}}\noutput: {path: result.csv, columns: [STUDYID, USUBJID, VAL]}\ncolumns:\n  - {name: STUDYID, type: str, label: Study, derivation: SRC.StudyOID}\n  - {name: USUBJID, type: str, label: Subject, derivation: SRC.SubjectKey}\n  - {name: VAL, type: str, label: Value, derivation: {odm: SRC.IT.TEST.OID}}\n",
     "expected": {
       "outcome": {
         "diagnostics": [
@@ -168,7 +168,7 @@
   },
   {
     "case": "declared_ordinal",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [STUDYID, USUBJID]\ninput: {SRC: {path: source.csv, ordinal: SOURCEORD}}\noutput: {path: result.csv, columns: [STUDYID, USUBJID, VAL]}\ncolumns:\n  - {name: STUDYID, type: str, label: Study, derivation: SRC.StudyOID}\n  - {name: USUBJID, type: str, label: Subject, derivation: SRC.SubjectKey}\n  - {name: VAL, type: str, label: Value, derivation: {odm: SRC.IT.TEST.OID}}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [STUDYID, USUBJID]\ninput: {SRC: {path: source.csv, ordinal: SOURCEORD}}\noutput: {path: result.csv, columns: [STUDYID, USUBJID, VAL]}\ncolumns:\n  - {name: STUDYID, type: str, label: Study, derivation: SRC.StudyOID}\n  - {name: USUBJID, type: str, label: Subject, derivation: SRC.SubjectKey}\n  - {name: VAL, type: str, label: Value, derivation: {odm: SRC.IT.TEST.OID}}\n",
     "expected": {
       "outcome": {
         "diagnostics": [

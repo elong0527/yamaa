@@ -335,7 +335,7 @@ columns:
                 result.observations()["handler_counts"],
                 yamaa_adapters::json!([
                     {"spec_path":"columns.VALUE.derivation.source.multiple_matches","handler":"multiple_matches","count":1},
-                    {"spec_path":"columns.VALUE.derivation.source.no_match","handler":"no_match","count":1}
+                    {"spec_path":"columns.VALUE.derivation.source.absent","handler":"absent","count":1}
                 ])
             );
         }
@@ -343,14 +343,14 @@ columns:
         #[test]
         fn false_when_still_resolves_require_lookup_and_refuses_a_required_match() {
             let (fixture, body) = lookup_fixture("assert_lookup_only");
-            for pattern in ["    no_match: {literal: null}\n", "when: 'P.X IS NOT NULL'"] {
+            for pattern in ["    keep: last\n", "when: 'P.X IS NOT NULL'"] {
                 assert!(body.contains(pattern), "fixture drifted: {pattern}");
             }
-            // An omitted `no_match` answers with missing; `require_match` refuses.
+            // An omitted `absent` answers with missing; `require_match` refuses.
             let body = body
                 .edit(
-                    "    no_match: {literal: null}\n",
-                    "    require_match: true\n",
+                    "    keep: last\n",
+                    "    keep: last\n    require_match: true\n",
                 )
                 .edit("when: 'P.X IS NOT NULL'", "when: 'FALSE'");
             let mut result = fixture.run(&body).unwrap();
@@ -390,7 +390,7 @@ columns:
                 result.observations()["handler_counts"],
                 yamaa_adapters::json!([
                     {"spec_path":"columns.VALUE.derivation.source.multiple_matches","handler":"multiple_matches","count":0},
-                    {"spec_path":"columns.VALUE.derivation.source.no_match","handler":"no_match","count":0}
+                    {"spec_path":"columns.VALUE.derivation.source.absent","handler":"absent","count":0}
                 ])
             );
             assert!(result.output().is_none());
@@ -809,10 +809,14 @@ columns:
                 }
                 let mut expected = case["findings"].clone();
                 if case["result_type"] == "SpecificationError" {
+                    // A schema finding names the files its run loaded: the
+                    // capture names its own, and this run loads spec.yaml.
+                    let loaded =
+                        yamaa_adapters::json!(fixture.0.join("spec.yaml").to_str().unwrap());
                     for d in expected.as_array_mut().unwrap() {
                         let c = d["context"].as_object_mut().unwrap();
-                        assert!(c.remove("source").is_some());
-                        assert!(c.remove("entry").is_some());
+                        assert!(c.insert("source".into(), loaded.clone()).is_some());
+                        assert!(c.insert("entry".into(), loaded.clone()).is_some());
                     }
                 }
                 match fixture.run(name) {
@@ -1193,7 +1197,7 @@ columns:
                     "phase": "validation",
                     "condition": "incompatible_input_type",
                     "rule": "FORMULA-5",
-                    "spec_paths": ["intermediates[0].filter"],
+                    "spec_paths": ["intermediates.LOOK.filter"],
                     "context": {"left_type": "int", "right_type": "str"},
                 }])
                 .as_array()
@@ -1227,7 +1231,7 @@ columns:
         result.issues().iter().map(issue_json).collect::<Vec<_>>(),
         yamaa_adapters::json!([{
             "phase": "validation", "condition": "incompatible_input_type", "rule": "FORMULA-5",
-            "spec_paths": ["intermediates[0].filter"], "context": {"left_type": "int", "right_type": "str"},
+            "spec_paths": ["intermediates.LOOK.filter"], "context": {"left_type": "int", "right_type": "str"},
         }]).as_array().unwrap().as_slice()
     );
             assert!(result.output().is_none());
@@ -1262,13 +1266,13 @@ columns:
                 case["specification"] = yamaa_adapters::json!(case["specification"]
                     .as_str()
                     .unwrap()
-                    .replace("derivation: LOOK.VAL", "derivation: {literal: ok}"))
+                    .replace("derivation: LOOK.VAL", "derivation: \"'ok'\""))
             }
             "unread_branch" => {
                 case["specification"] = yamaa_adapters::json!(case["specification"]
                     .as_str()
                     .unwrap()
-                    .replace("derivation: LOOK.VAL", "derivation: {case: [{when: 'FALSE', then: LOOK.VAL}, {otherwise: {literal: ok}}]}"))
+                    .replace("derivation: LOOK.VAL", "derivation: {case: [{when: 'FALSE', then: LOOK.VAL}, {otherwise: \"'ok'\"}]}"))
             }
             "boolean_missing" => {
                 case["inputs"]["tab.csv"] = yamaa_adapters::json!("K,KINT,KNUM,VAL\n\"       7\",,7,A\n");
@@ -1293,7 +1297,7 @@ columns:
                     assert!(fixture.check().is_empty(), "check without data: {variant}");
                     continue;
                 }
-                let expected = yamaa_adapters::json!([{"phase":"validation","condition":"incompatible_input_type","rule":"FORMULA-5","spec_paths":["intermediates[0].filter"],"context":{"left_type":"int","right_type":"str"}}]);
+                let expected = yamaa_adapters::json!([{"phase":"validation","condition":"incompatible_input_type","rule":"FORMULA-5","spec_paths":["intermediates.LOOK.filter"],"context":{"left_type":"int","right_type":"str"}}]);
                 assert_eq!(
                     result.issues().iter().map(issue_json).collect::<Vec<_>>(),
                     expected.as_array().unwrap().as_slice(),

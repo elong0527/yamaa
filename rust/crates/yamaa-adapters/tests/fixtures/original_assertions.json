@@ -1,7 +1,7 @@
 [
   {
     "case": "held",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"assert\": {\"id\": \"positive\", \"when\": \"V IS NOT NULL\", \"require\": \"V > 0\"}}, {\"row_count\": {\"min\": 0}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"assert\": {\"id\": \"positive\", \"when\": \"V IS NOT NULL\", \"require\": \"V > 0\"}}, {\"row_count\": {\"min\": 0}}]\n",
     "input": "ID,V\na,10\nb,\nc,7\n",
     "expected": {
       "artifacts": [
@@ -178,7 +178,7 @@
   },
   {
     "case": "failed",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"assert\": {\"id\": \"above-eight\", \"require\": \"V > 8\"}}, {\"row_count\": {\"min\": 0}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"assert\": {\"id\": \"above-eight\", \"require\": \"V > 8\"}}, {\"row_count\": {\"min\": 0}}]\n",
     "input": "ID,V\na,10\nb,\nc,7\n",
     "expected": {
       "artifacts": [],
@@ -370,7 +370,7 @@
   },
   {
     "case": "inactive",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"assert\": {\"when\": \"FALSE\", \"require\": \"FALSE\"}}, {\"row_count\": {\"min\": 0}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"assert\": {\"when\": \"FALSE\", \"require\": \"FALSE\"}}, {\"row_count\": {\"min\": 0}}]\n",
     "input": "ID,V\na,10\nb,\nc,7\n",
     "expected": {
       "artifacts": [
@@ -547,7 +547,7 @@
   },
   {
     "case": "unknown_when",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"assert\": {\"when\": \"V > 0\", \"require\": \"FALSE\"}}, {\"row_count\": {\"min\": 0}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"assert\": {\"when\": \"V > 0\", \"require\": \"FALSE\"}}, {\"row_count\": {\"min\": 0}}]\n",
     "input": "ID,V\na,10\nb,\nc,7\n",
     "expected": {
       "artifacts": [],
@@ -735,7 +735,7 @@
   },
   {
     "case": "null_require",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"assert\": {\"when\": \"V IS NULL\", \"require\": \"V IS NOT NULL\"}}, {\"row_count\": {\"min\": 0}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"assert\": {\"when\": \"V IS NULL\", \"require\": \"V IS NOT NULL\"}}, {\"row_count\": {\"min\": 0}}]\n",
     "input": "ID,V\na,10\nb,\nc,7\n",
     "expected": {
       "artifacts": [],
@@ -908,7 +908,7 @@
   },
   {
     "case": "empty",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"assert\": {\"require\": \"V > 0\"}}, {\"row_count\": {\"min\": 0}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"assert\": {\"require\": \"V > 0\"}}, {\"row_count\": {\"min\": 0}}]\n",
     "input": "ID,V\n",
     "expected": {
       "artifacts": [
@@ -1020,7 +1020,7 @@
   },
   {
     "case": "unknown_field",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"assert\": {\"when\": \"FALSE\", \"require\": \"Z > 0\"}}, {\"row_count\": {\"min\": 0}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"assert\": {\"when\": \"FALSE\", \"require\": \"Z > 0\"}}, {\"row_count\": {\"min\": 0}}]\n",
     "input": "ID,V\na,10\nb,\nc,7\n",
     "expected": {
       "artifacts": [],
@@ -1131,7 +1131,7 @@
   },
   {
     "case": "qualified_field",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"assert\": {\"require\": \"SRC.V > 0\"}}, {\"row_count\": {\"min\": 0}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"assert\": {\"require\": \"SRC.V > 0\"}}, {\"row_count\": {\"min\": 0}}]\n",
     "input": "ID,V\na,10\nb,\nc,7\n",
     "expected": {
       "artifacts": [],
@@ -1242,7 +1242,7 @@
   },
   {
     "case": "grammar",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"assert\": {\"require\": \"V >\"}}, {\"row_count\": {\"min\": 0}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"assert\": {\"require\": \"V >\"}}, {\"row_count\": {\"min\": 0}}]\n",
     "input": "ID,V\na,10\nb,\nc,7\n",
     "expected": {
       "artifacts": [],
@@ -1355,7 +1355,7 @@
   },
   {
     "case": "grammar_after_when",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"assert\": {\"when\": \"V > 0\", \"require\": \"V >\"}}, {\"row_count\": {\"min\": 0}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"assert\": {\"when\": \"V > 0\", \"require\": \"V >\"}}, {\"row_count\": {\"min\": 0}}]\n",
     "input": "ID,V\na,10\nb,\nc,7\n",
     "expected": {
       "artifacts": [],
@@ -1468,7 +1468,7 @@
   },
   {
     "case": "bad_when",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"assert\": {\"when\": \"V = 'bad'\", \"require\": \"TRUE\"}}, {\"row_count\": {\"min\": 0}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"assert\": {\"when\": \"V = 'bad'\", \"require\": \"TRUE\"}}, {\"row_count\": {\"min\": 0}}]\n",
     "input": "ID,V\na,10\nb,\nc,7\n",
     "expected": {
       "artifacts": [],
@@ -1583,7 +1583,7 @@
   },
   {
     "case": "inactive_bad_require",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"assert\": {\"when\": \"FALSE\", \"require\": \"V = 'bad'\"}}, {\"row_count\": {\"min\": 0}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"assert\": {\"when\": \"FALSE\", \"require\": \"V = 'bad'\"}}, {\"row_count\": {\"min\": 0}}]\n",
     "input": "ID,V\na,10\nb,\nc,7\n",
     "expected": {
       "artifacts": [],
@@ -1698,7 +1698,7 @@
   },
   {
     "case": "empty_bad_require",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"assert\": {\"require\": \"V = 'bad'\"}}, {\"row_count\": {\"min\": 0}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"assert\": {\"require\": \"V = 'bad'\"}}, {\"row_count\": {\"min\": 0}}]\n",
     "input": "ID,V\n",
     "expected": {
       "artifacts": [],
@@ -1782,7 +1782,7 @@
   },
   {
     "case": "duplicate_id",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"row_count\": {\"id\": \"prefix\", \"min\": 0}}, {\"assert\": {\"id\": \"prefix\", \"require\": \"TRUE\"}}, {\"row_count\": {\"min\": 0}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"row_count\": {\"id\": \"prefix\", \"min\": 0}}, {\"assert\": {\"id\": \"prefix\", \"require\": \"TRUE\"}}, {\"row_count\": {\"min\": 0}}]\n",
     "input": "ID,V\na,10\nb,\nc,7\n",
     "expected": {
       "artifacts": [],
@@ -1905,7 +1905,7 @@
   },
   {
     "case": "bad_when_before_grammar",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"assert\": {\"when\": \"V = 'bad'\", \"require\": \"V >\"}}, {\"row_count\": {\"min\": 0}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"assert\": {\"when\": \"V = 'bad'\", \"require\": \"V >\"}}, {\"row_count\": {\"min\": 0}}]\n",
     "input": "ID,V\na,10\nb,\nc,7\n",
     "expected": {
       "artifacts": [],
@@ -2020,7 +2020,7 @@
   },
   {
     "case": "bad_when_before_unknown",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"assert\": {\"when\": \"V = 'bad'\", \"require\": \"Z > 0\"}}, {\"row_count\": {\"min\": 0}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"assert\": {\"when\": \"V = 'bad'\", \"require\": \"Z > 0\"}}, {\"row_count\": {\"min\": 0}}]\n",
     "input": "ID,V\na,10\nb,\nc,7\n",
     "expected": {
       "artifacts": [],
@@ -2135,7 +2135,7 @@
   },
   {
     "case": "unknown_order",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"assert\": {\"when\": \"FALSE\", \"require\": \"Z > 0 OR A > 0\"}}, {\"row_count\": {\"min\": 0}}]\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"assert\": {\"when\": \"FALSE\", \"require\": \"Z > 0 OR A > 0\"}}, {\"row_count\": {\"min\": 0}}]\n",
     "input": "ID,V\na,10\nb,\nc,7\n",
     "expected": {
       "artifacts": [],

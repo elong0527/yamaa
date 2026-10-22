@@ -1,7 +1,7 @@
 [
   {
     "case": "exact_typed",
-    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\n  - name: V\n    type: int\n    label: V\n    derivation:\n      mapping: {source: SRC.X, dict: {Y: 1, y: 2.0, Z: {literal: null}}, missing: {literal: null}, unmapped: 7}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\n  - name: V\n    type: int\n    label: V\n    derivation:\n      mapping: {source: SRC.X, dict: {Y: 1, y: 2.0, Z: null}, unmapped: 7}\n",
     "inputs": {
       "SRC": "ID,X\na,Y\nb,y\nc,Z\nd,\ne,Q\n"
     },
@@ -222,7 +222,7 @@
   },
   {
     "case": "ascii_fold",
-    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\n  - name: V\n    type: str\n    label: V\n    derivation:\n      mapping: {source: SRC.X, dict: {'yes': 'matched', \"\\u00e9a\": 'foreign', \"\\u00c9a\": 'capital', \"\\u00df\": 'sharp', 'ss': 'double'}, case_sensitive: false, unmapped: 'other'}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\n  - name: V\n    type: str\n    label: V\n    derivation:\n      mapping: {source: SRC.X, dict: {'yes': 'matched', \"\\u00e9a\": 'foreign', \"\\u00c9a\": 'capital', \"\\u00df\": 'sharp', 'ss': 'double'}, case_sensitive: false, unmapped: 'other'}\n",
     "inputs": {
       "SRC": "ID,X\na,YES\nb,éA\nc,ÉA\nd,ß\ne,SS\nf,éB\n"
     },
@@ -464,7 +464,7 @@
   },
   {
     "case": "missing_separate",
-    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\n  - name: V\n    type: str\n    label: V\n    derivation:\n      mapping: {source: SRC.X, dict: {Y: 'present'}, missing: 'missing', unmapped: {literal: null}}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\n  - name: V\n    type: str\n    label: V\n    derivation:\n      mapping: {source: SRC.X, dict: {Y: 'present'}, missing: 'missing', unmapped: null}\n",
     "inputs": {
       "SRC": "ID,X\na,\nb,Q\nc,Y\n"
     },
@@ -643,7 +643,7 @@
   },
   {
     "case": "empty_rows",
-    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\n  - name: V\n    type: str\n    label: V\n    derivation:\n      mapping: {source: SRC.X, dict: {Y: 'present'}, missing: 'missing', unmapped: 'other'}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\n  - name: V\n    type: str\n    label: V\n    derivation:\n      mapping: {source: SRC.X, dict: {Y: 'present'}, missing: 'missing', unmapped: 'other'}\n",
     "inputs": {
       "SRC": "ID,X\n"
     },
@@ -757,7 +757,7 @@
   },
   {
     "case": "unused_invalid_literal",
-    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\n  - name: V\n    type: int\n    label: V\n    derivation:\n      mapping: {source: SRC.X, dict: {Y: 1, UNUSED: true}, missing: 'bad', unmapped: 'bad'}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\n  - name: V\n    type: int\n    label: V\n    derivation:\n      mapping: {source: SRC.X, dict: {Y: 1, UNUSED: true}, missing: 'bad', unmapped: 'bad'}\n",
     "inputs": {
       "SRC": "ID,X\na,Y\n"
     },
@@ -894,7 +894,7 @@
   },
   {
     "case": "filtered_driver",
-    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\n  - name: V\n    type: int\n    label: V\n    derivation:\n      mapping:\n        source: {variable: SRC.X, filter: \"SRC.F = 'Y'\"}\n        dict: {A: 1, B: 2}\n        missing: 9\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\n  - name: V\n    type: int\n    label: V\n    derivation:\n      mapping:\n        source: {variable: SRC.X, filter: \"SRC.F = 'Y'\"}\n        dict: {A: 1, B: 2}\n        missing: 9\n",
     "inputs": {
       "SRC": "ID,X,F\na,A,Y\nb,B,N\n"
     },
@@ -1052,7 +1052,7 @@
   },
   {
     "case": "secondary_source",
-    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\n  DONOR: donor.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\n  - name: V\n    type: int\n    label: V\n    derivation:\n      mapping: {source: DONOR.X, dict: {A: 1, B: 2}, missing: 9}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\n  DONOR: {path: donor.csv, key: [ID]}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\n  - name: V\n    type: int\n    label: V\n    derivation:\n      mapping: {source: DONOR.X, dict: {A: 1, B: 2}, missing: 9}\n",
     "inputs": {
       "DONOR": "ID,X\na,A\nb,B\n",
       "SRC": "ID\na\nb\nc\n"
@@ -1260,7 +1260,7 @@
   },
   {
     "case": "lazy_case",
-    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\n  - name: V\n    type: int\n    label: V\n    derivation:\n      case:\n        - when: \"ID = 'a'\"\n          then: {mapping: {source: SRC.X, dict: {Y: 1}, missing: 'bad', unmapped: {literal: null}}}\n        - otherwise: {literal: 9}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\n  - name: V\n    type: int\n    label: V\n    derivation:\n      case:\n        - when: \"ID = 'a'\"\n          then: {mapping: {source: SRC.X, dict: {Y: 1}, missing: 'bad', unmapped: null}}\n        - otherwise: 9\n",
     "inputs": {
       "SRC": "ID,X\na,Y\nb,\n"
     },
@@ -1418,7 +1418,7 @@
   },
   {
     "case": "record_mapping",
-    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n  - name: V\n    type: int\n    label: V\nrows:\n  - id: collected\n    dataset: SRC\n    derivations:\n      ID: SRC.ID\n      V:\n        mapping: {source: SRC.X, dict: {Y: 1}, missing: 8, unmapped: 9}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n  - name: V\n    type: int\n    label: V\nrows:\n  - id: collected\n    dataset: SRC\n    derivations:\n      ID: SRC.ID\n      V:\n        mapping: {source: SRC.X, dict: {Y: 1}, missing: 8, unmapped: 9}\n",
     "inputs": {
       "SRC": "ID,X\na,Y\nb,\nc,N\n"
     },
@@ -1456,12 +1456,12 @@
         {
           "count": 1,
           "handler": "missing",
-          "spec_path": "rows[0].derivations.V.mapping.missing"
+          "spec_path": "rows.collected.derivations.V.mapping.missing"
         },
         {
           "count": 1,
           "handler": "unmapped",
-          "spec_path": "rows[0].derivations.V.mapping.unmapped"
+          "spec_path": "rows.collected.derivations.V.mapping.unmapped"
         }
       ],
       "nodes": [
@@ -1471,12 +1471,12 @@
             {
               "count": 1,
               "handler": "missing",
-              "spec_path": "rows[0].derivations.V.mapping.missing"
+              "spec_path": "rows.collected.derivations.V.mapping.missing"
             },
             {
               "count": 1,
               "handler": "unmapped",
-              "spec_path": "rows[0].derivations.V.mapping.unmapped"
+              "spec_path": "rows.collected.derivations.V.mapping.unmapped"
             }
           ],
           "outcome": "success",
@@ -1593,11 +1593,11 @@
       "verifications": []
     },
     "artifact": "ID,V\na,1\nb,8\nc,9\n",
-    "expected_wire": "{\"artifacts\":[{\"byte_length\":17,\"columns\":[\"ID\",\"V\"],\"content\":\"ID,V\\na,1\\nb,8\\nc,9\\n\",\"name\":\"result\",\"profile\":\"csv\",\"records\":[\"ID,V\",\"a,1\",\"b,8\",\"c,9\"],\"row_count\":3,\"types\":[\"str\",\"int\"]}],\"backend\":\"rust\",\"callbacks\":[],\"diagnostics\":[],\"engine_version\":\"fixture-engine\",\"error\":null,\"example\":\"mapping-cut-record_mapping\",\"handler_counts\":[{\"count\":1,\"handler\":\"missing\",\"spec_path\":\"rows[0].derivations.V.mapping.missing\"},{\"count\":1,\"handler\":\"unmapped\",\"spec_path\":\"rows[0].derivations.V.mapping.unmapped\"}],\"nodes\":[{\"diagnostics\":[],\"handler_counts\":[{\"count\":1,\"handler\":\"missing\",\"spec_path\":\"rows[0].derivations.V.mapping.missing\"},{\"count\":1,\"handler\":\"unmapped\",\"spec_path\":\"rows[0].derivations.V.mapping.unmapped\"}],\"outcome\":\"success\",\"specification\":\"spec.yaml\",\"unsupported\":[]}],\"outcome\":\"success\",\"report_version\":\"0.3.0-draft\",\"runtime\":\"python\",\"runtime_version\":\"fixture-runtime\",\"source_reads\":[{\"base_directory\":\".\",\"condition\":null,\"outcome\":\"captured\",\"path\":\"src.csv\",\"snapshots_created\":1}],\"tables\":[{\"columns\":[\"ID\",\"X\"],\"name\":\"SRC\",\"rows\":[[{\"type\":\"str\",\"value\":\"a\"},{\"type\":\"str\",\"value\":\"Y\"}],[{\"type\":\"str\",\"value\":\"b\"},{\"type\":\"missing\",\"value\":null}],[{\"type\":\"str\",\"value\":\"c\"},{\"type\":\"str\",\"value\":\"N\"}]],\"specification\":\"spec.yaml\",\"stage\":\"source\",\"types\":[\"str\",\"str\"]},{\"columns\":[\"ID\",\"V\"],\"name\":\"output\",\"rows\":[[{\"type\":\"str\",\"value\":\"a\"},{\"type\":\"int\",\"value\":\"1\"}],[{\"type\":\"str\",\"value\":\"b\"},{\"type\":\"int\",\"value\":\"8\"}],[{\"type\":\"str\",\"value\":\"c\"},{\"type\":\"int\",\"value\":\"9\"}]],\"specification\":\"spec.yaml\",\"stage\":\"derived\",\"types\":[\"str\",\"int\"]}],\"unsupported\":[],\"verifications\":[]}"
+    "expected_wire": "{\"artifacts\":[{\"byte_length\":17,\"columns\":[\"ID\",\"V\"],\"content\":\"ID,V\\na,1\\nb,8\\nc,9\\n\",\"name\":\"result\",\"profile\":\"csv\",\"records\":[\"ID,V\",\"a,1\",\"b,8\",\"c,9\"],\"row_count\":3,\"types\":[\"str\",\"int\"]}],\"backend\":\"rust\",\"callbacks\":[],\"diagnostics\":[],\"engine_version\":\"fixture-engine\",\"error\":null,\"example\":\"mapping-cut-record_mapping\",\"handler_counts\":[{\"count\":1,\"handler\":\"missing\",\"spec_path\":\"rows.collected.derivations.V.mapping.missing\"},{\"count\":1,\"handler\":\"unmapped\",\"spec_path\":\"rows.collected.derivations.V.mapping.unmapped\"}],\"nodes\":[{\"diagnostics\":[],\"handler_counts\":[{\"count\":1,\"handler\":\"missing\",\"spec_path\":\"rows.collected.derivations.V.mapping.missing\"},{\"count\":1,\"handler\":\"unmapped\",\"spec_path\":\"rows.collected.derivations.V.mapping.unmapped\"}],\"outcome\":\"success\",\"specification\":\"spec.yaml\",\"unsupported\":[]}],\"outcome\":\"success\",\"report_version\":\"0.3.0-draft\",\"runtime\":\"python\",\"runtime_version\":\"fixture-runtime\",\"source_reads\":[{\"base_directory\":\".\",\"condition\":null,\"outcome\":\"captured\",\"path\":\"src.csv\",\"snapshots_created\":1}],\"tables\":[{\"columns\":[\"ID\",\"X\"],\"name\":\"SRC\",\"rows\":[[{\"type\":\"str\",\"value\":\"a\"},{\"type\":\"str\",\"value\":\"Y\"}],[{\"type\":\"str\",\"value\":\"b\"},{\"type\":\"missing\",\"value\":null}],[{\"type\":\"str\",\"value\":\"c\"},{\"type\":\"str\",\"value\":\"N\"}]],\"specification\":\"spec.yaml\",\"stage\":\"source\",\"types\":[\"str\",\"str\"]},{\"columns\":[\"ID\",\"V\"],\"name\":\"output\",\"rows\":[[{\"type\":\"str\",\"value\":\"a\"},{\"type\":\"int\",\"value\":\"1\"}],[{\"type\":\"str\",\"value\":\"b\"},{\"type\":\"int\",\"value\":\"8\"}],[{\"type\":\"str\",\"value\":\"c\"},{\"type\":\"int\",\"value\":\"9\"}]],\"specification\":\"spec.yaml\",\"stage\":\"derived\",\"types\":[\"str\",\"int\"]}],\"unsupported\":[],\"verifications\":[]}"
   },
   {
     "case": "left_closed",
-    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: float}}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\n  - name: V\n    type: str\n    label: V\n    derivation:\n      cut: {source: SRC.N, breaks: [18, 65], labels: [child, adult, older], right: false, missing: {literal: null}}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: float}}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\n  - name: V\n    type: str\n    label: V\n    derivation:\n      cut: {source: SRC.N, breaks: [18, 65], labels: [child, adult, older]}\n",
     "inputs": {
       "SRC": "ID,N\na,17.5\nb,18.0\nc,65.0\nd,65.5\ne,\n"
     },
@@ -1808,7 +1808,7 @@
   },
   {
     "case": "right_closed",
-    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: float}}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\n  - name: V\n    type: str\n    label: V\n    derivation:\n      cut: {source: SRC.N, breaks: [18, 65], labels: [child, adult, older], right: true, missing: {literal: null}}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: float}}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\n  - name: V\n    type: str\n    label: V\n    derivation:\n      cut: {source: SRC.N, breaks: [18, 65], labels: [child, adult, older], closed: right}\n",
     "inputs": {
       "SRC": "ID,N\na,17.5\nb,18.0\nc,65.0\nd,65.5\ne,\n"
     },
@@ -2019,7 +2019,7 @@
   },
   {
     "case": "integer_boundary",
-    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\n  - name: V\n    type: str\n    label: V\n    derivation:\n      cut: {source: SRC.N, breaks: [9007199254740992.0], labels: [before, after], right: true}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\n  - name: V\n    type: str\n    label: V\n    derivation:\n      cut: {source: SRC.N, breaks: [9007199254740992.0], labels: [before, after], closed: right}\n",
     "inputs": {
       "SRC": "ID,N\na,9007199254740992\nb,9007199254740993\n"
     },
@@ -2167,7 +2167,7 @@
   },
   {
     "case": "single_interval",
-    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\n  - name: V\n    type: str\n    label: V\n    derivation:\n      cut: {source: SRC.N, breaks: [], labels: [all], missing: blank}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\n  - name: V\n    type: str\n    label: V\n    derivation:\n      cut: {source: SRC.N, breaks: [], labels: [all], missing: blank}\n",
     "inputs": {
       "SRC": "ID,N\na,-1\nb,\nc,99\n"
     },
@@ -2336,7 +2336,7 @@
   },
   {
     "case": "record_cut",
-    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n  - name: V\n    type: str\n    label: V\nrows:\n  - id: collected\n    dataset: SRC\n    derivations:\n      ID: SRC.ID\n      V:\n        cut: {source: SRC.N, breaks: [18], labels: [child, adult], missing: blank}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n  - name: V\n    type: str\n    label: V\nrows:\n  - id: collected\n    dataset: SRC\n    derivations:\n      ID: SRC.ID\n      V:\n        cut: {source: SRC.N, breaks: [18], labels: [child, adult], missing: blank}\n",
     "inputs": {
       "SRC": "ID,N\na,17\nb,18\nc,\n"
     },
@@ -2374,7 +2374,7 @@
         {
           "count": 1,
           "handler": "missing",
-          "spec_path": "rows[0].derivations.V.cut.missing"
+          "spec_path": "rows.collected.derivations.V.cut.missing"
         }
       ],
       "nodes": [
@@ -2384,7 +2384,7 @@
             {
               "count": 1,
               "handler": "missing",
-              "spec_path": "rows[0].derivations.V.cut.missing"
+              "spec_path": "rows.collected.derivations.V.cut.missing"
             }
           ],
           "outcome": "success",
@@ -2501,11 +2501,11 @@
       "verifications": []
     },
     "artifact": "ID,V\na,child\nb,adult\nc,blank\n",
-    "expected_wire": "{\"artifacts\":[{\"byte_length\":29,\"columns\":[\"ID\",\"V\"],\"content\":\"ID,V\\na,child\\nb,adult\\nc,blank\\n\",\"name\":\"result\",\"profile\":\"csv\",\"records\":[\"ID,V\",\"a,child\",\"b,adult\",\"c,blank\"],\"row_count\":3,\"types\":[\"str\",\"str\"]}],\"backend\":\"rust\",\"callbacks\":[],\"diagnostics\":[],\"engine_version\":\"fixture-engine\",\"error\":null,\"example\":\"mapping-cut-record_cut\",\"handler_counts\":[{\"count\":1,\"handler\":\"missing\",\"spec_path\":\"rows[0].derivations.V.cut.missing\"}],\"nodes\":[{\"diagnostics\":[],\"handler_counts\":[{\"count\":1,\"handler\":\"missing\",\"spec_path\":\"rows[0].derivations.V.cut.missing\"}],\"outcome\":\"success\",\"specification\":\"spec.yaml\",\"unsupported\":[]}],\"outcome\":\"success\",\"report_version\":\"0.3.0-draft\",\"runtime\":\"python\",\"runtime_version\":\"fixture-runtime\",\"source_reads\":[{\"base_directory\":\".\",\"condition\":null,\"outcome\":\"captured\",\"path\":\"src.csv\",\"snapshots_created\":1}],\"tables\":[{\"columns\":[\"ID\",\"N\"],\"name\":\"SRC\",\"rows\":[[{\"type\":\"str\",\"value\":\"a\"},{\"type\":\"int\",\"value\":\"17\"}],[{\"type\":\"str\",\"value\":\"b\"},{\"type\":\"int\",\"value\":\"18\"}],[{\"type\":\"str\",\"value\":\"c\"},{\"type\":\"missing\",\"value\":null}]],\"specification\":\"spec.yaml\",\"stage\":\"source\",\"types\":[\"str\",\"int\"]},{\"columns\":[\"ID\",\"V\"],\"name\":\"output\",\"rows\":[[{\"type\":\"str\",\"value\":\"a\"},{\"type\":\"str\",\"value\":\"child\"}],[{\"type\":\"str\",\"value\":\"b\"},{\"type\":\"str\",\"value\":\"adult\"}],[{\"type\":\"str\",\"value\":\"c\"},{\"type\":\"str\",\"value\":\"blank\"}]],\"specification\":\"spec.yaml\",\"stage\":\"derived\",\"types\":[\"str\",\"str\"]}],\"unsupported\":[],\"verifications\":[]}"
+    "expected_wire": "{\"artifacts\":[{\"byte_length\":29,\"columns\":[\"ID\",\"V\"],\"content\":\"ID,V\\na,child\\nb,adult\\nc,blank\\n\",\"name\":\"result\",\"profile\":\"csv\",\"records\":[\"ID,V\",\"a,child\",\"b,adult\",\"c,blank\"],\"row_count\":3,\"types\":[\"str\",\"str\"]}],\"backend\":\"rust\",\"callbacks\":[],\"diagnostics\":[],\"engine_version\":\"fixture-engine\",\"error\":null,\"example\":\"mapping-cut-record_cut\",\"handler_counts\":[{\"count\":1,\"handler\":\"missing\",\"spec_path\":\"rows.collected.derivations.V.cut.missing\"}],\"nodes\":[{\"diagnostics\":[],\"handler_counts\":[{\"count\":1,\"handler\":\"missing\",\"spec_path\":\"rows.collected.derivations.V.cut.missing\"}],\"outcome\":\"success\",\"specification\":\"spec.yaml\",\"unsupported\":[]}],\"outcome\":\"success\",\"report_version\":\"0.3.0-draft\",\"runtime\":\"python\",\"runtime_version\":\"fixture-runtime\",\"source_reads\":[{\"base_directory\":\".\",\"condition\":null,\"outcome\":\"captured\",\"path\":\"src.csv\",\"snapshots_created\":1}],\"tables\":[{\"columns\":[\"ID\",\"N\"],\"name\":\"SRC\",\"rows\":[[{\"type\":\"str\",\"value\":\"a\"},{\"type\":\"int\",\"value\":\"17\"}],[{\"type\":\"str\",\"value\":\"b\"},{\"type\":\"int\",\"value\":\"18\"}],[{\"type\":\"str\",\"value\":\"c\"},{\"type\":\"missing\",\"value\":null}]],\"specification\":\"spec.yaml\",\"stage\":\"source\",\"types\":[\"str\",\"int\"]},{\"columns\":[\"ID\",\"V\"],\"name\":\"output\",\"rows\":[[{\"type\":\"str\",\"value\":\"a\"},{\"type\":\"str\",\"value\":\"child\"}],[{\"type\":\"str\",\"value\":\"b\"},{\"type\":\"str\",\"value\":\"adult\"}],[{\"type\":\"str\",\"value\":\"c\"},{\"type\":\"str\",\"value\":\"blank\"}]],\"specification\":\"spec.yaml\",\"stage\":\"derived\",\"types\":[\"str\",\"str\"]}],\"unsupported\":[],\"verifications\":[]}"
   },
   {
     "case": "unmapped_fatal",
-    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\n  - name: V\n    type: str\n    label: V\n    derivation:\n      mapping: {source: SRC.X, dict: {Y: 'yes'}, missing: 'missing'}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\n  - name: V\n    type: str\n    label: V\n    derivation:\n      mapping: {source: SRC.X, dict: {Y: 'yes'}, missing: 'missing'}\n",
     "inputs": {
       "SRC": "ID,X\na,N\n"
     },
@@ -2623,7 +2623,7 @@
   },
   {
     "case": "mapping_missing_default",
-    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\n  - name: V\n    type: str\n    label: V\n    derivation:\n      mapping: {source: SRC.X, dict: {Y: 'yes'}, unmapped: 'other'}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\n  - name: V\n    type: str\n    label: V\n    derivation:\n      mapping: {source: SRC.X, dict: {Y: 'yes'}, unmapped: 'other'}\n",
     "inputs": {
       "SRC": "ID,X\na,\n"
     },
@@ -2760,7 +2760,7 @@
   },
   {
     "case": "cut_missing_default",
-    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\n  - name: V\n    type: str\n    label: V\n    derivation:\n      cut: {source: SRC.N, breaks: [18], labels: [child, adult]}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\n  - name: V\n    type: str\n    label: V\n    derivation:\n      cut: {source: SRC.N, breaks: [18], labels: [child, adult]}\n",
     "inputs": {
       "SRC": "ID,N\na,\n"
     },
@@ -2887,7 +2887,7 @@
   },
   {
     "case": "cut_text_type",
-    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\n  - name: V\n    type: str\n    label: V\n    derivation:\n      cut: {source: SRC.X, breaks: [18], labels: [child, adult]}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\n  - name: V\n    type: str\n    label: V\n    derivation:\n      cut: {source: SRC.X, breaks: [18], labels: [child, adult]}\n",
     "inputs": {
       "SRC": "ID,X\na,20\n"
     },
@@ -2985,7 +2985,7 @@
   },
   {
     "case": "invalid_missing_literal",
-    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\n  - name: V\n    type: int\n    label: V\n    derivation:\n      mapping: {source: SRC.X, dict: {Y: 1}, missing: 'bad'}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\n  - name: V\n    type: int\n    label: V\n    derivation:\n      mapping: {source: SRC.X, dict: {Y: 1}, missing: 'bad'}\n",
     "inputs": {
       "SRC": "ID,X\na,\n"
     },
@@ -3111,7 +3111,7 @@
   },
   {
     "case": "multiple_distinct_input",
-    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\n  - name: V\n    type: str\n    label: V\n    derivation:\n      mapping: {source: {variable: SRC.X, filter: \"SRC.F = 'Y'\"}, dict: {Y: yes}, missing: blank, unmapped: other}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\n  - name: V\n    type: str\n    label: V\n    derivation:\n      mapping: {source: {variable: SRC.X, filter: \"SRC.F = 'Y'\"}, dict: {Y: yes}, missing: blank, unmapped: other}\n",
     "inputs": {
       "SRC": "ID,X,F\na,Y,Y\na,Q,Y\n"
     },

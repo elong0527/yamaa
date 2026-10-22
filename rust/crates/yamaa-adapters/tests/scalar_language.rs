@@ -889,7 +889,8 @@ rows:
             )
             .unwrap();
             let mut result = study.build(
-                r#"schema_version: '1.0'
+                r#"yamaa: "1.0"
+type: spec
 domain: TEST
 keys: [ID, KIND]
 input: {SRC: input/input.csv}
@@ -904,17 +905,16 @@ rows:
     filter: "SRC.KEEP = 'Y'"
     derivations:
       ID: SRC.ID
-      KIND: {literal: each}
+      KIND: "'each'"
       LABEL:
         mapping:
           source: SRC.CODE
           dict: {A: Alpha}
-          missing: null
           unmapped: Other
-      N: {value: {source: SRC.NUM}, unconvertible: -1}
+      N: {value: SRC.NUM, unconvertible: -1}
   - id: grouped
     group_by: [SRC.GRP]
-    derivations: {ID: SRC.GRP, KIND: {literal: group}, LABEL: {literal: Group}, N: {literal: 0}}
+    derivations: {ID: SRC.GRP, KIND: "'group'", LABEL: "'Group'", N: 0}
 "#,
             );
             assert!(result.issues().is_empty());
@@ -926,11 +926,11 @@ rows:
                 format!(
                     "{HEADER}out.csv,run,output,,,,,,succeeded,,5,,,{{}}\n\
                      out.csv,input,input.SRC,SRC,,,,,,,4,,,\"{{\"\"bytes\"\":65,\"\"path\"\":\"\"input/input.csv\"\",\"\"profile\"\":\"\"csv\"\"}}\"\n\
-                     out.csv,rows,rows[0],SRC,,,,,,,3,4,,{{}}\n\
-                     out.csv,rows,rows[1],SRC,,,,,,,2,4,,{{}}\n\
-                     out.csv,handler,rows[0].derivations.N.unconvertible,unconvertible,,N,VALUE-3,,,,1,,,{{}}\n\
-                     out.csv,handler,rows[0].derivations.LABEL.mapping.missing,missing,,LABEL,,,,,1,,,{{}}\n\
-                     out.csv,handler,rows[0].derivations.LABEL.mapping.unmapped,unmapped,,LABEL,COLUMN-10,,,,1,,,{{}}\n\
+                     out.csv,rows,rows.each,SRC,,,,,,,3,4,,{{}}\n\
+                     out.csv,rows,rows.grouped,SRC,,,,,,,2,4,,{{}}\n\
+                     out.csv,handler,rows.each.derivations.N.unconvertible,unconvertible,,N,VALUE-3,,,,1,,,{{}}\n\
+                     out.csv,handler,rows.each.derivations.LABEL.mapping.missing,missing,,LABEL,,,,,1,,,{{}}\n\
+                     out.csv,handler,rows.each.derivations.LABEL.mapping.unmapped,unmapped,,LABEL,COLUMN-10,,,,1,,,{{}}\n\
                      out.csv,column,columns.ID,ID,,,,,,,0,5,,\"{{\"\"max_length\"\":2}}\"\n\
                      out.csv,column,columns.KIND,KIND,,,,,,,0,5,,\"{{\"\"max_length\"\":5}}\"\n\
                      out.csv,column,columns.LABEL,LABEL,,,,,,,1,5,,\"{{\"\"max_length\"\":5}}\"\n\
@@ -1073,7 +1073,8 @@ intermediates:
             )
             .unwrap();
             let mut result = study.build(
-                r#"schema_version: '1.0'
+                r#"yamaa: "1.0"
+type: spec
 domain: TEST
 base: SRC
 keys: [ID]
@@ -1101,10 +1102,10 @@ intermediates:
     dataset: LKP
     key:
       VAL: {mapping: {source: SRC.CODE, dict: {A: one, B: dos}}}
-    no_match: {literal: null}
+    absent: null
 columns:
   - {name: ID, type: int, derivation: SRC.ID}
-  - {name: N, type: int, derivation: {value: {source: SRC.NUM}, unconvertible: -1}}
+  - {name: N, type: int, derivation: {value: SRC.NUM, unconvertible: -1}}
   - {name: LAST, type: str, derivation: PICK.VAL}
   - {name: UP, type: str, derivation: {str_case: {source: PICK.VAL, to: upper}}}
   - {name: ANY, type: str, derivation: {first_available: {sources: [PICK.VAL, SRC.ALT]}}}
@@ -1126,7 +1127,7 @@ columns:
             // handler first, then each column derivation's paths in
             // expression order, then the intermediate key expression. A
             // read of PICK counts `multiple_matches` (its `keep` never chose
-            // among several) and `no_match`, declared or not; SELFREF's read
+            // among several) and `absent`, declared or not; SELFREF's read
             // never misses and MUST's read requires a match, so it has none.
             // A read inside a `first_available` operand registers up front too.
             assert_eq!(
@@ -1134,16 +1135,16 @@ columns:
                 [
                     "out.csv,handler,columns.N.derivation.unconvertible,unconvertible,,N,VALUE-3,,,,1,,,{}",
                     "out.csv,handler,columns.LAST.derivation.source.multiple_matches,multiple_matches,,LAST,LOOKUP-10,,,,0,,,{}",
-                    "out.csv,handler,columns.LAST.derivation.source.no_match,no_match,,LAST,LOOKUP-24,,,,2,,,{}",
+                    "out.csv,handler,columns.LAST.derivation.source.absent,absent,,LAST,LOOKUP-24,,,,2,,,{}",
                     "out.csv,handler,columns.UP.derivation.str_case.missing,missing,,UP,,,,,2,,,{}",
                     "out.csv,handler,columns.UP.derivation.str_case.source.multiple_matches,multiple_matches,,UP,LOOKUP-10,,,,0,,,{}",
-                    "out.csv,handler,columns.UP.derivation.str_case.source.no_match,no_match,,UP,LOOKUP-24,,,,2,,,{}",
+                    "out.csv,handler,columns.UP.derivation.str_case.source.absent,absent,,UP,LOOKUP-24,,,,2,,,{}",
                     "out.csv,handler,columns.ANY.derivation.first_available.missing,missing,,ANY,,,,,1,,,{}",
                     "out.csv,handler,columns.ANY.derivation.first_available.sources[0].multiple_matches,multiple_matches,,ANY,LOOKUP-10,,,,0,,,{}",
-                    "out.csv,handler,columns.ANY.derivation.first_available.sources[0].no_match,no_match,,ANY,LOOKUP-24,,,,2,,,{}",
-                    "out.csv,handler,columns.SELFV.derivation.source.no_match,no_match,,SELFV,LOOKUP-24,,,,0,,,{}",
-                    "out.csv,handler,columns.BYC.derivation.source.no_match,no_match,,BYC,LOOKUP-24,,,,2,,,{}",
-                    "out.csv,handler,intermediates[3].key.VAL.mapping.missing,missing,,,,,,,1,,,{}",
+                    "out.csv,handler,columns.ANY.derivation.first_available.sources[0].absent,absent,,ANY,LOOKUP-24,,,,2,,,{}",
+                    "out.csv,handler,columns.SELFV.derivation.source.absent,absent,,SELFV,LOOKUP-24,,,,0,,,{}",
+                    "out.csv,handler,columns.BYC.derivation.source.absent,absent,,BYC,LOOKUP-24,,,,2,,,{}",
+                    "out.csv,handler,intermediates.BYCODE.key.VAL.mapping.missing,missing,,,,,,,1,,,{}",
                 ]
             );
         }
@@ -1162,7 +1163,8 @@ columns:
             )
             .unwrap();
             let mut result = study.build(
-                r#"schema_version: '1.0'
+                r#"yamaa: "1.0"
+type: spec
 domain: TEST
 base: SRC
 keys: [ID]
@@ -1176,24 +1178,23 @@ intermediates:
     key: [ID]
     derivations:
       GRADE: {mapping: {source: FLAG, dict: {H: high, L: low}}}
-      FLAGN: {type: int, derivation: FLAG, unconvertible: {literal: null}}
+      FLAGN: {type: int, derivation: FLAG, unconvertible: null}
     order_by: [LAB.SEQ]
     keep: first
   - id: NEAREST
     dataset: LAB
     key: [ID]
     derivations:
-      DIST: {compute: {expr: "ABS(DAY - SRC.REF)"}}
+      DIST: "ABS(DAY - SRC.REF)"
       G2: CODED.GRADE
     filter: "LAB.DIST IS NOT NULL"
     order_by: [LAB.DIST]
     keep: first
-    no_match: {literal: null}
 columns:
   - {name: ID, type: int, derivation: SRC.ID}
   - {name: CAT, type: str, derivation: CODED.GRADE}
   - {name: NEAR, type: int, derivation: NEAREST.SEQ}
-  - {name: TAGN, type: int, derivation: {value: {source: SRC.TAG}, unconvertible: -1}}
+  - {name: TAGN, type: int, derivation: {value: SRC.TAG, unconvertible: -1}}
 "#,
             );
             assert!(result.issues().is_empty(), "{:?}", result.issues());
@@ -1220,13 +1221,13 @@ columns:
                 [
                     "out.csv,handler,columns.TAGN.derivation.unconvertible,unconvertible,,TAGN,VALUE-3,,,,1,,,{}",
                     "out.csv,handler,columns.CAT.derivation.source.multiple_matches,multiple_matches,,CAT,LOOKUP-10,,,,1,,,{}",
-                    "out.csv,handler,columns.CAT.derivation.source.no_match,no_match,,CAT,LOOKUP-24,,,,1,,,{}",
+                    "out.csv,handler,columns.CAT.derivation.source.absent,absent,,CAT,LOOKUP-24,,,,1,,,{}",
                     "out.csv,handler,columns.NEAR.derivation.source.multiple_matches,multiple_matches,,NEAR,LOOKUP-10,,,,1,,,{}",
-                    "out.csv,handler,columns.NEAR.derivation.source.no_match,no_match,,NEAR,LOOKUP-24,,,,2,,,{}",
-                    "out.csv,handler,intermediates[0].derivations.FLAGN.unconvertible,unconvertible,,,VALUE-3,,,,6,,,{}",
-                    "out.csv,handler,intermediates[0].derivations.GRADE.mapping.missing,missing,,,,,,,3,,,{}",
-                    "out.csv,handler,intermediates[1].derivations.G2.source.multiple_matches,multiple_matches,,,LOOKUP-10,,,,2,,,{}",
-                    "out.csv,handler,intermediates[1].derivations.G2.source.no_match,no_match,,,LOOKUP-24,,,,0,,,{}",
+                    "out.csv,handler,columns.NEAR.derivation.source.absent,absent,,NEAR,LOOKUP-24,,,,2,,,{}",
+                    "out.csv,handler,intermediates.CODED.derivations.FLAGN.unconvertible,unconvertible,,,VALUE-3,,,,6,,,{}",
+                    "out.csv,handler,intermediates.CODED.derivations.GRADE.mapping.missing,missing,,,,,,,3,,,{}",
+                    "out.csv,handler,intermediates.NEAREST.derivations.G2.source.multiple_matches,multiple_matches,,,LOOKUP-10,,,,2,,,{}",
+                    "out.csv,handler,intermediates.NEAREST.derivations.G2.source.absent,absent,,,LOOKUP-24,,,,0,,,{}",
                 ]
             );
         }
@@ -1235,7 +1236,8 @@ columns:
         fn a_read_that_feeds_another_lookup_or_a_predicate_counts_nothing() {
             let value = "  - {name: V, type: str, derivation: P.VAL}\n";
             let flag = "  - {name: F, type: str, derivation: {flag: {condition: \"P.VAL IS NOT NULL\", false_value: N, missing: N}}}\n";
-            let v_row = "out.csv,handler,columns.V.derivation.source.no_match,no_match,,V,LOOKUP-24,,,,2,,,{}";
+            let v_row =
+                "out.csv,handler,columns.V.derivation.source.absent,absent,,V,LOOKUP-24,,,,2,,,{}";
             let f_row = "out.csv,handler,columns.F.derivation.flag.missing,missing,,F,,,,,0,,,{}";
             // Either column may read P first: the flag before the value, or
             // the value before the flag.
@@ -1251,7 +1253,8 @@ columns:
                 )
                 .unwrap();
                 let mut result = study.build(&format!(
-                    "schema_version: '1.0'\n\
+                    "yamaa: \"1.0\"\n\
+                     type: spec\n\
                      domain: TEST\n\
                      base: SRC\n\
                      keys: [ID]\n\
