@@ -6,7 +6,7 @@ use crate::{
     specification_source::{InheritanceError, Source},
 };
 use std::sync::Arc;
-use yamaa_core::project_activation::ActivationPort;
+use yamaa_core::host_functions::HostFunctions;
 
 #[derive(Debug)]
 pub enum Error {
@@ -273,17 +273,17 @@ impl FileSpecification {
                 unresolved_target(&error, Some(&format!("output.{field}")), origin.written)
             })
     }
-    /// Activate, capture, decode, bind and execute in `run`; this value is
-    /// unchanged. A specification that calls no project function never
-    /// enters `activation`.
-    pub fn build<A: ActivationPort>(
+    /// Activate through `functions`, the build's host-functions port, then
+    /// capture, decode, bind and execute in `run`; this value is unchanged. A
+    /// specification that calls no project function never enters `functions`.
+    pub fn build<A: HostFunctions>(
         &self,
         run: &mut RunScope,
-        activation: &mut A,
+        functions: &mut A,
         scope: yamaa_core::application_observer::Scope<'_>,
     ) -> Attempt<ResourceError, A::Error> {
         let mut port = crate::file_resources::HeldPort::new(run, &self.linked);
-        self.run.execute_with_ports(activation, &mut port, scope)
+        self.run.execute_with_ports(functions, &mut port, scope)
     }
 }
 

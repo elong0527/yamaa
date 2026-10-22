@@ -1,6 +1,7 @@
 //! Original-document compiler and source-port integration contracts.
 // Reexports share the authored fixture types across automatically discovered feature tests.
 #![allow(unused_imports)]
+use super::ports::NoFunctions;
 pub(crate) use std::{path::Path, sync::Arc};
 pub(crate) use yamaa_adapters::{
     csv_source,
@@ -235,7 +236,7 @@ pub(crate) fn independent_failed_reports(
         let run = PreparedRun::prepare(prepare(&schema, source.as_bytes())).unwrap();
         let content = source_bytes.as_deref().unwrap_or(content);
         let mut port = Port(0, Arc::from(content));
-        let attempt = run.execute(&mut port, Scope::default());
+        let attempt = run.execute_with_ports(&mut NoFunctions, &mut port, Scope::default());
         let example = format!("{prefix}-{}", case);
         let result = specification_report::build_result(
             &run,
@@ -309,7 +310,7 @@ pub(crate) fn independent_scalar_reports(fixture: &str, prefix: &str, expected_c
         let run =
             PreparedRun::prepare(prepare(&schema, row["source"].as_str().unwrap().as_bytes()))
                 .unwrap();
-        let attempt = run.execute(&mut port, Scope::default());
+        let attempt = run.execute_with_ports(&mut NoFunctions, &mut port, Scope::default());
         let example = format!("{prefix}-{}", row["case"].as_str().unwrap());
         let result = specification_report::build_result(
             &run,
@@ -398,7 +399,7 @@ pub(crate) fn replay_source_selection_truth(truth: &str, prefix: &str, cases: us
             reads: 0,
             expected: fixture_bytes(&row["artifact"]),
         };
-        let attempt = run.execute(&mut port, Scope::default());
+        let attempt = run.execute_with_ports(&mut NoFunctions, &mut port, Scope::default());
         let example = format!("{prefix}-{}", case);
         let result = specification_report::build_result(
             &run,

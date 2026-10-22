@@ -5,7 +5,7 @@ mod file {
         use crate::support::issues::assert_issues;
         #[test]
         fn entry_relative_shared_program_uses_each_study_input_and_saves_held_artifacts() {
-            use yamaa_adapters::{file_application, specification_report::Identity};
+            use yamaa_adapters::specification_report::Identity;
             use yamaa_core::domain_entry::Request;
             let study = Study::new();
             fs::write(study.0.join("shared/base.yaml"), "yamaa: \"1.0\"\ntype: spec\ndomain: BASE\nkeys: [ID]\ninput: {SRC: {path: input/data.csv, relative_to: entry, types: {ID: int}}}\ncolumns: [{name: ID, type: int, derivation: SRC.ID}]\noutput: {path: output/result.csv, relative_to: entry, columns: [ID], report: output/report.csv}\n").unwrap();
@@ -22,7 +22,7 @@ mod file {
                 )
                 .unwrap();
                 let path = study.text(&format!("{name}/spec.yaml"));
-                let result = file_application::domain(
+                let result = crate::support::study::domain(
                     yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &path,
@@ -107,7 +107,7 @@ mod file {
                 assert!(prepared
                     .build(
                         &mut prepared.run_scope(None),
-                        &mut yamaa_adapters::specification_run::NoActivation,
+                        &mut crate::support::ports::NoFunctions,
                         Scope::default()
                     )
                     .dataset
@@ -143,7 +143,7 @@ mod file {
 
         #[test]
         fn complete_output_replacement_resets_the_base_for_primary_and_report_files() {
-            use yamaa_adapters::{file_application, specification_report::Identity};
+            use yamaa_adapters::specification_report::Identity;
             use yamaa_core::{domain_entry::Request, schema::DocumentNode};
 
             for inherited_base in ["", "relative_to: entry, "] {
@@ -182,7 +182,7 @@ mod file {
                 assert_eq!(origin.written, "result.csv");
                 drop(prepared);
 
-                let mut result = file_application::domain(
+                let mut result = crate::support::study::domain(
                     yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &path,
@@ -304,7 +304,7 @@ mod file {
                         request(),
                         identity(),
                     );
-                    let built = file_application::domain(
+                    let built = crate::support::study::domain(
                         yamaa_core::project_function::Language::Python,
                         request(),
                         identity(),
@@ -337,7 +337,7 @@ mod file {
 
         #[test]
         fn public_uri_and_symlink_sources_keep_their_normative_cause_and_authored_path() {
-            use yamaa_adapters::{file_application, specification_report::Identity};
+            use yamaa_adapters::specification_report::Identity;
             use yamaa_core::domain_entry::Request;
             let study = Study::new();
             fs::write(study.0.join("shared/data.csv"), b"ID\n7\n").unwrap();
@@ -365,7 +365,7 @@ mod file {
                 let spec = format!("yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {{SRC: '{written}'}}\ncolumns: [{{name: ID, type: int, derivation: SRC.ID}}]\noutput: {{path: output.csv, columns: [ID]}}\n");
                 fs::write(study.0.join("entry/spec.yaml"), spec).unwrap();
                 let path = study.text("entry/spec.yaml");
-                let issues = file_application::domain(
+                let issues = crate::support::study::domain(
                     yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &path,
@@ -435,7 +435,7 @@ mod file {
             assert!(prepared
                 .build(
                     &mut run_scope,
-                    &mut yamaa_adapters::specification_run::NoActivation,
+                    &mut crate::support::ports::NoFunctions,
                     Scope::default()
                 )
                 .dataset

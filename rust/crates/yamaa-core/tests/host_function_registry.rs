@@ -7,15 +7,16 @@ use crate::support::roots::{Case, Definition, Parameter as DefParam};
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 use yamaa_core::function_batch::{
-    invoke_batch, invoke_batch_chunked, BatchArgument, BatchFailureKind, BatchFunctionPort,
+    invoke_batch, invoke_batch_chunked, BatchArgument, BatchFailureKind,
 };
 use yamaa_core::function_invocation::{invoke_project, Argument, HostError};
 use yamaa_core::function_signature::{
-    Parameter, Presence, ProjectFunctionIdentity, ProjectInvocationPlan,
+    LogicalSignature, Parameter, Presence, ProjectFunctionIdentity, ProjectInvocationPlan,
 };
 use yamaa_core::host_function_registry::{
     activate_registered, FunctionRegistry, RegistryActivationFailure, RegistryError,
 };
+use yamaa_core::host_functions::{HostFunctions, Lock};
 use yamaa_core::project_function::{Function, Language};
 use yamaa_core::table::ValueRef;
 use yamaa_core::temporal::{Date, DateTime, Precision};
@@ -83,9 +84,36 @@ enum Mode {
 }
 #[derive(Debug, PartialEq)]
 struct Payload(&'static str);
-impl BatchFunctionPort for VectorPort {
+
+/// The half of the host-functions port a batch double never serves: the
+/// registry resolves its bindings, verifies no lock and invokes in batches.
+macro_rules! batches_only {
+    () => {
+        fn verify_lock(
+            &mut self,
+            _: Language,
+            _: Lock<'_>,
+            _: &[ProjectFunctionIdentity],
+        ) -> Result<(), Payload> {
+            unreachable!("a registry activation verifies no lock")
+        }
+        fn bind(
+            &mut self,
+            _: &ProjectFunctionIdentity,
+            _: &LogicalSignature,
+        ) -> Result<(), Payload> {
+            unreachable!("a registry activation binds through its registry")
+        }
+        fn invoke(&mut self, _: &(), _: &[Argument<'_>]) -> Result<Value, HostError<Payload>> {
+            unreachable!("a batch double is invoked in batches")
+        }
+    };
+}
+
+impl HostFunctions for VectorPort {
     type Handle = ();
     type Error = Payload;
+    batches_only!();
     fn is_interrupt(&self, error: &Payload) -> bool {
         error.0 == "interrupt"
     }
@@ -339,15 +367,12 @@ fn chunked_batch_checks_cancellation_between_chunks_and_discards_partials() {
 }
 
 /// Scalar reference port used only to cross-check equivalence; expected
-/// literals below are authored independently of both implementations.
+/// literals below are authored independently of both implementations. As a
+/// host-functions port it serves batches through the provided row-by-row
+/// `call_batch`.
 struct ScalarPort;
-impl yamaa_core::function_invocation::FunctionPort for ScalarPort {
-    type Error = Payload;
-    fn call(
-        &mut self,
-        _slot: usize,
-        arguments: &[Argument<'_>],
-    ) -> Result<Value, HostError<Payload>> {
+impl ScalarPort {
+    fn sum(arguments: &[Argument<'_>]) -> Value {
         let get = |name: &str| arguments.iter().find(|a| a.name == name).unwrap().value;
         let x = match get("x") {
             ValueRef::Int(n) => n,
@@ -357,10 +382,40 @@ impl yamaa_core::function_invocation::FunctionPort for ScalarPort {
             ValueRef::Int(n) => n,
             _ => 0,
         };
-        Ok(Value::Int(x + y))
+        Value::Int(x + y)
+    }
+}
+impl yamaa_core::function_invocation::FunctionPort for ScalarPort {
+    type Error = Payload;
+    fn call(
+        &mut self,
+        _slot: usize,
+        arguments: &[Argument<'_>],
+    ) -> Result<Value, HostError<Payload>> {
+        Ok(Self::sum(arguments))
+    }
+}
+impl HostFunctions for ScalarPort {
+    type Handle = ();
+    type Error = Payload;
+    fn verify_lock(
+        &mut self,
+        _: Language,
+        _: Lock<'_>,
+        _: &[ProjectFunctionIdentity],
+    ) -> Result<(), Payload> {
+        unreachable!("a batch invocation verifies no lock")
+    }
+    fn bind(&mut self, _: &ProjectFunctionIdentity, _: &LogicalSignature) -> Result<(), Payload> {
+        unreachable!("a batch invocation is given its handle")
+    }
+    fn invoke(&mut self, _: &(), arguments: &[Argument<'_>]) -> Result<Value, HostError<Payload>> {
+        Ok(Self::sum(arguments))
     }
 }
 
+/// The vectorized double and the port's provided row-by-row batch both equal
+/// scalar invocation, partitioned however the rows are chunked.
 #[test]
 fn batch_matches_scalar_invocation_across_partitions() {
     let rows = vec![
@@ -382,7 +437,10 @@ fn batch_matches_scalar_invocation_across_partitions() {
     for chunk in [1usize, 2, 3, 100] {
         let mut port = VectorPort::default();
         let got = invoke_batch_chunked(&plan(), &(), &rows, chunk, &mut port, &|| false).unwrap();
-        assert_eq!(got, expected, "chunk {chunk}");
+        assert_eq!(got, expected, "vectorized, chunk {chunk}");
+        let got =
+            invoke_batch_chunked(&plan(), &(), &rows, chunk, &mut ScalarPort, &|| false).unwrap();
+        assert_eq!(got, expected, "provided row by row, chunk {chunk}");
     }
 }
 
@@ -555,9 +613,10 @@ fn batch_value_contract_keeps_exact_types_and_temporal_precision() {
     )
     .unwrap();
     struct EchoPort;
-    impl BatchFunctionPort for EchoPort {
+    impl HostFunctions for EchoPort {
         type Handle = ();
         type Error = Payload;
+        batches_only!();
         fn call_batch(
             &mut self,
             _handle: &(),
@@ -626,9 +685,10 @@ fn zero_parameter_batch_uses_the_explicit_row_count() {
     )
     .unwrap();
     struct ConstantPort;
-    impl BatchFunctionPort for ConstantPort {
+    impl HostFunctions for ConstantPort {
         type Handle = ();
         type Error = Payload;
+        batches_only!();
         fn call_batch(
             &mut self,
             _handle: &(),

@@ -40,7 +40,7 @@ impl Fixture {
     }
     fn attempt(&self) -> Result<file_application::Domain, Vec<yamaa_core::diagnostic::Diagnostic>> {
         let specification = self.0.join("spec.yaml").to_str().unwrap().to_owned();
-        file_application::domain(
+        crate::support::study::domain(
             yamaa_core::project_function::Language::Python,
             Request {
                 specification: &specification,

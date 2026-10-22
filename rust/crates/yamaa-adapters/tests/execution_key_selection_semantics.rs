@@ -9,7 +9,7 @@
 //! VALUE-21). A pattern read from data is checked on every record or row its
 //! predicate is asked about (FORMULA-7).
 use std::fs;
-use yamaa_adapters::{file_application, json};
+use yamaa_adapters::json;
 use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::{domain_entry::Request, json::Value};
 
@@ -29,7 +29,7 @@ impl Fixture {
     fn run(&self) -> Result<(String, Value), Vec<Value>> {
         let specification = self.0.join("spec.yaml");
         let specification = specification.to_str().unwrap();
-        let mut domain = file_application::domain(
+        let mut domain = crate::support::study::domain(
             yamaa_core::project_function::Language::Python,
             Request {
                 specification,

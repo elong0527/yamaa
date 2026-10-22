@@ -74,7 +74,7 @@ impl Fixture {
                 .collect::<Vec<_>>()
         };
         let checked = rows(&file_application::check(host, request(), identity()));
-        let built = match file_application::domain(host, request(), identity()) {
+        let built = match crate::support::study::domain(host, request(), identity()) {
             Ok(domain) => rows(&domain.issues()),
             Err(issues) => rows(&issues),
         };
@@ -84,7 +84,7 @@ impl Fixture {
     #[track_caller]
     fn saved(&self) -> String {
         let specification = self.specification();
-        let mut domain = file_application::domain(
+        let mut domain = crate::support::study::domain(
             Language::Python,
             Request {
                 specification: &specification,

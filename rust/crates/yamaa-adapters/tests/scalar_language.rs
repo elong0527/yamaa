@@ -31,7 +31,7 @@ mod scalar {
             fn run(&self) -> file_application::Domain {
                 let specification = self.0.join("spec.yaml").to_str().unwrap().to_owned();
                 let identity = crate::support::study::identity("test", &specification);
-                file_application::domain(
+                crate::support::study::domain(
                     yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &specification,
@@ -84,7 +84,7 @@ mod scalar {
             fixture: &Fixture,
         ) -> Result<file_application::Domain, Vec<yamaa_core::diagnostic::Diagnostic>> {
             let specification = fixture.0.join("spec.yaml").to_str().unwrap().to_owned();
-            file_application::domain(
+            crate::support::study::domain(
                 yamaa_core::project_function::Language::Python,
                 Request {
                     specification: &specification,
@@ -294,7 +294,7 @@ mod scalar {
             ) -> Result<file_application::Domain, Vec<yamaa_core::diagnostic::Diagnostic>>
             {
                 let specification = self.0.join("spec.yaml").to_str().unwrap().to_owned();
-                file_application::domain(
+                crate::support::study::domain(
                     yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &specification,
@@ -667,7 +667,7 @@ rows:
             ) -> Result<file_application::Domain, file_application::Failure> {
                 fs::write(self.0.join("spec.yaml"), raw).unwrap();
                 let path = self.0.join("spec.yaml").to_str().unwrap().to_owned();
-                file_application::domain(
+                crate::support::study::domain(
                     yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &path,

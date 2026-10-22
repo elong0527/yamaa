@@ -27,7 +27,7 @@ mod execution {
             fn run(&self) -> Result<file_application::Domain, Vec<Diagnostic>> {
                 let specification = self.0.join("spec.yaml");
                 let specification = specification.to_str().unwrap();
-                file_application::domain(
+                crate::support::study::domain(
                     yamaa_core::project_function::Language::Python,
                     Request {
                         specification,
@@ -415,7 +415,7 @@ mod execution {
                     "{}",
                     yamaa_adapters::json_wire::encode(&case["name"])
                 );
-                let mut result = file_application::domain(
+                let mut result = crate::support::study::domain(
                     yamaa_core::project_function::Language::Python,
                     request(),
                     identity(),
@@ -489,7 +489,7 @@ mod execution {
             fn run(&self) -> file_application::Domain {
                 let specification = self.0.join("spec.yaml").to_str().unwrap().to_owned();
                 let identity = crate::support::study::identity("test", &specification);
-                file_application::domain(
+                crate::support::study::domain(
                     yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &specification,
@@ -521,7 +521,7 @@ mod execution {
             fixture: &Fixture,
         ) -> Result<file_application::Domain, Vec<yamaa_core::diagnostic::Diagnostic>> {
             let specification = fixture.0.join("spec.yaml").to_str().unwrap().to_owned();
-            file_application::domain(
+            crate::support::study::domain(
                 yamaa_core::project_function::Language::Python,
                 Request {
                     specification: &specification,
@@ -903,7 +903,7 @@ rows:
                         expected,
                         "{row_id}: check inherited={inherited}"
                     );
-                    let built = file_application::domain(
+                    let built = crate::support::study::domain(
                         yamaa_core::project_function::Language::Python,
                         request(),
                         identity(),
@@ -944,7 +944,7 @@ rows:
             }
             fn run(&self) -> file_application::Domain {
                 let path = self.path();
-                file_application::domain(
+                crate::support::study::domain(
                     yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &path,
@@ -1125,7 +1125,7 @@ rows:
                         "{}",
                         yamaa_adapters::json_wire::encode(&case["name"])
                     );
-                    let mut result = file_application::domain(
+                    let mut result = crate::support::study::domain(
                         yamaa_core::project_function::Language::Python,
                         request(),
                         identity(),
@@ -1192,7 +1192,7 @@ rows:
             }
             fn build(&self) -> file_application::Domain {
                 let path = self.0.join("spec.yaml").to_str().unwrap().to_owned();
-                file_application::domain(
+                crate::support::study::domain(
                     yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &path,
@@ -1861,7 +1861,7 @@ rows:
                 for (path, text) in case["inputs"].as_object().unwrap() {
                     fs::write(fixture.0.join(path), text.as_str().unwrap()).unwrap();
                 }
-                match file_application::domain(
+                match crate::support::study::domain(
                     yamaa_core::project_function::Language::Python,
                     request(),
                     identity(),
@@ -1910,7 +1910,7 @@ rows:
             ) -> Result<file_application::Domain, Vec<yamaa_core::diagnostic::Diagnostic>>
             {
                 let specification = self.0.join("spec.yaml").to_str().unwrap().to_owned();
-                file_application::domain(
+                crate::support::study::domain(
                     yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &specification,

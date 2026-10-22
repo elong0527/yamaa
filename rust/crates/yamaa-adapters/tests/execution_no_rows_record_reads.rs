@@ -29,7 +29,7 @@ impl Fixture {
             specification,
             environment: None,
         };
-        let mut domain = file_application::domain(
+        let mut domain = crate::support::study::domain(
             yamaa_core::project_function::Language::Python,
             request,
             identity,

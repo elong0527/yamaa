@@ -687,7 +687,8 @@ mod project {
                 schema::DocumentNode as N,
             };
             use yamaa_core::{
-                project_activation::{ActivationPort, Failure, TestFailure},
+                host_functions::{HostFunctions, Lock},
+                project_activation::{Failure, TestFailure},
                 project_domain,
             };
             struct Activation {
@@ -696,17 +697,17 @@ mod project {
                 calls: Vec<i64>,
                 payload: Rc<()>,
             }
-            impl ActivationPort for Activation {
+            impl HostFunctions for Activation {
                 type Handle = ();
                 type Error = Payload;
                 fn verify_lock(
                     &mut self,
                     language: Language,
-                    lock: &LockReference,
+                    lock: Lock<'_>,
                     functions: &[ProjectFunctionIdentity],
                 ) -> Result<(), Payload> {
                     assert_eq!(language, Language::Python);
-                    assert_eq!(lock.written, "../uv.lock");
+                    assert_eq!(lock.reference.written, "../uv.lock");
                     assert_eq!(
                         functions
                             .iter()
@@ -846,6 +847,7 @@ mod project {
                     checked
                         .build_into(
                             &mut activation,
+                            b"",
                             &mut port,
                             &mut decoder,
                             &mut attempt,
@@ -890,6 +892,7 @@ mod project {
                 assert!(matches!(
                     checked.build_into(
                         &mut activation,
+                        b"",
                         &mut port,
                         &mut decoder,
                         &mut attempt,
@@ -927,6 +930,7 @@ mod project {
                     let failure = checked
                         .build_into(
                             &mut activation,
+                            b"",
                             &mut port,
                             &mut decoder,
                             &mut attempt,
@@ -1009,6 +1013,7 @@ mod project {
                     checked
                         .build_into(
                             &mut activation,
+                            b"",
                             &mut port,
                             &mut decoder,
                             &mut attempt,
@@ -1061,6 +1066,7 @@ mod project {
                 assert!(matches!(
                     checked.build_into(
                         &mut activation,
+                        b"",
                         &mut port,
                         &mut decoder,
                         &mut attempt,
@@ -1106,6 +1112,7 @@ mod project {
                     let mut observations = Observations::default();
                     let Err(Failure::Tests(failures)) = checked.build_into(
                         &mut activation,
+                        b"",
                         &mut port,
                         &mut decoder,
                         &mut attempt,
@@ -1181,6 +1188,7 @@ mod project {
                     checked
                         .build_into(
                             &mut activation,
+                            b"",
                             &mut source,
                             &mut decoder,
                             &mut attempt,
@@ -1253,6 +1261,7 @@ mod project {
                     checked
                         .build_into(
                             &mut activation,
+                            b"",
                             &mut port,
                             &mut decoder,
                             &mut attempt,
@@ -1380,7 +1389,8 @@ mod project {
         };
         use yamaa_core::{
             function_invocation::{Argument, HostError},
-            project_activation::{activate, ActivationPort, Failure},
+            host_functions::{HostFunctions, Lock},
+            project_activation::{activate, Failure},
         };
 
         // No Clone, Debug or Send implementation exists for this original host payload.
@@ -1392,17 +1402,17 @@ mod project {
             original: Option<Opaque>,
             effects: Rc<RefCell<Vec<&'static str>>>,
         }
-        impl ActivationPort for Port {
+        impl HostFunctions for Port {
             type Handle = ();
             type Error = Opaque;
             fn verify_lock(
                 &mut self,
                 language: Language,
-                lock: &LockReference,
+                lock: Lock<'_>,
                 functions: &[ProjectFunctionIdentity],
             ) -> Result<(), Opaque> {
                 assert_eq!(language, Language::Python);
-                assert_eq!(lock.written, "../uv.lock");
+                assert_eq!(lock.reference.written, "../uv.lock");
                 assert_eq!(functions.len(), 1);
                 assert_eq!(functions[0].call, "program.identity");
                 self.effects.borrow_mut().push("metadata/lock");
@@ -1492,7 +1502,11 @@ mod project {
                 written: "../uv.lock".into(),
                 kind: LockKind::Uv,
             };
-            let Err(failure) = activate(Language::Python, &lock, &functions, &mut port) else {
+            let held = Lock {
+                reference: &lock,
+                bytes: b"",
+            };
+            let Err(failure) = activate(Language::Python, held, &functions, &mut port) else {
                 panic!("original lock failure")
             };
             let Failure::Lock(original) = &failure else {

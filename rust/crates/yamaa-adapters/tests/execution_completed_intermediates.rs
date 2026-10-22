@@ -62,7 +62,7 @@ mod execution {
             fs::copy(original.join("spec.yaml"), fixture.0.join("spec.yaml")).unwrap();
             let spec = fixture.0.join("spec.yaml").to_str().unwrap().to_owned();
             let id = crate::support::study::identity(name, &spec);
-            let outcome = file_application::domain(
+            let outcome = crate::support::study::domain(
                 yamaa_core::project_function::Language::Python,
                 Request {
                     specification: &spec,
@@ -148,7 +148,7 @@ mod execution {
             }
             let path = fixture.0.join("spec.yaml").to_str().unwrap().to_owned();
             let id = crate::support::study::identity("independent-intermediate", &path);
-            let result = file_application::domain(
+            let result = crate::support::study::domain(
                 yamaa_core::project_function::Language::Python,
                 Request {
                     specification: &path,
@@ -468,7 +468,7 @@ mod execution {
         }
         fn between_run(fixture: &Fixture) -> file_application::Domain {
             let path = fixture.0.join("spec.yaml").to_str().unwrap().to_owned();
-            file_application::domain(
+            crate::support::study::domain(
                 yamaa_core::project_function::Language::Python,
                 Request {
                     specification: &path,
@@ -592,7 +592,7 @@ mod execution {
                 fs::write(fixture.0.join("win.csv"), "USUBJID,NAME,LO,HI\nS1,EARLY,1,10\nS1,LATE,11,100\nS2,EARLY,1,10\nS2,LATE,11,100\n").unwrap();
                 fs::write(fixture.0.join("evt.csv"), "USUBJID,EVDAY\nS1,3\nS2,3\n").unwrap();
                 let path = fixture.0.join("spec.yaml").to_str().unwrap().to_owned();
-                let mut result = match file_application::domain(
+                let mut result = match crate::support::study::domain(
                     yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &path,
@@ -699,7 +699,7 @@ mod execution {
                 .iter()
                 .map(issue)
                 .collect::<Vec<_>>();
-                let built = match file_application::domain(
+                let built = match crate::support::study::domain(
                     yamaa_core::project_function::Language::Python,
                     request(),
                     identity(),
@@ -859,7 +859,7 @@ mod execution {
                         case["check_issues"],
                         "{name}: check"
                     );
-                    let mut result = file_application::domain(
+                    let mut result = crate::support::study::domain(
                         yamaa_core::project_function::Language::Python,
                         request(),
                         identity(),
@@ -923,7 +923,7 @@ mod execution {
                 let specification = self.0.join("spec.yaml");
                 fs::write(&specification, body).unwrap();
                 let specification = specification.to_str().unwrap();
-                file_application::domain(
+                crate::support::study::domain(
                     yamaa_core::project_function::Language::Python,
                     Request {
                         specification,

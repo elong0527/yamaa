@@ -28,7 +28,7 @@ mod execution {
                 let specification = self.0.join("spec.yaml");
                 fs::write(&specification, text).unwrap();
                 let specification = specification.to_str().unwrap();
-                file_application::domain(
+                crate::support::study::domain(
                     yamaa_core::project_function::Language::Python,
                     Request {
                         specification,
@@ -636,7 +636,7 @@ rows:
                         case["check_issues"],
                         "{name}: static check"
                     );
-                    let mut result = file_application::domain(
+                    let mut result = crate::support::study::domain(
                         yamaa_core::project_function::Language::Python,
                         request(),
                         identity(written),
@@ -770,7 +770,7 @@ rows:
                         "{}",
                         yamaa_adapters::json_wire::encode(&case["name"])
                     );
-                    let issues = match file_application::domain(
+                    let issues = match crate::support::study::domain(
                         yamaa_core::project_function::Language::Python,
                         request(),
                         identity(),
@@ -801,7 +801,6 @@ rows:
             fs,
             path::{Path, PathBuf},
         };
-        use yamaa_adapters::file_application;
         use yamaa_core::domain_entry::Request;
 
         fn copy_dir(src: &Path, dst: &Path) {
@@ -824,7 +823,7 @@ rows:
         fn first_issue(spec: &Path) -> String {
             let path = spec.to_str().unwrap();
             let identity = crate::support::study::identity("empty-child-condition", path);
-            let failure = match file_application::domain(
+            let failure = match crate::support::study::domain(
                 yamaa_core::project_function::Language::Python,
                 Request {
                     specification: path,
@@ -913,7 +912,7 @@ rows:
                 let path = path.to_str().unwrap();
                 let identity =
                     || crate::support::study::identity("inherited_aggregate_bindings", path);
-                file_application::domain(
+                crate::support::study::domain(
                     yamaa_core::project_function::Language::Python,
                     Request {
                         specification: path,
@@ -1025,7 +1024,7 @@ rows:
                     },
                     identity(),
                 );
-                let built = file_application::domain(
+                let built = crate::support::study::domain(
                     yamaa_core::project_function::Language::Python,
                     Request {
                         specification: path,
@@ -1095,7 +1094,7 @@ rows:
                 let path = path.to_str().unwrap();
                 let identity =
                     || crate::support::study::identity("inherited_intermediate_verification", path);
-                file_application::domain(
+                crate::support::study::domain(
                     yamaa_core::project_function::Language::Python,
                     Request {
                         specification: path,
@@ -1288,7 +1287,7 @@ rows:
                     identity()
                 )
                 .is_empty());
-                file_application::domain(
+                crate::support::study::domain(
                     yamaa_core::project_function::Language::Python,
                     Request {
                         specification: path,
@@ -1408,7 +1407,7 @@ rows:
                     request(),
                     identity(runtime, &specification),
                 );
-                let built = match file_application::domain(
+                let built = match crate::support::study::domain(
                     crate::support::host(runtime),
                     request(),
                     identity(runtime, &specification),
@@ -1499,7 +1498,7 @@ rows:
                         identity(runtime, &specification)
                     )
                     .is_empty());
-                    let mut domain = file_application::domain(
+                    let mut domain = crate::support::study::domain(
                         crate::support::host(runtime),
                         request(),
                         identity(runtime, &specification),
@@ -1542,7 +1541,7 @@ rows:
                         identity(runtime, &specification)
                     )
                     .is_empty());
-                    let domain = file_application::domain(
+                    let domain = crate::support::study::domain(
                         crate::support::host(runtime),
                         request(),
                         identity(runtime, &specification),
@@ -1598,7 +1597,7 @@ rows:
                     );
                     assert_eq!(
                         rows(
-                            &file_application::domain(
+                            &crate::support::study::domain(
                                 yamaa_core::project_function::Language::Python,
                                 request(),
                                 identity()
@@ -1629,7 +1628,7 @@ rows:
                     if failing {
                         assert_eq!(
                             rows(
-                                &file_application::domain(
+                                &crate::support::study::domain(
                                     yamaa_core::project_function::Language::Python,
                                     request(),
                                     identity()
@@ -1641,7 +1640,7 @@ rows:
                         );
                         assert!(!fixture.0.join("out.csv").exists());
                     } else {
-                        let mut result = file_application::domain(
+                        let mut result = crate::support::study::domain(
                             yamaa_core::project_function::Language::Python,
                             request(),
                             identity(),
@@ -1711,7 +1710,7 @@ rows:
                     "{}",
                     yamaa_adapters::json_wire::encode(&case["name"])
                 );
-                let mut result = match file_application::domain(
+                let mut result = match crate::support::study::domain(
                     yamaa_core::project_function::Language::Python,
                     request(),
                     identity(),
@@ -1802,7 +1801,7 @@ rows:
                         "{} before input capture",
                         yamaa_adapters::json_wire::encode(&case["name"])
                     );
-                    let issues = match file_application::domain(
+                    let issues = match crate::support::study::domain(
                         yamaa_core::project_function::Language::Python,
                         request(),
                         identity(),
@@ -1848,7 +1847,7 @@ rows:
                         "{} check",
                         yamaa_adapters::json_wire::encode(&case["name"])
                     );
-                    let result = file_application::domain(
+                    let result = crate::support::study::domain(
                         yamaa_core::project_function::Language::Python,
                         request(),
                         identity(),
@@ -1923,7 +1922,7 @@ rows:
             fs::write(&entry, specification).unwrap();
             let refused = || {
                 let entry = entry.to_str().unwrap();
-                let mut result = file_application::domain(
+                let mut result = crate::support::study::domain(
                     yamaa_core::project_function::Language::Python,
                     Request {
                         specification: entry,
@@ -2019,7 +2018,7 @@ rows:
                     request(),
                     identity(),
                 );
-                let built = file_application::domain(
+                let built = crate::support::study::domain(
                     yamaa_core::project_function::Language::Python,
                     request(),
                     identity(),
@@ -2064,7 +2063,7 @@ rows:
             }
             fn try_build(&self) -> Result<file_application::Domain, file_application::Failure> {
                 let path = self.0.join("spec.yaml").to_str().unwrap().to_owned();
-                file_application::domain(
+                crate::support::study::domain(
                     yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &path,
@@ -2326,7 +2325,7 @@ output: {path: out.csv, columns: [I, V]}
             fn build(&self) -> Result<file_application::Domain, Vec<Diagnostic>> {
                 let entry = self.0.join("spec.yaml");
                 let entry = entry.to_str().unwrap();
-                file_application::domain(
+                crate::support::study::domain(
                     yamaa_core::project_function::Language::Python,
                     Request {
                         specification: entry,
@@ -2528,7 +2527,7 @@ output: {path: out.csv, columns: [I, V]}
                 .unwrap();
                 fs::write(self.0.join("input.csv"), input).unwrap();
                 let entry = entry.to_str().unwrap();
-                file_application::domain(
+                crate::support::study::domain(
                     yamaa_core::project_function::Language::Python,
                     Request {
                         specification: entry,
@@ -2658,7 +2657,7 @@ output: {path: out.csv, columns: [I, V]}
                     "{}",
                     yamaa_adapters::json_wire::encode(&case["name"])
                 );
-                let mut result = file_application::domain(
+                let mut result = crate::support::study::domain(
                     yamaa_core::project_function::Language::Python,
                     request(),
                     identity(),
@@ -2686,7 +2685,6 @@ output: {path: out.csv, columns: [I, V]}
         //! ascending and last descending. A declared `nulls` never flips.
         use crate::support::Edit as _;
         use std::fs;
-        use yamaa_adapters::file_application;
         use yamaa_core::domain_entry::Request;
         struct Study(crate::support::Scratch);
         impl Study {
@@ -2698,7 +2696,7 @@ output: {path: out.csv, columns: [I, V]}
             }
             fn saved(&self) -> String {
                 let path = self.0.join("spec.yaml").to_str().unwrap().to_owned();
-                let mut result = file_application::domain(
+                let mut result = crate::support::study::domain(
                     yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &path,
@@ -2800,7 +2798,6 @@ output: {path: out.csv, columns: [G, LOWEST, HIGHEST, DATED, TRAILING]}
         //! `window_order_by_forbidden` a 0.5 condition (WINDOW-5), so this
         //! module keeps its 0.5 document until the 0.5 path goes (#3447).
         use std::fs;
-        use yamaa_adapters::file_application;
         use yamaa_core::domain_entry::Request;
         const INPUT: &str = "I,G,D,R,V,SEQ\n1,A,2025-01-03,2025-01-05,10,2\n\
                              2,A,2025-01-03,2025-01-05,11,1\n3,A,2025-01-05,2025-01-05,12,3\n";
@@ -2833,7 +2830,7 @@ output: {path: out.csv, columns: [I, BLFL]}
             fs::write(root.join("input.csv"), INPUT).unwrap();
             fs::write(root.join("spec.yaml"), specification).unwrap();
             let path = root.join("spec.yaml").to_str().unwrap().to_owned();
-            let outcome = file_application::domain(
+            let outcome = crate::support::study::domain(
                 yamaa_core::project_function::Language::Python,
                 Request {
                     specification: &path,

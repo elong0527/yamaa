@@ -2,10 +2,37 @@
 use std::path::PathBuf;
 use yamaa_adapters::{file_application, specification_report::Identity};
 use yamaa_core::{
-    diagnostic::Diagnostic, domain_entry::Request, json::Value, project_function::Language,
+    application_observer::Scope, diagnostic::Diagnostic, domain_entry::Request, json::Value,
+    project_function::Language,
 };
 
-use super::Scratch;
+use super::{ports::NoFunctions, Scratch};
+
+/// Prepare and run one request for the host language `host` on the file
+/// route, through the host-functions port's empty double: the result, or the
+/// issues that refused it, up to the findings limit.
+pub fn domain(
+    host: Language,
+    request: Request<'_>,
+    identity: Identity<'_>,
+) -> Result<file_application::Domain, Vec<Diagnostic>> {
+    let prepared = file_application::select(Some(host), request, None).map_err(|error| {
+        file_application::collect(yamaa_adapters::project_application::selection_failure(
+            &error,
+        ))
+    })?;
+    let mut run = prepared.run_scope(None);
+    let classify = |_: &_| file_application::Classification::Opaque;
+    let (_, result) = file_application::run(
+        &prepared,
+        &mut run,
+        &mut NoFunctions,
+        classify,
+        identity,
+        Scope::default(),
+    );
+    result.map_err(file_application::collect)
+}
 
 /// The identity of a test run: the test runtime, the engine's version and
 /// paths relative to the working directory, for the case `example`.
@@ -69,7 +96,7 @@ impl Study {
     /// Run the specification `name` for the Python host.
     pub fn run(&self, name: &str) -> Result<file_application::Domain, Vec<Diagnostic>> {
         let specification = self.path(name);
-        file_application::domain(
+        domain(
             Language::Python,
             Request {
                 specification: &specification,

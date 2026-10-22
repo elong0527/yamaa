@@ -6,8 +6,8 @@
 //! identity together with the exact `LogicalSignature` it was validated
 //! against, whether or not any lock verification was requested. Lock
 //! verification, when requested, stays with `project_activation` and the
-//! host's `ActivationPort`; this registry never imports code, reads a
-//! lock, or resolves a namespace.
+//! host-functions port; this registry never imports code, reads a lock,
+//! or resolves a namespace.
 //!
 //! Registration rules:
 //! - Identities are keyed by their logical `call` string, the same string
@@ -38,8 +38,9 @@
 //! state: the registry is immutable, activation evidence is local to the
 //! call, and a later attempt re-runs every binding check and every case.
 use crate::{
-    function_batch::{invoke_batch, BatchFailure, BatchFailureKind, BatchFunctionPort},
+    function_batch::{invoke_batch, BatchFailure, BatchFailureKind},
     function_signature::{LogicalSignature, PlanError, ProjectFunctionIdentity},
+    host_functions::HostFunctions,
     project_function::{Function, Language},
     project_function_result::results_match,
     value::Value,
@@ -238,7 +239,7 @@ pub struct RegisteredActivatedFunction<'a, H> {
 /// ordinary case failures collect in declaration order. No successful
 /// evidence is retained anywhere, so a repeated attempt re-runs all of
 /// it, and a failed attempt grants no study authority.
-pub fn activate_registered<'a, P: BatchFunctionPort>(
+pub fn activate_registered<'a, P: HostFunctions>(
     language: Language,
     functions: &[&Function],
     registry: &'a FrozenRegistry<P::Handle>,

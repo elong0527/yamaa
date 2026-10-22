@@ -35,7 +35,7 @@ impl Fixture {
         };
         let identity = || crate::support::study::identity("row-phase-boundaries", specification);
         let checked = file_application::check(host, request(), identity());
-        let built = match file_application::domain(host, request(), identity()) {
+        let built = match crate::support::study::domain(host, request(), identity()) {
             Ok(domain) => domain.issues(),
             Err(issues) => issues,
         };

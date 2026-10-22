@@ -6,7 +6,7 @@
 //! validation; the three forms build with equal outputs.
 
 use std::fs;
-use yamaa_adapters::{file_application, specification_report::Identity};
+use yamaa_adapters::specification_report::Identity;
 use yamaa_core::domain_entry::Request;
 
 struct Study(crate::support::Scratch);
@@ -35,7 +35,7 @@ impl Study {
     /// Build one entry form and return its saved artifact bytes.
     fn build(&self, case: &str, entry: &str) -> Vec<u8> {
         let path = self.text(&format!("{case}/{entry}"));
-        let mut result = file_application::domain(
+        let mut result = crate::support::study::domain(
             yamaa_core::project_function::Language::Python,
             Request {
                 specification: &path,

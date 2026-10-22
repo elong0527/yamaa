@@ -591,10 +591,10 @@ was removed. Any module not listed here is internal by default.
 | `yaml_decode` | Internal -- `DecodeFailure` converts into diagnostics/`Error::Unavailable`. |
 | `yamaa_core::application_observer` | Internal -- the observer port: each build's phase and stage events reach the adapters' measurements, which the facade passes in the build's `Scope` beside its cancellation probe; there is no public progress port (#3030 D72). |
 | `yamaa_core::domain_entry` | Internal -- the observed preparation and build phases behind `Engine`. |
-| `yamaa_core::function_batch` | Facade -- `ProjectFunctions` batch invocation with facade scalar arguments; `BatchFunctionPort` stays internal. |
+| `yamaa_core::function_batch` | Facade -- `ProjectFunctions::call_batch` with facade scalar arguments; the batch invocation of the core host-functions port stays internal. |
 | `yamaa_core::function_invocation` | Facade -- `FunctionError` is its public form; `HostError` stays internal. |
 | `yamaa_core::function_signature` | Facade -- `FunctionIdentity` and `Signature`/`Parameter` are the public activation types, and `ColumnType` is the declared result type; `LogicalSignature` stays internal. |
-| `yamaa_core::project_activation::ActivationPort` | Facade -- the `ProjectFunctions` trait; the core port stays internal. |
+| `yamaa_core::project_activation::ActivationPort` | Facade -- the `ProjectFunctions` trait, the public form of the engine's one host-functions port; its core trait, `yamaa_core::host_functions::HostFunctions`, which absorbed `ActivationPort` and `BatchFunctionPort`, stays internal. |
 | `yamaa_core::project_environment` | Facade -- `LockKind` and `LockContext`; environment admission stays internal. |
 | `yamaa_core::project_function` | Facade -- `HostLanguage` and the facade `Scalar` value type; the core `Language` enum stays internal. |
 | `yamaa_core::table::ValueRef` | Facade -- `ScalarRef`; the core table stays internal. |

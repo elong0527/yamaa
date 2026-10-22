@@ -893,7 +893,7 @@ mod table {
     }
     #[cfg(feature = "yaml")]
     mod csv_precision {
-        use crate::support::ports::Sources;
+        use crate::support::ports::{NoFunctions, Sources};
         use crate::support::Edit as _;
         use yamaa_adapters::{
             specification_report::{self, Identity},
@@ -944,7 +944,7 @@ mod table {
         fn whole_result_keeps_unrounded_derivation_and_prepares_exact_saved_bytes_once() {
             let run = prepared("2", "output.csv", "VALUE + VALUE");
             let mut study = study();
-            let attempt = run.execute(&mut study, Scope::default());
+            let attempt = run.execute_with_ports(&mut NoFunctions, &mut study, Scope::default());
             // The attempt's own checked dataset keeps the unrounded
             // derivation; only the saved bytes round.
             let dataset = &attempt
@@ -1005,7 +1005,8 @@ mod table {
                 ("19", "output.csv", "1 / 0", "division_by_zero"),
             ] {
                 let run = prepared(precision, path, expression);
-                let attempt = run.execute(&mut study(), Scope::default());
+                let attempt =
+                    run.execute_with_ports(&mut NoFunctions, &mut study(), Scope::default());
                 let result =
                     specification_report::build_result(&run, &attempt, identity(), &[]).unwrap();
                 let report = result.observations();
@@ -1528,6 +1529,7 @@ mod table {
     #[cfg(feature = "yaml")]
     mod predicate_diagnostics {
         //! Complete original-document outcomes captured independently from Python.
+        use crate::support::ports::NoFunctions;
         use yamaa_adapters::{
             specification_report::{self, Identity},
             specification_run::PreparedRun,
@@ -1558,7 +1560,7 @@ mod table {
                     .unwrap();
                 let run = PreparedRun::prepare(prepared).unwrap();
                 let mut port = Sources::by_path([("source.csv", b"ID,V\n1,2\n".as_slice())]);
-                let attempt = run.execute(&mut port, Scope::default());
+                let attempt = run.execute_with_ports(&mut NoFunctions, &mut port, Scope::default());
                 let example = format!("predicate-context-{}", fields[0]);
                 let result = specification_report::build_result(
                     &run,

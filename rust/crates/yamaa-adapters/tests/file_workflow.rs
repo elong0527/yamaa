@@ -2,7 +2,7 @@
 //! File contracts: file workflow.
 mod file {
     mod file_workflow {
-        use crate::support::ports::NoActivation;
+        use crate::support::ports::NoFunctions;
         use crate::support::Edit as _;
         use std::fs;
         use yamaa_adapters::{
@@ -1017,7 +1017,7 @@ mod file {
                 rows
             );
             assert_eq!(
-                yamaa_adapters::file_application::domain(
+                crate::support::study::domain(
                     yamaa_core::project_function::Language::Python,
                     yamaa_core::domain_entry::Request {
                         specification: &entry,
@@ -1510,10 +1510,10 @@ mod file {
             .unwrap();
             let mut selected_scope = selected.run_scope(None);
             let selected_attempt =
-                selected.build(&mut selected_scope, &mut NoActivation, Scope::default());
+                selected.build(&mut selected_scope, &mut NoFunctions, Scope::default());
             let ordinary_attempt = ordinary.build(
                 &mut ordinary.run_scope(None),
-                &mut NoActivation,
+                &mut NoFunctions,
                 Scope::default(),
             );
             assert_eq!(selected_scope.capture_reads(), 3);

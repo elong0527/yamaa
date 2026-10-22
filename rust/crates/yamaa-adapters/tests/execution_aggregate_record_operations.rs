@@ -20,7 +20,7 @@ mod execution {
             ) -> Result<file_application::Domain, Vec<yamaa_core::diagnostic::Diagnostic>>
             {
                 let specification = self.0.join("spec.yaml").to_str().unwrap().to_owned();
-                file_application::domain(
+                crate::support::study::domain(
                     yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &specification,
@@ -807,7 +807,7 @@ S1,002,2024-06
                     "{}",
                     yamaa_adapters::json_wire::encode(&case["name"])
                 );
-                let mut result = match file_application::domain(
+                let mut result = match crate::support::study::domain(
                     yamaa_core::project_function::Language::Python,
                     request(),
                     identity(),
@@ -904,7 +904,7 @@ S1,002,2024-06
                     request(),
                     identity(runtime, &specification),
                 );
-                let built = match file_application::domain(
+                let built = match crate::support::study::domain(
                     crate::support::host(runtime),
                     request(),
                     identity(runtime, &specification),
@@ -1108,7 +1108,7 @@ S1,002,2024-06
                 identity(runtime, example, specification),
             );
             assert!(!checked.is_empty(), "{example}: check reported no issues");
-            let built = file_application::domain(
+            let built = crate::support::study::domain(
                 crate::support::host(runtime),
                 request(),
                 identity(runtime, example, specification),
@@ -1612,7 +1612,7 @@ S1,002,2024-06
                         request(),
                         identity(runtime, name, &spec),
                     );
-                    let built = match file_application::domain(
+                    let built = match crate::support::study::domain(
                         crate::support::host(runtime),
                         request(),
                         identity(runtime, name, &spec),
@@ -1743,7 +1743,7 @@ S1,002,2024-06
                             identity(runtime, name, &spec),
                         );
                         assert!(checked.is_empty(), "{name} ({runtime}): check");
-                        let mut built = file_application::domain(
+                        let mut built = crate::support::study::domain(
                             crate::support::host(runtime),
                             request(),
                             identity(runtime, name, &spec),
@@ -1865,7 +1865,7 @@ S1,002,2024-06
                         identity(runtime, "precision-endpoints", &specification)
                     )
                     .is_empty());
-                    let mut domain = file_application::domain(
+                    let mut domain = crate::support::study::domain(
                         crate::support::host(runtime),
                         request(),
                         identity(runtime, "precision-endpoints", &specification),

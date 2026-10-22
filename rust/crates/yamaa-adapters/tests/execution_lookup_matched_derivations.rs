@@ -6,7 +6,6 @@
 //! window among the derivations, reads every record's derived values, so
 //! every record is augmented as before.
 use std::fs;
-use yamaa_adapters::file_application;
 use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::{domain_entry::Request, json::Value};
 
@@ -29,7 +28,7 @@ impl Fixture {
     fn run(&self) -> Result<String, Vec<Value>> {
         let specification = self.0.join("spec.yaml");
         let specification = specification.to_str().unwrap();
-        let mut domain = file_application::domain(
+        let mut domain = crate::support::study::domain(
             yamaa_core::project_function::Language::Python,
             Request {
                 specification,

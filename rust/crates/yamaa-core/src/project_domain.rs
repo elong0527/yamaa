@@ -1,8 +1,10 @@
 //! Check and build against one immutable admitted environment.
-//! Each build activates called definitions before granting study-data authority.
+//! Each build activates called definitions through the host-functions port
+//! before granting study-data authority.
 use crate::{
     domain::{self, CheckedSpecification},
-    project_activation::{self, ActivationPort, Bindings, Failure},
+    host_functions::{HostFunctions, Lock},
+    project_activation::{self, Bindings, Failure},
     specification_run::{CapturedAttempt, PortError, SourceDecoder, SpecificationSourcePort},
 };
 use crate::{
@@ -39,9 +41,13 @@ impl CheckedProject<'_> {
     }
     /// Repeat lock, binding and all complete cases on each build. Source capture
     /// uses already activated handles and preserves the original host payloads.
-    pub fn build_into<A: ActivationPort, P: SpecificationSourcePort, D: SourceDecoder>(
+    /// `lock` holds the bytes of the declared lock, captured with the project,
+    /// and is empty when it declares none.
+    #[allow(clippy::too_many_arguments)]
+    pub fn build_into<A: HostFunctions, P: SpecificationSourcePort, D: SourceDecoder>(
         &self,
-        activation: &mut A,
+        functions: &mut A,
+        lock: &[u8],
         source: &mut P,
         decoder: &mut D,
         attempt: &mut CapturedAttempt<P::Error, D::Error, D::Table>,
@@ -53,7 +59,7 @@ impl CheckedProject<'_> {
     {
         build(
             (&self.checked, self.environment),
-            activation,
+            (functions, lock),
             source,
             decoder,
             attempt,
@@ -133,9 +139,12 @@ impl CheckedOwnedProject {
     pub fn check_diagnostics(&self) -> Vec<crate::diagnostic::Diagnostic> {
         self.checked.check_diagnostics()
     }
-    pub fn build_into<A: ActivationPort, P: SpecificationSourcePort, D: SourceDecoder>(
+    /// [`CheckedProject::build_into`] over the owned environment.
+    #[allow(clippy::too_many_arguments)]
+    pub fn build_into<A: HostFunctions, P: SpecificationSourcePort, D: SourceDecoder>(
         &self,
-        activation: &mut A,
+        functions: &mut A,
+        lock: &[u8],
         source: &mut P,
         decoder: &mut D,
         attempt: &mut CapturedAttempt<P::Error, D::Error, D::Table>,
@@ -147,7 +156,7 @@ impl CheckedOwnedProject {
     {
         build(
             (&self.checked, &self.environment),
-            activation,
+            (functions, lock),
             source,
             decoder,
             attempt,
@@ -155,9 +164,9 @@ impl CheckedOwnedProject {
         )
     }
 }
-fn build<A: ActivationPort, P: SpecificationSourcePort, D: SourceDecoder>(
+fn build<A: HostFunctions, P: SpecificationSourcePort, D: SourceDecoder>(
     (checked, environment): (&CheckedSpecification, &ExecutionEnvironment),
-    activation: &mut A,
+    (activation, lock_bytes): (&mut A, &[u8]),
     source: &mut P,
     decoder: &mut D,
     attempt: &mut CapturedAttempt<P::Error, D::Error, D::Table>,
@@ -191,21 +200,25 @@ where
         .iter()
         .map(|&index| &environment.functions()[index])
         .collect::<Vec<_>>();
-    let language = environment
-        .language()
-        .expect("admitted called functions declare a language");
-    let lock = environment.lock();
+    // The empty port and an engine that claims no host language refuse the
+    // build before it enters activation (D110, D123).
+    let language =
+        project_activation::selected_language(environment.language(), &functions, activation)?;
+    let lock = environment.lock().map(|reference| Lock {
+        reference,
+        bytes: lock_bytes,
+    });
     scope.phase(crate::application_observer::Phase::Activation);
     let activated = match observations {
         Some(observations) => project_activation::activate_references_observed(
-            language,
+            Some(language),
             lock,
             &functions,
             &mut scope.activation(activation),
             observations,
         ),
         None => project_activation::activate_references(
-            language,
+            Some(language),
             lock,
             &functions,
             &mut scope.activation(activation),

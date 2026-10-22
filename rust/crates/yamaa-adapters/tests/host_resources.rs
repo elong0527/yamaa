@@ -152,7 +152,7 @@ fn interrupted_stage_leaves_no_provisional_output() {
     let mut result = yamaa_adapters::file_application::run(
         &prepared,
         &mut prepared.run_scope(None),
-        &mut yamaa_adapters::specification_run::NoActivation,
+        &mut crate::support::ports::NoFunctions,
         |_| yamaa_adapters::file_application::Classification::Opaque,
         yamaa_adapters::specification_report::Identity {
             runtime: "rust",
@@ -326,7 +326,7 @@ fn a_parent_on_another_drive_reads_its_input_beside_itself() {
         let mut run = prepared.run_scope(None);
         let attempt = prepared.build(
             &mut run,
-            &mut yamaa_adapters::specification_run::NoActivation,
+            &mut crate::support::ports::NoFunctions,
             yamaa_core::application_observer::Scope::default(),
         );
         assert!(attempt.dataset.result.is_ok());
