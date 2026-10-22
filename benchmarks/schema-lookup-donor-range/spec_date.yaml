@@ -1,0 +1,51 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  DM: input/dm.csv
+  EX: {path: input/ex.csv, types: {EXSEQ: int, VISITNUM: int, EXSTDT: date}}
+  PERIODS:
+    path: input/periods.csv
+    types: {APERIOD: int, APERSDT: date, APEREDT: date}
+base: DM
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, TR02SDT]
+
+intermediates:
+  # The subject's period whose first and last days, both inclusive, hold a
+  # date. Only P2DOSE's derivation reads it, once for each exposure record,
+  # so the bare EXSTDT is that record's own start date.
+  - id: PERIOD
+    dataset: PERIODS
+    key: [STUDYID, USUBJID]
+    between: {value: EXSTDT, lower: APERSDT, upper: APEREDT}
+
+  # Each exposure record's period, then the subject's first dose in period 2.
+  - id: P2DOSE
+    dataset: EX
+    key: [STUDYID, USUBJID]
+    filter: "EX.DOSEPER = 2"
+    order_by: [EX.EXSTDT]
+    keep: first
+    derivations:
+      DOSEPER: {type: int, derivation: PERIOD.APERIOD}
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM.USUBJID
+
+  - name: TR02SDT
+    type: date
+    label: Date of First Exposure in Period 02
+    derivation: P2DOSE.EXSTDT

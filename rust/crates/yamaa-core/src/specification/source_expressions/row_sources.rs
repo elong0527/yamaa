@@ -167,6 +167,7 @@ pub(in crate::specification) fn bind(
                             cx.row(),
                             Some(driver),
                             cx.scope.available,
+                            cx.spec().header.surface.one_meaning_per_form(),
                             cx.edges,
                             cx.findings,
                         )?

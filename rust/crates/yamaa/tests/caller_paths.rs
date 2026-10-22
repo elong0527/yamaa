@@ -150,7 +150,7 @@ fn spec_routes(engine: &Engine, path: &str, expected: &[Row]) {
     // A run whose file was not read names the path as given.
     for _ in 0..2 {
         refused(
-            &run.save().unwrap_err(),
+            &run.save(&CancellationToken::new()).unwrap_err(),
             &format!("cannot save {path}"),
             expected,
         );
@@ -182,7 +182,7 @@ fn project_routes(engine: &Engine, project: &str, specification: &str, expected:
     assert!(run.names().is_empty());
     assert_eq!(run.status(), Status::Failed);
     refused(
-        &run.save().unwrap_err(),
+        &run.save(&CancellationToken::new()).unwrap_err(),
         &format!("cannot save {project}"),
         expected,
     );
@@ -202,7 +202,7 @@ fn project_routes(engine: &Engine, project: &str, specification: &str, expected:
         .unwrap();
     assert_eq!(rows(&submission.diagnostics()), expected);
     refused(
-        &submission.save().unwrap_err(),
+        &submission.save(&CancellationToken::new()).unwrap_err(),
         &format!("cannot save {project}, section sdtm"),
         expected,
     );

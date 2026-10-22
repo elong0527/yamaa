@@ -304,7 +304,7 @@ fn a_run_reads_and_saves_only_through_the_resolver() {
         case.accesses(),
         set(&[&SPEC[..], &INPUT, &[("target", "/dm.csv")]].concat())
     );
-    run.save().unwrap();
+    run.save(&CancellationToken::new()).unwrap();
     assert_eq!(case.accesses(), set(&SAVE_DM));
     assert_eq!(case.published("/dm.csv"), case.expected("dm.csv"));
 }
@@ -323,7 +323,7 @@ fn a_project_run_reads_and_saves_only_through_the_resolver() {
         case.accesses(),
         set(&[&PROJECT[..], &SPEC, &INPUT, &[("target", "/dm.csv")]].concat())
     );
-    runs.save().unwrap();
+    runs.save(&CancellationToken::new()).unwrap();
     assert_eq!(case.accesses(), set(&SAVE_DM));
     assert_eq!(case.published("/dm.csv"), case.expected("dm.csv"));
 }
@@ -352,7 +352,7 @@ fn a_submission_reads_and_saves_only_through_the_resolver() {
         ]
         .concat())
     );
-    submission.save().unwrap();
+    submission.save(&CancellationToken::new()).unwrap();
     assert_eq!(
         case.accesses(),
         set(&[

@@ -345,7 +345,7 @@ fn check_negative(name: &str, want: &Json, runs: Vec<EntryRun>, findings: &mut V
                         call.specification
                     ));
                 }
-                if run.save().is_ok() {
+                if run.save(&CancellationToken::new()).is_ok() {
                     findings.push(format!(
                         "{name}: negative build saved its output ({})",
                         call.specification
@@ -701,7 +701,8 @@ fn check_case_with(
             Ok(mut run) => {
                 // As the hosts' runners do, a positive entry without issues
                 // saves before the next entry reads its artifacts.
-                let saved = (expected.is_none() && run.issues().rows() == 0).then(|| run.save());
+                let saved = (expected.is_none() && run.issues().rows() == 0)
+                    .then(|| run.save(&CancellationToken::new()));
                 if let Some(Ok(paths)) = &saved {
                     served.offer_saved(paths);
                 }

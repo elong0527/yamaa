@@ -1229,10 +1229,6 @@ S1,002,2024-06
         /// report fails until it leaves this list.
         const NOT_REPORTED_BY_CHECK: &[(&str, &str)] = &[
             (
-                "negative-lookup-mismatched",
-                "the fields stored in the current input",
-            ),
-            (
                 "negative-odm-schema-ambiguous",
                 "the fields stored in the ODM input",
             ),
@@ -1430,6 +1426,7 @@ S1,002,2024-06
             // and driver scopes of what the rows read (#3229).
             for name in [
                 "negative-adlb-computed-param",
+                "negative-aggregate-key-bare-field",
                 "negative-aggregate-key-other-template",
                 "negative-cut-coded",
                 "negative-direct-dose-read",
@@ -1442,9 +1439,13 @@ S1,002,2024-06
                 "negative-keys-missing",
                 "negative-lookup-bad-range",
                 "negative-lookup-derivation-scope",
+                "negative-lookup-donor-range-driver",
                 "negative-lookup-key-column-phase",
+                "negative-lookup-key-lookup-qualified",
                 "negative-lookup-key-other-template",
                 "negative-lookup-match-column-phase",
+                "negative-lookup-mismatched",
+                "negative-lookup-range-bare-field",
                 "negative-row-aggregate-keys",
                 "negative-row-filter-lookup-scope",
                 "negative-row-phase-flag",
@@ -1452,6 +1453,7 @@ S1,002,2024-06
                 "negative-row-value-self",
                 "negative-row-window-ungrouped",
                 "negative-source-missing-field",
+                "negative-source-range-other-input",
                 "negative-source-trivial-filter",
                 "negative-sum-non-numeric",
                 "negative-verification-lookup-key",

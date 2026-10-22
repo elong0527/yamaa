@@ -217,7 +217,7 @@ fn a_copy_entry_declares_each_listed_producer_column() {
         .spec_run(&study.path("adsl.yaml"), None, &token)
         .unwrap();
     assert_eq!(rows(&producer.issues()), []);
-    producer.save().unwrap();
+    producer.save(&CancellationToken::new()).unwrap();
     assert_eq!(checked(&study, "adae.yaml"), []);
     let specification = resolved(&study, "adae.yaml");
     let age = column(&specification, "AGE");
@@ -249,7 +249,7 @@ fn a_copy_entry_declares_each_listed_producer_column() {
         .spec_run(&study.path("adae.yaml"), None, &token)
         .unwrap();
     assert_eq!(rows(&run.issues()), []);
-    run.save().unwrap();
+    run.save(&CancellationToken::new()).unwrap();
     assert_eq!(
         study.read("adae.csv"),
         b"STUDYID,USUBJID,AESEQ,AGE,SEX,TRTSDT\nS1,S1-01,1,34,F,2026-01-05\nS1,S1-01,2,34,F,2026-01-05\nS1,S1-02,1,51,M,2026-01-09\n"
@@ -546,7 +546,7 @@ fn a_copy_from_a_joined_input_needs_its_key() {
     engine
         .spec_run(&study.path("adsl.yaml"), None, &token)
         .unwrap()
-        .save()
+        .save(&CancellationToken::new())
         .unwrap();
     study.write(
         "adae.yaml",

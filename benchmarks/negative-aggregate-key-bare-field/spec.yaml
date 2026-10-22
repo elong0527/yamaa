@@ -1,0 +1,46 @@
+yamaa: "1.0"
+type: spec
+model: SDTM
+domain: VS
+keys: [STUDYID, USUBJID, VSSEQ]
+input:
+  VS_RAW: {path: input/vs_raw.csv, types: {VSSEQ: int, SYSBP: int}}
+  CALIB: {path: input/calibrations.csv, types: {CALDT: date}}
+base: VS_RAW
+
+output:
+  path: vs.csv
+  columns: [STUDYID, USUBJID, VSSEQ, VSSTRESN, NCAL]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: VS_RAW.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: VS_RAW.USUBJID
+
+  - name: VSSEQ
+    type: int
+    label: Sequence Number
+    derivation: VS_RAW.VSSEQ
+
+  - name: VSSTRESN
+    type: int
+    label: Numeric Result/Finding in Standard Units
+    derivation: VS_RAW.SYSBP
+
+  # The number of calibrations of the device each measurement was taken
+  # with. The device number is written bare, and a bare name is a column of
+  # the dataset being built; the specification declares no DEVNUM column,
+  # so it is rejected before any data is read.
+  - name: NCAL
+    type: int
+    label: Number of Device Calibrations
+    derivation:
+      aggregate:
+        expr: "COUNT(CALIB.CALDT)"
+        key: {DEVICEID: DEVNUM}

@@ -124,7 +124,7 @@ fn a_declared_mark_is_skipped_by_every_specification_call() {
     let mut run = engine.spec_run(&spec, None, &token).unwrap();
     let ran = issues(&run.issues());
     assert!(ran.is_empty(), "{ran:?}");
-    run.save().unwrap();
+    run.save(&CancellationToken::new()).unwrap();
     assert_eq!(study.read("dm.csv"), LISTING);
     // The resolved specification keeps the declaration as written.
     let resolved = engine.spec_resolve(&spec, None).unwrap();

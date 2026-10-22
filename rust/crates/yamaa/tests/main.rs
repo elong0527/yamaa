@@ -9,6 +9,7 @@
 mod support;
 
 mod caller_paths;
+mod cancellation;
 mod copy_entry;
 mod csv_byte_order_mark;
 mod diagnostic_records;

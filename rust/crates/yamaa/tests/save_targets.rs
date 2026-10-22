@@ -130,7 +130,11 @@ fn a_save_refuses_a_target_its_walk_cannot_reach_at_the_field_that_declares_it()
         assert!(run.output().is_some(), "{output}");
         let expected = [unreached(condition, rule, Some("output.path"), output)];
         for _ in 0..2 {
-            refused(&run.save().unwrap_err(), "DM", &expected);
+            refused(
+                &run.save(&CancellationToken::new()).unwrap_err(),
+                "DM",
+                &expected,
+            );
         }
         assert_eq!(rows(&run.diagnostics()), expected, "{output}");
     }
@@ -153,7 +157,7 @@ fn the_report_file_is_refused_at_its_own_field_and_a_later_save_retries() {
         .unwrap();
     // The report file comes first (OUTPUT-10).
     refused(
-        &run.save().unwrap_err(),
+        &run.save(&CancellationToken::new()).unwrap_err(),
         "DM",
         &[unreached(
             "resource_path_missing",
@@ -164,7 +168,7 @@ fn the_report_file_is_refused_at_its_own_field_and_a_later_save_retries() {
     );
     std::fs::create_dir(study.0.join("checks")).unwrap();
     refused(
-        &run.save().unwrap_err(),
+        &run.save(&CancellationToken::new()).unwrap_err(),
         "DM",
         &[unreached(
             "resource_path_missing",
@@ -177,7 +181,7 @@ fn the_report_file_is_refused_at_its_own_field_and_a_later_save_retries() {
     assert!(!study.0.join("checks/report.csv").exists());
     std::fs::create_dir(study.0.join("out")).unwrap();
     assert_eq!(
-        run.save().unwrap(),
+        run.save(&CancellationToken::new()).unwrap(),
         [study.path("checks/report.csv"), study.path("out/dm.csv")]
     );
     assert!(run.diagnostics().is_empty());
@@ -195,7 +199,7 @@ fn a_project_run_save_names_the_member_whose_target_it_cannot_reach() {
     let mut run = engine()
         .project_run(&project, None, &CancellationToken::new())
         .unwrap();
-    let failure = run.save().unwrap_err();
+    let failure = run.save(&CancellationToken::new()).unwrap_err();
     let [issue] = failure.diagnostics.as_slice() else {
         panic!("one issue: {failure:?}")
     };
@@ -246,7 +250,7 @@ fn a_submission_save_refuses_its_files_at_the_section_define() {
     // (JSON-14). The section's `define` places every file of the section.
     std::fs::create_dir(study.0.join("dm.json")).unwrap();
     refused(
-        &submission.save().unwrap_err(),
+        &submission.save(&CancellationToken::new()).unwrap_err(),
         &format!("{}, section sdtm", study.path("project.yaml")),
         &[unreached(
             "resource_path_not_regular_file",
@@ -348,7 +352,11 @@ fn a_kind_a_caller_resolver_reports_for_a_target_is_refused_as_the_walk_refuses_
             Some("output.path"),
             "out/dm.csv",
         )];
-        refused(&run.save().unwrap_err(), "DM", &expected);
+        refused(
+            &run.save(&CancellationToken::new()).unwrap_err(),
+            "DM",
+            &expected,
+        );
         // A table saved through the resolver names the path as given.
         let out = "out/dm.csv";
         refused(

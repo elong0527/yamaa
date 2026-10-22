@@ -232,6 +232,11 @@ struct Run<'p, 'a, E> {
     pub calls: bool,
     /// Key indexes and filter answers over source ports, for every region.
     pub ports: index::Ports,
+    /// The run's cancellation probe (#2822).
+    pub cancelled: &'a dyn Fn() -> bool,
+    /// Whether the probe has answered true: a run stays cancelled, even when
+    /// a probe of a lookup swallowed the poll's failure.
+    pub stopped: std::cell::Cell<bool>,
 }
 
 /// What a batch unit restores before it replays in row mode.
@@ -277,6 +282,30 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
             .fire_path(self.plan, path, kind)
             .map_err(|error| Box::new(ExecutionError::HandlerAccounting(error)))
     }
+
+    /// Poll the cancellation probe before `step` when the dataset's schedule
+    /// marks it a checkpoint (#2822).
+    fn poll(&self, step: super::resolved::Step) -> Result<(), Fail<E>> {
+        let checkpoint = self
+            .plan
+            .region_schedule(RegionId::DATASET)
+            .iter()
+            .any(|info| info.step == step && info.checkpoint);
+        if checkpoint {
+            self.stop_if_cancelled()?;
+        }
+        Ok(())
+    }
+
+    /// Fail with `ExecutionError::Cancelled` once the probe answers true; the
+    /// probe is not asked again after that.
+    fn stop_if_cancelled(&self) -> Result<(), Fail<E>> {
+        if self.stopped.get() || (self.cancelled)() {
+            self.stopped.set(true);
+            return Err(Box::new(ExecutionError::Cancelled));
+        }
+        Ok(())
+    }
 }
 
 /// A sized view of a table port.
@@ -299,12 +328,20 @@ impl ResolvedPlan {
     /// retaining handler and verification evidence on success and failure.
     /// Binding returned this plan already resolved, and a run writes nothing
     /// into it.
+    ///
+    /// The run polls `cancelled` before every step the schedule marks a
+    /// checkpoint and before each batch of project-function calls (#2822).
+    /// Once it answers true the run stops, and its attempt fails with
+    /// `ExecutionError::Cancelled`, keeping no output, handler counts,
+    /// verifications or template rows: the per-run state is dropped with
+    /// the run.
     pub fn execute<T: TableAccess + ?Sized>(
         &self,
         table: &T,
         secondary: &[&dyn TableAccess<Error = T::Error>],
         functions: &mut dyn FunctionPort<Error = T::Error>,
         observer: Option<&mut dyn FnMut(ExecutionEvent)>,
+        cancelled: &dyn Fn() -> bool,
     ) -> ExecutionAttempt<T::Error> {
         let primary = Borrowed(table);
         let mut ignore = |_| {};
@@ -329,10 +366,19 @@ impl ResolvedPlan {
             windows: windows::Runs::default(),
             calls: false,
             ports: index::Ports::default(),
+            cancelled,
+            stopped: std::cell::Cell::new(false),
         };
         let mut records = Vec::new();
         let mut templates = Vec::new();
-        let result = run.execute_inner(&mut records, &mut templates, &mut observer);
+        let mut result = run.execute_inner(&mut records, &mut templates, &mut observer);
+        // A poll whose failure a lookup's probe swallowed still cancels the
+        // run, and a cancelled run keeps nothing it built.
+        let cancelled = run.stopped.get()
+            || matches!(&result, Err(error) if matches!(**error, ExecutionError::Cancelled));
+        if cancelled {
+            result = Err(Box::new(ExecutionError::Cancelled));
+        }
         if let Err(error) = &result {
             if let ExecutionError::Limit {
                 resource,
@@ -366,11 +412,20 @@ impl ResolvedPlan {
             phase: active.get(),
             outcome: crate::application_observer::Outcome::from_result(&result),
         });
-        let attempt = ExecutionAttempt {
-            result,
-            handler_counts: run.handlers.snapshot(self),
-            retained_verifications: records,
-            template_rows: templates,
+        let attempt = if cancelled {
+            ExecutionAttempt {
+                result,
+                handler_counts: Vec::new(),
+                retained_verifications: Vec::new(),
+                template_rows: Vec::new(),
+            }
+        } else {
+            ExecutionAttempt {
+                result,
+                handler_counts: run.handlers.snapshot(self),
+                retained_verifications: records,
+                template_rows: templates,
+            }
         };
         observer(ExecutionEvent::Phase(ExecutionPhase::Finished));
         attempt
@@ -384,6 +439,7 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
         templates: &mut Vec<TemplateRows>,
         observer: &mut dyn FnMut(ExecutionEvent),
     ) -> Result<Execution, Fail<E>> {
+        self.poll(super::resolved::Step::Admit)?;
         functions::admit(self.plan, &*self.functions)?;
         let plan = self.plan;
         let sources: Vec<_> = plan.region_sources(RegionId::DATASET).collect();
@@ -455,6 +511,7 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
             .iter()
             .map(|&table| Table::Source(table))
             .collect();
+        self.poll(super::resolved::Step::VerifyIntermediates { self_rows: false })?;
         self.verify_intermediates(&frame, &secondary, false)?;
         let template_ids: Vec<TemplateId> = plan.region_templates(region).collect();
         let keyed = template_ids.first().is_some_and(|&template| {
@@ -481,6 +538,7 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
         }
         self.complete_columns(&mut frame, &secondary, records)?;
         checks::verify_output(self, &frame, &secondary, records, observer)?;
+        self.poll(super::resolved::Step::Order)?;
         let order = checks::output_order(self.plan, &frame);
         let mut rows = Vec::new();
         reserved(rows.try_reserve_exact(order.len()))?;
@@ -566,6 +624,8 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
         let node = plan.template(template);
         let region = node.region;
         let first = frame.rows();
+        // The driver is the template's first step.
+        self.poll(super::resolved::Step::Driver(template))?;
         let driver = relations::driver(self, template, frame, secondary)?;
         let table = match &driver.materialized {
             Some(data) => data.table(),
@@ -742,6 +802,7 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
             read,
         });
         self.relations.publish_self(plan);
+        self.poll(super::resolved::Step::VerifyIntermediates { self_rows: true })?;
         self.verify_intermediates(frame, secondary, true)?;
         Ok(())
     }
@@ -764,8 +825,11 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
         }
         let checkpoint = self.checkpoint();
         let result = unit(self, frame, false);
-        if result.is_ok() {
-            return Ok(());
+        match &result {
+            Ok(()) => return Ok(()),
+            // A cancelled run stops; replaying the unit would only poll again.
+            Err(error) if matches!(**error, ExecutionError::Cancelled) => return result,
+            Err(_) => {}
         }
         self.rollback(checkpoint);
         match footprint {
@@ -915,6 +979,7 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
         for column in order {
             let local = column.index() - columns[0].index();
             let step = super::resolved::Step::Column(column);
+            self.poll(step)?;
             let callbacks = self.step_callbacks(region, step);
             let rows: Vec<usize> = (0..frame.rows())
                 .filter(|&row| !frame.is_completed(row, local))

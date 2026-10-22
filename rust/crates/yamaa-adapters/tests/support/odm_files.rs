@@ -1,6 +1,6 @@
-//! ODM test inputs written at test time: scratch files, TAR archives with
-//! ustar, GNU and PAX headers, gzip streams, and readers for the result
-//! table. No binary fixture is committed.
+//! ODM test inputs written at test time: TAR archives with ustar, GNU and
+//! PAX headers, gzip streams, and readers for the result table. No binary
+//! fixture is committed.
 use arrow_array::{Array, Int64Array, StringArray};
 use std::io::Write;
 use yamaa_adapters::public_table::PublicTable;

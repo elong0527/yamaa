@@ -8,7 +8,7 @@
 #   values, tables, records   closed vocabularies, table columns and records,
 #                             each checked against the facade constant it names
 #   public                    the user-facing surface of each host
-#   cli                       the command line (empty until #3060)
+#   cli                       the command line
 #   python, r                 native registrations (private)
 #   operations, host_only     each operation's counterpart in every host
 #
@@ -384,7 +384,6 @@ public:
       python: yamaa.Run
       r: yamaa_run
       holds: {native: handle}
-      interrupt: run_interrupt
       doc: One specification run; nothing is written until `save()`.
       members:
         - name: status
@@ -457,7 +456,6 @@ public:
       python: yamaa.ProjectRun
       r: yamaa_project_run
       holds: {native: handle}
-      interrupt: project_run_interrupt
       doc: Every specification a project run built, by `domain` name.
       members:
         - name: status
@@ -640,9 +638,197 @@ public:
         A yamaa operation could not complete; `issues` says why, and `paths`
         lists the files a refused save wrote first.
 
-# The command line (D12), which #3060 adds. README.md gives its grammar.
-cli: {}
-
+# The command line (D12, section 2.8): the `yamaa` binary, which calls the
+# facade directly and so pairs no native export. README.md gives the grammar,
+# and tools/tests/test_bindings_cli.py keeps the commands, their arguments and
+# flags, the global flags, the output formats and the exit statuses equal to
+# what the binary's parser takes (rust/crates/yamaa-cli/src/arguments.rs and
+# main.rs).
+cli:
+  binary: yamaa
+  crate: rust/crates/yamaa-cli
+  depends_on: the yamaa facade crate only (section 2.10)
+  synopsis:
+    - yamaa [--format text|json] COMMAND [ARGUMENTS]
+    - yamaa --version [--format text|json]
+    - yamaa --help
+  inputs: "only the command line: no configuration file, environment variable or colour changes what it does"
+  # The command line's own vocabularies, which no facade constant owns.
+  values:
+    output_format: [text, json]
+  global_flags:
+    - {name: --format, values: output_format, default: text, position: before or after COMMAND}
+    - name: --version
+      effect: >-
+        print info() for the host cli, one field per line, or with --format
+        json one object with json.info_keys whose host_version is null; exit 0
+    - name: --help
+      effect: print the usage and exit 0; given anywhere before --, it wins over every other argument
+  # D142: the panic message of a selftest case is the one write to standard
+  # error that exit status 2 does not explain.
+  streams:
+    stdout: >-
+      what the command prints, each line ending in a line feed: text, or with
+      --format json one canonical JSON document (RFC 8785) on one line; as
+      text, a refusal prints its error text (D39), which carries the first
+      issue's line, then each other issue's line and the files written before
+      it
+    stderr: >-
+      only the refusals of exit status 2, each as `yamaa: <message>`, then
+      `run 'yamaa --help' for usage` unless the write to standard output
+      failed; and the panic message of a selftest case that panicked, which
+      fails that case
+  # D68, D98: an unknown section, an unknown schema TYPE and a PATH whose type
+  # cannot be read are refusals the facade explains with issues (D125, D149).
+  exit_status:
+    0: >-
+      the command completed and succeeded: its status is succeeded and any
+      save wrote everything, or resolve, schema, --version or --help printed
+      its output
+    1: >-
+      the command completed with findings: a status of failed or skipped, a
+      refused save, remaining lint findings, a failed selftest case, or a
+      refusal that carries issues
+    2: >-
+      the command could not run as asked: a usage error, an argument the
+      facade cannot take, a PATH whose declared type the command does not
+      take, or a failed write to standard output; a file problem the engine
+      reports as an issue exits 1
+  interrupt: "Ctrl+C ends the process by the signal and publishes nothing (D46); POSIX shells report status 130"
+  # Each command's JSON document has its json_keys, which canonical JSON
+  # prints sorted. A refusal prints the same keys, or its refusal_keys where
+  # they differ. The paths a command wrote, printed one per line and in
+  # `paths`, are absolute with forward slashes, in publication order (D38).
+  commands:
+    # D122: check, run, submission and resolve read the type their PATH
+    # declares. A type the command does not take, at all or with the flags
+    # given, is a usage error (exit status 2).
+    - name: check
+      synopsis: yamaa check PATH [--spec NAME]
+      args:
+        - {name: PATH, type: path, meaning: "a spec, or a project, as its type: header declares"}
+      flags:
+        - {name: --spec, value: NAME, valid_when: "PATH declares type: project", host: Project.spec(name)}
+      operations: [spec_check, project_check, project_spec]
+      text: the summary line, then each issue's line
+      json_keys: [command, path, spec, status, issues]
+    - name: run
+      synopsis: yamaa run PATH [--spec NAME | --section SECTION]
+      args:
+        - {name: PATH, type: path, meaning: "a spec, or a project, as its type: header declares"}
+      flags:
+        - name: --spec
+          value: NAME
+          valid_when: "PATH declares type: project, without --section"
+          host: Project.spec(name)
+        - name: --section
+          value: SECTION
+          valid_when: "PATH declares type: project, without --spec"
+          host: Project.run(section)
+      operations: [spec_run, run_save, project_spec, project_run, project_run_save]
+      effect: "runs, then saves; a failed run saves only its report (OUTPUT-10, PROJECT-12)"
+      text: "the summary line, a project run's member lines, each issue's line, then each written path"
+      json_keys: [command, path, spec, section, status, members, issues, paths]
+    # D129: without --created, the submission reads the clock once for every
+    # section and prints the time it read.
+    - name: submission
+      synopsis: yamaa submission PATH [--section SECTION] [--created TIME]
+      args:
+        - {name: PATH, type: path, valid_when: "PATH declares type: project"}
+      flags:
+        - {name: --section, value: SECTION, host: Project.submission(section)}
+        - name: --created
+          value: TIME
+          meaning: the ISO 8601 creation time the documents carry
+          host: Project.submission(created=TIME)
+      operations: [project_submission, submission_save]
+      effect: composes, then saves
+      text: "the summary line, `created: <time>` when --created is omitted, each issue's line, then each written path"
+      json_keys: [command, path, section, created, status, issues, paths]
+    - name: resolve
+      synopsis: yamaa resolve PATH [--spec NAME]
+      args:
+        - {name: PATH, type: path, meaning: "a spec, or a project with --spec"}
+      flags:
+        - {name: --spec, value: NAME, valid_when: "PATH declares type: project, which needs it", host: Project.spec(name)}
+      operations: [spec_resolve, project_spec]
+      text: the resolved specification as canonical JSON, in both formats
+      json_keys: the resolved specification itself
+      refusal_keys: [command, path, spec, status, issues]
+    # D134, D169: the status follows the read, as a run's follows the run.
+    - name: read-odm
+      synopsis: yamaa read-odm SOURCE OUT [--archive-member NAME] [--max-archive-members N] [--max-expanded-bytes N] [--max-xml-depth N]
+      args:
+        - {name: SOURCE, type: path, meaning: "an ODM XML file, or a TAR archive that holds one"}
+        - {name: OUT, type: path, meaning: "the file saved, whose extension, .csv or .parquet, selects its profile (OUTPUT-5)"}
+      flags:
+        - {name: --archive-member, value: NAME, host: read_odm(archive_member)}
+        - {name: --max-archive-members, value: N, default: 10000, host: read_odm(max_archive_members)}
+        - {name: --max-expanded-bytes, value: N, default: 268435456, host: read_odm(max_expanded_bytes)}
+        - {name: --max-xml-depth, value: N, default: 64, host: read_odm(max_xml_depth)}
+      operations: [read_odm]
+      effect: >-
+        reads SOURCE as read_odm() does, then saves its items to OUT; the
+        status stays succeeded when only the save is refused, and rows, the
+        number of items read, is null only when the read is refused
+      text: the written path
+      json_keys: [command, path, rows, status, issues, paths]
+    - name: lint
+      synopsis: yamaa lint [--fix] PATH...
+      args:
+        - {name: PATH, type: path, repeat: true, meaning: "a yamaa file, or a directory of them"}
+      flags:
+        - {name: --fix, meaning: apply the proved layout fixes in place first}
+      operations: [lint]
+      effect: lints each PATH; paths lists the files --fix rewrote
+      text: >-
+        each finding's line, `<file>:<line>:<column>: <finding> <message>`,
+        then `N lint findings in M of K files`, with `; fixed F files` under
+        --fix
+      json_keys: [command, status, findings, paths]
+      refusal_keys: [command, status, findings, issues, paths]
+    # D149: TYPE goes to the facade as given.
+    - name: schema
+      synopsis: yamaa schema TYPE
+      args:
+        - {name: TYPE, values: file_type, meaning: any other text is refused as unexpected_file_type}
+      operations: [schema]
+      text: the JSON Schema of TYPE as canonical JSON, in both formats
+      json_keys: the JSON Schema itself
+      refusal_keys: [command, type, status, issues]
+    # D119: a case this build does not cover is skipped, which fails nothing.
+    - name: selftest
+      synopsis: yamaa selftest
+      operations: [selftest]
+      text: >-
+        the facade's report, as the hosts print it: the summary line, `first
+        failure: <case>: <message>` when a case failed, `not covered:
+        <adapters>` when an adapter is not covered, then the engine, language,
+        host and platform
+      json_keys: [command, status, cases, info]
+  # The keys of the objects the documents hold: each of `issues`, `members`,
+  # `findings` and `cases`, and an `info`. An issue has the columns of the
+  # issues table, its `context` an object rather than canonical JSON text. A
+  # member without output has null `rows` and `columns`, and one whose listing
+  # could not be read is named by the listing's path (D130).
+  json:
+    issue_keys:
+      - severity
+      - phase
+      - condition
+      - rule
+      - spec_paths
+      - file
+      - line
+      - column
+      - message
+      - context
+      - source_span
+      - operand_route
+    member_keys: [name, status, rows, columns, issue_count]
+    finding_keys: [file, line, column, finding, spec_path, message]
+    case_keys: [case, status, message]
+    info_keys: [version, language_versions, features, host, host_version, platform]
 
 # Complete current registrations, in source order. Both hosts expose the same
 # operations: every export is paired with its counterpart under `operations`
@@ -859,7 +1045,6 @@ r:
         - {name: run_save, args: {handle: robj}, returns: r_reply}
         - {name: run_summary, args: {handle: robj}, returns: r_reply}
         - {name: run_observations, args: {handle: robj, include_measurements: bool}, returns: r_reply}
-        - {name: run_interrupt, args: {handle: robj}, returns: r_reply}
         - {name: project_spec, args: {project: raw, name: raw, version: raw}, returns: r_reply}
         - {name: project_summary, args: {project: raw}, returns: r_reply}
         - {name: project_names, args: {project: raw, version: raw}, returns: r_reply}
@@ -878,7 +1063,6 @@ r:
         - {name: project_run_report, args: {handle: robj}, returns: r_reply}
         - {name: project_run_save, args: {handle: robj}, returns: r_reply}
         - {name: project_run_summary, args: {handle: robj}, returns: r_reply}
-        - {name: project_run_interrupt, args: {handle: robj}, returns: r_reply}
         - name: project_submission
           args: {project: raw, section: robj, created: robj, version: raw}
           returns: r_reply
@@ -946,8 +1130,8 @@ operations:
   selftest_cases: {python: [_SelfTest.cases], r: [selftest_cases]}
   selftest_info: {python: [_SelfTest.info], r: [selftest_info]}
   selftest_summary: {python: [_SelfTest.summary], r: [selftest_summary]}
-# Host transport: Python checks interrupts inside the native calls, R through
-# these two helpers. yamaa.Table is Python's table type, and R converts every
+# Host transport: both hosts check interrupts inside their native calls.
+# yamaa.Table is Python's table type, and R converts every
 # table to a data frame instead, so each of its methods is Python-only.
 host_only:
   python:
@@ -960,4 +1144,4 @@ host_only:
     - Table.to_arrow
     - Table.to_polars
     - Table.to_pandas
-  r: [run_interrupt, project_run_interrupt]
+  r: []

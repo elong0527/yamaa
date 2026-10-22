@@ -250,7 +250,7 @@ fn a_saved_item_table_holds_the_bytes_a_run_saves_for_it() {
             .unwrap();
         assert_eq!(run.status(), Status::Succeeded, "{:?}", run.diagnostics());
         let ran = format!("memory:/run.{extension}");
-        assert_eq!(run.save().unwrap(), [ran.as_str()]);
+        assert_eq!(run.save(&CancellationToken::new()).unwrap(), [ran.as_str()]);
         let saved = format!("memory:/saved.{extension}");
         assert_eq!(
             engine
@@ -295,7 +295,7 @@ fn a_run_output_saved_as_a_table_holds_the_bytes_the_run_saved() {
             .spec_run(&study.path("spec.yaml"), None, &CancellationToken::new())
             .unwrap();
         assert_eq!(run.status(), Status::Succeeded, "{:?}", run.diagnostics());
-        run.save().unwrap();
+        run.save(&CancellationToken::new()).unwrap();
         let copy = format!("copy.{extension}");
         let out = study.path(&copy);
         assert_eq!(
@@ -355,7 +355,7 @@ fn run_refusal(study: &Study, engine: &Engine, output: &str) -> Diagnostic {
         .spec_run(&study.path("ids.yaml"), None, &CancellationToken::new())
         .unwrap();
     assert_eq!(run.status(), Status::Succeeded, "{:?}", run.diagnostics());
-    issue(&run.save().unwrap_err()).clone()
+    issue(&run.save(&CancellationToken::new()).unwrap_err()).clone()
 }
 
 /// A target that cannot be written is refused as a run's save refuses one

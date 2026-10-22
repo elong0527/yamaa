@@ -439,7 +439,7 @@ class LanesTest(unittest.TestCase):
             if diagnostic:
                 with self.subTest(job=job):
                     self.assertNotIn(job, jobs)
-        self.assertIn(f"native-cran ({native.PLATFORMS[0]}, R 4.4)", jobs)
+        self.assertIn(f"native-cran ({native.PLATFORMS[0]}, R 4.2.0)", jobs)
 
     def test_each_r_lane_proves_the_series_of_its_r(self):
         release_series = native.r_series(native.R_RELEASE)
@@ -546,18 +546,18 @@ class RealFilesTest(unittest.TestCase):
             ],
         )
 
-    def test_r_4_4_on_linux_aarch64_needs_a_lane(self):
+    def test_r_4_2_on_linux_aarch64_needs_a_lane(self):
         rows = dict(self.rows)
         rows["Linux aarch64"] = dict(rows["Linux aarch64"])
-        rows["Linux aarch64"][R_SOURCE] = "R 4.4 or later"
+        rows["Linux aarch64"][R_SOURCE] = "R 4.2 or later"
         self.assertEqual(
             platforms.problems(rows, platforms.lanes(), platforms.newest()),
             [
-                f"{PAGE} claims R 4.4 or later for the R source package on Linux "
-                "aarch64, and no native lane qualifies R 4.4 there"
+                f"{PAGE} claims R 4.2 or later for the R source package on Linux "
+                "aarch64, and no native lane qualifies R 4.2 there"
             ],
         )
-        # And the R 4.4 lane that would prove it needs the claim.
+        # And the R 4.2.0 lane that would prove it needs the claim.
         coverage = native.coverage()
         coverage["cran"]["os"].append("ubuntu-24.04-arm")
         self.assertEqual(
@@ -565,8 +565,8 @@ class RealFilesTest(unittest.TestCase):
                 self.rows, platforms.lanes(coverage), platforms.newest()
             ),
             [
-                f"{PAGE} does not claim R 4.4 for the R source package on Linux "
-                "aarch64, which native-cran (ubuntu-24.04-arm, R 4.4) qualifies"
+                f"{PAGE} does not claim R 4.2 for the R source package on Linux "
+                "aarch64, which native-cran (ubuntu-24.04-arm, R 4.2.0) qualifies"
             ],
         )
 

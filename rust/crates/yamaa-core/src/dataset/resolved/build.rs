@@ -1352,7 +1352,14 @@ impl<'p> Builder<'p> {
             )?;
             node.derivations = Some(region);
         }
-        if let Some(range) = &item.range {
+        // A contextual range value is no value of these rows: binding
+        // refuses every row's read of it, and only a donor plan, which rebases
+        // it onto the donor record, matches the range (LOOKUP-16).
+        if let Some(range) = item
+            .range
+            .as_ref()
+            .filter(|range| range.current().read != CurrentRead::Contextual)
+        {
             node.range = Some(range_node(cx, range)?);
         }
         node.selection = selection_shape(item.selection.as_ref())?;
@@ -1933,6 +1940,8 @@ fn current_read(cx: &Cx<'_>, current: &CurrentField) -> Result<Read, ResolutionE
         CurrentRead::Intermediate { index, column } => {
             Read::Relation(cx.named(index)?, field(column)?)
         }
+        // Only a donor plan reads it, rebased onto the donor record.
+        CurrentRead::Contextual => return Err(unsupported("contextual current read", 0)),
     })
 }
 

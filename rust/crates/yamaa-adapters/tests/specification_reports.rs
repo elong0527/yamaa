@@ -294,6 +294,7 @@ mod execution {
                     &[],
                     &mut yamaa_core::function_invocation::NoFunctions::new(),
                     None,
+                    &|| false,
                 )
                 .result
                 .unwrap();

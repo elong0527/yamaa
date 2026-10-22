@@ -1,0 +1,9 @@
+phase: validation
+condition: unknown_field
+spec_paths:
+  - intermediates.P2DOSE.derivations.DOSEPER.source
+rule: LOOKUP-16
+context:
+  identifier: DM.RFXSTDT
+  intermediate: P2DOSE
+  read: PERIOD

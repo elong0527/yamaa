@@ -148,7 +148,7 @@ fn compiled(run: &Run) -> bool {
 /// The saved output bytes of a run through a memory resolver.
 fn saved(run: &mut Run, resolver: &Recording) -> String {
     assert_eq!(run.issues().rows(), 0, "{:?}", run.build().report());
-    run.save().unwrap();
+    run.save(&CancellationToken::new()).unwrap();
     let bytes = resolver.inner.published("memory:/out.csv").unwrap();
     String::from_utf8(bytes.to_vec()).unwrap()
 }

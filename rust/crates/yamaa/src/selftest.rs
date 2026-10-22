@@ -379,7 +379,7 @@ fn check(case: &Case, info: &Info) -> Result<(), String> {
                 first.text()
             ));
         }
-        let paths = run.save().map_err(|failure| failure.message)?;
+        let paths = run.save(&token).map_err(|failure| failure.message)?;
         offer_saved(&served, &paths);
         saved.extend(paths);
     }
@@ -403,7 +403,7 @@ fn check(case: &Case, info: &Info) -> Result<(), String> {
                         first.text()
                     ));
                 }
-                saved.extend(submission.save().map_err(|failure| failure.message)?);
+                saved.extend(submission.save(&token).map_err(|failure| failure.message)?);
             }
         }
     } else if let Some(expected) = expected_issue {
@@ -839,6 +839,10 @@ mod tests {
     /// functions (D110), in every host; a case whose feature this build does
     /// not compile is not covered.
     #[test]
+    // Clippy 1.82, the minimum toolchain's, reads the generated table as a
+    // constant and finds the first assertion always false; the pinned Clippy
+    // does not. The assertion guards against an empty generated table.
+    #[allow(clippy::const_is_empty)]
     fn the_listed_cases_pass_without_project_functions() {
         assert!(!cases::CASES.is_empty());
         for (host, version) in [
