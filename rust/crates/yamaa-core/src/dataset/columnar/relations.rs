@@ -585,10 +585,11 @@ pub(super) fn named_value<E>(
             owned(cell(table, item, row, column)?),
             multiple.then_some(HandlerKind::MultipleMatches),
         ),
-        // The declared literal, or missing by default; counted either way.
+        // The declared literal, or missing by default; counted either way,
+        // under the handler the tree's surface names.
         Choice::Absent => (
             item.no_match.clone().unwrap_or(Value::Missing),
-            Some(HandlerKind::NoMatch),
+            Some(item.absence),
         ),
     };
     if let Some(handler) = handler.filter(|_| observe) {

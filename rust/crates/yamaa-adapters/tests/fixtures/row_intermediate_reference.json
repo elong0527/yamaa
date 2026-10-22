@@ -11,18 +11,18 @@
       "expected_csv": "STUDYID,USUBJID,LBSEQ,QVAL,QVAL_NAMED\nYAMAA-01,YAMAA-01-101,7,OTHER,OTHER\nYAMAA-01,YAMAA-01-103,42,SINGLE,SINGLE\nYAMAA-01,YAMAA-01-101,200,BOUND,BOUND\nYAMAA-01,YAMAA-01-101,259,EP,EP\nYAMAA-01,YAMAA-01-102,259,SHARED,SHARED\nYAMAA-01,YAMAA-01-104,311,,\n",
       "handler_counts": [
         {
-          "spec_path": "rows.low_sequence.derivations.QVAL.source.no_match",
-          "handler": "no_match",
+          "spec_path": "rows.low_sequence.derivations.QVAL.source.absent",
+          "handler": "absent",
           "count": 1
         },
         {
-          "spec_path": "rows.high_sequence.derivations.QVAL.source.no_match",
-          "handler": "no_match",
+          "spec_path": "rows.high_sequence.derivations.QVAL.source.absent",
+          "handler": "absent",
           "count": 1
         },
         {
-          "spec_path": "columns.QVAL_NAMED.derivation.source.no_match",
-          "handler": "no_match",
+          "spec_path": "columns.QVAL_NAMED.derivation.source.absent",
+          "handler": "absent",
           "count": 1
         }
       ],
@@ -301,8 +301,8 @@
           "count": 0
         },
         {
-          "spec_path": "intermediates.EOT_RANK.derivations.ENDPOINT.source.no_match",
-          "handler": "no_match",
+          "spec_path": "intermediates.EOT_RANK.derivations.ENDPOINT.source.absent",
+          "handler": "absent",
           "count": 9
         }
       ],
