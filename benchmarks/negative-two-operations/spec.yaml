@@ -1,0 +1,36 @@
+yamaa: "1.0"
+type: spec
+model: SDTM
+domain: DM
+keys: [STUDYID, USUBJID]
+input:
+  RAW: input/dm_raw.csv
+
+output:
+  path: dm.csv
+  columns: [DOMAIN, STUDYID, USUBJID, RACE]
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'DM'"
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: RAW.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: RAW.USUBJID
+
+  # Two operations in one value: upper case, and runs of spaces collapsed to
+  # one. Nothing says which applies first, or to what.
+  - name: RACE
+    type: str
+    label: Race
+    derivation:
+      str_case: {source: RAW.RACE, to: upper}
+      str_replace: {source: RAW.RACE, pattern: ' +', replacement: ' '}

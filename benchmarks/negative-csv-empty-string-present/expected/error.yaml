@@ -1,0 +1,7 @@
+phase: validation
+condition: empty_string_present_unsupported
+spec_paths:
+  - input.RAW.empty_string
+rule: INPUT-9
+context:
+  dataset: RAW
