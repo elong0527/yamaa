@@ -118,7 +118,7 @@ mod scalar {
             }
         }
         fn spec(derivation: &str, result_type: &str) -> String {
-            format!("schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {{SRC: {{path: input.csv, types: {{I: int, F: float, D: date}}}}}}\noutput: {{path: output.csv, columns: [ID, RESULT]}}\ncolumns:\n  - {{name: ID, type: str, derivation: SRC.ID}}\n  - {{name: RESULT, type: {result_type}, derivation: {derivation}}}\n")
+            format!("yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {{SRC: {{path: input.csv, types: {{I: int, F: float, D: date}}}}}}\noutput: {{path: output.csv, columns: [ID, RESULT]}}\ncolumns:\n  - {{name: ID, type: str, derivation: SRC.ID}}\n  - {{name: RESULT, type: {result_type}, derivation: {derivation}}}\n")
         }
         #[test]
         fn extremes_skip_missing_and_keep_wide_integers_and_temporal_values() {
@@ -154,7 +154,7 @@ mod scalar {
         }
         #[test]
         fn row_scalar_derivations_share_the_same_raw_contract() {
-            let source="schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {I: int, F: float}}}\noutput: {path: output.csv, columns: [ID, RESULT, MAXIMUM]}\ncolumns:\n  - {name: ID, type: str}\n  - {name: RESULT, type: str}\n  - {name: MAXIMUM, type: int}\nrows:\n  - id: values\n    derivations:\n      ID: SRC.ID\n      RESULT: {str_template: '[{SRC.TEXT}]'}\n      MAXIMUM: {greatest: {sources: [SRC.I, SRC.F]}}\n";
+            let source="yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {I: int, F: float}}}\noutput: {path: output.csv, columns: [ID, RESULT, MAXIMUM]}\ncolumns:\n  - {name: ID, type: str}\n  - {name: RESULT, type: str}\n  - {name: MAXIMUM, type: int}\nrows:\n  - id: values\n    derivations:\n      ID: SRC.ID\n      RESULT: {str_template: '[{SRC.TEXT}]'}\n      MAXIMUM: {greatest: {sources: [SRC.I, SRC.F]}}\n";
             let fixture = bespoke(source, b"ID,I,F,TEXT\na,3,2,abc\n");
             let mut result = fixture.run();
             assert!(result.issues().is_empty(), "{:?}", result.issues());
@@ -171,7 +171,7 @@ mod scalar {
         fn row_boolean_is_refused_at_validation_and_refuses_every_save() {
             for literal in ["false", "true"] {
                 let source = format!(
-            "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {{SRC: input.csv}}\noutput: {{path: output.csv, columns: [ID, RESULT]}}\ncolumns:\n  - {{name: ID, type: str}}\n  - {{name: RESULT, type: str}}\nrows:\n  - id: values\n    derivations:\n      ID: SRC.ID\n      RESULT: {{literal: {literal}}}\n"
+            "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {{SRC: input.csv}}\noutput: {{path: output.csv, columns: [ID, RESULT]}}\ncolumns:\n  - {{name: ID, type: str}}\n  - {{name: RESULT, type: str}}\nrows:\n  - id: values\n    derivations:\n      ID: SRC.ID\n      RESULT: {literal}\n"
         );
                 let fixture = bespoke(&source, b"ID,TEXT\na,abc\n");
                 let mut result = fixture.run();
@@ -229,7 +229,7 @@ mod scalar {
             "TEXT-10",
         ),
         (
-            "{case: [{when: 'SRC.I > 0', then: {str_extract: {source: SRC.TEXT, pattern: 'a)|(b'}}}, {otherwise: {literal: x}}]}",
+            "{case: [{when: 'SRC.I > 0', then: {str_extract: {source: SRC.TEXT, pattern: 'a)|(b'}}}, {otherwise: \"'x'\"}]}",
             "case[0].then.str_extract.pattern",
             "invalid_regex",
             "TEXT-6",
@@ -319,19 +319,19 @@ mod scalar {
                 let fixture = Fixture::new();
                 fs::write(fixture.0.join("a.csv"), "ID,N\n1,10\n2,20\n3,30\n").unwrap();
                 fs::write(fixture.0.join("b.csv"), "ID,N\n2,40\n1,50\n3,60\n").unwrap();
-                fs::write(fixture.0.join("spec.yaml"), format!("schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {{path: a.csv, types: {{ID: int, N: int}}}}\n  B: {{path: b.csv, types: {{ID: int, N: int}}}}\ncolumns:\n  - {{name: ID, type: int, derivation: {driver}.ID}}\n  - {{name: VALUE, type: int}}\nrows:\n  - id: selected\n    dataset: {driver}\n    filter: '{filter}'\n    derivations:\n      VALUE: {{literal: 0}}\noutput: {{path: result.csv, columns: [ID, VALUE]}}\n")).unwrap();
+                fs::write(fixture.0.join("spec.yaml"), format!("yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {{path: a.csv, key: [ID], types: {{ID: int, N: int}}}}\n  B: {{path: b.csv, key: [ID], types: {{ID: int, N: int}}}}\ncolumns:\n  - {{name: ID, type: int, derivation: {driver}.ID}}\n  - {{name: VALUE, type: int}}\nrows:\n  - id: selected\n    dataset: {driver}\n    filter: '{filter}'\n    derivations:\n      VALUE: 0\noutput: {{path: result.csv, columns: [ID, VALUE]}}\n")).unwrap();
                 assert_eq!(fixture.saved(), expected.as_bytes());
             }
             let fixture = Fixture::new();
             fs::write(fixture.0.join("a.csv"), "ID\n3\n").unwrap();
             fs::write(fixture.0.join("b.csv"), "ID,N\n3,60\n3,70\n").unwrap();
-            fs::write(fixture.0.join("spec.yaml"), "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: a.csv, types: {ID: int}}\n  B: {path: b.csv, types: {ID: int, N: int}}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\nrows:\n  - id: selected\n    dataset: SRC\n    filter: 'ID = 3 OR B.N = 40'\n    derivations: {}\noutput: {path: result.csv, columns: [ID]}\n").unwrap();
+            fs::write(fixture.0.join("spec.yaml"), "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: a.csv, types: {ID: int}}\n  B: {path: b.csv, key: [ID], types: {ID: int, N: int}}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\nrows:\n  - id: selected\n    dataset: SRC\n    filter: 'ID = 3 OR B.N = 40'\noutput: {path: result.csv, columns: [ID]}\n").unwrap();
             let mut result = fixture.run().unwrap();
             assert!(result.output().is_none());
             assert_eq!(result.issues().len(), 1);
             assert_eq!(result.issues()[0].condition(), "multiple_matches");
             assert_eq!(result.issues()[0].rule(), Some("LOOKUP-10"));
-            assert_eq!(result.issues()[0].spec_paths, ["rows[0].filter"]);
+            assert_eq!(result.issues()[0].spec_paths, ["rows.selected.filter"]);
             let context = yamaa_core::json::Value::Object(result.issues()[0].context.clone());
             assert_eq!(context["match_count"], 2);
             assert!(result.save().is_err());
@@ -350,13 +350,13 @@ mod scalar {
                 b"ID,D,TEXT\nb,2020-01-01,poison1\nb,2020-01-01,poison2\na,2020-01-01,Lower\n",
             )
             .unwrap();
-            fs::write(fixture.0.join("spec.yaml"),"schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {A: {path: a.csv, types: {D: date}}, B: {path: b.csv, types: {D: date}}}\nbase: A\noutput: {path: result.csv, columns: [ID, TEXT, DAYS]}\ncolumns:\n  - {name: ID, type: str, derivation: A.ID}\n  - {name: TEXT, type: str}\n  - {name: DAYS, type: int}\nrows:\n  - id: records\n    dataset: A\n    derivations:\n      TEXT: {case: [{when: \"A.USE = 'Y'\", then: {str_case: {source: B.TEXT, to: upper, missing: {literal: null}}}}, {otherwise: {literal: SKIP}}]}\n      DAYS: {case: [{when: \"A.USE = 'Y'\", then: {diff: {type: date, start: B.D, end: A.D, unit: day}}}, {otherwise: {literal: 0}}]}\n").unwrap();
+            fs::write(fixture.0.join("spec.yaml"),"yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {A: {path: a.csv, types: {D: date}}, B: {path: b.csv, key: [ID], types: {D: date}}}\nbase: A\noutput: {path: result.csv, columns: [ID, TEXT, DAYS]}\ncolumns:\n  - {name: ID, type: str, derivation: A.ID}\n  - {name: TEXT, type: str}\n  - {name: DAYS, type: int}\nrows:\n  - id: records\n    dataset: A\n    derivations:\n      TEXT: {case: [{when: \"A.USE = 'Y'\", then: {str_case: {source: B.TEXT, to: upper}}}, {otherwise: \"'SKIP'\"}]}\n      DAYS: {case: [{when: \"A.USE = 'Y'\", then: {diff: {type: date, start: B.D, end: A.D, unit: day}}}, {otherwise: 0}]}\n").unwrap();
             assert_eq!(fixture.saved(), b"ID,TEXT,DAYS\na,LOWER,2\nb,SKIP,0\nc,,\n");
             let original = fs::read_to_string(fixture.0.join("spec.yaml")).unwrap();
             fs::write(
                 fixture.0.join("spec.yaml"),
                 original.edit(
-                    "{str_case: {source: B.TEXT, to: upper, missing: {literal: null}}}",
+                    "{str_case: {source: B.TEXT, to: upper}}",
                     "{first_available: {sources: [B.TEXT], missing: NONE}}",
                 ),
             )
@@ -412,10 +412,10 @@ mod scalar {
             )
             .unwrap();
             fs::write(fixture.0.join("b.csv"), b"ID,N\nb,2\na,1\nc,3\n").unwrap();
-            fs::write(fixture.0.join("spec.yaml"),"schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {A: a.csv, B: {path: b.csv, types: {N: int}}}\nbase: A\noutput: {path: result.csv, columns: [ID, TEXT, FLAG]}\ncolumns:\n  - {name: ID, type: str}\n  - {name: TEXT, type: str}\n  - {name: FLAG, type: str, derivation: {flag: \"A.USE = 'Y'\"}}\nrows:\n  - id: beta\n    dataset: B\n    derivations:\n      ID: B.ID\n      TEXT: {str_case: {source: A.TEXT, to: upper, missing: {literal: null}}}\n").unwrap();
+            fs::write(fixture.0.join("spec.yaml"),"yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {A: {path: a.csv, key: [ID]}, B: {path: b.csv, types: {N: int}}}\nbase: A\noutput: {path: result.csv, columns: [ID, TEXT, FLAG]}\ncolumns:\n  - {name: ID, type: str}\n  - {name: TEXT, type: str}\n  - {name: FLAG, type: str, derivation: {flag: \"A.USE = 'Y'\"}}\nrows:\n  - id: beta\n    dataset: B\n    derivations:\n      ID: B.ID\n      TEXT: {str_case: {source: A.TEXT, to: upper}}\n").unwrap();
             assert_eq!(fixture.saved(), b"ID,TEXT,FLAG\nb,MIXED,\na,LOWER,Y\nc,,\n");
             let original = fs::read_to_string(fixture.0.join("spec.yaml")).unwrap();
-            fs::write(fixture.0.join("spec.yaml"),original.edit("TEXT: {str_case: {source: A.TEXT, to: upper, missing: {literal: null}}}",
+            fs::write(fixture.0.join("spec.yaml"),original.edit("TEXT: {str_case: {source: A.TEXT, to: upper}}",
         "TEXT: {source: {variable: A.TEXT, filter: \"A.USE = 'Y'\", order_by: [A.ID], keep: first}}" )).unwrap();
             assert_eq!(fixture.saved(), b"ID,TEXT,FLAG\nb,,\na,lower,Y\nc,,\n");
         }
@@ -424,7 +424,7 @@ mod scalar {
             let fixture = Fixture::new();
             fs::write(fixture.0.join("a.csv"), b"ID,TEXT\na,valid\n").unwrap();
             fs::write(fixture.0.join("b.csv"), b"ID,N\na,1\n").unwrap();
-            fs::write(fixture.0.join("spec.yaml"),"schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {A: a.csv, B: {path: b.csv, types: {N: int}}}\nbase: A\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: A.ID}\n  - {name: VALUE, type: int}\nrows:\n  - id: alpha\n    dataset: A\n    derivations:\n      VALUE: {compute: {expr: 'B.N + 1'}}\n").unwrap();
+            fs::write(fixture.0.join("spec.yaml"),"yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {A: a.csv, B: {path: b.csv, key: [ID], types: {N: int}}}\nbase: A\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: A.ID}\n  - {name: VALUE, type: int}\nrows:\n  - id: alpha\n    dataset: A\n    derivations:\n      VALUE: 'B.N + 1'\n").unwrap();
             let issues = match fixture.run() {
                 Ok(mut domain) => {
                     assert!(domain.output().is_none());
@@ -443,24 +443,24 @@ mod scalar {
                     .iter()
                     .any(|issue| issue.condition() == "unknown_field"
                         && issue.rule() == Some("FORMULA-9")
-                        && issue.spec_paths == ["rows[0].derivations.VALUE.compute.expr"]),
+                        && issue.spec_paths == ["rows.alpha.derivations.VALUE"]),
                 "{issues:?}"
             );
             assert!(!fixture.0.join("result.csv").exists());
             let original = fs::read_to_string(fixture.0.join("spec.yaml")).unwrap();
             for (operation, path) in [
                 (
-                    "case: [{when: 'B.N = 1', then: {literal: 1}}, {otherwise: {literal: 0}}]",
-                    "rows[0].derivations.VALUE.case[0].when",
+                    "{case: [{when: 'B.N = 1', then: 1}, {otherwise: 0}]}",
+                    "rows.alpha.derivations.VALUE.case[0].when",
                 ),
                 (
-                    "flag: {condition: 'B.N = 1', true_value: 1, false_value: 0}",
-                    "rows[0].derivations.VALUE.flag.condition",
+                    "{flag: {condition: 'B.N = 1', true_value: 1, false_value: 0}}",
+                    "rows.alpha.derivations.VALUE.flag.condition",
                 ),
             ] {
                 fs::write(
                     fixture.0.join("spec.yaml"),
-                    original.edit("compute: {expr: 'B.N + 1'}", operation),
+                    original.edit("'B.N + 1'", operation),
                 )
                 .unwrap();
                 let issues = match fixture.run() {
@@ -478,6 +478,9 @@ mod scalar {
             }
         }
 
+        /// B has no NOTTHERE column. Only a 0.5 file answers such a read with
+        /// `absent` (D67, D102); a 1.0 file fails it as `unknown_field`, so
+        /// this test keeps its 0.5 document until the 0.5 path goes (#3447).
         #[test]
         fn nested_structured_sources_keep_filters_stable_choices_absence_and_lazy_handlers() {
             let fixture = Fixture::new();
@@ -595,11 +598,12 @@ rows:
             .unwrap();
             fs::write(
                 fixture.0.join("spec.yaml"),
-                r#"schema_version: '1.0'
+                r#"yamaa: "1.0"
+type: spec
 domain: TEST
 keys: [ID]
 base: A
-input: {A: a.csv, B: b.csv}
+input: {A: {path: a.csv, key: [ID]}, B: {path: b.csv, key: [ID]}}
 output: {path: result.csv, columns: [ID, RN, PRIMARY, SECONDARY]}
 columns:
   - {name: ID, type: str}
@@ -611,17 +615,17 @@ columns:
       case:
         - when: 'RN > 0'
           then: A.TEXT
-        - otherwise: {literal: SKIP}
+        - otherwise: "'SKIP'"
   - name: SECONDARY
     type: str
     derivation:
       case:
         - when: 'RN > 0'
           then: B.TEXT
-        - otherwise: {literal: SKIP}
+        - otherwise: "'SKIP'"
 rows:
-  - {id: alpha, dataset: A, derivations: {ID: A.ID, ORD: {literal: 1}}}
-  - {id: beta, dataset: B, derivations: {ID: B.ID, ORD: {literal: 2}}}
+  - {id: alpha, dataset: A, derivations: {ID: A.ID, ORD: 1}}
+  - {id: beta, dataset: B, derivations: {ID: B.ID, ORD: 2}}
 "#,
             )
             .unwrap();
@@ -796,7 +800,7 @@ rows:
         fn every_run_reports_and_only_a_declared_report_file_is_written() {
             let study = Study::new();
             fs::write(study.0.join("input/input.csv"), "ID\n1\n").unwrap();
-            let raw = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input/input.csv}\noutput: {path: out.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
+            let raw = "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input/input.csv}\noutput: {path: out.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
             let mut undeclared = study.build(raw);
             assert!(undeclared.issues().is_empty());
             // A run, an input, a base and a column row; no handler or check.
@@ -1200,7 +1204,8 @@ columns:
             let study = Study::new();
             fs::write(study.0.join("input/input.csv"), "ID,ARM\n1,A\n2,A\n3,B\n").unwrap();
             let mut result = study.build(
-                r#"schema_version: '1.0'
+                r#"yamaa: "1.0"
+type: spec
 domain: TEST
 keys: [ID]
 input: {SRC: {path: input/input.csv, types: {ID: int}}}
@@ -1250,7 +1255,8 @@ verifications:
             )
             .unwrap();
             let mut result = study.build(
-                r#"schema_version: '1.0'
+                r#"yamaa: "1.0"
+type: spec
 domain: TEST
 keys: [ID]
 input: {SRC: {path: input/input.csv, types: {ID: int}}}
@@ -1259,16 +1265,16 @@ columns:
   - {name: ID, type: int, derivation: SRC.ID}
   - name: START
     type: date
-    derivation: {impute: {type: date, source: SRC.DTC, day: first, minimum_source_precision: month, invalid: {literal: null}}}
+    derivation: {impute: {type: date, source: SRC.DTC, day: first, invalid: null}}
   - name: STAMP
     type: datetime
-    derivation: {impute: {type: datetime, source: SRC.DTM, minimum_source_precision: day, time: first, invalid: {literal: null}}}
+    derivation: {impute: {type: datetime, source: SRC.DTM, time: first, invalid: null}}
   - name: SPAN
     type: float
-    derivation: {duration_value: {source: SRC.DUR, unit: day, invalid: {literal: null}}}
+    derivation: {duration_value: {source: SRC.DUR, unit: day, invalid: null}}
   - name: PR
     type: str
-    derivation: {precision: {type: datetime, source: SRC.DTM, invalid: {literal: null}}}
+    derivation: {precision: {type: datetime, source: SRC.DTM, invalid: null}}
 "#,
             );
             assert!(result.issues().is_empty(), "{:?}", result.issues());

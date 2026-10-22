@@ -441,10 +441,10 @@ mod scalar {
 
         #[test]
         fn study_day_epoch_and_nested_row_cases_execute_typed_driver_operands_and_missing_values() {
-            let source = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: input.csv, types: {ID: int, D: date, R: date}}\noutput: {path: result.csv, columns: [ID, SD, EPOCH]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - name: SD\n    type: int\n    derivation: {study_day: {date: SRC.D, reference: SRC.R}}\n  - name: EPOCH\n    type: int\n    derivation: {to_epoch_day: {source: SRC.D}}\n";
+            let source = "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: input.csv, types: {ID: int, D: date, R: date}}\noutput: {path: result.csv, columns: [ID, SD, EPOCH]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - name: SD\n    type: int\n    derivation: {study_day: {source: SRC.D, reference: SRC.R}}\n  - name: EPOCH\n    type: int\n    derivation: {to_epoch_day: {source: SRC.D}}\n";
             let input = b"ID,D,R\n1,2023-12-31,2024-01-01\n2,2024-01-01,2024-01-01\n3,2024-01-02,2024-01-01\n4,,2024-01-01\n5,2024-01-01,\n";
             let expected = b"ID,SD,EPOCH\n1,-1,19722\n2,1,19723\n3,2,19724\n4,,\n5,,19723\n";
-            for source in [source.into(), source.edit("derivation: {study_day: {date: SRC.D, reference: SRC.R}}", "derivation: {case: [{when: 'ID > 0', then: {study_day: {date: SRC.D, reference: SRC.R}}}, {otherwise: {literal: null}}]}"), format!("{source}rows:\n  - id: records\n    dataset: SRC\n    derivations:\n      SD: {{study_day: {{date: SRC.D, reference: SRC.R}}}}\n")] {
+            for source in [source.into(), source.edit("derivation: {study_day: {source: SRC.D, reference: SRC.R}}", "derivation: {case: [{when: 'ID > 0', then: {study_day: {source: SRC.D, reference: SRC.R}}}, {otherwise: null}]}"), format!("{source}rows:\n  - id: records\n    dataset: SRC\n    derivations:\n      SD: {{study_day: {{source: SRC.D, reference: SRC.R}}}}\n")] {
         let study = Study::new("adam-adsl-duration", false);
         fs::write(study.0.join("spec.yaml"), source).unwrap();
         fs::write(study.0.join("input.csv"), input).unwrap();
@@ -464,7 +464,7 @@ mod scalar {
             // Complete independent captures, including absent-input/type-error double faults.
             let reference: yamaa_core::json::Value = yamaa_adapters::json_wire::decode(r###"{
   "bare-default-to_epoch_day": {
-    "specification": "schema_version: '1.0'\ndomain: TEST\nkeys:\n- ID\ninput:\n  SRC:\n    path: src.csv\n    types:\n      D: date\n      E: date\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - D1\n  - D2\n  - EP\ncolumns:\n- name: ID\n  type: str\n  derivation: SRC.ID\n- name: D1\n  type: date\n  derivation: SRC.D\n- name: D2\n  type: date\n  derivation:\n    literal: '1970-01-01'\n- name: EP\n  type: int\nrows:\n- id: dates\n  derivations:\n    EP:\n      to_epoch_day:\n        source: D1\n",
+    "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys:\n- ID\ninput:\n  SRC:\n    path: src.csv\n    types:\n      D: date\n      E: date\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - D1\n  - D2\n  - EP\ncolumns:\n- name: ID\n  type: str\n  derivation: SRC.ID\n- name: D1\n  type: date\n  derivation: SRC.D\n- name: D2\n  type: date\n  derivation: \"'1970-01-01'\"\n- name: EP\n  type: int\nrows:\n- id: dates\n  derivations:\n    EP:\n      to_epoch_day:\n        source: D1\n",
     "inputs": {
       "src.csv": "ID,D,E\na,1970-01-01,1970-01-02\nb,2000-01-01,2000-01-02\n"
     },
@@ -473,7 +473,7 @@ mod scalar {
     "csv": "ID,D1,D2,EP\na,1970-01-01,1970-01-01,0\nb,2000-01-01,1970-01-01,10957\n"
   },
   "missing-input-row-invalid-to_epoch_day": {
-    "specification": "schema_version: '1.0'\ndomain: TEST\nkeys:\n- ID\ninput:\n  SRC:\n    path: src.csv\n    types: {}\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - D1\n  - D2\n  - EP\ncolumns:\n- name: ID\n  type: str\n  derivation: SRC.ID\n- name: D1\n  type: date\n  derivation: SRC.D\n- name: D2\n  type: date\n  derivation:\n    literal: '1970-01-01'\n- name: EP\n  type: int\nrows:\n- id: dates\n  derivations:\n    EP:\n      to_epoch_day:\n        source: SRC.D\n",
+    "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys:\n- ID\ninput:\n  SRC:\n    path: src.csv\n    types: {}\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - D1\n  - D2\n  - EP\ncolumns:\n- name: ID\n  type: str\n  derivation: SRC.ID\n- name: D1\n  type: date\n  derivation: SRC.D\n- name: D2\n  type: date\n  derivation: \"'1970-01-01'\"\n- name: EP\n  type: int\nrows:\n- id: dates\n  derivations:\n    EP:\n      to_epoch_day:\n        source: SRC.D\n",
     "inputs": {},
     "findings": [
       {
@@ -492,7 +492,7 @@ mod scalar {
     "handler_counts": []
   },
   "row-invalid-to_epoch_day": {
-    "specification": "schema_version: '1.0'\ndomain: TEST\nkeys:\n- ID\ninput:\n  SRC:\n    path: src.csv\n    types: {}\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - D1\n  - D2\n  - EP\ncolumns:\n- name: ID\n  type: str\n  derivation: SRC.ID\n- name: D1\n  type: date\n  derivation: SRC.D\n- name: D2\n  type: date\n  derivation:\n    literal: '1970-01-01'\n- name: EP\n  type: int\nrows:\n- id: dates\n  derivations:\n    EP:\n      to_epoch_day:\n        source: SRC.D\n",
+    "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys:\n- ID\ninput:\n  SRC:\n    path: src.csv\n    types: {}\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - D1\n  - D2\n  - EP\ncolumns:\n- name: ID\n  type: str\n  derivation: SRC.ID\n- name: D1\n  type: date\n  derivation: SRC.D\n- name: D2\n  type: date\n  derivation: \"'1970-01-01'\"\n- name: EP\n  type: int\nrows:\n- id: dates\n  derivations:\n    EP:\n      to_epoch_day:\n        source: SRC.D\n",
     "inputs": {
       "src.csv": "ID,D,E\na,1970-01-01,1970-01-02\nb,2000-01-01,2000-01-02\n"
     },
@@ -501,7 +501,7 @@ mod scalar {
         "phase": "validation",
         "condition": "incompatible_input_type",
         "spec_paths": [
-          "rows[0].derivations.EP.to_epoch_day.source"
+          "rows.dates.derivations.EP.to_epoch_day.source"
         ],
         "rule": "TIME-1",
         "context": {
@@ -514,7 +514,7 @@ mod scalar {
     "handler_counts": []
   },
   "bare-default-study_day": {
-    "specification": "schema_version: '1.0'\ndomain: TEST\nkeys:\n- ID\ninput:\n  SRC:\n    path: src.csv\n    types:\n      D: date\n      E: date\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - D1\n  - D2\n  - EP\ncolumns:\n- name: ID\n  type: str\n  derivation: SRC.ID\n- name: D1\n  type: date\n  derivation: SRC.D\n- name: D2\n  type: date\n  derivation:\n    literal: '1970-01-01'\n- name: EP\n  type: int\nrows:\n- id: dates\n  derivations:\n    EP:\n      study_day:\n        date: D2\n        reference: D1\n",
+    "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys:\n- ID\ninput:\n  SRC:\n    path: src.csv\n    types:\n      D: date\n      E: date\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - D1\n  - D2\n  - EP\ncolumns:\n- name: ID\n  type: str\n  derivation: SRC.ID\n- name: D1\n  type: date\n  derivation: SRC.D\n- name: D2\n  type: date\n  derivation: \"'1970-01-01'\"\n- name: EP\n  type: int\nrows:\n- id: dates\n  derivations:\n    EP:\n      study_day:\n        source: D2\n        reference: D1\n",
     "inputs": {
       "src.csv": "ID,D,E\na,1970-01-01,1970-01-02\nb,2000-01-01,2000-01-02\n"
     },
@@ -523,7 +523,7 @@ mod scalar {
     "csv": "ID,D1,D2,EP\na,1970-01-01,1970-01-01,1\nb,2000-01-01,1970-01-01,-10957\n"
   },
   "missing-input-row-invalid-study_day": {
-    "specification": "schema_version: '1.0'\ndomain: TEST\nkeys:\n- ID\ninput:\n  SRC:\n    path: src.csv\n    types: {}\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - D1\n  - D2\n  - EP\ncolumns:\n- name: ID\n  type: str\n  derivation: SRC.ID\n- name: D1\n  type: date\n  derivation: SRC.D\n- name: D2\n  type: date\n  derivation:\n    literal: '1970-01-01'\n- name: EP\n  type: int\nrows:\n- id: dates\n  derivations:\n    EP:\n      study_day:\n        date: SRC.D\n        reference: SRC.D\n",
+    "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys:\n- ID\ninput:\n  SRC:\n    path: src.csv\n    types: {}\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - D1\n  - D2\n  - EP\ncolumns:\n- name: ID\n  type: str\n  derivation: SRC.ID\n- name: D1\n  type: date\n  derivation: SRC.D\n- name: D2\n  type: date\n  derivation: \"'1970-01-01'\"\n- name: EP\n  type: int\nrows:\n- id: dates\n  derivations:\n    EP:\n      study_day:\n        source: SRC.D\n        reference: SRC.D\n",
     "inputs": {},
     "findings": [
       {
@@ -542,7 +542,7 @@ mod scalar {
     "handler_counts": []
   },
   "row-invalid-study_day": {
-    "specification": "schema_version: '1.0'\ndomain: TEST\nkeys:\n- ID\ninput:\n  SRC:\n    path: src.csv\n    types: {}\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - D1\n  - D2\n  - EP\ncolumns:\n- name: ID\n  type: str\n  derivation: SRC.ID\n- name: D1\n  type: date\n  derivation: SRC.D\n- name: D2\n  type: date\n  derivation:\n    literal: '1970-01-01'\n- name: EP\n  type: int\nrows:\n- id: dates\n  derivations:\n    EP:\n      study_day:\n        date: SRC.D\n        reference: SRC.D\n",
+    "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys:\n- ID\ninput:\n  SRC:\n    path: src.csv\n    types: {}\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - D1\n  - D2\n  - EP\ncolumns:\n- name: ID\n  type: str\n  derivation: SRC.ID\n- name: D1\n  type: date\n  derivation: SRC.D\n- name: D2\n  type: date\n  derivation: \"'1970-01-01'\"\n- name: EP\n  type: int\nrows:\n- id: dates\n  derivations:\n    EP:\n      study_day:\n        source: SRC.D\n        reference: SRC.D\n",
     "inputs": {
       "src.csv": "ID,D,E\na,1970-01-01,1970-01-02\nb,2000-01-01,2000-01-02\n"
     },
@@ -551,7 +551,7 @@ mod scalar {
         "phase": "validation",
         "condition": "incompatible_input_type",
         "spec_paths": [
-          "rows[0].derivations.EP.study_day.date"
+          "rows.dates.derivations.EP.study_day.source"
         ],
         "rule": "TIME-1",
         "context": {
@@ -564,7 +564,7 @@ mod scalar {
         "phase": "validation",
         "condition": "incompatible_input_type",
         "spec_paths": [
-          "rows[0].derivations.EP.study_day.reference"
+          "rows.dates.derivations.EP.study_day.reference"
         ],
         "rule": "TIME-1",
         "context": {
@@ -577,7 +577,7 @@ mod scalar {
     "handler_counts": []
   },
   "bare-default-diff": {
-    "specification": "schema_version: '1.0'\ndomain: TEST\nkeys:\n- ID\ninput:\n  SRC:\n    path: src.csv\n    types:\n      D: date\n      E: date\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - D1\n  - D2\n  - EP\ncolumns:\n- name: ID\n  type: str\n  derivation: SRC.ID\n- name: D1\n  type: date\n  derivation: SRC.D\n- name: D2\n  type: date\n  derivation:\n    literal: '1970-01-01'\n- name: EP\n  type: int\nrows:\n- id: dates\n  derivations:\n    EP:\n      diff:\n        type: date\n        start: D1\n        end: D2\n        unit: day\n        bounds: exclusive\n",
+    "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys:\n- ID\ninput:\n  SRC:\n    path: src.csv\n    types:\n      D: date\n      E: date\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - D1\n  - D2\n  - EP\ncolumns:\n- name: ID\n  type: str\n  derivation: SRC.ID\n- name: D1\n  type: date\n  derivation: SRC.D\n- name: D2\n  type: date\n  derivation: \"'1970-01-01'\"\n- name: EP\n  type: int\nrows:\n- id: dates\n  derivations:\n    EP:\n      diff:\n        type: date\n        start: D1\n        end: D2\n        unit: day\n        closed: right\n",
     "inputs": {
       "src.csv": "ID,D,E\na,1970-01-01,1970-01-02\nb,2000-01-01,2000-01-02\n"
     },
@@ -586,7 +586,7 @@ mod scalar {
     "csv": "ID,D1,D2,EP\na,1970-01-01,1970-01-01,0\nb,2000-01-01,1970-01-01,-10957\n"
   },
   "missing-input-row-invalid-diff": {
-    "specification": "schema_version: '1.0'\ndomain: TEST\nkeys:\n- ID\ninput:\n  SRC:\n    path: src.csv\n    types: {}\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - D1\n  - D2\n  - EP\ncolumns:\n- name: ID\n  type: str\n  derivation: SRC.ID\n- name: D1\n  type: date\n  derivation: SRC.D\n- name: D2\n  type: date\n  derivation:\n    literal: '1970-01-01'\n- name: EP\n  type: int\nrows:\n- id: dates\n  derivations:\n    EP:\n      diff:\n        type: date\n        start: SRC.D\n        end: SRC.D\n        unit: day\n        bounds: exclusive\n",
+    "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys:\n- ID\ninput:\n  SRC:\n    path: src.csv\n    types: {}\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - D1\n  - D2\n  - EP\ncolumns:\n- name: ID\n  type: str\n  derivation: SRC.ID\n- name: D1\n  type: date\n  derivation: SRC.D\n- name: D2\n  type: date\n  derivation: \"'1970-01-01'\"\n- name: EP\n  type: int\nrows:\n- id: dates\n  derivations:\n    EP:\n      diff:\n        type: date\n        start: SRC.D\n        end: SRC.D\n        unit: day\n        closed: right\n",
     "inputs": {},
     "findings": [
       {
@@ -605,7 +605,7 @@ mod scalar {
     "handler_counts": []
   },
   "row-invalid-diff": {
-    "specification": "schema_version: '1.0'\ndomain: TEST\nkeys:\n- ID\ninput:\n  SRC:\n    path: src.csv\n    types: {}\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - D1\n  - D2\n  - EP\ncolumns:\n- name: ID\n  type: str\n  derivation: SRC.ID\n- name: D1\n  type: date\n  derivation: SRC.D\n- name: D2\n  type: date\n  derivation:\n    literal: '1970-01-01'\n- name: EP\n  type: int\nrows:\n- id: dates\n  derivations:\n    EP:\n      diff:\n        type: date\n        start: SRC.D\n        end: SRC.D\n        unit: day\n        bounds: exclusive\n",
+    "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys:\n- ID\ninput:\n  SRC:\n    path: src.csv\n    types: {}\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - D1\n  - D2\n  - EP\ncolumns:\n- name: ID\n  type: str\n  derivation: SRC.ID\n- name: D1\n  type: date\n  derivation: SRC.D\n- name: D2\n  type: date\n  derivation: \"'1970-01-01'\"\n- name: EP\n  type: int\nrows:\n- id: dates\n  derivations:\n    EP:\n      diff:\n        type: date\n        start: SRC.D\n        end: SRC.D\n        unit: day\n        closed: right\n",
     "inputs": {
       "src.csv": "ID,D,E\na,1970-01-01,1970-01-02\nb,2000-01-01,2000-01-02\n"
     },
@@ -614,7 +614,7 @@ mod scalar {
         "phase": "validation",
         "condition": "incompatible_input_type",
         "spec_paths": [
-          "rows[0].derivations.EP.diff.start"
+          "rows.dates.derivations.EP.diff.start"
         ],
         "rule": "TIME-1",
         "context": {
@@ -627,7 +627,7 @@ mod scalar {
         "phase": "validation",
         "condition": "incompatible_input_type",
         "spec_paths": [
-          "rows[0].derivations.EP.diff.end"
+          "rows.dates.derivations.EP.diff.end"
         ],
         "rule": "TIME-1",
         "context": {
@@ -640,7 +640,7 @@ mod scalar {
     "handler_counts": []
   },
   "nested-default-to_epoch_day": {
-    "specification": "schema_version: '1.0'\ndomain: TEST\nkeys:\n- ID\ninput:\n  SRC:\n    path: src.csv\n    types:\n      D: date\n      E: date\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - D1\n  - D2\n  - EP\n  - NEXT\ncolumns:\n- name: ID\n  type: str\n  derivation: SRC.ID\n- name: D1\n  type: date\n  derivation: SRC.D\n- name: D2\n  type: date\n  derivation:\n    literal: '1970-01-01'\n- name: EP\n  type: int\n  derivation:\n    to_epoch_day:\n      source: D1\n- name: NEXT\n  type: int\nrows:\n- id: dates\n  derivations:\n    NEXT:\n      compute:\n        expr: EP + 1\n",
+    "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys:\n- ID\ninput:\n  SRC:\n    path: src.csv\n    types:\n      D: date\n      E: date\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - D1\n  - D2\n  - EP\n  - NEXT\ncolumns:\n- name: ID\n  type: str\n  derivation: SRC.ID\n- name: D1\n  type: date\n  derivation: SRC.D\n- name: D2\n  type: date\n  derivation: \"'1970-01-01'\"\n- name: EP\n  type: int\n  derivation:\n    to_epoch_day:\n      source: D1\n- name: NEXT\n  type: int\nrows:\n- id: dates\n  derivations:\n    NEXT: EP + 1\n",
     "inputs": {
       "src.csv": "ID,D,E\na,1970-01-01,1970-01-02\nb,2000-01-01,2000-01-02\n"
     },
@@ -649,7 +649,7 @@ mod scalar {
     "csv": "ID,D1,D2,EP,NEXT\na,1970-01-01,1970-01-01,0,1\nb,2000-01-01,1970-01-01,10957,10958\n"
   },
   "nested-default-study_day": {
-    "specification": "schema_version: '1.0'\ndomain: TEST\nkeys:\n- ID\ninput:\n  SRC:\n    path: src.csv\n    types:\n      D: date\n      E: date\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - D1\n  - D2\n  - EP\n  - NEXT\ncolumns:\n- name: ID\n  type: str\n  derivation: SRC.ID\n- name: D1\n  type: date\n  derivation: SRC.D\n- name: D2\n  type: date\n  derivation:\n    literal: '1970-01-01'\n- name: EP\n  type: int\n  derivation:\n    study_day:\n      date: D2\n      reference: D1\n- name: NEXT\n  type: int\nrows:\n- id: dates\n  derivations:\n    NEXT:\n      compute:\n        expr: EP + 1\n",
+    "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys:\n- ID\ninput:\n  SRC:\n    path: src.csv\n    types:\n      D: date\n      E: date\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - D1\n  - D2\n  - EP\n  - NEXT\ncolumns:\n- name: ID\n  type: str\n  derivation: SRC.ID\n- name: D1\n  type: date\n  derivation: SRC.D\n- name: D2\n  type: date\n  derivation: \"'1970-01-01'\"\n- name: EP\n  type: int\n  derivation:\n    study_day:\n      source: D2\n      reference: D1\n- name: NEXT\n  type: int\nrows:\n- id: dates\n  derivations:\n    NEXT: EP + 1\n",
     "inputs": {
       "src.csv": "ID,D,E\na,1970-01-01,1970-01-02\nb,2000-01-01,2000-01-02\n"
     },
@@ -658,7 +658,7 @@ mod scalar {
     "csv": "ID,D1,D2,EP,NEXT\na,1970-01-01,1970-01-01,1,2\nb,2000-01-01,1970-01-01,-10957,-10956\n"
   },
   "nested-default-diff": {
-    "specification": "schema_version: '1.0'\ndomain: TEST\nkeys:\n- ID\ninput:\n  SRC:\n    path: src.csv\n    types:\n      D: date\n      E: date\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - D1\n  - D2\n  - EP\n  - NEXT\ncolumns:\n- name: ID\n  type: str\n  derivation: SRC.ID\n- name: D1\n  type: date\n  derivation: SRC.D\n- name: D2\n  type: date\n  derivation:\n    literal: '1970-01-01'\n- name: EP\n  type: int\n  derivation:\n    diff:\n      type: date\n      start: D1\n      end: D2\n      unit: day\n      bounds: exclusive\n- name: NEXT\n  type: int\nrows:\n- id: dates\n  derivations:\n    NEXT:\n      compute:\n        expr: EP + 1\n",
+    "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys:\n- ID\ninput:\n  SRC:\n    path: src.csv\n    types:\n      D: date\n      E: date\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - D1\n  - D2\n  - EP\n  - NEXT\ncolumns:\n- name: ID\n  type: str\n  derivation: SRC.ID\n- name: D1\n  type: date\n  derivation: SRC.D\n- name: D2\n  type: date\n  derivation: \"'1970-01-01'\"\n- name: EP\n  type: int\n  derivation:\n    diff:\n      type: date\n      start: D1\n      end: D2\n      unit: day\n      closed: right\n- name: NEXT\n  type: int\nrows:\n- id: dates\n  derivations:\n    NEXT: EP + 1\n",
     "inputs": {
       "src.csv": "ID,D,E\na,1970-01-01,1970-01-02\nb,2000-01-01,2000-01-02\n"
     },
@@ -890,7 +890,8 @@ mod scalar {
             let fixture = Fixture::new("schema-birth-date");
             fs::write(
                 fixture.0.join("spec.yaml"),
-                r#"schema_version: '1.0'
+                r#"yamaa: "1.0"
+type: spec
 domain: TEST
 keys: [ID]
 input: {SRC: input.csv}
@@ -909,7 +910,7 @@ rows:
     dataset: SRC
     derivations:
       ID: SRC.ID
-      DTM: {impute: {type: datetime, source: SRC.TEXT, minimum_source_precision: day, time: last, invalid: {literal: null}}}
+      DTM: {impute: {type: datetime, source: SRC.TEXT, time: last, invalid: null}}
 "#,
             )
             .unwrap();
@@ -928,7 +929,8 @@ rows:
             let fixture = Fixture::new("schema-birth-date");
             fs::write(
                 fixture.0.join("spec.yaml"),
-                r#"schema_version: '1.0'
+                r#"yamaa: "1.0"
+type: spec
 domain: TEST
 keys: [ID]
 input: {SRC: input.csv}
@@ -937,7 +939,7 @@ columns:
   - {name: ID, type: int, derivation: SRC.ID}
   - name: DTM
     type: datetime
-    derivation: {impute: {type: datetime, source: SRC.TEXT, minimum_source_precision: day, time: last, invalid: {literal: null}}}
+    derivation: {impute: {type: datetime, source: SRC.TEXT, time: last, invalid: null}}
   - name: PR
     type: str
     derivation: {precision: {type: datetime, source: DTM}}
@@ -947,7 +949,7 @@ columns:
       case:
         - when: "PR = 'day'"
           then: {to_date: {source: DTM}}
-        - otherwise: {literal: null}
+        - otherwise: null
 "#,
             )
             .unwrap();
@@ -991,7 +993,8 @@ columns:
             let fixture = Fixture::new("schema-birth-date");
             fs::write(
                 fixture.0.join("spec.yaml"),
-                r#"schema_version: '1.0'
+                r#"yamaa: "1.0"
+type: spec
 domain: TEST
 keys: [ID]
 input: {SRC: {path: input.csv, types: {LOW: date, HIGH: date}}}
@@ -1007,7 +1010,7 @@ columns:
         month: 12
         day: last
         not_after: SRC.HIGH
-        invalid: {literal: null}
+        invalid: null
   - name: BOTH
     type: date
     derivation:
@@ -1018,7 +1021,7 @@ columns:
         day: 15
         not_before: SRC.LOW
         not_after: SRC.HIGH
-        invalid: {literal: null}
+        invalid: null
 "#,
             )
             .unwrap();
@@ -1057,7 +1060,8 @@ columns:
             let fixture = Fixture::new("schema-birth-date");
             fs::write(
                 fixture.0.join("spec.yaml"),
-                r#"schema_version: '1.0'
+                r#"yamaa: "1.0"
+type: spec
 domain: TEST
 keys: [ID]
 input: {SRC: {path: input.csv, types: {HIGH: int}}}
@@ -1073,7 +1077,7 @@ columns:
         month: 12
         day: last
         not_after: SRC.HIGH
-        invalid: {literal: null}
+        invalid: null
 "#,
             )
             .unwrap();
@@ -1090,7 +1094,8 @@ columns:
             );
             fs::write(
                 fixture.0.join("spec.yaml"),
-                r#"schema_version: '1.0'
+                r#"yamaa: "1.0"
+type: spec
 domain: OUT
 input:
   SRC: {path: source.csv, types: {ID: str, A: str, B: date}}
@@ -1119,7 +1124,7 @@ intermediates:
                     "phase": "planning",
                     "condition": "unsupported_operation",
                     "rule": null,
-                    "spec_paths": ["intermediates[0].key.M.impute.not_after"],
+                    "spec_paths": ["intermediates.LOOK.key.M.impute.not_after"],
                     "context": {"operation": "not_after"},
                 }])
             );
@@ -1133,7 +1138,8 @@ intermediates:
             let fixture = Fixture::new("schema-birth-date");
             fs::write(
                 fixture.0.join("spec.yaml"),
-                r#"schema_version: '1.0'
+                r#"yamaa: "1.0"
+type: spec
 domain: TEST
 keys: [ID]
 input: {SRC: {path: input.csv, types: {REF: date}}}
@@ -1149,7 +1155,7 @@ columns:
         month: 6
         day: first
         not_before: SRC.REF
-        invalid: {literal: null}
+        invalid: null
 "#,
             )
             .unwrap();
@@ -1221,7 +1227,8 @@ columns:
                 let fixture = Fixture::new("schema-birth-date");
                 fs::write(
                     fixture.0.join("spec.yaml"),
-                    r#"schema_version: '1.0'
+                    r#"yamaa: "1.0"
+type: spec
 domain: TEST
 keys: [ID]
 input: {SRC: {path: input.csv, types: {REF: date}}}
@@ -1266,7 +1273,8 @@ columns:
             let fixture = Fixture::new("schema-birth-date");
             fs::write(
                 fixture.0.join("spec.yaml"),
-                r#"schema_version: '1.0'
+                r#"yamaa: "1.0"
+type: spec
 domain: TEST
 keys: [ID]
 input: {SRC: input.csv}
@@ -1279,7 +1287,6 @@ columns:
       impute:
         type: datetime
         source: SRC.TEXT
-        minimum_source_precision: day
         time: first
         invalid: '2024-02-29T12:13'
 "#,
@@ -1440,7 +1447,8 @@ columns:
         #[test]
         fn four_modes_and_literal_handlers_preserve_unicode_empty_nul_and_original_case() {
             let fixture = bespoke(
-                r#"schema_version: '1.0'
+                r#"yamaa: "1.0"
+type: spec
 domain: TEST
 keys: [ID]
 input: {SRC: input.csv}
@@ -1448,9 +1456,9 @@ output: {path: output.csv, columns: [ID, UP, LOW, SENT, TITLE]}
 columns:
   - {name: ID, type: str, derivation: SRC.ID}
   - {name: UP, type: str, derivation: {str_case: {source: SRC.TEXT, to: upper, missing: MiXeD}}}
-  - {name: LOW, type: str, derivation: {str_case: {source: SRC.TEXT, to: lower, missing: {literal: null}}}}
-  - {name: SENT, type: str, derivation: {str_case: {source: SRC.TEXT, to: sentence, missing: {literal: null}}}}
-  - {name: TITLE, type: str, derivation: {str_case: {source: SRC.TEXT, to: title, missing: {literal: null}}}}
+  - {name: LOW, type: str, derivation: {str_case: {source: SRC.TEXT, to: lower}}}
+  - {name: SENT, type: str, derivation: {str_case: {source: SRC.TEXT, to: sentence}}}
+  - {name: TITLE, type: str, derivation: {str_case: {source: SRC.TEXT, to: title}}}
 "#,
                 "ID,TEXT\n1,FOLLOW-UP\n2,\u{00df}\u{0130}\u{00e9}\u{1f642}AbC\n3,a\0BC\n4,\n"
                     .as_bytes(),
@@ -1460,7 +1468,8 @@ columns:
             assert!(result.save().unwrap());
             assert_eq!(fs::read(fixture.0.join("output.csv")).unwrap(),"ID,UP,LOW,SENT,TITLE\n1,FOLLOW-UP,follow-up,Follow-up,Follow-Up\n2,\u{00df}\u{0130}\u{00e9}\u{1f642}ABC,\u{00df}\u{0130}\u{00e9}\u{1f642}abc,\u{00df}\u{0130}\u{00e9}\u{1f642}abc,\u{00df}\u{0130}\u{00e9}\u{1f642}Abc\n3,A\0BC,a\0bc,A\0bc,A\0Bc\n4,MiXeD,,,\n".as_bytes());
         }
-        const MISSING_SPEC: &str = r#"schema_version: '1.0'
+        const MISSING_SPEC: &str = r#"yamaa: "1.0"
+type: spec
 domain: TEST
 keys: [ID]
 input: {SRC: input.csv}
@@ -1496,7 +1505,8 @@ columns:
         #[test]
         fn row_substitution_and_selected_nested_case_preserve_scope_and_branch_effects() {
             let fixture = bespoke(
-                r#"schema_version: '1.0'
+                r#"yamaa: "1.0"
+type: spec
 domain: TEST
 keys: [ID]
 input: {SRC: input.csv}
@@ -1504,13 +1514,13 @@ output: {path: output.csv, columns: [ID, TEXT, RESULT]}
 columns:
   - {name: ID, type: str}
   - {name: TEXT, type: str}
-  - {name: RESULT, type: str, derivation: {str_case: {source: TEXT, to: sentence, missing: {literal: null}}}}
+  - {name: RESULT, type: str, derivation: {str_case: {source: TEXT, to: sentence}}}
 rows:
   - id: records
     dataset: SRC
     derivations:
       ID: SRC.ID
-      TEXT: {str_case: {source: SRC.TEXT, to: title, missing: {literal: null}}}
+      TEXT: {str_case: {source: SRC.TEXT, to: title}}
 "#,
                 b"ID,TEXT\n1,FOLLOW-UP\n2,\n",
             );
@@ -1522,7 +1532,8 @@ rows:
                 b"ID,TEXT,RESULT\n1,Follow-Up,Follow-up\n2,,\n"
             );
             let fixture = bespoke(
-                r#"schema_version: '1.0'
+                r#"yamaa: "1.0"
+type: spec
 domain: TEST
 keys: [ID]
 input: {SRC: input.csv}
@@ -1539,7 +1550,7 @@ columns:
               - when: "ID = '1'"
                 then: {str_case: {source: SRC.TEXT, to: title, missing: MiXeD}}
               - otherwise: {str_case: {source: SRC.TEXT, to: upper}}
-        - otherwise: {literal: safe}
+        - otherwise: "'safe'"
 "#,
                 b"ID,TEXT\n1,FOLLOW-UP\n2,\n",
             );
@@ -1555,7 +1566,7 @@ columns:
         #[test]
         fn declared_csv_source_types_are_rejected_in_row_scope_before_data_capture() {
             for kind in ["int", "float", "date", "datetime"] {
-                let source=format!("schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {{SRC: {{path: input.csv, types: {{TEXT: {kind}}}}}}}\noutput: {{path: output.csv, columns: [ID, TEXT]}}\ncolumns:\n  - {{name: ID, type: str}}\n  - {{name: TEXT, type: str}}\nrows:\n  - id: records\n    dataset: SRC\n    derivations:\n      ID: SRC.ID\n      TEXT: {{str_case: {{source: SRC.TEXT, to: upper, missing: fallback}}}}\n");
+                let source=format!("yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {{SRC: {{path: input.csv, types: {{TEXT: {kind}}}}}}}\noutput: {{path: output.csv, columns: [ID, TEXT]}}\ncolumns:\n  - {{name: ID, type: str}}\n  - {{name: TEXT, type: str}}\nrows:\n  - id: records\n    dataset: SRC\n    derivations:\n      ID: SRC.ID\n      TEXT: {{str_case: {{source: SRC.TEXT, to: upper, missing: fallback}}}}\n");
                 let fixture = bespoke(&source, b"ID,TEXT\nrow1,1\n");
                 fs::remove_file(fixture.0.join("input.csv")).unwrap();
                 let specification = fixture.0.join("spec.yaml").to_str().unwrap().to_owned();
@@ -1577,7 +1588,7 @@ columns:
                 assert_eq!(
                     issues.iter().map(issue_json).collect::<Vec<_>>(),
                     [
-                        yamaa_adapters::json!({"phase":"validation","condition":"incompatible_input_type","rule":"TEXT-1","spec_paths":["rows[0].derivations.TEXT.str_case.source"],"context":{"source":"SRC.TEXT","expected":"str","actual":kind}})
+                        yamaa_adapters::json!({"phase":"validation","condition":"incompatible_input_type","rule":"TEXT-1","spec_paths":["rows.records.derivations.TEXT.str_case.source"],"context":{"source":"SRC.TEXT","expected":"str","actual":kind}})
                     ]
                 );
                 assert!(!fixture.0.join("output.csv").exists());
@@ -1787,7 +1798,7 @@ columns:
             let wide =
                 "100000000000000000000000000000000000000000000000000000000000000000000000000000000";
             let source = format!(
-        "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {{SRC: input.csv}}\noutput: {{path: output.csv, columns: [ID, TEXT, RESULT]}}\ncolumns:\n  - {{name: ID, type: str, derivation: SRC.ID}}\n  - {{name: TEXT, type: str, derivation: SRC.TEXT}}\n  - name: RESULT\n    type: str\n    derivation:\n      str_extract: {{source: TEXT, pattern: '(a)', group: {wide}}}\n"
+        "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {{SRC: input.csv}}\noutput: {{path: output.csv, columns: [ID, TEXT, RESULT]}}\ncolumns:\n  - {{name: ID, type: str, derivation: SRC.ID}}\n  - {{name: TEXT, type: str, derivation: SRC.TEXT}}\n  - name: RESULT\n    type: str\n    derivation:\n      str_extract: {{source: TEXT, pattern: '(a)', group: {wide}}}\n"
     );
             let fixture = bespoke(&source, b"ID,TEXT\nrow1,a\n");
             let issues = match attempt(&fixture) {
@@ -1821,14 +1832,12 @@ columns:
                 names.push(name.clone());
                 columns.push(yamaa_adapters::json!({"name":name,"type":"str","derivation":{"str_extract":{"source":"TEXT","pattern":format!("[{}","a".repeat(600)),"group":0}}}));
             }
-            let spec = yamaa_adapters::json!({"schema_version":"1.0","domain":"TEST","keys":["ID"],"input":{"SRC":"input.csv"},"output":{"path":"output.csv","columns":names},"columns":columns});
-            let schema = yamaa_adapters::shipped_schema::capture().unwrap();
-            let document = schema
-                .prepare_standalone(yamaa_adapters::specification_source::Source {
-                    identity: "spec.yaml".into(),
-                    bytes: yamaa_adapters::json_wire::encode(&spec).into_bytes(),
-                })
-                .unwrap();
+            let spec = yamaa_adapters::json!({"yamaa":"1.0","type":"spec","domain":"TEST","keys":["ID"],"input":{"SRC":"input.csv"},"output":{"path":"output.csv","columns":names},"columns":columns});
+            // Prepared in the language it is written in.
+            let document = crate::support::specification_run::prepare(
+                &yamaa_adapters::shipped_schema::capture().unwrap(),
+                yamaa_adapters::json_wire::encode(&spec).as_bytes(),
+            );
             let Err(yamaa_adapters::specification_run::Error::Prepare(
                 yamaa_core::specification::PrepareError::Invalid(findings),
             )) = yamaa_adapters::specification_run::PreparedRun::prepare(document)
@@ -2016,7 +2025,7 @@ columns:
                 fs::write(
                     fixture.0.join("spec.yaml"),
                     format!(
-                        "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {{SRC: input.csv}}\noutput: {{path: output.csv, columns: [ID, TEXT, RESULT]}}\ncolumns:\n  - {{name: ID, type: str, derivation: SRC.ID}}\n  - {{name: TEXT, type: str, derivation: {{literal: {text}}}}}\n  - {{name: RESULT, type: str, derivation: {{str_pad: {{source: TEXT, width: {width}}}}}}}\n"
+                        "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {{SRC: input.csv}}\noutput: {{path: output.csv, columns: [ID, TEXT, RESULT]}}\ncolumns:\n  - {{name: ID, type: str, derivation: SRC.ID}}\n  - {{name: TEXT, type: str, derivation: {text}}}\n  - {{name: RESULT, type: str, derivation: {{str_pad: {{source: TEXT, width: {width}}}}}}}\n"
                     ),
                 )
                 .unwrap();
@@ -2044,7 +2053,7 @@ columns:
                 fs::read(fixture.0.join("output.csv")).unwrap(),
                 b"ID,TEXT,RESULT\nrow1,,\n"
             );
-            let (fixture, result) = attempt("''");
+            let (fixture, result) = attempt("\"''\"");
             let Err(issues) = result else {
                 panic!("a present value cannot be padded to the width")
             };
