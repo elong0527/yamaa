@@ -10,6 +10,9 @@ use yamaa_core::project_activation::ActivationPort;
 
 #[derive(Debug)]
 pub enum Error {
+    /// The caller's own entry, the file a preparation without a declaring
+    /// file starts from, could not be resolved or captured.
+    Entry(ResourceError),
     Resource(ResourceError),
     Inventory(yamaa_core::submission_inventory::MetadataError),
     Preparation(InheritanceError<ResourceError>),
@@ -226,18 +229,26 @@ impl FileSpecification {
     pub fn retained_sources(&self) -> crate::file_resources::RetainedSources {
         self.resources.retain_sources()
     }
+    /// The save target of the output file `field` declares, resolved in
+    /// `run`; a target its resolver cannot reach is refused as a save's walk
+    /// refuses it, at `output.<field>`.
     pub(crate) fn publication_field_target(
         &self,
         run: &RunScope,
         field: &str,
-    ) -> Result<crate::publication::AnchoredTarget, ResourceError> {
+    ) -> Result<crate::publication::AnchoredTarget, crate::file_application::Failure> {
+        use crate::file_application::{resource_failure, unresolved_target};
+        use yamaa_core::application_issue::Step;
         let origin = self
             .run
             .document()
             .written_output_field_origin(field)
-            .ok_or(ResourceError::InvalidPath)?;
+            .ok_or_else(|| resource_failure(Step::Output, &ResourceError::InvalidPath))?;
         run.resources()
             .publication_target_from(origin.base_source, origin.written)
+            .map_err(|error| {
+                unresolved_target(&error, Some(&format!("output.{field}")), origin.written)
+            })
     }
     /// Activate, capture, decode, bind and execute in `run`; this value is
     /// unchanged. A specification that calls no project function never
@@ -279,7 +290,10 @@ pub(crate) fn prepare_document_from(
         written,
     )
     .map_err(|error| match error {
-        Failure::Resource(error) => Error::Resource(error),
+        // Only an entry no file declares is the caller's own; a producer a
+        // `schema` link names was resolved from its declaring file first.
+        Failure::Entry(error) if declaring.is_none() => Error::Entry(error),
+        Failure::Entry(error) | Failure::Resource(error) => Error::Resource(error),
         Failure::Preparation(error) => Error::Preparation(error),
         Failure::ResourceFinding { error, diagnostic } => {
             Error::ResourceFinding { error, diagnostic }

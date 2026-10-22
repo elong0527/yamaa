@@ -1,6 +1,4 @@
 //! Service contracts.
-#[allow(dead_code)]
-mod support;
 mod service {
     mod specification_run {
         //! Fake native ports pin application order without a host runtime or codec.

@@ -167,10 +167,20 @@ fn listings_follow_section_run_order_and_names_are_their_domains() {
 #[test]
 fn an_unreadable_project_fails_as_a_check_reports_it() {
     let study = Study::new();
-    let issues = Project::read(&study.path("project.yaml"), Some(Language::Python), None)
+    let project = study.path("project.yaml");
+    let issues = Project::read(&project, Some(Language::Python), None)
         .err()
         .unwrap();
-    assert_eq!(condition(&issues), ["project_environment_missing"]);
+    // The caller's own path, named as given (FILE-7, #3321).
+    assert_eq!(condition(&issues), ["resource_path_missing"]);
+    assert!(issues[0].spec_paths.is_empty());
+    assert_eq!(issues[0].context["path"], Value::String(project.clone()));
+    let checked = yamaa_adapters::project_application::check(
+        &study.path("spec.yaml"),
+        &project,
+        Language::Python,
+    );
+    assert_eq!(checked, issues);
 }
 
 #[test]

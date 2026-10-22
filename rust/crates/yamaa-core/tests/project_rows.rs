@@ -1,6 +1,4 @@
 //! Project contracts.
-#[allow(dead_code)]
-mod support;
 mod project {
     mod project_compiled_rows {
         //! Execute compiler-selected row/default calls without a host-authored plan.
@@ -366,29 +364,8 @@ mod project {
             value::{ColumnType, Value, ValueType},
         };
         #[test]
-        fn classified_unavailable_root_maps_to_the_supplied_environment_requirement() {
-            use yamaa_core::project_environment_diagnostics::ReadFailure;
-            for (failure, cause) in [
-                (ReadFailure::Missing, "missing"),
-                (ReadFailure::Unreadable, "unreadable"),
-            ] {
-                let diagnostic = failure.diagnostic("/study/project.yaml");
-                let definition = diagnostic.code.definition();
-                assert_eq!(
-                    (definition.phase, definition.condition, definition.rule),
-                    ("validation", "project_environment_missing", Some("FUNC-1"))
-                );
-                assert_eq!(diagnostic.spec_paths, ["environment"]);
-                assert_eq!(diagnostic.context["cause"], JsonValue::String(cause.into()));
-                assert_eq!(
-                    diagnostic.context["path"],
-                    JsonValue::String("/study/project.yaml".into())
-                );
-            }
-        }
-        #[test]
         fn every_lock_and_terminology_cause_has_independent_normative_paths_and_mapping() {
-            assert_eq!(support::reached().len(), 8);
+            assert_eq!(support::reached().len(), 7);
             let draft = support::draft();
             let projected = diagnostics(
                 &draft,
@@ -956,7 +933,7 @@ mod project {
         }
         #[test]
         fn independent_complete_sixteen_record_project_report_preserves_every_field_and_order() {
-            assert_eq!(support::reached().len(), 8);
+            assert_eq!(support::reached().len(), 7);
             let draft = support::draft();
             let project = project_root(&[false], Some(&[]));
             let findings = project_environment::validate(Some(Language::Python), &draft);

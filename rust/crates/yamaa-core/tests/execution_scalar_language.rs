@@ -1,6 +1,4 @@
 //! Execution contracts.
-#[allow(dead_code)]
-mod support;
 mod execution {
     mod source_diagnostics {
         //! Actual capture/decoder ordering with payloads that are neither Clone nor Debug nor Send.

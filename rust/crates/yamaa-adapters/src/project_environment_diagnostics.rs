@@ -290,13 +290,6 @@ fn read_issue(
     Ok(diagnostic)
 }
 
-pub(crate) fn root_resource(
-    error: &crate::file_resources::Error,
-    written: &str,
-) -> Result<Vec<Diagnostic>, Error> {
-    Ok(vec![read_issue(error, written, written, "environment")?])
-}
-
 fn decode_issues(
     error: &SourceError,
     entry: &str,

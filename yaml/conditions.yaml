@@ -140,7 +140,7 @@ conditions:
     message: "input {dataset} declares empty_string: present, which a delimited source cannot hold"
   engine_rejected:
     phases: [engine]
-    message: "the engine refused the operation in its {stage} stage: {code}"
+    message: "the engine refused the operation in its {step} step: {code}"
   field_parse_failed:
     phases: [ingest]
     message: "field {field} of input {dataset} holds '{value}', which does not parse as {type}"
@@ -396,7 +396,7 @@ conditions:
     message: "the environment file cannot be admitted"
   project_environment_missing:
     phases: [validation]
-    message: "{spec_path} needs an environment file for this host that is not declared or cannot be read"
+    message: "{spec_path} needs an environment file for this host that the project does not declare"
   publication_failed:
     phases: [output]
     message: "the file of {spec_path} could not be published"
@@ -434,16 +434,16 @@ conditions:
     phases: [ingest]
     message: "{path} changed while it was being read"
   resource_path_missing:
-    phases: [validation]
+    phases: [output, validation]
     message: "{path} does not exist"
   resource_path_not_normalized:
     phases: [validation]
     message: "{path} is not a normalized relative path"
   resource_path_not_regular_file:
-    phases: [validation]
+    phases: [output, validation]
     message: "{path} is not a regular file"
   resource_path_symlink:
-    phases: [validation]
+    phases: [output, validation]
     message: "{path} is a symbolic link"
   resource_path_uri_scheme:
     phases: [validation]

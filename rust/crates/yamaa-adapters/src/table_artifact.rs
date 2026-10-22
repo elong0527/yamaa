@@ -15,19 +15,24 @@
 //!   is the caller's own file name (FILE-7, FILE-8). Through a caller's
 //!   resolver, the path is that resolver's name for the target.
 //!
-//! The refusals are a run's: a target that cannot be written fails as
-//! `engine_rejected` in the `output` stage with the save's code, and a file
-//! that cannot be staged or committed also names the path and the attempt,
-//! as a specification's file does, without a spec path.
+//! The refusals are a run's: a target in a directory that does not exist, a
+//! target that is a directory or a link, fails with FILE-7's or FILE-8's
+//! condition under `output`, naming the path as given at no field; any other
+//! target that cannot be written fails as `engine_rejected` in the `output`
+//! stage with the save's code, and a file that cannot be staged or committed
+//! also names the path and the attempt, as a specification's file does,
+//! without a spec path.
 
 use std::sync::Arc;
 
-use yamaa_core::application_issue::{self as issue, Fault, Stage};
+use yamaa_core::application_issue::{self as issue, Fault, Step};
 use yamaa_core::json::Value;
 
 use crate::{
     arrow_table::TableError,
-    file_application::{publication_failure, publication_stop, resource_failure, Failure},
+    file_application::{
+        publication_failure, publication_stop, target_failure, unresolved_target, Failure,
+    },
     file_publication::Error as PublicationError,
     file_resources::Resources,
     host_resources::Resolver,
@@ -85,7 +90,7 @@ fn encode(table: &PublicTable, profile: &str) -> Result<Vec<u8>, Failure> {
     )
     .map_err(|error| unrepresentable(table, error))?;
     let projection = (0..table.columns().len()).collect::<Vec<_>>();
-    let refused = |fault| vec![issue::rejected(Stage::Output, fault)];
+    let refused = |fault| vec![issue::rejected(Step::Output, fault)];
     if profile == "csv" {
         crate::csv_artifact::render(&snapshot, &projection, None).map_err(|error| match error {
             crate::csv_artifact::Error::Limit {
@@ -112,7 +117,7 @@ fn encode(table: &PublicTable, profile: &str) -> Result<Vec<u8>, Failure> {
 /// A bound the encoded file exceeds.
 fn over(resource: &'static str, limit: usize, actual: Option<usize>) -> Failure {
     vec![issue::resource_rejected(
-        Stage::Output,
+        Step::Output,
         Fault::OutputLimit,
         resource,
         limit,
@@ -131,7 +136,7 @@ fn unrepresentable(table: &PublicTable, error: TableError) -> Failure {
             required,
         } => over(resource, limit, required),
         error => {
-            let mut finding = issue::rejected(Stage::Output, Fault::OutputSchema);
+            let mut finding = issue::rejected(Step::Output, Fault::OutputSchema);
             if let TableError::ArrayType { column, .. } = error {
                 if let Some(field) = table.columns().get(column) {
                     finding
@@ -145,16 +150,16 @@ fn unrepresentable(table: &PublicTable, error: TableError) -> Failure {
 }
 
 /// The target of the file `written` names. Through the local file resolver,
-/// a path whose last segment is empty, `.` or `..` names no file, and a
-/// parent directory that cannot be selected, or a name that cannot be one,
-/// cannot be written: each fails as `invalid_target`, as a run's target in a
-/// missing directory does. Through a caller's resolver, a refused target
-/// reply fails as a run's does.
+/// a path whose last segment is empty, `.` or `..` names no file, and a name
+/// that cannot be one cannot be written: each fails as `invalid_target`. A
+/// parent directory that does not exist reaches no entry, and a file in its
+/// place stops the walk as not a regular file (FILE-7). Through a caller's
+/// resolver, a refused target reply fails as a run's does.
 fn target(written: &str, resolver: Option<Arc<dyn Resolver>>) -> Result<AnchoredTarget, Failure> {
     if let Some(resolver) = resolver {
         return Resources::with_resolver(resolver, written)
             .caller_target(written)
-            .map_err(|error| resource_failure(Stage::Output, &error));
+            .map_err(|error| unresolved_target(&error, None, written));
     }
     let separators: &[char] = if cfg!(windows) { &['/', '\\'] } else { &['/'] };
     if matches!(
@@ -163,10 +168,16 @@ fn target(written: &str, resolver: Option<Arc<dyn Resolver>>) -> Result<Anchored
     ) {
         return Err(publication_failure(&PublicationError::InvalidTarget));
     }
-    crate::file_configuration::resources(written)
-        .ok()
-        .and_then(|(resources, name)| resources.caller_target(&name).ok())
-        .ok_or_else(|| publication_failure(&PublicationError::InvalidTarget))
+    let refused = |error| {
+        let cause = crate::file_resources::resource_failure(&error).map_or(
+            PublicationError::InvalidTarget,
+            PublicationError::Unreachable,
+        );
+        target_failure(&cause, None, written)
+    };
+    let (resources, name) = crate::file_configuration::resources(written)
+        .map_err(|crate::file_configuration::Error::Path(error)| refused(error))?;
+    resources.caller_target(&name).map_err(refused)
 }
 
 /// The issues of a save stopped at its one file, as a run's save records a
@@ -175,12 +186,12 @@ fn target(written: &str, resolver: Option<Arc<dyn Resolver>>) -> Result<Anchored
 fn refusal(cause: Cause, written: &str) -> Failure {
     let at = |issues| publication_stop(issues, None, written, 1, 0);
     match cause {
-        Cause::Target(error) => publication_failure(&error),
+        Cause::Target(error) => target_failure(&error, None, written),
         // A save of one file names no earlier target.
         Cause::Collision { .. } => publication_failure(&PublicationError::InvalidTarget),
-        Cause::Stage(error) | Cause::Commit(error) => at(publication_failure(&error)),
+        Cause::Stage(error) | Cause::Commit(error) => at(target_failure(&error, None, written)),
         Cause::Unwind(_) => at(vec![issue::rejected(
-            Stage::Output,
+            Step::Output,
             Fault::PublicationUnwind,
         )]),
     }
@@ -236,7 +247,7 @@ mod tests {
             assert!(bytes.starts_with(b"PAR1") && bytes.ends_with(b"PAR1"));
         } else {
             let [refused] = parquet.unwrap_err().try_into().unwrap();
-            assert_eq!(refused.context["stage"], text("output"));
+            assert_eq!(refused.context["step"], text("output"));
             assert_eq!(refused.context["code"], text("parquet_codec_unavailable"));
         }
     }
@@ -252,10 +263,7 @@ mod tests {
             yamaa_core::diagnostic::ConditionCode::ApplicationRejected
         );
         assert!(refused.spec_paths.is_empty());
-        assert_eq!(
-            refused.context.keys().collect::<Vec<_>>(),
-            ["code", "stage"]
-        );
+        assert_eq!(refused.context.keys().collect::<Vec<_>>(), ["code", "step"]);
         assert_eq!(refused.context["code"], text("target_changed"));
         // A file the save entered names itself and the attempt, at no spec
         // path, whether it failed or a caller's resolver unwound.
@@ -268,7 +276,7 @@ mod tests {
         ] {
             let [stopped] = refusal(cause, "out.csv").try_into().unwrap();
             assert!(stopped.spec_paths.is_empty());
-            assert_eq!(stopped.context["stage"], text("output"));
+            assert_eq!(stopped.context["step"], text("output"));
             assert_eq!(stopped.context["code"], text(code));
             assert_eq!(stopped.context["path"], text("out.csv"));
             assert_eq!(stopped.context["entered"], Value::from(1_usize));

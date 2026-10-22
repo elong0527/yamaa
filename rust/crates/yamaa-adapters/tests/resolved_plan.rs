@@ -2,8 +2,7 @@
 //! The resolved plan graph (#2840) of authored benchmark specifications, on
 //! the rows and the no-rows binding routes, and the bind rejection that a
 //! failed resolution check produces.
-#[allow(dead_code)]
-mod support;
+use crate::support;
 use std::path::{Path, PathBuf};
 use support::specification_run::{compile, prepare, schema, try_prepare};
 use yamaa_core::{
@@ -285,7 +284,7 @@ fn a_failed_resolution_check_is_an_internal_bind_rejection() {
         specification_diagnostics::{failure, Rejection},
         specification_run::Error,
     };
-    use yamaa_core::application_issue::{rejected, Fault, Stage};
+    use yamaa_core::application_issue::{rejected, Fault, Step};
     use yamaa_core::{dataset::ResolutionError, specification::BindError};
     let reply = failure(
         &Error::Bind(BindError::Resolution(ResolutionError::Capacity)),
@@ -293,6 +292,6 @@ fn a_failed_resolution_check_is_an_internal_bind_rejection() {
     );
     assert_eq!(
         reply,
-        Rejection::Fault(rejected(Stage::Bind, Fault::Internal))
+        Rejection::Fault(rejected(Step::Bind, Fault::Internal))
     );
 }

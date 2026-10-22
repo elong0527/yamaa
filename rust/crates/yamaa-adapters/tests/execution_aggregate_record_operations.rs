@@ -1,17 +1,6 @@
 #![cfg(feature = "yaml")]
 //! Execution contracts.
 
-/// The host that each runtime name in these tests stands for.
-fn host(runtime: &str) -> yamaa_core::project_function::Language {
-    match runtime {
-        "python" => yamaa_core::project_function::Language::Python,
-        "r" => yamaa_core::project_function::Language::R,
-        other => panic!("no host for test runtime {other}"),
-    }
-}
-
-#[allow(dead_code)]
-mod support;
 mod execution {
     mod aggregate_record_operations {
         //! Independent YAML, donor bytes and exact saved truth for per-record aggregates.
@@ -954,12 +943,12 @@ S1,002,2024-06
                     environment: None,
                 };
                 let checked = file_application::check(
-                    crate::host(runtime),
+                    crate::support::host(runtime),
                     request(),
                     identity(runtime, &specification),
                 );
                 let built = match file_application::domain(
-                    crate::host(runtime),
+                    crate::support::host(runtime),
                     request(),
                     identity(runtime, &specification),
                 ) {
@@ -1165,13 +1154,13 @@ S1,002,2024-06
                 environment: None,
             };
             let checked = file_application::check(
-                crate::host(runtime),
+                crate::support::host(runtime),
                 request(),
                 identity(runtime, example, specification),
             );
             assert!(!checked.is_empty(), "{example}: check reported no issues");
             let built = file_application::domain(
-                crate::host(runtime),
+                crate::support::host(runtime),
                 request(),
                 identity(runtime, example, specification),
             );
@@ -1473,7 +1462,7 @@ S1,002,2024-06
                     for runtime in ["python", "r"] {
                         let spec = specification(runtime);
                         let checked = file_application::check(
-                            crate::host(runtime),
+                            crate::support::host(runtime),
                             Request {
                                 specification: &spec,
                                 environment: None,
@@ -1496,7 +1485,7 @@ S1,002,2024-06
                     let spec = specification(runtime);
                     if let Some((_, reason)) = missed {
                         let checked = file_application::check(
-                            crate::host(runtime),
+                            crate::support::host(runtime),
                             Request {
                                 specification: &spec,
                                 environment: None,
@@ -1629,12 +1618,12 @@ S1,002,2024-06
                 };
                 for runtime in ["python", "r"] {
                     let checked = file_application::check(
-                        crate::host(runtime),
+                        crate::support::host(runtime),
                         request(),
                         identity(runtime, name, &spec),
                     );
                     let built = match file_application::domain(
-                        crate::host(runtime),
+                        crate::support::host(runtime),
                         request(),
                         identity(runtime, name, &spec),
                     ) {
@@ -1759,13 +1748,13 @@ S1,002,2024-06
                             environment: None,
                         };
                         let checked = file_application::check(
-                            crate::host(runtime),
+                            crate::support::host(runtime),
                             request(),
                             identity(runtime, name, &spec),
                         );
                         assert!(checked.is_empty(), "{name} ({runtime}): check");
                         let mut built = file_application::domain(
-                            crate::host(runtime),
+                            crate::support::host(runtime),
                             request(),
                             identity(runtime, name, &spec),
                         )
@@ -1839,7 +1828,7 @@ S1,002,2024-06
                     fs::remove_file(fixture.0.join("input.csv")).unwrap();
                     for runtime in ["python", "r"] {
                         let issues = file_application::check(
-                            crate::host(runtime),
+                            crate::support::host(runtime),
                             Request {
                                 specification: &specification,
                                 environment: None,
@@ -1881,13 +1870,13 @@ S1,002,2024-06
                         environment: None,
                     };
                     assert!(file_application::check(
-                        crate::host(runtime),
+                        crate::support::host(runtime),
                         request(),
                         identity(runtime, "precision-endpoints", &specification)
                     )
                     .is_empty());
                     let mut domain = file_application::domain(
-                        crate::host(runtime),
+                        crate::support::host(runtime),
                         request(),
                         identity(runtime, "precision-endpoints", &specification),
                     )
