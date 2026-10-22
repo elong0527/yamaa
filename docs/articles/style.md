@@ -55,9 +55,8 @@ whose root declares the 1.0 header (`yamaa` and a `type` naming a file type);
 hidden directories are left out. Rows follow the files, then line, column and
 finding. A file that cannot be read or parsed, or a directory that cannot be
 listed, refuses the call with the issue that says why, and nothing is
-written. A file that declares `schema_version` is linted by the 0.5 form until
-the 0.5 surface is removed, and none of the findings that read the 1.0
-language applies to it.
+written. Field orders follow the 1.0 schemas. A directory skips a file that
+declares `schema_version`.
 
 ## The findings
 
