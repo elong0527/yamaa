@@ -86,15 +86,20 @@ unknown_member <- function(error, available) {
     identical(issue$message, "the project has no specification named ADSL") &&
     identical(issue$context, paste0('{"available":', available, ',"name":"ADSL"}'))
 }
-# The one issue of a call that selects `section`, which the project does not
-# declare; `sections` is the canonical JSON of the sections it does.
-unknown_section <- function(error, section, sections) {
+# The one issue of a call that selects a section the project does not
+# declare: the shared truth under `key`, which Python compares too. It has no
+# location and no geometry.
+unknown_section <- function(error, key) {
   issue <- error$issues
-  nrow(issue) == 1L && identical(issue$phase, "validation") &&
-    identical(issue$condition, "unknown_section") &&
-    identical(issue$rule, "PROJECT-14") && identical(issue$spec_paths, list(character())) &&
-    identical(issue$message, paste("the project declares no section", section)) &&
-    identical(issue$context, paste0('{"section":"', section, '","sections":', sections, "}"))
+  row <- host_truth[["unknown_section_issues"]][[key]]
+  nrow(issue) == 1L && is.null(row$file) && is.null(row$line) && is.null(row$column) &&
+    is.null(row$source_span) && is.null(row$operand_route) &&
+    identical(list(issue$severity, issue$phase, issue$condition, issue$rule, issue$spec_paths,
+      issue$file, issue$line, issue$column, issue$message, issue$context, issue$source_span,
+      issue$operand_route),
+      list(row$severity, row$phase, row$condition, row$rule,
+        list(as.character(unlist(row$spec_paths))), NA_character_, NA_real_, NA_real_,
+        row$message, row$context, list(NULL), list(NULL)))
 }
 # The one issue of a save with nothing to write, under `rule`.
 nothing_to_save <- function(error, rule) {
@@ -487,7 +492,7 @@ qualify_project_run_members <- function() {
   stopifnot(identical(conditionMessage(error), error_text("unknown_member")),
     unknown_member(error, '["TEST"]'))
   # A section the project does not declare refuses the run (PROJECT-14).
-  stopifnot(unknown_section(refusal(project$run("sdtm")), "sdtm", '["adam"]'))
+  stopifnot(unknown_section(refusal(project$run("sdtm")), "sdtm"))
   # A declared section that lists no specification builds nothing, and a run or
   # a submission that built nothing has nothing to save.
   listing <- file.path(case, "project.yaml")
@@ -638,7 +643,7 @@ qualify_project_refusals <- function() {
                     list(call = function() project$submission("bogus"), message = "unknown_section_submission"))) {
     error <- refusal(case$call())
     stopifnot(identical(conditionMessage(error), error_text(case$message)),
-      unknown_section(error, "bogus", '["adam"]'))
+      unknown_section(error, "bogus"))
   }
   stopifnot(identical(list.files(root), "project.yaml"))
   cat("project refusals are issues, refused saves fail and unknown sections raise\n")

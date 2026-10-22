@@ -59,7 +59,6 @@ not_covered:
     - origin_missing
     - origin_source_not_admitted
     - predecessor_label_mismatch
-    - producer_not_completed
     - project_environment_invalid
     - project_environment_missing
     - reference_data_repeating_conflict
@@ -77,9 +76,7 @@ not_covered:
     - transport_path_collision
     - unknown_codelist
     - unknown_document
-    - unknown_section
     - unknown_standard_family
-    - unlinked_producer
     - xpt_display_format_invalid
   "#3424":
     - resource_path_content_changed

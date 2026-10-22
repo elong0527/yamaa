@@ -1001,7 +1001,9 @@
         "python/tests/installed/installed_info.py",
         "R/yamaa/tests/info.R",
         "python/tests/installed/installed_issue_locations.py",
-        "R/yamaa/tests/issue_locations.R"
+        "R/yamaa/tests/issue_locations.R",
+        "python/tests/installed/installed_project_parity.py",
+        "R/yamaa/tests/project_parity.R"
       ]
     },
     {
