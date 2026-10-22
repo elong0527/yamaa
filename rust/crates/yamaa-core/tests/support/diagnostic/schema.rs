@@ -113,6 +113,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         "missing_required_field",
         "SCHEMA-13",
     );
+    // `schema_version_mismatch` retires with the 0.5 path (#3447).
     let findings = basic
         .validate_document(&document(T::map(vec![("schema_version", T::text("old"))])))
         .unwrap();
@@ -215,6 +216,8 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             "unknown_operation",
             "SCHEMA-7",
         ),
+        // `bare_derivation_scalar` retires with the 0.5 path (#3447): a 1.0
+        // expression field reads a YAML scalar as a literal (D18).
         (
             integer("2"),
             SchemaBareDerivationScalar,
@@ -367,6 +370,9 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             ("identifier", descriptor("str")),
         ],
     );
+    // The 0.5 layer admission (`normalize_layer`), which alone raises these
+    // causes, and whose null clears (LAYER-9) and version check (LAYER-4)
+    // only 0.5 has; #3447 deletes them with the 0.5 path.
     for (fields, code, path, condition, req) in [
         (
             vec![
@@ -406,22 +412,6 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             "LAYER-9",
         ),
         (
-            vec![
-                ("schema_version", T::text("1.0")),
-                (
-                    "columns",
-                    T::List(vec![
-                        T::map(vec![("name", T::text("X"))]),
-                        T::map(vec![("name", T::text("X"))]),
-                    ]),
-                ),
-            ],
-            SchemaLayerIdentifierRepeated,
-            "columns.X.name",
-            "duplicate_identifier",
-            "LAYER-4",
-        ),
-        (
             vec![("extra", T::text("x"))],
             SchemaLayerVersionMismatch,
             "schema_version",
@@ -441,6 +431,25 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         };
         check(&mut reached, &findings, code, path, condition, req);
     }
+    // A 1.x layer, checked as it declares (LAYER-4): two members of one
+    // keyed collection must not share an identifier.
+    let findings = layer_schema
+        .validate_layer(&raw_document(T::map(vec![(
+            "columns",
+            T::List(vec![
+                T::map(vec![("name", T::text("X"))]),
+                T::map(vec![("name", T::text("X"))]),
+            ]),
+        )])))
+        .unwrap();
+    check(
+        &mut reached,
+        &findings,
+        SchemaLayerIdentifierRepeated,
+        "columns.X.name",
+        "duplicate_identifier",
+        "LAYER-4",
+    );
     let window_schema = schema(
         vec![field("w", "window_selection", false)],
         vec![
@@ -471,6 +480,8 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         "unknown_window",
         "WINDOW-1",
     );
+    // The 0.5 model contract (#2844 decision 5), which only the 0.5 path
+    // reads; #3447 deletes it.
     for (extra, code, path, req) in [
         (
             vec![("domain", integer("7"))],

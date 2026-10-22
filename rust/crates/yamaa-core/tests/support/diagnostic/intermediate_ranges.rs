@@ -1,15 +1,16 @@
 //! Original declarations reach range and projection causes with complete context.
 use crate::support::document::Tree;
+use crate::support::specification::{header, prepare};
 use crate::support::table_schema as schema;
 use std::collections::BTreeSet;
 use yamaa_core::{
     diagnostic::{ConditionCode, Diagnostic},
-    schema::{Document, SpecificationDocument},
-    specification::{BindError, PrepareError, PreparedSpecification},
+    schema::Document,
+    specification::{BindError, PrepareError},
     value::ColumnType as T,
 };
 
-fn model(between: Option<Tree>, columns: Option<Tree>) -> SpecificationDocument {
+fn model(between: Option<Tree>, columns: Option<Tree>) -> Document {
     let mut item = vec![
         ("id", Tree::text("P")),
         ("dataset", Tree::text("D")),
@@ -21,9 +22,8 @@ fn model(between: Option<Tree>, columns: Option<Tree>) -> SpecificationDocument 
     if let Some(columns) = columns {
         item.push(("columns", columns));
     }
-    let mut nodes = vec![];
-    let root = Tree::map(vec![
-        ("schema_version", Tree::text("1.0")),
+    let mut fields = header();
+    fields.extend([
         ("domain", Tree::text("TEST")),
         ("base", Tree::text("SRC")),
         (
@@ -42,13 +42,7 @@ fn model(between: Option<Tree>, columns: Option<Tree>) -> SpecificationDocument 
                 ("type", Tree::text("int")),
                 (
                     "derivation",
-                    Tree::map(vec![(
-                        "value",
-                        Tree::map(vec![(
-                            "source",
-                            Tree::map(vec![("variable", Tree::text("SRC.ID"))]),
-                        )]),
-                    )]),
+                    Tree::map(vec![("value", Tree::text("SRC.ID"))]),
                 ),
             ])]),
         ),
@@ -59,11 +53,8 @@ fn model(between: Option<Tree>, columns: Option<Tree>) -> SpecificationDocument 
                 ("columns", Tree::List(vec![Tree::text("ID")])),
             ]),
         ),
-    ])
-    .append(&mut nodes);
-    SpecificationDocument::admit(Document::new(nodes, root).unwrap())
-        .unwrap()
-        .unwrap()
+    ]);
+    Tree::map(fields).document()
 }
 use super::text;
 #[track_caller]
@@ -81,7 +72,7 @@ fn check(
     super::expect(&d, "validation", condition, Some(rule), &[path], context)
 }
 fn bind(between: Option<Tree>, columns: Option<Tree>, lower: T) -> Vec<Diagnostic> {
-    let prepared = PreparedSpecification::prepare(&model(between, columns)).unwrap();
+    let prepared = prepare(&model(between, columns)).unwrap();
     let src = schema(&[("ID", T::Int)]);
     let donor = schema(&[
         ("ID", T::Int),
@@ -99,7 +90,7 @@ fn bind(between: Option<Tree>, columns: Option<Tree>, lower: T) -> Vec<Diagnosti
 }
 pub(crate) fn reached() -> BTreeSet<ConditionCode> {
     let mut reached = BTreeSet::new();
-    let Err(PrepareError::Invalid(findings)) = PreparedSpecification::prepare(&model(
+    let Err(PrepareError::Invalid(findings)) = prepare(&model(
         Some(Tree::map(vec![("value", Tree::text("ID"))])),
         None,
     )) else {
@@ -110,12 +101,14 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
         findings[0].diagnostic(),
         "invalid_field_type",
         "LOOKUP-9",
-        "intermediates[0].between",
+        "intermediates.P.between",
         &[
             ("intermediate", "P"),
             ("expected", "at least one of lower, upper"),
         ],
     ));
+    // Each bound that names no donor field fails, and so does a range value
+    // that no column takes, whatever the bounds bind (D195).
     let findings = bind(
         Some(Tree::map(vec![
             ("value", Tree::text("UNKNOWN")),
@@ -125,13 +118,17 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
         None,
         T::Int,
     );
-    assert_eq!(findings.len(), 2);
-    for (finding, name) in findings.into_iter().zip(["ABSENT_LOW", "ABSENT_HIGH"]) {
+    assert_eq!(findings.len(), 3);
+    for (finding, (path, name)) in findings.into_iter().zip([
+        ("intermediates.P.between", "ABSENT_LOW"),
+        ("intermediates.P.between", "ABSENT_HIGH"),
+        ("intermediates.P.between.value", "UNKNOWN"),
+    ]) {
         reached.insert(check(
             finding,
             "unknown_field",
             "LOOKUP-9",
-            "intermediates[0].between",
+            path,
             &[("intermediate", "P"), ("identifier", name)],
         ));
     }
@@ -148,7 +145,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
         findings.remove(0),
         "unknown_field",
         "LOOKUP-9",
-        "intermediates[0].between.value",
+        "intermediates.P.between.value",
         &[("intermediate", "P"), ("identifier", "UNKNOWN")],
     ));
     let mut findings = bind(
@@ -165,7 +162,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
         findings.remove(0),
         "incomparable_range_types",
         "LOOKUP-9",
-        "intermediates[0].between",
+        "intermediates.P.between",
         &[
             ("intermediate", "P"),
             ("value_type", "int"),
@@ -179,7 +176,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
         findings.remove(0),
         "unknown_field",
         "LOOKUP-11",
-        "intermediates[0].columns",
+        "intermediates.P.columns",
         &[("intermediate", "P"), ("identifier", "D.ABSENT")],
     ));
     reached
@@ -191,7 +188,7 @@ pub(crate) fn match_phase_reached() -> BTreeSet<ConditionCode> {
     let derivation = |operation: &str, payload: Tree| {
         Tree::map(vec![("value", Tree::map(vec![(operation, payload)]))])
     };
-    let source = |name: &str| derivation("source", Tree::map(vec![("variable", Tree::text(name))]));
+    let source = |name: &str| Tree::map(vec![("value", Tree::text(name))]);
     let column = |name: &str, kind: &str| {
         Tree::map(vec![("name", Tree::text(name)), ("type", Tree::text(kind))])
     };
@@ -209,9 +206,8 @@ pub(crate) fn match_phase_reached() -> BTreeSet<ConditionCode> {
             ),
         ),
     ]);
-    let mut nodes = vec![];
-    let root = Tree::map(vec![
-        ("schema_version", Tree::text("1.0")),
+    let mut fields = header();
+    fields.extend([
         ("domain", Tree::text("TEST")),
         (
             "input",
@@ -261,12 +257,8 @@ pub(crate) fn match_phase_reached() -> BTreeSet<ConditionCode> {
                 ),
             ]),
         ),
-    ])
-    .append(&mut nodes);
-    let model = SpecificationDocument::admit(Document::new(nodes, root).unwrap())
-        .unwrap()
-        .unwrap();
-    let prepared = PreparedSpecification::prepare(&model).unwrap();
+    ]);
+    let prepared = prepare(&Tree::map(fields).document()).unwrap();
     let src = schema(&[("ID", T::Int)]);
     let donor = schema(&[("ID", T::Int), ("LOW", T::Int), ("V", T::Str)]);
     let Err(BindError::Invalid(findings)) = prepared.bind_sources(&[&src, &donor]) else {
@@ -281,7 +273,7 @@ pub(crate) fn match_phase_reached() -> BTreeSet<ConditionCode> {
         found.remove(0),
         "phase_boundary",
         "LOOKUP-2",
-        "rows[0].derivations.VALUE.source",
+        "rows.record.derivations.VALUE.source",
         &[
             ("identifier", "RANK"),
             ("intermediate", "P"),

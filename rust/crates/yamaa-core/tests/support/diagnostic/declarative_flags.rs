@@ -1,6 +1,7 @@
 #![allow(unused_imports)]
 use super::rendered;
 pub(crate) use crate::support::project_call_compiler as support;
+pub(crate) use crate::support::specification::prepare;
 pub(crate) use support::{specification, Tree};
 pub(crate) use yamaa_core::{
     bound_expression::Read,
@@ -8,7 +9,7 @@ pub(crate) use yamaa_core::{
     diagnostic::ConditionCode as C,
     expression::{compile, Condition, Context, ErrorKind, EvaluationError, Step as Route, Truth},
     schema::DocumentNode as N,
-    specification::{BindError, PreparedSpecification},
+    specification::BindError,
     table::{Column, TableSchema, ValueRef},
     value::{ColumnType, Value, ValueType},
 };
@@ -26,7 +27,7 @@ pub(crate) fn diagnostics(
     columns: Vec<(&str, &str, Tree)>,
 ) -> Vec<yamaa_core::diagnostic::Diagnostic> {
     let spec = specification(columns);
-    let prepared = PreparedSpecification::prepare(&spec).unwrap();
+    let prepared = prepare(&spec).unwrap();
     let source = TableSchema::new(vec![
         Column {
             name: "ID".into(),

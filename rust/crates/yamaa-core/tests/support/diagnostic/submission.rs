@@ -16,30 +16,63 @@ pub(crate) use yamaa_core::{
     value::{ColumnType, Value},
 };
 
+/// A column's submission metadata, with its one origin (P-ORIGIN-1).
 pub(crate) fn metadata() -> Tree {
+    metadata_written(false)
+}
+/// [`metadata`]; `legacy` writes the 0.5 `origin`.
+fn metadata_written(legacy: bool) -> Tree {
+    let origin = Tree::map(vec![
+        ("type", Tree::text("Assigned")),
+        ("source", Tree::text("Sponsor")),
+    ]);
+    let origin = if legacy {
+        ("origin", origin)
+    } else {
+        ("origins", Tree::list(vec![origin]))
+    };
     Tree::map(vec![
         ("core", Tree::text("Exp")),
         ("length", Tree::integer("8")),
-        (
-            "origin",
-            Tree::map(vec![
-                ("type", Tree::text("Assigned")),
-                ("source", Tree::text("Sponsor")),
-            ]),
-        ),
+        origin,
     ])
 }
 pub(crate) fn column(name: &str) -> Tree {
+    column_written(name, false)
+}
+/// [`column`]; `legacy` writes it in 0.5.
+fn column_written(name: &str, legacy: bool) -> Tree {
+    let derivation = if legacy {
+        Tree::map(vec![("literal", Tree::text("X"))])
+    } else {
+        Tree::text("'X'")
+    };
     Tree::map(vec![
         ("name", Tree::text(name)),
         ("type", Tree::text("str")),
         ("label", Tree::text("Independent column")),
-        ("derivation", Tree::map(vec![("literal", Tree::text("X"))])),
-        ("submission", metadata()),
+        ("derivation", derivation),
+        ("submission", metadata_written(legacy)),
     ])
 }
+/// A 1.0 specification (D4) of the `SDTM` model (D25), which the `sdtm`
+/// section lists.
 pub(crate) fn specification() -> Tree {
-    Tree::map(vec![
+    specification_written(false)
+}
+/// [`specification`]; `legacy` writes it in 0.5, which takes its model from
+/// the section that lists it.
+fn specification_written(legacy: bool) -> Tree {
+    let mut fields = if legacy {
+        vec![]
+    } else {
+        vec![
+            ("yamaa", Tree::text("1.0")),
+            ("type", Tree::text("spec")),
+            ("model", Tree::text("SDTM")),
+        ]
+    };
+    fields.extend([
         ("domain", Tree::text("D0")),
         ("keys", Tree::list(vec![Tree::text("VALUE")])),
         (
@@ -51,7 +84,7 @@ pub(crate) fn specification() -> Tree {
                 ("repeating", Tree::boolean(false)),
             ]),
         ),
-        ("columns", Tree::list(vec![column("VALUE")])),
+        ("columns", Tree::list(vec![column_written("VALUE", legacy)])),
         (
             "output",
             Tree::map(vec![
@@ -59,10 +92,35 @@ pub(crate) fn specification() -> Tree {
                 ("columns", Tree::list(vec![Tree::text("VALUE")])),
             ]),
         ),
-    ])
+    ]);
+    Tree::map(fields)
 }
+/// A 1.0 project (D4) whose `sdtm` section lists `d0.yaml` under its
+/// `standards` (D16).
 pub(crate) fn project() -> Tree {
-    Tree::map(vec![
+    project_written(false)
+}
+/// [`project`]; `legacy` writes it in 0.5, with one `standard`.
+fn project_written(legacy: bool) -> Tree {
+    let guide = Tree::map(vec![
+        ("name", Tree::text("SDTMIG")),
+        ("version", Tree::text("3.4")),
+        ("status", Tree::text("Final")),
+    ]);
+    let guide = if legacy {
+        ("standard", guide)
+    } else {
+        ("standards", Tree::list(vec![guide]))
+    };
+    let mut fields = if legacy {
+        vec![]
+    } else {
+        vec![
+            ("yamaa", Tree::text("1.0")),
+            ("type", Tree::text("project")),
+        ]
+    };
+    fields.extend([
         (
             "study",
             Tree::map(vec![
@@ -75,20 +133,28 @@ pub(crate) fn project() -> Tree {
         (
             "sdtm",
             Tree::map(vec![
-                (
-                    "standard",
-                    Tree::map(vec![
-                        ("name", Tree::text("SDTMIG")),
-                        ("version", Tree::text("3.4")),
-                        ("status", Tree::text("Final")),
-                    ]),
-                ),
+                guide,
                 ("context", Tree::text("Other")),
                 ("define", Tree::text("define.xml")),
                 ("specs", Tree::list(vec![Tree::text("d0.yaml")])),
             ]),
         ),
-    ])
+    ]);
+    Tree::map(fields)
+}
+/// Move the project's `sdtm` section to `adam`, under the ADaM guide its
+/// specification's `model` names.
+fn adam(project: &mut Tree, spec: &mut Tree) {
+    let Tree::Map(fields) = project else {
+        unreachable!("a project is a mapping")
+    };
+    let section = fields
+        .iter_mut()
+        .find(|(name, _)| name == "sdtm")
+        .expect("the sdtm section");
+    section.0 = "adam".into();
+    *project.at(&["adam", "standards", "0", "name"]) = Tree::text("ADaMIG");
+    *spec.at(&["model"]) = Tree::text("ADaM");
 }
 pub(crate) fn document_reference(id: &str, kind: &str) -> Tree {
     Tree::map(vec![
@@ -144,10 +210,45 @@ pub(crate) fn compose_study(
     installed: &str,
     created: &str,
 ) -> Result<Study, Vec<Finding>> {
+    compose_written(
+        project,
+        docs,
+        others,
+        catalogue,
+        (installed, created),
+        false,
+    )
+}
+/// [`compose_study`]; `legacy` reads the project and specifications in 0.5.
+fn compose_written(
+    project: Tree,
+    docs: Vec<Tree>,
+    others: Vec<Tree>,
+    catalogue: &ct::Catalogue,
+    (installed, created): (&str, &str),
+    legacy: bool,
+) -> Result<Study, Vec<Finding>> {
     let project = project.document();
-    let declared = yamaa_core::front_end::v0_5::sections::sections(&project).unwrap();
+    let (declared, surface) = if legacy {
+        (
+            yamaa_core::front_end::v0_5::sections::sections(&project).unwrap(),
+            yamaa_core::ast::Surface::V0_5,
+        )
+    } else {
+        let lowered = yamaa_core::front_end::v1::project::project(&project, None).unwrap();
+        (lowered.submission.unwrap(), lowered.header.surface)
+    };
     let docs: Vec<_> = docs.into_iter().map(Tree::document).collect();
-    let trees: Vec<_> = docs.iter().map(crate::support::submission_tree).collect();
+    let trees: Vec<_> = docs
+        .iter()
+        .map(|document| {
+            if legacy {
+                crate::support::submission_tree(document)
+            } else {
+                yamaa_core::front_end::v1::spec::lower(document, None).into_spec()
+            }
+        })
+        .collect();
     let others: Vec<_> = others.into_iter().map(Tree::document).collect();
     let others: Vec<_> = others.iter().collect();
     let inputs: Vec<_> = docs
@@ -162,11 +263,7 @@ pub(crate) fn compose_study(
         })
         .collect();
     let section = &declared.sections[0];
-    let required = composition::Required::admit(
-        declared.study.as_ref(),
-        section,
-        yamaa_core::ast::Surface::V0_5,
-    )?;
+    let required = composition::Required::admit(declared.study.as_ref(), section, surface)?;
     composition::compose(required, catalogue, &inputs, &others, installed, created)
 }
 pub(crate) fn one(
@@ -426,13 +523,19 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             32,
         ),
     ] {
-        let mut project = project();
-        let mut spec = specification();
+        // Composition reads a `not_missing` check from the 0.5 long form
+        // `{not_missing: {}}`; a 1.0 file writes the bare keyword, which
+        // preparation reports as these two causes before composition
+        // (CHECK-5, SUB-11). Changes 4 and 28 keep their 0.5 documents
+        // until #3447.
+        let legacy = matches!(change, 4 | 28);
+        let mut project = project_written(legacy);
+        let mut spec = specification_written(legacy);
         let mut lists = empty.clone();
         let meta = ["columns", "0", "submission"];
         match change {
             0 => spec.remove(&["columns", "0", "submission"]),
-            1 => spec.remove(&["columns", "0", "submission", "origin"]),
+            1 => spec.remove(&["columns", "0", "submission", "origins"]),
             2 => {
                 project.set(&["sdtm", "context"], Tree::text("Submission"));
                 *spec.at(&["domain"]) = Tree::text("LONGDOMAIN");
@@ -444,36 +547,34 @@ pub fn reached() -> BTreeSet<ConditionCode> {
                 Tree::list(vec![Tree::map(vec![("not_missing", Tree::map(vec![]))])]),
             ),
             5 => {
-                project = Tree::Map(match project {
-                    Tree::Map(mut fields) => {
-                        fields[1].0 = "adam".into();
-                        fields
-                    }
-                    _ => unreachable!(),
-                });
-                *project.at(&["adam", "standard", "name"]) = Tree::text("ADaMIG");
+                adam(&mut project, &mut spec);
                 *spec.at(&["submission", "class"]) = Tree::text("SUBJECT LEVEL ANALYSIS DATASET");
                 spec.at(&meta).set(&["mandatory"], Tree::boolean(false));
                 spec.at(&meta).set(&["role"], Tree::text("Identifier"));
             }
             6 => {
-                *spec.at(&["columns", "0", "submission", "origin", "source"]) =
+                *spec.at(&["columns", "0", "submission", "origins", "0", "source"]) =
                     Tree::text("Investigator")
             }
-            7 => *spec.at(&["columns", "0", "submission", "origin", "type"]) = Tree::text("Other"),
+            7 => {
+                *spec.at(&["columns", "0", "submission", "origins", "0", "type"]) =
+                    Tree::text("Other")
+            }
             8 => {
-                *spec.at(&["columns", "0", "submission", "origin", "type"]) = Tree::text("Derived")
+                *spec.at(&["columns", "0", "submission", "origins", "0", "type"]) =
+                    Tree::text("Derived")
             }
             // A bare literal refutes Derived: the value is read from no input.
             9 => {
-                *spec.at(&["columns", "0", "submission", "origin", "type"]) = Tree::text("Derived");
+                *spec.at(&["columns", "0", "submission", "origins", "0", "type"]) =
+                    Tree::text("Derived");
                 spec.at(&meta)
                     .set(&["method"], Tree::text("Independent algorithm"));
             }
             10 | 11 => {
-                *spec.at(&["columns", "0", "submission", "origin", "type"]) =
+                *spec.at(&["columns", "0", "submission", "origins", "0", "type"]) =
                     Tree::text("Collected");
-                *spec.at(&["columns", "0", "submission", "origin", "source"]) =
+                *spec.at(&["columns", "0", "submission", "origins", "0", "source"]) =
                     Tree::text("Investigator");
                 if change == 11 {
                     project.set(
@@ -484,7 +585,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
                         ]),
                     );
                     spec.at(&meta).set(
-                        &["origin", "documents"],
+                        &["origins", "0", "documents"],
                         Tree::list(vec![Tree::text("OTHER")]),
                     );
                 }
@@ -502,7 +603,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             ),
             17 => spec.at(&meta).set(&["mandatory"], Tree::boolean(false)),
             18 => spec.at(&meta).set(
-                &["origin", "documents"],
+                &["origins", "0", "documents"],
                 Tree::list(vec![Tree::text("UNKNOWN")]),
             ),
             19 => spec.set(
@@ -516,7 +617,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             21 => spec.set(&["submission", "has_no_data"], Tree::boolean(true)),
             // A transport carries labels of at most 40 printable characters.
             22 => {
-                project.set(&["sdtm", "datasets"], Tree::text("xpt"));
+                project.set(&["sdtm", "transport"], Tree::text("xpt"));
                 *spec.at(&["submission", "label"]) =
                     Tree::text("An independent dataset label beyond forty characters");
             }
@@ -545,7 +646,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             // A declared `mandatory: true` on a non-key column already requires
             // every value; a `not_missing` beside it restates it.
             28 => {
-                let mut extra = column("EXTRA");
+                let mut extra = column_written("EXTRA", legacy);
                 extra
                     .at(&["submission"])
                     .set(&["mandatory"], Tree::boolean(true));
@@ -553,20 +654,13 @@ pub fn reached() -> BTreeSet<ConditionCode> {
                     &["verifications"],
                     Tree::list(vec![Tree::map(vec![("not_missing", Tree::map(vec![]))])]),
                 );
-                *spec.at(&["columns"]) = Tree::list(vec![column("VALUE"), extra]);
+                *spec.at(&["columns"]) = Tree::list(vec![column_written("VALUE", legacy), extra]);
                 *spec.at(&["output", "columns"]) =
                     Tree::list(vec![Tree::text("VALUE"), Tree::text("EXTRA")]);
             }
             // An ADaM date travels as a SAS date with its one display format.
             29 => {
-                project = Tree::Map(match project {
-                    Tree::Map(mut fields) => {
-                        fields[1].0 = "adam".into();
-                        fields
-                    }
-                    _ => unreachable!(),
-                });
-                *project.at(&["adam", "standard", "name"]) = Tree::text("ADaMIG");
+                adam(&mut project, &mut spec);
                 *spec.at(&["submission", "class"]) = Tree::text("SUBJECT LEVEL ANALYSIS DATASET");
                 spec.at(&meta).set(&["mandatory"], Tree::boolean(true));
                 let mut date = column("ADT");
@@ -576,23 +670,17 @@ pub fn reached() -> BTreeSet<ConditionCode> {
                     .set(&["mandatory"], Tree::boolean(false));
                 date.at(&["submission"])
                     .set(&["display_format"], Tree::text("YYMMDD10."));
-                date.set(
-                    &["derivation"],
-                    Tree::map(vec![("source", Tree::text("SRC.ADT"))]),
-                );
+                date.set(&["derivation"], Tree::text("SRC.ADT"));
                 *spec.at(&["columns"]) = Tree::list(vec![column("VALUE"), date]);
                 *spec.at(&["output", "columns"]) =
                     Tree::list(vec![Tree::text("VALUE"), Tree::text("ADT")]);
             }
             // A numeric display format under xpt must be a SAS format.
             30 => {
-                project.set(&["sdtm", "datasets"], Tree::text("xpt"));
+                project.set(&["sdtm", "transport"], Tree::text("xpt"));
                 let mut number = column("NUMBER");
                 *number.at(&["type"]) = Tree::text("int");
-                number.set(
-                    &["derivation"],
-                    Tree::map(vec![("literal", Tree::integer("1"))]),
-                );
+                number.set(&["derivation"], Tree::integer("1"));
                 number
                     .at(&["submission"])
                     .set(&["display_format"], Tree::text("8,2"));
@@ -603,7 +691,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             // A transport re-reads the artifact, so its display digits would
             // become the submitted values.
             31 => {
-                project.set(&["sdtm", "datasets"], Tree::text("json"));
+                project.set(&["sdtm", "transport"], Tree::text("dataset_json"));
                 spec.set(&["output", "decimals"], Tree::integer("2"));
             }
             // An `sdtm` dataset carries its date and time text as `str`.
@@ -611,17 +699,22 @@ pub fn reached() -> BTreeSet<ConditionCode> {
                 let mut moment = column("DTM");
                 *moment.at(&["type"]) = Tree::text("datetime");
                 moment.remove(&["submission", "length"]);
-                moment.set(
-                    &["derivation"],
-                    Tree::map(vec![("source", Tree::text("SRC.DTM"))]),
-                );
+                moment.set(&["derivation"], Tree::text("SRC.DTM"));
                 *spec.at(&["columns"]) = Tree::list(vec![column("VALUE"), moment]);
                 *spec.at(&["output", "columns"]) =
                     Tree::list(vec![Tree::text("VALUE"), Tree::text("DTM")]);
             }
             _ => unreachable!(),
         }
-        let findings = one(project, spec, &lists).unwrap_err();
+        let findings = compose_written(
+            project,
+            vec![spec],
+            Vec::new(),
+            &lists,
+            ("1.0", "2026-09-30T00:00:00"),
+            legacy,
+        )
+        .unwrap_err();
         reached_finding(&mut reached, &findings, code, "validation", condition, rule);
         if change == 31 {
             assert_eq!(findings.len(), 1, "{findings:?}");
@@ -711,11 +804,11 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     let derived = || {
         vec![
             (
-                "origin",
-                Tree::map(vec![
+                "origins",
+                Tree::list(vec![Tree::map(vec![
                     ("type", Tree::text("Derived")),
                     ("source", Tree::text("Sponsor")),
-                ]),
+                ])]),
             ),
             ("method", Tree::text("Independent algorithm")),
         ]
@@ -784,11 +877,11 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     // another section of the study declares that column.
     let mut spec = specification();
     spec.set(&["input"], Tree::map(vec![("P0", Tree::text("p0.csv"))]));
-    *spec.at(&["columns", "0", "derivation"]) = Tree::map(vec![("source", Tree::text("P0.VALUE"))]);
-    *spec.at(&["columns", "0", "submission", "origin"]) = Tree::map(vec![
+    *spec.at(&["columns", "0", "derivation"]) = Tree::text("P0.VALUE");
+    *spec.at(&["columns", "0", "submission", "origins"]) = Tree::list(vec![Tree::map(vec![
         ("type", Tree::text("Predecessor")),
         ("description", Tree::text("P0.VALUE")),
-    ]);
+    ])]);
     let mut predecessor = specification();
     *predecessor.at(&["domain"]) = Tree::text("P0");
     *predecessor.at(&["columns", "0", "label"]) = Tree::text("Predecessor column");
@@ -828,6 +921,9 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     ] {
         assert_eq!(findings[0].context[key], JsonValue::String(value.into()));
     }
+    // Change 0 reaches `unknown_standard_family`, which only a 0.5 project's
+    // one `standard` raises; it keeps its 0.5 documents until #3447 retires
+    // the cause (a 1.0 section's guides follow DEFINE-6).
     for (code, condition, rule, change) in [
         (
             SubmissionStandardFamily,
@@ -873,8 +969,9 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         ),
         (SubmissionDefineName, "value_not_permitted", "DEFINE-2", 7),
     ] {
-        let mut project = project();
-        let mut spec = specification();
+        let legacy = change == 0;
+        let mut project = project_written(legacy);
+        let mut spec = specification_written(legacy);
         let mut lists = empty.clone();
         let mut docs = None;
         match change {
@@ -907,17 +1004,18 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             }
             // A transport file sits beside a document named define.xml.
             7 => {
-                project.set(&["sdtm", "datasets"], Tree::text("json"));
+                project.set(&["sdtm", "transport"], Tree::text("dataset_json"));
                 *project.at(&["sdtm", "define"]) = Tree::text("out/metadata.xml");
             }
             _ => unreachable!(),
         }
-        let findings = compose(
+        let findings = compose_written(
             project,
             docs.unwrap_or_else(|| vec![spec]),
+            Vec::new(),
             &lists,
-            if change == 2 { "" } else { "1.0" },
-            "2026-09-30T00:00:00",
+            (if change == 2 { "" } else { "1.0" }, "2026-09-30T00:00:00"),
+            legacy,
         )
         .unwrap_err();
         reached_finding(&mut reached, &findings, code, "validation", condition, rule);
@@ -1029,14 +1127,15 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     // still needs, together, before composing any dataset.
     let mut specs_only = project();
     specs_only.remove(&["study"]);
-    specs_only.remove(&["sdtm", "standard"]);
+    specs_only.remove(&["sdtm", "standards"]);
     specs_only.remove(&["sdtm", "define"]);
     let findings = one(specs_only, specification(), &empty).unwrap_err();
+    // A 1.0 section's guides are its `standards` (D16).
     assert_eq!(
         findings,
         [
             Finding::cause(DefineRequiredDeclaration, "study", "study"),
-            Finding::cause(DefineRequiredDeclaration, "sdtm.standard", "standard"),
+            Finding::cause(DefineRequiredDeclaration, "sdtm.standards", "standards"),
             Finding::cause(DefineRequiredDeclaration, "sdtm.define", "define"),
         ]
     );
@@ -1111,40 +1210,15 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     // SUB-3 (D25, D58): a section lists only 1.x specifications of its model,
     // each at its listed `model`, and composes no further dataset metadata
     // for one that fails.
-    let listed = |model: Option<yamaa_core::ast::ModelKind>| {
-        let document = specification().document();
-        let mut tree = crate::support::submission_tree(&document);
-        tree.header.surface = yamaa_core::ast::Surface::V1 { minor: 0 };
-        tree.model = model.map(|kind| yamaa_core::ast::Model {
-            kind,
-            meta: tree.meta,
-        });
-        let project = project().document();
-        let declared = yamaa_core::front_end::v0_5::sections::sections(&project).unwrap();
-        let section = &declared.sections[0];
-        let required = composition::Required::admit(
-            declared.study.as_ref(),
-            section,
-            yamaa_core::ast::Surface::V0_5,
-        )
-        .unwrap();
-        let input = Input {
-            document: &document,
-            tree: &tree,
-            source: "d0.yaml",
-            artifact: "d0.csv",
-            href: Some("d0.csv"),
-        };
-        composition::compose(
-            required,
-            &empty,
-            &[input],
-            &[],
-            "1.0",
-            "2026-09-30T00:00:00",
-        )
+    let listed = |model: Option<&str>| {
+        let mut spec = specification();
+        match model {
+            Some(model) => *spec.at(&["model"]) = Tree::text(model),
+            None => spec.remove(&["model"]),
+        }
+        one(project(), spec, &empty)
     };
-    assert!(listed(Some(yamaa_core::ast::ModelKind::Sdtm)).is_ok());
+    assert!(listed(Some("SDTM")).is_ok());
     let text = |value: &str| JsonValue::String(value.into());
     for (model, code, condition, context) in [
         (
@@ -1158,7 +1232,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             ],
         ),
         (
-            Some(yamaa_core::ast::ModelKind::Adam),
+            Some("ADaM"),
             SubmissionModelMismatch,
             "standard_model_mismatch",
             vec![
@@ -1192,52 +1266,25 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     // its model under a name of its own, and a dataset binds the guide its
     // `submission.standard` names, or the first.
     let standards = |names: &[&str], selected: Option<&str>| {
-        let project = project().document();
-        let mut declared = yamaa_core::front_end::v0_5::sections::sections(&project).unwrap();
-        let first = declared.sections[0].standards[0].clone();
-        declared.sections[0].standards = names
-            .iter()
-            .map(|name| yamaa_core::ast::ImplementationGuide {
-                name: yamaa_core::ast::Text {
-                    text: (*name).into(),
-                    meta: first.name.meta,
-                },
-                ..first.clone()
-            })
-            .collect();
-        let mut tree = crate::support::submission_tree(&specification().document());
-        tree.header.surface = yamaa_core::ast::Surface::V1 { minor: 0 };
-        tree.model = Some(yamaa_core::ast::Model {
-            kind: yamaa_core::ast::ModelKind::Sdtm,
-            meta: tree.meta,
-        });
+        let mut project = project();
+        *project.at(&["sdtm", "standards"]) = Tree::list(
+            names
+                .iter()
+                .map(|name| {
+                    Tree::map(vec![
+                        ("name", Tree::text(name)),
+                        ("version", Tree::text("3.4")),
+                        ("status", Tree::text("Final")),
+                    ])
+                })
+                .collect(),
+        );
         let mut spec = specification();
         if let Some(selected) = selected {
             spec.at(&["submission"])
                 .set(&["standard"], Tree::text(selected));
         }
-        let document = spec.document();
-        let required = composition::Required::admit(
-            declared.study.as_ref(),
-            &declared.sections[0],
-            yamaa_core::ast::Surface::V1 { minor: 0 },
-        )
-        .unwrap();
-        let input = Input {
-            document: &document,
-            tree: &tree,
-            source: "d0.yaml",
-            artifact: "d0.csv",
-            href: Some("d0.csv"),
-        };
-        composition::compose(
-            required,
-            &empty,
-            &[input],
-            &[],
-            "1.0",
-            "2026-09-30T00:00:00",
-        )
+        one(project, spec, &empty)
     };
     let two = ["SDTMIG", "SDTMIG-MD"];
     let study = standards(&two, Some("SDTMIG-MD")).unwrap();
@@ -1352,7 +1399,7 @@ fn rows(kind: ColumnType, values: Vec<Value>) -> Rows {
 fn transport_refusals(reached: &mut BTreeSet<ConditionCode>, empty: &ct::Catalogue) {
     use ConditionCode::*;
     let mut project = project();
-    project.set(&["sdtm", "datasets"], Tree::text("xpt"));
+    project.set(&["sdtm", "transport"], Tree::text("xpt"));
     let study = one(project.clone(), specification(), empty).unwrap();
     let dataset = &study.datasets()[0];
     let finding = submission_transport::admit(
@@ -1385,7 +1432,7 @@ fn transport_refusals(reached: &mut BTreeSet<ConditionCode>, empty: &ct::Catalog
     );
     let mut spec = specification();
     *spec.at(&["columns", "0", "type"]) = Tree::text("int");
-    *spec.at(&["columns", "0", "derivation"]) = Tree::map(vec![("literal", Tree::integer("1"))]);
+    *spec.at(&["columns", "0", "derivation"]) = Tree::integer("1");
     let numeric = one(project, spec, empty).unwrap();
     let finding = submission_transport::admit(
         &numeric,

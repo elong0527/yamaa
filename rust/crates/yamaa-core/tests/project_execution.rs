@@ -11,7 +11,8 @@ mod project {
             rc::Rc,
             sync::Arc,
         };
-        use support::{call, function, specification, Tree};
+        // The 0.5 documents this family keeps until #3447 (#3435).
+        use support::{call, function, v0_5::specification, Tree};
         use yamaa_core::{
             dataset::ExecutionError,
             domain,
@@ -1799,7 +1800,11 @@ mod project {
     mod specification_codelist_execution {
         use crate::support::project_codelist_compiler as support;
         use std::{cell::RefCell, convert::Infallible};
-        use support::{environment, schema, spec};
+        // The 0.5 documents this family keeps until #3447 (#3435).
+        use support::{
+            schema,
+            v0_5::{environment, spec},
+        };
         use yamaa_core::{dataset::ExecutionError, project_domain};
         use yamaa_core::{
             table::{CellError, TableAccess, TableSchema, ValueRef},
@@ -1928,7 +1933,11 @@ mod project {
     mod specification_project_codelists {
         use crate::support::project_codelist_compiler as support;
         use crate::support::resolved;
-        use support::{environment, schema, spec};
+        // The 0.5 documents this family keeps until #3447 (#3435).
+        use support::{
+            schema,
+            v0_5::{environment, spec},
+        };
         use yamaa_core::{
             dataset::Check,
             specification::{PrepareError, PreparedSpecification},
@@ -2090,7 +2099,8 @@ mod project {
         use crate::support::id_source_schema as source;
         use crate::support::project_call_compiler as support;
         use crate::support::resolved;
-        use support::{call, function, specification, Tree};
+        // The 0.5 documents this family keeps until #3447 (#3435).
+        use support::{call, function, v0_5::specification, Tree};
         use yamaa_core::json::Value as JsonValue;
         use yamaa_core::{
             bound_expression::Read,

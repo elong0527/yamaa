@@ -1,6 +1,7 @@
 //! Actual binder, scope and dependency failures reach the canonical cause registry.
 #![allow(unused_imports)]
 use super::rendered;
+use crate::support::specification::{header, prepare};
 pub(crate) use std::collections::BTreeSet;
 pub(crate) use yamaa_core::json::Value as V;
 pub(crate) use yamaa_core::{
@@ -10,7 +11,8 @@ pub(crate) use yamaa_core::{
     reference_scope::{self, Phase, Reach, Scope},
     schema::{Document, DocumentNode as N, SpecificationDocument},
     specification::{
-        BindError, BindFinding, PreparedSpecification, SourceDeclaration, SourceProfile,
+        BindError, BindFinding, PrepareError, PreparedSpecification, SourceDeclaration,
+        SourceProfile,
     },
     table::{Column, TableSchema},
     value::ColumnType,
@@ -48,6 +50,10 @@ pub(crate) fn op<'a>(name: &'a str, field: &'a str, value: &'a str) -> T {
         T::map(vec![(name, T::map(vec![(field, T::text(value))]))]),
     )])
 }
+/// A derivation written as one expression (D18): a name alone reads it.
+pub(crate) fn expression(text: &str) -> T {
+    T::map(vec![("value", T::text(text))])
+}
 pub(crate) fn column(name: &str, derivation: Option<T>) -> T {
     let mut fields = vec![("name", T::text(name)), ("type", T::text("int"))];
     if let Some(d) = derivation {
@@ -56,8 +62,33 @@ pub(crate) fn column(name: &str, derivation: Option<T>) -> T {
     T::map(fields)
 }
 pub(crate) fn compile(value: T, rows: Option<T>) -> PreparedSpecification {
-    let mut fields = vec![
-        ("schema_version", T::text("1.0")),
+    prepare(&tree(value, rows, false).document()).unwrap()
+}
+/// [`compile`] for a cause only 0.5 reaches, which keeps its 0.5 document
+/// until #3447 deletes the 0.5 path and retires the cause.
+pub(crate) fn compile_v0_5(value: T) -> PreparedSpecification {
+    legacy(tree(value, None, true)).unwrap()
+}
+/// Prepare the 0.5 specification `tree`.
+pub(crate) fn legacy(tree: T) -> Result<PreparedSpecification, PrepareError> {
+    let model = SpecificationDocument::admit(tree.document())
+        .unwrap()
+        .unwrap();
+    PreparedSpecification::prepare(&model)
+}
+/// The specification [`compile`] prepares; `legacy` writes it in 0.5.
+fn tree(value: T, rows: Option<T>, legacy: bool) -> T {
+    let read = if legacy {
+        op("source", "variable", "SRC.ID")
+    } else {
+        expression("SRC.ID")
+    };
+    let mut fields = if legacy {
+        vec![("schema_version", T::text("1.0"))]
+    } else {
+        header()
+    };
+    fields.extend([
         ("domain", T::text("TEST")),
         ("base", T::text("SRC")),
         (
@@ -68,10 +99,7 @@ pub(crate) fn compile(value: T, rows: Option<T>) -> PreparedSpecification {
         (
             "columns",
             T::List(vec![
-                column(
-                    "ID",
-                    rows.is_none().then_some(op("source", "variable", "SRC.ID")),
-                ),
+                column("ID", rows.is_none().then_some(read)),
                 column("VALUE", rows.is_none().then_some(value)),
             ]),
         ),
@@ -82,16 +110,11 @@ pub(crate) fn compile(value: T, rows: Option<T>) -> PreparedSpecification {
                 ("columns", T::List(vec![T::text("ID"), T::text("VALUE")])),
             ]),
         ),
-    ];
+    ]);
     if let Some(rows) = rows {
         fields.push(("rows", rows));
     }
-    let mut nodes = vec![];
-    let root = T::map(fields).append(&mut nodes);
-    let model = SpecificationDocument::admit(Document::new(nodes, root).unwrap())
-        .unwrap()
-        .unwrap();
-    PreparedSpecification::prepare(&model).unwrap()
+    T::map(fields)
 }
 pub(crate) fn failures(prepared: &PreparedSpecification) -> Vec<BindFinding> {
     let schema = TableSchema::new(vec![
@@ -214,53 +237,46 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             fields,
         ));
     }
-    for (operation, field, value, condition, rule, fields) in [
+    // A name alone keeps its source binding (EXPR-5); a formula reports at
+    // its derivation (D18).
+    for (value, path, condition, rule, fields) in [
         (
-            "source",
-            "variable",
             "SRC.MISSING",
+            "columns.VALUE.derivation.source",
             "unknown_field",
             Some("NAME-3"),
             vec![("identifier", text("SRC.MISSING"))],
         ),
         (
-            "source",
-            "variable",
             "MISSING",
+            "columns.VALUE.derivation.source",
             "unknown_field",
             Some("NAME-3"),
             vec![("identifier", text("MISSING"))],
         ),
         (
-            "source",
-            "variable",
             "V",
+            "columns.VALUE.derivation.source",
             "unresolvable_name",
             Some("NAME-3"),
             vec![("identifier", text("V")), ("suggestion", text("SRC.V"))],
         ),
         (
-            "compute",
-            "expr",
             "SRC.ID + 1",
+            "columns.VALUE.derivation",
             "qualified_identifier",
             Some("FORMULA-9"),
             vec![("expr", text("SRC.ID + 1")), ("identifier", text("SRC.ID"))],
         ),
     ] {
-        let prepared = compile(op(operation, field, value), None);
+        let prepared = compile(expression(value), None);
         let found = failures(&prepared);
         let d = found
             .iter()
             .flat_map(|f| f.diagnostics(prepared.source()).unwrap())
             .find(|d| d.definition().condition == condition && d.definition().rule == rule)
             .unwrap();
-        let path = if operation == "compute" {
-            format!("columns.VALUE.derivation.{operation}.{field}")
-        } else {
-            format!("columns.VALUE.derivation.{operation}")
-        };
-        reached.insert(check(d, condition, rule, &[&path], fields));
+        reached.insert(check(d, condition, rule, &[path], fields));
     }
     for (expr, reason) in [
         ("SUM(ID)", "a grouped row aggregate reads its row driver"),
@@ -276,12 +292,12 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             (
                 "derivations",
                 T::map(vec![
-                    ("ID", op("source", "variable", "SRC.ID")),
+                    ("ID", expression("SRC.ID")),
                     ("VALUE", op("aggregate", "expr", expr)),
                 ]),
             ),
         ])]);
-        let prepared = compile(op("compute", "expr", "1"), Some(rows));
+        let prepared = compile(expression("1"), Some(rows));
         let found = failures(&prepared);
         let d = found
             .iter()
@@ -292,7 +308,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             d,
             "invalid_aggregate_context",
             Some("LOOKUP-18"),
-            &["rows[0].derivations.VALUE.aggregate"],
+            &["rows.first.derivations.VALUE.aggregate"],
             vec![("expr", text(expr)), ("reason", text(reason))],
         ));
     }
@@ -325,13 +341,13 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             (
                 "derivations",
                 T::map(vec![
-                    ("ID", op("source", "variable", "SRC.ID")),
+                    ("ID", expression("SRC.ID")),
                     (
                         "VALUE",
                         if grouped {
                             op("aggregate", "expr", "COUNT(SRC.V)")
                         } else {
-                            op("source", "variable", "SRC.V")
+                            expression("SRC.V")
                         },
                     ),
                 ]),
@@ -340,7 +356,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
         if grouped {
             row.push(("group_by", T::List(vec![T::text("SRC.ID")])));
         }
-        let prepared = compile(op("compute", "expr", "1"), Some(T::List(vec![T::map(row)])));
+        let prepared = compile(expression("1"), Some(T::List(vec![T::map(row)])));
         let found = failures(&prepared);
         assert_eq!(found.len(), 1);
         let d = found[0]
@@ -352,7 +368,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             d,
             "phase_boundary",
             Some("ROW-6"),
-            &["rows[0].filter"],
+            &["rows.first.filter"],
             vec![
                 ("identifier", text(identifier)),
                 ("row", text("first")),
@@ -419,8 +435,12 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
 pub(crate) fn window_reached() -> BTreeSet<ConditionCode> {
     let mut reached = BTreeSet::new();
     let source = source();
-    for (operation, payload, condition, rule, suffix, values) in [
+    // `legacy` marks the cause only 0.5 reaches, `window_order_by_forbidden`:
+    // a 1.0 `baseline_flag` admits `window.order_by` (D58, D101), and #3447
+    // retires the cause with its 0.5 document.
+    for (legacy, operation, payload, condition, rule, suffix, values) in [
         (
+            false,
             "row_value",
             T::map(vec![
                 ("source", T::text("ID")),
@@ -436,6 +456,7 @@ pub(crate) fn window_reached() -> BTreeSet<ConditionCode> {
             vec![("offset", V::from(0))],
         ),
         (
+            false,
             "rank",
             T::map(vec![]),
             "window_order_by_required",
@@ -444,6 +465,7 @@ pub(crate) fn window_reached() -> BTreeSet<ConditionCode> {
             vec![("operation", text("rank"))],
         ),
         (
+            true,
             "baseline_flag",
             T::map(vec![
                 ("date", T::text("ID")),
@@ -460,6 +482,7 @@ pub(crate) fn window_reached() -> BTreeSet<ConditionCode> {
             vec![("operation", text("baseline_flag"))],
         ),
         (
+            false,
             "row_number",
             T::map(vec![(
                 "window",
@@ -474,10 +497,12 @@ pub(crate) fn window_reached() -> BTreeSet<ConditionCode> {
             vec![("identifier", text("ID"))],
         ),
     ] {
-        let prepared = compile(
-            T::map(vec![("value", T::map(vec![(operation, payload)]))]),
-            None,
-        );
+        let value = T::map(vec![("value", T::map(vec![(operation, payload)]))]);
+        let prepared = if legacy {
+            compile_v0_5(value)
+        } else {
+            compile(value, None)
+        };
         let found = failures(&prepared);
         assert_eq!(found.len(), 1);
         let BindFinding::Window(window) = &found[0] else {
@@ -502,8 +527,8 @@ pub(crate) fn window_reached() -> BTreeSet<ConditionCode> {
                 "baseline_flag",
                 T::map(vec![
                     ("date", T::text("ID")),
-                    ("reference_date", T::text("ID")),
-                    ("value", T::text("ID")),
+                    ("reference", T::text("ID")),
+                    ("source", T::text("ID")),
                 ]),
             )]),
         )]),
@@ -539,10 +564,7 @@ pub(crate) fn window_driver_reached() -> BTreeSet<ConditionCode> {
                 ("dataset", T::text(driver)),
                 (
                     "derivations",
-                    T::map(vec![(
-                        "ID",
-                        op("source", "variable", &format!("{driver}.ID")),
-                    )]),
+                    T::map(vec![("ID", expression(&format!("{driver}.ID")))]),
                 ),
             ])
         };
@@ -556,8 +578,8 @@ pub(crate) fn window_driver_reached() -> BTreeSet<ConditionCode> {
                 )]),
             )]),
         )]);
-        let tree = T::map(vec![
-            ("schema_version", T::text("1.0")),
+        let mut fields = header();
+        fields.extend([
             ("domain", T::text("TEST")),
             (
                 "input",
@@ -583,12 +605,7 @@ pub(crate) fn window_driver_reached() -> BTreeSet<ConditionCode> {
                 T::List(vec![template("subjects", "DM"), template("events", second)]),
             ),
         ]);
-        let mut nodes = vec![];
-        let root = tree.append(&mut nodes);
-        let model = SpecificationDocument::admit(Document::new(nodes, root).unwrap())
-            .unwrap()
-            .unwrap();
-        PreparedSpecification::prepare(&model)
+        prepare(&T::map(fields).document())
     };
     assert!(prepare("DM").is_ok(), "a shared driver prepares");
     let Err(PrepareError::Invalid(mut findings)) = prepare("AE") else {
@@ -625,8 +642,8 @@ pub(crate) fn lookup_compile(
     if let Some(filter) = filter {
         selection.push(("filter", T::text(filter)));
     }
-    let tree = T::map(vec![
-        ("schema_version", T::text("1.0")),
+    let mut fields = header();
+    fields.extend([
         ("domain", T::text("TEST")),
         ("base", T::text("SRC")),
         (
@@ -640,8 +657,8 @@ pub(crate) fn lookup_compile(
         (
             "columns",
             T::List(vec![
-                column("ID", Some(op("source", "variable", "SRC.ID"))),
-                column("VALUE", Some(op("source", "variable", value))),
+                column("ID", Some(expression("SRC.ID"))),
+                column("VALUE", Some(expression(value))),
             ]),
         ),
         ("intermediates", T::List(vec![T::map(selection)])),
@@ -653,12 +670,7 @@ pub(crate) fn lookup_compile(
             ]),
         ),
     ]);
-    let mut nodes = vec![];
-    let root = tree.append(&mut nodes);
-    let model = SpecificationDocument::admit(Document::new(nodes, root).unwrap())
-        .unwrap()
-        .unwrap();
-    PreparedSpecification::prepare(&model).unwrap()
+    prepare(&T::map(fields).document()).unwrap()
 }
 
 pub(crate) fn lookup_reached() -> BTreeSet<ConditionCode> {
@@ -676,7 +688,7 @@ pub(crate) fn lookup_reached() -> BTreeSet<ConditionCode> {
             Some("V > 0"),
             ColumnType::Int,
             "LOOKUP-7",
-            "intermediates[0].filter",
+            "intermediates.SEL.filter",
             vec![
                 ("identifier", text("V")),
                 ("intermediate", text("SEL")),
@@ -690,7 +702,7 @@ pub(crate) fn lookup_reached() -> BTreeSet<ConditionCode> {
             None,
             ColumnType::Int,
             "LOOKUP-5",
-            "intermediates[0].key",
+            "intermediates.SEL.key",
             vec![
                 ("identifier", text("DONOR.BAD")),
                 ("intermediate", text("SEL")),
@@ -703,7 +715,7 @@ pub(crate) fn lookup_reached() -> BTreeSet<ConditionCode> {
             None,
             ColumnType::Int,
             "LOOKUP-5",
-            "intermediates[0].key",
+            "intermediates.SEL.key",
             vec![("identifier", text("BAD")), ("intermediate", text("SEL"))],
         ),
         (
@@ -723,7 +735,7 @@ pub(crate) fn lookup_reached() -> BTreeSet<ConditionCode> {
             None,
             ColumnType::Str,
             "LOOKUP-9",
-            "intermediates[0].key",
+            "intermediates.SEL.key",
             vec![
                 ("intermediate", text("SEL")),
                 ("source", text("ID")),
@@ -815,12 +827,7 @@ pub(crate) fn source_filter_reached() -> BTreeSet<ConditionCode> {
 /// has no match to require (LOOKUP-24).
 pub(crate) fn source_match_reached() -> BTreeSet<ConditionCode> {
     let mut reached = BTreeSet::new();
-    let null = || {
-        T::map(vec![(
-            "literal",
-            T::Scalar(yamaa_core::schema::DocumentNode::Null),
-        )])
-    };
+    let null = || T::Scalar(N::Null);
     for (options, condition, paths, values) in [
         (
             vec![("absent", null()), ("require_match", T::boolean(true))],
@@ -905,14 +912,13 @@ pub(crate) fn source_range_reached() -> BTreeSet<ConditionCode> {
 }
 
 pub fn verification_reached() -> BTreeSet<ConditionCode> {
-    let mut nodes = vec![];
     let assertion = T::map(vec![
         ("when", T::text("FALSE")),
         ("require", T::text("Z > 0 OR A > 0")),
     ]);
     let verifications = T::List(vec![T::map(vec![("assert", assertion)])]);
-    let root = T::map(vec![
-        ("schema_version", T::text("1.0")),
+    let mut fields = header();
+    fields.extend([
         ("domain", T::text("TEST")),
         ("base", T::text("SRC")),
         (
@@ -922,7 +928,7 @@ pub fn verification_reached() -> BTreeSet<ConditionCode> {
         ("keys", T::List(vec![T::text("ID")])),
         (
             "columns",
-            T::List(vec![column("ID", Some(op("source", "variable", "SRC.ID")))]),
+            T::List(vec![column("ID", Some(expression("SRC.ID")))]),
         ),
         (
             "output",
@@ -932,12 +938,8 @@ pub fn verification_reached() -> BTreeSet<ConditionCode> {
             ]),
         ),
         ("verifications", verifications),
-    ])
-    .append(&mut nodes);
-    let model = SpecificationDocument::admit(Document::new(nodes, root).unwrap())
-        .unwrap()
-        .unwrap();
-    let prepared = PreparedSpecification::prepare(&model).unwrap();
+    ]);
+    let prepared = prepare(&T::map(fields).document()).unwrap();
     assert_eq!(prepared.verifications().len(), 2);
     assert!(matches!(
         prepared.verifications()[0].check,
@@ -1113,9 +1115,8 @@ pub fn verification_declarations_reached() -> BTreeSet<ConditionCode> {
             "unknown column 'UNKNOWN'",
         ),
     ] {
-        let mut nodes = vec![];
-        let root = T::map(vec![
-            ("schema_version", T::text("1.0")),
+        let mut fields = header();
+        fields.extend([
             ("domain", T::text("TEST")),
             ("base", T::text("SRC")),
             (
@@ -1126,11 +1127,11 @@ pub fn verification_declarations_reached() -> BTreeSet<ConditionCode> {
             (
                 "columns",
                 T::List(vec![
-                    column("ID", Some(op("source", "variable", "SRC.ID"))),
+                    column("ID", Some(expression("SRC.ID"))),
                     T::map(vec![
                         ("name", T::text("V")),
                         ("type", T::text(kind)),
-                        ("derivation", op("source", "variable", "SRC.V")),
+                        ("derivation", expression("SRC.V")),
                         ("verifications", column_checks),
                     ]),
                 ]),
@@ -1143,12 +1144,8 @@ pub fn verification_declarations_reached() -> BTreeSet<ConditionCode> {
                 ]),
             ),
             ("verifications", dataset_checks),
-        ])
-        .append(&mut nodes);
-        let model = SpecificationDocument::admit(Document::new(nodes, root).unwrap())
-            .unwrap()
-            .unwrap();
-        let prepared = PreparedSpecification::prepare(&model).unwrap();
+        ]);
+        let prepared = prepare(&T::map(fields).document()).unwrap();
         let findings = prepared.verification_declaration_diagnostics();
         assert_eq!(prepared.verification_declaration_diagnostics(), findings);
         assert_eq!(findings.len(), 1);
@@ -1165,6 +1162,8 @@ pub fn verification_declarations_reached() -> BTreeSet<ConditionCode> {
 }
 
 /// Inferred source keys share the causes of every other lookup (LOOKUP-25).
+/// Only 0.5 infers keys (D23): the document stays 0.5 until #3447 deletes
+/// key inference.
 pub(crate) fn implicit_source_reached() -> BTreeSet<ConditionCode> {
     let tree = T::map(vec![
         ("schema_version", T::text("1.0")),
@@ -1193,12 +1192,7 @@ pub(crate) fn implicit_source_reached() -> BTreeSet<ConditionCode> {
             ]),
         ),
     ]);
-    let mut nodes = vec![];
-    let root = tree.append(&mut nodes);
-    let model = SpecificationDocument::admit(Document::new(nodes, root).unwrap())
-        .unwrap()
-        .unwrap();
-    let prepared = PreparedSpecification::prepare(&model).unwrap();
+    let prepared = legacy(tree).unwrap();
     let driver = TableSchema::new(vec![Column {
         name: "ID".into(),
         kind: ColumnType::Int,
@@ -1259,6 +1253,8 @@ pub(crate) fn implicit_source_reached() -> BTreeSet<ConditionCode> {
 }
 
 /// Omitted named keys share the inference service and the one no-applicable-keys cause.
+/// Only 0.5 infers keys (D23): the document stays 0.5 until #3447 deletes
+/// key inference.
 pub(crate) fn intermediate_key_reached() -> BTreeSet<ConditionCode> {
     let tree = T::map(vec![
         ("schema_version", T::text("1.0")),
@@ -1292,12 +1288,7 @@ pub(crate) fn intermediate_key_reached() -> BTreeSet<ConditionCode> {
             ]),
         ),
     ]);
-    let mut nodes = vec![];
-    let root = tree.append(&mut nodes);
-    let model = SpecificationDocument::admit(Document::new(nodes, root).unwrap())
-        .unwrap()
-        .unwrap();
-    let prepared = PreparedSpecification::prepare(&model).unwrap();
+    let prepared = legacy(tree).unwrap();
     let driver = TableSchema::new(vec![Column {
         name: "ID".into(),
         kind: ColumnType::Int,
@@ -1333,9 +1324,8 @@ pub(crate) fn intermediate_key_reached() -> BTreeSet<ConditionCode> {
 /// of a key combination that does not exist yet (COLUMN-7). Binding and the
 /// static check report the same finding.
 pub(crate) fn key_record_reached() -> BTreeSet<ConditionCode> {
-    let mut nodes = vec![];
-    let root = T::map(vec![
-        ("schema_version", T::text("1.0")),
+    let mut fields = header();
+    fields.extend([
         ("domain", T::text("TEST")),
         ("base", T::text("SRC")),
         (
@@ -1346,7 +1336,7 @@ pub(crate) fn key_record_reached() -> BTreeSet<ConditionCode> {
         (
             "columns",
             T::List(vec![
-                column("ID", Some(op("source", "variable", "SRC.ID"))),
+                column("ID", Some(expression("SRC.ID"))),
                 column("TOP", Some(op("aggregate", "expr", "MAX(SRC.V)"))),
             ]),
         ),
@@ -1357,12 +1347,8 @@ pub(crate) fn key_record_reached() -> BTreeSet<ConditionCode> {
                 ("columns", T::List(vec![T::text("ID"), T::text("TOP")])),
             ]),
         ),
-    ])
-    .append(&mut nodes);
-    let model = SpecificationDocument::admit(Document::new(nodes, root).unwrap())
-        .unwrap()
-        .unwrap();
-    let prepared = PreparedSpecification::prepare(&model).unwrap();
+    ]);
+    let prepared = prepare(&T::map(fields).document()).unwrap();
     let expected = |d: Diagnostic| {
         check(
             d,
