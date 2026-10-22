@@ -12,8 +12,11 @@
 //! bind (FORMULA-12); and for two more (#3580): every other read of a field
 //! qualified by nothing declared (NAME-3, FORMULA-9, LOOKUP-9), and the
 //! reads of a lookup binding binds without its derivations, which it admits
-//! for no row (LOOKUP-15). Every case lists the same issues in both routes
-//! and hosts, in the same order.
+//! for no row (LOOKUP-15); and for one more (#3585): a text extraction's or
+//! replacement's source that is not text (TEXT-1) and, once binding takes
+//! its source, its pattern and group (TEXT-6, TEXT-10), wherever binding
+//! binds it. Every case lists the same issues in both routes and hosts, in
+//! the same order.
 use crate::support::Edit as _;
 use std::fs;
 use yamaa_adapters::file_application;
@@ -1001,6 +1004,197 @@ fn check_admits_no_read_of_a_lookup_bound_without_its_derivations_as_domain_does
             ),
             &["intermediates.P.derivations.E.source"],
             current,
+        ),
+    ]);
+}
+
+const PATTERN: &str = "invalid_regex Some(\"TEXT-6\")";
+const TEXT: &str = "incompatible_input_type Some(\"TEXT-1\")";
+
+/// Binding binds a text extraction or replacement by its source: once the
+/// source binds it types it by the reading scope's catalog, refusing a
+/// source that is not text (TEXT-1), and once it takes the source it refuses
+/// the pattern and group (TEXT-6, TEXT-10). Without row templates preflight
+/// checks a source a declaration types; elsewhere `check()` follows binding,
+/// in a row template and the column phase, a `case` result, a lookup's
+/// derivation, an aggregate's derive binding and, under row templates, a
+/// lookup's or an aggregate's key value. The catalog does not type a
+/// lookup's field, so a source that reads one is taken as it binds.
+#[test]
+fn check_reports_a_text_pattern_where_binding_takes_its_source_as_domain_does() {
+    let text = |derivation: &str| record("", &format!("      C: {derivation}\n"), X, C);
+    let column = |c: &str| record("", "", X, c);
+    let lookup = |lookups: &str, c: &str| implicit(lookups, "", X, c);
+    let extract = |source: &str| {
+        format!("{{str_extract: {{source: {source}, pattern: \"^(?=A)\", group: 1}}}}")
+    };
+    let keyed = |key: &str, derivations: &str| {
+        record("", derivations, X, C).edit(
+            "intermediates:\n",
+            &format!("intermediates:\n  - {{id: Q, dataset: PLAN, key: {{USUBJID: {key}}}}}\n"),
+        )
+    };
+    assert_cases(&[
+        // #3585's report: the column phase, a row template and a replacement,
+        // with a Python-only named group and a lookahead.
+        (
+            column("{str_extract: {source: USUBJID, pattern: \"^(?P<site>[A-Z]+)-\", group: 1}}"),
+            &["columns.C.derivation.str_extract.pattern"],
+            PATTERN,
+        ),
+        (
+            text("{str_extract: {source: VS.USUBJID, pattern: \"^(?P<site>[A-Z]+)-\", group: 1}}"),
+            &["rows.record.derivations.C.str_extract.pattern"],
+            PATTERN,
+        ),
+        (
+            text("{str_extract: {source: USUBJID, pattern: \"^([A-Z]+)(?=-)\", group: 1}}"),
+            &["rows.record.derivations.C.str_extract.pattern"],
+            PATTERN,
+        ),
+        (
+            column("{str_replace: {source: USUBJID, pattern: \"-(?P<n>[0-9]+)$\", replacement: \"\"}}"),
+            &["columns.C.derivation.str_replace.pattern"],
+            PATTERN,
+        ),
+        (
+            text("{str_extract: {source: VS.VSTESTCD, pattern: \"^(A)\", group: 2}}"),
+            &["rows.record.derivations.C.str_extract.group"],
+            "regex_group_out_of_range Some(\"TEXT-10\")",
+        ),
+        (
+            text(&format!(
+                "{{case: [{{when: \"VS.SYSBP > 1\", then: {}}}, {{otherwise: \"'B'\"}}]}}",
+                extract("VS.USUBJID")
+            )),
+            &["rows.record.derivations.C.case[0].then.str_extract.pattern"],
+            PATTERN,
+        ),
+        // A source that is not text, whose pattern binding then leaves.
+        (
+            text(&extract("VS.VSDY")),
+            &["rows.record.derivations.C.str_extract.source"],
+            TEXT,
+        ),
+        (
+            column("{str_replace: {source: VSDY, pattern: \"A\", replacement: \"B\"}}"),
+            &["columns.C.derivation.str_replace.source"],
+            TEXT,
+        ),
+        // A lookup's field, without and with row templates.
+        (
+            lookup("", &extract("PB.DOSENUM")),
+            &["columns.C.derivation.str_extract.pattern"],
+            PATTERN,
+        ),
+        (
+            text(&extract("PB.DOSENUM")),
+            &["rows.record.derivations.C.str_extract.pattern"],
+            PATTERN,
+        ),
+        // Over a lookup's records and an aggregate's.
+        (
+            lookup(
+                &format!(
+                    "  - {{id: P, dataset: PLAN, key: [USUBJID], derivations: {{D: {}}}}}\n",
+                    extract("USUBJID")
+                ),
+                "P.D",
+            ),
+            &["intermediates.P.derivations.D.str_extract.pattern"],
+            PATTERN,
+        ),
+        (
+            lookup(
+                "  - {id: P, dataset: PLAN, key: [USUBJID], derivations: {D: {str_extract: {source: DOSENUM, pattern: \"^(A)\", group: 1}}}}\n",
+                "P.D",
+            ),
+            &["intermediates.P.derivations.D.str_extract.source"],
+            TEXT,
+        ),
+        (
+            lookup(
+                &format!(
+                    "  - {{id: Q, dataset: PLAN, key: {{USUBJID: HOME.USUBJID}}}}\n\
+                     \x20 - {{id: P, dataset: HOME, key: [USUBJID], derivations: {{D: {}}}}}\n",
+                    extract("Q.DOSENUM")
+                ),
+                "P.D",
+            ),
+            &["intermediates.P.derivations.D.str_extract.pattern"],
+            PATTERN,
+        ),
+        (
+            lookup(
+                "",
+                &format!(
+                    "{{aggregate: {{expr: \"COUNT(F)\", derivations: {{F: {{type: str, derivation: {}}}}}}}}}",
+                    extract("PLAN.USUBJID")
+                ),
+            ),
+            &["columns.C.derivation.aggregate.derivations.F.derivation.str_extract.pattern"],
+            PATTERN,
+        ),
+        // A key value under row templates; binding binds nothing more of
+        // its lookup.
+        (
+            keyed(&extract("VS.USUBJID"), "      X: Q.PLANDOSE\n"),
+            &[
+                "intermediates.Q.key.USUBJID.str_extract.pattern",
+                "rows.record.derivations.X.source",
+            ],
+            PATTERN,
+        ),
+        (
+            keyed("{str_template: \"{VS.VSDY}-{VS.USUBJID}\"}", "      X: Q.PLANDOSE\n"),
+            &[
+                "intermediates.Q.key.USUBJID.str_template.template",
+                "rows.record.derivations.X.source",
+            ],
+            TEXT,
+        ),
+        (
+            record(
+                "",
+                "",
+                &format!(
+                    "{{aggregate: {{expr: \"SUM(PLAN.PLANDOSE)\", key: {{USUBJID: {}}}}}}}",
+                    extract("USUBJID")
+                ),
+                C,
+            ),
+            &["columns.X.derivation.aggregate.key.USUBJID.str_extract.pattern"],
+            PATTERN,
+        ),
+        // The 0.5 surface, #3585's own specification.
+        (
+            "schema_version: \"1.0\"\ndomain: ADTOY\nkeys: [USUBJID]\n\
+             input: {SRC: vs.csv}\n\
+             output: {path: out.csv, columns: [USUBJID, SITE]}\n\
+             columns:\n\
+             \x20 - {name: USUBJID, type: str, label: Subject}\n\
+             \x20 - name: SITE\n\
+             \x20   type: str\n\
+             \x20   label: Site\n\
+             \x20   derivation:\n\
+             \x20     str_extract: {source: USUBJID, pattern: '^(?P<site>[A-Z]+)-', group: 1}\n\
+             rows:\n\
+             \x20 - id: subjects\n\
+             \x20   dataset: SRC\n\
+             \x20   derivations:\n\
+             \x20     USUBJID: SRC.USUBJID\n"
+                .into(),
+            &["columns.SITE.derivation.str_extract.pattern"],
+            PATTERN,
+        ),
+    ]);
+    // A valid pattern over a text source.
+    assert_clean(&[
+        text("{str_extract: {source: VS.USUBJID, pattern: \"^([A-Z]+)-\", group: 1}}"),
+        column("{str_replace: {source: USUBJID, pattern: \"-([0-9]+)$\", replacement: \"\"}}"),
+        lookup(
+            "  - {id: P, dataset: PLAN, key: [USUBJID], derivations: {D: {str_extract: {source: USUBJID, pattern: \"^([A-Z]+)\", group: 1}}}}\n",
+            "P.D",
         ),
     ]);
 }

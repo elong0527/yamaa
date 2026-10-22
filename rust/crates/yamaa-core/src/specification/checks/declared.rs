@@ -256,6 +256,22 @@ fn operand_types(
     );
 }
 
+/// Whether binding takes an operand of `operation` without typing it, as its
+/// type authority, the reading scope's catalog, does not type a lookup's
+/// field (`lookup_field`), which then binds (`BindContext::scalar`,
+/// [`crate::scalar_verb::Typing::Catalog`]).
+fn untyped(operation: &Operation, lookup_field: bool) -> bool {
+    lookup_field && operation.typing() == crate::scalar_verb::Typing::Catalog
+}
+
+/// The declaration finding binding reports once it took every operand
+/// (`taken`): an extraction's pattern or group (TEXT-6, TEXT-10).
+fn late_refusal(operation: &Operation, taken: bool, findings: &mut Vec<BindFinding>) {
+    if taken {
+        findings.extend(operation.late_refusal().cloned().map(BindFinding::Scalar));
+    }
+}
+
 /// A flag's or `case` predicate's static types (FORMULA-5, FORMULA-12),
 /// with `kind` typing each name it reads.
 fn condition_types(
@@ -451,10 +467,15 @@ impl Checks<'_> {
             // Each operand is read where binding reads it, a source binding
             // through its selection; the verb's operand types once a source
             // binding reads without a finding (EXPR-11, EXPR-13), where
-            // `check()` types them ([`CheckTyping::Always`]).
+            // `check()` types them ([`CheckTyping::Always`]). Preflight typed
+            // every other name a declaration types, and refused the spec when
+            // it refused one or the verb's late refusal followed; binding
+            // takes a lookup's field untyped, so the late refusal follows
+            // its read here (TEXT-6, TEXT-10).
             ExprKind::Scalar { op, .. } => {
                 let operation = crate::scalar_verb::Operation::from_tree(spec, e)
                     .map_err(|_| BindError::Internal)?;
+                let mut taken = scope.is_some();
                 for (index, operand) in operation.operands().iter().enumerate() {
                     match &operand.read {
                         Read::Source(source) => {
@@ -466,15 +487,18 @@ impl Checks<'_> {
                             if let Some(read) = variable(spec, *source).filter(|_| typed) {
                                 self.operand_type(&operation, index, read, findings);
                             }
+                            taken = false;
                         }
                         Read::Name(read) => {
                             if let Some(scope) = scope {
-                                self.read(scope, &operand.path, read, findings);
+                                taken &= self.read(scope, &operand.path, read, findings)
+                                    && untyped(&operation, self.lookup_field(read));
                             }
                         }
                         Read::Literal(_) => {}
                     }
                 }
+                late_refusal(&operation, taken, findings);
             }
             // A flag is typed only once every name it reads binds
             // (`flags::bind`).
@@ -581,6 +605,13 @@ impl Checks<'_> {
                 .position(|item| item.id.name == owner)
                 .is_some_and(|index| self.refused.contains(&index))
         })
+    }
+
+    /// Whether `name` is a lookup's field, which the implicit template
+    /// reads through the lookup's selector.
+    fn lookup_field(&self, name: &str) -> bool {
+        name.split_once('.')
+            .is_some_and(|(owner, _)| self.prepared.intermediates.contains(owner))
     }
 
     /// Whether `owner` qualifies nothing declared, no input or lookup, so a
@@ -1148,10 +1179,13 @@ impl Checks<'_> {
             }
             // Each operand is read where binding reads it, a source binding
             // as binding binds it; once a read binds, the verb's operand type
-            // where `check()` types it (EXPR-11, EXPR-13, TEXT-1).
+            // where `check()` types it (EXPR-11, EXPR-13, TEXT-1); and once
+            // binding takes every operand, the verb's late refusal (TEXT-6,
+            // TEXT-10).
             ExprKind::Scalar { op, .. } => {
                 let operation = crate::scalar_verb::Operation::from_tree(spec, e)
                     .map_err(|_| BindError::Internal)?;
+                let mut taken = true;
                 for (index, operand) in operation.operands().iter().enumerate() {
                     let (read, bound) = match &operand.read {
                         Read::Source(node) => (variable(spec, *node), source(*node, findings)?),
@@ -1161,12 +1195,16 @@ impl Checks<'_> {
                         ),
                         Read::Literal(_) => continue,
                     };
-                    if let Some(read) =
-                        read.filter(|_| bound && op.check_typing() != CheckTyping::Never)
-                    {
-                        self.operand_type(&operation, index, read, findings);
-                    }
+                    let Some(read) = read.filter(|_| bound) else {
+                        taken = false;
+                        continue;
+                    };
+                    let typed = (op.check_typing() != CheckTyping::Never)
+                        .then(|| self.operand_type(&operation, index, read, findings))
+                        .flatten();
+                    taken &= typed.unwrap_or_else(|| untyped(&operation, reads.lookup_field(read)));
                 }
+                late_refusal(&operation, taken, findings);
             }
             ExprKind::Window(window) => self.window(e, window, Some(scope), findings)?,
             ExprKind::Aggregate(aggregate) => {
@@ -1292,10 +1330,14 @@ impl Checks<'_> {
             // Each operand is read where binding reads it, a source binding
             // as binding binds it; once a read binds, the verb's operand type
             // where `check()` types it, as the donor's records type it
-            // (EXPR-11, EXPR-13, TEXT-1).
+            // (EXPR-11, EXPR-13, TEXT-1); and once binding takes every
+            // operand, the verb's late refusal (TEXT-6, TEXT-10). Binding
+            // takes a lookup's field untyped there, and its late refusal
+            // leaves the field's type unchecked.
             ExprKind::Scalar { op, .. } => {
                 let operation = crate::scalar_verb::Operation::from_tree(spec, e)
                     .map_err(|_| BindError::Internal)?;
+                let mut taken = true;
                 for (index, operand) in operation.operands().iter().enumerate() {
                     let (read, bound) = match &operand.read {
                         Read::Source(node) => (variable(spec, *node), source(*node, findings)?),
@@ -1305,12 +1347,23 @@ impl Checks<'_> {
                         ),
                         Read::Literal(_) => continue,
                     };
-                    if bound && op.check_typing() != CheckTyping::Never {
-                        if let Some(kind) = read.and_then(|read| reads.kind(read)) {
-                            findings.extend(operation.check(index, kind).map(BindFinding::Scalar));
-                        }
+                    let Some(read) = read.filter(|_| bound) else {
+                        taken = false;
+                        continue;
+                    };
+                    if operation.late_refusal().is_some()
+                        && untyped(&operation, reads.lookup_field(read))
+                    {
+                        continue;
                     }
+                    let kind = reads
+                        .kind(read)
+                        .filter(|_| op.check_typing() != CheckTyping::Never);
+                    let refusal = kind.and_then(|kind| operation.check(index, kind));
+                    taken &= kind.is_some() && refusal.is_none();
+                    findings.extend(refusal.map(BindFinding::Scalar));
                 }
+                late_refusal(&operation, taken, findings);
             }
             // The window's defects, then its operands and each name of its
             // filter once, in sorted order.
@@ -1350,23 +1403,24 @@ impl Checks<'_> {
     /// A verb refuses its operand `index`, which reads `name`, of a declared
     /// type it does not accept (EXPR-11, EXPR-13, TEXT-1): a bare output
     /// column's or a stored field's declared type. A lookup's field is
-    /// checked against the values it reads.
+    /// checked against the values it reads. Whether the verb takes the
+    /// declared type; `None` when no declaration types the name.
     fn operand_type(
         &self,
         operation: &Operation,
         index: usize,
         name: &str,
         findings: &mut Vec<BindFinding>,
-    ) {
+    ) -> Option<bool> {
         let kind = name
             .split_once('.')
             .is_none_or(|(owner, _)| !self.prepared.intermediates.contains(owner))
             .then(|| self.declared.name(name).column_type())
-            .flatten();
-        findings.extend(
-            kind.and_then(|kind| operation.check(index, kind))
-                .map(BindFinding::Scalar),
-        );
+            .flatten()?;
+        let refusal = operation.check(index, kind);
+        let taken = refusal.is_none();
+        findings.extend(refusal.map(BindFinding::Scalar));
+        Some(taken)
     }
 
     /// What binding decides of an aggregate from its declarations before it
@@ -2338,13 +2392,14 @@ impl Checks<'_> {
     /// (`intermediates::bind_one`): a name written as the value at `key`,
     /// any other value at its own entry, `key.<column>`. A lookup that
     /// another lookup's derivations read binds its key values at each read
-    /// instead. True when one is refused: binding then binds nothing of the
-    /// lookup.
-    fn key_values(&self, index: usize, findings: &mut Vec<BindFinding>) -> bool {
+    /// instead. Once a value's names bind, the verb it holds binds as in a
+    /// derivation ([`Self::key_verb`]). True when one is refused: binding then
+    /// binds nothing of the lookup.
+    fn key_values(&self, index: usize, findings: &mut Vec<BindFinding>) -> Result<bool, BindError> {
         let spec = self.spec;
         let item = &spec.intermediates[index];
         if !spec.header.surface.one_meaning_per_form() || donor_read(spec, index) {
-            return false;
+            return Ok(false);
         }
         let fields = match &item.key {
             Some(JoinKey::Columns { columns, .. }) => columns
@@ -2354,7 +2409,7 @@ impl Checks<'_> {
             Some(JoinKey::Pairs { pairs, .. }) => {
                 pairs.iter().map(|(field, _)| field.name.as_str()).collect()
             }
-            _ => return false,
+            _ => return Ok(false),
         };
         let at = render(spec, item.meta);
         let start = findings.len();
@@ -2373,6 +2428,7 @@ impl Checks<'_> {
                 }
                 _ => (format!("{at}.key.{field}"), true),
             };
+            let before = findings.len();
             for reference in value
                 .references()
                 .filter(|name| self.unknown_match_value(name))
@@ -2391,8 +2447,43 @@ impl Checks<'_> {
                     suggestion,
                 )));
             }
+            if let (match_values::Declaration::Expression { expr, .. }, true) =
+                (value, findings.len() == before)
+            {
+                self.key_verb(*expr, findings)?;
+            }
         }
-        findings.len() != start
+        Ok(findings.len() != start)
+    }
+
+    /// Under row templates, what binding finds of the verb a key's match
+    /// value at `value` holds, once the value's names bind
+    /// (`match_values::Declaration::bind`), as in a derivation: each
+    /// operand's declared type where `check()` leaves it to binding, then
+    /// the verb's late refusal (TEXT-1, TEXT-6, TEXT-10). Without row
+    /// templates preflight types it.
+    fn key_verb(&self, value: ExprId, findings: &mut Vec<BindFinding>) -> Result<(), BindError> {
+        let spec = self.spec;
+        let ExprKind::Scalar { op, .. } = &spec.expr(value).kind else {
+            return Ok(());
+        };
+        if !has_rows(spec) || op.check_typing() != CheckTyping::LeftToBinding {
+            return Ok(());
+        }
+        let operation = crate::scalar_verb::Operation::from_tree(spec, value)
+            .map_err(|_| BindError::Internal)?;
+        let mut taken = true;
+        for (index, operand) in operation.operands().iter().enumerate() {
+            taken &= match &operand.read {
+                Read::Name(read) => self
+                    .operand_type(&operation, index, read, findings)
+                    .unwrap_or(false),
+                Read::Source(_) => false,
+                Read::Literal(_) => true,
+            };
+        }
+        late_refusal(&operation, taken, findings);
+        Ok(())
     }
 
     /// On a 1.0 tree, what binding refuses of a column aggregate's written
@@ -2401,7 +2492,8 @@ impl Checks<'_> {
     /// intermediate's would be (LOOKUP-5): a pair whose declared types cannot
     /// compare at `key` (LOOKUP-9), then each reference of its match value
     /// that reads no current-row value ([`unknown_match_value`]) at the
-    /// pair, `key.<column>`. A key column the relation does not store is
+    /// pair, `key.<column>`, and once its names bind, the verb it holds
+    /// ([`Self::key_verb`]). A key column the relation does not store is
     /// decided once its records are read.
     fn aggregate_keys(
         &self,
@@ -2464,6 +2556,7 @@ impl Checks<'_> {
                 ));
             }
             let pair = format!("{key}.{field}");
+            let before = findings.len();
             for reference in value
                 .references()
                 .filter(|name| self.unknown_match_value(name))
@@ -2476,6 +2569,14 @@ impl Checks<'_> {
                     .diagnostic()
                     .map_err(|_| BindError::Internal)?,
                 ));
+            }
+            // A value whose names bind, for a key column the relation
+            // stores, binds the verb it holds.
+            if let (match_values::Declaration::Expression { expr, .. }, true) = (
+                &value,
+                findings.len() == before && stores(self.prepared, relation, field),
+            ) {
+                self.key_verb(*expr, findings)?;
             }
         }
         Ok(())
@@ -2658,7 +2759,7 @@ impl Checks<'_> {
                     )));
                 }
             }
-            if self.key_values(index, findings) {
+            if self.key_values(index, findings)? {
                 refused.insert(index);
             }
             if let Some(filter) = item.filter {

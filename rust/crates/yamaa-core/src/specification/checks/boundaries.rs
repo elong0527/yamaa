@@ -159,6 +159,13 @@ impl<'a> Reads<'a> {
         self.named(owner)
     }
 
+    /// Whether `name` is a field of a lookup that drives none of the rows,
+    /// which binding reads through the lookup's selector.
+    pub(super) fn lookup_field(&self, name: &str) -> bool {
+        name.split_once('.')
+            .is_some_and(|(owner, _)| self.lookup(owner).is_some())
+    }
+
     /// The lookup `owner` names, whatever rows it drives.
     fn named(&self, owner: &str) -> Option<usize> {
         self.spec
