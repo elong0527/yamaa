@@ -1317,6 +1317,8 @@ pub(super) fn current_value<E>(
                 .expect("a current field reads its region's intermediate");
             named_value(run, cx, site, relation, column, row, false)
         }
+        // Binding refuses every row's read of it, and a donor plan rebases it.
+        CurrentRead::Contextual => Err(Box::new(ExecutionError::SchemaMismatch)),
     }
 }
 

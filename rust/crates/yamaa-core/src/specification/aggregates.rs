@@ -1429,7 +1429,7 @@ fn visit(expression: &Expression, visitor: &mut impl FnMut(&crate::dataset::Boun
 /// another input's record names no value of those rows and fails as
 /// `unknown_field` at its key, once however many contexts read it.
 pub(super) fn admit_record_keys(
-    contexts: &[(Vec<&Expression>, Vec<usize>)],
+    contexts: &[(Vec<&Expression>, Vec<lookup_range::RowDriver>)],
     findings: &mut Vec<BindFinding>,
 ) {
     let mut reported = BTreeSet::new();
@@ -1447,7 +1447,7 @@ pub(super) fn admit_record_keys(
                             crate::dataset::MatchRead::SecondaryRecord { source, .. } => source + 1,
                             crate::dataset::MatchRead::Output { .. } => continue,
                         };
-                        if drivers.iter().any(|&driver| driver != port)
+                        if drivers.iter().any(|driver| driver.port != port)
                             && reported.insert((key.path.clone(), read.identifier().to_owned()))
                         {
                             findings.push(BindFinding::Scalar(
@@ -1510,7 +1510,8 @@ pub(super) fn late_reads(plan: &crate::dataset::DatasetPlan) -> Vec<BindFinding>
                         crate::dataset::CurrentRead::Intermediate { index, column } => {
                             Some(Read::Intermediate { index, column })
                         }
-                        crate::dataset::CurrentRead::Record { .. } => None,
+                        crate::dataset::CurrentRead::Record { .. }
+                        | crate::dataset::CurrentRead::Contextual => None,
                     };
                     if read.is_some_and(late) {
                         refuse(
@@ -1592,7 +1593,7 @@ fn bind_range(
         ));
         return Ok(None);
     };
-    Ok(match range.finish(read, kind, bounds, None)? {
+    Ok(match range.finish(read, kind, bounds, Owner::Unnamed)? {
         Ok(range) => Some(range),
         Err(diagnostic) => {
             findings.push(BindFinding::AggregateDiagnostic(diagnostic));

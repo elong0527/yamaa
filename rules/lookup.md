@@ -75,7 +75,7 @@ no record, and a record missing a key or a stated bound does not match.
 `between` names a current-row value and at least one bound field.
 
 Fails: `incompatible_input_type`, `incomparable_range_types`, `invalid_field_type`, `prohibited_construct`, `unknown_field`.
-Evidence: `negative-lookup-bad-range`, `negative-lookup-range-other-input`, `negative-lookup-range-bare-field`, `negative-source-range-other-input`, `negative-aggregate-range-other-input`, `schema-lookup-source-range`, `schema-lookup-source-range-driver`, `schema-lookup-intermediate-range-driver`, `schema-aggregate-range-driver`, `sdtm-lb-lab-specific-ranges`, `adam-advs-window-table`, `adam-adtr-nadir`, `adam-adsl-new-therapy`, `rust/crates/yamaa-adapters/tests/execution_lookup_model.rs`, `rust/crates/yamaa-adapters/tests/check_variable_forms.rs`.
+Evidence: `negative-lookup-bad-range`, `negative-lookup-range-other-input`, `negative-lookup-range-bare-field`, `negative-lookup-range-driver-intermediate`, `negative-source-range-other-input`, `negative-aggregate-range-other-input`, `schema-lookup-source-range`, `schema-lookup-source-range-driver`, `schema-lookup-intermediate-range-driver`, `schema-aggregate-range-driver`, `sdtm-lb-lab-specific-ranges`, `adam-advs-window-table`, `adam-adtr-nadir`, `adam-adsl-new-therapy`, `rust/crates/yamaa-adapters/tests/execution_lookup_model.rs`, `rust/crates/yamaa-adapters/tests/check_variable_forms.rs`.
 
 The key pairs are those of [LOOKUP-5](#lookup-5). Every pair is compared on
 every record offered, so a record value whose type cannot compare with its
@@ -126,9 +126,19 @@ whatever its bounds bind. Which columns a specification declares and which
 input drives each row are declared, so `check` reports a bare name that no
 column takes, and a value qualified by an input that does not drive every row
 reading the lookup, from the declarations alone, whether or not that input
-stores the field. A field of another input is never read through the implicit
-join ([LOOKUP-1](#lookup-1)); bring it onto the row as a column first, and name
-the column:
+stores the field. A named intermediate that another intermediate's derivation
+reads matches for the donor record there ([LOOKUP-16](#lookup-16)), where its
+bare value is that record's field; a row that reads it finds no value in a
+bare name that no column takes all the same. A named intermediate binds its
+range once for every row that reads it, so its value cannot read the record
+that built a row from another named intermediate's records: qualified by the
+intermediate that builds a reading row, it is not supported and fails as
+`unsupported_operation` at `between.value`
+([COLUMN-15](columns.md#column-15)); for rows another input builds, it is a
+keyed lookup of a row driver, which declares no key
+([LOOKUP-3](#lookup-3)). A field of another input is never read through the
+implicit join ([LOOKUP-1](#lookup-1)); bring it onto the row as a column
+first, and name the column:
 
 ```yaml
 columns:
@@ -145,8 +155,9 @@ intermediates:
 The value and every stated bound must be mutually comparable, with no operand
 converted. A value and a bound whose types cannot compare fail validation as
 `incomparable_range_types`, reporting the types of the value and the stated
-bounds; a type decided per value fails the same way when the record is
-compared. A derived bound has its derivation's declared or result type
+bounds, and the named intermediate's id or the source binding's variable that
+declares the range; a type decided per value fails the same way when the
+record is compared. A derived bound has its derivation's declared or result type
 ([LOOKUP-15](#lookup-15)).
 
 A `between` with neither bound fails as `invalid_field_type`, and a bound
@@ -159,8 +170,11 @@ no relation, fails as `invalid_aggregate_context` ([LOOKUP-18](#lookup-18)).
 A file that declares `schema_version` is read under the rules at the
 `yamaa-v0.5.0` tag, where a named intermediate's bare `between.value` that no
 column takes reads the field of that name of the record that builds the rows
-of the first row template, or of `base`, and a value that no row holds fails
-only once its bounds bind.
+of the first row template, or of `base`; a value that no row holds fails only
+once its bounds bind; a named intermediate's value qualified by an
+intermediate that builds a reading row reads that intermediate as a keyed
+lookup; and a source binding's `incomparable_range_types` names no
+variable.
 
 <a id="lookup-8"></a>
 
@@ -821,7 +835,8 @@ Evidence: `adam-adae-death`, `negative-lookup-key-lookup-qualified`, `rust/crate
 Naming in `columns` a column the dataset does not have fails as
 `unknown_field`, and so does a lookup-qualified read of a missing or
 unlisted column. In a `between.value` a lookup-qualified variable reads the
-column the lookup selects for the row ([LOOKUP-9](#lookup-9)). In a key match
+column the lookup selects for the row ([LOOKUP-9](#lookup-9)), or in a donor
+read for the donor record ([LOOKUP-16](#lookup-16)). In a key match
 value it fails as `unknown_field` at the pair, written alone or read by an
 expression; derive the value into a column first and match on the column.
 
@@ -1106,13 +1121,26 @@ absence policy apply as for any other read ([LOOKUP-25](#lookup-25)), once per
 donor record.
 
 Fails: `unknown_field`, `phase_boundary`, `dependency_cycle`.
-Evidence: `adam-adlb-end-of-treatment`, `adam-adsl-crossover-sequence`, `rust/crates/yamaa-adapters/tests/execution_aggregate_record_operations.rs`, `rust/crates/yamaa-adapters/tests/project_environment.rs::intermediate_callback_reads_a_kept_selection_beside_its_own_donor_field`.
+Evidence: `adam-adlb-end-of-treatment`, `adam-adsl-crossover-sequence`, `schema-lookup-donor-range`, `negative-lookup-donor-range-driver`, `rust/crates/yamaa-adapters/tests/execution_aggregate_record_operations.rs`, `rust/crates/yamaa-adapters/tests/check_variable_forms.rs`, `rust/crates/yamaa-adapters/tests/project_environment.rs::intermediate_callback_reads_a_kept_selection_beside_its_own_donor_field`.
 
 Either form of a donor-record name names a stored field or a derivation
 declared before the reading one, and a name the donor record cannot supply
 fails as `unknown_field`. The read column must exist in the other
 intermediate's dataset or derivations and, when that intermediate declares
 `columns`, be one of them ([LOOKUP-11](#lookup-11)).
+
+In the other intermediate's `between.value` the bare form is the donor
+record's field even when no output column takes the name, while a row that
+reads the same intermediate still finds no value there
+([LOOKUP-9](#lookup-9)). A value qualified by a third intermediate's id reads
+that intermediate's column for the donor record, and that match too reads the
+donor record alone. A read of any other record fails as `unknown_field` at
+the reading derivation, naming the read as `identifier`, the reading
+intermediate and the intermediate it reads as `read`: a range value,
+correlated `filter` field or derivation field of the other intermediate that
+names another input's record, such as the record of the current row's
+driver, and a key value of an intermediate its range value reads that does
+so. A key match value never reads an intermediate ([LOOKUP-5](#lookup-5)).
 
 The other intermediate is selected once per donor record, and every derivation
 of that record that reads it shares the selection ([LOOKUP-12](#lookup-12)). A
@@ -1158,6 +1186,11 @@ intermediates:
 
 Each laboratory record reads its own supplemental endpoint qualifier, and the
 window ranks the records of each subject and test on it.
+
+A file that declares `schema_version` is read under the rules at the
+`yamaa-v0.5.0` tag, where the other intermediate's bare `between.value` that
+no output column takes is a field of the driver's record
+([LOOKUP-9](#lookup-9)).
 
 <a id="lookup-17"></a>
 

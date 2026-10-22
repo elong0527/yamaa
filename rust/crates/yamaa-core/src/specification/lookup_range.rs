@@ -170,13 +170,13 @@ impl Declaration {
         })
     }
     /// Admit the bound range, or report a value or bound whose types cannot
-    /// compare (LOOKUP-9).
+    /// compare (LOOKUP-9), naming the lookup that declares the range.
     pub(super) fn finish(
         &self,
         read: CurrentRead,
         kind: Option<ValueType>,
         (lower, upper): Bounds,
-        intermediate: Option<&str>,
+        owner: Owner<'_>,
     ) -> Result<Result<RelationRange, Diagnostic>, BindError> {
         match RelationRange::new(
             self.path.clone(),
@@ -190,7 +190,9 @@ impl Declaration {
         ) {
             Ok(range) => Ok(Ok(range)),
             Err(RelationRangeError::Incomparable(types)) => {
-                Ok(Err(types.diagnostic_for(&self.path, intermediate)))
+                let mut diagnostic = types.diagnostic_for(&self.path, None);
+                owner.add(&mut diagnostic.context);
+                Ok(Err(diagnostic))
             }
             Err(_) => Err(BindError::Internal),
         }
@@ -251,38 +253,105 @@ fn stored_record(item: &Intermediate, column: usize) -> Option<usize> {
     }
 }
 
-/// A range whose value reads the record of an input that does not drive every
-/// row in `drivers` names no value of those rows (LOOKUP-9).
-fn refusal(range: &RelationRange, drivers: &[usize], owner: Owner<'_>) -> Option<Diagnostic> {
-    matches!(range.current().read, CurrentRead::Record { source, .. }
-        if drivers.iter().any(|&driver| driver != source))
-    .then(|| {
-        lookup::range_reference(
-            &format!("{}.value", range.path()),
+/// The driver of a row: the record port of the input whose records build it,
+/// and the named intermediate that selects those records, when one does
+/// (ROW-2).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) struct RowDriver {
+    pub port: usize,
+    pub intermediate: Option<usize>,
+}
+impl RowDriver {
+    /// Without row templates, the base builds every row.
+    pub(super) const BASE: Self = Self {
+        port: 0,
+        intermediate: None,
+    };
+    /// The driver of the rows a row template builds.
+    pub(super) fn of(mode: &RowMode) -> Self {
+        Self {
+            port: mode.source_index(),
+            intermediate: match mode {
+                RowMode::IntermediateDriver { index, .. } => Some(*index),
+                _ => None,
+            },
+        }
+    }
+}
+
+/// What refuses a range read for the rows of `drivers`: a value that reads
+/// the record of an input that does not drive every one of them, or a
+/// contextual bare name, names no value of those rows (LOOKUP-9). On a 1.0
+/// tree (`one_meaning`) a value qualified by a named intermediate that builds
+/// one of the rows reads that row's record, which a range value cannot read
+/// there, so it is unsupported; and one qualified by a row driver that builds
+/// none of them would read it as a keyed lookup, which it is not, since it
+/// declares no key (LOOKUP-3, ROW-2).
+fn refusal(
+    range: &RelationRange,
+    drivers: &[RowDriver],
+    owner: Owner<'_>,
+    one_meaning: bool,
+    named: &intermediates::Declarations,
+) -> Option<BindFinding> {
+    let path = format!("{}.value", range.path());
+    let unknown = || {
+        BindFinding::Scalar(lookup::range_reference(
+            &path,
             owner,
             &range.current().identifier,
-        )
-    })
+        ))
+    };
+    match range.current().read {
+        CurrentRead::Record { source, .. }
+            if drivers.iter().any(|driver| driver.port != source) =>
+        {
+            Some(unknown())
+        }
+        CurrentRead::Contextual => Some(unknown()),
+        CurrentRead::Intermediate { index, .. }
+            if one_meaning
+                && drivers
+                    .iter()
+                    .any(|driver| driver.intermediate == Some(index)) =>
+        {
+            Some(BindFinding::Scalar(crate::application_issue::unsupported(
+                "intermediate_driver_range_value",
+                Some(&path),
+            )))
+        }
+        CurrentRead::Intermediate { index, .. } if one_meaning => {
+            named.key_required(index).map(|key| {
+                BindFinding::Lookup(LookupFinding::from_diagnostic(lookup::key_required(key)))
+            })
+        }
+        _ => None,
+    }
 }
 
 /// A range value that reads an input's record must name the driver of every
 /// row that reads the lookup (LOOKUP-9). Each context pairs the expressions a
-/// row evaluates with the record ports of the drivers of those rows. A named
+/// row evaluates with the drivers of those rows ([`RowDriver`]). A named
 /// intermediate's range is admitted wherever the intermediate is read, through
-/// a chain of range values too. Each refused range is reported once.
+/// a chain of range values too. Each refused range is reported once, and a
+/// refusal another read already reported is not repeated.
 pub(super) fn admit<'a>(
-    contexts: impl IntoIterator<Item = (Vec<&'a Expression>, Vec<usize>)>,
+    contexts: impl IntoIterator<Item = (Vec<&'a Expression>, Vec<RowDriver>)>,
     intermediates: &[Option<Intermediate>],
+    named: &intermediates::Declarations,
+    one_meaning: bool,
     findings: &mut Vec<BindFinding>,
 ) {
     let mut seen = std::collections::BTreeSet::new();
     let mut refuse = |range: &RelationRange,
-                      drivers: &[usize],
+                      drivers: &[RowDriver],
                       owner: Owner<'_>,
                       findings: &mut Vec<BindFinding>| {
-        if let Some(diagnostic) = refusal(range, drivers, owner) {
-            if seen.insert(range.path().to_string()) {
-                findings.push(BindFinding::Scalar(diagnostic));
+        if let Some(finding) = refusal(range, drivers, owner, one_meaning, named) {
+            if seen.insert(range.path().to_string())
+                && !row_intermediates::reported(findings, &finding)
+            {
+                findings.push(finding);
             }
         }
     };
@@ -293,10 +362,10 @@ pub(super) fn admit<'a>(
                 let owner = range.variable().map_or(Owner::Unnamed, Owner::Source);
                 refuse(range, &drivers, owner, findings);
             });
-            let mut named = Vec::new();
-            crate::dataset::relation_predicates::visit(expression, &mut |index| named.push(index));
+            let mut read = Vec::new();
+            crate::dataset::relation_predicates::visit(expression, &mut |index| read.push(index));
             let mut visited = std::collections::BTreeSet::new();
-            while let Some(index) = named.pop() {
+            while let Some(index) = read.pop() {
                 if !visited.insert(index) {
                     continue;
                 }
@@ -313,7 +382,7 @@ pub(super) fn admit<'a>(
                     findings,
                 );
                 if let CurrentRead::Intermediate { index, .. } = range.current().read {
-                    named.push(index);
+                    read.push(index);
                 }
             }
         }
@@ -403,6 +472,7 @@ mod tests {
             &catalog,
             &driver,
             false,
+            false,
             &[],
             &secondary,
             &mut findings,
@@ -418,8 +488,17 @@ mod tests {
             }
         );
         let owner = Owner::Intermediate("W");
-        assert_eq!(refusal(&range, &[1], owner), None);
-        let diagnostic = refusal(&range, &[1, 0], owner).expect("another driver refuses");
+        let named = intermediates::Declarations::default();
+        let input = |port| RowDriver {
+            port,
+            intermediate: None,
+        };
+        assert!(refusal(&range, &[input(1)], owner, true, &named).is_none());
+        let Some(BindFinding::Scalar(diagnostic)) =
+            refusal(&range, &[input(1), input(0)], owner, true, &named)
+        else {
+            panic!("another driver refuses");
+        };
         assert_eq!(diagnostic.code, C::LookupRangeReference);
         assert_eq!(diagnostic.spec_paths, ["intermediates[0].between.value"]);
         assert_eq!(

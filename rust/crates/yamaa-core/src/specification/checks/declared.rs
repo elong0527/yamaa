@@ -707,7 +707,7 @@ impl Checks<'_> {
                     .iter()
                     .any(|input| input.name == owner)
         }) {
-            findings.extend(join_range(spec, e));
+            findings.extend(join_range_findings(spec, self.prepared, e));
             return Ok(());
         }
         let binds = match variable.split_once('.') {
@@ -820,6 +820,21 @@ impl Checks<'_> {
             .filter(|(_, value)| !value.contains('.') && !self.column(value))
         {
             findings.push(unknown_range_value(spec, between, Owner::Unnamed, value));
+        } else if let (true, Some(relation), Some(between)) = (
+            column,
+            relation,
+            aggregate
+                .between
+                .as_ref()
+                .filter(|between| between.lower.is_some() || between.upper.is_some()),
+        ) {
+            findings.extend(range_types(
+                spec,
+                self.prepared,
+                between,
+                relation,
+                Owner::Unnamed,
+            ));
         }
         // Each derive binding reads the relation the aggregate reduces, in
         // an ungrouped row phase ([`Self::donor_walk`]), typed by the
@@ -2591,12 +2606,14 @@ impl Checks<'_> {
             // range.
             if let Some(between) = &item.between {
                 // On a 1.0 tree a bare value that no column takes names
-                // nothing the row holds, and a value read from a lookup
-                // binding did not bind is none.
+                // nothing the row holds, unless another lookup's derivations
+                // read this one: binding then keeps it for the donor record,
+                // and refuses it where a row reads the lookup. A value read
+                // from a lookup binding did not bind is none.
                 let one_meaning = spec.header.surface.one_meaning_per_form();
                 if let Some(value) =
                     name(spec, between.value).filter(|value| match value.split_once('.') {
-                        None => one_meaning && !self.column(value),
+                        None => one_meaning && !self.column(value) && !donor_read(spec, index),
                         Some((owner, _)) => spec
                             .intermediates
                             .iter()
@@ -2617,6 +2634,9 @@ impl Checks<'_> {
                 let value =
                     name(spec, between.value).and_then(|value| match value.split_once('.') {
                         None if self.column(value) => Some(declared.name(value)),
+                        // A contextual 1.0 value has no type until a donor
+                        // record gives it one.
+                        None if one_meaning => None,
                         None => stored(primary, value),
                         Some((owner, field)) => {
                             match earlier.iter().find(|prior| prior.item.id.name == owner) {
@@ -3185,32 +3205,70 @@ impl Checks<'_> {
     /// LOOKUP-9 from the declarations alone: a range value qualified by an
     /// input that does not drive every row reading the lookup fails, whether
     /// or not the input stores the field. Each context pairs what its rows
-    /// evaluate with the inputs driving them, in binding's order, over the
-    /// derivations and filters that bound (`lookup_range::admit`); each
-    /// refused range is reported once.
+    /// evaluate with the inputs driving them and the named intermediates that
+    /// select their records, in binding's order, over the derivations and
+    /// filters that bound (`lookup_range::admit`); each refused range is
+    /// reported once, and a refusal already reported is not repeated. On a
+    /// 1.0 tree a named intermediate's bare value that no column takes, which
+    /// stays contextual when another lookup's derivations read it, names no
+    /// value of a row either (LOOKUP-9); a value qualified by a named
+    /// intermediate that builds one of the rows is unsupported; and one
+    /// qualified by a row driver that builds none of them is a keyed lookup
+    /// of a lookup that declares no key (LOOKUP-3, ROW-2).
     fn ranges(&self, bound: &Bound, findings: &mut Vec<BindFinding>) -> Result<(), BindError> {
+        let spec = self.spec;
         let named = &self.prepared.intermediates;
         let inputs = &self.prepared.sources;
-        let refused = |value: &str, drivers: &[&str]| {
+        let one_meaning = spec.header.surface.one_meaning_per_form();
+        let refused = |value: &str, drivers: &[(&str, Option<&str>)]| {
             value.split_once('.').is_some_and(|(qualifier, _)| {
                 inputs.iter().any(|input| input.name == qualifier)
-                    && drivers.iter().any(|&driver| driver != qualifier)
+                    && drivers.iter().any(|&(driver, _)| driver != qualifier)
             })
         };
+        // A value qualified by a 1.0 row driver that builds none of the rows
+        // reads it as a keyed lookup: its qualifier and the `key` it lacks.
+        fn keyless<'v, 'n>(
+            named: &'n intermediates::Declarations,
+            value: &'v str,
+        ) -> Option<(&'v str, &'n str)> {
+            let (qualifier, _) = value.split_once('.')?;
+            let (index, _) = named.reference(value)?;
+            Some((qualifier, named.key_required(index)?))
+        }
+        let keyless = |value| keyless(named, value).filter(|_| one_meaning);
+        let key_required = |key: &str| {
+            BindFinding::Lookup(LookupFinding::from_diagnostic(lookup::key_required(key)))
+        };
         let mut seen = BTreeSet::new();
+        let mut push = |path: &str, finding: BindFinding, findings: &mut Vec<BindFinding>| {
+            if seen.insert(path.to_owned())
+                && !crate::specification::row_intermediates::reported(findings, &finding)
+            {
+                findings.push(finding);
+            }
+        };
         for (evaluated, drivers) in self.range_contexts(bound)? {
             for evaluated in evaluated {
-                let (ranges, names) = match evaluated {
-                    Evaluated::Expression(root, own) => self.lookups(root, own),
-                    Evaluated::Name(name) => (Vec::new(), vec![name]),
+                let (ranges, names, own) = match evaluated {
+                    Evaluated::Expression(root, own) => {
+                        let (ranges, names) = self.lookups(root, own);
+                        (ranges, names, own)
+                    }
+                    Evaluated::Name(name) => (Vec::new(), vec![name], None),
                 };
                 for (value, path, owner) in ranges {
-                    if refused(value, &drivers) && seen.insert(path.clone()) {
-                        findings.push(BindFinding::Scalar(lookup::range_reference(
+                    if refused(value, &drivers) {
+                        let finding = BindFinding::Scalar(lookup::range_reference(
                             &format!("{path}.value"),
                             owner,
                             value,
-                        )));
+                        ));
+                        push(&path, finding, findings);
+                    } else if let Some((_, key)) =
+                        keyless(value).filter(|&(qualifier, _)| own != Some(qualifier))
+                    {
+                        push(&path, key_required(key), findings);
                     }
                 }
                 let mut stack = names
@@ -3225,12 +3283,36 @@ impl Checks<'_> {
                     let Some((identifier, range)) = named.range(index) else {
                         continue;
                     };
-                    if refused(&range.value, &drivers) && seen.insert(range.path().to_owned()) {
-                        findings.push(BindFinding::Scalar(
+                    let value = range.value.as_str();
+                    let contextual = one_meaning
+                        && !value.contains('.')
+                        && !self.column(value)
+                        && spec
+                            .intermediates
+                            .iter()
+                            .position(|item| item.id.name == identifier)
+                            .is_some_and(|position| donor_read(spec, position));
+                    let driving = value.split_once('.').is_some_and(|(qualifier, _)| {
+                        one_meaning
+                            && named.reference(value).is_some()
+                            && drivers.iter().any(|&(_, driver)| driver == Some(qualifier))
+                    });
+                    let finding = if refused(value, &drivers) || contextual {
+                        Some(BindFinding::Scalar(
                             range.unknown_value(Owner::Intermediate(identifier)),
-                        ));
+                        ))
+                    } else if driving {
+                        Some(BindFinding::Scalar(crate::application_issue::unsupported(
+                            "intermediate_driver_range_value",
+                            Some(&format!("{}.value", range.path())),
+                        )))
+                    } else {
+                        keyless(value).map(|(_, key)| key_required(key))
+                    };
+                    if let Some(finding) = finding {
+                        push(range.path(), finding, findings);
                     }
-                    if let Some((chained, _)) = named.reference(&range.value) {
+                    if let Some((chained, _)) = named.reference(value) {
                         stack.push(chained);
                     }
                 }
@@ -3252,7 +3334,7 @@ impl Checks<'_> {
     fn range_contexts(
         &self,
         bound: &Bound,
-    ) -> Result<Vec<(Vec<Evaluated<'_>>, Vec<&str>)>, BindError> {
+    ) -> Result<Vec<(Vec<Evaluated<'_>>, Vec<(&str, Option<&str>)>)>, BindError> {
         let spec = self.spec;
         let prepared = self.prepared;
         let verified = relation_predicates::verification_predicates(&prepared.verifications.checks)
@@ -3279,7 +3361,7 @@ impl Checks<'_> {
                 .map(|derivation| Evaluated::Expression(derivation.expr, Some(base)))
                 .chain(verified)
                 .collect();
-            return Ok(vec![(evaluated, vec![base])]);
+            return Ok(vec![(evaluated, vec![(base, None)])]);
         };
         let phases = rows.phases();
         let Some(drivers) = phases
@@ -3290,13 +3372,13 @@ impl Checks<'_> {
                     .iter()
                     .any(|source| source.name == template.driver)
                 {
-                    Some(template.driver)
+                    Some((template.driver, None))
                 } else {
                     prepared
                         .intermediates
                         .input(template.driver)
                         .and_then(|index| prepared.sources.get(index))
-                        .map(|source| source.name.as_str())
+                        .map(|source| (source.name.as_str(), Some(template.driver)))
                 }
             })
             .collect::<Option<Vec<_>>>()
@@ -3323,11 +3405,11 @@ impl Checks<'_> {
                     .iter()
                     .any(|derived| derived.column == derivation.column)
             });
-            let mut scopes: Vec<(Option<&str>, Vec<&str>)> = Vec::new();
+            let mut scopes: Vec<(Option<&str>, Vec<(&str, Option<&str>)>)> = Vec::new();
             if lookups::aggregates(spec, root) {
                 let own = drivers
                     .first()
-                    .copied()
+                    .map(|&(primary, _)| primary)
                     .filter(|&primary| phases.iter().all(|template| template.driver == primary));
                 scopes.push((own, leaving.map(|(_, &driver)| driver).collect()));
             } else {
@@ -3551,6 +3633,69 @@ pub(super) fn join_range(spec: &Spec, e: ExprId) -> Option<BindFinding> {
         Owner::Source(name(spec, source.variable).unwrap_or_default()),
         value,
     ))
+}
+
+/// On a 1.0 tree, the range at `between` of a lookup of `relation`, owned
+/// by `owner`, whose value and stated bounds the declarations type and whose
+/// types cannot compare (`incomparable_range_types`, LOOKUP-9), as binding
+/// reports it once the range's fields bind: the value an output column or a
+/// field of an input's record, each bound a field of the relation. A value
+/// read from a lookup is typed only once its relation is captured.
+pub(super) fn range_types(
+    spec: &Spec,
+    prepared: &PreparedSpecification,
+    between: &ast::Between,
+    relation: &str,
+    owner: Owner<'_>,
+) -> Option<BindFinding> {
+    if !spec.header.surface.one_meaning_per_form() {
+        return None;
+    }
+    let declared = prepared.declared_types();
+    let value = name(spec, between.value)?;
+    let typed = match value.split_once('.') {
+        None => spec.columns.iter().any(|column| column.name.name == value),
+        Some((owner, _)) => prepared.sources.iter().any(|input| input.name == owner),
+    };
+    let value_type = typed.then(|| declared.name(value).single()).flatten()?;
+    let bound = |bound: Option<ExprId>| match bound {
+        None => Some(None),
+        Some(bound) => declared
+            .name(&format!("{relation}.{}", name(spec, bound)?))
+            .single()
+            .map(Some),
+    };
+    let types = crate::dataset::RelationRangeTypes::incomparable(
+        value_type,
+        bound(between.lower)?,
+        bound(between.upper)?,
+    )?;
+    let mut diagnostic = types.diagnostic_for(&render(spec, between.meta), None);
+    owner.add(&mut diagnostic.context);
+    Some(BindFinding::Scalar(diagnostic))
+}
+
+/// On a 1.0 tree, what binding refuses of the range of the implicit join a
+/// structured source at `e` reads, once its read binds: a bare value that no
+/// column takes ([`join_range`]), or else types that cannot compare
+/// ([`range_types`]).
+pub(super) fn join_range_findings(
+    spec: &Spec,
+    prepared: &PreparedSpecification,
+    e: ExprId,
+) -> Option<BindFinding> {
+    join_range(spec, e).or_else(|| {
+        let ExprKind::Source(source) = &spec.expr(e).kind else {
+            return None;
+        };
+        let variable = name(spec, source.variable)?;
+        let (relation, _) = variable.split_once('.')?;
+        let between = source
+            .between
+            .as_ref()
+            .filter(|between| between.lower.is_some() || between.upper.is_some())?;
+        range_types(spec, prepared, between, relation, Owner::Source(variable))
+    })
 }
 
 /// `require_match` asserts what only an implicit join can miss, and

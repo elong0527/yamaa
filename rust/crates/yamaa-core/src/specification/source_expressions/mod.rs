@@ -544,7 +544,10 @@ impl Declaration {
             findings.push(wrap(range.unknown_value(owner)));
             return Ok(None);
         };
-        Ok(match range.finish(read, kind, bounds, None)? {
+        // On a 1.0 tree a type refusal names the variable too, as every
+        // other refusal of the binding's range does.
+        let named = if one_meaning { owner } else { Owner::Unnamed };
+        Ok(match range.finish(read, kind, bounds, named)? {
             Ok(range) => Some(Some(range.for_variable(&self.variable))),
             Err(diagnostic) => {
                 findings.push(wrap(diagnostic));

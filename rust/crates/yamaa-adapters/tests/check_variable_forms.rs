@@ -1,11 +1,16 @@
 #![cfg(feature = "yaml")]
 //! One meaning per form of a `variable` field that names a current-row value,
-//! on a 1.0 tree (#2934, row reads). In every `between.value` a bare name is
-//! an output column alone (NAME-3), a driver-qualified name reads the row's
-//! driver record, a name qualified by another input is refused and a
+//! on a 1.0 tree. In a row's read (#2934), in every `between.value` a bare
+//! name is an output column alone (NAME-3), a driver-qualified name reads the
+//! row's driver record, a name qualified by another input is refused and a
 //! lookup-qualified name reads that lookup's column for the row (LOOKUP-9). A
 //! key match value never reads a lookup (LOOKUP-5, LOOKUP-11), and a written
-//! aggregate key reports its refusals at its `key` (LOOKUP-5). `check` reports
+//! aggregate key reports its refusals at its `key` (LOOKUP-5). In a donor read
+//! (#3414) a bare or donor-qualified name reads the donor record, a
+//! lookup-qualified one that lookup's column for the donor record, and any
+//! other record is refused at the reading derivation (LOOKUP-16). A range
+//! value never reads the record of the intermediate that builds its row, and
+//! a source binding's type refusal names its variable (LOOKUP-9). `check` reports
 //! each refusal as `run` does, in `run`'s order and in both hosts, the later
 //! read of a lookup its own key refused included; it leaves out only what the
 //! declarations cannot decide, such as a field a relation does not store. A
@@ -94,9 +99,10 @@ impl Fixture {
 }
 
 /// Clinic and home measurements of one subject, each with its day and the
-/// device it was taken with; a reference day for the subject in REF; two
-/// day windows; and the calibration days of each device.
-const INPUTS: [(&str, &str); 5] = [
+/// device it was taken with; a reference day for the subject in REF and
+/// another in OTHER; two day windows; the calibration days of each device;
+/// two subjects' exposure records, one without a dose, and their periods.
+const INPUTS: [(&str, &str); 9] = [
     (
         "clinic.csv",
         "STUDYID,USUBJID,SEQ,DAY,SID\nS,S-1,1,5,D1\nS,S-1,2,20,D2\n",
@@ -111,6 +117,21 @@ const INPUTS: [(&str, &str); 5] = [
         "STUDYID,NAME,LO,HI\nS,EARLY,1,10\nS,LATE,11,50\n",
     ),
     ("cal.csv", "STUDYID,SID,CALDY\nS,D1,1\nS,D1,2\nS,D2,3\n"),
+    ("other.csv", "STUDYID,USUBJID,OTHDAY\nS,S-1,3\n"),
+    (
+        "subjects.csv",
+        "STUDYID,USUBJID,EXSTDT\nS,S-1,2025-02-15\nS,S-2,2025-03-05\n",
+    ),
+    (
+        "ex.csv",
+        "STUDYID,USUBJID,EXSEQ,EXDOSE,EXSTDT\nS,S-1,1,0,2025-01-03\nS,S-1,2,50,2025-01-10\n\
+         S,S-1,3,50,2025-02-01\nS,S-2,1,50,2025-03-01\n",
+    ),
+    (
+        "periods.csv",
+        "STUDYID,USUBJID,APERIOD,APERSDT,APEREDT\nS,S-1,1,2025-01-01,2025-01-31\n\
+         S,S-1,2,2025-02-01,2025-02-28\nS,S-2,1,2025-03-01,\n",
+    ),
 ];
 
 /// A 1.0 specification: clinic and home templates over CLINIC and HOME, the
@@ -554,4 +575,317 @@ fn a_written_aggregate_key_reports_its_refusals_at_key() {
     let fixture = Fixture::new(specification);
     let (_, built) = fixture.issues(Language::Python);
     assert_eq!(built, [unknown(&at("expr"), "DAY")], "{specification}");
+}
+
+/// A 1.0 specification built from CLINIC's records whose W is D.WNAME, read
+/// from D, REF's record of the subject, which derives WNAME from WI, the
+/// windows `wi` declares; RK reads OTHER's record of the subject on `rk`.
+/// With `row`, the rows read WI too, in the column R.
+fn donor(wi: &str, rk: &str, row: bool) -> String {
+    let (output, read) = if row {
+        (", R", "  - {name: R, type: str, derivation: WI.NAME}\n")
+    } else {
+        ("", "")
+    };
+    format!(
+        "yamaa: \"1.0\"\n\
+         type: spec\n\
+         domain: OUT\n\
+         keys: [STUDYID, USUBJID, SEQ]\n\
+         input:\n\
+         \x20 CLINIC: {{path: clinic.csv, types: {{SEQ: int, DAY: int}}}}\n\
+         \x20 REF: {{path: ref.csv, types: {{REFDAY: int}}}}\n\
+         \x20 OTHER: {{path: other.csv, types: {{OTHDAY: int}}}}\n\
+         \x20 WIN: {{path: win.csv, types: {{LO: int, HI: int}}}}\n\
+         base: CLINIC\n\
+         output: {{path: out.csv, columns: [STUDYID, USUBJID, SEQ, W{output}]}}\n\
+         intermediates:\n\
+         \x20 - {{id: RK, dataset: OTHER, key: {rk}}}\n\
+         \x20 - {{id: WI, dataset: WIN, {wi}}}\n\
+         \x20 - {{id: D, dataset: REF, key: [STUDYID, USUBJID], derivations: {{WNAME: WI.NAME}}}}\n\
+         columns:\n\
+         \x20 - {{name: STUDYID, type: str, derivation: CLINIC.STUDYID}}\n\
+         \x20 - {{name: USUBJID, type: str, derivation: CLINIC.USUBJID}}\n\
+         \x20 - {{name: SEQ, type: int, derivation: CLINIC.SEQ}}\n\
+         \x20 - {{name: W, type: str, derivation: D.WNAME}}\n\
+         {read}"
+    )
+}
+
+/// WI's range whose value is `value`.
+fn window(value: &str) -> String {
+    format!("key: [STUDYID], between: {{value: {value}, lower: LO, upper: HI}}")
+}
+
+/// The refusal at D's derivation of a read of WI that the donor record cannot
+/// give, naming the read `identifier` (LOOKUP-16).
+fn donor_refusal(identifier: &str) -> Value {
+    issue(
+        "unknown_field",
+        "LOOKUP-16",
+        "intermediates.D.derivations.WNAME.source",
+        yamaa_adapters::json!({"identifier": identifier, "intermediate": "D", "read": "WI"}),
+    )
+}
+
+/// In a donor read a bare range value is the donor record's field, and so is
+/// one qualified by the donor's dataset; a lookup-qualified one reads that
+/// lookup's column for the donor record (LOOKUP-16). The subject's reference
+/// day 12 is in LATE, and its OTHER day 3 in EARLY, for each clinic row.
+#[test]
+fn a_donor_read_takes_its_range_value_from_the_donor_record() {
+    for (value, csv) in [
+        (
+            "REFDAY",
+            "STUDYID,USUBJID,SEQ,W\nS,S-1,1,LATE\nS,S-1,2,LATE\n",
+        ),
+        (
+            "REF.REFDAY",
+            "STUDYID,USUBJID,SEQ,W\nS,S-1,1,LATE\nS,S-1,2,LATE\n",
+        ),
+        (
+            "RK.OTHDAY",
+            "STUDYID,USUBJID,SEQ,W\nS,S-1,1,EARLY\nS,S-1,2,EARLY\n",
+        ),
+    ] {
+        let fixture = Fixture::new(&donor(&window(value), "[STUDYID, USUBJID]", false));
+        for host in [Language::Python, Language::R] {
+            assert_eq!(
+                fixture.issues(host),
+                (Vec::new(), Vec::new()),
+                "{value} ({host:?})"
+            );
+        }
+        assert_eq!(fixture.saved(), csv, "{value}");
+    }
+}
+
+/// A donor read gives the donor record alone: a range value, a correlated
+/// filter field or a key value of a lookup a range value reads that names
+/// another input's record fails at the reading derivation (LOOKUP-16), where
+/// it read whatever record stood at the donor record's position. A bare name
+/// the donor record does not store fails there too, which only its records
+/// decide.
+#[test]
+fn a_donor_read_refuses_the_record_of_another_input() {
+    for (wi, rk, identifier) in [
+        (window("CLINIC.DAY"), "[STUDYID, USUBJID]", "CLINIC.DAY"),
+        (window("OTHER.OTHDAY"), "[STUDYID, USUBJID]", "OTHER.OTHDAY"),
+        (
+            "key: [STUDYID], filter: \"WIN.LO <= CLINIC.DAY\", order_by: [WIN.LO], keep: first"
+                .to_owned(),
+            "[STUDYID, USUBJID]",
+            "CLINIC.DAY",
+        ),
+        (
+            window("RK.OTHDAY"),
+            "{STUDYID: STUDYID, USUBJID: CLINIC.USUBJID}",
+            "CLINIC.USUBJID",
+        ),
+    ] {
+        assert_issues(&donor(&wi, rk, false), &[donor_refusal(identifier)], &[]);
+    }
+    let unstored = donor_refusal("NOPE");
+    assert_issues(
+        &donor(&window("NOPE"), "[STUDYID, USUBJID]", false),
+        std::slice::from_ref(&unstored),
+        std::slice::from_ref(&unstored),
+    );
+}
+
+/// A bare range value that no column takes stays the donor record's field
+/// for a donor read, and names no value of a row that reads the lookup
+/// (LOOKUP-9), once the rows are bound.
+#[test]
+fn a_bare_range_value_of_a_donor_read_names_no_value_of_a_row() {
+    let row = issue(
+        "unknown_field",
+        "LOOKUP-9",
+        "intermediates.WI.between.value",
+        yamaa_adapters::json!({"identifier": "REFDAY", "intermediate": "WI"}),
+    );
+    assert_issues(
+        &donor(&window("REFDAY"), "[STUDYID, USUBJID]", true),
+        &[row],
+        &[],
+    );
+}
+
+/// The exposure records with a dose drive the `dosed` rows and the subjects
+/// the `subject` rows; W, a lookup of the subject's periods, matches the one
+/// holding `value`, and each template's APERIOD is `dosed` and `subject`.
+fn dosed(value: &str, dosed: &str, subject: &str) -> String {
+    format!(
+        "yamaa: \"1.0\"\n\
+         type: spec\n\
+         domain: OUT\n\
+         keys: [STUDYID, USUBJID, ASEQ]\n\
+         input:\n\
+         \x20 SUBJ: {{path: subjects.csv, types: {{EXSTDT: date}}}}\n\
+         \x20 EX: {{path: ex.csv, types: {{EXSEQ: int, EXDOSE: int, EXSTDT: date}}}}\n\
+         \x20 PERIODS: {{path: periods.csv, types: {{APERIOD: int, APERSDT: date, APEREDT: date}}, key: [STUDYID, USUBJID]}}\n\
+         output: {{path: out.csv, columns: [STUDYID, USUBJID, ASEQ, APERIOD]}}\n\
+         intermediates:\n\
+         \x20 - {{id: DOSED, dataset: EX, filter: \"EX.EXDOSE > 0\"}}\n\
+         \x20 - {{id: W, dataset: PERIODS, key: [STUDYID, USUBJID], between: {{value: {value}, lower: APERSDT, upper: APEREDT}}, order_by: [PERIODS.APERIOD], keep: first}}\n\
+         columns:\n\
+         \x20 - {{name: STUDYID, type: str}}\n\
+         \x20 - {{name: USUBJID, type: str}}\n\
+         \x20 - {{name: ASEQ, type: int}}\n\
+         \x20 - {{name: APERIOD, type: int}}\n\
+         rows:\n\
+         \x20 - id: dosed\n\
+         \x20   dataset: DOSED\n\
+         \x20   derivations: {{STUDYID: DOSED.STUDYID, USUBJID: DOSED.USUBJID, ASEQ: DOSED.EXSEQ, APERIOD: {dosed}}}\n\
+         \x20 - id: subject\n\
+         \x20   dataset: SUBJ\n\
+         \x20   derivations: {{STUDYID: SUBJ.STUDYID, USUBJID: SUBJ.USUBJID, ASEQ: 0, APERIOD: {subject}}}\n"
+    )
+}
+
+/// A named intermediate binds once for every row that reads it, so a range
+/// value qualified by the intermediate that builds a reading row cannot read
+/// that row's record, and is unsupported (#3055); before, it looked the
+/// intermediate up by a key it does not declare. For rows another input
+/// builds, the read is a keyed lookup of a row driver, which declares no key
+/// (LOOKUP-3, ROW-2), as any other read of it is.
+#[test]
+fn a_range_value_never_reads_the_intermediate_that_builds_its_row() {
+    let unsupported = yamaa_adapters::json!({
+        "phase": "planning",
+        "condition": "unsupported_operation",
+        "rule": null,
+        "spec_paths": ["intermediates.W.between.value"],
+        "context": {"operation": "intermediate_driver_range_value"},
+    });
+    let keyless = issue(
+        "missing_required_field",
+        "LOOKUP-3",
+        "intermediates.DOSED.key",
+        yamaa_adapters::json!({"field": "key", "class": "intermediate_class"}),
+    );
+    for (dosed_rows, subject_rows, expected, label) in [
+        ("W.APERIOD", "null", &unsupported, "the dosed rows"),
+        (
+            "W.APERIOD",
+            "W.APERIOD",
+            &unsupported,
+            "both templates' rows",
+        ),
+        ("null", "W.APERIOD", &keyless, "the subject rows"),
+    ] {
+        let specification = dosed("DOSED.EXSTDT", dosed_rows, subject_rows);
+        let fixture = Fixture::new(&specification);
+        for host in [Language::Python, Language::R] {
+            let (checked, built) = fixture.issues(host);
+            assert_eq!(
+                built,
+                std::slice::from_ref(expected),
+                "domain, {label} ({host:?})"
+            );
+            assert_eq!(checked, built, "check, {label} ({host:?})");
+        }
+    }
+}
+
+/// A range whose value and bounds cannot compare names the source binding's
+/// variable, as each other refusal of its range does; an aggregate's names no
+/// owner (LOOKUP-9). On the 0.5 surface a source binding's names none.
+#[test]
+fn a_source_binding_s_range_types_refusal_names_its_variable() {
+    let types = |path: &str, variable: Option<&str>| {
+        let mut context = yamaa_core::json::Map::new();
+        for (key, value) in [
+            ("value_type", "str"),
+            ("lower_type", "int"),
+            ("upper_type", "int"),
+        ] {
+            context.insert(key.into(), Value::String(value.into()));
+        }
+        if let Some(variable) = variable {
+            context.insert("variable".into(), Value::String(variable.into()));
+        }
+        issue(
+            "incomparable_range_types",
+            "LOOKUP-9",
+            path,
+            Value::Object(context),
+        )
+    };
+    let source = "{source: {variable: WIN.NAME, between: {value: STUDYID, lower: LO, upper: HI}}}";
+    let aggregate =
+        "{aggregate: {expr: 'MAX(WIN.NAME)', between: {value: STUDYID, lower: LO, upper: HI}}}";
+    for (specification, expected) in [
+        (
+            rows("", source, "", ""),
+            types("columns.W.derivation.source.between", Some("WIN.NAME")),
+        ),
+        (
+            rows("", "", source, "\"'x'\""),
+            types("rows.clinic.derivations.W.source.between", Some("WIN.NAME")),
+        ),
+        (
+            base("", source),
+            types("columns.W.derivation.source.between", Some("WIN.NAME")),
+        ),
+        (
+            base("", aggregate),
+            types("columns.W.derivation.aggregate.between", None),
+        ),
+    ] {
+        assert_issues(&specification, &[expected], &[]);
+    }
+}
+
+/// On the 0.5 surface a donor read keeps the rules at the `yamaa-v0.5.0` tag
+/// (D75): a bare range value that no column takes is a field of the driver's
+/// record, which REF's REFDAY is not, and a source binding's type refusal
+/// names no variable.
+#[test]
+fn a_0_5_donor_read_and_range_type_keep_the_0_5_rules() {
+    let header = "schema_version: \"1.0\"\n\
+        domain: OUT\n\
+        keys: [STUDYID, USUBJID, SEQ]\n\
+        input:\n\
+        \x20 CLINIC: {path: clinic.csv, types: {SEQ: int, DAY: int}}\n\
+        \x20 REF: {path: ref.csv, types: {REFDAY: int}}\n\
+        \x20 WIN: {path: win.csv, types: {LO: int, HI: int}}\n\
+        base: CLINIC\n\
+        output: {path: out.csv, columns: [STUDYID, USUBJID, SEQ, W]}\n";
+    let columns = "  - {name: STUDYID, type: str, derivation: CLINIC.STUDYID}\n\
+        \x20 - {name: USUBJID, type: str, derivation: CLINIC.USUBJID}\n\
+        \x20 - {name: SEQ, type: int, derivation: CLINIC.SEQ}\n";
+    for (specification, expected) in [
+        (
+            format!(
+                "{header}intermediates:\n\
+                 \x20 - {{id: WI, dataset: WIN, key: [STUDYID], between: {{value: REFDAY, lower: LO, upper: HI}}}}\n\
+                 \x20 - {{id: D, dataset: REF, key: [STUDYID, USUBJID], derivations: {{WNAME: WI.NAME}}}}\n\
+                 columns:\n{columns}\
+                 \x20 - {{name: W, type: str, derivation: D.WNAME}}\n"
+            ),
+            issue(
+                "unknown_field",
+                "LOOKUP-9",
+                "intermediates[0].between.value",
+                yamaa_adapters::json!({"identifier": "REFDAY", "intermediate": "WI"}),
+            ),
+        ),
+        (
+            format!(
+                "{header}columns:\n{columns}\
+                 \x20 - {{name: W, type: str, derivation: {{source: {{variable: WIN.NAME, between: {{value: STUDYID, lower: LO, upper: HI}}}}}}}}\n"
+            ),
+            issue(
+                "incomparable_range_types",
+                "LOOKUP-9",
+                "columns.W.derivation.source.between",
+                yamaa_adapters::json!({"value_type": "str", "lower_type": "int", "upper_type": "int"}),
+            ),
+        ),
+    ] {
+        let fixture = Fixture::new(&specification);
+        let (_, built) = fixture.issues(Language::Python);
+        assert_eq!(built, [expected], "{specification}");
+    }
 }

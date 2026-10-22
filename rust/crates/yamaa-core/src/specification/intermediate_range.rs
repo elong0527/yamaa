@@ -32,9 +32,12 @@ fn reference(path: &str, name: &str, intermediate: &str, code: C, findings: &mut
 /// reads the intermediate; an input's record keeps that input's record port,
 /// and every context that reads the intermediate admits it (LOOKUP-9). With
 /// `one_meaning` (1.0) a bare name is an output column alone, so one that no
-/// column takes fails at `between.value`, whatever the bounds bind. On the
-/// 0.5 surface such a name reads a field of the driver's record, as at the
-/// `yamaa-v0.5.0` tag (D75).
+/// column takes fails at `between.value`, whatever the bounds bind; when
+/// another intermediate's derivations read this one (`contextual`), it stays
+/// contextual instead: a donor read takes the donor record's field of that
+/// name (LOOKUP-16), and every row that reads the intermediate refuses it
+/// ([`lookup_range::admit`]). On the 0.5 surface such a name reads a field of
+/// the driver's record, as at the `yamaa-v0.5.0` tag (D75).
 #[allow(clippy::too_many_arguments)]
 pub(super) fn bind(
     declaration: &lookup_range::Declaration,
@@ -45,6 +48,7 @@ pub(super) fn bind(
     catalog: &Catalog,
     driver: &TableSchema,
     one_meaning: bool,
+    contextual: bool,
     previous: &[Option<Intermediate>],
     secondary: &[crate::dataset::SecondarySource],
     findings: &mut Vec<BindFinding>,
@@ -55,12 +59,24 @@ pub(super) fn bind(
     // All stated donor bounds precede current-reference validation.
     let bounds = declaration.bind_bounds(owner, donor, donor_kind, admits, &mut diagnostics);
     findings.extend(diagnostics.into_iter().map(wrap));
+    let unread = one_meaning && declaration.names_no_column(catalog);
     let Some(bounds) = bounds else {
-        if one_meaning && declaration.names_no_column(catalog) {
+        if unread && !contextual {
             findings.push(wrap(declaration.unknown_value(owner)));
         }
         return Ok(None);
     };
+    if unread && contextual {
+        return Ok(
+            match declaration.finish(CurrentRead::Contextual, None, bounds, owner)? {
+                Ok(range) => Some(range),
+                Err(diagnostic) => {
+                    findings.push(wrap(diagnostic));
+                    None
+                }
+            },
+        );
+    }
     let name = declaration.value.as_str();
     let current = declaration
         .current_value(catalog, secondary, previous, None, None, &mut Vec::new())?
@@ -86,15 +102,13 @@ pub(super) fn bind(
         findings.push(wrap(declaration.unknown_value(owner)));
         return Ok(None);
     };
-    Ok(
-        match declaration.finish(read, kind, bounds, Some(intermediate))? {
-            Ok(range) => Some(range),
-            Err(diagnostic) => {
-                findings.push(wrap(diagnostic));
-                None
-            }
-        },
-    )
+    Ok(match declaration.finish(read, kind, bounds, owner)? {
+        Ok(range) => Some(range),
+        Err(diagnostic) => {
+            findings.push(wrap(diagnostic));
+            None
+        }
+    })
 }
 pub(super) fn prepare_columns(
     item: &ast::Intermediate,
