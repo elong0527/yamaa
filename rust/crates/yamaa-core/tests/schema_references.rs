@@ -1108,10 +1108,11 @@ mod schema {
             );
         }
 
-        /// 0.5 only (#3447): the 0.5 layer admission checks `schema_version`
-        /// and each member's identity before field findings. A 1.x layer's
-        /// header is read before admission (SCHEMA-2), and requiredness
-        /// waits inside a member (LAYER-4).
+        /// 0.5 only (#3447): the 0.5 layer admission reports `schema_version`
+        /// and a member's missing identity in its own phase order. A 1.x
+        /// layer's header is read before admission (SCHEMA-2), and its
+        /// unknown root fields follow the known ones; a 1.x member without
+        /// its identity is #3655.
         #[test]
         fn version_unknown_identity_and_duplicate_errors_keep_phase_order() {
             let findings = diagnostics_v0_5(document(V::map(vec![
@@ -1573,7 +1574,8 @@ mod schema {
 
         /// 0.5 only (#3447): the 0.5 layer admission reports a root Boolean
         /// key as `True`, among the fields in written order, and a member
-        /// without its identity at its position. Its member paths are above.
+        /// without its identity at its position (for 1.x, #3655). Its member
+        /// paths are above.
         #[test]
         fn paths_distinguish_positional_numeric_boolean_and_textual_members() {
             let input = document(V::Pairs(vec![
