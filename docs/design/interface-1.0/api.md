@@ -2,7 +2,9 @@
 
 Part of the [1.0 interface RFC](../interface-1.0.md): #3030 sections 2.7
 and 2.8, decisions D11, D12 and D28 to D46, and Phase 0 item 3. The bindings
-draft is [`rust/interface/bindings-1.0.yaml`](../../../rust/interface/bindings-1.0.yaml).
+draft is [`rust/interface/bindings-1.0.yaml`](https://github.com/elong0527/yamaa/blob/yamaa-v0.5.0/rust/interface/bindings-1.0.yaml)
+at the yamaa-v0.5.0 tag; `rust/interface/bindings.yaml` replaced it in 1.0
+(#3434).
 The printed text, error text and JSON below are designs, not captured output;
 their messages illustrate the templates of `yaml/conditions.yaml` (P-MSG-1).
 
@@ -284,7 +286,7 @@ engine panicked, to standard error.
 | Exit status | Meaning |
 | --- | --- |
 | 0 | the command completed and its status is `succeeded`; for `resolve`, `schema` and `--version`, the output was printed |
-| 1 | the command completed with findings: a `failed` or `skipped` status, remaining lint findings, a failed selftest case, or a refusal that carries issues; a missing or unreadable PATH is an issue (`resource_path_missing`), as the hosts return it |
+| 1 | the command completed with findings: a `failed` or `skipped` status, remaining lint findings, a failed selftest case, or a refusal that carries issues; a PATH that is missing, not a regular file or a link is an issue, `resource_path_missing`, `resource_path_not_regular_file` or `resource_path_symlink` (FILE-7, FILE-8; D125, D188), as the hosts return it |
 | 2 | the command could not run as asked: invalid usage or arguments, a PATH whose type the command does not take, `--spec` or `--section` with a spec PATH, or a failed write to standard output |
 
 D12 says 2 is for "usage or IO errors". This design reads "IO errors" as the

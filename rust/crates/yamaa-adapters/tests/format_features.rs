@@ -1,4 +1,8 @@
 //! Capability controls also run when no document or storage reader is selected.
+#[allow(dead_code)]
+#[path = "support/scratch.rs"]
+mod scratch;
+
 use yamaa_adapters::{
     arrow_table::ArrowTable, parquet_artifact, parquet_source, sas_source, yaml_decode,
 };
@@ -142,10 +146,9 @@ fn parquet_source_and_artifact_share_one_capability() {
 #[test]
 fn odm_reader_is_an_independent_capability() {
     const DOCUMENT: &str = r#"<ODM xmlns="http://www.cdisc.org/ns/odm/v1.3"><ClinicalData StudyOID="S" MetaDataVersionOID="M"/></ODM>"#;
-    let path = std::env::temp_dir().join(format!("yamaa-format-odm-{}.xml", std::process::id()));
-    std::fs::write(&path, DOCUMENT).unwrap();
+    let directory = scratch::Scratch::new("format-odm");
+    let path = directory.write("input.xml", DOCUMENT);
     let result = yamaa_adapters::odm_xml::read(&path, &yamaa_core::odm_items::Options::default());
-    std::fs::remove_file(&path).unwrap();
     // A specification's `.xml` input reads its held bytes through the same
     // reader, in the shared source decode (INPUT-1, ODM-1).
     let mut declaration = source(SourceProfile::OdmXml);
