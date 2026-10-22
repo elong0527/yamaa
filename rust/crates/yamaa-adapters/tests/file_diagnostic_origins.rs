@@ -13,15 +13,10 @@ mod file {
             fn new() -> Self {
                 let directory = crate::support::Scratch::canonical("diagnostic-origins");
                 fs::create_dir_all(directory.join("parent")).unwrap();
-                // A minimal project linking a Python environment file.
+                // A minimal project, which declares no function.
                 fs::write(
                     directory.join("project.yaml"),
-                    "schema_version: '1.0'\nenvironments: {python: environment.yaml}\n",
-                )
-                .unwrap();
-                fs::write(
-                    directory.join("environment.yaml"),
-                    "schema_version: '1.0'\n",
+                    "yamaa: \"1.0\"\ntype: project\n",
                 )
                 .unwrap();
                 Self(directory)
@@ -34,6 +29,8 @@ mod file {
             }
         }
 
+        /// The index notation `rows[N]` is 0.5's, so these specifications stay
+        /// as 0.5 wrote them until the 0.5 path goes.
         #[test]
         fn physical_row_indices_preserve_literal_parent_ids_and_refuse_invalid_slots() {
             for id in ["ordinary", "dot.id", "bracket[999]", "both.[999]"] {
@@ -110,10 +107,10 @@ mod file {
         fn ready_static_owner_returns_contributor_without_changing_public_issue_context() {
             let study = Study::new();
             fs::write(study.0.join("parent/base.yaml"),
-        "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: out.csv, columns: [ID]}\ncolumns:\n  - name: ID\n    type: str\n    label: Identifier\n    derivation: SRC.ID\n    verifications: [{matches: {pattern: '('}}]\n").unwrap();
+        "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: out.csv, columns: [ID]}\ncolumns:\n  - name: ID\n    type: str\n    label: Identifier\n    derivation: SRC.ID\n    verifications: [{matches: {pattern: '('}}]\n").unwrap();
             fs::write(
                 study.0.join("spec.yaml"),
-                "schema_version: '1.0'\nparent: parent/base.yaml\n",
+                "yamaa: \"1.0\"\ntype: spec\nparent: parent/base.yaml\n",
             )
             .unwrap();
             let owner = file_workflow::select_with_optional_resources(
@@ -171,7 +168,7 @@ mod file {
         };
         use yamaa_core::application_observer::Scope;
         use yamaa_core::domain_entry::Request;
-        const VALID: &str = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
+        const VALID: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
         struct Study(crate::support::Scratch);
         impl Study {
             fn new() -> Self {
@@ -184,15 +181,14 @@ mod file {
                 let path = path.replace('\\', "/");
                 path
             }
-            /// Write a minimal project that links a functionless Python
-            /// environment file, and return the project path a caller passes.
+            /// Write a minimal project, which declares no function, and return
+            /// the project path a caller passes.
             fn project(&self) -> String {
                 fs::write(
                     self.0.join("project.yaml"),
-                    "schema_version: '1.0'\nenvironments: {python: environment.yaml}\n",
+                    "yamaa: \"1.0\"\ntype: project\n",
                 )
                 .unwrap();
-                fs::write(self.0.join("environment.yaml"), "schema_version: '1.0'\n").unwrap();
                 self.text("project.yaml")
             }
             fn build(&self) -> file_application::Domain {
@@ -703,7 +699,7 @@ mod file {
                     65,
                     "columns.ID.derivation.first_available.sources",
                 ),
-                ("group_keys", 64, 65, "rows[0].group_by"),
+                ("group_keys", 64, 65, "rows.r.group_by"),
                 // No row_columns case: after pruning (LAYER-11) a row's
                 // derivations survive only for live columns, and 1025 live
                 // columns refuse at the columns capacity first — an inherited
@@ -716,7 +712,7 @@ mod file {
                     "columns" => {
                         for i in 1..actual {
                             body.push_str(&format!(
-                                "  - {{name: C{i}, type: int, derivation: {{literal: 1}}}}\n"
+                                "  - {{name: C{i}, type: int, derivation: 1}}\n"
                             ));
                         }
                         // The generated columns must be live under pruning
@@ -897,7 +893,7 @@ mod file {
                     assert_eq!(issues[0].phase(), "validation");
                     assert_eq!(issues[0].condition(), "invalid_field_type");
                     assert_eq!(issues[0].rule(), Some("ROW-4"));
-                    assert_eq!(issues[0].spec_paths, ["rows[0].group_by"]);
+                    assert_eq!(issues[0].spec_paths, ["rows.r.group_by"]);
                     assert_eq!(
                         yamaa_core::json::Value::Object(issues[0].context.clone()),
                         json!({"row":"r", "group_by":vec!["ID"; Limits::KEYS]}),
@@ -911,14 +907,14 @@ mod file {
                 .map(|i| format!("SRC.G{i}"))
                 .collect::<Vec<_>>()
                 .join(", ");
-            let mut body = String::from("schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int}\n");
+            let mut body = String::from("yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int}\n");
             for i in 1..Limits::COLUMNS {
                 body.push_str(&format!("  - {{name: C{i}, type: int}}\n"));
             }
             body.push_str("rows:\n");
             for row in 1..=2 {
-                let derivations = std::iter::once(format!("ID: {{literal: {row}}}"))
-                    .chain((1..Limits::COLUMNS).map(|i| format!("C{i}: {{literal: 1}}")))
+                let derivations = std::iter::once(format!("ID: {row}"))
+                    .chain((1..Limits::COLUMNS).map(|i| format!("C{i}: 1")))
                     .collect::<Vec<_>>()
                     .join(", ");
                 body.push_str(&format!("  - {{id: r{row}, dataset: SRC, group_by: [{groups}], derivations: {{{derivations}}}}}\n"));
@@ -1045,13 +1041,13 @@ mod file {
                 };
                 fs::write(
                     study.0.join(format!("layer-{index}.yaml")),
-                    format!("schema_version: '1.0'\nparent: {parent}\n"),
+                    format!("yamaa: \"1.0\"\ntype: spec\nparent: {parent}\n"),
                 )
                 .unwrap();
             }
             fs::write(
                 study.0.join("spec.yaml"),
-                "schema_version: '1.0'\nparent: layer-0.yaml\n",
+                "yamaa: \"1.0\"\ntype: spec\nparent: layer-0.yaml\n",
             )
             .unwrap();
             let spec = study.text("spec.yaml");
@@ -1082,6 +1078,8 @@ mod file {
             assert_eq!(fs::read(study.0.join("output.csv")).unwrap(), b"ID\n1\n");
         }
 
+        /// `schema_version_mismatch` is 0.5's finding, so the specification stays
+        /// as 0.5 wrote it until the 0.5 path goes.
         #[test]
         fn wide_integer_in_source_keeps_its_exact_language_finding_on_both_public_routes() {
             let study = Study::new();
@@ -1129,7 +1127,7 @@ mod file {
         #[test]
         fn catastrophic_pattern_is_an_ordinary_verification_failure() {
             let study = Study::new();
-            fs::write(study.0.join("spec.yaml"), "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, TERM]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - name: TERM\n    type: str\n    derivation: SRC.TERM\n    verifications: [{matches: {pattern: '(a+)+b'}}]\n").unwrap();
+            fs::write(study.0.join("spec.yaml"), "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, TERM]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - name: TERM\n    type: str\n    derivation: SRC.TERM\n    verifications: [{matches: {pattern: '(a+)+b'}}]\n").unwrap();
             fs::write(
                 study.0.join("input.csv"),
                 format!("ID,TERM\n1,{}\n", "a".repeat(32)),
@@ -1265,7 +1263,7 @@ mod file {
             }
         }
         fn yaml(input: &str, base: &str, output: &str) -> String {
-            format!("schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\nbase: {base}\ninput: {input}\ncolumns:\n  - {{name: ID, type: int, label: Identifier, derivation: {base}.ID}}\n  - {{name: VALUE, type: float, label: Reported value, derivation: {base}.VALUE}}\noutput: {{path: {output}, columns: [ID, VALUE], decimals: 2}}\n")
+            format!("yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\nbase: {base}\ninput: {input}\ncolumns:\n  - {{name: ID, type: int, label: Identifier, derivation: {base}.ID}}\n  - {{name: VALUE, type: float, label: Reported value, derivation: {base}.VALUE}}\noutput: {{path: {output}, columns: [ID, VALUE], decimals: 2}}\n")
         }
         fn leaf(study: &Study) {
             study.write(
@@ -1365,11 +1363,8 @@ mod file {
             // then the entry.
             study.write(
                 "origins/path.yaml",
-                &yaml("{P: ../data/p.csv}", "P", "root.csv").replacen(
-                    "schema_version: '1.0'\n",
-                    "schema_version: '1.0'\nparent: schema.yaml\n",
-                    1,
-                ),
+                &yaml("{P: ../data/p.csv}", "P", "root.csv")
+                    .edit("type: spec\n", "type: spec\nparent: schema.yaml\n"),
             );
             study.write(
                 "producer/base.yaml",
@@ -1377,11 +1372,11 @@ mod file {
             );
             study.write(
                 "producer/p.yaml",
-                "schema_version: '1.0'\nparent: base.yaml\ndomain: PRODUCER\n",
+                "yamaa: \"1.0\"\ntype: spec\nparent: base.yaml\ndomain: PRODUCER\n",
             );
             study.write(
                 "root.yaml",
-                "schema_version: '1.0'\nparent: origins/path.yaml\ndomain: ROOT\n",
+                "yamaa: \"1.0\"\ntype: spec\nparent: origins/path.yaml\ndomain: ROOT\n",
             );
             let prepared = plain(study.select());
             assert_eq!(prepared.capture_reads(), 5);
@@ -1440,13 +1435,13 @@ mod file {
         fn malformed_entry_and_failed_parent_raw_bytes_survive_without_a_prepared_document() {
             for parent in [false, true] {
                 let study = Study::new();
-                let malformed = "schema_version: '1.0'\ndomain: [\n";
+                let malformed = "yamaa: \"1.0\"\ntype: spec\ndomain: [\n";
                 let bad = if parent { "broken.yaml" } else { "root.yaml" };
                 study.write(bad, malformed);
                 if parent {
                     study.write(
                         "root.yaml",
-                        "schema_version: '1.0'\nparent: broken.yaml\ndomain: ROOT\n",
+                        "yamaa: \"1.0\"\ntype: spec\nparent: broken.yaml\ndomain: ROOT\n",
                     );
                 }
                 let failure = rejected_entry(study.select());
@@ -1558,11 +1553,13 @@ mod file {
                     let PrepareError::Invalid(findings) = &failure.run().rejection.error else {
                         panic!("consumer compilation: {:?}", failure.run().rejection.error);
                     };
+                    // Selected without a project, the consumer's call has no
+                    // project to bind it (CT-13, #3030 D146).
                     assert!(findings.iter().any(|finding| finding
                         .diagnostic()
                         .definition()
                         .condition
-                        == "unknown_project_function"));
+                        == "project_binding_missing"));
                     assert_eq!(failure.capture_reads(), 2);
                 }
                 assert!(!study.0.join("never-read.csv").exists());
@@ -1731,7 +1728,7 @@ mod file {
                 )
             }
         }
-        const VALID: &str = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
+        const VALID: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
         /// The report rows of a refused preparation's language findings.
         fn failure(study: &Study, source: &str) -> Value {
             match study.prepare(source) {
@@ -1807,11 +1804,13 @@ mod file {
         #[test]
         fn entry_version_finding_precedes_parent_and_study_authority() {
             let study = Study::new();
+            // `schema_version_mismatch` is 0.5's finding, so the entry stays as
+            // 0.5 wrote it until the 0.5 path goes.
             let actual: Value = failure(
                 &study,
                 &format!(
                     "{}parent: ../outside/missing.yaml\n",
-                    VALID.edit("'1.0'", "'99.0'")
+                    VALID.edit("yamaa: \"1.0\"\ntype: spec\n", "schema_version: '99.0'\n")
                 ),
             );
             assert_eq!(
@@ -1846,7 +1845,7 @@ mod file {
             let study = Study::new();
             fs::write(
                 study.0.join("parent/base.yaml"),
-                "schema_version: '1.0'\ndomain: bad-name\n",
+                "yamaa: \"1.0\"\ntype: spec\ndomain: bad-name\n",
             )
             .unwrap();
             let actual: Value = failure(&study, &format!("{VALID}parent: ../parent/base.yaml\n"));
@@ -1860,7 +1859,7 @@ mod file {
             let study = Study::new();
             fs::write(study.0.join("parent/base.yaml"), VALID).unwrap();
             let prepared = study
-                .prepare("schema_version: '1.0'\nparent: ../parent/./base.yaml\n")
+                .prepare("yamaa: \"1.0\"\ntype: spec\nparent: ../parent/./base.yaml\n")
                 .unwrap();
             assert_eq!(prepared.capture_reads(), 2);
             assert_eq!(prepared.run().document().parents().len(), 1);
@@ -2049,7 +2048,7 @@ mod file {
             }
         }
 
-        const DICTIONARY_SPEC: &str = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, X, Y]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: X, type: str, derivation: {mapping: {source: SRC.CODE, dict: dict.yaml}}}\n  - {name: Y, type: str, derivation: {mapping: {source: SRC.CODE, dict: ./dict.yaml}}}\n";
+        const DICTIONARY_SPEC: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, X, Y]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: X, type: str, derivation: {mapping: {source: SRC.CODE, dict: dict.yaml}}}\n  - {name: Y, type: str, derivation: {mapping: {source: SRC.CODE, dict: ./dict.yaml}}}\n";
         #[test]
         fn dictionary_resources_are_held_once_and_original_authored_model_is_retained() {
             let study = Study::new();
@@ -2067,7 +2066,7 @@ mod file {
                     .bytes,
                 b"A: answer\n"
             );
-            let document = prepared.run().document().model().document();
+            let document = prepared.run().document().document();
             let columns = document.field(document.root(), "columns").unwrap();
             let yamaa_core::schema::DocumentNode::Sequence(columns) = &document.nodes()[columns]
             else {
@@ -2103,7 +2102,7 @@ mod file {
             fs::write(study.0.join("parent/dict.yaml"), "A: declared-parent\n").unwrap();
             fs::write(study.0.join("entry/dict.yaml"), "A: wrong-entry\n").unwrap();
             let prepared = study
-                .prepare("schema_version: '1.0'\nparent: ../parent/base.yaml\n")
+                .prepare("yamaa: \"1.0\"\ntype: spec\nparent: ../parent/base.yaml\n")
                 .unwrap();
             assert_eq!(prepared.capture_reads(), 3);
             let dictionary = prepared
