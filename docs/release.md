@@ -10,7 +10,7 @@ Each row is a platform, and each column a package form that a release
 publishes. A cell names the CPython or R series with which native
 qualification installs and tests that form on that platform, with the oldest
 glibc that a Linux wheel needs, or the Rust target that the command-line
-binary is built for. A floor, as in R 4.4 or later, is qualified with the floor
+binary is built for. A floor, as in R 4.2 or later, is qualified with the floor
 and R-release, and a cell that says "no" means that a release has no such
 package for that platform. `tools.validation.check_supported_platforms`, which
 `make check-repository` runs, fails when the table and the native matrix that
@@ -18,10 +18,10 @@ package for that platform. `tools.validation.check_supported_platforms`, which
 
 | Platform | Python wheel | Python source archive | R source package | R binary package | Command-line binary |
 | --- | --- | --- | --- | --- | --- |
-| Linux x86_64 | CPython 3.12 to 3.15 on glibc 2.28 or later | CPython 3.12 to 3.15 | R 4.4 or later | no | `x86_64-unknown-linux-musl` |
+| Linux x86_64 | CPython 3.12 to 3.15 on glibc 2.28 or later | CPython 3.12 to 3.15 | R 4.2 or later | no | `x86_64-unknown-linux-musl` |
 | Linux aarch64 | CPython 3.12 to 3.15 on glibc 2.28 or later | CPython 3.12 to 3.15 | R 4.6 | no | `aarch64-unknown-linux-musl` |
-| macOS arm64 | CPython 3.12 to 3.15 | CPython 3.12 to 3.15 | R 4.4 or later | R 4.5 and 4.6 | `aarch64-apple-darwin` |
-| Windows x64 | CPython 3.12 to 3.15 | CPython 3.12 to 3.15 | R 4.4 or later | R 4.5 and 4.6 | `x86_64-pc-windows-msvc` |
+| macOS arm64 | CPython 3.12 to 3.15 | CPython 3.12 to 3.15 | R 4.2 or later | R 4.5 and 4.6 | `aarch64-apple-darwin` |
+| Windows x64 | CPython 3.12 to 3.15 | CPython 3.12 to 3.15 | R 4.2 or later | R 4.5 and 4.6 | `x86_64-pc-windows-msvc` |
 
 - The Linux wheels are `manylinux_2_28`, so they need glibc 2.28 or later,
   for example RHEL 8, Ubuntu 20.04 or Debian 10; older systems build from the
@@ -29,23 +29,24 @@ package for that platform. `tools.validation.check_supported_platforms`, which
   container of its architecture, and native qualification also installs it
   on AlmaLinux 8, which has glibc 2.28, and runs the conformance corpus there
   with that system's Python 3.12.
-- The R source package needs R 4.4.0 or later, a floor that follows an audit
-  of the R C API that the binding calls. On Linux x86_64, macOS arm64 and
+- The R source package needs R 4.2.0 or later, qualified on the oldest
+  admitted patch with the minimum Rust (#3561). On Linux x86_64, macOS arm64 and
   Windows x64 it passes `R CMD check --as-cran` with only the notes that
   `R/yamaa/cran-comments.md` explains: with R 4.6.1, and in CRAN's incoming
-  checks with R-devel, R-release and R 4.4 and the minimum Rust.
+  checks with R-devel, R-release and R 4.2.0 and the minimum Rust. The separate
+  R-CMD-check workflow also checks the latest R 4.2 patch on Linux.
 - On Linux aarch64, native qualification uses R-release alone. With the
   network disabled, it builds and installs the R source package that a
   release publishes and runs the conformance corpus with it: its
   `native-offline-source` job, with the pinned Rust, and its
   `native-offline-toolchain` job, with the minimum Rust installed from its
   standalone installer. No `R CMD check --as-cran` runs on aarch64, and no
-  lane there uses R 4.4.
+  lane there uses R 4.2.
 - The R binary packages are for R-release and R-oldrel, as CRAN builds them
   (#3030 D48). Each is built for one R series and works only with R of that
   series, and the macOS binaries need macOS 11 or later, the first macOS for
   Apple silicon; `install.packages()` installs each with no Rust, Rtools or
-  network. With any other R series, R 4.4 among them, and on Linux, which
+  network. With any other R series, R 4.2 among them, and on Linux, which
   gets no binary packages (D54), users install from source: the R source
   package of the GitHub release, which builds with its vendored crates and a
   Rust toolchain; CRAN, once it has 1.0.0; or, on a Linux machine without
@@ -73,7 +74,8 @@ build offline, as [Source package contents](#source-package-contents)
 describes. pip's build isolation fetches `maturin` 1.9.6 for the Python source
 archive, so an offline Python build needs `maturin` installed, for
 `pip install --no-build-isolation --no-index`. Windows R builds also need
-Rtools45 and the GNU Rust target, as
+the Rtools version for their R series (Rtools42 for R 4.2) and the GNU Rust
+target, as
 [Supported dependency combinations](#supported-dependency-combinations)
 describes. [Installing in a restricted environment](articles/restricted-environments.md)
 gives every route for a machine without internet access, each with the native
@@ -193,7 +195,7 @@ release publishes, the bytes of its `native-r-ubuntu-24.04` artifact: its
 that it requests. The build reads the vendored crates behind a proxy that
 refuses connections and runs two Cargo jobs.
 
-- With R-devel, R-release and R 4.4, on Linux, macOS and Windows, Cargo and
+- With R-devel, R-release and R 4.2.0, on Linux, macOS and Windows, Cargo and
   rustc are the workspace's `rust-version`, 1.82: the two-year-old toolchain
   that CRAN's guidance asks a package to be tested with.
 - With R-devel on Linux and none of the package's suggested packages
@@ -449,7 +451,7 @@ lxml 6.1.3, pandas 2.3.3, Polars 1.35.2, py-yaml12 0.2, PyArrow 23.0.1,
 Pydantic 2.12.4, packaging 25 and PyYAML 6.0.3.
 The Parquet 55.2.0 writer records only type-defined column orders, which
 Polars 1.35.2 reads; the IEEE 754 total-order form that later writers record
-for floating-point columns needs Polars 1.43.2. R supports R 4.4.0 and later
+for floating-point columns needs Polars 1.43.2. R supports R 4.2.0 and later
 and uses the shared Rust graph; its host qualification readers are the
 `Suggests` dependencies in `R/yamaa/DESCRIPTION`.
 

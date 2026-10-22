@@ -37,7 +37,7 @@ EXPECTED_NOTES = {
         r"New submission",
         r"Size of tarball: \d+ bytes",
     ),
-    # Above 5 MB, R 4.4 reports the installed size as a NOTE, and R 4.6.1 and
+    # Above 5 MB, R 4.2 reports the installed size as a NOTE, and R 4.6.1 and
     # R-devel as INFO: the shared object links the Rust engine statically.
     # The tests' inputs stay in tests/, which R does not install.
     "installed package size": (
