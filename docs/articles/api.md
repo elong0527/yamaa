@@ -3,6 +3,9 @@
 yamaa has the same small API in R and Python. Use it to create, verify and save
 SDTM and ADaM datasets and define.xml files. Both packages run the same Rust
 engine, so the same files give the same results, printed in the same words.
+Only a project function runs code of your own: each language calls its own
+implementation, and the function file's tests check both on the same cases
+([Project configuration](#project-configuration)).
 
 ## Quick reference
 
