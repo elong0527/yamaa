@@ -1,4 +1,6 @@
-schema_version: '1.0'
+yamaa: "1.0"
+type: spec
+model: SDTM
 domain: CM
 keys:
   - STUDYID
@@ -31,7 +33,7 @@ columns:
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
-    derivation: {literal: CM}
+    derivation: "'CM'"
 
   - name: STUDYID
     type: str
@@ -52,7 +54,7 @@ columns:
     type: str
     label: Reported Name of Drug, Med, or Therapy
     verifications:
-      - not_missing: {}
+      - not_missing
 
   - name: CMSTDTC
     type: str

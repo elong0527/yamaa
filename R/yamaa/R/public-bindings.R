@@ -26,7 +26,6 @@ format.yamaa_check <- function(x, ...) {
 
 .run <- function(native) {
   force(native)
-  .rethrow_interrupt(.native_run_interrupt(native))
   object <- new.env(parent = emptyenv())
   object$.handle <- native
   .read_only(object, "status", function() .reply(.native_run_status(native)))
@@ -86,7 +85,6 @@ format.yamaa_member_run <- function(x, ...) {
 
 .project_run <- function(native) {
   force(native)
-  .rethrow_interrupt(.native_project_run_interrupt(native))
   object <- new.env(parent = emptyenv())
   object$.handle <- native
   .read_only(object, "status", function() .reply(.native_project_run_status(native)))

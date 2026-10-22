@@ -700,6 +700,32 @@ class NativeWorkflowContract(unittest.TestCase):
                     2,
                 )
 
+    def test_r_checks_cover_the_declared_floor_and_latest_patch(self):
+        description = (ROOT / "R/yamaa/DESCRIPTION").read_text(encoding="utf-8")
+        floor = re.search(r"^Depends: R \(>= ([0-9.]+)\)$", description, re.M)[1]
+        workflow = yaml.load(
+            (ROOT / ".github/workflows/R-CMD-check.yaml").read_text(encoding="utf-8"),
+            Loader=UniqueKeyLoader,
+        )
+        regular = workflow["jobs"]["R-CMD-check"]["strategy"]["matrix"]["config"]
+        self.assertEqual(
+            {
+                "exact_floor": self.coverage["cran"]["os"]
+                if floor in self.coverage["cran"]["r"]
+                else [],
+                "latest_patch": [
+                    lane["os"]
+                    for lane in regular
+                    if lane["r"] == native.r_series(floor)
+                ],
+            },
+            {
+                "exact_floor": ["ubuntu-24.04", "macos-15", "windows-2025"],
+                "latest_patch": ["ubuntu-24.04"],
+            },
+            "the oldest admitted R patch is checked on every R platform, and its latest patch on Linux",
+        )
+
     def test_cran_checks_run_on_the_published_r_source_archive(self):
         # CRAN's incoming checks judge the bytes that a release publishes.
         r_source = f"native-r-{native.SOURCE_PLATFORM}"
@@ -716,7 +742,7 @@ class NativeWorkflowContract(unittest.TestCase):
             for platform in self.coverage["cran_no_suggests"]["os"]
             for version in self.coverage["cran_no_suggests"]["r"]
         ]
-        self.assertEqual(set(self.coverage["cran"]["r"]), {"devel", "release", "4.4"})
+        self.assertEqual(set(self.coverage["cran"]["r"]), {"devel", "release", "4.2.0"})
         for job in jobs:
             with self.subTest(job=job):
                 self.assertEqual(

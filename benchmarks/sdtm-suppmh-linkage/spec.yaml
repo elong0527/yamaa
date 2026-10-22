@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: SDTM
 domain: SUPPMH
 keys: [STUDYID, RDOMAIN, USUBJID, IDVAR, IDVARVAL, QNAM]
 input:
@@ -25,7 +27,7 @@ columns:
   - name: RDOMAIN
     type: str
     label: Related Domain Abbreviation
-    derivation: {literal: MH}
+    derivation: "'MH'"
 
   - name: USUBJID
     type: str
@@ -35,7 +37,7 @@ columns:
   - name: IDVAR
     type: str
     label: Identifying Variable
-    derivation: {literal: MHSEQ}
+    derivation: "'MHSEQ'"
 
   # The parent MH record for the same subject and condition term; its MHSEQ
   # (read as text) is the link. A qualifier with no parent record leaves this
@@ -60,19 +62,19 @@ columns:
     type: str
     label: Data Value
     verifications:
-      - not_missing: {}
+      - not_missing
       - allowed_values:
           values: [Y, N]
 
   - name: QORIG
     type: str
     label: Origin
-    derivation: {literal: Collected}
+    derivation: "'Collected'"
 
   - name: QEVAL
     type: str
     label: Evaluator
-    derivation: {literal: null}
+    derivation: null
 
 # One row template per qualifier. Each writes a row only for a condition
 # record where that qualifier was collected; a blank answer writes none.
@@ -81,16 +83,16 @@ rows:
     dataset: MH_SUPP_RAW
     filter: "MH_SUPP_RAW.MHFAMHX IS NOT NULL"
     derivations:
-      QNAM: {literal: MHFAMHX}
-      QLABEL: {literal: Family History}
+      QNAM: "'MHFAMHX'"
+      QLABEL: "'Family History'"
       QVAL: MH_SUPP_RAW.MHFAMHX
 
   - id: medical_record_confirmation
     dataset: MH_SUPP_RAW
     filter: "MH_SUPP_RAW.MHCONF IS NOT NULL"
     derivations:
-      QNAM: {literal: MHCONF}
-      QLABEL: {literal: Confirmed by Medical Records}
+      QNAM: "'MHCONF'"
+      QLABEL: "'Confirmed by Medical Records'"
       QVAL: MH_SUPP_RAW.MHCONF
 
 verifications:

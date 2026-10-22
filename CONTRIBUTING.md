@@ -497,8 +497,9 @@ host's own failure text.
 The ordinary CI workflow runs the same check targets listed above for each PR,
 every two hours on main, and on each push to a `release/**` branch. Merges to
 main do not start workflows other than the documentation site deployment; main
-is checked on those schedules instead. While the newest main run of CI or the
-documentation deployment fails, the `Main health` workflow keeps a `main-red`
+is checked on those schedules instead. While the newest main run of CI, the
+documentation deployment, or a weekly lane below (`Dependency graphs` and
+`Next toolchain`) fails, the `Main health` workflow keeps a `main-red`
 issue open for it and closes the issue when a later main run succeeds. A
 failing fuzz run on main opens such an issue, or comments on the open one, and
 a person closes it: a later green run does not show that the crash is fixed,
@@ -507,9 +508,10 @@ because the next run may not find the same input again. A PR that changes
 Keep workflow-specific setup in CI and reusable check logic in `tools/`.
 Pin external actions to complete commit IDs with exact release comments.
 
-PRs and the main schedule run four development jobs: repository checks
-(including lint), the Rust workspace, and the Python and R hosts on Linux.
-These four checks are required to merge into main.
+PRs and the main schedule run five development jobs: repository checks
+(including lint), the Rust workspace, the Python and R hosts on Linux, and
+`rust (minimum toolchain)`, which lints the workspace with the minimum Rust
+(below). The first four checks are required to merge into main.
 The additional checks run the gates on the pull requests described above and
 on dispatch: the `equivalence` job's two legs, `equivalence (python)` and
 `equivalence (r)`, and `conversion`, which also runs weekly. A
@@ -522,7 +524,8 @@ artifact readers on those same release events. The `R-CMD-check` workflow
 checks macOS, Windows and R-devel packages on release pushes and dispatch.
 Dependency graphs and advisories, native qualification, Harbor and coverage
 run on dispatch (native qualification also on a
-`qualification/issue-*` push). Dispatch any of them on a branch with
+`qualification/issue-*` push, and dependency graphs and advisories also
+weekly on main). Dispatch any of them on a branch with
 `gh workflow run <workflow> --ref <branch>` to check a change that needs them
 before merging.
 
@@ -535,18 +538,26 @@ Clippy over the targets, so a change that breaks one fails on its PR. The
 `python -m tools.ci.fuzz`. Fix a crash with a unit test in the owning crate and
 commit its input as a text regression beside the targets.
 
-The `Release compatibility` workflow's `rust (minimum toolchain)` job checks
-and lints the workspace with its declared `rust-version`, Rust 1.82.0, instead
-of the pinned toolchain that every other job uses, because embedders and the
-source packages build with their own toolchains. Rust 1.82.0 was released on
-2024-10-17, so it meets CRAN's request to test with a cargo at least two years
-old on any submission date.
-Run it locally from `rust/`, with R installed:
+CI's `rust (minimum toolchain)` job lints the workspace, with Clippy and
+`RUSTFLAGS=-D warnings`, with its declared `rust-version`, Rust 1.82.0,
+instead of the pinned toolchain that every other job uses, because embedders
+and the source packages build with their own toolchains, and the pinned
+toolchain accepts code that the minimum refuses. It runs on every pull
+request and on the main schedule, as Cargo's guide to continuous integration
+asks for a declared `rust-version`. It leaves the R binding out, as the
+repository lint does: the binding's build script runs R, and only the jobs
+that check the R host install R. The `Release compatibility` workflow's job
+of the same name repeats that lint with the R binding, after `cargo check`,
+on release branches and adds the builds below, and native qualification
+builds the R source package with the minimum. Rust 1.82.0 was released on
+2024-10-17, so it meets CRAN's request to test with a cargo at least two
+years old on any submission date.
+Run the lint locally from `rust/`; with R installed, drop `--exclude yamaa-r`
+to cover the R binding as the release lane does:
 
 ```sh
 rustup toolchain install 1.82.0 --profile minimal --component clippy
-RUSTFLAGS='-D warnings' cargo +1.82.0 check --locked --workspace --all-targets --all-features
-RUSTFLAGS='-D warnings' cargo +1.82.0 clippy --locked --workspace --all-targets --all-features -- -D warnings
+RUSTFLAGS='-D warnings' cargo +1.82.0 clippy --locked --workspace --exclude yamaa-r --all-targets --all-features -- -D warnings
 ```
 
 The same job builds the facade from the outside workspace in
@@ -586,7 +597,10 @@ RUSTUP_TOOLCHAIN=1.82.0 python -m tools.commands.check_r --archive yamaa_*.tar.g
 
 `.github/workflows/dependency-graphs.yml` checks both locks against the
 advisory policy in `rust/deny.toml` and `osv-scanner.toml`, and resolves
-minimum and newest compatible graphs, on dispatch. Run a lane locally
+minimum and newest compatible graphs, on dispatch and weekly on main: a new
+advisory, a lapsed ignore or a new release of a dependency changes what the
+same locks and manifests prove without a commit, so the weekly run, which
+`Main health` reports, finds it before a release does. Run a lane locally
 with R and the normal development prerequisites installed:
 
 ```sh

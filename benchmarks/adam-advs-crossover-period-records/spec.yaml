@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADVS
 keys: [STUDYID, USUBJID, VSSEQ]
 input:
@@ -7,6 +9,7 @@ input:
     path: input/adsl.csv
     types: {AP01SDT: date, AP01SDTM: datetime, AP02SDT: date,
             AP02SDTM: datetime}
+    key: [STUDYID, USUBJID]
 base: VS
 
 output:
@@ -73,11 +76,11 @@ columns:
         - when: >-
             ADTM >= ADSL.AP02SDTM
             OR (ADTM IS NULL AND ADT >= ADSL.AP02SDT)
-          then: {literal: 2}
+          then: 2
         - when: >-
             ADTM >= ADSL.AP01SDTM
             OR (ADTM IS NULL AND ADT >= ADSL.AP01SDT)
-          then: {literal: 1}
+          then: 1
     verifications:
       - allowed_values:
           values: [1, 2]

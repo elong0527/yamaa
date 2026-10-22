@@ -2,7 +2,7 @@
 //! `project`, `codelists` or `function`. The command line reads it with
 //! [`Engine::file_type`] to choose what a command runs (#3030 D122); the
 //! hosts do not call it, since each of their calls names the type it reads.
-//! [`crate::schema`] takes a type, as written, and gives its JSON Schema.
+//! [`crate::schema()`] takes a type, as written, and gives its JSON Schema.
 
 use crate::api::Failure;
 use crate::engine::Engine;
@@ -10,7 +10,7 @@ use crate::text::Action;
 
 /// The file types as written, one for each [`FileType`] in declaration order:
 /// the closed vocabulary of the `type` header and of the type
-/// [`crate::schema`] takes.
+/// [`crate::schema()`] takes.
 pub const FILE_TYPES: [&str; 4] = ["spec", "project", "codelists", "function"];
 
 /// The type a yamaa file declares in `type` (SCHEMA-2).

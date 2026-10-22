@@ -12,6 +12,7 @@
 .reply <- function(reply) {
   error <- reply$error
   if (!is.null(error)) {
+    if (!is.null(error$condition)) stop(error$condition)
     stop(structure(
       list(message = error$message, call = NULL, issues = error$issues, paths = error$paths),
       class = c("yamaa_error", "error", "condition")
@@ -42,13 +43,6 @@
 .capabilities <- function() {
   capabilities <- .yamaa_locked_host_capabilities()
   list(capabilities$verify, capabilities$resolve, .project_condition_details)
-}
-
-# A run keeps the interrupt a project function raised; once the native call
-# has returned, signal that original condition again.
-.rethrow_interrupt <- function(reply) {
-  interrupted <- .reply(reply)
-  if (!is.null(interrupted)) stop(interrupted)
 }
 
 # Locked bindings refuse assignment, so a binding only reads.

@@ -233,9 +233,9 @@ impl Run {
     /// and return the paths written in that order (D38). A failed run writes
     /// only its report file and fails with the run's issues; a refusal carries
     /// the paths written before it (P-API-1). See [`ProjectRun::save`] for the
-    /// one save every result shares.
-    pub fn save(&mut self) -> Result<Vec<String>, Failure> {
-        self.build.save()
+    /// one save every result shares, and for how it polls `token`.
+    pub fn save(&mut self, token: &CancellationToken) -> Result<Vec<String>, Failure> {
+        self.build.save(token)
     }
 
     /// Borrow the underlying build for qualification evidence.
@@ -365,8 +365,10 @@ impl Engine {
     /// Build every member of a producer graph once, in order. A producer
     /// hands its artifact to its consumers in memory; a member whose own
     /// findings refuse it, or whose producer did not complete, does not
-    /// build, and a user interrupt in project code stops the graph after
-    /// that member. Only cancellation fails the call.
+    /// build. Only cancellation fails the call: `token` is polled before
+    /// each member and as each builds, and a user interrupt in project code
+    /// cancels the call too (D46), so no later member builds or calls
+    /// project code.
     fn run_graph(
         &self,
         nodes: Vec<Node<'_>>,
@@ -377,6 +379,9 @@ impl Engine {
         let mut succeeded = vec![false; nodes.len()];
         let mut members = Vec::with_capacity(nodes.len());
         for (position, node) in nodes.into_iter().enumerate() {
+            if token.is_cancelled() {
+                return Err(Error::Cancelled);
+            }
             let blocked = node
                 .producers
                 .into_iter()
@@ -401,9 +406,6 @@ impl Engine {
             if let (Some(bytes), Some((producer, location))) = (artifact, node.artifact) {
                 held.insert(producer, location, bytes);
             }
-            // A user interrupt in project code stops the graph here, so no
-            // later member builds or calls project code.
-            let interrupted = build.interrupt().is_some();
             // A project run names each member by its label.
             let build = match &node.label {
                 Some(label) => build.with_subject(label),
@@ -414,9 +416,6 @@ impl Engine {
                 identity: node.identity,
                 work: Work::Built(Box::new(Run { build })),
             });
-            if interrupted {
-                break;
-            }
         }
         Ok(Outcome {
             members,
@@ -695,9 +694,16 @@ impl ProjectRun {
     /// A refusal carries its issues and the paths written before it
     /// (P-API-1). A run refused by a project finding fails with that finding,
     /// and a run that built no specification with `nothing_to_save`.
-    pub fn save(&mut self) -> Result<Vec<String>, Failure> {
+    ///
+    /// The save polls `token` once, after every file is staged and before
+    /// the first commit (D74), so it writes either nothing or everything it
+    /// planned. A cancelled save removes what it staged and fails with the
+    /// cancellation's error text, `cannot save <subject>: operation
+    /// cancelled`, with no issue and no path; `token` then reports itself
+    /// cancelled, which tells a cancellation from a refusal.
+    pub fn save(&mut self, token: &CancellationToken) -> Result<Vec<String>, Failure> {
         self.outcome
-            .save(crate::outcome::Operation::ProjectRun, &self.subject)
+            .save(crate::outcome::Operation::ProjectRun, &self.subject, token)
     }
 }
 
@@ -776,10 +782,11 @@ impl Submission {
     /// save. A section that did not compose publishes nothing and stops the
     /// save at its turn, after the sections before it. A refusal carries its
     /// issues and the paths written before it (P-API-1); a submission that
-    /// composed no section fails with `nothing_to_save`.
-    pub fn save(&mut self) -> Result<Vec<String>, Failure> {
+    /// composed no section fails with `nothing_to_save`. The save polls
+    /// `token` as [`ProjectRun::save`] does.
+    pub fn save(&mut self, token: &CancellationToken) -> Result<Vec<String>, Failure> {
         self.outcome
-            .save(crate::outcome::Operation::Submission, &self.subject)
+            .save(crate::outcome::Operation::Submission, &self.subject, token)
     }
 }
 
@@ -885,12 +892,12 @@ impl Engine {
     /// or of all sections in that order. Each builds once, producer first; a
     /// producer in the run scope hands its artifact to its consumers in
     /// memory, and one outside it is read from its saved artifact file. A
-    /// failed specification stops only its consumers, and a user interrupt in
-    /// project code stops the run after that specification. Project problems
-    /// come back as issues of a run that built nothing; only an unknown
-    /// section and cancellation fail the call. Once the project file is read,
-    /// a section it does not declare, or any other text, fails with
-    /// `unknown_section` (PROJECT-14) as `Error::Rejected`.
+    /// failed specification stops only its consumers. Project problems come
+    /// back as issues of a run that built nothing; only an unknown section
+    /// and cancellation fail the call, and a user interrupt in project code
+    /// cancels it (D46), so no later specification builds. Once the project
+    /// file is read, a section it does not declare, or any other text, fails
+    /// with `unknown_section` (PROJECT-14) as `Error::Rejected`.
     pub fn project_run(
         &self,
         project: &str,

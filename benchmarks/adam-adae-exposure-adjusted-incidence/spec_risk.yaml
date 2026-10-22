@@ -1,4 +1,6 @@
-schema_version: '1.0'
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADRISK
 keys:
 - STUDYID
@@ -44,7 +46,6 @@ intermediates:
   - ADAE.ASTDT
   - ADAE.ASEQ
   keep: first
-  no_match: {literal: null}
   derivations:
     POSTDAYS:
       diff:
@@ -84,8 +85,8 @@ columns:
   derivation:
     case:
     - when: FIRSTDT IS NOT NULL
-      then: {literal: 1}
-    - otherwise: {literal: 0}
+      then: 1
+    - otherwise: 0
 
 - name: FULLDAYS
   type: int
@@ -96,7 +97,7 @@ columns:
       start: ADSL.TRTSDT
       end: ADSL.TRTEDT
       unit: day
-      bounds: inclusive
+      closed: both
 
 - name: EVENTDAYS
   type: int
@@ -107,7 +108,7 @@ columns:
       start: ADSL.TRTSDT
       end: FIRSTDT
       unit: day
-      bounds: inclusive
+      closed: both
 
 - name: RISKDAYS
   type: int
@@ -116,9 +117,7 @@ columns:
     case:
     - when: EVENTN = 1
       then: EVENTDAYS
-    - otherwise:
-        compute:
-          expr: FULLDAYS + 30
+    - otherwise: FULLDAYS + 30
   verifications:
     - range:
         min: 1
@@ -127,12 +126,12 @@ rows:
 - id: diarrhoea
   dataset: ADSL
   derivations:
-    AEDECOD: {literal: DIARRHOEA}
+    AEDECOD: "'DIARRHOEA'"
 
 - id: headache
   dataset: ADSL
   derivations:
-    AEDECOD: {literal: HEADACHE}
+    AEDECOD: "'HEADACHE'"
 
 verifications:
 - assert:

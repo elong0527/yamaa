@@ -1,4 +1,6 @@
-schema_version: '1.0'
+yamaa: "1.0"
+type: spec
+model: SDTM
 domain: AE
 keys: [STUDYID, USUBJID, AESEQ]
 input:
@@ -14,7 +16,7 @@ columns:
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
-    derivation: {literal: AE}
+    derivation: "'AE'"
 
   - name: STUDYID
     type: str
@@ -34,7 +36,7 @@ columns:
     type: str
     label: Reported Term for the Adverse Event
     verifications:
-      - not_missing: {}
+      - not_missing
 
   - name: AESTDTC
     type: date

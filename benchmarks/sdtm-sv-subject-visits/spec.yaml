@@ -1,8 +1,10 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: SDTM
 domain: SV
 keys: [STUDYID, USUBJID, VISITNUM]
 input:
-  DM: {path: input/dm.csv, types: {RFSTDTC: date}}
+  DM: {path: input/dm.csv, types: {RFSTDTC: date}, key: [STUDYID, USUBJID]}
   ODM: input/odm.csv
 base: ODM
 
@@ -25,7 +27,7 @@ columns:
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
-    derivation: {literal: SV}
+    derivation: "'SV'"
 
   - name: STUDYID
     type: str
@@ -85,7 +87,7 @@ columns:
     label: Study Day of Start of Visit
     derivation:
       study_day:
-        date: SVSTDTC
+        source: SVSTDTC
         reference: RFSTDTC
 
   - name: SVENDY
@@ -93,7 +95,7 @@ columns:
     label: Study Day of End of Visit
     derivation:
       study_day:
-        date: SVENDTC
+        source: SVENDTC
         reference: RFSTDTC
 
   - name: TAETORD

@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADLB
 keys: [USUBJID, VISIT, PARAMCD]
 input:
@@ -17,7 +19,7 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation: {literal: YAMAA-01}
+    derivation: "'YAMAA-01'"
 
   - name: USUBJID
     type: str
@@ -45,7 +47,7 @@ columns:
     type: float
     label: Analysis Value
     verifications:
-      - not_missing: {}
+      - not_missing
 
   # Column stage: enriches the built rows with exactly one value each
   # and may not change the row count. The arithmetic reads AVAL's
@@ -54,9 +56,7 @@ columns:
   - name: DOUBLE
     type: float
     label: Twice the Analysis Value
-    derivation:
-      compute:
-        expr: "2 * AVAL"
+    derivation: "2 * AVAL"
 
   - name: FLAG
     type: str
@@ -64,8 +64,8 @@ columns:
     derivation:
       case:
         - when: "AVAL > 50"
-          then: {literal: H}
-        - otherwise: {literal: N}
+          then: "'H'"
+        - otherwise: "'N'"
 
 rows:
   # The record screen runs before any row value is built: records with
@@ -77,8 +77,8 @@ rows:
       PARAM:
         case:
           - when: "LB.LBTESTCD = 'ALT'"
-            then: {literal: Alanine Aminotransferase}
-          - otherwise: {literal: Aspartate Aminotransferase}
+            then: "'Alanine Aminotransferase'"
+          - otherwise: "'Aspartate Aminotransferase'"
       AVAL: LB.LBSTRESN
 
   # One candidate row per subject-visit. The visit screen runs after
@@ -88,7 +88,7 @@ rows:
     group_by: [LB.USUBJID, LB.VISIT]
     filter: "AVAL IS NOT NULL"
     derivations:
-      PARAMCD: {literal: LOW}
-      PARAM: {literal: Lowest Result of Visit}
+      PARAMCD: "'LOW'"
+      PARAM: "'Lowest Result of Visit'"
       AVAL:
         aggregate: "MIN(LB.LBSTRESN)"

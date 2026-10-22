@@ -156,11 +156,14 @@ fn completed(formatter: &Function, status: Status) -> std::result::Result<Robj, 
     match status {
         Status::Completed(payload) => Ok(payload),
         Status::Host(condition) => Err(classify_host(formatter, &condition)),
-        Status::Interrupt(condition) => Err(FunctionError::Interrupted {
-            payload: Some(HostPayload::new(crate::thread_bound::ThreadBound::new(
-                condition,
-            ))),
-        }),
+        Status::Interrupt(condition) => {
+            crate::interrupt::remember(condition.clone());
+            Err(FunctionError::Interrupted {
+                payload: Some(HostPayload::new(crate::thread_bound::ThreadBound::new(
+                    condition,
+                ))),
+            })
+        }
     }
 }
 

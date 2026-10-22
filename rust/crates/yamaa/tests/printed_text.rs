@@ -340,7 +340,7 @@ fn error_text_carries_the_first_issue_and_the_count_of_the_others() {
         )
         .unwrap();
     assert_eq!(run.diagnostics().len(), 3, "{:?}", run.diagnostics());
-    let failure = run.save().unwrap_err();
+    let failure = run.save(&CancellationToken::new()).unwrap_err();
     assert_eq!(
         failure.message,
         format!("cannot save ADAE: {} (and 2 more issues)", forward(&study))
@@ -374,7 +374,7 @@ fn every_refusal_names_its_call() {
             "yamaa project run of {project}, section send: succeeded, 0 specifications, 0 issues"
         )
     );
-    let failure = send.save().unwrap_err();
+    let failure = send.save(&CancellationToken::new()).unwrap_err();
     assert_eq!(
         failure.message,
         format!("cannot save {project}, section send: there is nothing to save [nothing_to_save, PROJECT-12]")
@@ -386,7 +386,7 @@ fn every_refusal_names_its_call() {
         submission.summary().to_string(),
         format!("yamaa submission of {project}: succeeded, 0 define.xml and 0 transport files, 0 issues")
     );
-    let failure = submission.save().unwrap_err();
+    let failure = submission.save(&CancellationToken::new()).unwrap_err();
     assert_eq!(
         failure.message,
         format!("cannot save {project}: there is nothing to save [nothing_to_save, PROJECT-13]")

@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADQS
 keys: [STUDYID, USUBJID, VISIT, PARAMCD]
 input:
@@ -33,9 +35,9 @@ columns:
     label: Parameter
 
   # Sums the physical functioning responses of this row's subject and
-  # visit. The derive binding's declared float type converts each text
-  # response; a blank one stays missing and SUM skips it, while text that
-  # is not a number is a conversion failure that stops the run.
+  # visit. The aggregate derivation's declared float type converts each
+  # text response; a blank one stays missing and SUM skips it, while text
+  # that is not a number is a conversion failure that stops the run.
   - name: AVAL
     type: float
     label: Analysis Value
@@ -43,8 +45,8 @@ columns:
       aggregate:
         filter: "QS.QSCAT = 'PHYSICAL FUNCTIONING SCALE'"
         key: [STUDYID, USUBJID, VISIT]
-        derive:
-          - name: QSNUM
+        derivations:
+          QSNUM:
             type: float
             derivation: QS.QSORRES
         expr: "SUM(QSNUM)"
@@ -55,5 +57,5 @@ rows:
   - id: subscale
     filter: "QS.QSCAT = 'PHYSICAL FUNCTIONING SCALE' AND QS.QSTESTCD = 'PF01'"
     derivations:
-      PARAMCD: {literal: PFSCORE}
-      PARAM: {literal: Physical Functioning Subscale Score}
+      PARAMCD: "'PFSCORE'"
+      PARAM: "'Physical Functioning Subscale Score'"

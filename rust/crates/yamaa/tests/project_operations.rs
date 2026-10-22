@@ -80,11 +80,11 @@ impl Drop for Study {
     }
 }
 
-const DM: &str = "schema_version: '1.0'\ndomain: DM\nkeys: [USUBJID]\ninput: {RAW: {path: ../raw/dm.csv, types: {AGE: int}}}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: RAW.USUBJID}\n  - {name: AGE, type: int, label: Age, derivation: RAW.AGE}\noutput: {path: ../out/dm.csv, columns: [USUBJID, AGE], report: ../out/dm-report.csv}\n";
-const AE: &str = "schema_version: '1.0'\ndomain: AE\nkeys: [USUBJID, AESEQ]\ninput: {RAW: {path: ../raw/ae.csv, types: {AESEQ: int}}}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: RAW.USUBJID}\n  - {name: AESEQ, type: int, label: Sequence, derivation: RAW.AESEQ}\noutput: {path: ../out/ae.csv, columns: [USUBJID, AESEQ]}\n";
-const ADSL: &str = "schema_version: '1.0'\ndomain: ADSL\nkeys: [USUBJID]\ninput: {DM: {path: ../out/dm.csv, schema: ../sdtm/dm.yaml}}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: DM.USUBJID}\n  - {name: AGE, type: int, label: Age, derivation: DM.AGE}\noutput: {path: ../out/adsl.csv, columns: [USUBJID, AGE], report: ../out/adsl-report.csv}\n";
+const DM: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: DM\nkeys: [USUBJID]\ninput: {RAW: {path: ../raw/dm.csv, types: {AGE: int}}}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: RAW.USUBJID}\n  - {name: AGE, type: int, label: Age, derivation: RAW.AGE}\noutput: {path: ../out/dm.csv, columns: [USUBJID, AGE], report: ../out/dm-report.csv}\n";
+const AE: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: AE\nkeys: [USUBJID, AESEQ]\ninput: {RAW: {path: ../raw/ae.csv, types: {AESEQ: int}}}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: RAW.USUBJID}\n  - {name: AESEQ, type: int, label: Sequence, derivation: RAW.AESEQ}\noutput: {path: ../out/ae.csv, columns: [USUBJID, AESEQ]}\n";
+const ADSL: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: ADSL\nkeys: [USUBJID]\ninput: {DM: {path: ../out/dm.csv, schema: ../sdtm/dm.yaml}}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: DM.USUBJID}\n  - {name: AGE, type: int, label: Age, derivation: DM.AGE}\noutput: {path: ../out/adsl.csv, columns: [USUBJID, AGE], report: ../out/adsl-report.csv}\n";
 const PROJECT: &str =
-    "schema_version: '1.0'\nsdtm:\n  specs: [sdtm/dm.yaml, sdtm/ae.yaml]\nadam:\n  specs: [adam/adsl.yaml]\n";
+    "yamaa: \"1.0\"\ntype: project\nsdtm:\n  specs: [sdtm/dm.yaml, sdtm/ae.yaml]\nadam:\n  specs: [adam/adsl.yaml]\n";
 const DM_CSV: &str = "USUBJID,AGE\nS1,30\nS2,41\n";
 
 /// DM and AE in SDTM, ADSL in ADaM reading DM through its `schema` link.
@@ -199,7 +199,7 @@ fn project_names_list_the_run_order_and_refuse_as_a_read() {
     // ADSL, listed first, reads DM, so DM runs before it.
     study.write(
         "project.yaml",
-        "schema_version: '1.0'\nsdtm:\n  specs: [adam/adsl.yaml, sdtm/dm.yaml, sdtm/ae.yaml]\n",
+        "yamaa: \"1.0\"\ntype: project\nsdtm:\n  specs: [adam/adsl.yaml, sdtm/dm.yaml, sdtm/ae.yaml]\n",
     );
     let names = engine.project_names(&study.project()).unwrap();
     assert_eq!(names, ["DM", "ADSL", "AE"]);
@@ -299,7 +299,7 @@ fn names_select_listed_specifications_and_refuse_unknown_or_shared_names() {
     let mut run = engine.project_run(&study.project(), None, &token).unwrap();
     assert!(run.names().is_empty());
     assert_eq!(conditions(&run.issues()), ["duplicate_specification_name"]);
-    assert!(run.save().is_err());
+    assert!(run.save(&CancellationToken::new()).is_err());
     let mut submission = engine
         .project_submission(&study.project(), None, None, "0.4.0", &token)
         .unwrap();
@@ -307,7 +307,7 @@ fn names_select_listed_specifications_and_refuse_unknown_or_shared_names() {
         conditions(&submission.issues()),
         ["duplicate_specification_name"]
     );
-    assert!(submission.save().is_err());
+    assert!(submission.save(&CancellationToken::new()).is_err());
     assert!(!study.exists("out/dm.csv"));
 }
 
@@ -455,17 +455,20 @@ impl ProjectFunctions for Interrupting {
     }
 }
 
+/// A user interrupt in project code cancels the project run (D46): the call
+/// returns `Error::Cancelled`, and no later specification builds or calls
+/// project code.
 #[test]
-fn a_user_interrupt_stops_the_project_run() {
+fn a_user_interrupt_cancels_the_project_run() {
     let study = Study::new();
     study.write("raw.csv", "ID,V\n1,2\n");
     study.write(
-        "environment.yaml",
-        "schema_version: '1.0'\nfunctions:\n  double:\n    function: pkg.double\n    description: Double the value.\n    params: [{name: x, type: int}]\n    returns: int\n    tests:\n      - {id: normal, covers: [normal], args: {x: 1}, result: 2}\n      - {id: zero, covers: [boundary], args: {x: 0}, result: 0}\n      - {id: missing, covers: ['short-circuit-missing:x'], args: {x: null}, result: null}\n",
+        "functions/double.yaml",
+        "yamaa: \"1.0\"\ntype: function\nname: double\ndescription: Double the value.\nparams: [{name: x, type: int}]\nreturns: int\nimplementations: {python: pkg.double}\ntests:\n  - {id: normal, covers: [normal], args: {x: 1}, result: 2}\n  - {id: zero, covers: [boundary], args: {x: 0}, result: 0}\n  - {id: missing, covers: ['short-circuit-missing:x'], args: {x: null}, result: null}\n",
     );
     let spec = |domain: &str| {
         format!(
-            "schema_version: '1.0'\ndomain: {domain}\nkeys: [ID]\ninput: {{RAW: {{path: raw.csv, types: {{ID: int, V: int}}}}}}\ncolumns:\n  - {{name: ID, type: int, label: Identifier, derivation: RAW.ID}}\n  - {{name: W, type: int, label: Doubled, derivation: {{function: {{name: double, args: {{x: RAW.V}}}}}}}}\noutput: {{path: {}.csv, columns: [ID, W]}}\n",
+            "yamaa: \"1.0\"\ntype: spec\ndomain: {domain}\nkeys: [ID]\ninput: {{RAW: {{path: raw.csv, types: {{ID: int, V: int}}}}}}\ncolumns:\n  - {{name: ID, type: int, label: Identifier, derivation: RAW.ID}}\n  - {{name: W, type: int, label: Doubled, derivation: {{function: {{name: double, args: {{x: RAW.V}}}}}}}}\noutput: {{path: {}.csv, columns: [ID, W]}}\n",
             domain.to_lowercase()
         )
     };
@@ -473,19 +476,16 @@ fn a_user_interrupt_stops_the_project_run() {
     study.write("two.yaml", spec("TWO"));
     study.write(
         "project.yaml",
-        "schema_version: '1.0'\nenvironments: {python: environment.yaml}\nadam: {specs: [one.yaml, two.yaml]}\n",
+        "yamaa: \"1.0\"\ntype: project\nfunctions: [functions/double.yaml]\nadam: {specs: [one.yaml, two.yaml]}\n",
     );
     let functions = Arc::new(Interrupting(AtomicUsize::new(0)));
     let engine = Engine::new(
         EngineOptions::new(HostLanguage::Python, "project-test".into(), "0".into())
             .with_functions(functions.clone()),
     );
-    let run = engine
-        .project_run(&study.project(), None, &CancellationToken::new())
-        .unwrap();
+    let run = engine.project_run(&study.project(), None, &CancellationToken::new());
+    assert!(matches!(run, Err(yamaa::Error::Cancelled)));
     // TWO never builds, so no more project code runs after the interrupt.
-    assert_eq!(run.names(), ["ONE"]);
-    assert!(run.get("ONE").unwrap().build().interrupt().is_some());
     assert_eq!(functions.0.load(Ordering::Relaxed), 1);
 }
 
@@ -517,7 +517,7 @@ fn a_save_that_would_write_nothing_fails() {
     assert_eq!(send.issues().rows(), 0);
     // An empty scope succeeds; its save refuses.
     assert_eq!(send.status(), Status::Succeeded);
-    let failure = send.save().unwrap_err();
+    let failure = send.save(&CancellationToken::new()).unwrap_err();
     assert_eq!(
         failure.message,
         format!(
@@ -533,7 +533,7 @@ fn a_save_that_would_write_nothing_fails() {
         .unwrap();
     assert_eq!(submission.issues().rows(), 0);
     assert_eq!(submission.status(), Status::Succeeded);
-    let failure = submission.save().unwrap_err();
+    let failure = submission.save(&CancellationToken::new()).unwrap_err();
     assert_eq!(
         failure.message,
         format!(
@@ -641,7 +641,7 @@ fn project_check_reports_every_specification_and_the_project_findings() {
     // A second ADaM specification reads DM's artifact without a link.
     study.write(
         "adam/adae.yaml",
-        "schema_version: '1.0'\ndomain: ADAE\nkeys: [USUBJID]\ninput: {DM: {path: ../out/dm.csv, types: {AGE: int}}}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: DM.USUBJID}\noutput: {path: ../out/adae.csv, columns: [USUBJID]}\n",
+        "yamaa: \"1.0\"\ntype: spec\ndomain: ADAE\nkeys: [USUBJID]\ninput: {DM: {path: ../out/dm.csv, types: {AGE: int}}}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: DM.USUBJID}\noutput: {path: ../out/adae.csv, columns: [USUBJID]}\n",
     );
     study.write(
         "project.yaml",
@@ -694,7 +694,7 @@ fn a_section_run_builds_only_its_scope_and_a_full_run_hands_producers_over_in_me
     // even though ADADD is listed first.
     study.write(
         "adam/adadd.yaml",
-        "schema_version: '1.0'\ndomain: ADADD\nkeys: [USUBJID]\ninput: {ADSL: {path: ../out/adsl.csv, schema: adsl.yaml}}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: ADSL.USUBJID}\noutput: {path: ../out/adadd.csv, columns: [USUBJID]}\n",
+        "yamaa: \"1.0\"\ntype: spec\ndomain: ADADD\nkeys: [USUBJID]\ninput: {ADSL: {path: ../out/adsl.csv, schema: adsl.yaml}}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: ADSL.USUBJID}\noutput: {path: ../out/adadd.csv, columns: [USUBJID]}\n",
     );
     study.write(
         "project.yaml",
@@ -732,7 +732,7 @@ fn a_section_run_builds_only_its_scope_and_a_full_run_hands_producers_over_in_me
     // The save returns every path it wrote, in run order, each report before
     // its primary artifact (D38, OUTPUT-10).
     assert_eq!(
-        run.save().unwrap(),
+        run.save(&CancellationToken::new()).unwrap(),
         [
             "out/dm-report.csv",
             "out/dm.csv",
@@ -820,7 +820,7 @@ fn a_specification_may_not_write_the_saved_artifact_it_reads() {
         assert_eq!(issues.len(), 1, "{issues:?}");
         assert_eq!(issues[0].condition, "artifact_path_collision");
         assert_eq!(issues[0].spec_paths, [field, field]);
-        assert!(adam.save().is_err());
+        assert!(adam.save(&CancellationToken::new()).is_err());
         assert_eq!(study.read("out/dm.csv").unwrap(), DM_CSV);
     }
 }
@@ -901,7 +901,7 @@ fn a_failed_specification_stops_only_its_consumers_and_saves_reports_alone() {
     order.dedup();
     assert_eq!(order, ["../out/dm.csv", "../out/ae.csv"]);
 
-    let failure = run.save().unwrap_err();
+    let failure = run.save(&CancellationToken::new()).unwrap_err();
     assert_eq!(rows(&failure.issues).len(), 2);
     // Only the report of the failed specification that ran is written, and
     // the refusal names it (P-API-1).
@@ -924,7 +924,7 @@ fn a_failed_specification_stops_only_its_consumers_and_saves_reports_alone() {
     let mut alone = engine
         .spec_run(&study.path("sdtm/dm.yaml"), Some(&study.project()), &token)
         .unwrap();
-    let failure = alone.save().unwrap_err();
+    let failure = alone.save(&CancellationToken::new()).unwrap_err();
     // D39: the run names its dataset, read before the run failed.
     assert_eq!(failure.message, save_refusal("DM", &failure));
     assert_eq!(rows(&failure.issues).len(), 1);
@@ -944,7 +944,7 @@ fn every_target_is_validated_before_the_first_file_is_written() {
     );
     let mut run = engine.project_run(&study.project(), None, &token).unwrap();
     assert_eq!(run.issues().rows(), 0, "{:?}", rows(&run.issues()));
-    let failure = run.save().unwrap_err();
+    let failure = run.save(&CancellationToken::new()).unwrap_err();
     // D39: the call names the project run; the issue names ADSL's
     // specification as its entry.
     assert_eq!(failure.message, save_refusal(&study.project(), &failure));
@@ -965,7 +965,7 @@ fn every_target_is_validated_before_the_first_file_is_written() {
     assert_eq!(issues.len(), 1);
     assert_eq!(issues[0].condition, "artifact_path_collision");
     assert_eq!(issues[0].spec_paths, ["output.report", "output.path"]);
-    assert!(run.save().is_err());
+    assert!(run.save(&CancellationToken::new()).is_err());
 }
 
 /// One save stages every file of every specification before it replaces any
@@ -994,7 +994,7 @@ fn a_file_that_cannot_be_staged_stops_the_save_before_any_target_is_replaced() {
         .project_run(&study.project(), None, &token)
         .unwrap();
     assert_eq!(run.status(), Status::Succeeded);
-    let failure = run.save().unwrap_err();
+    let failure = run.save(&CancellationToken::new()).unwrap_err();
     assert_eq!(failure.message, save_refusal(&study.project(), &failure));
     assert!(failure.paths.is_empty());
     let issues = rows(&failure.issues);
@@ -1008,7 +1008,7 @@ fn a_file_that_cannot_be_staged_stops_the_save_before_any_target_is_replaced() {
     std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o700)).unwrap();
     assert_eq!(std::fs::read_dir(&locked).unwrap().count(), 0);
     // Once the directory admits it, the same run saves every file.
-    assert_eq!(run.save().unwrap().len(), 5);
+    assert_eq!(run.save(&CancellationToken::new()).unwrap().len(), 5);
     assert_eq!(run.get("ADSL").unwrap().issues().rows(), 0);
     assert_eq!(study.read("locked/adsl.csv").unwrap(), DM_CSV);
 }
@@ -1090,7 +1090,7 @@ fn a_specification_runs_alike_alone_and_in_a_project_run_with_computed_statuses(
         .unwrap();
     assert_eq!(ae.issues().rows(), 0);
     assert_eq!(ae.status(), Status::Succeeded);
-    assert!(ae.save().is_err());
+    assert!(ae.save(&CancellationToken::new()).is_err());
     assert_ne!(ae.issues().rows(), 0);
     assert_eq!(ae.status(), Status::Succeeded);
     assert_eq!(
@@ -1133,6 +1133,8 @@ fn an_engine_without_functions_runs_every_build_that_calls_no_project_function()
     assert_eq!(runs.status(), Status::Succeeded);
     assert_eq!(runs.names(), ["DM", "AE", "ADSL"]);
 
+    // A 0.5 environment file, kept as 0.5 wrote it until environment files
+    // go; the next test is its 1.0 counterpart.
     let study = Study::new();
     study.write("raw.csv", "ID,V\n1,2\n");
     study.write(
@@ -1299,7 +1301,7 @@ fn a_submission_composes_the_selected_section() {
     assert_eq!(submission.created(), "2026-09-11T00:00:00");
     // Transport files come before the document (JSON-14).
     assert_eq!(
-        submission.save().unwrap(),
+        submission.save(&CancellationToken::new()).unwrap(),
         [study.path("dm.json"), study.path("define.xml")]
     );
     assert_eq!(
@@ -1326,11 +1328,11 @@ fn a_submission_without_a_section_composes_each_section_that_names_define_in_ord
         "{:?}",
         rows(&submission.issues())
     );
-    submission.save().unwrap();
+    submission.save(&CancellationToken::new()).unwrap();
     assert!(study.exists("define.xml"));
     std::fs::remove_file(study.0.join("define.xml")).unwrap();
 
-    // ADaM names a define but no standard: SDTM still composes and saves
+    // ADaM names a define but no standards: SDTM still composes and saves
     // first, and the ADaM failure stops the save after it.
     study.write(
         "project.yaml",
@@ -1345,14 +1347,16 @@ fn a_submission_without_a_section_composes_each_section_that_names_define_in_ord
     assert!(issues
         .iter()
         .all(|row| row.condition == "missing_required_field"));
-    assert!(issues.iter().any(|row| row.spec_paths == ["adam.standard"]));
-    let failure = submission.save().unwrap_err();
+    assert!(issues
+        .iter()
+        .any(|row| row.spec_paths == ["adam.standards"]));
+    let failure = submission.save(&CancellationToken::new()).unwrap_err();
     // D39: the call names the submission; ADaM's issue says what it lacks.
     assert_eq!(failure.message, save_refusal(&study.project(), &failure));
     assert!(
         failure
             .message
-            .contains(": adam.standard lacks a field it requires [missing_required_field, "),
+            .contains(": adam.standards lacks a field it requires [missing_required_field, "),
         "{}",
         failure.message
     );
@@ -1374,7 +1378,7 @@ fn adam_section(project: &str) -> String {
             "name: ADaMIG\n    version: '1.3'",
         )
         .replace("  specs:\n  - spec.yaml\n", "  specs: []\n")
-        .replace("  datasets: json\n", "")
+        .replace("  transport: dataset_json\n", "")
         .replace("define: define.xml", "define: adam-define.xml")
 }
 
@@ -1412,7 +1416,7 @@ fn a_submission_gives_every_section_one_creation_time_and_records_it() {
         .collect::<String>();
     assert_eq!(shape, "dddd-dd-ddTdd:dd:dd", "{created}");
     assert_eq!(
-        submission.save().unwrap(),
+        submission.save(&CancellationToken::new()).unwrap(),
         [
             study.path("dm.json"),
             study.path("define.xml"),
@@ -1482,7 +1486,7 @@ fn two_sections_that_write_one_file_save_neither() {
             "name: ADaMIG\n    version: '1.3'",
         )
         .replace("  specs:\n  - spec.yaml\n", "  specs: []\n")
-        .replace("  datasets: json\n", "");
+        .replace("  transport: dataset_json\n", "");
     study.write("project.yaml", format!("{project}{adam}"));
     let mut submission = engine
         .project_submission(
@@ -1499,7 +1503,7 @@ fn two_sections_that_write_one_file_save_neither() {
         "{:?}",
         rows(&submission.issues())
     );
-    let failure = submission.save().unwrap_err();
+    let failure = submission.save(&CancellationToken::new()).unwrap_err();
     assert_eq!(failure.message, save_refusal(&study.project(), &failure));
     assert!(failure.paths.is_empty());
     assert!(!study.exists("define.xml"));
@@ -1536,7 +1540,7 @@ fn a_later_section_whose_target_cannot_be_written_saves_nothing() {
         rows(&submission.issues())
     );
     std::fs::create_dir(study.0.join("adam-define.xml")).unwrap();
-    let failure = submission.save().unwrap_err();
+    let failure = submission.save(&CancellationToken::new()).unwrap_err();
     assert_eq!(failure.message, save_refusal(&study.project(), &failure));
     assert!(failure.paths.is_empty());
     // A directory where the file belongs is refused at the section's
@@ -1697,7 +1701,7 @@ fn a_submission_composes_the_artifacts_their_run_reports_record_and_refuses_stal
             .project_run(&study.project(), section, &token)
             .unwrap();
         assert_eq!(run.issues().rows(), 0, "{:?}", rows(&run.issues()));
-        run.save().unwrap();
+        run.save(&CancellationToken::new()).unwrap();
     };
     let submit = || {
         let submission = engine

@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADLB
 keys: [STUDYID, USUBJID, PARAMCD, LBSEQ]
 input:
@@ -53,7 +55,7 @@ columns:
     derivation:
       case:
         - when: "ADY BETWEEN 8 AND 22"
-          then: {literal: WEEK 2}
+          then: "'WEEK 2'"
     verifications:
       - allowed_values:
           values: [WEEK 2]
@@ -64,14 +66,12 @@ columns:
     derivation:
       case:
         - when: "AVISIT IS NOT NULL"
-          then: {literal: 15}
+          then: 15
 
   - name: ADIST
     type: float
     label: Analysis Day Distance from Target
-    derivation:
-      compute:
-        expr: "ABS(ADY - AWTARGET)"
+    derivation: "ABS(ADY - AWTARGET)"
     verifications:
       - range:
           min: 0

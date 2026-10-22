@@ -1,4 +1,5 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
 input:
   LB: input/lb.csv
   UNUSED: input/not-used.csv
@@ -37,7 +38,7 @@ columns:
   - name: TEMP
     type: str
     label: Unused Intermediate Value
-    derivation: {literal: unused}
+    derivation: "'unused'"
 
 metadata:
   scope: organization

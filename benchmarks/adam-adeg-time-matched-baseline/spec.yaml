@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADEG
 keys: [STUDYID, USUBJID, PARAMCD, APERIOD, APERDAY, ATPTN]
 input:
@@ -76,7 +78,7 @@ columns:
     derivation:
       case:
         - when: "APERDAY = -1"
-          then: {literal: "Y"}
+          then: "'Y'"
     verifications:
       - allowed_values:
           values: [Y]
@@ -100,9 +102,7 @@ columns:
     derivation:
       case:
         - when: "ABLFL IS NULL"
-          then:
-            compute:
-              expr: "AVAL - BASE"
+          then: "AVAL - BASE"
 
   # The key that pairs a time point with its baseline names the period too,
   # so each baseline record has a baseline type of its own.

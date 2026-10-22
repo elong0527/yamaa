@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADPC
 keys: [STUDYID, USUBJID, PCSEQ]
 input:
@@ -86,7 +88,7 @@ columns:
           then: PC.PCSTRESN
         - when: "PC.PCSTRESC LIKE '<%' AND (FIRSTQ IS NULL OR ATPTN < FIRSTQ
             OR ATPTN > LASTQ)"
-          then: {literal: 0.0}
+          then: 0.0
 
   - name: AVALU
     type: str

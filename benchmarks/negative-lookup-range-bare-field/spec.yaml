@@ -1,0 +1,64 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADLB
+keys: [STUDYID, USUBJID, LBSEQ]
+input:
+  LB: {path: input/lb.csv, types: {LBSEQ: int, LBDY: int, LBSTRESN: float}}
+  WINDOWS: {path: input/windows.csv, types: {AVISITN: int, LO: int, HI: int}}
+base: LB
+
+output:
+  path: adlb.csv
+  columns: [STUDYID, USUBJID, LBSEQ, PARAMCD, AVAL, ADY, AVISITN, AVISIT]
+
+intermediates:
+  # The analysis window whose first and last study days, both inclusive,
+  # hold the result's study day. LBDY is written bare, and a bare name is a
+  # column of the dataset being built; the specification declares ADY, not
+  # LBDY, so it is rejected before any data is read.
+  - id: WINDOW
+    dataset: WINDOWS
+    key: [STUDYID]
+    between: {value: LBDY, lower: LO, upper: HI}
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: LB.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: LB.USUBJID
+
+  - name: LBSEQ
+    type: int
+    label: Sequence Number
+    derivation: LB.LBSEQ
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+    derivation: LB.LBTESTCD
+
+  - name: AVAL
+    type: float
+    label: Analysis Value
+    derivation: LB.LBSTRESN
+
+  - name: ADY
+    type: int
+    label: Analysis Relative Day
+    derivation: LB.LBDY
+
+  - name: AVISITN
+    type: int
+    label: Analysis Visit (N)
+    derivation: WINDOW.AVISITN
+
+  - name: AVISIT
+    type: str
+    label: Analysis Visit
+    derivation: WINDOW.AVISIT

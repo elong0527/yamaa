@@ -446,9 +446,14 @@ impl<'a> Reads<'a> {
             .and_then(|between| Some((between, name(spec, between.value)?)))
         {
             let at = format!("{at}.between.value");
+            let types = |findings: &mut Vec<BindFinding>| {
+                findings.extend(super::declared::join_range_findings(spec, self.prepared, e));
+            };
             match value.split_once('.') {
                 Some((owner, _)) if self.drivers.contains(&owner) => {
-                    self.group(&at, value, findings);
+                    if self.group(&at, value, findings) {
+                        types(findings);
+                    }
                 }
                 // A lookup binding does not bind gives no value (LOOKUP-9).
                 Some((owner, _))
@@ -463,9 +468,15 @@ impl<'a> Reads<'a> {
                         value,
                     ));
                 }
-                Some(_) => {}
+                Some(_) => types(findings),
+                // On a 1.0 tree a bare value is an output column alone.
+                None if self.output(value).is_none() => {
+                    findings.extend(super::declared::join_range(spec, e));
+                }
                 None => {
-                    self.bare(&at, value, findings);
+                    if self.bare(&at, value, findings) {
+                        types(findings);
+                    }
                 }
             }
         }
@@ -573,18 +584,7 @@ impl<'a> Reads<'a> {
     /// binding then defers its matching and refuses a read of it on other
     /// grounds.
     fn deferred(&self, index: usize) -> bool {
-        let spec = self.spec;
-        let item = &spec.intermediates[index];
-        spec.intermediates
-            .iter()
-            .enumerate()
-            .any(|(reader, other)| {
-                other.bindings.iter().any(|binding| {
-                    spec.reads(binding.derivation.expr, Scope::Donor(reader))
-                        .iter()
-                        .any(|read| read.name.owner() == Some(item.id.name.as_str()))
-                })
-            })
+        donor_read(self.spec, index)
     }
 
     /// The read at `path` of `name`, a field of the lookup at `index`, as

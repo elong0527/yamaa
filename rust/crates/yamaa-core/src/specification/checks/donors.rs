@@ -163,6 +163,103 @@ impl<'a> DonorReads<'a> {
         !unknown
     }
 
+    /// On a 1.0 tree, the first read of the lookup at `index` that a donor
+    /// read cannot give it, in binding's order
+    /// (`intermediate_derivations::rebase`): a field of another input's
+    /// record than the donor's in its correlated filter, its range value or a
+    /// derivation's current fields; then, for a lookup a range value reads
+    /// (not `direct`), one in its key values. A range value read through
+    /// another lookup gives that lookup's first such read. A bare range value
+    /// is a field of the donor record, which only its records decide
+    /// (LOOKUP-16).
+    fn unavailable(&self, index: usize, direct: bool, followed: &mut Vec<usize>) -> Option<String> {
+        if followed.contains(&index) {
+            return None;
+        }
+        followed.push(index);
+        let spec = self.spec;
+        let item = &spec.intermediates[index];
+        let dataset = item.dataset.name.as_str();
+        let foreign = |name: &str| {
+            name.split_once('.').is_some_and(|(owner, _)| {
+                owner != self.relation && self.input(owner) && self.named(owner).is_none()
+            })
+        };
+        // A correlated filter reads each field of another input than its own.
+        if let Some(ExprKind::Formula(ast::Formula {
+            compiled: Ok(plan), ..
+        })) = item.filter.map(|filter| &spec.expr(filter).kind)
+        {
+            let mut seen = BTreeSet::new();
+            for identifier in plan.identifiers() {
+                if seen.insert(identifier)
+                    && identifier
+                        .split_once('.')
+                        .is_some_and(|(owner, _)| owner != dataset)
+                    && foreign(identifier)
+                {
+                    return Some(identifier.to_owned());
+                }
+            }
+        }
+        if let Some(value) = item
+            .between
+            .as_ref()
+            .and_then(|between| name(spec, between.value))
+        {
+            if foreign(value) {
+                return Some(value.to_owned());
+            }
+            if let Some(chained) = value
+                .split_once('.')
+                .and_then(|(owner, _)| self.named(owner))
+            {
+                if let Some(identifier) = self.unavailable(chained, false, followed) {
+                    return Some(identifier);
+                }
+            }
+        }
+        let scan = crate::specification::reads::Scan {
+            relation: true,
+            windows: true,
+        };
+        let calls = self.prepared.project_calls.is_some();
+        for binding in &item.bindings {
+            let references =
+                crate::specification::reads::names(spec, binding.derivation.expr, scan, calls)
+                    .unwrap_or_default();
+            if let Some(reference) = references.into_iter().find(|reference| {
+                reference
+                    .split_once('.')
+                    .is_some_and(|(owner, _)| owner != dataset)
+                    && foreign(reference)
+            }) {
+                return Some(reference);
+            }
+        }
+        if direct {
+            return None;
+        }
+        let fields = match &item.key {
+            Some(JoinKey::Columns { columns, .. }) => columns
+                .iter()
+                .map(|column| column.name.as_str())
+                .collect::<Vec<_>>(),
+            Some(JoinKey::Pairs { pairs, .. }) => {
+                pairs.iter().map(|(field, _)| field.name.as_str()).collect()
+            }
+            _ => Vec::new(),
+        };
+        fields.into_iter().find_map(|field| {
+            self.prepared
+                .intermediates
+                .match_declaration(&item.id.name, field)?
+                .references()
+                .find(|reference| foreign(reference))
+                .map(String::from)
+        })
+    }
+
     /// The read at `path` of the lookup at `index`, which a lookup's
     /// derivation reads as binding does there (`row_intermediates::bind`):
     /// a lookup whose key types fail binds nothing, so the read is unknown,
@@ -186,6 +283,22 @@ impl<'a> DonorReads<'a> {
         let item = &spec.intermediates[index];
         if self.refused.contains(&index) {
             findings.push(self.refusal(C::IntermediateDerivationWindowReference, path, name));
+            return false;
+        }
+        // A read the donor record cannot give leaves the lookup no value
+        // there (LOOKUP-16).
+        if let Some(identifier) = spec
+            .header
+            .surface
+            .one_meaning_per_form()
+            .then(|| self.unavailable(index, true, &mut Vec::new()))
+            .flatten()
+        {
+            let mut finding = LookupFinding::new(path, C::IntermediateDerivationDependency);
+            finding.text("intermediate", self.reader.unwrap_or_default());
+            finding.text("identifier", &identifier);
+            finding.text("read", &item.id.name);
+            findings.push(BindFinding::Lookup(finding));
             return false;
         }
         if item.dataset.name == "SELF" {

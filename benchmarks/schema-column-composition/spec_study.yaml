@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 parent: spec_compound.yaml
 domain: ADLB
 keys: [USUBJID, PARAMCD]
@@ -15,10 +17,10 @@ columns:
     derivation:
       case:
         - when: "USUBJID = '01' AND PARAMCD = 'AST'"
-          then: {literal: 31.0}
+          then: 31.0
         - otherwise: LB.LBSTRESN
     verifications:
-      - not_missing: {}
+      - not_missing
     metadata:
       review_status: adjudicated
 
@@ -27,12 +29,12 @@ columns:
   - name: ANRIND
     derivation:
       mapping:
-        missing: {literal: null}
-        unmapped: {literal: null}
+        missing: null
+        unmapped: null
 
   # A literal replaces the inherited mapping whole.
   - name: PARCAT1
-    derivation: {literal: CHEMISTRY}
+    derivation: "'CHEMISTRY'"
 
 metadata:
   scope: study

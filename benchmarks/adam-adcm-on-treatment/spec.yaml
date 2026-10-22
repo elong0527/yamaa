@@ -1,9 +1,12 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADCM
 keys: [STUDYID, USUBJID, CMSEQ]
 input:
   CM: {path: input/cm.csv, types: {CMSTDTC: date, CMENDTC: date}}
-  ADSL: {path: input/adsl.csv, types: {TRTSDT: date, TRTEDT: date}}
+  ADSL: {path: input/adsl.csv, types: {TRTSDT: date, TRTEDT: date},
+         key: [STUDYID, USUBJID]}
 base: CM
 
 output:

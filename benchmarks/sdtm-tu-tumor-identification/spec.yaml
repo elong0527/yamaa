@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: SDTM
 domain: TU
 keys: [STUDYID, USUBJID, TUSEQ]
 input:
@@ -16,7 +18,7 @@ columns:
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
-    derivation: {literal: TU}
+    derivation: "'TU'"
 
   - name: STUDYID
     type: str
@@ -54,7 +56,7 @@ columns:
   - name: TUTESTCD
     type: str
     label: Tumor Identification Test Short Name
-    derivation: {literal: TUMIDENT}
+    derivation: "'TUMIDENT'"
     verifications:
       - allowed_values:
           values: [TUMIDENT]
@@ -62,7 +64,7 @@ columns:
   - name: TUTEST
     type: str
     label: Tumor Identification Test Name
-    derivation: {literal: "Tumor Identification"}
+    derivation: "'Tumor Identification'"
 
   - name: TUORRES
     type: str
@@ -95,7 +97,6 @@ columns:
       str_case:
         source: TU_RAW.LATERALITY
         to: upper
-        missing: {literal: null}
 
   - name: TUMETHOD
     type: str

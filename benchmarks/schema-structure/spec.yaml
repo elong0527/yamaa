@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADLB
 keys: [USUBJID, VISIT, PARAMCD]
 input:
@@ -15,7 +17,7 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation: {literal: YAMAA-01}
+    derivation: "'YAMAA-01'"
 
   - name: USUBJID
     type: str
@@ -61,10 +63,10 @@ columns:
     derivation:
       case:
         - when: "AVAL > 60"
-          then: {literal: 1}
-        - otherwise: {literal: 0}
+          then: 1
+        - otherwise: 0
     verifications:
-      - not_missing: {}
+      - not_missing
 
   - name: FLAG
     type: str
@@ -72,8 +74,8 @@ columns:
     derivation:
       case:
         - when: "HIGH = 1"
-          then: {literal: H}
-        - otherwise: {literal: N}
+          then: "'H'"
+        - otherwise: "'N'"
 
 rows:
   # One row per record that carries a result.
@@ -84,15 +86,15 @@ rows:
       PARAM:
         case:
           - when: "LB.LBTESTCD = 'ALT'"
-            then: {literal: Alanine Aminotransferase}
-          - otherwise: {literal: Aspartate Aminotransferase}
+            then: "'Alanine Aminotransferase'"
+          - otherwise: "'Aspartate Aminotransferase'"
       AVISIT:
         case:
           - when: "LB.VISIT = 1"
-            then: {literal: WEEK 1 DAY 1}
-          - otherwise: {literal: WEEK 2 DAY 8}
+            then: "'WEEK 1 DAY 1'"
+          - otherwise: "'WEEK 2 DAY 8'"
       AVAL: LB.LBSTRESN
-      DTYPE: {literal: null}
+      DTYPE: null
 
   # One candidate row per subject-visit. The visit whose results are
   # all missing is discarded after its summary is computed.
@@ -100,9 +102,9 @@ rows:
     group_by: [LB.USUBJID, LB.VISIT]
     filter: "AVAL IS NOT NULL"
     derivations:
-      PARAMCD: {literal: LOW}
-      PARAM: {literal: Lowest Result of Visit}
-      AVISIT: {literal: OVERALL}
+      PARAMCD: "'LOW'"
+      PARAM: "'Lowest Result of Visit'"
+      AVISIT: "'OVERALL'"
       AVAL:
         aggregate: "MIN(LB.LBSTRESN)"
-      DTYPE: {literal: LOWEST}
+      DTYPE: "'LOWEST'"

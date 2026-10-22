@@ -3,7 +3,10 @@
 //! suite is ported here, followed by refusals that suite did not cover.
 use crate::support;
 
-use support::odm_files::{cell, column, edit, gzip, ordinals, Header, Scratch, Tar};
+use support::{
+    odm_files::{cell, column, edit, gzip, ordinals, Header, Tar},
+    scratch::Scratch,
+};
 use yamaa_adapters::{
     arrow_table::ArrowTable,
     odm_xml::{self, Error},

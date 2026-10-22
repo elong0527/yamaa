@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 # Inherits the input, keys and columns; this level adds the output and
 # replaces the metadata.
 parent: common/spec_common.yaml

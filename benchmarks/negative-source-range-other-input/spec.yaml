@@ -1,0 +1,78 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADQS
+keys: [STUDYID, USUBJID, SOURCE, QSSEQ]
+input:
+  CLINIC:
+    path: input/clinic.csv
+    types: {QSSEQ: int, QSDT: date}
+  EPRO:
+    path: input/epro.csv
+    types: {QSDT: date, QSSEQ: int}
+  PERIODS:
+    path: input/periods.csv
+    types: {APERIOD: int, APERSDT: date, APEREDT: date}
+    key: [STUDYID, USUBJID]
+
+output:
+  path: adqs.csv
+  columns: [STUDYID, USUBJID, SOURCE, QSSEQ, QSDT, APERIOD]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+
+  - name: SOURCE
+    type: str
+    label: Questionnaire Source
+
+  - name: QSSEQ
+    type: int
+    label: Sequence Number
+
+  - name: QSDT
+    type: date
+    label: Date of Questionnaire
+
+  - name: APERIOD
+    type: int
+    label: Period
+
+rows:
+  # Each template joins the subject's periods on the period table's key and
+  # keeps the period whose first to last day, both ends inclusive, holds the
+  # questionnaire's date.
+  - id: clinic
+    dataset: CLINIC
+    derivations:
+      STUDYID: CLINIC.STUDYID
+      USUBJID: CLINIC.USUBJID
+      SOURCE: "'CLINIC'"
+      QSSEQ: CLINIC.QSSEQ
+      QSDT: CLINIC.QSDT
+      APERIOD:
+        source:
+          variable: PERIODS.APERIOD
+          between: {value: CLINIC.QSDT, lower: APERSDT, upper: APEREDT}
+
+  - id: epro
+    dataset: EPRO
+    derivations:
+      STUDYID: EPRO.STUDYID
+      USUBJID: EPRO.USUBJID
+      SOURCE: "'EPRO'"
+      QSSEQ: EPRO.QSSEQ
+      QSDT: EPRO.QSDT
+      # Copied from the clinic template: CLINIC.QSDT names a clinic record,
+      # and a device row is built from a device record, so the specification
+      # is rejected before any data is read.
+      APERIOD:
+        source:
+          variable: PERIODS.APERIOD
+          between: {value: CLINIC.QSDT, lower: APERSDT, upper: APEREDT}

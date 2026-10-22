@@ -1,9 +1,12 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADTTE
 keys: [STUDYID, USUBJID, PARAMCD]
 input:
   ADSL: {path: input/adsl.csv, types: {RANDDT: date, NTXSTDT: date}}
-  RS: {path: input/rs.csv, types: {RSDTC: date, RSSEQ: int}}
+  RS: {path: input/rs.csv, types: {RSDTC: date, RSSEQ: int},
+       key: [STUDYID, USUBJID]}
   DS: {path: input/ds.csv, types: {DSDTC: date, DSSEQ: int}}
 base: ADSL
 
@@ -21,26 +24,26 @@ intermediates:
   # column level: intermediate filters cannot correlate to the base row.
   - id: PROGRESSION
     dataset: RS
+    key: [STUDYID, USUBJID]
     filter: "RS.RSTESTCD = 'OVRLRESP' AND RS.RSSTRESC = 'PD'
       AND RS.ADEQFL = 'Y' AND RS.RSDTC IS NOT NULL"
     order_by: [RS.RSDTC, RS.RSSEQ]
     keep: first
-    no_match: {literal: null}
 
   - id: DEATH
     dataset: DS
+    key: [STUDYID, USUBJID]
     filter: "DS.DSDECOD = 'DEATH' AND DS.DSDTC IS NOT NULL"
     order_by: [DS.DSDTC, DS.DSSEQ]
     keep: first
-    no_match: {literal: null}
 
   - id: LASTASSESS
     dataset: RS
+    key: [STUDYID, USUBJID]
     filter: "RS.RSTESTCD = 'OVRLRESP' AND RS.ADEQFL = 'Y'
       AND RS.RSDTC IS NOT NULL"
     order_by: [RS.RSDTC, RS.RSSEQ]
     keep: last
-    no_match: {literal: null}
 
 columns:
   - name: STUDYID
@@ -56,12 +59,12 @@ columns:
   - name: PARAMCD
     type: str
     label: Parameter Code
-    derivation: {literal: PFS}
+    derivation: "'PFS'"
 
   - name: PARAM
     type: str
     label: Parameter
-    derivation: {literal: Progression-Free Survival}
+    derivation: "'Progression-Free Survival'"
 
   - name: STARTDT
     type: date
@@ -86,7 +89,7 @@ columns:
     derivation:
       case:
         - when: "NTXSTDT IS NOT NULL AND PROGRESSION.RSDTC > NTXSTDT"
-          then: {literal: null}
+          then: null
         - otherwise: PROGRESSION.RSDTC
 
   # A death dated after the start of new anti-cancer therapy is likewise
@@ -97,7 +100,7 @@ columns:
     derivation:
       case:
         - when: "NTXSTDT IS NOT NULL AND DEATH.DSDTC > NTXSTDT"
-          then: {literal: null}
+          then: null
         - otherwise: DEATH.DSDTC
 
   # The last adequate assessment dated on or before new-therapy start;
@@ -179,8 +182,8 @@ columns:
     derivation:
       case:
         - when: "EVENTDT IS NOT NULL"
-          then: {literal: 0}
-        - otherwise: {literal: 1}
+          then: 0
+        - otherwise: 1
 
   # The event date for an event (CNSR 0), else the censoring date.
   - name: ADT
@@ -199,7 +202,7 @@ columns:
         start: STARTDT
         end: ADT
         unit: day
-        bounds: inclusive
+        closed: both
 
   # A progression and a death on the same day count as progression.
   - name: EVNTDESC
@@ -208,10 +211,10 @@ columns:
     derivation:
       case:
         - when: "EVENTDT IS NULL"
-          then: {literal: CENSORED}
+          then: "'CENSORED'"
         - when: "PDDT IS NOT NULL AND (DEATHDT IS NULL OR PDDT <= DEATHDT)"
-          then: {literal: DISEASE PROGRESSION}
-        - otherwise: {literal: DEATH}
+          then: "'DISEASE PROGRESSION'"
+        - otherwise: "'DEATH'"
 
   # A subject censored at randomization has no source assessment, so the
   # traceability triplet is empty rather than half-filled.
@@ -221,10 +224,10 @@ columns:
     derivation:
       case:
         - when: "EVNTDESC = 'DEATH'"
-          then: {literal: DS}
+          then: "'DS'"
         - when: "CENSORASSESSDT IS NULL"
-          then: {literal: null}
-        - otherwise: {literal: RS}
+          then: null
+        - otherwise: "'RS'"
 
   - name: SRCVAR
     type: str
@@ -232,10 +235,10 @@ columns:
     derivation:
       case:
         - when: "EVNTDESC = 'DEATH'"
-          then: {literal: DSDTC}
+          then: "'DSDTC'"
         - when: "CENSORASSESSDT IS NULL"
-          then: {literal: null}
-        - otherwise: {literal: RSDTC}
+          then: null
+        - otherwise: "'RSDTC'"
 
   - name: SRCSEQ
     type: int
@@ -247,7 +250,7 @@ columns:
         - when: "EVNTDESC = 'DEATH'"
           then: DEATH.DSSEQ
         - when: "CENSORASSESSDT IS NULL"
-          then: {literal: null}
+          then: null
         - otherwise: CENSORSEQ
 
 verifications:

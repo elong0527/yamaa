@@ -33,7 +33,7 @@ pub(crate) enum Owner<'a> {
 }
 
 impl Owner<'_> {
-    fn add(self, context: &mut Context) {
+    pub(crate) fn add(self, context: &mut Context) {
         match self {
             Self::Intermediate(name) => {
                 context.insert("intermediate".into(), text(name));

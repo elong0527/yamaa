@@ -476,7 +476,9 @@ impl Declaration {
     /// finding refuses it. Whether a record read names the driver of every row
     /// that reads the join is admitted per context ([`lookup_range::admit`]).
     /// `row` names the row template of a row-phase read, and `driver` the
-    /// driver whose records build the rows the binding is read for.
+    /// driver whose records build the rows the binding is read for. With
+    /// `one_meaning` (1.0) a bare value that no column takes fails whatever
+    /// the bounds bind.
     #[allow(clippy::too_many_arguments)]
     pub(super) fn bind_range(
         &self,
@@ -487,6 +489,7 @@ impl Declaration {
         row: Option<&str>,
         driver: Option<&str>,
         available: Option<&[usize]>,
+        one_meaning: bool,
         edges: &mut Vec<usize>,
         findings: &mut Vec<BindFinding>,
     ) -> Result<Option<Option<crate::dataset::RelationRange>>, BindError> {
@@ -505,6 +508,9 @@ impl Declaration {
         );
         findings.extend(diagnostics.into_iter().map(wrap));
         let Some(bounds) = bounds else {
+            if one_meaning && range.names_no_column(catalog) {
+                findings.push(wrap(range.unknown_value(owner)));
+            }
             return Ok(None);
         };
         // A column only the column phase derives is not yet a value of a row
@@ -538,7 +544,10 @@ impl Declaration {
             findings.push(wrap(range.unknown_value(owner)));
             return Ok(None);
         };
-        Ok(match range.finish(read, kind, bounds, None)? {
+        // On a 1.0 tree a type refusal names the variable too, as every
+        // other refusal of the binding's range does.
+        let named = if one_meaning { owner } else { Owner::Unnamed };
+        Ok(match range.finish(read, kind, bounds, named)? {
             Ok(range) => Some(Some(range.for_variable(&self.variable))),
             Err(diagnostic) => {
                 findings.push(wrap(diagnostic));
@@ -752,6 +761,7 @@ fn bind_implicit_source(
                                 None,
                                 None,
                                 None,
+                                cx.spec().header.surface.one_meaning_per_form(),
                                 cx.edges,
                                 cx.findings,
                             )?

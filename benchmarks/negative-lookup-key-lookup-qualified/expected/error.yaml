@@ -1,0 +1,8 @@
+phase: validation
+condition: unknown_field
+spec_paths:
+  - intermediates.RANGE.key
+rule: LOOKUP-5
+context:
+  identifier: SUBJECT.SEX
+  intermediate: RANGE

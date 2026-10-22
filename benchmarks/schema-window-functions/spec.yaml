@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADVS
 keys: [USUBJID, VISITN]
 input:
@@ -86,7 +88,6 @@ columns:
     label: Competition Rank of Result
     derivation:
       rank:
-        method: competition
         window: RESULT_ORDER
 
   # Dense rank of the same ordering: no number is skipped after a tie.
@@ -172,7 +173,7 @@ columns:
     derivation:
       baseline_flag:
         date: VSDTC
-        reference_date: TRTSDT
-        value: VSSTRESN
+        reference: TRTSDT
+        source: VSSTRESN
         window:
           group_by: [USUBJID]

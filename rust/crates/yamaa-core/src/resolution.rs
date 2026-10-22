@@ -98,6 +98,11 @@ enum Kind {
     Predicate,
     /// An ODM item, which names its dataset before the first dot (NAME-7).
     Item,
+    /// On a 1.0 tree, a lookup's match value or range value, which reads
+    /// only a column of the row when bare and whose own binding reports a
+    /// name it cannot read (LOOKUP-5, LOOKUP-9), so the name orders
+    /// declarations but is never an unknown dependency.
+    Match,
 }
 
 #[derive(Clone, Debug)]
@@ -211,8 +216,21 @@ impl<'a> Live<'a> {
         let mut predicates = BTreeSet::new();
         let mut items = BTreeSet::new();
         let mut keyless = BTreeSet::new();
+        let mut matched = BTreeSet::new();
+        let one_meaning = spec.header.surface.one_meaning_per_form();
         let mut failure = None;
         spec.walk(root, scope, |at, _| {
+            // A match value or range value, with every node inside it.
+            if one_meaning {
+                let inside = matched.contains(&at);
+                matched.extend(
+                    spec.children(at)
+                        .filter(|&(role, _)| {
+                            inside || matches!(role, Role::KeyValue | Role::RangeValue)
+                        })
+                        .map(|(_, child)| child),
+                );
+            }
             match &spec.expr(at).kind {
                 ExprKind::Formula(formula) => {
                     if let Err(error @ CompileError::Limit { .. }) = &formula.compiled {
@@ -228,7 +246,14 @@ impl<'a> Live<'a> {
                 }
                 ExprKind::Aggregate(aggregate) => match &aggregate.key {
                     Some(JoinKey::Columns { columns, .. }) => {
-                        out.extend(columns.iter().map(Reading::variable));
+                        out.extend(columns.iter().map(|column| Reading {
+                            name: column.name.clone(),
+                            kind: if one_meaning {
+                                Kind::Match
+                            } else {
+                                Kind::Variable
+                            },
+                        }));
                     }
                     Some(JoinKey::FromInput) => {
                         keyless.insert(at);
@@ -259,6 +284,8 @@ impl<'a> Live<'a> {
                 Kind::Item
             } else if predicates.contains(&read.at) {
                 Kind::Predicate
+            } else if matched.contains(&read.at) {
+                Kind::Match
             } else {
                 Kind::Variable
             };

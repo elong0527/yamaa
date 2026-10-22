@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADLB
 keys: [STUDYID, USUBJID, PARAMCD, ASEQ]
 input:
@@ -67,12 +69,12 @@ columns:
     derivation:
       case:
         - when: "AVAL IS NULL OR ANRLO IS NULL OR ANRHI IS NULL"
-          then: {literal: null}
+          then: null
         - when: "AVAL < ANRLO"
-          then: {literal: LOW}
+          then: "'LOW'"
         - when: "AVAL > ANRHI"
-          then: {literal: HIGH}
-        - otherwise: {literal: NORMAL}
+          then: "'HIGH'"
+        - otherwise: "'NORMAL'"
     verifications:
       - allowed_values:
           values: [LOW, NORMAL, HIGH]
@@ -116,24 +118,20 @@ columns:
     derivation:
       str_template:
         template: "{BNRIND} to {ANRIND}"
-        missing: {literal: null}
+        missing: null
 
   # NULLIF leaves the ratio empty when the baseline value is zero.
   - name: R2BASE
     type: float
     label: Ratio to Baseline
-    derivation:
-      compute:
-        expr: "AVAL / NULLIF(BASE, 0)"
+    derivation: "AVAL / NULLIF(BASE, 0)"
 
   # Three times the upper limit of normal (ULN). A condition cannot hold
   # arithmetic, so the limit is its own column; it is not in the output.
   - name: CRITLIM
     type: float
     label: Criterion Limit
-    derivation:
-      compute:
-        expr: "3 * ANRHI"
+    derivation: "3 * ANRHI"
 
   - name: CRIT1
     type: str
@@ -141,7 +139,7 @@ columns:
     derivation:
       case:
         - when: "AVAL IS NOT NULL AND CRITLIM IS NOT NULL"
-          then: {literal: Result greater than 3 x ULN}
+          then: "'Result greater than 3 x ULN'"
 
   # Y above the limit and N at or below it. The first branch keeps a record
   # with no value or no limit empty rather than N.
@@ -151,10 +149,10 @@ columns:
     derivation:
       case:
         - when: "AVAL IS NULL OR CRITLIM IS NULL"
-          then: {literal: null}
+          then: null
         - when: "AVAL > CRITLIM"
-          then: {literal: Y}
-        - otherwise: {literal: N}
+          then: "'Y'"
+        - otherwise: "'N'"
     verifications:
       - allowed_values:
           values: [Y, N]
@@ -166,7 +164,7 @@ columns:
     derivation:
       case:
         - when: "AVAL IS NOT NULL AND ANRLO IS NOT NULL"
-          then: {literal: Result less than LLN}
+          then: "'Result less than LLN'"
 
   # Y below the limit and N at or above it. Independent missingness from
   # CRIT1FL: only the value and the lower limit decide assessability.
@@ -176,10 +174,10 @@ columns:
     derivation:
       case:
         - when: "AVAL IS NULL OR ANRLO IS NULL"
-          then: {literal: null}
+          then: null
         - when: "AVAL < ANRLO"
-          then: {literal: Y}
-        - otherwise: {literal: N}
+          then: "'Y'"
+        - otherwise: "'N'"
     verifications:
       - allowed_values:
           values: [Y, N]
