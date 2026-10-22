@@ -1,5 +1,0 @@
-phase: validation
-condition: duplicate_dataset_entry
-spec_paths:
-  - sdtm.specs[1]
-rule: DEFINE-5

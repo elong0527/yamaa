@@ -6451,6 +6451,32 @@
           ]
         },
         {
+          "name": "a_section_that_lists_two_specifications_of_one_artifact",
+          "files": {
+            "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy:\n  id: PAR01\n  name: PAR01\n  description: Example study submitting its demographics\n  protocol_name: PAR-01\nsdtm:\n  specs:\n    - dm.yaml\n    - dmv2.yaml\n  standards:\n    - {name: SDTMIG, version: \"3.4\", status: Final}\n  define: define.xml\n",
+            "dm.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: DM\nkeys: [STUDYID, USUBJID]\ninput: {RAW: raw.csv}\noutput: {path: dm.csv, columns: [DOMAIN, STUDYID, USUBJID]}\ncolumns:\n  - {name: DOMAIN, type: str, label: Domain Abbreviation, derivation: \"'DM'\", submission: {core: Req, role: Identifier, length: 2, origins: [{type: Assigned, source: Sponsor}]}}\n  - {name: STUDYID, type: str, label: Study Identifier, derivation: RAW.STUDYID, submission: {core: Req, role: Identifier, length: 5, origins: [{type: Protocol, source: Sponsor}]}}\n  - {name: USUBJID, type: str, label: Unique Subject Identifier, derivation: RAW.USUBJID, submission: {core: Req, role: Identifier, length: 9, origins: [{type: Assigned, source: Sponsor}]}}\nsubmission: {label: Demographics, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false}\n",
+            "dmv2.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: DMV2\nkeys: [STUDYID, USUBJID]\ninput: {RAW: raw.csv}\noutput: {path: dm.csv, columns: [DOMAIN, STUDYID, USUBJID]}\ncolumns:\n  - {name: DOMAIN, type: str, label: Domain Abbreviation, derivation: \"'DM'\", submission: {core: Req, role: Identifier, length: 2, origins: [{type: Assigned, source: Sponsor}]}}\n  - {name: STUDYID, type: str, label: Study Identifier, derivation: RAW.STUDYID, submission: {core: Req, role: Identifier, length: 5, origins: [{type: Protocol, source: Sponsor}]}}\n  - {name: USUBJID, type: str, label: Unique Subject Identifier, derivation: RAW.USUBJID, submission: {core: Req, role: Identifier, length: 9, origins: [{type: Assigned, source: Sponsor}]}}\nsubmission: {label: Demographics, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false}\n",
+            "dm.csv": "DOMAIN,STUDYID,USUBJID\nDM,PAR01,PAR01-941\nDM,PAR01,PAR01-942\n"
+          },
+          "call": {"operation": "submission", "path": "project.yaml", "section": "sdtm", "created": "2026-09-11T00:00:00"},
+          "issues": [
+            {
+              "severity": "error",
+              "phase": "validation",
+              "condition": "duplicate_dataset_entry",
+              "rule": "DEFINE-5",
+              "spec_paths": ["sdtm.specs[1]"],
+              "file": "project.yaml",
+              "line": 11,
+              "column": 7,
+              "message": "the section lists dataset DMV2 or its artifact more than once",
+              "context": "{\"detail\":\"DMV2\"}",
+              "source_span": null,
+              "operand_route": null
+            }
+          ]
+        },
+        {
           "name": "a_function_the_running_host_does_not_implement",
           "files": {
             "project.yaml": "yamaa: \"1.0\"\ntype: project\nfunctions:\n- functions/project_value.yaml\n\nadam:\n  specs:\n  - spec.yaml\n",
