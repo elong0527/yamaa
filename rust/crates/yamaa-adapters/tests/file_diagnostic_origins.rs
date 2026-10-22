@@ -1363,11 +1363,8 @@ mod file {
             // then the entry.
             study.write(
                 "origins/path.yaml",
-                &yaml("{P: ../data/p.csv}", "P", "root.csv").replacen(
-                    "type: spec\n",
-                    "type: spec\nparent: schema.yaml\n",
-                    1,
-                ),
+                &yaml("{P: ../data/p.csv}", "P", "root.csv")
+                    .edit("type: spec\n", "type: spec\nparent: schema.yaml\n"),
             );
             study.write(
                 "producer/base.yaml",
