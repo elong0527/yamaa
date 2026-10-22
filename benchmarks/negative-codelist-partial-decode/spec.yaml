@@ -1,0 +1,67 @@
+yamaa: "1.0"
+type: spec
+model: SDTM
+domain: DM
+keys: [STUDYID, USUBJID]
+input:
+  RAW: input/dm_raw.csv
+
+output:
+  path: dm.csv
+  columns: [DOMAIN, STUDYID, USUBJID, SEX]
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'DM'"
+    submission:
+      core: Req
+      role: Identifier
+      length: 2
+      origins:
+        - type: Assigned
+          source: Sponsor
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: RAW.STUDYID
+    submission:
+      core: Req
+      role: Identifier
+      length: 8
+      origins:
+        - type: Protocol
+          source: Sponsor
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: RAW.USUBJID
+    submission:
+      core: Req
+      role: Identifier
+      length: 12
+      origins:
+        - type: Assigned
+          source: Sponsor
+
+  - name: SEX
+    type: str
+    label: Sex
+    derivation: RAW.SEX
+    submission:
+      core: Req
+      role: Record Qualifier
+      length: 1
+      codelist: SEX
+      origins:
+        - type: Collected
+          source: Investigator
+
+submission:
+  label: Demographics
+  class: SPECIAL PURPOSE
+  structure: One record per subject
+  repeating: false
