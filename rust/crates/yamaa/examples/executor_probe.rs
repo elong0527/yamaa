@@ -13,9 +13,9 @@
 //!
 //! The defaults are 10,000, 100,000 and 1,000,000 rows, every shape, and a
 //! limit of 300 seconds per case. Every shape derives the same columns from
-//! one source: source reads, `cut`, `case`, `compute` and a `row_number`
-//! window. The lookup shapes also read one column through one keyed
-//! intermediate over a donor table holding one record per source row:
+//! one source: source reads, `cut`, `case`, an arithmetic expression and a
+//! `row_number` window. The lookup shapes also read one column through one
+//! keyed intermediate over a donor table holding one record per source row:
 //!
 //! - `none`: no lookup.
 //! - `int-key`: `key: [ID]`, one `int` column.
@@ -53,8 +53,8 @@ const SIZES: [usize; 3] = [10_000, 100_000, 1_000_000];
 /// Seconds one case may run unless `--limit` is given.
 const LIMIT_SECONDS: u64 = 300;
 
-/// The columns every shape derives: source reads, `cut`, `case`, `compute`
-/// and a `row_number` window.
+/// The columns every shape derives: source reads, `cut`, `case`, an
+/// arithmetic expression and a `row_number` window.
 const COLUMNS: &str = r#"columns:
   - {name: ID, type: int, derivation: SRC.ID}
   - {name: SUBJ, type: str, derivation: SRC.SUBJ}
@@ -69,13 +69,13 @@ const COLUMNS: &str = r#"columns:
     derivation:
       case:
         - when: "DAY < 0"
-          then: {literal: PRE}
+          then: "'PRE'"
         - when: "VAL >= 75"
-          then: {literal: HIGH}
-        - otherwise: {literal: NORMAL}
+          then: "'HIGH'"
+        - otherwise: "'NORMAL'"
   - name: SCORE
     type: float
-    derivation: {compute: {expr: "VAL * 2 + DAY / 10"}}
+    derivation: "VAL * 2 + DAY / 10"
   - name: VALSEQ
     type: int
     derivation: {row_number: {window: {group_by: [SUBJ], order_by: [VAL]}}}
@@ -136,12 +136,11 @@ impl Shape {
     dataset: LK
     key: [ID]
     derivations:
-      DIST: {compute: {expr: "ABS(DAY - SRC.DAY)"}}
+      DIST: "ABS(DAY - SRC.DAY)"
     filter: "LK.DIST IS NOT NULL"
     order_by: [LK.DIST]
     keep: first
     columns: [REF]
-    no_match: null
 "#,
             ),
         }
@@ -152,7 +151,7 @@ impl Shape {
 fn specification(shape: Shape) -> String {
     let lookup = shape.intermediate();
     let mut text = String::from(
-        "schema_version: '1.0'\ndomain: PROBE\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {ID: int, SEQ: int, VAL: float, DAY: int}}\n",
+        "yamaa: \"1.0\"\ntype: spec\ndomain: PROBE\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {ID: int, SEQ: int, VAL: float, DAY: int}}\n",
     );
     if lookup.is_some() {
         text.push_str(

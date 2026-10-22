@@ -1901,7 +1901,7 @@ fn a_refused_read_or_save_prints_its_error_text_and_exits_1() {
 /// the JSON `paths`.
 #[test]
 fn lint_prints_each_finding_then_its_summary() {
-    const SPEC: &str = "schema_version: '1.0'\ndomain: DM\noutput:\n  path: dm.csv\n";
+    const SPEC: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: DM\noutput:\n  path: dm.csv\n";
     let study = Study::empty();
     study.write("dm.yaml", SPEC);
     let file = study.path("dm.yaml");

@@ -481,7 +481,8 @@ fn replaced_and_cleared_fields_do_not_locate_in_overridden_parent_values() {
 fn a_project_path_locates_in_the_project_or_the_file_it_lists() {
     let study = Study::new();
     let dm = [
-        "schema_version: '1.0'",
+        "yamaa: \"1.0\"",
+        "type: spec",
         "domain: DM",
         "keys: [USUBJID]",
         "input: {RAW: raw.csv}",
@@ -494,7 +495,8 @@ fn a_project_path_locates_in_the_project_or_the_file_it_lists() {
     study.write(
         "project.yaml",
         &[
-            "schema_version: '1.0'",
+            "yamaa: \"1.0\"",
+            "type: project",
             "sdtm:",
             "  specs:",
             "    - dm.yaml",
@@ -506,8 +508,8 @@ fn a_project_path_locates_in_the_project_or_the_file_it_lists() {
         .unwrap();
     let issues = check.diagnostics();
     assert_eq!(issues[0].spec_path[0], "sdtm.specs[0]", "{issues:?}");
-    // Line 4, after `    - `.
-    assert_eq!(location(&issues), Some((study.file("project.yaml"), 4, 7)));
+    // Line 5, after `    - `.
+    assert_eq!(location(&issues), Some((study.file("project.yaml"), 5, 7)));
 
     let study = Study::new();
     study.write(
@@ -603,7 +605,7 @@ fn only_a_refused_file_locates_an_issue_without_a_written_node() {
     let study = Study::new();
     study.write(
         "project.yaml",
-        &["schema_version: '1.0'", "sdtm:", "  specs: []"],
+        &["yamaa: \"1.0\"", "type: project", "sdtm:", "  specs: []"],
     );
     let failure = engine()
         .project_spec(&study.path("project.yaml"), "ADXX")
@@ -611,20 +613,23 @@ fn only_a_refused_file_locates_an_issue_without_a_written_node() {
     assert!(failure.diagnostics[0].spec_path.is_empty());
     assert_eq!(failure.diagnostics[0].location, None);
 
-    // The flow sequence is never closed: the reader stops at line 3, column 1.
-    study.write("invalid.yaml", &["schema_version: '1.0'", "domain: [ADSL"]);
+    // The flow sequence is never closed: the reader stops at line 4, column 1.
+    study.write(
+        "invalid.yaml",
+        &["yamaa: \"1.0\"", "type: spec", "domain: [ADSL"],
+    );
     let check = engine()
         .spec_check(&study.path("invalid.yaml"), None, &CancellationToken::new())
         .unwrap();
     let issues = check.diagnostics();
-    assert_eq!(location(&issues), Some((study.file("invalid.yaml"), 3, 1)));
-    assert_eq!(issues[0].context.get("line"), Some(&ContextValue::Int(3)));
+    assert_eq!(location(&issues), Some((study.file("invalid.yaml"), 4, 1)));
+    assert_eq!(issues[0].context.get("line"), Some(&ContextValue::Int(4)));
     assert_eq!(issues[0].context.get("column"), Some(&ContextValue::Int(1)));
 
     // The comment's sixth character, after `# caf`, is not ASCII.
     std::fs::write(
         study.0.join("accented.yaml"),
-        "schema_version: '1.0'\ndomain: ADSL\n# caf\u{e9}\n",
+        "yamaa: \"1.0\"\ntype: spec\ndomain: ADSL\n# caf\u{e9}\n",
     )
     .unwrap();
     let check = engine()
@@ -636,14 +641,18 @@ fn only_a_refused_file_locates_an_issue_without_a_written_node() {
         .unwrap();
     assert_eq!(
         location(&check.diagnostics()),
-        Some((study.file("accented.yaml"), 3, 6))
+        Some((study.file("accented.yaml"), 4, 6))
     );
 
     // A specification whose project file the reader refuses, read with it
     // and read alone: the project file is the file refused.
     study.write(
         "project.yaml",
-        &["schema_version: '1.0'", "sdtm: {specs: [accented.yaml"],
+        &[
+            "yamaa: \"1.0\"",
+            "type: project",
+            "sdtm: {specs: [accented.yaml",
+        ],
     );
     let check = engine()
         .spec_check(
@@ -654,14 +663,14 @@ fn only_a_refused_file_locates_an_issue_without_a_written_node() {
         .unwrap();
     assert_eq!(
         location(&check.diagnostics()),
-        Some((study.file("project.yaml"), 3, 1))
+        Some((study.file("project.yaml"), 4, 1))
     );
     let check = engine()
         .project_check(&study.path("project.yaml"), &CancellationToken::new())
         .unwrap();
     assert_eq!(
         location(&check.diagnostics()),
-        Some((study.file("project.yaml"), 3, 1))
+        Some((study.file("project.yaml"), 4, 1))
     );
 }
 
