@@ -7,32 +7,15 @@
 //! a location names its file by its absolute path.
 #![cfg(feature = "yaml")]
 
-use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::path::Path;
 use std::sync::Arc;
 
 use yamaa::{
-    Action, Argument, CallError, CancellationToken, ContextValue, Engine, EngineOptions, Error,
-    Failure, FunctionError, FunctionHandle, FunctionIdentity, HostLanguage, LockContext,
-    ProjectFunctions, Scalar, Signature, Status, Summary,
+    Action, CancellationToken, ContextValue, Engine, EngineOptions, Error, Failure, HostLanguage,
+    Status, Summary,
 };
 
-struct NoFunctions;
-impl ProjectFunctions for NoFunctions {
-    fn verify_lock(
-        &self,
-        _: &LockContext<'_>,
-        _: &[FunctionIdentity],
-    ) -> Result<(), FunctionError> {
-        Ok(())
-    }
-    fn bind(&self, _: &FunctionIdentity, _: &Signature) -> Result<FunctionHandle, FunctionError> {
-        unreachable!("these specifications call no project function")
-    }
-    fn invoke(&self, _: &FunctionHandle, _: &[Argument<'_>]) -> Result<Scalar, CallError> {
-        unreachable!("these specifications call no project function")
-    }
-}
+use crate::support::NoFunctions;
 
 fn engine() -> Engine {
     Engine::new(
@@ -41,18 +24,11 @@ fn engine() -> Engine {
     )
 }
 
-static NEXT: AtomicUsize = AtomicUsize::new(0);
-
-struct Study(PathBuf);
+struct Study(crate::support::Scratch);
 impl Study {
     fn new() -> Self {
-        let root = std::env::temp_dir().join(format!(
-            "yamaa-printed-text-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
-        std::fs::create_dir_all(&root).unwrap();
-        Self(yamaa_adapters::canonical_path::canonicalize(root).unwrap())
+        let root = crate::support::Scratch::new("printed-text");
+        Self(root)
     }
     fn write(&self, name: &str, contents: impl AsRef<[u8]>) {
         let path = self.0.join(name);
@@ -61,11 +37,6 @@ impl Study {
     }
     fn path(&self, name: &str) -> String {
         self.0.join(name).to_str().unwrap().to_owned()
-    }
-}
-impl Drop for Study {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
     }
 }
 

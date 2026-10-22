@@ -13,8 +13,8 @@
 mod declaration {
     mod language_header {
         use std::fs;
-        use std::path::{Path, PathBuf};
-        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::path::Path;
+
         use std::sync::Arc;
         use yamaa_adapters::document::{
             self, check_references, Closures, Decoded, ReferenceError, SpecificationError,
@@ -32,8 +32,6 @@ mod declaration {
         use yamaa_core::project_function::Language;
         use yamaa_core::schema::{NormalizationError, SchemaContext as C};
 
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-
         /// A complete 0.5 specification reading one CSV input.
         const LEGACY: &str = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
         /// A complete 1.0 specification of the same dataset.
@@ -41,16 +39,11 @@ mod declaration {
         /// A complete 1.0 function file.
         const FUNCTION: &str = "yamaa: \"1.0\"\ntype: function\nname: bmi\ndescription: Body mass index.\nparams: [{name: weight, type: float}]\nreturns: float\nimplementations: {python: project.bmi}\ntests: [{id: normal, covers: [normal], args: {weight: 1.0}, result: 1.0}]\n";
 
-        struct Study(PathBuf);
+        struct Study(crate::support::Scratch);
         impl Study {
             fn new() -> Self {
-                let path = std::env::temp_dir().join(format!(
-                    "yamaa-language-header-{}-{}",
-                    std::process::id(),
-                    NEXT.fetch_add(1, Ordering::Relaxed)
-                ));
-                fs::create_dir_all(&path).unwrap();
-                Self(yamaa_adapters::canonical_path::canonicalize(path).unwrap())
+                let path = crate::support::Scratch::canonical("language-header");
+                Self(path)
             }
             fn write(&self, name: &str, text: &str) {
                 let path = self.0.join(name);
@@ -151,11 +144,6 @@ mod declaration {
                         [checked, refused]
                     })
                     .collect()
-            }
-        }
-        impl Drop for Study {
-            fn drop(&mut self) {
-                let _ = fs::remove_dir_all(&self.0);
             }
         }
 

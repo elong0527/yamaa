@@ -104,6 +104,7 @@ pub use text::{Action, Summary};
 pub const VERSION: &str = yamaa_core::VERSION;
 
 #[cfg(all(test, unix))]
+#[allow(dead_code)]
 #[path = "../tests/support/scratch.rs"]
 mod test_scratch;
 

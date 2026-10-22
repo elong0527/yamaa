@@ -5,27 +5,17 @@ mod execution {
         //! Original retired ODM-context operands through the shared public file engine.
         //! Generic source reads keep their ordinary relation semantics; only `odm`
         //! expressions select the fixed eleven-field ODM interpretation.
-        use std::{
-            fs,
-            path::PathBuf,
-            sync::atomic::{AtomicUsize, Ordering},
-        };
+        use std::{fs, path::PathBuf};
         use yamaa_adapters::json;
         use yamaa_adapters::{file_application, specification_report::Identity};
         use yamaa_core::diagnostic::Diagnostic;
         use yamaa_core::domain_entry::Request;
         use yamaa_core::json::Value;
 
-        struct Fixture(PathBuf);
+        struct Fixture(crate::support::Scratch);
         impl Fixture {
             fn new(specification: &str, input: &str) -> Self {
-                static NEXT: AtomicUsize = AtomicUsize::new(0);
-                let root = std::env::temp_dir().join(format!(
-                    "yamaa-retired-odm-{}-{}",
-                    std::process::id(),
-                    NEXT.fetch_add(1, Ordering::Relaxed)
-                ));
-                fs::create_dir(&root).unwrap();
+                let root = crate::support::Scratch::new("retired-odm");
                 fs::write(root.join("spec.yaml"), specification).unwrap();
                 fs::write(root.join("odm.csv"), input).unwrap();
                 Self(root)
@@ -59,11 +49,6 @@ mod execution {
                     expected.as_bytes()
                 );
                 report
-            }
-        }
-        impl Drop for Fixture {
-            fn drop(&mut self) {
-                fs::remove_dir_all(&self.0).unwrap();
             }
         }
 
@@ -388,21 +373,11 @@ mod execution {
     }
     mod row_count_lookups {
         //! Original row-count verification lookups and declaration ordering.
-        use std::{
-            fs,
-            path::PathBuf,
-            sync::atomic::{AtomicUsize, Ordering},
-        };
+        use std::fs;
         use yamaa_adapters::{file_application, specification_report::Identity};
         use yamaa_core::domain_entry::Request;
 
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        struct Fixture(PathBuf);
-        impl Drop for Fixture {
-            fn drop(&mut self) {
-                fs::remove_dir_all(&self.0).unwrap();
-            }
-        }
+        struct Fixture(crate::support::Scratch);
         fn issues(rows: &[yamaa_core::diagnostic::Diagnostic]) -> yamaa_core::json::Value {
             yamaa_adapters::json!(rows
                 .iter()
@@ -422,12 +397,7 @@ mod execution {
                 .as_array()
                 .unwrap()
             {
-                let fixture = Fixture(std::env::temp_dir().join(format!(
-                    "yamaa-row-count-lookups-{}-{}",
-                    std::process::id(),
-                    NEXT.fetch_add(1, Ordering::Relaxed)
-                )));
-                fs::create_dir(&fixture.0).unwrap();
+                let fixture = Fixture(crate::support::Scratch::new("row-count-lookups"));
                 for (path, bytes) in case["inputs"].as_object().unwrap() {
                     let path = fixture.0.join(path);
                     fs::create_dir_all(path.parent().unwrap()).unwrap();
@@ -504,26 +474,16 @@ mod execution {
         }
     }
     mod row_derivations {
-        use std::{
-            fs,
-            path::{Path, PathBuf},
-            sync::atomic::{AtomicUsize, Ordering},
-        };
+        use std::{fs, path::Path};
         use yamaa_adapters::{file_application, specification_report::Identity};
         use yamaa_core::domain_entry::Request;
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        struct Fixture(PathBuf);
+        struct Fixture(crate::support::Scratch);
         impl Fixture {
             fn new(name: &str) -> Self {
                 let source = Path::new(env!("CARGO_MANIFEST_DIR"))
                     .join("../../../benchmarks")
                     .join(name);
-                let path = std::env::temp_dir().join(format!(
-                    "yamaa-retired-odm-scalar-{}-{}",
-                    std::process::id(),
-                    NEXT.fetch_add(1, Ordering::Relaxed)
-                ));
-                fs::create_dir(&path).unwrap();
+                let path = crate::support::Scratch::new("retired-odm-scalar");
                 fn copy(source: &Path, target: &Path) {
                     for entry in fs::read_dir(source).unwrap() {
                         let entry = entry.unwrap();
@@ -576,11 +536,6 @@ mod execution {
                         base_directory: ".",
                     },
                 )
-            }
-        }
-        impl Drop for Fixture {
-            fn drop(&mut self) {
-                fs::remove_dir_all(&self.0).unwrap();
             }
         }
         fn bespoke(source: &str, input: &[u8]) -> Fixture {
@@ -879,11 +834,7 @@ rows:
     }
     mod row_filter_paths {
         //! Static and build diagnostics use declaration indices, never arbitrary row IDs.
-        use std::{
-            fs,
-            path::PathBuf,
-            sync::atomic::{AtomicUsize, Ordering},
-        };
+        use std::fs;
         use yamaa_adapters::json;
         use yamaa_adapters::{
             file_application, file_preparation::FileSpecification, file_resources::Resources,
@@ -893,28 +844,18 @@ rows:
         use yamaa_core::domain_entry::Request;
         use yamaa_core::json::Value;
 
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        struct Study(PathBuf);
+        struct Study(crate::support::Scratch);
         impl Study {
             fn new() -> Self {
-                let path = std::env::temp_dir().join(format!(
-                    "yamaa-row-filter-path-{}-{}",
-                    std::process::id(),
-                    NEXT.fetch_add(1, Ordering::Relaxed)
-                ));
+                let path = crate::support::Scratch::canonical("row-filter-path");
                 fs::create_dir_all(path.join("parent")).unwrap();
-                Self(yamaa_adapters::canonical_path::canonicalize(path).unwrap())
+                Self(path)
             }
             fn identity(&self, name: &str) -> String {
                 let value = self.0.join(name).to_string_lossy().into_owned();
                 #[cfg(windows)]
                 let value = value.replace('\\', "/");
                 value
-            }
-        }
-        impl Drop for Study {
-            fn drop(&mut self) {
-                fs::remove_dir_all(&self.0).unwrap();
             }
         }
         fn issues(rows: &[Diagnostic]) -> Value {
@@ -1009,24 +950,14 @@ rows:
         }
     }
     mod row_intermediate_operands {
-        use std::{
-            fs,
-            path::PathBuf,
-            sync::atomic::{AtomicUsize, Ordering},
-        };
+        use std::fs;
         use yamaa_adapters::{file_application, specification_report::Identity};
         use yamaa_core::domain_entry::Request;
 
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        struct Study(PathBuf);
+        struct Study(crate::support::Scratch);
         impl Study {
             fn new(source: &str) -> Self {
-                let path = std::env::temp_dir().join(format!(
-                    "yamaa-row-intermediate-operands-{}-{}",
-                    std::process::id(),
-                    NEXT.fetch_add(1, Ordering::Relaxed)
-                ));
-                fs::create_dir(&path).unwrap();
+                let path = crate::support::Scratch::canonical("row-intermediate-operands");
                 fs::write(path.join("spec.yaml"), source).unwrap();
                 fs::write(
                     path.join("pp.csv"),
@@ -1034,7 +965,7 @@ rows:
                 )
                 .unwrap();
                 fs::write(path.join("ex.csv"), "USUBJID,EXSPID,EXROUTE,DATE,DTM,N\nS1,PER1-D1,ORAL,2030-01-01,2030-01-01T08:00:00,1.25\nS2,PER2-D1,INTRAVENOUS,2030-02-01,2030-02-01T09:00:00,-2.25\n").unwrap();
-                Self(yamaa_adapters::canonical_path::canonicalize(path).unwrap())
+                Self(path)
             }
             fn path(&self) -> String {
                 self.0.join("spec.yaml").to_str().unwrap().into()
@@ -1050,11 +981,6 @@ rows:
                     identity(&path),
                 )
                 .unwrap_or_else(|issues| panic!("preparation {issues:?}"))
-            }
-        }
-        impl Drop for Study {
-            fn drop(&mut self) {
-                fs::remove_dir_all(&self.0).unwrap();
             }
         }
         fn identity(path: &str) -> Identity<'_> {
@@ -1179,22 +1105,12 @@ rows:
     }
     mod row_join_keys {
         //! Implicit row joins read raw driver keys; column and named lookups retain their own key scope.
-        use std::{
-            fs,
-            path::PathBuf,
-            sync::atomic::{AtomicUsize, Ordering},
-        };
+        use std::fs;
         use yamaa_adapters::{file_application, specification_report::Identity};
         use yamaa_core::diagnostic::Diagnostic;
         use yamaa_core::domain_entry::Request;
 
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        struct Fixture(PathBuf);
-        impl Drop for Fixture {
-            fn drop(&mut self) {
-                fs::remove_dir_all(&self.0).unwrap();
-            }
-        }
+        struct Fixture(crate::support::Scratch);
         fn rows(issues: &[Diagnostic]) -> yamaa_core::json::Value {
             issues
                 .iter()
@@ -1216,12 +1132,7 @@ rows:
                 .as_array()
                 .unwrap()
             {
-                let fixture = Fixture(std::env::temp_dir().join(format!(
-                    "yamaa-row-join-keys-{}-{}",
-                    std::process::id(),
-                    NEXT.fetch_add(1, Ordering::Relaxed)
-                )));
-                fs::create_dir(&fixture.0).unwrap();
+                let fixture = Fixture(crate::support::Scratch::new("row-join-keys"));
                 let path = fixture.0.join("spec.yaml");
                 fs::write(&path, case["specification"].as_str().unwrap()).unwrap();
                 let path = path.to_str().unwrap();
@@ -1296,21 +1207,14 @@ rows:
         use std::{
             fs,
             path::{Path, PathBuf},
-            sync::atomic::{AtomicUsize, Ordering},
         };
         use yamaa_adapters::{file_application, specification_report::Identity};
         use yamaa_core::domain_entry::Request;
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        struct Study(PathBuf);
+        struct Study(crate::support::Scratch);
         impl Study {
             fn new() -> Self {
-                let path = std::env::temp_dir().join(format!(
-                    "yamaa-scoped-window-checks-{}-{}",
-                    std::process::id(),
-                    NEXT.fetch_add(1, Ordering::Relaxed)
-                ));
-                fs::create_dir(&path).unwrap();
-                Self(yamaa_adapters::canonical_path::canonicalize(path).unwrap())
+                let path = crate::support::Scratch::canonical("scoped-window-checks");
+                Self(path)
             }
             fn benchmark(name: &str) -> (Self, PathBuf) {
                 fn copy(source: &Path, destination: &Path) {
@@ -1350,11 +1254,6 @@ rows:
                     },
                 )
                 .unwrap()
-            }
-        }
-        impl Drop for Study {
-            fn drop(&mut self) {
-                fs::remove_dir_all(&self.0).unwrap();
             }
         }
         #[test]
@@ -1946,31 +1845,16 @@ rows:
     }
     mod temporal_arithmetic {
         //! The same authored conformance vectors run through Rust, installed Python and R.
-        use std::{
-            fs,
-            path::PathBuf,
-            sync::atomic::{AtomicUsize, Ordering},
-        };
+        use std::fs;
         use yamaa_adapters::{file_application, specification_report::Identity};
         use yamaa_core::diagnostic::Diagnostic;
         use yamaa_core::domain_entry::Request;
 
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        struct Fixture(PathBuf);
+        struct Fixture(crate::support::Scratch);
         impl Fixture {
             fn new() -> Self {
-                let path = std::env::temp_dir().join(format!(
-                    "yamaa-retired-odm-temporal-{}-{}",
-                    std::process::id(),
-                    NEXT.fetch_add(1, Ordering::Relaxed)
-                ));
-                fs::create_dir(&path).unwrap();
+                let path = crate::support::Scratch::new("retired-odm-temporal");
                 Self(path)
-            }
-        }
-        impl Drop for Fixture {
-            fn drop(&mut self) {
-                fs::remove_dir_all(&self.0).unwrap();
             }
         }
         fn assert_issues(issues: &[Diagnostic], expected: &yamaa_core::json::Value, name: &str) {
@@ -2063,23 +1947,13 @@ rows:
     }
     mod typed_intermediate_derivations {
         //! Independent YAML, donor bytes and exact saved truth for per-record aggregates.
-        use std::{
-            fs,
-            path::PathBuf,
-            sync::atomic::{AtomicUsize, Ordering},
-        };
+        use std::fs;
         use yamaa_adapters::{file_application, specification_report::Identity};
         use yamaa_core::domain_entry::Request;
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        struct Fixture(PathBuf);
+        struct Fixture(crate::support::Scratch);
         impl Fixture {
             fn new() -> Self {
-                let path = std::env::temp_dir().join(format!(
-                    "yamaa-typed-intermediates-{}-{}",
-                    std::process::id(),
-                    NEXT.fetch_add(1, Ordering::Relaxed)
-                ));
-                fs::create_dir(&path).unwrap();
+                let path = crate::support::Scratch::new("typed-intermediates");
                 Self(path)
             }
             fn run(
@@ -2108,11 +1982,6 @@ rows:
                 assert!(domain.issues().is_empty(), "{:?}", domain.issues());
                 assert!(domain.save().unwrap());
                 fs::read(self.0.join("result.csv")).unwrap()
-            }
-        }
-        impl Drop for Fixture {
-            fn drop(&mut self) {
-                fs::remove_dir_all(&self.0).unwrap();
             }
         }
         #[test]

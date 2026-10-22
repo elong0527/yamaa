@@ -8,25 +8,15 @@
 //! read's own driver decide: a template grouped over another driver leaves
 //! the read scalar. A column-level window instead reads only a driver that
 //! every row template shares, grouped or not (WINDOW-11).
-use std::{
-    fs,
-    path::PathBuf,
-    sync::atomic::{AtomicUsize, Ordering},
-};
+use std::fs;
 use yamaa_adapters::{file_application, specification_report::Identity};
 use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::{domain_entry::Request, json::Value};
 
-struct Fixture(PathBuf);
+struct Fixture(crate::support::Scratch);
 impl Fixture {
     fn new(specification: &str) -> Self {
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        let root = std::env::temp_dir().join(format!(
-            "yamaa-grouped-driver-dataset-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
-        fs::create_dir(&root).unwrap();
+        let root = crate::support::Scratch::new("grouped-driver-dataset");
         fs::write(root.join("spec.yaml"), specification).unwrap();
         fs::write(root.join("clinic.csv"), CLINIC).unwrap();
         fs::write(root.join("home.csv"), HOME).unwrap();
@@ -77,11 +67,6 @@ impl Fixture {
                 })
             })
             .collect()
-    }
-}
-impl Drop for Fixture {
-    fn drop(&mut self) {
-        fs::remove_dir_all(&self.0).unwrap();
     }
 }
 

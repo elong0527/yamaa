@@ -5,25 +5,15 @@
 //! must not read that lookup before its filter, so an intermediate without
 //! `no_match` must not fail `unmatched_key` for it (LOOKUP-12), while A
 //! still completes its keys.
-use std::{
-    fs,
-    path::PathBuf,
-    sync::atomic::{AtomicUsize, Ordering},
-};
+use std::fs;
 use yamaa_adapters::{file_application, specification_report::Identity};
 use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::domain_entry::Request;
 
-struct Fixture(PathBuf);
+struct Fixture(crate::support::Scratch);
 impl Fixture {
     fn new(specification: &str, files: &[(&str, &str)]) -> Self {
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        let root = std::env::temp_dir().join(format!(
-            "yamaa-per-template-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
-        fs::create_dir(&root).unwrap();
+        let root = crate::support::Scratch::new("per-template");
         fs::write(root.join("spec.yaml"), specification).unwrap();
         for (name, body) in files {
             fs::write(root.join(name), body).unwrap();
@@ -54,11 +44,6 @@ impl Fixture {
         assert!(domain.issues().is_empty(), "{:?}", domain.issues());
         assert!(domain.save().unwrap());
         fs::read_to_string(self.0.join(output)).unwrap()
-    }
-}
-impl Drop for Fixture {
-    fn drop(&mut self) {
-        fs::remove_dir_all(&self.0).unwrap();
     }
 }
 

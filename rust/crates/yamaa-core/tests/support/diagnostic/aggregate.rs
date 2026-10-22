@@ -13,9 +13,7 @@ pub(crate) use yamaa_core::{
 
 pub(crate) use crate::support::project_call_compiler as specification_support;
 
-pub(crate) fn text(value: &str) -> V {
-    V::String(value.into())
-}
+pub(crate) use super::text;
 
 pub fn reached() -> BTreeSet<ConditionCode> {
     let group = vec![("D.ID".into(), Value::Missing)];

@@ -17,7 +17,6 @@
 #![cfg(feature = "yaml")]
 
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicUsize, Ordering};
 
 use yamaa::{CancellationToken, ContextValue, Diagnostic, Engine, EngineOptions, HostLanguage};
 
@@ -29,20 +28,13 @@ fn engine() -> Engine {
     ))
 }
 
-static NEXT: AtomicUsize = AtomicUsize::new(0);
-
 /// A study directory outside the current directory, so a location names its
 /// file by its absolute path.
-struct Study(PathBuf);
+struct Study(crate::support::Scratch);
 impl Study {
     fn new() -> Self {
-        let root = std::env::temp_dir().join(format!(
-            "yamaa-issue-locations-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
-        std::fs::create_dir_all(&root).unwrap();
-        Self(yamaa_adapters::canonical_path::canonicalize(root).unwrap())
+        let root = crate::support::Scratch::new("issue-locations");
+        Self(root)
     }
     /// Write `lines`, each ended by LF.
     fn write(&self, name: &str, lines: &[&str]) {
@@ -57,11 +49,6 @@ impl Study {
     /// A file as a location names it: absolute, with forward slashes.
     fn file(&self, name: &str) -> String {
         self.path(name).replace('\\', "/")
-    }
-}
-impl Drop for Study {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
     }
 }
 

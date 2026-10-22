@@ -7,7 +7,6 @@
 //! stale. A run's private measurements say how it got its plan: `compiled`,
 //! `refused` or `reused`; a compiling run's also start with the `preparation`
 //! phase. The host suites and the conformance repeat pass read the same.
-use std::path::{Path, PathBuf};
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
     Arc, Mutex,
@@ -366,15 +365,11 @@ fn a_run_started_from_a_project_function_reuses_the_same_holder() {
 
 /// A local study for project runs: DM, then ADSL reading DM through its
 /// `schema` link.
-struct Study(PathBuf);
+struct Study(crate::support::Scratch);
 impl Study {
     /// An empty directory for a test of its own.
     fn empty(name: &str) -> Self {
-        let root =
-            std::env::temp_dir().join(format!("yamaa-plan-reuse-{name}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&root);
-        std::fs::create_dir_all(&root).unwrap();
-        Self(yamaa_adapters::canonical_path::canonicalize(root).unwrap())
+        Self(crate::support::Scratch::new(&format!("plan-reuse-{name}")))
     }
     fn new(name: &str) -> Self {
         let study = Self::empty(name);
@@ -397,11 +392,6 @@ impl Study {
         #[cfg(windows)]
         let path = path.replace('\\', "/");
         path
-    }
-}
-impl Drop for Study {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(Path::new(&self.0));
     }
 }
 

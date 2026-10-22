@@ -115,11 +115,7 @@ mod file {
             }
         }
 
-        use std::{
-            fs,
-            path::PathBuf,
-            sync::atomic::{AtomicUsize, Ordering},
-        };
+        use std::fs;
         use yamaa_adapters::{
             file_configuration,
             file_preparation::FileSpecification,
@@ -127,31 +123,20 @@ mod file {
         };
         use yamaa_core::application_observer::Scope;
 
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        struct Study(PathBuf);
+        struct Study(crate::support::Scratch);
         impl Study {
             fn new() -> Self {
-                let path = std::env::temp_dir().join(format!(
-                    "yamaa-local-paths-{}-{}",
-                    std::process::id(),
-                    NEXT.fetch_add(1, Ordering::Relaxed)
-                ));
-                fs::create_dir(&path).unwrap();
+                let path = crate::support::Scratch::canonical("local-paths");
                 for name in ["entry", "shared", "outputs"] {
                     fs::create_dir(path.join(name)).unwrap();
                 }
-                Self(yamaa_adapters::canonical_path::canonicalize(path).unwrap())
+                Self(path)
             }
             fn text(&self, name: &str) -> String {
                 self.0.join(name).to_str().unwrap().replace('\\', "/")
             }
             fn resources(&self) -> Resources {
                 Resources::for_entry(&self.text("entry")).unwrap()
-            }
-        }
-        impl Drop for Study {
-            fn drop(&mut self) {
-                let _ = fs::remove_dir_all(&self.0);
             }
         }
 
@@ -688,21 +673,14 @@ mod file {
         use std::{
             fs,
             path::{Path, PathBuf},
-            sync::atomic::{AtomicU64, Ordering},
         };
         use yamaa_adapters::file_define::{Define, PublicationState};
         use yamaa_core::{project_environment::Submission, project_function::Language};
-        static NEXT: AtomicU64 = AtomicU64::new(0);
-        struct Temp(PathBuf);
+        struct Temp(crate::support::Scratch);
         impl Temp {
             fn new() -> Self {
-                let path = std::env::temp_dir().join(format!(
-                    "yamaa-define-{}-{}",
-                    std::process::id(),
-                    NEXT.fetch_add(1, Ordering::Relaxed)
-                ));
-                fs::create_dir_all(&path).unwrap();
-                Self(yamaa_adapters::canonical_path::canonicalize(path).unwrap())
+                let path = crate::support::Scratch::canonical("define");
+                Self(path)
             }
             fn fixture(name: &str, published: bool) -> Self {
                 let this = Self::new();
@@ -871,11 +849,6 @@ mod file {
             assert!(run.save().is_err());
             assert!(!temp.0.join("define.xml").exists());
             assert!(!temp.0.join("lb.json").exists());
-        }
-        impl Drop for Temp {
-            fn drop(&mut self) {
-                let _ = fs::remove_dir_all(&self.0);
-            }
         }
         /// Drop one YAML mapping entry: its header line and every following
         /// line indented deeper than the header, or written at its depth as

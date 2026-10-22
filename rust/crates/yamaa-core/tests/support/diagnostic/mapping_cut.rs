@@ -1,5 +1,6 @@
 #![allow(unused_imports)]
 use super::rendered;
+pub(crate) use super::text;
 pub(crate) use std::collections::BTreeSet;
 pub(crate) use yamaa_core::json::Value as V;
 pub(crate) use yamaa_core::{
@@ -8,9 +9,6 @@ pub(crate) use yamaa_core::{
     table::ValueRef,
     value::Value,
 };
-pub(crate) fn text(s: &str) -> V {
-    V::String(s.into())
-}
 pub fn reached() -> BTreeSet<ConditionCode> {
     let mut reached = BTreeSet::new();
     let mapping = Mapping::new(
@@ -132,6 +130,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     }
     reached
 }
+#[track_caller]
 pub(crate) fn check(
     finding: &Diagnostic,
     phase: &str,
@@ -140,16 +139,5 @@ pub(crate) fn check(
     path: &str,
     context: Vec<(&str, V)>,
 ) {
-    let definition = finding.definition();
-    assert_eq!(
-        (definition.phase, definition.condition, definition.rule),
-        (phase, condition, Some(rule))
-    );
-    assert_eq!(finding.spec_paths, [path]);
-    assert_eq!(
-        finding.context,
-        context.into_iter().map(|(k, v)| (k.into(), v)).collect()
-    );
-    assert_eq!(finding.source_span, None);
-    assert_eq!(finding.operand_route, None);
+    super::expect(finding, phase, condition, Some(rule), &[path], context);
 }
