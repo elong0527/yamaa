@@ -13,6 +13,7 @@ codelists:
           - {value: 1, decode: '<65'}
           - {value: 2, decode: '65-80'}
           - {value: 3, decode: '>80'}
+
 adam:
   specs:
   - spec.yaml

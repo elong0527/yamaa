@@ -1,11 +1,6 @@
 # Fixed creation time is supplied by the submission call in benchmark.yaml.
 yamaa: "1.0"
 type: project
-study:
-  id: CATH
-  name: CATH
-  description: Example study coding demographics with SDTM terminology
-  protocol_name: CATH-01
 codelists:
 - standard:
     name: CDISC/NCI
@@ -25,7 +20,6 @@ codelists:
     - value: U
       decode: Unknown
       alias: C17998
-    data_type: text
 - standard:
     name: CDISC/NCI
     publishing_set: SDTM
@@ -37,19 +31,23 @@ codelists:
     items:
     - value: YEARS
       alias: C29848
-    data_type: text
+study:
+  id: CATH
+  name: CATH
+  description: Example study coding demographics with SDTM terminology
+  protocol_name: CATH-01
+
 sdtm:
+  specs:
+  - spec.yaml
   standards:
   - name: SDTMIG
     version: '3.4'
     status: Final
-  specs:
-  - spec.yaml
   define: define.xml
-  context: Submission
-  source_system_version: '1.0'
   documents:
   - id: acrf
     kind: annotated_crf
     link: acrf.pdf
     title: Annotated Case Report Form
+  source_system_version: '1.0'

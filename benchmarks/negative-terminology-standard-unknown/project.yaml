@@ -16,6 +16,7 @@ codelists:
           - {value: F, decode: Female, alias: C16576}
           - {value: M, decode: Male, alias: C20197}
           - {value: U, decode: Unknown, alias: C17998}
+
 sdtm:
   specs:
   - spec.yaml

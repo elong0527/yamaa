@@ -24,6 +24,7 @@ columns:
     label: Unique Subject Identifier
     derivation: DM.USUBJID
 
+  # yamaa-lint: allow redundant_long_form -- the long form is the fault
   # The full form holds nothing but the formula, so it only repeats the
   # short spelling of the same summary.
   - name: WTMAX

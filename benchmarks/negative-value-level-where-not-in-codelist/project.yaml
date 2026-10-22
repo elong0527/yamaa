@@ -13,6 +13,7 @@ codelists:
           - {value: SYSBP, decode: Systolic Blood Pressure}
           - {value: DIABP, decode: Diastolic Blood Pressure}
           - {value: PULSE, decode: Pulse Rate}
+
 sdtm:
   specs:
   - spec.yaml

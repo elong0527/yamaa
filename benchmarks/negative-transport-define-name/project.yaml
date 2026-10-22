@@ -6,19 +6,19 @@ study:
   name: CATH
   description: Example study submitting demographics in SAS transport
   protocol_name: CATH-01
+
 sdtm:
+  specs:
+  - spec.yaml
   standards:
   - name: SDTMIG
     version: '3.4'
     status: Final
-  specs:
-  - spec.yaml
   define: dm-define.xml
-  transport: xpt
-  context: Submission
-  source_system_version: '1.0'
   documents:
   - id: acrf
     kind: annotated_crf
     link: acrf.pdf
     title: Annotated Case Report Form
+  transport: xpt
+  source_system_version: '1.0'
