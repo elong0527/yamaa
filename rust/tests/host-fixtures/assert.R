@@ -116,7 +116,7 @@ expect_issue_rows <- function(frame, expected, label, columns = NULL) {
         rule = frame$rule[[index]], spec_paths = frame$spec_paths[[index]]),
       list(phase = row$phase, condition = row$condition,
         rule = if (is.null(row$rule)) NA_character_ else row$rule,
-        spec_paths = unlist(row$spec_paths, use.names = FALSE)),
+        spec_paths = as.character(unlist(row$spec_paths, use.names = FALSE))),
       where)
     expect_context(jsonlite::fromJSON(frame$context[[index]], simplifyVector = FALSE),
       row$context, paste0(where, ": its context"))

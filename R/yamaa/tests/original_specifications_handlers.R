@@ -22,7 +22,7 @@ source(file.path(host_fixture_root,"original.R"),local=TRUE)
 reaches <- list(
   inheritance_nulls = function(issues, truth, stage) {
     condition <- truth[[paste0(stage, "_condition")]]
-    if (is.null(condition)) nrow(issues) == 0L else identical(issues$condition[[1]], condition)
+    if (is.null(condition)) nrow(issues) == 0L else nrow(issues) > 0L && identical(issues$condition[[1]], condition)
   },
   typed_intermediates = function(issues, truth, stage) {
     condition <- truth[[paste0(stage, "_condition")]]
