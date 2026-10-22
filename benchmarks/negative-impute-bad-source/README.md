@@ -31,7 +31,7 @@ derivation:
     source: AE.AESTDTC
     month: 1
     day: 1
-    invalid: {literal: null}
+    invalid: null
 ```
 
 The `invalid` outcome applies to text that is not a calendar date or date

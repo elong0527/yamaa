@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
@@ -15,7 +17,6 @@ intermediates:
   - id: RANDOMIZED
     dataset: RAND
     key: {SITEID: EX.SITEID, USUBJID: EX.USUBJID}
-    no_match: null
 
 columns:
   - name: STUDYID

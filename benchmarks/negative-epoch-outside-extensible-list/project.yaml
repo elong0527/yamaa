@@ -1,4 +1,5 @@
-schema_version: '1.0'
+yamaa: "1.0"
+type: project
 codelists:
   - standard:
       name: CDISC/NCI
@@ -12,6 +13,7 @@ codelists:
           - {value: SCREENING}
           - {value: TREATMENT}
           - {value: FOLLOW-UP}
+
 sdtm:
   specs:
   - spec.yaml

@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADLB
 keys: [STUDYID, USUBJID]
 input:
@@ -24,9 +26,7 @@ columns:
   - name: AVALDOUBLED
     type: float
     label: Doubled Analysis Value
-    derivation:
-      compute:
-        expr: "AVAL * 2"
+    derivation: "AVAL * 2"
 
   - name: AVAL
     type: float

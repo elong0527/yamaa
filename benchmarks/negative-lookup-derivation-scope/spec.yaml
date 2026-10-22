@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: SDTM
 domain: VS
 keys: [USUBJID, VSDY, SOURCE]
 input:
@@ -18,7 +20,6 @@ intermediates:
     dataset: WINDOWS
     key: [USUBJID]
     filter: "WINDOWS.LO <= WINDOWS.MEASDY AND WINDOWS.MEASDY <= WINDOWS.HI"
-    no_match: null
     derivations:
       MEASDY: CLINIC.VSDY
 
@@ -42,7 +43,7 @@ rows:
     derivations:
       USUBJID: CLINIC.USUBJID
       VSDY: CLINIC.VSDY
-      SOURCE: {literal: CLINIC}
+      SOURCE: "'CLINIC'"
       VSSTRESN: CLINIC.SYSBP
 
   - id: home
@@ -50,5 +51,5 @@ rows:
     derivations:
       USUBJID: HOME.USUBJID
       VSDY: HOME.VSDY
-      SOURCE: {literal: HOME}
+      SOURCE: "'HOME'"
       VSSTRESN: HOME.SYSBP

@@ -1,7 +1,7 @@
 phase: validation
 condition: unknown_field
 spec_paths:
-  - intermediates[0].derivations.MEASDY.source
+  - intermediates.VISITWIN.derivations.MEASDY.source
 rule: LOOKUP-15
 context:
   identifier: CLINIC.VSDY
