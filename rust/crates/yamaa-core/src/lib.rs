@@ -1,4 +1,5 @@
-//! Shared language semantics, preparation, execution and publication services.
+//! Shared language semantics, preparation and execution services, and the
+//! submission metadata model. The adapters encode and publish files.
 #![forbid(unsafe_code)]
 
 pub mod application_issue;
