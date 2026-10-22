@@ -20,9 +20,7 @@ pub(crate) fn field(name: &str) -> Field {
         stored_type: "int64".into(),
     }
 }
-pub(crate) fn text(value: &str) -> V {
-    V::String(value.into())
-}
+pub(crate) use super::text;
 pub(crate) fn reached() -> BTreeSet<ConditionCode> {
     let mut nested = field("S");
     nested.leaves = 2;

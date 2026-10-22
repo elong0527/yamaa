@@ -1,4 +1,5 @@
 use super::rendered;
+use super::text;
 use std::collections::BTreeSet;
 use yamaa_core::json::Value as V;
 use yamaa_core::{
@@ -10,9 +11,6 @@ use yamaa_core::{
     table::ValueRef,
     temporal::Precision as P,
 };
-fn text(value: &str) -> V {
-    V::String(value.into())
-}
 fn operation(kind: K) -> Imputation {
     Imputation::new(
         kind,

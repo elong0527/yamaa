@@ -8,28 +8,24 @@ pub(crate) use yamaa_core::{
     expression::{compile, CompileError, Context as Field},
 };
 
-pub(crate) fn text(v: &str) -> V {
-    V::String(v.into())
-}
+pub(crate) use super::text;
+#[track_caller]
 pub(crate) fn check(
     finding: Diagnostic,
     expression: &str,
     condition: &str,
     rule: &str,
-    fields: Vec<(&str, V)>,
+    mut fields: Vec<(&str, V)>,
 ) -> ConditionCode {
-    let definition = finding.definition();
-    assert_eq!(
-        (definition.phase, definition.condition, definition.rule),
-        ("validation", condition, Some(rule))
-    );
-    assert_eq!(finding.spec_paths, ["columns.VALUE.derivation.expr"]);
-    let mut expected: Context = fields.into_iter().map(|(k, v)| (k.into(), v)).collect();
-    expected.insert("expr".into(), text(expression));
-    assert_eq!(finding.context, expected);
-    assert_eq!(finding.source_span, None);
-    assert_eq!(finding.operand_route, None);
-    rendered(&finding)
+    fields.push(("expr", text(expression)));
+    super::expect(
+        &finding,
+        "validation",
+        condition,
+        Some(rule),
+        &["columns.VALUE.derivation.expr"],
+        fields,
+    )
 }
 /// One syntax condition, one refused-construct cause and one refused-function
 /// cause serve compute and aggregate alike.

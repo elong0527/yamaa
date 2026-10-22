@@ -1,5 +1,4 @@
 //! Owned causes reached by the compiler and eager donor uniqueness descriptor.
-use super::rendered;
 use crate::support::document::Tree;
 use crate::support::resolved::intermediates;
 use std::collections::BTreeSet;
@@ -141,9 +140,8 @@ fn read_model(self_target: bool) -> SpecificationDocument {
         .unwrap()
         .unwrap()
 }
-fn text(text: &str) -> V {
-    V::String(text.into())
-}
+use super::text;
+#[track_caller]
 fn check(
     d: Diagnostic,
     phase: &str,
@@ -152,22 +150,7 @@ fn check(
     path: &str,
     context: Vec<(&str, V)>,
 ) -> ConditionCode {
-    let definition = d.definition();
-    assert_eq!(
-        (definition.phase, definition.condition, definition.rule),
-        (phase, condition, Some(rule))
-    );
-    assert_eq!(d.spec_paths, [path]);
-    assert_eq!(
-        d.context,
-        context
-            .into_iter()
-            .map(|(name, value)| (name.into(), value))
-            .collect()
-    );
-    assert_eq!(d.source_span, None);
-    assert_eq!(d.operand_route, None);
-    rendered(&d)
+    super::expect(&d, phase, condition, Some(rule), &[path], context)
 }
 pub(crate) fn reached() -> BTreeSet<ConditionCode> {
     let src = TableSchema::new(vec![Column {
