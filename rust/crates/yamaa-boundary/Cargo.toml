@@ -1,0 +1,26 @@
+[package]
+name = "yamaa-boundary"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish.workspace = true
+autotests = false
+
+# No dependencies: the boundary depends on nothing in the workspace, and the
+# host bindings link it beside the facade (rust/interface/README.md).
+
+[dev-dependencies]
+# The handshake family decodes the shared host truth,
+# rust/tests/host-fixtures/cases.json; the adapters already lock serde_json.
+serde_json = "1.0.145"
+
+[lints]
+workspace = true
+
+# The integration tests are one binary: tests/main.rs declares each family
+# file under tests/ as a module and checks that none is left out (#3556).
+[[test]]
+name = "main"
+path = "tests/main.rs"

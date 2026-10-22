@@ -6,6 +6,7 @@ use std::sync::{Arc, Mutex};
 use yamaa::{Action, Engine, EngineOptions, Error, Failure, HostLanguage};
 
 use crate::arrow_bridge::Table;
+use crate::interface::gate;
 
 pyo3::create_exception!(yamaa, _Error, PyException);
 
@@ -28,13 +29,15 @@ fn raise_error(py: Python<'_>, action: Action<'_>, error: Error) -> PyErr {
     raise(py, Failure::from_error(action, &error))
 }
 
+/// The engine of one call, behind the interface gate.
 // `Python::version` builds on the PyO3 0.27.2 floor; 0.29 renamed it `version_str`.
 #[allow(deprecated)]
-fn engine(py: Python<'_>) -> Engine {
-    Engine::new(
+fn engine(py: Python<'_>) -> PyResult<Engine> {
+    gate()?;
+    Ok(Engine::new(
         EngineOptions::new(HostLanguage::Python, "python".into(), py.version().into())
             .with_functions(Arc::new(crate::project_activation::Port)),
-    )
+    ))
 }
 
 fn poisoned() -> PyErr {
@@ -132,7 +135,7 @@ impl Check {
 #[pyo3(signature=(specification, project=None))]
 pub fn _spec_check(py: Python<'_>, specification: &str, project: Option<&str>) -> PyResult<Check> {
     crate::interrupt::run(py, |token| {
-        engine(py)
+        engine(py)?
             .spec_check(specification, project, token)
             .map(Check::new)
             .map_err(|error| raise_error(py, Action::Read(specification), error))
@@ -142,14 +145,16 @@ pub fn _spec_check(py: Python<'_>, specification: &str, project: Option<&str>) -
 /// The printed text of a lazy specification object, which has read nothing
 /// (D37): `yamaa spec <path>`, with the path as given.
 #[pyfunction]
-pub fn _spec_summary(specification: &str) -> String {
-    yamaa::Summary::spec(specification).to_string()
+pub fn _spec_summary(specification: &str) -> PyResult<String> {
+    gate()?;
+    Ok(yamaa::Summary::spec(specification).to_string())
 }
 
 /// The printed text of a lazy project object: `yamaa project <path>`.
 #[pyfunction]
-pub fn _project_summary(project: &str) -> String {
-    yamaa::Summary::project(project).to_string()
+pub fn _project_summary(project: &str) -> PyResult<String> {
+    gate()?;
+    Ok(yamaa::Summary::project(project).to_string())
 }
 
 /// The compiled plans one lazy specification or project object keeps between
@@ -161,10 +166,11 @@ pub struct Plans {
 
 /// An empty holder for one lazy object. Creating it reads nothing.
 #[pyfunction]
-pub fn _plans() -> Plans {
-    Plans {
+pub fn _plans() -> PyResult<Plans> {
+    gate()?;
+    Ok(Plans {
         inner: yamaa::Plans::new(),
-    }
+    })
 }
 
 #[pyfunction]
@@ -176,7 +182,7 @@ pub fn _spec_run(
     plans: Option<PyRef<'_, Plans>>,
 ) -> PyResult<Run> {
     crate::interrupt::run(py, |token| {
-        let engine = engine(py);
+        let engine = engine(py)?;
         let run = match plans.as_deref() {
             Some(plans) => engine.spec_run_reusing(specification, project, &plans.inner, token),
             None => engine.spec_run(specification, project, token),
@@ -194,7 +200,7 @@ pub fn _spec_resolve<'py>(
     specification: &str,
     project: Option<&str>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let value = engine(py)
+    let value = engine(py)?
         .spec_resolve(specification, project)
         .map_err(|failure| raise(py, failure))?;
     crate::context_values::context_value(py, &value)
@@ -219,7 +225,7 @@ pub fn _read_odm(
     if let Some(member) = archive_member {
         options = options.with_archive_member(member);
     }
-    engine(py)
+    engine(py)?
         .read_odm(source, &options)
         .map(|table| Table::from(&table))
         .map_err(|error| raise_error(py, Action::Read(source), error))
@@ -230,6 +236,7 @@ pub fn _read_odm(
 #[pyfunction]
 #[pyo3(signature=(paths, fix=false))]
 pub fn _lint(py: Python<'_>, paths: Vec<String>, fix: bool) -> PyResult<Table> {
+    gate()?;
     yamaa::lint(&paths, fix)
         .map(|lint| Table::from(&lint.table()))
         .map_err(|failure| raise(py, failure))
@@ -239,6 +246,7 @@ pub fn _lint(py: Python<'_>, paths: Vec<String>, fix: bool) -> PyResult<Table> {
 /// type the facade does not know raises `_Error`.
 #[pyfunction]
 pub fn _schema(py: Python<'_>, file_type: &str) -> PyResult<String> {
+    gate()?;
     yamaa::schema(file_type).map_err(|failure| raise(py, failure))
 }
 
@@ -297,6 +305,7 @@ fn info_dict<'py>(py: Python<'py>, info: &yamaa::Info) -> PyResult<Bound<'py, Py
 /// interpreter (D41, P-INFO-1).
 #[pyfunction]
 pub fn _info(py: Python<'_>) -> PyResult<Bound<'_, PyDict>> {
+    gate()?;
     info_dict(
         py,
         &yamaa::info(yamaa::Host::Python, Some(&python_version(py))),
@@ -306,10 +315,11 @@ pub fn _info(py: Python<'_>) -> PyResult<Bound<'_, PyDict>> {
 /// Run every selftest case through this engine as the Python host, with the
 /// running interpreter's version.
 #[pyfunction]
-pub fn _selftest(py: Python<'_>) -> SelfTest {
-    SelfTest {
+pub fn _selftest(py: Python<'_>) -> PyResult<SelfTest> {
+    gate()?;
+    Ok(SelfTest {
         inner: yamaa::selftest(yamaa::Host::Python, Some(&python_version(py))),
-    }
+    })
 }
 
 fn project_poisoned() -> PyErr {
@@ -424,7 +434,7 @@ impl Submission {
 
 #[pyfunction]
 pub fn _project_spec(py: Python<'_>, project: &str, name: &str) -> PyResult<String> {
-    engine(py)
+    engine(py)?
         .project_spec(project, name)
         .map_err(|failure| raise(py, failure))
 }
@@ -432,7 +442,7 @@ pub fn _project_spec(py: Python<'_>, project: &str, name: &str) -> PyResult<Stri
 /// The listed specifications' names in run order, read without data (D45).
 #[pyfunction]
 pub fn _project_names(py: Python<'_>, project: &str) -> PyResult<Vec<String>> {
-    engine(py)
+    engine(py)?
         .project_names(project)
         .map_err(|failure| raise(py, failure))
 }
@@ -440,7 +450,7 @@ pub fn _project_names(py: Python<'_>, project: &str) -> PyResult<Vec<String>> {
 #[pyfunction]
 pub fn _project_check(py: Python<'_>, project: &str) -> PyResult<Check> {
     crate::interrupt::run(py, |token| {
-        engine(py)
+        engine(py)?
             .project_check(project, token)
             .map(Check::new)
             .map_err(|error| raise_error(py, Action::Read(project), error))
@@ -456,7 +466,7 @@ pub fn _project_run(
     plans: Option<PyRef<'_, Plans>>,
 ) -> PyResult<ProjectRun> {
     crate::interrupt::run(py, |token| {
-        let engine = engine(py);
+        let engine = engine(py)?;
         let runs = match plans.as_deref() {
             Some(plans) => engine.project_run_reusing(project, section, &plans.inner, token),
             None => engine.project_run(project, section, token),
@@ -478,7 +488,7 @@ pub fn _project_submission(
     created: Option<&str>,
 ) -> PyResult<Submission> {
     crate::interrupt::run(py, |token| {
-        let submission = engine(py)
+        let submission = engine(py)?
             .project_submission(project, section, created, yamaa::VERSION, token)
             // Only an unknown section refuses the call with issues.
             .map_err(|error| raise_error(py, Action::Select(section.unwrap_or_default()), error))?;

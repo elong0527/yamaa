@@ -1,0 +1,89 @@
+//! The interface handshake of the Python binding and the gate that every
+//! native function passes (`rust/interface/README.md`, "Version and feature
+//! handshake").
+//!
+//! The generated `yamaa/__init__.py` calls `_interface_handshake` right after
+//! importing this module, before any other native call. Until a negotiation
+//! is accepted, every other module function refuses with a `RuntimeError`;
+//! a result handle only comes from such a function, so its methods need no
+//! gate of their own.
+use pyo3::{
+    exceptions::PyRuntimeError,
+    prelude::*,
+    types::{PyBool, PyDict, PyInt, PyList, PyString, PyTuple},
+};
+use yamaa_boundary::{EngineFacts, Gate, Outcome, Value};
+
+/// The gate, which the first accepted handshake opens.
+static GATE: Gate = Gate::new();
+
+/// Refuse a native call until the interface handshake succeeds, with the
+/// binding's ordinary boundary refusal, as a busy handle is refused.
+pub(crate) fn gate() -> PyResult<()> {
+    GATE.pass()
+        .map_err(|closed| PyRuntimeError::new_err(closed.to_string()))
+}
+
+/// Answer an interface request: the accepted record, or the refusal
+/// envelope. The first acceptance opens the gate; a later call answers its
+/// request and changes nothing.
+#[pyfunction]
+pub fn _interface_handshake<'py>(
+    py: Python<'py>,
+    request: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyDict>> {
+    // The engine information names no host version, which nothing here reads.
+    let info = yamaa::info(yamaa::Host::Python, None);
+    let engine = EngineFacts::new(&info.features, yamaa::VERSION, &info.language_versions);
+    let record = PyDict::new(py);
+    match GATE.negotiate(&value(request), &engine) {
+        Outcome::Accepted(accepted) => {
+            record.set_item("accepted", true)?;
+            record.set_item("version", accepted.version)?;
+            record.set_item("enabled", accepted.enabled)?;
+            record.set_item("supported", accepted.supported)?;
+            record.set_item("core_version", accepted.core_version)?;
+            record.set_item("language_versions", accepted.language_versions)?;
+        }
+        Outcome::Refused(refusal) => {
+            record.set_item("accepted", false)?;
+            record.set_item("requested_version", refusal.requested_version)?;
+            record.set_item("supported_version", refusal.supported_version)?;
+            record.set_item("reason", refusal.reason.as_str())?;
+            record.set_item("missing_features", refusal.missing_features)?;
+        }
+    }
+    Ok(record)
+}
+
+/// A request as the boundary reads it: an `int` within 64 bits that is not
+/// a `bool` is an integer, a `str` text, a list or tuple a sequence and a
+/// dict whose keys are all `str` a mapping; anything else is no field of a
+/// request.
+fn value(object: &Bound<'_, PyAny>) -> Value {
+    if object.is_instance_of::<PyBool>() {
+        Value::Other
+    } else if let Ok(integer) = object.cast::<PyInt>() {
+        integer
+            .extract::<i64>()
+            .map_or(Value::Other, Value::Integer)
+    } else if let Ok(text) = object.cast::<PyString>() {
+        text.to_str()
+            .map_or(Value::Other, |text| Value::Text(text.to_owned()))
+    } else if let Ok(list) = object.cast::<PyList>() {
+        Value::List(list.iter().map(|item| value(&item)).collect())
+    } else if let Ok(tuple) = object.cast::<PyTuple>() {
+        Value::List(tuple.iter().map(|item| value(&item)).collect())
+    } else if let Ok(mapping) = object.cast::<PyDict>() {
+        mapping
+            .iter()
+            .map(|(key, item)| {
+                let key = key.cast::<PyString>().ok()?.to_str().ok()?.to_owned();
+                Some((key, value(&item)))
+            })
+            .collect::<Option<Vec<_>>>()
+            .map_or(Value::Other, Value::Map)
+    } else {
+        Value::Other
+    }
+}

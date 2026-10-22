@@ -862,8 +862,8 @@ notices remain in the distributed `LICENSE-YAML.txt`.
 
 `tools/staging/engine_bundle.py` stages each host's engine source bundle,
 from which both source packages build (#3030 D55). The bundle holds the
-engine crates `yamaa-core`, `yamaa-adapters` and `yamaa` with that host's
-binding crate; the canonical workspace manifest with `crates/*` as its
+engine crates `yamaa-core`, `yamaa-adapters` and `yamaa` with `yamaa-boundary`
+and that host's binding crate; the canonical workspace manifest with `crates/*` as its
 members, which in the bundle are exactly those crates, and with the profiles
 that the host builds with, so that the R bundle's leaves out
 `[profile.dist]`, which only the wheels and the command-line binaries

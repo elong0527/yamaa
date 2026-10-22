@@ -1376,6 +1376,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "yamaa-boundary"
+version = "1.0.0-rc.1"
+dependencies = [
+ "serde_json",
+]
+
+[[package]]
 name = "yamaa-cli"
 version = "1.0.0-rc.1"
 dependencies = [
@@ -1403,6 +1410,7 @@ dependencies = [
  "pyo3",
  "pyo3-build-config",
  "yamaa",
+ "yamaa-boundary",
 ]
 
 [[package]]
@@ -1411,6 +1419,7 @@ version = "1.0.0-rc.1"
 dependencies = [
  "extendr-api",
  "yamaa",
+ "yamaa-boundary",
 ]
 
 [[package]]

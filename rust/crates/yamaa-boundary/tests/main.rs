@@ -1,0 +1,43 @@
+//! Every integration test of `yamaa-boundary`, in one binary.
+//!
+//! Each file under `tests/` holds one family and is a module here, so the
+//! families link into one executable (#3556). A new family file gets its
+//! `mod` line below, which `every_family_file_is_declared` requires.
+
+mod support;
+
+mod handshake;
+
+/// A file under `tests/` that is neither a module here nor its own `[[test]]`
+/// in the manifest would never run (#3556).
+#[test]
+fn every_family_file_is_declared() {
+    let modules = include_str!("main.rs");
+    let manifest = include_str!("../Cargo.toml");
+    let tests = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests");
+    let mut undeclared = Vec::new();
+    for entry in std::fs::read_dir(tests).unwrap() {
+        let path = entry.unwrap().path();
+        let name = path.file_name().unwrap().to_str().unwrap().to_owned();
+        let module = match name.strip_suffix(".rs") {
+            Some("main") => continue,
+            Some(stem) => stem.to_owned(),
+            None if path.join("mod.rs").is_file() => name.clone(),
+            None => continue,
+        };
+        let here = modules
+            .lines()
+            .any(|line| line.trim() == format!("mod {module};"));
+        let own = manifest
+            .lines()
+            .any(|line| line.trim() == format!("path = \"tests/{name}\""));
+        if here == own {
+            undeclared.push(name);
+        }
+    }
+    undeclared.sort();
+    assert!(
+        undeclared.is_empty(),
+        "declare each file once, as a module here or as its own [[test]]: {undeclared:?}"
+    );
+}

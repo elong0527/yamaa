@@ -7053,6 +7053,139 @@
           }
         ]
       }
+    },
+    "interface": {
+      "request": {"version": "{version}", "required": ["structured_records", "arrow_c_stream", "plan_reuse"], "optional": ["format_yaml", "format_parquet", "format_readstat", "format_odm"]},
+      "accepted": {"accepted": true, "version": "{version}", "enabled": ["structured_records", "arrow_c_stream", "plan_reuse", "format_yaml", "format_parquet", "format_readstat", "format_odm"], "supported": ["structured_records", "arrow_c_stream", "plan_reuse", "format_yaml", "format_parquet", "format_readstat", "format_odm"], "core_version": "{core_version}", "language_versions": ["1.0"]},
+      "messages": {
+        "version_mismatch": "yamaa's native module has interface version {supported_version}, but its code needs version {requested_version}: reinstall yamaa",
+        "malformed_request": "yamaa's native module refused its code's interface request as malformed: reinstall yamaa",
+        "missing_feature": "yamaa's native module lacks the interface features {missing_features} that its code needs: reinstall yamaa",
+        "missing_interface": "yamaa's native module has no interface handshake, but its code needs interface version {requested_version}: reinstall yamaa"
+      },
+      "gate_message": "yamaa's native module has not negotiated its interface: load it through the yamaa package, which negotiates before any other call",
+      "cases": [
+        {
+          "case": "every required identifier and no optional one",
+          "request": {"version": "{version}", "required": ["structured_records", "arrow_c_stream", "plan_reuse"], "optional": []},
+          "outcome": {"accepted": true, "version": "{version}", "enabled": ["structured_records", "arrow_c_stream", "plan_reuse"], "supported": ["structured_records", "arrow_c_stream", "plan_reuse", "format_yaml", "format_parquet", "format_readstat", "format_odm"], "core_version": "{core_version}", "language_versions": ["1.0"]}
+        },
+        {
+          "case": "an unknown optional identifier stays disabled",
+          "request": {"version": "{version}", "required": ["structured_records", "arrow_c_stream", "plan_reuse"], "optional": ["batch_stream", "format_odm"]},
+          "outcome": {"accepted": true, "version": "{version}", "enabled": ["structured_records", "arrow_c_stream", "plan_reuse", "format_odm"], "supported": ["structured_records", "arrow_c_stream", "plan_reuse", "format_yaml", "format_parquet", "format_readstat", "format_odm"], "core_version": "{core_version}", "language_versions": ["1.0"]}
+        },
+        {
+          "case": "optional identifiers are enabled in request order",
+          "request": {"version": "{version}", "required": ["structured_records", "arrow_c_stream", "plan_reuse"], "optional": ["format_odm", "format_yaml"]},
+          "outcome": {"accepted": true, "version": "{version}", "enabled": ["structured_records", "arrow_c_stream", "plan_reuse", "format_odm", "format_yaml"], "supported": ["structured_records", "arrow_c_stream", "plan_reuse", "format_yaml", "format_parquet", "format_readstat", "format_odm"], "core_version": "{core_version}", "language_versions": ["1.0"]}
+        },
+        {
+          "case": "a required format is enabled as a capability is",
+          "request": {"version": "{version}", "required": ["structured_records", "arrow_c_stream", "plan_reuse", "format_parquet"], "optional": ["format_yaml"]},
+          "outcome": {"accepted": true, "version": "{version}", "enabled": ["structured_records", "arrow_c_stream", "plan_reuse", "format_parquet", "format_yaml"], "supported": ["structured_records", "arrow_c_stream", "plan_reuse", "format_yaml", "format_parquet", "format_readstat", "format_odm"], "core_version": "{core_version}", "language_versions": ["1.0"]}
+        },
+        {
+          "case": "a request for the next version is a mismatch",
+          "request": {"version": "{next_version}", "required": ["structured_records", "arrow_c_stream", "plan_reuse"], "optional": []},
+          "outcome": {"accepted": false, "requested_version": "{next_version}", "supported_version": "{version}", "reason": "version_mismatch", "missing_features": []}
+        },
+        {
+          "case": "the largest 32-bit version is a mismatch",
+          "request": {"version": 4294967295, "required": ["structured_records", "arrow_c_stream", "plan_reuse"], "optional": []},
+          "outcome": {"accepted": false, "requested_version": 4294967295, "supported_version": "{version}", "reason": "version_mismatch", "missing_features": []}
+        },
+        {
+          "case": "the version is compared before any list is read",
+          "request": {"version": "{next_version}", "required": [1, 1], "optional": "format_yaml", "extra": true},
+          "outcome": {"accepted": false, "requested_version": "{next_version}", "supported_version": "{version}", "reason": "version_mismatch", "missing_features": []}
+        },
+        {
+          "case": "an unknown required identifier is missing",
+          "request": {"version": "{version}", "required": ["structured_records", "arrow_c_stream", "plan_reuse", "batch_stream"], "optional": []},
+          "outcome": {"accepted": false, "requested_version": "{version}", "supported_version": "{version}", "reason": "missing_feature", "missing_features": ["batch_stream"]}
+        },
+        {
+          "case": "missing identifiers are named in request order",
+          "request": {"version": "{version}", "required": ["zeta_stream", "structured_records", "alpha_stream"], "optional": []},
+          "outcome": {"accepted": false, "requested_version": "{version}", "supported_version": "{version}", "reason": "missing_feature", "missing_features": ["zeta_stream", "alpha_stream"]}
+        },
+        {
+          "case": "a zero version is malformed",
+          "request": {"version": 0, "required": ["structured_records", "arrow_c_stream", "plan_reuse"], "optional": []},
+          "outcome": {"accepted": false, "requested_version": null, "supported_version": "{version}", "reason": "malformed_request", "missing_features": []}
+        },
+        {
+          "case": "a negative version is malformed",
+          "request": {"version": -1, "required": ["structured_records", "arrow_c_stream", "plan_reuse"], "optional": []},
+          "outcome": {"accepted": false, "requested_version": null, "supported_version": "{version}", "reason": "malformed_request", "missing_features": []}
+        },
+        {
+          "case": "a version beyond 32 bits is malformed",
+          "request": {"version": 4294967296, "required": ["structured_records", "arrow_c_stream", "plan_reuse"], "optional": []},
+          "outcome": {"accepted": false, "requested_version": null, "supported_version": "{version}", "reason": "malformed_request", "missing_features": []}
+        },
+        {
+          "case": "a boolean version is malformed",
+          "request": {"version": true, "required": ["structured_records", "arrow_c_stream", "plan_reuse"], "optional": []},
+          "outcome": {"accepted": false, "requested_version": null, "supported_version": "{version}", "reason": "malformed_request", "missing_features": []}
+        },
+        {
+          "case": "a text version is malformed",
+          "request": {"version": "1", "required": ["structured_records", "arrow_c_stream", "plan_reuse"], "optional": []},
+          "outcome": {"accepted": false, "requested_version": null, "supported_version": "{version}", "reason": "malformed_request", "missing_features": []}
+        },
+        {
+          "case": "a fractional version is malformed",
+          "request": {"version": 1.5, "required": ["structured_records", "arrow_c_stream", "plan_reuse"], "optional": []},
+          "outcome": {"accepted": false, "requested_version": null, "supported_version": "{version}", "reason": "malformed_request", "missing_features": []}
+        },
+        {
+          "case": "a null version is malformed",
+          "request": {"version": null, "required": ["structured_records", "arrow_c_stream", "plan_reuse"], "optional": []},
+          "outcome": {"accepted": false, "requested_version": null, "supported_version": "{version}", "reason": "malformed_request", "missing_features": []}
+        },
+        {
+          "case": "a request without a version is malformed",
+          "request": {"required": ["structured_records", "arrow_c_stream", "plan_reuse"], "optional": []},
+          "outcome": {"accepted": false, "requested_version": null, "supported_version": "{version}", "reason": "malformed_request", "missing_features": []}
+        },
+        {
+          "case": "a request that is not a mapping is malformed",
+          "request": ["structured_records"],
+          "outcome": {"accepted": false, "requested_version": null, "supported_version": "{version}", "reason": "malformed_request", "missing_features": []}
+        },
+        {
+          "case": "an identifier twice within required is malformed",
+          "request": {"version": "{version}", "required": ["structured_records", "structured_records"], "optional": []},
+          "outcome": {"accepted": false, "requested_version": "{version}", "supported_version": "{version}", "reason": "malformed_request", "missing_features": []}
+        },
+        {
+          "case": "an identifier in both lists is malformed",
+          "request": {"version": "{version}", "required": ["structured_records", "arrow_c_stream", "plan_reuse"], "optional": ["plan_reuse"]},
+          "outcome": {"accepted": false, "requested_version": "{version}", "supported_version": "{version}", "reason": "malformed_request", "missing_features": []}
+        },
+        {
+          "case": "an unknown key is malformed",
+          "request": {"version": "{version}", "required": ["structured_records", "arrow_c_stream", "plan_reuse"], "optional": [], "extra": []},
+          "outcome": {"accepted": false, "requested_version": "{version}", "supported_version": "{version}", "reason": "malformed_request", "missing_features": []}
+        },
+        {
+          "case": "a request without optional is malformed",
+          "request": {"version": "{version}", "required": ["structured_records", "arrow_c_stream", "plan_reuse"]},
+          "outcome": {"accepted": false, "requested_version": "{version}", "supported_version": "{version}", "reason": "malformed_request", "missing_features": []}
+        },
+        {
+          "case": "an identifier outside the grammar is malformed",
+          "request": {"version": "{version}", "required": ["structured_records", "arrow_c_stream", "plan_reuse"], "optional": ["Format_YAML"]},
+          "outcome": {"accepted": false, "requested_version": "{version}", "supported_version": "{version}", "reason": "malformed_request", "missing_features": []}
+        },
+        {
+          "case": "a list that holds a number is malformed",
+          "request": {"version": "{version}", "required": ["structured_records", "arrow_c_stream", "plan_reuse", 1], "optional": []},
+          "outcome": {"accepted": false, "requested_version": "{version}", "supported_version": "{version}", "reason": "malformed_request", "missing_features": []}
+        }
+      ]
     }
   }
 }

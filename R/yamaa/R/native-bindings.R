@@ -188,3 +188,63 @@
 .native_selftest_summary <- function(handle) {
   .Call(wrap__selftest_summary, handle)
 }
+
+.native_interface_handshake <- function(request) {
+  .Call(wrap__interface_handshake, request)
+}
+
+# The interface handshake (rust/interface/README.md): .onLoad sends this
+# request before any other native call, and a refusal stops the load.
+.interface_request <- list(
+  version = 1L,
+  required = c("structured_records", "arrow_c_stream", "plan_reuse"),
+  optional = c("format_yaml", "format_parquet", "format_readstat", "format_odm")
+)
+
+# One message per reason, filled from the refusal envelope.
+.interface_messages <- c(
+  version_mismatch = "yamaa's native module has interface version {supported_version}, but its code needs version {requested_version}: reinstall yamaa",
+  malformed_request = "yamaa's native module refused its code's interface request as malformed: reinstall yamaa",
+  missing_feature = "yamaa's native module lacks the interface features {missing_features} that its code needs: reinstall yamaa",
+  missing_interface = "yamaa's native module has no interface handshake, but its code needs interface version {requested_version}: reinstall yamaa"
+)
+
+# The yamaa_interface_error of a refused handshake, carrying the
+# envelope's fields.
+.interface_error <- function(outcome) {
+  message <- .interface_messages[[outcome$reason]]
+  for (field in c("requested_version", "supported_version")) {
+    if (!is.null(outcome[[field]])) {
+      message <- gsub(paste0("{", field, "}"),
+        format(outcome[[field]], scientific = FALSE), message, fixed = TRUE)
+    }
+  }
+  message <- gsub("{missing_features}",
+    paste(outcome$missing_features, collapse = ", "), message, fixed = TRUE)
+  structure(c(list(message = message, call = NULL), outcome),
+    class = c("yamaa_interface_error", "error", "condition"))
+}
+
+# Negotiate through `routine`, which gives the function that calls one of
+# this package's native routines, or NULL where its library has none.
+.interface_negotiate <- function(routine) {
+  handshake <- routine("interface_handshake")
+  if (is.null(handshake)) {
+    outcome <- list(accepted = FALSE, requested_version = .interface_request$version,
+      supported_version = NULL, reason = "missing_interface",
+      missing_features = character())
+  } else {
+    outcome <- .reply(handshake(.interface_request))
+  }
+  if (!isTRUE(outcome$accepted)) stop(.interface_error(outcome))
+  invisible(outcome)
+}
+
+.onLoad <- function(libname, pkgname) {
+  namespace <- topenv()
+  .interface_negotiate(function(name) {
+    if (exists(paste0("wrap__", name), envir = namespace, inherits = FALSE)) {
+      get(paste0(".native_", name), envir = namespace, inherits = FALSE)
+    }
+  })
+}

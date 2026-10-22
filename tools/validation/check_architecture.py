@@ -3,9 +3,10 @@
 Two rules hold for the Rust workspace under `rust/`:
 
 - **Crate edges.** Core depends on nothing else in the workspace, the
-  adapters depend on core, the facade composes the adapters and core, and
-  each host (the Python and R bindings and the command line) depends on the
-  facade only. Every dependency table counts: normal, build and development
+  adapters depend on core, the facade composes the adapters and core, the
+  boundary that the host bindings negotiate through depends on nothing else
+  in the workspace, and each host (the Python and R bindings and the command
+  line) depends on the facade and the boundary only. Every dependency table counts: normal, build and development
   dependencies, on every target, under any rename, including a rename that a
   member inherits from `[workspace.dependencies]`. A vendored crate outside
   the workspace, such as the adapters' YAML parser, is outside the rule, and
@@ -46,6 +47,7 @@ LAYER = {
     "yamaa-core": "core",
     "yamaa-adapters": "adapters",
     "yamaa": "facade",
+    "yamaa-boundary": "boundary",
     "yamaa-cli": "host",
     "yamaa-python": "host",
     "yamaa-r": "host",
@@ -55,13 +57,15 @@ ALLOWED = {
     "core": frozenset(),
     "adapters": frozenset({"core"}),
     "facade": frozenset({"adapters", "core"}),
-    "host": frozenset({"facade"}),
+    "boundary": frozenset(),
+    "host": frozenset({"facade", "boundary"}),
 }
 RULE = {
     "core": "core depends on nothing else in the workspace",
     "adapters": "the adapters depend on core alone",
     "facade": "the facade depends on the adapters and core alone",
-    "host": "a host depends on the facade alone",
+    "boundary": "the boundary depends on nothing else in the workspace",
+    "host": "a host depends on the facade and the boundary alone",
 }
 # Cargo still reads the underscore spellings of the last two tables.
 DEPENDENCY_TABLES = (

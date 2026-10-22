@@ -1019,7 +1019,10 @@
         "python/tests/installed/installed_longitudinal_capacity.py",
         "R/yamaa/tests/longitudinal_capacity.R",
         "python/tests/installed/installed_column_ceilings.py",
-        "R/yamaa/tests/column_ceilings.R"
+        "R/yamaa/tests/column_ceilings.R",
+        "rust/crates/yamaa-boundary/tests/handshake.rs",
+        "python/tests/installed/installed_interface.py",
+        "R/yamaa/tests/interface.R"
       ]
     },
     {
