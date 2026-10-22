@@ -1,10 +1,7 @@
 # Installed 1,024/1,025 controls for every width route (#2299).
 library(yamaa)
-# save() returns the absolute paths it wrote, invisibly, with forward slashes,
-# in publication order (D38); each one exists once written.
-returns_paths <- function(paths) is.character(paths) && length(paths) > 0L && !anyNA(paths) &&
-  all(grepl("^(/|[[:alpha:]]:/)", paths)) && !any(grepl("\\", paths, fixed = TRUE)) &&
-  all(file.exists(paths))
+host_fixture_root <- normalizePath("host-fixtures", winslash = "/", mustWork = TRUE)
+source(file.path(host_fixture_root, "assert.R"), local = TRUE)
 # arrow and jsonlite are suggested packages, each used only where it is
 # installed. Without jsonlite, which decodes the project route's issues,
 # the capacity refusals are compared on the specification route alone;
@@ -37,14 +34,16 @@ operations <- function(project) {
 # its own source operand. The specification alone adds neither.
 route_issues <- function(issues, spec, project) {
   if (!has_jsonlite) {
-    stopifnot(!project)
+    stopifnot("without jsonlite only the specification route runs" = !project)
     return(issues)
   }
   issues$context <- vapply(issues$context, function(text) {
     context <- jsonlite::fromJSON(text, simplifyVector = FALSE)
-    stopifnot(identical(!is.null(context$entry), project))
+    expect_identical(!is.null(context$entry), project,
+      paste("the context names an entry exactly on the project route:", text))
     if (!project) return(text)
-    stopifnot(endsWith(context$entry, paste0("/", basename(spec))), !is.null(context$source))
+    stopifnot("the entry is the listed specification, and a source is named" =
+      endsWith(context$entry, paste0("/", basename(spec))) && !is.null(context$source))
     if (identical(context$source, context$entry)) context$source <- NULL
     context$entry <- NULL
     as.character(jsonlite::toJSON(context, auto_unbox = TRUE, digits = NA))
@@ -88,45 +87,41 @@ write_case <- function(root, columns = 1L, fields = 1L, typed = FALSE,
 }
 
 assert_build <- function(spec, width = 1L, project = FALSE) {
+  label <- sprintf("%s (width %d, %s route)", spec, width, if (project) "project" else "specification")
   if (project) {
-    stopifnot(nrow(project_of(spec)$check()$issues) == 0L)
+    expect_identical(nrow(project_of(spec)$check()$issues), 0L, paste(label, "checks without issues"))
     runs <- project_of(spec)$run()
-    stopifnot(identical(runs$names, "TEST"), nrow(runs$issues) == 0L)
+    expect_identical(runs$names, "TEST", paste(label, "builds TEST"))
+    expect_identical(nrow(runs$issues), 0L, paste(label, "runs without issues"))
     built <- runs[["TEST"]]
   } else {
-    stopifnot(nrow(yamaa_spec(spec)$check()$issues) == 0L)
+    expect_identical(nrow(yamaa_spec(spec)$check()$issues), 0L, paste(label, "checks without issues"))
     built <- yamaa_spec(spec)$run()
   }
-  stopifnot(nrow(built$issues) == 0L, nrow(built$output) == 1L,
-            ncol(built$output) == width, identical(built$output$ID, "S-001"))
-  if (width > 1L) stopifnot(all(built$output[1L, -1L] == "x"))
+  expect_identical(nrow(built$issues), 0L, paste(label, "builds without issues"))
+  expect_identical(dim(built$output), c(1L, width), paste(label, "builds one row of every column"))
+  expect_identical(built$output$ID, "S-001", paste(label, "keeps the source ID"))
+  if (width > 1L) stopifnot("every other cell is the literal x" = all(built$output[1L, -1L] == "x"))
 }
 
-# D39's error text: `cannot save <subject>`, then the first issue's line,
-# `<message> [<condition>, <rule>]`, and the count of the other issues.
-save_refusal_text <- function(failure, issues) {
-  rule <- issues$rule[[1L]]
-  line <- sprintf("%s [%s]", issues$message[[1L]],
-    if (is.na(rule)) issues$condition[[1L]] else paste(issues$condition[[1L]], rule, sep = ", "))
-  others <- nrow(issues) - 1L
-  if (others > 0L) line <- sprintf("%s (and %d more %s)", line, others, if (others == 1L) "issue" else "issues")
-  text <- conditionMessage(failure)
-  startsWith(text, "cannot save ") && endsWith(text, paste0(": ", line))
-}
-assert_refusal <- function(result, compiler = FALSE) {
+assert_refusal <- function(result, label, compiler = FALSE) {
   issues <- result$issues
-  stopifnot(nrow(issues) > 0L, any(issues$condition == "engine_rejected"))
-  if (compiler) stopifnot(any(grepl('"code":"compiler_limit"', issues$context, fixed = TRUE)))
+  if (!(nrow(issues) > 0L && any(issues$condition == "engine_rejected")))
+    fail(paste(label, "is refused as engine_rejected"), issues, "engine_rejected")
+  if (compiler && !any(grepl('"code":"compiler_limit"', issues$context, fixed = TRUE)))
+    fail(paste(label, "is refused at a compiler limit"), issues$context, '"code":"compiler_limit"')
   # A refused run has no output; its save signals the run's own issues.
   if (inherits(result, "yamaa_run")) {
     failure <- tryCatch(result$save(), error = identity)
-    stopifnot(is.null(result$output), inherits(failure, "yamaa_error"),
-              save_refusal_text(failure, issues),
-              identical(failure$issues, issues))
+    stopifnot("a refused run has no output" = is.null(result$output),
+      "its save signals yamaa_error with D39's text and the run's issues" =
+        inherits(failure, "yamaa_error") && save_refusal_text(failure, issues) &&
+        identical(failure$issues, issues))
   }
   if (inherits(result, "yamaa_project_run")) {
     failure <- tryCatch(result$save(), error = identity)
-    stopifnot(inherits(failure, "yamaa_error"), identical(failure$issues, issues))
+    stopifnot("a refused project run's save signals yamaa_error with its issues" =
+      inherits(failure, "yamaa_error") && identical(failure$issues, issues))
   }
 }
 
@@ -159,16 +154,18 @@ assert_layered_cases <- function(root, width) {
     vapply(rows, paste, character(1L), collapse = ",")), collapse = "\n"), "\n"))
   for (file in c("parent.yaml", "explicit.yaml", "child.yaml", "grandchild.yaml")) {
     spec <- file.path(root, file)
-    stopifnot(nrow(yamaa_spec(spec)$check()$issues) == 0L)
+    label <- sprintf("%s of width %d", file, width)
+    expect_identical(nrow(yamaa_spec(spec)$check()$issues), 0L, paste(label, "checks without issues"))
     built <- yamaa_spec(spec)$run()
-    stopifnot(nrow(built$issues) == 0L, identical(names(built$output), names),
-              nrow(built$output) == 3L, ncol(built$output) == width)
+    expect_identical(nrow(built$issues), 0L, paste(label, "builds without issues"))
+    expect_identical(names(built$output), names, paste(label, "builds every column in order"))
+    expect_identical(dim(built$output), c(3L, width), paste(label, "builds three rows"))
     for (row in seq_along(rows)) {
-      stopifnot(identical(unlist(built$output[row, ], use.names = FALSE), rows[[row]]))
+      expect_identical(unlist(built$output[row, ], use.names = FALSE), rows[[row]],
+        sprintf("%s: row %d", label, row))
     }
-    stopifnot(returns_paths(built$save()))
-    output <- file.path(root, "out.csv")
-    stopifnot(identical(readBin(output, "raw", n = file.info(output)$size), expected))
+    stopifnot("save returns the paths it wrote" = returns_paths(built$save()))
+    expect_identical(rawfile(file.path(root, "out.csv")), expected, paste(label, "saves the exact CSV"))
   }
 }
 
@@ -190,9 +187,10 @@ run_column_ceilings <- function() {
   file.copy(base, file.path(dirname(base), "layer-8193.yaml"))
   for (operation in operations(FALSE)) {
     result <- operation(file.path(dirname(base), "layer-0.yaml"))
-    assert_refusal(result)
-    stopifnot(nrow(result$issues) == 1L, identical(result$issues$context,
-      '{"actual":8193,"code":"resource_limit","limit":8192,"phase":"inheritance","resource":"parent_occurrences","step":"prepare"}'))
+    assert_refusal(result, "a chain of 8,193 parents")
+    expect_identical(result$issues$context,
+      '{"actual":8193,"code":"resource_limit","limit":8192,"phase":"inheritance","resource":"parent_occurrences","step":"prepare"}',
+      "a chain of 8,193 parents reaches the parent-occurrence bound, in one issue")
   }
 
   # A fixed refusal does not certify that later semantic checks passed. Once
@@ -209,14 +207,17 @@ run_column_ceilings <- function() {
     "  - {name: C0002, type: str, derivation: {str_case: {source: C0001, to: upper}}}"
   for (project in routes) {
     writeLines(lines, spec)
+    route <- if (project) "project route" else "specification route"
     for (operation in operations(project)) {
       refused <- operation(spec)
-      assert_refusal(refused, TRUE)
+      assert_refusal(refused, paste("1,025 columns on the", route), TRUE)
       issue <- route_issues(refused$issues, spec, project)
-      stopifnot(nrow(issue) == 1L, is.na(issue$rule),
-        !grepl("incomplete_checks_from", issue$context, fixed = TRUE),
-        grepl('"actual":1025', issue$context, fixed = TRUE),
-        grepl('"limit":1024', issue$context, fixed = TRUE))
+      if (!(nrow(issue) == 1L && is.na(issue$rule) &&
+        !grepl("incomplete_checks_from", issue$context, fixed = TRUE) &&
+        grepl('"actual":1025', issue$context, fixed = TRUE) &&
+        grepl('"limit":1024', issue$context, fixed = TRUE)))
+        fail(paste("1,025 columns on the", route, "give one ruleless capacity issue of 1,025 against 1,024"),
+          issue, '"actual":1025 and "limit":1024 without incomplete_checks_from')
     }
     repaired <- lines[!grepl("name: C1024,", lines, fixed = TRUE)]
     # Dropping the C1024 declaration must also drop it from the live output
@@ -226,11 +227,13 @@ run_column_ceilings <- function() {
     writeLines(repaired, spec)
     for (operation in operations(project)) {
       issue <- route_issues(operation(spec)$issues, spec, project)
-      stopifnot(nrow(issue) == 1L, identical(issue$condition, "incompatible_input_type"),
-        identical(issue$rule, "TEXT-1"),
+      expect_identical(as.list(issue[c("condition", "rule")]),
+        list(condition = "incompatible_input_type", rule = "TEXT-1"),
+        paste("the repaired capacity on the", route, "exposes the one remaining type error"))
+      stopifnot("the remaining error names no incomplete checks" =
         !grepl("incomplete_checks_from", issue$context, fixed = TRUE))
     }
-    stopifnot(!file.exists(file.path(case_root, "out.csv")))
+    stopifnot("nothing is written" = !file.exists(file.path(case_root, "out.csv")))
   }
 
   # Compiler capacity facts are identical through both operations and routes.
@@ -261,9 +264,12 @@ run_column_ceilings <- function() {
     for (project in routes) {
       for (operation in operations(project)) {
         issue <- route_issues(operation(spec)$issues, spec, project)
-        stopifnot(nrow(issue) == 1L, identical(issue$phase, "engine"),
-          identical(issue$condition, "engine_rejected"), is.na(issue$rule),
-          identical(issue$spec_paths, list(spec_path)), identical(issue$context, expected))
+        expect_identical(
+          as.list(issue[c("phase", "condition", "rule", "spec_paths", "context")]),
+          list(phase = "engine", condition = "engine_rejected", rule = NA_character_,
+            spec_paths = list(spec_path), context = expected),
+          sprintf("the %s compiler limit on the %s route", resource,
+            if (project) "project" else "specification"))
       }
     }
   }
@@ -291,13 +297,16 @@ run_column_ceilings <- function() {
       issue <- operation(spec)$issues
       # Keep the wide number as exact text: drop the project identification
       # literally rather than through a JSON number codec.
+      route <- if (project) "project route" else "specification route"
       identified <- ',"entry":"[^"]*","expected":"1.0","source":"[^"]*"}$'
-      stopifnot(identical(grepl(identified, issue$context), project))
+      expect_identical(grepl(identified, issue$context), project,
+        paste("the wide version's context names the listed entry exactly on the project route:", route))
       issue$context <- sub(identified, ',"expected":"1.0"}', issue$context)
-      stopifnot(nrow(issue) == 1L, identical(issue$phase, "validation"),
-        identical(issue$condition, "schema_version_mismatch"),
-        identical(issue$rule, "SCHEMA-2"),
-        identical(issue$spec_paths, list("schema_version")), identical(issue$context, expected))
+      expect_identical(
+        as.list(issue[c("phase", "condition", "rule", "spec_paths", "context")]),
+        list(phase = "validation", condition = "schema_version_mismatch", rule = "SCHEMA-2",
+          spec_paths = list("schema_version"), context = expected),
+        paste("a 4,097-digit schema version keeps its exact digits on the", route))
     }
   }
 
@@ -306,23 +315,23 @@ run_column_ceilings <- function() {
   # 1,025-column output.
   assert_build(write_case(path("admit-columns"), 1024L, selected = "ID"))
   spec <- write_case(path("refuse-columns"), 1025L)
-  for (operation in operations(FALSE)) assert_refusal(operation(spec), TRUE)
+  for (operation in operations(FALSE)) assert_refusal(operation(spec), "1,025 live columns", TRUE)
 
   assert_build(write_case(path("admit-output"), 1024L), 1024L)
   names <- c("ID", sprintf("C%04d", seq_len(1023L)))
   # Keep declarations in range: projection count refuses before the repeated
   # output name is validated, independently of the declared-column cap.
   spec <- write_case(path("refuse-output"), 1024L, selected = c(names, "ID"))
-  for (operation in operations(FALSE)) assert_refusal(operation(spec), TRUE)
+  for (operation in operations(FALSE)) assert_refusal(operation(spec), "1,025 output columns", TRUE)
 
   assert_build(write_case(path("admit-types"), fields = 1024L, typed = TRUE))
   spec <- write_case(path("refuse-types"), fields = 1025L, typed = TRUE)
-  for (operation in operations(FALSE)) assert_refusal(operation(spec), TRUE)
+  for (operation in operations(FALSE)) assert_refusal(operation(spec), "1,025 declared types", TRUE)
 
   for (format in if (has_arrow) c("csv", "parquet") else "csv") {
     assert_build(write_case(path(paste0("admit-", format)), fields = 1024L, source_format = format))
     spec <- write_case(path(paste0("refuse-", format)), fields = 1025L, source_format = format)
-    assert_refusal(yamaa_spec(spec)$run())
+    assert_refusal(yamaa_spec(spec)$run(), paste("1,025 fields of a", format, "source"))
   }
 
   linked_consumer <- function(producer) {
@@ -340,10 +349,11 @@ run_column_ceilings <- function() {
     consumer <- linked_consumer(producer)
     if (width == 1024L) {
       # Callers build and save the producer before its consumer reads it.
-      stopifnot(returns_paths(yamaa_spec(producer)$run()$save()))
+      stopifnot("the producer saves before its consumer reads it" =
+        returns_paths(yamaa_spec(producer)$run()$save()))
       assert_build(consumer)
     } else {
-      for (operation in operations(FALSE)) assert_refusal(operation(consumer))
+      for (operation in operations(FALSE)) assert_refusal(operation(consumer), "a consumer of a 1,025-column producer")
     }
   }
 
@@ -356,8 +366,10 @@ run_column_ceilings <- function() {
     writeLines(c(paste(header, collapse = ","),
                  paste(c("S-001", rep("x", width - 1L)), collapse = ",")),
                file.path(dirname(producer), "out.csv"))
-    stopifnot(nrow(yamaa_spec(consumer)$check()$issues) == 0L)
-    if (width == 1024L) assert_build(consumer) else assert_refusal(yamaa_spec(consumer)$run())
+    expect_identical(nrow(yamaa_spec(consumer)$check()$issues), 0L,
+      sprintf("a consumer of a %d-column stored artifact checks without issues", width))
+    if (width == 1024L) assert_build(consumer) else
+      assert_refusal(yamaa_spec(consumer)$run(), "a consumer of a 1,025-column stored artifact")
   }
 }
 
