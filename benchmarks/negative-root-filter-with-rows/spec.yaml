@@ -1,0 +1,41 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADAE
+keys: [STUDYID, USUBJID, AESEQ]
+input:
+  AE: {path: input/ae.csv, types: {AESEQ: int}}
+
+# Serious events only. The selection is written at the root, while the row
+# template below also builds the rows, so two declarations decide which
+# records become rows.
+filter: "AE.AESER = 'Y'"
+
+output:
+  path: adae.csv
+  columns: [STUDYID, USUBJID, AESEQ, AEDECOD]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: AE.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: AE.USUBJID
+
+  - name: AESEQ
+    type: int
+    label: Sequence Number
+    derivation: AE.AESEQ
+
+  - name: AEDECOD
+    type: str
+    label: Dictionary-Derived Term
+    derivation: AE.AEDECOD
+
+rows:
+  - id: event
+    dataset: AE

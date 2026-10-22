@@ -1,0 +1,10 @@
+lifecycle: draft
+standard: ADaM
+domain: ADSL
+conformance:
+  metamorphic:
+    empty_child:
+      reason: 'by design: the empty child is not the file its PREV link names, so
+        the link names no self-reference, and the child writes its parent''s output
+        file, which OUTPUT-9 refuses'
+      permanent: true

@@ -125,18 +125,6 @@ def unknown_member(available):
     )
 
 
-def unknown_section(section, sections):
-    """The one issue of a call that selects `section`, which the project does
-    not declare; `sections` is the canonical JSON of the sections it does."""
-    return issue_row(
-        f"the project declares no section {section}",
-        phase="validation",
-        condition="unknown_section",
-        rule="PROJECT-14",
-        context='{"section":"' + section + '","sections":' + sections + "}",
-    )
-
-
 def arguments(function):
     return list(inspect.signature(function).parameters)
 
@@ -723,10 +711,11 @@ class PublicContract(unittest.TestCase):
         self.assertEqual(list(runs), ["TEST"])
         self.assertEqual(len(runs), len(runs.names))
         self.assertEqual(project.run("adam").names, ["TEST"])
-        # A section the project does not declare refuses the run (PROJECT-14).
+        # A section the project does not declare refuses the run (PROJECT-14);
+        # R compares the same issue row.
         error = self.refusal(lambda: project.run("sdtm"))
         self.assertEqual(
-            error.issues.to_pylist(), [unknown_section("sdtm", '["adam"]')]
+            error.issues.to_pylist(), [TRUTH["unknown_section_issues"]["sdtm"]]
         )
         # A declared section that lists no specification builds nothing.
         with (case / "project.yaml").open("a", encoding="utf-8") as listing:
@@ -936,7 +925,7 @@ class PublicContract(unittest.TestCase):
             error = self.refusal(call)
             self.assertEqual(str(error), expected)
             self.assertEqual(
-                error.issues.to_pylist(), [unknown_section("bogus", '["adam"]')]
+                error.issues.to_pylist(), [TRUTH["unknown_section_issues"]["bogus"]]
             )
         self.assertEqual(
             sorted(path.name for path in self.root.iterdir()),

@@ -1,0 +1,15 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+
+# The identifier columns that every analysis dataset of the study shares.
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: VS.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: VS.USUBJID

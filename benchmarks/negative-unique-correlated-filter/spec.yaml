@@ -1,0 +1,45 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  DM: {path: input/dm.csv, types: {TRTEDY: int}}
+  DS: {path: input/ds.csv, types: {DSSEQ: int, DSSTDY: int}}
+base: DM
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, TRTEDY, EOSSTT]
+
+intermediates:
+  # Each subject's disposition event after the last dose day, checked to be
+  # one per subject. The filter compares every event with the subject record
+  # being built, so the events it keeps differ from subject to subject.
+  - id: POSTTRT
+    dataset: DS
+    key: [STUDYID, USUBJID]
+    filter: "DS.DSSTDY > DM.TRTEDY"
+    verifications:
+      - unique: [STUDYID, USUBJID]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM.USUBJID
+
+  - name: TRTEDY
+    type: int
+    label: Last Dose Study Day
+    derivation: DM.TRTEDY
+
+  - name: EOSSTT
+    type: str
+    label: End of Study Status
+    derivation: POSTTRT.DSDECOD

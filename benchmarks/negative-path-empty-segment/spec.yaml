@@ -1,0 +1,33 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADLB
+keys: [STUDYID, USUBJID, PARAMCD]
+input:
+  # The folder and the file name were joined with one separator too many.
+  LB: {path: input//lb.csv, types: {AVAL: float}}
+
+output:
+  path: adlb.csv
+  columns: [STUDYID, USUBJID, PARAMCD, AVAL]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: LB.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: LB.USUBJID
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+    derivation: LB.PARAMCD
+
+  - name: AVAL
+    type: float
+    label: Analysis Value
+    derivation: LB.AVAL

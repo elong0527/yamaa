@@ -1,0 +1,40 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  VS: {path: input/vs.csv, types: {WEIGHTBL: float, HEIGHTBL: float}}
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, WEIGHTBL, HEIGHTBL, BMIBL]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: VS.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: VS.USUBJID
+
+  - name: WEIGHTBL
+    type: float
+    label: Baseline Weight (kg)
+    derivation: VS.WEIGHTBL
+
+  - name: HEIGHTBL
+    type: float
+    label: Baseline Height (cm)
+    derivation: VS.HEIGHTBL
+
+  - name: BMIBL
+    type: float
+    label: Baseline BMI (kg/m2)
+    derivation:
+      function:
+        name: bmi
+        args: {weight_kg: WEIGHTBL, height_cm: HEIGHTBL}
