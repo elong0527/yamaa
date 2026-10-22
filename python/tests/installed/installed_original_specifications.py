@@ -1605,7 +1605,8 @@ columns:
                     if cohort == "flags":
                         # A witness is staged from its capture. A benchmark
                         # runs as it is written, in either language, whose
-                        # findings and handlers are the same (#3422).
+                        # findings and handlers are the same (#3422) but for
+                        # an intermediate's absence, `absent` in 1.0 (D202).
                         self.assertEqual(
                             entry.read_text(encoding="utf-8"), case["specification"]
                         )

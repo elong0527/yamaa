@@ -3420,9 +3420,9 @@ columns:
                 result.observations()["handler_counts"],
                 yamaa_adapters::json!([
                     {"spec_path":"columns.AEDT.derivation.source.multiple_matches","handler":"multiple_matches","count":2},
-                    {"spec_path":"columns.AEDT.derivation.source.no_match","handler":"no_match","count":3},
+                    {"spec_path":"columns.AEDT.derivation.source.absent","handler":"absent","count":3},
                     {"spec_path":"columns.SRCSEQ.derivation.case[0].then.source.multiple_matches","handler":"multiple_matches","count":2},
-                    {"spec_path":"columns.SRCSEQ.derivation.case[0].then.source.no_match","handler":"no_match","count":0}
+                    {"spec_path":"columns.SRCSEQ.derivation.case[0].then.source.absent","handler":"absent","count":0}
                 ])
             );
         }

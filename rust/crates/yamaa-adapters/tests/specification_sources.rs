@@ -1907,14 +1907,14 @@ output: {{path: output.csv, columns: [I, S]}}
                                 "multiple_matches",
                                 1
                             ),
-                            ("columns.DTHDY.derivation.source.no_match", "no_match", 2),
+                            ("columns.DTHDY.derivation.source.absent", "absent", 2),
                             (
                                 "columns.DTHCAUS.derivation.source.multiple_matches",
                                 "multiple_matches",
                                 1
                             ),
-                            ("columns.DTHCAUS.derivation.source.no_match", "no_match", 2),
-                            ("columns.DTHPTERM.derivation.source.no_match", "no_match", 2),
+                            ("columns.DTHCAUS.derivation.source.absent", "absent", 2),
+                            ("columns.DTHPTERM.derivation.source.absent", "absent", 2),
                         ]
                     );
                 }
