@@ -368,10 +368,11 @@ class PublicConformance(unittest.TestCase):
             None,
             [],
         ):
-            self.assertEqual(
-                judge.empty_child(document, "spec.yaml"),
-                'schema_version: "1.0"\nparent: spec.yaml\n',
-            )
+            with self.subTest(document=document):
+                self.assertEqual(
+                    judge.empty_child(document, "spec.yaml"),
+                    'schema_version: "1.0"\nparent: spec.yaml\n',
+                )
 
     def test_quoted_empty_is_distinct_from_missing_and_csv_bytes_are_exact(self):
         self.build["tables"]["output"]["rows"][0][1] = None
@@ -948,19 +949,21 @@ class PublicConformance(unittest.TestCase):
             'schema_version: "1.0"\nenvironments:\n  python: python/environment.yaml\n',
             'yamaa: "1.0"\ntype: project\nfunctions: [functions/bmi.yaml]\n',
         ):
-            project.write_text(text)
-            self.assertEqual(
-                self.command_line(),
-                {"excluded": judge.CLI_FUNCTION_EXCLUSION, "calls": []},
-            )
+            with self.subTest(text=text):
+                project.write_text(text)
+                self.assertEqual(
+                    self.command_line(),
+                    {"excluded": judge.CLI_FUNCTION_EXCLUSION, "calls": []},
+                )
         # A 1.0 project's environments hold only locks, and an unreadable
         # project supplies nothing; the hosts report why it cannot be read.
         for text in (
             'yamaa: "1.0"\ntype: project\nenvironments:\n  python: {lock: uv.lock}\n',
             "sdtm: [unclosed\n",
         ):
-            project.write_text(text)
-            self.assertIsNone(self.command_line()["excluded"])
+            with self.subTest(text=text):
+                project.write_text(text)
+                self.assertIsNone(self.command_line()["excluded"])
         # A benchmark's own exclusion holds for the command line too.
         (self.case / "benchmark.yaml").write_text(
             METADATA + "conformance:\n  excluded: a reviewed reason\n"
@@ -1100,9 +1103,10 @@ class PublicConformance(unittest.TestCase):
             ["FLAG", "SEQ", "ID", "DOMAIN", "OTHER"],
         )
         for derivation in ("ID", "SRC.ID + 1", "UPPER(SRC.ID)", {"literal": "x"}):
-            ineligible = copy.deepcopy(document)
-            ineligible["columns"][2]["derivation"] = derivation
-            self.assertIsNone(judge.key_order_texts(ineligible), derivation)
+            with self.subTest(derivation=derivation):
+                ineligible = copy.deepcopy(document)
+                ineligible["columns"][2]["derivation"] = derivation
+                self.assertIsNone(judge.key_order_texts(ineligible), derivation)
         # A 0.5 document reads text as a field and `{literal: X}` as a literal.
         legacy = copy.deepcopy(document)
         del legacy["yamaa"], legacy["type"]
@@ -1384,16 +1388,19 @@ class PublicConformance(unittest.TestCase):
         corpus = corpus_plan()
         names = {example["name"]: example for example in corpus["examples"]}
         for name in ("adam-adsl-bmi", "schema-functions"):
-            self.assertEqual(
-                names[name]["cli"],
-                {"excluded": judge.CLI_FUNCTION_EXCLUSION, "calls": []},
-            )
+            with self.subTest(name=name):
+                self.assertEqual(
+                    names[name]["cli"],
+                    {"excluded": judge.CLI_FUNCTION_EXCLUSION, "calls": []},
+                )
         for name, example in names.items():
             entries = example["entries"]
             if example["cli"]["excluded"]:
                 # Only a project supplies project functions.
-                self.assertTrue(
-                    any(call["environment"] for call in entries["python"]), name
+                self.assertNotEqual(
+                    {call["environment"] for call in entries["python"]} - {None, ""},
+                    set(),
+                    name,
                 )
                 continue
             # The command line makes the hosts' calls, so they must agree.

@@ -355,13 +355,14 @@ class ConvertedCorpus(unittest.TestCase):
             ("plain", ["run", "spec.yaml"]),
             ("project", ["run", "project.yaml", "--spec", "TEST"]),
         ):
-            [call] = json.loads((records / f"{name}.json").read_text())["calls"]
-            self.assertEqual(call["exit_status"], 0, name)
-            self.assertEqual(
-                call["document"]["arguments"], ["--format", "json", *arguments]
-            )
-            self.assertEqual(call["document"]["header"], 'yamaa: "1.0"\n')
-            self.assertEqual(call["document"]["paths"], ["result.csv"])
+            with self.subTest(case=name):
+                [call] = json.loads((records / f"{name}.json").read_text())["calls"]
+                self.assertEqual(call["exit_status"], 0, name)
+                self.assertEqual(
+                    call["document"]["arguments"], ["--format", "json", *arguments]
+                )
+                self.assertEqual(call["document"]["header"], 'yamaa: "1.0"\n')
+                self.assertEqual(call["document"]["paths"], ["result.csv"])
         self.assertTrue((output / "benchmarks/plain/spec.yaml").is_file())
         run = json.loads((output / "observed/run.json").read_text())
         self.assertEqual(

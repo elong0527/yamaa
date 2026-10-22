@@ -307,8 +307,9 @@ class BindingsTests(unittest.TestCase):
     def test_only_the_cli_exit_statuses_may_have_integer_keys(self):
         generator._text_keys({"cli": {"exit_status": {0: "succeeded"}}})
         for value in ({"values": {1: "x"}}, {"cli": {"commands": [{2: "x"}]}}):
-            with self.assertRaisesRegex(ValueError, "keys must be text"):
-                generator._text_keys(value)
+            with self.subTest(value=value):
+                with self.assertRaisesRegex(ValueError, "keys must be text"):
+                    generator._text_keys(value)
 
     def test_operations_may_name_only_declared_commands(self):
         definition = generator._load_definition()

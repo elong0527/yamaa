@@ -311,13 +311,17 @@ class RepositoryCatalog(unittest.TestCase):
         staged = dict(module.host_fixture_files(catalog))
         # haven's datetime.sas7bdat and pandas' compressed files and truth.
         for owner in ("haven", "pandas"):
-            name = prefix + f"LICENSE-{owner}.txt"
-            self.assertEqual(roles[name], "license")
-            self.assertEqual(staged[name], f"host-fixtures/sas/LICENSE-{owner}.txt")
+            with self.subTest(owner=owner):
+                name = prefix + f"LICENSE-{owner}.txt"
+                self.assertEqual(roles[name], "license")
+                self.assertEqual(staged[name], f"host-fixtures/sas/LICENSE-{owner}.txt")
         self.assertEqual(roles[prefix + "README.md"], "documentation")
         self.assertNotIn(prefix + "README.md", staged)
         for fixture in ("datetime.sas7bdat", "rle.sas7bdat", "rdc.sas7bdat"):
-            self.assertEqual(staged[prefix + fixture], "host-fixtures/sas/" + fixture)
+            with self.subTest(fixture=fixture):
+                self.assertEqual(
+                    staged[prefix + fixture], "host-fixtures/sas/" + fixture
+                )
 
     def test_sas_fixture_cannot_overwrite_an_existing_shared_host_input(self):
         catalog = {

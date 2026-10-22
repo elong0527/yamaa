@@ -89,7 +89,7 @@ class RationalePhraseTests(unittest.TestCase):
             "values/one.md",
             "# One\n\nA pattern fails because it is empty. ```text\nexample\n```\n",
         )
-        self.assertTrue(any("because" in error for error in self.errors()))
+        self.assertIn("because", "\n".join(self.errors()))
 
     def test_inline_code_is_excluded(self):
         self.write(
@@ -122,7 +122,7 @@ class RationalePhraseTests(unittest.TestCase):
             "values/one.md",
             "# One\n\nBecause the value is missing, the column fails.\n",
         )
-        self.assertTrue(any("Because" in error for error in self.errors()))
+        self.assertIn("Because", "\n".join(self.errors()))
 
     def test_frontmatter_is_excluded(self):
         self.write(

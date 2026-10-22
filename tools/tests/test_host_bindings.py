@@ -68,7 +68,8 @@ class HostBindings(unittest.TestCase):
                 self.assertIs(manifest["lib"]["bench"], False)
                 # `test = false` would leave any of these unrun.
                 for targets in ("tests", "benches", "examples"):
-                    self.assertFalse((directory / targets).exists())
+                    with self.subTest(targets=targets):
+                        self.assertFalse((directory / targets).exists())
                 for source in sorted((directory / "src").rglob("*.rs")):
                     self.assertNotRegex(
                         source.read_text(encoding="utf-8"), r"#\[(cfg\()?test"

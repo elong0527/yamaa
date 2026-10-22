@@ -229,9 +229,10 @@ class ConversionGateTests(unittest.TestCase):
             (GateRun(python=1), "Python public benchmark conformance"),
             (GateRun(define=True), "Python Define benchmarks"),
         ):
-            with self.assertRaises(SystemExit) as stopped:
-                gate.run()
-            self.assertIn(named, str(stopped.exception.code))
+            with self.subTest(named=named):
+                with self.assertRaises(SystemExit) as stopped:
+                    gate.run()
+                self.assertIn(named, str(stopped.exception.code))
         with self.assertRaises(SystemExit) as stopped:
             GateRun(r=1).run("--hosts", "r")
         self.assertIn("R public benchmark conformance", str(stopped.exception.code))

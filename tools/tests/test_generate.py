@@ -568,12 +568,13 @@ class DashboardTests(unittest.TestCase):
             page,
         )
         for tier in ("full", "conventions", "brief"):
-            self.assertIn(f'id="prompt-pane-{tier}"', page)
-            self.assertIn(
-                '<a class="edit-button" href="https://github.com/elong0527/yamaa/edit/main/'
-                f'evaluations/harbor/prompts/adam-adae-death/{"full" if tier == "brief" else tier}.md">Edit</a>',
-                page,
-            )
+            with self.subTest(tier=tier):
+                self.assertIn(f'id="prompt-pane-{tier}"', page)
+                self.assertIn(
+                    '<a class="edit-button" href="https://github.com/elong0527/yamaa/edit/main/'
+                    f'evaluations/harbor/prompts/adam-adae-death/{"full" if tier == "brief" else tier}.md">Edit</a>',
+                    page,
+                )
         self.assertIn(
             'DTHFL is "Y" or has no value.', (prompts / "conventions.md").read_text()
         )
@@ -687,7 +688,8 @@ class DashboardTests(unittest.TestCase):
                 "spec_study.yaml",
                 "expected/spec_resolved.yaml",
             ]:
-                self.assertIn(f'data-edit-url="{base}/{path}"', page)
+                with self.subTest(path=path):
+                    self.assertIn(f'data-edit-url="{base}/{path}"', page)
             self.assertIn(
                 'fileHeading.className = "file-heading spec-file-heading"', page
             )
@@ -700,9 +702,10 @@ class DashboardTests(unittest.TestCase):
                 "spec_compound.yaml",
                 "spec_study.yaml",
             ):
-                self.assertIn(
-                    f'<a class="edit-button" href="{base}/{target}">Edit</a>', page
-                )
+                with self.subTest(target=target):
+                    self.assertIn(
+                        f'<a class="edit-button" href="{base}/{target}">Edit</a>', page
+                    )
             self.assertIn(
                 f'<a class="edit-button" href="{base}/expected/spec_resolved.yaml">Edit</a>',
                 page,
@@ -913,7 +916,8 @@ class DashboardTests(unittest.TestCase):
             text.index("adam-aaa-two.html"), text.index("adam-mmm-three.html")
         )
         for name in ("adam-zzz-one", "adam-aaa-two", "adam-mmm-three"):
-            self.assertIn(f'href="{name}.html"', text)
+            with self.subTest(name=name):
+                self.assertIn(f'href="{name}.html"', text)
 
     def test_gallery_counts_groups_from_the_directory_names(self):
         # The group table is the figure readers quote, so it is counted from
@@ -1029,7 +1033,8 @@ class DashboardTests(unittest.TestCase):
             "spec_compound.yaml",
             "spec_study.yaml",
         ]:
-            self.assertIn(f'data-edit-url="{base}/{path}"', page)
+            with self.subTest(path=path):
+                self.assertIn(f'data-edit-url="{base}/{path}"', page)
         self.assertIn('fileHeading.className = "file-heading spec-file-heading"', page)
         self.assertIn("edit.href = active.dataset.editUrl", page)
         self.assertNotIn('aria-label="expected/spec_resolved.yaml"', page)
@@ -1042,9 +1047,10 @@ class DashboardTests(unittest.TestCase):
             "spec_compound.yaml",
             "spec_study.yaml",
         ):
-            self.assertIn(
-                f'<a class="edit-button" href="{base}/{target}">Edit</a>', page
-            )
+            with self.subTest(target=target):
+                self.assertIn(
+                    f'<a class="edit-button" href="{base}/{target}">Edit</a>', page
+                )
         self.assertNotIn('data-filename="spec_resolved.yaml"', page)
         self.assertIn(
             '<header class="section-header"><h2 id="schema-heading">YAML specification</h2>',

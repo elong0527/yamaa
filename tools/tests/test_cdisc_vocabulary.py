@@ -108,11 +108,8 @@ class CdiscVocabularyTests(unittest.TestCase):
         classes.append({"value": "CUSTOM CLASS", "since": "1.0"})
         self.write(document)
         errors = OWNER.check(self.root)
-        self.assertTrue(
-            any(
-                "dataset_class: values differ from ItemGroupClass" in e for e in errors
-            ),
-            errors,
+        self.assertIn(
+            "dataset_class: values differ from ItemGroupClass", "\n".join(errors)
         )
         # Both schema sets still spell the published list.
         self.assertEqual(
@@ -301,9 +298,7 @@ class CdiscVocabularyTests(unittest.TestCase):
         document["vocabularies"]["origin_source"]["enumeration"] = "OriginParty"
         self.write(document)
         errors = OWNER.check(self.root)
-        self.assertTrue(
-            any("has no simple type OriginParty" in error for error in errors), errors
-        )
+        self.assertIn("has no simple type OriginParty", "\n".join(errors))
 
     def test_values_are_unique_and_admitted_no_later_than_the_file_version(self):
         document = self.vocabulary()

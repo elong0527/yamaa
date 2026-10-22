@@ -97,7 +97,8 @@ class MarkdownTests(unittest.TestCase):
             "a----b",
             "chosen",
         ):
-            self.assertIn(anchor, found)
+            with self.subTest(anchor=anchor):
+                self.assertIn(anchor, found)
         self.assertNotIn("fenced", found)
 
     def test_words_count_link_text_once(self):
@@ -246,7 +247,8 @@ class RuleFileTests(unittest.TestCase):
             "yamaa.egg-info/x.md",
             "rules/reference/rule-index.md",
         ):
-            self.assertNotIn(skipped, found)
+            with self.subTest(skipped=skipped):
+                self.assertNotIn(skipped, found)
 
 
 if __name__ == "__main__":

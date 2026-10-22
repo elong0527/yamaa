@@ -351,7 +351,8 @@ class TestConditionRegistry(unittest.TestCase):
         self.assertEqual(placeholders("{{literal}} and {spec_path}"), ["spec_path"])
         self.assertEqual(placeholders("{{{key}}}"), ["key"])
         for stray in ("{", "}", "{key}}", "{Key}", "{1key}", "{key"):
-            self.assertIsNone(placeholders(stray), stray)
+            with self.subTest(stray=stray):
+                self.assertIsNone(placeholders(stray), stray)
 
     def test_wrong_phase_condition_is_rejected(self):
         changed = copy.deepcopy(self.registry)
@@ -392,9 +393,7 @@ class TestValidationMetadata(unittest.TestCase):
             contract["condition"] = "not_registered"
             contract_path.write_text(yaml.safe_dump(contract))
             _, errors = OWNER_REPOSITORY_MANIFESTS.load_validation_fixtures(root)
-            self.assertTrue(
-                any("unregistered validation condition" in error for error in errors)
-            )
+            self.assertIn("unregistered validation condition", "\n".join(errors))
 
 
 class TestClosedGrammarContracts(unittest.TestCase):
@@ -717,9 +716,11 @@ class TestValidatorCLI(unittest.TestCase):
         status, output, errors = self.validate()
 
         for directory in CHECKED_LOCATIONS:
-            self.assertIn(f"ERROR: {directory}bad.yaml:", output)
+            with self.subTest(directory=directory):
+                self.assertIn(f"ERROR: {directory}bad.yaml:", output)
         for directory in SKIPPED_LOCATIONS:
-            self.assertNotIn(f"ERROR: {directory}", output)
+            with self.subTest(directory=directory):
+                self.assertNotIn(f"ERROR: {directory}", output)
 
     def test_schema_shared_include_is_not_a_cycle(self):
         yaml_dir = self.root_dir / "yaml"

@@ -46,6 +46,10 @@ class DiagnosticGuardTests(unittest.TestCase):
     def errors(self):
         return guard.violations(self.root)
 
+    def assertReported(self, fragment):
+        """Some violation names `fragment`; a failure shows every violation."""
+        self.assertIn(fragment, "\n".join(self.errors()))
+
     def test_registered_core_mapping_passes(self):
         self.assertEqual(self.errors(), [])
 
@@ -104,14 +108,12 @@ class DiagnosticGuardTests(unittest.TestCase):
     def test_new_null_language_cause_is_rejected(self):
         path = self.root / "rust/crates/yamaa-core/src/diagnostic/mod.rs"
         path.write_text(path.read_text().replace('Some("VALUE-1")', "None"))
-        self.assertTrue(
-            any("null rule is not normatively permitted" in e for e in self.errors())
-        )
+        self.assertReported("null rule is not normatively permitted")
 
     def test_implementation_condition_must_retain_null(self):
         path = self.root / "rust/crates/yamaa-core/src/diagnostic/mod.rs"
         path.write_text(path.read_text().replace("None", 'Some("VALUE-1")'))
-        self.assertTrue(any("must retain a null rule" in e for e in self.errors()))
+        self.assertReported("must retain a null rule")
 
     def test_null_policy_is_explicit_registered_and_reached(self):
         path = self.root / guard.NULL_POLICY
@@ -152,13 +154,9 @@ class DiagnosticGuardTests(unittest.TestCase):
         ]:
             with self.subTest(expected=expected):
                 path.write_text(body)
-                self.assertTrue(
-                    any(expected in e for e in self.errors()), self.errors()
-                )
+                self.assertReported(expected)
         path.unlink()
-        self.assertTrue(
-            any("unavailable normative null policy" in e for e in self.errors())
-        )
+        self.assertReported("unavailable normative null policy")
 
     def test_unknown_requirement_is_rejected_in_every_crate(self):
         for crate in ("yamaa-core", *sorted(guard.HOST_CRATES)):
@@ -167,9 +165,7 @@ class DiagnosticGuardTests(unittest.TestCase):
                     f"rust/crates/{crate}/src/unknown.rs",
                     'const REQUIREMENT: &str = "VALUE-999";\n',
                 )
-                self.assertTrue(
-                    any("undefined rule VALUE-999" in e for e in self.errors())
-                )
+                self.assertReported("undefined rule VALUE-999")
                 path.unlink()
 
     def test_new_registered_condition_and_known_requirement_fail_in_each_host(self):
@@ -246,8 +242,8 @@ class DiagnosticGuardTests(unittest.TestCase):
             + "\n",
         )
         self.assertEqual(len(self.errors()), 2)
-        self.assertTrue(any("undefined rule VALUE-999" in e for e in self.errors()))
-        self.assertTrue(any("outside canonical registry" in e for e in self.errors()))
+        self.assertReported("undefined rule VALUE-999")
+        self.assertReported("outside canonical registry")
 
     def test_comments_quoted_prose_and_character_literals_are_irrelevant(self):
         self.write(
@@ -318,16 +314,14 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
             "yaml/conditions.yaml",
             'conditions:\n  invalid_value: {phases: [validation]}\n  new_value:\n    message: "no phases"\n',
         )
-        self.assertTrue(
-            any("unrecognized registration: new_value" in e for e in self.errors())
-        )
+        self.assertReported("unrecognized registration: new_value")
         self.write(
             "yaml/conditions.yaml",
             "conditions:\n  invalid_value: {phases: [validation]}\n  invalid_value: {phases: [validation]}\n",
         )
-        self.assertTrue(any("duplicate key" in e for e in self.errors()))
+        self.assertReported("duplicate key")
         self.write("yaml/conditions.yaml", "conditions: []\n")
-        self.assertTrue(any("no condition registrations" in e for e in self.errors()))
+        self.assertReported("no condition registrations")
 
     def test_generated_message_table_is_exempt_from_ownership(self):
         self.write(
@@ -339,17 +333,17 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
             "rust/crates/yamaa-core/src/diagnostic/other.rs",
             'const NAME: &str = "invalid_value";\n',
         )
-        self.assertTrue(any("new diagnostic literal site" in e for e in self.errors()))
+        self.assertReported("new diagnostic literal site")
 
     def test_unparseable_or_missing_registry_and_vocabulary_fail_closed(self):
         path = self.root / "rust/crates/yamaa-core/src/diagnostic/mod.rs"
         path.write_text("conditions! {\n    malformed => (),\n}\n")
-        self.assertTrue(any("unrecognized cause" in e for e in self.errors()))
+        self.assertReported("unrecognized cause")
         path.unlink()
         self.write("rust/crates/yamaa-core/src/marker.rs", "// engine source\n")
-        self.assertTrue(any("unavailable core registry" in e for e in self.errors()))
+        self.assertReported("unavailable core registry")
         (self.root / "yaml/conditions.yaml").unlink()
-        self.assertTrue(any("unavailable vocabulary" in e for e in self.errors()))
+        self.assertReported("unavailable vocabulary")
 
     def test_new_core_and_engine_sites_are_rejected_in_every_literal_form(self):
         sources = [
@@ -1734,7 +1728,7 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
         self.write(
             "rust/crates/yamaa-core/src/retired.rs", 'const RULE: &str = "VALUE-2";\n'
         )
-        self.assertTrue(any("undefined rule VALUE-2" in e for e in self.errors()))
+        self.assertReported("undefined rule VALUE-2")
 
     def publication_unit_module(self):
         self.write(
@@ -1756,7 +1750,7 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
             "rust/crates/yamaa-adapters/src/file_define/mod.rs",
             "mod publication_failure_tests;\n",
         )
-        self.assertTrue(any("new diagnostic literal site" in e for e in self.errors()))
+        self.assertReported("new diagnostic literal site")
 
     def test_unit_source_reused_by_production_alias_remains_production(self):
         self.publication_unit_module()
@@ -1792,7 +1786,7 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
             str(guard.PRIVATE_TEST_MODULE),
             '#[test]\nfn independent_expectation() { assert_eq!("VALUE-999", "VALUE-999"); }\n',
         )
-        self.assertTrue(any("undefined rule VALUE-999" in e for e in self.errors()))
+        self.assertReported("undefined rule VALUE-999")
 
     def card_file(self, fails="Fails: `invalid_value`.\n"):
         self.write(
@@ -1848,11 +1842,11 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
         self.write(
             "rust/crates/yamaa-core/src/unknown.rs", 'const RULE: &str = "LAYER-99";\n'
         )
-        self.assertTrue(any("undefined rule LAYER-99" in e for e in self.errors()))
+        self.assertReported("undefined rule LAYER-99")
         (self.root / "rust/crates/yamaa-core/src/unknown.rs").unlink()
         path = self.root / "rust/crates/yamaa-core/src/diagnostic/mod.rs"
         path.write_text(path.read_text().replace('Some("VALUE-1")', 'Some("RULE-1")'))
-        self.assertTrue(any("unrecognized cause" in e for e in self.errors()))
+        self.assertReported("unrecognized cause")
 
     def test_missing_rules_and_sources_do_not_pass(self):
         (self.root / "rules/values.md").unlink()

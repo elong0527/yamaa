@@ -568,18 +568,20 @@ class NativeWorkflowContract(unittest.TestCase):
                 )
                 self.assertIn('--volume "${PWD}/rust:/opt/rust" ', installation)
                 for tool in ("rustc", "cargo"):
-                    self.assertIn(
-                        f"/opt/rust/bin/{tool} --version | "
-                        f'grep -F "{tool} ${{STANDALONE_RUST_VERSION}} "',
-                        installation,
-                    )
+                    with self.subTest(tool=tool):
+                        self.assertIn(
+                            f"/opt/rust/bin/{tool} --version | "
+                            f'grep -F "{tool} ${{STANDALONE_RUST_VERSION}} "',
+                            installation,
+                        )
                 self.assertIn('--volume "${PWD}/rust:/opt/rust:ro"', compilation)
                 self.assertIn('test -z "$(command -v rustup)"', compilation)
                 for tool in ("cargo", "rustc"):
-                    self.assertIn(
-                        f'test "$(command -v {tool})" = /opt/rust/bin/{tool}',
-                        compilation,
-                    )
+                    with self.subTest(tool=tool):
+                        self.assertIn(
+                            f'test "$(command -v {tool})" = /opt/rust/bin/{tool}',
+                            compilation,
+                        )
                 self.assertEqual(compilation.count(commands[host]), 1)
                 self.assertLess(
                     compilation.index("command -v rustc"),

@@ -986,12 +986,13 @@ class ReservedSpellingTests(unittest.TestCase):
         self.assertEqual(messages(validator("project"), self.documents["project"]), [])
         # NE and NOTIN are admitted in 1.0 (D66), beside the plain list.
         for comparator, values in (("NE", ["DM"]), ("NOTIN", ["DM", "AE"])):
-            document = copy.deepcopy(self.documents["spec"])
-            value_level(document)["where"]["DOMAIN"] = {
-                "comparator": comparator,
-                "values": values,
-            }
-            self.assertEqual(messages(validator("spec"), document), [])
+            with self.subTest(comparator=comparator):
+                document = copy.deepcopy(self.documents["spec"])
+                value_level(document)["where"]["DOMAIN"] = {
+                    "comparator": comparator,
+                    "values": values,
+                }
+                self.assertEqual(messages(validator("spec"), document), [])
 
 
 class SchemaNotationTests(unittest.TestCase):
