@@ -1,9 +1,11 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
   DM: input/dm.csv
-  EX: {path: input/ex.csv, types: {EXSEQ: int}}
+  EX: {path: input/ex.csv, types: {EXSEQ: int}, key: [STUDYID, USUBJID]}
   DS: {path: input/ds.csv, types: {DSSEQ: int}}
 base: DM
 
@@ -18,13 +20,13 @@ output:
 intermediates:
   - id: P01DS
     dataset: DS
+    key: [STUDYID, USUBJID]
     filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.EPOCH = 'TREATMENT 1'"
-    no_match: {literal: null}
 
   - id: P02DS
     dataset: DS
+    key: [STUDYID, USUBJID]
     filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.EPOCH = 'TREATMENT 2'"
-    no_match: {literal: null}
 
 columns:
   - name: STUDYID
@@ -74,11 +76,11 @@ columns:
     derivation:
       case:
         - when: "P01EXN IS NOT NULL AND P01DECOD = 'COMPLETED'"
-          then: {literal: COMPLETED}
+          then: "'COMPLETED'"
         - when: "P01EXN IS NOT NULL AND P01DECOD IS NOT NULL"
-          then: {literal: DISCONTINUED}
+          then: "'DISCONTINUED'"
         - when: "P01EXN IS NOT NULL"
-          then: {literal: ONGOING}
+          then: "'ONGOING'"
     verifications:
       - allowed_values:
           values: [COMPLETED, DISCONTINUED, ONGOING]
@@ -98,11 +100,11 @@ columns:
     derivation:
       case:
         - when: "P02EXN IS NOT NULL AND P02DECOD = 'COMPLETED'"
-          then: {literal: COMPLETED}
+          then: "'COMPLETED'"
         - when: "P02EXN IS NOT NULL AND P02DECOD IS NOT NULL"
-          then: {literal: DISCONTINUED}
+          then: "'DISCONTINUED'"
         - when: "P02EXN IS NOT NULL"
-          then: {literal: ONGOING}
+          then: "'ONGOING'"
     verifications:
       - allowed_values:
           values: [COMPLETED, DISCONTINUED, ONGOING]

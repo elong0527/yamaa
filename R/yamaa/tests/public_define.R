@@ -1,7 +1,7 @@
 # Independent installed R submission witnesses. The runtime has no Python
 # executable. project$submission() composes Define-XML (and the Dataset-JSON or
-# SAS Transport files where the section sets `datasets: json` or
-# `datasets: xpt`) when called; only $save() writes files.
+# SAS Transport files where the section sets `transport: dataset_json` or
+# `transport: xpt`) when called; only $save() writes files.
 library(yamaa)
 # The truth is JSON, and jsonlite, which reads it, is a suggested package:
 # where it is not installed, the file is skipped.
@@ -31,7 +31,7 @@ fixture <- function(name, published = FALSE) {
 edit_lines <- function(path, edit) writeLines(edit(readLines(path)), path)
 # Compose Define-XML alone: the section no longer asks for Dataset-JSON.
 metadata_only <- function(root) edit_lines(file.path(root, "project.yaml"),
-  function(lines) lines[lines != "  datasets: json"])
+  function(lines) lines[lines != "  transport: dataset_json"])
 submission <- function(root, created = host_truth[["created"]], section = "sdtm") {
   result <- yamaa_project(file.path(root, "project.yaml"))$submission(section, created = created)
   check_issues(result, FALSE)
@@ -263,7 +263,7 @@ result <- submission(root); check_issues(result)
 project <- file.path(root, "project.yaml")
 edit_lines(project, function(lines) gsub("name: SDTMIG", "name: ADaMIG", lines, fixed = TRUE))
 result <- submission(root)
-stopifnot("ADaMIG is no SDTM standard" = "unknown_standard_family" %in% result$issues$condition,
+stopifnot("ADaMIG in the SDTM section is a model mismatch" = "standard_model_mismatch" %in% result$issues$condition,
   "its save is refused" = refused(result), "no Define-XML is written" = !file.exists(file.path(root, "define.xml")))
 unlink(root, recursive = TRUE)
 
@@ -316,7 +316,7 @@ metadata <- which(lines == "  metadata_version:")
 stopifnot("the project declares one metadata version" = length(metadata) == 1L)
 lines <- lines[-(metadata + 0:3)]
 lines <- lines[!grepl("^  file_oid:", lines)]
-writeLines(c(lines, "adam:", "  standard: {name: ADaMIG, version: '1.3', status: Final}",
+writeLines(c(lines, "adam:", "  standards: [{name: ADaMIG, version: '1.3', status: Final}]",
   "  specs: [missing-other-section.yaml]", "  define: adam.xml"), project)
 result <- submission(root); check_issues(result)
 xml <- rawToChar(saved(result, root, c("dm.json", "define.xml"))[["define.xml"]])
@@ -341,7 +341,7 @@ for (name in c("parents", "children", "artifacts")) dir.create(file.path(root, n
 spec <- readLines(file.path(root, "spec.yaml"))
 spec <- gsub("path: dm.csv", "path: ../artifacts/dm.csv", spec, fixed = TRUE)
 writeLines(spec, file.path(root, "parents/base.yaml"))
-writeLines(c("schema_version: '1.0'", "parent: ../parents/base.yaml"), file.path(root, "children/spec.yaml"))
+writeLines(c('yamaa: "1.0"', "type: spec", "parent: ../parents/base.yaml"), file.path(root, "children/spec.yaml"))
 project <- file.path(root, "project.yaml")
 edit_lines(project, function(lines) gsub("define: define.xml", "define: artifacts/define.xml",
   gsub("  - spec.yaml", "  - children/spec.yaml", lines, fixed = TRUE), fixed = TRUE))
@@ -403,7 +403,7 @@ spec <- gsub(host_truth[["numeric_original_metadata"]], host_truth[["numeric_com
 writeLines(spec, spec_path)
 project <- file.path(root, "project.yaml")
 source <- paste(readLines(project), collapse = "\n")
-source <- gsub("sdtm:\n", host_truth[["numeric_codelist_yaml"]], source, fixed = TRUE)
+source <- gsub("study:\n", host_truth[["numeric_codelist_yaml"]], source, fixed = TRUE)
 writeLines(source, project)
 result <- submission(root); check_issues(result)
 held <- saved(result, root, c("dm.json", "define.xml"))
@@ -416,8 +416,8 @@ writeBin(charToRaw("original publication sentinel"), sentinel)
 # Under Other a lower-case dataset name is admitted, and its transport file is
 # named for it in lower case beside the document.
 project <- file.path(root, "project.yaml")
-edit_lines(project, function(lines) gsub("context: Submission", "context: Other",
-  gsub("  - spec.yaml", "  - spec.yaml\n  - second.yaml", lines, fixed = TRUE), fixed = TRUE))
+edit_lines(project, function(lines) sub("^sdtm:$", "sdtm:\n  context: Other",
+  gsub("  - spec.yaml", "  - spec.yaml\n  - second.yaml", lines, fixed = TRUE)))
 spec <- gsub("domain: DM", "domain: dm", readLines(file.path(root, "spec.yaml")), fixed = TRUE)
 writeLines(gsub("path: dm.csv", "path: second.csv", spec, fixed = TRUE), file.path(root, "second.yaml"))
 define_sentinel <- file.path(root, "define.xml")
@@ -451,7 +451,7 @@ for (case_index in seq_along(host_truth[["xml_text_cases"]])) {
   }
   if (case[["inherit_specification"]]) {
     stopifnot_case(label, "the specification becomes a parent" = file.rename(file.path(root, "spec.yaml"), file.path(root, "base.yaml")))
-    writeLines(c("schema_version: '1.0'", "parent: base.yaml"), file.path(root, "spec.yaml"))
+    writeLines(c('yamaa: "1.0"', "type: spec", "parent: base.yaml"), file.path(root, "spec.yaml"))
   }
   result <- submission(root)
   check_issues(result, empty = !length(case[["issues"]]))

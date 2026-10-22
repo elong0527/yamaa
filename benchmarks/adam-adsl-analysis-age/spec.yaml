@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
@@ -31,7 +33,7 @@ columns:
 
   # Whole years from birth to randomization, counted as birthdays reached;
   # randomization before birth gives minus the whole years back. Empty if
-  # either date is missing. exclusive is the only bounds a year count takes.
+  # either date is missing. A year count takes only the default closed: right.
   - name: AAGE
     type: int
     label: Analysis Age
@@ -41,9 +43,8 @@ columns:
         start: BRTHDT
         end: RANDDT
         unit: year
-        bounds: exclusive
 
   - name: AAGEU
     type: str
     label: Analysis Age Unit
-    derivation: {literal: YEARS}
+    derivation: "'YEARS'"

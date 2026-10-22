@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
@@ -6,9 +8,11 @@ input:
   CM:
     path: input/cm.csv
     types: {CMSTDTC: str, CMSTDTC_IMP: date}
+    key: [STUDYID, USUBJID]
   PR:
     path: input/pr.csv
     types: {PRSTDTC: date}
+    key: [STUDYID, USUBJID]
 base: ADSL_RAW
 
 output:
@@ -31,7 +35,7 @@ columns:
     label: Date of First Exposure to Treatment
     derivation: ADSL_RAW.TRTSDT
     verifications:
-      - not_missing: {}
+      - not_missing
 
   # The first start of an on-treatment medication, and of an on-treatment
   # cancer-related procedure, on or after the treatment start date. A record
@@ -78,7 +82,7 @@ columns:
     label: New Anti-Cancer Therapy Start Relative Day
     derivation:
       study_day:
-        date: NACTDT
+        source: NACTDT
         reference: TRTSDT
 
   - name: NACTFL

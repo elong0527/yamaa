@@ -1,4 +1,6 @@
-schema_version: '1.0'
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: RESULTS
 keys:
 - STUDYID
@@ -40,42 +42,42 @@ columns:
 - name: ANALYSISID
   type: str
   label: Analysis Identifier
-  derivation: {literal: AEINC}
+  derivation: "'AEINC'"
 
 - name: ANALYSISSETID
   type: str
   label: Analysis Set Identifier
-  derivation: {literal: SAFETY}
+  derivation: "'SAFETY'"
 
 - name: DATASET
   type: str
   label: Analysis Dataset
-  derivation: {literal: ADAE}
+  derivation: "'ADAE'"
 
 - name: VARIABLE
   type: str
   label: Analysis Variable
-  derivation: {literal: USUBJID}
+  derivation: "'USUBJID'"
 
 - name: ANALYSISSET
   type: str
   label: Analysis Set Condition
-  derivation: {literal: SAFFL = 'Y'}
+  derivation: "'SAFFL = ''Y'''"
 
 - name: DATASUBSET
   type: str
   label: Data Subset Condition
-  derivation: {literal: TRTEMFL = 'Y'}
+  derivation: "'TRTEMFL = ''Y'''"
 
 - name: GROUPINGID
   type: str
   label: Grouping Factor Identifier
-  derivation: {literal: TRT01P}
+  derivation: "'TRT01P'"
 
 - name: METHODID
   type: str
   label: Analysis Method Identifier
-  derivation: {literal: AEINCIDENCE}
+  derivation: "'AEINCIDENCE'"
 
 - name: GROUPORDER
   type: int
@@ -106,9 +108,7 @@ columns:
     case:
     - when: OPERATIONID = 'COUNT'
       then: NSUBJ
-    - otherwise:
-        compute:
-          expr: 100 * NSUBJ / DENOM
+    - otherwise: 100 * NSUBJ / DENOM
 
 rows:
 - id: count
@@ -118,7 +118,7 @@ rows:
   - SUBJECT.TRT01P
   - SUBJECT.TRT01PN
   derivations:
-    OPERATIONID: {literal: COUNT}
+    OPERATIONID: "'COUNT'"
     NSUBJ:
       aggregate: SUM(SUBJECT.EVENTN)
     DENOM:
@@ -131,7 +131,7 @@ rows:
   - SUBJECT.TRT01P
   - SUBJECT.TRT01PN
   derivations:
-    OPERATIONID: {literal: PERCENT}
+    OPERATIONID: "'PERCENT'"
     NSUBJ:
       aggregate: SUM(SUBJECT.EVENTN)
     DENOM:

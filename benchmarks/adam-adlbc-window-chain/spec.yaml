@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADLBC
 keys: [STUDYID, USUBJID, PARAMCD, AVISITN]
 input:
@@ -50,9 +52,7 @@ columns:
   - name: CHG
     type: float
     label: Change from Previous Value
-    derivation:
-      compute:
-        expr: "AVAL - PREV_AVAL"
+    derivation: "AVAL - PREV_AVAL"
 
   # PREV2 chains on the finished CHG: the previous visit's change is
   # read after CHG is complete for every row in the window.
@@ -73,4 +73,4 @@ rows:
     dataset: LB
     filter: "LB.LBTESTCD = 'ALB' AND LB.LBSTRESN IS NOT NULL"
     derivations:
-      PARAMCD: {literal: "_ALB"}
+      PARAMCD: "'_ALB'"

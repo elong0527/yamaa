@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADLB
 keys: [STUDYID, USUBJID, PARAMCD, AVISIT]
 input:
@@ -47,7 +49,7 @@ rows:
       PARAMCD: LB.LBTESTCD
       PARAM: LB.LBTEST
       AVAL: LB.LBSTRESN
-      DTYPE: {literal: null}
+      DTYPE: null
 
   # One TOTAL record per subject and visit, adding the results in stored
   # record order. A missing result is skipped; if all are missing, the total
@@ -55,11 +57,11 @@ rows:
   - id: total
     group_by: [LB.STUDYID, LB.USUBJID, LB.VISIT]
     derivations:
-      PARAMCD: {literal: TOTAL}
-      PARAM: {literal: Total of Components}
+      PARAMCD: "'TOTAL'"
+      PARAM: "'Total of Components'"
       AVAL:
         aggregate: "SUM(LB.LBSTRESN)"
-      DTYPE: {literal: CALCULATION}
+      DTYPE: "'CALCULATION'"
 
 verifications:
   - row_count:

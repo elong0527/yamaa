@@ -1,9 +1,11 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADPP
 keys: [STUDYID, USUBJID, PARAMCD, APERIOD]
 input:
   ADPP_RAW: {path: input/adpp_raw.csv, types: {APERIOD: int, AVAL: float}}
-  ADSL: input/adsl.csv
+  ADSL: {path: input/adsl.csv, key: [STUDYID, USUBJID]}
   COMPARE: {path: input/compare.csv, types: {COMPNO: int}}
 base: ADPP_RAW
 
@@ -17,14 +19,14 @@ output:
 intermediates:
   - id: COMP01
     dataset: COMPARE
-    key: {COMPNO: {literal: 1}}
+    key: {COMPNO: 1}
     require_match: true
     verifications:
       - unique: [COMPNO]
 
   - id: COMP02
     dataset: COMPARE
-    key: {COMPNO: {literal: 2}}
+    key: {COMPNO: 2}
     require_match: true
     verifications:
       - unique: [COMPNO]

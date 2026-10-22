@@ -6,17 +6,18 @@ study:
   name: LAB01
   description: Example study testing samples at a central laboratory
   protocol_name: LAB-01
+
 sdtm:
+  specs:
+    - spec.yaml
   standards:
     - name: SDTMIG
       version: "3.4"
       status: Final
-  specs:
-    - spec.yaml
   define: define.xml
-  source_system_version: "1.0"
   documents:
     - id: acrf
       kind: annotated_crf
       link: acrf.pdf
       title: Annotated Case Report Form
+  source_system_version: "1.0"

@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADEG
 keys: [STUDYID, USUBJID, PARAMCD, ATPTN]
 input:
@@ -20,7 +22,7 @@ intermediates:
     key: [STUDYID, USUBJID, EGTPTNUM, EGREPNUM]
     filter: "EG.EGTESTCD = 'RRAG'"
     columns: [EGSTRESN]
-    no_match: 0
+    absent: 0
     verifications:
       - unique: [STUDYID, USUBJID, EGTPTNUM, EGREPNUM]
 
@@ -64,13 +66,13 @@ columns:
   - name: DTYPE
     type: str
     label: Derivation Type
-    derivation: {literal: AVERAGE}
+    derivation: "'AVERAGE'"
 
   - name: AVAL
     type: float
     label: Analysis Value
     verifications:
-      - not_missing: {}
+      - not_missing
 
 # One average record per subject, planned time point and parameter, over
 # the ECGs of that time point that have a value for the parameter. A
@@ -83,8 +85,8 @@ rows:
     derivations:
       STUDYID: EG.STUDYID
       USUBJID: EG.USUBJID
-      PARAMCD: {literal: QTAG}
-      PARAM: {literal: "QT Interval, Aggregate (msec)"}
+      PARAMCD: "'QTAG'"
+      PARAM: "'QT Interval, Aggregate (msec)'"
       ATPT: EG.EGTPT
       ATPTN: EG.EGTPTNUM
       AVAL:
@@ -99,8 +101,8 @@ rows:
     derivations:
       STUDYID: EG.STUDYID
       USUBJID: EG.USUBJID
-      PARAMCD: {literal: RRAG}
-      PARAM: {literal: "RR Interval, Aggregate (msec)"}
+      PARAMCD: "'RRAG'"
+      PARAM: "'RR Interval, Aggregate (msec)'"
       ATPT: EG.EGTPT
       ATPTN: EG.EGTPTNUM
       AVAL:
@@ -118,8 +120,8 @@ rows:
     derivations:
       STUDYID: QT.STUDYID
       USUBJID: QT.USUBJID
-      PARAMCD: {literal: QTCF}
-      PARAM: {literal: "QTcF Interval, Aggregate (msec)"}
+      PARAMCD: "'QTCF'"
+      PARAM: "'QTcF Interval, Aggregate (msec)'"
       ATPT: QT.EGTPT
       ATPTN: QT.EGTPTNUM
       AVAL:

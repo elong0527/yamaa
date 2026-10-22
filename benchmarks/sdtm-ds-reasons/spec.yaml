@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: SDTM
 domain: DS
 keys: [STUDYID, USUBJID, DSSEQ]
 
@@ -15,7 +17,7 @@ columns:
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
-    derivation: {literal: DS}
+    derivation: "'DS'"
     verifications:
       - allowed_values:
           values: [DS]
@@ -46,7 +48,7 @@ columns:
   - name: DSCAT
     type: str
     label: Category for Disposition Event
-    derivation: {literal: DISPOSITION EVENT}
+    derivation: "'DISPOSITION EVENT'"
     verifications:
       - allowed_values:
           values: [DISPOSITION EVENT]
@@ -61,7 +63,7 @@ columns:
           EOT: STUDY TREATMENT
           EOS: STUDY
     verifications:
-      - not_missing: {}
+      - not_missing
       - allowed_values:
           values: [STUDY TREATMENT, STUDY]
 
@@ -76,7 +78,7 @@ columns:
         filter: ODM.ItemOID = 'IT.DS.COMP'
         variable: ODM.Value
     verifications:
-      - not_missing: {}
+      - not_missing
       - allowed_values:
           values: [COMPLETED, DISCONTINUED]
 
@@ -86,13 +88,13 @@ columns:
     derivation:
       case:
         - when: "COMPSTAT = 'COMPLETED'"
-          then: {literal: COMPLETED}
+          then: "'COMPLETED'"
         - otherwise:
             source:
               filter: ODM.ItemOID = 'IT.DS.REASON'
               variable: ODM.Value
     verifications:
-      - not_missing: {}
+      - not_missing
 
   - name: DSDECOD
     type: str
@@ -100,13 +102,13 @@ columns:
     derivation:
       case:
         - when: "COMPSTAT = 'COMPLETED'"
-          then: {literal: COMPLETED}
+          then: "'COMPLETED'"
         - otherwise:
             source:
               filter: ODM.ItemOID = 'IT.DS.REASONCD'
               variable: ODM.Value
     verifications:
-      - not_missing: {}
+      - not_missing
       - allowed_values:
           values: [COMPLETED, ADVERSE EVENT, OTHER]
 
@@ -118,7 +120,7 @@ columns:
         filter: ODM.ItemOID = 'IT.DS.DTC'
         variable: ODM.Value
     verifications:
-      - not_missing: {}
+      - not_missing
 
 verifications:
   - row_count:
