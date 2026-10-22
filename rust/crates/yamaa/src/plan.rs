@@ -15,7 +15,7 @@ use yamaa_adapters::application_measurements::Measurements;
 use crate::cancel::CancellationToken;
 use crate::diagnostic::Report;
 use crate::engine::Build;
-use crate::internal::{Compiled, EngineShared, ObserverBridge};
+use crate::internal::{Compiled, EngineShared};
 
 /// An owned compiled specification, cheap to clone: every clone shares the
 /// same compiled state. A refused compilation is a plan too: [`Plan::report`]
@@ -106,7 +106,7 @@ impl Plan {
             &self.compiled.specification,
             &self.compiled.state,
             held,
-            &ObserverBridge::new(measurements),
+            measurements,
             token,
         )
     }
