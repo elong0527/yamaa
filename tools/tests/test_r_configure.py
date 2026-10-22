@@ -238,10 +238,10 @@ class ConfigureTests(unittest.TestCase):
         ).splitlines()
         return Path(directory, target).resolve(), Path(directory, cargo_home).resolve()
 
-    def cargo_command(self, makevars):
+    def cargo_command(self, makevars, *arguments):
         """The words of the engine recipe's cargo command, as make prints it
-        without running anything."""
-        result = self.make(makevars, "-n")
+        without running anything, with `arguments` on make's command line."""
+        result = self.make(makevars, "-n", *arguments)
         self.assertEqual(result.returncode, 0, result.stderr)
         # The shell joins a line that ends in a backslash to the next.
         lines = result.stdout.replace("\\\n", "").splitlines()
@@ -701,6 +701,36 @@ class ConfigureTests(unittest.TestCase):
                         for word in self.cargo_command(makevars)
                     ],
                     [word for word in isolated if word not in settings + options],
+                )
+
+    def test_the_c_that_crates_compile_uses_the_c_compiler_of_r(self):
+        # The cc crate compiles the ReadStat and zstd sources. A sanitizer
+        # build of R, such as R-hub's clang-asan image, adds its flags to the
+        # CC of R's Makeconf, given here on make's command line, so each
+        # recipe hands that whole command to Cargo for the target it builds.
+        # R's CFLAGS, set for a package's own sources, stay out.
+        compiler = (
+            "clang-23 -std=gnu23 -fsanitize=address,undefined -fno-omit-frame-pointer"
+        )
+        for windows, variable in ((False, "CC"), (True, "CC_x86_64_pc_windows_gnu")):
+            with self.subTest(windows=windows):
+                command = self.cargo_command(
+                    self.configured(windows),
+                    f"CC={compiler}",
+                    "CFLAGS=-O3 -Wall -pedantic",
+                )
+                cargo = next(
+                    index
+                    for index, word in enumerate(command)
+                    if word.endswith(("/cargo", "/cargo.exe"))
+                )
+                self.assertEqual(
+                    [
+                        word
+                        for word in command[:cargo]
+                        if word.startswith(("CC", "CFLAGS"))
+                    ],
+                    [f"{variable}={compiler}"],
                 )
 
     def test_no_inherited_build_directory_or_rustc_wrapper_reaches_cargo(self):
