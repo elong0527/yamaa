@@ -14,7 +14,6 @@ mod execution {
         };
         use yamaa_core::{
             diagnostic::{source_diagnostics, ConditionCode as C, Diagnostic},
-            schema::{Document, SpecificationDocument},
             specification::{PreparedSpecification, SourceDeclaration},
             table::{CellError, TableAccess, TableSchema, ValueRef},
             typed_csv::Error as TypingError,
@@ -22,10 +21,12 @@ mod execution {
         };
 
         use crate::support::document::Tree;
+        use crate::support::specification::prepare;
 
         fn prepared(names: &[&str]) -> PreparedSpecification {
             let tree = Tree::map(vec![
-                ("schema_version", Tree::text("1.0")),
+                ("yamaa", Tree::text("1.0")),
+                ("type", Tree::text("spec")),
                 ("domain", Tree::text("TEST")),
                 ("base", Tree::text("SRC")),
                 (
@@ -45,13 +46,7 @@ mod execution {
                         ("type", Tree::text("int")),
                         (
                             "derivation",
-                            Tree::map(vec![(
-                                "value",
-                                Tree::map(vec![(
-                                    "source",
-                                    Tree::map(vec![("variable", Tree::text("SRC.ID"))]),
-                                )]),
-                            )]),
+                            Tree::map(vec![("value", Tree::text("SRC.ID"))]),
                         ),
                     ])]),
                 ),
@@ -63,11 +58,7 @@ mod execution {
                     ]),
                 ),
             ]);
-            let mut nodes = Vec::new();
-            let root = tree.append(&mut nodes);
-            let document = Document::new(nodes, root).unwrap();
-            let model = SpecificationDocument::admit(document).unwrap().unwrap();
-            PreparedSpecification::prepare(&model).unwrap()
+            prepare(&tree.document()).unwrap()
         }
         type Trace = Rc<RefCell<Vec<String>>>;
         struct Opaque {

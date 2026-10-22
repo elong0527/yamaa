@@ -140,7 +140,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     )]));
     let copies = Copies::of(&[&linked]).unwrap();
     assert_eq!(copies.dataset_findings(), None);
-    let contracts = BTreeMap::from([("SRC", prepare_document(producer().document()).unwrap())]);
+    let contracts = BTreeMap::from([("SRC", prepare_document(&producer()).unwrap())]);
     let (_, findings) = copies.column_findings(&contracts).unwrap();
     assert_eq!(findings.len(), 1);
     check(

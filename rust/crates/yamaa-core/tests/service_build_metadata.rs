@@ -928,40 +928,28 @@ mod service {
         };
         use yamaa_core::{
             odm_source::FIELDS,
-            schema::{Document, SpecificationDocument},
             specification::{PreparedSpecification, SourceDeclaration, SourceInterpretation},
             table::{CellError, Column, TableAccess, TableSchema, ValueRef},
             value::ColumnType,
         };
 
         use crate::support::document::Tree;
+        use crate::support::specification::prepare;
 
         fn prepared() -> PreparedSpecification {
-            // The canonical document normalization admits: every shorthand is
-            // expanded to its class.
-            let column = |name, operation, item| {
-                let field = if operation == "odm" {
-                    "item"
-                } else {
-                    "variable"
-                };
+            // The canonical document normalization admits: an ODM read is
+            // expanded to its class, and a name is an expression's text.
+            let column = |name, value| {
                 Tree::map(vec![
                     ("name", Tree::text(name)),
                     ("type", Tree::text("str")),
-                    (
-                        "derivation",
-                        Tree::map(vec![(
-                            "value",
-                            Tree::map(vec![(
-                                operation,
-                                Tree::map(vec![(field, Tree::text(item))]),
-                            )]),
-                        )]),
-                    ),
+                    ("derivation", Tree::map(vec![("value", value)])),
                 ])
             };
+            let odm = |item| Tree::map(vec![("odm", Tree::map(vec![("item", Tree::text(item))]))]);
             let tree = Tree::map(vec![
-                ("schema_version", Tree::text("1.0")),
+                ("yamaa", Tree::text("1.0")),
+                ("type", Tree::text("spec")),
                 ("domain", Tree::text("TEST")),
                 ("base", Tree::text("SRC")),
                 (
@@ -975,8 +963,8 @@ mod service {
                 (
                     "columns",
                     Tree::List(vec![
-                        column("ID", "source", "SRC.SubjectKey"),
-                        column("VAL", "odm", "SRC.IT.TEST.OID"),
+                        column("ID", Tree::text("SRC.SubjectKey")),
+                        column("VAL", odm("SRC.IT.TEST.OID")),
                     ]),
                 ),
                 (
@@ -990,11 +978,7 @@ mod service {
                     ]),
                 ),
             ]);
-            let mut nodes = Vec::new();
-            let root = tree.append(&mut nodes);
-            let document = Document::new(nodes, root).unwrap();
-            let admitted = SpecificationDocument::admit(document).unwrap().unwrap();
-            PreparedSpecification::prepare(&admitted).unwrap()
+            prepare(&tree.document()).unwrap()
         }
         #[derive(Debug)]
         struct Original(Rc<()>);

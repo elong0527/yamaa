@@ -4,10 +4,10 @@ use crate::support;
 #[test]
 fn oversized_patterns_report_the_compiled_size_limit_at_the_pattern() {
     use support::document::Tree as T;
+    use support::specification::prepare;
     use yamaa_core::{
         limits::Limits,
-        schema::SpecificationDocument,
-        specification::{CompilerLimit, PrepareError, PreparedSpecification},
+        specification::{CompilerLimit, PrepareError},
     };
 
     // A valid repetition count far beyond any compiled program the limit admits.
@@ -21,7 +21,8 @@ fn oversized_patterns_report_the_compiled_size_limit_at_the_pattern() {
             fields.push(("replacement", T::text("-")));
         }
         let document = T::map(vec![
-            ("schema_version", T::text("1.0")),
+            ("yamaa", T::text("1.0")),
+            ("type", T::text("spec")),
             ("domain", T::text("TEST")),
             ("base", T::text("SRC")),
             (
@@ -49,8 +50,7 @@ fn oversized_patterns_report_the_compiled_size_limit_at_the_pattern() {
             ),
         ])
         .document();
-        let model = SpecificationDocument::admit(document).unwrap().unwrap();
-        let Err(PrepareError::Limit(limit)) = PreparedSpecification::prepare(&model) else {
+        let Err(PrepareError::Limit(limit)) = prepare(&document) else {
             panic!("an oversized pattern must be refused for {operation}");
         };
         assert_eq!(

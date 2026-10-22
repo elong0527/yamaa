@@ -193,7 +193,6 @@ pub(in crate::specification) fn context_findings(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::schema::Document;
     use crate::test_document::Tree;
 
     #[test]
@@ -209,10 +208,12 @@ mod tests {
                     ),
                 ]),
             )]),
-            Tree::map(vec![("literal", Tree::text("SRC.IT.TEST.OID"))]),
+            // Quoted text is a literal (D18).
+            Tree::text("'SRC.IT.TEST.OID'"),
         ] {
             let tree = Tree::map(vec![
-                ("schema_version", Tree::text("1.0")),
+                ("yamaa", Tree::text("1.0")),
+                ("type", Tree::text("spec")),
                 ("domain", Tree::text("TEST")),
                 (
                     "input",
@@ -238,16 +239,11 @@ mod tests {
                     ]),
                 ),
             ]);
-            let mut nodes = Vec::new();
-            let root = tree.append(&mut nodes);
-            let document = Document::new(nodes, root).unwrap();
-            let admitted = SpecificationDocument::admit(document).unwrap().unwrap();
-            let lowered = crate::front_end::v0_5::lower(&admitted, None);
-            let spec = lowered.spec();
+            let spec = crate::test_specification::lower(tree);
             let derivation = spec.columns[0].derivation.as_ref().unwrap().expr;
-            assert!(!reads_odm(spec, derivation));
-            assert!(inputs(spec).unwrap().is_empty());
-            assert!(context_findings(spec).unwrap().is_empty());
+            assert!(!reads_odm(&spec, derivation));
+            assert!(inputs(&spec).unwrap().is_empty());
+            assert!(context_findings(&spec).unwrap().is_empty());
         }
     }
 }

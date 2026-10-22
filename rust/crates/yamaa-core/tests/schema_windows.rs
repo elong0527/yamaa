@@ -243,9 +243,11 @@ mod schema {
         }
     }
     mod specification_compiler {
-        //! Compile normalized documents using only the core crate and immutable schemas.
+        //! Compile 1.0 documents, lowered by the 1.0 front end, using only the
+        //! core crate and immutable schemas.
         use crate::support::id_source_schema as source;
         use crate::support::resolved;
+        use crate::support::specification::{header, prepare};
         use yamaa_core::{
             dataset::{
                 resolved::{Op, OperandRole},
@@ -260,35 +262,98 @@ mod schema {
 
         use crate::support::document::Tree;
 
-        fn document(expression: &str, input_path: &str) -> SpecificationDocument {
-            operation_document(
-                "compute",
-                Tree::map(vec![("expr", Tree::text(expression))]),
+        /// A column of type `int` that reads `read`, an expression field's text.
+        fn reference(name: &str, read: &str) -> Tree {
+            Tree::map(vec![
+                ("name", Tree::text(name)),
+                ("type", Tree::text("int")),
+                ("derivation", Tree::map(vec![("value", Tree::text(read))])),
+            ])
+        }
+        /// The expression a YAML scalar writes: text is quoted, and any other
+        /// scalar is itself a literal (D18).
+        fn literal(node: N) -> Tree {
+            match node {
+                N::Text(text) => Tree::text(format!("'{}'", text.replace('\'', "''"))),
+                node => Tree::Scalar(node),
+            }
+        }
+        /// A 1.0 specification over `SRC`, read from `input_path`, whose `VALUE`
+        /// column derives `expression`, an expression field's text.
+        fn document(expression: &str, input_path: &str) -> Document {
+            value_document(Tree::text(expression), input_path, None, None)
+        }
+        /// [`document`], with `VALUE` deriving `operation` over `payload`.
+        fn operation_document(operation: &str, payload: Tree, input_path: &str) -> Document {
+            value_document(
+                Tree::map(vec![(operation, payload)]),
                 input_path,
+                None,
+                None,
             )
         }
-        fn operation_document(
-            operation: &str,
-            payload: Tree,
-            input_path: &str,
-        ) -> SpecificationDocument {
-            operation_document_with_handler(operation, payload, input_path, None)
-        }
-        fn operation_document_with_handler(
-            operation: &str,
-            payload: Tree,
-            input_path: &str,
-            handler: Option<N>,
-        ) -> SpecificationDocument {
-            operation_document_with_rows(operation, payload, input_path, handler, None)
-        }
-        fn operation_document_with_rows(
-            operation: &str,
-            payload: Tree,
+        /// [`document`], with `VALUE` deriving `value` under the conversion
+        /// handler `handler` and with the row templates `rows`, when given.
+        fn value_document(
+            value: Tree,
             input_path: &str,
             handler: Option<N>,
             rows: Option<Tree>,
-        ) -> SpecificationDocument {
+        ) -> Document {
+            value_tree(value, input_path, handler, rows).document()
+        }
+        /// The tree of [`value_document`].
+        fn value_tree(
+            value: Tree,
+            input_path: &str,
+            handler: Option<N>,
+            rows: Option<Tree>,
+        ) -> Tree {
+            let mut wrapper = vec![("value", value)];
+            if let Some(value) = handler {
+                wrapper.push(("unconvertible", Tree::Scalar(value)));
+            }
+            let mut fields = header();
+            fields.extend([
+                ("domain", Tree::text("TEST")),
+                (
+                    "input",
+                    Tree::map(vec![(
+                        "SRC",
+                        Tree::map(vec![("path", Tree::text(input_path))]),
+                    )]),
+                ),
+                ("keys", Tree::List(vec![Tree::text("ID")])),
+                (
+                    "columns",
+                    Tree::List(vec![
+                        reference("ID", "SRC.ID"),
+                        Tree::map(vec![
+                            ("name", Tree::text("VALUE")),
+                            ("type", Tree::text("int")),
+                            ("derivation", Tree::map(wrapper)),
+                        ]),
+                    ]),
+                ),
+                (
+                    "output",
+                    Tree::map(vec![
+                        ("path", Tree::text("result.csv")),
+                        (
+                            "columns",
+                            Tree::List(vec![Tree::text("ID"), Tree::text("VALUE")]),
+                        ),
+                    ]),
+                ),
+            ]);
+            if let Some(rows) = rows {
+                fields.push(("rows", rows));
+            }
+            Tree::map(fields)
+        }
+        /// A 0.5 specification whose `VALUE` derives `operation` over
+        /// `payload`, for the 0.5-only test below, which #3447 deletes.
+        fn legacy_operation_document(operation: &str, payload: Tree) -> SpecificationDocument {
             let column = |name, op, field, value| {
                 Tree::map(vec![
                     ("name", Tree::text(name)),
@@ -302,11 +367,9 @@ mod schema {
                     ),
                 ])
             };
-            let mut wrapper = vec![("value", Tree::map(vec![(operation, payload)]))];
-            if let Some(value) = handler {
-                wrapper.push(("unconvertible", Tree::Scalar(value)));
-            }
-            let mut fields = vec![
+            let wrapper = vec![("value", Tree::map(vec![(operation, payload)]))];
+            let input_path = "input.csv";
+            let fields = vec![
                 ("schema_version", Tree::text("1.0")),
                 ("domain", Tree::text("TEST")),
                 (
@@ -339,9 +402,6 @@ mod schema {
                     ]),
                 ),
             ];
-            if let Some(rows) = rows {
-                fields.push(("rows", rows));
-            }
             let tree = Tree::map(fields);
             let mut nodes = Vec::new();
             let root = tree.append(&mut nodes);
@@ -368,14 +428,13 @@ mod schema {
                         "locf" => fields.push(("source", Tree::text(variable))),
                         "baseline_flag" => {
                             fields.push(("date", Tree::text(variable)));
-                            fields.push(("reference_date", Tree::text(variable)));
-                            fields.push(("value", Tree::text(variable)));
+                            fields.push(("reference", Tree::text(variable)));
+                            fields.push(("source", Tree::text(variable)));
                         }
                         _ => {}
                     }
                     let window = Tree::map(vec![(operation, Tree::map(fields))]);
-                    let literal =
-                        Tree::map(vec![("literal", Tree::Scalar(N::Integer("0".into())))]);
+                    let literal = Tree::Scalar(N::Integer("0".into()));
                     for (derivation, suffix) in [
                         (window.clone(), format!(".{operation}")),
                         (
@@ -409,18 +468,20 @@ mod schema {
                             "aggregate",
                             Tree::map(vec![
                                 (
-                                    "derive",
-                                    Tree::List(vec![Tree::map(vec![
-                                        ("name", Tree::text("V")),
-                                        ("type", Tree::text("int")),
-                                        ("derivation", Tree::map(vec![("value", derivation)])),
-                                    ])]),
+                                    "derivations",
+                                    Tree::map(vec![(
+                                        "V",
+                                        Tree::map(vec![
+                                            ("type", Tree::text("int")),
+                                            ("derivation", Tree::map(vec![("value", derivation)])),
+                                        ]),
+                                    )]),
                                 ),
                                 ("expr", Tree::text("SUM(V)")),
                             ]),
                             "input.csv",
                         );
-                        let outcome = PreparedSpecification::prepare(&document);
+                        let outcome = prepare(&document);
                         let Err(PrepareError::Invalid(findings)) = outcome else {
                             panic!("unexpected aggregate derive window outcome: {operation} {variable}: {outcome:?}");
                         };
@@ -434,7 +495,7 @@ mod schema {
                         assert_eq!(
                             diagnostic.spec_paths,
                             [format!(
-                                "columns.VALUE.derivation.aggregate.derive[0].derivation{suffix}"
+                                "columns.VALUE.derivation.aggregate.derivations.V.derivation{suffix}"
                             )]
                         );
                         assert_eq!(
@@ -451,58 +512,40 @@ mod schema {
         #[test]
         fn aggregate_derive_window_names_in_literals_remain_literals() {
             let binding = |name, kind, value| {
-                Tree::map(vec![
-                    ("name", Tree::text(name)),
-                    ("type", Tree::text(kind)),
-                    ("derivation", Tree::map(vec![("value", value)])),
-                ])
+                (
+                    name,
+                    Tree::map(vec![
+                        ("type", Tree::text(kind)),
+                        ("derivation", Tree::map(vec![("value", value)])),
+                    ]),
+                )
             };
             let document = operation_document(
                 "aggregate",
                 Tree::map(vec![
                     (
-                        "derive",
-                        Tree::List(vec![
-                            binding(
-                                "V",
-                                "int",
-                                Tree::map(vec![(
-                                    "source",
-                                    Tree::map(vec![("variable", Tree::text("SRC.ID"))]),
-                                )]),
-                            ),
-                            binding(
-                                "TAG",
-                                "str",
-                                Tree::map(vec![("literal", Tree::text("row_value"))]),
-                            ),
+                        "derivations",
+                        Tree::map(vec![
+                            binding("V", "int", Tree::text("SRC.ID")),
+                            binding("TAG", "str", Tree::text("'row_value'")),
                         ]),
                     ),
                     ("expr", Tree::text("SUM(V)")),
                 ]),
                 "input.csv",
             );
-            PreparedSpecification::prepare(&document).unwrap();
+            prepare(&document).unwrap();
         }
 
-        fn case_document(when: &str, expression: &str) -> SpecificationDocument {
+        fn case_document(when: &str, expression: &str) -> Document {
             operation_document(
                 "case",
                 Tree::List(vec![
                     Tree::map(vec![
                         ("when", Tree::text(when)),
-                        (
-                            "then",
-                            Tree::map(vec![(
-                                "compute",
-                                Tree::map(vec![("expr", Tree::text(expression))]),
-                            )]),
-                        ),
+                        ("then", Tree::text(expression)),
                     ]),
-                    Tree::map(vec![(
-                        "otherwise",
-                        Tree::map(vec![("literal", Tree::Scalar(N::Integer("1".into())))]),
-                    )]),
+                    Tree::map(vec![("otherwise", Tree::Scalar(N::Integer("1".into())))]),
                 ]),
                 "input.csv",
             )
@@ -510,7 +553,7 @@ mod schema {
 
         #[test]
         fn case_grammar_findings_retain_their_original_nested_paths() {
-            let prepared = PreparedSpecification::prepare(&case_document("ID >", "1")).unwrap();
+            let prepared = prepare(&case_document("ID >", "1")).unwrap();
             let Err(BindError::Invalid(findings)) = prepared.bind(&source()) else {
                 panic!("a predicate expression finding")
             };
@@ -520,23 +563,21 @@ mod schema {
                 ["columns.VALUE.derivation.case[0].when"]
             );
             assert!(matches!(findings[0], BindFinding::Predicate(_)));
-            let prepared =
-                PreparedSpecification::prepare(&case_document("ID > 0", "ID +")).unwrap();
+            let prepared = prepare(&case_document("ID > 0", "ID +")).unwrap();
             let Err(BindError::Invalid(findings)) = prepared.bind(&source()) else {
-                panic!("a compute expression finding")
+                panic!("an expression finding")
             };
             let diagnostics = findings[0].diagnostics(prepared.source()).unwrap();
             assert_eq!(
                 diagnostics[0].spec_paths,
-                ["columns.VALUE.derivation.case[0].then.compute.expr"]
+                ["columns.VALUE.derivation.case[0].then"]
             );
             assert!(matches!(findings[0], BindFinding::Numeric { .. }));
         }
 
         #[test]
         fn non_key_case_predicate_owns_key_grain_collection_without_study_authority() {
-            let prepared =
-                PreparedSpecification::prepare(&case_document("SRC.ID > 0", "1")).unwrap();
+            let prepared = prepare(&case_document("SRC.ID > 0", "1")).unwrap();
             let plan = prepared.bind(&source()).unwrap();
             let case = resolved::columns(&plan)[0].expr;
             let Op::Case = resolved::op(&plan, case) else {
@@ -559,8 +600,7 @@ mod schema {
 
         #[test]
         fn compiler_owns_bound_plan_without_an_engine_or_source_port() {
-            let prepared =
-                PreparedSpecification::prepare(&document("ID + 1 / 0", "input.csv")).unwrap();
+            let prepared = prepare(&document("ID + 1 / 0", "input.csv")).unwrap();
             assert_eq!(prepared.source().path, "input.csv");
             assert_eq!(prepared.projection(), ["ID", "VALUE"]);
             let plan: ResolvedPlan = prepared.bind(&source()).unwrap();
@@ -575,25 +615,21 @@ mod schema {
             let Op::Compute(compute) = resolved::op(&plan, binding.expr) else {
                 panic!("compiled numeric declaration")
             };
-            assert_eq!(
-                compute.expression().spec_path(),
-                "columns.VALUE.derivation.compute"
-            );
+            assert_eq!(compute.expression().spec_path(), "columns.VALUE.derivation");
             // Division by zero remains deferred until an application actually executes a row.
-            assert_eq!(&*binding.path, "columns.VALUE.derivation.compute");
+            assert_eq!(&*binding.path, "columns.VALUE.derivation");
         }
 
         #[test]
         fn compiler_retains_admission_binding_and_resource_boundaries() {
-            let prepared = PreparedSpecification::prepare(&document("ID +", "input.csv")).unwrap();
+            let prepared = prepare(&document("ID +", "input.csv")).unwrap();
             let Err(BindError::Invalid(findings)) = prepared.bind(&source()) else {
                 panic!("binding diagnostic")
             };
             assert!(
-                matches!(&findings[..], [BindFinding::Numeric { path, expression, .. }] if path == "columns.VALUE.derivation.compute.expr" && expression == "ID +")
+                matches!(&findings[..], [BindFinding::Numeric { path, expression, .. }] if path == "columns.VALUE.derivation" && expression == "ID +")
             );
-            let Err(PrepareError::Invalid(findings)) =
-                PreparedSpecification::prepare(&document("ID + 1", "input.bad"))
+            let Err(PrepareError::Invalid(findings)) = prepare(&document("ID + 1", "input.bad"))
             else {
                 panic!("unknown source profile admission")
             };
@@ -611,8 +647,7 @@ mod schema {
                     .map(|(key, value)| (key.into(), yamaa_core::json::Value::String(value.into())))
                     .collect()
             );
-            let prepared =
-                PreparedSpecification::prepare(&document("ID + 1", "input.PARQUET")).unwrap();
+            let prepared = prepare(&document("ID + 1", "input.PARQUET")).unwrap();
             assert_eq!(
                 prepared.source().profile,
                 yamaa_core::specification::SourceProfile::Parquet
@@ -620,8 +655,7 @@ mod schema {
             assert!(!prepared.source().empty_string_present);
             assert!(prepared.source().text_is_missing(""));
             assert!(!prepared.source().text_is_missing("NA"));
-            let prepared =
-                PreparedSpecification::prepare(&document("ID + 1", "input.csv")).unwrap();
+            let prepared = prepare(&document("ID + 1", "input.csv")).unwrap();
             assert_eq!(
                 resolved::output(&prepared.bind(&source()).unwrap())
                     .columns()
@@ -632,46 +666,15 @@ mod schema {
 
         #[test]
         fn parquet_type_declarations_keep_all_semantic_findings() {
-            let original = document("ID + 1", "source.parquet");
-            let d = original.document();
-            let inputs = d.field(d.root(), "input").unwrap();
-            let source = d.field(inputs, "SRC").unwrap();
-            let mut nodes = d.nodes().to_vec();
-            let types = Tree::map(vec![
-                ("ID", Tree::text("int")),
-                ("VALUE", Tree::text("float")),
-            ])
-            .append(&mut nodes);
-            let name = Tree::text("types").append(&mut nodes);
-            let N::Mapping(fields) = &mut nodes[source] else {
-                unreachable!()
-            };
-            fields.push((name, types));
-            // Reorder the arena after adding fields, preserving the model's ownership contract.
-            fn copy(input: &[N], id: usize, out: &mut Vec<N>) -> usize {
-                let value = match &input[id] {
-                    N::Sequence(items) => {
-                        N::Sequence(items.iter().map(|&id| copy(input, id, out)).collect())
-                    }
-                    N::Mapping(items) => N::Mapping(
-                        items
-                            .iter()
-                            .map(|&(k, v)| (copy(input, k, out), copy(input, v, out)))
-                            .collect(),
-                    ),
-                    value => value.clone(),
-                };
-                let index = out.len();
-                out.push(value);
-                index
-            }
-            let mut ordered = Vec::new();
-            let root = copy(&nodes, d.root(), &mut ordered);
-            let model = SpecificationDocument::admit(Document::new(ordered, root).unwrap())
-                .unwrap()
-                .unwrap();
-            let Err(PrepareError::Invalid(findings)) = PreparedSpecification::prepare(&model)
-            else {
+            let mut tree = value_tree(Tree::text("ID + 1"), "source.parquet", None, None);
+            tree.set(
+                &["input", "SRC", "types"],
+                Tree::map(vec![
+                    ("ID", Tree::text("int")),
+                    ("VALUE", Tree::text("float")),
+                ]),
+            );
+            let Err(PrepareError::Invalid(findings)) = prepare(&tree.document()) else {
                 panic!("all redundant parquet type declarations remain semantic findings");
             };
             assert_eq!(findings.len(), 2);
@@ -681,7 +684,7 @@ mod schema {
             )));
         }
 
-        fn window_document(filter: &str) -> SpecificationDocument {
+        fn window_document(filter: &str) -> Document {
             window_settings(filter, "row_number", None, None, None)
         }
         fn window_settings(
@@ -690,18 +693,7 @@ mod schema {
             method: Option<&str>,
             direction: Option<&str>,
             nulls: Option<&str>,
-        ) -> SpecificationDocument {
-            let original = document("0", "input.csv");
-            let input = original.document();
-            let N::Sequence(columns) =
-                &input.nodes()[input.field(input.root(), "columns").unwrap()]
-            else {
-                unreachable!()
-            };
-            let derivation = input.field(columns[1], "derivation").unwrap();
-            let value = input.field(derivation, "value").unwrap();
-            let payload = input.field(value, "compute").unwrap();
-            let mut nodes = input.nodes().to_vec();
+        ) -> Document {
             let mut order = vec![("variable", Tree::text("ID"))];
             if let Some(value) = direction {
                 order.push(("direction", Tree::text(value)));
@@ -709,54 +701,23 @@ mod schema {
             if let Some(value) = nulls {
                 order.push(("nulls", Tree::text(value)));
             }
-            let window = Tree::map(vec![
-                ("order_by", Tree::List(vec![Tree::map(order)])),
-                ("filter", Tree::text(filter)),
-            ])
-            .append(&mut nodes);
-            let window_name = Tree::text("window").append(&mut nodes);
-            let operation = Tree::text(operation).append(&mut nodes);
-            let mut options = vec![(window_name, window)];
+            let mut options = vec![(
+                "window",
+                Tree::map(vec![
+                    ("order_by", Tree::List(vec![Tree::map(order)])),
+                    ("filter", Tree::text(filter)),
+                ]),
+            )];
             if let Some(value) = method {
-                options.push((
-                    Tree::text("method").append(&mut nodes),
-                    Tree::text(value).append(&mut nodes),
-                ));
+                options.push(("method", Tree::text(value)));
             }
-            nodes[payload] = N::Mapping(options);
-            nodes[value] = N::Mapping(vec![(operation, payload)]);
-            fn copy_node(input: &[N], id: usize, output: &mut Vec<N>) -> usize {
-                let node = match &input[id] {
-                    N::Sequence(items) => N::Sequence(
-                        items
-                            .iter()
-                            .map(|&id| copy_node(input, id, output))
-                            .collect(),
-                    ),
-                    N::Mapping(items) => N::Mapping(
-                        items
-                            .iter()
-                            .map(|&(a, b)| {
-                                (copy_node(input, a, output), copy_node(input, b, output))
-                            })
-                            .collect(),
-                    ),
-                    node => node.clone(),
-                };
-                let id = output.len();
-                output.push(node);
-                id
-            }
-            let mut ordered = Vec::new();
-            let root = copy_node(&nodes, input.root(), &mut ordered);
-            let doc = Document::new(ordered, root).unwrap();
-            SpecificationDocument::admit(doc).unwrap().unwrap()
+            operation_document(operation, Tree::map(options), "input.csv")
         }
 
         #[test]
         fn window_compiler_binds_output_dependencies_without_engine_or_records() {
             use yamaa_core::dataset::WindowKind;
-            let prepared = PreparedSpecification::prepare(&window_document("ID > 0")).unwrap();
+            let prepared = prepare(&window_document("ID > 0")).unwrap();
             let plan = prepared.bind(&source()).unwrap();
             let Op::Window { window, .. } = resolved::op(&plan, resolved::columns(&plan)[0].expr)
             else {
@@ -772,7 +733,7 @@ mod schema {
                 window.filter.as_ref().unwrap().plan().spec_path(),
                 "columns.VALUE.derivation.row_number.window.filter"
             );
-            let qualified = PreparedSpecification::prepare(&window_document("SRC.ID > 0"))
+            let qualified = prepare(&window_document("SRC.ID > 0"))
                 .unwrap()
                 .bind(&source())
                 .unwrap();
@@ -802,10 +763,7 @@ mod schema {
                 for direction in [None, Some("asc"), Some("desc")] {
                     for nulls in [None, Some("last"), Some("first")] {
                         let document = window_settings("ID > 0", "rank", method, direction, nulls);
-                        let plan = PreparedSpecification::prepare(&document)
-                            .unwrap()
-                            .bind(&source())
-                            .unwrap();
+                        let plan = prepare(&document).unwrap().bind(&source()).unwrap();
                         let Op::Window { window, .. } =
                             resolved::op(&plan, resolved::columns(&plan)[0].expr)
                         else {
@@ -825,8 +783,8 @@ mod schema {
             }
         }
 
-        fn literal_document(node: N) -> SpecificationDocument {
-            operation_document("literal", Tree::Scalar(node), "input.csv")
+        fn literal_document(node: N) -> Document {
+            value_document(literal(node), "input.csv", None, None)
         }
 
         #[test]
@@ -848,18 +806,17 @@ mod schema {
                     Value::Int(i64::MIN),
                 ),
             ] {
-                let prepared = PreparedSpecification::prepare(&literal_document(node)).unwrap();
+                let prepared = prepare(&literal_document(node)).unwrap();
                 let plan = prepared.bind(&source()).unwrap();
                 let literal = resolved::columns(&plan)[0];
                 assert_eq!(resolved::op(&plan, literal.expr), &Op::Literal(value));
-                assert_eq!(&*literal.path, "columns.VALUE.derivation.literal");
+                assert_eq!(&*literal.path, "columns.VALUE.derivation");
                 assert_eq!(resolved::output(&plan).columns()[1].kind, ColumnType::Int);
                 assert_eq!(resolved::keys(&plan), [0]);
             }
             // A Boolean converts to no column type (VALUE-3), so its int column
             // is refused before any record is read (VALUE-24).
-            let prepared =
-                PreparedSpecification::prepare(&literal_document(N::Boolean(true))).unwrap();
+            let prepared = prepare(&literal_document(N::Boolean(true))).unwrap();
             let Err(BindError::Invalid(findings)) = prepared.bind(&source()) else {
                 panic!("a Boolean literal cannot fill an int column")
             };
@@ -885,15 +842,15 @@ mod schema {
 
         #[test]
         fn out_of_range_literal_integers_fail_validation_before_binding() {
-            let Err(PrepareError::Invalid(findings)) = PreparedSpecification::prepare(
-                &literal_document(N::Integer("9223372036854775808".into())),
-            ) else {
+            let Err(PrepareError::Invalid(findings)) =
+                prepare(&literal_document(N::Integer("9223372036854775808".into())))
+            else {
                 panic!("wide integer must not narrow")
             };
             assert_eq!(
                 findings,
                 [PreflightFinding::IntegerLiteralOverflow {
-                    path: "columns.VALUE.derivation.literal".into(),
+                    path: "columns.VALUE.derivation".into(),
                     value: "9223372036854775808".into(),
                 }]
             );
@@ -910,22 +867,22 @@ mod schema {
                     Value::Str("NOT.A.REFERENCE".into()),
                 ),
             ] {
-                let document = operation_document_with_handler(
-                    "literal",
+                let document = value_document(
                     Tree::Scalar(N::Boolean(true)),
                     "input.csv",
                     Some(node),
+                    None,
                 );
-                let prepared = PreparedSpecification::prepare(&document).unwrap();
+                let prepared = prepare(&document).unwrap();
                 let plan = prepared.bind(&source()).unwrap();
                 let handlers = resolved::conversion_handlers(&plan);
                 assert_eq!(handlers.len(), 1);
                 let (assignment_path, handler) = handlers[0];
-                assert_eq!(assignment_path, "columns.VALUE.derivation.literal");
+                assert_eq!(assignment_path, "columns.VALUE.derivation");
                 assert_eq!(handler.spec_path, "columns.VALUE.derivation.unconvertible");
                 assert_eq!(handler.value, value);
                 assert_eq!(
-                    resolved::conversion_handler(&plan, "columns.VALUE.derivation.literal"),
+                    resolved::conversion_handler(&plan, "columns.VALUE.derivation"),
                     Some(handler)
                 );
                 assert_eq!(
@@ -934,20 +891,19 @@ mod schema {
                 );
                 assert_eq!(resolved::keys(&plan), [0]);
             }
-            let prepared = PreparedSpecification::prepare(&literal_document(N::Null)).unwrap();
+            let prepared = prepare(&literal_document(N::Null)).unwrap();
             assert!(resolved::conversion_handlers(&prepared.bind(&source()).unwrap()).is_empty());
         }
 
         #[test]
         fn wide_recovery_literal_fails_validation_before_source_binding() {
-            let document = operation_document_with_handler(
-                "literal",
+            let document = value_document(
                 Tree::Scalar(N::Boolean(true)),
                 "input.csv",
                 Some(N::Integer("9223372036854775808".into())),
+                None,
             );
-            let Err(PrepareError::Invalid(findings)) = PreparedSpecification::prepare(&document)
-            else {
+            let Err(PrepareError::Invalid(findings)) = prepare(&document) else {
                 panic!("wide handler must not narrow")
             };
             assert_eq!(
@@ -967,20 +923,14 @@ mod schema {
                     Tree::map(vec![(
                         "VALUE",
                         Tree::map(vec![
-                            (
-                                "value",
-                                Tree::map(vec![("literal", Tree::Scalar(N::Boolean(true)))]),
-                            ),
+                            ("value", Tree::Scalar(N::Boolean(true))),
                             ("unconvertible", Tree::Scalar(value)),
                         ]),
                     )]),
                 ),
             ])];
             for id in ["default-one", "default-two"].into_iter().take(count - 1) {
-                rows.push(Tree::map(vec![
-                    ("id", Tree::text(id)),
-                    ("derivations", Tree::map(vec![])),
-                ]));
+                rows.push(Tree::map(vec![("id", Tree::text(id))]));
             }
             Tree::List(rows)
         }
@@ -989,23 +939,19 @@ mod schema {
         fn row_recovery_binds_only_effective_handlers_in_row_order_and_shares_defaults() {
             use yamaa_core::value::Value;
             for count in [1, 3] {
-                let document = operation_document_with_rows(
-                    "literal",
+                let document = value_document(
                     Tree::Scalar(N::Boolean(true)),
                     "input.csv",
                     Some(N::Null),
                     Some(recovery_rows(N::Integer("7".into()), count)),
                 );
-                let plan = PreparedSpecification::prepare(&document)
-                    .unwrap()
-                    .bind(&source())
-                    .unwrap();
+                let plan = prepare(&document).unwrap().bind(&source()).unwrap();
                 let handlers = resolved::conversion_handlers(&plan);
                 assert_eq!(handlers.len(), if count == 1 { 1 } else { 2 });
-                assert_eq!(handlers[0].0, "rows[0].derivations.VALUE.literal");
+                assert_eq!(handlers[0].0, "rows.override.derivations.VALUE");
                 assert_eq!(
                     handlers[0].1.spec_path,
-                    "rows[0].derivations.VALUE.unconvertible"
+                    "rows.override.derivations.VALUE.unconvertible"
                 );
                 assert_eq!(handlers[0].1.value, Value::Int(7));
                 if count == 3 {
@@ -1021,7 +967,7 @@ mod schema {
                     assert!(resolved::row(&plan, 2).is_empty());
                     assert_eq!(
                         &*resolved::columns(&plan)[1].path,
-                        "columns.VALUE.derivation.literal"
+                        "columns.VALUE.derivation"
                     );
                 }
             }
@@ -1038,33 +984,30 @@ mod schema {
             // passes (match values, scalar, str_case, str_extract, str_pad and
             // str_template) aborted preparation immediately afterwards, so those
             // passes skip a Null `rows` node too.
-            let document = operation_document_with_rows(
-                "compute",
-                Tree::map(vec![("expr", Tree::text("ID + 1"))]),
+            let document = value_document(
+                Tree::text("ID + 1"),
                 "input.csv",
                 None,
                 Some(Tree::Scalar(N::Null)),
             );
-            PreparedSpecification::prepare(&document).unwrap();
+            prepare(&document).unwrap();
         }
 
         #[test]
         fn wide_row_recovery_fails_validation_at_its_authored_path_before_binding() {
-            let document = operation_document_with_rows(
-                "literal",
+            let document = value_document(
                 Tree::Scalar(N::Boolean(true)),
                 "input.csv",
                 None,
                 Some(recovery_rows(N::Integer("9223372036854775808".into()), 1)),
             );
-            let Err(PrepareError::Invalid(findings)) = PreparedSpecification::prepare(&document)
-            else {
+            let Err(PrepareError::Invalid(findings)) = prepare(&document) else {
                 panic!("wide row handler must not narrow")
             };
             assert_eq!(
                 findings,
                 [PreflightFinding::IntegerLiteralOverflow {
-                    path: "rows[0].derivations.VALUE.unconvertible".into(),
+                    path: "rows.override.derivations.VALUE.unconvertible".into(),
                     value: "9223372036854775808".into(),
                 }]
             );
@@ -1082,37 +1025,21 @@ mod schema {
                     (
                         "derivations",
                         Tree::map(vec![
-                            (
-                                "ID",
-                                Tree::map(vec![(
-                                    "value",
-                                    Tree::map(vec![(
-                                        "source",
-                                        Tree::map(vec![("variable", Tree::text("SRC.ID"))]),
-                                    )]),
-                                )]),
-                            ),
+                            ("ID", Tree::map(vec![("value", Tree::text("SRC.ID"))])),
                             (
                                 "VALUE",
-                                Tree::map(vec![(
-                                    "value",
-                                    Tree::map(vec![(
-                                        "literal",
-                                        Tree::Scalar(N::Integer("2".into())),
-                                    )]),
-                                )]),
+                                Tree::map(vec![("value", Tree::Scalar(N::Integer("2".into())))]),
                             ),
                         ]),
                     ),
                 ])]);
-                let document = operation_document_with_rows(
-                    "literal",
+                let document = value_document(
                     Tree::Scalar(N::Integer("2".into())),
                     "input.csv",
                     None,
                     Some(rows),
                 );
-                let prepared = PreparedSpecification::prepare(&document).unwrap();
+                let prepared = prepare(&document).unwrap();
                 let Err(BindError::Invalid(findings)) = prepared.bind(&source()) else {
                     panic!("predicate overflow must remain a deferred normative finding");
                 };
@@ -1124,7 +1051,7 @@ mod schema {
                     diagnostic.code,
                     yamaa_core::diagnostic::ConditionCode::LiteralIntegerOverflow
                 );
-                assert_eq!(diagnostic.spec_paths, ["rows[0].filter"]);
+                assert_eq!(diagnostic.spec_paths, ["rows.first.filter"]);
                 assert_eq!(diagnostic.definition().phase, "validation");
                 assert_eq!(diagnostic.definition().rule, Some("VALUE-5"));
                 assert_eq!(diagnostic.context.len(), 2);
@@ -1151,24 +1078,12 @@ mod schema {
                             (
                                 "derivations",
                                 Tree::map(vec![
-                                    (
-                                        "ID",
-                                        Tree::map(vec![(
-                                            "value",
-                                            Tree::map(vec![(
-                                                "source",
-                                                Tree::map(vec![("variable", Tree::text("SRC.ID"))]),
-                                            )]),
-                                        )]),
-                                    ),
+                                    ("ID", Tree::map(vec![("value", Tree::text("SRC.ID"))])),
                                     (
                                         "VALUE",
                                         Tree::map(vec![(
                                             "value",
-                                            Tree::map(vec![(
-                                                "literal",
-                                                Tree::Scalar(N::Integer("2".into())),
-                                            )]),
+                                            Tree::Scalar(N::Integer("2".into())),
                                         )]),
                                     ),
                                 ]),
@@ -1177,19 +1092,21 @@ mod schema {
                     })
                     .collect(),
             );
-            let document = operation_document_with_rows(
-                "literal",
+            let document = value_document(
                 Tree::Scalar(N::Integer("2".into())),
                 "input.csv",
                 None,
                 Some(rows),
             );
-            let prepared = PreparedSpecification::prepare(&document).unwrap();
+            let prepared = prepare(&document).unwrap();
             let Err(BindError::Invalid(findings)) = prepared.bind(&source()) else {
                 panic!("both authored row filters must retain their grammar failures");
             };
             assert_eq!(findings.len(), 2);
-            for (finding, path) in findings.iter().zip(["rows[0].filter", "rows[1].filter"]) {
+            for (finding, path) in findings
+                .iter()
+                .zip(["rows.first.filter", "rows.second.filter"])
+            {
                 let BindFinding::Lookup(finding) = finding else {
                     panic!("row predicate finding")
                 };
@@ -1216,30 +1133,20 @@ mod schema {
                         "derivations",
                         Tree::map(vec![(
                             "ID",
-                            Tree::map(vec![(
-                                "value",
-                                Tree::map(vec![(
-                                    "source",
-                                    Tree::map(vec![("variable", Tree::text("SRC.ID"))]),
-                                )]),
-                            )]),
+                            Tree::map(vec![("value", Tree::text("SRC.ID"))]),
                         )]),
                     ),
                 ];
                 if grouped {
                     fields.push(("group_by", Tree::List(vec![Tree::text("SRC.ID")])));
                 }
-                let document = operation_document_with_rows(
-                    "literal",
+                let document = value_document(
                     Tree::Scalar(N::Integer("2".into())),
                     "input.csv",
                     None,
                     Some(Tree::List(vec![Tree::map(fields)])),
                 );
-                let plan = PreparedSpecification::prepare(&document)
-                    .unwrap()
-                    .bind(&source())
-                    .unwrap();
+                let plan = prepare(&document).unwrap().bind(&source()).unwrap();
                 assert_eq!(resolved::row(&plan, 0).len(), 2);
                 assert!(resolved::templates(&plan)[0].filter.is_some());
                 assert!(resolved::columns(&plan).is_empty());
@@ -1256,10 +1163,7 @@ mod schema {
                 ]),
                 "input.csv",
             );
-            PreparedSpecification::prepare(&document)
-                .unwrap()
-                .bind(&source())
-                .unwrap();
+            prepare(&document).unwrap().bind(&source()).unwrap();
             let document = operation_document(
                 "source",
                 Tree::map(vec![
@@ -1268,7 +1172,7 @@ mod schema {
                 ]),
                 "input.csv",
             );
-            let prepared = PreparedSpecification::prepare(&document).unwrap();
+            let prepared = prepare(&document).unwrap();
             let Err(BindError::Invalid(findings)) = prepared.bind(&source()) else {
                 panic!("source predicate overflow must remain a deferred normative finding");
             };
@@ -1307,7 +1211,7 @@ mod schema {
                 ])]),
             )]);
             let document = operation_document("first_available", payload, "input.csv");
-            let prepared = PreparedSpecification::prepare(&document).unwrap();
+            let prepared = prepare(&document).unwrap();
             let Err(BindError::Invalid(findings)) = prepared.bind(&source()) else {
                 panic!("deferred selection grammar")
             };
@@ -1345,13 +1249,10 @@ mod schema {
                 let value = Tree::map(vec![("source", Tree::map(fields))]);
                 let payload = Tree::List(vec![
                     Tree::map(vec![("when", Tree::text("ID = 1")), ("then", value)]),
-                    Tree::map(vec![(
-                        "otherwise",
-                        Tree::map(vec![("literal", Tree::Scalar(N::Integer("0".into())))]),
-                    )]),
+                    Tree::map(vec![("otherwise", Tree::Scalar(N::Integer("0".into())))]),
                 ]);
                 let document = operation_document("case", payload, "input.csv");
-                let prepared = PreparedSpecification::prepare(&document).unwrap();
+                let prepared = prepare(&document).unwrap();
                 let plan = prepared.bind(&source()).unwrap();
                 let case = resolved::columns(&plan)[0].expr;
                 let Op::Case = resolved::op(&plan, case) else {
@@ -1381,15 +1282,16 @@ mod schema {
             }
         }
 
+        /// 0.5-only until #3447: a 1.0 tree refuses an unknown variable
+        /// instead of answering `absent` (D67, D102).
         #[test]
         fn unqualified_key_source_absence_is_an_admitted_key_expression() {
-            let document = operation_document(
+            let document = legacy_operation_document(
                 "source",
                 Tree::map(vec![
                     ("variable", Tree::text("SOME_NAME")),
                     ("absent", Tree::Scalar(N::Integer("7".into()))),
                 ]),
-                "input.csv",
             );
             let raw = document.document();
             let mut nodes = raw.nodes().to_vec();
@@ -1426,7 +1328,7 @@ mod schema {
                 )]),
                 "input.csv",
             );
-            let prepared = PreparedSpecification::prepare(&document).unwrap();
+            let prepared = prepare(&document).unwrap();
             let plan = prepared.bind(&source()).unwrap();
             let selection = resolved::columns(&plan)[0].expr;
             let Op::FirstAvailable { sources, .. } = resolved::op(&plan, selection) else {
@@ -1455,7 +1357,8 @@ mod schema {
             let when = "ID = 1";
             let require = "ID >";
             let tree = Tree::map(vec![
-                ("schema_version", Tree::text("1.0")),
+                ("yamaa", Tree::text("1.0")),
+                ("type", Tree::text("spec")),
                 ("domain", Tree::text("TEST")),
                 (
                     "input",
@@ -1472,13 +1375,7 @@ mod schema {
                         ("type", Tree::text("int")),
                         (
                             "derivation",
-                            Tree::map(vec![(
-                                "value",
-                                Tree::map(vec![(
-                                    "source",
-                                    Tree::map(vec![("variable", Tree::text("SRC.ID"))]),
-                                )]),
-                            )]),
+                            Tree::map(vec![("value", Tree::text("SRC.ID"))]),
                         ),
                     ])]),
                 ),
@@ -1500,15 +1397,7 @@ mod schema {
                     )])]),
                 ),
             ]);
-            let mut nodes = Vec::new();
-            let root = tree.append(&mut nodes);
-            let document = SpecificationDocument::admit(Document::new(nodes, root).unwrap())
-                .unwrap()
-                .unwrap();
-            let plan = PreparedSpecification::prepare(&document)
-                .unwrap()
-                .bind(&source())
-                .unwrap();
+            let plan = prepare(&tree.document()).unwrap().bind(&source()).unwrap();
             let verifications = resolved::verifications(&plan);
             assert!(matches!(
                 verifications[0],
@@ -1520,23 +1409,21 @@ mod schema {
             );
         }
 
-        fn verification_document(kind: &str, check: Tree, column: bool) -> SpecificationDocument {
+        fn verification_document(kind: &str, check: Tree, column: bool) -> Document {
             let mut value = vec![
                 ("name", Tree::text("VALUE")),
                 ("type", Tree::text(kind)),
                 (
                     "derivation",
-                    Tree::map(vec![(
-                        "value",
-                        Tree::map(vec![("literal", Tree::Scalar(N::Integer("1".into())))]),
-                    )]),
+                    Tree::map(vec![("value", Tree::Scalar(N::Integer("1".into())))]),
                 ),
             ];
             if column {
                 value.push(("verifications", Tree::List(vec![check.clone()])));
             }
             let mut tree = vec![
-                ("schema_version", Tree::text("1.0")),
+                ("yamaa", Tree::text("1.0")),
+                ("type", Tree::text("spec")),
                 ("domain", Tree::text("TEST")),
                 (
                     "input",
@@ -1554,13 +1441,7 @@ mod schema {
                             ("type", Tree::text("int")),
                             (
                                 "derivation",
-                                Tree::map(vec![(
-                                    "value",
-                                    Tree::map(vec![(
-                                        "source",
-                                        Tree::map(vec![("variable", Tree::text("SRC.ID"))]),
-                                    )]),
-                                )]),
+                                Tree::map(vec![("value", Tree::text("SRC.ID"))]),
                             ),
                         ]),
                         Tree::map(value),
@@ -1580,11 +1461,7 @@ mod schema {
             if !column {
                 tree.push(("verifications", Tree::List(vec![check])));
             }
-            let mut nodes = Vec::new();
-            let root = Tree::map(tree).append(&mut nodes);
-            SpecificationDocument::admit(Document::new(nodes, root).unwrap())
-                .unwrap()
-                .unwrap()
+            Tree::map(tree).document()
         }
         #[test]
         fn malformed_assert_carriers_and_numeric_bounds_are_typed_declaration_findings() {
@@ -1650,9 +1527,7 @@ mod schema {
                 ),
             ];
             for (kind, column, check, code, path, reason) in checks {
-                let prepared =
-                    PreparedSpecification::prepare(&verification_document(kind, check, column))
-                        .unwrap();
+                let prepared = prepare(&verification_document(kind, check, column)).unwrap();
                 let findings = prepared.verification_declaration_diagnostics();
                 assert_eq!(findings.len(), 1);
                 assert_eq!(findings[0].code, code);
@@ -1669,14 +1544,14 @@ mod schema {
             }
         }
 
-        fn wide_document(columns: usize, typed_fields: usize) -> SpecificationDocument {
+        fn wide_document(columns: usize, typed_fields: usize) -> Document {
             wide_document_with_projection(columns, typed_fields, columns)
         }
         fn wide_document_with_projection(
             columns: usize,
             typed_fields: usize,
             projected: usize,
-        ) -> SpecificationDocument {
+        ) -> Document {
             let column_names: Vec<_> = (1..columns).map(|i| format!("C{i:04}")).collect();
             let field_names: Vec<_> = (1..=typed_fields).map(|i| format!("F{i:04}")).collect();
             let mut names = vec!["ID"];
@@ -1685,13 +1560,7 @@ mod schema {
                 ("type", Tree::text("str")),
                 (
                     "derivation",
-                    Tree::map(vec![(
-                        "value",
-                        Tree::map(vec![(
-                            "source",
-                            Tree::map(vec![("variable", Tree::text("SRC.ID"))]),
-                        )]),
-                    )]),
+                    Tree::map(vec![("value", Tree::text("SRC.ID"))]),
                 ),
             ])];
             for name in &column_names {
@@ -1699,13 +1568,7 @@ mod schema {
                 column_trees.push(Tree::map(vec![
                     ("name", Tree::text(name)),
                     ("type", Tree::text("str")),
-                    (
-                        "derivation",
-                        Tree::map(vec![(
-                            "value",
-                            Tree::map(vec![("literal", Tree::Scalar(N::Text("x".into())))]),
-                        )]),
-                    ),
+                    ("derivation", Tree::map(vec![("value", Tree::text("'x'"))])),
                 ]));
             }
             let mut input = vec![("path", Tree::text("input.csv"))];
@@ -1717,7 +1580,8 @@ mod schema {
                 input.push(("types", Tree::map(types)));
             }
             let fields = vec![
-                ("schema_version", Tree::text("1.0")),
+                ("yamaa", Tree::text("1.0")),
+                ("type", Tree::text("spec")),
                 ("domain", Tree::text("TEST")),
                 ("input", Tree::map(vec![("SRC", Tree::map(input))])),
                 ("keys", Tree::List(vec![Tree::text("ID")])),
@@ -1740,19 +1604,13 @@ mod schema {
                     ]),
                 ),
             ];
-            let tree = Tree::map(fields);
-            let mut nodes = Vec::new();
-            let root = tree.append(&mut nodes);
-            let document = Document::new(nodes, root).unwrap();
-            SpecificationDocument::admit(document).unwrap().unwrap()
+            Tree::map(fields).document()
         }
 
         #[test]
         fn fixed_column_ceilings_admit_1024_and_refuse_1025() {
-            PreparedSpecification::prepare(&wide_document(1_024, 0)).unwrap();
-            let Err(PrepareError::Limit(resource)) =
-                PreparedSpecification::prepare(&wide_document(1_025, 0))
-            else {
+            prepare(&wide_document(1_024, 0)).unwrap();
+            let Err(PrepareError::Limit(resource)) = prepare(&wide_document(1_025, 0)) else {
                 panic!("1,025 declared columns must hit the fixed compiler bound");
             };
             assert_eq!(resource.resource, "columns");
@@ -1760,7 +1618,7 @@ mod schema {
             assert_eq!(resource.actual, Some(1025));
             assert_eq!(resource.spec_paths, ["columns"]);
             let Err(PrepareError::Limit(resource)) =
-                PreparedSpecification::prepare(&wide_document_with_projection(1_024, 0, 1_025))
+                prepare(&wide_document_with_projection(1_024, 0, 1_025))
             else {
                 panic!("1,025 projected columns must hit their fixed bound independently");
             };
@@ -1768,10 +1626,8 @@ mod schema {
             assert_eq!(resource.limit, 1024);
             assert_eq!(resource.actual, Some(1025));
             assert_eq!(resource.spec_paths, ["output.columns"]);
-            PreparedSpecification::prepare(&wide_document(2, 1_024)).unwrap();
-            let Err(PrepareError::Limit(resource)) =
-                PreparedSpecification::prepare(&wide_document(2, 1_025))
-            else {
+            prepare(&wide_document(2, 1_024)).unwrap();
+            let Err(PrepareError::Limit(resource)) = prepare(&wide_document(2, 1_025)) else {
                 panic!("1,025 typed source fields must hit the fixed compiler bound");
             };
             assert_eq!(resource.resource, "source_fields");
@@ -1807,18 +1663,26 @@ mod schema {
                 },
             ])
             .unwrap();
+            // The aggregate declares no `key`, so it matches on the key its
+            // input declares, the output key ID (D63).
             let document_for = |group: &str| {
-                operation_document(
-                    "aggregate",
-                    Tree::map(vec![
-                        ("expr", Tree::text("SUM(SRC.V)")),
-                        ("group_by", Tree::List(vec![Tree::text(group)])),
-                    ]),
+                let mut tree = value_tree(
+                    Tree::map(vec![(
+                        "aggregate",
+                        Tree::map(vec![
+                            ("expr", Tree::text("SUM(SRC.V)")),
+                            ("group_by", Tree::List(vec![Tree::text(group)])),
+                        ]),
+                    )]),
                     "input.csv",
-                )
+                    None,
+                    None,
+                );
+                tree.set(&["input", "SRC", "key"], Tree::List(vec![Tree::text("ID")]));
+                tree.document()
             };
             // Non-compliant: PARAM is not an output key (spec keys are [ID]).
-            let prepared = PreparedSpecification::prepare(&document_for("SRC.PARAM")).unwrap();
+            let prepared = prepare(&document_for("SRC.PARAM")).unwrap();
             let Err(BindError::Invalid(findings)) = prepared.bind(&donor) else {
                 panic!("qualified aggregate grouping by a non-output-key column must be refused");
             };
@@ -1839,11 +1703,13 @@ mod schema {
             );
             // Positive control: grouping by the output key itself is compliant and
             // the same aggregate still binds (and so can execute).
-            let prepared = PreparedSpecification::prepare(&document_for("SRC.ID")).unwrap();
+            let prepared = prepare(&document_for("SRC.ID")).unwrap();
             prepared.bind(&donor).unwrap();
         }
     }
     mod specification_model {
+        //! The 0.5 normalized model contract, which only the 0.5 path reads
+        //! (#2844 decision 5): 0.5-only until #3447 deletes it.
         use yamaa_core::schema::{Document, DocumentNode as N, SpecificationDocument};
 
         fn document() -> Document {
