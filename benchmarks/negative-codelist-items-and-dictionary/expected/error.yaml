@@ -1,0 +1,7 @@
+phase: validation
+condition: codelist_shape_invalid
+spec_paths:
+  - codelists[0].codelists[0]
+rule: CT-3
+context:
+  codelist: MEDDRA

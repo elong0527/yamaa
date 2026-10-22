@@ -1,0 +1,118 @@
+yamaa: "1.0"
+type: spec
+model: SDTM
+domain: TA
+keys: [STUDYID, ARMCD, TAETORD]
+input:
+  DESIGN: {path: input/design.csv, types: {TAETORD: int}}
+
+output:
+  path: ta.csv
+  columns: [DOMAIN, STUDYID, ARMCD, ARM, TAETORD, ETCD, ELEMENT, EPOCH]
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'TA'"
+    submission:
+      core: Req
+      role: Identifier
+      length: 2
+      origins:
+        - type: Assigned
+          source: Sponsor
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DESIGN.STUDYID
+    submission:
+      core: Req
+      role: Identifier
+      length: 8
+      origins:
+        - type: Protocol
+          source: Sponsor
+
+  - name: ARMCD
+    type: str
+    label: Planned Arm Code
+    derivation: DESIGN.ARMCD
+    submission:
+      core: Req
+      role: Topic
+      length: 8
+      origins:
+        - type: Protocol
+          source: Sponsor
+
+  - name: ARM
+    type: str
+    label: Description of Planned Arm
+    derivation: DESIGN.ARM
+    submission:
+      core: Req
+      role: Synonym Qualifier
+      length: 40
+      origins:
+        - type: Protocol
+          source: Sponsor
+
+  - name: TAETORD
+    type: int
+    label: Planned Order of Element within Arm
+    derivation: DESIGN.TAETORD
+    submission:
+      core: Req
+      role: Timing
+      length: 8
+      origins:
+        - type: Protocol
+          source: Sponsor
+
+  - name: ETCD
+    type: str
+    label: Element Code
+    derivation: DESIGN.ETCD
+    submission:
+      core: Req
+      role: Record Qualifier
+      length: 8
+      origins:
+        - type: Protocol
+          source: Sponsor
+
+  - name: ELEMENT
+    type: str
+    label: Description of Element
+    derivation: DESIGN.ELEMENT
+    submission:
+      core: Perm
+      role: Synonym Qualifier
+      length: 40
+      origins:
+        - type: Protocol
+          source: Sponsor
+
+  # The open-label extension epoch is a sponsor addition to the published
+  # epoch list, which the project declares as an extended item.
+  - name: EPOCH
+    type: str
+    label: Epoch
+    derivation: DESIGN.EPOCH
+    submission:
+      core: Req
+      role: Timing
+      length: 20
+      codelist: EPOCH
+      origins:
+        - type: Protocol
+          source: Sponsor
+
+submission:
+  label: Trial Arms
+  class: TRIAL DESIGN
+  structure: One record per planned element per arm
+  repeating: false
+  reference_data: true
