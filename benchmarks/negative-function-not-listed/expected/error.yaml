@@ -1,0 +1,7 @@
+phase: validation
+condition: unknown_project_function
+spec_paths:
+  - columns.BMIBL.derivation.function.name
+rule: FUNC-4
+context:
+  function: bmi

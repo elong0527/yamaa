@@ -1,0 +1,7 @@
+phase: validation
+condition: invalid_producer_contract
+spec_paths:
+  - input.PREV.schema
+rule: INPUT-10
+context:
+  dataset: PREV

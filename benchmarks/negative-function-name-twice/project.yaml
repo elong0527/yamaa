@@ -1,0 +1,11 @@
+yamaa: "1.0"
+type: project
+# The second file is a working copy of the first, listed by mistake. Both
+# define a function named project_value.
+functions:
+- functions/project_value.yaml
+- functions/project_value_copy.yaml
+
+adam:
+  specs:
+  - spec.yaml

@@ -1,0 +1,38 @@
+yamaa: "1.0"
+type: spec
+parent: layers/study.yaml
+domain: ADVS
+keys: [STUDYID, USUBJID, PARAMCD, AVISIT]
+input:
+  VS: {path: input/vs.csv, types: {AVAL: float, BASE: float}}
+
+output:
+  path: advs.csv
+  columns: [STUDYID, USUBJID, PARAMCD, AVISIT, AVAL, BASE, CHG]
+
+columns:
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+    derivation: VS.PARAMCD
+
+  - name: AVISIT
+    type: str
+    label: Analysis Visit
+    derivation: VS.AVISIT
+
+  - name: AVAL
+    type: float
+    label: Analysis Value
+    derivation: VS.AVAL
+
+  - name: BASE
+    type: float
+    label: Baseline Value
+    derivation: VS.BASE
+
+  # The baseline column is BASE; no file of the chain declares BASEVAL.
+  - name: CHG
+    type: float
+    label: Change from Baseline
+    derivation: "AVAL - BASEVAL"

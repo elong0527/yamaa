@@ -1,0 +1,31 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  DM: input/dm.csv
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, AGE]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM.USUBJID
+
+  # The protocol enrolls adults from 18 to 120 years; the two limits were
+  # entered the wrong way round.
+  - name: AGE
+    type: int
+    label: Age
+    derivation: DM.AGE
+    verifications:
+      - range: {min: 120, max: 18}

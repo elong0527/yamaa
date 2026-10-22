@@ -1,0 +1,8 @@
+phase: validation
+condition: mixed_relations
+spec_paths:
+  - columns.DOSEKG.derivation.aggregate.expr
+rule: LOOKUP-18
+context:
+  expr: "SUM(EX.EXDOSE) / MAX(VS.WEIGHT)"
+  relations: [EX, VS]
