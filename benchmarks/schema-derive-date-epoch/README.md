@@ -1,6 +1,6 @@
 # Derive Date Epoch
 
-**Goal:** demonstrate the per-record `derivations` map of an aggregation:
+**Goal:** demonstrate the per-record bindings of an aggregation:
 convert each record's date to an integer day count with `to_epoch_day`,
 then summarize the integers.
 

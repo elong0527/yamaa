@@ -1,6 +1,6 @@
 # Derive Text Score
 
-**Goal:** demonstrate the per-record `derivations` map of an aggregation:
+**Goal:** demonstrate the per-record bindings of an aggregation:
 convert text questionnaire responses to numbers, then sum them.
 
 **Input:** questionnaire responses with text results (`QSORRES`)
