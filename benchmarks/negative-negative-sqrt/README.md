@@ -28,9 +28,7 @@ square root:
 derivation:
   case:
     - when: "HEIGHTCM > 0 AND WEIGHTKG > 0"
-      then:
-        compute:
-          expr: "SQRT(HEIGHTCM * WEIGHTKG / 3600)"
+      then: "SQRT(HEIGHTCM * WEIGHTKG / 3600)"
 ```
 
 With no `otherwise`, an invalid measurement produces missing.
