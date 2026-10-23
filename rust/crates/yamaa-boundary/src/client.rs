@@ -1159,14 +1159,16 @@ pub struct LockFinding {
 }
 
 /// A host's callbacks: the probe, and its project functions with their lock
-/// verification. Each runs on the calling thread while the call runs; a
-/// panic in one is contained and answered as a failure of the host's own.
+/// verification. Ordinary callbacks run on the calling thread; streamed
+/// callbacks follow the retained context's thread contract. A panic in one
+/// is contained and answered as a failure of the host's own.
 /// The provided methods are the engine's own defaults.
 pub trait Callbacks {
     /// A host object the engine keeps: a bound function, or a failure's
     /// original object. The engine drops it on the thread that releases
-    /// what keeps it.
-    type Object: 'static;
+    /// what keeps it. Interpreter objects therefore need a thread-safe owner
+    /// (the R binding uses its checked `ThreadBound` wrapper).
+    type Object: Send + Sync + 'static;
 
     /// Whether the call is cancelled; a host that answers true keeps the
     /// interrupt it found and raises it once the call returns.
