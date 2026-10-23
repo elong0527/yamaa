@@ -1,6 +1,8 @@
 //! Entry preparation and success-only alias acceptance through the resolver
-//! port. Physical identities, snapshots, path policy and resource limits
-//! belong to the resolver.
+//! port, in three steps a caller takes in order: [`capture_entry`], then the
+//! document's own preparation through an [`AliasCache`], then
+//! [`AliasCache::accept`] once it has prepared. Physical identities,
+//! snapshots, path policy and resource limits belong to the resolver.
 use crate::{diagnostic::Diagnostic, resource::ResourceFailure};
 use crate::{
     project_preparation::Source,
@@ -8,39 +10,6 @@ use crate::{
 };
 use std::collections::BTreeMap;
 
-/// The exact immutable retained first-capture catalog, not a replayed iterator.
-pub trait PreparedView {
-    type Parent;
-    fn parents(&self) -> &[Self::Parent];
-    fn parent_source(parent: &Self::Parent) -> &Source;
-    fn resources(&self) -> impl Iterator<Item = &Source> {
-        std::iter::empty()
-    }
-    /// Project only an original declaring occurrence retained by this document.
-    /// Resolved identities are never substituted for its authored field or path.
-    fn resource_diagnostic(
-        &self,
-        _declaring: &str,
-        _written: &str,
-        _failure: ResourceFailure,
-    ) -> Option<Diagnostic> {
-        None
-    }
-    /// Move the already admitted alias ledger to its prepared document owner.
-    fn retain_resource_aliases(&mut self, _aliases: BTreeMap<String, Vec<(String, String)>>) {}
-}
-/// A schema authority connector delegates to the document application. It must
-/// not decode, traverse, normalize or retry a semantic failure in this method.
-pub trait DocumentPort<E> {
-    type Prepared: PreparedView;
-    type Error;
-    fn prepare<P: Resolver<Error = E>>(
-        &mut self,
-        source: Source,
-        display_path: String,
-        resolver: &mut P,
-    ) -> Result<Self::Prepared, Self::Error>;
-}
 #[derive(Debug, thiserror::Error)]
 pub enum Error<E, X> {
     /// The file `written` names could not be resolved or captured as the
@@ -62,18 +31,97 @@ pub enum Error<E, X> {
         diagnostic: Box<Diagnostic>,
     },
 }
+/// The spellings that located each metadata file a document holds, by the
+/// file's identity: the declaring file and the path as written, in the order
+/// they first located it.
+pub type Aliases = BTreeMap<String, Vec<(String, String)>>;
+
 /// The resolver a document prepares through: it keeps every spelling that
 /// located a metadata file, so a located file is captured by the name that
 /// located it, and every spelling is captured again once the document
 /// prepares.
-struct AliasCache<'a, P> {
+pub struct AliasCache<'a, P> {
     port: &'a mut P,
-    paths: BTreeMap<String, Vec<(String, String)>>,
+    paths: Aliases,
     /// The finding the port classified for the last failed parent request or
     /// layer rebase; a failed preparation reports it beside its own error.
     parent_failure: Option<Diagnostic>,
 }
-impl<P: Resolver> AliasCache<'_, P> {
+impl<'a, P: Resolver> AliasCache<'a, P> {
+    /// A cache over `port` that has located nothing yet.
+    pub fn new(port: &'a mut P) -> Self {
+        Self {
+            port,
+            paths: BTreeMap::new(),
+            parent_failure: None,
+        }
+    }
+    /// The document's preparation through this cache failed with `error`:
+    /// with the finding the port classified for the last failed parent
+    /// request or layer rebase, when there is one.
+    pub fn refused<X>(&mut self, error: X) -> Error<P::Error, X> {
+        match self.parent_failure.take() {
+            Some(diagnostic) => Error::PreparationFinding {
+                error,
+                diagnostic: Box::new(diagnostic),
+            },
+            None => Error::Preparation(error),
+        }
+    }
+    /// Once the document has prepared, capture again every distinct spelling
+    /// that located each file it holds, `held` by identity, including its
+    /// first capture, and return the spellings. A file this cache never
+    /// located is captured as the port captures it. A spelling found changed
+    /// fails with the finding `diagnostic` gives it, from the declaring file
+    /// and the path as written, when the document names one (FILE-10); any
+    /// other failure moves unchanged and stops later captures.
+    pub fn accept<'h, X>(
+        self,
+        held: impl IntoIterator<Item = &'h str>,
+        diagnostic: impl Fn(&str, &str, ResourceFailure) -> Option<Diagnostic>,
+    ) -> Result<Aliases, Error<P::Error, X>> {
+        for identity in held {
+            let Some(paths) = self.paths.get(identity) else {
+                // Every file a document holds was located through this cache;
+                // one it never located is captured as the port captures it.
+                let located = Located {
+                    identity: identity.into(),
+                    display_path: identity.into(),
+                };
+                self.port
+                    .capture(Name::Located {
+                        file: File::Resource,
+                        source: &located,
+                    })
+                    .map_err(Error::Resource)?;
+                continue;
+            };
+            for (declaring, written) in paths {
+                let name = Name::Written {
+                    file: File::Resource,
+                    declaring,
+                    written,
+                };
+                if let Err(error) = self.port.capture(name) {
+                    if let Some(diagnostic) = self
+                        .port
+                        .failure(name, &error)
+                        .and_then(Failure::resource)
+                        .filter(|failure| *failure == ResourceFailure::ContentChanged)
+                        .and_then(|failure| diagnostic(declaring, written, failure))
+                    {
+                        return Err(Error::ResourceFinding {
+                            error,
+                            diagnostic: Box::new(diagnostic),
+                        });
+                    }
+                    return Err(Error::Resource(error));
+                }
+            }
+        }
+        Ok(self.paths)
+    }
+
     /// A `parent` the port refused as written (FILE-5), found to reach a
     /// symbolic link (FILE-8) or found changed (FILE-10) fails with that
     /// condition at `parent`, naming the path as written; any other refusal
@@ -179,21 +227,17 @@ impl<P: Resolver> Resolver for AliasCache<'_, P> {
         self.port.rebase_failure(error, layer, entry, written)
     }
 }
-pub type PreparationResult<P, D> = Result<
-    <D as DocumentPort<<P as Resolver>::Error>>::Prepared,
-    Error<<P as Resolver>::Error, <D as DocumentPort<<P as Resolver>::Error>>::Error>,
->;
-
-/// Resolve and capture precede schema selection and document preparation.
-/// Only semantic success captures every distinct alias again, including its
-/// first capture. Errors move unchanged and stop effects. The caller selects
-/// the prepared entry as its scope's base.
-pub fn prepare<P: Resolver, D: DocumentPort<P::Error>>(
+/// Resolve and capture the entry `written` names, from `declaring` or the
+/// scope's base, before any schema selection or document preparation. A
+/// failure of the entry itself is `Entry`; one found changed fails with
+/// FILE-10 at `specification`. The caller then prepares the document through
+/// an [`AliasCache`] over the same port, accepts its aliases only once it has
+/// prepared, and selects the prepared entry as its scope's base.
+pub fn capture_entry<P: Resolver, X>(
     port: &mut P,
-    documents: &mut D,
     declaring: Option<&str>,
     written: &str,
-) -> PreparationResult<P, D> {
+) -> Result<Source, Error<P::Error, X>> {
     let entry = Name::Entry { declaring, written };
     let entry_error = |port: &P, error| {
         if port.failure(entry, &error).and_then(Failure::resource)
@@ -218,72 +262,5 @@ pub fn prepare<P: Resolver, D: DocumentPort<P::Error>>(
         .map_err(|error| entry_error(port, error))?
         .bytes
         .to_vec();
-    let source = Source {
-        identity: identity.clone(),
-        bytes,
-    };
-    let mut aliases = AliasCache {
-        port,
-        paths: BTreeMap::new(),
-        parent_failure: None,
-    };
-    let mut document = match documents.prepare(source, identity, &mut aliases) {
-        Ok(document) => document,
-        Err(error) => {
-            return Err(match aliases.parent_failure {
-                Some(diagnostic) => Error::PreparationFinding {
-                    error,
-                    diagnostic: Box::new(diagnostic),
-                },
-                None => Error::Preparation(error),
-            })
-        }
-    };
-    for source in document
-        .parents()
-        .iter()
-        .map(D::Prepared::parent_source)
-        .chain(document.resources())
-    {
-        let Some(paths) = aliases.paths.get(&source.identity) else {
-            // Every file a document holds was located through this cache;
-            // one it never located is captured as the port captures it.
-            let located = Located {
-                identity: source.identity.clone(),
-                display_path: source.identity.clone(),
-            };
-            aliases
-                .port
-                .capture(Name::Located {
-                    file: File::Resource,
-                    source: &located,
-                })
-                .map_err(Error::Resource)?;
-            continue;
-        };
-        for (declaring, written) in paths {
-            let name = Name::Written {
-                file: File::Resource,
-                declaring,
-                written,
-            };
-            if let Err(error) = aliases.port.capture(name) {
-                if let Some(diagnostic) = aliases
-                    .port
-                    .failure(name, &error)
-                    .and_then(Failure::resource)
-                    .filter(|failure| *failure == ResourceFailure::ContentChanged)
-                    .and_then(|failure| document.resource_diagnostic(declaring, written, failure))
-                {
-                    return Err(Error::ResourceFinding {
-                        error,
-                        diagnostic: Box::new(diagnostic),
-                    });
-                }
-                return Err(Error::Resource(error));
-            }
-        }
-    }
-    document.retain_resource_aliases(aliases.paths);
-    Ok(document)
+    Ok(Source { identity, bytes })
 }

@@ -259,7 +259,7 @@ the run; the replacement is not read. Content identity is over bytes: a
 modification time, inode number or size is not the identity.
 
 Fails: `resource_path_content_changed`.
-Evidence: `rust/crates/yamaa-adapters/tests/file_diagnostic_origins.rs::changed_source_retains_original_snapshot_and_ingest_issue_and_refuses_both_saves`, `rust/crates/yamaa-adapters/tests/file_diagnostic_origins.rs::already_captured_changed_metadata_keeps_original_snapshot_and_native_failure`, `rust/crates/yamaa-adapters/src/file_resources.rs::reused_numeric_identity_without_a_current_physical_witness_is_a_fresh_capture`, `rust/crates/yamaa-adapters/tests/submission_service.rs::a_file_changed_before_verification_fails_at_its_field_before_any_target`.
+Evidence: `rust/crates/yamaa-adapters/tests/file_diagnostic_origins.rs::changed_source_retains_original_snapshot_and_ingest_issue_and_refuses_both_saves`, `rust/crates/yamaa-adapters/tests/file_diagnostic_origins.rs::already_captured_changed_metadata_keeps_original_snapshot_and_native_failure`, `rust/crates/yamaa-adapters/src/file_resources.rs::reused_numeric_identity_without_a_current_physical_witness_is_a_fresh_capture`, `rust/crates/yamaa-adapters/tests/submission_service.rs::a_file_changed_before_verification_fails_at_its_field_before_any_target`, `rust/crates/yamaa-adapters/tests/file_diagnostic_origins.rs::a_file_changed_before_the_entry_is_verified_fails_at_its_field`.
 
 An implementation may validate once and run many times. Each such run, before
 it activates a project function or reads an input record, verifies every file

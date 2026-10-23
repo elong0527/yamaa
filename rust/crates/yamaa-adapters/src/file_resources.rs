@@ -396,6 +396,7 @@ impl Resources {
     pub fn capture_reads(&self) -> usize {
         self.reads
     }
+    #[cfg(test)]
     pub(crate) fn snapshot_count(&self) -> usize {
         self.store.len()
     }
@@ -406,20 +407,12 @@ impl Resources {
             .iter()
             .map(|(name, bytes)| (name.clone(), bytes.as_ref()))
     }
-    pub(crate) fn verify_captured(&self) -> Result<(), (String, Error)> {
-        self.verify_prefix(self.snapshot_count())
-    }
     /// Verify every held snapshot again, naming a failed one by the identity
     /// its documents carry: the canonical path of a local file, the logical
     /// location of a host object.
     pub(crate) fn verify_held(&self) -> Result<(), (String, Error)> {
         self.store
-            .verify_located(self.store.len())
-            .map_err(|(identity, failure)| (identity, Error::from_failure(failure)))
-    }
-    pub(crate) fn verify_prefix(&self, count: usize) -> Result<(), (String, Error)> {
-        self.store
-            .verify(count)
+            .verify(self.store.len())
             .map_err(|(identity, failure)| (identity, Error::from_failure(failure)))
     }
     /// Own immutable raw evidence without copying content or reopening files.
@@ -909,12 +902,12 @@ mod physical_capture_tests {
         std::fs::remove_file(fixture.0.join("other.yaml")).unwrap();
         std::fs::write(fixture.0.join("other.yaml"), b"changed alias").unwrap();
         assert_eq!(
-            resources.verify_captured().unwrap_err(),
+            resources.verify_held().unwrap_err(),
             (fixture.identity("other.yaml"), Error::Changed)
         );
         std::fs::write(fixture.0.join("source.yaml"), b"changed bytes").unwrap();
         assert_eq!(
-            resources.verify_captured().unwrap_err(),
+            resources.verify_held().unwrap_err(),
             (fixture.identity("source.yaml"), Error::Changed)
         );
         assert_eq!(

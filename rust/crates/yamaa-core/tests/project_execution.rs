@@ -15,9 +15,10 @@ mod project {
         use support::{call, environment as with_functions, function, specification, Tree};
         use yamaa_core::{
             dataset::ExecutionError,
+            decoder,
             function_invocation::{Argument, FailureKind, FunctionPort, HostError},
             resolver::{Captured, Failure, Located, Name, Resolver},
-            specification_run::{CapturedAttempt, SourceDecoder},
+            specification_run::CapturedAttempt,
         };
         use yamaa_core::{
             function_signature::{InvocationPlan, ProjectInvocationPlan},
@@ -121,14 +122,15 @@ mod project {
             trace: Trace,
             cells: Rc<Cell<usize>>,
         }
-        impl SourceDecoder for Decoder {
+        impl decoder::Decoder for Decoder {
+            crate::support::ports::no_documents!();
             fn continue_after(&self, _error: &Self::Error) -> bool {
                 false
             }
 
             type Error = Payload;
             type Table = Table;
-            fn decode(
+            fn table(
                 &mut self,
                 source: &SourceDeclaration,
                 bytes: &[u8],

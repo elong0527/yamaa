@@ -708,17 +708,18 @@ mod project {
             }
         }
     }
-    mod project_source_decoder {
+    mod decoder {
         use crate::support::project_call_compiler as support;
         use std::{cell::RefCell, rc::Rc, sync::Arc};
-        use yamaa_adapters::project_source_decoder::Decoder;
+        use yamaa_adapters::decoder::Decoder;
         use yamaa_core::{
             dataset::ExecutionError,
+            decoder::Decoder as _,
             function_invocation::{Argument, FailureKind, HostError},
             host_functions::{HostFunctions, Lock},
             project_activation::Failure,
             project_domain,
-            specification_run::{CapturedAttempt, PortError, SourceDecoder},
+            specification_run::{CapturedAttempt, PortError},
         };
         use yamaa_core::{
             function_signature::{LogicalSignature, ProjectFunctionIdentity},
@@ -765,7 +766,7 @@ mod project {
             let bytes = format!("{}\n{}\n", names.join(","), vec!["x"; 1_024].join(","));
             let mut decoder = Decoder::<Payload>::default();
             let table = decoder
-                .decode(
+                .table(
                     &source,
                     bytes.as_bytes(),
                     SourceInterpretation::Ordinary,
@@ -776,7 +777,7 @@ mod project {
             assert_eq!(table.cell(0, 1_023).unwrap(), ValueRef::Str("x"));
             let excess = format!("{},EXCESS\n", names.join(","));
             assert!(matches!(
-                decoder.decode(
+                decoder.table(
                     &source,
                     excess.as_bytes(),
                     SourceInterpretation::Ordinary,
@@ -794,7 +795,7 @@ mod project {
             ));
             assert_eq!(
                 decoder
-                    .decode(
+                    .table(
                         &source,
                         bytes.as_bytes(),
                         SourceInterpretation::Ordinary,
@@ -836,7 +837,7 @@ mod project {
             ] {
                 let yamaa_adapters::specification_run::Error::ProducerMetadata(diagnostic) =
                     decoder
-                        .decode(
+                        .table(
                             &source,
                             bytes,
                             SourceInterpretation::Ordinary,
@@ -854,7 +855,7 @@ mod project {
                 assert_eq!(diagnostic.spec_paths, ["input.P.schema", "input.P.path"]);
             }
             let table = decoder
-                .decode(
+                .table(
                     &source,
                     b"ID,VALUE\n1,13\n",
                     SourceInterpretation::Ordinary,
@@ -865,7 +866,7 @@ mod project {
             let mut ordinal_source = source.clone();
             ordinal_source.ordinal = Some("REC".into());
             let table = decoder
-                .decode(
+                .table(
                     &ordinal_source,
                     b"ID,VALUE\n1,13\n2,17\n",
                     SourceInterpretation::Ordinary,
@@ -888,7 +889,7 @@ mod project {
             ordinal_source.ordinal = Some("ID".into());
             for bytes in [b"ID,VALUE\n1,13\n".as_slice(), b"ID,VALUE\n"] {
                 assert!(matches!(
-                    decoder.decode(
+                    decoder.table(
                         &ordinal_source,
                         bytes,
                         SourceInterpretation::Ordinary,
@@ -906,7 +907,7 @@ mod project {
                 .join(",")
                 + "\n";
             assert!(matches!(
-                decoder.decode(
+                decoder.table(
                     &source,
                     header.as_bytes(),
                     SourceInterpretation::Ordinary,
@@ -944,7 +945,7 @@ mod project {
                 ordinal: None,
             };
             let table = decoder
-        .decode(
+        .table(
             &source,
             b"I,S,F,D,T\n9223372036854775807,\"x\0y\",-0.0,2024-02-29,2024-02-29T12:34:56\n",
             SourceInterpretation::Ordinary,
@@ -984,7 +985,7 @@ mod project {
             };
             assert_eq!(text.as_ptr(), retained);
             let error = decoder
-                .decode(
+                .table(
                     &source,
                     b"I,S,F,D,T\nbad,x,1,2024-02-29,2024-02-29T12:34:56\n",
                     SourceInterpretation::Ordinary,
@@ -999,7 +1000,7 @@ mod project {
                 .join(",")
                 + "\n";
             let error = decoder
-                .decode(
+                .table(
                     &source,
                     wide_header.as_bytes(),
                     SourceInterpretation::Ordinary,
@@ -1036,7 +1037,7 @@ mod project {
                         ordinal: None,
                     };
                     let table = decoder
-                        .decode(&source, bytes, SourceInterpretation::Ordinary, None)
+                        .table(&source, bytes, SourceInterpretation::Ordinary, None)
                         .unwrap();
                     assert_eq!(
                         table.cell(0, 1).unwrap(),

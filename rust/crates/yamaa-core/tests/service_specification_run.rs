@@ -5,8 +5,9 @@ mod service {
         use std::{cell::RefCell, rc::Rc, sync::Arc};
         use yamaa_core::{
             dataset::ExecutionError,
+            decoder,
             resolver::{Captured, Failure, Located, Name, Origin, Resolver},
-            specification_run::{self as run, CapturedAttempt, PortError, RunError, SourceDecoder},
+            specification_run::{self as run, CapturedAttempt, PortError, RunError},
         };
         use yamaa_core::{
             schema::Document,
@@ -158,14 +159,15 @@ mod service {
             panic_cell: bool,
             payload: Rc<()>,
         }
-        impl SourceDecoder for Decoder {
+        impl decoder::Decoder for Decoder {
+            crate::support::ports::no_documents!();
             fn continue_after(&self, _error: &Self::Error) -> bool {
                 false
             }
 
             type Error = Payload;
             type Table = Table;
-            fn decode(
+            fn table(
                 &mut self,
                 declaration: &SourceDeclaration,
                 bytes: &[u8],
@@ -235,13 +237,14 @@ mod service {
                 rows: usize,
                 columns: usize,
             }
-            impl SourceDecoder for GeometryDecoder {
+            impl decoder::Decoder for GeometryDecoder {
+                crate::support::ports::no_documents!();
                 type Error = Payload;
                 type Table = Geometry;
                 fn continue_after(&self, _error: &Payload) -> bool {
                     false
                 }
-                fn decode(
+                fn table(
                     &mut self,
                     _source: &SourceDeclaration,
                     _bytes: &[u8],
@@ -325,13 +328,14 @@ mod service {
                 }
             }
             struct OversizedDecoder;
-            impl SourceDecoder for OversizedDecoder {
+            impl decoder::Decoder for OversizedDecoder {
+                crate::support::ports::no_documents!();
                 type Error = Payload;
                 type Table = Oversized;
                 fn continue_after(&self, _: &Payload) -> bool {
                     false
                 }
-                fn decode(
+                fn table(
                     &mut self,
                     _: &SourceDeclaration,
                     _: &[u8],
@@ -582,13 +586,14 @@ mod service {
                 panic: bool,
                 payload: Rc<()>,
             }
-            impl SourceDecoder for Decode {
+            impl decoder::Decoder for Decode {
+                crate::support::ports::no_documents!();
                 type Error = DecodeFailure;
                 type Table = Table;
                 fn continue_after(&self, error: &DecodeFailure) -> bool {
                     error.recoverable
                 }
-                fn decode(
+                fn table(
                     &mut self,
                     source: &SourceDeclaration,
                     _bytes: &[u8],

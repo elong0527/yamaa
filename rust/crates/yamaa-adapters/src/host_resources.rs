@@ -595,25 +595,18 @@ impl Resources {
             .map(|s| (s.reference.clone(), Arc::clone(&s.bytes)))
             .collect()
     }
+    /// Check the first `count` held snapshots again, in capture order, each
+    /// at its own reference and bytes. A failed one is named by the identity
+    /// [`Self::resolve`] gave the document it holds, as every document
+    /// carries it: the location of its capture's reply, else its lexical
+    /// location.
     pub fn verify(&self, count: usize) -> Result<(), (String, Failure)> {
-        self.verify_named(count, |snapshot| snapshot.reference.clone())
-    }
-    /// [`Self::verify`], naming a failed snapshot by the identity
-    /// [`Self::resolve`] gave the document it holds: the location of its
-    /// capture's reply, else its lexical location.
-    pub fn verify_located(&self, count: usize) -> Result<(), (String, Failure)> {
-        self.verify_named(count, |snapshot| {
+        let name = |snapshot: &Snapshot| {
             snapshot.location.clone().unwrap_or_else(|| {
                 Self::location(&snapshot.declaring, &snapshot.written)
                     .unwrap_or_else(|_| snapshot.reference.clone())
             })
-        })
-    }
-    fn verify_named(
-        &self,
-        count: usize,
-        name: impl Fn(&Snapshot) -> String,
-    ) -> Result<(), (String, Failure)> {
+        };
         let snapshots = self
             .snapshots
             .lock()

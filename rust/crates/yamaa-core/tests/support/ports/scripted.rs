@@ -3,8 +3,8 @@ use super::*;
 use function_invocation::Argument;
 use function_invocation::FunctionPort;
 use function_invocation::HostError;
-use run::SourceDecoder;
 use std::{collections::VecDeque, sync::Arc};
+use yamaa_core::decoder;
 use yamaa_core::function_signature::InvocationPlan;
 use yamaa_core::function_signature::ProjectInvocationPlan;
 use yamaa_core::project_environment::LockKind;
@@ -104,10 +104,12 @@ impl<E> ScriptedMetadataDecoder<E> {
         }
     }
 }
-impl<E> metadata::ProjectDecodePort for ScriptedMetadataDecoder<E> {
-    type Error = E;
-    type Document = MetadataDocument;
-    fn decode(
+impl<E> decoder::Decoder for ScriptedMetadataDecoder<E> {
+    crate::support::ports::no_tables!();
+    crate::support::ports::no_raw!();
+    type Admitted = MetadataDocument;
+    type DocumentError = E;
+    fn admitted(
         &mut self,
         source: metadata::Source,
         target: metadata::DecodeTarget,
@@ -124,10 +126,10 @@ impl<E> metadata::ProjectDecodePort for ScriptedMetadataDecoder<E> {
         step.outcome
             .map(|document| MetadataDocument { source, document })
     }
-    fn document(document: &MetadataDocument) -> &yamaa_core::schema::Document {
+    fn admitted_document(document: &MetadataDocument) -> &yamaa_core::schema::Document {
         &document.document
     }
-    fn source(document: &MetadataDocument) -> &metadata::Source {
+    fn admitted_source(document: &MetadataDocument) -> &metadata::Source {
         &document.source
     }
     /// The scripted lock syntax: held bytes `uv` are a uv lock and `renv` an
@@ -224,13 +226,14 @@ impl<E, T> ScriptedDecoder<E, T> {
         }
     }
 }
-impl<E, T: TableAccess> SourceDecoder for ScriptedDecoder<E, T> {
+impl<E, T: TableAccess> decoder::Decoder for ScriptedDecoder<E, T> {
+    crate::support::ports::no_documents!();
     type Error = E;
     type Table = T;
     fn continue_after(&self, _: &E) -> bool {
         self.continue_after_failure
     }
-    fn decode(
+    fn table(
         &mut self,
         source: &SourceDeclaration,
         bytes: &[u8],

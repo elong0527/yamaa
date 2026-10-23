@@ -1,22 +1,12 @@
-//! Live structural root and versionless class preparation over captured metadata.
-//! The codec owns physical source limits and exact occurrence-location authority.
+//! Live structural root and versionless class preparation over captured
+//! metadata. The decoder port decodes the held source once, keeping its own
+//! physical limits and where each node was written.
+use crate::decoder::Decoder;
 use crate::project_preparation::Source;
 use crate::schema::{
     Document, NormalizationError, NormalizedDocument, SchemaDiagnostic, SchemaStructure,
     ValidationError,
 };
-
-/// A physical codec decodes this exact held source once. Its locations must
-/// address the returned arena; equal strings cannot establish replacement authority.
-pub trait StructuralDecodePort {
-    type Error;
-    type Locations;
-    fn decode(&mut self, source: &Source) -> Result<Decoded<Self::Locations>, Self::Error>;
-}
-pub struct Decoded<L> {
-    pub document: Document,
-    pub locations: L,
-}
 #[derive(Clone, Copy, Debug)]
 pub enum Selection<'a> {
     StructuralRoot,
@@ -62,24 +52,21 @@ impl Findings {
 }
 
 /// Structural admission grants no specification, data or execution authority.
-/// The caller must retain the exact admitted schema for Default origin references.
+/// The caller must retain the exact admitted schema for Default origin
+/// references. `R` is the source as the decoder decoded it.
 #[derive(Debug)]
-pub struct Prepared<L> {
+pub struct Prepared<R> {
     source: Source,
-    raw: Document,
-    locations: L,
+    raw: R,
     class_name: String,
     normalized: NormalizedDocument,
 }
-impl<L> Prepared<L> {
+impl<R> Prepared<R> {
     pub fn source(&self) -> &Source {
         &self.source
     }
-    pub fn raw(&self) -> &Document {
+    pub fn raw(&self) -> &R {
         &self.raw
-    }
-    pub fn locations(&self) -> &L {
-        &self.locations
     }
     pub fn class_name(&self) -> &str {
         &self.class_name
@@ -87,14 +74,8 @@ impl<L> Prepared<L> {
     pub fn normalized(&self) -> &NormalizedDocument {
         &self.normalized
     }
-    pub fn into_parts(self) -> (Source, Document, L, String, NormalizedDocument) {
-        (
-            self.source,
-            self.raw,
-            self.locations,
-            self.class_name,
-            self.normalized,
-        )
+    pub fn into_parts(self) -> (Source, R, String, NormalizedDocument) {
+        (self.source, self.raw, self.class_name, self.normalized)
     }
 }
 
@@ -103,12 +84,12 @@ impl<L> Prepared<L> {
 /// One successful decode precedes the existing default/type/value checkpoints;
 /// a root that declares the 1.x header is refused first (SCHEMA-2).
 /// No source is captured, replayed, queried as a model or granted host authority.
-pub fn prepare<P: StructuralDecodePort>(
+pub fn prepare<D: Decoder>(
     schema: &SchemaStructure,
     source: Source,
     selection: Selection<'_>,
-    decoder: &mut P,
-) -> Result<Prepared<P::Locations>, Error<P::Error>> {
+    decoder: &mut D,
+) -> Result<Prepared<D::Raw>, Error<D::DocumentError>> {
     let class_name = match selection {
         Selection::StructuralRoot => &schema.root_class().name,
         Selection::NamedClass(name) => {
@@ -125,20 +106,20 @@ pub fn prepare<P: StructuralDecodePort>(
             name
         }
     };
-    let Decoded {
-        document,
-        locations,
-    } = decoder.decode(&source).map_err(Error::Decode)?;
+    let raw = decoder
+        .raw(&source.identity, &source.bytes)
+        .map_err(Error::Decode)?;
+    let document = D::raw_document(&raw);
     // The 0.5 closure reads every root it is given under the rules at the
     // `yamaa-v0.5.0` tag (#3030 D75): a caller routes a root that declares the
     // 1.x header to the 1.0 closures first.
     let normalized = match selection {
-        Selection::StructuralRoot => schema.normalize_document(&document),
+        Selection::StructuralRoot => schema.normalize_document(document),
         Selection::NamedClass(_) => {
             let types = schema
                 .parse_query_types(&[class_name.into()])
                 .map_err(Error::Validation)?;
-            schema.normalize_types(&types, &document, document.root(), false)
+            schema.normalize_types(&types, document, document.root(), false)
         }
     };
     let normalized = match normalized {
@@ -146,7 +127,7 @@ pub fn prepare<P: StructuralDecodePort>(
         Err(NormalizationError::Invalid(findings)) => {
             return Err(Error::Findings(Box::new(Findings {
                 source,
-                document,
+                document: document.clone(),
                 findings,
             })));
         }
@@ -154,8 +135,7 @@ pub fn prepare<P: StructuralDecodePort>(
     };
     Ok(Prepared {
         source,
-        raw: document,
-        locations,
+        raw,
         class_name: class_name.into(),
         normalized,
     })

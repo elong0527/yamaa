@@ -60,6 +60,7 @@ SHARED = (
     "rust/Cargo.lock",
     "rust/crates/yamaa-adapters/Cargo.toml",
     "rust/crates/yamaa-core/Cargo.toml",
+    "rust/crates/yamaa-core/src/decoder.rs",
     "rust/crates/yamaa-core/src/limits.rs",
     "rust/crates/yamaa-core/src/specification_run.rs",
     "rust/crates/yamaa-core/src/table.rs",
@@ -71,7 +72,7 @@ SHARED = (
 # The source decode that both host routes call for held bytes.
 SOURCE_DECODE = (
     "rust/crates/yamaa-adapters/src/arrow_table.rs",
-    "rust/crates/yamaa-adapters/src/project_source_decoder.rs",
+    "rust/crates/yamaa-adapters/src/decoder.rs",
     "rust/crates/yamaa-adapters/src/source_ordinal.rs",
     "rust/crates/yamaa-adapters/src/specification_run.rs",
     "rust/crates/yamaa-core/src/odm_source.rs",

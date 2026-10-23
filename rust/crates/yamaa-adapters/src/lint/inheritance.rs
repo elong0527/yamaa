@@ -23,9 +23,10 @@
 
 use std::path::Path;
 
-use yamaa_core::inheritance::{self as graph, InheritanceSourcePort, Source, SourceError};
+use yamaa_core::file_preparation::AliasCache;
+use yamaa_core::inheritance as graph;
 use yamaa_core::language::{FileType, LANGUAGE_VERSION};
-use yamaa_core::resolver::{File, Name, Resolver};
+use yamaa_core::resolver::{Name, Resolver};
 use yamaa_core::schema::{
     Document as Values, DocumentNode as N, NormalizedDocument, SchemaOrigin, SchemaStructure,
 };
@@ -33,7 +34,6 @@ use yamaa_core::schema::{
 use super::canonical::same;
 use super::checks::Departure;
 use super::document::Document;
-use crate::file_resources::{Error as ResourceError, Resources};
 
 /// The keyed collections whose members hold the mappings a layer restates,
 /// and the only root fields composed here (LAYER-5).
@@ -117,12 +117,20 @@ fn layers(file: &Path, entry: Values) -> Option<(SchemaStructure, Vec<Normalized
     .ok()?;
     let captured = crate::shipped_schema::capture_versioned(FileType::Spec).ok()?;
     let schema = captured.structure();
-    let mut parents = Parents {
-        resources: &mut resources,
-        located: Vec::new(),
-    };
-    let chain =
-        graph::traverse_versioned(schema, LANGUAGE_VERSION, source, entry, &mut parents).ok()?;
+    // Each parent is read through the local file resolver from the layer
+    // that names it (LAYER-2), captured by the spelling that located it, and
+    // decoded with the shared YAML reader. Why a layer cannot be read does
+    // not matter here: the chain is then not read at all.
+    let chain = graph::traverse_versioned(
+        schema,
+        LANGUAGE_VERSION,
+        source,
+        entry,
+        &mut AliasCache::new(&mut resources),
+        &mut crate::decoder::Decoder::<std::convert::Infallible>::default(),
+    )
+    .ok()?
+    .chain;
     let layers = chain
         .layers
         .iter()
@@ -135,63 +143,6 @@ fn layers(file: &Path, entry: Values) -> Option<(SchemaStructure, Vec<Normalized
         })
         .collect::<Option<Vec<_>>>()?;
     Some((schema.at_version(chain.version), layers))
-}
-
-/// A linted specification's parents, read through the local file resolver
-/// from the layer that names each (LAYER-2) and captured by the spelling that
-/// located them. Why a layer cannot be read does not matter here: the chain
-/// is then not read at all.
-struct Parents<'a> {
-    resources: &'a mut Resources,
-    /// Each layer located so far: its identity, and the file and path that
-    /// name it.
-    located: Vec<(String, String, String)>,
-}
-
-impl InheritanceSourcePort for Parents<'_> {
-    type Error = ResourceError;
-
-    fn canonicalize(
-        &mut self,
-        declaring: &str,
-        written: &str,
-    ) -> Result<Source, SourceError<ResourceError>> {
-        let source = Resolver::inspect(
-            &mut *self.resources,
-            Name::Written {
-                file: File::Parent,
-                declaring,
-                written,
-            },
-        )
-        .map_err(SourceError::Raised)?;
-        self.located.push((
-            source.identity.clone(),
-            declaring.to_owned(),
-            written.to_owned(),
-        ));
-        Ok(source)
-    }
-
-    fn read(&mut self, source: &Source) -> Result<Values, SourceError<ResourceError>> {
-        let (_, declaring, written) = self
-            .located
-            .iter()
-            .find(|(identity, ..)| *identity == source.identity)
-            .ok_or(SourceError::Unavailable)?;
-        let captured = Resolver::capture(
-            &mut *self.resources,
-            Name::Written {
-                file: File::Parent,
-                declaring,
-                written,
-            },
-        )
-        .map_err(SourceError::Raised)?;
-        crate::yaml_decode::decode_yaml(&captured.bytes)
-            .map(|decoded| decoded.document)
-            .map_err(|_| SourceError::Unavailable)
-    }
 }
 
 /// `layer` holding only the collections composed here and the `clear` paths

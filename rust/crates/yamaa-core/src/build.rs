@@ -43,23 +43,18 @@ pub enum EnvironmentFailure<E, D, X> {
 }
 
 pub(crate) type EnvironmentPreparation<R, D> = Result<
-    crate::project_preparation::PreparedEnvironment<
-        <D as crate::project_preparation::ProjectDecodePort>::Document,
-    >,
+    crate::project_preparation::PreparedEnvironment<<D as crate::decoder::Decoder>::Admitted>,
     EnvironmentFailure<
         <R as crate::resolver::Resolver>::Error,
-        <D as crate::project_preparation::ProjectDecodePort>::Document,
-        <D as crate::project_preparation::ProjectDecodePort>::Error,
+        <D as crate::decoder::Decoder>::Admitted,
+        <D as crate::decoder::Decoder>::DocumentError,
     >,
 >;
 
 /// Compose the resolver and structural metadata codec with the existing
 /// environment application. No activation, study, output or publisher port
 /// is accepted at this boundary.
-pub fn prepare_environment<
-    R: crate::resolver::Resolver,
-    D: crate::project_preparation::ProjectDecodePort,
->(
+pub fn prepare_environment<R: crate::resolver::Resolver, D: crate::decoder::Decoder>(
     resolver: &mut R,
     decoder: &mut D,
     written: &str,
