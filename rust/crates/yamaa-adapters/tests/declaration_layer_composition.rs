@@ -19,13 +19,15 @@ mod declaration {
         };
         use yamaa_adapters::resolved_artifact::{self, model::specification_value};
 
-        use yamaa_adapters::specification_source::{Error, InheritancePort, Source};
+        use yamaa_adapters::specification_source::{Error, Source};
         use yamaa_core::diagnostic::ConditionCode;
         use yamaa_core::domain_entry::Request;
-        use yamaa_core::inheritance::{self as graph, Source as GraphSource, SourceError};
+        use yamaa_core::inheritance::{self as graph, Source as GraphSource};
         use yamaa_core::json::Value;
         use yamaa_core::language::{FileType, LANGUAGE_VERSION};
         use yamaa_core::project_function::Language;
+        use yamaa_core::resolver::{Captured, Failure, Name, Resolver};
+        use yamaa_core::resource::ResourceFailure;
         use yamaa_core::schema::{NormalizationError, SchemaContext as C, SchemaDiagnostic};
 
         fn repository() -> PathBuf {
@@ -78,27 +80,34 @@ mod declaration {
         /// respelled from the entry's directory, so a resolved specification
         /// shows the base each path took (LAYER-10).
         struct Files;
-        impl InheritancePort for Files {
+        impl Resolver for Files {
             type Error = std::io::Error;
-            fn canonicalize(
-                &mut self,
-                declaring: &str,
-                written: &str,
-            ) -> Result<GraphSource, SourceError<Self::Error>> {
+            fn inspect(&mut self, name: Name<'_>) -> Result<GraphSource, Self::Error> {
+                let Name::Written {
+                    declaring, written, ..
+                } = name
+                else {
+                    panic!("unexpected request {name:?}")
+                };
                 let candidate = Path::new(declaring).parent().unwrap().join(written);
-                let canonical = yamaa_adapters::canonical_path::canonicalize(&candidate)
-                    .map_err(|_| SourceError::Unavailable)?;
+                let canonical = yamaa_adapters::canonical_path::canonicalize(&candidate)?;
                 let identity = identity(&canonical);
                 Ok(GraphSource {
                     display_path: identity.clone(),
                     identity,
                 })
             }
-            fn capture(
-                &mut self,
-                source: &GraphSource,
-            ) -> Result<Vec<u8>, SourceError<Self::Error>> {
-                fs::read(&source.identity).map_err(SourceError::Raised)
+            fn capture(&mut self, name: Name<'_>) -> Result<Captured, Self::Error> {
+                let Name::Located { source, .. } = name else {
+                    panic!("unexpected request {name:?}")
+                };
+                Ok(Captured::resource(fs::read(&source.identity)?.into(), true))
+            }
+            /// A file that cannot be located is missing; a read error stays
+            /// the host's own.
+            fn failure(&self, name: Name<'_>, _: &Self::Error) -> Option<Failure> {
+                matches!(name, Name::Written { .. })
+                    .then_some(Failure::Resource(ResourceFailure::Missing))
             }
             fn rebase(
                 &mut self,

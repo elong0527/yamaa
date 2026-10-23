@@ -441,7 +441,6 @@ fn refusal(error: Error) -> Failure {
         Error::Changed => Failure::Changed,
         Error::Limit(limit) => Failure::Limit(limit.actual.and_then(|n| u64::try_from(n).ok())),
         Error::Host(failure) => failure,
-        Error::InvalidLock => Failure::Rejected,
     }
 }
 

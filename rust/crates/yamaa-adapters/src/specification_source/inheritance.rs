@@ -1,8 +1,9 @@
 //! Physical inheritance decoding for retained engine preparation.
 use super::*;
-use yamaa_core::{inheritance_capture as application, inheritance_preparation as lifecycle};
+use yamaa_core::{
+    inheritance_capture as application, inheritance_preparation as lifecycle, resolver::Resolver,
+};
 
-pub use application::InheritanceCapturePort as InheritancePort;
 pub type CapturedParent = application::CapturedParent<DecodedYaml>;
 pub type SourceFailure<E> = application::SourceFailure<E, Error>;
 #[derive(Debug)]
@@ -42,7 +43,7 @@ impl application::InheritanceDecodePort for Decoder {
 }
 impl CapturedSchema {
     /// Preserve raw YAML captures while the engine prepares the inherited model.
-    pub fn prepare_inherited<P: InheritancePort>(
+    pub fn prepare_inherited<P: Resolver>(
         self: &Arc<Self>,
         source: Source,
         display_path: String,
@@ -53,7 +54,7 @@ impl CapturedSchema {
             .map_err(InheritanceError::Entry)?;
         self.prepare_inherited_decoded(source, display_path, raw, port)
     }
-    pub(super) fn prepare_inherited_decoded<P: InheritancePort>(
+    pub(super) fn prepare_inherited_decoded<P: Resolver>(
         self: &Arc<Self>,
         source: Source,
         display_path: String,

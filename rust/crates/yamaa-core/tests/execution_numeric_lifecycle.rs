@@ -528,38 +528,32 @@ mod execution {
         #[test]
         fn all_inputs_inspect_then_capture_decode_in_authored_order_and_move_opaque_failure_once() {
             use std::sync::Arc;
-            use yamaa_core::specification_run::{
-                self as run, PortError, RunError, SourceDecoder, SpecificationSourcePort,
-            };
+            use yamaa_core::resolver::{self, Captured, Located, Name, Resolver};
+            use yamaa_core::specification_run::{self as run, PortError, RunError, SourceDecoder};
             type IoTrace = Rc<RefCell<Vec<String>>>;
             struct Port {
                 trace: IoTrace,
                 reads: usize,
                 fail: Option<Failure>,
             }
-            impl SpecificationSourcePort for Port {
-                fn resource_failure(
-                    &self,
-                    _error: &Self::Error,
-                ) -> Option<yamaa_core::resource::ResourceFailure> {
-                    None
-                }
+            impl Resolver for Port {
                 type Error = Failure;
-                fn inspect(&mut self, source: &SourceDeclaration) -> Result<(), Failure> {
+                fn inspect(&mut self, name: Name<'_>) -> Result<Located, Failure> {
+                    let Name::Input(source) = name else {
+                        panic!("unexpected request {name:?}")
+                    };
                     self.trace
                         .borrow_mut()
                         .push(format!("inspect:{}", source.name));
-                    Ok(())
+                    Ok(Located {
+                        identity: source.path.clone(),
+                        display_path: source.path.clone(),
+                    })
                 }
-                fn capture_reads(&self) -> usize {
-                    self.reads
-                }
-                fn capture(
-                    &mut self,
-                    source: &SourceDeclaration,
-                    origin: &mut Option<run::SourceOrigin>,
-                ) -> Result<Arc<[u8]>, Failure> {
-                    *origin = Some(run::SourceOrigin::Resource);
+                fn capture(&mut self, name: Name<'_>) -> Result<Captured, Failure> {
+                    let Name::Input(source) = name else {
+                        panic!("unexpected request {name:?}")
+                    };
                     self.trace
                         .borrow_mut()
                         .push(format!("capture:{}", source.name));
@@ -569,7 +563,13 @@ mod execution {
                         }
                     }
                     self.reads += 1;
-                    Ok(Arc::from([1u8]))
+                    Ok(Captured::resource(Arc::from([1u8]), true))
+                }
+                fn failure(&self, _: Name<'_>, _: &Failure) -> Option<resolver::Failure> {
+                    None
+                }
+                fn rebase(&mut self, _: &Located, _: &Located, _: &str) -> Result<String, Failure> {
+                    panic!("an input is never rebased")
                 }
             }
             struct Decoder {

@@ -22,15 +22,15 @@ mod declaration {
         };
         use yamaa_adapters::json;
 
-        use yamaa_adapters::specification_source::{
-            CapturedSchema, Error, InheritancePort, Source,
-        };
+        use yamaa_adapters::specification_source::{CapturedSchema, Error, Source};
         use yamaa_core::diagnostic::{ConditionCode, Diagnostic as Issue};
         use yamaa_core::domain_entry::Request;
-        use yamaa_core::inheritance::{self as graph, Source as GraphSource, SourceError};
+        use yamaa_core::inheritance::{self as graph, Source as GraphSource};
         use yamaa_core::json::Value;
         use yamaa_core::language::{FileType, LanguageVersion, ReferenceFault, LANGUAGE_VERSION};
         use yamaa_core::project_function::Language;
+        use yamaa_core::resolver::{Captured, Failure, Name, Resolver};
+        use yamaa_core::resource::ResourceFailure;
         use yamaa_core::schema::{NormalizationError, SchemaContext as C};
 
         /// A complete 0.5 specification reading one CSV input.
@@ -553,27 +553,34 @@ mod declaration {
 
         /// Files resolved beside their declaring file.
         struct Files;
-        impl InheritancePort for Files {
+        impl Resolver for Files {
             type Error = std::io::Error;
-            fn canonicalize(
-                &mut self,
-                declaring: &str,
-                written: &str,
-            ) -> Result<GraphSource, SourceError<Self::Error>> {
+            fn inspect(&mut self, name: Name<'_>) -> Result<GraphSource, Self::Error> {
+                let Name::Written {
+                    declaring, written, ..
+                } = name
+                else {
+                    panic!("unexpected request {name:?}")
+                };
                 let candidate = Path::new(declaring).parent().unwrap().join(written);
-                let identity = yamaa_adapters::canonical_path::canonicalize(&candidate)
-                    .map_err(|_| SourceError::Unavailable)?;
+                let identity = yamaa_adapters::canonical_path::canonicalize(&candidate)?;
                 let identity = identity.to_str().unwrap().replace('\\', "/");
                 Ok(GraphSource {
                     display_path: identity.clone(),
                     identity,
                 })
             }
-            fn capture(
-                &mut self,
-                source: &GraphSource,
-            ) -> Result<Vec<u8>, SourceError<Self::Error>> {
-                fs::read(&source.identity).map_err(SourceError::Raised)
+            fn capture(&mut self, name: Name<'_>) -> Result<Captured, Self::Error> {
+                let Name::Located { source, .. } = name else {
+                    panic!("unexpected request {name:?}")
+                };
+                Ok(Captured::resource(fs::read(&source.identity)?.into(), true))
+            }
+            /// A file that cannot be located is missing; a read error stays
+            /// the host's own.
+            fn failure(&self, name: Name<'_>, _: &Self::Error) -> Option<Failure> {
+                matches!(name, Name::Written { .. })
+                    .then_some(Failure::Resource(ResourceFailure::Missing))
             }
             fn rebase(
                 &mut self,

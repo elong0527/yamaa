@@ -6,38 +6,29 @@
 //! time on the input.
 #![no_main]
 
-use std::convert::Infallible;
-
 use libfuzzer_sys::fuzz_target;
 use yamaa_adapters::{
-    shipped_schema,
-    specification_run::PreparedRun,
-    specification_source::{InheritancePort, Source},
+    shipped_schema, specification_run::PreparedRun, specification_source::Source,
 };
-use yamaa_core::inheritance::{Source as Location, SourceError};
+use yamaa_core::resolver::{Captured, Failure, Located, Name, Resolver};
+use yamaa_core::resource::ResourceFailure;
 
 /// A resolver that holds only the entry: every parent and dictionary it names
-/// is unavailable, as for a host resolver that lacks the file.
+/// is missing, as for a host resolver that lacks the file.
 struct EntryOnly;
 
-impl InheritancePort for EntryOnly {
-    type Error = Infallible;
-    fn canonicalize(
-        &mut self,
-        _declaring: &str,
-        _written: &str,
-    ) -> Result<Location, SourceError<Infallible>> {
-        Err(SourceError::Unavailable)
+impl Resolver for EntryOnly {
+    type Error = ();
+    fn inspect(&mut self, _name: Name<'_>) -> Result<Located, ()> {
+        Err(())
     }
-    fn capture(&mut self, _source: &Location) -> Result<Vec<u8>, SourceError<Infallible>> {
-        Err(SourceError::Unavailable)
+    fn capture(&mut self, _name: Name<'_>) -> Result<Captured, ()> {
+        Err(())
     }
-    fn rebase(
-        &mut self,
-        _layer: &Location,
-        _entry: &Location,
-        written: &str,
-    ) -> Result<String, Infallible> {
+    fn failure(&self, _name: Name<'_>, _error: &()) -> Option<Failure> {
+        Some(Failure::Resource(ResourceFailure::Missing))
+    }
+    fn rebase(&mut self, _layer: &Located, _entry: &Located, written: &str) -> Result<String, ()> {
         Ok(written.into())
     }
 }

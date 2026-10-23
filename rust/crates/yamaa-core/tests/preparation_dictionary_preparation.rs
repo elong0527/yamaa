@@ -5,14 +5,15 @@ mod preparation {
         //! Independent logical arenas and opaque effects exercise capture ownership, over a 1.0
         //! document (`prepare_document`).
         use crate::support::document::Tree as V;
-        use std::rc::Rc;
+        use std::{rc::Rc, sync::Arc};
         use yamaa_core::resource::ResourceFailure;
         use yamaa_core::schema::{Document, DocumentNode as N, SchemaModule, SchemaStructure};
         use yamaa_core::{
             dictionary_preparation as app,
             inheritance::{Source as Identity, SourceError},
-            inheritance_capture::{InheritanceCapturePort, InheritanceDecodePort},
+            inheritance_capture::InheritanceDecodePort,
             project_preparation::Source,
+            resolver::{Captured, Failure, File, Name, Resolver},
         };
 
         fn document(value: V) -> Document {
@@ -175,25 +176,23 @@ mod preparation {
                 }
             }
         }
-        impl InheritanceCapturePort for Port {
+        impl Resolver for Port {
             type Error = Host;
-            fn canonicalize(&mut self, _: &str, _: &str) -> Result<Identity, SourceError<Host>> {
-                panic!("parent route entered")
-            }
-            fn capture(&mut self, _: &Identity) -> Result<Vec<u8>, SourceError<Host>> {
-                panic!("parent route entered")
-            }
-            fn canonicalize_resource(
-                &mut self,
-                declaring: &str,
-                written: &str,
-            ) -> Result<Identity, SourceError<Host>> {
+            fn inspect(&mut self, name: Name<'_>) -> Result<Identity, Host> {
+                let Name::Written {
+                    file: File::Resource,
+                    declaring,
+                    written,
+                } = name
+                else {
+                    panic!("parent route entered")
+                };
                 self.events.push(format!("resolve:{declaring}:{written}"));
                 if let Some(tag) = self.fail {
-                    return Err(SourceError::Raised(Host {
+                    return Err(Host {
                         tag,
                         owner: self.owner.clone(),
-                    }));
+                    });
                 }
                 Ok(Identity {
                     identity: if written == "later.yaml" {
@@ -205,17 +204,22 @@ mod preparation {
                     display_path: written.into(),
                 })
             }
-            fn capture_resource(
-                &mut self,
-                source: &Identity,
-            ) -> Result<Vec<u8>, SourceError<Host>> {
+            fn capture(&mut self, name: Name<'_>) -> Result<Captured, Host> {
+                let Name::Located {
+                    file: File::Resource,
+                    source,
+                } = name
+                else {
+                    panic!("parent route entered")
+                };
                 self.events.push(format!("capture:{}", source.identity));
-                Ok(vec![if source.identity == "later" { 2 } else { 1 }])
+                let byte = if source.identity == "later" { 2 } else { 1 };
+                Ok(Captured::resource(Arc::from(vec![byte]), true))
             }
-            fn resource_failure(&self, error: &Host) -> Option<ResourceFailure> {
+            fn failure(&self, _: Name<'_>, error: &Host) -> Option<Failure> {
                 match error.tag {
-                    "missing" => Some(ResourceFailure::Missing),
-                    "directory" => Some(ResourceFailure::NotRegularFile),
+                    "missing" => Some(Failure::Resource(ResourceFailure::Missing)),
+                    "directory" => Some(Failure::Resource(ResourceFailure::NotRegularFile)),
                     _ => None,
                 }
             }
@@ -439,7 +443,9 @@ mod preparation {
         };
         use yamaa_core::{
             document_preparation as app, inheritance as graph, inheritance_capture as capture,
-            inheritance_preparation as lifecycle, project_preparation::Source,
+            inheritance_preparation as lifecycle,
+            project_preparation::Source,
+            resolver::{self, Captured, Name, Resolver},
         };
 
         fn text(s: &str) -> Tree {
@@ -601,28 +607,31 @@ mod preparation {
             bytes: BTreeMap<String, Vec<u8>>,
             error: Option<Payload>,
         }
-        impl capture::InheritanceCapturePort for Host {
+        impl Resolver for Host {
             type Error = Payload;
-            fn canonicalize(
-                &mut self,
-                _: &str,
-                written: &str,
-            ) -> Result<graph::Source, graph::SourceError<Payload>> {
+            fn inspect(&mut self, name: Name<'_>) -> Result<graph::Source, Payload> {
+                let Name::Written { written, .. } = name else {
+                    panic!("unexpected request {name:?}")
+                };
                 self.calls.push(format!("canonical:{written}"));
                 if let Some(error) = self.error.take() {
-                    return Err(graph::SourceError::Raised(error));
+                    return Err(error);
                 }
                 Ok(graph::Source {
                     identity: written.into(),
                     display_path: format!("display/{written}"),
                 })
             }
-            fn capture(
-                &mut self,
-                source: &graph::Source,
-            ) -> Result<Vec<u8>, graph::SourceError<Payload>> {
+            fn capture(&mut self, name: Name<'_>) -> Result<Captured, Payload> {
+                let Name::Located { source, .. } = name else {
+                    panic!("unexpected request {name:?}")
+                };
                 self.calls.push(format!("capture:{}", source.identity));
-                Ok(self.bytes.remove(&source.identity).unwrap())
+                let bytes = self.bytes.remove(&source.identity).unwrap();
+                Ok(Captured::resource(bytes.into(), true))
+            }
+            fn failure(&self, _: Name<'_>, _: &Payload) -> Option<resolver::Failure> {
+                None
             }
             fn rebase(
                 &mut self,
@@ -1123,12 +1132,12 @@ mod preparation {
     }
     mod file_preparation {
         //! Typed effect/order witnesses use independent retained parents and native policy.
-        use std::{cell::RefCell, collections::BTreeMap, rc::Rc};
+        use std::{cell::RefCell, collections::BTreeMap, rc::Rc, sync::Arc};
         use yamaa_core::{
             file_preparation as app,
             inheritance::{Source as Identity, SourceError},
-            inheritance_capture::InheritanceCapturePort,
             project_preparation::Source,
+            resolver::{self, Captured, File, Name, Resolver},
         };
         #[derive(Clone, Debug, PartialEq, Eq)]
         enum Event {
@@ -1138,7 +1147,6 @@ mod preparation {
             Canonical(String, String),
             Parent(String, String),
             Alias(String, String),
-            Base(String),
             Rebase(String, String, String),
         }
         type Log = Rc<RefCell<Vec<Event>>>;
@@ -1173,50 +1181,64 @@ mod preparation {
                 Ok(())
             }
         }
-        impl app::NativePort for Native {
+        impl Resolver for Native {
             type Error = Fault;
-            fn resolve_entry(
-                &mut self,
-                declaring: Option<&str>,
-                written: &str,
-            ) -> Result<String, Fault> {
-                self.event(Event::Resolve(declaring.map(Into::into), written.into()))?;
-                Ok("/study/entry".into())
+            fn inspect(&mut self, name: Name<'_>) -> Result<Identity, Fault> {
+                match name {
+                    Name::Entry { declaring, written } => {
+                        self.event(Event::Resolve(declaring.map(Into::into), written.into()))?;
+                        Ok(Identity {
+                            identity: "/study/entry".into(),
+                            display_path: "/study/entry".into(),
+                        })
+                    }
+                    Name::Written {
+                        declaring, written, ..
+                    } => {
+                        self.event(Event::Canonical(declaring.into(), written.into()))?;
+                        let identity = if written.starts_with('b') { "B" } else { "A" }.to_string();
+                        let display_path = format!("{declaring}/{written}");
+                        self.identity_pointer = Some(identity.as_ptr());
+                        self.display_pointer = Some(display_path.as_ptr());
+                        Ok(Identity {
+                            identity,
+                            display_path,
+                        })
+                    }
+                    name => panic!("unexpected request {name:?}"),
+                }
             }
-            fn capture_entry(
-                &mut self,
-                declaring: Option<&str>,
-                written: &str,
-            ) -> Result<Vec<u8>, Fault> {
-                self.event(Event::Entry(declaring.map(Into::into), written.into()))?;
-                Ok(self.entry.take().unwrap())
+            /// A spelling's first capture of its parent reads it; a later one,
+            /// once the document prepares, checks the spelling as an alias. A
+            /// located file no spelling reaches is refused.
+            fn capture(&mut self, name: Name<'_>) -> Result<Captured, Fault> {
+                match name {
+                    Name::Entry { declaring, written } => {
+                        self.event(Event::Entry(declaring.map(Into::into), written.into()))?;
+                        Ok(Captured::resource(
+                            Arc::from(self.entry.take().unwrap()),
+                            true,
+                        ))
+                    }
+                    Name::Written {
+                        declaring, written, ..
+                    } => {
+                        let key = if written.starts_with('b') { "B" } else { "A" };
+                        if self.parents.contains_key(key) {
+                            self.event(Event::Parent(declaring.into(), written.into()))?;
+                            let bytes = self.parents.remove(key).unwrap();
+                            Ok(Captured::resource(Arc::from(bytes), true))
+                        } else {
+                            self.event(Event::Alias(declaring.into(), written.into()))?;
+                            Ok(Captured::resource(Arc::from(Vec::new()), false))
+                        }
+                    }
+                    Name::Located { .. } => Err(Fault::new()),
+                    name => panic!("unexpected request {name:?}"),
+                }
             }
-            fn canonicalize(
-                &mut self,
-                declaring: &str,
-                written: &str,
-            ) -> Result<Identity, SourceError<Fault>> {
-                self.event(Event::Canonical(declaring.into(), written.into()))
-                    .map_err(SourceError::Raised)?;
-                let identity = if written.starts_with('b') { "B" } else { "A" }.to_string();
-                let display_path = format!("{declaring}/{written}");
-                self.identity_pointer = Some(identity.as_ptr());
-                self.display_pointer = Some(display_path.as_ptr());
-                Ok(Identity {
-                    identity,
-                    display_path,
-                })
-            }
-
-            fn capture_parent(
-                &mut self,
-                declaring: &str,
-                written: &str,
-            ) -> Result<Vec<u8>, SourceError<Fault>> {
-                self.event(Event::Parent(declaring.into(), written.into()))
-                    .map_err(SourceError::Raised)?;
-                let key = if written.starts_with('b') { "B" } else { "A" };
-                Ok(self.parents.remove(key).unwrap())
+            fn failure(&self, _: Name<'_>, _: &Fault) -> Option<resolver::Failure> {
+                None
             }
             fn rebase(
                 &mut self,
@@ -1230,15 +1252,6 @@ mod preparation {
                     written.into(),
                 ))?;
                 Ok(written.into())
-            }
-            fn accept_alias(&mut self, declaring: &str, written: &str) -> Result<(), Fault> {
-                self.event(Event::Alias(declaring.into(), written.into()))
-            }
-            fn select_entry_base(&mut self, identity: &str) -> Result<(), Fault> {
-                self.event(Event::Base(identity.into()))
-            }
-            fn missing_alias() -> Fault {
-                Fault::new()
             }
         }
         struct Prepared {
@@ -1264,14 +1277,12 @@ mod preparation {
             written: Vec<String>,
             rejection: Option<Fault>,
             wrong_parent: bool,
-            source_pointer: Option<*const u8>,
             display_pointer: Option<*const u8>,
-            parent_pointer: Option<*const u8>,
         }
         impl app::DocumentPort<Fault> for Documents {
             type Prepared = Prepared;
             type Error = Failure;
-            fn prepare<P: InheritanceCapturePort<Error = Fault>>(
+            fn prepare<P: Resolver<Error = Fault>>(
                 &mut self,
                 source: Source,
                 display: String,
@@ -1279,16 +1290,20 @@ mod preparation {
             ) -> Result<Prepared, Failure> {
                 self.log.borrow_mut().push(Event::Service);
                 assert_eq!(display, "/study/entry");
-                self.source_pointer = Some(source.bytes.as_ptr());
+                let failed = |error| match error {
+                    SourceError::Raised(error) => Failure::Parent(error),
+                    SourceError::Unavailable => Failure::Unavailable,
+                };
                 let mut parents = vec![];
                 for written in &self.written {
-                    let identity = match port.canonicalize(&source.identity, written) {
-                        Ok(source) => source,
-                        Err(SourceError::Raised(error)) => {
-                            return Err(Failure::Parent(error));
-                        }
-                        Err(SourceError::Unavailable) => return Err(Failure::Unavailable),
+                    let name = Name::Written {
+                        file: File::Parent,
+                        declaring: &source.identity,
+                        written,
                     };
+                    let identity = port
+                        .inspect(name)
+                        .map_err(|error| failed(resolver::source_error(port, name, error)))?;
                     self.display_pointer = Some(identity.display_path.as_ptr());
                     if parents
                         .iter()
@@ -1296,11 +1311,14 @@ mod preparation {
                     {
                         continue;
                     }
-                    let bytes = port.capture(&identity).map_err(|error| match error {
-                        SourceError::Raised(error) => Failure::Parent(error),
-                        SourceError::Unavailable => Failure::Unavailable,
-                    })?;
-                    self.parent_pointer = Some(bytes.as_ptr());
+                    let name = Name::Located {
+                        file: File::Parent,
+                        source: &identity,
+                    };
+                    let bytes = port
+                        .capture(name)
+                        .map(resolver::bytes)
+                        .map_err(|error| failed(resolver::source_error(port, name, error)))?;
                     parents.push(Source {
                         identity: identity.identity,
                         bytes,
@@ -1337,9 +1355,7 @@ mod preparation {
                     written: written.iter().map(|s| (*s).into()).collect(),
                     rejection: None,
                     wrong_parent: false,
-                    source_pointer: None,
                     display_pointer: None,
-                    parent_pointer: None,
                 },
                 log,
             )
@@ -1351,17 +1367,14 @@ mod preparation {
             app::prepare(native, documents, None, "root.yaml")
         }
         #[test]
-        fn exact_effect_tape_preserves_duplicates_first_capture_and_success_aliases_before_base() {
+        fn exact_effect_tape_preserves_duplicates_first_capture_and_success_aliases() {
             let (mut native, mut documents, log) = setup(&["a", "./a", "a", "b"]);
-            let root = native.entry.as_ref().unwrap().as_ptr();
-            let a = native.parents["A"].as_ptr();
-            let b = native.parents["B"].as_ptr();
             let Ok(prepared) = run(&mut native, &mut documents) else {
                 panic!()
             };
-            assert_eq!(prepared.source.bytes.as_ptr(), root);
-            assert_eq!(prepared.parents[0].bytes.as_ptr(), a);
-            assert_eq!(prepared.parents[1].bytes.as_ptr(), b);
+            assert_eq!(prepared.source.bytes, b"original-entry");
+            assert_eq!(prepared.parents[0].bytes, b"original-a");
+            assert_eq!(prepared.parents[1].bytes, b"b");
             assert_eq!(
                 prepared
                     .parents
@@ -1386,7 +1399,6 @@ mod preparation {
                     Event::Alias("/study/entry".into(), "a".into()),
                     Event::Alias("/study/entry".into(), "./a".into()),
                     Event::Alias("/study/entry".into(), "b".into()),
-                    Event::Base("/study/entry".into()),
                 ]
             );
         }
@@ -1406,7 +1418,6 @@ mod preparation {
                     Event::Resolve(Some("/meta/original".into()), "../study/root.yaml".into()),
                     Event::Entry(Some("/meta/original".into()), "../study/root.yaml".into()),
                     Event::Service,
-                    Event::Base("/study/entry".into())
                 ]
             );
         }
@@ -1436,7 +1447,7 @@ mod preparation {
             }
         }
         #[test]
-        fn semantic_rejection_preserves_original_error_and_grants_no_alias_or_base_authority() {
+        fn semantic_rejection_preserves_original_error_and_grants_no_alias_authority() {
             let (mut native, mut documents, log) = setup(&["a", "./a"]);
             let error = Fault::new();
             let pointer = &*error.allocation as *const u32;
@@ -1447,10 +1458,7 @@ mod preparation {
                 panic!()
             };
             assert_eq!(&*error.allocation as *const u32, pointer);
-            assert!(!log
-                .borrow()
-                .iter()
-                .any(|e| matches!(e, Event::Alias(..) | Event::Base(..))));
+            assert!(!log.borrow().iter().any(|e| matches!(e, Event::Alias(..))));
         }
 
         #[test]
@@ -1475,7 +1483,7 @@ mod preparation {
             );
         }
         #[test]
-        fn unknown_retained_catalog_identity_refuses_before_any_later_base_effect() {
+        fn unknown_retained_catalog_identity_refuses_before_any_alias_effect() {
             let (mut native, mut documents, log) = setup(&[]);
             documents.wrong_parent = true;
             assert!(matches!(
@@ -2190,6 +2198,7 @@ mod preparation {
         use yamaa_core::{
             inheritance as graph, inheritance_capture as app, inheritance_preparation as lifecycle,
             project_preparation::Source,
+            resolver::{self, Captured, Name, Resolver},
         };
 
         fn text(s: &str) -> Tree {
@@ -2340,6 +2349,8 @@ mod preparation {
             aliases: BTreeMap<String, String>,
             failure: Option<(usize, Payload)>,
             unavailable: Option<usize>,
+            /// Whether the last request failed as unavailable.
+            missing: bool,
         }
         impl Host {
             fn failure(&mut self, index: usize) -> Option<Payload> {
@@ -2349,23 +2360,33 @@ mod preparation {
                     None
                 }
             }
+            /// The scripted failure of request `index`: its payload, or an
+            /// unavailable file.
+            fn refusal(&mut self, index: usize) -> Option<Payload> {
+                self.missing = self.unavailable == Some(index);
+                self.failure(index).or_else(|| {
+                    self.missing.then(|| Payload {
+                        identity: Rc::new(()),
+                        allocation: Box::new(0),
+                    })
+                })
+            }
         }
-        impl app::InheritanceCapturePort for Host {
+        impl Resolver for Host {
             type Error = Payload;
-            fn canonicalize(
-                &mut self,
-                declaring: &str,
-                written: &str,
-            ) -> Result<graph::Source, graph::SourceError<Payload>> {
+            fn inspect(&mut self, name: Name<'_>) -> Result<graph::Source, Payload> {
+                let Name::Written {
+                    declaring, written, ..
+                } = name
+                else {
+                    panic!("unexpected request {name:?}")
+                };
                 let index = self.log.borrow().len();
                 self.log
                     .borrow_mut()
                     .push(Event::Resolve(declaring.into(), written.into()));
-                if let Some(error) = self.failure(index) {
-                    return Err(graph::SourceError::Raised(error));
-                }
-                if self.unavailable == Some(index) {
-                    return Err(graph::SourceError::Unavailable);
+                if let Some(error) = self.refusal(index) {
+                    return Err(error);
                 }
                 Ok(graph::Source {
                     identity: self
@@ -2376,24 +2397,25 @@ mod preparation {
                     display_path: format!("display/{written}"),
                 })
             }
-            fn capture(
-                &mut self,
-                source: &graph::Source,
-            ) -> Result<Vec<u8>, graph::SourceError<Payload>> {
+            fn capture(&mut self, name: Name<'_>) -> Result<Captured, Payload> {
+                let Name::Located { source, .. } = name else {
+                    panic!("unexpected request {name:?}")
+                };
                 let index = self.log.borrow().len();
                 self.log
                     .borrow_mut()
                     .push(Event::Capture(source.identity.clone()));
-                if let Some(error) = self.failure(index) {
-                    return Err(graph::SourceError::Raised(error));
+                if let Some(error) = self.refusal(index) {
+                    return Err(error);
                 }
-                if self.unavailable == Some(index) {
-                    return Err(graph::SourceError::Unavailable);
-                }
-                Ok(self
+                let bytes = self
                     .bytes
                     .remove(&source.identity)
-                    .expect("only one capture per identity"))
+                    .expect("only one capture per identity");
+                Ok(Captured::resource(bytes.into(), true))
+            }
+            fn failure(&self, _: Name<'_>, _: &Payload) -> Option<resolver::Failure> {
+                self.missing.then_some(resolver::Failure::Unreadable)
             }
             fn rebase(
                 &mut self,
@@ -2451,6 +2473,7 @@ mod preparation {
                 aliases: [("alias".into(), "common".into())].into_iter().collect(),
                 failure: None,
                 unavailable: None,
+                missing: false,
             };
             let decoder = Decoder {
                 log,

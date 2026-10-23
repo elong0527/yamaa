@@ -17,7 +17,7 @@
 //! decode ports each read site has today.
 use crate::shipped_schema;
 use crate::specification_source::{
-    CapturedFindings, CapturedParent, CapturedSchema, Error, InheritancePort, Source, SourceFailure,
+    CapturedFindings, CapturedParent, CapturedSchema, Error, Source, SourceFailure,
 };
 use crate::yaml_decode::{decode_yaml, DecodedYaml, SourcePosition};
 use std::sync::Arc;
@@ -28,6 +28,7 @@ use yamaa_core::inheritance_preparation::{self as lifecycle, ResolvedVersioned, 
 use yamaa_core::language::{
     self, FileType, Header, LanguageVersion, PathBase, Reference, ReferenceFault,
 };
+use yamaa_core::resolver::{self, File, Name, Resolver};
 use yamaa_core::schema::{
     Document, LayerNodeOrigin, LayerProvenance, NormalizationError, NormalizedDocument,
     SchemaDiagnostic, SchemaSource,
@@ -457,7 +458,7 @@ impl VersionedDocument {
     /// and every layer must declare `type: spec` (LAYER-4); the chain needs
     /// the newest version a layer declares (P-VER-1). A specification of one
     /// layer must also be complete at its version.
-    pub fn prepare_specification<P: InheritancePort>(
+    pub fn prepare_specification<P: Resolver>(
         self,
         display_path: String,
         port: &mut P,
@@ -468,7 +469,7 @@ impl VersionedDocument {
 
     /// [`VersionedDocument::prepare_specification`], keeping the entry as
     /// captured and decoded and each parent layer the traversal read.
-    pub fn prepare_sources<P: InheritancePort>(
+    pub fn prepare_sources<P: Resolver>(
         self,
         display_path: String,
         port: &mut P,
@@ -480,7 +481,7 @@ impl VersionedDocument {
     /// entry copies from while the specifications and layers `resolving`
     /// names, entry first, are being resolved: a copy that leads back to one
     /// of them fails (SPEC-9).
-    pub(crate) fn prepare_sources_within<P: InheritancePort>(
+    pub(crate) fn prepare_sources_within<P: Resolver>(
         self,
         display_path: String,
         port: &mut P,
@@ -659,7 +660,7 @@ fn positions<'a, 'b>(
 /// reader, keeping each parent as captured and decoded, in first-capture
 /// order. Opaque host failures keep their payload. A copy entry's producer
 /// is read through the same port (SPEC-9).
-struct Parents<'a, P: InheritancePort> {
+struct Parents<'a, P: Resolver> {
     port: &'a mut P,
     captured: Vec<CapturedParent>,
     /// The specifications whose copies are being resolved, entry first,
@@ -670,7 +671,7 @@ struct Parents<'a, P: InheritancePort> {
     producer: Option<ProducerFailure<P::Error>>,
 }
 
-impl<P: InheritancePort> Parents<'_, P> {
+impl<P: Resolver> Parents<'_, P> {
     /// The output contract of the producer that input `dataset`'s link,
     /// `written` in `declaring`, names, read and resolved as a specification
     /// of either language (INPUT-10, D115). `layers` are this
@@ -687,23 +688,25 @@ impl<P: InheritancePort> Parents<'_, P> {
         layers: &[&graph::Source],
     ) -> Result<yamaa_core::producer_contract::Contract, ProducerFailure<P::Error>> {
         use yamaa_core::producer_contract::{self as contract, Error as Invalid};
-        use yamaa_core::resource::ResourceFailure;
         let field = format!("input.{dataset}.schema");
-        let failed = |port: &P, error: graph::SourceError<P::Error>| match error {
-            graph::SourceError::Raised(error) => match port.resource_failure(&error) {
-                Some(failure) => {
-                    ProducerFailure::Findings(vec![failure.field_diagnostic(&field, written)])
-                }
-                None => ProducerFailure::Host(error),
-            },
-            graph::SourceError::Unavailable => ProducerFailure::Findings(vec![
-                ResourceFailure::Missing.field_diagnostic(&field, written),
-            ]),
+        let failed = |port: &P, name: Name<'_>, error: P::Error| match port
+            .failure(name, &error)
+            .and_then(resolver::Failure::resource)
+        {
+            Some(failure) => {
+                ProducerFailure::Findings(vec![failure.field_diagnostic(&field, written)])
+            }
+            None => ProducerFailure::Host(error),
+        };
+        let name = Name::Written {
+            file: File::Resource,
+            declaring: &declaring.identity,
+            written,
         };
         let source = self
             .port
-            .canonicalize_resource(&declaring.identity, written)
-            .map_err(|error| failed(self.port, error))?;
+            .inspect(name)
+            .map_err(|error| failed(self.port, name, error))?;
         // This specification's layers that count as being resolved begin
         // with its entry, which they replace (SPEC-9).
         let own = self.resolving.len() - 1;
@@ -730,10 +733,15 @@ impl<P: InheritancePort> Parents<'_, P> {
                 },
             ]));
         }
+        let name = Name::Located {
+            file: File::Resource,
+            source: &source,
+        };
         let bytes = self
             .port
-            .capture_resource(&source)
-            .map_err(|error| failed(self.port, error))?;
+            .capture(name)
+            .map(resolver::bytes)
+            .map_err(|error| failed(self.port, name, error))?;
         let captured = Source {
             identity: source.identity,
             bytes,
@@ -777,7 +785,7 @@ fn host<E>(error: graph::SourceError<E>) -> graph::SourceError<SourceFailure<E>>
     }
 }
 
-impl<P: InheritancePort> lifecycle::PathPort for Parents<'_, P> {
+impl<P: Resolver> lifecycle::PathPort for Parents<'_, P> {
     fn rebase(
         &mut self,
         layer: &graph::Source,
@@ -801,20 +809,35 @@ impl<P: InheritancePort> lifecycle::PathPort for Parents<'_, P> {
     }
 }
 
-impl<P: InheritancePort> graph::InheritanceSourcePort for Parents<'_, P> {
+impl<P: Resolver> graph::InheritanceSourcePort for Parents<'_, P> {
     type Error = SourceFailure<P::Error>;
     fn canonicalize(
         &mut self,
         declaring: &str,
         written: &str,
     ) -> Result<graph::Source, graph::SourceError<Self::Error>> {
-        self.port.canonicalize(declaring, written).map_err(host)
+        let name = Name::Written {
+            file: File::Parent,
+            declaring,
+            written,
+        };
+        self.port
+            .inspect(name)
+            .map_err(|error| host(resolver::source_error(self.port, name, error)))
     }
     fn read(
         &mut self,
         source: &graph::Source,
     ) -> Result<Document, graph::SourceError<Self::Error>> {
-        let bytes = self.port.capture(source).map_err(host)?;
+        let name = Name::Located {
+            file: File::Parent,
+            source,
+        };
+        let bytes = self
+            .port
+            .capture(name)
+            .map(resolver::bytes)
+            .map_err(|error| host(resolver::source_error(self.port, name, error)))?;
         decode_yaml(&bytes)
             .map(|decoded| {
                 let document = decoded.document.clone();
@@ -878,7 +901,7 @@ pub struct RefusedReference {
 /// `relative_to: entry`, `entry`, the identity of the specification's entry
 /// file, which is `declaring` itself for an entry or a project file. Each is
 /// read through `port`; the first refused file stops the check.
-pub fn check_references<P: InheritancePort>(
+pub fn check_references<P: Resolver>(
     document: &Document,
     file_type: FileType,
     declaring: &str,
@@ -896,13 +919,22 @@ pub fn check_references<P: InheritancePort>(
             PathBase::Declaring => declaring,
             PathBase::Entry => entry,
         };
-        let source = match port.canonicalize(base, &reference.written) {
-            Ok(source) => source,
-            Err(error) => return Err(failed(error, reference)),
+        let name = Name::Written {
+            file: File::Resource,
+            declaring: base,
+            written: &reference.written,
         };
-        let bytes = match port.capture(&source) {
-            Ok(bytes) => bytes,
-            Err(error) => return Err(failed(error, reference)),
+        let source = match port.inspect(name) {
+            Ok(source) => source,
+            Err(error) => return Err(failed(resolver::source_error(port, name, error), reference)),
+        };
+        let name = Name::Located {
+            file: File::Resource,
+            source: &source,
+        };
+        let bytes = match port.capture(name) {
+            Ok(captured) => resolver::bytes(captured),
+            Err(error) => return Err(failed(resolver::source_error(port, name, error), reference)),
         };
         let named = match decode_yaml(&bytes) {
             Ok(decoded) => decoded.document,

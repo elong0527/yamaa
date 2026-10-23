@@ -8,6 +8,7 @@ use crate::{
     host_resources::{Failure, Kind, PathRefusal, ResourceKind},
 };
 use yamaa_core::limits::{LimitExceeded, Limits};
+use yamaa_core::resolver::{self, Captured, File, Located, Name, Origin, Resolver};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Error {
@@ -19,7 +20,6 @@ pub enum Error {
     InvalidBase,
     InvalidPath,
     WrittenForm(yamaa_core::resource::ResourceFailure),
-    InvalidLock,
     OutsideRoots,
     Symlink,
     Changed,
@@ -34,7 +34,6 @@ impl Error {
             Self::NotRegularFile => "resource path is not a regular file",
             Self::InvalidRoot => "invalid approved resource root",
             Self::InvalidBase => "invalid resource base directory",
-            Self::InvalidLock => "invalid packaging lock syntax",
             Self::InvalidPath => "invalid resource path spelling",
             Self::WrittenForm(_) => "invalid resource path spelling",
             Self::OutsideRoots => "resource path outside approved roots",
@@ -200,55 +199,63 @@ impl<'a> HeldPort<'a> {
             inputs,
         }
     }
-    fn held(&self, source: &yamaa_core::specification::SourceDeclaration) -> Option<Arc<[u8]>> {
-        let held = self.held.as_ref()?;
-        self.inputs
-            .iter()
-            .find(|input| input.dataset == source.name)
-            .and_then(|input| held.get(&input.producer, &input.location))
-    }
-}
-impl yamaa_core::specification_run::SpecificationSourcePort for HeldPort<'_> {
-    type Error = Error;
-    fn owned_table(
+    /// The artifact a linked input reads, held by the run, with the location
+    /// the input's path names.
+    fn held(
         &self,
         source: &yamaa_core::specification::SourceDeclaration,
-    ) -> Option<Arc<dyn std::any::Any + Send + Sync>> {
-        if self.held(source).is_some() {
-            None
-        } else {
-            self.resources.owned_table(source)
+    ) -> Option<(String, Arc<[u8]>)> {
+        let held = self.held.as_ref()?;
+        let input = self
+            .inputs
+            .iter()
+            .find(|input| input.dataset == source.name)?;
+        held.get(&input.producer, &input.location)
+            .map(|bytes| (input.location.clone(), bytes))
+    }
+}
+/// The resolver port of one run: a linked input whose producer the run holds
+/// reads the held artifact, and every other request reads the run's scope.
+impl yamaa_core::resolver::Resolver for HeldPort<'_> {
+    type Error = Error;
+    fn inspect(&mut self, name: Name<'_>) -> Result<Located, Error> {
+        if let Name::Input(source) = name {
+            if let Some((location, _)) = self.held(source) {
+                return Ok(Located {
+                    identity: location,
+                    display_path: source.path.clone(),
+                });
+            }
         }
+        Resolver::inspect(&mut *self.resources, name)
     }
-    fn resource_failure(&self, error: &Error) -> Option<yamaa_core::resource::ResourceFailure> {
-        resource_failure(error)
-    }
-    fn inspect(
-        &mut self,
-        source: &yamaa_core::specification::SourceDeclaration,
-    ) -> Result<(), Error> {
-        if self.held(source).is_some() {
-            return Ok(());
+    fn capture(&mut self, name: Name<'_>) -> Result<Captured, Error> {
+        if let Name::Input(source) = name {
+            if let Some((_, bytes)) = self.held(source) {
+                return Ok(Captured {
+                    bytes,
+                    created: false,
+                    origin: Origin::Generated,
+                    table: None,
+                });
+            }
         }
-        Resources::inspect(self.resources, &source.path)
+        Resolver::capture(&mut *self.resources, name)
     }
-    fn capture_reads(&self) -> usize {
-        self.resources.reads
+    fn failure(&self, name: Name<'_>, error: &Error) -> Option<resolver::Failure> {
+        Resolver::failure(&*self.resources, name, error)
     }
-    fn capture(
-        &mut self,
-        source: &yamaa_core::specification::SourceDeclaration,
-        origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
-    ) -> Result<Arc<[u8]>, Error> {
-        if let Some(bytes) = self.held(source) {
-            *origin = Some(yamaa_core::specification_run::SourceOrigin::Generated);
-            return Ok(bytes);
-        }
-        yamaa_core::specification_run::SpecificationSourcePort::capture(
-            self.resources,
-            source,
-            origin,
-        )
+    fn rebase(&mut self, layer: &Located, entry: &Located, written: &str) -> Result<String, Error> {
+        Resolver::rebase(&mut *self.resources, layer, entry, written)
+    }
+    fn rebase_failure(
+        &self,
+        error: &Error,
+        layer: &Located,
+        entry: &Located,
+        written: &str,
+    ) -> Option<yamaa_core::diagnostic::Diagnostic> {
+        Resolver::rebase_failure(&*self.resources, error, layer, entry, written)
     }
 }
 
@@ -606,7 +613,6 @@ mod classification_tests {
             Error::InvalidRoot,
             Error::InvalidBase,
             Error::InvalidPath,
-            Error::InvalidLock,
             Error::OutsideRoots,
         ] {
             assert_eq!(resource_failure(&error), None);
@@ -614,35 +620,116 @@ mod classification_tests {
     }
 }
 
-impl yamaa_core::specification_run::SpecificationSourcePort for Resources {
+/// The resolver port on one scope's snapshots. An input resolves from the
+/// selected entry, an entry from the caller's base or the project file that
+/// lists it, and a metadata file from the file that writes it. A located
+/// file is captured by a name that located it, which only a scope that keeps
+/// those names knows: a located name alone is an invalid path.
+impl yamaa_core::resolver::Resolver for Resources {
     type Error = Error;
-    fn owned_table(
+    fn inspect(&mut self, name: Name<'_>) -> Result<Located, Error> {
+        match name {
+            Name::Input(source) => Ok(Located {
+                identity: self
+                    .store
+                    .resolve(&self.store.base, &source.path, Kind::Input)
+                    .map_err(Error::from_failure)?,
+                display_path: source.path.clone(),
+            }),
+            Name::Entry { declaring, written } => {
+                let identity = match declaring {
+                    Some(declaring) => self.resolve_from(declaring, written)?,
+                    None => self.resolve(written)?,
+                };
+                Ok(Located {
+                    display_path: identity.clone(),
+                    identity,
+                })
+            }
+            Name::Written {
+                file,
+                declaring,
+                written,
+            } => {
+                // A parent is judged as written before any resolver is asked
+                // for it (FILE-4, FILE-5, LAYER-2), as schema admission judges
+                // every other declared path: a backslash, an empty segment or
+                // a trailing separator, which a network share's
+                // `//server/share` root also writes, is refused as written
+                // whichever resolver serves the layers.
+                if file == File::Parent {
+                    if let Some(failure) = yamaa_core::resource::written_path_failure(written) {
+                        return Err(Error::WrittenForm(failure));
+                    }
+                }
+                let identity = self.resolve_from(declaring, written)?;
+                let display_path = match file {
+                    File::Parent | File::Resource => {
+                        crate::file_metadata::display_path(declaring, written)?
+                    }
+                    File::Project(_) => identity.clone(),
+                };
+                Ok(Located {
+                    identity,
+                    display_path,
+                })
+            }
+            Name::Located { .. } => Err(Error::InvalidPath),
+        }
+    }
+    fn capture(&mut self, name: Name<'_>) -> Result<Captured, Error> {
+        match name {
+            Name::Input(source) => {
+                let (bytes, created) = Resources::capture(self, &source.path)?;
+                Ok(Captured {
+                    table: self
+                        .store
+                        .frame(&self.store.base, &source.path)
+                        .map(|table| table as Arc<dyn std::any::Any + Send + Sync>),
+                    ..Captured::resource(bytes, created)
+                })
+            }
+            Name::Entry { declaring, written } => {
+                let (bytes, created) = match declaring {
+                    Some(declaring) => self.capture_metadata_from(declaring, written)?,
+                    None => self.capture_metadata(written)?,
+                };
+                Ok(Captured::resource(bytes, created))
+            }
+            Name::Written {
+                declaring, written, ..
+            } => {
+                let (bytes, created) = self.capture_metadata_from(declaring, written)?;
+                Ok(Captured::resource(bytes, created))
+            }
+            Name::Located { .. } => Err(Error::InvalidPath),
+        }
+    }
+    /// An input over its limit is a boundary finding at its declaration. A
+    /// metadata file over its limit has no finding of its own: the operation
+    /// that reads it reports the limit (`resource_limit`).
+    fn failure(&self, name: Name<'_>, error: &Error) -> Option<resolver::Failure> {
+        match (name, error) {
+            (_, Error::Unreadable) => Some(resolver::Failure::Unreadable),
+            (Name::Entry { .. } | Name::Written { .. } | Name::Located { .. }, Error::Limit(_)) => {
+                None
+            }
+            (_, error) => resource_failure(error).map(resolver::Failure::Resource),
+        }
+    }
+    fn rebase(&mut self, layer: &Located, entry: &Located, written: &str) -> Result<String, Error> {
+        crate::file_metadata::rebased(&layer.identity, &entry.identity, written)
+    }
+    /// The rebase is lexical, so its refusal is derived again, with both
+    /// roots, from the same identities.
+    fn rebase_failure(
         &self,
-        source: &yamaa_core::specification::SourceDeclaration,
-    ) -> Option<Arc<dyn std::any::Any + Send + Sync>> {
-        self.store
-            .frame(&self.store.base, &source.path)
-            .map(|table| table as Arc<dyn std::any::Any + Send + Sync>)
-    }
-    fn resource_failure(&self, error: &Error) -> Option<yamaa_core::resource::ResourceFailure> {
-        resource_failure(error)
-    }
-    fn inspect(
-        &mut self,
-        source: &yamaa_core::specification::SourceDeclaration,
-    ) -> Result<(), Error> {
-        Resources::inspect(self, &source.path)
-    }
-    fn capture_reads(&self) -> usize {
-        self.reads
-    }
-    fn capture(
-        &mut self,
-        source: &yamaa_core::specification::SourceDeclaration,
-        origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
-    ) -> Result<Arc<[u8]>, Error> {
-        *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
-        Resources::capture(self, &source.path).map(|(bytes, _)| bytes)
+        _error: &Error,
+        layer: &Located,
+        entry: &Located,
+        written: &str,
+    ) -> Option<yamaa_core::diagnostic::Diagnostic> {
+        crate::file_metadata::share_refusal(layer, entry, written)
     }
 }
 

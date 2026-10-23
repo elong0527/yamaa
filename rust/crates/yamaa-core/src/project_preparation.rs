@@ -1,4 +1,4 @@
-//! Capture, lower and admit project dependencies through native ports.
+//! Capture, lower and admit project dependencies through the resolver port.
 //! Code activation, study data and publication authority are absent from this service.
 //!
 //! The caller supplies one project file. Each captured file lowers once into
@@ -25,6 +25,7 @@ use crate::{
     project_environment::{Draft, Environment, Finding, LockKind, LockReference},
     project_function::Language,
     project_function_document,
+    resolver::{File, Name, Resolver},
     schema::Document,
 };
 
@@ -53,32 +54,6 @@ pub enum Origin {
     FunctionFile(usize),
     Codelist(usize),
 }
-/// One metadata dependency request; each captured file uses the shared size cap.
-pub struct Request<'a> {
-    pub kind: Kind,
-    pub declaring_source: &'a str,
-    pub written: &'a str,
-}
-#[derive(Debug)]
-pub enum Reply {
-    Document(Source),
-    /// The host parses the held packaging-tool syntax to classify the lock.
-    /// Installed package versions are verified only by the activation port.
-    Lock {
-        source: Source,
-        kind: LockKind,
-    },
-}
-pub trait ProjectCapturePort {
-    type Error;
-    fn capture(&mut self, request: Request<'_>) -> Result<Reply, Self::Error>;
-    /// Hosts identify user interrupts without changing their original payload.
-    /// An interrupt aborts immediately; ordinary independent failures collect.
-    fn is_interrupt(&self, _error: &Self::Error) -> bool {
-        false
-    }
-}
-
 /// Closed structural targets are selected by the application, never by a host callback.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DecodeTarget {
@@ -108,6 +83,9 @@ pub trait ProjectDecodePort {
     ) -> Result<Self::Document, Self::Error>;
     fn document(document: &Self::Document) -> &Document;
     fn source(document: &Self::Document) -> &Source;
+    /// The packaging tool whose lock syntax the held bytes are, or `None`
+    /// when they are no lock the engine reads.
+    fn lock(&mut self, source: &Source) -> Option<LockKind>;
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -116,8 +94,9 @@ pub enum CaptureFailure<E, D, X> {
     Port(E),
     #[error("project preparation interrupted: {0:?}")]
     Interrupted(E),
-    #[error("project preparation protocol")]
-    Protocol,
+    /// The held lock is no packaging lock the engine reads.
+    #[error("project preparation lock syntax")]
+    Lock,
     #[error("project preparation limit: {0:?}")]
     Limit(LimitExceeded),
     #[error("project preparation structural: {0:?}")]
@@ -211,31 +190,38 @@ pub enum Failure<E, D, X> {
 /// Preparation moves both admitted metadata and original boundary evidence.
 pub type PreparationResult<E, D, X> = Result<PreparedEnvironment<D>, Failure<E, D, X>>;
 
-fn capture<P: ProjectCapturePort, D, X>(
+/// Resolve and capture one file the project names, under the shared size
+/// cap. An interrupt aborts immediately; ordinary independent failures
+/// collect.
+fn capture<P: Resolver, D, X>(
     port: &mut P,
     kind: Kind,
     declaring: &str,
     written: &str,
-) -> Result<Reply, CaptureFailure<P::Error, D, X>> {
-    let reply = port
-        .capture(Request {
-            kind,
-            declaring_source: declaring,
-            written,
-        })
-        .map_err(|error| {
-            if port.is_interrupt(&error) {
-                CaptureFailure::Interrupted(error)
-            } else {
-                CaptureFailure::Port(error)
-            }
-        })?;
-    let source = match &reply {
-        Reply::Document(source) => source,
-        Reply::Lock { source, .. } => source,
+) -> Result<Source, CaptureFailure<P::Error, D, X>> {
+    let name = Name::Written {
+        file: File::Project(kind),
+        declaring,
+        written,
     };
-    Limits::spec_bytes(source.bytes.len()).map_err(CaptureFailure::Limit)?;
-    Ok(reply)
+    let failed = |port: &P, error| {
+        if port.is_interrupt(&error) {
+            CaptureFailure::Interrupted(error)
+        } else {
+            CaptureFailure::Port(error)
+        }
+    };
+    let identity = port
+        .inspect(name)
+        .map_err(|error| failed(port, error))?
+        .identity;
+    let bytes = port
+        .capture(name)
+        .map_err(|error| failed(port, error))?
+        .bytes
+        .to_vec();
+    Limits::spec_bytes(bytes.len()).map_err(CaptureFailure::Limit)?;
+    Ok(Source { identity, bytes })
 }
 
 /// One captured YAML dependency with its lowered root, or the retained
@@ -243,14 +229,14 @@ fn capture<P: ProjectCapturePort, D, X>(
 type Captured<P, D, T> = Result<
     (<D as ProjectDecodePort>::Document, T),
     CaptureFailure<
-        <P as ProjectCapturePort>::Error,
+        <P as Resolver>::Error,
         <D as ProjectDecodePort>::Document,
         <D as ProjectDecodePort>::Error,
     >,
 >;
 
 /// Capture, decode and lower one declared YAML dependency.
-fn capture_document<P: ProjectCapturePort, D: ProjectDecodePort, T>(
+fn capture_document<P: Resolver, D: ProjectDecodePort, T>(
     port: &mut P,
     decoder: &mut D,
     (kind, target): (Kind, DecodeTarget),
@@ -258,9 +244,7 @@ fn capture_document<P: ProjectCapturePort, D: ProjectDecodePort, T>(
     written: &str,
     lower: impl FnOnce(&Document) -> Result<T, Vec<project_function_document::Finding>>,
 ) -> Captured<P, D, T> {
-    let Reply::Document(source) = capture(port, kind, declaring, written)? else {
-        return Err(CaptureFailure::Protocol);
-    };
+    let source = capture(port, kind, declaring, written)?;
     let captured = decoder
         .decode(source, target)
         .map_err(CaptureFailure::Structural)?;
@@ -278,7 +262,7 @@ fn capture_document<P: ProjectCapturePort, D: ProjectDecodePort, T>(
 type Step<T, P, D> = Result<
     T,
     Failure<
-        <P as ProjectCapturePort>::Error,
+        <P as Resolver>::Error,
         <D as ProjectDecodePort>::Document,
         <D as ProjectDecodePort>::Error,
     >,
@@ -317,7 +301,7 @@ fn collect<E, D, X, T>(
 
 /// Prepare the project file `source` for the host language `host`, or for an
 /// engine that claims none (`None`), which reads no `environments` entry.
-pub fn prepare<P: ProjectCapturePort, D: ProjectDecodePort>(
+pub fn prepare<P: Resolver, D: ProjectDecodePort>(
     decoder: &mut D,
     source: Source,
     host: Option<Language>,
@@ -377,9 +361,10 @@ pub fn prepare<P: ProjectCapturePort, D: ProjectDecodePort>(
         .map(|lock| lock.text.clone());
     let mut lock = None;
     if let Some(written) = &written_lock {
-        let result = (|| match capture(port, Kind::Lock, &declaring, written)? {
-            Reply::Lock { source, kind } => Ok(LockCapture { source, kind }),
-            _ => Err(CaptureFailure::Protocol),
+        let result = (|| {
+            let source = capture(port, Kind::Lock, &declaring, written)?;
+            let kind = decoder.lock(&source).ok_or(CaptureFailure::Lock)?;
+            Ok(LockCapture { source, kind })
         })();
         lock = collect(&mut collected.failures, (Origin::Lock, written), result)?;
     }
@@ -445,7 +430,7 @@ pub fn prepare<P: ProjectCapturePort, D: ProjectDecodePort>(
 
 /// Capture the environment file a 0.5 project links for `host` and lower it
 /// into the project root.
-fn capture_environment<P: ProjectCapturePort, D: ProjectDecodePort>(
+fn capture_environment<P: Resolver, D: ProjectDecodePort>(
     port: &mut P,
     decoder: &mut D,
     project: &mut ast::Project,
@@ -478,7 +463,7 @@ fn capture_environment<P: ProjectCapturePort, D: ProjectDecodePort>(
 
 /// The definitions a 0.5 environment file declares, inline or as definition
 /// files relative to `declaring`.
-fn capture_functions<P: ProjectCapturePort, D: ProjectDecodePort>(
+fn capture_functions<P: Resolver, D: ProjectDecodePort>(
     port: &mut P,
     decoder: &mut D,
     project: &ast::Project,
@@ -533,7 +518,7 @@ fn capture_functions<P: ProjectCapturePort, D: ProjectDecodePort>(
 
 /// The function files a 1.0 project lists, each relative to the project file
 /// (D8). Every listed file is read, whichever host languages it implements.
-fn capture_function_files<P: ProjectCapturePort, D: ProjectDecodePort>(
+fn capture_function_files<P: Resolver, D: ProjectDecodePort>(
     port: &mut P,
     decoder: &mut D,
     project: &ast::Project,
@@ -579,7 +564,7 @@ fn capture_function_files<P: ProjectCapturePort, D: ProjectDecodePort>(
 /// The codelist sources a project declares, inline or as codelist files
 /// relative to the project file: header-less in 0.5, and declaring
 /// `type: codelists` in 1.0 (P-TYPE-1).
-fn capture_codelists<P: ProjectCapturePort, D: ProjectDecodePort>(
+fn capture_codelists<P: Resolver, D: ProjectDecodePort>(
     port: &mut P,
     decoder: &mut D,
     project: &ast::Project,

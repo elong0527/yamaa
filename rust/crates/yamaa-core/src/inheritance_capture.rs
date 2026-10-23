@@ -1,47 +1,13 @@
-//! Raw inheritance capture admission and retained catalogs over explicit native ports.
-//! YAML/schema representation and native path spelling remain decoder/host authority.
+//! Raw inheritance capture admission and retained catalogs over the resolver
+//! port. YAML/schema representation and native path spelling remain decoder
+//! and host authority.
 use crate::schema::{Document, SchemaStructure};
 use crate::{
-    inheritance as graph, inheritance_preparation as lifecycle, project_preparation::Source,
+    inheritance as graph, inheritance_preparation as lifecycle,
+    project_preparation::Source,
+    resolver::{self, File, Name, Resolver},
 };
 
-/// Fail-fast inheritance authority. Unlike project metadata capture, an ordinary
-/// failure stops the attempt; no independent-error collection or retry occurs.
-pub trait InheritanceCapturePort {
-    type Error;
-    fn canonicalize(
-        &mut self,
-        declaring: &str,
-        written: &str,
-    ) -> Result<graph::Source, graph::SourceError<Self::Error>>;
-    fn capture(
-        &mut self,
-        source: &graph::Source,
-    ) -> Result<Vec<u8>, graph::SourceError<Self::Error>>;
-    /// Planning resources retain their own path failures rather than parent-unavailability semantics.
-    fn canonicalize_resource(
-        &mut self,
-        declaring: &str,
-        written: &str,
-    ) -> Result<graph::Source, graph::SourceError<Self::Error>> {
-        self.canonicalize(declaring, written)
-    }
-    fn capture_resource(
-        &mut self,
-        source: &graph::Source,
-    ) -> Result<Vec<u8>, graph::SourceError<Self::Error>> {
-        self.capture(source)
-    }
-    fn resource_failure(&self, _error: &Self::Error) -> Option<crate::resource::ResourceFailure> {
-        None
-    }
-    fn rebase(
-        &mut self,
-        layer: &graph::Source,
-        entry: &graph::Source,
-        written: &str,
-    ) -> Result<String, Self::Error>;
-}
 /// A physical decoder retains original source and occurrence authority.
 pub trait InheritanceDecodePort {
     type Raw;
@@ -102,25 +68,36 @@ fn host_error<E, X>(error: graph::SourceError<E>) -> graph::SourceError<SourceFa
         graph::SourceError::Raised(error) => graph::SourceError::Raised(SourceFailure::Host(error)),
     }
 }
-impl<P: InheritanceCapturePort, D: InheritanceDecodePort> graph::InheritanceSourcePort
-    for Application<'_, P, D>
-{
+impl<P: Resolver, D: InheritanceDecodePort> graph::InheritanceSourcePort for Application<'_, P, D> {
     type Error = SourceFailure<P::Error, D::Error>;
     fn canonicalize(
         &mut self,
         declaring: &str,
         written: &str,
     ) -> Result<graph::Source, graph::SourceError<Self::Error>> {
+        let name = Name::Written {
+            file: File::Parent,
+            declaring,
+            written,
+        };
         self.host
-            .canonicalize(declaring, written)
-            .map_err(host_error)
+            .inspect(name)
+            .map_err(|error| host_error(resolver::source_error(self.host, name, error)))
     }
     fn read(
         &mut self,
         source: &graph::Source,
     ) -> Result<Document, graph::SourceError<Self::Error>> {
         let admission = |error| graph::SourceError::Raised(SourceFailure::Admission(error));
-        let bytes = self.host.capture(source).map_err(host_error)?;
+        let name = Name::Located {
+            file: File::Parent,
+            source,
+        };
+        let bytes = self
+            .host
+            .capture(name)
+            .map(resolver::bytes)
+            .map_err(|error| host_error(resolver::source_error(self.host, name, error)))?;
         let raw = self
             .decoder
             .decode(&source.identity, &bytes)
@@ -136,9 +113,7 @@ impl<P: InheritanceCapturePort, D: InheritanceDecodePort> graph::InheritanceSour
         Ok(document)
     }
 }
-impl<P: InheritanceCapturePort, D: InheritanceDecodePort> lifecycle::PathPort
-    for Application<'_, P, D>
-{
+impl<P: Resolver, D: InheritanceDecodePort> lifecycle::PathPort for Application<'_, P, D> {
     fn rebase(
         &mut self,
         layer: &graph::Source,
@@ -153,7 +128,7 @@ impl<P: InheritanceCapturePort, D: InheritanceDecodePort> lifecycle::PathPort
 /// Continue from the exact already-decoded entry. Entry parsing occurs once in
 /// the caller's codec; this application neither reopens nor decodes it again.
 /// Root/capture, traversal, normalization and rebasing policies remain distinct.
-pub fn prepare<P: InheritanceCapturePort, D: InheritanceDecodePort>(
+pub fn prepare<P: Resolver, D: InheritanceDecodePort>(
     schema: &SchemaStructure,
     source: &Source,
     display_path: String,

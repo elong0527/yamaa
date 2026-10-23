@@ -15,9 +15,7 @@ mod declaration {
         use std::path::{Component, Path, PathBuf};
 
         use yamaa_adapters::document::{self, AdmittedDocument, Closures, Decoded};
-        use yamaa_adapters::project_source::{
-            self, Failure, Kind, ProjectCapturePort, Reply, Request,
-        };
+        use yamaa_adapters::project_source::{self, Failure, Kind};
         use yamaa_adapters::shipped_schema;
         use yamaa_adapters::specification_source::{CapturedDocument, Error, Source};
         use yamaa_core::ast::{
@@ -27,6 +25,7 @@ mod declaration {
         use yamaa_core::json::Value;
         use yamaa_core::language::{FileType, LANGUAGE_VERSION};
         use yamaa_core::project_function::Language;
+        use yamaa_core::resolver::{self, Captured, File, Located, Name, Resolver};
         use yamaa_core::schema::SchemaSource;
 
         fn repository(path: &str) -> PathBuf {
@@ -321,26 +320,56 @@ mod declaration {
         #[derive(Default)]
         struct Files {
             read: Vec<(Kind, String)>,
+            /// The bytes of the file last located.
+            held: Vec<u8>,
         }
-        impl ProjectCapturePort for Files {
-            type Error = std::io::Error;
-            fn capture(&mut self, request: Request<'_>) -> Result<Reply, Self::Error> {
-                self.read.push((request.kind, request.written.into()));
-                let path = Path::new(request.declaring_source)
-                    .parent()
-                    .unwrap()
-                    .join(request.written);
+        impl Files {
+            /// The held source the double serves for the file a project names.
+            fn answer(
+                &mut self,
+                kind: Kind,
+                declaring: &str,
+                written: &str,
+            ) -> Result<Source, std::io::Error> {
+                self.read.push((kind, written.into()));
+                let path = Path::new(declaring).parent().unwrap().join(written);
                 let source = Source {
                     identity: path.to_str().unwrap().into(),
                     bytes: fs::read(&path)?,
                 };
-                Ok(match request.kind {
-                    Kind::Lock => Reply::Lock {
-                        kind: yamaa_adapters::project_lock::kind(&source.bytes).unwrap(),
-                        source,
-                    },
-                    _ => Reply::Document(source),
+                Ok(source)
+            }
+        }
+        /// A file is served when it is located; its capture reads the bytes served.
+        impl Resolver for Files {
+            type Error = std::io::Error;
+            fn inspect(&mut self, name: Name<'_>) -> Result<Located, Self::Error> {
+                let Name::Written {
+                    file: File::Project(kind),
+                    declaring,
+                    written,
+                } = name
+                else {
+                    panic!("unexpected request {name:?}")
+                };
+                let source = self.answer(kind, declaring, written)?;
+                self.held = source.bytes;
+                Ok(Located {
+                    display_path: source.identity.clone(),
+                    identity: source.identity,
                 })
+            }
+            fn capture(&mut self, _: Name<'_>) -> Result<Captured, Self::Error> {
+                Ok(Captured::resource(
+                    std::mem::take(&mut self.held).into(),
+                    true,
+                ))
+            }
+            fn failure(&self, _: Name<'_>, _: &Self::Error) -> Option<resolver::Failure> {
+                None
+            }
+            fn rebase(&mut self, _: &Located, _: &Located, _: &str) -> Result<String, Self::Error> {
+                panic!("a project file is never rebased")
             }
         }
 

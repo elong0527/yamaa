@@ -12,9 +12,7 @@ pub(crate) fn inspect(
     let error = resources
         .inspect_from(origin.base_source, origin.written)
         .err()?;
-    let failure = yamaa_core::specification_run::SpecificationSourcePort::resource_failure(
-        resources, &error,
-    )?;
+    let failure = crate::file_resources::resource_failure(&error)?;
     Some((
         failure,
         document.written_source_path(dataset).unwrap_or(path).into(),

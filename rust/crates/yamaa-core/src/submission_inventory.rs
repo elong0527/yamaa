@@ -12,7 +12,7 @@ pub enum MetadataError {
     Shape,
 }
 impl Inventory {
-    /// Capture ports supply admitted specification documents; no data table or
+    /// The caller's capture supplies admitted specification documents; no data table or
     /// filename can stand in for the dataset's declared domain identity.
     pub fn from_specifications(documents: &[&Document]) -> Result<Self, MetadataError> {
         let mut selected = BTreeSet::new();
@@ -69,17 +69,6 @@ pub fn references(project: &ast::Project) -> Result<Vec<&str>, MetadataError> {
         .collect())
 }
 
-pub trait Ports {
-    type Specification;
-    type Error;
-    fn capture(
-        &mut self,
-        declaring: &str,
-        written: &str,
-    ) -> Result<Self::Specification, Self::Error>;
-    fn document(specification: &Self::Specification) -> &Document;
-    fn identity(specification: &Self::Specification) -> &str;
-}
 #[derive(Debug, thiserror::Error)]
 pub enum Error<E> {
     #[error("submission inventory port: written={written:?}, error={error:?}")]
@@ -91,23 +80,24 @@ pub struct Captured<S> {
     pub inventory: Inventory,
     pub specifications: Vec<S>,
 }
-pub fn capture<P: Ports>(
+/// Capture each specification the project's sections list, in written
+/// order, with `capture`, and read the study's dataset names from the
+/// document `document` shows of each.
+pub fn capture<S, E>(
     project: &ast::Project,
-    declaring: &str,
-    port: &mut P,
-) -> Result<Captured<P::Specification>, Error<P::Error>> {
+    mut capture: impl FnMut(&str) -> Result<S, E>,
+    document: impl Fn(&S) -> &Document,
+) -> Result<Captured<S>, Error<E>> {
     let references = references(project).map_err(Error::Metadata)?;
     let mut specifications = Vec::new();
     for written in references {
-        let specification = port
-            .capture(declaring, written)
-            .map_err(|error| Error::Port {
-                written: written.into(),
-                error,
-            })?;
+        let specification = capture(written).map_err(|error| Error::Port {
+            written: written.into(),
+            error,
+        })?;
         specifications.push(specification);
     }
-    let documents = specifications.iter().map(P::document).collect::<Vec<_>>();
+    let documents = specifications.iter().map(document).collect::<Vec<_>>();
     let inventory = Inventory::from_specifications(&documents).map_err(Error::Metadata)?;
     Ok(Captured {
         inventory,

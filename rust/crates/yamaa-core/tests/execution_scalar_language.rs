@@ -7,10 +7,8 @@ mod execution {
         use yamaa_core::{
             application_observer::{Noop, Scope},
             function_invocation::NoFunctions,
-            specification_run::{
-                self as run, CapturedAttempt, PortError, RunError, SourceDecoder,
-                SpecificationSourcePort,
-            },
+            resolver::{Captured, Failure, Located, Name, Resolver},
+            specification_run::{self as run, CapturedAttempt, PortError, RunError, SourceDecoder},
         };
         use yamaa_core::{
             diagnostic::{source_diagnostics, ConditionCode as C, Diagnostic},
@@ -86,29 +84,24 @@ mod execution {
             marker: Rc<()>,
             fail_at: Option<&'static str>,
         }
-        impl SpecificationSourcePort for Port {
-            fn resource_failure(
-                &self,
-                _error: &Self::Error,
-            ) -> Option<yamaa_core::resource::ResourceFailure> {
-                None
-            }
+        impl Resolver for Port {
             type Error = Opaque;
-            fn inspect(&mut self, source: &SourceDeclaration) -> Result<(), Opaque> {
+            fn inspect(&mut self, name: Name<'_>) -> Result<Located, Opaque> {
+                let Name::Input(source) = name else {
+                    panic!("unexpected request {name:?}")
+                };
                 self.trace
                     .borrow_mut()
                     .push(format!("inspect:{}", source.name));
-                Ok(())
+                Ok(Located {
+                    identity: source.path.clone(),
+                    display_path: source.path.clone(),
+                })
             }
-            fn capture_reads(&self) -> usize {
-                self.reads
-            }
-            fn capture(
-                &mut self,
-                source: &SourceDeclaration,
-                origin: &mut Option<run::SourceOrigin>,
-            ) -> Result<Arc<[u8]>, Opaque> {
-                *origin = Some(run::SourceOrigin::Resource);
+            fn capture(&mut self, name: Name<'_>) -> Result<Captured, Opaque> {
+                let Name::Input(source) = name else {
+                    panic!("unexpected request {name:?}")
+                };
                 self.trace
                     .borrow_mut()
                     .push(format!("capture:{}", source.name));
@@ -122,7 +115,13 @@ mod execution {
                 let bytes = Arc::from(source.name.as_bytes());
                 self.held.push(Arc::clone(&bytes));
                 self.reads += 1;
-                Ok(bytes)
+                Ok(Captured::resource(bytes, true))
+            }
+            fn failure(&self, _: Name<'_>, _: &Opaque) -> Option<Failure> {
+                None
+            }
+            fn rebase(&mut self, _: &Located, _: &Located, _: &str) -> Result<String, Opaque> {
+                panic!("an input is never rebased")
             }
         }
         struct Decoder {

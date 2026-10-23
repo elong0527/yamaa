@@ -1,9 +1,10 @@
 //! One planning capture per resolved dictionary identity, with original policy failures.
 use crate::{
     inheritance::SourceError,
-    inheritance_capture::{InheritanceCapturePort, InheritanceDecodePort},
+    inheritance_capture::InheritanceDecodePort,
     inheritance_preparation::PreparedInheritance,
     project_preparation::Source,
+    resolver::{self, File, Name, Resolver},
 };
 use crate::{
     resource::ResourceFailure,
@@ -107,25 +108,26 @@ pub struct Prepared<R> {
     pub model: SpecificationDocument,
     pub captures: Vec<Captured<R>>,
 }
-struct Run<'a, P: InheritanceCapturePort, D: InheritanceDecodePort> {
+struct Run<'a, P: Resolver, D: InheritanceDecodePort> {
     port: &'a mut P,
     decoder: &'a mut D,
     seeds: &'a [Seed<'a, D::Raw>],
     captures: Vec<Captured<D::Raw>>,
 }
-impl<P: InheritanceCapturePort, D: InheritanceDecodePort> Run<'_, P, D> {
+impl<P: Resolver, D: InheritanceDecodePort> Run<'_, P, D> {
     fn capture_failure(
         &self,
         reference: MappingDictionaryReference,
-        error: SourceError<P::Error>,
+        name: Name<'_>,
+        error: P::Error,
     ) -> Cause<P::Error, D::Error> {
-        let failure = match &error {
-            SourceError::Raised(error) => self.port.resource_failure(error),
-            _ => None,
-        };
+        let failure = self
+            .port
+            .failure(name, &error)
+            .and_then(resolver::Failure::resource);
         Cause::Capture {
             reference,
-            error,
+            error: SourceError::Raised(error),
             failure,
         }
     }
@@ -135,12 +137,14 @@ impl<P: InheritanceCapturePort, D: InheritanceDecodePort> Run<'_, P, D> {
         reference: MappingDictionaryReference,
         declaring: &str,
     ) -> Result<AdmittedMappingDictionary, Cause<P::Error, D::Error>> {
-        let identity = match self
-            .port
-            .canonicalize_resource(declaring, reference.written())
-        {
+        let written = Name::Written {
+            file: File::Resource,
+            declaring,
+            written: reference.written(),
+        };
+        let identity = match self.port.inspect(written) {
             Ok(identity) => identity,
-            Err(error) => return Err(self.capture_failure(reference, error)),
+            Err(error) => return Err(self.capture_failure(reference.clone(), written, error)),
         };
 
         let arena = if let Some(index) = self
@@ -156,9 +160,13 @@ impl<P: InheritanceCapturePort, D: InheritanceDecodePort> Run<'_, P, D> {
         {
             Arena::Captured(index)
         } else {
-            let bytes = match self.port.capture_resource(&identity) {
-                Ok(bytes) => bytes,
-                Err(error) => return Err(self.capture_failure(reference, error)),
+            let located = Name::Located {
+                file: File::Resource,
+                source: &identity,
+            };
+            let bytes = match self.port.capture(located) {
+                Ok(captured) => resolver::bytes(captured),
+                Err(error) => return Err(self.capture_failure(reference, located, error)),
             };
             let source = Source {
                 identity: identity.identity,
@@ -195,7 +203,7 @@ impl<P: InheritanceCapturePort, D: InheritanceDecodePort> Run<'_, P, D> {
 pub type PreparationResult<E, X, R> = Result<Option<Prepared<R>>, Box<Error<E, X, R>>>;
 /// Metadata only. Failed parsing/admission keeps the entered capture prefix and
 /// original host error; no study source, callback or publication authority is entered.
-pub fn prepare<P: InheritanceCapturePort, D: InheritanceDecodePort>(
+pub fn prepare<P: Resolver, D: InheritanceDecodePort>(
     schema: &SchemaStructure,
     model: &SpecificationDocument,
     origins: Origins<'_>,
@@ -233,7 +241,7 @@ pub type DocumentPreparationResult<E, X, R> =
 /// [`prepare`] for a resolved 1.x specification held as `document`: each
 /// dictionary file it names is captured from the layer that wrote its path,
 /// admitted, and materialized; `None` when it names none.
-pub fn prepare_document<P: InheritanceCapturePort, D: InheritanceDecodePort>(
+pub fn prepare_document<P: Resolver, D: InheritanceDecodePort>(
     schema: &SchemaStructure,
     document: &Document,
     origins: Origins<'_>,
@@ -262,7 +270,7 @@ pub fn prepare_document<P: InheritanceCapturePort, D: InheritanceDecodePort>(
 /// Capture and admit every dictionary file `document` names, then
 /// `materialize` them.
 #[allow(clippy::type_complexity)]
-fn materialized<P: InheritanceCapturePort, D: InheritanceDecodePort, T>(
+fn materialized<P: Resolver, D: InheritanceDecodePort, T>(
     schema: &SchemaStructure,
     document: &Document,
     origins: Origins<'_>,

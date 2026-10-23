@@ -1079,6 +1079,27 @@ mod file {
         use std::path::Path;
         use std::{fs, path::PathBuf};
         use yamaa_adapters::file_resources::{Error, Resources};
+        use yamaa_core::resolver::{self, Name, Resolver};
+        use yamaa_core::resource::ResourceFailure;
+        use yamaa_core::specification::{SourceDeclaration, SourceProfile};
+
+        /// The finding a failed read of an input reports through the
+        /// resolver port, or `None` when the failure stays opaque.
+        fn input_failure(resources: &Resources, error: &Error) -> Option<ResourceFailure> {
+            let input = SourceDeclaration {
+                name: "SRC".into(),
+                path: "source.csv".into(),
+                types: vec![],
+                profile: SourceProfile::Csv,
+                encoding: None,
+                byte_order_mark: false,
+                empty_string_present: false,
+                ordinal: None,
+            };
+            resources
+                .failure(Name::Input(&input), error)
+                .and_then(resolver::Failure::resource)
+        }
 
         struct Study(crate::support::Scratch);
         impl Study {
@@ -1194,19 +1215,20 @@ mod file {
             assert_eq!(resources.capture("../data/source.csv"), Err(Error::Changed));
             assert_eq!(first.as_ref(), b"ID,V\n1,2\n");
             assert_eq!(resources.capture_reads(), 1);
-            use yamaa_core::resource::ResourceFailure;
-            use yamaa_core::specification_run::SpecificationSourcePort;
             assert_eq!(
-                resources.resource_failure(&Error::Changed),
+                input_failure(&resources, &Error::Changed),
                 Some(ResourceFailure::ContentChanged)
             );
             assert_eq!(
-                resources.resource_failure(&Error::Limit(
-                    yamaa_core::limits::Limits::source_bytes(
-                        yamaa_core::limits::Limits::SOURCE_BYTES + 1
+                input_failure(
+                    &resources,
+                    &Error::Limit(
+                        yamaa_core::limits::Limits::source_bytes(
+                            yamaa_core::limits::Limits::SOURCE_BYTES + 1
+                        )
+                        .unwrap_err(),
                     )
-                    .unwrap_err(),
-                )),
+                ),
                 Some(ResourceFailure::Boundary(
                     yamaa_core::limits::LimitExceeded {
                         resource: "source_bytes",
@@ -1216,7 +1238,7 @@ mod file {
                 ))
             );
             for opaque in [Error::Unreadable, Error::InvalidPath] {
-                assert_eq!(resources.resource_failure(&opaque), None);
+                assert_eq!(input_failure(&resources, &opaque), None);
             }
         }
 
@@ -1406,10 +1428,7 @@ mod file {
             let captured = resources.capture("blocked");
             fs::set_permissions(&earlier, permissions).unwrap();
             assert_eq!(
-                <Resources as yamaa_core::specification_run::SpecificationSourcePort>::resource_failure(
-                    &resources,
-                    inspected.as_ref().unwrap_err()
-                ),
+                input_failure(&resources, inspected.as_ref().unwrap_err()),
                 None
             );
             assert_eq!(inspected, Err(Error::Unreadable));
@@ -1440,10 +1459,7 @@ mod file {
             let captured = resources.capture("private/blocked");
             fs::set_permissions(&earlier, permissions).unwrap();
             assert_eq!(
-                <Resources as yamaa_core::specification_run::SpecificationSourcePort>::resource_failure(
-                    &resources,
-                    inspected.as_ref().unwrap_err()
-                ),
+                input_failure(&resources, inspected.as_ref().unwrap_err()),
                 None
             );
             assert_eq!(inspected, Err(Error::Unreadable));

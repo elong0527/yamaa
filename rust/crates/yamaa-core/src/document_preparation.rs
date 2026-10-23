@@ -66,7 +66,7 @@ pub fn prepare<E, D, P>(
 where
     E: EntryCodec,
     D: inheritance_capture::InheritanceDecodePort<Raw = E::Raw, Error = E::Error>,
-    P: inheritance_capture::InheritanceCapturePort,
+    P: crate::resolver::Resolver,
 {
     let raw = entry.decode(&source).map_err(Error::Entry)?;
     let content = if crate::inheritance::declares_parent(E::document(&raw)) {

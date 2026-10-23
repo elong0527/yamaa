@@ -5,11 +5,10 @@ mod project {
         use crate::support::project_schemas::candidate_schemas;
         use std::sync::Arc;
         use yamaa_adapters::{
-            project_source::{
-                self, CaptureFailure, Failure, Kind, Origin, ProjectCapturePort, Reply, Request,
-            },
+            project_source::{self, CaptureFailure, Failure, Kind, Origin},
             specification_source::{Error, Source},
         };
+        use yamaa_core::resolver::{self, Captured, File, Located, Name, Resolver};
         use yamaa_core::{
             project_environment::{Finding, LockKind, Undeclared},
             project_function::Language,
@@ -45,6 +44,8 @@ mod project {
             lock_kind: LockKind,
             interrupt_at: Option<String>,
             interrupt_address: usize,
+            /// The bytes of the file last located.
+            held: Vec<u8>,
         }
         impl Port {
             fn new() -> Self {
@@ -58,55 +59,89 @@ mod project {
                     lock_kind: LockKind::Uv,
                     interrupt_at: None,
                     interrupt_address: 0,
+                    held: vec![],
                 }
             }
         }
-        impl ProjectCapturePort for Port {
-            type Error = Payload;
-            fn is_interrupt(&self, error: &Payload) -> bool {
-                error.0.as_ref() == "host interrupt"
-            }
-            fn capture(&mut self, request: Request<'_>) -> Result<Reply, Payload> {
-                self.trace.push((
-                    request.kind,
-                    request.declaring_source.into(),
-                    request.written.into(),
-                ));
-                if self.interrupt_at.as_deref() == Some(request.written) {
+        impl Port {
+            /// The held source the double serves for the file a project names.
+            fn answer(
+                &mut self,
+                kind: Kind,
+                declaring: &str,
+                written: &str,
+            ) -> Result<Source, Payload> {
+                self.trace.push((kind, declaring.into(), written.into()));
+                if self.interrupt_at.as_deref() == Some(written) {
                     let payload = Payload("host interrupt".into());
                     self.interrupt_address = payload.0.as_ptr() as usize;
                     return Err(payload);
                 }
-                let fail = if request.kind == Kind::Environment {
+                let fail = if kind == Kind::Environment {
                     self.fail_environment
                 } else {
                     self.fail
                 };
                 if fail {
-                    return Err(Payload(request.written.into()));
+                    return Err(Payload(written.into()));
                 }
-                match request.kind {
-                    Kind::Environment => Ok(Reply::Document(source(
-                        &format!("study/{}", request.written),
+                match kind {
+                    Kind::Environment => Ok(source(
+                        &format!("study/{}", written),
                         &self.environment,
-                    ))),
-                    Kind::Lock => Ok(Reply::Lock {
-                        source: source("held/project.lock", "version = 1\n"),
-                        kind: self.lock_kind,
-                    }),
-                    Kind::Function => Ok(Reply::Document(source(
+                    )),
+                    Kind::Lock => Ok(source(
+                        "held/project.lock",
+                        crate::support::ports::lock(self.lock_kind),
+                    )),
+                    Kind::Function => Ok(source(
                         "held/function.yaml",
                         &format!(
                             "function: {}\ndescription: Constant\nparams: []\nreturns: int\ntests: [{{id: ordinary, covers: [normal, boundary], args: {{}}, result: {}}}]\n",
                             self.call,
                             if self.wide { "9223372036854775808" } else { "7" }
                         ),
-                    ))),
-                    Kind::Codelist => Ok(Reply::Document(source(
+                    )),
+                    Kind::Codelist => Ok(source(
                         "held/terminology.yaml",
                         "codelists: [{id: SEX, name: Sex, items: [{value: F}, {value: M}]}]\n",
-                    ))),
+                    )),
                 }
+            }
+        }
+        /// A file is served when it is located; its capture reads the bytes served.
+        impl Resolver for Port {
+            type Error = Payload;
+            fn inspect(&mut self, name: Name<'_>) -> Result<Located, Self::Error> {
+                let Name::Written {
+                    file: File::Project(kind),
+                    declaring,
+                    written,
+                } = name
+                else {
+                    panic!("unexpected request {name:?}")
+                };
+                let source = self.answer(kind, declaring, written)?;
+                self.held = source.bytes;
+                Ok(Located {
+                    display_path: source.identity.clone(),
+                    identity: source.identity,
+                })
+            }
+            fn capture(&mut self, _: Name<'_>) -> Result<Captured, Self::Error> {
+                Ok(Captured::resource(
+                    std::mem::take(&mut self.held).into(),
+                    true,
+                ))
+            }
+            fn failure(&self, _: Name<'_>, _: &Self::Error) -> Option<resolver::Failure> {
+                None
+            }
+            fn is_interrupt(&self, error: &Payload) -> bool {
+                error.0.as_ref() == "host interrupt"
+            }
+            fn rebase(&mut self, _: &Located, _: &Located, _: &str) -> Result<String, Self::Error> {
+                panic!("a project file is never rebased")
             }
         }
         fn root() -> Source {
@@ -217,7 +252,7 @@ mod project {
                 ));
                 assert_eq!(
                     prepared.lock.as_ref().unwrap().source.bytes,
-                    b"version = 1\n"
+                    crate::support::ports::UV_LOCK.as_bytes()
                 );
                 // The study and sections lower beside, in the project root.
                 let declarations = prepared.project.submission.as_ref().unwrap();
@@ -683,9 +718,7 @@ mod project {
             host_functions::{HostFunctions, Lock},
             project_activation::Failure,
             project_domain,
-            specification_run::{
-                CapturedAttempt, PortError, SourceDecoder, SpecificationSourcePort,
-            },
+            specification_run::{CapturedAttempt, PortError, SourceDecoder},
         };
         use yamaa_core::{
             function_signature::{LogicalSignature, ProjectFunctionIdentity},
@@ -1088,31 +1121,48 @@ mod project {
             bytes: Arc<[u8]>,
             reads: usize,
         }
-        impl SpecificationSourcePort for Source {
-            fn resource_failure(
-                &self,
-                _error: &Self::Error,
-            ) -> Option<yamaa_core::resource::ResourceFailure> {
-                None
-            }
+        use yamaa_core::resolver;
+        impl resolver::Resolver for Source {
             type Error = Payload;
-            fn inspect(&mut self, source: &SourceDeclaration) -> Result<(), Payload> {
+            fn inspect(
+                &mut self,
+                name: resolver::Name<'_>,
+            ) -> Result<resolver::Located, Self::Error> {
+                let resolver::Name::Input(source) = name else {
+                    panic!("unexpected request {name:?}")
+                };
                 assert_eq!(source.path, "input.csv");
                 self.trace.borrow_mut().push("inspect");
-                Ok(())
-            }
-            fn capture_reads(&self) -> usize {
-                self.reads
+                Ok(resolver::Located {
+                    identity: source.path.clone(),
+                    display_path: source.path.clone(),
+                })
             }
             fn capture(
                 &mut self,
-                _: &SourceDeclaration,
-                origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
-            ) -> Result<Arc<[u8]>, Payload> {
-                *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
+                name: resolver::Name<'_>,
+            ) -> Result<resolver::Captured, Self::Error> {
+                let resolver::Name::Input(_) = name else {
+                    panic!("unexpected request {name:?}")
+                };
+                let before = self.reads;
                 self.trace.borrow_mut().push("capture");
                 self.reads = 1;
-                Ok(Arc::clone(&self.bytes))
+                Ok(resolver::Captured::resource(
+                    Arc::clone(&self.bytes),
+                    self.reads != before,
+                ))
+            }
+            fn failure(&self, _: resolver::Name<'_>, _: &Self::Error) -> Option<resolver::Failure> {
+                None
+            }
+            fn rebase(
+                &mut self,
+                _: &resolver::Located,
+                _: &resolver::Located,
+                _: &str,
+            ) -> Result<String, Self::Error> {
+                panic!("an input is never rebased")
             }
         }
         #[test]

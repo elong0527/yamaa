@@ -15,8 +15,7 @@ use yamaa_adapters::{
 };
 use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::{
-    json::Value, project_environment::Submission, project_function::Language,
-    specification_run::SourceOrigin,
+    json::Value, project_environment::Submission, project_function::Language, resolver::Origin,
 };
 
 struct Study(crate::support::Scratch);
@@ -290,7 +289,7 @@ fn unlinked_inputs_cycles_and_collisions_are_project_findings() {
 fn saved_build(
     study: &Study,
     held: Option<HeldArtifacts>,
-) -> (bool, Option<SourceOrigin>, Vec<Diagnostic>) {
+) -> (bool, Option<Origin>, Vec<Diagnostic>) {
     let prepared = file_workflow::select_request(
         yamaa_core::build::Request {
             specification: &study.path("adam/adsl.yaml"),
@@ -343,7 +342,7 @@ fn saved_links_read_held_or_saved_artifacts_under_the_producer_contract() {
     held.insert(dm.clone(), artifact.clone(), Arc::from(&b"ID\n1\n2\n"[..]));
     let (accepted, origin, issues) = saved_build(&study, Some(held));
     assert!(accepted, "{issues:?}");
-    assert_eq!(origin, Some(SourceOrigin::Generated));
+    assert_eq!(origin, Some(Origin::Generated));
     // Without one, the missing saved file is a clear failure.
     let (accepted, _, issues) = saved_build(&study, None);
     assert!(!accepted);
@@ -358,7 +357,7 @@ fn saved_links_read_held_or_saved_artifacts_under_the_producer_contract() {
     study.write("out/dm.csv", "ID\n1\n2\n");
     let (accepted, origin, issues) = saved_build(&study, None);
     assert!(accepted, "{issues:?}");
-    assert_eq!(origin, Some(SourceOrigin::Resource));
+    assert_eq!(origin, Some(Origin::Resource));
     study.write("out/dm.csv", "ID,EXTRA\n1,x\n");
     let (accepted, _, issues) = saved_build(&study, None);
     assert!(!accepted);

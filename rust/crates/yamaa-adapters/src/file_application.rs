@@ -110,7 +110,6 @@ pub(crate) fn resource_fault(error: &crate::file_resources::Error) -> Fault {
         E::OutsideRoots => Fault::ResourceOutsideRoots,
         E::Symlink => Fault::ResourceLink,
         E::Changed => Fault::ResourceChanged,
-        E::InvalidLock => Fault::InvalidPackagingLock,
         E::Limit(_) => Fault::ResourceLimit,
     }
 }

@@ -1,4 +1,4 @@
-//! Classified resource failures; filesystem authority remains with the resource port.
+//! Classified resource failures; filesystem authority remains with the resolver port.
 
 use crate::diagnostic::{ConditionCode, Diagnostic};
 use crate::json::Value as JsonValue;
@@ -148,7 +148,7 @@ pub fn written_path_failure(path: &str) -> Option<ResourceFailure> {
 }
 
 /// URI spelling is a static declaration finding. Absolute Windows drive paths
-/// remain local paths; resource ports retain authority over actual file kinds.
+/// remain local paths; the resolver port keeps authority over actual file kinds.
 pub fn has_uri_scheme(path: &str) -> bool {
     let Some((scheme, rest)) = path.split_once(':') else {
         return false;

@@ -1,9 +1,7 @@
 //! Captured YAML codec and compatibility results for engine project preparation.
 use crate::document::{self, Closures, Decoded};
 use crate::specification_source::{CapturedDocument, CapturedSchema, Error, Source};
-pub use application::{
-    DecodeTarget, Kind, LockCapture, Origin, ProjectCapturePort, Reply, Request, SourceOrigins,
-};
+pub use application::{DecodeTarget, Kind, LockCapture, Origin, SourceOrigins};
 use std::sync::Arc;
 use yamaa_core::language::{FileType, LanguageVersion};
 use yamaa_core::project_preparation as application;
@@ -353,12 +351,16 @@ impl application::ProjectDecodePort for Decoder {
     fn source(document: &CapturedDocument) -> &Source {
         document.source()
     }
+    /// The packaging tool whose lock syntax the held bytes parse as.
+    fn lock(&mut self, source: &Source) -> Option<yamaa_core::project_environment::LockKind> {
+        crate::project_lock::kind(&source.bytes).ok()
+    }
 }
 
 /// Decode through the captured schema codecs; the engine owns ordering and
 /// admission. A 1.0 project is read only by schemas that read 1.x files
 /// ([`ProjectSchemas::reading`]), as public calls do (#3030 D76).
-pub fn prepare<P: ProjectCapturePort>(
+pub fn prepare<P: yamaa_core::resolver::Resolver>(
     schemas: ProjectSchemas,
     source: Source,
     host: Language,

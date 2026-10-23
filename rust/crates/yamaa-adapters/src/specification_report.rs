@@ -15,7 +15,8 @@ use yamaa_core::dataset::ExecutionError;
 use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::json::{Map, Value};
 use yamaa_core::numeric_lifecycle::HandlerCount;
-use yamaa_core::specification_run::{RunError, SourceIssue, SourceOrigin};
+use yamaa_core::resolver::Origin;
+use yamaa_core::specification_run::{RunError, SourceIssue};
 use yamaa_core::{table::TableAccess, value::Value as Scalar};
 
 pub struct Identity<'a> {
@@ -433,7 +434,7 @@ pub(crate) fn envelope_sources<T: TableAccess>(
     let mut reads = Vec::new();
     for source in sources
         .iter()
-        .filter(|source| source.read.origin == Some(SourceOrigin::Resource))
+        .filter(|source| source.read.origin == Some(Origin::Resource))
     {
         if !partial && source.read.snapshots_created.is_none() {
             return Err(Error::InvalidObservation);

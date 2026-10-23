@@ -1,6 +1,5 @@
 //! Original file preparation through retained native resources and the shipped schema.
 use crate::{
-    file_metadata::Reader as Native,
     file_resources::{Error as ResourceError, Resources, RunScope},
     specification_run::{Attempt, PreparedRun, RejectedRun},
     specification_source::{InheritanceError, Source},
@@ -306,8 +305,8 @@ pub(crate) fn prepare_document_from(
     schema: Option<Arc<crate::specification_source::CapturedSchema>>,
 ) -> Result<crate::specification_source::PreparedDocument, Error> {
     use yamaa_core::file_preparation::{self as application, Error as Failure};
-    application::prepare(
-        &mut Native { resources },
+    let document = application::prepare(
+        &mut *resources,
         &mut Documents { schema },
         declaring,
         written,
@@ -324,7 +323,12 @@ pub(crate) fn prepare_document_from(
         Failure::PreparationFinding { error, diagnostic } => {
             Error::PreparationFinding { error, diagnostic }
         }
-    })
+    })?;
+    // Data the entry declares reads from the identity its resolver gave it.
+    resources
+        .select_entry_base(&document.source().identity)
+        .map_err(Error::Resource)?;
+    Ok(document)
 }
 
 /// The refusal at `field` of the specification it names, `written` from
@@ -593,9 +597,7 @@ struct Documents {
 impl yamaa_core::file_preparation::DocumentPort<ResourceError> for Documents {
     type Prepared = crate::specification_source::PreparedDocument;
     type Error = InheritanceError<ResourceError>;
-    fn prepare<
-        P: yamaa_core::inheritance_capture::InheritanceCapturePort<Error = ResourceError>,
-    >(
+    fn prepare<P: yamaa_core::resolver::Resolver<Error = ResourceError>>(
         &mut self,
         source: Source,
         display: String,
@@ -868,9 +870,7 @@ mod dispatch_policy_tests {
     impl yamaa_core::file_preparation::DocumentPort<ResourceError> for ChangeAfterSuccess {
         type Prepared = crate::specification_source::PreparedDocument;
         type Error = InheritanceError<ResourceError>;
-        fn prepare<
-            P: yamaa_core::inheritance_capture::InheritanceCapturePort<Error = ResourceError>,
-        >(
+        fn prepare<P: yamaa_core::resolver::Resolver<Error = ResourceError>>(
             &mut self,
             source: Source,
             display: String,
@@ -891,9 +891,7 @@ mod dispatch_policy_tests {
         let mut resources = study.resources();
         let original = resources.resolve("root.yaml").unwrap();
         let result = yamaa_core::file_preparation::prepare(
-            &mut Native {
-                resources: &mut resources,
-            },
+            &mut resources,
             &mut ChangeAfterSuccess {
                 path: study.0.join("entry/dict.yaml"),
             },
@@ -933,9 +931,7 @@ mod dispatch_policy_tests {
         let mut resources = study.resources();
         let original = resources.resolve("root.yaml").unwrap();
         let result = yamaa_core::file_preparation::prepare(
-            &mut Native {
-                resources: &mut resources,
-            },
+            &mut resources,
             &mut ChangeAfterSuccess {
                 path: study.0.join("parent/base.yaml"),
             },

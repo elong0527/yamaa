@@ -6,12 +6,26 @@ use yamaa_core::{
     function_invocation::{Argument, HostError},
     function_signature::{LogicalSignature, ProjectFunctionIdentity},
     host_functions::{HostFunctions, Lock},
+    project_environment::LockKind,
     project_function::Language,
-    resource::ResourceFailure,
-    specification::SourceDeclaration,
-    specification_run::{SourceOrigin, SpecificationSourcePort},
+    resolver::{Captured, Failure, Located, Name, Resolver},
     value::Value,
 };
+
+/// The least uv lock the project decoder reads: version 1 and no package.
+pub const UV_LOCK: &str = "version = 1\npackage = []\n";
+/// The least renv lock the project decoder reads: an R version and no
+/// package.
+pub const RENV_LOCK: &str = r#"{"R":{"Version":"4.6.1"},"Packages":{}}"#;
+
+/// The least lock of the packaging tool `kind`, for a double that serves a
+/// project's lock.
+pub fn lock(kind: LockKind) -> &'static str {
+    match kind {
+        LockKind::Uv => UV_LOCK,
+        LockKind::Renv => RENV_LOCK,
+    }
+}
 
 /// The host-functions port's empty double. Like the empty port it keeps no
 /// project functions: a build that calls one gets D110's refusal before
@@ -45,7 +59,7 @@ impl HostFunctions for NoFunctions {
     }
 }
 
-/// A source port that serves authored bytes and records every capture.
+/// A resolver that serves inputs authored bytes and records every capture.
 /// `by_name` serves each input by its declared name, `by_path` by its
 /// written path, and `any` serves the same bytes to every input. A capture
 /// of an input the double does not serve fails the test, so a source a test
@@ -100,23 +114,21 @@ impl Sources {
     }
 }
 
-impl SpecificationSourcePort for Sources {
+impl Resolver for Sources {
     type Error = Infallible;
-    fn resource_failure(&self, _: &Infallible) -> Option<ResourceFailure> {
-        None
+    fn inspect(&mut self, name: Name<'_>) -> Result<Located, Infallible> {
+        let Name::Input(source) = name else {
+            panic!("the test serves inputs only, not {name:?}")
+        };
+        Ok(Located {
+            identity: source.path.clone(),
+            display_path: source.path.clone(),
+        })
     }
-    fn inspect(&mut self, _: &SourceDeclaration) -> Result<(), Infallible> {
-        Ok(())
-    }
-    fn capture_reads(&self) -> usize {
-        self.reads()
-    }
-    fn capture(
-        &mut self,
-        source: &SourceDeclaration,
-        origin: &mut Option<SourceOrigin>,
-    ) -> Result<Arc<[u8]>, Infallible> {
-        *origin = Some(SourceOrigin::Resource);
+    fn capture(&mut self, name: Name<'_>) -> Result<Captured, Infallible> {
+        let Name::Input(source) = name else {
+            panic!("the test serves inputs only, not {name:?}")
+        };
         self.captured.push(source.name.clone());
         let key = match self.key {
             Key::Name => source.name.as_str(),
@@ -129,6 +141,12 @@ impl SpecificationSourcePort for Sources {
                 source.name, source.path
             )
         });
-        Ok(Arc::clone(bytes))
+        Ok(Captured::resource(Arc::clone(bytes), true))
+    }
+    fn failure(&self, _: Name<'_>, error: &Infallible) -> Option<Failure> {
+        match *error {}
+    }
+    fn rebase(&mut self, _: &Located, _: &Located, _: &str) -> Result<String, Infallible> {
+        panic!("the test serves no layers to rebase")
     }
 }

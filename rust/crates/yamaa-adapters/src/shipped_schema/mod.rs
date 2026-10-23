@@ -9,9 +9,10 @@
 //! once, on first use, and every later check, compilation and run shares that
 //! immutable admitted closure.
 use crate::specification_source::{
-    CapturedSchema, Error, InheritanceError, InheritancePort, PreparedDocument, Source,
+    CapturedSchema, Error, InheritanceError, PreparedDocument, Source,
 };
 use std::sync::{Arc, OnceLock};
+use yamaa_core::resolver::Resolver;
 mod data;
 mod json;
 pub use json::json_schema;
@@ -119,7 +120,7 @@ fn admit_root(modules: &[(&str, &str)], root_class: &str) -> Result<Arc<Captured
 }
 
 /// Prepare either original document form without host semantic selection.
-pub fn prepare<P: InheritancePort>(
+pub fn prepare<P: Resolver>(
     source: Source,
     display_path: String,
     port: &mut P,
