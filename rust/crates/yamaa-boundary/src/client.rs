@@ -167,6 +167,46 @@ impl Gate {
         // boundary version and at least its size.
         unsafe { table.as_ref() }.map(Engine).ok_or(Closed)
     }
+
+    /// Answer `request` as [`Gate::negotiate`] does, through the engine
+    /// library beside this module: the test-only loaded mode
+    /// ([`crate::loader`]). Beside a module where no engine library loads,
+    /// or whose library exports no negotiation entry, the request is refused
+    /// as `missing_interface`, as from a native module without a handshake.
+    #[cfg(feature = "loader")]
+    pub fn negotiate_loaded(&self, request: &Value) -> Outcome {
+        self.negotiate_through(request, crate::loader::entry())
+    }
+
+    /// Answer `request` as [`Gate::negotiate_loaded`] does, through the
+    /// engine library beside `module`, a module file's absolute path: the
+    /// loading tests' route to their fixture engines.
+    #[cfg(feature = "loader")]
+    pub fn negotiate_beside(&self, request: &Value, module: &std::path::Path) -> Outcome {
+        self.negotiate_through(request, crate::loader::load(module))
+    }
+
+    #[cfg(feature = "loader")]
+    fn negotiate_through(
+        &self,
+        request: &Value,
+        entry: Result<Negotiate, crate::loader::Missing>,
+    ) -> Outcome {
+        match entry {
+            // SAFETY: the loader returns only an engine library's
+            // negotiation entry.
+            Ok(entry) => unsafe { self.negotiate(request, entry) },
+            Err(_) => {
+                let version = Sent::of(request).version;
+                Outcome::Refused(Refusal {
+                    requested_version: (version != 0).then_some(version),
+                    supported_version: None,
+                    reason: Reason::MissingInterface,
+                    missing_features: Vec::new(),
+                })
+            }
+        }
+    }
 }
 
 /// A request as it crosses: its version, or 0, and its two lists of texts

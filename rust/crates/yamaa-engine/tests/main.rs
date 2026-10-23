@@ -7,6 +7,7 @@
 mod support;
 
 mod abi_lifetime;
+mod abi_loading;
 mod abi_negotiation;
 mod client;
 mod client_streaming;

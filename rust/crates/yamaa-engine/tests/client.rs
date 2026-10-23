@@ -6,69 +6,10 @@
 //! the table of no issues a binding attaches to its own refusals has the
 //! issues columns.
 use arrow_array::RecordBatchReader;
-use serde_json::{json, Value as Json};
 use yamaa_boundary::client::Gate;
 use yamaa_boundary::{Closed, HandleKind, Outcome, Value, BOUNDARY_VERSION};
 
-use crate::support::{family, reader, serial};
-
-/// The truth with its placeholders filled: `{version}` is the boundary
-/// version, `{next_version}` the one after it and `{core_version}` the
-/// engine's release.
-fn resolved(value: &Json) -> Json {
-    match value {
-        Json::String(text) if text == "{version}" => json!(BOUNDARY_VERSION),
-        Json::String(text) if text == "{next_version}" => json!(BOUNDARY_VERSION + 1),
-        Json::String(text) if text == "{core_version}" => json!(env!("CARGO_PKG_VERSION")),
-        Json::Array(items) => Json::Array(items.iter().map(resolved).collect()),
-        Json::Object(fields) => Json::Object(
-            fields
-                .iter()
-                .map(|(key, item)| (key.clone(), resolved(item)))
-                .collect(),
-        ),
-        other => other.clone(),
-    }
-}
-
-/// A request as a host builds it from JSON: an object is a mapping, an array
-/// a list, a whole number within 64 bits an integer, and a boolean, a
-/// fraction or null no field of a request.
-fn request(value: &Json) -> Value {
-    match value {
-        Json::Number(number) => number.as_i64().map_or(Value::Other, Value::Integer),
-        Json::String(text) => Value::Text(text.clone()),
-        Json::Array(items) => Value::List(items.iter().map(request).collect()),
-        Json::Object(fields) => Value::Map(
-            fields
-                .iter()
-                .map(|(key, item)| (key.clone(), request(item)))
-                .collect(),
-        ),
-        Json::Bool(_) | Json::Null => Value::Other,
-    }
-}
-
-/// An outcome as the hosts return it: the accepted record or the envelope.
-fn record(outcome: &Outcome) -> Json {
-    match outcome {
-        Outcome::Accepted(accepted) => json!({
-            "accepted": true,
-            "version": accepted.version,
-            "enabled": accepted.enabled,
-            "supported": accepted.supported,
-            "core_version": accepted.core_version,
-            "language_versions": accepted.language_versions,
-        }),
-        Outcome::Refused(refusal) => json!({
-            "accepted": false,
-            "requested_version": refusal.requested_version,
-            "supported_version": refusal.supported_version,
-            "reason": refusal.reason.as_str(),
-            "missing_features": refusal.missing_features,
-        }),
-    }
-}
+use crate::support::{family, host_request, outcome_record, reader, resolved, serial};
 
 /// Negotiate `request` through `gate` with the engine's entry.
 fn negotiated(gate: &Gate, request: &Value) -> Outcome {
@@ -89,8 +30,8 @@ fn every_interface_case_negotiates_to_its_authored_outcome_through_the_client() 
         (case_name, &case["request"], &case["outcome"])
     });
     for (case, value, outcome) in generated.into_iter().chain(crafted) {
-        let answered = negotiated(&Gate::new(), &request(&resolved(value)));
-        assert_eq!(record(&answered), resolved(outcome), "{case}");
+        let answered = negotiated(&Gate::new(), &host_request(&resolved(value)));
+        assert_eq!(outcome_record(&answered), resolved(outcome), "{case}");
     }
 }
 
@@ -99,7 +40,7 @@ fn every_interface_case_negotiates_to_its_authored_outcome_through_the_client() 
 #[test]
 fn the_first_acceptance_opens_the_gate_and_nothing_closes_it() {
     let gate = Gate::new();
-    let generated = request(&resolved(&family("interface")["request"]));
+    let generated = host_request(&resolved(&family("interface")["request"]));
     let mismatch = Value::Map(vec![(
         "version".into(),
         Value::Integer(i64::from(BOUNDARY_VERSION) + 1),
@@ -131,7 +72,10 @@ fn the_first_acceptance_opens_the_gate_and_nothing_closes_it() {
 fn a_handle_the_client_owns_is_given_back_when_it_drops() {
     let _serial = serial();
     let gate = Gate::new();
-    negotiated(&gate, &request(&resolved(&family("interface")["request"])));
+    negotiated(
+        &gate,
+        &host_request(&resolved(&family("interface")["request"])),
+    );
     let engine = gate.pass().unwrap();
     let plans = |census: yamaa_boundary::client::Census| {
         census
@@ -158,7 +102,10 @@ fn the_table_of_no_issues_has_the_issues_columns_and_no_rows() {
     // rust/interface/bindings.yaml), without a row.
     let _serial = serial();
     let gate = Gate::new();
-    negotiated(&gate, &request(&resolved(&family("interface")["request"])));
+    negotiated(
+        &gate,
+        &host_request(&resolved(&family("interface")["request"])),
+    );
     let engine = gate.pass().unwrap();
     let issues = engine.no_issues().unwrap();
     let reader = reader(engine.export(issues.handle()).unwrap().into_raw());

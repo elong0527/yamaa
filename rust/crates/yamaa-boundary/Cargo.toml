@@ -8,8 +8,20 @@ authors.workspace = true
 publish.workspace = true
 autotests = false
 
-# No dependencies: the boundary depends on nothing in the workspace, and the
-# host bindings link it beside the facade (rust/interface/README.md).
+# The boundary depends on nothing else in the workspace, and each host
+# binding links it beside the engine (rust/interface/README.md).
+
+[features]
+# The engine loader of the test-only loaded mode (src/loader.rs), which the
+# bindings' dynamic-engine feature selects. No shipped build compiles it.
+loader = ["dep:libc", "dep:windows-sys"]
+
+# The loader's system calls, from crates the lock already holds.
+[target.'cfg(unix)'.dependencies]
+libc = { version = "0.2.191", optional = true }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61.2", optional = true, features = ["Win32_Foundation", "Win32_System_LibraryLoader"] }
 
 [dev-dependencies]
 # The handshake family decodes the shared host truth,

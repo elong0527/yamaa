@@ -16,9 +16,9 @@ use std::sync::{LazyLock, Mutex, MutexGuard, OnceLock, PoisonError};
 
 use arrow_array::ffi_stream::{ArrowArrayStreamReader, FFI_ArrowArrayStream};
 use arrow_array::{Array, Int64Array, StringArray};
-use serde_json::Value as Json;
+use serde_json::{json, Value as Json};
 use yamaa_boundary::abi::{self, Handle, Str};
-use yamaa_boundary::{HandleKind, BOUNDARY_VERSION, CAPABILITIES, FORMATS};
+use yamaa_boundary::{HandleKind, Outcome, Value, BOUNDARY_VERSION, CAPABILITIES, FORMATS};
 
 static TRUTH: LazyLock<Json> = LazyLock::new(|| {
     let truth: Json =
@@ -32,6 +32,64 @@ pub fn family(name: &str) -> &'static Json {
     let family = &TRUTH["families"][name];
     assert!(family.is_object(), "cases.json has no family {name}");
     family
+}
+
+/// The truth with its placeholders filled: `{version}` is the boundary
+/// version, `{next_version}` the one after it and `{core_version}` the
+/// engine's release.
+pub fn resolved(value: &Json) -> Json {
+    match value {
+        Json::String(text) if text == "{version}" => json!(BOUNDARY_VERSION),
+        Json::String(text) if text == "{next_version}" => json!(BOUNDARY_VERSION + 1),
+        Json::String(text) if text == "{core_version}" => json!(env!("CARGO_PKG_VERSION")),
+        Json::Array(items) => Json::Array(items.iter().map(resolved).collect()),
+        Json::Object(fields) => Json::Object(
+            fields
+                .iter()
+                .map(|(key, item)| (key.clone(), resolved(item)))
+                .collect(),
+        ),
+        other => other.clone(),
+    }
+}
+
+/// A request as a host builds it from JSON: an object is a mapping, an array
+/// a list, a whole number within 64 bits an integer, and a boolean, a
+/// fraction or null no field of a request.
+pub fn host_request(value: &Json) -> Value {
+    match value {
+        Json::Number(number) => number.as_i64().map_or(Value::Other, Value::Integer),
+        Json::String(text) => Value::Text(text.clone()),
+        Json::Array(items) => Value::List(items.iter().map(host_request).collect()),
+        Json::Object(fields) => Value::Map(
+            fields
+                .iter()
+                .map(|(key, item)| (key.clone(), host_request(item)))
+                .collect(),
+        ),
+        Json::Bool(_) | Json::Null => Value::Other,
+    }
+}
+
+/// An outcome as the hosts return it: the accepted record or the envelope.
+pub fn outcome_record(outcome: &Outcome) -> Json {
+    match outcome {
+        Outcome::Accepted(accepted) => json!({
+            "accepted": true,
+            "version": accepted.version,
+            "enabled": accepted.enabled,
+            "supported": accepted.supported,
+            "core_version": accepted.core_version,
+            "language_versions": accepted.language_versions,
+        }),
+        Outcome::Refused(refusal) => json!({
+            "accepted": false,
+            "requested_version": refusal.requested_version,
+            "supported_version": refusal.supported_version,
+            "reason": refusal.reason.as_str(),
+            "missing_features": refusal.missing_features,
+        }),
+    }
 }
 
 /// A request of this boundary version for `required` and `optional`, which
