@@ -358,10 +358,11 @@ case-sensitive. No escape character exists by default. `ESCAPE` declares a
 string literal of exactly one scalar value, which marks the next pattern scalar
 as literal. An invalid `ESCAPE` literal or a trailing escape character fails.
 
-Fails: `incompatible_input_type`, `invalid_expression`.
+Fails: `invalid_expression`.
 Evidence: `adam-adae-protocol-review`, `schema-predicates`, `rust/crates/yamaa-adapters/tests/fixtures/syntax_controls.json`.
 
-A non-string operand fails with `incompatible_input_type`. An invalid
+A non-string operand fails with `incompatible_input_type` under
+[FORMULA-5](#formula-5). An invalid
 `ESCAPE` literal, or a pattern with a dangling escape, fails with
 `invalid_expression`: a literal pattern when the expression is admitted, and
 a pattern read from a value when it is evaluated.

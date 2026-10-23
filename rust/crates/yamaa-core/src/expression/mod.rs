@@ -181,6 +181,8 @@ pub enum Failure {
     InvalidEscape,
     /// A `str_contains` pattern the portable regex contract rejects.
     InvalidRegex { byte: usize, reason: &'static str },
+    /// A `str_contains` pattern that is not a string literal (FORMULA-8).
+    PatternNotLiteral,
     /// An integer literal outside the signed 64-bit range.
     IntegerOverflow,
     /// A construct the context refuses.

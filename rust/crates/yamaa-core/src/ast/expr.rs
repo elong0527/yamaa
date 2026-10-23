@@ -104,8 +104,9 @@ pub enum Literal {
 }
 
 impl Literal {
-    /// The value the literal writes: none for an integer beyond 64 bits or a
-    /// value outside the language, which the check that converts it refuses.
+    /// The value the literal writes (EXPR-4): none for an integer beyond 64
+    /// bits, temporal text that names no day or second, or a value outside
+    /// the language, which the check that converts it refuses.
     pub fn value(&self) -> Option<Value> {
         Some(match self {
             Self::Missing => Value::Missing,
@@ -113,7 +114,9 @@ impl Literal {
             Self::Bool(value) => Value::Bool(*value),
             Self::Float(value) => Value::float(*value),
             Self::Int(value) => Value::Int(value.parse().ok()?),
-            Self::Date(_) | Self::DateTime(_) | Self::Unsupported => return None,
+            Self::Date(value) => Value::Date(value.parse().ok()?),
+            Self::DateTime(value) => Value::DateTime(value.parse().ok()?),
+            Self::Unsupported => return None,
         })
     }
 }

@@ -122,6 +122,11 @@ pub(crate) fn predicate_reached(
             C::ExpressionInvalidRegex,
             "FORMULA-8",
         ),
+        (
+            "STR_CONTAINS(A, B)",
+            C::ExpressionPatternNotLiteral,
+            "FORMULA-8",
+        ),
         ("A = DATE '2026-02-30'", C::ExpressionInvalid, "FORMULA-1"),
     ] {
         let Err(CompileError::Invalid {

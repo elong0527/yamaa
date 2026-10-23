@@ -270,6 +270,56 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         assert!(diagnostic.operand_route.is_none());
         reached.insert(rendered(&diagnostic));
     }
+    // Arithmetic over a reduction or a grouping column that is not numeric is
+    // refused from the declared types, before any record is read (FORMULA-23).
+    for (expression, source) in [("MIN(D.S) + 1", "MIN(D.S)"), ("SUM(D.N) + G", "G")] {
+        let compiled = yamaa_core::expression::compile(
+            expression,
+            yamaa_core::expression::Context::Aggregate,
+            "aggregate.expr",
+        )
+        .unwrap();
+        let findings = compiled.type_findings(
+            |name| match name {
+                "D.S" | "G" => Some(ValueType::Str),
+                "D.N" => Some(ValueType::Int),
+                _ => None,
+            },
+            false,
+        );
+        let [finding] = findings.as_slice() else {
+            panic!("{expression}: one static finding, not {findings:?}")
+        };
+        let diagnostic = finding.diagnostic("aggregate.expr", expression).unwrap();
+        assert_eq!(
+            (
+                diagnostic.definition(),
+                diagnostic.spec_paths.clone(),
+                diagnostic.context.clone(),
+                diagnostic.source_span,
+                diagnostic.operand_route.clone(),
+            ),
+            (
+                yamaa_core::diagnostic::Definition {
+                    phase: "validation",
+                    condition: "incompatible_input_type",
+                    rule: Some("FORMULA-23"),
+                },
+                vec!["aggregate.expr".to_string()],
+                [
+                    ("expr".into(), text(expression)),
+                    ("source".into(), text(source)),
+                    ("expected".into(), text("numeric")),
+                    ("actual".into(), text("str")),
+                ]
+                .into(),
+                None,
+                None,
+            ),
+            "{expression}"
+        );
+        reached.insert(rendered(&diagnostic));
+    }
     reached.extend(derive_reached());
     reached
 }

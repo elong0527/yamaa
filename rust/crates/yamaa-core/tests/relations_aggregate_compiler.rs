@@ -88,6 +88,55 @@ mod relations {
             assert_eq!(plan.expression(), expression);
         }
 
+        /// Arithmetic over a reduction or a grouping column whose value is not
+        /// a number fails under FORMULA-23 when it is evaluated, as the static
+        /// check refuses it wherever the declared types already show it.
+        #[test]
+        fn arithmetic_over_a_text_reduction_or_grouping_column_fails_under_formula_23() {
+            use yamaa_core::{diagnostic::Definition, json::Value as Json};
+            struct Group;
+            impl ExpressionResolver for Group {
+                type Error = std::convert::Infallible;
+                fn resolve(&mut self, name: &str) -> Result<Selection, Self::Error> {
+                    assert_eq!(name, "KEY", "a grouping column");
+                    Ok(Selection::Present(Value::Str("a".into())))
+                }
+            }
+            for (expression, reductions, source) in [
+                ("MIN(EX.TEXT) + 1", Value::Str("a".into()), "MIN(EX.TEXT)"),
+                ("SUM(EX.DOSE) + KEY", Value::Int(1), "KEY"),
+            ] {
+                let plan = compile_aggregate(expression, "columns.X.aggregate").unwrap();
+                let error = plan
+                    .evaluate_aggregate(&mut Group, &[reductions])
+                    .unwrap_err();
+                let diagnostic = error.diagnostic().unwrap();
+                assert_eq!(
+                    (
+                        diagnostic.definition(),
+                        diagnostic.spec_paths,
+                        diagnostic.context,
+                    ),
+                    (
+                        Definition {
+                            phase: "validation",
+                            condition: "incompatible_input_type",
+                            rule: Some("FORMULA-23"),
+                        },
+                        vec!["columns.X.aggregate".to_string()],
+                        [
+                            ("expr".into(), Json::String(expression.into())),
+                            ("source".into(), Json::String(source.into())),
+                            ("expected".into(), Json::String("numeric".into())),
+                            ("actual".into(), Json::String("str".into())),
+                        ]
+                        .into(),
+                    ),
+                    "{expression}"
+                );
+            }
+        }
+
         #[test]
         fn bare_reducers_retain_typed_reads_and_record_stars() {
             let plan =
