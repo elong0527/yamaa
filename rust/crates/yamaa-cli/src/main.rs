@@ -180,8 +180,10 @@ fn help() -> String {
          --section and submission take a project. read-odm saves the clinical\n\
          items of SOURCE, an ODM XML file or a TAR archive that holds one, to\n\
          OUT, a .csv or .parquet file. schema prints the JSON Schema of the file\n\
-         type TYPE: spec, project, codelists or function. selftest runs the\n\
-         cases the binary carries and compares each with its expected files.\n\n\
+         type TYPE: spec, project, codelists or function. conditions prints the\n\
+         catalogue of the conditions the engine may report and those a release\n\
+         retired. selftest runs the cases the binary carries and compares each\n\
+         with its expected files.\n\n\
          exit status: 0 succeeded, 1 completed with findings, 2 could not run as asked\n",
     );
     text

@@ -3,12 +3,12 @@
 //!
 //! An embedder configures one [`Engine`] and calls its use cases: check, run
 //! and save, submission, resolve, `read_odm` and `file_type`, beside the free
-//! [`lint`], [`schema()`], [`info`] and [`selftest`]. The facade wraps the
-//! existing prepare, bind, execute and publish workflow; there is no second
-//! admission or evaluation route. All physical access goes through a
-//! resolver; local files are just the default resolver. The use cases carry
-//! runnable examples, and `examples/memory.rs` runs one specification
-//! entirely from memory.
+//! [`lint`], [`schema()`], [`conditions()`], [`info`] and [`selftest`]. The
+//! facade wraps the existing prepare, bind, execute and publish workflow;
+//! there is no second admission or evaluation route. All physical access
+//! goes through a resolver; local files are just the default resolver. The
+//! use cases carry runnable examples, and `examples/memory.rs` runs one
+//! specification entirely from memory.
 //!
 //! Adapters and core may change in any release without notice; their `pub`
 //! items are visibility for the workspace, not a public API. Every public
@@ -52,6 +52,7 @@
 
 pub mod api;
 pub mod cancel;
+pub mod conditions;
 pub mod diagnostic;
 pub mod engine;
 pub mod error;
@@ -75,6 +76,7 @@ mod plan;
 
 pub use api::{Check, Failure, Plans, ProjectRun, Run, Status, Submission, SECTIONS, STATUSES};
 pub use cancel::CancellationToken;
+pub use conditions::{conditions, Condition, Conditions, CONDITION_COLUMNS};
 pub use diagnostic::{
     ContextValue, Diagnostic, DiagnosticContext, Location, Position, Report, Severity, SourceSpan,
     ISSUE_COLUMNS, PHASES, REPORT_COLUMNS, REPORT_KINDS, REPORT_OUTCOMES, SEVERITIES,

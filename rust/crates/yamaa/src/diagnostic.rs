@@ -300,7 +300,12 @@ pub struct Diagnostic {
 
 /// The severity of one issue, as the registry gives its condition.
 pub(crate) fn severity(diagnostic: &yamaa_core::diagnostic::Diagnostic) -> Severity {
-    match diagnostic.severity() {
+    from_core(diagnostic.severity())
+}
+
+/// The public form of a severity the registry gives.
+pub(crate) fn from_core(severity: yamaa_core::diagnostic::Severity) -> Severity {
+    match severity {
         yamaa_core::diagnostic::Severity::Error => Severity::Error,
     }
 }
