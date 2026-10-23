@@ -2,8 +2,9 @@
 
 Each case of the shared `project-parity` truth writes its files, makes one
 call and compares every issue row it returns with the authored rows, all
-twelve columns of D28 (#3030): a listed specification's issues in a project
-run, the run of a specification the project names, or a submission. A case
+twelve columns of D28 (#3030): the issues of a project check, a listed
+specification's issues in a project run, the run of a specification the
+project names, or a submission. A case
 whose files or rows depend on the host language names them under
 `host_files` and under `issues` by language. `{root}` stands for the
 directory the case is written in, resolved, with forward slashes, and
@@ -30,6 +31,8 @@ def issues(call, root):
     """The issues table the case's call returns."""
     path = root / call["path"]
     operation = call["operation"]
+    if operation == "project_check":
+        return yamaa.project(path).check().issues
     if operation == "project_run":
         return yamaa.project(path).run(call.get("section"))[call["member"]].issues
     if operation == "spec_run":

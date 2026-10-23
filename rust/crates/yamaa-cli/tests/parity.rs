@@ -8,11 +8,11 @@
 //! - **Issues.** Each case of `diagnostic-parity` and `project-parity`, and
 //!   the contained panic of `parquet-containment`, writes its files and makes
 //!   its call: `check` or `run` of `spec.yaml`, given as that relative path,
-//!   or `run` or `submission` of a project. Every issue the document holds is
-//!   compared with the case's rows in report order, all twelve columns of
-//!   D28 (`public-contract.issue_columns`), and each issue object has exactly
-//!   those keys. A context is compared as the canonical JSON text that the
-//!   binary printed, so no reader chooses a number type.
+//!   or `check`, `run` or `submission` of a project. Every issue the document
+//!   holds is compared with the case's rows in report order, all twelve
+//!   columns of D28 (`public-contract.issue_columns`), and each issue object
+//!   has exactly those keys. A context is compared as the canonical JSON text
+//!   that the binary printed, so no reader chooses a number type.
 //! - **Run reports.** The command line sees a run's report in the file its
 //!   save writes (OUTPUT-10). `public-contract.value_level_report` declares
 //!   one, whose value-level rows are compared with the case's, all fourteen
@@ -337,8 +337,8 @@ fn each_diagnostic_parity_case_prints_the_issue_rows_both_hosts_return() {
 }
 
 /// Each case of `project-parity` prints every issue row that both hosts
-/// return for the same call: a project run, or one specification or one
-/// submission of a project. A member's rows are its issues in the run; the
+/// return for the same call: a project check, a project run, or one
+/// specification or one submission of a project. A member's rows are its issues in the run; the
 /// command line runs no project function, so the cases that call one give
 /// its own rows.
 #[test]
@@ -359,6 +359,7 @@ fn each_project_parity_case_prints_the_issue_rows_both_hosts_return() {
         let call = &case["call"];
         let path = text(call, "path");
         let arguments = match text(call, "operation") {
+            "project_check" => vec!["check", path],
             "project_run" => match call["section"].as_str() {
                 Some(section) => vec!["run", path, "--section", section],
                 None => vec!["run", path],
