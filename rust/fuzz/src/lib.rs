@@ -11,7 +11,7 @@
 
 use std::convert::Infallible;
 
-use yamaa_adapters::{arrow_table::ArrowTable, decoder::Decoder, specification_run::Error};
+use yamaa_adapters::{column_table::ColumnTable, decoder::Decoder, specification_run::Error};
 use yamaa_core::{
     decoder::Decoder as _,
     specification::{SourceDeclaration, SourceInterpretation, SourceProfile},
@@ -53,7 +53,7 @@ pub fn decode(
     source: &SourceDeclaration,
     bytes: &[u8],
     interpretation: SourceInterpretation,
-) -> Result<ArrowTable, Error> {
+) -> Result<ColumnTable, Error> {
     Decoder::<Infallible>::default()
         .table(source, bytes, interpretation, None)
         .map(|snapshot| snapshot.into_table())
@@ -101,7 +101,7 @@ pub fn sas(profile: SourceProfile, bytes: &[u8]) {
     }
 }
 
-fn refuse_internal(result: &Result<ArrowTable, Error>) {
+fn refuse_internal(result: &Result<ColumnTable, Error>) {
     if let Err(Error::SasSource(yamaa_adapters::sas_source::Error::Internal)) = result {
         panic!("the SAS reader returned an internal error for input bytes");
     }

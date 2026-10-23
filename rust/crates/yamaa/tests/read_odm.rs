@@ -72,7 +72,6 @@ fn clinical_items_read_into_the_fixed_table() {
     assert_eq!(text("FormOID", 0).as_deref(), Some("F"));
     assert_eq!(text("IsNull", 1).as_deref(), Some("true"));
     assert_eq!(text("Value", 1), None);
-    assert!(!table.ipc().unwrap().is_empty());
 }
 
 /// The one issue of a refusal, which a rejected report carries.

@@ -71,7 +71,6 @@ pub fn main() {
             .downcast_ref::<Int64Array>()
             .unwrap();
         assert_eq!((ids.value(0), ids.value(1)), (1, 2));
-        assert!(!output.ipc().unwrap().is_empty());
         // A save returns what it wrote; a caller's resolver names each file
         // by the reference its target reply gave.
         assert_eq!(

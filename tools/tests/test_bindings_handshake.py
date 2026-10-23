@@ -123,18 +123,21 @@ class HandshakeTests(unittest.TestCase):
         read_text = Path.read_text
         python = generator.RUST_TARGET.parent / "api_entry.rs"
         r = generator.R_SOURCE / "api_entry.rs"
+        # Each binding's helper that passes the gate, swapped for a name that
+        # none of the binding's functions has.
         cases = [
             (
                 python,
                 "pub fn _schema(py: Python<'_>, file_type: &str) -> PyResult<String> {\n"
-                "    gate()?;\n",
-                "pub fn _schema(py: Python<'_>, file_type: &str) -> PyResult<String> {\n",
+                "    plain(py,",
+                "pub fn _schema(py: Python<'_>, file_type: &str) -> PyResult<String> {\n"
+                "    ungated(py,",
                 "python native functions that do not reach the interface gate: _schema",
             ),
             (
                 r,
-                "fn schema(file_type: Raw) -> List {\n    reply(||",
-                "fn schema(file_type: Raw) -> List {\n    answer(||",
+                "fn schema(file_type: Raw) -> List {\n    reply(",
+                "fn schema(file_type: Raw) -> List {\n    ungated(",
                 "r native functions that do not reach the interface gate: schema",
             ),
         ]

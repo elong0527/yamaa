@@ -29,7 +29,7 @@ use yamaa_core::application_issue::{self as issue, Fault, Step};
 use yamaa_core::json::Value;
 
 use crate::{
-    arrow_table::TableError,
+    column_table::{ColumnTable, TableError},
     file_application::{
         publication_failure, publication_stop, target_failure, unresolved_target, Failure,
     },
@@ -84,12 +84,9 @@ fn profile(written: &str) -> Option<&'static str> {
 /// as `output_projection`, as a run's output does. A build without Parquet
 /// fails a `parquet` file as `parquet_codec_unavailable`.
 fn encode(table: &PublicTable, profile: &str) -> Result<Vec<u8>, Failure> {
-    let snapshot = crate::arrow_bridge::import_public_batches(
-        table.schema().clone(),
-        table.batches().to_vec(),
-    )
-    .map_err(|error| unrepresentable(table, error))?;
-    let projection = (0..table.columns().len()).collect::<Vec<_>>();
+    let snapshot =
+        ColumnTable::from_public(table).map_err(|error| unrepresentable(table, error))?;
+    let projection = (0..table.width()).collect::<Vec<_>>();
     let refused = |fault| vec![issue::rejected(Step::Output, fault)];
     if profile == "csv" {
         crate::csv_artifact::render(&snapshot, &projection, None).map_err(|error| match error {
@@ -138,10 +135,9 @@ fn unrepresentable(table: &PublicTable, error: TableError) -> Failure {
         error => {
             let mut finding = issue::rejected(Step::Output, Fault::OutputSchema);
             if let TableError::ArrayType { column, .. } = error {
-                if let Some(field) = table.columns().get(column) {
-                    finding
-                        .context
-                        .insert("column".into(), Value::String(field.name().clone()));
+                if column < table.width() {
+                    let name = Value::String(table.name(column).to_owned());
+                    finding.context.insert("column".into(), name);
                 }
             }
             vec![finding]
@@ -229,17 +225,9 @@ mod tests {
 
     #[test]
     fn a_parquet_file_needs_the_parquet_codec() {
-        let schema = Arc::new(arrow_schema::Schema::new(vec![arrow_schema::Field::new(
-            "ID",
-            arrow_schema::DataType::Utf8,
-            true,
-        )]));
-        let batch = arrow_array::RecordBatch::try_new(
-            Arc::clone(&schema),
-            vec![Arc::new(arrow_array::StringArray::from(vec![Some("a")]))],
-        )
-        .unwrap();
-        let table = PublicTable::from_batches(schema, vec![batch]).unwrap();
+        let values = [Some("a")].into_iter().collect();
+        let column = crate::public_table::PublicColumn::Str(values);
+        let table = PublicTable::new(vec![("ID".into(), column)]).unwrap();
         assert_eq!(encode(&table, "csv").unwrap(), b"ID\na\n");
         let parquet = encode(&table, "parquet");
         if cfg!(feature = "parquet") {

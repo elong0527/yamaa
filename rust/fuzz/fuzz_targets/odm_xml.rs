@@ -10,7 +10,7 @@
 use std::{path::PathBuf, sync::LazyLock};
 
 use libfuzzer_sys::fuzz_target;
-use yamaa_adapters::{ipc_table::TableError, odm_xml, specification_run};
+use yamaa_adapters::{odm_xml, public_table::TableError, specification_run};
 use yamaa_core::{
     odm_items::{Error, Options},
     specification::{SourceInterpretation, SourceProfile},

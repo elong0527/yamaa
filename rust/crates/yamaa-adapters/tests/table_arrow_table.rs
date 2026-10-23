@@ -1,39 +1,30 @@
-//! Table contracts: Arrow table, CSV artifact, CSV precision, CSV source,
-//! parquet artifact, predicate diagnostics and public table.
+//! Table contracts: column table, epoch conversions, CSV artifact, CSV
+//! precision, CSV source, parquet artifact, predicate diagnostics and public
+//! table.
 mod table {
-    mod arrow_table {
+    mod column_table {
         use crate::support::table_schema as logical_schema;
-        use arrow_array::{
-            Array, ArrayRef, Date32Array, Float64Array, Int64Array, RecordBatch,
-            RecordBatchOptions, StringArray, StructArray, TimestampSecondArray, UInt8Array,
-        };
-        use arrow_buffer::NullBuffer;
-        use arrow_schema::{DataType, Field, Schema};
-        use std::sync::Arc;
-        use yamaa_adapters::arrow_table::{
-            date_array, datetime_array, physical_schema, ArrowTable, TableError,
+        use yamaa_adapters::{
+            column_table::{Column, ColumnTable, TableError},
+            columns::Values,
         };
         use yamaa_core::{
+            limits::Limits,
             table::{CellError, TableAccess, TableSchema, ValueRef},
-            temporal::{Date, DateTime, Precision as DP, Precision as TP},
+            temporal::{Date, DateTime, Precision as P},
             value::ColumnType as CT,
         };
 
-        /// Create a batch with the canonical physical schema.
-        fn batch(schema: &TableSchema, arrays: Vec<ArrayRef>) -> RecordBatch {
-            RecordBatch::try_new(physical_schema(schema), arrays).unwrap()
-        }
-
-        /// Read and require an actual date, preserving its separate precision metadata.
-        fn date(table: &ArrowTable, row: usize, column: usize) -> Date {
+        /// Read and require an actual date, with its collected precision.
+        fn date(table: &ColumnTable, row: usize, column: usize) -> Date {
             let ValueRef::Date(value) = table.cell(row, column).unwrap() else {
                 panic!("date required")
             };
             value
         }
 
-        /// Read and require an actual datetime, preserving its separate precision metadata.
-        fn datetime(table: &ArrowTable, row: usize, column: usize) -> DateTime {
+        /// Read and require an actual datetime, with its collected precision.
+        fn datetime(table: &ColumnTable, row: usize, column: usize) -> DateTime {
             let ValueRef::DateTime(value) = table.cell(row, column).unwrap() else {
                 panic!("datetime required")
             };
@@ -41,48 +32,38 @@ mod table {
         }
 
         #[test]
-        /// Retain full-range integers, borrowed text and finite bits after inputs drop.
-        fn exact_scalars_normalization_and_buffer_ownership() {
+        /// Retain full-range integers, exact text and finite bits; admission
+        /// makes a nonfinite float missing.
+        fn exact_scalars_are_kept_and_nonfinite_floats_are_missing() {
             let schema = logical_schema(&[
                 ("text", CT::Str),
                 ("integer", CT::Int),
                 ("float", CT::Float),
             ]);
-            let text = Arc::new(StringArray::from(vec![
-                Some(""),
-                Some("a\0\u{1f980}"),
-                None,
-                Some("last"),
-            ]));
-            let pointer = text.value(1).as_ptr();
-            let original = batch(
-                &schema,
+            let floats = [-0.0, f64::INFINITY, f64::NEG_INFINITY, f64::NAN];
+            let table = ColumnTable::new(
+                schema,
                 vec![
-                    text.clone(),
-                    Arc::new(Int64Array::from(vec![
-                        i64::MIN,
-                        i64::MAX,
-                        9_007_199_254_740_993,
-                        0,
-                    ])),
-                    Arc::new(Float64Array::from(vec![
-                        -0.0,
-                        f64::INFINITY,
-                        f64::NEG_INFINITY,
-                        f64::NAN,
-                    ])),
+                    Column::Str(
+                        [Some(""), Some("a\0\u{1f980}"), None, Some("last")]
+                            .into_iter()
+                            .collect(),
+                    ),
+                    Column::Int(
+                        [i64::MIN, i64::MAX, 9_007_199_254_740_993, 0]
+                            .map(Some)
+                            .into_iter()
+                            .collect(),
+                    ),
+                    Column::Float(floats.map(Some).into_iter().collect::<Values<f64>>()),
                 ],
-            );
-            let table = ArrowTable::try_new(schema, vec![original.clone()]).unwrap();
-            drop(original);
-            drop(text);
+                4,
+            )
+            .unwrap();
             assert_eq!(table.cell(0, 0).unwrap(), ValueRef::Str(""));
-            let ValueRef::Str(text) = table.cell(1, 0).unwrap() else {
-                panic!("text required")
-            };
-            assert_eq!(text, "a\0\u{1f980}");
-            assert_eq!(text.as_ptr(), pointer);
+            assert_eq!(table.cell(1, 0).unwrap(), ValueRef::Str("a\0\u{1f980}"));
             assert_eq!(table.cell(2, 0).unwrap(), ValueRef::Missing);
+            assert_eq!(table.cell(3, 0).unwrap(), ValueRef::Str("last"));
             for (row, value) in [i64::MIN, i64::MAX, 9_007_199_254_740_993, 0]
                 .into_iter()
                 .enumerate()
@@ -95,10 +76,6 @@ mod table {
             assert_eq!(zero.get().to_bits(), 1 << 63);
             for row in 1..4 {
                 assert_eq!(table.cell(row, 2).unwrap(), ValueRef::Missing);
-                assert!(table.batches()[0].column(2).is_null(row));
-            }
-            for _ in 0..100 {
-                assert_eq!(table.cell(3, 0).unwrap(), ValueRef::Str("last"));
             }
             assert_eq!(
                 table.cell(4, 0),
@@ -111,351 +88,210 @@ mod table {
         }
 
         #[test]
-        /// Navigate empty chunks and nonzero slice offsets without changing order.
-        fn chunk_and_slice_offsets_keep_original_record_and_column_order() {
+        /// A projection and an appended column keep record and column order.
+        fn projected_and_appended_columns_keep_record_and_column_order() {
             let schema = logical_schema(&[("B", CT::Str), ("A", CT::Int)]);
-            let original = batch(
-                &schema,
-                vec![
-                    Arc::new(StringArray::from(vec!["skip", "first", "second", "third"])),
-                    Arc::new(Int64Array::from(vec![-1, 10, 20, 30])),
-                ],
-            );
-            let empty = original.slice(0, 0);
-            let table = ArrowTable::try_new(
+            let table = ColumnTable::new(
                 schema,
                 vec![
-                    empty.clone(),
-                    original.slice(1, 2),
-                    empty.clone(),
-                    original.slice(3, 1),
-                    empty,
+                    Column::Str(["first", "second", "third"].map(Some).into_iter().collect()),
+                    Column::Int([10, 20, 30].map(Some).into_iter().collect()),
                 ],
+                3,
             )
             .unwrap();
-            assert_eq!(table.row_count(), 3);
-            assert_eq!(table.batches().len(), 5);
+            let projected = table
+                .project(logical_schema(&[("A", CT::Int), ("B", CT::Str)]), &[1, 0])
+                .unwrap();
+            let appended = projected
+                .appended(
+                    logical_schema(&[("A", CT::Int), ("B", CT::Str), ("C", CT::Int)]),
+                    Column::Int([1, 2, 3].map(Some).into_iter().collect()),
+                )
+                .unwrap();
             assert_eq!(
-                table
+                appended
                     .schema()
                     .columns()
                     .iter()
-                    .map(|col| col.name.as_str())
+                    .map(|column| column.name.as_str())
                     .collect::<Vec<_>>(),
-                ["B", "A"]
+                ["A", "B", "C"]
             );
-            for (row, (name, value)) in [("first", 10), ("second", 20), ("third", 30)]
-                .into_iter()
-                .enumerate()
+            for (row, (value, name, position)) in
+                [(10, "first", 1), (20, "second", 2), (30, "third", 3)]
+                    .into_iter()
+                    .enumerate()
             {
-                assert_eq!(table.cell(row, 0).unwrap(), ValueRef::Str(name));
-                assert_eq!(table.cell(row, 1).unwrap(), ValueRef::Int(value));
+                assert_eq!(appended.cell(row, 0).unwrap(), ValueRef::Int(value));
+                assert_eq!(appended.cell(row, 1).unwrap(), ValueRef::Str(name));
+                assert_eq!(appended.cell(row, 2).unwrap(), ValueRef::Int(position));
             }
         }
 
         #[test]
-        /// Keep imputed fields and precision independently through temporal slicing.
-        fn temporal_precision_and_negative_epoch_survive_sliced_structs() {
+        /// Keep imputed fields and every rung of the one collected-precision
+        /// ladder beside the completed fields, for dates and datetimes alike.
+        fn temporal_fields_and_every_collected_precision_survive() {
+            let dates = [P::None, P::Year, P::Month, P::Day]
+                .map(|precision| Date::new(2025, 3, 4, precision).unwrap());
+            let day = Date::new(2025, 3, 4, P::Day).unwrap();
+            let negative = Date::new(1969, 12, 31, P::Month).unwrap();
+            let datetimes = [
+                DateTime::new(day, 0, 0, 0, P::None).unwrap(),
+                DateTime::new(day, 0, 0, 0, P::Year).unwrap(),
+                DateTime::new(day, 0, 0, 0, P::Month).unwrap(),
+                // Day precision still retains supplied or imputed time fields.
+                DateTime::new(day, 12, 34, 56, P::Day).unwrap(),
+                DateTime::new(day, 8, 59, 59, P::Hour).unwrap(),
+                DateTime::new(day, 8, 30, 0, P::Minute).unwrap(),
+                DateTime::new(negative, 23, 59, 59, P::Second).unwrap(),
+            ];
             let schema = logical_schema(&[("date", CT::Date), ("datetime", CT::DateTime)]);
-            let year = Date::new(2025, 7, 19, DP::Year).unwrap();
-            let month = Date::new(1969, 12, 31, DP::Month).unwrap();
-            let day = Date::new(1, 1, 1, DP::Day).unwrap();
-            let time = DateTime::new(month, 23, 59, 59, TP::Second).unwrap();
-            // Day precision still retains supplied/imputed time fields.
-            let imputed = DateTime::new(year, 12, 34, 56, TP::Day).unwrap();
-            let dates =
-                Arc::new(date_array(&[None, Some(year), Some(month), Some(day), None]).unwrap());
-            let times =
-                Arc::new(datetime_array(&[None, Some(imputed), Some(time), None, None]).unwrap());
-            let original = batch(&schema, vec![dates, times]);
-            let table = ArrowTable::try_new(schema, vec![original.slice(1, 4)]).unwrap();
-            drop(original);
-            for (row, expected) in [year, month, day].into_iter().enumerate() {
+            let table = ColumnTable::new(
+                schema,
+                vec![
+                    Column::Date(dates.map(Some).into_iter().chain([None; 4]).collect()),
+                    Column::DateTime(datetimes.map(Some).into_iter().chain([None]).collect()),
+                ],
+                8,
+            )
+            .unwrap();
+            for (row, expected) in dates.into_iter().enumerate() {
                 assert_eq!(date(&table, row, 0).fields(), expected.fields());
                 assert_eq!(
                     date(&table, row, 0).collected_precision(),
                     expected.collected_precision()
                 );
             }
-            assert_eq!(datetime(&table, 0, 1).fields(), imputed.fields());
-            assert_eq!(datetime(&table, 0, 1).collected_precision(), TP::Day);
-            assert_eq!(datetime(&table, 1, 1).fields(), (1969, 12, 31, 23, 59, 59));
-            assert_eq!(datetime(&table, 1, 1).collected_precision(), TP::Second);
-            assert_eq!(table.cell(2, 1).unwrap(), ValueRef::Missing);
-            assert_eq!(table.cell(3, 0).unwrap(), ValueRef::Missing);
-        }
-
-        #[test]
-        /// Keep every rung of the one collected-precision ladder beside the
-        /// completed fields, for dates and datetimes alike.
-        fn every_collected_precision_survives_encoding() {
-            let schema = logical_schema(&[("date", CT::Date)]);
-            let dates = [DP::None, DP::Year, DP::Month, DP::Day]
-                .map(|precision| Date::new(2025, 3, 4, precision).unwrap());
-            let encoded = Arc::new(date_array(&dates.map(Some)).unwrap());
-            let table =
-                ArrowTable::try_new(schema.clone(), vec![batch(&schema, vec![encoded])]).unwrap();
-            for (row, expected) in dates.into_iter().enumerate() {
-                let ValueRef::Date(value) = table.cell(row, 0).unwrap() else {
-                    panic!("date")
-                };
-                assert_eq!(value.collected_precision(), expected.collected_precision());
-            }
-            let schema = logical_schema(&[("datetime", CT::DateTime)]);
-            let day = Date::new(2025, 3, 4, DP::Day).unwrap();
-            let values = [
-                DateTime::new(day, 0, 0, 0, TP::None).unwrap(),
-                DateTime::new(day, 0, 0, 0, TP::Year).unwrap(),
-                DateTime::new(day, 0, 0, 0, TP::Month).unwrap(),
-                DateTime::new(day, 0, 0, 0, TP::Day).unwrap(),
-                DateTime::new(day, 8, 59, 59, TP::Hour).unwrap(),
-                DateTime::new(day, 8, 30, 0, TP::Minute).unwrap(),
-                DateTime::new(day, 8, 30, 15, TP::Second).unwrap(),
-            ];
-            let times = Arc::new(datetime_array(&values.map(Some)).unwrap());
-            let table =
-                ArrowTable::try_new(schema.clone(), vec![batch(&schema, vec![times])]).unwrap();
-            for (row, expected) in values.into_iter().enumerate() {
-                assert_eq!(datetime(&table, row, 0).fields(), expected.fields());
+            for (row, expected) in datetimes.into_iter().enumerate() {
+                assert_eq!(datetime(&table, row, 1).fields(), expected.fields());
                 assert_eq!(
-                    datetime(&table, row, 0).collected_precision(),
+                    datetime(&table, row, 1).collected_precision(),
                     expected.collected_precision()
                 );
             }
+            assert_eq!(table.cell(4, 0).unwrap(), ValueRef::Missing);
+            assert_eq!(table.cell(7, 1).unwrap(), ValueRef::Missing);
         }
 
         #[test]
         /// Retain declared schema with no records and record counts with no columns.
         fn zero_rows_and_zero_columns_retain_independent_shapes() {
             let schema = logical_schema(&[("D", CT::Date), ("T", CT::Str)]);
-            let no_batches = ArrowTable::try_new(schema.clone(), vec![]).unwrap();
-            assert_eq!(no_batches.schema(), &schema);
-            assert_eq!(no_batches.row_count(), 0);
-            let empty = batch(
-                &schema,
-                vec![
-                    Arc::new(date_array(&[]).unwrap()),
-                    Arc::new(StringArray::from(Vec::<Option<&str>>::new())),
-                ],
-            );
-            let table = ArrowTable::try_new(schema, vec![empty]).unwrap();
-            assert_eq!(table.batches().len(), 1);
-            assert_eq!(table.schema().columns().len(), 2);
-            assert_eq!(
-                table.cell(0, 0),
-                Err(CellError::OutOfBounds { row: 0, column: 0 })
-            );
-            let empty_schema = TableSchema::new(vec![]).unwrap();
-            let rows = RecordBatch::try_new_with_options(
-                physical_schema(&empty_schema),
-                vec![],
-                &RecordBatchOptions::new().with_row_count(Some(3)),
+            let empty = ColumnTable::new(
+                schema.clone(),
+                vec![Column::empty(CT::Date), Column::empty(CT::Str)],
+                0,
             )
             .unwrap();
-            let table = ArrowTable::try_new(empty_schema, vec![rows]).unwrap();
-            assert_eq!(table.row_count(), 3);
+            assert_eq!(empty.schema(), &schema);
+            assert_eq!(empty.row_count(), 0);
             assert_eq!(
-                table.cell(0, 0),
+                empty.cell(0, 0),
+                Err(CellError::OutOfBounds { row: 0, column: 0 })
+            );
+            let records = ColumnTable::new(TableSchema::new(vec![]).unwrap(), vec![], 3).unwrap();
+            assert_eq!(records.row_count(), 3);
+            assert_eq!(
+                records.cell(0, 0),
                 Err(CellError::OutOfBounds { row: 0, column: 0 })
             );
         }
 
-        /// Construct canonical date storage directly to test independent bad payloads.
-        fn raw_dates(
-            values: Vec<i32>,
-            precision: Vec<u8>,
-            valid: Option<Vec<bool>>,
-        ) -> StructArray {
-            let schema = logical_schema(&[("D", CT::Date)]);
-            let physical = physical_schema(&schema);
-            let DataType::Struct(fields) = physical.field(0).data_type() else {
-                panic!("struct required")
-            };
-            StructArray::try_new(
-                fields.clone(),
-                vec![
-                    Arc::new(Date32Array::from(values)),
-                    Arc::new(UInt8Array::from(precision)),
-                ],
-                valid.map(NullBuffer::from),
-            )
-            .unwrap()
-        }
-
         #[test]
-        /// Reject malformed visible data but honor parent-null masking.
-        fn visible_temporal_payloads_are_validated_before_any_use() {
-            // Codes 0 to 3 name year, month, day and none; 4 is the first unknown.
-            for (values, precisions, precision) in [
-                (vec![0, 0], vec![2, 4], true),
-                (vec![0, i32::MIN], vec![2, 2], false),
-                (vec![0, 2932897], vec![2, 2], false),
-            ] {
-                let schema = logical_schema(&[("D", CT::Date)]);
-                let input = batch(&schema, vec![Arc::new(raw_dates(values, precisions, None))]);
-                let result = ArrowTable::try_new(schema, vec![input]);
-                if precision {
-                    assert!(matches!(
-                        result,
-                        Err(TableError::TemporalPrecision {
-                            batch: 0,
-                            column: 0,
-                            row: 1
-                        })
-                    ));
-                } else {
-                    assert!(matches!(
-                        result,
-                        Err(TableError::TemporalRange {
-                            batch: 0,
-                            column: 0,
-                            row: 1
-                        })
-                    ));
-                }
-            }
-            // Null parent masks even an invalid raw day and unknown precision.
-            let schema = logical_schema(&[("D", CT::Date)]);
-            let input = batch(
-                &schema,
-                vec![Arc::new(raw_dates(
-                    vec![i32::MIN, 0],
-                    vec![255, 2],
-                    Some(vec![false, true]),
-                ))],
-            );
-            let table = ArrowTable::try_new(schema, vec![input]).unwrap();
-            assert_eq!(table.cell(0, 0).unwrap(), ValueRef::Missing);
-            assert_eq!(date(&table, 1, 0).fields(), (1970, 1, 1));
-        }
-
-        #[test]
-        /// Require both temporal children and their exact ordered non-null schema.
-        fn temporal_child_validity_and_physical_schema_cannot_drift() {
-            let schema = logical_schema(&[("D", CT::Date)]);
-            let physical = physical_schema(&schema);
-            let DataType::Struct(fields) = physical.field(0).data_type() else {
-                panic!("struct required")
-            };
-            let null_children: Vec<ArrayRef> = vec![
-                Arc::new(Date32Array::from(vec![None, Some(0)])),
-                Arc::new(UInt8Array::from(vec![None, Some(2)])),
-            ];
-            assert!(StructArray::try_new(fields.clone(), null_children.clone(), None).is_err());
-            let masked = StructArray::try_new(
-                fields.clone(),
-                null_children,
-                Some(NullBuffer::from(vec![false, true])),
-            )
-            .unwrap();
-            let table =
-                ArrowTable::try_new(schema.clone(), vec![batch(&schema, vec![Arc::new(masked)])])
-                    .unwrap();
-            assert_eq!(table.cell(0, 0).unwrap(), ValueRef::Missing);
-            for fields in [
-                vec![
-                    Field::new("precision", DataType::UInt8, false),
-                    Field::new("value", DataType::Date32, false),
-                ],
-                vec![
-                    Field::new("value", DataType::Date32, true),
-                    Field::new("precision", DataType::UInt8, false),
-                ],
-            ] {
-                let arrays: Vec<ArrayRef> = if fields[0].name() == "precision" {
-                    vec![
-                        Arc::new(UInt8Array::from(vec![2])),
-                        Arc::new(Date32Array::from(vec![0])),
-                    ]
-                } else {
-                    vec![
-                        Arc::new(Date32Array::from(vec![0])),
-                        Arc::new(UInt8Array::from(vec![2])),
-                    ]
-                };
-                let array = StructArray::try_new(fields.into(), arrays, None).unwrap();
-                let foreign = Arc::new(Schema::new(vec![Field::new(
-                    "D",
-                    array.data_type().clone(),
-                    true,
-                )]));
-                let input = RecordBatch::try_new(foreign, vec![Arc::new(array)]).unwrap();
-                assert!(matches!(
-                    ArrowTable::try_new(schema.clone(), vec![input]),
-                    Err(TableError::SchemaMismatch { batch: 0 })
-                ));
-            }
-        }
-
-        #[test]
-        /// Fixed geometry precedes malformed temporal payloads; schema errors remain distinct.
-        fn schema_mismatches_and_fixed_geometry_precede_payload_scans() {
-            let schema = logical_schema(&[("D", CT::Date)]);
-            let invalid = batch(&schema, vec![Arc::new(raw_dates(vec![0], vec![255], None))]);
-            let wide_schema = TableSchema::new(
+        /// Fixed geometry precedes every column check; a missing column, or
+        /// a column of another type or length, is refused in column order.
+        fn fixed_geometry_precedes_column_checks_in_column_order() {
+            let wide = TableSchema::new(
                 (0..1_025)
                     .map(|column| yamaa_core::table::Column {
-                        name: if column == 0 {
-                            "D".into()
-                        } else {
-                            format!("C{column}")
-                        },
-                        kind: if column == 0 { CT::Date } else { CT::Int },
+                        name: format!("C{column}"),
+                        kind: CT::Int,
                     })
                     .collect(),
             )
             .unwrap();
-            let number = Arc::new(Int64Array::from(vec![1])) as ArrayRef;
-            let arrays = std::iter::once(invalid.column(0).clone())
-                .chain(std::iter::repeat_n(number, 1_024))
-                .collect();
-            let wide = batch(&wide_schema, arrays);
+            let columns = (0..1_025).map(|_| Column::empty(CT::Str)).collect();
             assert!(matches!(
-                ArrowTable::try_new(wide_schema, vec![wide]),
+                ColumnTable::new(wide, columns, 0),
                 Err(TableError::Limit {
                     resource: "columns",
                     limit: 1_024,
                     required: Some(1_025),
                 })
             ));
-            for foreign in [
-                Arc::new(Schema::new(vec![Field::new(
-                    "wrong",
-                    DataType::Int64,
-                    true,
-                )])),
-                Arc::new(Schema::new(vec![Field::new("D", DataType::Int64, true)])),
-            ] {
-                let input =
-                    RecordBatch::try_new(foreign, vec![Arc::new(Int64Array::from(vec![1]))])
-                        .unwrap();
-                assert!(matches!(
-                    ArrowTable::try_new(schema.clone(), vec![input]),
-                    Err(TableError::SchemaMismatch { batch: 0 })
-                ));
-            }
-            let no_columns = TableSchema::new(vec![]).unwrap();
-            let huge = RecordBatch::try_new_with_options(
-                physical_schema(&no_columns),
-                vec![],
-                &RecordBatchOptions::new().with_row_count(Some(usize::MAX)),
-            )
-            .unwrap();
             assert!(matches!(
-                ArrowTable::try_new(no_columns, vec![huge.clone(), huge]),
+                ColumnTable::new(
+                    TableSchema::new(vec![]).unwrap(),
+                    vec![],
+                    Limits::TABLE_ROWS + 1
+                ),
                 Err(TableError::Limit {
                     resource: "table_rows",
-                    required: None,
-                    ..
+                    limit: Limits::TABLE_ROWS,
+                    required: Some(_),
                 })
+            ));
+            let schema = logical_schema(&[("I", CT::Int), ("S", CT::Str)]);
+            let int = || Column::Int([Some(1)].into_iter().collect());
+            for (columns, expected) in [
+                (vec![int(), Column::empty(CT::Str)], 1),
+                (vec![Column::empty(CT::Str), int()], 0),
+                (vec![Column::empty(CT::Int), Column::empty(CT::Str)], 0),
+            ] {
+                assert!(matches!(
+                    ColumnTable::new(schema.clone(), columns, 1),
+                    Err(TableError::ArrayType { batch: 0, column }) if column == expected
+                ));
+            }
+            assert!(matches!(
+                ColumnTable::new(schema, vec![int()], 1),
+                Err(TableError::SchemaMismatch { batch: 0 })
             ));
         }
 
         #[test]
+        /// Keep explicit missing values separate from i64 sentinels and finite float bits.
+        fn null_validity_never_collides_with_exact_scalar_payloads() {
+            let schema = logical_schema(&[("I", CT::Int), ("F", CT::Float)]);
+            let bits = [1, 0x7fefffffffffffff, 0xffefffffffffffff];
+            let floats = bits.map(|bits| Some(f64::from_bits(bits)));
+            let table = ColumnTable::new(
+                schema,
+                vec![
+                    Column::Int(
+                        [Some(i64::MIN), None, Some(i64::MAX), Some(0)]
+                            .into_iter()
+                            .collect(),
+                    ),
+                    Column::floats(floats.into_iter().chain([None])),
+                ],
+                4,
+            )
+            .unwrap();
+            assert_eq!(table.cell(0, 0).unwrap(), ValueRef::Int(i64::MIN));
+            assert_eq!(table.cell(1, 0).unwrap(), ValueRef::Missing);
+            assert_eq!(table.cell(3, 0).unwrap(), ValueRef::Int(0));
+            for (row, bits) in bits.into_iter().enumerate() {
+                let ValueRef::Float(value) = table.cell(row, 1).unwrap() else {
+                    panic!("finite float required")
+                };
+                assert_eq!(value.get().to_bits(), bits);
+            }
+            assert_eq!(table.cell(3, 1).unwrap(), ValueRef::Missing);
+        }
+    }
+    mod epoch {
+        use yamaa_adapters::epoch::{
+            date_days, date_from_days, datetime_from_seconds, datetime_seconds,
+        };
+        use yamaa_core::temporal::{Date, Precision as P};
+
+        #[test]
         /// Compare independent epoch anchors and every day of a Gregorian cycle.
         fn epoch_calendar_anchors_and_full_gregorian_cycle() {
-            let schema = logical_schema(&[("D", CT::Date)]);
-            let anchors = [
+            for (days, fields) in [
                 (-719162, (1, 1, 1)),
                 (-135140, (1600, 1, 1)),
                 (-25508, (1900, 3, 1)),
@@ -464,178 +300,50 @@ mod table {
                 (11016, (2000, 2, 29)),
                 (20089, (2025, 1, 1)),
                 (2932896, (9999, 12, 31)),
-            ];
-            let raw = raw_dates(
-                anchors.iter().map(|(days, _)| *days).collect(),
-                vec![2; anchors.len()],
-                None,
-            );
-            let table =
-                ArrowTable::try_new(schema.clone(), vec![batch(&schema, vec![Arc::new(raw)])])
-                    .unwrap();
-            for (row, (_, fields)) in anchors.iter().enumerate() {
-                assert_eq!(date(&table, row, 0).fields(), *fields);
+            ] {
+                let date = date_from_days(days, P::Day).unwrap();
+                assert_eq!(date.fields(), fields, "{days}");
+                assert_eq!(i64::from(date_days(date)), days, "{days}");
+            }
+            for days in [-719163, 2932897, i64::from(i32::MIN), i64::MAX] {
+                assert_eq!(date_from_days(days, P::Day), None, "{days}");
             }
             let mut civil = vec![];
             for year in 1600..2000 {
                 for month in 1..=12 {
                     for day in 1..=31 {
-                        if let Ok(value) = Date::new(year, month, day, DP::Day) {
-                            civil.push(Some(value));
+                        if let Ok(value) = Date::new(year, month, day, P::Day) {
+                            civil.push(value);
                         }
                     }
                 }
             }
             assert_eq!(civil.len(), 146097);
-            let array = date_array(&civil).unwrap();
-            let days = array
-                .column(0)
-                .as_any()
-                .downcast_ref::<Date32Array>()
-                .unwrap();
-            for row in 0..civil.len() {
-                assert_eq!(days.value(row), -135140 + row as i32);
-            }
-            let table =
-                ArrowTable::try_new(schema.clone(), vec![batch(&schema, vec![Arc::new(array)])])
-                    .unwrap();
-            for (row, expected) in civil.into_iter().enumerate() {
-                assert_eq!(date(&table, row, 0).fields(), expected.unwrap().fields());
+            for (row, date) in civil.into_iter().enumerate() {
+                assert_eq!(date_days(date), -135140 + row as i32);
+                let decoded = date_from_days(-135140 + row as i64, P::Day).unwrap();
+                assert_eq!(decoded.fields(), date.fields());
             }
         }
 
         #[test]
-        /// Check negative epochs, range endpoints, precision and timezone rejection.
-        fn datetime_range_precision_and_unit_are_strict() {
-            let schema = logical_schema(&[("T", CT::DateTime)]);
-            let physical = physical_schema(&schema);
-            let DataType::Struct(fields) = physical.field(0).data_type() else {
-                panic!("struct required")
-            };
-            for (seconds, code, precision) in [
-                (i64::MIN, 1, false),
-                (i64::MAX, 1, false),
-                (-62135596801, 1, false),
-                (253402300800, 1, false),
-                // Codes 0 to 6 name day, second, hour, minute, none, year and month.
-                (0, 7, true),
+        /// Check negative epochs and range endpoints of civil seconds.
+        fn datetime_range_and_negative_epochs_are_strict() {
+            for seconds in [i64::MIN, i64::MAX, -62135596801, 253402300800] {
+                assert_eq!(datetime_from_seconds(seconds, P::Second), None, "{seconds}");
+            }
+            for (seconds, fields) in [
+                (-62135596800, (1, 1, 1, 0, 0, 0)),
+                (-86401, (1969, 12, 30, 23, 59, 59)),
+                (-86400, (1969, 12, 31, 0, 0, 0)),
+                (-1, (1969, 12, 31, 23, 59, 59)),
+                (0, (1970, 1, 1, 0, 0, 0)),
+                (253402300799, (9999, 12, 31, 23, 59, 59)),
             ] {
-                let array = StructArray::try_new(
-                    fields.clone(),
-                    vec![
-                        Arc::new(TimestampSecondArray::from(vec![seconds])),
-                        Arc::new(UInt8Array::from(vec![code])),
-                    ],
-                    None,
-                )
-                .unwrap();
-                let input = batch(&schema, vec![Arc::new(array)]);
-                let result = ArrowTable::try_new(schema.clone(), vec![input]);
-                if precision {
-                    assert!(matches!(result, Err(TableError::TemporalPrecision { .. })));
-                } else {
-                    assert!(matches!(result, Err(TableError::TemporalRange { .. })));
-                }
+                let datetime = datetime_from_seconds(seconds, P::Second).unwrap();
+                assert_eq!(datetime.fields(), fields, "{seconds}");
+                assert_eq!(datetime_seconds(datetime), seconds, "{seconds}");
             }
-            let seconds = [-62135596800, -86401, -86400, -1, 0, 253402300799];
-            let expected = [
-                (1, 1, 1, 0, 0, 0),
-                (1969, 12, 30, 23, 59, 59),
-                (1969, 12, 31, 0, 0, 0),
-                (1969, 12, 31, 23, 59, 59),
-                (1970, 1, 1, 0, 0, 0),
-                (9999, 12, 31, 23, 59, 59),
-            ];
-            let array = StructArray::try_new(
-                fields.clone(),
-                vec![
-                    Arc::new(TimestampSecondArray::from(seconds.to_vec())),
-                    Arc::new(UInt8Array::from(vec![1; 6])),
-                ],
-                None,
-            )
-            .unwrap();
-            let table =
-                ArrowTable::try_new(schema.clone(), vec![batch(&schema, vec![Arc::new(array)])])
-                    .unwrap();
-            for (row, fields) in expected.into_iter().enumerate() {
-                assert_eq!(datetime(&table, row, 0).fields(), fields);
-            }
-            let encoded = datetime_array(
-                &(0..6)
-                    .map(|row| Some(datetime(&table, row, 0)))
-                    .collect::<Vec<_>>(),
-            )
-            .unwrap();
-            assert_eq!(
-                encoded
-                    .column(0)
-                    .as_any()
-                    .downcast_ref::<TimestampSecondArray>()
-                    .unwrap()
-                    .values()
-                    .as_ref(),
-                seconds
-            );
-            // A timezone-bearing timestamp is not the civil representation.
-            let zoned = TimestampSecondArray::from(vec![0]).with_timezone("UTC");
-            let foreign_fields = vec![
-                Field::new("value", zoned.data_type().clone(), false),
-                Field::new("precision", DataType::UInt8, false),
-            ];
-            let array = StructArray::try_new(
-                foreign_fields.into(),
-                vec![Arc::new(zoned), Arc::new(UInt8Array::from(vec![1]))],
-                None,
-            )
-            .unwrap();
-            let input = RecordBatch::try_new(
-                Arc::new(Schema::new(vec![Field::new(
-                    "T",
-                    array.data_type().clone(),
-                    true,
-                )])),
-                vec![Arc::new(array)],
-            )
-            .unwrap();
-            assert!(matches!(
-                ArrowTable::try_new(schema, vec![input]),
-                Err(TableError::SchemaMismatch { batch: 0 })
-            ));
-        }
-
-        #[test]
-        /// Keep explicit null validity separate from i64 sentinels and finite float bits.
-        fn null_validity_never_collides_with_exact_scalar_payloads() {
-            let schema = logical_schema(&[("I", CT::Int), ("F", CT::Float)]);
-            let bits = [1, 0x7fefffffffffffff, 0xffefffffffffffff];
-            let floats: Vec<_> = bits
-                .into_iter()
-                .map(|bits| Some(f64::from_bits(bits)))
-                .chain([None])
-                .collect();
-            let input = batch(
-                &schema,
-                vec![
-                    Arc::new(Int64Array::from(vec![
-                        Some(i64::MIN),
-                        None,
-                        Some(i64::MAX),
-                        Some(0),
-                    ])),
-                    Arc::new(Float64Array::from(floats)),
-                ],
-            );
-            let table = ArrowTable::try_new(schema, vec![input]).unwrap();
-            assert_eq!(table.cell(0, 0).unwrap(), ValueRef::Int(i64::MIN));
-            assert_eq!(table.cell(1, 0).unwrap(), ValueRef::Missing);
-            for (row, bits) in bits.into_iter().enumerate() {
-                let ValueRef::Float(value) = table.cell(row, 1).unwrap() else {
-                    panic!("finite float required")
-                };
-                assert_eq!(value.get().to_bits(), bits);
-            }
-            assert_eq!(table.cell(3, 1).unwrap(), ValueRef::Missing);
         }
     }
     mod csv_artifact {
@@ -1033,7 +741,7 @@ mod table {
     }
     mod csv_source {
         #[test]
-        fn untyped_arrow_snapshot_owns_exact_source_cells_and_limits() {
+        fn untyped_text_table_owns_exact_source_cells_and_limits() {
             use yamaa_adapters::csv_source::{parse_text_table, TextTableError};
             use yamaa_core::table::{TableAccess, ValueRef};
             let mut input = b"A,B\n9007199254740993,\"\"\nx\0y,NA".to_vec();
@@ -1585,46 +1293,37 @@ mod table {
             assert_eq!(count, 2);
         }
     }
+    #[cfg(feature = "arrow")]
     mod public_table {
         use arrow_array::{
-            Array, ArrayRef, Date32Array, Float64Array, Int64Array, RecordBatch, StringArray,
-            TimestampSecondArray,
+            Array, Date32Array, Float64Array, Int64Array, StringArray, TimestampSecondArray,
         };
-        use arrow_ipc::reader::StreamReader;
-        use std::{io::Cursor, sync::Arc};
         use yamaa_adapters::{
-            arrow_table::{date_array, datetime_array, physical_schema, ArrowTable},
+            column_table::{Column, ColumnTable},
             public_table::PublicTable,
         };
         use yamaa_core::{
-            table::{Column, TableSchema},
+            table::{Column as Declared, TableSchema},
             temporal::{Date, DateTime, Precision},
             value::ColumnType,
         };
 
-        fn source(rows: usize) -> ArrowTable {
-            let schema = TableSchema::new(vec![
-                Column {
-                    name: "S".into(),
-                    kind: ColumnType::Str,
-                },
-                Column {
-                    name: "I".into(),
-                    kind: ColumnType::Int,
-                },
-                Column {
-                    name: "F".into(),
-                    kind: ColumnType::Float,
-                },
-                Column {
-                    name: "D".into(),
-                    kind: ColumnType::Date,
-                },
-                Column {
-                    name: "T".into(),
-                    kind: ColumnType::DateTime,
-                },
-            ])
+        fn source(rows: usize) -> ColumnTable {
+            let schema = TableSchema::new(
+                [
+                    ("S", ColumnType::Str),
+                    ("I", ColumnType::Int),
+                    ("F", ColumnType::Float),
+                    ("D", ColumnType::Date),
+                    ("T", ColumnType::DateTime),
+                ]
+                .into_iter()
+                .map(|(name, kind)| Declared {
+                    name: name.into(),
+                    kind,
+                })
+                .collect(),
+            )
             .unwrap();
             let date = Date::new(1970, 1, 1, Precision::Year).unwrap();
             let time = DateTime::new(date, 0, 0, 0, Precision::Day).unwrap();
@@ -1641,33 +1340,26 @@ mod table {
                 None,
                 Some(DateTime::new(date, 0, 0, 1, Precision::Second).unwrap()),
             ];
-            let arrays: Vec<ArrayRef> = vec![
-                Arc::new(StringArray::from(strings[..rows].to_vec())),
-                Arc::new(Int64Array::from(integers[..rows].to_vec())),
-                Arc::new(Float64Array::from(floats[..rows].to_vec())),
-                Arc::new(date_array(&dates[..rows]).unwrap()),
-                Arc::new(datetime_array(&times[..rows]).unwrap()),
+            let columns = vec![
+                Column::Str(strings[..rows].iter().copied().collect()),
+                Column::Int(integers[..rows].iter().copied().collect()),
+                Column::floats(floats[..rows].iter().copied()),
+                Column::Date(dates[..rows].to_vec()),
+                Column::DateTime(times[..rows].to_vec()),
             ];
-            let batch = RecordBatch::try_new(physical_schema(&schema), arrays).unwrap();
-            ArrowTable::try_new(schema, vec![batch]).unwrap()
+            ColumnTable::new(schema, columns, rows).unwrap()
         }
+
+        /// The public Arrow form keeps every value exactly and each missing
+        /// value as a null, a date as its epoch day and a datetime as its
+        /// epoch second, without collected precision.
         #[test]
         fn public_columns_preserve_exact_values_missing_and_temporal_null_masks() {
-            let table = PublicTable::from_snapshot(&source(3)).unwrap();
+            let table = PublicTable::from_table(&source(3), &[0, 1, 2, 3, 4]).unwrap();
             assert_eq!(table.rows(), 3);
-            assert_eq!(
-                table.batches()[0]
-                    .column(1)
-                    .as_any()
-                    .downcast_ref::<Int64Array>()
-                    .unwrap()
-                    .iter()
-                    .collect::<Vec<_>>(),
-                vec![Some(i64::MIN), None, Some(i64::MAX)]
-            );
-            let mut stream =
-                StreamReader::try_new(Cursor::new(table.ipc().unwrap()), None).unwrap();
-            let batch = stream.next().unwrap().unwrap();
+            let [batch] = table.batches() else {
+                panic!("one record batch")
+            };
             let strings = batch
                 .column(0)
                 .as_any()
@@ -1681,9 +1373,10 @@ mod table {
                 .as_any()
                 .downcast_ref::<Int64Array>()
                 .unwrap();
-            assert_eq!(integers.value(0), i64::MIN);
-            assert!(integers.is_null(1));
-            assert_eq!(integers.value(2), i64::MAX);
+            assert_eq!(
+                integers.iter().collect::<Vec<_>>(),
+                [Some(i64::MIN), None, Some(i64::MAX)]
+            );
             let floats = batch
                 .column(2)
                 .as_any()
@@ -1696,26 +1389,25 @@ mod table {
                 .as_any()
                 .downcast_ref::<Date32Array>()
                 .unwrap();
-            assert_eq!(dates.value(0), 0);
-            assert!(dates.is_null(1));
-            assert_eq!(dates.value(2), -1);
+            assert_eq!(dates.iter().collect::<Vec<_>>(), [Some(0), None, Some(-1)]);
             let times = batch
                 .column(4)
                 .as_any()
                 .downcast_ref::<TimestampSecondArray>()
                 .unwrap();
-            assert_eq!(times.value(0), 0);
-            assert!(times.is_null(1));
-            assert_eq!(times.value(2), 1);
-            assert!(stream.next().is_none());
+            assert_eq!(times.iter().collect::<Vec<_>>(), [Some(0), None, Some(1)]);
+            // A null holds no payload of its own.
+            assert_eq!(integers.values().as_ref(), [i64::MIN, 0, i64::MAX]);
+            assert_eq!(strings.value_offsets(), [0, 8, 8, 8]);
         }
+
         #[test]
         fn empty_public_table_retains_every_declared_column_type() {
-            let table = PublicTable::from_snapshot(&source(0)).unwrap();
+            let table = PublicTable::from_table(&source(0), &[0, 1, 2, 3, 4]).unwrap();
             assert_eq!(table.rows(), 0);
-            let mut stream =
-                StreamReader::try_new(Cursor::new(table.ipc().unwrap()), None).unwrap();
-            let batch = stream.next().unwrap().unwrap();
+            let [batch] = table.batches() else {
+                panic!("one empty record batch")
+            };
             assert_eq!(batch.num_rows(), 0);
             assert_eq!(batch.num_columns(), 5);
             assert!(batch.column(0).as_any().is::<StringArray>());

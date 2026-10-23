@@ -6,7 +6,7 @@
 //! environment. Every build of it activates the project functions it calls
 //! through one host-functions port, then captures, decodes, binds and executes.
 use crate::{
-    arrow_table::ArrowTable,
+    column_table::ColumnTable,
     csv_source::{self, TextTableError},
     dataset_result::{self, DatasetError, DatasetResponse},
     decoder::{Decoder, Snapshot},
@@ -298,7 +298,7 @@ fn run_error(error: application::RunError<Error>, prepared: &PreparedSpecificati
 fn stored_contract(
     source: &SourceDeclaration,
     contract: &yamaa_core::producer_contract::Contract,
-    table: &ArrowTable,
+    table: &ColumnTable,
 ) -> Result<(), Error> {
     use yamaa_core::table::TableAccess;
     let fields = table
@@ -322,10 +322,10 @@ fn stored_contract(
 /// execution.
 pub(crate) fn decode_frame(
     source: &SourceDeclaration,
-    table: ArrowTable,
+    table: ColumnTable,
     interpretation: yamaa_core::specification::SourceInterpretation,
     contract: Option<&yamaa_core::producer_contract::Contract>,
-) -> Result<ArrowTable, Error> {
+) -> Result<ColumnTable, Error> {
     use yamaa_core::table::TableAccess;
     // A linked artifact's declared types are its producer's contract; compare
     // the whole stored field list before any single declared field.
@@ -366,7 +366,7 @@ pub(crate) fn decode_source(
     bytes: &[u8],
     interpretation: yamaa_core::specification::SourceInterpretation,
     contract: Option<&yamaa_core::producer_contract::Contract>,
-) -> Result<ArrowTable, Error> {
+) -> Result<ColumnTable, Error> {
     let odm = interpretation == yamaa_core::specification::SourceInterpretation::Odm;
     let table = match source.profile {
         yamaa_core::specification::SourceProfile::Parquet => decode_parquet(source, bytes, odm)?,
@@ -457,7 +457,7 @@ pub(crate) fn typed_source_error(error: crate::typed_csv::Error) -> Error {
     }
 }
 
-fn project_odm(table: ArrowTable) -> Result<ArrowTable, Error> {
+fn project_odm(table: ColumnTable) -> Result<ColumnTable, Error> {
     use yamaa_core::table::{Column, TableAccess, TableSchema};
     let fields = table
         .schema()
@@ -479,16 +479,8 @@ fn project_odm(table: ArrowTable) -> Result<ArrowTable, Error> {
             .collect(),
     )
     .map_err(|_| Error::SasSource(crate::sas_source::Error::Internal))?;
-    let batches = table
-        .batches()
-        .iter()
-        .map(|batch| {
-            batch
-                .project(binding.stored())
-                .map_err(|_| Error::SasSource(crate::sas_source::Error::Internal))
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    ArrowTable::try_new(schema, batches)
+    table
+        .project(schema, binding.stored())
         .map_err(|error| Error::Source(TextTableError::Table(error)))
 }
 
@@ -496,7 +488,7 @@ fn decode_parquet(
     source: &SourceDeclaration,
     bytes: &[u8],
     odm: bool,
-) -> Result<ArrowTable, Error> {
+) -> Result<ColumnTable, Error> {
     use crate::parquet_source;
     let table = if odm {
         parquet_source::parse_odm(bytes)
@@ -513,95 +505,37 @@ fn decode_parquet(
 
 /// Apply the dataset's empty-string convention after the profile decodes, so
 /// equal logical input yields equal values whichever transport carried it.
-/// Only a text array holding a convention-missing zero-length value gains a
-/// new validity bitmap; its offsets, value buffers and physical type (including
-/// imported large/view strings) stay shared. An unaffected table is returned
-/// unchanged.
+/// Only a text column holding a convention-missing value is rebuilt, with
+/// that value missing; every other column stays shared, and an unaffected
+/// table is returned unchanged.
 fn empty_string_convention(
     source: &SourceDeclaration,
-    table: ArrowTable,
-) -> Result<ArrowTable, Error> {
-    use arrow_array::{
-        cast::AsArray, ArrayRef, LargeStringArray, RecordBatch, StringArray, StringViewArray,
-    };
-    use arrow_schema::ArrowError;
-    use std::sync::Arc;
-    use yamaa_core::table::TableAccess;
-    let normalize = |array: &ArrayRef| -> Option<Result<ArrayRef, ArrowError>> {
-        Some(if let Some(strings) = array.as_string_opt::<i32>() {
-            let nulls = convention_nulls(source, || strings.iter())?;
-            let (offsets, values, _) = strings.clone().into_parts();
-            StringArray::try_new(offsets, values, Some(nulls)).map(|array| Arc::new(array) as _)
-        } else if let Some(strings) = array.as_string_opt::<i64>() {
-            let nulls = convention_nulls(source, || strings.iter())?;
-            let (offsets, values, _) = strings.clone().into_parts();
-            LargeStringArray::try_new(offsets, values, Some(nulls))
-                .map(|array| Arc::new(array) as _)
-        } else {
-            let strings = array.as_string_view_opt()?;
-            let nulls = convention_nulls(source, || strings.iter())?;
-            let (views, buffers, _) = strings.clone().into_parts();
-            StringViewArray::try_new(views, buffers, Some(nulls)).map(|array| Arc::new(array) as _)
-        })
-    };
-    let arrow_error = |error| {
-        Error::Source(TextTableError::Table(
-            crate::arrow_table::TableError::Arrow(error),
-        ))
-    };
-    let mut changed = false;
-    let mut batches = Vec::with_capacity(table.batches().len());
-    for batch in table.batches() {
-        let mut arrays = Vec::with_capacity(batch.num_columns());
-        for array in batch.columns() {
-            arrays.push(match normalize(array) {
-                Some(normalized) => {
-                    changed = true;
-                    normalized.map_err(arrow_error)?
-                }
-                None => array.clone(),
-            });
-        }
-        batches.push(RecordBatch::try_new(batch.schema(), arrays).map_err(arrow_error)?);
+    table: ColumnTable,
+) -> Result<ColumnTable, Error> {
+    use crate::column_table::Column;
+    let replaced = table.replaced(|column| match column {
+        Column::Str(text) => text
+            .missing_where(|value| source.text_is_missing(value))
+            .map(Column::Str),
+        _ => None,
+    });
+    match replaced {
+        None => Ok(table),
+        Some(table) => table.map_err(|error| Error::Source(TextTableError::Table(error))),
     }
-    if !changed {
-        return Ok(table);
-    }
-    // A change implies at least one batch, whose schema every batch shares.
-    let physical = batches[0].schema();
-    ArrowTable::try_new_with_schema(table.schema().clone(), batches, physical)
-        .map_err(|error| Error::Source(TextTableError::Table(error)))
 }
 
-/// The validity a text array needs under the convention, or `None` when no
-/// present value is convention-missing and the array stays as it is.
-fn convention_nulls<'a, I: Iterator<Item = Option<&'a str>>>(
-    source: &SourceDeclaration,
-    values: impl Fn() -> I,
-) -> Option<arrow_buffer::NullBuffer> {
-    values()
-        .flatten()
-        .any(|text| source.text_is_missing(text))
-        .then(|| {
-            arrow_buffer::NullBuffer::new(
-                values()
-                    .map(|value| value.is_some_and(|text| !source.text_is_missing(text)))
-                    .collect(),
-            )
-        })
-}
-
-#[cfg(test)]
-mod empty_string_tests {
+/// Host frames decode as their input declares: the empty-string convention
+/// and the `odm` projection.
+#[cfg(all(test, feature = "arrow"))]
+mod frame_tests {
     use super::*;
-    use arrow_array::{
-        cast::AsArray, Array, ArrayRef, LargeStringArray, RecordBatch, StringArray, StringViewArray,
-    };
+    use arrow_array::{ArrayRef, LargeStringArray, RecordBatch, StringArray, StringViewArray};
     use arrow_schema::{Field, Schema};
     use std::sync::Arc;
     use yamaa_core::{
         specification::{SourceInterpretation, SourceProfile},
-        table::{Column, TableAccess, TableSchema, ValueRef},
+        table::{TableAccess, ValueRef},
         value::ColumnType,
     };
 
@@ -618,19 +552,21 @@ mod empty_string_tests {
         }
     }
 
-    fn frame(array: ArrayRef) -> ArrowTable {
-        let schema = TableSchema::new(vec![Column {
-            name: "S".into(),
-            kind: ColumnType::Str,
-        }])
-        .unwrap();
-        let physical = Arc::new(Schema::new(vec![Field::new(
-            "S",
-            array.data_type().clone(),
-            true,
-        )]));
-        let batch = RecordBatch::try_new(physical.clone(), vec![array]).unwrap();
-        ArrowTable::try_new_with_schema(schema, vec![batch], physical).unwrap()
+    /// A host frame of these named columns, through a C stream.
+    fn frame(columns: Vec<(&str, ArrayRef)>) -> ColumnTable {
+        let schema = Arc::new(Schema::new(
+            columns
+                .iter()
+                .map(|(name, array)| Field::new(*name, array.data_type().clone(), true))
+                .collect::<Vec<_>>(),
+        ));
+        let arrays = columns.into_iter().map(|(_, array)| array).collect();
+        let batch = RecordBatch::try_new(schema.clone(), arrays).unwrap();
+        crate::arrow_bridge::import_public_stream(crate::arrow_bridge::export_stream(
+            schema,
+            vec![batch],
+        ))
+        .unwrap()
     }
 
     #[test]
@@ -644,7 +580,7 @@ mod empty_string_tests {
             let kind = array.data_type().clone();
             let missing = decode_frame(
                 &source(false),
-                frame(array.clone()),
+                frame(vec![("S", array.clone())]),
                 SourceInterpretation::Ordinary,
                 None,
             )
@@ -652,23 +588,59 @@ mod empty_string_tests {
             assert_eq!(missing.cell(0, 0).unwrap(), ValueRef::Missing, "{kind}");
             assert_eq!(missing.cell(1, 0).unwrap(), ValueRef::Str("x"), "{kind}");
             assert_eq!(missing.cell(2, 0).unwrap(), ValueRef::Missing, "{kind}");
-            let normalized = missing.batches()[0].column(0);
-            assert_eq!(normalized.data_type(), &kind);
-            if let (Some(before), Some(after)) = (
-                array.as_string_opt::<i32>(),
-                normalized.as_string_opt::<i32>(),
-            ) {
-                assert_eq!(before.values().as_ptr(), after.values().as_ptr());
-            }
             let present = decode_frame(
                 &source(true),
-                frame(array),
+                frame(vec![("S", array)]),
                 SourceInterpretation::Ordinary,
                 None,
             )
             .unwrap();
             assert_eq!(present.cell(0, 0).unwrap(), ValueRef::Str(""), "{kind}");
             assert_eq!(present.cell(2, 0).unwrap(), ValueRef::Missing, "{kind}");
+        }
+    }
+
+    /// An `odm` read binds the eleven fields by name, ignoring ASCII case
+    /// (NAME-8), and takes them in their canonical order and spelling,
+    /// whatever text layout the frame holds them in.
+    #[test]
+    fn an_odm_frame_binds_the_eleven_canonical_fields_whatever_their_case_and_layout() {
+        use yamaa_core::odm_source::FIELDS;
+        // Lower-cased and in reverse order, as large strings, each holding
+        // its own name with a suffix.
+        let names = FIELDS
+            .iter()
+            .rev()
+            .map(|name| name.to_ascii_lowercase())
+            .collect::<Vec<_>>();
+        let columns = names
+            .iter()
+            .map(|name| {
+                let values = LargeStringArray::from(vec![Some(format!("{name}-1"))]);
+                (name.as_str(), Arc::new(values) as ArrayRef)
+            })
+            .collect();
+        let table = decode_frame(
+            &source(false),
+            frame(columns),
+            SourceInterpretation::Odm,
+            None,
+        )
+        .unwrap();
+        let fields = table
+            .schema()
+            .columns()
+            .iter()
+            .map(|column| (column.name.as_str(), column.kind))
+            .collect::<Vec<_>>();
+        assert_eq!(fields, FIELDS.map(|name| (name, ColumnType::Str)));
+        for (column, name) in FIELDS.iter().enumerate() {
+            let expected = format!("{}-1", name.to_ascii_lowercase());
+            assert_eq!(
+                table.cell(0, column).unwrap(),
+                ValueRef::Str(&expected),
+                "{name}"
+            );
         }
     }
 }

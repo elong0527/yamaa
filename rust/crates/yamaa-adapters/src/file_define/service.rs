@@ -6,7 +6,7 @@
 //! target through the publisher port before the composition is held.
 use super::{Failure, Reads};
 use crate::{
-    arrow_table::ArrowTable,
+    column_table::ColumnTable,
     project_source::OwnedEnvironment,
     publication::{AnchoredTarget, Publisher},
     specification_source::PreparedDocument,
@@ -138,7 +138,7 @@ fn published_typed_csv_failure(
 /// One published artifact held for a transport, as its profile decoded it.
 enum Held {
     Csv(yamaa_core::typed_csv::TypedRows),
-    Parquet(ArrowTable),
+    Parquet(ColumnTable),
 }
 impl TableAccess for Held {
     type Error = ();

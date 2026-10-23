@@ -138,7 +138,7 @@ pub fn failure(error: &Error, source: Option<&SourceDeclaration>) -> Rejection {
         Error::Source(TextTableError::Csv(csv_source::Error::Limit { .. })) => {
             (Step::Ingest, Fault::CsvLimit)
         }
-        Error::Source(TextTableError::Table(crate::arrow_table::TableError::Limit { .. })) => {
+        Error::Source(TextTableError::Table(crate::column_table::TableError::Limit { .. })) => {
             (Step::Ingest, Fault::TableLimit)
         }
         Error::Source(_) => (Step::Ingest, Fault::Internal),

@@ -7,6 +7,8 @@
 //! built in batches of 65,536 records, a streamed batch holds at most the
 //! records asked for and never crosses one of those batches, and building a
 //! batch reads each of its cells once.
+#![cfg(feature = "arrow")]
+
 use std::convert::Infallible;
 use std::num::NonZeroUsize;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -15,7 +17,7 @@ use std::sync::Arc;
 use arrow_array::ffi_stream::{ArrowArrayStreamReader, FFI_ArrowArrayStream};
 use arrow_array::{Array, Int64Array, RecordBatch, RecordBatchIterator, StringArray};
 use arrow_schema::ArrowError;
-use yamaa_adapters::ipc_table::TableError;
+use yamaa_adapters::public_table::TableError;
 use yamaa_adapters::public_table::{PublicBatches, PublicTable};
 use yamaa_core::table::{CellError, Column, TableAccess, TableSchema, ValueRef};
 use yamaa_core::value::{ColumnType, Value};

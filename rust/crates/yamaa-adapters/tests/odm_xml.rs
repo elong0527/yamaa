@@ -6,7 +6,7 @@ use crate::support;
 use support::odm_files::{cell, column, gzip, ordinals, Header, Tar};
 use support::{edit, Scratch};
 use yamaa_adapters::{
-    arrow_table::ArrowTable,
+    column_table::ColumnTable,
     odm_xml::{self, Error},
     public_table::PublicTable,
 };
@@ -1041,7 +1041,8 @@ mod snapshots {
     #[test]
     fn the_table_is_an_ordinary_engine_input() {
         let table = rows(ODM_13);
-        let input = ArrowTable::try_new(odm_items::schema(), table.batches().to_vec()).unwrap();
+        let input = ColumnTable::from_public(&table).unwrap();
+        assert_eq!(input.schema(), &odm_items::schema());
         assert_eq!(input.row_count(), 3);
         assert_eq!(input.cell(0, 26).unwrap(), ValueRef::Str("2026-01-02"));
         assert_eq!(input.cell(2, 26).unwrap(), ValueRef::Missing);

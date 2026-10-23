@@ -304,11 +304,9 @@ impl Domain {
             publication_attempt: Default::default(),
         }
     }
-    pub fn output(&self) -> Option<&[u8]> {
+    /// The output table, which only an accepted output has.
+    pub fn output(&self) -> Option<&crate::public_table::PublicTable> {
         self.result.output()
-    }
-    pub fn output_table(&self) -> Option<&crate::public_table::PublicTable> {
-        self.result.output_table()
     }
     /// Whether the build accepted its primary output: built as a table, or
     /// deferred to be read as a stream (#3697).
@@ -320,12 +318,9 @@ impl Domain {
     pub fn projection(&self) -> Option<&[usize]> {
         self.result.projection()
     }
-    /// The run report's owned Arrow IPC view; every build holds one.
-    pub fn run_report(&self) -> &[u8] {
+    /// The run report table; every build holds one.
+    pub fn run_report(&self) -> &crate::public_table::PublicTable {
         self.result.run_report()
-    }
-    pub fn report_table(&self) -> &crate::public_table::PublicTable {
-        self.result.report_table()
     }
     pub fn issues(&self) -> Failure {
         collect(
@@ -938,7 +933,7 @@ mod tests {
         assert!(result.output().is_some());
         assert!(result.result.publication_items().last().unwrap().1.len() > 8 * 1024 * 1024);
         // One run, input and base row, two column rows and two check rows.
-        assert_eq!(result.report_table().rows(), 7);
+        assert_eq!(result.run_report().rows(), 7);
         assert!(result.issues().is_empty());
         fs::remove_file(study.0.join("input/input.csv")).unwrap();
         fs::remove_file(study.0.join("spec.yaml")).unwrap();
@@ -1209,7 +1204,8 @@ mod tests {
         let (study, mut result) = built_with(true, false);
         assert!(result.output().is_none());
         assert!(result.result.report_file());
-        assert!(!result.run_report().is_empty());
+        let columns = result.run_report().names().collect::<Vec<_>>();
+        assert_eq!(columns, yamaa_core::run_report::COLUMNS);
         let original = result.observations();
         let marker = Arc::new(());
         assert!(result
@@ -1383,8 +1379,8 @@ mod tests {
             )
             .unwrap();
             assert!(result.issues().is_empty());
-            let public = result.output_table().unwrap();
-            assert_eq!(public.columns().len(), 40);
+            let public = result.output().unwrap();
+            assert_eq!(public.width(), 40);
             assert_eq!(public.rows(), 1);
             let domain = Domain::from_build(result, |field| {
                 let origin = prepared
@@ -1400,7 +1396,7 @@ mod tests {
             assert!(domain.issues().is_empty());
             assert_eq!(domain.result.report_file(), verification);
             // One run, input and base row and one row for each of the 40 columns.
-            assert_eq!(domain.report_table().rows(), 43);
+            assert_eq!(domain.run_report().rows(), 43);
             fs::remove_file(study.0.join("input.csv")).unwrap();
             fs::remove_file(study.0.join("spec.yaml")).unwrap();
             assert!(domain.save().unwrap());

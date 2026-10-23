@@ -122,7 +122,7 @@ pub struct Request<'a> {
 }
 #[derive(Clone, Debug)]
 pub struct Reply {
-    pub frame: Option<Arc<crate::arrow_table::ArrowTable>>,
+    pub frame: Option<Arc<crate::column_table::ColumnTable>>,
     pub reference: String,
     /// Present only for Capture. Inspect and Target must never read data.
     pub bytes: Option<Arc<[u8]>>,
@@ -248,7 +248,7 @@ struct Snapshot {
     /// capture found no held name reaching it and took a fresh snapshot.
     physical: Option<PhysicalFile>,
     bytes: Arc<[u8]>,
-    frame: Option<Arc<crate::arrow_table::ArrowTable>>,
+    frame: Option<Arc<crate::column_table::ColumnTable>>,
 }
 /// The snapshots one scope captured through one resolver: every capture of
 /// an operation, whatever resolver serves it, is held and verified here.
@@ -468,7 +468,7 @@ impl Resources {
         &self,
         physical: Option<PhysicalFile>,
         bytes: &[u8],
-        frame: &Option<Arc<crate::arrow_table::ArrowTable>>,
+        frame: &Option<Arc<crate::column_table::ColumnTable>>,
     ) -> Result<Option<Snapshot>, Failure> {
         let Some(physical) = physical else {
             return Ok(None);
@@ -571,7 +571,7 @@ impl Resources {
         &self,
         declaring: &str,
         written: &str,
-    ) -> Option<Arc<crate::arrow_table::ArrowTable>> {
+    ) -> Option<Arc<crate::column_table::ColumnTable>> {
         self.snapshots
             .lock()
             .ok()?
@@ -626,8 +626,8 @@ impl Resources {
 /// Whether two held frames have the same cells: floats by bits, and dates and
 /// datetimes with their collected precision.
 fn same_frame(
-    old: &Option<Arc<crate::arrow_table::ArrowTable>>,
-    new: &Option<Arc<crate::arrow_table::ArrowTable>>,
+    old: &Option<Arc<crate::column_table::ColumnTable>>,
+    new: &Option<Arc<crate::column_table::ColumnTable>>,
 ) -> bool {
     use yamaa_core::table::{TableAccess, ValueRef};
     match (old, new) {
@@ -683,7 +683,7 @@ impl MemoryResolver {
         declaring: &str,
         written: &str,
         reference: &str,
-        frame: Arc<crate::arrow_table::ArrowTable>,
+        frame: Arc<crate::column_table::ColumnTable>,
     ) {
         self.objects.lock().unwrap().insert(
             (declaring.into(), written.into()),

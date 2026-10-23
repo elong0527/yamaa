@@ -510,6 +510,12 @@ fn another(entry: &str, kind: HandleKind) -> Fault {
     boundary(format!("{entry} does not take a {} handle", noun(kind)))
 }
 
+/// Stream accessors have the same boundary refusal text as the host's former
+/// direct facade calls, including cancellation and an already-taken stream.
+fn stream_fault(streamed: &yamaa::Streamed, error: yamaa::Error) -> Fault {
+    boundary(yamaa::Failure::from_error(Action::Read(streamed.subject()), &error).message)
+}
+
 /// A result, unless another call holds it.
 fn locked<T>(value: &Mutex<T>, kind: HandleKind) -> Answer<MutexGuard<'_, T>> {
     value
@@ -553,6 +559,12 @@ fn view<T>(
     match &held.value {
         Value::Check(check) => read(View::Check(&*locked(check, kind)?)),
         Value::Run(run) => read(View::Run(&*locked(run, kind)?)),
+        Value::Streamed(streamed) => {
+            let run = streamed
+                .run()
+                .map_err(|error| stream_fault(streamed, error))?;
+            read(View::Run(&run))
+        }
         Value::ProjectRun(runs) => {
             let runs = locked(runs, kind)?;
             match member {
@@ -571,6 +583,12 @@ fn table<T>(handle: Handle, entry: &str, read: impl FnOnce(&yamaa::Table) -> T) 
     let held = held(handle)?;
     match &held.value {
         Value::Table(table) => Ok(read(table)),
+        Value::StreamTable(streamed) => {
+            let table = streamed
+                .table()
+                .map_err(|error| stream_fault(streamed, error))?;
+            Ok(read(&table))
+        }
         other => Err(another(entry, other.kind())),
     }
 }
@@ -611,6 +629,21 @@ entries! {
         insert(Value::Check(Mutex::new(check)))
     }
 
+    fn spec_check_on(call: *const Call, specification: Str, project: Str, parent: Str) -> Handle {
+        // SAFETY: the entry's contract: its texts are valid for the call.
+        let specification = unsafe { required(specification, "the specification") }?;
+        // SAFETY: as above.
+        let project = unsafe { optional(project, "the project") }?;
+        // SAFETY: as above.
+        let parent = unsafe { required(parent, "the parent") }?;
+        let check = call.cancellable(|token| {
+            call.engine()
+                .spec_check_on(specification, project, parent, token)
+                .map_err(|error| failed(Action::Read(specification), error))
+        })?;
+        insert(Value::Check(Mutex::new(check)))
+    }
+
     fn project_check(call: *const Call, project: Str) -> Handle {
         // SAFETY: the entry's contract: its text is valid for the call.
         let project = unsafe { required(project, "the project") }?;
@@ -638,6 +671,25 @@ entries! {
             })
         })?;
         insert(Value::Run(Mutex::new(built)))
+    }
+
+    fn spec_stream(call: *const Call, specification: Str, project: Str, plans: Handle) -> Handle {
+        // SAFETY: the entry's contract: its texts are valid for the call.
+        let specification = unsafe { required(specification, "the specification") }?;
+        // SAFETY: as above.
+        let project = unsafe { optional(project, "the project") }?;
+        let streamed = run(plans, "spec_stream", |plans| {
+            let once = yamaa::Plans::new();
+            call.cancellable(|token| {
+                call.engine().spec_stream(specification, project, plans.unwrap_or(&once), token)
+                    .map_err(|error| failed(Action::Read(specification), error))
+            })
+        })?;
+        insert(Value::Streamed(Arc::new(streamed)))
+    }
+
+    fn is_stream(handle: Handle) -> u32 {
+        Ok(u32::from(matches!(&held(handle)?.value, Value::Streamed(_) | Value::StreamTable(_))))
     }
 
     fn project_run(call: *const Call, project: Str, section: Str, plans: Handle) -> Handle {
@@ -720,6 +772,10 @@ entries! {
 
     fn no_issues() -> Handle {
         insert(Value::Table(yamaa::Report::default().table()))
+    }
+
+    fn conditions() -> Handle {
+        insert(Value::Table(yamaa::conditions().table()))
     }
 
     fn spec_resolve(call: *const Call, specification: Str, project: Str) -> abi::Nodes {
@@ -813,6 +869,21 @@ entries! {
     fn output(result: Handle, member: Str) -> Handle {
         // SAFETY: the entry's contract: its text is valid for the call.
         let member = unsafe { optional(member, "the member") }?;
+        if member.is_none() {
+            if let Value::Streamed(streamed) = &held(result)?.value {
+                match streamed.progress() {
+                    yamaa::StreamProgress::Cancelled => return Err(stream_fault(streamed, yamaa::Error::Cancelled)),
+                    yamaa::StreamProgress::Ended => {
+                        let run = streamed.run().map_err(|error| stream_fault(streamed, error))?;
+                        if run.output().is_some() || run.status() == yamaa::Status::Failed {
+                            return handed_table(run.output());
+                        }
+                    }
+                    _ => {}
+                }
+                return insert(Value::StreamTable(Arc::clone(streamed)));
+            }
+        }
         view(result, member, "output", |view| match view {
             View::Run(run) => handed_table(run.output()),
             other => Err(another("output", other.kind())),
@@ -835,6 +906,8 @@ entries! {
         let paths = call.cancellable(|token| {
             Ok(match &held.value {
                 Value::Run(run) => locked(run, kind)?.save(token),
+                Value::Streamed(streamed) => streamed.run()
+                    .map_err(|error| stream_fault(streamed, error))?.save(token),
                 Value::ProjectRun(runs) => locked(runs, kind)?.save(token),
                 Value::Submission(submission) => locked(submission, kind)?.save(token),
                 _ => return Err(another("save", kind)),
@@ -886,6 +959,10 @@ entries! {
     }
 
     fn columns(handle: Handle) -> abi::Texts {
+        if let Value::StreamTable(streamed) = &held(handle)?.value {
+            return Ok(texts(streamed.schema().into_iter().flat_map(|schema| schema.fields())
+                .map(|field| field.name().as_str())));
+        }
         table(handle, "columns", |table| {
             texts(table.columns().iter().map(|field| field.name().as_str()))
         })
@@ -908,7 +985,11 @@ unsafe extern "C" fn export(
         if live {
             return Err(boundary("the stream's destination holds a live stream"));
         }
-        table(handle, "export", |table| exported(table.stream()))
+        match &held(handle)?.value {
+            Value::StreamTable(streamed) => Ok(exported(streamed.reader().into_stream())),
+            Value::Table(table) => Ok(exported(table.stream())),
+            other => Err(another("export", other.kind())),
+        }
     };
     // SAFETY: the entry's contract: `out` and `refusal` are null or valid
     // for writes.
@@ -1124,6 +1205,10 @@ static ENGINE: abi::Engine = abi::Engine {
     release,
     census,
     no_issues,
+    spec_stream,
+    is_stream,
+    conditions,
+    spec_check_on,
 };
 
 /// What the engine reports when it accepts a request, with the texts the

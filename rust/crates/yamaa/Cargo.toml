@@ -9,7 +9,7 @@ publish.workspace = true
 autotests = false
 
 [features]
-default = ["yaml", "parquet", "readstat", "odm"]
+default = ["yaml", "parquet", "readstat", "odm", "arrow"]
 # Document syntax admission; owned core documents do not require this parser.
 yaml = ["yamaa-adapters/yaml"]
 # Source and artifact codecs share one edge, including native Zstd compression.
@@ -18,16 +18,19 @@ parquet = ["yamaa-adapters/parquet"]
 readstat = ["yamaa-adapters/readstat"]
 # ODM XML clinical items from plain XML or plain/gzip TAR input; pure Rust.
 odm = ["yamaa-adapters/odm"]
+# The Arrow form of tables, which is not a format: the re-exported Arrow
+# types, a table's record batches and C stream, and InputFrame::import.
+arrow = ["yamaa-adapters/arrow", "dep:arrow-array", "dep:arrow-schema"]
 
 [dependencies]
 # The forwarded format features above are the only admission edges: without
-# them adapters builds with no physical reader, leaving CSV and Arrow routes.
+# them adapters builds with no physical reader, leaving the CSV route.
 yamaa-adapters = { path = "../yamaa-adapters", default-features = false }
 yamaa-core = { path = "../yamaa-core" }
-# Table representation and host transfer only. These edges select no physical
-# reader; format admission stays behind the forwarded features above.
-arrow-array = { version = "=55.2.0", default-features = false, features = ["ffi"] }
-arrow-schema = { version = "=55.2.0", default-features = false }
+# The Arrow form of tables at the hosts' edge (the arrow feature). These edges
+# select no physical reader; format admission stays behind the features above.
+arrow-array = { version = "=55.2.0", default-features = false, features = ["ffi"], optional = true }
+arrow-schema = { version = "=55.2.0", default-features = false, optional = true }
 
 [lints]
 workspace = true

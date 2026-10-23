@@ -31,12 +31,12 @@ Layer composition and null handling follow the
 [composition contract](../rules/inheritance.md).
 
 The `yamaa` facade crate forwards the adapter's independent `yaml`, `parquet`,
-`readstat` and `odm` Cargo features, all enabled by default. Python wheels,
-Python source installations and R source packages use that default and retain
-every supported format. Rust embedders depend on the facade, never on
-`yamaa-adapters`, and can select only the physical formats they need. This
-selection admits YAML specifications and reads CSV and Parquet, and it omits
-the bundled ReadStat C build, so it reads no SAS input:
+`readstat` and `odm` Cargo features and its `arrow` feature, all enabled by
+default. Python wheels, Python source installations and R source packages use
+that default and retain every supported format. Rust embedders depend on the
+facade, never on `yamaa-adapters`, and can select only the physical formats
+they need. This selection admits YAML specifications and reads CSV and
+Parquet, and it omits the bundled ReadStat C build, so it reads no SAS input:
 
 ```toml
 yamaa = { path = "<yamaa checkout>/rust/crates/yamaa", default-features = false, features = ["yaml", "parquet"] }
@@ -51,13 +51,18 @@ other configuration.
 | `parquet` | Parquet source and artifact encoding, schema metadata, and Brotli, Gzip, LZ4, Snappy and Zstd codecs. Zstd builds native C through `zstd-sys` and `cc`. |
 | `readstat` | Bundled read-only C backend and direct `cc` build dependency for `.sas7bdat` and `.xpt` input. |
 | `odm` | The `quick-xml` tokenizer and the pure-Rust Gzip codec; reads CDISC ODM 1.3 and 2.0 XML clinical items from plain XML or plain/Gzip TAR files into the fixed clinical-item table, for `read_odm` and for a specification's `.xml` inputs. |
-| No format features | CSV and Arrow table/IPC representation remain available, including supplied Arrow batches. No YAML parser, Parquet codec, ODM XML reader, ReadStat or native compression build is selected. |
+| `arrow` | Not a format: the Arrow form of tables at the hosts' edge. The facade's re-exported Arrow types, `Table::columns`, `schema`, `batches` and `stream`, and `InputFrame::import`, plus `Engine::spec_stream` and its streamed-run types, through `arrow-array` and `arrow-schema`. `parquet` builds the adapter's Arrow code too. |
+| No optional features | The CSV route and the engine's own tables remain; a table has its rows and its preview, and `save_table` writes it. No YAML parser, Parquet codec, ODM XML reader, ReadStat, native compression build or Arrow crate is selected. |
 
-Arrow arrays, buffers, schemas, IPC and FlatBuffers are representation and host
-transfer dependencies shared by every configuration. They do not enable a
-physical reader. The semantic `yamaa-core` crate remains independent of all
-these codecs and representation libraries; callers can supply owned documents,
-plans and tables to its ports without a physical reader.
+The engine's own tables are columnar (`column_table.rs` over `columns.rs`):
+every source decodes into one, and a public table holds the same storage. Its
+Arrow form, built once on first use, is what the `arrow` feature exposes; a
+host frame imports by copying its values into the engine's columns. Arrow is
+not a physical reader: a build without `parquet` links no Arrow IPC or
+FlatBuffers, and one without `arrow` and `parquet` links no Arrow crate. The
+semantic `yamaa-core` crate remains independent of all these codecs and
+representation libraries; callers can supply owned documents, plans and tables
+to its ports without a physical reader.
 
 Format APIs and their public error types remain available with features omitted.
 YAML admission returns `yaml_decode::DecodeFailure::Unavailable`, Parquet input
@@ -71,17 +76,20 @@ malformed-source language findings. Capture and ingest boundary replies expose
 compression retains its separate `parquet_codec_unavailable` code.
 
 The Release compatibility workflow's Rust job adds two minimal facade builds:
-no optional formats and YAML + Parquet. Each compiles the adapter's unit tests,
-runs the focused adapter capability tests, verifies the facade's Cargo graph, and
-inspects the linked test binary for ReadStat and Zstd symbols. The core's
-dependency isolation is checked once. Run both builds from
+no optional features and YAML + Parquet. Each compiles the adapter's unit tests,
+runs the focused adapter capability tests, verifies the facade's Cargo graph,
+including which Arrow crates it holds, and inspects the linked test binary for
+ReadStat and Zstd symbols. The core's dependency isolation is checked once, and
+so is the graph of the default features without Parquet, which keeps the four
+Arrow crates of the table hand-off and no Arrow IPC or FlatBuffers. Run both builds from
 the repository root with `python -m tools.ci.format_features`; CI uses the
 workspace's minimum Rust toolchain. Ordinary workspace tests cover all default
 formats, including the full specification and project fixture suites. Python/R
 checks and native wheel/source qualification retain the packaged default.
 
 Arrow/Parquet release-specific operations live in the adapter's
-`storage_api` module: fallible IPC schema conversion, C stream import,
+`storage_api` module: fallible IPC schema conversion of a Parquet file's
+embedded schema, C stream import,
 row-group reader construction, logical timestamp/integer construction, and
 logical-type inspection. The canonical lock and manifests select exactly
 55.2.0, the newest release that builds with the minimum Rust; using another
@@ -90,11 +98,13 @@ profile when adapting the boundary.
 ## Arrow host handoff
 
 The Python bridge uses Arrow-rs 55.2.0 C Data/Stream callbacks and PyArrow
->=23.0.1. The R binding instead copies each table into plain R vectors in Rust,
-so no Arrow stream crosses the R boundary. An exported stream owns a reader
-with an independent cursor and shared immutable Arrow array references. Each
-emitted C Data array
-owns its own buffer references. Dropping the build, stream or exporter cannot
+>=23.0.1. Both bindings read tables through the engine's Arrow C streams.
+The R binding copies ordinary tables into plain R vectors in Rust, while a
+streamed run exports the Arrow C stream through nanoarrow. A table builds
+its Arrow form once, on first use, from the engine's columns. An exported
+stream owns a reader with an independent cursor and shared immutable
+references to that form's arrays. Each emitted C Data array owns its own
+buffer references. Dropping the build, stream or exporter cannot
 invalidate arrays already imported by the consumer. Releasing a stream early
 drops unread batches; imported batches retain their buffers. Moving a header
 clears its source release callback. The current owner calls release exactly
@@ -107,18 +117,18 @@ stop consuming. No callback calls back into Python or R, so buffer destruction
 requires neither interpreter nor build handle. Native consumers/exporters must
 obey the Arrow ABI; forged pointers are outside this memory-safety contract.
 
-The zero-copy promise covers retained public Arrow buffers through standard
-stream import/export, including sliced and chunked arrays. Build result
-materialization, a Python table's `to_pylist()`, its Polars and pandas
-conversions and R data-frame conversion can copy.
+The zero-copy promise covers a table's Arrow form through standard stream
+export: every export shares the same buffers. Building that form, a host
+frame's import, a Python table's `to_pylist()`, its Polars and pandas
+conversions and R data-frame conversion copy.
 Public dates project Date32 days and zone-free datetimes project whole
 TimestampSecond values, preserving existing public semantics; collected
 precision remains private to execution. Import accepts UTF-8 (including large
-and view arrays), Int64, Float64, Date32 and zone-free TimestampSecond. Other
-types, fractional units and timezones require an explicit preserving conversion
-before import. Nonfinite floats become missing under the existing engine rule.
-Imported public temporals share their value buffers and allocate only a complete
-precision child; public exports share the value buffer and parent validity.
+and view arrays), Int64, Float64, Date32 and zone-free TimestampSecond, and
+copies the values into the engine's columns, a date with day and a datetime
+with second precision. Other types, fractional units and timezones require an
+explicit preserving conversion before import. Nonfinite floats become missing
+under the existing engine rule.
 R's data-frame conversion holds integers as doubles and text as character, and
 raises an error for an integer beyond 2^53 or text containing NUL rather than
 change the value. Requested Python schema conversion is refused rather than
@@ -195,10 +205,11 @@ are implemented.
 The supported API lives in one new crate, `rust/crates/yamaa` (package name
 `yamaa`), a small facade over `yamaa-adapters` and `yamaa-core`. The owner
 decided this on 2026-10-16: a separate facade crate, not a module inside
-`yamaa-adapters`. Host crates depend only on the facade (plus their language
-runtime, and for the two bindings `yamaa-boundary`, which holds their
-interface handshake and no engine code), so the compiler enforces the
-boundary: the 69 `pub mod`s of
+`yamaa-adapters`. Host crates reach the engine only through the facade:
+the command line depends on it (plus its language runtime), and the two
+bindings link `yamaa-engine`, the facade behind a C ABI, and call it through
+the client of `yamaa-boundary`, which holds no engine code (D225 on #3030).
+So the compiler enforces the boundary: the 69 `pub mod`s of
 `yamaa-adapters` and the 107 of `yamaa-core` stay internal and cannot be
 reached past the facade. The facade re-exports no adapters or core type; every
 public type below is facade-owned, and adapters/core types are converted at
@@ -349,8 +360,8 @@ pub fn selftest(host: Host, host_version: Option<&str>) -> SelfTest;
   `ContextValue` tree: the internal `ResolvedArtifact` (above) is its
   implementation and wire format, and no public type stands for it (#2725).
 - The hosts' lazy objects keep a `Plans` holder each (#2821), so `Plans`
-  stays public: it is the one way a host, which depends on the facade alone,
-  reuses what a run compiled (#3030 D72). `Engine::spec_run_reusing` and
+  stays public: an embedder using the facade reuses what a run compiled through
+  this holder (#3030 D72). `Engine::spec_run_reusing` and
   `Engine::project_run_reusing` first resolve the request's paths as
   compilation does: absolute against the current working directory, with each
   parent directory canonical. They run the plan kept for those identities when
@@ -380,7 +391,7 @@ pub fn selftest(host: Host, host_version: Option<&str>) -> SelfTest;
 | `Engine` | Owned, cheap to clone (shared `Arc` state) | Yes | Yes | Operations take `&self`; concurrent calls are independent attempts. |
 | `Run`, `ProjectRun`, `Submission` | Owned, one attempt | Yes | No | `save(&mut self, token)` publishes once, as today; a result outlives its engine. |
 | `Plans` | Owned by one host object, interior lock | Yes | Yes | Keeps one compiled plan per resolved specification and project identity. The lock is held only to read or replace a kept plan, never across a compilation, a run or a callback, so a run started from a callback or another thread proceeds as any other. |
-| `Table` | Owned, immutable batches | Yes | Yes | Borrowed views share buffers with the owning table. |
+| `Table` | Owned, immutable columns, cheap to clone | Yes | Yes | Clones share the columns and the Arrow form, which borrowed views borrow. |
 | `MemoryResolver` | Owned, interior-mutable | Yes | Yes | Mirrors today's `host_resources::MemoryResolver`. |
 | `CancellationToken` | Owned, cheap to clone | Yes | Yes | All clones share one flag. |
 | `dyn ResourceResolver`, `dyn ProjectFunctions`, `dyn InstalledDistributions` | Caller-owned, shared as `Arc` | Required | Required | The facade never calls back into a host while holding an engine lock; the `Plans` lock, too, is held only to read or replace a kept plan. |
@@ -391,9 +402,10 @@ that constraint, exactly as the current host crates do.
 
 ### Results
 
-`Table` is the facade form of `public_table::PublicTable`: owned Arrow
-`RecordBatch`es with their schema, plus `columns()`, `rows()`, `ipc()`,
-`stream()` and `preview()`. Stream export follows the ownership rules in
+`Table` is the facade form of `public_table::PublicTable`: the engine's own
+columns with their names, `rows()` and `preview()`, and with the `arrow`
+feature their Arrow form: `columns()`, `schema()`, the owned `RecordBatch`es
+of `batches()` and `stream()`. Stream export follows the ownership rules in
 "Arrow host handoff" above unchanged. `preview()` renders the printed preview
 (D43, #3030 D167): the header `yamaa.Table: <r> rows x <c> columns`, then
 names, types and at most 10 rows of the first 8 columns, so every host prints
@@ -455,7 +467,7 @@ pub enum Error {                  // #[non_exhaustive]
     Rejected(Report),             // the operation was refused with diagnostics
     Resolver(ResolverFailure),    // a caller-supplied resolver failed
     Host(FunctionError),          // a caller-supplied project function failed
-    Table(TableError),            // Arrow/IPC representation failed
+    Table(TableError),            // a table could not be built or imported
     Unavailable { feature: &'static str },  // a format feature is not compiled in
     Cancelled,                    // the call was cancelled (see Cancellation)
     Internal { code: &'static str },        // stable code, no internal payload
@@ -507,10 +519,10 @@ command line catches Ctrl+C, cancels its token and ends by the signal
 
 The facade forwards the existing format features to `yamaa-adapters`:
 `yaml`, `parquet`, `readstat` and `odm`, all on by default, and it builds with any
-combination of them. Release compatibility smoke-tests no optional formats and
-YAML + Parquet alongside the default-format workspace coverage.
-With no format feature, CSV and Arrow routes remain, exactly as described in
-the feature table above. A capability a build omits fails the same way it does
+combination of them and of `arrow`, also on by default. Release compatibility
+smoke-tests no optional features and YAML + Parquet alongside the
+default-feature workspace coverage. With no optional feature, the CSV route
+remains, exactly as described in the feature table above. A capability a build omits fails the same way it does
 today: the stable codes (`yaml_reader_unavailable`,
 `parquet_reader_unavailable`, `sas_reader_unavailable`,
 `odm_reader_unavailable`, `parquet_codec_unavailable`) surface as
@@ -568,16 +580,17 @@ git/path is the distribution route.
 Every adapters or core module the two host crates used before they moved onto
 the facade (24 adapters modules and 11 core modules, counted from the host
 sources on 2026-10-16, less the removed producer-route modules) maps to a facade
-item or is marked internal. The host crates now depend only on the facade and
-use none of these modules directly; the facade itself uses 29 adapters modules
+item or is marked internal. The host crates reach the facade through the
+engine's C ABI, depending on `yamaa-boundary` and `yamaa-engine`; they use none
+of these modules directly. The facade itself uses 29 adapters modules
 and 17 core modules, counted from `crates/yamaa/src` after the producer route
 was removed. Any module not listed here is internal by default.
 
 | Module the hosts used | Facade disposition |
 | --- | --- |
 | `application_measurements` | Internal -- a host-side timing helper; the facade `Report` carries no measurements in the first surface. |
-| `arrow_bridge` | Facade -- `Table::stream` and stream import on `Table`; the FFI types themselves are not re-exported. |
-| `arrow_table` | Internal -- the engine's table representation; `Table` is the public form. |
+| `arrow_bridge` | Facade -- the Arrow form of `Table` and `InputFrame::import` (the `arrow` feature). |
+| `arrow_table` | Removed -- `column_table`, the engine's own columnar table, replaced it; `Table` is the public form. |
 | `callback` | Facade -- the `ProjectFunctions` trait and `FunctionError`; `BoundaryError`/`CallbackError` convert into `FunctionError`. |
 | `file_application` | Facade -- the one route behind every check, run and project operation: a specification alone and each member of a project run prepare, run and report there. |
 | `file_define` | Internal -- each section's composition behind `Engine::project_submission`, which `Submission::save` publishes. |
@@ -586,7 +599,7 @@ was removed. Any module not listed here is internal by default.
 | `file_resources` | Internal -- its `Error` converts into `ResolverFailure`/`Error::Internal`. |
 | `file_workflow` | Internal -- `SelectionError` converts into diagnostics/`Error`. |
 | `host_resources` | Facade -- the `ResourceResolver` trait, `MemoryResolver`, and the resolver request/reply/failure types. |
-| `ipc_table` | Internal -- `TableError` converts into the facade `TableError`; `Table::ipc` is the public IPC route. |
+| `ipc_table` | Removed -- `public_table::TableError` converts into the facade `TableError`; no IPC route remains. |
 | `issue_rows` | Removed -- core's `Diagnostic` is the one record; the facade's `Diagnostic` and `Report` are its public form. |
 | `project_application` | Internal -- selection failures convert into diagnostics. |
 | `project_attempt` | Internal -- host-failure traversal; failures surface as `Error::Host`. |

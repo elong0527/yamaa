@@ -6,12 +6,12 @@ alloc-no-stdlib	2.0.4	BSD-3-Clause	crates.io	transitive dependency of brotli: it
 alloc-stdlib	0.2.4	BSD-3-Clause	crates.io	transitive dependency of brotli: the standard library allocator behind that interface
 android_system_properties	0.1.6	MIT	crates.io	not compiled: iana-time-zone's time zone lookup on Android
 arraydeque	0.5.1	MIT	crates.io	transitive dependency of yamaa-saphyr-parser: the fixed-capacity buffer of its scanner
-arrow-array	55.2.0	Apache-2.0	crates.io	Arrow arrays: the tables of yamaa-adapters and the Rust facade, and the Python hand-off through the Arrow C data interface
-arrow-buffer	55.2.0	Apache-2.0	crates.io	Arrow buffers that table columns are built from (yamaa-adapters)
+arrow-array	55.2.0	Apache-2.0	crates.io	Arrow arrays: the Arrow form of tables at the hosts' edge (the arrow feature of yamaa-adapters and the Rust facade), which the engine hands to both bindings through Arrow C streams; parquet uses it too
+arrow-buffer	55.2.0	Apache-2.0	crates.io	Arrow buffers that the Arrow form of a table is built from (the arrow feature of yamaa-adapters); arrow-array and parquet use it too
 arrow-cast	55.2.0	Apache-2.0	crates.io	transitive dependency of parquet: conversions between Parquet and Arrow types
 arrow-data	55.2.0	Apache-2.0	crates.io	transitive dependency of arrow-array: the data layout of every Arrow array
-arrow-ipc	55.2.0	Apache-2.0	crates.io	Arrow IPC streams of tables, and the Arrow schema embedded in Parquet files (yamaa-adapters)
-arrow-schema	55.2.0	Apache-2.0	crates.io	Arrow schemas and data types of those tables (yamaa-adapters and the Rust facade)
+arrow-ipc	55.2.0	Apache-2.0	crates.io	reads the Arrow schema embedded in Parquet files (the parquet feature of yamaa-adapters); parquet uses it too
+arrow-schema	55.2.0	Apache-2.0	crates.io	Arrow schemas and data types: the Arrow form of tables (the arrow feature of yamaa-adapters and the Rust facade), the streams read by both bindings, and the schema embedded in Parquet files (the parquet feature)
 arrow-select	55.2.0	Apache-2.0	crates.io	transitive dependency of parquet and arrow-cast: Arrow selection kernels
 atoi	2.0.0	MIT	crates.io	transitive dependency of arrow-cast: integer parsing
 autocfg	1.5.1	MIT	crates.io	build script: compiler feature probes of num-traits, and of memoffset in the Python binding
@@ -33,7 +33,7 @@ crunchy	0.2.4	MIT	crates.io	not compiled: loop unrolling for tiny-keccak (wasm32
 equivalent	1.0.3	MIT	crates.io	not compiled: transitive dependency of indexmap, which no build compiles
 errno	0.3.14	MIT	crates.io	transitive dependency of rustix on macOS: errno access where rustix calls the C library
 find-msvc-tools	0.1.14	MIT	crates.io	build script: finds the MSVC tools for cc on Windows
-flatbuffers	25.12.19	Apache-2.0	crates.io	bounds the FlatBuffers-encoded Arrow schema in Parquet metadata before it is converted (yamaa-adapters); arrow-ipc depends on it too
+flatbuffers	25.12.19	Apache-2.0	crates.io	bounds the FlatBuffers-encoded Arrow schema in Parquet metadata before it is converted (the parquet feature of yamaa-adapters); arrow-ipc depends on it too
 flate2	1.1.10	MIT	crates.io	gzip codec for Parquet pages (the parquet feature) and gzip TAR input (the odm feature)
 futures-core	0.3.34	MIT	crates.io	not compiled: transitive dependency of futures-util (wasm32 only)
 futures-task	0.3.34	MIT	crates.io	not compiled: transitive dependency of futures-util (wasm32 only)
@@ -140,10 +140,11 @@ windows-strings	0.5.1	MIT	crates.io	not compiled: transitive dependency of windo
 windows-sys	0.61.2	MIT	crates.io	handle-relative file IO and atomic publication on Windows (yamaa-adapters), and console Ctrl+C handling in the command line
 winnow	1.0.4	MIT	crates.io	transitive dependency of toml and toml_parser: parser combinators
 wit-bindgen	0.46.0	MIT	crates.io	not compiled: transitive dependency of wasip2 (WASI preview 2 only)
-yamaa	1.0.0-rc.1	MIT	rust/crates/yamaa	the Rust facade over yamaa-core and yamaa-adapters, which the host bindings and the command line depend on
+yamaa	1.0.0-rc.1	MIT	rust/crates/yamaa	the Rust facade over yamaa-core and yamaa-adapters, which the engine's C ABI and the command line depend on
 yamaa-adapters	1.0.0-rc.1	MIT	rust/crates/yamaa-adapters	the engine's codecs, storage formats, physical IO and filesystem environment capture
-yamaa-boundary	1.0.0-rc.1	MIT	rust/crates/yamaa-boundary	the engine boundary of the host bindings: the interface version and feature handshake, the gate every native call passes and the census of live native handles
+yamaa-boundary	1.0.0-rc.1	MIT	rust/crates/yamaa-boundary	the engine boundary of the host bindings: the interface version and feature handshake, the gate every native call passes, the census of live native handles and the client of the engine's C ABI
 yamaa-core	1.0.0-rc.1	MIT AND Unicode-3.0	rust/crates/yamaa-core	the language engine: specification admission, expressions, dataset execution, project lifecycle, verification and Define rendering
+yamaa-engine	1.0.0-rc.1	MIT	rust/crates/yamaa-engine	the engine's C ABI over the Rust facade: the function table, handles and Arrow C streams that both bindings link and call through yamaa-boundary
 yamaa-python	1.0.0-rc.1	MIT	rust/crates/yamaa-python	the Python binding: the native extension module of the Python package
 yamaa-saphyr-parser	0.2.1	MIT	rust/vendor/saphyr-parser, from https://github.com/saphyr-rs/saphyr at 1583482c4f08f3c14caea0e2f1a8526950fb0eff	the YAML parser (the yaml feature): saphyr-parser 0.2.1 with the reviewed compact-flow fix and 0.2.2's raw NUL fix, vendored in rust/vendor
 zerocopy	0.8.63	MIT	crates.io	transitive dependency of ahash and half: checked byte-level conversions
