@@ -126,7 +126,7 @@ pub(super) fn admit(
                 C::SubmissionMandatoryRedundant
             };
             for check in &column.checks {
-                if matches!(check.kind, ColumnCheckKind::NotMissing) {
+                if matches!(check.kind, ColumnCheckKind::NotMissing { .. }) {
                     result.push(finding(
                         code,
                         spec.cite(check.meta),

@@ -244,6 +244,18 @@
               "x-yamaa-kind": "identifier",
               "x-yamaa-type": "verification_id"
             },
+            "when": {
+              "$ref": "#/$defs/predicate",
+              "description": "See CHECK-5.",
+              "x-yamaa-kind": "expression",
+              "x-yamaa-type": "predicate"
+            },
+            "max_fraction": {
+              "type": "number",
+              "description": "See CHECK-5.",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "float"
+            },
             "severity": {
               "$ref": "#/$defs/verification_severity",
               "default": "error",
@@ -1111,6 +1123,18 @@
               "x-yamaa-kind": "identifier",
               "x-yamaa-type": "verification_id"
             },
+            "when": {
+              "$ref": "#/$defs/predicate",
+              "description": "See CHECK-5.",
+              "x-yamaa-kind": "expression",
+              "x-yamaa-type": "predicate"
+            },
+            "max_fraction": {
+              "type": "number",
+              "description": "See CHECK-5.",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "float"
+            },
             "severity": {
               "$ref": "#/$defs/verification_severity",
               "default": "error",
@@ -1660,6 +1684,13 @@
           },
           "x-yamaa-kind": "name",
           "x-yamaa-type": "list[variable]"
+        },
+        "severity": {
+          "$ref": "#/$defs/verification_severity",
+          "default": "error",
+          "description": "See LOOKUP-17.",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "verification_severity"
         }
       },
       "additionalProperties": false
@@ -3369,6 +3400,13 @@
           },
           "x-yamaa-kind": "name",
           "x-yamaa-type": "list[variable]"
+        },
+        "severity": {
+          "$ref": "#/$defs/verification_severity",
+          "default": "error",
+          "description": "See LOOKUP-17.",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "verification_severity"
         }
       },
       "required": [

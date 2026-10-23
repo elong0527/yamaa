@@ -110,7 +110,7 @@ fn records_plan() -> DatasetPlan {
         column: 2,
         checks: vec![verification(
             "columns.RN.verifications[0]",
-            Check::NotMissing,
+            Check::NOT_MISSING,
         )],
     }])
 }
@@ -397,14 +397,14 @@ fn key_grain_plan() -> DatasetPlan {
             column: 0,
             checks: vec![verification(
                 "columns.ID.verifications[0]",
-                Check::NotMissing,
+                Check::NOT_MISSING,
             )],
         },
         ColumnVerifications {
             column: 1,
             checks: vec![verification(
                 "columns.N.verifications[0]",
-                Check::NotMissing,
+                Check::NOT_MISSING,
             )],
         },
     ])

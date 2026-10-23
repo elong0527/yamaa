@@ -3,8 +3,8 @@
 //! validation, as the schema's do, and name the 1.0 paths (P-CLR-2).
 
 use crate::ast::{
-    Direction, ExprId, ExprKind, Origin, Profile, ScalarOp, Spec, SubmissionMetadata, Window,
-    WindowFunction,
+    Direction, ExprId, ExprKind, Origin, Profile, ScalarOp, Severity, Spec, SubmissionMetadata,
+    Window, WindowFunction,
 };
 use crate::diagnostic::ConditionCode;
 use crate::schema::{SchemaContext as C, SchemaDiagnostic};
@@ -118,6 +118,23 @@ pub fn findings(spec: &Spec) -> Vec<SchemaDiagnostic> {
                     ("class", C::Text("intermediate_class".into())),
                 ],
             });
+        }
+        // A `unique` may warn only where `keep` and `order_by` choose the
+        // record every read takes (LOOKUP-17, D210); an `order_by` with no
+        // term orders nothing.
+        let chooses = item.keep.is_some() && !item.order_by.is_empty();
+        for check in &item.checks {
+            if check.severity == Severity::Warning && !chooses {
+                findings.push(SchemaDiagnostic {
+                    path: format!("{}.severity", spec.cite(check.meta)),
+                    code: ConditionCode::IntermediateUniqueSeverity,
+                    context: vec![
+                        ("intermediate", C::Text(item.id.name.clone())),
+                        ("value", C::Text("warning".into())),
+                        ("permitted", C::TextList(vec!["error".into()])),
+                    ],
+                });
+            }
         }
     }
     let name = |id: ExprId| match &spec.expr(id).kind {

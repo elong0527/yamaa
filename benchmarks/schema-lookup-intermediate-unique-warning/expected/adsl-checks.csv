@@ -1,0 +1,11 @@
+ARTIFACT,KIND,SPEC_PATH,NAME,ID,TARGET,RULE,SEVERITY,OUTCOME,CONDITION,COUNT,TOTAL,KEYS,DETAILS
+adsl.csv,run,output,,,,,,succeeded,,3,,,{}
+adsl.csv,input,input.DM,DM,,,,,,,3,,,"{""bytes"":55,""path"":""input/dm.csv"",""profile"":""csv""}"
+adsl.csv,input,input.EX,EX,,,,,,,5,,,"{""bytes"":223,""path"":""input/ex.csv"",""profile"":""csv""}"
+adsl.csv,rows,base,DM,,,,,,,3,3,,{}
+adsl.csv,handler,columns.TRTEDT.derivation.source.multiple_matches,multiple_matches,,TRTEDT,LOOKUP-10,,,,2,,,{}
+adsl.csv,handler,columns.TRTEDT.derivation.source.absent,absent,,TRTEDT,LOOKUP-24,,,,0,,,{}
+adsl.csv,column,columns.STUDYID,STUDYID,,,,,,,0,3,,"{""max_length"":8}"
+adsl.csv,column,columns.USUBJID,USUBJID,,,,,,,0,3,,"{""max_length"":3}"
+adsl.csv,column,columns.TRTEDT,TRTEDT,,,,,,,0,3,,{}
+adsl.csv,check,intermediates.LAST_EX.verifications[0].unique,unique,one-exposure-record,,LOOKUP-17,warning,violated,duplicate_intermediate_records,2,3,"[{""STUDYID"":""YAMAA-01"",""USUBJID"":""P03""},{""STUDYID"":""YAMAA-01"",""USUBJID"":""P02""}]","{""columns"":[""STUDYID"",""USUBJID""],""dataset"":""EX"",""intermediate"":""LAST_EX""}"

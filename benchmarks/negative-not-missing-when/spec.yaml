@@ -1,0 +1,42 @@
+yamaa: "1.0"
+type: spec
+model: SDTM
+domain: AE
+keys: [STUDYID, USUBJID, AESEQ]
+input:
+  AE_RAW: input/ae_raw.csv
+
+output:
+  path: ae.csv
+  columns: [STUDYID, USUBJID, AESEQ, AETERM, AEDECOD]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: AE_RAW.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: AE_RAW.USUBJID
+
+  - name: AESEQ
+    type: int
+    label: Sequence Number
+    derivation: AE_RAW.AESEQ
+
+  - name: AETERM
+    type: str
+    label: Reported Term for the Adverse Event
+    derivation: AE_RAW.AETERM
+
+  # Every reported event is coded. P02's record reports no term and is not
+  # checked; P01's second event reports one without its code, so the check
+  # fails.
+  - name: AEDECOD
+    type: str
+    label: Dictionary-Derived Term
+    derivation: AE_RAW.AEDECOD
+    verifications:
+      - not_missing: {when: "AETERM IS NOT NULL"}

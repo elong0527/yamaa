@@ -369,6 +369,8 @@ pub enum JoinKey {
 pub struct UniqueCheck {
     pub columns: Vec<Named>,
     pub id: Option<Text>,
+    /// `warning` is permitted only beside `keep` and `order_by` (LOOKUP-17).
+    pub severity: Severity,
     pub meta: Meta,
 }
 
@@ -414,7 +416,12 @@ pub struct ColumnCheck {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum ColumnCheckKind {
-    NotMissing,
+    /// `when` selects the rows it checks, and `max_fraction` the share of
+    /// them that may be missing (CHECK-5).
+    NotMissing {
+        when: Option<ExprId>,
+        max_fraction: Option<Constant>,
+    },
     AllowedValues(Vec<Constant>),
     Range {
         min: Option<Constant>,

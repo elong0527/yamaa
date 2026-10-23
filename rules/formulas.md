@@ -211,7 +211,7 @@ Evidence: `negative-review-unknown-date`, `negative-direct-dose-read`, `adam-ads
 | Grouped row filter | Only unqualified columns derived by that row |
 | Aggregate, record-lookup and multiple-match filters | Records of their owning right-side dataset |
 | Window filter | Constructed output columns in row construction; in an intermediate derivation, the augmented donor records [LOOKUP-15](lookup.md#lookup-15) describes |
-| Verification | Completed columns and record intermediates resolved for the completed row |
+| Verification | Completed columns and record intermediates resolved for the completed row; completed columns alone in a `not_missing`'s `when` ([CHECK-5](verification.md#check-5)) |
 | `case` | The values available to its enclosing derivation |
 | Expression-field text in column derivation | Constructed output columns, and fields of a declared record lookup |
 | Expression-field text in row construction | The names the paragraphs below give |

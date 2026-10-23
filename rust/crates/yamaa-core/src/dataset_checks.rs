@@ -14,7 +14,7 @@ pub struct NotMissingResult {
 
 pub fn not_missing<'a>(values: impl IntoIterator<Item = &'a Value>) -> NotMissingResult {
     NotMissingResult {
-        offending_rows: column_offenders(&Check::NotMissing, values),
+        offending_rows: column_offenders(&Check::NOT_MISSING, values),
     }
 }
 
@@ -24,7 +24,7 @@ pub(crate) fn not_missing_diagnostic(
     column: String,
     failures: usize,
 ) -> Option<Diagnostic> {
-    column_diagnostic(&Check::NotMissing, path, column, failures)
+    column_diagnostic(&Check::NOT_MISSING, path, column, failures)
 }
 
 impl NotMissingResult {
@@ -36,7 +36,7 @@ impl NotMissingResult {
 /// The admitted check retains its semantic cause through every engine record.
 pub fn column_code(check: &Check) -> Option<ConditionCode> {
     Some(match check {
-        Check::NotMissing => ConditionCode::VerificationNotMissingFailed,
+        Check::NotMissing { .. } => ConditionCode::VerificationNotMissingFailed,
         Check::Mandatory(_) => ConditionCode::SubmissionMandatoryFailed,
         Check::DataType { .. } => ConditionCode::SubmissionDataTypeFailed,
         Check::AllowedValues(_) => ConditionCode::VerificationAllowedValuesFailed,
@@ -122,7 +122,7 @@ pub fn column_offenders<'a>(
         .enumerate()
         .filter_map(|(row, value)| {
             let failed = match check {
-                Check::NotMissing | Check::Mandatory(_) => matches!(value, Value::Missing),
+                Check::NotMissing { .. } | Check::Mandatory(_) => matches!(value, Value::Missing),
                 _ if matches!(value, Value::Missing) => false,
                 Check::DataType { form, .. } => {
                     matches!(value, Value::Str(text) if !form.admits(text))

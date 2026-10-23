@@ -240,5 +240,78 @@
         ]
       }
     ]
+  },
+  {
+    "case": "not_missing_fraction_above_one",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"not_missing\": {\"max_fraction\": 1.5, \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": 2}]\n",
+    "expected": [
+      {
+        "condition": "invalid_declaration",
+        "context": {
+          "reason": "a not_missing fraction is between 0 and 1"
+        },
+        "phase": "validation",
+        "rule": "CHECK-4",
+        "spec_paths": [
+          "columns.V.verifications[0].not_missing.max_fraction"
+        ]
+      }
+    ]
+  },
+  {
+    "case": "not_missing_fraction_below_zero",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"not_missing\": {\"max_fraction\": -0.25, \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": 2}]\n",
+    "expected": [
+      {
+        "condition": "invalid_declaration",
+        "context": {
+          "reason": "a not_missing fraction is between 0 and 1"
+        },
+        "phase": "validation",
+        "rule": "CHECK-4",
+        "spec_paths": [
+          "columns.V.verifications[0].not_missing.max_fraction"
+        ]
+      }
+    ]
+  },
+  {
+    "case": "not_missing_when_unknown_column",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"not_missing\": {\"when\": \"ABSENT = 2\", \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": 2}]\n",
+    "expected": [
+      {
+        "condition": "unknown_field",
+        "context": {
+          "identifier": "ABSENT"
+        },
+        "phase": "validation",
+        "rule": "CHECK-4",
+        "spec_paths": [
+          "columns.V.verifications[0].not_missing.when"
+        ]
+      }
+    ]
+  },
+  {
+    "case": "not_missing_when_reads_columns_alone",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"not_missing\": {\"when\": \"SRC.V = 2\", \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": 2}]\n",
+    "expected": [
+      {
+        "condition": "unknown_field",
+        "context": {
+          "identifier": "SRC.V"
+        },
+        "phase": "validation",
+        "rule": "CHECK-4",
+        "spec_paths": [
+          "columns.V.verifications[0].not_missing.when"
+        ]
+      }
+    ]
+  },
+  {
+    "case": "not_missing_share_held",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"not_missing\": {\"when\": \"LATER = 2\", \"max_fraction\": 0, \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": 2}]\n",
+    "expected": []
   }
 ]

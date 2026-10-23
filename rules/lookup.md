@@ -1159,7 +1159,7 @@ selection chooses. A lookup whose key is verified unique at `error` needs
 neither `keep` nor `order_by`.
 
 Fails: `duplicate_intermediate_records`, `unknown_field`, `correlated_filter_with_unique_verification`, `correlated_derivation_with_unique_verification`, `value_not_permitted`.
-Evidence: `schema-lookup-intermediate-unique`, `negative-lookup-duplicate-intermediate`.
+Evidence: `schema-lookup-intermediate-unique`, `negative-lookup-duplicate-intermediate`, `schema-lookup-intermediate-unique-warning`, `negative-lookup-unique-warning-unordered`, `rust/crates/yamaa-core/tests/support/diagnostic/front_end.rs`.
 
 ```yaml
 - id: DS_EOS
