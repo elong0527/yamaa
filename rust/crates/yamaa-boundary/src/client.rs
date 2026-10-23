@@ -1770,12 +1770,16 @@ mod tests {
     use super::*;
     use std::cell::RefCell;
 
+    /// One call's arguments: each name with its integer, or `None` for a
+    /// missing value.
+    type Arguments = Vec<(String, Option<i64>)>;
+
     /// A host whose bound function adds its offset to the sum of its
     /// arguments, or answers missing when one is missing, keeping the
     /// arguments of each call.
     #[derive(Default)]
     struct Adder {
-        calls: RefCell<Vec<Vec<(String, Option<i64>)>>>,
+        calls: RefCell<Vec<Arguments>>,
     }
 
     impl Callbacks for Adder {
@@ -1786,7 +1790,7 @@ mod tests {
             offset: &i64,
             arguments: &[Argument<'_>],
         ) -> Result<Scalar, CallFailure<i64>> {
-            let values: Vec<(String, Option<i64>)> = arguments
+            let values: Arguments = arguments
                 .iter()
                 .map(|argument| match argument.value {
                     ScalarRef::Int(value) => (argument.name.to_owned(), Some(value)),
