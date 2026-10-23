@@ -24,23 +24,18 @@ pub enum SchemaDiagnosticValue<'a> {
     TextList(&'a [String]),
 }
 
-/// Descriptor-value and layer-shape findings preserve their qualified vocabularies.
+/// A descriptor-value finding names the kind it read in its own vocabulary.
 pub fn schema_diagnostic_kind_label(context: &C) -> Option<&'static str> {
-    let (kind, layer) = match context {
-        C::ValueKind(kind) => (*kind, false),
-        C::LayerKind(kind) => (*kind, true),
-        _ => return None,
+    let C::ValueKind(kind) = context else {
+        return None;
     };
     Some(match kind {
-        K::Null if layer => "NoneType",
         K::Null => "null",
         K::Boolean => "bool",
         K::Integer => "int",
         K::Float => "float",
         K::Text => "str",
-        K::Sequence if layer => "list",
         K::Sequence => "sequence",
-        K::Mapping if layer => "dict",
         K::Mapping => "mapping",
     })
 }
@@ -55,9 +50,7 @@ fn resolve<'a>(
     Ok(match value {
         C::Text(text) => V::Text(text),
         C::Boolean(value) => V::Boolean(*value),
-        C::ValueKind(_) | C::LayerKind(_) => {
-            V::Text(schema_diagnostic_kind_label(value).ok_or(Invalid)?)
-        }
+        C::ValueKind(_) => V::Text(schema_diagnostic_kind_label(value).ok_or(Invalid)?),
         C::Count(count) => V::Count(*count),
         C::TextList(values) => V::TextList(values),
         C::Null => V::Null,

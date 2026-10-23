@@ -3,7 +3,7 @@
 //! data, execution or publication authority, and the producer is never run.
 use crate::{
     diagnostic::{ConditionCode as C, Diagnostic},
-    schema::{Document, DocumentNode as N, SpecificationDocument},
+    schema::{Document, DocumentNode as N},
     value::ColumnType,
 };
 use std::vec;
@@ -142,16 +142,10 @@ fn content(d: &Document, column: usize, kind: ColumnType) -> Content {
         codelist: scalar("codelist"),
     }
 }
-/// Read the producing specification's selected output fields with their declared
-/// types and labels. Each output schema has the fixed column boundary.
-pub fn prepare(spec: &SpecificationDocument) -> Result<Contract, Error> {
-    prepare_document(spec.document())
-}
-
-/// [`prepare`] for a resolved specification of either language: a 0.5
-/// model's document or a resolved 1.x specification, which write the output
-/// contract's fields, their content metadata and the `domain` under the same
-/// names.
+/// Read the producing specification's selected output fields with their
+/// declared types and labels, from its resolved document, which writes the
+/// output contract's fields, their content metadata and the `domain`. Each
+/// output schema has the fixed column boundary.
 pub fn prepare_document(d: &Document) -> Result<Contract, Error> {
     let domain = node_text(d, field(d, d.root(), "domain")?)?.to_owned();
     let declarations = sequence(d, field(d, d.root(), "columns")?)?;
@@ -222,8 +216,7 @@ pub struct Link<'a> {
     pub dataset: &'a str,
     /// Canonical identity of the producing specification.
     pub identity: &'a str,
-    /// The producing specification, resolved: a 0.5 model's document or a
-    /// resolved 1.x specification ([`prepare_document`]).
+    /// The producing specification, resolved ([`prepare_document`]).
     pub document: &'a Document,
 }
 /// Every resolved link of one consuming specification, beside the consumer's

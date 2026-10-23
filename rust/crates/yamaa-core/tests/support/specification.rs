@@ -4,8 +4,10 @@
 //! preparation and binding read only the lowered tree.
 use super::document::Tree;
 use yamaa_core::{
+    domain::{self, CheckedSpecification},
     front_end::v1::spec as front_end,
     producer_contract::Links,
+    project_domain::{self, CheckedOwnedProject, RejectedOwnedProject},
     project_environment::ExecutionEnvironment,
     schema::Document,
     specification::{PrepareError, PreparedSpecification},
@@ -41,4 +43,26 @@ pub fn prepare_linked(
 ) -> Result<PreparedSpecification, PrepareError> {
     let tree = front_end::lower(document, None).into_spec();
     PreparedSpecification::prepare_tree_linked(tree, document, environment, links)
+}
+
+/// Check the 1.0 specification `document` against `environment`, the
+/// admitted metadata of its project, or alone without one (CT-13).
+#[allow(dead_code)]
+pub fn check(
+    document: &Document,
+    environment: Option<&ExecutionEnvironment>,
+) -> Result<CheckedSpecification, PrepareError> {
+    let tree = front_end::lower(document, None).into_spec();
+    domain::check_tree_linked(tree, document, environment, Links::default())
+}
+
+/// [`check`] owning the admitted metadata of the project, which a refusal
+/// returns beside its error.
+#[allow(dead_code)]
+pub fn check_owned(
+    document: &Document,
+    environment: ExecutionEnvironment,
+) -> Result<CheckedOwnedProject, Box<RejectedOwnedProject>> {
+    let tree = front_end::lower(document, None).into_spec();
+    project_domain::check_owned_tree_linked(tree, document, environment, Links::default())
 }

@@ -4,11 +4,8 @@
 //! Project activation is the project boundary's authority. A successful check
 //! admits declarations; actual source schemas and values are observed at build.
 use crate::resolver::Resolver;
+use crate::specification::{PrepareError, PreparedSpecification};
 use crate::specification_run::{self, CapturedAttempt, SourceDecoder};
-use crate::{
-    schema::SpecificationDocument,
-    specification::{PrepareError, PreparedSpecification},
-};
 
 /// An immutable capability obtained only by the engine's preflight operation.
 /// Each build has fresh observations and executes again, including cached reads.
@@ -20,39 +17,12 @@ pub struct CheckedSpecification {
 /// A rejected check has no source attempt; every entered build retains one.
 pub type BuildResult<C, D, T> = Result<CapturedAttempt<C, D, T>, PrepareError>;
 
-/// Admit the executable vocabulary without study data, callbacks or publication.
-/// Formula evaluation and binding to actual source schemas remain build phases.
-pub fn check(document: &SpecificationDocument) -> Result<CheckedSpecification, PrepareError> {
-    Ok(CheckedSpecification {
-        compiled: PreparedSpecification::prepare(document)?,
-    })
-}
-
-/// Compile calls against the one admitted environment without activating code.
-pub fn check_with_project(
-    document: &SpecificationDocument,
-    functions: &[crate::project_function::Function],
-) -> Result<CheckedSpecification, PrepareError> {
-    Ok(CheckedSpecification {
-        compiled: PreparedSpecification::prepare_with_project(document, functions)?,
-    })
-}
-
-/// Compile with the producing specifications that `schema` links name, with or
-/// without admitted environment metadata. Links supply output contracts only;
-/// no producer is compiled, activated or executed.
-pub fn check_linked(
-    document: &SpecificationDocument,
-    environment: Option<&crate::project_environment::ExecutionEnvironment>,
-    links: crate::producer_contract::Links<'_>,
-) -> Result<CheckedSpecification, PrepareError> {
-    Ok(CheckedSpecification {
-        compiled: PreparedSpecification::prepare_linked(document, environment, links)?,
-    })
-}
-
-/// [`check_linked`] for a 1.x specification its front end lowered into
-/// `tree`, beside its resolved `document`, which declares its linked inputs.
+/// Compile a 1.x specification its front end lowered into `tree`, beside its
+/// resolved `document`, which declares its linked inputs, with the producing
+/// specifications that `schema` links name, with or without admitted
+/// environment metadata. Links supply output contracts only; no producer is
+/// compiled, activated or executed. Formula evaluation and binding to actual
+/// source schemas remain build phases.
 pub fn check_tree_linked(
     tree: crate::ast::Spec,
     document: &crate::schema::Document,
@@ -61,16 +31,6 @@ pub fn check_tree_linked(
 ) -> Result<CheckedSpecification, PrepareError> {
     Ok(CheckedSpecification {
         compiled: PreparedSpecification::prepare_tree_linked(tree, document, environment, links)?,
-    })
-}
-
-/// Compile against complete admitted environment metadata without host or study ports.
-pub fn check_with_environment(
-    document: &SpecificationDocument,
-    environment: &crate::project_environment::ExecutionEnvironment,
-) -> Result<CheckedSpecification, PrepareError> {
-    Ok(CheckedSpecification {
-        compiled: PreparedSpecification::prepare_with_environment(document, environment)?,
     })
 }
 
@@ -106,23 +66,4 @@ impl CheckedSpecification {
     ) -> std::vec::Vec<crate::diagnostic::Diagnostic> {
         self.compiled.verification_declaration_diagnostics()
     }
-}
-
-/// Check and build in one engine operation. Preparation failures return before
-/// capture or decoding; later failures retain their original typed attempt.
-pub fn build<P: Resolver, D: SourceDecoder>(
-    document: &SpecificationDocument,
-    port: &mut P,
-    decoder: &mut D,
-) -> BuildResult<P::Error, D::Error, D::Table> {
-    let checked = check(document)?;
-    let mut attempt = CapturedAttempt::new(checked.compiled().source());
-    checked.build_into(
-        port,
-        decoder,
-        &mut crate::function_invocation::NoFunctions::new(),
-        &mut attempt,
-        crate::application_observer::Scope::default(),
-    );
-    Ok(attempt)
 }

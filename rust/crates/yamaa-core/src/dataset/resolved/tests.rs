@@ -597,10 +597,10 @@ fn registration_registers_every_site_up_front_in_expression_order() {
 }
 
 /// A named read counts its absence whether or not the intermediate declares
-/// an answer, under the handler its tree's surface names: `absent` on a 1.x
-/// tree (D202) and `no_match` on a 0.5 tree (D75). Only `require_match`
-/// removes the site, and only `keep` adds `multiple_matches` (LOOKUP-24,
-/// LOOKUP-10).
+/// an answer, under the absence handler the plan gives the intermediate,
+/// `absent` for a specification's (D202) or any other the plan names. Only
+/// `require_match` removes the site, and only `keep` adds `multiple_matches`
+/// (LOOKUP-24, LOOKUP-10).
 #[test]
 fn a_named_read_has_an_absence_site_unless_it_requires_a_match() {
     let sites = |absence: HandlerKind, no_match: Option<Value>, require_match: bool, keep: bool| {
@@ -657,26 +657,30 @@ fn a_named_read_has_an_absence_site_unless_it_requires_a_match() {
             HandlerKind::MultipleMatches,
         )
     };
-    for (surface, absence, path) in [
-        ("1.x", HandlerKind::Absent, "columns.C1.derivation.absent"),
+    for (handler, absence, path) in [
         (
-            "0.5",
+            "absent",
+            HandlerKind::Absent,
+            "columns.C1.derivation.absent",
+        ),
+        (
+            "no_match",
             HandlerKind::NoMatch,
             "columns.C1.derivation.no_match",
         ),
     ] {
         let answer = || (path.to_string(), absence);
         let declared = Some(Value::Missing);
-        assert_eq!(sites(absence, None, false, false), [answer()], "{surface}");
+        assert_eq!(sites(absence, None, false, false), [answer()], "{handler}");
         assert_eq!(
             sites(absence, declared, false, false),
             [answer()],
-            "{surface}"
+            "{handler}"
         );
-        assert_eq!(sites(absence, None, true, false), [], "{surface}");
+        assert_eq!(sites(absence, None, true, false), [], "{handler}");
         let both = [multiple(), answer()];
-        assert_eq!(sites(absence, None, false, true), both, "{surface}");
-        assert_eq!(sites(absence, None, true, true), [multiple()], "{surface}");
+        assert_eq!(sites(absence, None, false, true), both, "{handler}");
+        assert_eq!(sites(absence, None, true, true), [multiple()], "{handler}");
     }
 }
 
@@ -1060,7 +1064,6 @@ fn column_bindings_register_their_sites_one_binding_after_another() {
     let source = Expression::SourceBinding {
         source: Box::new(assign(1, Expression::Source(1))),
         absent: Some(Value::Int(0)),
-        variable_absent: false,
         selection_declared: false,
         variable: "SEC.B".into(),
         path: "columns.V.derivation.source".into(),

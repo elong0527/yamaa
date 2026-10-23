@@ -256,10 +256,10 @@ impl Scopes<'_> {
                 BindFinding::Lookup(finding)
             };
             // A lookup that another lookup's derivations read binds its key
-            // values for each context that reads it: on a 1.0 tree a row
-            // refuses a value whose reads name no value of it, at the first
-            // such read (LOOKUP-5).
-            let contextual = spec.header.surface.one_meaning_per_form() && donor_read(spec, index);
+            // values for each context that reads it: a row refuses a value
+            // whose reads name no value of it, at the first such read
+            // (LOOKUP-5).
+            let contextual = donor_read(spec, index);
             // A key value reads the reading row's own driver record (LOOKUP-5).
             for (path, reads) in self.keys(index) {
                 if let Some(name) = reads

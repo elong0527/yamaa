@@ -699,8 +699,7 @@ pub(super) fn bind_findings(
                             },
                         })
                     }
-                    reference_binding::JoinedFinding::NoApplicableKeys { .. }
-                    | reference_binding::JoinedFinding::UndeclaredKey { .. }
+                    reference_binding::JoinedFinding::UndeclaredKey { .. }
                     | reference_binding::JoinedFinding::DonorKey { .. }
                     | reference_binding::JoinedFinding::MatchValue { .. }
                     | reference_binding::JoinedFinding::KeyType { .. } => {

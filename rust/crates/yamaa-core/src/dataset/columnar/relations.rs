@@ -586,7 +586,7 @@ pub(super) fn named_value<E>(
             multiple.then_some(HandlerKind::MultipleMatches),
         ),
         // The declared literal, or missing by default; counted either way,
-        // under the handler the tree's surface names.
+        // under the intermediate's absence handler.
         Choice::Absent => (
             item.no_match.clone().unwrap_or(Value::Missing),
             Some(item.absence),

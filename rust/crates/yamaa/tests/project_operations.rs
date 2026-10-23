@@ -1127,8 +1127,9 @@ fn an_engine_without_functions_runs_every_build_that_calls_no_project_function()
     assert_eq!(runs.status(), Status::Succeeded);
     assert_eq!(runs.names(), ["DM", "AE", "ADSL"]);
 
-    // A 0.5 environment file, kept as 0.5 wrote it until environment files
-    // go; the next test is its 1.0 counterpart.
+    // A 0.5 project and environment file, kept as 0.5 wrote them until
+    // environment files go, listing a 1.0 specification; the next test is
+    // their 1.0 counterpart.
     let study = Study::new();
     study.write("raw.csv", "ID,V\n1,2\n");
     study.write(
@@ -1137,7 +1138,7 @@ fn an_engine_without_functions_runs_every_build_that_calls_no_project_function()
     );
     study.write(
         "one.yaml",
-        "schema_version: '1.0'\ndomain: ONE\nkeys: [ID]\ninput: {RAW: {path: raw.csv, types: {ID: int, V: int}}}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: RAW.ID}\n  - {name: W, type: int, label: Doubled, derivation: {function: {name: double, args: {x: RAW.V}}}}\noutput: {path: one.csv, columns: [ID, W]}\n",
+        "yamaa: \"1.0\"\ntype: spec\ndomain: ONE\nkeys: [ID]\ninput: {RAW: {path: raw.csv, types: {ID: int, V: int}}}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: RAW.ID}\n  - {name: W, type: int, label: Doubled, derivation: {function: {name: double, args: {x: RAW.V}}}}\noutput: {path: one.csv, columns: [ID, W]}\n",
     );
     study.write(
         "project.yaml",
@@ -1151,7 +1152,7 @@ fn an_engine_without_functions_runs_every_build_that_calls_no_project_function()
     assert!(calls.report().is_none());
     // An engine that claims Python but was given no functions runs through
     // the empty port, so the refusal names the first derivation that calls
-    // one (D221), located at its `derivation` key: line 7, column 42, after
+    // one (D221), located at its `derivation` key: line 8, column 42, after
     // `  - {name: W, type: int, label: Doubled, ` (P-ISSUE-1).
     let found = rows(&calls.issues());
     let [row] = found.as_slice() else {
@@ -1180,7 +1181,7 @@ fn an_engine_without_functions_runs_every_build_that_calls_no_project_function()
             location.file,
             location.position.map(|at| (at.line, at.column))
         ),
-        (study.path("one.yaml"), Some((7, 42))),
+        (study.path("one.yaml"), Some((8, 42))),
         "the refusal's location"
     );
     // An engine that claims no host language reads no 0.5 environment file,

@@ -1,12 +1,14 @@
 //! The header a yamaa document's root declares: the language version the
 //! document needs and its file type (SCHEMA-2, LAYER-4, P-VER-1).
 //!
-//! A root that declares `schema_version`, or no `yamaa`, is read by the 0.5
-//! language at the `yamaa-v0.5.0` tag (#3030 D75). A root that declares `yamaa`
-//! is a 1.x document: its header is read here, before any schema closure is
-//! chosen, and the declared type then selects the 1.0 closure. The engine
-//! reads language version 1.0 ([`LANGUAGE_VERSION`], #3030 D76): every public
-//! call routes a file it reads by the header the file declares.
+//! A root that declares `yamaa` is a 1.x document: its header is read here,
+//! before any schema closure is chosen, and the declared type then selects
+//! the 1.0 closure. The engine reads language version 1.0
+//! ([`LANGUAGE_VERSION`], #3030 D76). A root that declares `schema_version`
+//! is written in language version 0.5, which the engine does not read: every
+//! reader refuses it as `unsupported_language_version`, naming 0.5. Only a
+//! 0.5 project file is still read, by the 0.5 project route, until that route
+//! goes (P2-13d).
 use crate::diagnostic::{ConditionCode, Context, Diagnostic};
 use crate::json::Value as JsonValue;
 use crate::schema::{Document, DocumentNode as N, SchemaContext as C, SchemaDiagnostic};
@@ -101,9 +103,8 @@ impl FileType {
 }
 
 /// Whether a document's root declares the 1.x header: a mapping holding
-/// `yamaa` and no `schema_version`. A root that declares `schema_version`
-/// keeps the 0.5 path, which reports a `yamaa` beside it as it reports any
-/// unknown field (D75).
+/// `yamaa` and no `schema_version`. A root that declares `schema_version` is
+/// written in language version 0.5, whether or not `yamaa` stands beside it.
 pub fn declares_header(document: &Document) -> bool {
     let root = document.root();
     document.field(root, "yamaa").is_some() && document.field(root, "schema_version").is_none()
@@ -119,10 +120,15 @@ pub struct Header {
 /// Why a document's header is refused.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum HeaderFault {
-    /// The root is not a non-empty mapping, `yamaa` or `type` is missing or
-    /// not text, or `yamaa` stands beside `schema_version`: a schema finding
-    /// in the document, at that field.
+    /// The root is not a non-empty mapping, or `yamaa` or `type` is missing
+    /// or not text: a schema finding in the document, at that field.
     Shape(SchemaDiagnostic),
+    /// The root declares `schema_version`: a document written in language
+    /// version 0.5, which declares no type and which no reader reads.
+    Legacy {
+        /// The versions the engine reads, oldest first.
+        reads: Vec<String>,
+    },
     /// The document declares a version the engine does not read.
     Version {
         /// The `yamaa` value occurrence in the document.
@@ -220,10 +226,10 @@ fn read_version(
 /// it fails as `unexpected_file_type`. An unquoted `1.0` is a float and fails
 /// as `invalid_field_type` (SCHEMA-2, SCHEMA-4).
 ///
-/// A root that declares `schema_version` is a 0.5 document wherever it is
-/// read, as [`declares_header`] routes it (D75): a `yamaa` beside it is not a
-/// header but the field the 0.5 path reports as `unknown_field`, and it fails
-/// so here too, whether a call, a `parent` or a referencing field reads it.
+/// A root that declares `schema_version`, with `yamaa` beside it or not, is
+/// written in language version 0.5 and fails as `unsupported_language_version`
+/// naming 0.5 ([`HeaderFault::Legacy`]), whether a call, a `parent` or a
+/// referencing field reads it.
 pub fn read_header(
     document: &Document,
     reads: Option<LanguageVersion>,
@@ -231,15 +237,10 @@ pub fn read_header(
 ) -> Result<Header, HeaderFault> {
     let class = expected.root_class();
     root_mapping(document, Some(class))?;
-    if !declares_header(document) && document.field(document.root(), "yamaa").is_some() {
-        return Err(shape(
-            "yamaa",
-            ConditionCode::SchemaUnknownField,
-            vec![
-                ("field", C::Text("yamaa".into())),
-                ("class", C::Text(class.into())),
-            ],
-        ));
+    if document.field(document.root(), "schema_version").is_some() {
+        return Err(HeaderFault::Legacy {
+            reads: language_versions(reads),
+        });
     }
     let version = read_version(document, reads, Some(class))?;
     let (node, written) = header_field(document, "type", "str", Some(class))?;
@@ -254,11 +255,19 @@ pub fn read_header(
 }
 
 impl HeaderFault {
-    /// The finding in the document a call reads, at its own `yamaa` or `type`
-    /// (SCHEMA-2). Context values address that document.
+    /// The finding in the document a call reads, at its own `schema_version`,
+    /// `yamaa` or `type` (SCHEMA-2). Context values address that document.
     pub fn finding(&self) -> SchemaDiagnostic {
         match self {
             Self::Shape(finding) => finding.clone(),
+            Self::Legacy { reads } => SchemaDiagnostic {
+                path: "schema_version".into(),
+                code: ConditionCode::HeaderLanguageVersion,
+                context: vec![
+                    ("version", C::Text(LEGACY_LANGUAGE_VERSION.into())),
+                    ("language_versions", C::TextList(reads.clone())),
+                ],
+            },
             Self::Version { node, reads, .. } => SchemaDiagnostic {
                 path: "yamaa".into(),
                 code: ConditionCode::HeaderLanguageVersion,
@@ -280,8 +289,8 @@ impl HeaderFault {
 }
 
 /// The language a document that declares `schema_version` is written in: the
-/// language at the `yamaa-v0.5.0` tag (#3030 D75), which declares no type.
-const LEGACY_LANGUAGE_VERSION: &str = "0.5";
+/// language at the `yamaa-v0.5.0` tag, which declares no type.
+pub const LEGACY_LANGUAGE_VERSION: &str = "0.5";
 
 /// The type a document's root declares in `type`, when that is text naming
 /// one of the four file types.
@@ -295,12 +304,6 @@ pub fn declared_type(document: &Document) -> Option<FileType> {
 /// Why the type a document declares is not read (#3030 D122).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TypeFault {
-    /// The root declares `schema_version`: a 0.5 document, which declares no
-    /// type and which a read of the 1.x header does not read.
-    Legacy {
-        /// The versions the engine reads, oldest first.
-        reads: Vec<String>,
-    },
     /// The header is refused as [`read_header`] refuses it.
     Header(HeaderFault),
     /// `type` is text naming none of the four file types.
@@ -316,14 +319,6 @@ impl TypeFault {
     /// `type` (SCHEMA-2). Context values address that document.
     pub fn finding(&self) -> SchemaDiagnostic {
         match self {
-            Self::Legacy { reads } => SchemaDiagnostic {
-                path: "schema_version".into(),
-                code: ConditionCode::HeaderLanguageVersion,
-                context: vec![
-                    ("version", C::Text(LEGACY_LANGUAGE_VERSION.into())),
-                    ("language_versions", C::TextList(reads.clone())),
-                ],
-            },
             Self::Header(fault) => fault.finding(),
             Self::Unknown { node, .. } => SchemaDiagnostic {
                 path: "type".into(),
@@ -346,20 +341,20 @@ impl TypeFault {
 ///
 /// A root that declares `schema_version`, with `yamaa` or without, is a 0.5
 /// document and declares no type: it fails as `unsupported_language_version`
-/// at `schema_version`, naming version 0.5. A root that declares one of the
-/// four types is read as [`read_header`] reads that type, so it fails as a
-/// call that reads that type fails. Any other root is read in the same order,
-/// `yamaa` first, then `type`, with findings that name no class, since no
-/// closure is chosen; a `type` naming none of the four types fails as
-/// `unexpected_file_type`, expecting any of them (SCHEMA-2).
+/// at `schema_version`, naming version 0.5 ([`HeaderFault::Legacy`]). A root
+/// that declares one of the four types is read as [`read_header`] reads that
+/// type, so it fails as a call that reads that type fails. Any other root is
+/// read in the same order, `yamaa` first, then `type`, with findings that name
+/// no class, since no closure is chosen; a `type` naming none of the four
+/// types fails as `unexpected_file_type`, expecting any of them (SCHEMA-2).
 pub fn read_declared_header(
     document: &Document,
     reads: LanguageVersion,
 ) -> Result<Header, TypeFault> {
     if document.field(document.root(), "schema_version").is_some() {
-        return Err(TypeFault::Legacy {
+        return Err(TypeFault::Header(HeaderFault::Legacy {
             reads: language_versions(Some(reads)),
-        });
+        }));
     }
     if let Some(declared) = declared_type(document) {
         return read_header(document, Some(reads), declared).map_err(TypeFault::Header);
@@ -553,9 +548,8 @@ pub fn references(document: &Document, file_type: FileType) -> Vec<Reference> {
 impl Reference {
     /// Check the header of the file this field names, read from `source` as
     /// `document`, by an engine whose newest version is `reads` (SCHEMA-2).
-    /// A named file is routed as [`read_header`] routes every root: one that
-    /// declares `schema_version` is a 0.5 document, whose `yamaa` is a
-    /// finding in that file.
+    /// A named file is read as [`read_header`] reads every root: one that
+    /// declares `schema_version` is refused at this field, naming 0.5.
     pub fn check(
         &self,
         source: &str,
@@ -568,16 +562,20 @@ impl Reference {
 
     /// How this field reports the file it names, read from `source`, whose
     /// header `fault` refuses (SCHEMA-2): a malformed header is a finding in
-    /// that file, at its own field; a version the engine does not read, or a
-    /// type the field does not expect, is a diagnostic at this field, naming
-    /// the file as `source`. A reader that decoded the file before it knew the
-    /// field, such as a project's preparation of the files it lists, reports
-    /// the fault it kept here.
+    /// that file, at its own field; a version the engine does not read, 0.5
+    /// included, or a type the field does not expect, is a diagnostic at this
+    /// field, naming the file as `source`. A reader that decoded the file
+    /// before it knew the field, such as a project's preparation of the files
+    /// it lists, reports the fault it kept here.
     pub fn refuse(&self, source: &str, fault: &HeaderFault) -> ReferenceFault {
         let mut context = Context::new();
         context.insert("source".into(), text(source));
         let code = match fault {
             HeaderFault::Shape(finding) => return ReferenceFault::Finding(finding.clone()),
+            HeaderFault::Legacy { reads } => {
+                version_context(&mut context, LEGACY_LANGUAGE_VERSION, reads);
+                ConditionCode::ReferenceLanguageVersion
+            }
             HeaderFault::Version { version, reads, .. } => {
                 version_context(&mut context, version, reads);
                 ConditionCode::ReferenceLanguageVersion
@@ -665,7 +663,7 @@ mod tests {
     }
 
     #[test]
-    fn schema_version_keeps_the_0_5_path_and_yamaa_alone_declares_the_header() {
+    fn only_yamaa_without_schema_version_declares_the_header() {
         let both = document(T::map(vec![
             ("schema_version", T::text("1.0")),
             ("yamaa", T::text("1.0")),
@@ -836,44 +834,68 @@ mod tests {
     }
 
     #[test]
-    fn a_yamaa_beside_schema_version_is_an_unknown_field_wherever_it_is_read() {
-        // The root routes as `declares_header` routes it: `schema_version`
-        // makes it a 0.5 document, where `yamaa` is an unknown field, so a
-        // parent or a referencing field reads it as the decoder does.
+    fn a_schema_version_root_is_language_version_0_5_wherever_it_is_read() {
+        // SCHEMA-2: the engine reads 1.0, so a root that declares
+        // `schema_version`, with `yamaa` beside it or not, fails as
+        // `unsupported_language_version` naming 0.5 (D125, D139): at its own
+        // `schema_version` where a call reads it, and at the field that names
+        // it where a referencing field does.
         for expected in FileType::ALL {
-            let both = document(T::map(vec![
-                ("schema_version", T::text("1.0")),
-                ("yamaa", T::text("1.0")),
-                ("type", T::text(expected.name())),
-            ]));
-            let Err(HeaderFault::Shape(finding)) =
-                read_header(&both, Some(LANGUAGE_VERSION), expected)
-            else {
-                panic!("{expected:?}: a 0.5 document");
-            };
-            assert_eq!(
-                (finding.path.as_str(), finding.code),
-                ("yamaa", ConditionCode::SchemaUnknownField)
-            );
-            assert_eq!(
-                finding.context,
-                [
-                    ("field", C::Text("yamaa".into())),
-                    ("class", C::Text(expected.root_class().into())),
-                ]
-            );
+            for tree in [
+                T::map(vec![
+                    ("schema_version", T::text("1.0")),
+                    ("yamaa", T::text("1.0")),
+                    ("type", T::text(expected.name())),
+                ]),
+                T::map(vec![("schema_version", T::text("1.0"))]),
+            ] {
+                let legacy = document(tree);
+                let fault = read_header(&legacy, Some(LANGUAGE_VERSION), expected).unwrap_err();
+                assert_eq!(
+                    fault,
+                    HeaderFault::Legacy {
+                        reads: vec!["1.0".into()]
+                    },
+                    "{expected:?}"
+                );
+                assert_eq!(
+                    fault.finding(),
+                    SchemaDiagnostic {
+                        path: "schema_version".into(),
+                        code: ConditionCode::HeaderLanguageVersion,
+                        context: vec![
+                            ("version", C::Text("0.5".into())),
+                            ("language_versions", C::TextList(vec!["1.0".into()])),
+                        ],
+                    },
+                    "{expected:?}"
+                );
+                let reference = Reference {
+                    field: "sdtm.specs[0]".into(),
+                    written: "dm.yaml".into(),
+                    expected,
+                    base: PathBase::Declaring,
+                };
+                assert_eq!(
+                    reference.check("/study/dm.yaml", &legacy, LANGUAGE_VERSION),
+                    Err(ReferenceFault::Field(Diagnostic {
+                        code: ConditionCode::ReferenceLanguageVersion,
+                        spec_paths: vec!["sdtm.specs[0]".into()],
+                        context: Context::from([
+                            ("source".into(), text("/study/dm.yaml")),
+                            ("version".into(), text("0.5")),
+                            (
+                                "language_versions".into(),
+                                JsonValue::Array(vec![text("1.0")])
+                            ),
+                        ]),
+                        source_span: None,
+                        operand_route: None,
+                    })),
+                    "{expected:?}"
+                );
+            }
         }
-        // A 0.5 document without `yamaa` misses the header.
-        let legacy = document(T::map(vec![("schema_version", T::text("1.0"))]));
-        let Err(HeaderFault::Shape(finding)) =
-            read_header(&legacy, Some(LANGUAGE_VERSION), FileType::Spec)
-        else {
-            panic!("a 0.5 document");
-        };
-        assert_eq!(
-            (finding.path.as_str(), finding.code),
-            ("yamaa", ConditionCode::SchemaMissingRequiredField)
-        );
     }
 
     #[test]
@@ -913,9 +935,9 @@ mod tests {
             let fault = header.unwrap_err();
             assert_eq!(
                 fault,
-                TypeFault::Legacy {
+                TypeFault::Header(HeaderFault::Legacy {
                     reads: vec!["1.0".into()]
-                }
+                })
             );
             let finding = fault.finding();
             assert_eq!(

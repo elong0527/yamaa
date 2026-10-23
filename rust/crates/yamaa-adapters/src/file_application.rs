@@ -830,11 +830,10 @@ mod tests {
         }
         fs::write(study.0.join("input/input.csv"), input).unwrap();
         let entry = study.0.join("spec.yaml");
-        fs::write(&entry, "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input/input.csv, types: {VALUE: float}}}\noutput: {path: out.csv, columns: [ID, VALUE], decimals: 18, report: checks.csv}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - name: VALUE\n    type: float\n    derivation: SRC.VALUE\n    verifications:\n      - not_missing: {}\n      - range: {max: 0, severity: warning}\n").unwrap();
+        fs::write(&entry, "yamaa: '1.0'\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input/input.csv, types: {VALUE: float}}}\noutput: {path: out.csv, columns: [ID, VALUE], decimals: 18, report: checks.csv}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - name: VALUE\n    type: float\n    derivation: SRC.VALUE\n    verifications:\n      - not_missing\n      - range: {max: 0, severity: warning}\n").unwrap();
         let written = entry.to_str().unwrap();
         let (mut resources, entry) = file_configuration::resources(written).unwrap();
-        let document =
-            crate::file_preparation::prepare_document(&mut resources, &entry, None).unwrap();
+        let document = crate::file_preparation::prepare_document(&mut resources, &entry).unwrap();
         let prepared = crate::specification_run::PreparedRun::prepare(document).unwrap();
         let mut empty = Empty::<std::convert::Infallible>::new();
         let attempt = prepared.execute_with_ports(&mut empty, &mut resources, Scope::default());
@@ -1275,7 +1274,7 @@ mod tests {
                 .chain(names.iter().map(String::as_str))
                 .collect::<Vec<_>>();
             let mut raw = format!(
-                "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {{SRC: input.csv}}\noutput: {{path: out.csv, columns: [{}]{} }}\ncolumns:\n",
+                "yamaa: '1.0'\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {{SRC: input.csv}}\noutput: {{path: out.csv, columns: [{}]{} }}\ncolumns:\n",
                 columns.join(", "),
                 if verification { ", report: checks.csv" } else { "" }
             );
@@ -1288,14 +1287,8 @@ mod tests {
             fs::write(&entry, raw).unwrap();
             let written = entry.to_str().unwrap();
             let (mut resources, entry) = file_configuration::resources(written).unwrap();
-            let schema = crate::specification_source::CapturedSchema::admit(
-                crate::shipped_schema::capture().unwrap().sources().to_vec(),
-                0,
-            )
-            .unwrap();
             let document =
-                crate::file_preparation::prepare_document(&mut resources, &entry, Some(schema))
-                    .unwrap();
+                crate::file_preparation::prepare_document(&mut resources, &entry).unwrap();
             let prepared = crate::specification_run::PreparedRun::prepare(document).unwrap();
             let mut empty = Empty::<std::convert::Infallible>::new();
             let attempt = prepared.execute_with_ports(&mut empty, &mut resources, Scope::default());

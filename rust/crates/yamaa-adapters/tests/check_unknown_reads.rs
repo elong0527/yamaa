@@ -540,19 +540,6 @@ fn check_types_a_formula_s_operands_without_rows_as_domain_does() {
             &["columns.X.derivation.case[0].when", then],
             "incompatible_input_type Some(\"FORMULA-5\")",
         ),
-        // The 0.5 surface types every name of its `compute` text.
-        (
-            "schema_version: \"1.0\"\ndomain: ADVS\nkeys: [STUDYID, USUBJID]\n\
-             input: {VS: {path: vs.csv, types: {VSDY: int}}}\n\
-             output: {path: out.csv, columns: [STUDYID, USUBJID, X]}\n\
-             columns:\n\
-             \x20 - {name: STUDYID, type: str, derivation: VS.STUDYID}\n\
-             \x20 - {name: USUBJID, type: str, derivation: VS.USUBJID}\n\
-             \x20 - {name: X, type: float, derivation: {compute: {expr: \"USUBJID + 1\"}}}\n"
-                .into(),
-            &["columns.X.derivation.compute"],
-            OPERAND,
-        ),
     ]);
     assert_clean(&[column("\"VSDY + 1.5\""), result("\"VSDY * PB.PLANDOSE\"")]);
 }
@@ -718,20 +705,6 @@ fn check_reports_a_row_filter_s_undeclared_qualifier_as_domain_does() {
             filtered("XX.Y > 1", "      X: \"VS.VSTESTCD + 1\"\n"),
             &["rows.record.derivations.X", at],
             OPERAND,
-        ),
-        // The 0.5 surface.
-        (
-            "schema_version: \"1.0\"\ndomain: ADVS\nkeys: [STUDYID, USUBJID]\n\
-             input: {VS: vs.csv}\n\
-             output: {path: out.csv, columns: [STUDYID, USUBJID]}\n\
-             columns:\n\
-             \x20 - {name: STUDYID, type: str}\n\
-             \x20 - {name: USUBJID, type: str}\n\
-             rows:\n\
-             \x20 - {id: vs, dataset: VS, filter: \"XX.Y > 1\", derivations: {STUDYID: VS.STUDYID, USUBJID: VS.USUBJID}}\n"
-                .into(),
-            &["rows[0].filter"],
-            NAME,
         ),
     ]);
     assert_clean(&[filtered(
@@ -941,38 +914,6 @@ fn check_reports_a_read_qualified_by_nothing_declared_as_domain_does() {
                 "intermediates.P.derivations.D.source",
             ],
             "unknown_field Some(\"LOOKUP-15\")",
-        ),
-        // The 0.5 surface.
-        (
-            "schema_version: \"1.0\"\ndomain: ADVS\nkeys: [STUDYID, USUBJID]\n\
-             input: {VS: vs.csv}\n\
-             output: {path: out.csv, columns: [STUDYID, USUBJID]}\n\
-             columns:\n\
-             \x20 - {name: STUDYID, type: str}\n\
-             \x20 - {name: USUBJID, type: str}\n\
-             rows:\n\
-             \x20 - {id: vs, dataset: VS, derivations: {STUDYID: VS.STUDYID, USUBJID: XX.Y}}\n"
-                .into(),
-            &["rows[0].derivations.USUBJID.source"],
-            NAME,
-        ),
-        (
-            "schema_version: \"1.0\"\ndomain: ADVS\nkeys: [STUDYID, USUBJID]\n\
-             input: {VS: vs.csv, PLAN: {path: plan.csv, types: {DOSENUM: int, PLANDOSE: float}}}\n\
-             base: VS\n\
-             output: {path: out.csv, columns: [STUDYID, USUBJID, X]}\n\
-             columns:\n\
-             \x20 - {name: STUDYID, type: str, derivation: VS.STUDYID}\n\
-             \x20 - {name: USUBJID, type: str, derivation: XX.Y}\n\
-             \x20 - name: X\n\
-             \x20   type: float\n\
-             \x20   derivation: {aggregate: {expr: \"SUM(PLAN.PLANDOSE)\", between: {value: XX.Y, lower: DOSENUM}}}\n"
-                .into(),
-            &[
-                "columns.USUBJID.derivation.source",
-                "columns.X.derivation.aggregate.between.value",
-            ],
-            NAME,
         ),
     ]);
     // The same reads of a declared record bind.
@@ -1244,27 +1185,6 @@ fn check_reports_a_text_pattern_where_binding_takes_its_source_as_domain_does() 
                 C,
             ),
             &["columns.X.derivation.aggregate.key.USUBJID.str_extract.pattern"],
-            PATTERN,
-        ),
-        // The 0.5 surface, #3585's own specification.
-        (
-            "schema_version: \"1.0\"\ndomain: ADTOY\nkeys: [USUBJID]\n\
-             input: {SRC: vs.csv}\n\
-             output: {path: out.csv, columns: [USUBJID, SITE]}\n\
-             columns:\n\
-             \x20 - {name: USUBJID, type: str, label: Subject}\n\
-             \x20 - name: SITE\n\
-             \x20   type: str\n\
-             \x20   label: Site\n\
-             \x20   derivation:\n\
-             \x20     str_extract: {source: USUBJID, pattern: '^(?P<site>[A-Z]+)-', group: 1}\n\
-             rows:\n\
-             \x20 - id: subjects\n\
-             \x20   dataset: SRC\n\
-             \x20   derivations:\n\
-             \x20     USUBJID: SRC.USUBJID\n"
-                .into(),
-            &["columns.SITE.derivation.str_extract.pattern"],
             PATTERN,
         ),
     ]);

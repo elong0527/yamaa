@@ -169,16 +169,13 @@ fn assert_mark(issue: &Issue, declared: bool) {
 }
 
 #[test]
-fn a_mark_the_input_does_not_declare_fails_on_both_surfaces() {
+fn a_mark_the_input_does_not_declare_fails() {
     assert_mark(&run_issue(MARKED, &spec("raw.csv")), false);
     // `false` declares no mark, as an omitted field does.
     assert_mark(
         &run_issue(MARKED, &spec("{path: raw.csv, byte_order_mark: false}")),
         false,
     );
-    // A 0.5 file declares no mark and keeps the 0.5.0 refusal.
-    let legacy = spec("raw.csv").replace("yamaa: \"1.0\"\ntype: spec\n", "schema_version: '1.0'\n");
-    assert_mark(&run_issue(MARKED, &legacy), false);
 }
 
 #[test]
@@ -220,26 +217,4 @@ fn a_declared_mark_on_another_profile_fails_before_any_input_is_read() {
             "input.RAW.byte_order_mark has a value that is not permitted"
         );
     }
-}
-
-#[test]
-fn a_0_5_file_cannot_declare_a_mark() {
-    let study = Study::new();
-    study.write("raw.csv", MARKED);
-    study.write(
-        "spec.yaml",
-        spec("{path: raw.csv, byte_order_mark: true}")
-            .replace("yamaa: \"1.0\"\ntype: spec\n", "schema_version: '1.0'\n"),
-    );
-    let found = issues(
-        &engine()
-            .spec_check(&study.path("spec.yaml"), None, &CancellationToken::new())
-            .unwrap()
-            .issues(),
-    );
-    let [issue] = found.as_slice() else {
-        panic!("one issue: {found:?}")
-    };
-    assert_eq!(issue.condition, "unknown_field");
-    assert_eq!(issue.paths, ["input.RAW.byte_order_mark"]);
 }

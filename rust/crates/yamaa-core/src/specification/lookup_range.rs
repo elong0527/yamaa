@@ -281,17 +281,16 @@ impl RowDriver {
 
 /// What refuses a range read for the rows of `drivers`: a value that reads
 /// the record of an input that does not drive every one of them, or a
-/// contextual bare name, names no value of those rows (LOOKUP-9). On a 1.0
-/// tree (`one_meaning`) a value qualified by a named intermediate that builds
-/// one of the rows reads that row's record, which a range value cannot read
-/// there, so it is unsupported; and one qualified by a row driver that builds
-/// none of them would read it as a keyed lookup, which it is not, since it
-/// declares no key (LOOKUP-3, ROW-2).
+/// contextual bare name, names no value of those rows (LOOKUP-9). A value
+/// qualified by a named intermediate that builds one of the rows reads that
+/// row's record, which a range value cannot read there, so it is
+/// unsupported; and one qualified by a row driver that builds none of them
+/// would read it as a keyed lookup, which it is not, since it declares no key
+/// (LOOKUP-3, ROW-2).
 fn refusal(
     range: &RelationRange,
     drivers: &[RowDriver],
     owner: Owner<'_>,
-    one_meaning: bool,
     named: &intermediates::Declarations,
 ) -> Option<BindFinding> {
     let path = format!("{}.value", range.path());
@@ -310,21 +309,18 @@ fn refusal(
         }
         CurrentRead::Contextual => Some(unknown()),
         CurrentRead::Intermediate { index, .. }
-            if one_meaning
-                && drivers
-                    .iter()
-                    .any(|driver| driver.intermediate == Some(index)) =>
+            if drivers
+                .iter()
+                .any(|driver| driver.intermediate == Some(index)) =>
         {
             Some(BindFinding::Scalar(crate::application_issue::unsupported(
                 "intermediate_driver_range_value",
                 Some(&path),
             )))
         }
-        CurrentRead::Intermediate { index, .. } if one_meaning => {
-            named.key_required(index).map(|key| {
-                BindFinding::Lookup(LookupFinding::from_diagnostic(lookup::key_required(key)))
-            })
-        }
+        CurrentRead::Intermediate { index, .. } => named.key_required(index).map(|key| {
+            BindFinding::Lookup(LookupFinding::from_diagnostic(lookup::key_required(key)))
+        }),
         _ => None,
     }
 }
@@ -339,7 +335,6 @@ pub(super) fn admit<'a>(
     contexts: impl IntoIterator<Item = (Vec<&'a Expression>, Vec<RowDriver>)>,
     intermediates: &[Option<Intermediate>],
     named: &intermediates::Declarations,
-    one_meaning: bool,
     findings: &mut Vec<BindFinding>,
 ) {
     let mut seen = std::collections::BTreeSet::new();
@@ -347,7 +342,7 @@ pub(super) fn admit<'a>(
                       drivers: &[RowDriver],
                       owner: Owner<'_>,
                       findings: &mut Vec<BindFinding>| {
-        if let Some(finding) = refusal(range, drivers, owner, one_meaning, named) {
+        if let Some(finding) = refusal(range, drivers, owner, named) {
             if seen.insert(range.path().to_string())
                 && !row_intermediates::reported(findings, &finding)
             {
@@ -470,8 +465,6 @@ mod tests {
             &|column| donor.columns().get(column).map(|column| column.kind),
             &|_| true,
             &catalog,
-            &driver,
-            false,
             false,
             &[],
             &secondary,
@@ -493,9 +486,9 @@ mod tests {
             port,
             intermediate: None,
         };
-        assert!(refusal(&range, &[input(1)], owner, true, &named).is_none());
+        assert!(refusal(&range, &[input(1)], owner, &named).is_none());
         let Some(BindFinding::Scalar(diagnostic)) =
-            refusal(&range, &[input(1), input(0)], owner, true, &named)
+            refusal(&range, &[input(1), input(0)], owner, &named)
         else {
             panic!("another driver refuses");
         };

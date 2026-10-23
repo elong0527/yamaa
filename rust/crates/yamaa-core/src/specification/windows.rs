@@ -35,38 +35,24 @@ pub(super) struct Declaration {
     groups: Vec<String>,
     order: Vec<(String, bool, bool)>,
     filter: Option<(String, Result<CompiledExpression, CompileError>)>,
-    /// The path of each read, in [`Declaration::operands`] order, as a 1.0
-    /// tree writes it: `baseline_flag` names its operands `source` and
+    /// The path of each read, in [`Declaration::operands`] order, as the tree
+    /// writes it: `baseline_flag` names its operands `source` and
     /// `reference` and its tie-break terms in `window.order_by` (P-OP-2,
-    /// P-OP-3, P-ORD-1). A 0.5 tree's reads compose the field names below.
-    surface_reads: Option<Vec<String>>,
+    /// P-OP-3, P-ORD-1).
+    reads: Vec<String>,
 }
 #[derive(Debug)]
 pub enum WindowFinding {
-    ZeroOffset {
-        path: String,
-    },
-    Order {
-        path: String,
-        operation: String,
-        forbidden: bool,
-    },
-    RepeatedGroup {
-        path: String,
-        identifier: String,
-    },
+    ZeroOffset { path: String },
+    Order { path: String, operation: String },
+    RepeatedGroup { path: String, identifier: String },
 }
 impl WindowFinding {
     pub fn diagnostic_code(&self) -> crate::diagnostic::ConditionCode {
         use crate::diagnostic::ConditionCode as C;
         match self {
             Self::ZeroOffset { .. } => C::WindowZeroOffset,
-            Self::Order {
-                forbidden: false, ..
-            } => C::WindowOrderRequired,
-            Self::Order {
-                forbidden: true, ..
-            } => C::WindowOrderForbidden,
+            Self::Order { .. } => C::WindowOrderRequired,
             Self::RepeatedGroup { .. } => C::WindowRepeatedGroup,
         }
     }
@@ -79,9 +65,7 @@ impl WindowFinding {
         use crate::json::Value as JsonValue;
         let (path, name, value) = match self {
             Self::ZeroOffset { path } => (path, "offset", crate::value::Value::Int(0)),
-            Self::Order {
-                path, operation, ..
-            } => (
+            Self::Order { path, operation } => (
                 path,
                 "operation",
                 crate::value::Value::Str(operation.clone()),
@@ -114,8 +98,10 @@ impl Declaration {
         }
     }
     /// The window at `e`: its function and operands, partitions, order and
-    /// filter. A baseline's date and tie-break terms are the tree's order;
-    /// its written `window.order_by`, which is refused, is the window's own.
+    /// filter. A baseline's date and tie-break terms are the tree's order,
+    /// so the window has no order of its own; a written `window.order_by`
+    /// that does not start with the date is refused before binding
+    /// (WINDOW-5).
     pub fn from_tree(spec: &ast::Spec, e: ExprId) -> Result<Self, PrepareError> {
         use ast::{RankMethod, Slot, WindowFunction};
         let ExprKind::Window(window) = &spec.expr(e).kind else {
@@ -161,10 +147,7 @@ impl Declaration {
                 "locf",
                 &window.order_by[..],
             ),
-            WindowFunction::BaselineFlag {
-                inclusive,
-                window_order_by,
-            } => {
+            WindowFunction::BaselineFlag { inclusive, .. } => {
                 let (date, tie_break) = window
                     .order_by
                     .split_first()
@@ -181,7 +164,7 @@ impl Declaration {
                             .collect::<Result<_, _>>()?,
                     },
                     "baseline_flag",
-                    &window_order_by[..],
+                    &[][..],
                 )
             }
         };
@@ -194,32 +177,24 @@ impl Declaration {
                 _ => Err(PrepareError::Internal),
             })
             .transpose()?;
-        let surface_reads = match spec.header.surface {
-            ast::Surface::V0_5 => None,
-            ast::Surface::V1 { .. } => {
-                let at = |e: ExprId| spec.cite(spec.expr(e).meta);
-                let mut reads = Vec::new();
-                match &kind {
-                    Kind::RowValue { .. } | Kind::Locf { .. } => {
-                        reads.push(at(operand(Slot::Source)?))
-                    }
-                    Kind::BaselineFlag { .. } => {
-                        let (date, tie_break) = window
-                            .order_by
-                            .split_first()
-                            .ok_or(PrepareError::Internal)?;
-                        reads.push(spec.cite(date.meta));
-                        reads.push(at(operand(Slot::Reference)?));
-                        reads.push(at(operand(Slot::Source)?));
-                        reads.extend(tie_break.iter().map(|term| spec.cite(term.meta)));
-                    }
-                    Kind::RowNumber | Kind::Competition | Kind::Dense => (),
-                }
-                reads.extend(window.group_by.iter().map(|&group| at(group)));
-                reads.extend(order.iter().map(|term| spec.cite(term.meta)));
-                Some(reads)
+        let at = |e: ExprId| spec.cite(spec.expr(e).meta);
+        let mut reads = Vec::new();
+        match &kind {
+            Kind::RowValue { .. } | Kind::Locf { .. } => reads.push(at(operand(Slot::Source)?)),
+            Kind::BaselineFlag { .. } => {
+                let (date, tie_break) = window
+                    .order_by
+                    .split_first()
+                    .ok_or(PrepareError::Internal)?;
+                reads.push(spec.cite(date.meta));
+                reads.push(at(operand(Slot::Reference)?));
+                reads.push(at(operand(Slot::Source)?));
+                reads.extend(tie_break.iter().map(|term| spec.cite(term.meta)));
             }
-        };
+            Kind::RowNumber | Kind::Competition | Kind::Dense => (),
+        }
+        reads.extend(window.group_by.iter().map(|&group| at(group)));
+        reads.extend(order.iter().map(|term| spec.cite(term.meta)));
         Ok(Self {
             kind,
             operation: operation.into(),
@@ -234,17 +209,17 @@ impl Declaration {
                 .map(|term| tree_order_term(spec, term))
                 .collect::<Result<_, _>>()?,
             filter,
-            surface_reads,
+            reads,
         })
     }
     /// Each variable the window names, with the path of the operand that
     /// names it, in authored order: the operation's own operands, then every
-    /// `window.group_by` and `window.order_by` entry.
+    /// `window.group_by` and `window.order_by` entry, each at its read's path.
     fn operands(&self) -> Vec<(&str, String)> {
-        let mut reads = Vec::new();
+        let mut names = Vec::new();
         match &self.kind {
             Kind::RowValue { source, .. } | Kind::Locf { source, .. } => {
-                reads.push((source.as_str(), format!("{}.source", self.path)))
+                names.push(source.as_str())
             }
             Kind::BaselineFlag {
                 date,
@@ -253,37 +228,15 @@ impl Declaration {
                 tie_break,
                 ..
             } => {
-                reads.push((date.as_str(), format!("{}.date", self.path)));
-                reads.push((
-                    reference_date.as_str(),
-                    format!("{}.reference_date", self.path),
-                ));
-                reads.push((value.as_str(), format!("{}.value", self.path)));
-                for (index, (name, ..)) in tie_break.iter().enumerate() {
-                    reads.push((name.as_str(), format!("{}.tie_break[{index}]", self.path)));
-                }
+                names.extend([date.as_str(), reference_date.as_str(), value.as_str()]);
+                names.extend(tie_break.iter().map(|(name, ..)| name.as_str()));
             }
             Kind::RowNumber | Kind::Competition | Kind::Dense => (),
         }
-        for (index, name) in self.groups.iter().enumerate() {
-            reads.push((
-                name.as_str(),
-                format!("{}.window.group_by[{index}]", self.path),
-            ));
-        }
-        for (index, (name, ..)) in self.order.iter().enumerate() {
-            reads.push((
-                name.as_str(),
-                format!("{}.window.order_by[{index}]", self.path),
-            ));
-        }
-        if let Some(paths) = &self.surface_reads {
-            debug_assert_eq!(paths.len(), reads.len());
-            for ((_, path), surface) in reads.iter_mut().zip(paths) {
-                path.clone_from(surface);
-            }
-        }
-        reads
+        names.extend(self.groups.iter().map(String::as_str));
+        names.extend(self.order.iter().map(|(name, ..)| name.as_str()));
+        debug_assert_eq!(names.len(), self.reads.len());
+        names.into_iter().zip(self.reads.iter().cloned()).collect()
     }
     /// WINDOW-11: a column-level window spans the rows of every row template
     /// and reads a qualified field at the record that built each row. When
@@ -392,16 +345,12 @@ impl Declaration {
                 path: format!("{}.offset", self.path),
             }));
         }
-        let baseline = matches!(self.kind, Kind::BaselineFlag { .. });
-        if self.order.is_empty() != baseline {
+        // A positional window needs an order; a baseline orders by its date
+        // and tie-break terms (WINDOW-5).
+        if self.order.is_empty() && !matches!(self.kind, Kind::BaselineFlag { .. }) {
             findings.push(BindFinding::Window(WindowFinding::Order {
-                path: format!(
-                    "{}.window{}",
-                    self.path,
-                    if baseline { ".order_by" } else { "" }
-                ),
+                path: format!("{}.window", self.path),
                 operation: self.operation.clone(),
-                forbidden: baseline,
             }));
         }
         self.repeated_groups(findings);
@@ -503,7 +452,7 @@ impl Declaration {
             },
         };
         // The baseline's tie-break terms bind in authored order and become the
-        // plan's order terms; `window.order_by` stays forbidden beside them.
+        // plan's order terms (WINDOW-9).
         let mut tie_break = Vec::new();
         if let Kind::BaselineFlag {
             tie_break: terms, ..
@@ -684,11 +633,10 @@ impl Declaration {
             None
         };
         let (operand, source, expected, actual) = invalid?;
-        // A 1.0 tree's date is its first read and its reference the second.
-        let path = match (&self.surface_reads, operand) {
-            (Some(paths), "date") => paths.first()?.clone(),
-            (Some(paths), _) => paths.get(1)?.clone(),
-            (None, _) => format!("{}.{operand}", self.path),
+        // The date is the first read and the reference the second.
+        let path = match operand {
+            "date" => self.reads.first()?.clone(),
+            _ => self.reads.get(1)?.clone(),
         };
         let mut finding = LookupFinding::new(
             &path,

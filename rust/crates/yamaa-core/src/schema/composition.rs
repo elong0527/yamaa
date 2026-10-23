@@ -67,10 +67,6 @@ struct Run<'a> {
     schema: &'a SchemaStructure,
     nodes: Vec<N>,
     origins: Vec<CompositionOrigin>,
-    /// `Clear` composes a 0.5 layer, whose YAML null clears what it inherits
-    /// (LAYER-9 at the `yamaa-v0.5.0` tag); `Value` composes a 1.x layer, in
-    /// which null is the missing value and never removes anything.
-    nulls: NullPolicy,
 }
 impl Run<'_> {
     fn step(&mut self, depth: usize) -> Result<(), NormalizationError> {
@@ -117,8 +113,7 @@ impl Run<'_> {
         };
         Ok(self.push(value, site))
     }
-    /// The first union member a fragment matches. In a 0.5 layer clear markers
-    /// read as absent.
+    /// The first union member a fragment matches.
     fn selected<'a>(
         &mut self,
         descriptor: usize,
@@ -136,7 +131,7 @@ impl Run<'_> {
                 (expression, expression.root()),
                 site.node,
                 true,
-                self.nulls,
+                NullPolicy::Value,
                 &[],
             )? {
                 return Ok(Some(Member {
@@ -148,8 +143,7 @@ impl Run<'_> {
         Ok(None)
     }
     /// Compose one value by its descriptor. A mapping composes with an inherited
-    /// mapping that selects the same union member; anything else replaces it, and
-    /// a value without an inherited counterpart is taken with its clears dropped.
+    /// mapping that selects the same union member; anything else replaces it.
     fn descriptor(
         &mut self,
         descriptor: usize,
@@ -212,9 +206,8 @@ impl Run<'_> {
             Entries::Values(member) => self.member(member, old, new, depth),
         }
     }
-    /// A class merges field by field and a dictionary key by key. In a 0.5
-    /// layer a null entry is a clear: it removes the inherited entry and is
-    /// never itself retained. In a 1.x layer it composes as the value it is.
+    /// A class merges field by field and a dictionary key by key; a null entry
+    /// composes as the value it is (LAYER-9).
     fn mapping(
         &mut self,
         entries: Entries<'_>,
@@ -235,11 +228,6 @@ impl Run<'_> {
             for &(key, value) in before {
                 let inherited = old.child(value);
                 let value = match self.matching_key(old.child(key), new)? {
-                    Some((_, value))
-                        if self.nulls.clears() && matches!(new.child(value).value(), N::Null) =>
-                    {
-                        continue
-                    }
                     Some((_, value)) => self.entry(
                         entries,
                         old.child(key),
@@ -257,9 +245,6 @@ impl Run<'_> {
                 if self.matching_key(new.child(key), old)?.is_some() {
                     continue;
                 }
-            }
-            if self.nulls.clears() && matches!(new.child(value).value(), N::Null) {
-                continue;
             }
             let value = self.entry(entries, new.child(key), None, new.child(value), depth + 1)?;
             output.push((self.copy(new.child(key), depth + 1)?, value));
@@ -351,74 +336,17 @@ impl Run<'_> {
     }
 }
 impl SchemaStructure {
-    /// Compose two admitted normalized values by a field's declared kind (LAYER-6).
-    /// A class merges field by field and a mapping key by key; a registry value
-    /// composes with the same keyword and otherwise replaces; scalars and lists
-    /// replace. A null entry is a clear marker: it removes the inherited entry and
-    /// never survives. Input 0 denotes the accumulated value and input 1 the later
-    /// contribution. Default insertion belongs to the surrounding layer pass.
-    pub fn compose_descriptor(
-        &self,
-        descriptor: usize,
-        accumulated: &Document,
-        incoming: &Document,
-    ) -> Result<ComposedValue, NormalizationError> {
-        self.compose_descriptor_at(
-            descriptor,
-            Some((accumulated, accumulated.root())),
-            (incoming, incoming.root()),
-        )
-    }
-
-    pub(super) fn compose_descriptor_at(
-        &self,
-        descriptor: usize,
-        accumulated: Option<(&Document, usize)>,
-        incoming: (&Document, usize),
-    ) -> Result<ComposedValue, NormalizationError> {
-        if descriptor >= self.descriptors().len()
-            || accumulated.is_some_and(|(document, node)| node >= document.nodes().len())
-            || incoming.1 >= incoming.0.nodes().len()
-        {
-            return Err(ValidationError::InvalidDescriptor.into());
-        }
-        let mut run = Run {
-            schema: self,
-            nodes: Vec::new(),
-            origins: Vec::new(),
-            nulls: NullPolicy::Clear,
-        };
-        let root = run.descriptor(
-            descriptor,
-            accumulated.map(|(document, node)| Site {
-                document,
-                node,
-                input: 0,
-            }),
-            Site {
-                document: incoming.0,
-                node: incoming.1,
-                input: 1,
-            },
-            0,
-        )?;
-        let document = Document::new(run.nodes, root).map_err(NormalizationError::Document)?;
-        Ok(ComposedValue {
-            document,
-            origins: run.origins,
-        })
-    }
-
     /// Compose one member of a keyed root collection, a `list[T]` or `dict[K, T]`
-    /// field, by its member type `T` (LAYER-5). Without an inherited member the
-    /// incoming member is taken with a 0.5 layer's clear markers dropped; under
-    /// `NullPolicy::Value` YAML null composes as a value.
+    /// field, by its member type `T` (LAYER-5): a class merges field by field
+    /// and a mapping key by key, a registry value composes with the same
+    /// keyword and otherwise replaces, and scalars and lists replace (LAYER-6).
+    /// YAML null composes as a value. Input 0 denotes the accumulated value and
+    /// input 1 the later contribution. Defaults belong to the surrounding pass.
     pub(super) fn compose_member_at(
         &self,
         collection: usize,
         accumulated: Option<(&Document, usize)>,
         incoming: (&Document, usize),
-        nulls: NullPolicy,
     ) -> Result<ComposedValue, NormalizationError> {
         let located = self
             .descriptors()
@@ -441,7 +369,6 @@ impl SchemaStructure {
             schema: self,
             nodes: Vec::new(),
             origins: Vec::new(),
-            nulls,
         };
         let root = run.member(
             Member {

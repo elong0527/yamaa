@@ -40,24 +40,15 @@ fn date_bounds(closed: ast::Closed) -> Result<DateBounds, Refusal> {
 }
 
 /// TIME-5's refusal of the endpoints a `diff` counts with a datetime or a
-/// unit coarser than a day, as the tree's surface writes them: 0.5's
-/// `bounds`, permitting `exclusive`, or 1.0's `closed`, permitting `right`
+/// unit coarser than a day, as `closed` writes them, permitting `right`
 /// (P-ORD-2).
-fn bounds_finding(spec: &Spec, path: String, closed: ast::Closed) -> Result<Diagnostic, Refusal> {
-    let v1 = !matches!(spec.header.surface, ast::Surface::V0_5);
-    let value = match (v1, closed) {
-        (false, ast::Closed::Both) => "inclusive",
-        (false, ast::Closed::Neither) => "between",
-        (true, ast::Closed::Both) => "both",
-        (true, ast::Closed::Neither) => "neither",
+fn bounds_finding(path: String, closed: ast::Closed) -> Result<Diagnostic, Refusal> {
+    let value = match closed {
+        ast::Closed::Both => "both",
+        ast::Closed::Neither => "neither",
         _ => return Err(Refusal::Internal),
     };
-    Ok(Temporal::bounds_diagnostic(
-        &path,
-        if v1 { "closed" } else { "bounds" },
-        value,
-        if v1 { "right" } else { "exclusive" },
-    ))
+    Ok(Temporal::bounds_diagnostic(&path, "closed", value, "right"))
 }
 
 /// The operand field of a temporal verb that `field` names: each verb's
@@ -79,17 +70,13 @@ fn slot(field: &str) -> Option<Slot> {
     })
 }
 
-/// `operation` with each operand's path as a 1.0 tree writes it, whose
-/// operand fields differ from the executor's names (`study_day.source`,
-/// P-OP-1); a 0.5 tree writes the executor's names.
+/// `operation` with each operand's path as the tree writes it, whose operand
+/// fields differ from the executor's names (`study_day.source`, P-OP-1).
 fn surface_operands(
     spec: &Spec,
     operands: &[ast::Operand],
     operation: Temporal,
 ) -> Result<Temporal, Refusal> {
-    if matches!(spec.header.surface, ast::Surface::V0_5) {
-        return Ok(operation);
-    }
     let paths = operation
         .kind()
         .fields()
@@ -136,7 +123,7 @@ pub(super) fn tree_kind(
                     )]));
                 };
                 if bounds != DateBounds::Exclusive {
-                    return Ok(Err(vec![bounds_finding(spec, path, *closed)?]));
+                    return Ok(Err(vec![bounds_finding(path, *closed)?]));
                 }
                 TemporalKind::DateTimeDifference { unit }
             } else {
@@ -280,9 +267,7 @@ pub(super) fn from_tree(spec: &Spec, e: ExprId) -> Result<Operation, Refusal> {
             let ScalarOp::Diff { closed, .. } = op else {
                 return Err(Refusal::Internal);
             };
-            Err(Refusal::Findings(vec![bounds_finding(
-                spec, path, *closed,
-            )?]))
+            Err(Refusal::Findings(vec![bounds_finding(path, *closed)?]))
         }
     }
 }
@@ -322,7 +307,7 @@ pub(super) fn preflight(
             let ScalarOp::Diff { closed, .. } = op else {
                 return Err(Refusal::Internal);
             };
-            findings.push(bounds_finding(spec, path.clone(), *closed)?);
+            findings.push(bounds_finding(path.clone(), *closed)?);
         }
     }
     // Bounds and operand types are independent declaration findings.
@@ -383,11 +368,9 @@ mod tests {
     use crate::test_specification::{column, derivation, document, lower, op};
 
     /// TIME-5 refuses a datetime `diff` that counts both endpoints, naming
-    /// the field and the values its surface writes: 1.0's `closed`, whose
-    /// `both` lowers to the node 0.5's `inclusive` does (P-ORD-2), and 0.5's
-    /// `bounds`, until #3447 deletes the 0.5 front end.
+    /// `closed` and the value it writes, and permitting `right` (P-ORD-2).
     #[test]
-    fn a_datetime_diff_s_endpoints_are_refused_as_its_surface_writes_them() {
+    fn a_datetime_diff_s_endpoints_are_refused_as_closed_writes_them() {
         let days = |endpoints: (&str, &str)| {
             column(
                 "DAYS",
@@ -428,24 +411,5 @@ mod tests {
         );
         assert_eq!(diagnostic.context["value"], Json::String("both".into()));
         assert_eq!(diagnostic.context["permitted"], permitted("right"));
-
-        // The 0.5 spelling, 0.5-only until #3447.
-        use crate::front_end::v0_5::tests::{admit, document as legacy};
-        let tree = legacy(vec![days(("bounds", "inclusive"))], vec![]);
-        let spec = crate::front_end::v0_5::lower(&admit(tree), None).into_spec();
-        let diagnostic = refusal(&spec);
-        assert_eq!(
-            diagnostic.code,
-            crate::diagnostic::ConditionCode::TemporalBounds
-        );
-        assert_eq!(
-            diagnostic.spec_paths,
-            ["columns.DAYS.derivation.diff.bounds"]
-        );
-        assert_eq!(
-            diagnostic.context["value"],
-            Json::String("inclusive".into())
-        );
-        assert_eq!(diagnostic.context["permitted"], permitted("exclusive"));
     }
 }

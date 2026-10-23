@@ -12,12 +12,11 @@
 //! ([`Implicit`]). Its reads keep the rules a spec without `rows` has always
 //! bound by: a driver field read by a non-key column collects the distinct
 //! readings of the row's records; another input's field joins on its implicit
-//! join's key, the output keys its own fields name (0.5) or its declared key
-//! (1.0); a lookup read takes the selector's record without a row template's
-//! checks of its keys; a formula reports its qualified names first; a `case`
-//! predicate is typed and may suggest the input that stores an unknown name;
-//! and a formula or `first_available` in a `case` result binds as those results
-//! did before.
+//! join's key, the key that input declares; a lookup read takes the
+//! selector's record without a row template's checks of its keys; a formula
+//! reports its qualified names first; a `case` predicate is typed and may
+//! suggest the input that stores an unknown name; and a formula or
+//! `first_available` in a `case` result binds as those results did before.
 use super::*;
 use crate::{
     dataset::{Intermediate, SecondarySource},
@@ -46,7 +45,7 @@ pub(super) struct Scope<'a> {
 #[derive(Clone, Copy, Debug)]
 pub(super) enum Template<'a> {
     /// The implicit template of a spec without `rows`.
-    Implicit(Implicit<'a>),
+    Implicit(Implicit),
     /// A row template's row phase, named by its id.
     Row(&'a str),
     /// No one template: the column phase completes the rows of every
@@ -58,16 +57,14 @@ pub(super) enum Template<'a> {
 /// The implicit template of a spec without `rows`: one template over the
 /// base driver, whose keys are computed from one base record each.
 #[derive(Clone, Copy, Debug)]
-pub(super) struct Implicit<'a> {
-    /// The output keys, in declared order.
-    pub keys: &'a [usize],
+pub(super) struct Implicit {
     /// Whether the bound column is a key.
     pub key: bool,
     /// Whether every row is one base record: a window derives a key.
     pub records: bool,
 }
 
-impl Implicit<'_> {
+impl Implicit {
     /// Whether the bound column reads one base record per row: a key does,
     /// and every column does with record rows.
     pub(super) fn record(&self) -> bool {
@@ -107,7 +104,7 @@ impl<'a> BindContext<'a, '_> {
             _ => None,
         }
     }
-    pub(super) fn implicit(&self) -> Option<Implicit<'a>> {
+    pub(super) fn implicit(&self) -> Option<Implicit> {
         match self.scope.template {
             Template::Implicit(implicit) => Some(implicit),
             _ => None,
@@ -548,13 +545,12 @@ impl<'a> BindContext<'a, '_> {
     }
 
     /// The implicit template's named read: another input's field joins on
-    /// its implicit join's key, the output keys its fields name (0.5) or its
-    /// declared key (1.0); a lookup read takes the selector's own record; a
-    /// driver field of a non-key column collects the distinct readings of the
-    /// row's records.
+    /// its implicit join's key, the key that input declares; a lookup read
+    /// takes the selector's own record; a driver field of a non-key column
+    /// collects the distinct readings of the row's records.
     fn implicit_operand(
         &mut self,
-        implicit: Implicit<'_>,
+        implicit: Implicit,
         name: &str,
         path: &str,
     ) -> Result<Option<Expression>, BindError> {
@@ -570,8 +566,7 @@ impl<'a> BindContext<'a, '_> {
             return source_expressions::bind_implicit(
                 name,
                 path,
-                implicit.keys,
-                &row_drivers::implied(self.spec(), dataset),
+                &row_drivers::declared_key(self.spec(), dataset),
                 self.catalog,
                 secondary,
                 self.edges,
@@ -898,7 +893,7 @@ impl<'a> BindContext<'a, '_> {
     /// collection; with record rows each source reads the row's record.
     fn implicit_first_available(
         &mut self,
-        implicit: Implicit<'_>,
+        implicit: Implicit,
         selection: &source_expressions::FirstAvailable,
         path: &str,
         column: usize,

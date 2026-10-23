@@ -180,27 +180,23 @@ mod declaration {
                     bytes: original.replacen(old, new, 1).into_bytes(),
                 }
             };
-            // `schema_version` beside `yamaa` routes the file to the 0.5 path,
-            // which reports `yamaa` as an unknown field.
+            // `schema_version` beside `yamaa` declares language 0.5, which no
+            // route reads: the file is refused at its `schema_version`
+            // (SCHEMA-2).
             let both = edit("type: spec\n", "type: spec\nschema_version: '1.0'\n");
-            let decoded =
-                document::decode(both, FileType::Spec, Some(LANGUAGE_VERSION), &closures).unwrap();
-            let Decoded::Legacy { source, .. } = decoded else {
-                panic!("schema_version keeps the 0.5 path: {decoded:?}");
+            let Err(Error::Findings(captured)) =
+                document::decode(both, FileType::Spec, Some(LANGUAGE_VERSION), &closures)
+            else {
+                panic!("a file that declares schema_version is refused");
             };
-            let error = shipped_schema::capture()
-                .unwrap()
-                .prepare_standalone(source)
-                .unwrap_err();
-            let Error::Findings(captured) = &error else {
-                panic!("0.5 findings: {error:?}");
-            };
-            let unknown = captured
-                .findings()
-                .iter()
-                .find(|finding| finding.code == ConditionCode::SchemaUnknownField)
-                .unwrap_or_else(|| panic!("an unknown field: {error:?}"));
-            assert_eq!(unknown.path, "yamaa");
+            assert_eq!(
+                captured
+                    .findings()
+                    .iter()
+                    .map(|finding| (finding.path.as_str(), finding.code))
+                    .collect::<Vec<_>>(),
+                [("schema_version", ConditionCode::HeaderLanguageVersion)]
+            );
             // A 0.5 spelling under the 1.x header fails 1.0 admission.
             for (old, new) in [
                 ("derivation: SOURCE.STUDYID", "derivation: {literal: X}"),

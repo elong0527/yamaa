@@ -65,13 +65,9 @@ pub struct Resource {
 #[serde(deny_unknown_fields)]
 pub struct Entry {
     pub entry: String,
-    /// The bundle version a 0.5 entry's specification declares.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub schema_version: Option<String>,
-    /// The language version a 1.x entry's resolved specification records in
+    /// The language version the entry's resolved specification records in
     /// `yamaa`, the newest any of its layers declares (P-VER-1).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub language_version: Option<String>,
+    pub language_version: String,
     #[serde(
         serialize_with = "crate::json_wire::serialize_value",
         deserialize_with = "crate::json_wire::deserialize_value"
@@ -186,13 +182,9 @@ impl ResolvedArtifact {
             ));
         }
         for entry in &self.entries {
-            // A 0.5 entry names its bundle version and a 1.x entry its
-            // language version, each as its specification records it.
-            let (field, version) = match (&entry.schema_version, &entry.language_version) {
-                (Some(version), None) => ("schema_version", version),
-                (None, Some(version)) => ("yamaa", version),
-                _ => return Err(Error::Facts("incomplete entry")),
-            };
+            // The entry names its language version as its specification
+            // records it.
+            let version = &entry.language_version;
             if entry.entry.is_empty()
                 || version.is_empty()
                 || !entry.specification.is_object()
@@ -201,8 +193,8 @@ impl ResolvedArtifact {
             {
                 return Err(Error::Facts("incomplete entry"));
             }
-            if entry.specification.get(field).and_then(Value::as_str) != Some(version) {
-                return Err(Error::Facts("schema version differs from the model"));
+            if entry.specification.get("yamaa").and_then(Value::as_str) != Some(version) {
+                return Err(Error::Facts("language version differs from the model"));
             }
             validate_ledgers(entry)?;
             for resource in &entry.resources {

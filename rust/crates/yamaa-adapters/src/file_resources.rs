@@ -1175,7 +1175,7 @@ mod default_resolver_tests {
         std::fs::create_dir_all(directory.join("input")).unwrap();
         std::fs::write(
             directory.join("spec.yaml"),
-            "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input/src.csv, types: {ID: int}}}\noutput: {path: out.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n",
+            "yamaa: '1.0'\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input/src.csv, types: {ID: int}}}\noutput: {path: out.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n",
         )
         .unwrap();
         std::fs::write(directory.join("input/src.csv"), "ID\n1\n2\n").unwrap();

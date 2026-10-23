@@ -4,7 +4,6 @@
 pub(crate) enum Error {
     Internal,
     InvalidQuery,
-    InvalidDocument,
 }
 // Stable outcomes keep language findings, policy refusal and transport defects separate.
 
@@ -26,20 +25,6 @@ fn document_resource(resource: DocumentResource) -> &'static str {
 }
 fn limit(step: Step, phase: &str, resource: &str, limit: usize) -> Rejection {
     bound(step, phase, resource, limit, None)
-}
-pub(crate) fn document(error: DocumentError, step: Step) -> Result<Rejection, Error> {
-    match error {
-        DocumentError::Limit {
-            resource,
-            limit: maximum,
-        } => Ok(limit(
-            step,
-            "decoded_document",
-            document_resource(resource),
-            maximum,
-        )),
-        _ => Err(Error::InvalidDocument),
-    }
 }
 pub(crate) fn validation(error: ValidationError, step: Step) -> Result<Rejection, Error> {
     Ok(match error {

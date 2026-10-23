@@ -685,15 +685,7 @@ impl<'d> Parser<'d, '_, '_> {
         let listed = self.meta(meta, docs_origin);
         let mut documents = Vec::with_capacity(doc_nodes.len());
         for (index, &item) in doc_nodes.iter().enumerate() {
-            let id = match self
-                .input
-                .field(item, "id")
-                .map(|id| &self.input.nodes()[id])
-            {
-                Some(N::Text(id)) => id.as_str(),
-                _ => "",
-            };
-            let meta = self.metas.member(listed, index, id, item);
+            let meta = self.metas.index(listed, index, item);
             if let Some(value) =
                 self.document(item, docs_origin, docs_path.child(Step::Index(index)), meta)
             {

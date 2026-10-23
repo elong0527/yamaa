@@ -1,8 +1,7 @@
-//! Declared join keys on a 1.0 tree (D23, D63): an implicit join and a
-//! qualified aggregate without `key` match on the input's declared `key`, a
-//! named intermediate states its own unless it drives a row template, and a
-//! read of an input without `key` fails at the read. The same declarations
-//! lowered by the 0.5 front end infer the applicable output keys.
+//! Declared join keys (D23, D63): an implicit join and a qualified aggregate
+//! without `key` match on the input's declared `key`, a named intermediate
+//! states its own unless it drives a row template, and a read of an input
+//! without `key` fails at the read.
 use super::*;
 use crate::diagnostic::ConditionCode as Code;
 use crate::test_document::Tree;
@@ -66,15 +65,13 @@ fn spec(dm_key: Option<&[&str]>, columns: Vec<Tree>, extra: Vec<(&str, Tree)>) -
     tree
 }
 
-/// The tree `surface`'s front end lowers the document to.
-fn lowered(tree: Tree, surface: ast::Surface) -> ast::Spec {
-    crate::front_end::lowering::lower_surface(&tree.document(), None, surface).into_spec()
+/// The tree the 1.0 front end lowers the document to.
+fn lowered(tree: Tree) -> ast::Spec {
+    crate::test_specification::lower(tree)
 }
 
-const V1: ast::Surface = ast::Surface::V1 { minor: 0 };
-
 fn prepare(tree: Tree) -> Result<PreparedSpecification, PrepareError> {
-    PreparedSpecification::from_tree(lowered(tree, V1), Vec::new(), None, None, None, None)
+    PreparedSpecification::from_tree(lowered(tree), Vec::new(), None, None, None, None)
 }
 
 fn schema(fields: &[(&str, ColumnType)]) -> TableSchema {
@@ -145,13 +142,9 @@ fn join_keys(plan: &ResolvedPlan) -> Vec<usize> {
 #[test]
 fn an_implicit_join_matches_on_the_input_s_declared_key() {
     let tree = |key: Option<&[&str]>| spec(key, vec![column("AGE", "int", "DM.AGE")], vec![]);
-    // DM stores both output keys. 1.0 matches on the one it declares; the
-    // same declarations lowered by the 0.5 front end infer both.
+    // DM stores both output keys; the join matches on the one it declares.
     let plan = bind(&prepare(tree(Some(&["USUBJID"]))).unwrap()).unwrap();
     assert_eq!(join_keys(&plan), [1]);
-    let legacy = lowered(tree(None), ast::Surface::V0_5);
-    let legacy = PreparedSpecification::from_tree(legacy, Vec::new(), None, None, None, None);
-    assert_eq!(join_keys(&bind(&legacy.unwrap()).unwrap()), [2]);
     let plan = bind(&prepare(tree(Some(&["STUDYID", "USUBJID"]))).unwrap()).unwrap();
     assert_eq!(join_keys(&plan), [2]);
 }
@@ -278,7 +271,7 @@ fn an_intermediate_read_as_a_lookup_requires_its_key() {
         context(&[("class", "intermediate_class"), ("field", "key")])
     );
     // The 1.0 front end refuses the same declaration first.
-    let checked = crate::front_end::v1::spec::checks::findings(&lowered(tree, V1));
+    let checked = crate::front_end::v1::spec::checks::findings(&lowered(tree));
     assert_eq!(
         checked
             .iter()
@@ -407,7 +400,7 @@ fn a_row_template_s_join_matches_the_driver_on_the_declared_key() {
 
 /// A row template's driver declares no key, so a read of it as a lookup,
 /// for the rows another template builds, is refused at its `key`
-/// (LOOKUP-3, ROW-2), where 0.5 infers the applicable output keys.
+/// (LOOKUP-3, ROW-2).
 #[test]
 fn a_row_driver_read_as_a_lookup_is_refused_at_its_key() {
     let tree = || {
@@ -437,16 +430,6 @@ fn a_row_driver_read_as_a_lookup_is_refused_at_its_key() {
             ],
         )
     };
-    let legacy = PreparedSpecification::from_tree(
-        lowered(tree(), ast::Surface::V0_5),
-        Vec::new(),
-        None,
-        None,
-        None,
-        None,
-    )
-    .unwrap();
-    bind(&legacy).unwrap();
     let diagnostics = refused(&prepare(tree()).unwrap());
     let [diagnostic] = diagnostics.as_slice() else {
         panic!("one refusal: {diagnostics:?}");

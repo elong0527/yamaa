@@ -2,7 +2,6 @@
 use crate::{
     inheritance::SourceError,
     inheritance_capture::InheritanceDecodePort,
-    inheritance_preparation::PreparedInheritance,
     project_preparation::Source,
     resolver::{self, File, Name, Resolver},
 };
@@ -10,20 +9,16 @@ use crate::{
     resource::ResourceFailure,
     schema::{
         AdmittedMappingDictionary, Document, LayerProvenance, MappingDictionaryReference,
-        NormalizationError, SchemaStructure, SpecificationDocument,
+        NormalizationError, SchemaStructure,
     },
 };
 
-/// Only the retained declaring contribution can authorize a relative resource path.
-pub enum Origins<'a> {
-    Standalone(&'a str),
-    Inherited(&'a PreparedInheritance),
-    /// A resolved 1.x specification: the layer that contributed each
-    /// written path, and its layers in contribution order.
-    Versioned {
-        provenance: &'a [LayerProvenance],
-        layers: &'a [crate::inheritance::VersionedLayer],
-    },
+/// Only the retained declaring contribution can authorize a relative resource
+/// path: of a resolved 1.x specification, the layer that contributed each
+/// written path, and its layers in contribution order.
+pub struct Origins<'a> {
+    pub provenance: &'a [LayerProvenance],
+    pub layers: &'a [crate::inheritance::VersionedLayer],
 }
 /// The layer, numbered in contribution order, that contributed `path` or
 /// the nearest written path holding it.
@@ -41,17 +36,8 @@ fn contribution(provenance: &[LayerProvenance], path: &str) -> Option<usize> {
 }
 impl Origins<'_> {
     fn declaring(&self, path: &str) -> Option<&str> {
-        match self {
-            Self::Standalone(source) => Some(source),
-            Self::Inherited(prepared) => {
-                let layer = contribution(prepared.provenance(), path)?;
-                Some(&prepared.layers().get(layer)?.source.identity)
-            }
-            Self::Versioned { provenance, layers } => {
-                let layer = contribution(provenance, path)?;
-                Some(&layers.get(layer)?.source.identity)
-            }
-        }
+        let layer = contribution(self.provenance, path)?;
+        Some(&self.layers.get(layer)?.source.identity)
     }
 }
 /// Entry and parents have already been captured and physically decoded.
@@ -101,11 +87,6 @@ pub enum Cause<E, X> {
 #[error("dictionary preparation: cause={cause:?}, captures={captures:?}")]
 pub struct Error<E, X, R> {
     pub cause: Cause<E, X>,
-    pub captures: Vec<Captured<R>>,
-}
-#[derive(Debug)]
-pub struct Prepared<R> {
-    pub model: SpecificationDocument,
     pub captures: Vec<Captured<R>>,
 }
 struct Run<'a, P: Resolver, D: InheritanceDecodePort> {
@@ -200,31 +181,8 @@ impl<P: Resolver, D: InheritanceDecodePort> Run<'_, P, D> {
             })
     }
 }
-pub type PreparationResult<E, X, R> = Result<Option<Prepared<R>>, Box<Error<E, X, R>>>;
-/// Metadata only. Failed parsing/admission keeps the entered capture prefix and
-/// original host error; no study source, callback or publication authority is entered.
-pub fn prepare<P: Resolver, D: InheritanceDecodePort>(
-    schema: &SchemaStructure,
-    model: &SpecificationDocument,
-    origins: Origins<'_>,
-    seeds: &[Seed<'_, D::Raw>],
-    port: &mut P,
-    decoder: &mut D,
-) -> PreparationResult<P::Error, D::Error, D::Raw> {
-    materialized(
-        schema,
-        model.document(),
-        origins,
-        seeds,
-        port,
-        decoder,
-        |dictionaries| schema.materialize_mapping_dictionaries(model, dictionaries),
-    )
-    .map(|prepared| prepared.map(|(model, captures)| Prepared { model, captures }))
-}
-
 /// The dictionaries a resolved 1.x specification reads, materialized into a
-/// compiler-only copy of it, as [`prepare`] materializes a 0.5 model's.
+/// compiler-only copy of it.
 #[derive(Debug)]
 pub struct PreparedDocument<R> {
     /// The specification with each dictionary file's admitted content in
@@ -238,9 +196,12 @@ pub struct PreparedDocument<R> {
 }
 pub type DocumentPreparationResult<E, X, R> =
     Result<Option<PreparedDocument<R>>, Box<Error<E, X, R>>>;
-/// [`prepare`] for a resolved 1.x specification held as `document`: each
-/// dictionary file it names is captured from the layer that wrote its path,
-/// admitted, and materialized; `None` when it names none.
+/// Prepare the dictionaries of a resolved 1.x specification held as
+/// `document`: each dictionary file it names is captured from the layer that
+/// wrote its path, admitted, and materialized; `None` when it names none.
+/// Metadata only: a failed parse or admission keeps the entered capture
+/// prefix and the original host error, and no study source, callback or
+/// publication authority is entered.
 pub fn prepare_document<P: Resolver, D: InheritanceDecodePort>(
     schema: &SchemaStructure,
     document: &Document,

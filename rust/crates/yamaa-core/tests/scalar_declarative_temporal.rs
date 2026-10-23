@@ -301,11 +301,12 @@ mod scalar {
             day: Option<D<'_>>,
             time: Option<TimeRule>,
         ) -> Completion {
+            // A month, written only where the rules complete a year, implies
+            // that precision (TIME-8).
             completion_policy(
                 target,
                 (minimum == P::Year).then_some("6"),
                 day,
-                minimum,
                 time,
                 "date",
             )
@@ -1091,30 +1092,20 @@ mod scalar {
         use crate::support::diagnostic::temporal_imputation as diagnostic;
         #[test]
         fn independent_diagnostic_truth_reaches_every_imputation_cause() {
-            assert_eq!(diagnostic::reached().len(), 17);
+            assert_eq!(diagnostic::reached().len(), 13);
         }
 
         #[test]
-        fn calendar_policy_preserves_wide_integers_and_unreachable_month_precedence() {
+        fn calendar_policy_preserves_wide_integers() {
             use yamaa_core::dataset::DatePolicyError;
             use yamaa_core::diagnostic::ConditionCode as C;
             use yamaa_core::json::Value as JsonValue;
             let wide = "9".repeat(5000);
-            let policy = |month: Option<&str>, day: D<'_>, minimum: P| {
-                completion_policy(T::Date, month, Some(day), minimum, None, "date")
+            let policy = |month: Option<&str>, day: D<'_>| {
+                completion_policy(T::Date, month, Some(day), None, "date")
             };
             let DatePolicyError::Diagnostic(error) =
-                policy(Some(&wide), D::Number("0"), P::Month).unwrap_err()
-            else {
-                panic!("admitted semantic failure")
-            };
-            assert_eq!(error.code, C::ImputationMonthNotPermitted);
-            assert_eq!(
-                error.context["month"],
-                JsonValue::Number((wide.clone()).parse().expect("canonical integer"))
-            );
-            let DatePolicyError::Diagnostic(error) =
-                policy(Some(&wide), D::Number("1"), P::Year).unwrap_err()
+                policy(Some(&wide), D::Number("1")).unwrap_err()
             else {
                 panic!("admitted semantic failure")
             };
@@ -1124,23 +1115,13 @@ mod scalar {
                 JsonValue::Number((wide.clone()).parse().expect("canonical integer"))
             );
             let DatePolicyError::Diagnostic(error) =
-                policy(Some("6"), D::Number(&wide), P::Year).unwrap_err()
+                policy(Some("6"), D::Number(&wide)).unwrap_err()
             else {
                 panic!("admitted semantic failure")
             };
             assert_eq!(error.code, C::ImputationDayRange);
             assert_eq!(
                 error.context["value"],
-                JsonValue::Number((wide.clone()).parse().expect("canonical integer"))
-            );
-            let DatePolicyError::Diagnostic(error) =
-                policy(None, D::Number(&wide), P::Day).unwrap_err()
-            else {
-                panic!("admitted semantic failure")
-            };
-            assert_eq!(error.code, C::ImputationDayNotPermitted);
-            assert_eq!(
-                error.context["day"],
                 JsonValue::Number((wide).parse().expect("canonical integer"))
             );
         }
@@ -1148,48 +1129,36 @@ mod scalar {
         #[test]
         fn public_policy_admits_whole_context_before_semantic_copies_or_integer_scans() {
             use yamaa_core::{dataset::DatePolicyError as E, diagnostic::ConditionCode as C};
-            let policy = |month: Option<&str>, day: D<'_>, minimum: P, path: &str| {
-                completion_policy(T::Date, month, Some(day), minimum, None, path)
+            let policy = |month: Option<&str>, day: D<'_>, path: &str| {
+                completion_policy(T::Date, month, Some(day), None, path)
             };
             let oversized = "9".repeat(200_000);
             let E::Diagnostic(finding) =
-                policy(Some(&oversized), D::Number("0"), P::Month, "date").unwrap_err()
+                policy(Some(&oversized), D::Number("1"), "date").unwrap_err()
             else {
                 panic!("month policy");
             };
-            assert_eq!(finding.code, C::ImputationMonthNotPermitted);
+            assert_eq!(finding.code, C::ImputationMonthRange);
             let E::Diagnostic(finding) =
-                policy(Some("6"), D::Position(&oversized), P::Year, "date").unwrap_err()
+                policy(Some("6"), D::Position(&oversized), "date").unwrap_err()
             else {
                 panic!("day policy");
             };
             assert_eq!(finding.code, C::ImputationDayRule);
-            assert!(policy(Some("6"), D::Number("1"), P::Year, &oversized).is_ok());
-            assert!(policy(Some("6"), D::Number("1"), P::Year, &oversized[..100_000]).is_ok());
+            assert!(policy(Some("6"), D::Number("1"), &oversized).is_ok());
+            assert!(policy(Some("6"), D::Number("1"), &oversized[..100_000]).is_ok());
             for number in ["", "01", "+1", "-0", "1.0", "bad"] {
-                assert_eq!(
-                    policy(Some(number), D::Number("1"), P::Year, "date"),
-                    Err(E::Shape)
-                );
-                assert_eq!(
-                    policy(Some("6"), D::Number(number), P::Year, "date"),
-                    Err(E::Shape)
-                );
+                assert_eq!(policy(Some(number), D::Number("1"), "date"), Err(E::Shape));
+                assert_eq!(policy(Some("6"), D::Number(number), "date"), Err(E::Shape));
             }
-            for minimum in [P::None, P::Hour, P::Minute, P::Second] {
-                assert_eq!(policy(None, D::Number("1"), minimum, "date"), Err(E::Shape));
-            }
-            assert_eq!(
-                policy(Some("6"), D::Number("1"), P::Year, ""),
-                Err(E::Shape)
-            );
+            assert_eq!(policy(Some("6"), D::Number("1"), ""), Err(E::Shape));
             // The time rule belongs to the datetime type alone.
             assert_eq!(
-                completion_policy(T::DateTime, None, None, P::Day, None, "date"),
+                completion_policy(T::DateTime, None, None, None, "date"),
                 Err(E::Shape)
             );
             assert_eq!(
-                completion_policy(T::Date, None, None, P::Day, Some(TimeRule::Last), "date"),
+                completion_policy(T::Date, None, None, Some(TimeRule::Last), "date"),
                 Err(E::Shape)
             );
         }

@@ -6,7 +6,6 @@ use crate::{
     file_project,
     file_resources::Resources,
     project_source::ProjectSchemas,
-    specification_source::CapturedSchema,
 };
 use std::sync::Arc;
 use yamaa_core::project_function::Language;
@@ -39,12 +38,12 @@ pub enum Error {
     Entry(Box<RejectedEntry>),
 }
 /// Even an early root decode or metadata transport failure retains the original
-/// raw captures and both schema capabilities. No diagnostic refusal consumes it.
+/// raw captures and the project schema capabilities. No diagnostic refusal
+/// consumes it.
 pub struct RejectedEnvironment {
     error: file_project::Error,
     entry: Option<String>,
     environment: Option<String>,
-    specification_schema: Arc<CapturedSchema>,
     project_schemas: ProjectSchemas,
     resources: Resources,
 }
@@ -60,9 +59,6 @@ impl RejectedEnvironment {
     }
     pub fn environment(&self) -> Option<&str> {
         self.environment.as_deref()
-    }
-    pub fn specification_schema(&self) -> &Arc<CapturedSchema> {
-        &self.specification_schema
     }
     pub fn project_schemas(&self) -> &ProjectSchemas {
         &self.project_schemas
@@ -106,7 +102,6 @@ struct Configured {
     resources: Resources,
     entry: String,
     environment: Option<String>,
-    specification_schema: Arc<CapturedSchema>,
     project_schemas: ProjectSchemas,
 }
 /// The refusal of the caller's own path `given`.
@@ -121,7 +116,6 @@ fn configure(specification: &str, environment: Option<&str>) -> Result<Configure
         .map_err(|crate::file_configuration::Error::Path(error)| caller(specification, error))?;
     // Public caller paths retain the established absolute-path policy. This is
     // a lexical fact; the first environment file is opened only after admission.
-    let specification_schema = crate::shipped_schema::capture().map_err(Error::Schema)?;
     let project_schemas = crate::shipped_schema::capture_project().map_err(Error::Schema)?;
     let environment = environment
         .map(|given| {
@@ -136,18 +130,15 @@ fn configure(specification: &str, environment: Option<&str>) -> Result<Configure
         resources,
         entry,
         environment,
-        specification_schema,
         project_schemas,
     })
 }
 
 /// One project file captured for project operations: the resources that read
-/// it, its admitted project and environment documents, and the specification
-/// schema that prepares the specifications its sections list.
+/// it and its admitted project and environment documents.
 pub struct CapturedProject {
     pub(crate) resources: Resources,
     pub(crate) environment: crate::project_source::OwnedEnvironment,
-    pub(crate) schema: Arc<CapturedSchema>,
 }
 
 /// Capture a project file with the path policy, schemas and environment
@@ -165,7 +156,6 @@ pub fn capture_project(
             resources: Resources::with_resolver(resolver, project),
             entry: project.to_owned(),
             environment: Some(project.to_owned()),
-            specification_schema: crate::shipped_schema::capture().map_err(Error::Schema)?,
             project_schemas: crate::shipped_schema::capture_project().map_err(Error::Schema)?,
         },
         None => configure(project, Some(project))?,
@@ -178,13 +168,11 @@ pub fn capture_project(
             .as_deref()
             .map(|resolved| (project, resolved)),
         host,
-        Arc::clone(&request.specification_schema),
         request.project_schemas,
     )?;
     Ok(CapturedProject {
         resources,
         environment,
-        schema: request.specification_schema,
     })
 }
 
@@ -238,17 +226,10 @@ pub fn select_request(
         &request.entry,
         given.environment.zip(request.environment.as_deref()),
         host,
-        Arc::clone(&request.specification_schema),
         request.project_schemas,
     )
     .map_err(SelectionError::Preparation)?;
-    compile(
-        resources,
-        given.specification,
-        &request.entry,
-        environment,
-        request.specification_schema,
-    )
+    compile(resources, given.specification, &request.entry, environment)
 }
 
 /// Host authority replaces physical lookup while all metadata preparation
@@ -258,8 +239,6 @@ pub fn select_with_resolver(
     host: Option<Language>,
     resolver: Arc<dyn crate::host_resources::Resolver>,
 ) -> Result<Selected, SelectionError> {
-    let specification_schema = crate::shipped_schema::capture()
-        .map_err(|error| SelectionError::Preparation(Error::Schema(error)))?;
     let project_schemas = crate::shipped_schema::capture_project()
         .map_err(|error| SelectionError::Preparation(Error::Schema(error)))?;
     select_with_optional_resources(
@@ -267,7 +246,6 @@ pub fn select_with_resolver(
         request.specification,
         request.environment,
         host,
-        specification_schema,
         project_schemas,
     )
 }
@@ -280,11 +258,9 @@ fn compile(
     given: &str,
     entry: &str,
     environment: crate::project_source::OwnedEnvironment,
-    specification_schema: Arc<CapturedSchema>,
 ) -> Result<Selected, SelectionError> {
-    let entry =
-        crate::file_entry::capture(resources, given, entry, environment, specification_schema)
-            .map_err(|error| SelectionError::Preparation(Error::Entry(error)))?;
+    let entry = crate::file_entry::capture(resources, given, entry, environment)
+        .map_err(|error| SelectionError::Preparation(Error::Entry(error)))?;
     FileSpecification::from_workflow(entry).map_err(SelectionError::Compile)
 }
 
@@ -293,7 +269,6 @@ pub fn select_with_resources(
     entry: &str,
     environment: &str,
     host: Language,
-    specification_schema: Arc<CapturedSchema>,
     project_schemas: ProjectSchemas,
 ) -> Result<Selected, SelectionError> {
     select_with_optional_resources(
@@ -301,7 +276,6 @@ pub fn select_with_resources(
         entry,
         Some(environment),
         Some(host),
-        specification_schema,
         project_schemas,
     )
 }
@@ -311,7 +285,6 @@ pub fn select_with_optional_resources(
     entry: &str,
     environment: Option<&str>,
     host: Option<Language>,
-    specification_schema: Arc<CapturedSchema>,
     project_schemas: ProjectSchemas,
 ) -> Result<Selected, SelectionError> {
     let (resources, environment) = capture_environment(
@@ -319,11 +292,10 @@ pub fn select_with_optional_resources(
         entry,
         environment.map(|environment| (environment, environment)),
         host,
-        Arc::clone(&specification_schema),
         project_schemas,
     )
     .map_err(SelectionError::Preparation)?;
-    compile(resources, entry, entry, environment, specification_schema)
+    compile(resources, entry, entry, environment)
 }
 
 /// Capture the project file `environment` names, as the path the caller gave
@@ -334,7 +306,6 @@ fn capture_environment(
     entry: &str,
     environment: Option<(&str, &str)>,
     host: Option<Language>,
-    specification_schema: Arc<CapturedSchema>,
     project_schemas: ProjectSchemas,
 ) -> Result<(Resources, crate::project_source::OwnedEnvironment), Error> {
     let owned_entry = entry.to_owned();
@@ -356,7 +327,6 @@ fn capture_environment(
             error,
             entry: Some(owned_entry),
             environment: Some(environment.to_owned()),
-            specification_schema,
             project_schemas,
             resources,
         }))),

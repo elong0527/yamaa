@@ -252,14 +252,17 @@ mod tests {
     #[test]
     #[cfg(feature = "yaml")]
     fn generated_contract_csv_admits_100k_and_retains_exact_cell_and_ordinal_boundaries() {
-        let document = crate::shipped_schema::capture()
-            .unwrap()
-            .prepare_standalone(Source {
+        let document = crate::shipped_schema::prepare(
+            Source {
                 identity: "producer.yaml".into(),
-                bytes: b"schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {RAW: raw.csv}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: RAW.ID}\n  - {name: VALUE, type: int, label: Value, derivation: RAW.VALUE}\noutput: {path: produced.csv, columns: [ID, VALUE]}\n".to_vec(),
-            })
-            .unwrap();
-        let contract = yamaa_core::producer_contract::prepare(document.model()).unwrap();
+                bytes: b"yamaa: '1.0'\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {RAW: raw.csv}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: RAW.ID}\n  - {name: VALUE, type: int, label: Value, derivation: RAW.VALUE}\noutput: {path: produced.csv, columns: [ID, VALUE]}\n".to_vec(),
+            },
+            "producer.yaml".into(),
+            &mut crate::specification_source::EntryOnly,
+        )
+        .unwrap();
+        let contract =
+            yamaa_core::producer_contract::prepare_document(document.document()).unwrap();
         let mut source = SourceDeclaration {
             name: "P".into(),
             path: "produced.csv".into(),

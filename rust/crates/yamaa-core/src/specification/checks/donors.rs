@@ -308,13 +308,7 @@ impl<'a> DonorReads<'a> {
         }
         // A read the donor record cannot give leaves the lookup no value
         // there (LOOKUP-16).
-        if let Some(identifier) = spec
-            .header
-            .surface
-            .one_meaning_per_form()
-            .then(|| self.unavailable(index, true, &mut Vec::new()))
-            .flatten()
-        {
+        if let Some(identifier) = self.unavailable(index, true, &mut Vec::new()) {
             let mut finding = LookupFinding::new(path, C::IntermediateDerivationDependency);
             finding.text("intermediate", self.reader.unwrap_or_default());
             finding.text("identifier", &identifier);
@@ -335,7 +329,7 @@ impl<'a> DonorReads<'a> {
             Some(JoinKey::Pairs { pairs, .. }) => {
                 pairs.iter().map(|(field, _)| field.name.as_str()).collect()
             }
-            _ if !spec.header.surface.infers_join_keys() => {
+            _ => {
                 findings.push(BindFinding::Lookup(LookupFinding::from_diagnostic(
                     crate::diagnostic::lookup::key_required(&format!(
                         "{}.key",
@@ -344,7 +338,6 @@ impl<'a> DonorReads<'a> {
                 )));
                 return false;
             }
-            _ => return false,
         };
         let mut decided = true;
         let mut refused = false;

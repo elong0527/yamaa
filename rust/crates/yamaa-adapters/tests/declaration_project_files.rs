@@ -18,9 +18,7 @@ mod declaration {
         use yamaa_adapters::project_source::{self, Failure, Kind};
         use yamaa_adapters::shipped_schema;
         use yamaa_adapters::specification_source::{CapturedDocument, Error, Source};
-        use yamaa_core::ast::{
-            FileId, FileRef, Function, FunctionSource, Notation, Project, Span, Surface,
-        };
+        use yamaa_core::ast::{FileId, FileRef, Function, FunctionSource, Project, Span, Surface};
         use yamaa_core::front_end::{lowering, v0_5, v1};
         use yamaa_core::json::Value;
         use yamaa_core::language::{FileType, LANGUAGE_VERSION};
@@ -282,9 +280,7 @@ mod declaration {
             for implementation in &function.implementations {
                 assert!(implementation.callable.meta.span.is_known());
                 assert_eq!(
-                    function
-                        .paths
-                        .render(implementation.callable.meta.path, Notation::V0_5),
+                    function.paths.render(implementation.callable.meta.path),
                     format!("implementations.{}", implementation.language.key())
                 );
             }
@@ -814,7 +810,7 @@ mod declaration {
         const CODELISTS: &str = "yamaa: \"1.0\"\ntype: codelists\ncodelists: [{id: SEX, name: Sex, items: [{value: F}, {value: M}]}]\n";
         /// A 0.5 specification calling the project's function, which a 1.0
         /// project supplies as it supplies a 1.0 specification.
-        const DOMAIN: &str = "schema_version: '1.0'\ndomain: TEST\ninput: {SRC: {path: input.csv, types: {ID: int}}}\nkeys: [ID]\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {function: {name: id, args: {x: SRC.ID}}}}\noutput: {path: output.csv, columns: [ID, VALUE]}\n";
+        const DOMAIN: &str = "yamaa: '1.0'\ntype: spec\ndomain: TEST\ninput: {SRC: {path: input.csv, types: {ID: int}}}\nkeys: [ID]\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {function: {name: id, args: {x: SRC.ID}}}}\noutput: {path: output.csv, columns: [ID, VALUE]}\n";
 
         /// The shipped project schemas, which read 1.x files.
         fn reading() -> ProjectSchemas {
@@ -874,7 +870,6 @@ mod declaration {
                     "domain.yaml",
                     "../project.yaml",
                     host,
-                    shipped_schema::capture().unwrap(),
                     schemas,
                 )
             }
@@ -891,7 +886,6 @@ mod declaration {
                     "domain.yaml",
                     "../project.yaml",
                     host,
-                    shipped_schema::capture().unwrap(),
                     reading(),
                 ) else {
                     panic!("a refused selection")

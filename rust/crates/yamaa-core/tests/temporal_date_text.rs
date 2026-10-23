@@ -11,7 +11,6 @@ mod temporal_date_text {
         diagnostic::Diagnostic,
         iso8601::Form,
         table::ValueRef,
-        temporal::Precision as P,
         value::Value,
     };
 
@@ -54,7 +53,6 @@ mod temporal_date_text {
                 T::DateTime,
                 Some("1"),
                 Some(DayDeclaration::Position("first")),
-                P::Year,
                 Some(TimeRule::First),
                 PATH,
             )

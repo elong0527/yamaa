@@ -59,12 +59,7 @@ pub enum AggregateFinding<'a> {
         expected: ResultType,
         actual: ColumnType,
     },
-    NoApplicableKeys {
-        path: &'a str,
-        dataset: &'a str,
-        keys: &'a [String],
-    },
-    /// A 1.0 input without `key`, which a keyless qualified aggregate over it
+    /// An input without `key`, which a keyless qualified aggregate over it
     /// would match on (LOOKUP-5).
     UndeclaredInputKey {
         path: &'a str,
@@ -160,14 +155,6 @@ impl AggregateFinding<'_> {
                     actual.into(),
                 ))
             }
-            Self::NoApplicableKeys {
-                path,
-                dataset,
-                keys,
-            } => {
-                let keys = keys.iter().map(String::as_str).collect::<Vec<_>>();
-                return Ok(lookup::no_applicable_keys(path, dataset, &keys, true));
-            }
             Self::UndeclaredInputKey { path, dataset } => {
                 return Ok(lookup::undeclared_input_key(path, dataset, true));
             }
@@ -227,7 +214,6 @@ impl AggregateFinding<'_> {
             | Self::DonorKeyReference { .. }
             | Self::MatchValueReference { .. }
             | Self::KeyType { .. }
-            | Self::NoApplicableKeys { .. }
             | Self::UndeclaredInputKey { .. } => {
                 unreachable!("key causes projected above")
             }
@@ -298,7 +284,6 @@ impl AggregateFinding<'_> {
             | Self::DonorKeyReference { .. }
             | Self::MatchValueReference { .. }
             | Self::KeyType { .. }
-            | Self::NoApplicableKeys { .. }
             | Self::UndeclaredInputKey { .. } => {
                 unreachable!("key causes projected above")
             }

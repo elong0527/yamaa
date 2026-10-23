@@ -27,7 +27,7 @@ pub struct Expr {
 /// sub-expressions; every other walk derives from that.
 #[derive(Clone, Debug, PartialEq)]
 pub enum ExprKind {
-    /// A written scalar: `{literal: X}` today, a YAML scalar in 1.0.
+    /// A written scalar: a YAML scalar, or text holding only a literal.
     Literal(Literal),
     /// A name read at the current position: a column, `OWNER.FIELD`, or
     /// `OWNER.*` under `COUNT`. A bare name in either surface lowers here,
@@ -87,7 +87,7 @@ pub struct CallShape {
 /// stays a finding of the check that converts it.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Literal {
-    /// `{literal: null}` today, YAML null in 1.0.
+    /// YAML null, or `NULL` in text.
     Missing,
     Bool(bool),
     /// Canonical decimal text of any width.
@@ -95,9 +95,9 @@ pub enum Literal {
     /// A finite binary64 value.
     Float(f64),
     Text(String),
-    /// `{date: TEXT}`, a tagged function argument in 0.5.
+    /// A DATE literal in text, its value as written.
     Date(String),
-    /// `{datetime: TEXT}`, a tagged function argument in 0.5.
+    /// A DATETIME literal in text, its value as written.
     DateTime(String),
     /// A value outside the language; see [`ExprKind::Unsupported`].
     Unsupported,
@@ -141,9 +141,9 @@ impl Name {
 }
 
 /// Grammar text with its context and its one compilation. The expression's
-/// own meta is the operation site (today's `derivation.compute`); `text`
-/// carries the text field's (today's `derivation.compute.expr`). In 1.0
-/// both are the expression field.
+/// own meta is its site and `text` carries the text field's, which differ
+/// only where an operation holds the text in a field of its own, such as
+/// `aggregate.expr`.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Formula {
     pub context: Context,
@@ -164,9 +164,8 @@ pub struct SourceRead {
     pub filter: Option<ExprId>,
     pub order_by: Vec<OrderTerm>,
     pub keep: Option<Keep>,
-    /// The answer when the read finds no record; in 0.5 also when the
-    /// variable does not exist ([`super::Surface::absent_answers_unknown_variable`],
-    /// D67).
+    /// The answer when the read finds no record, never when the variable
+    /// does not exist (D67).
     pub absent: Option<Constant>,
     pub require_match: bool,
     /// Of `between`, `filter`, `order_by`, `keep`, `absent` and
@@ -292,12 +291,11 @@ pub enum ScalarOp {
     Dtc,
     /// `dataset::Temporal`.
     TimeOfDay,
-    /// `dataset::Imputation`. `minimum_source_precision` is 0.5 only (P-IMP-1).
+    /// `dataset::Imputation`.
     Impute {
         kind: TemporalType,
         month: Option<String>,
         day: Option<DayRule>,
-        minimum_source_precision: Option<Precision>,
         time: Option<TimeRule>,
     },
     /// `dataset::Imputation`.
@@ -366,9 +364,7 @@ pub enum TimeUnit {
     Hour,
 }
 
-/// Which endpoints an interval includes (P-ORD-2): today's `diff.bounds`
-/// `exclusive` is `Right`, `inclusive` `Both`, `between` `Neither`, and
-/// `cut.right: true` is `Right`.
+/// Which endpoints an interval includes, as `closed` writes it (P-ORD-2).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Closed {
     Left,
@@ -389,13 +385,6 @@ pub enum DayRule {
 pub enum TimeRule {
     First,
     Last,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Precision {
-    Year,
-    Month,
-    Day,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -443,8 +432,9 @@ pub enum WindowFunction {
     Locf {
         include_current: bool,
     },
-    /// `window_order_by` holds a written `window.order_by`, which 0.5
-    /// refuses (`window_order_by_forbidden`) and 1.0 folds into `order_by`.
+    /// `window_order_by` holds a written `window.order_by` that does not
+    /// start with the date ascending, which WINDOW-5 refuses; an order that
+    /// does is folded into the window's `order_by`.
     BaselineFlag {
         inclusive: bool,
         window_order_by: Vec<OrderTerm>,
@@ -461,8 +451,7 @@ pub enum RankMethod {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Aggregate {
     /// `None` for a reduction of the output rows or of a grouped row's
-    /// records; for a keyless qualified aggregate, [`JoinKey::FromInput`] in
-    /// 1.0 and [`JoinKey::Applicable`] in 0.5.
+    /// records; [`JoinKey::FromInput`] for a keyless qualified aggregate.
     pub key: Option<JoinKey>,
     pub between: Option<Between>,
     pub filter: Option<ExprId>,
@@ -470,7 +459,7 @@ pub struct Aggregate {
     /// Per-record bindings evaluated before the reduction (P-BIND-1).
     pub bindings: Vec<Binding>,
     pub expr: ExprId,
-    /// Of the bindings: 0.5 writes them `derive`, 1.0 `derivations`.
+    /// Of the bindings, written `derivations`.
     pub written: super::Written,
 }
 

@@ -4,7 +4,6 @@
 mod file {
     mod diagnostic_origins {
         //! Native index paths resolve only through the exact held composed member IDs.
-        use crate::support::issues::assert_issues;
         use std::fs;
         use yamaa_adapters::{file_resources::Resources, file_workflow, shipped_schema};
         use yamaa_core::project_function::Language;
@@ -30,78 +29,6 @@ mod file {
             }
         }
 
-        /// The index notation `rows[N]` is 0.5's, so these specifications stay
-        /// as 0.5 wrote them until the 0.5 path goes.
-        #[test]
-        fn physical_row_indices_preserve_literal_parent_ids_and_refuse_invalid_slots() {
-            for id in ["ordinary", "dot.id", "bracket[999]", "both.[999]"] {
-                let study = Study::new();
-                fs::write(study.0.join("parent/base.yaml"), format!(
-            "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {{SRC: input.csv}}\noutput: {{path: out.csv, columns: [ID]}}\ncolumns: [{{name: ID, type: str}}]\nrows:\n  - {{id: clean, dataset: SRC, derivations: {{ID: SRC.ID}}}}\n  - {{id: '{id}', dataset: SRC, filter: 'ID >', derivations: {{ID: SRC.ID}}}}\n")).unwrap();
-                fs::write(
-                    study.0.join("spec.yaml"),
-                    "schema_version: '1.0'\nparent: parent/base.yaml\n",
-                )
-                .unwrap();
-                let owner = file_workflow::select_with_optional_resources(
-                    Resources::for_entry(study.0.to_str().unwrap()).unwrap(),
-                    "spec.yaml",
-                    None,
-                    Some(Language::Python),
-                    shipped_schema::capture().unwrap(),
-                    shipped_schema::capture_project().unwrap(),
-                )
-                .unwrap();
-                let prepared = &owner;
-                let document = prepared.run().document();
-                let parent = study.identity("parent/base.yaml");
-                assert_eq!(
-                    document.declaring_source("rows[1].filter"),
-                    Some(parent.as_str())
-                );
-                assert_eq!(
-                    document.declaring_source(&format!("rows.{id}.filter")),
-                    Some(parent.as_str())
-                );
-                for invalid in [
-                    "rows[2].filter",
-                    "rows[-1].filter",
-                    "rows[01].filter",
-                    "rows[+1].filter",
-                    "rows[1]x",
-                ] {
-                    assert_eq!(document.declaring_source(invalid), None, "{invalid}");
-                }
-                assert_eq!(prepared.capture_reads(), 2);
-                let findings = prepared.run().check_diagnostics();
-                assert_eq!(findings.len(), 1);
-                assert_eq!(findings[0].spec_paths, ["rows[1].filter"]);
-                assert_eq!(
-                    document.declaring_source(&findings[0].spec_paths[0]),
-                    Some(parent.as_str())
-                );
-                let issues = yamaa_adapters::specification_check::issues(prepared.run());
-                assert_issues(
-                    &issues,
-                    &[
-                        yamaa_adapters::json!({"phase":"validation","condition":"invalid_expression","rule":"FORMULA-1","spec_paths":["rows[1].filter"],"context":{"predicate":"ID >","position":4}}),
-                    ],
-                    "the parent's invalid filter",
-                );
-                assert_eq!(
-                    yamaa_adapters::project_application::check(
-                        &study.identity("spec.yaml"),
-                        &study.identity("project.yaml"),
-                        Language::Python,
-                    ),
-                    issues
-                );
-                assert_eq!(prepared.capture_reads(), 2);
-                assert!(!study.0.join("parent/input.csv").exists());
-                assert!(!study.0.join("parent/out.csv").exists());
-            }
-        }
-
         #[test]
         fn ready_static_owner_returns_contributor_without_changing_public_issue_context() {
             let study = Study::new();
@@ -117,7 +44,6 @@ mod file {
                 "spec.yaml",
                 None,
                 Some(Language::Python),
-                shipped_schema::capture().unwrap(),
                 shipped_schema::capture_project().unwrap(),
             )
             .unwrap();
@@ -1025,52 +951,6 @@ mod file {
             assert_eq!(fs::read(study.0.join("output.csv")).unwrap(), b"ID\n1\n");
         }
 
-        /// `schema_version_mismatch` is 0.5's finding, so the specification stays
-        /// as 0.5 wrote it until the 0.5 path goes.
-        #[test]
-        fn wide_integer_in_source_keeps_its_exact_language_finding_on_both_public_routes() {
-            let study = Study::new();
-            let digits = "9".repeat(4097);
-            fs::write(
-                study.0.join("spec.yaml"),
-                format!("schema_version: {digits}\n"),
-            )
-            .unwrap();
-            let spec = study.text("spec.yaml");
-            let project = study.project();
-            for environment in [None, Some(project.as_str())] {
-                let request = || Request {
-                    specification: &spec,
-                    environment,
-                };
-                for issues in [
-                    file_application::check(
-                        yamaa_core::project_function::Language::Python,
-                        request(),
-                        identity(&spec),
-                    ),
-                    crate::support::study::domain(
-                        yamaa_core::project_function::Language::Python,
-                        request(),
-                        identity(&spec),
-                    )
-                    .err()
-                    .unwrap(),
-                ] {
-                    assert_eq!(issues.len(), 1);
-                    let issue = &issues[0];
-                    assert_eq!(issue.phase(), "validation");
-                    assert_eq!(issue.condition(), "schema_version_mismatch");
-                    assert_eq!(issue.rule(), Some("SCHEMA-2"));
-                    assert_eq!(issue.spec_paths, ["schema_version"]);
-                    assert_eq!(
-                        yamaa_adapters::json_wire::encode_object(&issue.context),
-                        format!(r#"{{"actual":{digits},"expected":"1.0"}}"#)
-                    );
-                }
-            }
-        }
-
         #[test]
         fn catastrophic_pattern_is_an_ordinary_verification_failure() {
             let study = Study::new();
@@ -1173,7 +1053,6 @@ mod file {
                 "root.yaml",
                 None,
                 Some(Language::Python),
-                shipped_schema::capture().unwrap(),
                 shipped_schema::capture_project().unwrap(),
             )
         }
@@ -1745,8 +1624,9 @@ mod file {
         #[test]
         fn entry_version_finding_precedes_parent_and_study_authority() {
             let study = Study::new();
-            // `schema_version_mismatch` is 0.5's finding, so the entry stays as
-            // 0.5 wrote it until the 0.5 path goes.
+            // An entry that declares `schema_version` is written in language
+            // 0.5 and is refused at its own `schema_version` before its parent
+            // is resolved or any study file is read (SCHEMA-2).
             let actual: Value = failure(
                 &study,
                 &format!(
@@ -1756,7 +1636,7 @@ mod file {
             );
             assert_eq!(
                 actual,
-                json!([{"phase":"validation","condition":"schema_version_mismatch","rule":"SCHEMA-2","spec_paths":["schema_version"],"context":{"expected":"1.0","actual":"99.0","source":study.resource_key("entry/spec.yaml"),"entry":study.resource_key("entry/spec.yaml")}}])
+                json!([{"phase":"validation","condition":"unsupported_language_version","rule":"SCHEMA-2","spec_paths":["schema_version"],"context":{"version":"0.5","language_versions":["1.0"]}}])
             );
         }
         #[test]

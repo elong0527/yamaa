@@ -1,5 +1,5 @@
-//! Preparation contracts: dictionary preparation, document preparation, file
-//! preparation, inheritance and inheritance capture.
+//! Preparation contracts: dictionary preparation, file preparation,
+//! inheritance and inheritance capture.
 mod preparation {
     mod dictionary_preparation {
         //! Independent logical arenas and opaque effects exercise capture ownership, over a 1.0
@@ -7,10 +7,12 @@ mod preparation {
         use crate::support::document::Tree as V;
         use std::{rc::Rc, sync::Arc};
         use yamaa_core::resource::ResourceFailure;
-        use yamaa_core::schema::{Document, DocumentNode as N, SchemaModule, SchemaStructure};
+        use yamaa_core::schema::{
+            Document, DocumentNode as N, LayerProvenance, SchemaModule, SchemaStructure,
+        };
         use yamaa_core::{
             dictionary_preparation as app,
-            inheritance::{Source as Identity, SourceError},
+            inheritance::{Source as Identity, SourceError, VersionedLayer},
             inheritance_capture::InheritanceDecodePort,
             project_preparation::Source,
             resolver::{Captured, Failure, File, Name, Resolver},
@@ -264,6 +266,33 @@ mod preparation {
                 raw
             }
         }
+        /// A specification `source` declares alone: one layer, which wrote
+        /// every column.
+        struct Alone(Vec<LayerProvenance>, Vec<VersionedLayer>);
+        impl Alone {
+            fn new(source: &str) -> Self {
+                Self(
+                    vec![LayerProvenance {
+                        path: "columns".into(),
+                        layer: 0,
+                    }],
+                    vec![VersionedLayer {
+                        source: Identity {
+                            identity: source.into(),
+                            display_path: source.into(),
+                        },
+                        document: document(V::map(vec![])),
+                        version: yamaa_core::language::LANGUAGE_VERSION,
+                    }],
+                )
+            }
+            fn origins(&self) -> app::Origins<'_> {
+                app::Origins {
+                    provenance: &self.0,
+                    layers: &self.1,
+                }
+            }
+        }
         fn model(paths: &[&'static str]) -> Document {
             document(input(
                 paths
@@ -284,7 +313,7 @@ mod preparation {
             let prepared = app::prepare_document(
                 &schema,
                 &model,
-                app::Origins::Standalone("parent/base.yaml"),
+                Alone::new("parent/base.yaml").origins(),
                 &[],
                 &mut port,
                 &mut decoder,
@@ -319,7 +348,7 @@ mod preparation {
             let prepared = app::prepare_document(
                 &schema,
                 &model,
-                app::Origins::Standalone("entry"),
+                Alone::new("entry").origins(),
                 &[app::Seed {
                     source: &source,
                     raw: &raw,
@@ -346,7 +375,7 @@ mod preparation {
                 let rejected = app::prepare_document(
                     &schema(),
                     &model(&["dict.yaml", "later.yaml"]),
-                    app::Origins::Standalone("entry"),
+                    Alone::new("entry").origins(),
                     &[],
                     &mut port,
                     &mut decoder,
@@ -377,7 +406,7 @@ mod preparation {
             let rejected = app::prepare_document(
                 &schema(),
                 &model(&["dict.yaml", "later.yaml"]),
-                app::Origins::Standalone("entry"),
+                Alone::new("entry").origins(),
                 &[],
                 &mut port,
                 &mut decoder,
@@ -407,7 +436,7 @@ mod preparation {
             let rejected = app::prepare_document(
                 &schema(),
                 &model(&["dict.yaml", "later.yaml"]),
-                app::Origins::Standalone("entry"),
+                Alone::new("entry").origins(),
                 &[],
                 &mut port,
                 &mut decoder,
@@ -424,711 +453,6 @@ mod preparation {
             assert_eq!(source.bytes, [1]);
             assert!(rejected.captures.is_empty());
             assert_eq!(decoder.events, ["dictionary:[1]"]);
-        }
-    }
-    mod document_preparation {
-        //! Independent raw logical arenas and opaque payloads qualify the dispatch service.
-        //!
-        //! Every test here is 0.5 only (#3447): `document_preparation::prepare`
-        //! routes a 0.5 entry by its raw `parent` to the standalone or the
-        //! inherited 0.5 lifecycle, and moves the entry codec's allocations.
-        //! A 1.x entry is a chain of layers that `traverse_versioned` admits
-        //! (LAYER-1); its non-mapping root is
-        //! `inheritance::a_non_mapping_entry_is_a_finding_that_holds_its_raw_arena`.
-        use crate::support::document::Tree;
-        use std::{collections::BTreeMap, rc::Rc};
-        use yamaa_core::schema::{
-            Document, DocumentNode as N, NormalizationError, SchemaContext as C, SchemaDiagnostic,
-            SchemaModule, SchemaOrigin, SchemaSource, SchemaStructure,
-        };
-        use yamaa_core::{
-            document_preparation as app, inheritance as graph, inheritance_capture as capture,
-            inheritance_preparation as lifecycle,
-            project_preparation::Source,
-            resolver::{self, Captured, Name, Resolver},
-        };
-
-        fn text(s: &str) -> Tree {
-            Tree::text(s)
-        }
-        fn map(v: Vec<(&'static str, Tree)>) -> Tree {
-            Tree::map(v)
-        }
-        fn seq(v: Vec<Tree>) -> Tree {
-            Tree::List(v)
-        }
-        fn document(tree: Tree) -> Document {
-            tree.document()
-        }
-        fn field(name: &'static str, kind: &str) -> Tree {
-            map(vec![(name, map(vec![("type", text(kind))]))])
-        }
-        fn schema() -> SchemaStructure {
-            SchemaStructure::admit(
-                vec![SchemaModule {
-                    name: "schema.yaml".into(),
-                    document: document(map(vec![
-                        ("version", text("1.0")),
-                        ("identifier", map(vec![("type", text("str"))])),
-                        (
-                            "root_class",
-                            seq(vec![
-                                field("schema_version", "str"),
-                                field("parent", "str"),
-                                field("domain", "str"),
-                                field("keys", "list[str]"),
-                                field("input", "dict[str,dataset_class]"),
-                                field("output", "output_class"),
-                                field("columns", "list[column_class]"),
-                            ]),
-                        ),
-                        (
-                            "dataset_class",
-                            seq(vec![field("path", "str"), field("schema", "str")]),
-                        ),
-                        (
-                            "output_class",
-                            seq(vec![
-                                field("path", "str"),
-                                field("columns", "list[str]"),
-                                field("report", "str"),
-                            ]),
-                        ),
-                        (
-                            "column_class",
-                            seq(vec![
-                                field("name", "str"),
-                                field("type", "str"),
-                                map(vec![(
-                                    "label",
-                                    map(vec![
-                                        ("type", text("str")),
-                                        ("default", text("Default label")),
-                                    ]),
-                                )]),
-                            ]),
-                        ),
-                    ])),
-                }],
-                0,
-                "root_class",
-            )
-            .unwrap()
-        }
-        fn layer(name: &str, parent: Option<&str>, entry: bool) -> Document {
-            let mut fields = vec![("schema_version", text("1.0"))];
-            if let Some(parent) = parent {
-                fields.push(("parent", text(parent)));
-            }
-            fields.push((
-                "input",
-                map(vec![(
-                    "SRC",
-                    map(vec![
-                        ("path", text(&format!("{name}.csv"))),
-                        ("schema", text(&format!("{name}-source.yaml"))),
-                    ]),
-                )]),
-            ));
-            if entry {
-                fields.extend([
-                    ("domain", text("TEST")),
-                    ("keys", seq(vec![text("ID")])),
-                    (
-                        "columns",
-                        seq(vec![map(vec![("name", text("ID")), ("type", text("int"))])]),
-                    ),
-                    (
-                        "output",
-                        map(vec![
-                            ("path", text("output.csv")),
-                            ("columns", seq(vec![text("ID")])),
-                            ("report", text("report.csv")),
-                        ]),
-                    ),
-                ]);
-            }
-            document(map(fields))
-        }
-
-        struct Payload {
-            allocation: Box<u32>,
-            marker: Rc<()>,
-        }
-        struct Raw {
-            document: Document,
-            locations: Box<u32>,
-        }
-        enum Failure {
-            Original(Payload),
-        }
-        struct Entry {
-            raw: Option<Raw>,
-            error: Option<Payload>,
-            calls: usize,
-        }
-        impl app::EntryCodec for Entry {
-            type Raw = Raw;
-            type Locations = Box<u32>;
-            type Error = Failure;
-            fn decode(&mut self, source: &Source) -> Result<Raw, Failure> {
-                assert_eq!(source.identity, "entry");
-                assert_eq!(source.bytes, b"held root");
-                self.calls += 1;
-                if let Some(error) = self.error.take() {
-                    return Err(Failure::Original(error));
-                }
-                Ok(self.raw.take().unwrap())
-            }
-            fn document(raw: &Raw) -> &Document {
-                &raw.document
-            }
-            fn into_parts(raw: Raw) -> (Document, Box<u32>) {
-                (raw.document, raw.locations)
-            }
-        }
-        struct Parents {
-            documents: BTreeMap<String, Raw>,
-            calls: Vec<String>,
-        }
-        impl capture::InheritanceDecodePort for Parents {
-            type Raw = Raw;
-            type Error = Failure;
-            fn decode(&mut self, identity: &str, _: &[u8]) -> Result<Raw, Failure> {
-                self.calls.push(identity.into());
-                Ok(self.documents.remove(identity).unwrap())
-            }
-            fn document(raw: &Raw) -> &Document {
-                &raw.document
-            }
-        }
-        struct Host {
-            calls: Vec<String>,
-            bytes: BTreeMap<String, Vec<u8>>,
-            error: Option<Payload>,
-        }
-        impl Resolver for Host {
-            type Error = Payload;
-            fn inspect(&mut self, name: Name<'_>) -> Result<graph::Source, Payload> {
-                let Name::Written { written, .. } = name else {
-                    panic!("unexpected request {name:?}")
-                };
-                self.calls.push(format!("canonical:{written}"));
-                if let Some(error) = self.error.take() {
-                    return Err(error);
-                }
-                Ok(graph::Source {
-                    identity: written.into(),
-                    display_path: format!("display/{written}"),
-                })
-            }
-            fn capture(&mut self, name: Name<'_>) -> Result<Captured, Payload> {
-                let Name::Located { source, .. } = name else {
-                    panic!("unexpected request {name:?}")
-                };
-                self.calls.push(format!("capture:{}", source.identity));
-                let bytes = self.bytes.remove(&source.identity).unwrap();
-                Ok(Captured::resource(bytes.into(), true))
-            }
-            fn failure(&self, _: Name<'_>, _: &Payload) -> Option<resolver::Failure> {
-                None
-            }
-            fn rebase(
-                &mut self,
-                _: &graph::Source,
-                _: &graph::Source,
-                written: &str,
-            ) -> Result<String, Payload> {
-                self.calls.push(format!("rebase:{written}"));
-                Ok(written.into())
-            }
-        }
-        fn ports(document: Document) -> (Entry, Parents, Host) {
-            (
-                Entry {
-                    raw: Some(Raw {
-                        document,
-                        locations: Box::new(17),
-                    }),
-                    error: None,
-                    calls: 0,
-                },
-                Parents {
-                    documents: BTreeMap::new(),
-                    calls: vec![],
-                },
-                Host {
-                    calls: vec![],
-                    bytes: BTreeMap::new(),
-                    error: None,
-                },
-            )
-        }
-        fn source() -> Source {
-            Source {
-                identity: "entry".into(),
-                bytes: b"held root".to_vec(),
-            }
-        }
-        fn run(
-            entry: &mut Entry,
-            parents: &mut Parents,
-            host: &mut Host,
-        ) -> app::PreparationResult<Payload, Failure, Raw, Box<u32>> {
-            app::prepare(
-                &schema(),
-                source(),
-                "display/entry".into(),
-                entry,
-                parents,
-                host,
-            )
-        }
-        fn standalone() -> Document {
-            document(map(vec![
-                ("schema_version", text("1.0")),
-                ("domain", text("TEST")),
-                ("input", map(vec![])),
-                ("keys", seq(vec![text("ID")])),
-                (
-                    "output",
-                    map(vec![
-                        ("path", text("output.csv")),
-                        ("columns", seq(vec![text("ID")])),
-                        ("report", text("report.csv")),
-                    ]),
-                ),
-                (
-                    "columns",
-                    seq(vec![map(vec![("name", text("ID")), ("type", text("int"))])]),
-                ),
-            ]))
-        }
-        fn finding(
-            path: &str,
-            condition: &'static str,
-            rule: Option<&'static str>,
-            context: Vec<(&'static str, C)>,
-        ) -> SchemaDiagnostic {
-            SchemaDiagnostic {
-                path: path.into(),
-                code: match (condition, rule) {
-                    ("schema_version_mismatch", None) => {
-                        yamaa_core::diagnostic::ConditionCode::SchemaVersionMismatch
-                    }
-                    ("invalid_field_type", Some("SCHEMA-12")) => {
-                        yamaa_core::diagnostic::ConditionCode::SchemaInvalidFieldType
-                    }
-                    _ => panic!("unexpected test cause"),
-                },
-                context,
-            }
-        }
-        #[test]
-        fn standalone_success_moves_source_raw_and_opaque_locations_without_parent_effects() {
-            let raw = standalone();
-            let pointer = raw.nodes().as_ptr();
-            let expected = raw.clone();
-            let (mut entry, mut parents, mut host) = ports(raw);
-            let locations = &*entry.raw.as_ref().unwrap().locations as *const u32;
-            let source = source();
-            let bytes = source.bytes.as_ptr();
-            let identity = source.identity.as_ptr();
-            let result = app::prepare(
-                &schema(),
-                source,
-                "unused".into(),
-                &mut entry,
-                &mut parents,
-                &mut host,
-            );
-            let Ok(prepared) = result else {
-                panic!("standalone success")
-            };
-            assert_eq!(prepared.source().bytes.as_ptr(), bytes);
-            assert_eq!(prepared.source().identity.as_ptr(), identity);
-            let app::Content::Standalone {
-                prepared,
-                locations: held,
-            } = prepared.content()
-            else {
-                panic!()
-            };
-            assert_eq!(prepared.raw().nodes().as_ptr(), pointer);
-            assert_eq!(prepared.raw(), &expected);
-            assert_eq!(&**held as *const u32, locations);
-            assert_model(prepared.model().document());
-            assert_eq!(prepared.windows(), &[]);
-            assert_eq!(entry.calls, 1);
-            assert!(parents.calls.is_empty());
-            assert!(host.calls.is_empty());
-            assert_eq!(
-                prepared.origins().len(),
-                prepared.model().document().nodes().len()
-            );
-            let schema = schema();
-            let descriptor = schema
-                .class_named("column_class")
-                .unwrap()
-                .fields
-                .iter()
-                .find(|field| field.name == "label")
-                .unwrap()
-                .descriptor;
-            let default = schema.descriptors()[descriptor]
-                .descriptor
-                .default_node()
-                .unwrap();
-            let mut expected_origins = vec![None; prepared.model().document().nodes().len()];
-            fn copied(
-                model: &Document,
-                id: usize,
-                raw: &Document,
-                original: usize,
-                descriptor: usize,
-                default: usize,
-                expected: &mut [Option<SchemaOrigin>],
-            ) {
-                expected[id] = Some(SchemaOrigin {
-                    source: SchemaSource::Input,
-                    node: original,
-                    generated: false,
-                });
-                match (&model.nodes()[id], &raw.nodes()[original]) {
-                    (N::Sequence(items), N::Sequence(source)) => {
-                        for (&id, &original) in items.iter().zip(source) {
-                            copied(model, id, raw, original, descriptor, default, expected)
-                        }
-                    }
-                    (N::Mapping(items), N::Mapping(source)) => {
-                        for &(key, value) in items {
-                            if model.nodes()[key] == N::Text("label".into()) {
-                                expected[key] = Some(SchemaOrigin {
-                                    source: SchemaSource::Default {
-                                        module: 0,
-                                        descriptor,
-                                    },
-                                    node: default,
-                                    generated: true,
-                                });
-                                expected[value] = Some(SchemaOrigin {
-                                    source: SchemaSource::Default {
-                                        module: 0,
-                                        descriptor,
-                                    },
-                                    node: default,
-                                    generated: false,
-                                });
-                            } else {
-                                let &(original_key, original_value) = source
-                                    .iter()
-                                    .find(|&&(k, _)| raw.nodes()[k] == model.nodes()[key])
-                                    .unwrap();
-                                copied(
-                                    model,
-                                    key,
-                                    raw,
-                                    original_key,
-                                    descriptor,
-                                    default,
-                                    expected,
-                                );
-                                copied(
-                                    model,
-                                    value,
-                                    raw,
-                                    original_value,
-                                    descriptor,
-                                    default,
-                                    expected,
-                                );
-                            }
-                        }
-                    }
-                    (actual, original) => assert_eq!(actual, original),
-                }
-            }
-            let model = prepared.model().document();
-            copied(
-                model,
-                model.root(),
-                &expected,
-                expected.root(),
-                descriptor,
-                default,
-                &mut expected_origins,
-            );
-            assert_eq!(
-                prepared.origins(),
-                expected_origins
-                    .into_iter()
-                    .map(Option::unwrap)
-                    .collect::<Vec<_>>()
-            );
-        }
-        #[test]
-        fn inherited_success_keeps_entry_parent_allocations_and_distinct_catalog_order() {
-            let (mut entry, mut parents, mut host) = ports(layer("entry", Some("b"), true));
-            let raw = entry.raw.as_ref().unwrap().document.nodes().as_ptr();
-            let locations = &*entry.raw.as_ref().unwrap().locations as *const u32;
-            let mut held = vec![];
-            for (name, parent) in [("b", Some("a")), ("a", Some("common")), ("common", None)] {
-                let document = layer(name, parent, false);
-                let bytes = name.as_bytes().to_vec();
-                // A parent's bytes are copied out of the resolver's snapshot.
-                held.push((name, document.nodes().as_ptr(), bytes.clone()));
-                parents.documents.insert(
-                    name.into(),
-                    Raw {
-                        document,
-                        locations: Box::new(21),
-                    },
-                );
-                host.bytes.insert(name.into(), bytes);
-            }
-            let Ok(prepared) = run(&mut entry, &mut parents, &mut host) else {
-                panic!()
-            };
-            let app::Content::Inherited {
-                raw: actual,
-                prepared,
-            } = prepared.content()
-            else {
-                panic!()
-            };
-            assert_eq!(actual.document.nodes().as_ptr(), raw);
-            assert_eq!(&*actual.locations as *const u32, locations);
-            assert_eq!(
-                prepared
-                    .parents
-                    .iter()
-                    .map(|p| p.source().identity.as_str())
-                    .collect::<Vec<_>>(),
-                ["b", "a", "common"]
-            );
-            assert_eq!(
-                prepared
-                    .inheritance
-                    .layers()
-                    .iter()
-                    .map(|l| l.source.identity.as_str())
-                    .collect::<Vec<_>>(),
-                ["common", "a", "b", "entry"]
-            );
-            for (parent, (name, nodes, bytes)) in prepared.parents.iter().zip(held) {
-                assert_eq!(parent.source().identity, name);
-                assert_eq!(parent.raw().document.nodes().as_ptr(), nodes);
-                assert_eq!(parent.source().bytes, bytes);
-            }
-            assert_eq!(entry.calls, 1);
-            assert_eq!(parents.calls, ["b", "a", "common"]);
-            assert_model(prepared.inheritance.model().document());
-        }
-        #[test]
-        fn a_written_parent_selects_inheritance_and_a_null_parent_is_standalone() {
-            for value in [N::Null, N::Integer("7".into()), N::Sequence(vec![])] {
-                let document = layer("entry", Some("replaced"), true);
-                let parent = document.field(document.root(), "parent").unwrap();
-                let mut nodes = document.nodes().to_vec();
-                nodes[parent] = value.clone();
-                let (mut entry, mut parents, mut host) =
-                    ports(Document::new(nodes, document.root()).unwrap());
-                let result = run(&mut entry, &mut parents, &mut host);
-                if matches!(value, N::Null) {
-                    // A null parent is absent: a composition of one layer.
-                    assert!(matches!(
-                        result.as_ref().map(app::Prepared::content),
-                        Ok(app::Content::Standalone { .. })
-                    ));
-                } else {
-                    // Any other written parent is admitted, and rejected, as a layer.
-                    assert!(matches!(
-                        result,
-                        Err(app::Error::Inherited(capture::Error::Preparation { .. }))
-                    ));
-                }
-                assert_eq!(entry.calls, 1);
-                assert!(!host
-                    .calls
-                    .iter()
-                    .any(|c| c.starts_with("canonical:") || c.starts_with("capture:")));
-                assert!(parents.calls.is_empty());
-            }
-        }
-        #[test]
-        fn independent_full_version_findings_distinguish_route_checkpoints_and_hold_raw_arena() {
-            for inherited in [false, true] {
-                let document = if inherited {
-                    layer("entry", Some("never"), true)
-                } else {
-                    standalone()
-                };
-                let version = document.field(document.root(), "schema_version").unwrap();
-                let mut nodes = document.nodes().to_vec();
-                nodes[version] = N::Text("99.0".into());
-                let raw = Document::new(nodes, document.root()).unwrap();
-                let pointer = raw.nodes().as_ptr();
-                let (mut entry, mut parents, mut host) = ports(raw);
-                match run(&mut entry, &mut parents, &mut host) {
-                    Err(app::Error::Standalone {
-                        error: yamaa_core::standalone_preparation::Error::Normalize(failure),
-                        ..
-                    }) if !inherited => {
-                        assert_eq!(failure.input.unwrap().nodes().as_ptr(), pointer);
-                        assert_eq!(
-                            failure.error,
-                            NormalizationError::Invalid(vec![finding(
-                                "schema_version",
-                                "schema_version_mismatch",
-                                None,
-                                vec![
-                                    ("expected", C::Text("1.0".into())),
-                                    ("actual", C::InputValue(version))
-                                ]
-                            )])
-                        );
-                    }
-                    Err(app::Error::Inherited(capture::Error::Preparation {
-                        error,
-                        captured_parents,
-                    })) if inherited => {
-                        assert!(captured_parents.is_empty());
-                        let lifecycle::Error::Traversal(graph::Error::Version {
-                            source,
-                            entry: held,
-                            expected,
-                            actual,
-                            is_entry,
-                        }) = *error
-                        else {
-                            panic!("inherited version category")
-                        };
-                        assert_eq!(
-                            (source, held, expected, actual, is_entry),
-                            (
-                                "entry".into(),
-                                "entry".into(),
-                                "1.0".into(),
-                                "99.0".into(),
-                                true
-                            )
-                        );
-                    }
-                    _ => panic!("version route"),
-                }
-                assert_eq!(entry.calls, 1);
-                assert!(host.calls.is_empty());
-            }
-        }
-        #[test]
-        fn entry_opaque_failure_moves_original_allocation_before_semantic_work() {
-            let (mut entry, mut parents, mut host) = ports(standalone());
-            let payload = Payload {
-                allocation: Box::new(99),
-                marker: Rc::new(()),
-            };
-            let pointer = &*payload.allocation as *const u32;
-            let marker = Rc::as_ptr(&payload.marker);
-            entry.error = Some(payload);
-
-            let Err(app::Error::Entry(Failure::Original(error))) =
-                run(&mut entry, &mut parents, &mut host)
-            else {
-                panic!()
-            };
-            assert_eq!(&*error.allocation as *const u32, pointer);
-            assert_eq!(Rc::as_ptr(&error.marker), marker);
-            assert_eq!(entry.calls, 1);
-            assert!(host.calls.is_empty());
-            assert!(entry.raw.is_some());
-        }
-
-        #[derive(Debug, PartialEq)]
-        enum Logical {
-            Text(String),
-            Seq(Vec<Logical>),
-            Map(BTreeMap<String, Logical>),
-        }
-        fn logical(doc: &Document, id: usize) -> Logical {
-            match &doc.nodes()[id] {
-                N::Text(text) => Logical::Text(text.clone()),
-                N::Sequence(items) => {
-                    Logical::Seq(items.iter().map(|&id| logical(doc, id)).collect())
-                }
-                N::Mapping(items) => Logical::Map(
-                    items
-                        .iter()
-                        .map(|&(k, v)| {
-                            let N::Text(key) = &doc.nodes()[k] else {
-                                panic!()
-                            };
-                            (key.clone(), logical(doc, v))
-                        })
-                        .collect(),
-                ),
-                _ => panic!("oracle scalar"),
-            }
-        }
-        fn assert_model(actual: &Document) {
-            // Authored independently: the parent disappears and only column label defaults.
-            let expected = document(map(vec![
-                ("schema_version", text("1.0")),
-                ("domain", text("TEST")),
-                ("keys", seq(vec![text("ID")])),
-                ("input", map(vec![])),
-                (
-                    "output",
-                    map(vec![
-                        ("path", text("output.csv")),
-                        ("columns", seq(vec![text("ID")])),
-                        ("report", text("report.csv")),
-                    ]),
-                ),
-                (
-                    "columns",
-                    seq(vec![map(vec![
-                        ("name", text("ID")),
-                        ("type", text("int")),
-                        ("label", text("Default label")),
-                    ])]),
-                ),
-            ]));
-            assert_eq!(
-                logical(actual, actual.root()),
-                logical(&expected, expected.root())
-            );
-        }
-
-        #[test]
-        fn nonmapping_raw_root_remains_a_standalone_raw_arena_finding_without_capture() {
-            let raw = Document::new(vec![N::Integer("7".into())], 0).unwrap();
-            let pointer = raw.nodes().as_ptr();
-            let (mut entry, mut parents, mut host) = ports(raw);
-            let Err(app::Error::Standalone {
-                error: yamaa_core::standalone_preparation::Error::Normalize(failure),
-                ..
-            }) = run(&mut entry, &mut parents, &mut host)
-            else {
-                panic!()
-            };
-            assert_eq!(failure.input.unwrap().nodes().as_ptr(), pointer);
-            assert_eq!(
-                failure.error,
-                NormalizationError::Invalid(vec![finding(
-                    "$",
-                    "invalid_field_type",
-                    Some("SCHEMA-12"),
-                    vec![
-                        ("expected", C::Text("root_class".into())),
-                        (
-                            "actual",
-                            C::ValueKind(yamaa_core::schema::DocumentKind::Integer)
-                        )
-                    ]
-                )])
-            );
-            assert_eq!(entry.calls, 1);
-            assert!(host.calls.is_empty());
         }
     }
     mod file_preparation {
@@ -1517,10 +841,8 @@ mod preparation {
         }
     }
     mod inheritance {
-        //! A 1.x specification's parents are followed by `traverse_versioned`,
-        //! which shares its walk with the 0.5 `traverse` (LAYER-2, LAYER-3).
-        //! A test marked 0.5 exercises what only the 0.5 traversal admits, and
-        //! goes with it (#3447).
+        //! A 1.x specification's parents are followed by `traverse_versioned`
+        //! (LAYER-2, LAYER-3).
         use std::collections::BTreeMap;
         use yamaa_core::inheritance::*;
         use yamaa_core::language::LanguageVersion;
@@ -1537,8 +859,7 @@ mod preparation {
         fn field(name: &'static str, types: V) -> V {
             V::map(vec![(name, V::map(vec![("type", types)]))])
         }
-        /// The layers of both languages: `yamaa` and `type` head a 1.x layer,
-        /// and `schema_version` a 0.5 one.
+        /// The layers of a 1.x specification, headed by `yamaa` and `type`.
         fn schema() -> SchemaStructure {
             SchemaStructure::admit(
                 vec![SchemaModule {
@@ -1548,7 +869,6 @@ mod preparation {
                         (
                             "root_class",
                             V::List(vec![
-                                field("schema_version", text("str")),
                                 field("yamaa", text("str")),
                                 field("type", text("str")),
                                 field("parent", text("str")),
@@ -1572,14 +892,6 @@ mod preparation {
                 fields.push(("parent", text(parent)));
             }
             fields.extend(more);
-            document(V::map(fields))
-        }
-        /// A 0.5 layer declaring `version`.
-        fn layer_v0_5(version: &str, parent: Option<&str>) -> Document {
-            let mut fields = vec![("schema_version", text(version))];
-            if let Some(parent) = parent {
-                fields.push(("parent", text(parent)));
-            }
             document(V::map(fields))
         }
         fn source(identity: &str) -> Source {
@@ -1649,13 +961,6 @@ mod preparation {
             )
             .map(|chain| chain.layers)
         }
-        /// The 0.5 chain from the entry `input`.
-        fn run_v0_5(
-            input: Document,
-            port: &mut Port,
-        ) -> Result<Vec<Layer>, Error<(&'static str, u32)>> {
-            traverse(&schema(), source("entry"), input, port)
-        }
         /// `error`'s projection: a validation finding of `condition` and
         /// `rule` at `path`, with each text context value of `fields`.
         fn check(
@@ -1703,27 +1008,6 @@ mod preparation {
                 ]
             );
             assert_eq!(layers[0].document, layer(None));
-        }
-
-        /// 0.5 only (#3447): a null `parent` is absent only in a 0.5 layer.
-        /// A 1.x `parent` is a path, and null fails there (LAYER-9).
-        #[test]
-        fn a_null_parent_is_absent_and_ends_the_chain() {
-            let null_parent = |version: &str| {
-                document(V::map(vec![
-                    ("schema_version", text(version)),
-                    ("parent", V::Scalar(yamaa_core::schema::DocumentNode::Null)),
-                ]))
-            };
-            let mut port = Port::default();
-            port.documents.insert("a".into(), null_parent("1.0"));
-            let layers = run_v0_5(layer_v0_5("1.0", Some("a")), &mut port).unwrap();
-            assert_eq!(port.calls, ["resolve:entry:a", "read:a"]);
-            assert_eq!(layers.len(), 2);
-            let mut port = Port::default();
-            let layers = run_v0_5(null_parent("1.0"), &mut port).unwrap();
-            assert!(port.calls.is_empty());
-            assert_eq!(layers.len(), 1);
         }
 
         #[test]
@@ -1775,83 +1059,6 @@ mod preparation {
             assert_eq!(source, "entry");
             assert_eq!(entry, "entry");
             assert_eq!(findings[0].definition().condition, "unknown_field");
-            assert!(port.calls.is_empty());
-        }
-
-        /// 0.5 only (#3447): the 0.5 traversal checks `schema_version` after
-        /// a layer's findings. A 1.x layer's header is read first (SCHEMA-2);
-        /// its findings and parent effects are the test above.
-        #[test]
-        fn layer_findings_precede_version_mismatch_and_all_parent_effects() {
-            let input = document(V::map(vec![
-                ("schema_version", text("0")),
-                ("parent", text("https://bad")),
-                ("unexpected", text("x")),
-            ]));
-            let mut port = Port::default();
-            let Error::Layer {
-                source,
-                entry,
-                input: _,
-                error: NormalizationError::Invalid(findings),
-            } = run_v0_5(input, &mut port).unwrap_err()
-            else {
-                panic!("expected structural findings")
-            };
-            assert_eq!(source, "entry");
-            assert_eq!(entry, "entry");
-            assert_eq!(findings[0].definition().condition, "unknown_field");
-            assert!(port.calls.is_empty());
-        }
-
-        /// 0.5 only (#3447): a 0.5 chain's version must match the schema's
-        /// exactly. A 1.x layer may declare any version the engine reads
-        /// (SCHEMA-2, LAYER-4).
-        #[test]
-        fn version_checks_stop_before_reading_a_parent() {
-            let mut port = Port::default();
-            assert_eq!(
-                run_v0_5(layer_v0_5("0", Some("a")), &mut port).unwrap_err(),
-                Error::Version {
-                    source: "entry".into(),
-                    entry: "entry".into(),
-                    expected: "1.0".into(),
-                    actual: "0".into(),
-                    is_entry: true
-                }
-            );
-            assert!(port.calls.is_empty());
-            port.documents
-                .insert("a".into(), layer_v0_5("0", Some("unread")));
-            assert_eq!(
-                run_v0_5(layer_v0_5("1.0", Some("a")), &mut port).unwrap_err(),
-                Error::Version {
-                    source: "a".into(),
-                    entry: "entry".into(),
-                    expected: "1.0".into(),
-                    actual: "0".into(),
-                    is_entry: false
-                }
-            );
-            assert_eq!(port.calls, ["resolve:entry:a", "read:a"]);
-        }
-
-        /// 0.5 only (#3447): `schema_version_mismatch` retires with 0.5. A
-        /// 1.x layer without `yamaa` fails at its header (SCHEMA-2).
-        #[test]
-        fn missing_version_retains_layer_diagnostics_and_never_reads_parents() {
-            let mut port = Port::default();
-            let Error::Layer {
-                error: NormalizationError::Invalid(findings),
-                ..
-            } = run_v0_5(document(V::map(vec![("parent", text("a"))])), &mut port).unwrap_err()
-            else {
-                panic!("expected missing version")
-            };
-            assert_eq!(
-                findings[0].definition().condition,
-                "schema_version_mismatch"
-            );
             assert!(port.calls.is_empty());
         }
 
@@ -2052,44 +1259,6 @@ mod preparation {
             }
         }
 
-        /// 0.5 only (#3447): `schema_version_mismatch` retires with 0.5. A
-        /// 1.x layer's unread version fails at its header (SCHEMA-2,
-        /// LAYER-4).
-        #[test]
-        fn real_version_mismatches_project_canonical_causes_and_original_provenance() {
-            let mut port = Port::default();
-            let error = run_v0_5(layer_v0_5("0", Some("later")), &mut port).unwrap_err();
-            check(
-                &error,
-                "schema_version_mismatch",
-                "SCHEMA-2",
-                "schema_version",
-                &[
-                    ("source", "entry"),
-                    ("entry", "entry"),
-                    ("expected", "1.0"),
-                    ("actual", "0"),
-                ],
-            );
-            assert!(port.calls.is_empty());
-            port.documents
-                .insert("a".into(), layer_v0_5("0", Some("unread")));
-            let error = run_v0_5(layer_v0_5("1.0", Some("a")), &mut port).unwrap_err();
-            check(
-                &error,
-                "schema_version_mismatch",
-                "LAYER-4",
-                "parent",
-                &[
-                    ("source", "a"),
-                    ("entry", "entry"),
-                    ("entry_version", "1.0"),
-                    ("parent_version", "0"),
-                ],
-            );
-            assert_eq!(port.calls, ["resolve:entry:a", "read:a"]);
-        }
-
         #[test]
         fn unclassified_failures_and_contradictory_cycles_have_no_semantic_projection() {
             struct Opaque(Box<u8>);
@@ -2186,21 +1355,14 @@ mod preparation {
         //! A 1.x chain's parents are read through the host's port as
         //! `traverse_versioned` asks for them, and each layer's relative paths
         //! are respelled through the same port as `prepare_versioned` resolves
-        //! the chain (LAYER-3, LAYER-7, LAYER-10). A test marked 0.5 exercises
-        //! `inheritance_capture::prepare`, the 0.5 capture application with
-        //! its catalog of captured parents, and goes with it (#3447).
+        //! the chain (LAYER-3, LAYER-7, LAYER-10).
         use crate::support::document::Tree;
-        use std::{cell::RefCell, collections::BTreeMap, rc::Rc};
+        use std::{collections::BTreeMap, rc::Rc};
         use yamaa_core::language::LanguageVersion;
         use yamaa_core::schema::{
-            Document, DocumentNode as N, NormalizationError, SchemaModule, SchemaSource,
-            SchemaStructure,
+            Document, DocumentNode as N, SchemaModule, SchemaSource, SchemaStructure,
         };
-        use yamaa_core::{
-            inheritance as graph, inheritance_capture as app, inheritance_preparation as lifecycle,
-            project_preparation::Source,
-            resolver::{self, Captured, Name, Resolver},
-        };
+        use yamaa_core::{inheritance as graph, inheritance_preparation as lifecycle};
 
         fn text(s: &str) -> Tree {
             Tree::text(s)
@@ -2227,9 +1389,6 @@ mod preparation {
                         (
                             "root_class",
                             seq(vec![
-                                // `yamaa` and `type` head a 1.x layer, and
-                                // `schema_version` a 0.5 one.
-                                field("schema_version", "str"),
                                 field("yamaa", "str"),
                                 field("type", "str"),
                                 field("parent", "str"),
@@ -2276,24 +1435,7 @@ mod preparation {
         /// The 1.x layer `name`: its input `SRC` names its own data file and
         /// schema link, and the entry declares the rest of a specification.
         fn layer(name: &str, parent: Option<&str>, entry: bool) -> Document {
-            layer_headed(
-                vec![("yamaa", text("1.0")), ("type", text("spec"))],
-                name,
-                parent,
-                entry,
-            )
-        }
-        /// The same layer in 0.5.
-        fn layer_v0_5(name: &str, parent: Option<&str>, entry: bool) -> Document {
-            layer_headed(vec![("schema_version", text("1.0"))], name, parent, entry)
-        }
-        fn layer_headed(
-            header: Vec<(&'static str, Tree)>,
-            name: &str,
-            parent: Option<&str>,
-            entry: bool,
-        ) -> Document {
-            let mut fields = header;
+            let mut fields = vec![("yamaa", text("1.0")), ("type", text("spec"))];
             if let Some(parent) = parent {
                 fields.push(("parent", text(parent)));
             }
@@ -2332,428 +1474,6 @@ mod preparation {
             identity: Rc<()>,
             allocation: Box<u32>,
         }
-        struct Raw {
-            document: Document,
-            marker: Box<u32>,
-        }
-        #[derive(Clone, Debug, PartialEq, Eq)]
-        enum Event {
-            Resolve(String, String),
-            Capture(String),
-            Decode(String, Vec<u8>),
-            Rebase(String, String, String),
-        }
-        type Log = Rc<RefCell<Vec<Event>>>;
-        struct Host {
-            log: Log,
-            bytes: BTreeMap<String, Vec<u8>>,
-            aliases: BTreeMap<String, String>,
-            failure: Option<(usize, Payload)>,
-            unavailable: Option<usize>,
-            /// Whether the last request failed as unavailable.
-            missing: bool,
-        }
-        impl Host {
-            fn failure(&mut self, index: usize) -> Option<Payload> {
-                if self.failure.as_ref().is_some_and(|(at, _)| *at == index) {
-                    self.failure.take().map(|(_, p)| p)
-                } else {
-                    None
-                }
-            }
-            /// The scripted failure of request `index`: its payload, or an
-            /// unavailable file.
-            fn refusal(&mut self, index: usize) -> Option<Payload> {
-                self.missing = self.unavailable == Some(index);
-                self.failure(index).or_else(|| {
-                    self.missing.then(|| Payload {
-                        identity: Rc::new(()),
-                        allocation: Box::new(0),
-                    })
-                })
-            }
-        }
-        impl Resolver for Host {
-            type Error = Payload;
-            fn inspect(&mut self, name: Name<'_>) -> Result<graph::Source, Payload> {
-                let Name::Written {
-                    declaring, written, ..
-                } = name
-                else {
-                    panic!("unexpected request {name:?}")
-                };
-                let index = self.log.borrow().len();
-                self.log
-                    .borrow_mut()
-                    .push(Event::Resolve(declaring.into(), written.into()));
-                if let Some(error) = self.refusal(index) {
-                    return Err(error);
-                }
-                Ok(graph::Source {
-                    identity: self
-                        .aliases
-                        .get(written)
-                        .cloned()
-                        .unwrap_or_else(|| written.into()),
-                    display_path: format!("display/{written}"),
-                })
-            }
-            fn capture(&mut self, name: Name<'_>) -> Result<Captured, Payload> {
-                let Name::Located { source, .. } = name else {
-                    panic!("unexpected request {name:?}")
-                };
-                let index = self.log.borrow().len();
-                self.log
-                    .borrow_mut()
-                    .push(Event::Capture(source.identity.clone()));
-                if let Some(error) = self.refusal(index) {
-                    return Err(error);
-                }
-                let bytes = self
-                    .bytes
-                    .remove(&source.identity)
-                    .expect("only one capture per identity");
-                Ok(Captured::resource(bytes.into(), true))
-            }
-            fn failure(&self, _: Name<'_>, _: &Payload) -> Option<resolver::Failure> {
-                self.missing.then_some(resolver::Failure::Unreadable)
-            }
-            fn rebase(
-                &mut self,
-                layer: &graph::Source,
-                entry: &graph::Source,
-                written: &str,
-            ) -> Result<String, Payload> {
-                let index = self.log.borrow().len();
-                self.log.borrow_mut().push(Event::Rebase(
-                    layer.identity.clone(),
-                    entry.identity.clone(),
-                    written.into(),
-                ));
-                if let Some(error) = self.failure(index) {
-                    return Err(error);
-                }
-                Ok(written.into())
-            }
-        }
-        enum CodecFailure {
-            Original(Payload),
-        }
-        struct Decoder {
-            log: Log,
-            documents: BTreeMap<String, Raw>,
-            failure: Option<Payload>,
-        }
-        impl app::InheritanceDecodePort for Decoder {
-            type Raw = Raw;
-            type Error = CodecFailure;
-            fn decode(&mut self, identity: &str, bytes: &[u8]) -> Result<Raw, CodecFailure> {
-                self.log
-                    .borrow_mut()
-                    .push(Event::Decode(identity.into(), bytes.to_vec()));
-                if let Some(error) = self.failure.take() {
-                    return Err(CodecFailure::Original(error));
-                }
-                Ok(self
-                    .documents
-                    .remove(identity)
-                    .expect("entry is never decoded again"))
-            }
-            fn document(raw: &Raw) -> &Document {
-                &raw.document
-            }
-        }
-        fn fixture() -> (Source, Raw, Host, Decoder) {
-            let log = Rc::new(RefCell::new(vec![]));
-            let host = Host {
-                log: log.clone(),
-                bytes: [("a", vec![1, 2]), ("common", vec![3]), ("b", vec![4, 5, 6])]
-                    .into_iter()
-                    .map(|(k, v)| (k.into(), v))
-                    .collect(),
-                aliases: [("alias".into(), "common".into())].into_iter().collect(),
-                failure: None,
-                unavailable: None,
-                missing: false,
-            };
-            let decoder = Decoder {
-                log,
-                documents: [
-                    ("b", layer_v0_5("b", Some("a"), false)),
-                    ("a", layer_v0_5("a", Some("alias"), false)),
-                    ("common", layer_v0_5("common", None, false)),
-                ]
-                .into_iter()
-                .map(|(k, d)| {
-                    (
-                        k.into(),
-                        Raw {
-                            document: d,
-                            marker: Box::new(73),
-                        },
-                    )
-                })
-                .collect(),
-                failure: None,
-            };
-            (
-                Source {
-                    identity: "entry".into(),
-                    bytes: vec![9, 8],
-                },
-                Raw {
-                    document: layer_v0_5("entry", Some("b"), true),
-                    marker: Box::new(71),
-                },
-                host,
-                decoder,
-            )
-        }
-        fn run(
-            source: &Source,
-            raw: &Raw,
-            host: &mut Host,
-            decoder: &mut Decoder,
-        ) -> app::PreparationResult<Payload, CodecFailure, Raw> {
-            app::prepare(
-                &schema(),
-                source,
-                "written/entry".into(),
-                raw,
-                host,
-                decoder,
-            )
-        }
-        fn expected_effects() -> Vec<Event> {
-            let mut events = vec![
-                Event::Resolve("entry".into(), "b".into()),
-                Event::Capture("b".into()),
-                Event::Decode("b".into(), vec![4, 5, 6]),
-                Event::Resolve("b".into(), "a".into()),
-                Event::Capture("a".into()),
-                Event::Decode("a".into(), vec![1, 2]),
-                Event::Resolve("a".into(), "alias".into()),
-                Event::Capture("common".into()),
-                Event::Decode("common".into(), vec![3]),
-            ];
-            for (layer, paths) in [
-                ("common", vec!["common.csv", "common-source.yaml"]),
-                ("a", vec!["a.csv", "a-source.yaml"]),
-                ("b", vec!["b.csv", "b-source.yaml"]),
-                (
-                    "entry",
-                    vec!["entry.csv", "entry-source.yaml", "output.csv", "report.csv"],
-                ),
-            ] {
-                for path in paths {
-                    events.push(Event::Rebase(layer.into(), "entry".into(), path.into()));
-                }
-            }
-            events
-        }
-        /// 0.5 only (#3447): the catalog of captured parents is the 0.5 capture
-        /// application's. Its effects, layers and defaults on a 1.x chain are
-        /// `complete_effects_defaults_and_distinct_orders_are_engine_owned`.
-        #[test]
-        fn complete_effects_catalog_allocations_defaults_and_distinct_orders_are_engine_owned() {
-            for _ in 0..2 {
-                let (source, raw, mut host, mut decoder) = fixture();
-                let held: Vec<_> = ["b", "a", "common"]
-                    .into_iter()
-                    .map(|name| {
-                        let d = &decoder.documents[name];
-                        // A parent's bytes are copied out of the resolver's
-                        // snapshot; its decoded arena keeps its allocation.
-                        (
-                            name,
-                            host.bytes[name].clone(),
-                            d.document.nodes().as_ptr(),
-                            (&*d.marker) as *const u32,
-                        )
-                    })
-                    .collect();
-                let prepared = match run(&source, &raw, &mut host, &mut decoder) {
-                    Ok(p) => p,
-                    Err(app::Error::Preparation { error, .. }) => match *error {
-                        lifecycle::Error::Traversal(graph::Error::Layer { error, .. }) => {
-                            panic!("fixture layer: {error:?}")
-                        }
-                        _ => panic!("fixture later phase"),
-                    },
-                };
-                assert_eq!(*host.log.borrow(), expected_effects());
-                assert_eq!(
-                    prepared
-                        .parents
-                        .iter()
-                        .map(|p| p.source().identity.as_str())
-                        .collect::<Vec<_>>(),
-                    ["b", "a", "common"]
-                );
-                for (parent, (name, bytes, nodes, marker)) in prepared.parents.iter().zip(held) {
-                    assert_eq!(parent.source().identity, name);
-                    assert_eq!(parent.source().bytes, bytes);
-                    assert_eq!(parent.raw().document.nodes().as_ptr(), nodes);
-                    assert_eq!((&*parent.raw().marker) as *const u32, marker);
-                }
-                assert_eq!(
-                    prepared
-                        .inheritance
-                        .layers()
-                        .iter()
-                        .map(|p| p.source.identity.as_str())
-                        .collect::<Vec<_>>(),
-                    ["common", "a", "b", "entry"]
-                );
-                let d = prepared.inheritance.model().document();
-                let columns = d.field(d.root(), "columns").unwrap();
-                let N::Sequence(columns) = &d.nodes()[columns] else {
-                    panic!()
-                };
-                let label = d.field(columns[0], "label").unwrap();
-                assert_eq!(d.nodes()[label], N::Text("Default label".into()));
-                let origin = prepared.inheritance.origins()[label];
-                assert!(matches!(
-                    origin.source,
-                    yamaa_core::schema::SchemaSource::Default { module: 0, .. }
-                ));
-                assert_eq!(prepared.inheritance.origins().len(), d.nodes().len());
-                assert_eq!(source.bytes, [9, 8]);
-                assert_eq!(*raw.marker, 71);
-            }
-        }
-
-        /// 0.5 only (#3447): the catalog prefix is the 0.5 capture
-        /// application's. Its opaque effect errors on a 1.x chain are
-        /// `every_opaque_effect_error_keeps_original_allocation_and_exact_completed_prefix`.
-        #[test]
-        fn every_opaque_effect_error_keeps_original_allocation_and_exact_completed_catalog_prefix()
-        {
-            for index in [0, 1, 3, 4, 6, 7, 9, 10, 18] {
-                let (source, raw, mut host, mut decoder) = fixture();
-                let identity = Rc::new(());
-                let allocation = Box::new(99);
-                let pointer = (&*allocation) as *const u32;
-                host.failure = Some((
-                    index,
-                    Payload {
-                        identity: identity.clone(),
-                        allocation,
-                    },
-                ));
-                let Err(app::Error::Preparation {
-                    error,
-                    captured_parents,
-                }) = run(&source, &raw, &mut host, &mut decoder)
-                else {
-                    panic!()
-                };
-                let original = match *error {
-                    lifecycle::Error::Traversal(graph::Error::Host(app::SourceFailure::Host(
-                        p,
-                    )))
-                    | lifecycle::Error::Path(app::SourceFailure::Host(p)) => p,
-                    _ => panic!(),
-                };
-                assert!(Rc::ptr_eq(&original.identity, &identity));
-                assert_eq!((&*original.allocation) as *const u32, pointer);
-                assert_eq!(&*host.log.borrow(), &expected_effects()[..=index]);
-                let count = expected_effects()[..index]
-                    .iter()
-                    .filter(|e| matches!(e, Event::Decode(..)))
-                    .count();
-                assert_eq!(captured_parents.len(), count);
-            }
-        }
-        /// 0.5 only (#3447): the decoder is the 0.5 capture application's own
-        /// port. A 1.x port's failed read is a test below, and its
-        /// unavailable parents are
-        /// `inheritance::source_failure_retains_written_spelling_and_stops_later_access`.
-        #[test]
-        fn original_decoder_failure_and_unavailable_roles_stop_before_later_authority() {
-            let (source, raw, mut host, mut decoder) = fixture();
-            let identity = Rc::new(());
-            let allocation = Box::new(99);
-            let pointer = (&*allocation) as *const u32;
-            decoder.failure = Some(Payload {
-                identity: identity.clone(),
-                allocation,
-            });
-            let Err(app::Error::Preparation {
-                error,
-                captured_parents,
-            }) = run(&source, &raw, &mut host, &mut decoder)
-            else {
-                panic!()
-            };
-            let lifecycle::Error::Traversal(graph::Error::Host(app::SourceFailure::Admission(
-                CodecFailure::Original(original),
-            ))) = *error
-            else {
-                panic!()
-            };
-            assert!(Rc::ptr_eq(&original.identity, &identity));
-            assert_eq!((&*original.allocation) as *const u32, pointer);
-            assert!(captured_parents.is_empty());
-            assert_eq!(&*host.log.borrow(), &expected_effects()[..3]);
-            for index in [0, 1] {
-                let (source, raw, mut host, mut decoder) = fixture();
-                host.unavailable = Some(index);
-                let Err(app::Error::Preparation {
-                    error,
-                    captured_parents,
-                }) = run(&source, &raw, &mut host, &mut decoder)
-                else {
-                    panic!()
-                };
-                let lifecycle::Error::Traversal(graph::Error::Unavailable { declaring, path }) =
-                    *error
-                else {
-                    panic!()
-                };
-                assert_eq!(declaring, "entry");
-                assert_eq!(path, if index == 0 { "b" } else { "display/b" });
-                assert!(captured_parents.is_empty());
-                assert_eq!(&*host.log.borrow(), &expected_effects()[..=index]);
-            }
-        }
-        /// 0.5 only (#3447): the 0.5 capture application keeps each parent it
-        /// decoded in its catalog. A 1.x parent's failed admission is
-        /// `inheritance::malformed_parent_admission_precedes_its_descendants`.
-        #[test]
-        fn admitted_parent_raw_is_retained_when_later_normalization_fails_before_descendants() {
-            let (source, raw, mut host, mut decoder) = fixture();
-            let bad = document(map(vec![
-                ("schema_version", text("1.0")),
-                ("unknown", text("kept")),
-                ("parent", text("not-read")),
-            ]));
-            let nodes = bad.nodes().as_ptr();
-            decoder.documents.get_mut("b").unwrap().document = bad;
-            let Err(app::Error::Preparation {
-                error,
-                captured_parents,
-            }) = run(&source, &raw, &mut host, &mut decoder)
-            else {
-                panic!()
-            };
-            let lifecycle::Error::Traversal(graph::Error::Layer {
-                source,
-                entry,
-                error: NormalizationError::Invalid(findings),
-                ..
-            }) = *error
-            else {
-                panic!()
-            };
-            assert_eq!((source.as_str(), entry.as_str()), ("b", "entry"));
-            assert_eq!(findings.len(), 1);
-            assert_eq!(findings[0].definition().condition, "unknown_field");
-            assert_eq!(captured_parents.len(), 1);
-            assert_eq!(captured_parents[0].raw().document.nodes().as_ptr(), nodes);
-            assert_eq!(&*host.log.borrow(), &expected_effects()[..3]);
-        }
-
         /// What resolving a 1.x chain asks of its host's port, in order.
         #[derive(Clone, Debug, PartialEq, Eq)]
         enum Effect {

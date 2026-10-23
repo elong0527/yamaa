@@ -12,30 +12,10 @@
 # is done. Each list is sorted.
 
 unreachable:
-  bare_derivation_scalar: >-
-    only the 0.5 path raises it, until P2-13 removes that path: in 1.0 a YAML
-    number, Boolean or null derivation is a literal (EXPR-5)
-  day_not_permitted: >-
-    only the 0.5 path raises it, until P2-13 removes that path: 1.0 drops
-    minimum_source_precision, and #3030 D61 retired its benchmarks
-  day_required: >-
-    only the 0.5 path raises it, until P2-13 removes that path: 1.0 drops
-    minimum_source_precision, and #3030 D61 retired its benchmarks
   invalid_size: >-
     no schema the engine ships declares a size constraint (yaml/ and yaml/v1/),
     so no file can fail one (SCHEMA-12); the schema-language tests reach it
     with a schema of their own
-  model_contract_mismatch: >-
-    only the 0.5 path raises it, until P2-13 removes that path: final
-    normalized model admission reads only a 0.5 model, and the 1.0 front end
-    reports the same faults under their schema conditions (SCHEMA-7,
-    SCHEMA-12, SCHEMA-13)
-  month_not_permitted: >-
-    only the 0.5 path raises it, until P2-13 removes that path: 1.0 drops
-    minimum_source_precision, and #3030 D61 retired its benchmarks
-  month_required: >-
-    only the 0.5 path raises it, until P2-13 removes that path: 1.0 drops
-    minimum_source_precision, and #3030 D61 retired its benchmarks
   parent_on_another_share: >-
     only a layer on a network share that the entry is not on raises it
     (LAYER-10, FILE-4); only Windows hosts have shares, which no portable case
@@ -64,10 +44,6 @@ unreachable:
     first (minimum_length, SCHEMA-12), and every host passes its own nonempty
     version as the installed one (DEFINE-12); the core's submission tests
     reach it with an empty installed version
-  unknown_standard_family: >-
-    only the 0.5 path raises it, until P2-13 removes that path: a guide a 1.0
-    section lists outside its model fails as standard_model_mismatch (DEFINE-6,
-    #3030 D58)
   xpt_file_too_large: >-
     XPT-10 refuses a transport file past 5,000,000,000 bytes, which takes a
     published dataset of at least 25 million 200-byte values (SUB-24 measures a

@@ -34,7 +34,7 @@ type SharedDeclaration = std::sync::Arc<RowDeclaration>;
 #[derive(Debug)]
 struct Template {
     id: String,
-    /// The template's own path, `rows[i]` in 0.5.
+    /// The template's own path, `rows.<id>` (P-CLR-2).
     path: String,
     driver: String,
     groups: Option<Vec<String>>,
@@ -117,7 +117,6 @@ impl Rows {
             prepared.driver,
             schemas,
             &prepared.output,
-            &prepared.keys,
             self_columns.as_deref(),
             prepared.project_calls.as_ref(),
             &prepared.tree,
@@ -212,7 +211,6 @@ impl Implicit {
     ) -> binder::Scope<'a> {
         binder::Scope {
             template: binder::Template::Implicit(binder::Implicit {
-                keys,
                 key: keys.contains(&column),
                 records: self.records,
             }),
@@ -239,7 +237,6 @@ impl Implicit {
             &prepared.output,
             source,
             base,
-            keys,
             &secondary,
         )?;
         let mut assignments = BTreeMap::new();
@@ -345,7 +342,6 @@ impl Implicit {
             contexts.iter().cloned(),
             &intermediates,
             &prepared.intermediates,
-            prepared.tree.spec().header.surface.one_meaning_per_form(),
             &mut findings,
         );
         aggregates::admit_record_keys(&contexts, &mut findings);
@@ -848,7 +844,6 @@ fn bind_template(
     declared: &TemplatePhase<'_>,
     source: &TableSchema,
     name: &str,
-    keys: &[usize],
     tree: &types::Tree,
     named: &intermediates::Declarations,
     secondary: &[crate::dataset::SecondarySource],
@@ -895,7 +890,6 @@ fn bind_template(
         row_catalog,
         source,
         name,
-        keys,
         secondary,
         &template.driver,
     )?;
@@ -1456,8 +1450,7 @@ impl Templates {
         // The whole-dataset catalog binds a column holding a qualified
         // aggregate; every other column binds against each driver's own.
         let spec = prepared.tree.spec();
-        let mut catalog =
-            row_drivers::joined_catalog(spec, output, source, name, keys, &secondary)?;
+        let mut catalog = row_drivers::joined_catalog(spec, output, source, name, &secondary)?;
         if self
             .templates
             .iter()
@@ -1465,8 +1458,7 @@ impl Templates {
         {
             // The rows have no record owner shared by every template. Every
             // stored source uses its captured port and its implicit join's key.
-            catalog =
-                row_drivers::extend_catalog(spec, catalog, source, name, keys, &secondary, "")?;
+            catalog = row_drivers::extend_catalog(spec, catalog, source, name, &secondary, "")?;
         }
         // Each template's scope and the column phase's grouping come from the
         // declarations alone, as `check()` reads them: the column phase checks
@@ -1488,7 +1480,6 @@ impl Templates {
                 &phases[index],
                 source,
                 name,
-                keys,
                 &prepared.tree,
                 named,
                 &secondary,
@@ -1572,7 +1563,6 @@ impl Templates {
                             )?,
                             source,
                             name,
-                            keys,
                             &secondary,
                             driver,
                         )?;
@@ -1694,7 +1684,6 @@ impl Templates {
             contexts.iter().cloned(),
             &intermediates,
             named,
-            prepared.tree.spec().header.surface.one_meaning_per_form(),
             &mut findings,
         );
         aggregates::admit_record_keys(&contexts, &mut findings);

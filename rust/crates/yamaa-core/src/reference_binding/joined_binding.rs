@@ -12,11 +12,7 @@ pub enum JoinedFinding {
         identifier: String,
         finding: crate::reference_scope::Finding,
     },
-    NoApplicableKeys {
-        dataset: String,
-        keys: Vec<String>,
-    },
-    /// A 1.0 input that declares no `key` (LOOKUP-1).
+    /// An input that declares no `key` (LOOKUP-1).
     UndeclaredKey {
         dataset: String,
     },
@@ -47,10 +43,6 @@ impl JoinedFinding {
     pub(crate) fn key_diagnostic(&self, path: &str) -> Option<crate::diagnostic::Diagnostic> {
         use crate::diagnostic::lookup::{self, Owner};
         Some(match self {
-            Self::NoApplicableKeys { dataset, keys } => {
-                let keys = keys.iter().map(String::as_str).collect::<Vec<_>>();
-                lookup::no_applicable_keys(path, dataset, &keys, false)
-            }
             Self::UndeclaredKey { dataset } => lookup::undeclared_input_key(path, dataset, false),
             Self::DonorKey { identifier } => {
                 lookup::donor_key_reference(path, Owner::Unnamed, identifier)
@@ -88,21 +80,12 @@ impl Catalog {
         let Some(&(column, kind)) = donor.fields.get(field) else {
             return Ok(Some(Err(JoinedFinding::UnknownField)));
         };
-        let no_keys = || {
-            if donor.declared {
-                JoinedFinding::UndeclaredKey {
-                    dataset: owner.into(),
-                }
-            } else {
-                JoinedFinding::NoApplicableKeys {
-                    dataset: owner.into(),
-                    keys: donor.keys.iter().map(|(name, _)| name.clone()).collect(),
-                }
-            }
+        let no_keys = || JoinedFinding::UndeclaredKey {
+            dataset: owner.into(),
         };
         let mut record_keys = None;
         let row_pairs;
-        let inferred = if let Some(scope) = &self.row_joins {
+        let matched = if let Some(scope) = &self.row_joins {
             use crate::reference_scope::{self, Phase, Reach, Scope};
             let groups = scope
                 .groups
@@ -111,15 +94,11 @@ impl Catalog {
             let mut pairs = Vec::new();
             let mut records = Vec::new();
             for (index, (name, output_column)) in donor.keys.iter().enumerate() {
-                // 0.5 applies the output keys the relation stores; every
-                // column of a declared key applies (LOOKUP-1, LOOKUP-5).
+                // Every column of a declared key applies (LOOKUP-1, LOOKUP-5).
                 let Some(&(_, actual)) = donor.fields.get(name) else {
-                    if donor.declared {
-                        return Ok(Some(Err(JoinedFinding::DonorKey {
-                            identifier: std::format!("{owner}.{name}"),
-                        })));
-                    }
-                    continue;
+                    return Ok(Some(Err(JoinedFinding::DonorKey {
+                        identifier: std::format!("{owner}.{name}"),
+                    })));
                 };
                 if output_column.is_none() {
                     return Ok(Some(Err(JoinedFinding::MatchValue {
@@ -195,14 +174,11 @@ impl Catalog {
                         identifier: donor.keys[*key].0.clone(),
                     })))
                 }
-                crate::key_relation::Inference::UndeclaredOutput { .. } => {
-                    return Err(Error::InvalidAvailableOutput)
-                }
             }
         };
         let mut keys = Vec::new();
         let mut dependencies = Vec::new();
-        for &index in inferred {
+        for &index in matched {
             let (name, output_column) = &donor.keys[index];
             let output_column = output_column.ok_or(Error::InvalidAvailableOutput)?;
             if record_keys.is_none()

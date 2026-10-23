@@ -682,7 +682,6 @@ impl ColumnAdmission<'_> {
         bound: &mut BTreeSet<String>,
     ) -> Option<Column> {
         let Self {
-            tree,
             section,
             known,
             keys,
@@ -755,19 +754,14 @@ impl ColumnAdmission<'_> {
                 name,
             ));
         }
-        // Each origin is admitted on its own, at its own position: 1.0's
-        // `origins[<i>]`, or 0.5's one `origin` (P-ORIGIN-1).
-        let v1 = matches!(tree.header.surface, ast::Surface::V1 { .. });
+        // Each origin is admitted on its own, at its own position,
+        // `origins[<i>]` (P-ORIGIN-1).
         let origins = metadata
             .origins
             .iter()
             .enumerate()
             .map(|(index, declared)| {
-                let at = if v1 {
-                    format!("{column_path}.origins[{index}]")
-                } else {
-                    format!("{column_path}.origin")
-                };
+                let at = format!("{column_path}.origins[{index}]");
                 self.admit_origin(
                     declared,
                     &at,
@@ -933,13 +927,8 @@ impl ColumnAdmission<'_> {
         let kind = declared.kind.value;
         let model = section_model(section.family);
         let source = declared.source.as_ref().map(|s| s.value);
-        // D65: a 1.0 specification takes no `Not Available` origin under
-        // SDTM; a 0.5 one keeps the pairs of 0.5.0 (D75).
-        let admitted = match tree.header.surface {
-            ast::Surface::V0_5 => kind.admits_source_v0_5(model, source),
-            ast::Surface::V1 { .. } => kind.admits_source(model, source),
-        };
-        if !admitted {
+        // D65: a specification takes no `Not Available` origin under SDTM.
+        if !kind.admits_source(model, source) {
             findings.push(Finding::cause(
                 ConditionCode::SubmissionOriginSource,
                 at,
@@ -1229,66 +1218,26 @@ impl ColumnAdmission<'_> {
     }
 }
 
-/// SUB-10 and SUB-11 for one column at composition: a key column declares no
-/// `mandatory: false`, and a `not_missing` verification beside a column that is
-/// mandatory on every row restates the resolution and is redundant.
-fn redundant_mandatory_checks(
-    admission: &ColumnAdmission<'_>,
+/// SUB-10 for one column at composition: a key column declares no
+/// `mandatory: false`. Preparation reports a `not_missing` verification that
+/// restates a resolution (SUB-11) before composition.
+fn key_column_mandatory(
     column: &spec::Column,
+    keys: &[String],
     path: &str,
     findings: &mut Vec<Finding>,
 ) {
     let name = &column.name.value;
-    let prefix = format!("{path}.columns.{name}");
-    let position = admission.keys.iter().position(|key| key == name);
-    let base = column.submission.as_ref();
-    let declared = base.and_then(|metadata| metadata.mandatory.as_ref());
-    if position.is_some() && declared.is_some_and(|mandatory| !mandatory.value) {
+    let declared = column
+        .submission
+        .as_ref()
+        .and_then(|metadata| metadata.mandatory.as_ref());
+    if keys.contains(name) && declared.is_some_and(|mandatory| !mandatory.value) {
         findings.push(Finding::cause(
             ConditionCode::SubmissionKeyMandatory,
-            &format!("{prefix}.submission.mandatory"),
+            &format!("{path}.columns.{name}.submission.mandatory"),
             name,
         ));
-    }
-    // A value-level entry merges field by field over the column's metadata.
-    let resolve = |entry: Option<&spec::ColumnSubmission>| {
-        spec::resolve_mandatory(
-            position.is_some(),
-            entry
-                .and_then(|metadata| metadata.mandatory.as_ref())
-                .or(declared)
-                .map(|field| field.value),
-            entry
-                .and_then(|metadata| metadata.core.as_ref())
-                .or(base.and_then(|metadata| metadata.core.as_ref()))
-                .map(|field| field.value),
-            admission.tabulation,
-        )
-    };
-    let everywhere = resolve(None)
-        && base
-            .iter()
-            .flat_map(|metadata| &metadata.value_level)
-            .all(|entry| resolve(Some(&entry.metadata)));
-    if !everywhere {
-        return;
-    }
-    let (code, stated_by) = match position {
-        Some(position) => (
-            ConditionCode::VerificationNotMissingRedundant,
-            format!("{path}.keys[{position}]"),
-        ),
-        None if declared.is_some() => (
-            ConditionCode::SubmissionMandatoryRedundant,
-            format!("{prefix}.submission.mandatory"),
-        ),
-        None => (
-            ConditionCode::SubmissionMandatoryRedundant,
-            format!("{prefix}.submission.core"),
-        ),
-    };
-    for check in verification_paths(admission.doc, column.node, "not_missing", &prefix) {
-        findings.push(redundant(code, &check, name, &stated_by));
     }
 }
 
@@ -1700,24 +1649,18 @@ fn compose_datasets(
     for (index, input) in inputs.iter().enumerate() {
         let doc = input.document;
         let path = format!("{family}.specs[{index}]");
-        // A section lists only 1.x specifications that declare its model
-        // (SUB-3, D25). A missing `model` or another model fails at the
-        // listed specification's `model`, and its dataset composes no
-        // further, since every rule after this one reads the model. A 0.5
-        // specification declares none, and its section gives its family.
-        if !matches!(input.tree.header.surface, ast::Surface::V0_5) {
-            if let Some(finding) = listed_model(input.tree, section.family, &path) {
-                findings.push(finding);
-                continue;
-            }
+        // A section lists only specifications that declare its model (SUB-3,
+        // D25). A missing `model` or another model fails at the listed
+        // specification's `model`, and its dataset composes no further,
+        // since every rule after this one reads the model.
+        if let Some(finding) = listed_model(input.tree, section.family, &path) {
+            findings.push(finding);
+            continue;
         }
         reserved_metadata(
             doc,
             doc.root(),
-            spec::dataset_metadata_fields(matches!(
-                input.tree.header.surface,
-                ast::Surface::V1 { .. }
-            )),
+            spec::DATASET_METADATA_FIELDS,
             &path,
             findings,
         );
@@ -1925,7 +1868,7 @@ fn compose_datasets(
                 ));
                 continue;
             };
-            redundant_mandatory_checks(&admission, column, &path, findings);
+            key_column_mandatory(column, admission.keys, &path, findings);
             // Every origin the column and its entries declare.
             let origins: Vec<_> = column
                 .submission
@@ -2121,21 +2064,10 @@ pub fn compose(
         ));
     }
     // Every guide a 1.0 section lists belongs to its model under a name of
-    // its own (DEFINE-6, D16). A 0.5 project writes one `standard`, refused
-    // outside the section's family (SUB-3).
-    match surface {
-        ast::Surface::V0_5 => {
-            for guide in guides {
-                if !guide_of(section.family, &guide.name.text) {
-                    findings.push(cause(
-                        ConditionCode::SubmissionStandardFamily,
-                        "standard.name",
-                        &guide.name.text,
-                    ));
-                }
-            }
-        }
-        ast::Surface::V1 { .. } => section_standards(section.family, guides, &mut findings),
+    // its own (DEFINE-6, D16). A 0.5 project's one `standard` is not
+    // checked, until the 0.5 project route goes (P2-13d).
+    if matches!(surface, ast::Surface::V1 { .. }) {
+        section_standards(section.family, guides, &mut findings);
     }
     if !define.text.to_ascii_lowercase().ends_with(".xml") {
         findings.push(cause(

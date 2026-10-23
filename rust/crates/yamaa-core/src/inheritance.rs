@@ -1,7 +1,6 @@
 //! Demand-driven inheritance traversal; filesystem identity and bytes remain host ports.
 use crate::language::{self, FileType, HeaderFault, LanguageVersion};
 use crate::schema::{Document, DocumentNode as N, NormalizationError, SchemaStructure};
-use std::vec;
 
 /// The canonical identity is compared directly. Display spelling retains read-error context.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -32,14 +31,6 @@ pub trait InheritanceSourcePort {
     fn read(&mut self, source: &Source) -> Result<Document, SourceError<Self::Error>>;
 }
 
-/// A normalized contribution, retained in contribution order with its source identity.
-#[derive(Debug, PartialEq)]
-pub struct Layer {
-    pub source: Source,
-    pub document: Document,
-    pub origins: Vec<crate::schema::SchemaOrigin>,
-}
-
 /// No partial contribution list escapes a traversal failure.
 #[derive(Debug, PartialEq)]
 pub enum Error<E> {
@@ -57,15 +48,9 @@ pub enum Error<E> {
         path: Vec<String>,
         returns_to_entry: bool,
     },
-    Version {
-        source: String,
-        entry: String,
-        expected: String,
-        actual: String,
-        is_entry: bool,
-    },
-    /// A layer declares a 1.x header this traversal does not read: a version
-    /// the engine does not read, or a type other than `spec` (SCHEMA-2, LAYER-4).
+    /// A layer declares a header this traversal does not read: a version the
+    /// engine does not read, 0.5 included, or a type other than `spec`
+    /// (SCHEMA-2, LAYER-4).
     Header {
         source: String,
         entry: String,
@@ -77,11 +62,6 @@ pub enum Error<E> {
         entry: String,
         input: Document,
         error: NormalizationError,
-    },
-    /// An admitted custom schema gave control fields a shape this application cannot use.
-    UnsupportedControlField {
-        source: String,
-        field: &'static str,
     },
     InvalidIdentity,
 }
@@ -117,19 +97,6 @@ impl<E> Error<E> {
             } => F::Cycle {
                 path,
                 returns_to_entry: *returns_to_entry,
-            },
-            Self::Version {
-                source,
-                entry,
-                expected,
-                actual,
-                is_entry,
-            } => F::Version {
-                source,
-                entry,
-                expected,
-                actual,
-                is_entry: *is_entry,
             },
             Self::Header {
                 source,
@@ -199,31 +166,27 @@ pub fn declares_parent(document: &Document) -> bool {
         .is_some_and(|node| !matches!(document.nodes()[node], N::Null))
 }
 
-fn text_field<'a>(document: &'a Document, name: &str) -> Option<&'a str> {
-    document
-        .field(document.root(), name)
-        .and_then(|node| match &document.nodes()[node] {
-            N::Text(value) => Some(value.as_str()),
-            _ => None,
-        })
-}
-
-/// The traversal error a refused 1.x header gives: a malformed header is a
-/// finding in the layer, and a version or type the traversal does not read
-/// names the layer and the entry.
+/// The traversal error a refused header gives: a malformed header is a
+/// finding in the layer, as is the entry's `schema_version`; a version or type
+/// the traversal does not read, a parent's 0.5 included, names the layer and
+/// the entry.
 fn header_error<E>(fault: HeaderFault, entry: &str, source: Source, input: Document) -> Error<E> {
     let is_entry = source.identity == entry;
     let mismatch = match fault {
-        HeaderFault::Shape(finding) => {
+        HeaderFault::Legacy { reads } if !is_entry => HeaderMismatch::Version {
+            version: language::LEGACY_LANGUAGE_VERSION.into(),
+            reads,
+        },
+        HeaderFault::Version { version, reads, .. } => HeaderMismatch::Version { version, reads },
+        HeaderFault::FileType { file_type, .. } => HeaderMismatch::FileType { file_type },
+        HeaderFault::Shape(_) | HeaderFault::Legacy { .. } => {
             return Error::Layer {
                 source: source.identity,
                 entry: entry.into(),
                 input,
-                error: NormalizationError::Invalid(vec![finding]),
+                error: NormalizationError::Invalid(vec![fault.finding()]),
             };
         }
-        HeaderFault::Version { version, reads, .. } => HeaderMismatch::Version { version, reads },
-        HeaderFault::FileType { file_type, .. } => HeaderMismatch::FileType { file_type },
     };
     Error::Header {
         source: source.identity,
@@ -233,86 +196,12 @@ fn header_error<E>(fault: HeaderFault, entry: &str, source: Source, input: Docum
     }
 }
 
-fn admit<E>(
-    schema: &SchemaStructure,
-    entry: &str,
-    source: Source,
-    input: Document,
-) -> Result<(Layer, Option<String>), Error<E>> {
-    // A 0.5 chain reads each of its layers under the rules at the
-    // `yamaa-v0.5.0` tag (#3030 D75), so a parent that declares the 1.x header
-    // fails its admission in that layer: inheritance never migrates a layer
-    // between the languages (LAYER-4).
-    let normalized = match schema.normalize_layer(&input) {
-        Ok(value) => value,
-        Err(error) => {
-            return Err(Error::Layer {
-                source: source.identity,
-                entry: entry.into(),
-                input,
-                error,
-            });
-        }
-    };
-    let Some(version) = text_field(&normalized.document, "schema_version") else {
-        return Err(Error::UnsupportedControlField {
-            source: source.identity,
-            field: "schema_version",
-        });
-    };
-    if version != schema.version() {
-        let is_entry = source.identity == entry;
-        return Err(Error::Version {
-            source: source.identity,
-            entry: entry.into(),
-            expected: schema.version().into(),
-            actual: version.into(),
-            is_entry,
-        });
-    }
-    // A null parent is absent: the layer has no parent.
-    let parent = match normalized
-        .document
-        .field(normalized.document.root(), "parent")
-        .map(|node| &normalized.document.nodes()[node])
-    {
-        None | Some(N::Null) => None,
-        Some(N::Text(parent)) => Some(parent.clone()),
-        Some(_) => {
-            return Err(Error::UnsupportedControlField {
-                source: source.identity,
-                field: "parent",
-            })
-        }
-    };
-    Ok((
-        Layer {
-            source,
-            document: normalized.document,
-            origins: normalized.origins,
-        },
-        parent,
-    ))
-}
-
-/// Follow each layer's single parent from the entry, admitting each layer before
-/// reading its parent, and return the chain in contribution order: the root
-/// ancestor first and the entry last. Reaching a layer already on the chain is a
-/// cycle. The caller supplies the already captured entry.
-pub fn traverse<P: InheritanceSourcePort>(
-    schema: &SchemaStructure,
-    entry: Source,
-    entry_document: Document,
-    port: &mut P,
-) -> Result<Vec<Layer>, Error<P::Error>> {
-    walk(entry, entry_document, port, |entry, source, input| {
-        admit(schema, entry, source, input)
-    })
-}
-
-/// The traversal both languages share. `admit` admits one layer, given the
-/// entry identity, the layer's source and its document, and returns the layer
-/// with the parent it names.
+/// Follow each layer's single parent from the entry, admitting each layer
+/// before reading its parent, and return the chain in contribution order:
+/// the root ancestor first and the entry last. Reaching a layer already on
+/// the chain is a cycle. `admit` admits one layer, given the entry identity,
+/// the layer's source and its document, and returns the layer with the
+/// parent it names.
 fn walk<L, P: InheritanceSourcePort>(
     entry: Source,
     entry_document: Document,
@@ -405,16 +294,15 @@ pub struct VersionedChain {
     pub version: LanguageVersion,
 }
 
-/// Follow a 1.x specification's parents as [`traverse`] does, admitting each
+/// Follow a 1.x specification's parents from the entry, admitting each
 /// layer against the view of `schema`, the 1.0 specification closure, at the
 /// version that layer declares (LAYER-4, P-VER-1). `reads` is the newest
 /// version the engine reads. Every layer declares `type: spec`; a layer that
 /// declares a version the engine does not read, or another type, fails before
 /// its parent is read, at the entry's header or at the `parent` naming it.
-/// A layer that declares `schema_version` is a 0.5 layer wherever it is read
-/// (D75), so it fails in that layer as the header reader routes it: a `yamaa`
-/// beside it as `unknown_field`, and a missing `yamaa` as
-/// `missing_required_field`. Composition is not part of this traversal.
+/// A layer that declares `schema_version` is written in language version
+/// 0.5, which the engine does not read: it fails the same way, naming 0.5.
+/// Composition is not part of this traversal.
 pub fn traverse_versioned<P: InheritanceSourcePort>(
     schema: &SchemaStructure,
     reads: LanguageVersion,
@@ -440,8 +328,6 @@ fn admit_versioned<E>(
     source: Source,
     input: Document,
 ) -> Result<(VersionedLayer, Option<String>), Error<E>> {
-    // The header reader routes a root that declares `schema_version` to the
-    // 0.5 language, as `language::declares_header` and the decoder do.
     let header = match language::read_header(&input, Some(reads), FileType::Spec) {
         Ok(header) => header,
         Err(fault) => return Err(header_error(fault, entry, source, input)),

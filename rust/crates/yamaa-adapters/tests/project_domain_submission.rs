@@ -891,13 +891,6 @@ mod project {
             ));
             assert_eq!(issues.len(), 1, "{issues:?}");
             assert_eq!(issues[0].spec_paths, ["columns.VALUE.submission.core"]);
-            // A 0.5 specification declares no model: its section decides
-            // these rules when a document composes it. This case goes with
-            // the 0.5 path.
-            let valid_0_5 = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - name: VALUE\n    type: str\n    derivation: SRC.VALUE\n    submission: {length: 3, origin: {type: Assigned}}\n";
-            assert!(study
-                .check(&valid_0_5.edit("submission: {", "submission: {core: Cond, "))
-                .is_empty());
             assert!(!study.0.join("output.csv").exists());
         }
 

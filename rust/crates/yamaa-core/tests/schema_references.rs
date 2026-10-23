@@ -940,13 +940,11 @@ mod schema {
     mod schema_layer_admission {
         //! A 1.x layer is checked by `validate_layer`, against the view of the
         //! version it declares, and normalized by `normalize_versioned_layer`
-        //! before it composes (LAYER-4). A test marked 0.5 exercises
-        //! `normalize_layer`, the 0.5 layer admission, and goes with it
-        //! (#3447).
+        //! before it composes (LAYER-4).
         use yamaa_core::language::LanguageVersion;
         use yamaa_core::schema::{
-            Document, DocumentKind as K, DocumentNode as N, NormalizationError, NormalizedDocument,
-            SchemaContext as C, SchemaDiagnostic, SchemaModule, SchemaSource, SchemaStructure,
+            Document, DocumentKind as K, DocumentNode as N, NormalizedDocument, SchemaContext as C,
+            SchemaDiagnostic, SchemaModule, SchemaSource, SchemaStructure,
         };
 
         use crate::support::document::Tree as V;
@@ -967,9 +965,9 @@ mod schema {
             schema_with_identifier(V::text("str"))
         }
 
-        /// The layers of both languages: `yamaa` and `type` head a 1.x layer,
-        /// and `schema_version` a 0.5 one. An input member is a path or a
-        /// dataset, so a bare path is shorthand for the dataset (SCHEMA-10).
+        /// The layers of a 1.x specification, headed by `yamaa` and `type`. An
+        /// input member is a path or a dataset, so a bare path is shorthand for
+        /// the dataset (SCHEMA-10).
         fn schema_with_identifier(identifier_type: V) -> SchemaStructure {
             SchemaStructure::admit(
                 vec![SchemaModule {
@@ -979,7 +977,6 @@ mod schema {
                         (
                             "root_class",
                             V::List(vec![
-                                field("schema_version", "str", true),
                                 field("yamaa", "str", false),
                                 field("type", "str", false),
                                 field("parent", "str", false),
@@ -1074,44 +1071,6 @@ mod schema {
             assert_eq!(view.validate_layer(input).unwrap(), []);
             view.normalize_versioned_layer(input).unwrap()
         }
-        /// A 0.5 layer: its `schema_version`, then `fields`.
-        fn layer_v0_5(mut fields: Vec<(&'static str, V)>) -> Document {
-            fields.insert(0, ("schema_version", V::text("1.0")));
-            document(V::map(fields))
-        }
-        /// The findings `normalize_layer`, the 0.5 layer admission, reports.
-        fn diagnostics_v0_5(input: Document) -> Vec<SchemaDiagnostic> {
-            match schema().normalize_layer(&input) {
-                Err(NormalizationError::Invalid(findings)) => findings,
-                other => panic!("expected ordered findings, got {other:?}"),
-            }
-        }
-        fn finding(
-            path: &str,
-            condition: &'static str,
-            rule: &'static str,
-            context: Vec<(&'static str, C)>,
-        ) -> SchemaDiagnostic {
-            SchemaDiagnostic {
-                path: path.into(),
-                code: match (condition, rule) {
-                    ("schema_version_mismatch", "LAYER-4") => {
-                        yamaa_core::diagnostic::ConditionCode::SchemaLayerVersionMismatch
-                    }
-                    ("duplicate_identifier", "LAYER-4") => {
-                        yamaa_core::diagnostic::ConditionCode::SchemaLayerIdentifierRepeated
-                    }
-                    ("invalid_field_type", "SCHEMA-12") => {
-                        yamaa_core::diagnostic::ConditionCode::SchemaLayerInvalidFieldType
-                    }
-                    ("invalid_clear", "LAYER-9") => {
-                        yamaa_core::diagnostic::ConditionCode::SchemaLayerInvalidClear
-                    }
-                    _ => panic!("unexpected test cause"),
-                },
-                context,
-            }
-        }
         fn text(value: &str) -> C {
             C::Text(value.into())
         }
@@ -1188,145 +1147,6 @@ mod schema {
             );
         }
 
-        /// 0.5 only (#3447): the 0.5 layer admission reports `schema_version`
-        /// and a member's missing identity in its own phase order. A 1.x
-        /// layer's header is read before admission (SCHEMA-2), and its
-        /// unknown root fields follow the known ones; a 1.x member without
-        /// its identity is #3655.
-        #[test]
-        fn version_unknown_identity_and_duplicate_errors_keep_phase_order() {
-            let findings = diagnostics_v0_5(document(V::map(vec![
-                ("unknown", V::Scalar(N::Null)),
-                (
-                    "columns",
-                    V::List(vec![
-                        V::map(vec![("extra", V::Scalar(N::Null))]),
-                        V::map(vec![("name", V::text("X"))]),
-                        V::map(vec![("name", V::text("X")), ("label", V::integer("2"))]),
-                    ]),
-                ),
-            ])));
-            assert_eq!(
-                paths(&findings),
-                [
-                    ("schema_version", "schema_version_mismatch"),
-                    ("unknown", "unknown_field"),
-                    ("columns[0].name", "missing_required_field"),
-                    ("columns[0].extra", "unknown_field"),
-                    ("columns.X.label", "invalid_field_type"),
-                    ("columns.X.name", "duplicate_identifier"),
-                ]
-            );
-            assert_eq!(
-                findings[0],
-                finding(
-                    "schema_version",
-                    "schema_version_mismatch",
-                    "LAYER-4",
-                    vec![("expected", text("1.0")), ("actual", C::Null)]
-                )
-            );
-            assert_eq!(
-                findings[5],
-                finding(
-                    "columns.X.name",
-                    "duplicate_identifier",
-                    "LAYER-4",
-                    vec![("identifier", text("X"))]
-                )
-            );
-        }
-
-        /// 0.5 only (#3447): the layer kinds (`C::LayerKind`) are the 0.5
-        /// layer admission's own vocabulary. A 1.x layer reports a shape as
-        /// any value of the wrong type (SCHEMA-12).
-        #[test]
-        fn layer_shape_errors_retain_portable_kinds_and_named_classes() {
-            for (input, path, expected, actual) in [
-                (
-                    document(V::map(vec![])),
-                    "$",
-                    text("root_class"),
-                    K::Mapping,
-                ),
-                (
-                    document(V::Scalar(N::Null)),
-                    "$",
-                    text("root_class"),
-                    K::Null,
-                ),
-                (
-                    layer_v0_5(vec![("input", V::List(vec![]))]),
-                    "input",
-                    C::LayerKind(K::Mapping),
-                    K::Sequence,
-                ),
-                (
-                    layer_v0_5(vec![("columns", V::map(vec![]))]),
-                    "columns",
-                    C::LayerKind(K::Sequence),
-                    K::Mapping,
-                ),
-                (
-                    layer_v0_5(vec![("columns", V::List(vec![V::integer("7")]))]),
-                    "columns[0]",
-                    text("column_class"),
-                    K::Integer,
-                ),
-            ] {
-                assert_eq!(
-                    diagnostics_v0_5(input),
-                    [finding(
-                        path,
-                        "invalid_field_type",
-                        "SCHEMA-12",
-                        vec![("expected", expected), ("actual", C::LayerKind(actual))]
-                    )]
-                );
-            }
-        }
-
-        /// 0.5 only (#3447): a null that clears is the 0.5 clear marker. In
-        /// a 1.x layer null is a value, refused where its field's type does
-        /// not admit it, and `clear` lists what a layer clears (LAYER-9).
-        #[test]
-        fn required_and_identity_nulls_are_invalid_clears() {
-            let findings = diagnostics_v0_5(layer_v0_5(vec![
-                (
-                    "columns",
-                    V::List(vec![V::map(vec![
-                        ("name", V::Scalar(N::Null)),
-                        ("type", V::Scalar(N::Null)),
-                        ("label", V::Scalar(N::Null)),
-                    ])]),
-                ),
-                ("output", V::Scalar(N::Null)),
-            ]));
-            assert_eq!(
-                findings,
-                [
-                    finding(
-                        "columns[0].name",
-                        "invalid_clear",
-                        "LAYER-9",
-                        vec![("field", text("name"))]
-                    ),
-                    finding(
-                        "columns[0].type",
-                        "invalid_clear",
-                        "LAYER-9",
-                        vec![("field", text("type"))]
-                    ),
-                    finding(
-                        "output",
-                        "invalid_clear",
-                        "LAYER-9",
-                        vec![("field", text("output"))]
-                    ),
-                ]
-            );
-        }
-
         #[test]
         fn keyed_member_fragments_defer_nested_requiredness_but_root_values_do_not() {
             let findings = diagnostics(layer(vec![
@@ -1360,38 +1180,6 @@ mod schema {
             assert_eq!(
                 paths(&findings),
                 [("settings.needed", "missing_required_field")]
-            );
-        }
-
-        /// 0.5 only (#3447): the 0.5 clear marker, as above.
-        #[test]
-        fn nested_required_nulls_are_invalid_clears_in_members_and_root_values() {
-            let findings = diagnostics_v0_5(layer_v0_5(vec![
-                (
-                    "rows",
-                    V::List(vec![V::map(vec![
-                        ("id", V::text("R")),
-                        ("options", V::map(vec![("needed", V::Scalar(N::Null))])),
-                    ])]),
-                ),
-                ("settings", V::map(vec![("needed", V::Scalar(N::Null))])),
-            ]));
-            assert_eq!(
-                findings,
-                [
-                    finding(
-                        "rows.R.options.needed",
-                        "invalid_clear",
-                        "LAYER-9",
-                        vec![("field", text("needed"))]
-                    ),
-                    finding(
-                        "settings.needed",
-                        "invalid_clear",
-                        "LAYER-9",
-                        vec![("field", text("needed"))]
-                    ),
-                ]
             );
         }
 
@@ -1454,82 +1242,6 @@ mod schema {
                 .any(|o| matches!(o.source, SchemaSource::Default { .. })));
         }
 
-        /// 0.5 only (#3447): the nulls are 0.5 clear markers, kept for
-        /// composition. A 1.x layer clears only through `clear` (LAYER-9);
-        /// its normalization is above.
-        #[test]
-        fn normalization_preserves_clears_at_every_depth_defers_defaults_and_owns_shorthand() {
-            let normalized = {
-                let input = layer_v0_5(vec![
-                    (
-                        "rows",
-                        V::List(vec![V::map(vec![
-                            ("id", V::text("R")),
-                            (
-                                "options",
-                                V::map(vec![
-                                    ("needed", V::text("yes")),
-                                    ("defaulted", V::Scalar(N::Null)),
-                                ]),
-                            ),
-                        ])]),
-                    ),
-                    (
-                        "columns",
-                        V::List(vec![V::map(vec![
-                            ("name", V::text("X")),
-                            ("label", V::Scalar(N::Null)),
-                            ("options", V::map(vec![])),
-                        ])]),
-                    ),
-                    (
-                        "input",
-                        V::map(vec![
-                            ("SRC", V::text("data.csv")),
-                            ("EMPTY", V::map(vec![])),
-                        ]),
-                    ),
-                ]);
-                schema().normalize_layer(&input).unwrap()
-            };
-            let expected = layer_v0_5(vec![
-                (
-                    "input",
-                    V::map(vec![
-                        ("SRC", V::map(vec![("path", V::text("data.csv"))])),
-                        ("EMPTY", V::map(vec![])),
-                    ]),
-                ),
-                (
-                    "columns",
-                    V::List(vec![V::map(vec![
-                        ("name", V::text("X")),
-                        ("label", V::Scalar(N::Null)),
-                        ("options", V::map(vec![])),
-                    ])]),
-                ),
-                (
-                    "rows",
-                    V::List(vec![V::map(vec![
-                        ("id", V::text("R")),
-                        (
-                            "options",
-                            V::map(vec![
-                                ("needed", V::text("yes")),
-                                ("defaulted", V::Scalar(N::Null)),
-                            ]),
-                        ),
-                    ])]),
-                ),
-            ]);
-            assert_document(&normalized.document, &expected);
-            assert_eq!(normalized.origins.len(), expected.nodes().len());
-            assert!(!normalized
-                .origins
-                .iter()
-                .any(|o| matches!(o.source, SchemaSource::Default { .. })));
-        }
-
         #[test]
         fn generated_input_path_and_container_point_to_original_shorthand() {
             let input = layer(vec![("input", V::map(vec![("SRC", V::text("data.csv"))]))]);
@@ -1567,49 +1279,6 @@ mod schema {
             let first = normalized(&schema, &input);
             let second = normalized(&schema, &input);
             assert_eq!(first, second);
-        }
-
-        /// 0.5 only (#3447): the 0.5 layer admission reads a bare input path
-        /// as a dataset whatever the schema declares. A 1.x shorthand is a
-        /// union the schema declares (SCHEMA-10).
-        #[test]
-        fn empty_collections_and_input_shorthand_do_not_require_unused_member_classes() {
-            let schema = SchemaStructure::admit(
-                vec![SchemaModule {
-                    name: "schema.yaml".into(),
-                    document: document(V::map(vec![
-                        ("version", V::text("1.0")),
-                        (
-                            "root_class",
-                            V::List(vec![
-                                field("schema_version", "str", true),
-                                field("columns", "list", false),
-                                field("input", "dict", false),
-                            ]),
-                        ),
-                        ("identifier", V::map(vec![("type", V::text("str"))])),
-                        ("project_path", V::map(vec![("type", V::text("str"))])),
-                    ])),
-                }],
-                0,
-                "root_class",
-            )
-            .unwrap();
-            let input = layer_v0_5(vec![
-                ("columns", V::List(vec![])),
-                ("input", V::map(vec![("SRC", V::text("data.csv"))])),
-            ]);
-            let output = schema.normalize_layer(&input).unwrap();
-            assert_document(
-                &output.document,
-                &layer_v0_5(vec![
-                    ("columns", V::List(vec![])),
-                    (
-                        "input",
-                        V::map(vec![("SRC", V::map(vec![("path", V::text("data.csv"))]))]),
-                    ),
-                ]),
-            );
         }
 
         #[test]
@@ -1650,130 +1319,6 @@ mod schema {
                     ("columns.2[3]", "unknown_field"),
                 ]
             );
-        }
-
-        /// 0.5 only (#3447): the 0.5 layer admission reports a root Boolean
-        /// key as `True`, among the fields in written order, and a member
-        /// without its identity at its position (for 1.x, #3655). Its member
-        /// paths are above.
-        #[test]
-        fn paths_distinguish_positional_numeric_boolean_and_textual_members() {
-            let input = document(V::Pairs(vec![
-                (V::text("schema_version"), V::text("1.0")),
-                (V::boolean(true), V::Scalar(N::Null)),
-                (
-                    V::text("input"),
-                    V::Pairs(vec![
-                        (V::boolean(true), V::List(vec![])),
-                        (V::integer("2"), V::List(vec![])),
-                        (V::text("2"), V::List(vec![])),
-                        (V::Scalar(N::Null), V::List(vec![])),
-                    ]),
-                ),
-                (
-                    V::text("columns"),
-                    V::List(vec![
-                        V::map(vec![]),
-                        V::Pairs(vec![
-                            (V::text("name"), V::text("2")),
-                            (V::boolean(false), V::Scalar(N::Null)),
-                            (V::integer("3"), V::Scalar(N::Null)),
-                        ]),
-                    ]),
-                ),
-            ]));
-            let findings = diagnostics_v0_5(input);
-            assert_eq!(
-                paths(&findings),
-                [
-                    ("True", "unknown_field"),
-                    ("input.key(True)", "invalid_field_type"),
-                    ("input[True]", "invalid_field_type"),
-                    ("input.key(2)", "invalid_field_type"),
-                    ("input[2]", "invalid_field_type"),
-                    ("input.2", "invalid_field_type"),
-                    ("input.key(None)", "invalid_field_type"),
-                    ("input.None", "invalid_field_type"),
-                    ("columns[0].name", "missing_required_field"),
-                    ("columns.2[False]", "unknown_field"),
-                    ("columns.2[3]", "unknown_field"),
-                ]
-            );
-        }
-
-        /// 0.5 only (#3447): the 0.5 layer admission stringifies input keys,
-        /// so `2` and `"2"` collide. A 1.x layer keeps each key as written,
-        /// and its input keys are identifiers (NAME-1).
-        #[test]
-        fn stringified_input_collisions_keep_first_position_and_last_value_with_origins() {
-            let schema = schema_with_identifier(V::List(vec![
-                V::text("str"),
-                V::text("int"),
-                V::text("bool"),
-                V::text("null"),
-            ]));
-            // A dataset written as a mapping says more than its path, so it is
-            // not a restated path shorthand (SCHEMA-15).
-            let dataset = |path: &str| {
-                V::map(vec![
-                    ("path", V::text(path)),
-                    ("options", V::map(vec![("defaulted", V::text("SET"))])),
-                ])
-            };
-            let input = layer_v0_5(vec![(
-                "input",
-                V::Pairs(vec![
-                    (V::integer("2"), dataset("first.csv")),
-                    (V::text("KEEP"), dataset("middle.csv")),
-                    (V::text("2"), dataset("last.csv")),
-                    (V::boolean(true), V::text("first-bool.csv")),
-                    (V::text("True"), V::text("last-bool.csv")),
-                    (V::Scalar(N::Null), V::text("first-null.csv")),
-                    (V::text("None"), V::text("last-null.csv")),
-                ]),
-            )]);
-            let output = schema.normalize_layer(&input).unwrap();
-            assert_document(
-                &output.document,
-                &layer_v0_5(vec![(
-                    "input",
-                    V::map(vec![
-                        ("2", dataset("last.csv")),
-                        ("KEEP", dataset("middle.csv")),
-                        ("True", V::map(vec![("path", V::text("last-bool.csv"))])),
-                        ("None", V::map(vec![("path", V::text("last-null.csv"))])),
-                    ]),
-                )]),
-            );
-            let input_members = get(&input, input.root(), "input");
-            let N::Mapping(entries) = &input.nodes()[input_members] else {
-                panic!("input map")
-            };
-            let output_members = get(&output.document, output.document.root(), "input");
-            let N::Mapping(result) = &output.document.nodes()[output_members] else {
-                panic!("output map")
-            };
-            assert_eq!(output.origins[result[0].0].node, entries[0].0);
-            assert!(output.origins[result[0].0].generated);
-            assert_eq!(output.origins[result[0].1].node, entries[2].1);
-            assert!(!output.origins[result[0].1].generated);
-        }
-
-        /// 0.5 only (#3447): key selection is the 0.5 stringification above.
-        #[test]
-        fn overwritten_input_members_are_still_validated_before_key_selection() {
-            let schema = schema_with_identifier(V::List(vec![V::text("str"), V::text("int")]));
-            let input = layer_v0_5(vec![(
-                "input",
-                V::Pairs(vec![
-                    (V::integer("2"), V::map(vec![("path", V::boolean(false))])),
-                    (V::text("2"), V::text("last.csv")),
-                ]),
-            )]);
-            let Err(NormalizationError::Invalid(findings)) = schema.normalize_layer(&input) else {
-                panic!("shadowed invalid member must fail")
-            };
-            assert_eq!(paths(&findings), [("input[2].path", "invalid_field_type")]);
         }
 
         #[test]

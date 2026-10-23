@@ -200,18 +200,14 @@ fn numeric_and_aggregate_result_types_follow_their_operands() {
 
 #[test]
 fn independent_calendar_findings_keep_first_error_priority() {
-    use crate::{
-        dataset::{
-            completion_policy, completion_policy_findings, DatePolicyError, DayDeclaration,
-            TemporalType,
-        },
-        temporal::Precision,
+    use crate::dataset::{
+        completion_policy, completion_policy_findings, DatePolicyError, DayDeclaration,
+        TemporalType,
     };
     let findings = completion_policy_findings(
         TemporalType::Date,
         Some("13"),
         Some(DayDeclaration::Number("0")),
-        Precision::Year,
         None,
         "date",
     )
@@ -228,7 +224,6 @@ fn independent_calendar_findings_keep_first_error_priority() {
         TemporalType::Date,
         Some("13"),
         Some(DayDeclaration::Number("0")),
-        Precision::Year,
         None,
         "date",
     )

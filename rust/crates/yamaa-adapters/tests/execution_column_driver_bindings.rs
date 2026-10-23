@@ -327,40 +327,6 @@ fn serious(derivation: &str, intermediate: &str) -> String {
     )
 }
 
-/// The DM rows bind SER.AETERM as a lookup of SER, by the key a 0.5 file
-/// infers. A 1.0 row driver declares no key (ROW-2), so a 1.0 file refuses
-/// that read at SER's `key` (LOOKUP-3, D159): this test keeps its 0.5
-/// document until the 0.5 path goes (#3447).
-#[test]
-fn an_intermediate_driver_over_another_input_reads_its_own_record() {
-    // The SER rows read the serious event that built them in AE, which is not
-    // the input behind the first template; the DM rows read their own SEX.
-    let own = "USUBJID,SRC,SEQ,X\nS1,CM,1,OWN\nS3,CM,1,OWN\n";
-    let specification = format!(
-        "schema_version: \"1.0\"\n\
-         domain: XX\n\
-         input:\n\
-         \x20 AE: {{path: ae.csv, types: {{AESEQ: int}}}}\n\
-         \x20 DM: dm.csv\n\
-         \x20 CM: {{path: cm.csv, types: {{CMSEQ: int}}}}\n\
-         keys: [USUBJID, SRC, SEQ]\n\
-         output: {{path: out.csv, columns: [USUBJID, SRC, SEQ, X]}}\n\
-         intermediates:\n\
-         \x20 - {{id: SER, dataset: AE, filter: \"AE.AESER = 'Y'\"}}\n\
-         {}rows:\n\
-         \x20 - {{id: cm, dataset: CM, derivations: {{USUBJID: CM.USUBJID, SRC: {{literal: CM}}, SEQ: CM.CMSEQ, X: {{literal: OWN}}}}}}\n\
-         \x20 - {{id: ser, dataset: SER, derivations: {{USUBJID: SER.USUBJID, SRC: {{literal: SER}}, SEQ: SER.AESEQ}}}}\n\
-         \x20 - {{id: dm, dataset: DM, derivations: {{USUBJID: DM.USUBJID, SRC: {{literal: DM}}, SEQ: {{literal: 0}}}}}}\n",
-        columns(
-            "str",
-            "{case: [{when: \"SRC = 'SER'\", then: SER.AETERM}, {otherwise: DM.SEX}]}"
-        ),
-    );
-    Fixture::new(&specification).saved(&format!(
-        "{own}S1,SER,1,HEADACHE\nS2,SER,1,RASH\nS1,DM,0,F\nS2,DM,0,M\nS3,DM,0,F\n"
-    ));
-}
-
 #[test]
 fn a_field_an_intermediate_driver_derives_is_refused_beside_another_driver() {
     let fixture = Fixture::new(&serious(
