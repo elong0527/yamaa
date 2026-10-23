@@ -334,6 +334,14 @@ pub fn call() -> abi::Call {
         probe: None,
         bind: None,
         invoke: None,
+        call_batch: None,
+        is_interrupt: None,
+        providers: None,
+        standard_library: None,
+        distribution_version: None,
+        environment: None,
+        integer_digits: None,
+        compare_locked: None,
     }
 }
 

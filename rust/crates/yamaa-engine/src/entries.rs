@@ -707,6 +707,10 @@ entries! {
         insert(Value::Plans(yamaa::Plans::new()))
     }
 
+    fn no_issues() -> Handle {
+        insert(Value::Table(yamaa::Report::default().table()))
+    }
+
     fn spec_resolve(call: *const Call, specification: Str, project: Str) -> abi::Nodes {
         // SAFETY: the entry's contract: its texts are valid for the call.
         let specification = unsafe { required(specification, "the specification") }?;
@@ -1108,6 +1112,7 @@ static ENGINE: abi::Engine = abi::Engine {
     export,
     release,
     census,
+    no_issues,
 };
 
 /// What the engine reports when it accepts a request, with the texts the
