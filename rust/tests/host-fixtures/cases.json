@@ -7057,6 +7057,431 @@
               ]
             }
           ]
+        },
+        {
+          "name": "a_key_that_no_column_declares",
+          "files": {
+            "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy:\n  id: PAR01\n  name: PAR01\n  description: Example study submitting its demographics\n  protocol_name: PAR-01\nsdtm:\n  specs:\n    - dm.yaml\n  standards:\n    - {name: SDTMIG, version: \"3.4\", status: Final}\n  define: define.xml\n",
+            "dm.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: DM\nkeys: [STUDYID, USUBJID, SUBJID]\ninput: {RAW: raw.csv}\noutput: {path: dm.csv, columns: [DOMAIN, STUDYID, USUBJID]}\ncolumns:\n  - {name: DOMAIN, type: str, label: Domain Abbreviation, derivation: \"'DM'\", submission: {core: Req, role: Identifier, length: 2, origins: [{type: Assigned, source: Sponsor}]}}\n  - {name: STUDYID, type: str, label: Study Identifier, derivation: RAW.STUDYID, submission: {core: Req, role: Identifier, length: 5, origins: [{type: Protocol, source: Sponsor}]}}\n  - {name: USUBJID, type: str, label: Unique Subject Identifier, derivation: RAW.USUBJID, submission: {core: Req, role: Identifier, length: 9, origins: [{type: Assigned, source: Sponsor}]}}\nsubmission: {label: Demographics, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false}\n",
+            "raw.csv": "STUDYID,USUBJID\nPAR01,PAR01-941\nPAR01,PAR01-942\n"
+          },
+          "calls": [
+            {
+              "call": {
+                "operation": "project_check",
+                "path": "project.yaml"
+              },
+              "issues": [
+                {
+                  "severity": "error",
+                  "phase": "validation",
+                  "condition": "undeclared_column",
+                  "rule": "OUTPUT-2",
+                  "spec_paths": [
+                    "keys[2]"
+                  ],
+                  "file": "dm.yaml",
+                  "line": 5,
+                  "column": 26,
+                  "message": "SUBJID is not a declared column",
+                  "context": "{\"column\":\"SUBJID\",\"entry\":\"{root}/dm.yaml\",\"source\":\"{root}/dm.yaml\"}",
+                  "source_span": null,
+                  "operand_route": null
+                }
+              ]
+            },
+            {
+              "call": {
+                "operation": "spec_run",
+                "path": "project.yaml",
+                "name": "DM"
+              },
+              "issues": [
+                {
+                  "severity": "error",
+                  "phase": "validation",
+                  "condition": "undeclared_column",
+                  "rule": "OUTPUT-2",
+                  "spec_paths": [
+                    "keys[2]"
+                  ],
+                  "file": "dm.yaml",
+                  "line": 5,
+                  "column": 26,
+                  "message": "SUBJID is not a declared column",
+                  "context": "{\"column\":\"SUBJID\"}",
+                  "source_span": null,
+                  "operand_route": null
+                }
+              ]
+            },
+            {
+              "call": {
+                "operation": "submission",
+                "path": "project.yaml",
+                "section": "sdtm",
+                "created": "2026-09-11T00:00:00"
+              },
+              "issues": [
+                {
+                  "severity": "error",
+                  "phase": "validation",
+                  "condition": "undeclared_column",
+                  "rule": "OUTPUT-2",
+                  "spec_paths": [
+                    "sdtm.specs[0].keys[2]"
+                  ],
+                  "file": "dm.yaml",
+                  "line": 5,
+                  "column": 26,
+                  "message": "SUBJID is not a declared column",
+                  "context": "{\"column\":\"SUBJID\"}",
+                  "source_span": null,
+                  "operand_route": null
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "a_key_listed_twice",
+          "files": {
+            "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy:\n  id: PAR01\n  name: PAR01\n  description: Example study submitting its demographics\n  protocol_name: PAR-01\nsdtm:\n  specs:\n    - dm.yaml\n  standards:\n    - {name: SDTMIG, version: \"3.4\", status: Final}\n  define: define.xml\n",
+            "dm.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: DM\nkeys: [STUDYID, USUBJID, USUBJID]\ninput: {RAW: raw.csv}\noutput: {path: dm.csv, columns: [DOMAIN, STUDYID, USUBJID]}\ncolumns:\n  - {name: DOMAIN, type: str, label: Domain Abbreviation, derivation: \"'DM'\", submission: {core: Req, role: Identifier, length: 2, origins: [{type: Assigned, source: Sponsor}]}}\n  - {name: STUDYID, type: str, label: Study Identifier, derivation: RAW.STUDYID, submission: {core: Req, role: Identifier, length: 5, origins: [{type: Protocol, source: Sponsor}]}}\n  - {name: USUBJID, type: str, label: Unique Subject Identifier, derivation: RAW.USUBJID, submission: {core: Req, role: Identifier, length: 9, origins: [{type: Assigned, source: Sponsor}]}}\nsubmission: {label: Demographics, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false}\n",
+            "raw.csv": "STUDYID,USUBJID\nPAR01,PAR01-941\nPAR01,PAR01-942\n"
+          },
+          "calls": [
+            {
+              "call": {
+                "operation": "project_check",
+                "path": "project.yaml"
+              },
+              "issues": [
+                {
+                  "severity": "error",
+                  "phase": "validation",
+                  "condition": "duplicate_identifier",
+                  "rule": "OUTPUT-2",
+                  "spec_paths": [
+                    "keys[2]"
+                  ],
+                  "file": "dm.yaml",
+                  "line": 5,
+                  "column": 26,
+                  "message": "keys[2] repeats the identifier USUBJID, declared earlier",
+                  "context": "{\"entry\":\"{root}/dm.yaml\",\"identifier\":\"USUBJID\",\"source\":\"{root}/dm.yaml\"}",
+                  "source_span": null,
+                  "operand_route": null
+                }
+              ]
+            },
+            {
+              "call": {
+                "operation": "spec_run",
+                "path": "project.yaml",
+                "name": "DM"
+              },
+              "issues": [
+                {
+                  "severity": "error",
+                  "phase": "validation",
+                  "condition": "duplicate_identifier",
+                  "rule": "OUTPUT-2",
+                  "spec_paths": [
+                    "keys[2]"
+                  ],
+                  "file": "dm.yaml",
+                  "line": 5,
+                  "column": 26,
+                  "message": "keys[2] repeats the identifier USUBJID, declared earlier",
+                  "context": "{\"identifier\":\"USUBJID\"}",
+                  "source_span": null,
+                  "operand_route": null
+                }
+              ]
+            },
+            {
+              "call": {
+                "operation": "submission",
+                "path": "project.yaml",
+                "section": "sdtm",
+                "created": "2026-09-11T00:00:00"
+              },
+              "issues": [
+                {
+                  "severity": "error",
+                  "phase": "validation",
+                  "condition": "duplicate_identifier",
+                  "rule": "OUTPUT-2",
+                  "spec_paths": [
+                    "sdtm.specs[0].keys[2]"
+                  ],
+                  "file": "dm.yaml",
+                  "line": 5,
+                  "column": 26,
+                  "message": "sdtm.specs[0].keys[2] repeats the identifier USUBJID, declared earlier",
+                  "context": "{\"identifier\":\"USUBJID\"}",
+                  "source_span": null,
+                  "operand_route": null
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "an_empty_key_list",
+          "files": {
+            "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy:\n  id: PAR01\n  name: PAR01\n  description: Example study submitting its demographics\n  protocol_name: PAR-01\nsdtm:\n  specs:\n    - dm.yaml\n  standards:\n    - {name: SDTMIG, version: \"3.4\", status: Final}\n  define: define.xml\n",
+            "dm.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: DM\nkeys: []\ninput: {RAW: raw.csv}\noutput: {path: dm.csv, columns: [DOMAIN, STUDYID, USUBJID]}\ncolumns:\n  - {name: DOMAIN, type: str, label: Domain Abbreviation, derivation: \"'DM'\", submission: {core: Req, role: Identifier, length: 2, origins: [{type: Assigned, source: Sponsor}]}}\n  - {name: STUDYID, type: str, label: Study Identifier, derivation: RAW.STUDYID, submission: {core: Req, role: Identifier, length: 5, origins: [{type: Protocol, source: Sponsor}]}}\n  - {name: USUBJID, type: str, label: Unique Subject Identifier, derivation: RAW.USUBJID, submission: {core: Req, role: Identifier, length: 9, origins: [{type: Assigned, source: Sponsor}]}}\nsubmission: {label: Demographics, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false}\n",
+            "raw.csv": "STUDYID,USUBJID\nPAR01,PAR01-941\nPAR01,PAR01-942\n"
+          },
+          "calls": [
+            {
+              "call": {
+                "operation": "project_check",
+                "path": "project.yaml"
+              },
+              "issues": [
+                {
+                  "severity": "error",
+                  "phase": "validation",
+                  "condition": "invalid_field_type",
+                  "rule": "OUTPUT-2",
+                  "spec_paths": [
+                    "keys"
+                  ],
+                  "file": "dm.yaml",
+                  "line": 5,
+                  "column": 1,
+                  "message": "keys has a value of the wrong type or form (expected at least one key column)",
+                  "context": "{\"actual\":\"empty list\",\"entry\":\"{root}/dm.yaml\",\"expected\":\"at least one key column\",\"source\":\"{root}/dm.yaml\"}",
+                  "source_span": null,
+                  "operand_route": null
+                }
+              ]
+            },
+            {
+              "call": {
+                "operation": "spec_run",
+                "path": "project.yaml",
+                "name": "DM"
+              },
+              "issues": [
+                {
+                  "severity": "error",
+                  "phase": "validation",
+                  "condition": "invalid_field_type",
+                  "rule": "OUTPUT-2",
+                  "spec_paths": [
+                    "keys"
+                  ],
+                  "file": "dm.yaml",
+                  "line": 5,
+                  "column": 1,
+                  "message": "keys has a value of the wrong type or form (expected at least one key column)",
+                  "context": "{\"actual\":\"empty list\",\"expected\":\"at least one key column\"}",
+                  "source_span": null,
+                  "operand_route": null
+                }
+              ]
+            },
+            {
+              "call": {
+                "operation": "submission",
+                "path": "project.yaml",
+                "section": "sdtm",
+                "created": "2026-09-11T00:00:00"
+              },
+              "issues": [
+                {
+                  "severity": "error",
+                  "phase": "validation",
+                  "condition": "invalid_field_type",
+                  "rule": "OUTPUT-2",
+                  "spec_paths": [
+                    "sdtm.specs[0].keys"
+                  ],
+                  "file": "dm.yaml",
+                  "line": 5,
+                  "column": 1,
+                  "message": "sdtm.specs[0].keys has a value of the wrong type or form (expected at least one key column)",
+                  "context": "{\"actual\":\"empty list\",\"expected\":\"at least one key column\"}",
+                  "source_span": null,
+                  "operand_route": null
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "an_output_column_that_no_column_declares",
+          "files": {
+            "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy:\n  id: PAR01\n  name: PAR01\n  description: Example study submitting its demographics\n  protocol_name: PAR-01\nsdtm:\n  specs:\n    - dm.yaml\n  standards:\n    - {name: SDTMIG, version: \"3.4\", status: Final}\n  define: define.xml\n",
+            "dm.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: DM\nkeys: [STUDYID, USUBJID]\ninput: {RAW: raw.csv}\noutput: {path: dm.csv, columns: [DOMAIN, STUDYID, USUBJID, RACE]}\ncolumns:\n  - {name: DOMAIN, type: str, label: Domain Abbreviation, derivation: \"'DM'\", submission: {core: Req, role: Identifier, length: 2, origins: [{type: Assigned, source: Sponsor}]}}\n  - {name: STUDYID, type: str, label: Study Identifier, derivation: RAW.STUDYID, submission: {core: Req, role: Identifier, length: 5, origins: [{type: Protocol, source: Sponsor}]}}\n  - {name: USUBJID, type: str, label: Unique Subject Identifier, derivation: RAW.USUBJID, submission: {core: Req, role: Identifier, length: 9, origins: [{type: Assigned, source: Sponsor}]}}\nsubmission: {label: Demographics, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false}\n",
+            "raw.csv": "STUDYID,USUBJID\nPAR01,PAR01-941\nPAR01,PAR01-942\n"
+          },
+          "calls": [
+            {
+              "call": {
+                "operation": "project_check",
+                "path": "project.yaml"
+              },
+              "issues": [
+                {
+                  "severity": "error",
+                  "phase": "validation",
+                  "condition": "undeclared_column",
+                  "rule": "OUTPUT-1",
+                  "spec_paths": [
+                    "output.columns[3]"
+                  ],
+                  "file": "dm.yaml",
+                  "line": 7,
+                  "column": 60,
+                  "message": "RACE is not a declared column",
+                  "context": "{\"column\":\"RACE\",\"entry\":\"{root}/dm.yaml\",\"source\":\"{root}/dm.yaml\"}",
+                  "source_span": null,
+                  "operand_route": null
+                }
+              ]
+            },
+            {
+              "call": {
+                "operation": "spec_run",
+                "path": "project.yaml",
+                "name": "DM"
+              },
+              "issues": [
+                {
+                  "severity": "error",
+                  "phase": "validation",
+                  "condition": "undeclared_column",
+                  "rule": "OUTPUT-1",
+                  "spec_paths": [
+                    "output.columns[3]"
+                  ],
+                  "file": "dm.yaml",
+                  "line": 7,
+                  "column": 60,
+                  "message": "RACE is not a declared column",
+                  "context": "{\"column\":\"RACE\"}",
+                  "source_span": null,
+                  "operand_route": null
+                }
+              ]
+            },
+            {
+              "call": {
+                "operation": "submission",
+                "path": "project.yaml",
+                "section": "sdtm",
+                "created": "2026-09-11T00:00:00"
+              },
+              "issues": [
+                {
+                  "severity": "error",
+                  "phase": "validation",
+                  "condition": "undeclared_column",
+                  "rule": "OUTPUT-1",
+                  "spec_paths": [
+                    "sdtm.specs[0].output.columns[3]"
+                  ],
+                  "file": "dm.yaml",
+                  "line": 7,
+                  "column": 60,
+                  "message": "RACE is not a declared column",
+                  "context": "{\"column\":\"RACE\"}",
+                  "source_span": null,
+                  "operand_route": null
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "an_output_column_listed_twice",
+          "files": {
+            "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy:\n  id: PAR01\n  name: PAR01\n  description: Example study submitting its demographics\n  protocol_name: PAR-01\nsdtm:\n  specs:\n    - dm.yaml\n  standards:\n    - {name: SDTMIG, version: \"3.4\", status: Final}\n  define: define.xml\n",
+            "dm.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: DM\nkeys: [STUDYID, USUBJID]\ninput: {RAW: raw.csv}\noutput: {path: dm.csv, columns: [DOMAIN, STUDYID, USUBJID, DOMAIN]}\ncolumns:\n  - {name: DOMAIN, type: str, label: Domain Abbreviation, derivation: \"'DM'\", submission: {core: Req, role: Identifier, length: 2, origins: [{type: Assigned, source: Sponsor}]}}\n  - {name: STUDYID, type: str, label: Study Identifier, derivation: RAW.STUDYID, submission: {core: Req, role: Identifier, length: 5, origins: [{type: Protocol, source: Sponsor}]}}\n  - {name: USUBJID, type: str, label: Unique Subject Identifier, derivation: RAW.USUBJID, submission: {core: Req, role: Identifier, length: 9, origins: [{type: Assigned, source: Sponsor}]}}\nsubmission: {label: Demographics, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false}\n",
+            "raw.csv": "STUDYID,USUBJID\nPAR01,PAR01-941\nPAR01,PAR01-942\n"
+          },
+          "calls": [
+            {
+              "call": {
+                "operation": "project_check",
+                "path": "project.yaml"
+              },
+              "issues": [
+                {
+                  "severity": "error",
+                  "phase": "validation",
+                  "condition": "duplicate_identifier",
+                  "rule": "OUTPUT-1",
+                  "spec_paths": [
+                    "output.columns[3]"
+                  ],
+                  "file": "dm.yaml",
+                  "line": 7,
+                  "column": 60,
+                  "message": "output.columns[3] repeats the identifier DOMAIN, declared earlier",
+                  "context": "{\"column\":\"DOMAIN\",\"entry\":\"{root}/dm.yaml\",\"identifier\":\"DOMAIN\",\"source\":\"{root}/dm.yaml\"}",
+                  "source_span": null,
+                  "operand_route": null
+                }
+              ]
+            },
+            {
+              "call": {
+                "operation": "spec_run",
+                "path": "project.yaml",
+                "name": "DM"
+              },
+              "issues": [
+                {
+                  "severity": "error",
+                  "phase": "validation",
+                  "condition": "duplicate_identifier",
+                  "rule": "OUTPUT-1",
+                  "spec_paths": [
+                    "output.columns[3]"
+                  ],
+                  "file": "dm.yaml",
+                  "line": 7,
+                  "column": 60,
+                  "message": "output.columns[3] repeats the identifier DOMAIN, declared earlier",
+                  "context": "{\"column\":\"DOMAIN\",\"identifier\":\"DOMAIN\"}",
+                  "source_span": null,
+                  "operand_route": null
+                }
+              ]
+            },
+            {
+              "call": {
+                "operation": "submission",
+                "path": "project.yaml",
+                "section": "sdtm",
+                "created": "2026-09-11T00:00:00"
+              },
+              "issues": [
+                {
+                  "severity": "error",
+                  "phase": "validation",
+                  "condition": "duplicate_identifier",
+                  "rule": "OUTPUT-1",
+                  "spec_paths": [
+                    "sdtm.specs[0].output.columns[3]"
+                  ],
+                  "file": "dm.yaml",
+                  "line": 7,
+                  "column": 60,
+                  "message": "sdtm.specs[0].output.columns[3] repeats the identifier DOMAIN, declared earlier",
+                  "context": "{\"column\":\"DOMAIN\",\"identifier\":\"DOMAIN\"}",
+                  "source_span": null,
+                  "operand_route": null
+                }
+              ]
+            }
+          ]
         }
       ]
     },
