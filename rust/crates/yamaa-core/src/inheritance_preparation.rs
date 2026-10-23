@@ -1,41 +1,14 @@
-//! The resolution of a 1.x chain over captured documents and explicit path
-//! authority ([`prepare_versioned`]).
-use crate::inheritance::{InheritanceSourcePort, Source, VersionedChain};
+//! The resolution of a 1.x chain over captured documents, its paths respelled
+//! through the resolver port ([`prepare_versioned`]).
+use crate::inheritance::{Source, VersionedChain};
 use crate::resolution::{self, Order};
+use crate::resolver::Resolver;
 use crate::schema::{
     shorthand_key, written_path, CompositionOrigin, Document, DocumentError, DocumentNode as N,
     LayerNodeOrigin, LayerProvenance, NormalizationError, SchemaDiagnostic, SchemaOrigin,
     SchemaSource, SchemaStructure, SpecPath, VersionedCompositionError,
 };
 use std::collections::BTreeMap;
-
-/// The host respells paths using captured canonical file identities, without reopening them.
-pub trait PathPort: InheritanceSourcePort {
-    fn rebase(
-        &mut self,
-        layer: &Source,
-        entry: &Source,
-        written: &str,
-    ) -> Result<String, Self::Error>;
-    /// The output contract of the producing specification that `written`,
-    /// input `dataset`'s `schema` link as `declaring` writes it, names, which
-    /// a copy entry copies columns from (SPEC-9). `resolving` holds the layers
-    /// that count as being resolved while it is read, entry first: the entry
-    /// and each parent layer up to the last one with a copy entry that reads
-    /// `dataset`. The producer is read and resolved, never compiled or run
-    /// (INPUT-10). `None` when it cannot be: the port keeps why, and the chain
-    /// does not resolve.
-    fn producer(
-        &mut self,
-        declaring: &Source,
-        written: &str,
-        dataset: &str,
-        resolving: &[&Source],
-    ) -> Option<crate::producer_contract::Contract> {
-        let _ = (declaring, written, dataset, resolving);
-        None
-    }
-}
 
 /// Failed passes retain the arena addressed by semantic context references.
 /// Policy/internal failures need no arena copy and never become language findings.
@@ -52,13 +25,13 @@ pub struct FailureContext<E> {
 /// `relative_to` selects, and `output`'s `path` and `report` from the base
 /// its own `relative_to` selects, since output composes whole. Node indices
 /// are kept, so origins addressing the layer still hold.
-fn rebased<P: PathPort>(
+fn rebased<R: Resolver>(
     document: &Document,
     source: &Source,
     entry: &Source,
     input_bases: &BTreeMap<String, bool>,
-    port: &mut P,
-) -> Result<Document, Rebase<P::Error>> {
+    resolver: &mut R,
+) -> Result<Document, Rebase<R::Error>> {
     let mut paths = Vec::new();
     if let Some(input) = document.field(document.root(), "input") {
         if let N::Mapping(inputs) = &document.nodes()[input] {
@@ -86,7 +59,7 @@ fn rebased<P: PathPort>(
     let mut nodes = document.nodes().to_vec();
     for (id, from_entry) in paths {
         if let N::Text(written) = &document.nodes()[id] {
-            let path = port
+            let path = resolver
                 .rebase(if from_entry { entry } else { source }, entry, written)
                 .map_err(Rebase::Path)?;
             nodes[id] = N::Text(path);
@@ -168,8 +141,8 @@ pub enum VersionedError<E> {
         findings: Vec<SchemaDiagnostic>,
     },
     /// The producing specification input `dataset` links, which a copy entry
-    /// copies from, could not be read; [`PathPort::producer`]'s port says
-    /// why (SPEC-9).
+    /// copies from, could not be read; the producer reader
+    /// [`prepare_versioned`] was given keeps why (SPEC-9).
     Producer {
         dataset: String,
     },
@@ -225,11 +198,28 @@ fn clear_input_bases(document: &Document, bases: &mut BTreeMap<String, bool>) {
 /// its 1.0 lowering (LAYER-11, LAYER-13); and what survives is normalized at
 /// the chain's version, which materializes defaults and checks requiredness
 /// (LAYER-7, LAYER-12).
-pub fn prepare_versioned<P: PathPort>(
+///
+/// `resolver` respells each relative path. `producer` reads the output
+/// contract of the producing specification that a copy entry copies columns
+/// from (SPEC-9): given `resolver`, the layer that declares the link, the
+/// link as written, the input `dataset` it belongs to, and the layers that
+/// count as being resolved while it is read, entry first: the entry and each
+/// parent layer up to the last one with a copy entry that reads `dataset`.
+/// The producer is read and resolved, never compiled or run (INPUT-10); it
+/// returns `None` when it cannot be, keeps why, and the chain does not
+/// resolve.
+pub fn prepare_versioned<R: Resolver>(
     schema: &SchemaStructure,
     chain: &VersionedChain,
-    port: &mut P,
-) -> Result<ResolvedVersioned, VersionedError<P::Error>> {
+    resolver: &mut R,
+    producer: impl FnMut(
+        &mut R,
+        &Source,
+        &str,
+        &str,
+        &[&Source],
+    ) -> Option<crate::producer_contract::Contract>,
+) -> Result<ResolvedVersioned, VersionedError<R::Error>> {
     let mut normalized = Vec::with_capacity(chain.layers.len());
     for (index, layer) in chain.layers.iter().enumerate() {
         let view = schema.at_version(layer.version);
@@ -241,7 +231,7 @@ pub fn prepare_versioned<P: PathPort>(
                 })?,
         );
     }
-    crate::copy_expansion::expand(schema, chain, &mut normalized, port)?;
+    crate::copy_expansion::expand(schema, chain, &mut normalized, resolver, producer)?;
     let entry = &chain.layers.last().expect("a chain holds its entry").source;
     // The final base of each input is selected before any contributing path
     // is respelled; a cleared `relative_to` selects the declaring layer
@@ -252,7 +242,13 @@ pub fn prepare_versioned<P: PathPort>(
         record_input_bases(&layer.document, &mut input_bases);
     }
     for (layer, written) in normalized.iter_mut().zip(&chain.layers) {
-        layer.document = rebased(&layer.document, &written.source, entry, &input_bases, port)?;
+        layer.document = rebased(
+            &layer.document,
+            &written.source,
+            entry,
+            &input_bases,
+            resolver,
+        )?;
     }
     let view = schema.at_version(chain.version);
     let mut composed = view

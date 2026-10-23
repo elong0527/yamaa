@@ -1,10 +1,21 @@
-//! Decode existing CSV/Parquet profiles while retaining a caller's opaque error.
-//! Snapshot cells remain infallible; the error type is only the engine's shared
-//! callback boundary. This grants no host access or activation authority.
-use crate::{arrow_table::ArrowTable, specification_run::Error};
+//! The decoder port's one implementation. A parent layer or a dictionary
+//! file decodes with the shared YAML reader, keeping the position of each
+//! node; a file a project names decodes and admits against the project's
+//! schemas; and an input's bytes decode by its profile (CSV, Parquet, SAS or
+//! ODM) into a table that keeps a caller's opaque error. Snapshot cells
+//! remain infallible; the error type is only the engine's shared callback
+//! boundary. This grants no host access or activation authority.
+use crate::{
+    arrow_table::ArrowTable,
+    project_source::ProjectSchemas,
+    specification_run::Error,
+    specification_source::{self, CapturedDocument, Source},
+    yaml_decode::{decode_yaml, DecodedYaml},
+};
 use std::marker::PhantomData;
-use yamaa_core::specification_run::SourceDecoder;
 use yamaa_core::{
+    project_environment::LockKind,
+    project_preparation::DecodeTarget,
     specification::SourceDeclaration,
     table::{CellError, TableAccess, TableSchema, ValueRef},
 };
@@ -36,16 +47,66 @@ impl<E> TableAccess for Snapshot<E> {
         })
     }
 }
-pub struct Decoder<E>(PhantomData<fn() -> E>);
+pub struct Decoder<E> {
+    /// The schemas a project's files admit against, or none until a project
+    /// file is first admitted against the shipped schemas.
+    schemas: Option<ProjectSchemas>,
+    error: PhantomData<fn() -> E>,
+}
 impl<E> Default for Decoder<E> {
     fn default() -> Self {
-        Self(PhantomData)
+        Self {
+            schemas: None,
+            error: PhantomData,
+        }
     }
 }
-impl<E> SourceDecoder for Decoder<E> {
+impl<E> Decoder<E> {
+    /// A decoder that admits a project's files against `schemas`.
+    pub fn with_schemas(schemas: ProjectSchemas) -> Self {
+        Self {
+            schemas: Some(schemas),
+            error: PhantomData,
+        }
+    }
+}
+impl<E> yamaa_core::decoder::Decoder for Decoder<E> {
+    type Raw = DecodedYaml;
+    type Admitted = CapturedDocument;
+    type DocumentError = specification_source::Error;
     type Error = Error;
     type Table = Snapshot<E>;
-    fn decode_owned(
+    fn raw(&mut self, identity: &str, bytes: &[u8]) -> Result<DecodedYaml, Self::DocumentError> {
+        decode_yaml(bytes).map_err(|error| specification_source::Error::Decode {
+            identity: identity.into(),
+            error,
+        })
+    }
+    fn raw_document(raw: &DecodedYaml) -> &yamaa_core::schema::Document {
+        &raw.document
+    }
+    fn admitted(
+        &mut self,
+        source: Source,
+        target: DecodeTarget,
+    ) -> Result<CapturedDocument, Self::DocumentError> {
+        let schemas = match &mut self.schemas {
+            Some(schemas) => schemas,
+            empty => empty.insert(crate::shipped_schema::capture_project()?),
+        };
+        schemas.admit(source, target)
+    }
+    fn admitted_document(admitted: &CapturedDocument) -> &yamaa_core::schema::Document {
+        &admitted.normalized().document
+    }
+    fn admitted_source(admitted: &CapturedDocument) -> &Source {
+        admitted.source()
+    }
+    /// The packaging tool whose lock syntax the held bytes parse as.
+    fn lock(&mut self, source: &Source) -> Option<LockKind> {
+        crate::project_lock::kind(&source.bytes).ok()
+    }
+    fn served_table(
         &mut self,
         source: &SourceDeclaration,
         table: &(dyn std::any::Any + Send + Sync),
@@ -60,10 +121,33 @@ impl<E> SourceDecoder for Decoder<E> {
                 })
         })
     }
+    /// A profile, typing, ordinal, metadata or document finding in one input
+    /// lets the remaining inputs decode; any other failure ends the attempt.
     fn continue_after(&self, error: &Error) -> bool {
-        crate::specification_run::SourceDecoder.continue_after(error)
+        use crate::{csv_source, parquet_source, sas_source};
+        use yamaa_core::{source_ordinal, typed_csv};
+        matches!(
+            error,
+            Error::Source(csv_source::TextTableError::Csv(
+                csv_source::Error::Profile { .. }
+            )) | Error::Ordinal(source_ordinal::Error::Collision)
+                | Error::TypedSource(crate::typed_csv::Error::Typing(
+                    typed_csv::Error::UnknownField { .. } | typed_csv::Error::FieldParse { .. }
+                ))
+                | Error::ParquetSource(
+                    parquet_source::Error::Malformed
+                        | parquet_source::Error::EmptyName { .. }
+                        | parquet_source::Error::DuplicateName { .. }
+                        | parquet_source::Error::Unsupported { .. }
+                        | parquet_source::Error::Value { .. }
+                )
+                | Error::ProducerMetadata(_)
+                | Error::OdmFields(_)
+                | Error::SasSource(sas_source::Error::Invalid(_) | sas_source::Error::Typing(_))
+                | Error::OdmValues(_)
+        ) || matches!(error, Error::OdmSource(error) if error.refuses_document())
     }
-    fn decode(
+    fn table(
         &mut self,
         source: &SourceDeclaration,
         bytes: &[u8],
@@ -84,6 +168,7 @@ mod tests {
     use super::*;
     #[cfg(feature = "yaml")]
     use crate::specification_source::Source;
+    use yamaa_core::decoder::Decoder as _;
     use yamaa_core::specification::SourceInterpretation;
     use yamaa_core::specification::SourceProfile;
     #[cfg(feature = "yaml")]
@@ -106,7 +191,7 @@ mod tests {
     fn native_csv_values_and_retry_after_malformed_input_use_the_same_decoder() {
         let mut decoder = Decoder::<std::convert::Infallible>::default();
         let table = decoder
-            .decode(
+            .table(
                 &csv_source(),
                 b"A\nx\n",
                 SourceInterpretation::Ordinary,
@@ -115,7 +200,7 @@ mod tests {
             .unwrap();
         assert_eq!(table.cell(0, 0).unwrap(), ValueRef::Str("x"));
         assert!(decoder
-            .decode(
+            .table(
                 &csv_source(),
                 b"A\n\"x",
                 SourceInterpretation::Ordinary,
@@ -123,7 +208,7 @@ mod tests {
             )
             .is_err());
         let repeated = decoder
-            .decode(
+            .table(
                 &csv_source(),
                 b"A\nx\n",
                 SourceInterpretation::Ordinary,
@@ -138,14 +223,14 @@ mod tests {
         let mut decoder = Decoder::<std::convert::Infallible>::default();
         let mut source = csv_source();
         let table = decoder
-            .decode(&source, b"A\nx\ny\n", SourceInterpretation::Ordinary, None)
+            .table(&source, b"A\nx\ny\n", SourceInterpretation::Ordinary, None)
             .unwrap();
         assert_eq!(table.row_count(), 2);
         assert_eq!(table.cell(0, 0).unwrap(), ValueRef::Str("x"));
         assert_eq!(table.cell(1, 0).unwrap(), ValueRef::Str("y"));
         source.ordinal = Some("POSITION".into());
         let table = decoder
-            .decode(&source, b"A\nx\n", SourceInterpretation::Ordinary, None)
+            .table(&source, b"A\nx\n", SourceInterpretation::Ordinary, None)
             .unwrap();
         assert_eq!(table.cell(0, 1).unwrap(), ValueRef::Int(1));
     }
@@ -176,7 +261,7 @@ mod tests {
         source.path = "raw.parquet".into();
         let mut decoder = Decoder::<std::convert::Infallible>::default();
         let table = decoder
-            .decode(&source, &bytes, SourceInterpretation::Ordinary, None)
+            .table(&source, &bytes, SourceInterpretation::Ordinary, None)
             .unwrap();
         assert_eq!(table.row_count(), 64);
         assert_eq!(table.cell(63, 0).unwrap(), ValueRef::Int(64));
@@ -211,7 +296,7 @@ mod tests {
             source.profile = profile;
             let mut decoder = Decoder::<std::convert::Infallible>::default();
             let table = decoder
-                .decode(&source, &bytes, SourceInterpretation::Odm, None)
+                .table(&source, &bytes, SourceInterpretation::Odm, None)
                 .unwrap();
             assert_eq!(table.row_count(), 1);
             assert_eq!(table.schema().columns().len(), 11);
@@ -239,11 +324,11 @@ mod tests {
             source.encoding = Some("windows-1252".into());
             let mut decoder = Decoder::<std::convert::Infallible>::default();
             let table = decoder
-                .decode(&source, bytes, SourceInterpretation::Ordinary, None)
+                .table(&source, bytes, SourceInterpretation::Ordinary, None)
                 .unwrap();
             assert!(table.row_count() > 0);
             let repeated = decoder
-                .decode(&source, bytes, SourceInterpretation::Ordinary, None)
+                .table(&source, bytes, SourceInterpretation::Ordinary, None)
                 .unwrap();
             assert_eq!(repeated.row_count(), table.row_count());
         }
@@ -282,7 +367,7 @@ mod tests {
             writeln!(bytes, "{row},1").unwrap();
         }
         let table = Decoder::<std::convert::Infallible>::default()
-            .decode(
+            .table(
                 &source,
                 bytes.as_bytes(),
                 SourceInterpretation::Ordinary,
@@ -296,7 +381,7 @@ mod tests {
         }
         source.ordinal = Some("POSITION".into());
         let table = Decoder::<std::convert::Infallible>::default()
-            .decode(
+            .table(
                 &source,
                 bytes.as_bytes(),
                 SourceInterpretation::Ordinary,

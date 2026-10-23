@@ -1,7 +1,7 @@
 //! One planning capture per resolved dictionary identity, with original policy failures.
 use crate::{
+    decoder::Decoder,
     inheritance::SourceError,
-    inheritance_capture::InheritanceDecodePort,
     project_preparation::Source,
     resolver::{self, File, Name, Resolver},
 };
@@ -89,19 +89,19 @@ pub struct Error<E, X, R> {
     pub cause: Cause<E, X>,
     pub captures: Vec<Captured<R>>,
 }
-struct Run<'a, P: Resolver, D: InheritanceDecodePort> {
+struct Run<'a, P: Resolver, D: Decoder> {
     port: &'a mut P,
     decoder: &'a mut D,
     seeds: &'a [Seed<'a, D::Raw>],
     captures: Vec<Captured<D::Raw>>,
 }
-impl<P: Resolver, D: InheritanceDecodePort> Run<'_, P, D> {
+impl<P: Resolver, D: Decoder> Run<'_, P, D> {
     fn capture_failure(
         &self,
         reference: MappingDictionaryReference,
         name: Name<'_>,
         error: P::Error,
-    ) -> Cause<P::Error, D::Error> {
+    ) -> Cause<P::Error, D::DocumentError> {
         let failure = self
             .port
             .failure(name, &error)
@@ -117,7 +117,7 @@ impl<P: Resolver, D: InheritanceDecodePort> Run<'_, P, D> {
         schema: &SchemaStructure,
         reference: MappingDictionaryReference,
         declaring: &str,
-    ) -> Result<AdmittedMappingDictionary, Cause<P::Error, D::Error>> {
+    ) -> Result<AdmittedMappingDictionary, Cause<P::Error, D::DocumentError>> {
         let written = Name::Written {
             file: File::Resource,
             declaring,
@@ -153,7 +153,7 @@ impl<P: Resolver, D: InheritanceDecodePort> Run<'_, P, D> {
                 identity: identity.identity,
                 bytes,
             };
-            let raw = match self.decoder.decode(&source.identity, &source.bytes) {
+            let raw = match self.decoder.raw(&source.identity, &source.bytes) {
                 Ok(raw) => raw,
                 Err(error) => {
                     return Err(Cause::Decode {
@@ -173,7 +173,7 @@ impl<P: Resolver, D: InheritanceDecodePort> Run<'_, P, D> {
         };
 
         schema
-            .admit_mapping_dictionary(reference.clone(), D::document(raw))
+            .admit_mapping_dictionary(reference.clone(), D::raw_document(raw))
             .map_err(|error| Cause::Admission {
                 reference,
                 arena,
@@ -202,14 +202,14 @@ pub type DocumentPreparationResult<E, X, R> =
 /// Metadata only: a failed parse or admission keeps the entered capture
 /// prefix and the original host error, and no study source, callback or
 /// publication authority is entered.
-pub fn prepare_document<P: Resolver, D: InheritanceDecodePort>(
+pub fn prepare_document<P: Resolver, D: Decoder>(
     schema: &SchemaStructure,
     document: &Document,
     origins: Origins<'_>,
     seeds: &[Seed<'_, D::Raw>],
     port: &mut P,
     decoder: &mut D,
-) -> DocumentPreparationResult<P::Error, D::Error, D::Raw> {
+) -> DocumentPreparationResult<P::Error, D::DocumentError, D::Raw> {
     materialized(
         schema,
         document,
@@ -231,7 +231,7 @@ pub fn prepare_document<P: Resolver, D: InheritanceDecodePort>(
 /// Capture and admit every dictionary file `document` names, then
 /// `materialize` them.
 #[allow(clippy::type_complexity)]
-fn materialized<P: Resolver, D: InheritanceDecodePort, T>(
+fn materialized<P: Resolver, D: Decoder, T>(
     schema: &SchemaStructure,
     document: &Document,
     origins: Origins<'_>,
@@ -239,7 +239,7 @@ fn materialized<P: Resolver, D: InheritanceDecodePort, T>(
     port: &mut P,
     decoder: &mut D,
     materialize: impl FnOnce(&[AdmittedMappingDictionary]) -> Result<T, NormalizationError>,
-) -> Result<Option<(T, Vec<Captured<D::Raw>>)>, Box<Error<P::Error, D::Error, D::Raw>>> {
+) -> Result<Option<(T, Vec<Captured<D::Raw>>)>, Box<Error<P::Error, D::DocumentError, D::Raw>>> {
     let mut run = Run {
         port,
         decoder,

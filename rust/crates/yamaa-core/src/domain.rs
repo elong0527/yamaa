@@ -3,9 +3,10 @@
 //! Source capture, YAML preparation and schema selection precede this boundary.
 //! Project activation is the project boundary's authority. A successful check
 //! admits declarations; actual source schemas and values are observed at build.
+use crate::decoder::Decoder;
 use crate::resolver::Resolver;
 use crate::specification::{PrepareError, PreparedSpecification};
-use crate::specification_run::{self, CapturedAttempt, SourceDecoder};
+use crate::specification_run::{self, CapturedAttempt};
 
 /// An immutable capability obtained only by the engine's preflight operation.
 /// Each build has fresh observations and executes again, including cached reads.
@@ -37,7 +38,7 @@ pub fn check_tree_linked(
 impl CheckedSpecification {
     /// Execute with explicit activated handles and caller-held observations.
     /// Metadata admission precedes every source inspection, capture and decode.
-    pub fn build_into<P: Resolver, D: SourceDecoder>(
+    pub fn build_into<P: Resolver, D: Decoder>(
         &self,
         port: &mut P,
         decoder: &mut D,

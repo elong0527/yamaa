@@ -56,8 +56,8 @@ pub fn parse(_bytes: &[u8], _source: &SourceDeclaration) -> Result<ArrowTable, E
 #[cfg(all(test, not(feature = "readstat")))]
 mod tests {
     use super::*;
+    use yamaa_core::decoder::Decoder as _;
     use yamaa_core::specification::SourceProfile;
-    use yamaa_core::specification_run::SourceDecoder as _;
 
     #[test]
     fn omitted_reader_rejects_both_profiles_with_explicit_boundary_code() {
@@ -82,7 +82,10 @@ mod tests {
                 None,
             )
             .unwrap_err();
-            assert!(!crate::specification_run::SourceDecoder.continue_after(&failure));
+            assert!(
+                !crate::decoder::Decoder::<std::convert::Infallible>::default()
+                    .continue_after(&failure)
+            );
             let crate::specification_run::Error::SasSource(error) = failure else {
                 panic!("SAS capability refusal must keep its source boundary");
             };

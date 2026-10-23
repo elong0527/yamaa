@@ -1,5 +1,9 @@
-//! Demand-driven inheritance traversal; filesystem identity and bytes remain host ports.
+//! Demand-driven inheritance traversal: each parent is located and captured
+//! through the resolver port and decoded through the decoder port.
+use crate::decoder::Decoder;
+use crate::inheritance_capture::{CapturedParent, SourceFailure};
 use crate::language::{self, FileType, HeaderFault, LanguageVersion};
+use crate::resolver::{self, File, Name, Resolver};
 use crate::schema::{Document, DocumentNode as N, NormalizationError, SchemaStructure};
 
 /// The canonical identity is compared directly. Display spelling retains read-error context.
@@ -16,19 +20,6 @@ pub enum SourceError<E> {
     Unavailable,
     #[error("inheritance raised: {0:?}")]
     Raised(E),
-}
-
-/// Synchronous source authority. No discovery, retry, concurrency or implicit ambient reader.
-pub trait InheritanceSourcePort {
-    type Error;
-    /// Resolve relative to the declaring canonical file and verify a regular local file.
-    fn canonicalize(
-        &mut self,
-        declaring: &str,
-        written: &str,
-    ) -> Result<Source, SourceError<Self::Error>>;
-    /// Read/decode only when requested. Shared schema admission remains in this service.
-    fn read(&mut self, source: &Source) -> Result<Document, SourceError<Self::Error>>;
 }
 
 /// No partial contribution list escapes a traversal failure.
@@ -196,18 +187,29 @@ fn header_error<E>(fault: HeaderFault, entry: &str, source: Source, input: Docum
     }
 }
 
+/// Why a parent could not be read: the resolver's own failure, or its
+/// decoding.
+type ReadFailure<R, D> = SourceFailure<<R as Resolver>::Error, <D as Decoder>::DocumentError>;
+
 /// Follow each layer's single parent from the entry, admitting each layer
 /// before reading its parent, and return the chain in contribution order:
 /// the root ancestor first and the entry last. Reaching a layer already on
-/// the chain is a cycle. `admit` admits one layer, given the entry identity,
-/// the layer's source and its document, and returns the layer with the
-/// parent it names.
-fn walk<L, P: InheritanceSourcePort>(
+/// the chain is a cycle. A parent is located as written, then captured and
+/// decoded, and kept in `parents`. `admit` admits one layer, given the entry
+/// identity, the layer's source and its document, and returns the layer with
+/// the parent it names.
+fn walk<L, R: Resolver, D: Decoder>(
     entry: Source,
     entry_document: Document,
-    port: &mut P,
-    mut admit: impl FnMut(&str, Source, Document) -> Result<(L, Option<String>), Error<P::Error>>,
-) -> Result<Vec<L>, Error<P::Error>> {
+    resolver: &mut R,
+    decoder: &mut D,
+    parents: &mut Vec<CapturedParent<D::Raw>>,
+    mut admit: impl FnMut(
+        &str,
+        Source,
+        Document,
+    ) -> Result<(L, Option<String>), Error<ReadFailure<R, D>>>,
+) -> Result<Vec<L>, Error<ReadFailure<R, D>>> {
     if entry.identity.is_empty() || entry.display_path.is_empty() {
         return Err(Error::InvalidIdentity);
     }
@@ -236,15 +238,22 @@ fn walk<L, P: InheritanceSourcePort>(
                 path: written,
             });
         }
-        let source = match port.canonicalize(&declaring, &written) {
+        let name = Name::Written {
+            file: File::Parent,
+            declaring: &declaring,
+            written: &written,
+        };
+        let source = match resolver.inspect(name) {
             Ok(source) => source,
-            Err(SourceError::Unavailable) => {
-                return Err(Error::Unavailable {
-                    declaring,
-                    path: written,
-                })
-            }
-            Err(SourceError::Raised(error)) => return Err(Error::Host(error)),
+            Err(error) => match resolver::source_error(resolver, name, error) {
+                SourceError::Unavailable => {
+                    return Err(Error::Unavailable {
+                        declaring,
+                        path: written,
+                    })
+                }
+                SourceError::Raised(error) => return Err(Error::Host(SourceFailure::Host(error))),
+            },
         };
         if source.identity.is_empty() || source.display_path.is_empty() {
             return Err(Error::InvalidIdentity);
@@ -261,16 +270,33 @@ fn walk<L, P: InheritanceSourcePort>(
                 returns_to_entry,
             });
         }
-        let input = match port.read(&source) {
-            Ok(input) => input,
-            Err(SourceError::Unavailable) => {
-                return Err(Error::Unavailable {
-                    declaring,
-                    path: source.display_path,
-                })
-            }
-            Err(SourceError::Raised(error)) => return Err(Error::Host(error)),
+        let name = Name::Located {
+            file: File::Parent,
+            source: &source,
         };
+        let bytes = match resolver.capture(name) {
+            Ok(captured) => resolver::bytes(captured),
+            Err(error) => match resolver::source_error(resolver, name, error) {
+                SourceError::Unavailable => {
+                    return Err(Error::Unavailable {
+                        declaring,
+                        path: source.display_path,
+                    })
+                }
+                SourceError::Raised(error) => return Err(Error::Host(SourceFailure::Host(error))),
+            },
+        };
+        let raw = decoder
+            .raw(&source.identity, &bytes)
+            .map_err(|error| Error::Host(SourceFailure::Admission(error)))?;
+        let input = D::raw_document(&raw).clone();
+        parents.push(CapturedParent::new(
+            crate::project_preparation::Source {
+                identity: source.identity.clone(),
+                bytes,
+            },
+            raw,
+        ));
         chain.push(frame(source, input)?);
     }
     Ok(chain.into_iter().rev().map(|frame| frame.layer).collect())
@@ -294,6 +320,14 @@ pub struct VersionedChain {
     pub version: LanguageVersion,
 }
 
+/// A traversed 1.x chain and each parent layer it read, held as captured and
+/// decoded, in the order it read them: from the entry up.
+#[derive(Debug)]
+pub struct Traversal<R> {
+    pub chain: VersionedChain,
+    pub parents: Vec<CapturedParent<R>>,
+}
+
 /// Follow a 1.x specification's parents from the entry, admitting each
 /// layer against the view of `schema`, the 1.0 specification closure, at the
 /// version that layer declares (LAYER-4, P-VER-1). `reads` is the newest
@@ -302,23 +336,34 @@ pub struct VersionedChain {
 /// its parent is read, at the entry's header or at the `parent` naming it.
 /// A layer that declares `schema_version` is written in language version
 /// 0.5, which the engine does not read: it fails the same way, naming 0.5.
-/// Composition is not part of this traversal.
-pub fn traverse_versioned<P: InheritanceSourcePort>(
+/// Composition is not part of this traversal. Each parent is located and
+/// captured through `resolver` and decoded through `decoder`.
+pub fn traverse_versioned<R: Resolver, D: Decoder>(
     schema: &SchemaStructure,
     reads: LanguageVersion,
     entry: Source,
     entry_document: Document,
-    port: &mut P,
-) -> Result<VersionedChain, Error<P::Error>> {
-    let layers = walk(entry, entry_document, port, |entry, source, input| {
-        admit_versioned(schema, reads, entry, source, input)
-    })?;
+    resolver: &mut R,
+    decoder: &mut D,
+) -> Result<Traversal<D::Raw>, Error<ReadFailure<R, D>>> {
+    let mut parents = Vec::new();
+    let layers = walk(
+        entry,
+        entry_document,
+        resolver,
+        decoder,
+        &mut parents,
+        |entry, source, input| admit_versioned(schema, reads, entry, source, input),
+    )?;
     let version = layers
         .iter()
         .map(|layer| layer.version)
         .max()
         .expect("a chain holds its entry");
-    Ok(VersionedChain { layers, version })
+    Ok(Traversal {
+        chain: VersionedChain { layers, version },
+        parents,
+    })
 }
 
 fn admit_versioned<E>(
