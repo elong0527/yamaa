@@ -1,0 +1,32 @@
+[package]
+name = "yamaa-engine"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish.workspace = true
+autotests = false
+
+# The engine's C ABI over the facade (rust/crates/yamaa-boundary/src/abi.rs).
+# No package links it yet; both bindings still call the facade.
+[dependencies]
+yamaa = { path = "../yamaa" }
+yamaa-boundary = { path = "../yamaa-boundary" }
+
+[dev-dependencies]
+# The lifetime tests read exported streams as a host does, with the Arrow
+# release the facade locks.
+arrow-array = { version = "=55.2.0", default-features = false, features = ["ffi"] }
+# The families decode the shared host truth,
+# rust/tests/host-fixtures/cases.json; the adapters already lock serde_json.
+serde_json = "1.0.145"
+
+[lints]
+workspace = true
+
+# The integration tests are one binary: tests/main.rs declares each family
+# file under tests/ as a module and checks that none is left out (#3556).
+[[test]]
+name = "main"
+path = "tests/main.rs"
