@@ -81,6 +81,8 @@ pub(crate) struct EngineShared {
     pub runtime_name: String,
     pub runtime_version: String,
     pub functions: Option<Arc<dyn ProjectFunctions>>,
+    /// How each run divides its driver input (#3697).
+    pub partitioning: Option<yamaa_core::dataset::Partitioning>,
 }
 
 impl EngineShared {
@@ -96,6 +98,7 @@ impl EngineShared {
             // Implementations are named per host language, so an engine that
             // claims none has no function to call: its port stays empty.
             functions: options.host_language.and(options.functions.clone()),
+            partitioning: options.partitions.map(crate::engine::Partitions::into_core),
         }
     }
 
@@ -377,9 +380,10 @@ pub(crate) fn compile(
 /// resource scope, whose phase and stage events reach `measurements`, which
 /// the build keeps. A refused compilation's run returns its held refusal and performs
 /// no resource, activation or study work. A run offers its `held` artifacts
-/// to the inputs whose `schema` links name their producers, and polls
-/// `token` at every checkpoint of its dataset's schedule and before each
-/// batch of project-function calls (#2822).
+/// to the inputs whose `schema` links name their producers, divides its
+/// driver input as the engine's partitions ask (#3697), and polls `token` at
+/// every checkpoint of its dataset's schedule, between partitions and before
+/// each batch of project-function calls (#2822).
 pub(crate) fn run(
     shared: &EngineShared,
     specification: &str,
@@ -389,8 +393,9 @@ pub(crate) fn run(
     token: &CancellationToken,
 ) -> Build {
     let cancelled = || token.is_cancelled();
-    let scope =
-        yamaa_core::application_observer::Scope::new(&**measurements).cancellable(&cancelled);
+    let scope = yamaa_core::application_observer::Scope::new(&**measurements)
+        .cancellable(&cancelled)
+        .partitioned(shared.partitioning);
     let measurements = Arc::clone(measurements);
     let locator = Arc::clone(compiled.locator());
     let prepared = match compiled {

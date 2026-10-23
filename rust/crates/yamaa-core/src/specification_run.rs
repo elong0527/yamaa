@@ -520,7 +520,8 @@ fn execute_inner_into<R: Resolver, D: SourceDecoder>(
         }
     };
     let cancelled = || scope.cancelled();
-    attempt.result = Ok(plan.execute(
+    attempt.result = Ok(plan.execute_divided(
+        scope.partitioning(),
         primary,
         &secondary,
         &mut functions,

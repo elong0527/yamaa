@@ -251,6 +251,9 @@ fn semantic_failure<E>(error: &ExecutionError<E>) -> Result<Outcome, Error> {
         ExecutionError::VerificationPredicate { error, .. } => {
             condition(diagnostics::predicate(error)?, None)
         }
+        ExecutionError::PartitionGlobal { path } => {
+            condition(yamaa_core::application_issue::partition_global(path), None)
+        }
         ExecutionError::SchemaMismatch => return Err(Error::InvalidObservation),
         // Admitted references and normalized owned Arrow values make other semantic
         // and coordinate failures impossible. Never invent missing or acceptance.

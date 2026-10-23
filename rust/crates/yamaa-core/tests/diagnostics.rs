@@ -170,6 +170,7 @@ mod diagnostics {
                     "parquet_codec_unavailable",
                     "parquet_limit",
                     "parquet_reader_unavailable",
+                    "partition_global",
                     "path_mismatch",
                     "producer_contract",
                     "producer_metadata",

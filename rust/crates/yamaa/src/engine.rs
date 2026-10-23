@@ -10,6 +10,7 @@
 //! saves through [`crate::Run::save`], [`crate::ProjectRun::save`] or
 //! [`crate::Submission::save`], one save over its outcome.
 
+use std::num::NonZeroUsize;
 use std::sync::Arc;
 
 use yamaa_adapters::application_measurements::Measurements;
@@ -41,6 +42,58 @@ pub struct EngineOptions {
     pub runtime_name: String,
     pub runtime_version: String,
     pub functions: Option<Arc<dyn ProjectFunctions>>,
+    /// How each run divides its driver input, or none to run it whole, the
+    /// default (see [`EngineOptions::with_partitions`]).
+    pub partitions: Option<Partitions>,
+}
+
+/// Partitioned execution (#3697): each run divides its driver input into
+/// consecutive partitions of `rows` records, the last holding the rest, and
+/// runs every partition-safe step over one partition at a time. A run
+/// polls its token between partitions as well. Its result, output, issues
+/// and run report are the whole-table run's, and the partition boundaries
+/// change none of them.
+///
+/// The partitions divide only what the partition-safety inventory lets
+/// them divide. A step that needs the whole table, one that reads a window,
+/// an aggregate, a named or joined relation, SELF rows or a project
+/// function, refuses the run before derivation: the run fails with
+/// `engine_rejected` (`step: execute`, `code: partition_global`) at that
+/// step's spec path. With [`Partitions::with_whole_table_fallback`], such a
+/// step runs over the whole input instead.
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Partitions {
+    /// The driver records of each partition.
+    pub rows: NonZeroUsize,
+    /// Whether a step that needs the whole table runs over the whole input
+    /// instead of refusing the run.
+    pub whole_table_fallback: bool,
+}
+
+impl Partitions {
+    /// Partitions of `rows` driver records, refusing a run that has a step
+    /// that needs the whole table.
+    pub fn new(rows: NonZeroUsize) -> Self {
+        Self {
+            rows,
+            whole_table_fallback: false,
+        }
+    }
+
+    /// The same partitions, running a step that needs the whole table over
+    /// the whole input instead of refusing the run.
+    pub fn with_whole_table_fallback(mut self) -> Self {
+        self.whole_table_fallback = true;
+        self
+    }
+
+    pub(crate) fn into_core(self) -> yamaa_core::dataset::Partitioning {
+        yamaa_core::dataset::Partitioning {
+            rows: self.rows,
+            whole_table_fallback: self.whole_table_fallback,
+        }
+    }
 }
 
 impl EngineOptions {
@@ -75,6 +128,7 @@ impl EngineOptions {
             runtime_name,
             runtime_version,
             functions: None,
+            partitions: None,
         }
     }
 
@@ -91,6 +145,41 @@ impl EngineOptions {
     /// claims no host language never calls them.
     pub fn with_functions(mut self, functions: Arc<dyn ProjectFunctions>) -> Self {
         self.functions = Some(functions);
+        self
+    }
+
+    /// Run every build divided into `partitions` (#3697), an engine mode with
+    /// no host surface.
+    ///
+    /// # Example
+    ///
+    /// A specification whose steps are all partition-safe builds the same
+    /// output one record at a time as it does whole.
+    ///
+    /// ```
+    /// use std::num::NonZeroUsize;
+    /// use std::sync::Arc;
+    ///
+    /// use yamaa::{CancellationToken, Engine, EngineOptions, HostLanguage, MemoryResolver, Partitions};
+    ///
+    /// let resolver = Arc::new(MemoryResolver::new());
+    /// resolver.insert("/", "spec.yaml", "spec:1", Arc::from(
+    ///     &b"yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv}}\noutput: {path: out.csv, columns: [ID, NAME]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: NAME, type: str, derivation: SRC.NAME}\n"[..],
+    /// ));
+    /// resolver.insert("/spec.yaml", "input.csv", "input:1", Arc::from(&b"ID,NAME\n1,alpha\n2,beta\n3,gamma\n"[..]));
+    /// let engine = Engine::new(
+    ///     EngineOptions::new(HostLanguage::Python, "doctest".into(), "0".into())
+    ///         .with_resolver(resolver)
+    ///         .with_partitions(Partitions::new(NonZeroUsize::MIN)),
+    /// );
+    /// let run = engine.spec_run("spec.yaml", None, &CancellationToken::new()).unwrap();
+    /// if cfg!(feature = "yaml") {
+    ///     assert!(run.diagnostics().is_empty(), "{:?}", run.diagnostics());
+    ///     assert_eq!(run.output().unwrap().rows(), 3);
+    /// }
+    /// ```
+    pub fn with_partitions(mut self, partitions: Partitions) -> Self {
+        self.partitions = Some(partitions);
         self
     }
 }

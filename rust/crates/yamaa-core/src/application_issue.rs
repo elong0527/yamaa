@@ -89,6 +89,9 @@ vocabulary! {
         ParquetCodecUnavailable => "parquet_codec_unavailable",
         ParquetLimit => "parquet_limit",
         ParquetReaderUnavailable => "parquet_reader_unavailable",
+        /// A partitioned run that needs the whole table at a step and was not
+        /// allowed to fall back to it (#3697).
+        PartitionGlobal => "partition_global",
         PathMismatch => "path_mismatch",
         ProducerContract => "producer_contract",
         ProducerMetadata => "producer_metadata",
@@ -185,6 +188,16 @@ pub fn rejected(step: Step, fault: Fault) -> Diagnostic {
         .collect(),
         source_span: None,
         operand_route: None,
+    }
+}
+
+/// The refusal of a partitioned run without the whole-table fallback
+/// (#3697): the step at `path` needs the whole table. It is the engine's,
+/// at the spec path of the step it cannot divide.
+pub fn partition_global(path: &str) -> Diagnostic {
+    Diagnostic {
+        spec_paths: vec![path.into()],
+        ..rejected(Step::Execute, Fault::PartitionGlobal)
     }
 }
 
