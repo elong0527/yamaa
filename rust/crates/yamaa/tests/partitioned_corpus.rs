@@ -13,10 +13,12 @@
 //! partition-safe runs divided; a plan with a step that needs the whole
 //! table is refused, and runs again with the whole-table fallback. Either
 //! way, a positive benchmark's saved files equal its expected files byte for
-//! byte, and a negative benchmark's first issue is the one its
-//! `expected/error.yaml` states. A Parquet file has no byte guarantee
-//! (PARQUET-4), so it equals the whole-table run's file instead, which the
-//! hosts' conformance checks compare with the expected file's content.
+//! byte. A negative benchmark's first issue has the phase, condition, spec
+//! paths and rule its `expected/error.yaml` states, and every issue, context
+//! included, equals the whole-table run's. A Parquet file has no byte
+//! guarantee (PARQUET-4), so it equals the whole-table run's file instead,
+//! which the hosts' conformance checks compare with the expected file's
+//! content.
 use std::collections::BTreeMap;
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
@@ -248,7 +250,18 @@ fn partitioned_runs_reproduce_every_single_specification_benchmark() {
         } else {
             divided.push(name.clone());
         }
-        let problems = problems(&case, outcome(run));
+        // A negative benchmark states its first issue's phase, condition,
+        // paths and rule; every issue, context included, is the whole-table
+        // run's, over the same staged files.
+        let issues = if case.join("expected/error.yaml").is_file() {
+            let whole = engine(None).spec_run(spec, None, &token).unwrap();
+            (run.diagnostics() != whole.diagnostics())
+                .then(|| "issues differ from the whole-table run's".to_owned())
+        } else {
+            None
+        };
+        let mut problems = problems(&case, outcome(run));
+        problems.extend(issues);
         if !problems.is_empty() {
             mismatched.insert(name, problems);
         }

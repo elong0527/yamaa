@@ -97,7 +97,7 @@ fn engine(resolver: Arc<Recording>, fallback: bool) -> Engine {
 /// The end state of one cell.
 #[derive(Debug, PartialEq)]
 struct EndState {
-    /// `cancelled`, or the first issue's phase, condition and spec paths.
+    /// `cancelled`, or every issue whole.
     outcome: String,
     /// What names the run: the subject of a summary or a save's failure
     /// text, through its first colon; a cancelled call has none.
@@ -115,9 +115,27 @@ fn subject(text: &str) -> String {
     text.split_inclusive(':').next().unwrap_or("").to_owned()
 }
 
-fn first_issue(diagnostics: &[yamaa::Diagnostic]) -> String {
-    let first = diagnostics.first().expect("an issue");
-    format!("{} {} {:?}", first.phase, first.code, first.spec_path)
+/// Every issue whole: its severity, phase, condition, rule, spec paths,
+/// context, source span and operand route; its message is not frozen.
+fn issues(diagnostics: &[yamaa::Diagnostic]) -> String {
+    assert!(!diagnostics.is_empty(), "an issue");
+    diagnostics
+        .iter()
+        .map(|issue| {
+            format!(
+                "{:?} {} {} {:?} {:?} {} {:?} {:?}",
+                issue.severity,
+                issue.phase,
+                issue.code,
+                issue.rule,
+                issue.spec_path,
+                issue.context.to_json(),
+                issue.source_span,
+                issue.operand_route,
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("; ")
 }
 
 fn end_state(resolver: &Recording, outcome: String, named: String) -> EndState {
@@ -138,14 +156,14 @@ fn end_state(resolver: &Recording, outcome: String, named: String) -> EndState {
 fn failed_and_saved(resolver: &Recording, mut run: Run) -> (EndState, EndState) {
     let built = end_state(
         resolver,
-        first_issue(&run.diagnostics()),
+        issues(&run.diagnostics()),
         subject(&run.summary().to_string()),
     );
     let failure: Failure = run.save(&CancellationToken::new()).unwrap_err();
     assert_eq!(failure.paths, [REPORT], "the files the failed save wrote");
     let saved = end_state(
         resolver,
-        first_issue(&failure.diagnostics),
+        issues(&failure.diagnostics),
         subject(&failure.message),
     );
     (built, saved)
@@ -201,13 +219,7 @@ fn before_start_a_refused_partitioned_run_publishes_only_its_report() {
         .spec_run("spec.yaml", None, &CancellationToken::new())
         .unwrap();
     assert!(run.output().is_none());
-    let issue = &run.diagnostics()[0];
-    assert_eq!(
-        (issue.context.to_json(), run.diagnostics().len()),
-        (r#"{"code":"partition_global","step":"execute"}"#, 1),
-        "the refusal's context"
-    );
-    let outcome = "engine engine_rejected [\"columns.RN.derivation.row_number\"]".to_owned();
+    let outcome = r#"Error engine engine_rejected None ["columns.RN.derivation.row_number"] {"code":"partition_global","step":"execute"} None None"#.to_owned();
     assert_eq!(
         failed_and_saved(&resolver, run),
         (
@@ -283,16 +295,22 @@ fn mid_partition_a_cancelled_run_returns_no_result_and_publishes_nothing() {
 
 /// A specification whose VALUE calls the project function `echo`.
 const FUNCTION_SPEC: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, key: [ID]}}\noutput: {path: out.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, label: Identifier, derivation: SRC.ID}\n  - {name: VALUE, type: str, label: Value, derivation: {function: {name: echo, args: {x: SRC.NAME}}}}\n";
+/// A specification whose rows ECHOED drives: an intermediate whose
+/// derivation ECHO calls the project function `echo`.
+const DRIVER_SPEC: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, key: [ID]}}\noutput: {path: out.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: ECHOED\n    dataset: SRC\n    derivations:\n      ECHO: {function: {name: echo, args: {x: SRC.NAME}}}\ncolumns:\n  - {name: ID, type: str, label: Identifier}\n  - {name: VALUE, type: str, label: Value}\nrows:\n  - id: echoed\n    dataset: ECHOED\n    derivations:\n      ID: ECHOED.ID\n      VALUE: ECHOED.ECHO\n";
 const FUNCTION: &[u8] = b"yamaa: \"1.0\"\ntype: function\nname: echo\ndescription: The value itself.\nparams: [{name: x, type: str}]\nreturns: str\nimplementations: {python: pkg.echo}\ntests:\n  - {id: normal, covers: [normal], args: {x: a}, result: a}\n  - {id: empty, covers: [boundary], args: {x: ''}, result: ''}\n  - {id: missing, covers: ['short-circuit-missing:x'], args: {x: null}, result: null}\n";
 const FUNCTION_PROJECT: &str =
     "yamaa: \"1.0\"\ntype: project\nfunctions: [functions/echo.yaml]\nadam: {specs: [spec.yaml]}\n";
+/// The data rows' names, which no function test passes.
+const NAMES: &[u8] = b"ID,NAME\n1,alpha\n2,beta\n";
 
-/// `echo` answers its tests' arguments and raises the host's interrupt on
-/// the first data row, `alpha`; it counts the data rows it is called with.
-struct Interrupting {
+/// `echo` answers its argument; on a data row, `alpha` or `beta`, it counts
+/// the call and, when asked to, raises the host's interrupt instead.
+struct Echo {
+    interrupt: bool,
     calls: AtomicUsize,
 }
-impl ProjectFunctions for Interrupting {
+impl ProjectFunctions for Echo {
     fn verify_lock(
         &self,
         _: &LockContext<'_>,
@@ -304,16 +322,90 @@ impl ProjectFunctions for Interrupting {
         Ok(FunctionHandle::new(()))
     }
     fn invoke(&self, _: &FunctionHandle, arguments: &[Argument<'_>]) -> Result<Scalar, CallError> {
-        match arguments[0].value {
-            ScalarRef::Str(value) if value == "alpha" || value == "beta" => {
-                self.calls.fetch_add(1, Ordering::SeqCst);
-                Err(CallError::Raised(FunctionError::Interrupted {
+        let ScalarRef::Str(value) = arguments[0].value else {
+            return Ok(Scalar::Missing);
+        };
+        if value == "alpha" || value == "beta" {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            if self.interrupt {
+                return Err(CallError::Raised(FunctionError::Interrupted {
                     payload: None,
-                }))
+                }));
             }
-            ScalarRef::Str(value) => Ok(Scalar::Str(value.to_owned())),
-            _ => Ok(Scalar::Missing),
         }
+        Ok(Scalar::Str(value.to_owned()))
+    }
+}
+
+/// A project listing `spec` and the function file of `echo`, served from
+/// memory, and a partitioned engine with `functions` over it.
+fn function_study(
+    spec: &str,
+    functions: Arc<Echo>,
+    partitions: Partitions,
+) -> (Engine, Arc<Recording>) {
+    let resolver = Recording::new(spec, NAMES, None);
+    for (name, bytes) in [
+        ("project.yaml", FUNCTION_PROJECT.as_bytes()),
+        ("functions/echo.yaml", FUNCTION),
+        ("spec.yaml", spec.as_bytes()),
+    ] {
+        for declaring in ["/", "/project.yaml"] {
+            resolver
+                .inner
+                .insert(declaring, name, &format!("{name}:1"), Arc::from(bytes));
+        }
+    }
+    let engine = Engine::new(
+        EngineOptions::new(HostLanguage::Python, "test".into(), "0".into())
+            .with_resolver(resolver.clone())
+            .with_functions(functions)
+            .with_partitions(partitions),
+    );
+    (engine, resolver)
+}
+
+/// Before start, failed, at a driver: a template driven by an intermediate
+/// whose derivation calls a project function needs the whole table, as the
+/// call does. Without the fallback the partitioned run is refused at the
+/// intermediate before any call; with it, the donor calls `echo` once per
+/// record and the run builds its output.
+#[test]
+fn before_start_a_driver_whose_donor_calls_a_function_is_refused_before_any_call() {
+    let one = Partitions::new(NonZeroUsize::MIN);
+    let refused = r#"Error engine engine_rejected None ["intermediates.ECHOED"] {"code":"partition_global","step":"execute"} None None"#;
+    for (partitions, outcome, calls, rows) in [
+        (one, refused.to_owned(), 0, None),
+        (
+            one.with_whole_table_fallback(),
+            "succeeded".to_owned(),
+            2,
+            Some(2),
+        ),
+    ] {
+        let functions = Arc::new(Echo {
+            interrupt: false,
+            calls: AtomicUsize::new(0),
+        });
+        let (engine, resolver) = function_study(DRIVER_SPEC, functions.clone(), partitions);
+        let run = engine
+            .spec_run("spec.yaml", Some("project.yaml"), &CancellationToken::new())
+            .unwrap();
+        let built = if run.diagnostics().is_empty() {
+            "succeeded".to_owned()
+        } else {
+            issues(&run.diagnostics())
+        };
+        assert_eq!(
+            (
+                built,
+                functions.calls.load(Ordering::SeqCst),
+                run.output().map(|output| output.rows()),
+                resolver.count("stage"),
+            ),
+            (outcome, calls, rows, 0),
+            "{partitions:?}"
+        );
     }
 }
 
@@ -323,35 +415,14 @@ impl ProjectFunctions for Interrupting {
 /// no later row is called, and nothing is staged or published.
 #[test]
 fn mid_partition_a_project_function_interrupt_cancels_the_call() {
-    let resolver = Recording::new(FUNCTION_SPEC, b"ID,NAME\n1,alpha\n2,beta\n", None);
-    for (name, bytes) in [
-        ("project.yaml", FUNCTION_PROJECT.as_bytes()),
-        ("functions/echo.yaml", FUNCTION),
-    ] {
-        resolver
-            .inner
-            .insert("/", name, &format!("{name}:1"), Arc::from(bytes));
-        resolver.inner.insert(
-            "/project.yaml",
-            name,
-            &format!("{name}:1"),
-            Arc::from(bytes),
-        );
-    }
-    resolver.inner.insert(
-        "/project.yaml",
-        "spec.yaml",
-        "spec:1",
-        Arc::from(FUNCTION_SPEC.as_bytes()),
-    );
-    let functions = Arc::new(Interrupting {
+    let functions = Arc::new(Echo {
+        interrupt: true,
         calls: AtomicUsize::new(0),
     });
-    let engine = Engine::new(
-        EngineOptions::new(HostLanguage::Python, "test".into(), "0".into())
-            .with_resolver(resolver.clone())
-            .with_functions(functions.clone())
-            .with_partitions(Partitions::new(NonZeroUsize::MIN).with_whole_table_fallback()),
+    let (engine, resolver) = function_study(
+        FUNCTION_SPEC,
+        functions.clone(),
+        Partitions::new(NonZeroUsize::MIN).with_whole_table_fallback(),
     );
     let token = CancellationToken::new();
     let result = engine.spec_run("spec.yaml", Some("project.yaml"), &token);
@@ -386,7 +457,7 @@ fn mid_partition_a_failed_run_publishes_only_its_report() {
         .spec_run("spec.yaml", None, &CancellationToken::new())
         .unwrap();
     assert!(run.output().is_none());
-    let outcome = "convert conversion_failed [\"columns.W\"]".to_owned();
+    let outcome = r#"Error convert conversion_failed Some("VALUE-7") ["columns.W"] {"from":"float","keys":[{"ID":3}],"to":"int","value":3.5} None None"#.to_owned();
     assert_eq!(
         failed_and_saved(&resolver, run),
         (
@@ -464,11 +535,11 @@ fn during_publication_a_file_that_cannot_be_staged_publishes_nothing() {
     assert_eq!(
         end_state(
             &resolver,
-            first_issue(&failure.diagnostics),
+            issues(&failure.diagnostics),
             subject(&failure.message)
         ),
         EndState {
-            outcome: "engine engine_rejected [\"output.path\"]".into(),
+            outcome: r#"Error engine engine_rejected None ["output.path"] {"code":"host_publication_failure","completed":0,"entered":2,"path":"out.csv","step":"output"} None None"#.into(),
             named: "cannot save TEST:".into(),
             published: vec![],
             staged: 2,
@@ -493,11 +564,11 @@ fn during_publication_a_failed_commit_keeps_only_the_files_before_it() {
     assert_eq!(
         end_state(
             &resolver,
-            first_issue(&failure.diagnostics),
+            issues(&failure.diagnostics),
             subject(&failure.message)
         ),
         EndState {
-            outcome: "engine engine_rejected [\"output.path\"]".into(),
+            outcome: r#"Error engine engine_rejected None ["output.path"] {"code":"host_publication_failure","completed":1,"entered":2,"path":"out.csv","step":"output"} None None"#.into(),
             named: "cannot save TEST:".into(),
             published: vec![REPORT],
             staged: 2,

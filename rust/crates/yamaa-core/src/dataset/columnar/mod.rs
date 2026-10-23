@@ -1069,33 +1069,46 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
                 })
                 .collect();
             let columns = [local];
-            // A partitioned run completes a partition-safe column one
-            // partition's rows after another, each a unit of its own (#3697).
-            let divided = self.divides(|candidate| candidate == step);
-            for (number, range) in self.row_runs(divided, frame, &rows).into_iter().enumerate() {
-                self.next_partition(number)?;
-                let unit_rows = &rows[range];
-                // A binding serves this unit's rows of its own: the rows of
-                // `rows` are ascending, so those between the unit's first
-                // and last.
-                let unit_bindings: std::borrow::Cow<'_, [(BindingId, Vec<usize>)]> =
-                    match (unit_rows.first(), unit_rows.last()) {
-                        (Some(&first), Some(&last)) if divided => bindings
-                            .iter()
-                            .map(|(binding, served)| {
-                                let served = served
-                                    .iter()
-                                    .copied()
-                                    .filter(|row| (first..=last).contains(row))
-                                    .collect();
-                                (*binding, served)
-                            })
-                            .collect(),
-                        _ => std::borrow::Cow::Borrowed(&bindings),
-                    };
+            if self.divides(|candidate| candidate == step) {
+                // A partitioned run completes a partition-safe column as the
+                // whole-table run does, one binding after another (#2829),
+                // and each binding over one partition's rows after another,
+                // each a unit of its own (#3697).
+                self.windows = windows::Runs::default();
+                let mut prepared = None;
+                for (binding, served) in &bindings {
+                    let expr = plan.binding(*binding).expr;
+                    let mut prepare = prepared != Some(expr);
+                    prepared = Some(expr);
+                    let runs = self.row_runs(true, frame, served);
+                    for (number, range) in runs.into_iter().enumerate() {
+                        self.next_partition(number)?;
+                        let unit_rows = &served[range];
+                        // The binding's first unit prepares its expression.
+                        let first_unit = std::mem::replace(&mut prepare, false);
+                        let footprint = Footprint::Cells {
+                            columns: &columns,
+                            rows: unit_rows,
+                        };
+                        self.run_unit(frame, footprint, callbacks, |run, frame, row_mode| {
+                            if row_mode {
+                                run.complete_column(frame, *binding, secondary, &[], first_unit)?;
+                                for &row in unit_rows {
+                                    run.complete_column(frame, *binding, secondary, &[row], false)?;
+                                }
+                                Ok(())
+                            } else {
+                                run.complete_column(
+                                    frame, *binding, secondary, unit_rows, first_unit,
+                                )
+                            }
+                        })?;
+                    }
+                }
+            } else {
                 let footprint = Footprint::Cells {
                     columns: &columns,
-                    rows: unit_rows,
+                    rows: &rows,
                 };
                 self.run_unit(frame, footprint, callbacks, |run, frame, row_mode| {
                     run.windows = windows::Runs::default();
@@ -1103,7 +1116,7 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
                     // expression, and a column-level window over it is
                     // prepared once, through the first one's driver.
                     let mut prepared = None;
-                    for (binding, served) in unit_bindings.iter() {
+                    for (binding, served) in &bindings {
                         let expr = plan.binding(*binding).expr;
                         let prepare = prepared != Some(expr);
                         prepared = Some(expr);

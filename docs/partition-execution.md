@@ -206,9 +206,11 @@ with no host surface.
 - **Units, one partition at a time.** The schedule's units run in their
   order. A unit whose steps are all `Safe` or `CombineStep`, and whose rows
   come from the driver input, runs over each partition's rows in turn, each
-  as a unit of its own: in batch, replayed row by row after a failure. So
-  the first failure is the whole-table run's: the earliest failing step, then
-  the earliest row in base-record order. Rows of a template driven by a
+  as a unit of its own: in batch, replayed row by row after a failure. A
+  column step runs its bindings one after another, as the whole-table run
+  does (#2829), each over one partition's rows after another. So the first
+  failure is the whole-table run's: the earliest failing step and binding,
+  then the earliest row in base-record order. Rows of a template driven by a
   secondary input or a named intermediate belong to no partition.
 - **Combine state.** Only the state this inventory marks combinable crosses
   partitions: the candidate rows the output is built from; the handler counts
@@ -219,7 +221,10 @@ with no host surface.
   over every partition's candidates in candidate order.
 - **Global steps.** `ResolvedPlan::whole_table_step` names the first step
   the schedule marks `Global` whose evaluation reads a window, an aggregate,
-  a named or joined relation, `SELF` rows or a project function. Without the
+  a named or joined relation, `SELF` rows or a project function, or the
+  driver step of a template driven by a named intermediate whose
+  derivations, filter or keys call a project function or are global
+  themselves, because materializing it is. Without the
   whole-table fallback, such a plan fails at admission with
   `ExecutionError::PartitionGlobal`, which the facade reports as
   `engine_rejected` with `step: execute` and `code: partition_global` at that
