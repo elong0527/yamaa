@@ -193,6 +193,7 @@ fn relation(region: RegionId, kind: RelationKind, path: &str, donor: Donor) -> R
         path: path.into(),
         donor,
         keys: Vec::new(),
+        nearest: None,
         current: Vec::new(),
         filter: None,
         range: None,
@@ -1339,6 +1340,14 @@ impl<'p> Builder<'p> {
             donor,
         );
         (node.keys, node.windowed) = self.key_values(cx, &item.keys)?;
+        // The reference a nearest selection measures to is read as a key's
+        // match value is, after the keys (LOOKUP-26).
+        if let Some(nearest) = &item.nearest {
+            let (mut reference, windowed) =
+                self.key_values(cx, std::slice::from_ref(&nearest.reference))?;
+            node.windowed |= windowed;
+            node.nearest = reference.pop();
+        }
         for current in item.filter.iter().flat_map(|filter| filter.current()) {
             node.current.push(current_read(cx, current)?);
         }

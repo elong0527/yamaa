@@ -26,7 +26,7 @@ pub use odm::{BoundOdm, OdmRead, OdmScope, OdmTemplateScope};
 mod intermediates;
 pub(crate) use intermediates::{read_handlers, ReadHandlers};
 pub use intermediates::{
-    visit_output_dependencies, Intermediate, IntermediateDerivations, IntermediateUnique,
+    visit_output_dependencies, Intermediate, IntermediateDerivations, IntermediateUnique, Nearest,
     RecordMatchKey, SourceSchemas,
 };
 pub(crate) mod relation_predicates;

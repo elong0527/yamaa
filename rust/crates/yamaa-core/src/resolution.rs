@@ -315,20 +315,17 @@ impl<'a> Live<'a> {
         Ok(())
     }
 
-    /// The reads that match a lookup's records to the current row: its key,
-    /// its range value, its filter and its order (LOOKUP-25).
+    /// The reads that match a lookup's records to the current row: its key
+    /// and the reference its nearest selection measures to, its range value,
+    /// its filter and its order (LOOKUP-25, LOOKUP-26). A nearest
+    /// selection's `source`, like a range bound, names a donor field.
     fn matching(&self, index: usize, out: &mut Vec<Reading>) -> Result<(), Error> {
         let item = &self.spec.intermediates[index];
-        match &item.key {
-            Some(JoinKey::Columns { columns, .. }) => {
-                out.extend(columns.iter().map(Reading::variable));
-            }
-            Some(JoinKey::Pairs { pairs, .. }) => {
-                for &(_, value) in pairs {
-                    self.read(value, Scope::Row, out)?;
-                }
-            }
-            _ => {}
+        if let Some(JoinKey::Columns { columns, .. }) = &item.key {
+            out.extend(columns.iter().map(Reading::variable));
+        }
+        for value in item.match_values() {
+            self.read(value, Scope::Row, out)?;
         }
         if let Some(between) = &item.between {
             self.read(between.value, Scope::Row, out)?;
@@ -690,6 +687,7 @@ fn rename_only(spec: &Spec, item: &Intermediate) -> bool {
         && item.filter.is_none()
         && item.order_by.is_empty()
         && item.keep.is_none()
+        && item.nearest.is_none()
         && item.columns.is_none()
         && item.bindings.is_empty()
         && item.checks.is_empty()

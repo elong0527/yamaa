@@ -374,7 +374,8 @@ impl Classes<'_> {
     }
 
     /// Reading a relation: its class, and the effects of selecting from it
-    /// (key expressions, filter, and a donor plan it materializes).
+    /// (key expressions and the nearest reference, filter, and a donor plan
+    /// it materializes).
     fn relation(
         &mut self,
         relation: RelationId,
@@ -386,7 +387,8 @@ impl Classes<'_> {
             _ => PartitionClass::Global,
         };
         pending.extend(node.filter);
-        pending.extend(node.keys.iter().filter_map(|key| match key.value {
+        let keys = node.keys.iter().chain(&node.nearest);
+        pending.extend(keys.filter_map(|key| match key.value {
             KeyValue::Expr(expr) => Some(expr),
             _ => None,
         }));

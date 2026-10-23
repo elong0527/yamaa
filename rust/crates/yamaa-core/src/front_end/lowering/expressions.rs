@@ -13,9 +13,9 @@
 use super::{column_type, keyword, Lower};
 use crate::ast::{
     Aggregate, Arm, Between, Binding, Closed, DayRule, Derivation, Dictionary, Direction, ExprId,
-    ExprKind, FlagPart, Formula, Handlers, JoinKey, Keep, Literal, Meta, Name, Nulls, OdmRead,
-    Operand, OrderTerm, RankMethod, Role, ScalarOp, Segment, Slot, SourceRead, TemporalType, Text,
-    TextCase, TimeRule, TimeUnit, Window, WindowFunction,
+    ExprKind, FlagPart, Formula, Handlers, JoinKey, Keep, Literal, Meta, Name, Named, Nearest,
+    Nulls, OdmRead, Operand, OrderTerm, RankMethod, Role, ScalarOp, Segment, Slot, SourceRead,
+    TemporalType, Text, TextCase, TimeRule, TimeUnit, Window, WindowFunction,
 };
 use crate::expression::{compile, CompiledExpression, Context, NodeKind, TemporalKind};
 use crate::schema::DocumentNode as N;
@@ -292,6 +292,33 @@ impl Lower<'_> {
         }
     }
 
+    /// A selection by distance: `{source, to, unit}` (LOOKUP-26). `to` is
+    /// read as a key match value is: a name written alone is read at the
+    /// field itself, and an operation at its keyword.
+    pub(super) fn nearest(&mut self, node: usize, meta: Meta) -> Nearest {
+        let source = self.named(meta, node, "source").unwrap_or(Named {
+            name: String::new(),
+            meta,
+        });
+        let (to, to_field) = match self.field(node, "to") {
+            Some(value) => {
+                let at = self.field_meta(meta, "to", value);
+                (self.placed(value, at, Placement::Value), at)
+            }
+            None => (
+                self.push(ExprKind::Unsupported("nearest".into()), meta),
+                meta,
+            ),
+        };
+        Nearest {
+            source,
+            to,
+            to_field,
+            unit: self.text_of(node, "unit").and_then(time_unit),
+            meta,
+        }
+    }
+
     /// The order terms of `owner.name`: bare names or `{variable, direction, nulls}`.
     pub(super) fn order_by(
         &mut self,
@@ -446,18 +473,7 @@ impl Lower<'_> {
             "datetime" => Some(TemporalType::DateTime),
             _ => None,
         };
-        let unit = |name| {
-            Some(match text(name)? {
-                "day" => TimeUnit::Day,
-                "week" => TimeUnit::Week,
-                "month" => TimeUnit::Month,
-                "year" => TimeUnit::Year,
-                "second" => TimeUnit::Second,
-                "minute" => TimeUnit::Minute,
-                "hour" => TimeUnit::Hour,
-                _ => return None,
-            })
-        };
+        let unit = |name| text(name).and_then(time_unit);
         let (kind, fields): (ScalarOp, Fields) = match op {
             "round_half_away_from_zero" => (
                 ScalarOp::Round {
@@ -1154,4 +1170,18 @@ fn formula_names(compiled: &CompiledExpression) -> Vec<(Role, String)> {
         names.push((Role::Reducer, format!("{relation}.*")));
     }
     names
+}
+
+/// A unit as `diff` and `nearest` write it (TIME-4, LOOKUP-26).
+fn time_unit(text: &str) -> Option<TimeUnit> {
+    Some(match text {
+        "day" => TimeUnit::Day,
+        "week" => TimeUnit::Week,
+        "month" => TimeUnit::Month,
+        "year" => TimeUnit::Year,
+        "second" => TimeUnit::Second,
+        "minute" => TimeUnit::Minute,
+        "hour" => TimeUnit::Hour,
+        _ => return None,
+    })
 }

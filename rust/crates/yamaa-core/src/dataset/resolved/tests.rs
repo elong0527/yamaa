@@ -463,6 +463,7 @@ fn lookup() -> Intermediate {
         }],
         filter: None,
         selection: None,
+        nearest: None,
         range: None,
         columns: None,
         no_match: Some(Value::Missing),

@@ -587,6 +587,10 @@ impl<'d> Lower<'d> {
             });
             let order_by = self.order_by(item, "order_by", meta);
             let keep = self.keep(item);
+            let nearest = self.field(item, "nearest").map(|node| {
+                let meta = self.field_meta(meta, "nearest", node);
+                self.nearest(node, meta)
+            });
             let columns = self
                 .field(item, "columns")
                 .map(|_| self.names(meta, item, "columns"));
@@ -627,6 +631,7 @@ impl<'d> Lower<'d> {
                 filter,
                 order_by,
                 keep,
+                nearest,
                 columns,
                 absent,
                 require_match: self.boolean(item, "require_match", false),
@@ -640,6 +645,7 @@ impl<'d> Lower<'d> {
                         "filter",
                         "order_by",
                         "keep",
+                        "nearest",
                         "columns",
                         "derivations",
                         "verifications",

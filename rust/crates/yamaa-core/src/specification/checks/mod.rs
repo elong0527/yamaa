@@ -121,8 +121,8 @@ pub(super) fn aggregate_key_values(spec: &Spec, root: ExprId) -> Vec<ExprId> {
 
 /// Every key value a verb check visits besides the column and row
 /// derivations: the aggregates' key values in column defaults, then in row
-/// overrides, then each intermediate's own key values and those of the
-/// aggregates in its derivations.
+/// overrides, then each intermediate's own key values and nearest reference
+/// (LOOKUP-26) and those of the aggregates in its derivations.
 pub(super) fn key_sites(spec: &Spec) -> Vec<ExprId> {
     let mut sites = Vec::new();
     for column in &spec.columns {
@@ -136,9 +136,7 @@ pub(super) fn key_sites(spec: &Spec) -> Vec<ExprId> {
         }
     }
     for item in &spec.intermediates {
-        if let Some(JoinKey::Pairs { pairs, .. }) = &item.key {
-            sites.extend(pairs.iter().map(|&(_, value)| value));
-        }
+        sites.extend(item.match_values());
         for binding in &item.bindings {
             sites.extend(aggregate_key_values(spec, binding.derivation.expr));
         }

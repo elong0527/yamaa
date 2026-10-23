@@ -2010,6 +2010,10 @@ intermediate_class:
     - fields_from: match_range_fields
     - fields_from: match_filter_fields
     - fields_from: match_selection_fields
+    - nearest:
+        type: nearest_class
+        required: false
+        description: Selects the candidate whose date or datetime lies nearest a current-row value; it cannot be declared with order_by or keep (LOOKUP-26).
     - columns:
         type: "list[identifier]"
         required: false
@@ -2044,6 +2048,21 @@ record_between_class:
         type: identifier
         required: false
         description: Donor-record field whose value is an inclusive upper bound; omit for no upper bound (LOOKUP-9).
+
+nearest_class:
+    - source:
+        type: identifier
+        required: true
+        description: Donor-record date or datetime field, stored or derived, whose distance to `to` chooses the candidate (LOOKUP-26).
+    - to:
+        type: match_value
+        required: true
+        description: Current-row value of the source's type that the distance is measured to, read as a key match value is, such as a DATE or DATETIME literal (LOOKUP-26).
+    - unit:
+        type: str
+        required: true
+        values: [day, week, month, year, second, minute, hour]
+        description: Unit the distance is counted in, as diff counts it, a calendar unit for a date source or an elapsed unit for a datetime source (TIME-4).
 
 # See SCHEMA-5.
 match_key_range_fields:
@@ -4089,6 +4108,12 @@ pub(super) const V1_JSON_SCHEMAS: &[(&str, &str)] = &[
           "x-yamaa-kind": "value",
           "x-yamaa-type": "keep_policy"
         },
+        "nearest": {
+          "$ref": "#/$defs/fragment.nearest_class",
+          "description": "Selects the candidate whose date or datetime lies nearest a current-row value; it cannot be declared with order_by or keep (LOOKUP-26).",
+          "x-yamaa-kind": "structure",
+          "x-yamaa-type": "nearest_class"
+        },
         "columns": {
           "type": "array",
           "items": {
@@ -4214,6 +4239,39 @@ pub(super) const V1_JSON_SCHEMAS: &[(&str, &str)] = &[
     "fragment.match_value": {
       "$ref": "#/$defs/fragment.expression",
       "description": "See LOOKUP-6."
+    },
+    "fragment.nearest_class": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "$ref": "#/$defs/identifier",
+          "description": "Donor-record date or datetime field, stored or derived, whose distance to `to` chooses the candidate (LOOKUP-26).",
+          "x-yamaa-kind": "identifier",
+          "x-yamaa-type": "identifier"
+        },
+        "to": {
+          "$ref": "#/$defs/fragment.match_value",
+          "description": "Current-row value of the source's type that the distance is measured to, read as a key match value is, such as a DATE or DATETIME literal (LOOKUP-26).",
+          "x-yamaa-kind": "expression",
+          "x-yamaa-type": "match_value"
+        },
+        "unit": {
+          "type": "string",
+          "enum": [
+            "day",
+            "week",
+            "month",
+            "year",
+            "second",
+            "minute",
+            "hour"
+          ],
+          "description": "Unit the distance is counted in, as diff counts it, a calendar unit for a date source or an elapsed unit for a datetime source (TIME-4).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        }
+      },
+      "additionalProperties": false
     },
     "fragment.odm_class": {
       "type": "object",
@@ -5799,6 +5857,12 @@ pub(super) const V1_JSON_SCHEMAS: &[(&str, &str)] = &[
           "x-yamaa-kind": "value",
           "x-yamaa-type": "keep_policy"
         },
+        "nearest": {
+          "$ref": "#/$defs/nearest_class",
+          "description": "Selects the candidate whose date or datetime lies nearest a current-row value; it cannot be declared with order_by or keep (LOOKUP-26).",
+          "x-yamaa-kind": "structure",
+          "x-yamaa-type": "nearest_class"
+        },
         "columns": {
           "type": "array",
           "items": {
@@ -6152,6 +6216,44 @@ pub(super) const V1_JSON_SCHEMAS: &[(&str, &str)] = &[
         "Imputation"
       ],
       "description": "Kind of algorithm a method describes."
+    },
+    "nearest_class": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "$ref": "#/$defs/identifier",
+          "description": "Donor-record date or datetime field, stored or derived, whose distance to `to` chooses the candidate (LOOKUP-26).",
+          "x-yamaa-kind": "identifier",
+          "x-yamaa-type": "identifier"
+        },
+        "to": {
+          "$ref": "#/$defs/match_value",
+          "description": "Current-row value of the source's type that the distance is measured to, read as a key match value is, such as a DATE or DATETIME literal (LOOKUP-26).",
+          "x-yamaa-kind": "expression",
+          "x-yamaa-type": "match_value"
+        },
+        "unit": {
+          "type": "string",
+          "enum": [
+            "day",
+            "week",
+            "month",
+            "year",
+            "second",
+            "minute",
+            "hour"
+          ],
+          "description": "Unit the distance is counted in, as diff counts it, a calendar unit for a date source or an elapsed unit for a datetime source (TIME-4).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        }
+      },
+      "required": [
+        "source",
+        "to",
+        "unit"
+      ],
+      "additionalProperties": false
     },
     "odm_class": {
       "type": "object",

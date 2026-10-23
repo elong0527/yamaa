@@ -15,10 +15,12 @@ use super::frame::{Frame, Identity, IdentityMap};
 use super::index::{self, Index};
 use super::{Cx, Fail, Run, Table};
 use crate::dataset::execution::{CheckRecord, ExecutionError, RowIdentity};
-use crate::dataset::resolved::{ExprId, KeyValue, Read, RegionId, RelationId, ResolvedPlan};
+use crate::dataset::resolved::{
+    ExprId, KeyValue, Read, RegionId, RelationId, RelationKey, ResolvedPlan,
+};
 use crate::dataset::{
     CurrentField, CurrentRead, Intermediate, IntermediateSource, Keep, MatchRead, MatchValue,
-    OrderTerm, RelationPredicate, SourceSelection, VerificationSeverity,
+    Nearest, OrderTerm, RelationPredicate, SourceSelection, VerificationSeverity,
 };
 use crate::expression::Truth;
 use crate::numeric_lifecycle::HandlerKind;
@@ -883,6 +885,10 @@ fn resolve_choice<E>(
         )?),
         None => None,
     };
+    // The reference a nearest selection measures to is read with the match
+    // values; a missing one seeks no record, as a missing match value does
+    // (LOOKUP-26).
+    let reference = reference_value(run, cx, relation, item, row)?;
     let probe_keys: Vec<(usize, ValueRef<'_>)> = keys
         .iter()
         .map(|(column, value)| (*column, ValueRef::from(value)))
@@ -901,7 +907,7 @@ fn resolve_choice<E>(
     };
     let mut count = 0;
     let mut selected = None;
-    if !probe.incomplete() {
+    if !probe.incomplete() && !matches!(reference, Some(Value::Missing)) {
         let indexed = key_bucket(run, relation, item, table, donor, &probe_keys)?;
         // A bucket's records already equal the match values on every key
         // pair; the range still holds or not per record.
@@ -966,7 +972,13 @@ fn resolve_choice<E>(
         .map_err(|found| refusal(found, item, table, &keys))?;
         count = found.rows.len();
         selected = found.rows.first().copied();
-        if count > 1 {
+        // A nearest selection chooses among the candidates with a distance,
+        // and one candidate without a distance is not chosen either.
+        if let (Some(choice), Some(reference)) = (&item.nearest, &reference) {
+            (selected, count) = nearest(&found.rows, choice, reference, |source_row, column| {
+                cell(table, item, source_row, column)
+            })?;
+        } else if count > 1 {
             if let Some(selection) = &item.selection {
                 selected = Some(select(&found.rows, selection, |source_row, column| {
                     cell(table, item, source_row, column)
@@ -1021,10 +1033,51 @@ pub(super) fn match_values<E>(
     if item.has_expression_keys() {
         let current = resolve_operands(run, cx, &item.path, &item.keys, row)?;
         check_deferred_filter_types(item)?;
-        evaluate_keys(run, cx, relation, &item.keys, &current, row)
+        let lowered = &run.plan.relation(relation).keys;
+        evaluate_keys(run, cx, lowered, &item.keys, &current, row)
     } else {
         check_deferred_filter_types(item)?;
         ordinary_keys(run, cx, &item.path, &item.keys, row)
+    }
+}
+
+/// The current row's reference for the nearest selection of `item`, read as
+/// a key's match value is, or none without one (LOOKUP-26). A value whose
+/// type is not its source's fails, as a key pair whose types cannot compare
+/// does.
+fn reference_value<E>(
+    run: &mut Run<'_, '_, E>,
+    cx: &Cx<'_, E>,
+    relation: RelationId,
+    item: &Intermediate,
+    row: usize,
+) -> Result<Option<Value>, Fail<E>> {
+    let Some(nearest) = &item.nearest else {
+        return Ok(None);
+    };
+    let keys = std::slice::from_ref(&nearest.reference);
+    let values = if nearest.reference.value.is_expression() {
+        let current = resolve_operands(run, cx, &item.path, keys, row)?;
+        let lowered = run.plan.relation(relation).nearest.as_slice();
+        evaluate_keys(run, cx, lowered, keys, &current, row)?
+    } else {
+        ordinary_keys(run, cx, &item.path, keys, row)?
+    };
+    let value = values
+        .into_iter()
+        .next()
+        .map_or(Value::Missing, |(_, value)| value);
+    let expected = nearest.source_type();
+    match value.value_type() {
+        Some(actual) if actual != expected => Err(Box::new(ExecutionError::ScalarDiagnostic(
+            crate::diagnostic::lookup::nearest_reference_type(
+                &nearest.reference.path,
+                crate::diagnostic::lookup::Owner::Intermediate(&item.identifier),
+                expected.into(),
+                actual.into(),
+            ),
+        ))),
+        _ => Ok(Some(value)),
     }
 }
 
@@ -1463,7 +1516,8 @@ pub(super) fn match_keys<E>(
 ) -> Result<Vec<(usize, Value)>, Fail<E>> {
     if keys.iter().any(|key| key.value.is_expression()) {
         let current = resolve_operands(run, cx, path, keys, row)?;
-        evaluate_keys(run, cx, relation, keys, &current, row)
+        let lowered = &run.plan.relation(relation).keys;
+        evaluate_keys(run, cx, lowered, keys, &current, row)
     } else {
         ordinary_keys(run, cx, path, keys, row)
     }
@@ -1495,16 +1549,16 @@ fn ordinary_keys<E>(
     Ok(resolved)
 }
 
-/// Evaluate every key before considering missingness.
+/// Evaluate every key before considering missingness, each expression key by
+/// its node in `lowered`, which holds the keys' lowered values in order.
 fn evaluate_keys<E>(
     run: &mut Run<'_, '_, E>,
     cx: &Cx<'_, E>,
-    relation: RelationId,
+    lowered: &[RelationKey],
     keys: &[crate::dataset::IntermediateKey],
     current: &[(&MatchRead, Value)],
     row: usize,
 ) -> Result<Vec<(usize, Value)>, Fail<E>> {
-    let plan = run.plan;
     let value_of = |read: &MatchRead| -> Value {
         current
             .iter()
@@ -1513,7 +1567,6 @@ fn evaluate_keys<E>(
             .1
             .clone()
     };
-    let lowered = &plan.relation(relation).keys;
     let mut resolved = Vec::with_capacity(keys.len());
     for (position, key) in keys.iter().enumerate() {
         let value = match &key.value {
@@ -1713,6 +1766,47 @@ pub(super) fn select<'t, E>(
         }
     }
     Ok(best)
+}
+
+/// The candidate nearest the reference (LOOKUP-26), and how many candidates
+/// had a distance: one whose distance is missing is never chosen, and a tie
+/// goes to the earlier `source`, then to the earlier stored record.
+pub(super) fn nearest<'t, E>(
+    candidates: &[usize],
+    nearest: &Nearest,
+    reference: &Value,
+    mut read: impl FnMut(usize, usize) -> Result<ValueRef<'t>, Fail<E>>,
+) -> Result<(Option<usize>, usize), Fail<E>> {
+    // Distances share one unit and sources one type, so both compare.
+    let order = |left: &Value, right: &Value| {
+        crate::value::compare_present(left, right)
+            .map_err(|_| Box::new(ExecutionError::SchemaMismatch))
+    };
+    let mut best: Option<(usize, Value, Value)> = None;
+    let mut measured = 0;
+    for &row in candidates {
+        let source = owned(read(row, nearest.source)?);
+        let distance = nearest
+            .distance(&source, reference)
+            .map_err(|diagnostic| Box::new(ExecutionError::ScalarDiagnostic(diagnostic)))?;
+        if matches!(distance, Value::Missing) {
+            continue;
+        }
+        measured += 1;
+        let nearer = match &best {
+            None => true,
+            Some((chosen, chosen_distance, chosen_source)) => {
+                order(&distance, chosen_distance)?
+                    .then(order(&source, chosen_source)?)
+                    .then_with(|| row.cmp(chosen))
+                    == Ordering::Less
+            }
+        };
+        if nearer {
+            best = Some((row, distance, source));
+        }
+    }
+    Ok((best.map(|(row, ..)| row), measured))
 }
 
 /// Compare values within one normalized column; missing values sort by the

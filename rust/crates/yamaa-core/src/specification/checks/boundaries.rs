@@ -506,9 +506,11 @@ impl<'a> Reads<'a> {
         bound && findings.len() == start
     }
 
-    /// Each key match value of the lookup at `index`, at the path binding
-    /// cites it, with the names it reads; `None` when the declarations do not
-    /// decide them: keys inferred from the captured schemas.
+    /// Each key match value of the lookup at `index`, then the reference of
+    /// its nearest selection, which is read as a match value is (LOOKUP-26),
+    /// at the path binding cites it, with the names it reads; `None` when the
+    /// declarations do not decide them: keys inferred from the captured
+    /// schemas.
     fn keys(&self, index: usize) -> Option<Vec<(String, Vec<&'a str>)>> {
         let spec = self.spec;
         let item = &spec.intermediates[index];
@@ -523,13 +525,11 @@ impl<'a> Reads<'a> {
             _ => return None,
         };
         let at = render(spec, item.meta);
-        fields
+        let named = &self.prepared.intermediates;
+        let mut keys = fields
             .into_iter()
             .map(|field| {
-                let value = self
-                    .prepared
-                    .intermediates
-                    .match_declaration(&item.id.name, field)?;
+                let value = named.match_declaration(&item.id.name, field)?;
                 // A name written as the value is cited at the key, any other
                 // value at its own entry.
                 let path = match value {
@@ -538,7 +538,15 @@ impl<'a> Reads<'a> {
                 };
                 Some((path, value.references().collect()))
             })
-            .collect()
+            .collect::<Option<Vec<_>>>()?;
+        if let Some(nearest) = &item.nearest {
+            let value = named.reference_declaration(&item.id.name)?;
+            keys.push((
+                render(spec, nearest.to_field),
+                value.references().collect(),
+            ));
+        }
+        Some(keys)
     }
 
     /// The output columns the lookup at `index` matches on, sorted: those its
@@ -903,9 +911,10 @@ impl<'a> Reads<'a> {
 
     /// Whether the lookup at `index` completes only after the template's
     /// window pass, with the first column it matches on that does
-    /// (`dataset::read_requires_window`): one it matches on, a key value that
-    /// is a window, or a range value that reads a lookup derived after it.
-    /// `None` when a lookup on the way has inferred keys.
+    /// (`dataset::read_requires_window`): one it matches on, a key value or
+    /// nearest reference that is a window, or a range value that reads a
+    /// lookup derived after it. `None` when a lookup on the way has inferred
+    /// keys.
     fn lookup_late(&self, index: usize, deferred: &[bool]) -> Option<(bool, Option<usize>)> {
         let mut dependencies = BTreeSet::new();
         self.dependencies(index, &mut Vec::new(), &mut dependencies)?;
@@ -926,10 +935,8 @@ impl<'a> Reads<'a> {
                 continue;
             }
             let item = &spec.intermediates[index];
-            if let Some(JoinKey::Pairs { pairs, .. }) = &item.key {
-                if pairs.iter().any(|&(_, value)| windowed(spec, value)) {
-                    return Some((true, None));
-                }
+            if item.match_values().any(|value| windowed(spec, value)) {
+                return Some((true, None));
             }
             let chained = item
                 .between

@@ -2223,10 +2223,10 @@ impl Checks<'_> {
     }
 
     /// The output columns the named intermediate a name reads matches on,
-    /// sorted: those its key and range value read, then those of each
-    /// intermediate its range value or derivations read. An inferred key's
-    /// columns depend on the fields its input stores, which only capture
-    /// decides.
+    /// sorted: those its key, nearest reference and range value read, then
+    /// those of each intermediate its range value or derivations read. An
+    /// inferred key's columns depend on the fields its input stores, which
+    /// only capture decides.
     fn matched(&self, name: &str) -> Vec<usize> {
         let spec = self.spec;
         let output = |name: &str| {
@@ -2253,13 +2253,15 @@ impl Checks<'_> {
                 Some(JoinKey::Columns { columns, .. }) => {
                     columns.iter().map(|column| column.name.as_str()).collect()
                 }
-                Some(JoinKey::Pairs { pairs, .. }) => pairs
-                    .iter()
-                    .flat_map(|&(_, value)| spec.reads(value, ast::Scope::Row))
-                    .filter_map(|read| super::name(spec, read.at))
-                    .collect(),
                 _ => Vec::new(),
             };
+            // The key pairs' match values and a nearest selection's
+            // reference (LOOKUP-26).
+            reads.extend(
+                item.match_values()
+                    .flat_map(|value| spec.reads(value, ast::Scope::Row))
+                    .filter_map(|read| super::name(spec, read.at)),
+            );
             reads.extend(
                 item.between
                     .as_ref()
@@ -2470,6 +2472,133 @@ impl Checks<'_> {
             {
                 self.key_verb(*expr, findings)?;
             }
+        }
+        Ok(findings.len() != start)
+    }
+
+    /// What binding refuses of the nearest selection of `donor`'s lookup that
+    /// the declarations decide (`intermediates::bind_nearest`), in binding's
+    /// order (LOOKUP-26): a `source` the declarations type as neither `date`
+    /// nor `datetime`, a `unit` that type does not count in (TIME-4), a `to`
+    /// whose type is not the source's, then each reference of `to` that reads
+    /// no current-row value and the verb it holds, as for a key's match value
+    /// ([`Self::key_values`]). A source the declarations do not type is left
+    /// to binding. True when one is refused: binding then binds nothing of
+    /// the lookup.
+    fn nearest(
+        &self,
+        donor: &Donor<'_>,
+        stored: &Typing<'_>,
+        current_names: &dyn Fn(&str) -> ResultType,
+        findings: &mut Vec<BindFinding>,
+    ) -> Result<bool, BindError> {
+        let spec = self.spec;
+        let item = donor.item;
+        let (Some(nearest), Some(unit)) = (
+            &item.nearest,
+            item.nearest.as_ref().and_then(|nearest| nearest.unit),
+        ) else {
+            return Ok(false);
+        };
+        let identifier = item.id.name.as_str();
+        let owner = Owner::Intermediate(identifier);
+        let at = render(spec, nearest.meta);
+        let refuse = |diagnostic: Diagnostic, findings: &mut Vec<BindFinding>| {
+            findings.push(BindFinding::Lookup(LookupFinding::from_diagnostic(
+                diagnostic,
+            )));
+            Ok(true)
+        };
+        let Some(kind) = donor.field(&nearest.source.name, stored) else {
+            return Ok(false);
+        };
+        let source = match kind.column_type() {
+            Some(source @ (ColumnType::Date | ColumnType::DateTime)) => source,
+            other => {
+                return refuse(
+                    lookup::nearest_source_type(
+                        &format!("{at}.source"),
+                        owner,
+                        &nearest.source.name,
+                        ResultType::declared(other),
+                    ),
+                    findings,
+                )
+            }
+        };
+        let (value, permitted): (&str, &[&str]) = (
+            match unit {
+                ast::TimeUnit::Day => "day",
+                ast::TimeUnit::Week => "week",
+                ast::TimeUnit::Month => "month",
+                ast::TimeUnit::Year => "year",
+                ast::TimeUnit::Second => "second",
+                ast::TimeUnit::Minute => "minute",
+                ast::TimeUnit::Hour => "hour",
+            },
+            if source == ColumnType::DateTime {
+                &["second", "minute", "hour", "day"]
+            } else {
+                &["day", "week", "month", "year"]
+            },
+        );
+        if !permitted.contains(&value) {
+            return refuse(
+                crate::dataset::Temporal::unit_diagnostic(&at, value, permitted),
+                findings,
+            );
+        }
+        let Some(to) = self
+            .prepared
+            .intermediates
+            .reference_declaration(identifier)
+        else {
+            return Ok(false);
+        };
+        let path = render(spec, nearest.to_field);
+        let expected = ResultType::column(source);
+        let actual = match to {
+            match_values::Declaration::Variable(read)
+            | match_values::Declaration::Source(read) => current_names(read),
+            match_values::Declaration::Literal(_, expr)
+            | match_values::Declaration::Read(_, expr)
+            | match_values::Declaration::Expression { expr, .. } => {
+                self.result_type(*expr, ast::Scope::Row, &current_names)
+            }
+        };
+        if !actual.comparable(expected) {
+            return refuse(
+                lookup::nearest_reference_type(&path, owner, expected, actual),
+                findings,
+            );
+        }
+        // A lookup that another lookup's derivations read binds its
+        // reference at each read instead.
+        if donor_read(spec, donor.index) {
+            return Ok(false);
+        }
+        let suggests = !matches!(to, match_values::Declaration::Expression { .. });
+        let start = findings.len();
+        for reference in to
+            .references()
+            .filter(|name| self.unknown_match_value(name))
+        {
+            let suggestion = reference
+                .strip_prefix("SELF.")
+                .filter(|bare| suggests && self.column(bare))
+                .map(String::from);
+            findings.push(BindFinding::Lookup(LookupFinding::reference(
+                &path,
+                reference,
+                Some(identifier),
+                ReferenceCause::OutputKey,
+                suggestion,
+            )));
+        }
+        if let (match_values::Declaration::Expression { expr, .. }, true) =
+            (to, findings.len() == start)
+        {
+            self.key_verb(*expr, findings)?;
         }
         Ok(findings.len() != start)
     }
@@ -2871,6 +3000,10 @@ impl Checks<'_> {
                 }
             }
             if self.key_values(index, findings)? {
+                refused.insert(index);
+            }
+            // The nearest selection binds after the keys (LOOKUP-26).
+            if self.nearest(donor, &stored, &current_names, findings)? {
                 refused.insert(index);
             }
             // A name qualified by nothing declared fails the filter, and

@@ -532,6 +532,9 @@ pub struct RelationNode {
     pub donor: Donor,
     /// Equality keys: a donor field and the current value it must equal.
     pub keys: Vec<RelationKey>,
+    /// A nearest selection's source field and the current value its
+    /// distance is measured to (LOOKUP-26).
+    pub nearest: Option<RelationKey>,
     /// Correlated current-row operands: a named relation's filter fields in
     /// their declared positions, then its donor operands; an ODM read's scope.
     pub current: Vec<Read>,
