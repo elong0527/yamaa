@@ -1,6 +1,7 @@
 //! The files a lint call names: directory expansion, one capture of each file
 //! through the local file resolver, and atomic replacement of fixed files.
 
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use yamaa_core::language::FileType;
@@ -12,9 +13,15 @@ use crate::yaml_decode::DecodeFailure;
 
 /// The findings that remain in `text` once suppressions apply, one-based.
 /// With `file`, the path `text` was read from, a specification is also
-/// compared with the layers it inherits.
-pub(super) fn findings(text: &[u8], file: Option<&Path>) -> Result<Vec<Finding>, DecodeFailure> {
-    let document = Document::parse(text)?;
+/// compared with the layers it inherits. `included` reads `text` as a
+/// fragment another linted file includes.
+pub(super) fn findings(
+    text: &[u8],
+    file: Option<&Path>,
+    included: bool,
+) -> Result<Vec<Finding>, DecodeFailure> {
+    let mut document = Document::parse(text)?;
+    document.included = included;
     let mut found = check(&document);
     if let Some(file) = file {
         found.extend(inheritance::check(&document, file));
@@ -67,12 +74,15 @@ pub(super) fn lint(paths: &[String], fix: bool) -> Result<Vec<Linted>, Error> {
         if document.key(document.root, "schema_version").is_some() {
             return Err(Error::Language { file: file.display });
         }
-        sources.push((file, document.text));
+        sources.push((file, document));
     }
+    let fragments = fragments(&sources);
     let mut linted = Vec::with_capacity(sources.len());
-    for (file, text) in sources {
+    for (file, document) in sources {
+        let text = document.text;
+        let included = canonical(&file.path).is_some_and(|path| fragments.contains(&path));
         let fixed = if fix {
-            fix::fix_text(&text)
+            fix::fix_text(&text, included)
         } else {
             text.clone()
         };
@@ -81,9 +91,11 @@ pub(super) fn lint(paths: &[String], fix: bool) -> Result<Vec<Linted>, Error> {
             write(&file, fixed.as_bytes())?;
         }
         let findings =
-            findings(fixed.as_bytes(), Some(&file.path)).map_err(|failure| Error::Source {
-                file: file.display.clone(),
-                failure,
+            findings(fixed.as_bytes(), Some(&file.path), included).map_err(|failure| {
+                Error::Source {
+                    file: file.display.clone(),
+                    failure,
+                }
             })?;
         linted.push(Linted {
             file: file.display,
@@ -92,6 +104,45 @@ pub(super) fn lint(paths: &[String], fix: bool) -> Result<Vec<Linted>, Error> {
         });
     }
     Ok(linted)
+}
+
+/// The canonical path of a linted file, or of a file one names; none for a
+/// path that reaches no file.
+fn canonical(path: &Path) -> Option<PathBuf> {
+    crate::canonical_path::canonicalize(path).ok()
+}
+
+/// The files the call's 1.x specifications name in `include`, each resolved
+/// from the file that lists it: the fragments, read as layers that compose on
+/// whatever includes them (LAYER-3).
+fn fragments(sources: &[(File, Document)]) -> BTreeSet<PathBuf> {
+    use yamaa_core::schema::DocumentNode as N;
+    let mut fragments = BTreeSet::new();
+    for (file, document) in sources {
+        let Some(values) = document
+            .decoded
+            .as_ref()
+            .map(|decoded| &decoded.document)
+            .filter(|values| yamaa_core::language::declares_header(values))
+        else {
+            continue;
+        };
+        let Some(N::Sequence(entries)) = values
+            .field(values.root(), "include")
+            .map(|list| &values.nodes()[list])
+        else {
+            continue;
+        };
+        let Some(directory) = file.path.parent() else {
+            continue;
+        };
+        for &entry in entries {
+            if let N::Text(written) = &values.nodes()[entry] {
+                fragments.extend(canonical(&directory.join(written)));
+            }
+        }
+    }
+    fragments
 }
 
 /// A named file is always read. A directory names the `.yaml` files beneath

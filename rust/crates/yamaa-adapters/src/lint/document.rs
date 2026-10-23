@@ -87,6 +87,10 @@ pub(super) struct Document {
     /// The values document admission decoded, which the schema findings
     /// read; none for the directory scan's structure alone.
     pub decoded: Option<DecodedYaml>,
+    /// Another specification of the same lint call names this file in
+    /// `include`: it is a fragment, which composes on the layers before it
+    /// (LAYER-3).
+    pub included: bool,
 }
 
 // --- Text as Python's str methods read it ---------------------------------------
@@ -403,6 +407,7 @@ impl Document {
             suppressions: Vec::new(),
             newline: dominant_ending(text),
             decoded: None,
+            included: false,
         };
         if let Some(root) = document.root {
             let mut content = std::mem::take(&mut document.content);
@@ -418,6 +423,24 @@ impl Document {
 
     pub(super) fn node(&self, id: usize) -> &Node {
         &self.nodes[id]
+    }
+
+    /// Whether the file is a layer that composes on others, so a value it
+    /// writes may replace one it inherits: it declares `parent` or `include`,
+    /// or another file of the call includes it (LAYER-3). A null `parent`
+    /// names no parent.
+    pub(super) fn layered(&self) -> bool {
+        use yamaa_core::schema::DocumentNode as N;
+        let declares = |field| match &self.decoded {
+            Some(decoded) => {
+                let values = &decoded.document;
+                values
+                    .field(values.root(), field)
+                    .is_some_and(|node| !matches!(values.nodes()[node], N::Null))
+            }
+            None => self.member(self.root, field).is_some(),
+        };
+        self.included || declares("parent") || declares("include")
     }
 
     /// The text of a scalar node.

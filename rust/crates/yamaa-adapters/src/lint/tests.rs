@@ -1693,10 +1693,13 @@ fn a_restated_default_needs_its_meaning_proved() {
         "    keep: first\n    absent: null\n    require_match: true\n",
     );
     assert!(!names(&conflicting).contains(&"restated_default"));
-    // A layer may replace an inherited value, so it is not read.
-    let layer = SPELLED.replace("domain: ADSL\n", "parent: base.yaml\ndomain: ADSL\n");
-    let restated = layer.replace("    keep: first\n", "    keep: first\n    absent: null\n");
-    assert!(!names(&restated).contains(&"restated_default"));
+    // A layer may replace an inherited value, so it is not read, whether it
+    // names a parent or includes a fragment (LAYER-3).
+    for header in ["parent: base.yaml\n", "include: [fragment.yaml]\n"] {
+        let layer = SPELLED.replace("domain: ADSL\n", &format!("{header}domain: ADSL\n"));
+        let restated = layer.replace("    keep: first\n", "    keep: first\n    absent: null\n");
+        assert!(!names(&restated).contains(&"restated_default"), "{header}");
+    }
     // A comment the removal would lose keeps the entry as written.
     let commented = SPELLED.replace(
         "    keep: first\n",
@@ -2044,9 +2047,12 @@ fn an_input_key_no_read_uses_is_reported() {
         !names(&templates).contains(&"unused_input_key"),
         "{templates}"
     );
-    // A layer's columns may come from the layer it inherits.
-    let layer = base.replace("domain: ADLB\n", "parent: base.yaml\ndomain: ADLB\n");
-    assert!(!names(&layer).contains(&"unused_input_key"));
+    // A layer's columns may come from the layer it inherits or a fragment it
+    // includes.
+    for header in ["parent: base.yaml\n", "include: [fragment.yaml]\n"] {
+        let layer = base.replace("domain: ADLB\n", &format!("{header}domain: ADLB\n"));
+        assert!(!names(&layer).contains(&"unused_input_key"), "{header}");
+    }
     // A shared parent layer suppresses it with a reason.
     let shared = base.replace(
         "  LB: {path",
@@ -2199,11 +2205,13 @@ fn output_columns_without_a_label_are_reported() {
 fn internal_and_inherited_columns_need_no_label() {
     let internal = MISSING_LABEL.replace("  columns: [STUDYID, AGE]", "  columns: [STUDYID]");
     assert!(names(&internal).is_empty());
-    let inherited = MISSING_LABEL.replace(
-        "type: spec\ndomain: ADSL",
-        "type: spec\nparent: base.yaml\ndomain: ADSL",
-    );
-    assert!(!names(&inherited).contains(&"missing_label"));
+    for header in ["parent: base.yaml", "include: [fragment.yaml]"] {
+        let inherited = MISSING_LABEL.replace(
+            "type: spec\ndomain: ADSL",
+            &format!("type: spec\n{header}\ndomain: ADSL"),
+        );
+        assert!(!names(&inherited).contains(&"missing_label"), "{header}");
+    }
 }
 
 #[test]
@@ -2367,6 +2375,43 @@ mod files {
         assert!(linted
             .iter()
             .all(|file| file.findings.len() == 1 && file.findings[0].finding == "root_spacing"));
+    }
+
+    #[test]
+    fn a_fragment_linted_with_a_file_that_includes_it_is_a_layer() {
+        // A fragment's value may replace one of the layers it composes on, so
+        // a call that also lints a file including it reads the fragment as a
+        // layer: its restated default is not reported and no fix removes it
+        // (LAYER-3). Linted alone, the same file is read as standalone.
+        let directory = Directory::new("fragments");
+        let fragment_text = "yamaa: \"1.0\"\ntype: spec\ninput:\n  AE: {path: ae.csv, \
+                             types: {AESEQ: int}, empty_string: missing}\n";
+        let fragment = directory.write("shared/fragment.yaml", fragment_text);
+        directory.write(
+            "adae.yaml",
+            "yamaa: \"1.0\"\ntype: spec\ninclude: [shared/fragment.yaml]\n",
+        );
+        let alone = lint(&[text(&fragment)], false).unwrap();
+        assert_eq!(
+            alone[0]
+                .findings
+                .iter()
+                .map(|item| (item.finding, item.spec_path.as_str()))
+                .collect::<Vec<_>>(),
+            [("restated_default", "input.AE.empty_string")]
+        );
+        let together = lint(&[text(&directory.0)], true).unwrap();
+        assert_eq!(
+            together
+                .iter()
+                .map(|file| (file.file.clone(), file.findings.len(), file.fixed))
+                .collect::<Vec<_>>(),
+            [
+                (display(&directory.0.join("adae.yaml")), 0, false),
+                (display(&fragment), 0, false),
+            ]
+        );
+        assert_eq!(std::fs::read_to_string(&fragment).unwrap(), fragment_text);
     }
 
     #[test]
