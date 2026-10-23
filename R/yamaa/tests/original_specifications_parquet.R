@@ -89,7 +89,10 @@ local({
   directory <- tempfile("public-parquet-refusals-"); dir.create(directory)
   on.exit(unlink(directory,recursive=TRUE))
   entry <- file.path(directory,"spec.yaml")
-  source <- '{"schema_version":"1.0","domain":"TEST","base":"SRC","input":{"SRC":"input.parquet"},"keys":["ID"],"columns":[{"name":"ID","type":"int","derivation":{"compute":{"expr":"1"}}}],"output":{"path":"output.csv","columns":["ID"]}}'
+  source <- paste0('yamaa: "1.0"\ntype: spec\ndomain: TEST\nbase: SRC\n',
+    'input: {SRC: input.parquet}\nkeys: [ID]\n',
+    'columns:\n  - {name: ID, type: int, derivation: "1"}\n',
+    'output: {path: output.csv, columns: [ID]}\n')
   writeBin(charToRaw(source),entry)
   entry <- normalizePath(entry,winslash="/",mustWork=TRUE)
   cases <- list(
@@ -113,15 +116,8 @@ local({
   for(name in names(unsupported_types)) cases[[length(cases)+1L]] <- c(
     paste0("unsupported-",name),"source_field_type_unsupported","PARQUET-7",
     paste0('"dataset":"SRC","field":"FIELD","path":"input.parquet","stored_type":"',unsupported_types[[name]],'"'))
-  # The same specification on the 1.0 surface, as the converter writes it: each
-  # refusal keeps its condition, rule, path and context.
-  surfaces <- c(json = source, yaml = paste0('yamaa: "1.0"\ntype: spec\ndomain: TEST\nbase: SRC\n',
-    'input: {SRC: input.parquet}\nkeys: [ID]\n',
-    'columns:\n  - {name: ID, type: int, derivation: "1"}\n',
-    'output: {path: output.csv, columns: [ID]}\n'))
-  for (surface in names(surfaces)) for (test in cases) {
-    label <- sprintf("the Parquet file %s on the %s surface",test[[1L]],surface)
-    writeBin(charToRaw(surfaces[[surface]]),entry)
+  for (test in cases) {
+    label <- sprintf("the Parquet file %s",test[[1L]])
     stopifnot_case(label,"the input is copied"=
       file.copy(file.path(root,"pq",paste0(test[[1L]],".parquet")),file.path(directory,"input.parquet"),overwrite=TRUE))
     result <- run_spec(entry)

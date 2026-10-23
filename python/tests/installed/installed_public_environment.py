@@ -30,7 +30,7 @@ TRUTH = load_truth(__file__, "public-environment")
 ROOT = Path(__file__).parent / "project-original"
 CASES = tuple(TRUTH["original_case_names"])
 FUNCTION_SPEC = (
-    "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\n"
+    'yamaa: "1.0"\ntype: spec\ndomain: TEST\nkeys: [ID]\n'
     "input: {SRC: {path: input.csv, types: {VALUE: float}}}\n"
     "columns:\n  - {name: ID, type: str, derivation: SRC.ID}\n"
     "  - {name: VALUE, type: float, derivation: "
@@ -55,10 +55,12 @@ def no_activation():
         yield
 
 
-# negative-function-contract as 0.5 wrote it, its argument supplied, for the
-# tests whose subject is an environment file (PublicEnvironment.legacy_study).
+# negative-function-contract, its argument supplied, under a project and
+# environment files as 0.5 wrote them, for the tests whose subject is an
+# environment file (PublicEnvironment.legacy_study).
 LEGACY_SPEC = (
-    "schema_version: '1.0'\n"
+    'yamaa: "1.0"\n'
+    "type: spec\n"
     "domain: TEST\n"
     "keys: [ID]\n"
     "input: {SOURCE: {path: input/source.csv, types: {VALUE: float}}}\n"
@@ -179,9 +181,10 @@ class PublicEnvironment(unittest.TestCase):
         return case
 
     def legacy_study(self):
-        """negative-function-contract, its argument supplied, as 0.5 wrote it
-        with its environment files inline: for the tests whose subject is an
-        environment file, which 1.0 removes (D8). They go with those files."""
+        """negative-function-contract, its argument supplied, under a project
+        and environment files as 0.5 wrote them: for the tests whose subject
+        is an environment file, which 1.0 removes (D8). They go with those
+        files."""
         case = self.study("negative-function-contract")
         shutil.rmtree(case / "functions")
         (case / "spec.yaml").write_text(LEGACY_SPEC)
@@ -327,15 +330,16 @@ class PublicEnvironment(unittest.TestCase):
                     )
                 ],
             )
-            # The same file alone has no project, so the function is unknown.
+            # The same file alone has no project, so its function call binds
+            # nothing a project supplies (CT-13).
             self.assertEqual(
                 yamaa.spec("spec.yaml").check().issues.to_pylist(),
                 [
                     issue(
-                        "unknown_project_function",
-                        "FUNC-4",
+                        "project_binding_missing",
+                        "CT-13",
                         ["columns.VALUE.derivation.function.name"],
-                        {"function": "project_value"},
+                        {"binding": "function", "function": "project_value"},
                     )
                 ],
             )

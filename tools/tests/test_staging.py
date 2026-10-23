@@ -18,7 +18,6 @@ from tools.packaging import generate_selftest_cases as selftest_cases
 from tools.staging import engine_bundle, vendor_crates
 from tools.staging import stage_grammar_inputs as grammar
 from tools.staging import stage_r_package as staging
-from tools.staging import stage_specification_inputs as specification
 
 
 class StagingTests(unittest.TestCase):
@@ -397,36 +396,10 @@ class StagingTests(unittest.TestCase):
                 [case / "functions/a.yaml", case / "functions/b.yaml"],
             )
 
-    def test_shared_specification_inputs_keep_both_preparation_copies(self):
-        """Both copies retain the fixture-owned facts and rule citations."""
-        with tempfile.TemporaryDirectory() as directory:
-            destination = Path(directory) / "specification-original"
-            specification.stage(destination)
-            source_preparation = (
-                staging.WORKSPACE
-                / "crates/yamaa-adapters/tests/fixtures/inheritance_preparation.tsv"
-            )
-            retained_preparation = destination / "inheritance-preparation.tsv"
-            self.assertEqual(
-                retained_preparation.read_bytes(), source_preparation.read_bytes()
-            )
-
-            def preparation_rows(path):
-                with path.open(encoding="ascii", newline="") as stream:
-                    return list(csv.DictReader(stream, delimiter="\t"))
-
-            historical = preparation_rows(retained_preparation)
-            normative = preparation_rows(
-                retained_preparation.with_name("normative-inheritance-preparation.tsv")
-            )
-            for rows in (historical, normative):
-                for row in rows:
-                    row["expected"] = json.loads(row["expected"])
-            self.assertEqual(historical, normative)
-
     def test_shared_grammar_inputs_cover_every_context(self):
-        """The hosts replay every case, the derivation context's in a 1.0
-        expression field, since the engine reads 1.0 files (D76)."""
+        """The hosts replay every case that a public field reads, each in a 1.0
+        specification, since the engine reads only 1.0 specifications; no
+        public field reads the `compute` context."""
         with tempfile.TemporaryDirectory() as directory:
             destination = Path(directory) / "grammar-original"
             grammar.stage(destination)
@@ -437,7 +410,6 @@ class StagingTests(unittest.TestCase):
             headers = {
                 (written["yamaa"], written["type"])
                 for row in staged
-                if row["context"] == "derivation"
                 for written in [
                     json.loads(
                         (destination / row["specification"]).read_text(encoding="utf-8")
@@ -450,11 +422,13 @@ class StagingTests(unittest.TestCase):
         self.assertEqual(list(grammar.CONTEXTS), declared)
         self.assertEqual(
             {row["context"] for row in staged if row["contract"] == "expression"},
-            set(declared),
+            set(declared) - {"compute"},
         )
         every = [case for document in documents.values() for case in document["cases"]]
         every += grammar.expansions(documents["expression"])
-        self.assertEqual(len(staged), len(every))
+        self.assertEqual(
+            len(staged), len([case for case in every if grammar.public(case)])
+        )
 
     def test_unread_inputs_follow_gitignore_order_and_refuse_stale_patterns(self):
         with tempfile.TemporaryDirectory() as directory:

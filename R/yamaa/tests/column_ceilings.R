@@ -147,26 +147,21 @@ assert_layered_cases <- function(root, width, layered) {
   dir.create(root, recursive = TRUE)
   writeBin(fixture_bytes(layered$input_csv), file.path(root, "input.csv"))
   names <- c("ID", sprintf(layered$column_name, seq_len(width - 1L)))
-  # The wide specification; a 0.5 file writes its header as `schema_version`
-  # and a text constant as a `literal` (D18).
-  case_column <- function(index, legacy) {
-    text <- function(value) if (legacy) sprintf("{literal: %s}", value) else sprintf("\"'%s'\"", value)
+  # The wide specification, whose text constants are quoted (D18).
+  case_column <- function(index) {
+    text <- function(value) sprintf("\"'%s'\"", value)
     c(sprintf("  - name: %s", sprintf(layered$column_name, index)), "    type: str", "    derivation:", "      case:",
       sprintf("        - when: \"SRC.A = 'x' AND SRC.B = '%d'\"", index %% 3L),
       paste0("          then: ", text("P")), "        - when: \"SRC.A IS NULL\"",
       paste0("          then: ", text("Q")), "        - otherwise: SRC.A")
   }
-  document <- function(legacy) c(
-    if (legacy) "schema_version: '1.0'" else c('yamaa: "1.0"', "type: spec"),
+  document <- c(
+    'yamaa: "1.0"', "type: spec",
     "domain: TEST", "keys: [ID]", "input: {SRC: input.csv}",
     "columns:", "  - {name: ID, type: str, derivation: SRC.ID}",
-    unlist(lapply(seq_len(width - 1L), case_column, legacy = legacy), use.names = FALSE),
+    unlist(lapply(seq_len(width - 1L), case_column), use.names = FALSE),
     sprintf("output: {path: out.csv, columns: [%s]}", paste(names, collapse = ", ")))
-  writeLines(document(FALSE), file.path(root, "parent.yaml"))
-  # 0.5 only, until #3447 deletes the 0.5 path: a null parent names no
-  # parent, so the entry stays standalone. A 1.0 file admits YAML null only
-  # in value and expression fields (P-NULL-1).
-  writeLines(c(document(TRUE), "parent: null"), file.path(root, "explicit.yaml"))
+  writeLines(document, file.path(root, "parent.yaml"))
   writeLines(c('yamaa: "1.0"', "type: spec", "parent: parent.yaml"),
              file.path(root, "child.yaml"))
   writeLines(c('yamaa: "1.0"', "type: spec", "parent: child.yaml"),
@@ -375,31 +370,6 @@ run_column_ceilings <- function() {
     stopifnot_case(paste(layers, "layers on the", route_name(project)), "the build saves" = returns_paths(built$save()))
     expect_identical(rawfile(file.path(case_root, "out.csv")), fixture_bytes(depth$output_csv),
       paste(layers, "layers on the", route_name(project), "save the base's output"))
-  }
-
-  # A wide scalar within the file boundary reaches its language finding with exact digits.
-  digits <- strrep("9", truth$wide_integers$digits)
-  for (project in c(FALSE, TRUE)) {
-    route <- route_name(project)
-    case_root <- path(paste0("preparation-numeric-digits-", if (project) "project" else "spec"))
-    spec <- write_case(case_root)
-    for (case in truth$wide_integers$cases) {
-      writeBin(fixture_bytes(gsub("{digits}", digits, case$yaml, fixed = TRUE)), spec)
-      expected <- case$issue
-      expected$context <- gsub("{digits}", digits, expected$context, fixed = TRUE)
-      for (operation in operations(project)) {
-        issue <- operation(spec)$issues
-        # Keep the wide number as exact text: drop the project identification
-        # literally rather than through a JSON number codec.
-        identified <- ',"entry":"[^"]*","expected":"1.0","source":"[^"]*"}$'
-        expect_identical(grepl(identified, issue$context), project,
-          paste(case$name, "names the listed entry in its context exactly on the project route:", route))
-        issue$context <- sub(identified, ',"expected":"1.0"}', issue$context)
-        expect_identical(issue_fields(issue), truth_fields(list(expected)),
-          paste(case$name, "keeps its exact digits on the", route))
-      }
-    }
-    stopifnot_case(route, "nothing is written" = !file.exists(file.path(case_root, "out.csv")))
   }
 
   # Each width ceiling admits 1,024 and refuses 1,025.
