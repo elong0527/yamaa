@@ -57,10 +57,11 @@ pub struct EngineOptions {
 /// The partitions divide only what the partition-safety inventory lets
 /// them divide. A step that needs the whole table, one that reads a window,
 /// an aggregate, a named or joined relation, SELF rows or a project
-/// function, refuses the run before derivation: the run fails with
-/// `engine_rejected` (`step: execute`, `code: partition_global`) at that
-/// step's spec path. With [`Partitions::with_whole_table_fallback`], such a
-/// step runs over the whole input instead.
+/// function, or rows driven by an intermediate whose derivations do,
+/// refuses the run before derivation: the run fails with `engine_rejected`
+/// (`step: execute`, `code: partition_global`) at that step's spec path.
+/// With [`Partitions::with_whole_table_fallback`], such a step runs over the
+/// whole input instead.
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Partitions {

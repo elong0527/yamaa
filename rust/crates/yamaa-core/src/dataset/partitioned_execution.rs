@@ -144,10 +144,14 @@ fn divisions(rows: usize) -> Vec<Vec<usize>> {
     divisions
 }
 
+/// The secondary inputs of a run, which no partitioning divides.
+type Secondary<'a> = [&'a dyn TableAccess<Error = Infallible>];
+
 /// One partitioned attempt over `input` divided into `sizes`.
 fn partitioned(
     plan: &super::ResolvedPlan,
     input: &Rows,
+    secondary: &Secondary<'_>,
     sizes: &[usize],
     fallback: bool,
 ) -> ExecutionAttempt<Infallible> {
@@ -158,7 +162,7 @@ fn partitioned(
         .collect();
     plan.execute_partitioned(
         &parts,
-        &[],
+        secondary,
         &mut NoFunctions::new(),
         None,
         &|| false,
@@ -171,13 +175,14 @@ fn partitioned(
 fn assert_every_division(
     plan: &DatasetPlan,
     input: &Rows,
+    secondary: &Secondary<'_>,
     expected: &ExecutionAttempt<Infallible>,
 ) {
     let resolved = plan.resolve().unwrap();
-    let whole = resolved.execute(input, &[], &mut NoFunctions::new(), None, &|| false);
+    let whole = resolved.execute(input, secondary, &mut NoFunctions::new(), None, &|| false);
     assert_eq!(&whole, expected, "the whole-table run");
     for sizes in divisions(input.rows.len()) {
-        let attempt = partitioned(&resolved, input, &sizes, false);
+        let attempt = partitioned(&resolved, input, secondary, &sizes, false);
         assert_eq!(&attempt, expected, "partitions {sizes:?}");
     }
 }
@@ -348,7 +353,7 @@ fn graded_attempt() -> ExecutionAttempt<Infallible> {
 #[test]
 fn a_partition_safe_plan_has_its_whole_table_result_over_any_partitions() {
     let (plan, input) = graded();
-    assert_every_division(&plan, &input, &graded_attempt());
+    assert_every_division(&plan, &input, &[], &graded_attempt());
 }
 
 /// A group that spans partitions is merged into one candidate at its first
@@ -411,7 +416,7 @@ fn a_group_that_spans_partitions_is_one_candidate_at_its_first_occurrence() {
             read: 6,
         }],
     };
-    assert_every_division(&plan, &input, &expected);
+    assert_every_division(&plan, &input, &[], &expected);
 }
 
 /// The key grain filters every record, derives its keys partition by
@@ -477,7 +482,7 @@ fn equal_keys_in_different_partitions_build_one_key_grain_candidate() {
             read: 5,
         }],
     };
-    assert_every_division(&plan, &input, &expected);
+    assert_every_division(&plan, &input, &[], &expected);
 }
 
 /// Output keys combine across partitions: the key 1 of the first and third
@@ -510,22 +515,41 @@ fn a_duplicate_key_split_across_partitions_fails_the_output_keys() {
             read: 3,
         }],
     };
-    assert_every_division(&plan, &input, &expected);
+    assert_every_division(&plan, &input, &[], &expected);
 }
 
-/// The first failure is the whole-table run's: the row stage, an earlier
-/// unit, fails at the second record's X before the column phase reaches the
-/// first record's Y, whichever partition each record is in.
+/// A conversion of 1.5 to an integer, which `conversion::integral` refuses.
+fn not_integral() -> ConversionError {
+    ConversionError {
+        target: ColumnType::Int,
+        value: crate::json::Value::from(&Value::float(1.5)),
+        source_type: Some(ValueType::Float),
+        reason: ConversionReason::IntegerRangeOrFraction,
+    }
+}
+
+/// The first failure is the whole-table run's, with its handler counts and
+/// retained check records: X's handler fires for the first record's 0.5 and
+/// the warning range check on X finds the second record's 1, both before
+/// the column phase; then the column step Y, the earlier unit, fails at the
+/// second record's 1.5 before the column step Z reaches the first record's
+/// 2.5, whichever partition each record is in.
 #[test]
 fn the_earliest_failing_step_fails_the_run_whichever_partition_holds_it() {
     let float = ColumnType::Float;
-    let source = schema(&[("ID", ColumnType::Int), ("A", float), ("B", float)]);
+    let source = schema(&[
+        ("ID", ColumnType::Int),
+        ("A", float),
+        ("B", float),
+        ("C", float),
+    ]);
     let plan = DatasetPlan::new(
         source.clone(),
         schema(&[
             ("ID", ColumnType::Int),
             ("X", ColumnType::Int),
             ("Y", ColumnType::Int),
+            ("Z", ColumnType::Int),
         ]),
         vec![RowTemplate {
             mode: RowMode::Records,
@@ -535,34 +559,178 @@ fn the_earliest_failing_step_fails_the_run_whichever_partition_holds_it() {
             ],
             filter: None,
         }],
-        vec![assign(2, Expression::Source(2))],
+        vec![
+            assign(2, Expression::Source(2)),
+            assign(3, Expression::Source(3)),
+        ],
         vec![0],
         Vec::new(),
-    );
+    )
+    .with_column_verifications(vec![ColumnVerifications {
+        column: 1,
+        checks: vec![verification(
+            "columns.X.verifications[0]",
+            Check::Range {
+                min: Some(int(0)),
+                max: Some(int(0)),
+            },
+        )],
+    }])
+    .with_warning_verifications(vec!["columns.X.verifications[0]".into()])
+    .with_conversion_handlers(vec![ConversionHandler {
+        assignment_path: "columns.C1.derivation".into(),
+        handler: LiteralHandler {
+            spec_path: "columns.X.unconvertible".into(),
+            value: Value::Missing,
+        },
+    }]);
     let input = Rows::new(
         source,
         vec![
-            vec![int(1), Value::float(1.0), Value::float(2.5)],
-            vec![int(2), Value::float(1.5), Value::float(1.0)],
+            vec![
+                int(1),
+                Value::float(0.5),
+                Value::float(1.0),
+                Value::float(2.5),
+            ],
+            vec![
+                int(2),
+                Value::float(1.0),
+                Value::float(1.5),
+                Value::float(3.0),
+            ],
         ],
     );
+    let mut range = record(
+        "columns.X.verifications[0]",
+        ConditionCode::VerificationRangeFailed,
+        (2, 1, 2),
+    );
+    range.offending_rows = vec![identity(1, 2)];
     let expected = ExecutionAttempt {
         result: Err(Box::new(ExecutionError::Conversion {
-            path: "columns.X".into(),
+            path: "columns.Y".into(),
             output_row: 1,
-            error: ConversionError {
-                target: ColumnType::Int,
-                value: crate::json::Value::from(&Value::float(1.5)),
-                source_type: Some(ValueType::Float),
-                reason: ConversionReason::IntegerRangeOrFraction,
-            },
+            error: not_integral(),
             identity: Some(identity(1, 2)),
+        })),
+        handler_counts: vec![HandlerCount {
+            spec_path: "columns.X.unconvertible".into(),
+            handler: HandlerKind::Unconvertible,
+            count: 1,
+        }],
+        retained_verifications: vec![range],
+        template_rows: vec![TemplateRows {
+            emitted: 2,
+            read: 2,
+        }],
+    };
+    assert_every_division(&plan, &input, &[], &expected);
+}
+
+/// A column bound per driver runs one binding after another, as the
+/// whole-table run does (#2829), however its rows interleave in frame
+/// order. Templates a (the primary input, filtered to ID < 2), b (SEC) and
+/// c (the primary input) build the candidates a1, b3, c1, c2; W's binding
+/// for a and c runs first and fails at c2's 2.5, before W's binding for b
+/// would fail at b3's 3.5.
+#[test]
+fn a_column_bound_per_driver_fails_at_its_first_binding_whatever_the_frame_order() {
+    use super::{ColumnBinding, ColumnScope, SecondarySource, SourceSchemas};
+    let float = ColumnType::Float;
+    let source = schema(&[("ID", ColumnType::Int), ("V", float)]);
+    let output = schema(&[
+        ("ID", ColumnType::Int),
+        ("T", ColumnType::Str),
+        ("W", ColumnType::Int),
+    ]);
+    let template = |mode: RowMode, tag: &str, filter: Option<BoundPredicate>| RowTemplate {
+        mode,
+        assignments: vec![
+            assign(0, Expression::Source(0)),
+            assign(1, Expression::Literal(text(tag))),
+        ],
+        filter,
+    };
+    let below = predicate(
+        "ID < 2",
+        "rows[0].filter",
+        vec![Bound {
+            name: "ID".into(),
+            read: BoundRead::Source(0),
+        }],
+    );
+    let per_driver = |templates: Vec<usize>| ColumnBinding {
+        assignment: assign(2, Expression::Source(1)),
+        templates,
+        scope: ColumnScope::Template,
+    };
+    let plan = DatasetPlan::new_with_bindings(
+        SourceSchemas {
+            primary: source.clone(),
+            secondary: vec![SecondarySource {
+                name: "SEC".into(),
+                schema: source.clone(),
+            }],
+        },
+        Vec::new(),
+        output,
+        vec![
+            template(RowMode::Records, "a", Some(below)),
+            template(
+                RowMode::Driver {
+                    source: 1,
+                    mode: Box::new(RowMode::Records),
+                },
+                "b",
+                None,
+            ),
+            template(RowMode::Records, "c", None),
+        ],
+        vec![per_driver(vec![0, 2]), per_driver(vec![1])],
+        vec![0, 1],
+        Vec::new(),
+    );
+    let input = Rows::new(
+        source.clone(),
+        vec![
+            vec![int(1), Value::float(1.0)],
+            vec![int(2), Value::float(2.5)],
+        ],
+    );
+    let alternate = Rows::new(source, vec![vec![int(3), Value::float(3.5)]]);
+    let not_integral = ConversionError {
+        value: crate::json::Value::from(&Value::float(2.5)),
+        ..not_integral()
+    };
+    let expected = ExecutionAttempt {
+        result: Err(Box::new(ExecutionError::Conversion {
+            path: "columns.W".into(),
+            output_row: 3,
+            error: not_integral,
+            identity: Some(RowIdentity {
+                position: 3,
+                values: vec![int(2), text("c")],
+            }),
         })),
         handler_counts: Vec::new(),
         retained_verifications: Vec::new(),
-        template_rows: Vec::new(),
+        template_rows: vec![
+            TemplateRows {
+                emitted: 1,
+                read: 2,
+            },
+            TemplateRows {
+                emitted: 1,
+                read: 1,
+            },
+            TemplateRows {
+                emitted: 2,
+                read: 2,
+            },
+        ],
     };
-    assert_every_division(&plan, &input, &expected);
+    assert_every_division(&plan, &input, &[&alternate], &expected);
 }
 
 /// One record template and a column-phase row number over V: a window,
@@ -685,7 +853,7 @@ fn a_step_that_needs_the_whole_table_refuses_the_run_unless_it_falls_back() {
     };
     for sizes in divisions(3) {
         assert_eq!(
-            partitioned(&resolved, &input, &sizes, true),
+            partitioned(&resolved, &input, &[], &sizes, true),
             numbered,
             "fallback over partitions {sizes:?}"
         );
@@ -693,7 +861,8 @@ fn a_step_that_needs_the_whole_table_refuses_the_run_unless_it_falls_back() {
 }
 
 /// A partition whose schema is not the driver's fails admission as a schema
-/// mismatch, as a whole input would.
+/// mismatch, as a whole input would, before any record is read: every
+/// handler site of the plan is reported at zero.
 #[test]
 fn a_partition_with_another_schema_fails_admission() {
     let (plan, input) = graded();
@@ -702,14 +871,22 @@ fn a_partition_with_another_schema_fails_admission() {
     let parts: Vec<&dyn TableAccess<Error = Infallible>> = vec![&input, &other];
     let attempt =
         resolved.execute_partitioned(&parts, &[], &mut NoFunctions::new(), None, &|| false, false);
-    assert!(
-        matches!(
-            attempt.result.as_ref().map_err(|error| &**error),
-            Err(ExecutionError::SchemaMismatch)
-        ),
-        "{:?}",
-        attempt.result
-    );
+    let zero = |spec_path: &str| HandlerCount {
+        spec_path: spec_path.into(),
+        handler: HandlerKind::Unconvertible,
+        count: 0,
+    };
+    let expected = ExecutionAttempt {
+        result: Err(Box::new(ExecutionError::SchemaMismatch)),
+        handler_counts: vec![
+            zero("columns.W.unconvertible"),
+            zero("columns.W2.unconvertible"),
+        ],
+        retained_verifications: Vec::new(),
+        template_rows: Vec::new(),
+    };
+    assert_eq!(attempt, expected);
+    assert_eq!(input.reads.get() + other.reads.get(), 0, "cells read");
 }
 
 /// A cancellation probe that counts its polls and answers true from poll
