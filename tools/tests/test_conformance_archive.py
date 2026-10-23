@@ -1,5 +1,5 @@
-"""The conformance archive holds the closed grammars, the expression language's
-evaluation set and the project license, as committed."""
+"""The conformance archive holds the closed grammars with their README, the
+expression language's evaluation set and the project license, as committed."""
 
 import tempfile
 import unittest
@@ -15,10 +15,13 @@ from tools.validation import check_expression_conformance
 
 
 class Files(unittest.TestCase):
-    def test_the_files_are_the_grammars_the_evaluation_set_and_the_license(self):
+    def test_the_files_are_the_grammars_with_their_readme_the_evaluation_set_and_the_license(
+        self,
+    ):
         # yaml/grammar/README.md: each closed grammar of the language is
-        # defined once, there. The evaluation set is the document that
-        # `make check-repository` runs through the engine.
+        # defined once, there, and the README states their file format and
+        # the shape notation of their vectors. The evaluation set is the
+        # document that `make check-repository` runs through the engine.
         grammars = sorted(
             path.relative_to(ROOT).as_posix()
             for path in (ROOT / "yaml/grammar").glob("*.yaml")
@@ -26,6 +29,7 @@ class Files(unittest.TestCase):
         self.assertEqual(
             archives.FILES,
             (
+                "yaml/grammar/README.md",
                 *grammars,
                 check_expression_conformance.DOCUMENT.as_posix(),
                 "LICENSE",
@@ -115,7 +119,7 @@ class Archives(unittest.TestCase):
 
         def extra(entries):
             yield from entries
-            info = zipfile.ZipInfo(f"{self.directory}/yaml/grammar/README.md")
+            info = zipfile.ZipInfo(f"{self.directory}/yaml/README.md")
             info.create_system = cli_archive.UNIX
             info.external_attr = archives.MODE << 16
             yield info, b"read me\n"
@@ -191,7 +195,7 @@ class Archives(unittest.TestCase):
             (code, output),
             (
                 0,
-                f"{path.name}: yaml/grammar/expression.yaml, "
+                f"{path.name}: yaml/grammar/README.md, yaml/grammar/expression.yaml, "
                 "yaml/grammar/string-template.yaml, "
                 "yaml/conformance/expressions.yaml, LICENSE, as committed\n",
             ),
