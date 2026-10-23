@@ -7,12 +7,13 @@
 //!
 //! - **Issues.** Each case of `diagnostic-parity` and `project-parity`, and
 //!   the contained panic of `parquet-containment`, writes its files and makes
-//!   its call: `check` or `run` of `spec.yaml`, given as that relative path,
-//!   or `check`, `run` or `submission` of a project. Every issue the document
-//!   holds is compared with the case's rows in report order, all twelve
-//!   columns of D28 (`public-contract.issue_columns`), and each issue object
-//!   has exactly those keys. A context is compared as the canonical JSON text
-//!   that the binary printed, so no reader chooses a number type.
+//!   its call, or each of its calls: `check` or `run` of `spec.yaml`, given as
+//!   that relative path, or `check`, `run` or `submission` of a project. Every
+//!   issue the document holds is compared with the case's rows in report
+//!   order, all twelve columns of D28 (`public-contract.issue_columns`), and
+//!   each issue object has exactly those keys. A context is compared as the
+//!   canonical JSON text that the binary printed, so no reader chooses a
+//!   number type.
 //! - **Run reports.** The command line sees a run's report in the file its
 //!   save writes (OUTPUT-10). `public-contract.value_level_report` declares
 //!   one, whose value-level rows are compared with the case's, all fourteen
@@ -338,9 +339,10 @@ fn each_diagnostic_parity_case_prints_the_issue_rows_both_hosts_return() {
 
 /// Each case of `project-parity` prints every issue row that both hosts
 /// return for the same call: a project check, a project run, or one
-/// specification or one submission of a project. A member's rows are its issues in the run; the
-/// command line runs no project function, so the cases that call one give
-/// its own rows.
+/// specification or one submission of a project. A case that makes several
+/// calls on its files lists each with its rows under `calls`. A member's rows
+/// are its issues in the run; the command line runs no project function, so
+/// the cases that call one give its own rows.
 #[test]
 fn each_project_parity_case_prints_the_issue_rows_both_hosts_return() {
     for case in family("project-parity")["cases"].as_array().unwrap() {
@@ -356,43 +358,56 @@ fn each_project_parity_case_prints_the_issue_rows_both_hosts_return() {
         {
             directory.write(file, contents.as_str().unwrap());
         }
-        let call = &case["call"];
-        let path = text(call, "path");
-        let arguments = match text(call, "operation") {
-            "project_check" => vec!["check", path],
-            "project_run" => match call["section"].as_str() {
-                Some(section) => vec!["run", path, "--section", section],
-                None => vec!["run", path],
-            },
-            "spec_run" => vec!["run", path, "--spec", text(call, "name")],
-            "submission" => vec![
-                "submission",
-                path,
-                "--section",
-                text(call, "section"),
-                "--created",
-                text(call, "created"),
-            ],
-            other => panic!("{name}: the command line has no call for the operation {other}"),
+        let calls = match case.get("calls") {
+            Some(calls) => calls
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|entry| (&entry["call"], &entry["issues"]))
+                .collect(),
+            None => vec![(&case["call"], &case["issues"])],
         };
-        let document = document(&directory, &arguments, name);
-        let mut printed = printed_rows(&document, name);
-        if let Some(member) = call["member"].as_str() {
-            printed = member_rows(&document, printed, member, name);
+        for (call, issues) in calls {
+            let path = text(call, "path");
+            let operation = text(call, "operation");
+            let arguments = match operation {
+                "project_check" => vec!["check", path],
+                "project_run" => match call["section"].as_str() {
+                    Some(section) => vec!["run", path, "--section", section],
+                    None => vec!["run", path],
+                },
+                "spec_run" => vec!["run", path, "--spec", text(call, "name")],
+                "submission" => vec![
+                    "submission",
+                    path,
+                    "--section",
+                    text(call, "section"),
+                    "--created",
+                    text(call, "created"),
+                ],
+                other => {
+                    panic!("{name}: the command line has no call for the operation {other}")
+                }
+            };
+            let document = document(&directory, &arguments, name);
+            let mut printed = printed_rows(&document, name);
+            if let Some(member) = call["member"].as_str() {
+                printed = member_rows(&document, printed, member, name);
+            }
+            let stand_ins = [
+                ("{root}", directory.spelled("")),
+                ("{version}", yamaa::VERSION.to_owned()),
+            ];
+            assert_eq!(
+                printed,
+                truth_rows(
+                    for_command_line(issues, "issues", name),
+                    &directory,
+                    &stand_ins
+                ),
+                "{name}: {operation}"
+            );
         }
-        let stand_ins = [
-            ("{root}", directory.spelled("")),
-            ("{version}", yamaa::VERSION.to_owned()),
-        ];
-        assert_eq!(
-            printed,
-            truth_rows(
-                for_command_line(&case["issues"], "issues", name),
-                &directory,
-                &stand_ins
-            ),
-            "{name}"
-        );
     }
 }
 

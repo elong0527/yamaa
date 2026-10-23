@@ -6654,6 +6654,91 @@
               "operand_route": null
             }
           ]
+        },
+        {
+          "name": "a_key_that_is_not_an_output_column",
+          "files": {
+            "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy:\n  id: PAR01\n  name: PAR01\n  description: Example study submitting its demographics\n  protocol_name: PAR-01\nsdtm:\n  specs:\n    - dm.yaml\n  standards:\n    - {name: SDTMIG, version: \"3.4\", status: Final}\n  define: define.xml\n",
+            "dm.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: DM\nkeys: [STUDYID, USUBJID, SUBJID]\ninput: {RAW: raw.csv}\noutput: {path: dm.csv, columns: [DOMAIN, STUDYID, USUBJID]}\ncolumns:\n  - {name: DOMAIN, type: str, label: Domain Abbreviation, derivation: \"'DM'\", submission: {core: Req, role: Identifier, length: 2, origins: [{type: Assigned, source: Sponsor}]}}\n  - {name: STUDYID, type: str, label: Study Identifier, derivation: RAW.STUDYID, submission: {core: Req, role: Identifier, length: 5, origins: [{type: Protocol, source: Sponsor}]}}\n  - {name: USUBJID, type: str, label: Unique Subject Identifier, derivation: RAW.USUBJID, submission: {core: Req, role: Identifier, length: 9, origins: [{type: Assigned, source: Sponsor}]}}\n  - {name: SUBJID, type: str, label: Subject Identifier for the Study, derivation: RAW.SUBJID}\nsubmission: {label: Demographics, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false}\n",
+            "raw.csv": "STUDYID,USUBJID,SUBJID\nPAR01,PAR01-941,941\nPAR01,PAR01-942,942\n"
+          },
+          "calls": [
+            {
+              "call": {
+                "operation": "project_check",
+                "path": "project.yaml"
+              },
+              "issues": [
+                {
+                  "severity": "error",
+                  "phase": "validation",
+                  "condition": "internal_column_in_keys",
+                  "rule": "OUTPUT-2",
+                  "spec_paths": [
+                    "keys[2]"
+                  ],
+                  "file": "dm.yaml",
+                  "line": 5,
+                  "column": 26,
+                  "message": "keys names SUBJID, which is not an output column",
+                  "context": "{\"column\":\"SUBJID\",\"entry\":\"{root}/dm.yaml\",\"source\":\"{root}/dm.yaml\"}",
+                  "source_span": null,
+                  "operand_route": null
+                }
+              ]
+            },
+            {
+              "call": {
+                "operation": "spec_run",
+                "path": "project.yaml",
+                "name": "DM"
+              },
+              "issues": [
+                {
+                  "severity": "error",
+                  "phase": "validation",
+                  "condition": "internal_column_in_keys",
+                  "rule": "OUTPUT-2",
+                  "spec_paths": [
+                    "keys[2]"
+                  ],
+                  "file": "dm.yaml",
+                  "line": 5,
+                  "column": 26,
+                  "message": "keys names SUBJID, which is not an output column",
+                  "context": "{\"column\":\"SUBJID\"}",
+                  "source_span": null,
+                  "operand_route": null
+                }
+              ]
+            },
+            {
+              "call": {
+                "operation": "submission",
+                "path": "project.yaml",
+                "section": "sdtm",
+                "created": "2026-09-11T00:00:00"
+              },
+              "issues": [
+                {
+                  "severity": "error",
+                  "phase": "validation",
+                  "condition": "internal_column_in_keys",
+                  "rule": "OUTPUT-2",
+                  "spec_paths": [
+                    "sdtm.specs[0].keys[2]"
+                  ],
+                  "file": "dm.yaml",
+                  "line": 5,
+                  "column": 26,
+                  "message": "keys names SUBJID, which is not an output column",
+                  "context": "{\"column\":\"SUBJID\"}",
+                  "source_span": null,
+                  "operand_route": null
+                }
+              ]
+            }
+          ]
         }
       ]
     },

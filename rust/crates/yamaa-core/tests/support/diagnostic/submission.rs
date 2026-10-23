@@ -387,12 +387,6 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             22,
         ),
         (
-            SubmissionKeyNotOutput,
-            "value_not_permitted",
-            "DEFINE-7",
-            23,
-        ),
-        (
             SubmissionColumnNotOutput,
             "submission_not_output_column",
             "SUB-1",
@@ -523,7 +517,6 @@ pub fn reached() -> BTreeSet<ConditionCode> {
                 *spec.at(&["submission", "label"]) =
                     Tree::text("An independent dataset label beyond forty characters");
             }
-            23 => *spec.at(&["keys"]) = Tree::list(vec![Tree::text("MISSING")]),
             24 => *spec.at(&["output", "columns"]) = Tree::list(vec![]),
             25 => *spec.at(&["submission", "class"]) = Tree::text("BASIC DATA STRUCTURE"),
             // Composition reads the canonical class of the `unique` shorthand.
@@ -639,6 +632,44 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             }
             assert_eq!(finding.context.len(), 5, "{:?}", finding.context);
         }
+    }
+    // OUTPUT-2: composition refuses a key that is not an output column as
+    // checking the specification does, at the key under its listing and
+    // naming the column: a declared column that `output.columns` leaves out
+    // as `internal_column_in_keys`, a name no column declares as
+    // `undeclared_column`. The internal column declares no submission
+    // metadata, which SUB-1 would refuse on a column that is not an output.
+    for (key, declared, condition, label) in [
+        (
+            "INTERNAL",
+            true,
+            "internal_column_in_keys",
+            "an internal key",
+        ),
+        ("MISSING", false, "undeclared_column", "an undeclared key"),
+    ] {
+        let mut spec = specification();
+        if declared {
+            let mut internal = column(key);
+            internal.remove(&["submission"]);
+            let Tree::List(columns) = spec.at(&["columns"]) else {
+                unreachable!("columns are a list")
+            };
+            columns.push(internal);
+        }
+        *spec.at(&["keys"]) = Tree::list(vec![Tree::text("VALUE"), Tree::text(key)]);
+        let findings = one(project(), spec, &empty).unwrap_err();
+        let [finding] = findings.as_slice() else {
+            panic!("{label} fails once: {findings:?}")
+        };
+        reached.insert(super::expect(
+            &super::Record::record(finding),
+            "validation",
+            condition,
+            Some("OUTPUT-2"),
+            &["sdtm.specs[0].keys[1]"],
+            vec![("column", super::text(key))],
+        ));
     }
     // A `not_missing` check that restates a column's resolved `mandatory` is
     // refused when the specification is prepared, before composition: a key
