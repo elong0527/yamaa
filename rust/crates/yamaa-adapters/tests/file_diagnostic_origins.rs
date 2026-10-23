@@ -1008,12 +1008,14 @@ mod file {
         //! Entry capture reads each `schema`-linked producing specification once,
         //! as metadata. No producer is compiled, executed or followed further.
         use crate::support::Edit as _;
-        use std::{collections::BTreeMap, fs};
+        use std::{collections::BTreeMap, fs, sync::Arc};
         use yamaa_adapters::{
             file_entry::{Error, RejectedEntry},
             file_preparation::{Error as DocumentError, FileSpecification, Rejected},
             file_resources::{Error as ResourceError, Resources},
             file_workflow::{self, SelectionError},
+            host_resources::{Failure, MemoryResolver, Operation, Reply, Request, Resolver},
+            project_application,
             resolved_artifact::model::{Location, ResourceRole},
             shipped_schema,
         };
@@ -1507,6 +1509,101 @@ mod file {
                 )])
             );
             assert_eq!(prepared.capture_reads(), 2);
+        }
+
+        /// A caller's resolver over a memory store, whose references are not
+        /// the files' locations. It refuses with `failure` the capture of
+        /// `stale` that holds a reference: the check of that file's snapshot.
+        struct Changing {
+            store: MemoryResolver,
+            stale: &'static str,
+            failure: Failure,
+        }
+        impl Resolver for Changing {
+            fn request(&self, request: Request<'_>) -> Result<Reply, Failure> {
+                if request.operation == Operation::Capture
+                    && request.written == self.stale
+                    && request.reference.is_some()
+                {
+                    return Err(self.failure);
+                }
+                self.store.request(request)
+            }
+        }
+
+        /// A file that changed or disappeared after it was read, found when
+        /// the entry's snapshots are verified before selection, fails with
+        /// its own condition at the field that declared it, the path as
+        /// written (FILE-10, FILE-7), through a caller's resolver whose
+        /// references are not the files' locations: the project file at
+        /// `environment` and the entry at `specification`.
+        #[test]
+        fn a_file_changed_before_the_entry_is_verified_fails_at_its_field() {
+            let changed = |field: &str, path: &str| {
+                yamaa_adapters::json!({
+                    "phase": "ingest",
+                    "condition": "resource_path_content_changed",
+                    "rule": "FILE-10",
+                    "spec_paths": [field],
+                    "context": {"path": path},
+                })
+            };
+            for (stale, failure, expected) in [
+                (
+                    "project.yaml",
+                    Failure::Changed,
+                    changed("environment", "project.yaml"),
+                ),
+                (
+                    "spec.yaml",
+                    Failure::Changed,
+                    changed("specification", "spec.yaml"),
+                ),
+                (
+                    "project.yaml",
+                    Failure::Missing,
+                    yamaa_adapters::json!({
+                        "phase": "validation",
+                        "condition": "resource_path_missing",
+                        "rule": "FILE-7",
+                        "spec_paths": ["environment"],
+                        "context": {"path": "project.yaml"},
+                    }),
+                ),
+            ] {
+                let store = MemoryResolver::default();
+                store.insert(
+                    "/",
+                    "spec.yaml",
+                    "spec:1",
+                    Arc::from(yaml("{RAW: raw.csv}", "RAW", "out.csv").as_bytes()),
+                );
+                store.insert(
+                    "/",
+                    "project.yaml",
+                    "project:1",
+                    Arc::from(&b"yamaa: \"1.0\"\ntype: project\n"[..]),
+                );
+                let Err(error) = file_workflow::select_with_resolver(
+                    yamaa_core::build::Request {
+                        specification: "spec.yaml",
+                        environment: Some("project.yaml"),
+                    },
+                    Some(Language::Python),
+                    Arc::new(Changing {
+                        store,
+                        stale,
+                        failure,
+                    }),
+                ) else {
+                    panic!("{stale} {failure:?}: the file was selected");
+                };
+                assert_eq!(
+                    crate::support::rows(&project_application::selection_failure(&error)),
+                    [expected],
+                    "{stale} {failure:?}"
+                );
+            }
         }
     }
     mod file_preparation {

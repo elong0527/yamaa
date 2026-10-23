@@ -149,10 +149,11 @@ pub(crate) fn capture(
         let links = file_preparation::capture_links(&mut resources, root, &mut origin)
             .map_err(Error::Document)?;
         // Complete admission and the whole input inspection precede
-        // selection: every metadata snapshot is verified unchanged.
-        resources
-            .verify_captured()
-            .map_err(|(identity, error)| Error::Snapshot { identity, error })?;
+        // selection: every metadata snapshot is verified unchanged, and one
+        // that changed or disappeared fails at the field that declared it.
+        resources.verify_held().map_err(|(identity, error)| {
+            changed(root, &written, &links, &environment, identity, error)
+        })?;
         Ok(links)
     })();
     match result {
@@ -174,6 +175,53 @@ pub(crate) fn capture(
                 resources,
             }))
         }
+    }
+}
+
+/// A held snapshot that no longer matches: a file that changed or disappeared
+/// fails with its own condition at the field that declared it, the path as
+/// written, when `entry` and what it holds declare it (FILE-10, FILE-11); the
+/// snapshot is named by its location, as the documents carry it, so this holds
+/// on every resolver. Any other failure stays the snapshot's own refusal.
+fn changed(
+    document: &PreparedDocument,
+    entry: &str,
+    links: &[LinkedSpecification],
+    environment: &OwnedEnvironment,
+    identity: String,
+    error: ResourceError,
+) -> Error {
+    use crate::changed_metadata as changed;
+    use yamaa_core::resource::ResourceFailure as R;
+    let held = changed::Held {
+        entry,
+        document,
+        links,
+        project: environment.project(),
+        inventory: environment.inventory_documents(),
+        environment: environment
+            .root_optional()
+            .zip(environment.project())
+            .zip(environment.written())
+            .map(|((root, project), written)| changed::Environment {
+                written,
+                host: environment.environment().host(),
+                root,
+                project,
+                environment_file: environment.environment_file(),
+                lock: environment.lock(),
+                captures: environment.captures(),
+            }),
+    };
+    let declared = crate::file_resources::resource_failure(&error)
+        .filter(|failure| matches!(failure, R::ContentChanged | R::Missing))
+        .and_then(|failure| changed::declaration(&held, &identity, failure));
+    match declared {
+        Some(diagnostic) => Error::Document(file_preparation::Error::ResourceFinding {
+            error,
+            diagnostic: Box::new(diagnostic),
+        }),
+        None => Error::Snapshot { identity, error },
     }
 }
 

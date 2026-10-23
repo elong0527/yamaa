@@ -219,6 +219,15 @@ impl OwnedEnvironment {
     pub(crate) fn inventory_captured(&self) -> bool {
         self.inventory_captured
     }
+    /// The project file path as preparation was given it.
+    pub(crate) fn written(&self) -> Option<&str> {
+        self.written.as_deref()
+    }
+    /// The specifications the project lists, captured for the submission
+    /// inventory in listing order.
+    pub(crate) fn inventory_documents(&self) -> &[crate::specification_source::PreparedDocument] {
+        &self.inventory_documents
+    }
     /// Keep the project file path preparation was given, so a later refusal
     /// can name the file as written.
     pub(crate) fn with_written(mut self, written: &str) -> Self {
