@@ -133,7 +133,7 @@ Every file declares one of four types in its `type` line:
 
 | Type | What one file holds |
 |---|---|
-| `spec` | One dataset: its inputs, keys, rows, columns, checks and output, as above. A specification may inherit from a `parent` layer, which is a `spec` file too. |
+| `spec` | One dataset: its inputs, keys, rows, columns, checks and output, as above. A specification may inherit from a `parent` layer and add reusable fragments under `include`, each a `spec` file too. |
 | `project` | A study: the specifications of each section (`sdtm`, `adam` or `send`), the codelists and function files they share, the lock of each host language, and the metadata define.xml needs. |
 | `codelists` | The codelists of one terminology source, such as a CDISC Controlled Terminology release or the sponsor's own lists. |
 | `function` | One project function: its parameters, return type and tests, and the callable that implements it in each host language, so R and Python share one contract and one set of tests. |

@@ -38,7 +38,7 @@ is resolved, and returns a table with one row per finding: the file's absolute
 path with forward slashes, the one-based line and column where the departure
 starts, the finding, its spec path and a message. Only
 [`partial_restatement`](#authoring-findings) also reads the layers a
-specification inherits.
+specification inherits and includes.
 
 | file | line | column | finding | spec_path | message |
 | --- | --- | --- | --- | --- | --- |
@@ -99,8 +99,8 @@ field written after one the schema declares later is reported as
 
 A specification's root reads in this order:
 
-- what the specification is (`yamaa`, `type`, `model`, `parent`, `clear`,
-  `domain`, `keys`);
+- what the specification is (`yamaa`, `type`, `model`, `parent`, `include`,
+  `clear`, `domain`, `keys`);
 - what it reads (`input`, `base`, `filter`);
 - what it writes (`output`);
 - how it derives its rows (`windows`, `intermediates`, `columns`, `rows`);
@@ -257,9 +257,12 @@ fails, such as `unmapped`, declares an answer when it is `null`, a flag's
 `missing` beside a declared `false_value` is required
 ([EXPR-8](../../rules/expressions.md#expr-8)), and an `absent` beside
 `require_match: true` conflicts with it
-([LOOKUP-24](../../rules/lookup.md#lookup-24)); none is reported. A file that
-declares `parent` is not read for restated defaults: a value a layer writes may
-replace one it inherits.
+([LOOKUP-24](../../rules/lookup.md#lookup-24)); none is reported. A layer is
+not read for restated defaults, since a value it writes may replace one it
+inherits. A layer is a file that declares `parent` or `include`, or a fragment
+that another file of the same check includes, which composes on whatever
+includes it. Check a fragment together with the files that include it, so
+that `fix` keeps the values it writes.
 
 **`clear:` removes an inherited value.** A layer that removes a value it
 inherits lists its spec path in `clear`; null never clears
@@ -369,7 +372,8 @@ the implicit join then uses it.
 **`missing_label`.** Every output column declares `label:`. A column named in
 `output.columns` and declared in the same file without a non-empty `label` is
 reported at its `columns` entry. A column not declared in the same file, and
-any file with a `parent`, is never reported: the label may come from an
+any layer, a file with a `parent` or an `include` or a fragment another file
+of the check includes, is never reported: the label may come from an
 inherited layer. Labels carry the reader-facing description a submission
 document is generated from.
 
@@ -381,8 +385,9 @@ current row's driver, a qualified `aggregate` over the input that declares no
 the input reads its records by its own `key`, and when every row is built from
 the input, each qualified read of it reads the driver. Validation admits such a
 key, so a shared parent layer may declare it for the layers that inherit it and
-suppress the finding there; a file that declares `parent` is not read, since
-its columns may come from the layer it inherits.
+suppress the finding there; a layer, a file that declares `parent` or
+`include` or a fragment another file of the check includes, is not read, since
+its columns may come from the layers it composes on.
 
 ```yaml
 input:
@@ -415,7 +420,7 @@ the filter.
 
 **`partial_restatement`.** A layer that writes a member it inherits merges
 with it, a mapping key by key, so an entry the layer leaves out of an
-inherited mapping comes back from its parent
+inherited mapping comes back from its parent or from a fragment it includes
 ([LAYER-6](../../rules/inheritance.md#layer-6),
 [LAYER-8](../../rules/inheritance.md#layer-8)). A layer that restates such a
 mapping, writing it empty or writing again an entry exactly as it inherits
@@ -448,9 +453,10 @@ the derivations this layer changes to keep the parent's. A named window is a
 keyed member, which `clear` never names, so each setting the layer leaves
 out is cleared by its own path, such as `windows.BYSUBJ.filter`. Either
 meaning may be intended, so `fix` makes neither rewrite. The check follows
-the file's `parent` chain through the same resolver and composes it as the
-engine does; a file whose layers cannot be read or composed is not read for
-this finding, and validation reports why.
+the file's `parent` chain and the fragments its layers include through the
+same resolver and composes them as the engine does; a file whose layers
+cannot be read or composed is not read for this finding, and validation
+reports why.
 
 ## Fixes
 
