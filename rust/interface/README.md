@@ -310,11 +310,15 @@ refuse each other cleanly:
    in request order.
 5. Otherwise the request is accepted.
 
-Each binding converts its host's request structurally: a Python `int` that is
+Each binding converts its host's request structurally, and no deeper than
+the request's own shape (the mapping, a field's list and that list's items),
+so deeper input reads as no field whatever its size. A Python `int` that is
 not a `bool`, an R integer and a whole R double are integers; an R atomic
 vector reads as its element where a value belongs and as a list where a list
-does; anything else, such as a float, a missing value or a key that is not
-text, is no field of a request.
+does; a key that is not text, or a name R cannot give as text, names no field,
+so the version is still read first and nothing else is read for another
+version; anything else, such as a float or a missing value, is no field of a
+request.
 
 | Request and native side | Outcome |
 | --- | --- |
@@ -326,13 +330,17 @@ text, is no field of a request.
 | An identifier twice, a zero, negative or oversized version, or a field of the wrong type | `malformed_request` |
 
 A refusal is a fault of the installation, not a finding about the user's
-files, so it is a typed error, not an issue: `import yamaa` raises
-`yamaa.InterfaceError`, a subclass of `ImportError`, and the R namespace does
-not load, its `.onLoad` signalling a `yamaa_interface_error` condition. Each
-carries the envelope's five fields, and its message is the template of its
-reason, declared in the `handshake` section and filled from the envelope, so
-a mismatch names both versions. Only a generated layer gives
-`missing_interface`, since no native side could. The messages are not frozen.
+files, so it is an error, not an issue. `import yamaa` raises
+`yamaa.InterfaceError`, a subclass of `ImportError` that carries the
+envelope's five fields. In R, `.interface_negotiate()` signals a
+`yamaa_interface_error` condition with the same fields, but `loadNamespace()`
+runs `.onLoad` through a hook that catches the error and stops with a plain
+one, so `library(yamaa)` refuses the load with the message alone, and the
+typed condition reaches only direct callers of `.interface_negotiate()`. The
+message is the template of the reason, declared in the `handshake` section and
+filled from the envelope, so a mismatch names both versions in both hosts.
+Only a generated layer gives `missing_interface`, since no native side could.
+The messages are not frozen.
 
 The first accepted negotiation opens the binding's gate, which stays open for
 the life of the process; a replaced native module starts closed, and a later
@@ -360,9 +368,39 @@ proves source authority, lock conformance or a successful build.
 ## Imported records and errors
 
 The diagnostic record comes from the `records` import, and each issues view
-projects its named fields into both hosts. It must retain the
-owner's code/phase/rule/severity mapping, diagnostic and path ordering,
-structured context, and absent-versus-present span/route rules. No host sorts,
+projects its named fields into both hosts, keeping the record's rules:
+
+- **Ordering.** Diagnostic order is authored order. A producer emits findings
+  in stage order, and every boundary collection keeps that order; records are
+  never sorted, grouped or deduplicated at the boundary. Within one record,
+  `spec_paths` keep their authored order, and `operand_route` the order the
+  core diagnostic recorded.
+- **Severity.** The vocabulary is closed: `error` and `warning`. Every
+  condition of the current registry is an `error`, which blocks the result it
+  belongs to; `warning` is reserved for later non-blocking findings, and
+  assigning one is a registry decision recorded with the condition, never a
+  host's choice.
+- **Geometry: absent is not zero.** `source_span` and `operand_route` are
+  optional because geometry is not always available, and absent means
+  unavailable, never a default. A present span with `start == end == 0` is a
+  real zero-width span at the first byte of the original expression, and a
+  present empty route is a recorded route with no steps; both differ from
+  absent, and no host collapses them.
+- **Context ownership.** A record owns its context outright: the core's owned
+  JSON tree, which a producer neither keeps nor changes after handing it
+  over. Its numbers keep their width end to end; nothing narrows them to
+  binary64 at the boundary.
+- **Extension.** Within one boundary version, a new registry condition, a
+  severity for such a new condition, or a new optional record field is
+  compatible, since a reader that ignores what it does not know is unaffected.
+  Renaming or removing a field, changing a field's type or meaning, reading
+  absent geometry as zero, reassigning an existing condition's severity,
+  changing the severity vocabulary or weakening the ordering above needs a new
+  boundary version.
+
+It must retain the owner's code/phase/rule/severity mapping, diagnostic and
+path ordering, structured context, and absent-versus-present span/route rules.
+No host sorts,
 deduplicates, caps or reconstructs findings from message strings. Context and
 record values own their text, arrays, objects and exact numbers. Integers wider
 than a host's ordinary numeric type retain their numeric identity through the

@@ -1202,8 +1202,9 @@ owns decoding behavior.
   them; the crates are not published.
 - Generate both hosts' binding declarations from
   `rust/interface/bindings.yaml` and compare them in the repository check
-  and the native qualification lane. The version and feature handshake
-  runtime waits for an engine that loads separately from the host facade.
+  and the native qualification lane. Both hosts run the version and feature
+  handshake of `yamaa-boundary` before any other native call (#3679); an
+  engine that loads separately from the host packages is later work (#2870).
 - The `yamaa` facade crate is the only supported Rust surface;
   `yamaa-adapters` and `yamaa-core` are internal and may change in any
   release.

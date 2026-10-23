@@ -23,7 +23,19 @@ class InterfaceError(ImportError):
         self.reason = outcome["reason"]
         self.missing_features = outcome["missing_features"]
 
+    def __reduce__(self):
+        """Pickle the refusal, from which the error is made again."""
+        outcome = {field: getattr(self, field) for field in _INTERFACE_FIELDS}
+        return type(self), (outcome,)
 
+
+_INTERFACE_FIELDS = (
+    "accepted",
+    "requested_version",
+    "supported_version",
+    "reason",
+    "missing_features",
+)
 _INTERFACE_REQUEST = {
     "version": 1,
     "required": ["structured_records", "arrow_c_stream", "plan_reuse"],

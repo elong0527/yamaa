@@ -9,7 +9,7 @@
 use crate::api_entry::answer;
 use crate::function_callback::text_at;
 use extendr_api::prelude::*;
-use yamaa_boundary::{EngineFacts, Gate, Outcome, Value};
+use yamaa_boundary::{EngineFacts, Gate, Outcome, Value, DEPTH};
 
 /// The gate, which the first accepted handshake opens.
 static GATE: Gate = Gate::new();
@@ -36,7 +36,7 @@ fn interface_handshake(request: Robj) -> List {
         let info = yamaa::info(yamaa::Host::R, None);
         let engine = EngineFacts::new(&info.features, yamaa::VERSION, &info.language_versions);
         let absent = |value: Option<u32>| value.map_or_else(|| NULL.into_robj(), version);
-        let record = match GATE.negotiate(&value(&request), &engine) {
+        let record = match GATE.negotiate(&value(&request, 0), &engine) {
             Outcome::Accepted(accepted) => list!(
                 accepted = true,
                 version = version(accepted.version),
@@ -57,27 +57,34 @@ fn interface_handshake(request: Robj) -> List {
     })
 }
 
-/// A request as the boundary reads it: a list with names is a mapping and
-/// one without a sequence, and an atomic vector is a vector of its elements.
-/// An integer or a whole, finite double is an integer, as R writes integers;
-/// text is read strictly, and `NA` text reads as "NA", which no identifier
-/// is; a logical, a missing number or any other object is no field of a
-/// request.
-fn value(object: &Robj) -> Value {
+/// A request at `depth` below its mapping, as the boundary reads it, never
+/// deeper than [`DEPTH`]. A list with names is the request's mapping, where a
+/// name R cannot give as text reads as the empty key, which names no field; a
+/// list without names above the items is a sequence; and an atomic vector, at
+/// any depth, is a vector of its elements. An integer or a whole, finite
+/// double is an integer, as R writes integers; text is read strictly, and
+/// `NA` text reads as "NA", which no identifier is. A logical, a missing
+/// number, a list with names below the request, a list among the items or
+/// any other object is no field of a request.
+fn value(object: &Robj, depth: usize) -> Value {
     match object.rtype() {
         Rtype::List => {
+            let names = object.get_attrib(names_symbol());
+            if depth >= DEPTH || (depth > 0 && names.is_some()) {
+                return Value::Other;
+            }
             let items: Vec<Value> = object
                 .as_list()
-                .map(|list| list.values().map(|item| value(&item)).collect())
+                .map(|list| list.values().map(|item| value(&item, depth + 1)).collect())
                 .unwrap_or_default();
-            match object.get_attrib(names_symbol()) {
+            match names {
                 None => Value::List(items),
-                Some(names) => (0..names.len())
-                    .map(|index| text_at(&names, index).ok())
-                    .collect::<Option<Vec<String>>>()
-                    .map_or(Value::Other, |names| {
-                        Value::Map(names.into_iter().zip(items).collect())
-                    }),
+                Some(names) => Value::Map(
+                    (0..names.len())
+                        .map(|index| text_at(&names, index).unwrap_or_default())
+                        .zip(items)
+                        .collect(),
+                ),
             }
         }
         Rtype::Integers => object.as_integer_slice().map_or(Value::Other, |values| {

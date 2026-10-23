@@ -193,7 +193,15 @@ def python_lines(definition):
         '        super().__init__(_interface_message(outcome), name="yamaa")',
         *(f'        self.{field} = outcome["{field}"]' for field in fields),
         "",
+        "    def __reduce__(self):",
+        '        """Pickle the refusal, from which the error is made again."""',
+        "        outcome = {field: getattr(self, field) for field in _INTERFACE_FIELDS}",
+        "        return type(self), (outcome,)",
         "",
+        "",
+        "_INTERFACE_FIELDS = (",
+        *(f'    "{field}",' for field in fields),
+        ")",
         "_INTERFACE_REQUEST = {",
         f'    "version": {version},',
         *_py_items("required", required, "    "),
@@ -315,7 +323,11 @@ def free_functions(paths, strip, block):
 
     `strip` blanks comments and literals and `block` returns a brace block's
     body (generate_bindings.py). Functions of one name in several modules
-    count as one.
+    count as one, which reaches the gate when any of them does; a call is
+    matched by name, not resolved. This check catches an export that forgets
+    the gate. The installed interface suites prove the rest at run time: they
+    enumerate every registered function of a native module loaded alone and
+    require each to refuse before negotiation.
     """
     functions = {}
     for path in paths:

@@ -59,6 +59,12 @@ pub const FORMATS: [(&str, &str); 4] = [
 /// The fields of a request, each exactly once.
 const FIELDS: [&str; 3] = ["version", "required", "optional"];
 
+/// How deep a request nests below its mapping: a field's list, then that
+/// list's items. A binding converts no deeper, so deeper input reads as
+/// [`Value::Other`] whatever its size, and the conversion never recurses
+/// past it.
+pub const DEPTH: usize = 2;
+
 /// A request as a host built it, in the shapes that the check order tells
 /// apart. Each binding converts its host's object structurally; nothing here
 /// knows a host type.
@@ -75,12 +81,14 @@ pub enum Value {
     /// An R atomic vector, which reads as its element where it has one, and
     /// as a sequence of any length.
     Vector(Vec<Value>),
-    /// A mapping with text keys, in order: a Python dict, or an R list with
-    /// names.
+    /// The request's mapping, in order: a Python dict, or an R list with
+    /// names. A key that is not text, or a name R cannot give as text, reads
+    /// as the empty key, which names no field, so the check order still reads
+    /// the version first.
     Map(Vec<(String, Value)>),
     /// Anything else, which no field of a request holds: a boolean, a float,
-    /// a missing value, an integer beyond 64 bits, or a mapping with a key
-    /// that is not text.
+    /// a missing value, an integer beyond 64 bits, or anything nested deeper
+    /// than [`DEPTH`].
     Other,
 }
 
@@ -370,7 +378,7 @@ impl fmt::Display for Closed {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(
             "yamaa's native module has not negotiated its interface: load it \
-             through the yamaa package, which negotiates before any other call",
+             through the yamaa package, which negotiates first, or reinstall yamaa",
         )
     }
 }

@@ -84,42 +84,55 @@ class ArchitectureTests(unittest.TestCase):
         )
 
     def test_each_layer_depends_only_on_the_layers_below_it(self):
-        cases = {
-            "yamaa-adapters": (
+        cases = [
+            (
+                "yamaa-adapters",
                 '\n[build-dependencies]\nyamaa = { path = "../yamaa" }\n',
                 "[build-dependencies] yamaa-adapters depends on yamaa, but the "
                 "adapters depend on core alone",
             ),
-            "yamaa": (
+            (
+                "yamaa",
                 '\n[dev-dependencies]\nyamaa-cli = { path = "../yamaa-cli" }\n',
                 "[dev-dependencies] yamaa depends on yamaa-cli, but the facade "
                 "depends on the adapters and core alone",
             ),
-            "yamaa-boundary": (
+            (
+                "yamaa-boundary",
                 '\n[dev-dependencies]\nyamaa = { path = "../yamaa" }\n',
                 "[dev-dependencies] yamaa-boundary depends on yamaa, but the "
                 "boundary depends on nothing else in the workspace",
             ),
-            "yamaa-python": (
+            (
+                "yamaa-python",
                 '\n[target."cfg(unix)".dependencies]\n'
                 'yamaa-core = { path = "../yamaa-core" }\n',
                 "[target.cfg(unix).dependencies] yamaa-python depends on "
-                "yamaa-core, but a host depends on the facade and the boundary alone",
+                "yamaa-core, but a host binding depends on the facade and the "
+                "boundary alone",
             ),
-            "yamaa-r": (
+            (
+                "yamaa-r",
                 "\n[dev_dependencies]\n"
                 'engine = { package = "yamaa-adapters", path = "../yamaa-adapters" }\n',
                 "[dev_dependencies] yamaa-r depends on yamaa-adapters, but a host "
-                "depends on the facade and the boundary alone",
+                "binding depends on the facade and the boundary alone",
             ),
-            "yamaa-cli": (
+            (
+                "yamaa-cli",
                 '\n[dev-dependencies]\nyamaa-r = { path = "../yamaa-r" }\n',
                 "[dev-dependencies] yamaa-cli depends on yamaa-r, but a host "
-                "depends on the facade and the boundary alone",
+                "depends on the facade alone",
             ),
-        }
-        for crate, (table, message) in cases.items():
-            with self.subTest(crate=crate):
+            (
+                "yamaa-cli",
+                '\n[dependencies.yamaa-boundary]\npath = "../yamaa-boundary"\n',
+                "[dependencies] yamaa-cli depends on yamaa-boundary, but a host "
+                "depends on the facade alone",
+            ),
+        ]
+        for crate, table, message in cases:
+            with self.subTest(crate=crate, message=message):
                 path = f"rust/crates/{crate}/Cargo.toml"
                 original = (self.root / path).read_text(encoding="utf-8")
                 self.append(path, table)
@@ -141,8 +154,8 @@ class ArchitectureTests(unittest.TestCase):
         path = "rust/crates/yamaa-python/Cargo.toml"
         original = (self.root / path).read_text(encoding="utf-8")
         refusal = (
-            "{table} yamaa-python depends on {package}, but a host depends on the "
-            "facade and the boundary alone (#3030 section 2.10)"
+            "{table} yamaa-python depends on {package}, but a host binding depends "
+            "on the facade and the boundary alone (#3030 section 2.10)"
         )
         cases = {
             "engine = { workspace = true }\n": refusal.format(

@@ -74,9 +74,15 @@ check_interface <- function() {
   cat("the load negotiates the generated request\n")
 
   # Requests that only R builds: an NA is no version, a whole double is an
-  # integer as R writes one, a character vector is a list of identifiers,
-  # and a list with names may repeat one.
+  # integer as R writes one, a character vector is a list of identifiers, a
+  # list with names may repeat one, a name R cannot give as text names no
+  # field but leaves the version to be read first, and nothing deeper than a
+  # request's own shape is read.
   required <- fixture_strings(truth$request$required)
+  unreadable <- list(version = version + 1L, name = list())
+  names(unreadable)[[2L]] <- rawToChar(as.raw(c(0x61, 0xff)))
+  deep <- list()
+  for (index in seq_len(100000L)) deep <- list(deep)
   plain <- outcome_of(crafted("every required identifier and no optional one")$outcome)
   one <- plain
   one$enabled <- "structured_records"
@@ -95,7 +101,12 @@ check_interface <- function() {
       outcome = one),
     list(case = "a version given twice is malformed",
       request = list(version = version, version = version, required = required, optional = character()),
-      outcome = refusal(NULL, version, "malformed_request")))
+      outcome = refusal(NULL, version, "malformed_request")),
+    list(case = "another version with a name R cannot give as text is a mismatch",
+      request = unreadable, outcome = refusal(version + 1L, version, "version_mismatch")),
+    list(case = "a list nested a hundred thousand deep is malformed",
+      request = list(version = version, required = deep, optional = character()),
+      outcome = refusal(version, version, "malformed_request")))
   shared <- lapply(truth$cases, function(case) {
     case <- resolved(case)
     list(case = case$case, request = case$request, outcome = outcome_of(case$outcome))
