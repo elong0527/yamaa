@@ -409,7 +409,8 @@
           ],
           "context": {
             "left_type": "int",
-            "right_type": "str"
+            "right_type": "str",
+            "actual": "str"
           },
           "operand_route": []
         }
@@ -450,7 +451,8 @@
           ],
           "context": {
             "left_type": "int",
-            "right_type": "str"
+            "right_type": "str",
+            "actual": "str"
           },
           "operand_route": []
         }

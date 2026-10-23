@@ -273,6 +273,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
     let option = Error::Option {
         option: "max_xml_depth",
         minimum: 8,
+        value: 7,
     };
     let diagnostic = OdmReadFinding {
         refusal: &option,
@@ -288,11 +289,14 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
     assert_eq!(diagnostic.spec_paths, ["max_xml_depth"]);
     assert_eq!(
         diagnostic.context,
-        BTreeMap::from([("minimum".to_owned(), V::from(8_u64))])
+        BTreeMap::from([
+            ("minimum".to_owned(), V::from(8_u64)),
+            ("value".to_owned(), V::from(7_u64)),
+        ])
     );
     assert_eq!(
         diagnostic.message(),
-        "max_xml_depth has a value that is not permitted"
+        "max_xml_depth has the value 7, which is not permitted"
     );
     reached.insert(rendered(&diagnostic));
 

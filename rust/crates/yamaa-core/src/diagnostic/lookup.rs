@@ -163,8 +163,13 @@ pub(crate) fn selection_unpaired(
 
 /// `order_by` or `keep` beside a nearest selection, which replaces them
 /// (LOOKUP-26): each field written, then `nearest`, in specification order.
-pub(crate) fn nearest_beside_selection(paths: Vec<String>, owner: Owner<'_>) -> Diagnostic {
-    let mut context = Context::new();
+/// `construct` is the first field written, which its message names.
+pub(crate) fn nearest_beside_selection(
+    paths: Vec<String>,
+    owner: Owner<'_>,
+    construct: &str,
+) -> Diagnostic {
+    let mut context: Context = [("construct".into(), text(construct))].into();
     owner.add(&mut context);
     finding(C::LookupNearestSelection, paths, context)
 }
@@ -216,13 +221,15 @@ pub(crate) fn nearest_reference_type(
     finding(C::LookupNearestReferenceType, vec![path.into()], context)
 }
 
-/// `require_match: true` beside a declared absence value (LOOKUP-24).
+/// `require_match: true` beside a declared absence value (LOOKUP-24), naming
+/// the dataset the lookup reads.
 pub(crate) fn absence_conflict(
     answer: String,
     require_match: String,
     owner: Owner<'_>,
+    dataset: &str,
 ) -> Diagnostic {
-    let mut context = Context::new();
+    let mut context: Context = [("dataset".into(), text(dataset))].into();
     owner.add(&mut context);
     finding(
         C::LookupAbsenceConflict,

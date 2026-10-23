@@ -290,8 +290,8 @@ select step of a named intermediate ([LOOKUP-25](#lookup-25)) and replaces
 the ordered selection of [LOOKUP-10](#lookup-10): an `order_by` or a `keep`
 written beside it, an `order_by` with no term included, fails validation
 before any input is read as `prohibited_construct`, naming each of them and
-then `nearest`, in that order, with the intermediate's id as `intermediate`.
-A row driver declares no selection ([ROW-2](rows.md#row-2)), and a
+then `nearest`, in that order, with the intermediate's id as `intermediate`
+and the first of them as `construct`. A row driver declares no selection ([ROW-2](rows.md#row-2)), and a
 structured `source:` binding has no `nearest`.
 
 `source` names a field of the lookup's relation, written bare: a stored field

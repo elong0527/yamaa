@@ -810,7 +810,8 @@ class PublicDomains(unittest.TestCase):
                 "condition": "incompatible_input_type",
                 "rule": "FORMULA-5",
                 "spec_paths": ["intermediates.LOOK.filter"],
-                "context": {"left_type": "int", "right_type": "str"},
+                # The right operand's type is the one not accepted (FORMULA-5).
+                "context": {"actual": "str", "left_type": "int", "right_type": "str"},
             }
         ]
 
@@ -1886,7 +1887,20 @@ columns:
                 case = root / name
                 shutil.copytree(ROOT / "text-template-cases" / directories[name], case)
                 result = yamaa.spec(case / "spec.yaml").run()
-                self.assertEqual(issues(result), value.get("findings", []), name)
+                # `{entry}` stands for the specification's absolute path as
+                # the engine resolves it, with forward slashes.
+                resolved = (case / "spec.yaml").resolve().as_posix()
+                expected = [
+                    {
+                        **finding,
+                        "context": {
+                            key: resolved if item == "{entry}" else item
+                            for key, item in finding["context"].items()
+                        },
+                    }
+                    for finding in value.get("findings", [])
+                ]
+                self.assertEqual(issues(result), expected, name)
                 observations = result._native.observations()
                 if observations is not None and "handler_counts" in value:
                     self.assertEqual(

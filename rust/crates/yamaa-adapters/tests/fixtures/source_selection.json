@@ -747,7 +747,8 @@
             "columns.VALUE.derivation.source.filter"
           ],
           "context": {
-            "identifier": "BASE"
+            "identifier": "BASE",
+            "construct": "filter"
           }
         }
       ],
@@ -760,7 +761,8 @@
             "columns.VALUE.derivation.source.filter"
           ],
           "context": {
-            "identifier": "BASE"
+            "identifier": "BASE",
+            "construct": "filter"
           }
         }
       ],

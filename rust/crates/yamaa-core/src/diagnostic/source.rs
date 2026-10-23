@@ -162,8 +162,10 @@ impl SourceFinding<'_> {
                 }
                 format!("input.{dataset}.path")
             }
+            // The undeclared field is the identifier the input's types write.
             Self::UnknownField { field, .. } => {
                 context.insert("field".into(), text(field));
+                context.insert("identifier".into(), text(field));
                 format!("input.{dataset}.types.{field}")
             }
             Self::FieldParse {

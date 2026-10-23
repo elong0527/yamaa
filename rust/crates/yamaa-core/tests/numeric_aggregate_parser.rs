@@ -155,7 +155,13 @@ mod numeric {
             }
             let long = format!("SUM({})", "9".repeat(5000));
             for text in ["SUM(0009223372036854775808)", long.as_str()] {
-                assert_eq!(failure(text), (4, 4, Failure::IntegerOverflow), "{text}");
+                // The literal as written, between the parentheses.
+                let literal = text[4..text.len() - 1].to_string();
+                assert_eq!(
+                    failure(text),
+                    (4, 4, Failure::IntegerOverflow { literal }),
+                    "{text}"
+                );
             }
             assert_eq!(failure("SUM(9223372036854775808").2, Failure::Syntax);
         }
@@ -313,7 +319,7 @@ mod numeric {
                     "columns.RESULT"
                 ),
                 Err(CompileError::Invalid {
-                    failure: Failure::IntegerOverflow,
+                    failure: Failure::IntegerOverflow { .. },
                     ..
                 })
             ));
@@ -463,7 +469,12 @@ mod numeric {
                 else {
                     panic!("an overflowing literal must be refused: {text}")
                 };
-                assert_eq!(failure, Failure::IntegerOverflow);
+                assert_eq!(
+                    failure,
+                    Failure::IntegerOverflow {
+                        literal: digits.clone()
+                    }
+                );
                 assert!(text[position.byte..].starts_with(&digits));
             }
             let Err(CompileError::Invalid { failure, .. }) =
@@ -847,7 +858,9 @@ mod numeric {
                             byte: 0,
                             character: 0
                         },
-                        Failure::IntegerOverflow
+                        Failure::IntegerOverflow {
+                            literal: text.into()
+                        }
                     )
                 );
             }
@@ -1773,9 +1786,10 @@ mod numeric {
                     ..
                 })
             ));
-            for text in [
-                "FALSE AND X = 9223372036854775808",
-                "X = -9223372036854775809",
+            // A sign belongs to the literal it is written on.
+            for (text, literal) in [
+                ("FALSE AND X = 9223372036854775808", "9223372036854775808"),
+                ("X = -9223372036854775809", "-9223372036854775809"),
             ] {
                 let Err(CompileError::Invalid {
                     failure, position, ..
@@ -1783,7 +1797,13 @@ mod numeric {
                 else {
                     panic!("expected literal rejection")
                 };
-                assert_eq!(failure, Failure::IntegerOverflow);
+                assert_eq!(
+                    failure,
+                    Failure::IntegerOverflow {
+                        literal: literal.into()
+                    },
+                    "{text}"
+                );
                 assert_eq!(
                     position.character,
                     text.find("9223372036854775808")
@@ -1820,12 +1840,19 @@ mod numeric {
             ] {
                 predicate(expression).unwrap();
             }
-            for expression in [
-                "X = 9223372036854775808",
-                "X = -9223372036854775809",
-                "FALSE AND X IN (1, +9223372036854775808)",
-                "'\u{1f600}' = -9223372036854775809",
-                "X BETWEEN 0 AND 9999999999999999999999999999999",
+            // Each literal as written, its sign included.
+            for (expression, literal) in [
+                ("X = 9223372036854775808", "9223372036854775808"),
+                ("X = -9223372036854775809", "-9223372036854775809"),
+                (
+                    "FALSE AND X IN (1, +9223372036854775808)",
+                    "+9223372036854775808",
+                ),
+                ("'\u{1f600}' = -9223372036854775809", "-9223372036854775809"),
+                (
+                    "X BETWEEN 0 AND 9999999999999999999999999999999",
+                    "9999999999999999999999999999999",
+                ),
             ] {
                 let Err(CompileError::Invalid {
                     failure, position, ..
@@ -1833,7 +1860,13 @@ mod numeric {
                 else {
                     panic!("overflowing literal admitted: {expression}")
                 };
-                assert_eq!(failure, Failure::IntegerOverflow);
+                assert_eq!(
+                    failure,
+                    Failure::IntegerOverflow {
+                        literal: literal.into()
+                    },
+                    "{expression}"
+                );
                 let suffix = &expression[position.byte..];
                 assert!(
                     suffix.starts_with("9223372036854775808")

@@ -50,7 +50,12 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             "NOT (FLAG = 1)",
             "incompatible_input_type",
             "FORMULA-5",
-            vec![("left_type", text("bool")), ("right_type", text("int"))],
+            // The right operand's type is the one not accepted beside the left.
+            vec![
+                ("left_type", text("bool")),
+                ("right_type", text("int")),
+                ("actual", text("int")),
+            ],
             vec!["Child"],
         ),
         (
@@ -71,7 +76,10 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             "TEXT LIKE PATTERN ESCAPE '!'",
             "invalid_expression",
             "FORMULA-7",
-            vec![("reason", text("LIKE pattern has a dangling escape"))],
+            vec![
+                ("expr", text("TEXT LIKE PATTERN ESCAPE '!'")),
+                ("reason", text("LIKE pattern has a dangling escape")),
+            ],
             vec![],
         ),
     ];

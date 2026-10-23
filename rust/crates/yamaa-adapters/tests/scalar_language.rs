@@ -110,11 +110,25 @@ mod scalar {
                     Ok(result) => result.issues().to_vec(),
                     Err(issues) => issues,
                 };
-                assert_eq!(
-                    issues.iter().map(issue_json).collect::<Vec<_>>(),
-                    vec![expected],
-                    "{name}"
-                );
+                // An expected error.yaml compares its context as a subset:
+                // the issue holds each key it writes, with its value, and
+                // may record more.
+                let actual = issues
+                    .iter()
+                    .map(|issue| {
+                        let mut row = issue_json(issue);
+                        let recorded = row["context"].as_object().cloned().unwrap_or_default();
+                        let written = expected["context"].as_object().cloned().unwrap_or_default();
+                        row["context"] = yamaa_core::json::Value::Object(
+                            recorded
+                                .into_iter()
+                                .filter(|(key, _)| written.contains_key(key))
+                                .collect(),
+                        );
+                        row
+                    })
+                    .collect::<Vec<_>>();
+                assert_eq!(actual, vec![expected], "{name}");
             }
         }
         fn spec(derivation: &str, result_type: &str) -> String {

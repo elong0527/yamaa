@@ -126,7 +126,7 @@ fn refusals_carry_their_registered_issue() {
     let failure = Failure::from_error(Action::Read("edc/odm.xml"), &error);
     assert_eq!(
         failure.message,
-        "cannot read edc/odm.xml: max_xml_depth has a value that is not permitted \
+        "cannot read edc/odm.xml: max_xml_depth has the value 7, which is not permitted \
          [value_not_permitted, ODM-1]"
     );
     let option = refusal(Err(error));
@@ -135,6 +135,7 @@ fn refusals_carry_their_registered_issue() {
         ("validation", &["max_xml_depth".to_owned()][..])
     );
     assert_eq!(option.context.get("minimum"), Some(&ContextValue::Int(8)));
+    assert_eq!(option.context.get("value"), Some(&ContextValue::Int(7)));
 
     let options = OdmOptions::new().with_archive_member("odm.xml");
     let member = refusal(read_odm(&file.path, &options));

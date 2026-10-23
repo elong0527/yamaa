@@ -53,7 +53,11 @@ fn diagnostic(column: &str, finding: &Finding<'_>) -> PreflightFinding {
         Finding::DuplicateId { id } => (
             C::SubmissionValueDuplicateId,
             vec![format!("{}.id", values::path(column, id))],
-            vec![("column", text(column)), ("entry", text(id))],
+            vec![
+                ("column", text(column)),
+                ("entry", text(id)),
+                ("identifier", text(id)),
+            ],
         ),
         Finding::Where {
             id,
@@ -74,12 +78,16 @@ fn diagnostic(column: &str, finding: &Finding<'_>) -> PreflightFinding {
             if let Some(comparator) = fault.comparator() {
                 context.push(("comparator", text(comparator)));
             }
+            // A clause that names no column has no where column.
             let path = match where_column {
                 Some(where_column) => {
                     context.push(("where_column", text(where_column)));
                     format!("{}.where.{where_column}", values::path(column, id))
                 }
-                None => format!("{}.where", values::path(column, id)),
+                None => {
+                    context.push(("where_column", V::Null));
+                    format!("{}.where", values::path(column, id))
+                }
             };
             (C::SubmissionValueWhereInvalid, vec![path], context)
         }

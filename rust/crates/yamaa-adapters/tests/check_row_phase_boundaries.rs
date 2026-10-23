@@ -187,7 +187,7 @@ fn an_aggregate_in_a_case_result_is_not_row_local_in_either_spelling() {
             "condition": "duplicate_derivation",
             "rule": "SPEC-6",
             "spec_paths": [format!("columns.{column}.derivation")],
-            "context": {"column": column, "rows": ["dosed"], "not_row_local": why}
+            "context": {"column": column, "identifier": column, "rows": ["dosed"], "not_row_local": why}
         })
     };
     let boundary = |path: &str| {

@@ -142,6 +142,7 @@ pub fn flag_condition_diagnostic<E>(
         Condition::IncompatiblePair { left, right } => {
             context.insert("left_type".into(), text(kind(*left)));
             context.insert("right_type".into(), text(kind(*right)));
+            context.insert("actual".into(), text(kind(*right)));
             C::PredicateInputType
         }
         Condition::ExpectedText { actual } | Condition::ContainsExpectedText { actual } => {
@@ -150,6 +151,7 @@ pub fn flag_condition_diagnostic<E>(
             C::PredicateInputType
         }
         Condition::DanglingEscape => {
+            context.insert("expr".into(), text(&error.expression));
             context.insert("reason".into(), text("LIKE pattern has a dangling escape"));
             C::PredicateDanglingEscape
         }

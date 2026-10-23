@@ -374,6 +374,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         [
             ("field", C::Text("added".into())),
             ("class", C::Text("root_class".into())),
+            ("identifier", C::Text("added".into())),
             ("since", C::Text("1.1".into())),
         ]
     );

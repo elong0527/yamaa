@@ -63,7 +63,10 @@ impl OutputFinding {
             Self::DuplicateColumn { position, name } => (
                 C::OutputDuplicateColumn,
                 format!("output.columns[{position}]"),
-                vec![("column", V::String(name.clone()))],
+                vec![
+                    ("column", V::String(name.clone())),
+                    ("identifier", V::String(name.clone())),
+                ],
             ),
             Self::UndeclaredColumn { position, name } => (
                 C::OutputUndeclaredColumn,
