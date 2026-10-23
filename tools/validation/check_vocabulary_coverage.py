@@ -1,7 +1,7 @@
 """Require authored failure coverage beside benchmark and shared fixtures.
 
-Every expression registered in yaml/v1/schema_expression_*.yaml and every
-verification registered in yaml/v1/schema_verification.yaml, the 1.0 schema
+Every expression registered in yaml/schema_expression_*.yaml and every
+verification registered in yaml/schema_verification.yaml, the 1.0 schema
 the corpus is written in, must name negative examples or shared installed
 refusal cases. A benchmark entry must point at real negative examples:
 each directory exists, carries expected/error.yaml, and either the error
@@ -21,7 +21,7 @@ from tools.paths import ROOT
 
 REPO = ROOT
 EXAMPLES = REPO / "benchmarks"
-SCHEMAS = REPO / "yaml" / "v1"
+SCHEMAS = REPO / "yaml"
 SHARED = REPO / "rust/tests/host-fixtures/cases.json"
 
 

@@ -166,11 +166,11 @@ mod project {
         /// A build no host can run is refused at the first derivation, in
         /// authored order, that calls a project function the build runs
         /// (#3030 D221). Authored order is the order a formatted file writes
-        /// derivations in (yaml/v1): the intermediates', then the columns',
-        /// then the row templates', each in declaration order and named by
-        /// its derivation however deep the call sits in it. A column's
-        /// derivation that every row template replaces calls nothing the
-        /// build runs.
+        /// derivations in (yaml/schema_spec.yaml): the intermediates', then
+        /// the columns', then the row templates', each in declaration order
+        /// and named by its derivation however deep the call sits in it. A
+        /// column's derivation that every row template replaces calls nothing
+        /// the build runs.
         #[test]
         fn the_first_calling_derivation_is_the_first_whose_call_the_build_runs() {
             let seven = || Tree::Scalar(N::Integer("7".into()));

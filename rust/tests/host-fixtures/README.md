@@ -151,7 +151,7 @@ compiled core version, its interpreter's version, and the platform its
 interpreter reports.
 
 `schema` pairs the installed Python and R `schema()` suites (#3030 D149). Its
-facts were read by hand from the JSON Schemas committed in `yaml/v1/json/`,
+facts were read by hand from the JSON Schemas committed in `yaml/json/`,
 and its refusal text was written from D39's prefix and the template that
 `yaml/conditions.yaml` holds for `unexpected_file_type`. The suites check that
 each schema is one ASCII line whose top-level keys come in key order, as

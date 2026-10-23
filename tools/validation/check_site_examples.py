@@ -44,9 +44,8 @@ PAGES = (
     "R/yamaa/README.md",
 )
 FORMS = ".github/ISSUE_TEMPLATE/*.yml"
-# Where the JSON Schemas are committed. P2-13e (#3449) moves yaml/v1/ up into
-# yaml/ and updates this one path.
-JSON_SCHEMAS = Path("yaml/v1/json")
+# Where the JSON Schemas are committed.
+JSON_SCHEMAS = Path("yaml/json")
 SCHEMA_SUFFIX = ".schema.json"
 FRAGMENT = "# fragment"
 # Off until #3451 (P2-14) takes the last 0.5 example off the pages.

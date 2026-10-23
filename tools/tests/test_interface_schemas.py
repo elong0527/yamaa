@@ -828,7 +828,7 @@ class Manifests(Temporary):
         )
         (repo.root / SCHEMA).unlink()
         with self.assertRaisesRegex(
-            ManifestError, "yaml/v1/json: no JSON Schema in the working tree"
+            ManifestError, "yaml/json: no JSON Schema in the working tree"
         ):
             repo.changes()
         save_json(repo.root, SCHEMA, DOCUMENT)

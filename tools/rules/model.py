@@ -24,9 +24,8 @@ INFORMATIVE = frozenset({"reference/glossary.md"})
 # Rendered from rules/ and yaml/ on every docs build; never committed.
 RULE_INDEX = "reference/rule-index.md"
 SCHEMA_FIELDS = "reference/schema-fields.md"
-SCHEMA_FIELDS_V1 = "reference/schema-fields-v1.md"
 RULES_SUMMARY = "reference/rules-summary.md"
-GENERATED_PAGES = (RULE_INDEX, SCHEMA_FIELDS, SCHEMA_FIELDS_V1, RULES_SUMMARY)
+GENERATED_PAGES = (RULE_INDEX, SCHEMA_FIELDS, RULES_SUMMARY)
 # Directories that hold build output, environments or caches, never sources.
 SKIPPED_DIRECTORIES = frozenset(
     {

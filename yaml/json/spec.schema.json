@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "yamaa 1.0 spec file",
-  "description": "One file of the 1.0 spec type. A specification file may be one layer of an inheritance chain: the header is required in every layer, a root field it writes is complete there, and inside a member of input, windows, intermediates, columns or rows requiredness waits for the composed specification, which $defs/root_class checks (LAYER-4). Each field carries its kind as x-yamaa-kind and its schema-notation type as x-yamaa-type. Generated from yaml/v1/ by tools/packaging/generate_json_schema.py.",
+  "description": "One file of the 1.0 spec type. A specification file may be one layer of an inheritance chain: the header is required in every layer, a root field it writes is complete there, and inside a member of input, windows, intermediates, columns or rows requiredness waits for the composed specification, which $defs/root_class checks (LAYER-4). Each field carries its kind as x-yamaa-kind and its schema-notation type as x-yamaa-type. Generated from yaml/ by tools/packaging/generate_json_schema.py.",
   "$ref": "#/$defs/layer",
   "$defs": {
     "aggregate_class": {

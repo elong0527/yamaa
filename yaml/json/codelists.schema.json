@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "yamaa 1.0 codelists file",
-  "description": "One file of the 1.0 codelists type. Each field carries its kind as x-yamaa-kind and its schema-notation type as x-yamaa-type. Generated from yaml/v1/ by tools/packaging/generate_json_schema.py.",
+  "description": "One file of the 1.0 codelists type. Each field carries its kind as x-yamaa-kind and its schema-notation type as x-yamaa-type. Generated from yaml/ by tools/packaging/generate_json_schema.py.",
   "$ref": "#/$defs/codelist_file_class",
   "$defs": {
     "codelist_class": {

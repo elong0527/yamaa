@@ -1,5 +1,5 @@
 #![cfg(feature = "yaml")]
-//! The 1.0 schema files in `yaml/v1/`, read with the engine's schema model.
+//! The 1.0 schema files in `yaml/`, read with the engine's schema model.
 //!
 //! The package embeds the closure of each 1.0 file type, and the engine's
 //! bundle rules accept the notation the 1.0 files are written in, `kind`

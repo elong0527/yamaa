@@ -2,8 +2,8 @@
 
 The pages are views of ``rules/`` and ``yaml/`` rendered on every docs build;
 they add no semantics. Their relative links resolve from
-``rules/reference/`` and become repository links on the site. The 0.5 schema
-fields page reads ``yaml/schema*.yaml`` and the 1.0 page ``yaml/v1/``.
+``rules/reference/`` and become repository links on the site. The schema
+fields page reads the schema files, ``yaml/schema*.yaml``.
 """
 
 import argparse
@@ -16,7 +16,6 @@ from tools.rules.model import (
     RULE_INDEX,
     RULES_SUMMARY,
     SCHEMA_FIELDS,
-    SCHEMA_FIELDS_V1,
     edit_lines,
     load,
     markdown_links,
@@ -25,17 +24,12 @@ from tools.validation.repository_schema import (
     POINTER,
     SchemaSourceError,
     description_rules,
-    load_schema,
     schema_descriptions,
 )
 from tools.validation.schema_bundle import Bundle
 
 PAGE_DIRECTORY = posixpath.dirname(RULE_INDEX)
 GENERATED_MARK = "<!-- generated: generate_rule_reference.py -->"
-# A link between two generated pages names the site page: a relative link on
-# a generated page becomes a repository link, and generated pages are not
-# committed.
-SCHEMA_FIELDS_SITE = "https://elong0527.github.io/yamaa/reference/schema-fields/"
 
 
 def descriptors(node, parts=(), classes=None, active=()):
@@ -115,76 +109,16 @@ def contract_cell(rules, source, value):
 
 
 def schema_fields(root, rules):
+    """The schema files: each field's shape, kind and default."""
     lines = [
         "# Schema fields",
         "",
         GENERATED_MARK,
         "",
-        "This table is a generated view of schema shape and defaults. Follow the",
-        "rule link for behavior. It is not an additional semantic contract.",
-        "",
-    ]
-    documents = {
-        path: load_schema(path) for path in sorted((root / "yaml").glob("schema*.yaml"))
-    }
-    for path, document in documents.items():
-        for field, value in schema_descriptions(document):
-            description_rules(f"{path.name}:{field}", value, rules)
-    classes = {
-        name: definition
-        for document in documents.values()
-        for name, definition in document.items()
-        if isinstance(definition, list)
-    }
-    for path, document in documents.items():
-        lines.extend(
-            [
-                f"## {path.name}",
-                "",
-                "| Field or value type | Type | Required | Default | Constraints | Contract |",
-                "| --- | --- | --- | --- | --- | --- |",
-            ]
-        )
-        for name, descriptor in descriptors(document, classes=classes):
-            contract = (
-                contract_cell(
-                    rules, f"{path.name}:{name}.description", descriptor["description"]
-                )
-                if "description" in descriptor
-                else "Schema constraint"
-            )
-            constraints = {
-                k: descriptor[k]
-                for k in ("values", "pattern", "min_length", "size")
-                if k in descriptor
-            }
-            default = (
-                cell(descriptor["default"]) if "default" in descriptor else "Absent"
-            )
-            lines.append(
-                f"| {code_span(name)} | {cell(descriptor['type'])} | {cell(descriptor.get('required', False))} | {default} | {cell(constraints) if constraints else '--'} | {contract} |"
-            )
-        lines.append("")
-    return "\n".join(lines)
-
-
-def schema_fields_v1(root, rules):
-    """The 1.0 schema files: each field's shape, kind and default."""
-    lines = [
-        "# Schema fields (1.0)",
-        "",
-        GENERATED_MARK,
-        "",
-        "This table is a generated view of the 1.0 schema files in `yaml/v1/`,",
-        "which define the `spec`, `project`, `codelists` and `function` file",
-        "types: each field's shape, kind and default. Follow the rule link for",
+        "This table is a generated view of the schema files in `yaml/`, which",
+        "define the `spec`, `project`, `codelists` and `function` file types:",
+        "each field's shape, kind and default. Follow the rule link for",
         "behavior. It is not an additional semantic contract.",
-        "",
-        "The engine reads a 1.0 file against these schema files, and a 0.5 file",
-        "against the 0.5 schema files shown on the",
-        f"[schema fields]({SCHEMA_FIELDS_SITE}) page; `yaml/README.md` says how",
-        "long both sets exist. A field that 1.0 adds or changes links the rule",
-        "that will own it.",
         "",
         "A field's kind comes from its type and says what a bare scalar in it is:",
         "",
@@ -198,14 +132,14 @@ def schema_fields_v1(root, rules):
         "| `structure` | Nothing: the field holds a class, a list or mapping of classes, or a registry value. |",
         "",
     ]
-    directory = root / "yaml" / "v1"
+    directory = root / "yaml"
     paths = sorted(directory.glob("schema*.yaml"))
     if not paths:
         return "\n".join(lines)
     bundle = Bundle(directory)
     for path in paths:
         for field, value in schema_descriptions(bundle.modules[path.name]):
-            description_rules(f"v1/{path.name}:{field}", value, rules)
+            description_rules(f"{path.name}:{field}", value, rules)
     for path in paths:
         lines.extend(
             [
@@ -226,11 +160,11 @@ def schema_fields_v1(root, rules):
                 try:
                     kind = code_span(bundle.descriptor_kind(descriptor, name))
                 except SchemaSourceError as exc:
-                    raise ValueError(f"v1/{path.name}: {exc}") from exc
+                    raise ValueError(f"{path.name}: {exc}") from exc
             contract = (
                 contract_cell(
                     rules,
-                    f"v1/{path.name}:{name}.description",
+                    f"{path.name}:{name}.description",
                     descriptor["description"],
                 )
                 if "description" in descriptor
@@ -315,7 +249,6 @@ def generated(root):
     rules = load(root)
     pages = {
         SCHEMA_FIELDS: schema_fields(root, rules),
-        SCHEMA_FIELDS_V1: schema_fields_v1(root, rules),
         RULE_INDEX: rule_index(rules),
         RULES_SUMMARY: rules_summary(rules),
     }

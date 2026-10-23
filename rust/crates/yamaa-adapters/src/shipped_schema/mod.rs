@@ -1,7 +1,7 @@
 //! Package-owned schema closures; no directory search or caller-provided schema.
-//! The package ships the 1.0 closure of each file type (`yaml/v1/`), which a
-//! document's header selects (SCHEMA-2), and that type's JSON Schema
-//! ([`json_schema`]).
+//! The package ships the 1.0 closure of each file type
+//! (`yaml/schema_*.yaml`), which a document's header selects (SCHEMA-2), and
+//! that type's JSON Schema ([`json_schema`]).
 //!
 //! Each closure is fixed when the package is built, so the process admits it
 //! once, on first use, and every later check, compilation and run shares that
@@ -15,8 +15,9 @@ mod data;
 mod json;
 pub use json::json_schema;
 
-/// Admit the 1.0 closure of one file type (`yaml/v1/`): its entry module and
-/// every module it includes, with the type's root class (SCHEMA-2).
+/// Admit the 1.0 closure of one file type (`yaml/schema_*.yaml`): its entry
+/// module and every module it includes, with the type's root class
+/// (SCHEMA-2).
 pub fn capture_versioned(
     file_type: yamaa_core::language::FileType,
 ) -> Result<Arc<CapturedSchema>, Error> {

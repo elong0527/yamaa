@@ -1,5 +1,5 @@
 //! The JSON Schema of each 1.0 file type (#3030 section 2.12): the file
-//! `tools/packaging/generate_json_schema.py` commits in `yaml/v1/json/`,
+//! `tools/packaging/generate_json_schema.py` commits in `yaml/json/`,
 //! which the package embeds byte for byte when it is built, so nothing is
 //! read at run time. The committed file is indented for review; the engine
 //! gives the same document as canonical JSON text, the encoding of every
@@ -16,7 +16,7 @@ pub fn json_schema(file_type: FileType) -> String {
     json_wire::encode(&document)
 }
 
-/// The embedded copy of `yaml/v1/json/<file_type>.schema.json`.
+/// The embedded copy of `yaml/json/<file_type>.schema.json`.
 fn committed(file_type: FileType) -> &'static str {
     super::data::V1_JSON_SCHEMAS
         .iter()
@@ -32,7 +32,7 @@ mod tests {
 
     fn read(file_type: FileType) -> Vec<u8> {
         let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../../yaml/v1/json")
+            .join("../../../yaml/json")
             .join(format!("{}.schema.json", file_type.name()));
         std::fs::read(&path).unwrap_or_else(|error| panic!("{}: {error}", path.display()))
     }
