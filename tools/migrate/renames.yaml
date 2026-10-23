@@ -88,11 +88,11 @@ status: approved
 measured_at: 1758ad145
 design: docs/design/interface-1.0.md
 summary:
-  entries: 643
-  changes: 74
+  entries: 644
+  changes: 75
   by_kind_and_decision:
     keep, decided: 569
-    new, decided: 28
+    new, decided: 29
     removed, decided: 13
     rename, decided: 9
     reshape, decided: 19
@@ -7364,6 +7364,19 @@ entries:
     to the earlier source and then to stored order; beside order_by or keep it fails as prohibited_construct
     (LOOKUP-26). No 0.5 file declares it, so the converter wrote none.'
   field_kind: structure
+  convert: {action: none}
+- id: new.spec.include
+  file_type: spec
+  path: include
+  today: null
+  kind: new
+  proposed: 'include: [FRAGMENT, ...]'
+  decision: decided (D206)
+  reason: 'An addition to the approved table under D27 (D206). Optional: the local spec fragments a layer
+    composes after its parent chain and before its own fields, in list order. A fragment declares neither
+    parent nor include, and a file reaches one composition at most once (LAYER-3, LAYER-4). No 0.5 file
+    declares it, so the converter wrote none.'
+  field_kind: path
   convert: {action: none}
 conditions:
 - today: schema_version_mismatch

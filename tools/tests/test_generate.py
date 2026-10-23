@@ -756,6 +756,15 @@ class DashboardTests(unittest.TestCase):
             with self.subTest(parent=parent):
                 self.assertEqual(generate.linked_specs({"parent": parent}), [])
         self.assertEqual(generate.linked_specs({"parent": "a.yaml"}), ["a.yaml"])
+        # Each fragment an `include` list names is linked too, after the
+        # parent; an entry that is not a path names nothing.
+        self.assertEqual(
+            generate.linked_specs(
+                {"parent": "a.yaml", "include": ["b.yaml", 7, "", "c.yaml"]}
+            ),
+            ["a.yaml", "b.yaml", "c.yaml"],
+        )
+        self.assertEqual(generate.linked_specs({"include": "b.yaml"}), [])
 
     def test_scalar_parent_and_columns_do_not_abort_rendering(self):
         source = generate.BENCHMARKS / "sdtm-dm-race-ethnicity"
