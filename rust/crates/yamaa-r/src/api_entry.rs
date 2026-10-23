@@ -1,6 +1,7 @@
 //! Native half of the R host API: specification operations, their results and
 //! one error shape. The R facade keeps paths in lazy objects and calls these
-//! functions; behavior, validation and messages stay in Rust.
+//! functions, which reach the engine through the boundary's client;
+//! behavior, validation and messages stay in Rust.
 //!
 //! Every function replies `list(value, error)`. `error` is `NULL` on success,
 //! otherwise `list(message, issues, paths)`, where `issues` is the issues data
@@ -8,20 +9,27 @@
 //! save wrote before it stopped. Every function replies behind the interface
 //! gate, so it refuses until the handshake succeeds (`crate::interface`).
 use crate::handle::address;
+use crate::project_activation::{Functions, Host};
 use extendr_api::prelude::*;
 use std::{
     cell::{Cell, RefCell},
     collections::BTreeMap,
     panic::{catch_unwind, AssertUnwindSafe},
-    rc::{Rc, Weak},
-    sync::Arc,
 };
-use yamaa::{Action, Engine, EngineOptions, Error, Failure, HostLanguage, Report};
-use yamaa_boundary::{HandleKind, Live};
+use yamaa_boundary::abi::Handle;
+use yamaa_boundary::client::{Call, Engine, Info, Language, OdmOptions, Owned, Refused};
+use yamaa_boundary::HandleKind;
 
 /// Why a call could not return its value.
 pub(crate) enum Refusal {
-    Failure(Failure),
+    /// The engine refused: D39's text, the issues that explain it and the
+    /// files a refused save wrote.
+    Failure {
+        message: String,
+        issues: Option<Owned>,
+        paths: Vec<String>,
+    },
+    /// The binding or the boundary refused, with no issues.
     Message(String),
 }
 
@@ -37,18 +45,49 @@ impl From<&str> for Refusal {
     }
 }
 
-fn refused(error: Refusal) -> List {
-    // A refusal of this boundary itself carries an empty issues table and
-    // wrote nothing.
+impl From<Refused> for Refusal {
+    fn from(refused: Refused) -> Self {
+        match refused {
+            Refused::Engine {
+                message,
+                issues,
+                paths,
+            } => Self::Failure {
+                message,
+                issues,
+                paths,
+            },
+            Refused::Boundary(message) => Self::Message(message),
+            // The interrupt the call kept is signalled in preference to this.
+            Refused::Cancelled => Self::Message("the call was cancelled".to_owned()),
+        }
+    }
+}
+
+/// The refusal `error` as the reply's error. A refusal of this boundary
+/// itself wrote nothing and carries the engine's table of no issues, or
+/// `NULL` before the handshake, when there is no `engine` to ask.
+fn refused(error: Refusal, engine: Option<Engine>) -> List {
     let (message, issues, paths) = match error {
-        Refusal::Failure(failure) => (failure.message, failure.issues, failure.paths),
-        Refusal::Message(message) => (message, Report::default().table(), Vec::new()),
+        Refusal::Failure {
+            message,
+            issues,
+            paths,
+        } => (message, issues, paths),
+        Refusal::Message(message) => {
+            let issues = engine.and_then(|engine| engine.no_issues().ok());
+            (message, issues, Vec::new())
+        }
     };
     let paths = Strings::from_values(&paths);
-    match crate::public_table::frame(&issues) {
+    match issues.as_ref().map(crate::public_table::frame).transpose() {
         Ok(issues) => list!(
             value = NULL,
-            error = list!(message = message, issues = issues, paths = paths)
+            error = list!(
+                message = message,
+                issues = issues.unwrap_or_else(|| NULL.into_robj()),
+                paths = paths
+            )
         ),
         Err(conversion) => list!(
             value = NULL,
@@ -63,16 +102,18 @@ fn refused(error: Refusal) -> List {
 
 /// Reply with `run`'s value or refusal, behind the interface gate: until the
 /// handshake succeeds, the reply refuses with no issues.
-pub(crate) fn reply(run: impl FnOnce() -> std::result::Result<Robj, Refusal>) -> List {
-    answer(|| {
-        crate::interface::gate()?;
-        run()
-    })
+pub(crate) fn reply(run: impl FnOnce(Engine) -> std::result::Result<Robj, Refusal>) -> List {
+    let gate = crate::interface::gate();
+    answer(gate.as_ref().ok().copied(), || run(gate?))
 }
 
 /// Reply with `run`'s value or refusal, containing a panic and keeping an
-/// interrupt the call observed. Only the handshake replies without the gate.
-pub(crate) fn answer(run: impl FnOnce() -> std::result::Result<Robj, Refusal>) -> List {
+/// interrupt the call observed; `engine`, once negotiated, gives a refusal
+/// its table of no issues. Only the handshake replies without the gate.
+pub(crate) fn answer(
+    engine: Option<Engine>,
+    run: impl FnOnce() -> std::result::Result<Robj, Refusal>,
+) -> List {
     let scope = crate::interrupt::Scope::new();
     let result = catch_unwind(AssertUnwindSafe(run));
     if let Some(condition) = scope.take() {
@@ -80,14 +121,9 @@ pub(crate) fn answer(run: impl FnOnce() -> std::result::Result<Robj, Refusal>) -
     }
     match result {
         Ok(Ok(value)) => list!(value = value, error = NULL),
-        Ok(Err(error)) => refused(error),
-        Err(_) => refused("internal host boundary failure".into()),
+        Ok(Err(error)) => refused(error, engine),
+        Err(_) => refused("internal host boundary failure".into(), engine),
     }
-}
-
-/// The refusal of `action` for `error` (D39).
-fn from_error(action: Action<'_>, error: &Error) -> Refusal {
-    Refusal::Failure(Failure::from_error(action, error))
 }
 
 fn text(bytes: &Raw) -> std::result::Result<String, Refusal> {
@@ -108,9 +144,7 @@ fn optional_text(value: &Robj) -> std::result::Result<Option<String>, Refusal> {
 
 /// The three installed R capabilities project functions need: lock
 /// verification, binding resolution and condition rendering.
-fn parse_capabilities(
-    parsed: List,
-) -> std::result::Result<(Function, Function, Function), Refusal> {
+fn parse_capabilities(parsed: List) -> std::result::Result<Functions, Refusal> {
     if parsed.len() != 3 {
         return Err("invalid project host capabilities".into());
     }
@@ -121,7 +155,7 @@ fn parse_capabilities(
             .as_function()
             .ok_or_else(|| Refusal::from(invalid))
     };
-    Ok((
+    Ok(Functions::new(
         capability(0, "missing lock capability", "invalid lock capability")?,
         capability(
             1,
@@ -136,212 +170,144 @@ fn parse_capabilities(
     ))
 }
 
-fn engine(version: &Raw, capabilities: Option<List>) -> std::result::Result<Engine, Refusal> {
-    let mut options = EngineOptions::new(HostLanguage::R, "r".into(), text(version)?);
-    if let Some(capabilities) = capabilities {
-        let (verify, resolve, formatter) = parse_capabilities(capabilities)?;
-        options = options.with_functions(Arc::new(crate::project_activation::Functions::new(
-            verify, resolve, formatter,
-        )));
-    }
-    Ok(Engine::new(options))
-}
-
-/// One registered owner per R external pointer: dropping the pointer drops
-/// the owner, and lookups go through the registry, never the pointee. Each
-/// owner counts in the census under `$census` while it lives.
-macro_rules! registry {
-    ($registry:ident, $handle:ident, $store:ident, $lookup:ident, $kind:ty, $what:literal, $census:expr) => {
-        thread_local! {
-            static $registry: RefCell<BTreeMap<usize, Weak<RefCell<$kind>>>> =
-                const { RefCell::new(BTreeMap::new()) };
-        }
-
-        struct $handle {
-            value: Rc<RefCell<$kind>>,
-            identity: Cell<usize>,
-            _live: Live,
-        }
-
-        impl Drop for $handle {
-            fn drop(&mut self) {
-                $registry.with(|registry| {
-                    registry.borrow_mut().remove(&self.identity.get());
-                });
-            }
-        }
-
-        fn $store(value: $kind) -> std::result::Result<Robj, Refusal> {
-            let handle = ExternalPtr::new($handle {
-                value: Rc::new(RefCell::new(value)),
-                identity: Cell::new(0),
-                _live: crate::interface::CENSUS.hold($census),
-            });
-            let identity = address(handle.as_robj())?;
-            handle.identity.set(identity);
-            $registry.with(|registry| {
-                registry
-                    .borrow_mut()
-                    .insert(identity, Rc::downgrade(&handle.value));
-            });
-            Ok(handle.into_robj())
-        }
-
-        fn $lookup(handle: &Robj) -> std::result::Result<Rc<RefCell<$kind>>, Refusal> {
-            let identity = address(handle)?;
-            $registry
-                .with(|registry| registry.borrow().get(&identity).and_then(Weak::upgrade))
-                .ok_or_else(|| concat!("unknown ", $what, " handle").into())
-        }
-    };
-}
-
-/// A run built whole, or a streamed run (#3697), whose result is known once
-/// its output's stream ends.
-enum RunHeld {
-    Built(Box<yamaa::Run>),
-    Streamed(yamaa::Streamed),
-}
-
-registry!(RUNS, RunHandle, store, run, RunHeld, "run", HandleKind::Run);
-
-/// A streamed run's refusal of a reader or of its result: D39's text of
-/// reading the run, such as `cannot read DM: operation cancelled`, with no
-/// issues, as the binding's other boundary refusals.
-fn stream_refusal(streamed: &yamaa::Streamed, error: &Error) -> Refusal {
-    Refusal::Message(Failure::from_error(Action::Read(streamed.subject()), error).message)
-}
-
-/// Read the run's result with `read`. A streamed run nobody started to read
-/// runs whole first, polling the native call's interrupts; one whose stream
-/// has not ended, or that was cancelled, refuses.
-fn read_run<T>(
-    handle: &Robj,
-    read: impl FnOnce(&yamaa::Run) -> std::result::Result<T, Refusal>,
+/// Run a call of the engine as the R host on R's `version`, with the
+/// interrupt probe and, when `capabilities` are given, the installed project
+/// functions behind its callbacks.
+fn called<T>(
+    version: &Raw,
+    capabilities: Option<List>,
+    run: impl FnOnce(&Call<'_>) -> Result<T, Refused>,
 ) -> std::result::Result<T, Refusal> {
-    let held = run(handle)?;
-    let held = held.try_borrow().map_err(|_| "run handle in use")?;
-    match &*held {
-        RunHeld::Built(run) => read(run),
-        RunHeld::Streamed(streamed) => read(
-            &*streamed
-                .run()
-                .map_err(|error| stream_refusal(streamed, &error))?,
-        ),
+    let version = text(version)?;
+    let host = Host::new(capabilities.map(parse_capabilities).transpose()?);
+    let call = Call::new(Language::R, "r", &version).with(&host, host.offers_functions());
+    run(&call).map_err(Refusal::from)
+}
+
+/// One owner per R external pointer: dropping the pointer drops the owner,
+/// which gives its engine handle back, and lookups go through the registry,
+/// never the pointee.
+struct Holder {
+    _owned: Owned,
+    identity: Cell<usize>,
+}
+
+thread_local! {
+    static HANDLES: RefCell<BTreeMap<usize, (Handle, HandleKind)>> =
+        const { RefCell::new(BTreeMap::new()) };
+}
+
+impl Drop for Holder {
+    fn drop(&mut self) {
+        HANDLES.with(|handles| {
+            handles.borrow_mut().remove(&self.identity.get());
+        });
     }
 }
-registry!(
-    CHECKS,
-    CheckHandle,
-    store_check,
-    check_of,
-    yamaa::Check,
-    "check",
-    HandleKind::Check
-);
-registry!(
-    PROJECT_RUNS,
-    ProjectRunHandle,
-    store_project_run,
-    project_run_of,
-    yamaa::ProjectRun,
-    "project run",
-    HandleKind::ProjectRun
-);
-registry!(
-    SUBMISSIONS,
-    SubmissionHandle,
-    store_submission,
-    submission_of,
-    yamaa::Submission,
-    "submission",
-    HandleKind::Submission
-);
-registry!(
-    PLANS,
-    PlansHandle,
-    store_plans,
-    plans_of,
-    yamaa::Plans,
-    "plans",
-    HandleKind::Plans
-);
-registry!(
-    SELFTESTS,
-    SelfTestHandle,
-    store_selftest,
-    selftest_of,
-    yamaa::SelfTest,
-    "selftest",
-    HandleKind::SelfTest
-);
 
-fn table(table: Option<&yamaa::Table>) -> std::result::Result<Robj, Refusal> {
+/// Hold `owned`, a handle of `kind`, in a new R external pointer.
+fn store(owned: Owned, kind: HandleKind) -> std::result::Result<Robj, Refusal> {
+    let handle = owned.handle();
+    let holder = ExternalPtr::new(Holder {
+        _owned: owned,
+        identity: Cell::new(0),
+    });
+    let identity = address(holder.as_robj())?;
+    holder.identity.set(identity);
+    HANDLES.with(|handles| handles.borrow_mut().insert(identity, (handle, kind)));
+    Ok(holder.into_robj())
+}
+
+/// The engine handle of `kind` an R external pointer holds; `what` names the
+/// kind in a refusal.
+fn handle_of(robj: &Robj, kind: HandleKind, what: &str) -> std::result::Result<Handle, Refusal> {
+    let identity = address(robj)?;
+    HANDLES
+        .with(|handles| handles.borrow().get(&identity).copied())
+        .filter(|(_, held)| *held == kind)
+        .map(|(handle, _)| handle)
+        .ok_or_else(|| format!("unknown {what} handle").into())
+}
+
+fn run_of(robj: &Robj) -> std::result::Result<Handle, Refusal> {
+    handle_of(robj, HandleKind::Run, "run")
+}
+
+fn check_of(robj: &Robj) -> std::result::Result<Handle, Refusal> {
+    handle_of(robj, HandleKind::Check, "check")
+}
+
+fn project_run_of(robj: &Robj) -> std::result::Result<Handle, Refusal> {
+    handle_of(robj, HandleKind::ProjectRun, "project run")
+}
+
+fn submission_of(robj: &Robj) -> std::result::Result<Handle, Refusal> {
+    handle_of(robj, HandleKind::Submission, "submission")
+}
+
+fn selftest_of(robj: &Robj) -> std::result::Result<Handle, Refusal> {
+    handle_of(robj, HandleKind::SelfTest, "selftest")
+}
+
+/// A table as a data frame, or `NULL` for none; the table's handle is given
+/// back once it is copied, or once its conversion fails.
+fn table(table: Option<Owned>) -> std::result::Result<Robj, Refusal> {
     match table {
-        Some(table) => Ok(crate::public_table::frame(table)?),
+        Some(table) => Ok(crate::public_table::frame(&table)?),
         None => Ok(NULL.into_robj()),
     }
 }
 
 /// A result's printed lines (D37), which `format()` returns.
-fn summary_lines(summary: &yamaa::Summary) -> Robj {
-    Strings::from_values(summary.lines().collect::<Vec<_>>()).into_robj()
+fn lines(lines: Vec<String>) -> Robj {
+    Strings::from_values(lines).into_robj()
+}
+
+/// Save a result, with the R interrupt probe behind the call.
+fn save(engine: Engine, result: Handle) -> std::result::Result<Robj, Refusal> {
+    let host = Host::new(None);
+    let call = Call::new(Language::R, "r", "").with(&host, false);
+    Ok(Strings::from_values(engine.save(&call, result)?).into_robj())
 }
 
 #[extendr]
 fn spec_check(specification: Raw, project: Robj, version: Raw) -> List {
-    reply(|| {
+    reply(|engine| {
         let project = optional_text(&project)?;
         let specification = text(&specification)?;
-        let check = engine(&version, None)?
-            .spec_check(
-                &specification,
-                project.as_deref(),
-                &crate::interrupt::token(),
-            )
-            .map_err(|error| from_error(Action::Read(&specification), &error))?;
-        store_check(check)
+        let check = called(&version, None, |call| {
+            engine.spec_check(call, &specification, project.as_deref())
+        })?;
+        store(check, HandleKind::Check)
     })
 }
 
 #[extendr]
 fn check_status(handle: Robj) -> List {
-    reply(|| {
-        let check = check_of(&handle)?;
-        let check = check.try_borrow().map_err(|_| "check handle in use")?;
-        Ok(r!(check.status().as_str()))
-    })
+    reply(|engine| Ok(r!(engine.status(check_of(&handle)?, None)?)))
 }
 
 #[extendr]
 fn check_issues(handle: Robj) -> List {
-    reply(|| {
-        let check = check_of(&handle)?;
-        let check = check.try_borrow().map_err(|_| "check handle in use")?;
-        Ok(crate::public_table::frame(&check.issues())?)
-    })
+    reply(|engine| table(Some(engine.issues(check_of(&handle)?, None)?)))
 }
 
 #[extendr]
 fn check_summary(handle: Robj) -> List {
-    reply(|| {
-        let check = check_of(&handle)?;
-        let check = check.try_borrow().map_err(|_| "check handle in use")?;
-        Ok(summary_lines(&check.summary()))
-    })
+    reply(|engine| Ok(lines(engine.summary(check_of(&handle)?, None)?)))
 }
 
 /// The printed line of a lazy specification object, which has read nothing
 /// (D37): `yamaa spec <path>`, with the path as given.
 #[extendr]
 fn spec_summary(specification: Raw) -> List {
-    reply(|| Ok(summary_lines(&yamaa::Summary::spec(&text(&specification)?))))
+    reply(|engine| Ok(lines(engine.spec_summary(&text(&specification)?)?)))
 }
 
 /// The printed line of a lazy project object: `yamaa project <path>`.
 #[extendr]
 fn project_summary(project: Raw) -> List {
-    reply(|| Ok(summary_lines(&yamaa::Summary::project(&text(&project)?))))
+    reply(|engine| Ok(lines(engine.project_summary(&text(&project)?)?)))
 }
 
 /// The holder for the compiled plans one lazy object keeps between its runs
@@ -351,22 +317,21 @@ fn project_summary(project: Raw) -> List {
 /// starts afresh (#3069). Creating a holder reads nothing.
 #[extendr]
 fn plans(handle: Robj) -> List {
-    reply(|| {
-        if !handle.is_null() && plans_of(&handle).is_ok() {
+    reply(|engine| {
+        if !handle.is_null() && handle_of(&handle, HandleKind::Plans, "plans").is_ok() {
             return Ok(handle);
         }
-        store_plans(yamaa::Plans::new())
+        store(engine.plans()?, HandleKind::Plans)
     })
 }
 
-/// The holder a lazy object passes, or `None` for a one-shot run. Nothing
-/// borrows a holder mutably, so a run started from a project function shares
-/// it too.
-fn held_plans(plans: &Robj) -> std::result::Result<Option<Rc<RefCell<yamaa::Plans>>>, Refusal> {
+/// The holder a lazy object passes, or 0 for a one-shot run. Nothing borrows
+/// a holder mutably, so a run started from a project function shares it too.
+fn held_plans(plans: &Robj) -> std::result::Result<Handle, Refusal> {
     if plans.is_null() {
-        return Ok(None);
+        return Ok(0);
     }
-    plans_of(plans).map(Some)
+    handle_of(plans, HandleKind::Plans, "plans")
 }
 
 /// A run of one specification: built now, or with `stream` built as its
@@ -380,44 +345,32 @@ fn spec_run(
     plans: Robj,
     stream: bool,
 ) -> List {
-    reply(|| {
+    reply(|engine| {
         let project = optional_text(&project)?;
-        let engine = engine(&version, Some(capabilities))?;
         let specification = text(&specification)?;
-        let held = held_plans(&plans)?;
+        let plans = held_plans(&plans)?;
         if stream {
-            let once = yamaa::Plans::new();
-            let borrowed = held.as_ref().map(|plans| plans.borrow());
-            let streamed = engine
-                .spec_stream(
-                    &specification,
-                    project.as_deref(),
-                    borrowed.as_deref().unwrap_or(&once),
-                    &crate::interrupt::stream_token(),
-                )
-                .map_err(|error| from_error(Action::Read(&specification), &error))?;
-            drop(borrowed);
-            return store(RunHeld::Streamed(streamed));
+            let version = text(&version)?;
+            let host = Host::streamed(parse_capabilities(capabilities)?);
+            let call = Call::new(Language::R, "r", &version).with_owned(host, true);
+            let run = engine.spec_stream(call, &specification, project.as_deref(), plans)?;
+            return store(run, HandleKind::Run);
         }
-        let token = crate::interrupt::token();
-        let run = match held {
-            Some(plans) => {
-                engine.spec_run_reusing(&specification, project.as_deref(), &plans.borrow(), &token)
-            }
-            None => engine.spec_run(&specification, project.as_deref(), &token),
-        }
-        .map_err(|error| from_error(Action::Read(&specification), &error))?;
-        store(RunHeld::Built(Box::new(run)))
+        let run = called(&version, Some(capabilities), |call| {
+            engine.spec_run(call, &specification, project.as_deref(), plans)
+        })?;
+        store(run, HandleKind::Run)
     })
 }
 
 #[extendr]
 fn spec_resolve(specification: Raw, project: Robj, version: Raw) -> List {
-    reply(|| {
+    reply(|engine| {
         let project = optional_text(&project)?;
-        let value = engine(&version, None)?
-            .spec_resolve(&text(&specification)?, project.as_deref())
-            .map_err(Refusal::Failure)?;
+        let specification = text(&specification)?;
+        let value = called(&version, None, |call| {
+            engine.spec_resolve(call, &specification, project.as_deref())
+        })?;
         Ok(crate::context_values::context_value(&value)?)
     })
 }
@@ -430,25 +383,19 @@ fn read_odm(
     max_expanded_bytes: usize,
     max_xml_depth: usize,
 ) -> List {
-    reply(|| {
-        let mut options = yamaa::OdmOptions::new()
-            .with_max_archive_members(max_archive_members)
-            .with_max_expanded_bytes(u64::try_from(max_expanded_bytes).unwrap_or(u64::MAX))
-            .with_max_xml_depth(max_xml_depth);
-        if let Some(member) = optional_text(&archive_member)? {
-            options = options.with_archive_member(member);
-        }
+    reply(|engine| {
+        let member = optional_text(&archive_member)?;
+        let limit = |value: usize| u64::try_from(value).unwrap_or(u64::MAX);
+        let options = OdmOptions {
+            archive_member: member.as_deref(),
+            max_archive_members: limit(max_archive_members),
+            max_expanded_bytes: limit(max_expanded_bytes),
+            max_xml_depth: limit(max_xml_depth),
+        };
         let source = text(&source)?;
-        // The read needs no host capability, so the engine names no R version.
-        let engine = Engine::new(EngineOptions::new(
-            HostLanguage::R,
-            "r".into(),
-            String::new(),
-        ));
-        let items = engine
-            .read_odm(&source, &options)
-            .map_err(|error| from_error(Action::Read(&source), &error))?;
-        Ok(crate::public_table::frame(&items)?)
+        // The read needs no host capability, so the call names no R version.
+        let call = Call::new(Language::R, "r", "");
+        table(Some(engine.read_odm(&call, &source, &options)?))
     })
 }
 
@@ -471,10 +418,7 @@ fn texts(value: &Robj) -> std::result::Result<Vec<String>, Refusal> {
 /// is true; a file that cannot be read or admitted refuses with its issues.
 #[extendr]
 fn lint(paths: Robj, fix: bool) -> List {
-    reply(|| {
-        let lint = yamaa::lint(&texts(&paths)?, fix).map_err(Refusal::Failure)?;
-        Ok(crate::public_table::frame(&lint.table())?)
-    })
+    reply(|engine| table(Some(engine.lint(&texts(&paths)?, fix)?)))
 }
 
 /// The JSON Schema of a file type as canonical JSON text, one character
@@ -482,22 +426,19 @@ fn lint(paths: Robj, fix: bool) -> List {
 /// issue.
 #[extendr]
 fn schema(file_type: Raw) -> List {
-    reply(|| {
-        let schema = yamaa::schema(&text(&file_type)?).map_err(Refusal::Failure)?;
-        Ok(r!(schema))
-    })
+    reply(|engine| Ok(r!(engine.schema(&text(&file_type)?)?)))
 }
 
 /// The condition catalogue (#3700) as a data frame: every condition the
 /// engine may report, and every condition a release retired.
 #[extendr]
 fn conditions() -> List {
-    reply(|| Ok(crate::public_table::frame(&yamaa::conditions().table())?))
+    reply(|engine| table(Some(engine.conditions()?)))
 }
 
 #[extendr]
 fn run_status(handle: Robj) -> List {
-    reply(|| read_run(&handle, |run| Ok(r!(run.status().as_str()))))
+    reply(|engine| Ok(r!(engine.status(run_of(&handle)?, None)?)))
 }
 
 /// A run's output: a data frame, or for a streamed run its Arrow C stream
@@ -505,85 +446,58 @@ fn run_status(handle: Robj) -> List {
 /// run.
 #[extendr]
 fn run_output(handle: Robj) -> List {
-    reply(|| {
-        let held = run(&handle)?;
-        let held = held.try_borrow().map_err(|_| "run handle in use")?;
-        let streamed = match &*held {
-            RunHeld::Built(run) => return table(run.output()),
-            RunHeld::Streamed(streamed) => streamed,
-        };
-        let refused = |error| stream_refusal(streamed, &error);
-        let failed = match streamed.progress() {
-            yamaa::StreamProgress::Cancelled => return Err(refused(Error::Cancelled)),
-            yamaa::StreamProgress::Ended => {
-                streamed.run().map_err(refused)?.status() == yamaa::Status::Failed
-            }
-            _ => false,
-        };
-        if failed {
-            return Ok(NULL.into_robj());
+    reply(|engine| {
+        let handle = run_of(&handle)?;
+        let output = engine.output(handle, None)?;
+        if engine.is_stream(handle)? {
+            return output.map_or_else(
+                || Ok(NULL.into_robj()),
+                |output| {
+                    let stream = crate::public_table::stream(&output)?;
+                    Ok(crate::arrow_stream::stream_object(stream)?)
+                },
+            );
         }
-        Ok(crate::arrow_stream::stream_object(
-            streamed.reader().into_stream(),
-        )?)
+        table(output)
     })
 }
 
 #[extendr]
 fn run_issues(handle: Robj) -> List {
-    reply(|| {
-        read_run(&handle, |run| {
-            Ok(crate::public_table::frame(&run.issues())?)
-        })
-    })
+    reply(|engine| table(Some(engine.issues(run_of(&handle)?, None)?)))
 }
 
 #[extendr]
 fn run_report(handle: Robj) -> List {
-    reply(|| read_run(&handle, |run| table(run.report())))
+    reply(|engine| table(engine.report(run_of(&handle)?, None)?))
 }
 
 #[extendr]
 fn run_save(handle: Robj) -> List {
-    reply(|| {
-        let held = run(&handle)?;
-        let mut held = held.try_borrow_mut().map_err(|_| "run handle in use")?;
-        let token = crate::interrupt::token();
-        let paths = match &mut *held {
-            RunHeld::Built(run) => run.save(&token),
-            RunHeld::Streamed(streamed) => streamed
-                .run()
-                .map_err(|error| stream_refusal(streamed, &error))?
-                .save(&token),
-        }
-        .map_err(Refusal::Failure)?;
-        Ok(Strings::from_values(paths).into_robj())
-    })
+    reply(|engine| save(engine, run_of(&handle)?))
 }
 
 #[extendr]
 fn run_summary(handle: Robj) -> List {
-    reply(|| read_run(&handle, |run| Ok(summary_lines(&run.summary()))))
+    reply(|engine| Ok(lines(engine.summary(run_of(&handle)?, None)?)))
 }
 
 /// Private installed-run evidence for qualification suites.
 #[extendr]
 fn run_observations(handle: Robj, include_measurements: bool) -> List {
-    reply(|| {
-        read_run(&handle, |run| {
-            Ok(run
-                .observations(include_measurements)
-                .map_or_else(|| NULL.into_robj(), |value| r!(value.as_str())))
-        })
+    reply(|engine| {
+        let observations = engine.observations(run_of(&handle)?, include_measurements)?;
+        Ok(observations.map_or_else(|| NULL.into_robj(), |value| r!(value.as_str())))
     })
 }
 
 #[extendr]
 fn project_spec(project: Raw, name: Raw, version: Raw) -> List {
-    reply(|| {
-        let path = engine(&version, None)?
-            .project_spec(&text(&project)?, &text(&name)?)
-            .map_err(Refusal::Failure)?;
+    reply(|engine| {
+        let (project, name) = (text(&project)?, text(&name)?);
+        let path = called(&version, None, |call| {
+            engine.project_spec(call, &project, &name)
+        })?;
         Ok(r!(path.as_str()))
     })
 }
@@ -591,296 +505,182 @@ fn project_spec(project: Raw, name: Raw, version: Raw) -> List {
 /// The listed specifications' names in run order, read without data (D45).
 #[extendr]
 fn project_names(project: Raw, version: Raw) -> List {
-    reply(|| {
-        let names = engine(&version, None)?
-            .project_names(&text(&project)?)
-            .map_err(Refusal::Failure)?;
+    reply(|engine| {
+        let project = text(&project)?;
+        let names = called(&version, None, |call| engine.project_names(call, &project))?;
         Ok(Strings::from_values(names).into_robj())
     })
 }
 
 #[extendr]
 fn project_check(project: Raw, version: Raw) -> List {
-    reply(|| {
+    reply(|engine| {
         let project = text(&project)?;
-        let check = engine(&version, None)?
-            .project_check(&project, &crate::interrupt::token())
-            .map_err(|error| from_error(Action::Read(&project), &error))?;
-        store_check(check)
+        let check = called(&version, None, |call| engine.project_check(call, &project))?;
+        store(check, HandleKind::Check)
     })
 }
 
 #[extendr]
 fn project_run(project: Raw, section: Robj, version: Raw, capabilities: List, plans: Robj) -> List {
-    reply(|| {
+    reply(|engine| {
         let section = optional_text(&section)?;
-        let engine = engine(&version, Some(capabilities))?;
         let project = text(&project)?;
-        let token = crate::interrupt::token();
-        let runs = match held_plans(&plans)? {
-            Some(plans) => {
-                engine.project_run_reusing(&project, section.as_deref(), &plans.borrow(), &token)
-            }
-            None => engine.project_run(&project, section.as_deref(), &token),
-        }
-        // Only an unknown section refuses the call with issues.
-        .map_err(|error| {
-            from_error(
-                Action::Select(section.as_deref().unwrap_or_default()),
-                &error,
-            )
+        let plans = held_plans(&plans)?;
+        let runs = called(&version, Some(capabilities), |call| {
+            engine.project_run(call, &project, section.as_deref(), plans)
         })?;
-        store_project_run(runs)
+        store(runs, HandleKind::ProjectRun)
     })
 }
 
 #[extendr]
 fn project_run_status(handle: Robj) -> List {
-    reply(|| {
-        let runs = project_run_of(&handle)?;
-        let runs = runs.try_borrow().map_err(|_| "project run handle in use")?;
-        Ok(r!(runs.status().as_str()))
-    })
+    reply(|engine| Ok(r!(engine.status(project_run_of(&handle)?, None)?)))
 }
 
 #[extendr]
 fn project_run_names(handle: Robj) -> List {
-    reply(|| {
-        let runs = project_run_of(&handle)?;
-        let runs = runs.try_borrow().map_err(|_| "project run handle in use")?;
-        Ok(Strings::from_values(runs.names()).into_robj())
+    reply(|engine| {
+        let names = engine.names(project_run_of(&handle)?)?;
+        Ok(Strings::from_values(names).into_robj())
     })
 }
 
 #[extendr]
 fn project_run_member_status(handle: Robj, name: Raw) -> List {
-    reply(|| {
-        let runs = project_run_of(&handle)?;
-        let runs = runs.try_borrow().map_err(|_| "project run handle in use")?;
-        let run = runs.member(&text(&name)?).map_err(Refusal::Failure)?;
-        Ok(r!(run.status().as_str()))
+    reply(|engine| {
+        let status = engine.status(project_run_of(&handle)?, Some(&text(&name)?))?;
+        Ok(r!(status))
     })
 }
 
 #[extendr]
 fn project_run_output(handle: Robj, name: Raw) -> List {
-    reply(|| {
-        let runs = project_run_of(&handle)?;
-        let runs = runs.try_borrow().map_err(|_| "project run handle in use")?;
-        let run = runs.member(&text(&name)?).map_err(Refusal::Failure)?;
-        table(run.output())
-    })
+    reply(|engine| table(engine.output(project_run_of(&handle)?, Some(&text(&name)?))?))
 }
 
 #[extendr]
 fn project_run_member_issues(handle: Robj, name: Raw) -> List {
-    reply(|| {
-        let runs = project_run_of(&handle)?;
-        let runs = runs.try_borrow().map_err(|_| "project run handle in use")?;
-        let run = runs.member(&text(&name)?).map_err(Refusal::Failure)?;
-        Ok(crate::public_table::frame(&run.issues())?)
+    reply(|engine| {
+        let issues = engine.issues(project_run_of(&handle)?, Some(&text(&name)?))?;
+        table(Some(issues))
     })
 }
 
 #[extendr]
 fn project_run_member_report(handle: Robj, name: Raw) -> List {
-    reply(|| {
-        let runs = project_run_of(&handle)?;
-        let runs = runs.try_borrow().map_err(|_| "project run handle in use")?;
-        let run = runs.member(&text(&name)?).map_err(Refusal::Failure)?;
-        table(run.report())
-    })
+    reply(|engine| table(engine.report(project_run_of(&handle)?, Some(&text(&name)?))?))
 }
 
 /// One member's printed lines, its run's under its name (D37).
 #[extendr]
 fn project_run_member_summary(handle: Robj, name: Raw) -> List {
-    reply(|| {
-        let runs = project_run_of(&handle)?;
-        let runs = runs.try_borrow().map_err(|_| "project run handle in use")?;
-        let run = runs.member(&text(&name)?).map_err(Refusal::Failure)?;
-        Ok(summary_lines(&run.summary()))
+    reply(|engine| {
+        let summary = engine.summary(project_run_of(&handle)?, Some(&text(&name)?))?;
+        Ok(lines(summary))
     })
 }
 
 #[extendr]
 fn project_run_issues(handle: Robj) -> List {
-    reply(|| {
-        let runs = project_run_of(&handle)?;
-        let runs = runs.try_borrow().map_err(|_| "project run handle in use")?;
-        Ok(crate::public_table::frame(&runs.issues())?)
-    })
+    reply(|engine| table(Some(engine.issues(project_run_of(&handle)?, None)?)))
 }
 
 #[extendr]
 fn project_run_report(handle: Robj) -> List {
-    reply(|| {
-        let runs = project_run_of(&handle)?;
-        let runs = runs.try_borrow().map_err(|_| "project run handle in use")?;
-        Ok(crate::public_table::frame(&runs.report())?)
-    })
+    reply(|engine| table(engine.report(project_run_of(&handle)?, None)?))
 }
 
 #[extendr]
 fn project_run_save(handle: Robj) -> List {
-    reply(|| {
-        let runs = project_run_of(&handle)?;
-        let mut runs = runs
-            .try_borrow_mut()
-            .map_err(|_| "project run handle in use")?;
-        let paths = runs
-            .save(&crate::interrupt::token())
-            .map_err(Refusal::Failure)?;
-        Ok(Strings::from_values(paths).into_robj())
-    })
+    reply(|engine| save(engine, project_run_of(&handle)?))
 }
 
 /// The printed lines, with one line per member (D37).
 #[extendr]
 fn project_run_summary(handle: Robj) -> List {
-    reply(|| {
-        let runs = project_run_of(&handle)?;
-        let runs = runs.try_borrow().map_err(|_| "project run handle in use")?;
-        Ok(summary_lines(&runs.summary()))
-    })
+    reply(|engine| Ok(lines(engine.summary(project_run_of(&handle)?, None)?)))
 }
 
 #[extendr]
 fn project_submission(project: Raw, section: Robj, created: Robj, version: Raw) -> List {
-    reply(|| {
+    reply(|engine| {
         let section = optional_text(&section)?;
         let created = optional_text(&created)?;
-        let submission = engine(&version, None)?
-            .project_submission(
-                &text(&project)?,
-                section.as_deref(),
-                created.as_deref(),
-                yamaa::VERSION,
-                &crate::interrupt::token(),
-            )
-            // Only an unknown section refuses the call with issues.
-            .map_err(|error| {
-                from_error(
-                    Action::Select(section.as_deref().unwrap_or_default()),
-                    &error,
-                )
-            })?;
-        store_submission(submission)
+        let project = text(&project)?;
+        let submission = called(&version, None, |call| {
+            engine.project_submission(call, &project, section.as_deref(), created.as_deref())
+        })?;
+        store(submission, HandleKind::Submission)
     })
 }
 
 #[extendr]
 fn submission_status(handle: Robj) -> List {
-    reply(|| {
-        let submission = submission_of(&handle)?;
-        let submission = submission
-            .try_borrow()
-            .map_err(|_| "submission handle in use")?;
-        Ok(r!(submission.status().as_str()))
-    })
+    reply(|engine| Ok(r!(engine.status(submission_of(&handle)?, None)?)))
 }
 
 /// The creation time the documents carry (D69, D129).
 #[extendr]
 fn submission_created(handle: Robj) -> List {
-    reply(|| {
-        let submission = submission_of(&handle)?;
-        let submission = submission
-            .try_borrow()
-            .map_err(|_| "submission handle in use")?;
-        Ok(r!(submission.created()))
-    })
+    reply(|engine| Ok(r!(engine.created(submission_of(&handle)?)?)))
 }
 
 #[extendr]
 fn submission_issues(handle: Robj) -> List {
-    reply(|| {
-        let submission = submission_of(&handle)?;
-        let submission = submission
-            .try_borrow()
-            .map_err(|_| "submission handle in use")?;
-        Ok(crate::public_table::frame(&submission.issues())?)
-    })
+    reply(|engine| table(Some(engine.issues(submission_of(&handle)?, None)?)))
 }
 
 #[extendr]
 fn submission_save(handle: Robj) -> List {
-    reply(|| {
-        let submission = submission_of(&handle)?;
-        let mut submission = submission
-            .try_borrow_mut()
-            .map_err(|_| "submission handle in use")?;
-        let paths = submission
-            .save(&crate::interrupt::token())
-            .map_err(Refusal::Failure)?;
-        Ok(Strings::from_values(paths).into_robj())
-    })
+    reply(|engine| save(engine, submission_of(&handle)?))
 }
 
 #[extendr]
 fn submission_summary(handle: Robj) -> List {
-    reply(|| {
-        let submission = submission_of(&handle)?;
-        let submission = submission
-            .try_borrow()
-            .map_err(|_| "submission handle in use")?;
-        Ok(summary_lines(&submission.summary()))
-    })
+    reply(|engine| Ok(lines(engine.summary(submission_of(&handle)?, None)?)))
 }
 
 /// Run every selftest case through this engine as the R host, with R's
 /// `version`, such as `4.6.1` (#3030 D28, D119).
 #[extendr]
 fn selftest(version: Raw) -> List {
-    reply(|| store_selftest(yamaa::selftest(yamaa::Host::R, Some(&text(&version)?))))
+    reply(|engine| {
+        let version = text(&version)?;
+        let selftest = engine.selftest(&Call::new(Language::R, "r", &version))?;
+        store(selftest, HandleKind::SelfTest)
+    })
 }
 
 #[extendr]
 fn selftest_status(handle: Robj) -> List {
-    reply(|| {
-        let selftest = selftest_of(&handle)?;
-        let selftest = selftest
-            .try_borrow()
-            .map_err(|_| "selftest handle in use")?;
-        Ok(r!(selftest.status().as_str()))
-    })
+    reply(|engine| Ok(r!(engine.status(selftest_of(&handle)?, None)?)))
 }
 
 #[extendr]
 fn selftest_cases(handle: Robj) -> List {
-    reply(|| {
-        let selftest = selftest_of(&handle)?;
-        let selftest = selftest
-            .try_borrow()
-            .map_err(|_| "selftest handle in use")?;
-        Ok(crate::public_table::frame(&selftest.table())?)
-    })
+    reply(|engine| table(Some(engine.cases(selftest_of(&handle)?)?)))
 }
 
 /// The engine information that ran the cases, as `yamaa_info()` gives it.
 #[extendr]
 fn selftest_info(handle: Robj) -> List {
-    reply(|| {
-        let selftest = selftest_of(&handle)?;
-        let selftest = selftest
-            .try_borrow()
-            .map_err(|_| "selftest handle in use")?;
-        Ok(info_list(selftest.info()))
-    })
+    reply(|engine| Ok(info_list(&engine.selftest_info(selftest_of(&handle)?)?)))
 }
 
 /// The engine information as a named list in the facade's field order, with
-/// `host_version` `NULL` when the facade has none: the one construction that
+/// `host_version` `NULL` when the engine has none: the one construction that
 /// `yamaa_info()` and a selftest's `info` share (D41).
-fn info_list(info: &yamaa::Info) -> Robj {
+fn info_list(info: &Info) -> Robj {
     let host_version = info
         .host_version
         .as_deref()
         .map_or_else(|| NULL.into_robj(), |version| r!(version));
     list!(
-        version = info.version,
+        version = info.version.as_str(),
         language_versions = Strings::from_values(&info.language_versions),
-        features = Strings::from_values(info.features.clone()),
+        features = Strings::from_values(&info.features),
         host = info.host.as_str(),
         host_version = host_version,
         platform = info.platform.as_str()
@@ -892,24 +692,20 @@ fn info_list(info: &yamaa::Info) -> Robj {
 /// such as `4.6.1` (D41, P-INFO-1).
 #[extendr]
 fn info(version: Raw) -> List {
-    reply(|| {
-        Ok(info_list(&yamaa::info(
-            yamaa::Host::R,
-            Some(&text(&version)?),
-        )))
+    reply(|engine| {
+        let version = text(&version)?;
+        Ok(info_list(&engine.info(&Call::new(
+            Language::R,
+            "r",
+            &version,
+        ))?))
     })
 }
 
 /// The printed report's lines (D37, D119), which `format()` returns.
 #[extendr]
 fn selftest_summary(handle: Robj) -> List {
-    reply(|| {
-        let selftest = selftest_of(&handle)?;
-        let selftest = selftest
-            .try_borrow()
-            .map_err(|_| "selftest handle in use")?;
-        Ok(summary_lines(&selftest.summary()))
-    })
+    reply(|engine| Ok(lines(engine.summary(selftest_of(&handle)?, None)?)))
 }
 
 include!("generated/api_entry.rs");
