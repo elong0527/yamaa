@@ -609,7 +609,10 @@ This section is the specification for #2683 (step A of #2600; steps B-F are
 #2684-#2688). It classifies every operation family and verification `Check`
 variant in `yamaa-core` dataset execution, defines exact equivalence between
 partitioned execution and whole-table execution, and identifies the seams where
-partition boundaries sit. It changes no code behavior.
+partition boundaries sit. It changes no code behavior. The partitioned executor
+built on it (#3697, `ResolvedPlan::execute_partitioned` and the facade's
+`EngineOptions::with_partitions`), with the end states of a cancelled or failed
+run and save, is described in `docs/partition-execution.md`.
 
 ### Terminology: key groups vs. data partitions
 
