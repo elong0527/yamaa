@@ -1393,8 +1393,7 @@ fn a_nearest_selection_takes_the_earlier_source_then_the_earlier_record_on_a_tie
         assert_eq!(agreeing(&fixture), Vec::<Value>::new(), "{unit}");
         let (csv, counts) = fixture.saved();
         assert_eq!(
-            csv,
-            "STUDYID,USUBJID,EGSEQ,PCSEQ\nS,S-1,1,1\nS,S-1,2,\nS,S-2,1,3\n",
+            csv, "STUDYID,USUBJID,EGSEQ,PCSEQ\nS,S-1,1,1\nS,S-1,2,\nS,S-2,1,3\n",
             "{unit}"
         );
         for (path, count) in [
@@ -1423,8 +1422,14 @@ fn a_calendar_unit_counts_whole_units_so_samples_within_one_unit_tie() {
         let specification = nearest_ecgs(&nearest_in(unit))
             .edit("EGDTC: datetime", "EGDTC: date")
             .edit("PCDTM: datetime", "PCDTM: date")
-            .edit("type: datetime, derivation: EG.EGDTC", "type: date, derivation: EG.EGDTC");
-        let fixture = Fixture::new(&specification, &[("eg.csv", reference), ("pc.csv", samples)]);
+            .edit(
+                "type: datetime, derivation: EG.EGDTC",
+                "type: date, derivation: EG.EGDTC",
+            );
+        let fixture = Fixture::new(
+            &specification,
+            &[("eg.csv", reference), ("pc.csv", samples)],
+        );
         let (csv, _) = fixture.saved();
         assert_eq!(
             csv,
@@ -1470,7 +1475,10 @@ fn the_reference_may_be_a_literal_or_an_expression_over_the_current_row() {
 #[test]
 fn a_required_nearest_match_fails_an_ecg_without_a_reference() {
     let fixture = Fixture::new(
-        &nearest_ecgs(&format!("{}    require_match: true\n", nearest_in("minute"))),
+        &nearest_ecgs(&format!(
+            "{}    require_match: true\n",
+            nearest_in("minute")
+        )),
         &[("eg.csv", EG), ("pc.csv", PC)],
     );
     let failure = fixture.failure();
@@ -1517,7 +1525,10 @@ fn nearest_refusals_fail_validation_in_check_and_the_run_alike() {
     };
     for (selection, expected) in [
         (
-            format!("{}    order_by: [PC.PCSEQ]\n    keep: first\n", nearest_in("hour")),
+            format!(
+                "{}    order_by: [PC.PCSEQ]\n    keep: first\n",
+                nearest_in("hour")
+            ),
             vec![yamaa_adapters::json!({
                 "phase": "validation",
                 "condition": "prohibited_construct",
@@ -1682,5 +1693,66 @@ fn an_aggregate_derivation_may_read_a_nearest_selection() {
     let fixture = Fixture::new(&specification, &[("eg.csv", EG), ("pc.csv", PC)]);
     assert_eq!(agreeing(&fixture), Vec::<Value>::new());
     let (csv, _) = fixture.saved();
-    assert_eq!(csv, "STUDYID,USUBJID,EGSEQ,NEARMAX\nS,S-1,1,1\nS,S-1,2,\nS,S-2,1,3\n");
+    assert_eq!(
+        csv,
+        "STUDYID,USUBJID,EGSEQ,NEARMAX\nS,S-1,1,1\nS,S-1,2,\nS,S-2,1,3\n"
+    );
+}
+
+/// LOOKUP-26 and LOOKUP-7: a nearest selection over `SELF` measures the
+/// completed rows of the earlier template, and the column it measures from
+/// stays a column of those rows though the artifact leaves it out. From the
+/// 8 January target, the visits 7, 1 and 12 days away give the second.
+#[test]
+fn a_nearest_selection_over_self_measures_the_completed_rows() {
+    let specification = "yamaa: \"1.0\"\n\
+        type: spec\n\
+        domain: OUT\n\
+        keys: [STUDYID, USUBJID, SEQ]\n\
+        input:\n\
+        \x20 VS: {path: vs.csv, types: {VSSEQ: int, VSDT: date}}\n\
+        output: {path: out.csv, columns: [STUDYID, USUBJID, SEQ, NEARSEQ]}\n\
+        intermediates:\n\
+        \x20 - id: COVER\n\
+        \x20   dataset: SELF\n\
+        \x20   key: [STUDYID, USUBJID]\n\
+        \x20   nearest: {source: ADT, to: TARGET, unit: day}\n\
+        columns:\n\
+        \x20 - {name: STUDYID, type: str}\n\
+        \x20 - {name: USUBJID, type: str}\n\
+        \x20 - {name: SEQ, type: int}\n\
+        \x20 - {name: ADT, type: date}\n\
+        \x20 - {name: TARGET, type: date}\n\
+        \x20 - {name: NEARSEQ, type: int}\n\
+        rows:\n\
+        \x20 - id: collected\n\
+        \x20   dataset: VS\n\
+        \x20   derivations:\n\
+        \x20     STUDYID: VS.STUDYID\n\
+        \x20     USUBJID: VS.USUBJID\n\
+        \x20     SEQ: VS.VSSEQ\n\
+        \x20     ADT: VS.VSDT\n\
+        \x20     TARGET: \"NULL\"\n\
+        \x20     NEARSEQ: \"NULL\"\n\
+        \x20 - id: expected\n\
+        \x20   dataset: VS\n\
+        \x20   group_by: [VS.STUDYID, VS.USUBJID]\n\
+        \x20   derivations:\n\
+        \x20     STUDYID: VS.STUDYID\n\
+        \x20     USUBJID: VS.USUBJID\n\
+        \x20     SEQ: 99\n\
+        \x20     ADT: \"NULL\"\n\
+        \x20     TARGET: \"DATE '2025-01-08'\"\n\
+        \x20     NEARSEQ: COVER.SEQ\n";
+    let visits = "STUDYID,USUBJID,VSSEQ,VSDT\n\
+        S,S-1,1,2025-01-01\n\
+        S,S-1,2,2025-01-09\n\
+        S,S-1,3,2025-01-20\n";
+    let fixture = Fixture::new(specification, &[("vs.csv", visits)]);
+    assert_eq!(agreeing(&fixture), Vec::<Value>::new());
+    let (csv, _) = fixture.saved();
+    assert_eq!(
+        csv,
+        "STUDYID,USUBJID,SEQ,NEARSEQ\nS,S-1,1,\nS,S-1,2,\nS,S-1,3,\nS,S-1,99,2\n"
+    );
 }

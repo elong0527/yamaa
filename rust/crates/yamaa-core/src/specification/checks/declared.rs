@@ -2512,8 +2512,9 @@ impl Checks<'_> {
         let Some(kind) = donor.field(&nearest.source.name, stored) else {
             return Ok(false);
         };
-        let source = match kind.column_type() {
-            Some(source @ (ColumnType::Date | ColumnType::DateTime)) => source,
+        let (source, temporal) = match kind.column_type() {
+            Some(source @ ColumnType::Date) => (source, ast::TemporalType::Date),
+            Some(source @ ColumnType::DateTime) => (source, ast::TemporalType::DateTime),
             other => {
                 return refuse(
                     lookup::nearest_source_type(
@@ -2526,27 +2527,8 @@ impl Checks<'_> {
                 )
             }
         };
-        let (value, permitted): (&str, &[&str]) = (
-            match unit {
-                ast::TimeUnit::Day => "day",
-                ast::TimeUnit::Week => "week",
-                ast::TimeUnit::Month => "month",
-                ast::TimeUnit::Year => "year",
-                ast::TimeUnit::Second => "second",
-                ast::TimeUnit::Minute => "minute",
-                ast::TimeUnit::Hour => "hour",
-            },
-            if source == ColumnType::DateTime {
-                &["second", "minute", "hour", "day"]
-            } else {
-                &["day", "week", "month", "year"]
-            },
-        );
-        if !permitted.contains(&value) {
-            return refuse(
-                crate::dataset::Temporal::unit_diagnostic(&at, value, permitted),
-                findings,
-            );
+        if let Err(diagnostic) = crate::scalar_verb::difference(temporal, unit, &at) {
+            return refuse(diagnostic, findings);
         }
         let Some(to) = self
             .prepared
@@ -2558,8 +2540,9 @@ impl Checks<'_> {
         let path = render(spec, nearest.to_field);
         let expected = ResultType::column(source);
         let actual = match to {
-            match_values::Declaration::Variable(read)
-            | match_values::Declaration::Source(read) => current_names(read),
+            match_values::Declaration::Variable(read) | match_values::Declaration::Source(read) => {
+                current_names(read)
+            }
             match_values::Declaration::Literal(_, expr)
             | match_values::Declaration::Read(_, expr)
             | match_values::Declaration::Expression { expr, .. } => {

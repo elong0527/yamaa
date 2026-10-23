@@ -317,8 +317,10 @@ impl<'a> Live<'a> {
 
     /// The reads that match a lookup's records to the current row: its key
     /// and the reference its nearest selection measures to, its range value,
-    /// its filter and its order (LOOKUP-25, LOOKUP-26). A nearest
-    /// selection's `source`, like a range bound, names a donor field.
+    /// its filter, its order and the source its nearest selection measures
+    /// from (LOOKUP-25, LOOKUP-26). That source, like a range bound, names a
+    /// donor field, which is a completed row's column only over `SELF`, as a
+    /// bare order term there is (LOOKUP-7).
     fn matching(&self, index: usize, out: &mut Vec<Reading>) -> Result<(), Error> {
         let item = &self.spec.intermediates[index];
         if let Some(JoinKey::Columns { columns, .. }) = &item.key {
@@ -326,6 +328,13 @@ impl<'a> Live<'a> {
         }
         for value in item.match_values() {
             self.read(value, Scope::Row, out)?;
+        }
+        if item.dataset.name == "SELF" {
+            out.extend(
+                item.nearest
+                    .iter()
+                    .map(|nearest| Reading::variable(&nearest.source)),
+            );
         }
         if let Some(between) = &item.between {
             self.read(between.value, Scope::Row, out)?;

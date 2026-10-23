@@ -88,11 +88,11 @@ status: approved
 measured_at: 1758ad145
 design: docs/design/interface-1.0.md
 summary:
-  entries: 642
-  changes: 73
+  entries: 643
+  changes: 74
   by_kind_and_decision:
     keep, decided: 569
-    new, decided: 27
+    new, decided: 28
     removed, decided: 13
     rename, decided: 9
     reshape, decided: 19
@@ -7350,6 +7350,20 @@ entries:
     and fails as value_not_permitted elsewhere (LOOKUP-17). No 0.5 file declares it, so the converter wrote
     none.'
   field_kind: value
+  convert: {action: none}
+- id: new.spec.intermediate.nearest
+  file_type: spec
+  path: intermediates[].nearest
+  today: null
+  kind: new
+  proposed: 'nearest: {source: FIELD, to: VALUE, unit: UNIT}'
+  decision: decided (D206)
+  reason: 'An addition to the approved table under D27 (D206), spelled under D241. Optional, with no default
+    (I5): a named intermediate selects the candidate whose date or datetime `source` lies nearest `to`, a
+    value of the current row read as a key match value is, counted in `unit` as diff counts it, a tie going
+    to the earlier source and then to stored order; beside order_by or keep it fails as prohibited_construct
+    (LOOKUP-26). No 0.5 file declares it, so the converter wrote none.'
+  field_kind: structure
   convert: {action: none}
 conditions:
 - today: schema_version_mismatch

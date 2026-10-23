@@ -267,7 +267,6 @@ fn bind_nearest(
     context: match_values::Context<'_>,
     findings: &mut Vec<BindFinding>,
 ) -> Result<Option<crate::dataset::Nearest>, BindError> {
-    use crate::dataset::{CalendarUnit, DateBounds, ElapsedUnit, Temporal, TemporalKind};
     use crate::diagnostic::lookup::{self, Owner};
     use crate::result_type::ResultType;
     let owner = Owner::Intermediate(intermediate);
@@ -291,65 +290,27 @@ fn bind_nearest(
             findings,
         );
     };
-    let kind = donor_kind(source);
-    let datetime = match kind {
-        Some(ColumnType::Date) => false,
-        Some(ColumnType::DateTime) => true,
-        _ => {
+    let (kind, temporal) = match donor_kind(source) {
+        Some(kind @ ColumnType::Date) => (kind, ast::TemporalType::Date),
+        Some(kind @ ColumnType::DateTime) => (kind, ast::TemporalType::DateTime),
+        other => {
             return refuse(
                 lookup::nearest_source_type(
                     &source_path,
                     owner,
                     &declaration.source,
-                    ResultType::declared(kind),
+                    ResultType::declared(other),
                 ),
                 findings,
             )
         }
     };
     let unit = declaration.unit.ok_or(BindError::Internal)?;
-    let difference = match (datetime, unit) {
-        (false, ast::TimeUnit::Day) => Some(CalendarUnit::Day),
-        (false, ast::TimeUnit::Week) => Some(CalendarUnit::Week),
-        (false, ast::TimeUnit::Month) => Some(CalendarUnit::Month),
-        (false, ast::TimeUnit::Year) => Some(CalendarUnit::Year),
-        _ => None,
-    }
-    .map(|unit| TemporalKind::Difference {
-        unit,
-        bounds: DateBounds::Exclusive,
-    })
-    .or(match (datetime, unit) {
-        (true, ast::TimeUnit::Second) => Some(ElapsedUnit::Second),
-        (true, ast::TimeUnit::Minute) => Some(ElapsedUnit::Minute),
-        (true, ast::TimeUnit::Hour) => Some(ElapsedUnit::Hour),
-        (true, ast::TimeUnit::Day) => Some(ElapsedUnit::Day),
-        _ => None,
-    }
-    .map(|unit| TemporalKind::DateTimeDifference { unit }));
-    let Some(difference) = difference else {
-        let (value, permitted): (&str, &[&str]) = (
-            match unit {
-                ast::TimeUnit::Day => "day",
-                ast::TimeUnit::Week => "week",
-                ast::TimeUnit::Month => "month",
-                ast::TimeUnit::Year => "year",
-                ast::TimeUnit::Second => "second",
-                ast::TimeUnit::Minute => "minute",
-                ast::TimeUnit::Hour => "hour",
-            },
-            if datetime {
-                &["second", "minute", "hour", "day"]
-            } else {
-                &["day", "week", "month", "year"]
-            },
-        );
-        return refuse(
-            Temporal::unit_diagnostic(&declaration.path, value, permitted),
-            findings,
-        );
+    let difference = match crate::scalar_verb::difference(temporal, unit, &declaration.path) {
+        Ok(difference) => difference,
+        Err(diagnostic) => return refuse(diagnostic, findings),
     };
-    let expected = ResultType::column(kind.ok_or(BindError::Internal)?);
+    let expected = ResultType::column(kind);
     let actual = declaration.to.result_type(context.tree, catalog)?;
     if !actual.comparable(expected) {
         return refuse(
@@ -359,13 +320,25 @@ fn bind_nearest(
     }
     let to = &declaration.to;
     let Some(value) = (if contextual {
-        to.bind_deferred(&declaration.to_path, intermediate, catalog, findings, context)?
+        to.bind_deferred(
+            &declaration.to_path,
+            intermediate,
+            catalog,
+            findings,
+            context,
+        )?
     } else {
-        to.bind(&declaration.to_path, intermediate, catalog, findings, context)?
+        to.bind(
+            &declaration.to_path,
+            intermediate,
+            catalog,
+            findings,
+            context,
+        )?
     }) else {
         return Ok(None);
     };
-    let difference = Temporal::new(
+    let difference = crate::dataset::Temporal::new(
         difference,
         vec![declaration.source.clone(), "to".into()],
         declaration.path.clone(),

@@ -541,10 +541,7 @@ impl<'a> Reads<'a> {
             .collect::<Option<Vec<_>>>()?;
         if let Some(nearest) = &item.nearest {
             let value = named.reference_declaration(&item.id.name)?;
-            keys.push((
-                render(spec, nearest.to_field),
-                value.references().collect(),
-            ));
+            keys.push((render(spec, nearest.to_field), value.references().collect()));
         }
         Some(keys)
     }
