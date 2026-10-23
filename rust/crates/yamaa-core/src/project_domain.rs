@@ -2,11 +2,12 @@
 //! Each build activates called definitions through the host-functions port
 //! before granting study-data authority.
 use crate::{
+    decoder::Decoder,
     domain::{self, CheckedSpecification},
     host_functions::{HostFunctions, Lock},
     project_activation::{self, Bindings, Failure},
     resolver::Resolver,
-    specification_run::{CapturedAttempt, PortError, SourceDecoder},
+    specification_run::{CapturedAttempt, PortError},
 };
 use crate::{
     project_environment::ExecutionEnvironment,
@@ -67,7 +68,7 @@ impl CheckedOwnedProject {
     }
     /// [`CheckedProject::build_into`] over the owned environment.
     #[allow(clippy::too_many_arguments)]
-    pub fn build_into<A: HostFunctions, P: Resolver, D: SourceDecoder>(
+    pub fn build_into<A: HostFunctions, P: Resolver, D: Decoder>(
         &self,
         functions: &mut A,
         lock: &[u8],
@@ -90,7 +91,7 @@ impl CheckedOwnedProject {
         )
     }
 }
-fn build<A: HostFunctions, P: Resolver, D: SourceDecoder>(
+fn build<A: HostFunctions, P: Resolver, D: Decoder>(
     (checked, environment): (&CheckedSpecification, &ExecutionEnvironment),
     (activation, lock_bytes): (&mut A, &[u8]),
     source: &mut P,

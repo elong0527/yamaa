@@ -11,9 +11,8 @@ mod preparation {
             Document, DocumentNode as N, LayerProvenance, SchemaModule, SchemaStructure,
         };
         use yamaa_core::{
-            dictionary_preparation as app,
+            decoder, dictionary_preparation as app,
             inheritance::{Source as Identity, SourceError, VersionedLayer},
-            inheritance_capture::InheritanceDecodePort,
             project_preparation::Source,
             resolver::{Captured, Failure, File, Name, Resolver},
         };
@@ -245,10 +244,12 @@ mod preparation {
                 }
             }
         }
-        impl InheritanceDecodePort for Decoder {
+        impl decoder::Decoder for Decoder {
+            crate::support::ports::no_tables!();
+            crate::support::ports::no_project_files!();
             type Raw = Document;
-            type Error = DecodeError;
-            fn decode(&mut self, identity: &str, bytes: &[u8]) -> Result<Document, DecodeError> {
+            type DocumentError = DecodeError;
+            fn raw(&mut self, identity: &str, bytes: &[u8]) -> Result<Document, DecodeError> {
                 self.events.push(format!("{identity}:{bytes:?}"));
                 if self.invalid {
                     return Err(DecodeError::Invalid);
@@ -262,7 +263,7 @@ mod preparation {
                     ]))
                 })
             }
-            fn document(raw: &Document) -> &Document {
+            fn raw_document(raw: &Document) -> &Document {
                 raw
             }
         }
@@ -583,15 +584,6 @@ mod preparation {
             source: Source,
             parents: Vec<Source>,
         }
-        impl app::PreparedView for Prepared {
-            type Parent = Source;
-            fn parents(&self) -> &[Source] {
-                &self.parents
-            }
-            fn parent_source(parent: &Source) -> &Source {
-                parent
-            }
-        }
         enum Failure {
             Opaque(Fault),
             Parent(Fault),
@@ -604,9 +596,9 @@ mod preparation {
             wrong_parent: bool,
             display_pointer: Option<*const u8>,
         }
-        impl app::DocumentPort<Fault> for Documents {
-            type Prepared = Prepared;
-            type Error = Failure;
+        impl Documents {
+            /// Prepare the entry `source` as a document service does, reading
+            /// each written parent through `port`.
             fn prepare<P: Resolver<Error = Fault>>(
                 &mut self,
                 source: Source,
@@ -685,11 +677,36 @@ mod preparation {
                 log,
             )
         }
+        /// Prepare `written` from `declaring` in the order a caller takes the
+        /// steps: the entry is captured, the document prepares through an
+        /// alias cache, and every alias of each parent it holds is captured
+        /// again once it has prepared.
+        fn prepare(
+            native: &mut Native,
+            documents: &mut Documents,
+            declaring: Option<&str>,
+            written: &str,
+        ) -> Result<Prepared, app::Error<Fault, Failure>> {
+            let source = app::capture_entry(native, declaring, written)?;
+            let display = source.identity.clone();
+            let mut aliases = app::AliasCache::new(native);
+            let prepared = documents
+                .prepare(source, display, &mut aliases)
+                .map_err(|error| aliases.refused(error))?;
+            aliases.accept(
+                prepared
+                    .parents
+                    .iter()
+                    .map(|parent| parent.identity.as_str()),
+                |_, _, _| None,
+            )?;
+            Ok(prepared)
+        }
         fn run(
             native: &mut Native,
             documents: &mut Documents,
         ) -> Result<Prepared, app::Error<Fault, Failure>> {
-            app::prepare(native, documents, None, "root.yaml")
+            prepare(native, documents, None, "root.yaml")
         }
         #[test]
         fn exact_effect_tape_preserves_duplicates_first_capture_and_success_aliases() {
@@ -730,7 +747,7 @@ mod preparation {
         #[test]
         fn declaring_entry_keeps_authored_spelling_and_service_waits_for_entry_capture() {
             let (mut native, mut documents, log) = setup(&[]);
-            assert!(app::prepare(
+            assert!(prepare(
                 &mut native,
                 &mut documents,
                 Some("/meta/original"),
@@ -844,11 +861,22 @@ mod preparation {
         //! A 1.x specification's parents are followed by `traverse_versioned`
         //! (LAYER-2, LAYER-3).
         use std::collections::BTreeMap;
+        use yamaa_core::decoder;
         use yamaa_core::inheritance::*;
+        use yamaa_core::inheritance_capture::SourceFailure;
         use yamaa_core::language::LanguageVersion;
+        use yamaa_core::resolver::{Captured, Failure, File, Located, Name, Resolver};
+        use yamaa_core::resource::ResourceFailure;
         use yamaa_core::schema::{Document, NormalizationError, SchemaModule, SchemaStructure};
 
         use crate::support::document::Tree as V;
+        use crate::support::ports::Never;
+
+        type Host = (&'static str, u32);
+        /// A traversal's failure, of which no decoding fails here.
+        type Failed = Error<SourceFailure<Host, Never>>;
+        /// What the port refuses a file it does not hold with.
+        const MISSING: Host = ("missing", 0);
 
         fn text(value: &str) -> V {
             V::text(value)
@@ -915,21 +943,25 @@ mod preparation {
                 self
             }
         }
-        impl InheritanceSourcePort for Port {
-            type Error = (&'static str, u32);
-            fn canonicalize(
-                &mut self,
-                declaring: &str,
-                written: &str,
-            ) -> Result<Source, SourceError<Self::Error>> {
+        impl Resolver for Port {
+            type Error = Host;
+            fn inspect(&mut self, name: Name<'_>) -> Result<Located, Host> {
+                let Name::Written {
+                    file: File::Parent,
+                    declaring,
+                    written,
+                } = name
+                else {
+                    panic!("unexpected inspection {name:?}")
+                };
                 self.calls.push(format!("resolve:{declaring}:{written}"));
                 if self.unavailable == Some(written) {
-                    return Err(SourceError::Unavailable);
+                    return Err(MISSING);
                 }
                 if self.raised == Some(written) {
-                    return Err(SourceError::Raised(("opaque", 73)));
+                    return Err(("opaque", 73));
                 }
-                Ok(Source {
+                Ok(Located {
                     identity: self
                         .aliases
                         .get(written)
@@ -939,37 +971,59 @@ mod preparation {
                     display_path: format!("written/{written}"),
                 })
             }
-            fn read(&mut self, source: &Source) -> Result<Document, SourceError<Self::Error>> {
+            fn capture(&mut self, name: Name<'_>) -> Result<Captured, Host> {
+                let Name::Located {
+                    file: File::Parent,
+                    source,
+                } = name
+                else {
+                    panic!("unexpected capture {name:?}")
+                };
                 self.calls.push(format!("read:{}", source.identity));
-                self.documents
-                    .get(&source.identity)
-                    .cloned()
-                    .ok_or(SourceError::Unavailable)
+                if self.documents.contains_key(&source.identity) {
+                    Ok(Captured::resource(source.identity.as_bytes().into(), true))
+                } else {
+                    Err(MISSING)
+                }
+            }
+            fn failure(&self, _: Name<'_>, error: &Host) -> Option<Failure> {
+                (*error == MISSING).then_some(Failure::Resource(ResourceFailure::Missing))
+            }
+            fn rebase(&mut self, _: &Located, _: &Located, _: &str) -> Result<String, Host> {
+                panic!("a traversal respells no path")
+            }
+        }
+        /// Each layer's document, by the identity its held bytes name.
+        struct Layers(BTreeMap<String, Document>);
+        impl decoder::Decoder for Layers {
+            crate::support::ports::no_tables!();
+            crate::support::ports::no_project_files!();
+            type Raw = Document;
+            type DocumentError = Never;
+            fn raw(&mut self, identity: &str, bytes: &[u8]) -> Result<Document, Never> {
+                assert_eq!(bytes, identity.as_bytes(), "the held bytes of {identity}");
+                Ok(self.0[identity].clone())
+            }
+            fn raw_document(raw: &Document) -> &Document {
+                raw
             }
         }
         /// The 1.x chain from the entry `input`, root ancestor first.
-        fn run(
-            input: Document,
-            port: &mut Port,
-        ) -> Result<Vec<VersionedLayer>, Error<(&'static str, u32)>> {
+        fn run(input: Document, port: &mut Port) -> Result<Vec<VersionedLayer>, Failed> {
+            let mut layers = Layers(port.documents.clone());
             traverse_versioned(
                 &schema(),
                 LanguageVersion::new(0),
                 source("entry"),
                 input,
                 port,
+                &mut layers,
             )
-            .map(|chain| chain.layers)
+            .map(|traversal| traversal.chain.layers)
         }
         /// `error`'s projection: a validation finding of `condition` and
         /// `rule` at `path`, with each text context value of `fields`.
-        fn check(
-            error: &Error<(&str, u32)>,
-            condition: &str,
-            rule: &str,
-            path: &str,
-            fields: &[(&str, &str)],
-        ) {
+        fn check(error: &Failed, condition: &str, rule: &str, path: &str, fields: &[(&str, &str)]) {
             use yamaa_core::json::Value as C;
             use yamaa_core::value::Value as S;
             let diagnostic = error.diagnostic().unwrap().unwrap();
@@ -1171,7 +1225,7 @@ mod preparation {
             };
             assert_eq!(
                 run(layer(Some("raise")), &mut port).unwrap_err(),
-                Error::Host(("opaque", 73))
+                Error::Host(SourceFailure::Host(("opaque", 73)))
             );
             assert_eq!(port.calls, ["resolve:entry:raise"]);
         }
@@ -1357,12 +1411,17 @@ mod preparation {
         //! are respelled through the same port as `prepare_versioned` resolves
         //! the chain (LAYER-3, LAYER-7, LAYER-10).
         use crate::support::document::Tree;
+        use crate::support::ports::Never;
         use std::{collections::BTreeMap, rc::Rc};
         use yamaa_core::language::LanguageVersion;
+        use yamaa_core::resolver::{self, Captured, File, Located, Name, Resolver};
         use yamaa_core::schema::{
             Document, DocumentNode as N, SchemaModule, SchemaSource, SchemaStructure,
         };
-        use yamaa_core::{inheritance as graph, inheritance_preparation as lifecycle};
+        use yamaa_core::{
+            decoder, inheritance as graph, inheritance_capture::SourceFailure,
+            inheritance_preparation as lifecycle,
+        };
 
         fn text(s: &str) -> Tree {
             Tree::text(s)
@@ -1481,29 +1540,20 @@ mod preparation {
             Read(String),
             Rebase(String, String, String),
         }
-        /// A host's port over 1.x layers held by identity. It resolves a
-        /// written parent, reads a parent, and respells a path from the
+        /// A host's resolver over 1.x layers held by identity. It locates a
+        /// written parent, captures a parent, and respells a path from the
         /// entry; one effect may raise an opaque payload instead.
         struct Chain {
             log: Vec<Effect>,
-            documents: BTreeMap<String, Document>,
             aliases: BTreeMap<String, String>,
             failure: Option<(usize, Payload)>,
         }
         impl Chain {
-            /// The entry's parents: `b`, then `a`, whose `alias` resolves to
-            /// the root ancestor `common`.
+            /// The entry's parents are `b`, then `a`, whose `alias` resolves
+            /// to the root ancestor `common`.
             fn new() -> Self {
                 Self {
                     log: Vec::new(),
-                    documents: [
-                        ("b", layer("b", Some("a"), false)),
-                        ("a", layer("a", Some("alias"), false)),
-                        ("common", layer("common", None, false)),
-                    ]
-                    .into_iter()
-                    .map(|(name, document)| (name.into(), document))
-                    .collect(),
                     aliases: [("alias".into(), "common".into())].into_iter().collect(),
                     failure: None,
                 }
@@ -1519,19 +1569,23 @@ mod preparation {
                 }
             }
         }
-        impl graph::InheritanceSourcePort for Chain {
+        impl Resolver for Chain {
             type Error = Payload;
-            fn canonicalize(
-                &mut self,
-                declaring: &str,
-                written: &str,
-            ) -> Result<graph::Source, graph::SourceError<Payload>> {
+            fn inspect(&mut self, name: Name<'_>) -> Result<Located, Payload> {
+                let Name::Written {
+                    file: File::Parent,
+                    declaring,
+                    written,
+                } = name
+                else {
+                    panic!("unexpected inspection {name:?}")
+                };
                 if let Some(payload) =
                     self.effect(Effect::Resolve(declaring.into(), written.into()))
                 {
-                    return Err(graph::SourceError::Raised(payload));
+                    return Err(payload);
                 }
-                Ok(graph::Source {
+                Ok(Located {
                     identity: self
                         .aliases
                         .get(written)
@@ -1540,24 +1594,26 @@ mod preparation {
                     display_path: format!("display/{written}"),
                 })
             }
-            fn read(
-                &mut self,
-                source: &graph::Source,
-            ) -> Result<Document, graph::SourceError<Payload>> {
+            fn capture(&mut self, name: Name<'_>) -> Result<Captured, Payload> {
+                let Name::Located {
+                    file: File::Parent,
+                    source,
+                } = name
+                else {
+                    panic!("unexpected capture {name:?}")
+                };
                 if let Some(payload) = self.effect(Effect::Read(source.identity.clone())) {
-                    return Err(graph::SourceError::Raised(payload));
+                    return Err(payload);
                 }
-                Ok(self
-                    .documents
-                    .remove(&source.identity)
-                    .expect("each parent is read once"))
+                Ok(Captured::resource(source.identity.as_bytes().into(), true))
             }
-        }
-        impl lifecycle::PathPort for Chain {
+            fn failure(&self, _: Name<'_>, _: &Payload) -> Option<resolver::Failure> {
+                None
+            }
             fn rebase(
                 &mut self,
-                layer: &graph::Source,
-                entry: &graph::Source,
+                layer: &Located,
+                entry: &Located,
                 written: &str,
             ) -> Result<String, Payload> {
                 match self.effect(Effect::Rebase(
@@ -1570,9 +1626,42 @@ mod preparation {
                 }
             }
         }
+        /// The entry's parent layers, each decoded once by the identity its
+        /// held bytes name.
+        struct Layers(BTreeMap<String, Document>);
+        impl Layers {
+            fn new() -> Self {
+                Self(
+                    [
+                        ("b", layer("b", Some("a"), false)),
+                        ("a", layer("a", Some("alias"), false)),
+                        ("common", layer("common", None, false)),
+                    ]
+                    .into_iter()
+                    .map(|(name, document)| (name.into(), document))
+                    .collect(),
+                )
+            }
+        }
+        impl decoder::Decoder for Layers {
+            crate::support::ports::no_tables!();
+            crate::support::ports::no_project_files!();
+            type Raw = Document;
+            type DocumentError = Never;
+            fn raw(&mut self, identity: &str, bytes: &[u8]) -> Result<Document, Never> {
+                assert_eq!(bytes, identity.as_bytes(), "the held bytes of {identity}");
+                Ok(self
+                    .0
+                    .remove(identity)
+                    .expect("each parent is decoded once"))
+            }
+            fn raw_document(raw: &Document) -> &Document {
+                raw
+            }
+        }
         /// Why a 1.x chain did not resolve.
         enum Failure {
-            Traversal(graph::Error<Payload>),
+            Traversal(graph::Error<SourceFailure<Payload, Never>>),
             Resolution(lifecycle::VersionedError<Payload>),
         }
         /// Traverse the entry's chain and resolve it, as a 1.x
@@ -1585,15 +1674,20 @@ mod preparation {
                 identity: "entry".into(),
                 display_path: "written/entry".into(),
             };
-            let layers = graph::traverse_versioned(
+            let graph::Traversal { chain: layers, .. } = graph::traverse_versioned(
                 &schema,
                 LanguageVersion::new(0),
                 entry,
                 layer("entry", Some("b"), true),
                 chain,
+                &mut Layers::new(),
             )
             .map_err(Failure::Traversal)?;
-            let resolved = lifecycle::prepare_versioned(&schema, &layers, chain)
+            // No layer copies columns, so no producer is read.
+            let resolved =
+                lifecycle::prepare_versioned(&schema, &layers, chain, |_, _, _, _, _| {
+                    panic!("no layer copies columns")
+                })
                 .map_err(Failure::Resolution)?;
             Ok((layers, resolved))
         }
@@ -1677,7 +1771,7 @@ mod preparation {
                     },
                 ));
                 let original = match resolve(&mut chain) {
-                    Err(Failure::Traversal(graph::Error::Host(payload)))
+                    Err(Failure::Traversal(graph::Error::Host(SourceFailure::Host(payload))))
                     | Err(Failure::Resolution(lifecycle::VersionedError::Path(payload))) => payload,
                     _ => panic!("effect {index} raises its payload"),
                 };

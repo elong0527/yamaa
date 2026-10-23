@@ -6,7 +6,6 @@ use yamaa_core::schema::{
     BundleError, NormalizationError, NormalizedDocument, SchemaDiagnostic, SchemaStructure,
     ValidationError,
 };
-use yamaa_core::schema_capture::{self as capture, RootSelection};
 mod inheritance;
 pub use inheritance::{CapturedParent, InheritanceError, SourceFailure};
 use yamaa_core::resolver::Resolver;
@@ -171,50 +170,11 @@ impl CapturedDocument {
         &self.normalized
     }
 }
-/// Physical schema YAML representation; closure ordering and admission belong
-/// to the engine. Original occurrence locations stay here.
-struct SchemaDecoder;
-impl capture::SchemaDecodePort for SchemaDecoder {
-    type Error = DecodeFailure;
-    type Locations = Vec<SourcePosition>;
-    fn decode(
-        &mut self,
-        _: &str,
-        bytes: &[u8],
-    ) -> Result<capture::DecodedModule<Self::Locations>, DecodeFailure> {
-        let decoded = decode_yaml(bytes)?;
-        Ok(capture::DecodedModule {
-            document: decoded.document,
-            locations: decoded.locations,
-        })
-    }
-}
-
-/// Physical entry decoding retains its source-limit order and YAML locations.
-struct StructuralDecoder<'a>(&'a CapturedSchema);
-impl yamaa_core::structural_preparation::StructuralDecodePort for StructuralDecoder<'_> {
-    type Error = Error;
-    type Locations = Vec<SourcePosition>;
-    fn decode(
-        &mut self,
-        source: &Source,
-    ) -> Result<yamaa_core::structural_preparation::Decoded<Self::Locations>, Error> {
-        let DecodedYaml {
-            document,
-            locations,
-        } = self.0.decode_entry(source)?;
-        Ok(yamaa_core::structural_preparation::Decoded {
-            document,
-            locations,
-        })
-    }
-}
-
 impl CapturedSchema {
     /// Decode the complete host-captured closure using the shared YAML semantics.
     /// Cumulative byte/count admission happens before any source is decoded.
     pub fn admit(sources: Vec<Source>, entry: usize) -> Result<Arc<Self>, Error> {
-        Self::admit_with_root(sources, entry, RootSelection::Default)
+        Self::admit_with_root(sources, entry, "root_class")
     }
     /// Capture a closed schema root without interpreting it as a specification.
     pub fn admit_root(
@@ -222,20 +182,30 @@ impl CapturedSchema {
         entry: usize,
         root_class: &str,
     ) -> Result<Arc<Self>, Error> {
-        Self::admit_with_root(sources, entry, RootSelection::Named(root_class))
+        Self::admit_with_root(sources, entry, root_class)
     }
+    /// Every module decodes, in the order supplied, before the closure's
+    /// semantic admission, which reports entry and name errors as well.
     fn admit_with_root(
         sources: Vec<Source>,
         entry: usize,
-        root: RootSelection<'_>,
+        root_class: &str,
     ) -> Result<Arc<Self>, Error> {
-        let closure = capture::admit(sources, entry, root, &mut SchemaDecoder).map_err(
-            |error| match error {
-                capture::Error::Decode { identity, error } => Error::Decode { identity, error },
-                capture::Error::Bundle(error) => Error::Bundle(error),
-            },
-        )?;
-        let (sources, locations, structure) = closure.into_parts();
+        let mut locations = Vec::with_capacity(sources.len());
+        let mut modules = Vec::with_capacity(sources.len());
+        for source in &sources {
+            let decoded = decode_yaml(&source.bytes).map_err(|error| Error::Decode {
+                identity: source.identity.clone(),
+                error,
+            })?;
+            locations.push(decoded.locations);
+            modules.push(yamaa_core::schema::SchemaModule {
+                name: source.identity.clone(),
+                document: decoded.document,
+            });
+        }
+        let structure =
+            SchemaStructure::admit(modules, entry, root_class).map_err(Error::Bundle)?;
         Ok(Arc::new(Self {
             sources,
             locations,
@@ -291,7 +261,7 @@ impl CapturedSchema {
             &self.structure,
             source,
             selection,
-            &mut StructuralDecoder(self),
+            &mut crate::decoder::Decoder::<std::convert::Infallible>::default(),
         )
         .map_err(|error| match error {
             StructuralError::UnknownClass(name) => Error::UnknownClass(name),
@@ -309,23 +279,13 @@ impl CapturedSchema {
                 )))
             }
         })?;
-        let (source, document, locations, class_name, normalized) = prepared.into_parts();
+        let (source, raw, class_name, normalized) = prepared.into_parts();
         Ok(CapturedDocument {
             schema: Arc::clone(self),
             class_name,
             source,
-            raw: DecodedYaml {
-                document,
-                locations,
-            },
+            raw,
             normalized,
-        })
-    }
-
-    fn decode_entry(&self, source: &Source) -> Result<DecodedYaml, Error> {
-        decode_yaml(&source.bytes).map_err(|error| Error::Decode {
-            identity: source.identity.clone(),
-            error,
         })
     }
 }
@@ -372,7 +332,7 @@ pub struct PreparedDocument {
     /// The dictionary files its `mapping.dict` paths name; its lowering holds
     /// their content.
     dictionaries: Vec<yamaa_core::dictionary_preparation::Captured<DecodedYaml>>,
-    resource_aliases: std::collections::BTreeMap<String, Vec<(String, String)>>,
+    resource_aliases: yamaa_core::file_preparation::Aliases,
 }
 
 /// Prepare a specification read from `source` with the 1.0 closures the
@@ -431,18 +391,21 @@ pub(crate) fn prepare_versioned_within<P: Resolver>(
     }
     .prepare_dictionaries(port)
 }
-impl yamaa_core::file_preparation::PreparedView for PreparedDocument {
-    type Parent = CapturedParent;
-    fn parents(&self) -> &[CapturedParent] {
-        &self.parents
+impl PreparedDocument {
+    /// The identity of each file this document holds besides its entry: its
+    /// parent layers in first-capture order, then its dictionary files.
+    pub(crate) fn held(&self) -> impl Iterator<Item = &str> {
+        self.parents
+            .iter()
+            .map(CapturedParent::source)
+            .chain(self.dictionary_sources())
+            .map(|source| source.identity.as_str())
     }
-    fn parent_source(parent: &CapturedParent) -> &Source {
-        parent.source()
-    }
-    fn resources(&self) -> impl Iterator<Item = &Source> {
-        self.dictionary_sources()
-    }
-    fn resource_diagnostic(
+    /// The finding at the field that wrote `written` in the file `declaring`
+    /// names, when this document holds that occurrence: its `parent`, or a
+    /// dictionary path. Resolved identities never replace the authored field
+    /// or path.
+    pub(crate) fn resource_diagnostic(
         &self,
         declaring: &str,
         written: &str,
@@ -475,20 +438,19 @@ impl yamaa_core::file_preparation::PreparedView for PreparedDocument {
             .then(|| failure.field_diagnostic(reference.path(), written))
         })
     }
-    fn retain_resource_aliases(
+    /// Keep the spellings that located each file this document holds, once
+    /// every one of them was captured again.
+    pub(crate) fn retain_resource_aliases(
         &mut self,
-        aliases: std::collections::BTreeMap<String, Vec<(String, String)>>,
+        aliases: yamaa_core::file_preparation::Aliases,
     ) {
         self.resource_aliases = aliases;
     }
-}
-impl PreparedDocument {
     pub(crate) fn resource_diagnostic_for_identity(
         &self,
         identity: &str,
         failure: yamaa_core::resource::ResourceFailure,
     ) -> Option<yamaa_core::diagnostic::Diagnostic> {
-        use yamaa_core::file_preparation::PreparedView;
         self.resource_aliases
             .get(identity)?
             .iter()
@@ -575,7 +537,7 @@ impl PreparedDocument {
             origins,
             &seeds,
             port,
-            &mut inheritance::Decoder,
+            &mut crate::decoder::Decoder::<std::convert::Infallible>::default(),
         );
         drop(seeds);
         match materialized {

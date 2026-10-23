@@ -11,12 +11,10 @@
 
 use std::convert::Infallible;
 
-use yamaa_adapters::{
-    arrow_table::ArrowTable, project_source_decoder::Decoder, specification_run::Error,
-};
+use yamaa_adapters::{arrow_table::ArrowTable, decoder::Decoder, specification_run::Error};
 use yamaa_core::{
+    decoder::Decoder as _,
     specification::{SourceDeclaration, SourceInterpretation, SourceProfile},
-    specification_run::SourceDecoder as _,
     table::TableAccess,
     value::ColumnType,
 };
@@ -57,7 +55,7 @@ pub fn decode(
     interpretation: SourceInterpretation,
 ) -> Result<ArrowTable, Error> {
     Decoder::<Infallible>::default()
-        .decode(source, bytes, interpretation, None)
+        .table(source, bytes, interpretation, None)
         .map(|snapshot| snapshot.into_table())
 }
 

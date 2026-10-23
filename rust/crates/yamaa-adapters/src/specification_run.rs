@@ -9,8 +9,8 @@ use crate::{
     arrow_table::ArrowTable,
     csv_source::{self, TextTableError},
     dataset_result::{self, DatasetError, DatasetResponse},
+    decoder::{Decoder, Snapshot},
     project_source::{CapturedEnvironment, OwnedEnvironment},
-    project_source_decoder::{Decoder, Snapshot},
     specification_source::{LinkedSpecification, PreparedDocument},
 };
 use std::{
@@ -197,7 +197,11 @@ impl PreparedRun {
     /// The shared application service decodes, binds and executes held bytes.
     pub fn execute_csv(&self, bytes: &[u8]) -> Result<DatasetResponse, Error> {
         let attempt = catch_unwind(AssertUnwindSafe(|| {
-            application::execute_bytes(self.compiled(), bytes, &mut SourceDecoder)
+            application::execute_bytes(
+                self.compiled(),
+                bytes,
+                &mut Decoder::<crate::callback::CallbackError>::default(),
+            )
         }))
         .map_err(|_| Error::Execution(DatasetError::Internal))?;
         let execution = attempt
@@ -285,57 +289,6 @@ fn run_error(error: application::RunError<Error>, prepared: &PreparedSpecificati
             crate::resource_diagnostics::run_limit(&error, prepared.sources())
                 .expect("source boundary owner"),
         ),
-    }
-}
-
-pub(crate) struct SourceDecoder;
-impl application::SourceDecoder for SourceDecoder {
-    type Error = Error;
-    type Table = dataset_result::Snapshot;
-    fn decode_owned(
-        &mut self,
-        source: &SourceDeclaration,
-        table: &(dyn std::any::Any + Send + Sync),
-        interpretation: yamaa_core::specification::SourceInterpretation,
-        contract: Option<&yamaa_core::producer_contract::Contract>,
-    ) -> Option<Result<Self::Table, Self::Error>> {
-        table.downcast_ref::<ArrowTable>().map(|table| {
-            decode_frame(source, table.clone(), interpretation, contract)
-                .map(dataset_result::Snapshot)
-        })
-    }
-    fn continue_after(&self, error: &Self::Error) -> bool {
-        matches!(
-            error,
-            Error::Source(TextTableError::Csv(csv_source::Error::Profile { .. }))
-                | Error::Ordinal(yamaa_core::source_ordinal::Error::Collision)
-                | Error::TypedSource(crate::typed_csv::Error::Typing(
-                    yamaa_core::typed_csv::Error::UnknownField { .. }
-                        | yamaa_core::typed_csv::Error::FieldParse { .. }
-                ))
-                | Error::ParquetSource(
-                    crate::parquet_source::Error::Malformed
-                        | crate::parquet_source::Error::EmptyName { .. }
-                        | crate::parquet_source::Error::DuplicateName { .. }
-                        | crate::parquet_source::Error::Unsupported { .. }
-                        | crate::parquet_source::Error::Value { .. }
-                )
-                | Error::ProducerMetadata(_)
-                | Error::OdmFields(_)
-                | Error::SasSource(
-                    crate::sas_source::Error::Invalid(_) | crate::sas_source::Error::Typing(_)
-                )
-                | Error::OdmValues(_)
-        ) || matches!(error, Error::OdmSource(error) if error.refuses_document())
-    }
-    fn decode(
-        &mut self,
-        source: &SourceDeclaration,
-        bytes: &[u8],
-        interpretation: yamaa_core::specification::SourceInterpretation,
-        contract: Option<&yamaa_core::producer_contract::Contract>,
-    ) -> Result<Self::Table, Self::Error> {
-        decode_source(source, bytes, interpretation, contract).map(dataset_result::Snapshot)
     }
 }
 

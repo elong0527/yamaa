@@ -299,21 +299,23 @@ pub enum Failure<E> {
     Rejected(Box<RejectedEnvironment<E>>),
 }
 
-/// The decoder of one project preparation, configured by its schemas. A 0.5
-/// project, and every file it links, is read against the 0.5 roots, which
-/// refuse a file that declares the 1.x header (#3030 D76). Schemas that read
-/// 1.x files ([`ProjectSchemas::versioned`]) admit a project file that
-/// declares the header against the 1.0 project closure, at the version it
-/// declares, and each function file and codelist file a 1.0 project lists
-/// against the closure of its type; a listed file must declare the header,
-/// and one whose version the engine does not read, or whose type is another,
-/// is refused at the project's field that lists it (SCHEMA-2).
-pub(crate) struct Decoder(pub(crate) ProjectSchemas);
-impl application::ProjectDecodePort for Decoder {
-    type Error = Error;
-    type Document = CapturedDocument;
-    fn decode(&mut self, source: Source, target: DecodeTarget) -> Result<CapturedDocument, Error> {
-        let schemas = &self.0;
+impl ProjectSchemas {
+    /// Decode `source`, a file a project names, and admit it as `target`. A
+    /// 0.5 project, and every file it links, is read against the 0.5 roots,
+    /// which refuse a file that declares the 1.x header (#3030 D76). Schemas
+    /// that read 1.x files ([`ProjectSchemas::versioned`]) admit a project
+    /// file that declares the header against the 1.0 project closure, at the
+    /// version it declares, and each function file and codelist file a 1.0
+    /// project lists against the closure of its type; a listed file must
+    /// declare the header, and one whose version the engine does not read, or
+    /// whose type is another, is refused at the project's field that lists it
+    /// (SCHEMA-2).
+    pub(crate) fn admit(
+        &self,
+        source: Source,
+        target: DecodeTarget,
+    ) -> Result<CapturedDocument, Error> {
+        let schemas = self;
         let listed = match target {
             DecodeTarget::Environment => return schemas.environment.prepare_structural(source),
             DecodeTarget::Function => {
@@ -345,16 +347,6 @@ impl application::ProjectDecodePort for Decoder {
             Decoded::Legacy { source, .. } => schemas.project.prepare_structural(source),
         }
     }
-    fn document(document: &CapturedDocument) -> &yamaa_core::schema::Document {
-        &document.normalized().document
-    }
-    fn source(document: &CapturedDocument) -> &Source {
-        document.source()
-    }
-    /// The packaging tool whose lock syntax the held bytes parse as.
-    fn lock(&mut self, source: &Source) -> Option<yamaa_core::project_environment::LockKind> {
-        crate::project_lock::kind(&source.bytes).ok()
-    }
 }
 
 /// Decode through the captured schema codecs; the engine owns ordering and
@@ -367,7 +359,7 @@ pub fn prepare<P: yamaa_core::resolver::Resolver>(
     port: &mut P,
 ) -> Result<PreparedEnvironment, Failure<P::Error>> {
     adapt_preparation(application::prepare(
-        &mut Decoder(schemas),
+        &mut crate::decoder::Decoder::<std::convert::Infallible>::with_schemas(schemas),
         source,
         Some(host),
         port,

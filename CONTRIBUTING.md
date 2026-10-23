@@ -369,7 +369,9 @@ in `tests/main.rs` and reached as `crate::support`. Reach for its factories
 before writing a local one: `support::document::Tree` builds a document
 by hand, `support::roots` lowers project functions and codelists into
 the AST roots a project file produces, `support::ports` (core) holds the
-scripted ports that log each effect and panic on an unexpected request,
+scripted ports that log each effect and panic on an unexpected request, and
+the `no_tables!`, `no_raw!`, `no_project_files!` and `no_documents!` halves
+of the decoder port for a test decoder that serves only the others,
 `support::specification_run` (adapters) prepares, compiles and lowers a
 document and replays authored reports against it,
 `support::diagnostic::expect` (core) compares a diagnostic's phase,

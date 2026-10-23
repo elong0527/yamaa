@@ -3,40 +3,13 @@
 //! belong to adapters.
 use crate::dataset::{self, ExecutionAttempt};
 use crate::{
+    decoder::Decoder,
     resolver::{Failure, Name, Origin, Resolver},
     resource::ResourceFailure,
     specification::{BindError, PreparedSpecification, SourceDeclaration, SourceInterpretation},
     table::TableAccess,
 };
 use std::{sync::Arc, vec};
-
-/// Decode one captured source with its declared logical types. The returned table
-/// owns its storage and must not retain borrowed input or temporary host buffers.
-pub trait SourceDecoder {
-    type Error;
-    type Table: TableAccess;
-    fn decode_owned(
-        &mut self,
-        _source: &SourceDeclaration,
-        _table: &(dyn std::any::Any + Send + Sync),
-        _interpretation: SourceInterpretation,
-        _contract: Option<&crate::producer_contract::Contract>,
-    ) -> Option<Result<Self::Table, Self::Error>> {
-        None
-    }
-    /// Semantic ingestion findings can be collected across the remaining declared
-    /// sources. Resource, transport and opaque boundary failures must abort.
-    fn continue_after(&self, error: &Self::Error) -> bool;
-    /// Apply the declared interpretation and any linked producer contract before
-    /// value conversion. The table owns its decoded physical storage.
-    fn decode(
-        &mut self,
-        source: &SourceDeclaration,
-        bytes: &[u8],
-        interpretation: SourceInterpretation,
-        contract: Option<&crate::producer_contract::Contract>,
-    ) -> Result<Self::Table, Self::Error>;
-}
 
 #[derive(Debug)]
 pub enum RunError<E> {
@@ -223,7 +196,7 @@ pub struct DecodedAttempt<D, T: TableAccess> {
     pub result: Result<ExecutionAttempt<T::Error>, RunError<D>>,
 }
 
-fn decode_and_execute<D: SourceDecoder>(
+fn decode_and_execute<D: Decoder>(
     prepared: &PreparedSpecification,
     bytes: &[u8],
     decoder: &mut D,
@@ -235,7 +208,7 @@ fn decode_and_execute<D: SourceDecoder>(
     })?;
     *captured_table = Some(
         decoder
-            .decode(
+            .table(
                 prepared.source(),
                 bytes,
                 prepared
@@ -284,7 +257,7 @@ fn decode_and_execute<D: SourceDecoder>(
 
 /// Run from caller-held bytes without a resource request. Reuse repeats decoding,
 /// binding and execution; no mutable application state is stored in the model.
-pub fn execute_bytes<D: SourceDecoder>(
+pub fn execute_bytes<D: Decoder>(
     prepared: &PreparedSpecification,
     bytes: &[u8],
     decoder: &mut D,
@@ -296,7 +269,7 @@ pub fn execute_bytes<D: SourceDecoder>(
 
 /// Fill caller-owned observations so panic containment retains the entered prefix.
 /// The supplied function port is already activated; this service never activates it.
-pub fn execute_into<R: Resolver, D: SourceDecoder>(
+pub fn execute_into<R: Resolver, D: Decoder>(
     prepared: &PreparedSpecification,
     resolver: &mut R,
     decoder: &mut D,
@@ -326,7 +299,7 @@ pub fn execute_into<R: Resolver, D: SourceDecoder>(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn execute_inner_into<R: Resolver, D: SourceDecoder>(
+fn execute_inner_into<R: Resolver, D: Decoder>(
     prepared: &PreparedSpecification,
     resolver: &mut R,
     decoder: &mut D,
@@ -419,13 +392,13 @@ fn execute_inner_into<R: Resolver, D: SourceDecoder>(
             .expect("admitted source interpretation");
         let contract = prepared.source_contract(index);
         let owned_decoded = owned.as_ref().and_then(|table| {
-            decoder.decode_owned(declaration, table.as_ref(), interpretation, contract)
+            decoder.served_table(declaration, table.as_ref(), interpretation, contract)
         });
         // Only a table the owned decoder accepted replaces the byte snapshot;
         // a byte fallback keeps the bytes it actually decoded.
         let used_owned = owned_decoded.is_some();
         let decoded = owned_decoded
-            .unwrap_or_else(|| decoder.decode(declaration, bytes, interpretation, contract));
+            .unwrap_or_else(|| decoder.table(declaration, bytes, interpretation, contract));
         if used_owned {
             observed.snapshot = None;
             observed.owned_snapshot = owned;
