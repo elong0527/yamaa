@@ -476,25 +476,27 @@ impl Reads {
             .expect("admitted define name")
             .into()
     }
+    /// Verify every held metadata snapshot again before the composition is
+    /// published. A changed one is named by the identity its document holds,
+    /// whichever resolver serves the composition, so it fails with FILE-10's
+    /// condition at the field that declared it.
     fn verify_metadata(&mut self, path: &str, source: &str) -> Result<(), Failure> {
-        self.resources()
-            .verify_captured()
-            .map_err(|(identity, error)| {
-                if error == file_resources::Error::Changed {
-                    if let Some(diagnostic) = self.metadata_diagnostic(&identity) {
-                        return Failure::ClassifiedResource {
-                            error,
-                            diagnostic: Box::new(diagnostic),
-                        };
-                    }
-                    // Keep the original cause opaque when no retained authored
-                    // occurrence can supply its required diagnostic context.
-                    return Failure::Project(project_application::Error::Project(
-                        file_project::Error::Resource(error),
-                    ));
+        self.resources().verify_held().map_err(|(identity, error)| {
+            if error == file_resources::Error::Changed {
+                if let Some(diagnostic) = self.metadata_diagnostic(&identity) {
+                    return Failure::ClassifiedResource {
+                        error,
+                        diagnostic: Box::new(diagnostic),
+                    };
                 }
-                resource(path, source, error)
-            })
+                // Keep the original cause opaque when no retained authored
+                // occurrence can supply its required diagnostic context.
+                return Failure::Project(project_application::Error::Project(
+                    file_project::Error::Resource(error),
+                ));
+            }
+            resource(path, source, error)
+        })
     }
 
     fn capture_published(
