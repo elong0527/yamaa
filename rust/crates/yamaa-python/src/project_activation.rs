@@ -17,13 +17,24 @@ use crate::function_callback::{host_argument, host_error, host_result, HostFailu
 /// The callbacks of one call: its interrupt state, and the installed
 /// project functions. No construction imports a helper or project module;
 /// empty selection has no host effects.
-pub struct Port<'a> {
-    state: &'a crate::interrupt::State,
+pub struct Port {
+    state: Option<crate::interrupt::State>,
+    owner: std::thread::ThreadId,
 }
 
-impl<'a> Port<'a> {
-    pub fn new(state: &'a crate::interrupt::State) -> Self {
-        Self { state }
+impl Port {
+    pub fn new(state: &crate::interrupt::State) -> Self {
+        Self {
+            state: Some(std::sync::Arc::clone(state)),
+            owner: std::thread::current().id(),
+        }
+    }
+
+    pub fn streamed() -> Self {
+        Self {
+            state: None,
+            owner: std::thread::current().id(),
+        }
     }
 
     fn helper(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
@@ -85,11 +96,17 @@ fn arguments<'py>(
         .collect()
 }
 
-impl Callbacks for Port<'_> {
+impl Callbacks for Port {
     type Object = Py<PyAny>;
 
     fn cancelled(&self) -> bool {
-        crate::interrupt::cancelled(self.state)
+        if std::thread::current().id() != self.owner {
+            return false;
+        }
+        self.state.as_ref().map_or_else(
+            crate::interrupt::stream_cancelled,
+            crate::interrupt::cancelled,
+        )
     }
 
     fn bind(

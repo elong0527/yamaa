@@ -10,7 +10,7 @@ pub(super) static SPEC: &Class = &ROOT_CLASS;
 
 #[rustfmt::skip]
 static ROOT_CLASS: Class = Class {
-    fields: &["yamaa", "type", "model", "parent", "clear", "domain", "keys", "input", "base", "filter", "output", "windows", "intermediates", "columns", "rows", "verifications", "submission", "metadata"],
+    fields: &["yamaa", "type", "model", "parent", "include", "clear", "domain", "keys", "input", "base", "filter", "output", "windows", "intermediates", "columns", "rows", "verifications", "submission", "metadata"],
     members: &[
         ("input", Holds::Values, &DATASET_CLASS),
         ("output", Holds::Value, &OUTPUT_CLASS),

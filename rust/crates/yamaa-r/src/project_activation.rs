@@ -44,12 +44,25 @@ impl Functions {
 /// The callbacks of one call: the R interrupt probe, and the installed
 /// project functions when the call activates them.
 pub struct Host {
-    functions: Option<Functions>,
+    functions: Option<ThreadBound<Functions>>,
+    owner: std::thread::ThreadId,
+    streamed: bool,
 }
 
 impl Host {
     pub fn new(functions: Option<Functions>) -> Self {
-        Self { functions }
+        Self {
+            functions: functions.map(ThreadBound::new),
+            owner: std::thread::current().id(),
+            streamed: false,
+        }
+    }
+
+    pub fn streamed(functions: Functions) -> Self {
+        Self {
+            streamed: true,
+            ..Self::new(Some(functions))
+        }
     }
 
     /// Whether the call offers the engine project functions.
@@ -58,7 +71,10 @@ impl Host {
     }
 
     fn functions(&self) -> Result<&Functions, HostFailure> {
-        self.functions.as_ref().ok_or_else(Failure::protocol)
+        self.functions
+            .as_ref()
+            .and_then(ThreadBound::get)
+            .ok_or_else(Failure::protocol)
     }
 }
 
@@ -208,7 +224,14 @@ impl Callbacks for Host {
     type Object = Object;
 
     fn cancelled(&self) -> bool {
-        crate::interrupt::poll(false)
+        if std::thread::current().id() != self.owner {
+            return false;
+        }
+        if self.streamed {
+            crate::interrupt::stream_cancelled()
+        } else {
+            crate::interrupt::poll(false)
+        }
     }
 
     fn bind(

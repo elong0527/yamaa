@@ -1382,6 +1382,10 @@ root_class:
         type: path
         required: false
         description: Local specification layer this one inherits from, resolved before validation and execution (LAYER-2).
+    - include:
+        type: "list[project_path]"
+        required: false
+        description: Local specification fragments composed after the parent chain and before this layer's own fields, in list order, each relative to this layer (LAYER-3).
     - clear:
         type: "list[spec_path]"
         required: false
@@ -5498,6 +5502,15 @@ pub(super) const V1_JSON_SCHEMAS: &[(&str, &str)] = &[
           "x-yamaa-kind": "path",
           "x-yamaa-type": "path"
         },
+        "include": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/project_path"
+          },
+          "description": "Local specification fragments composed after the parent chain and before this layer's own fields, in list order, each relative to this layer (LAYER-3).",
+          "x-yamaa-kind": "path",
+          "x-yamaa-type": "list[project_path]"
+        },
         "clear": {
           "type": "array",
           "items": {
@@ -6948,6 +6961,15 @@ pub(super) const V1_JSON_SCHEMAS: &[(&str, &str)] = &[
           "description": "Local specification layer this one inherits from, resolved before validation and execution (LAYER-2).",
           "x-yamaa-kind": "path",
           "x-yamaa-type": "path"
+        },
+        "include": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/project_path"
+          },
+          "description": "Local specification fragments composed after the parent chain and before this layer's own fields, in list order, each relative to this layer (LAYER-3).",
+          "x-yamaa-kind": "path",
+          "x-yamaa-type": "list[project_path]"
         },
         "clear": {
           "type": "array",

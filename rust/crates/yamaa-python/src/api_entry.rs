@@ -79,7 +79,9 @@ fn read<T>(
     result: &Owned,
     read: impl FnOnce(Engine) -> Result<T, Refused>,
 ) -> PyResult<T> {
-    read(result.engine()).map_err(|refusal| raise(py, refusal))
+    crate::interrupt::run(py, |_| {
+        read(result.engine()).map_err(|refusal| raise(py, refusal))
+    })
 }
 
 /// Save a result, with the interpreter's interrupts behind the call's probe.
@@ -210,15 +212,30 @@ pub fn _plans(py: Python<'_>) -> PyResult<Plans> {
     Ok(Plans { plans })
 }
 
+/// A run of one specification: built now, or with `stream` built as its
+/// output is read (#3697), polling a token of its own from then on.
 #[pyfunction]
-#[pyo3(signature=(specification, project=None, plans=None))]
+#[pyo3(signature=(specification, project=None, plans=None, stream=false))]
 pub fn _spec_run(
     py: Python<'_>,
     specification: &str,
     project: Option<&str>,
     plans: Option<PyRef<'_, Plans>>,
+    stream: bool,
 ) -> PyResult<Run> {
     let plans = plans.as_deref().map_or(0, |plans| plans.plans.handle());
+    if stream {
+        let engine = gate()?;
+        let version = runtime(py);
+        let run = crate::interrupt::run(py, |_| {
+            let call =
+                Call::new(Language::Python, "python", &version).with_owned(Port::streamed(), true);
+            engine
+                .spec_stream(call, specification, project, plans)
+                .map_err(|refusal| raise(py, refusal))
+        })?;
+        return Ok(Run { run });
+    }
     let run = called(py, true, |engine, call| {
         engine.spec_run(call, specification, project, plans)
     })?;

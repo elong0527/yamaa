@@ -30,6 +30,13 @@ enum Column {
 /// The data frame of an engine table: its columns read whole from a fresh
 /// stream, which a failed conversion releases with every batch it read.
 pub(super) fn frame(table: &Owned) -> std::result::Result<Robj, String> {
+    let reader =
+        ArrowArrayStreamReader::try_new(stream(table)?).map_err(|error| error.to_string())?;
+    frame_reader(reader)
+}
+
+/// Move a fresh engine stream into Arrow's owned C interface header.
+pub(super) fn stream(table: &Owned) -> std::result::Result<FFI_ArrowArrayStream, String> {
     let stream = table.engine().export(table.handle());
     let mut stream = stream
         .map_err(|refused| match refused {
@@ -39,8 +46,10 @@ pub(super) fn frame(table: &Owned) -> std::result::Result<Robj, String> {
         .into_raw();
     // SAFETY: the engine's stream has the C stream interface's layout;
     // `from_raw` moves it out and leaves the source released.
-    let stream = unsafe { FFI_ArrowArrayStream::from_raw((&raw mut stream).cast()) };
-    let reader = ArrowArrayStreamReader::try_new(stream).map_err(|error| error.to_string())?;
+    Ok(unsafe { FFI_ArrowArrayStream::from_raw((&raw mut stream).cast()) })
+}
+
+fn frame_reader(reader: ArrowArrayStreamReader) -> std::result::Result<Robj, String> {
     let schema = reader.schema();
     let batches = reader
         .collect::<std::result::Result<Vec<RecordBatch>, _>>()

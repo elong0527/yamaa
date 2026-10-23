@@ -1,0 +1,7 @@
+phase: validation
+condition: duplicate_layer
+spec_paths:
+  - include[0]
+rule: LAYER-3
+context:
+  path: layers/duration.yaml

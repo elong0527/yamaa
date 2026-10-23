@@ -169,11 +169,12 @@ impl<'a> Read<'a> {
     /// field writes the default its schema declares, and a handler whose
     /// omission answers with the missing value writes YAML null, except a
     /// flag's `missing` beside a declared `false_value`, which requires it
-    /// (EXPR-8). A file that declares `parent` is left out: a value it
-    /// writes may replace an inherited one.
+    /// (EXPR-8). A layer that declares `parent` or `include`, or that another
+    /// linted file includes, is left out: a value it writes may replace an
+    /// inherited one.
     fn restated_defaults(&self) -> Vec<Departure> {
         let mut found = Vec::new();
-        if self.values.field(self.values.root(), "parent").is_some() {
+        if self.document.layered() {
             return found;
         }
         for site in &self.sites {

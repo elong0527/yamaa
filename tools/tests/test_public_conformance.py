@@ -1085,6 +1085,7 @@ class PublicConformance(unittest.TestCase):
         for ineligible in (
             {**document, "rows": []},
             {**document, "parent": "base.yaml"},
+            {**document, "include": ["fragment.yaml"]},
             {**document, "keys": ["ID"]},
             {
                 **document,
@@ -1141,6 +1142,28 @@ class PublicConformance(unittest.TestCase):
         )
         with self.assertRaisesRegex(ValueError, "cyclic declarations"):
             judge.declarations(self.case / "entry.yaml")
+
+    def test_declarations_read_fragments_after_the_parent_chain(self):
+        """A layer's fragments contribute after its parent chain and before
+        its own fields, in list order (LAYER-3)."""
+        (self.case / "base.yaml").write_text(SPEC)
+        (self.case / "first.yaml").write_text(
+            'yamaa: "1.0"\ntype: spec\ncolumns:\n  - {name: VALUE, type: int}\n'
+        )
+        (self.case / "second.yaml").write_text(
+            'yamaa: "1.0"\ntype: spec\ncolumns:\n  - {name: VALUE, type: float}\n'
+        )
+        (self.case / "entry.yaml").write_text(
+            'yamaa: "1.0"\ntype: spec\nparent: base.yaml\n'
+            "include: [first.yaml, second.yaml]\noutput: {decimals: 2}\n"
+        )
+        layers = [path.name for path, _ in judge.chain(self.case / "entry.yaml")]
+        self.assertEqual(
+            layers, ["base.yaml", "first.yaml", "second.yaml", "entry.yaml"]
+        )
+        types, output = judge.declarations(self.case / "entry.yaml")
+        self.assertEqual(types, {"ID": "int", "VALUE": "float"})
+        self.assertEqual(output["decimals"], 2)
 
     def test_a_1_x_child_clears_an_inherited_output_field(self):
         """A 1.x child removes an inherited field by listing it in `clear`

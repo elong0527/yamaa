@@ -215,7 +215,7 @@ fn a_1_x_header_is_refused_as_a_call_reading_its_type_refuses_it() {
                 "invalid_field_type",
                 "SCHEMA-12",
                 "$",
-                r#"{"actual":"sequence"}"#,
+                r#"{"actual":"sequence","expected":"non-empty dict"}"#,
             ),
         ),
     ] {

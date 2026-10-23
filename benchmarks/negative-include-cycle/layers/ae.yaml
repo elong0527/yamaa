@@ -1,0 +1,20 @@
+yamaa: "1.0"
+type: spec
+include:
+  - ../spec.yaml
+input:
+  AE:
+    path: ../input/ae.csv
+    types:
+      AESTDTC: date
+
+columns:
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: AE.USUBJID
+
+  - name: ASTDT
+    type: date
+    label: Analysis Start Date
+    derivation: AE.AESTDTC

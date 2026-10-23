@@ -375,9 +375,18 @@ mod service {
                 assert_eq!(created.as_deref(), Ok(expected), "{seconds}");
                 assert_eq!(calls.get(), 1);
             }
-            for (seconds, detail) in [
-                (None, "UTC clock before epoch"),
-                (Some(u64::MAX), "UTC clock outside supported calendar"),
+            // The refusal names the clock's reading, null when it gave none.
+            for (seconds, detail, value) in [
+                (
+                    None,
+                    "UTC clock before epoch",
+                    yamaa_core::json::Value::Null,
+                ),
+                (
+                    Some(u64::MAX),
+                    "UTC clock outside supported calendar",
+                    yamaa_core::json::Value::from(u64::MAX),
+                ),
             ] {
                 let calls = Cell::new(0);
                 let refused = define::created_time(None, || {
@@ -386,7 +395,9 @@ mod service {
                 });
                 assert_eq!(
                     refused,
-                    Err(yamaa_core::define_diagnostics::creation_refusal(detail)),
+                    Err(yamaa_core::define_diagnostics::creation_refusal(
+                        detail, value
+                    )),
                     "{detail}"
                 );
                 assert_eq!(calls.get(), 1);
@@ -459,10 +470,13 @@ mod service {
                 assert_eq!(finding.definition().phase, "validation");
                 assert_eq!(finding.definition().rule, Some(rule));
                 assert_eq!(finding.spec_paths, [path]);
-                assert_eq!(
-                    finding.context,
-                    [("path".into(), C::String("declared.csv".into()))].into()
-                );
+                // A missing published artifact also names its dataset.
+                let mut expected: yamaa_core::diagnostic::Context =
+                    [("path".into(), C::String("declared.csv".into()))].into();
+                if code == ConditionCode::ProducerContractMismatch {
+                    expected.insert("dataset".into(), C::String("DM".into()));
+                }
+                assert_eq!(finding.context, expected);
                 assert_eq!(finding.source_span, None);
                 assert_eq!(finding.operand_route, None);
             }
@@ -547,6 +561,7 @@ mod service {
             ] {
                 let finding = define::publication_diagnostic(
                     usize::MAX,
+                    "dm.json",
                     stage,
                     "opaque original cause".into(),
                 );
@@ -565,6 +580,9 @@ mod service {
                         "step".into(),
                         C::String("publication_target_admission".into()),
                     );
+                } else {
+                    // A failed publication names the file as written.
+                    expected.insert("path".into(), C::String("dm.json".into()));
                 }
                 assert_eq!(finding.context, expected);
                 assert_eq!(finding.source_span, None);

@@ -59,6 +59,7 @@ pub mod resolver;
 pub mod scalar;
 pub mod schema;
 pub mod selftest;
+pub mod stream;
 pub mod table;
 pub mod text;
 
@@ -93,6 +94,7 @@ pub use resolver::{
 pub use scalar::{Date, DateTime, EncodedScalar, Scalar, ScalarDecodeError, ScalarRef};
 pub use schema::schema;
 pub use selftest::{selftest, SelfTest, SelfTestCase, SELFTEST_COLUMNS};
+pub use stream::{Batches, RunGuard, StreamProgress, Streamed};
 pub use table::{
     Array, DataType, Date32Array, FFI_ArrowArrayStream, Field, Fields, Float64Array, InputFrame,
     Int64Array, LargeStringArray, ListArray, RecordBatch, SchemaRef, StringArray, StringViewArray,

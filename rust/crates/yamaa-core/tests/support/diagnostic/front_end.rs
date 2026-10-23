@@ -134,10 +134,12 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         finding(&baseline),
         ("value_not_permitted", "WINDOW-5"),
         "columns.ABLFL.derivation.baseline_flag.window.order_by[0]",
+        // The refused value is the first term's variable, which is not the date.
         vec![
             ("variable", C::Text("ATM".into())),
             ("direction", C::Text("asc".into())),
             ("date", C::Text("ADT".into())),
+            ("value", C::Text("ATM".into())),
         ],
     );
     // A month rule completes no date without a day rule beside it.
@@ -280,7 +282,11 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             finding(&marked(path, value)),
             ("value_not_permitted", "CSV-10"),
             "input.SRC.byte_order_mark",
-            vec![("dataset", C::Text("SRC".into()))],
+            // The mark as declared, whatever its value.
+            vec![
+                ("dataset", C::Text("SRC".into())),
+                ("value", C::Boolean(value)),
+            ],
         );
     }
     for path in ["src.csv", "src.txt"] {

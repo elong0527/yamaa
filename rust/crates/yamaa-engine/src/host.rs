@@ -7,13 +7,13 @@
 //! Every unsafe operation here calls a host callback or reads what one
 //! answered. Their soundness rests on the contract of
 //! [`yamaa_boundary::abi`]: a callback is a valid function for the life of
-//! the call that received it, it reads the borrowed records the engine
+//! the call or streamed run that received it, it reads the borrowed records the engine
 //! passes only while it runs, and a reply it fills points at memory that
 //! stays valid until the engine calls the reply's `release`. The engine
-//! calls the callbacks only on the entry's thread, while the entry runs:
-//! [`Host`] and [`Root`] are `Send` and `Sync` only because the facade's
-//! port and token types ask for it, and nothing here moves them to another
-//! thread.
+//! calls project functions only on the originating thread. A streamed run's
+//! probe may run on a reader's thread; its host guards interpreter access.
+//! Retained contexts are owned and safe to release on any thread. These ABI
+//! guarantees permit [`Host`] and [`Root`] to cross threads behind facade types.
 use std::collections::BTreeMap;
 use std::ffi::{c_int, c_void};
 use std::sync::Arc;

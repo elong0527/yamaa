@@ -334,6 +334,8 @@ fn held_plans(plans: &Robj) -> std::result::Result<Handle, Refusal> {
     handle_of(plans, HandleKind::Plans, "plans")
 }
 
+/// A run of one specification: built now, or with `stream` built as its
+/// output is read (#3697), polling a token of its own from then on.
 #[extendr]
 fn spec_run(
     specification: Raw,
@@ -341,11 +343,19 @@ fn spec_run(
     version: Raw,
     capabilities: List,
     plans: Robj,
+    stream: bool,
 ) -> List {
     reply(|engine| {
         let project = optional_text(&project)?;
         let specification = text(&specification)?;
         let plans = held_plans(&plans)?;
+        if stream {
+            let version = text(&version)?;
+            let host = Host::streamed(parse_capabilities(capabilities)?);
+            let call = Call::new(Language::R, "r", &version).with_owned(host, true);
+            let run = engine.spec_stream(call, &specification, project.as_deref(), plans)?;
+            return store(run, HandleKind::Run);
+        }
         let run = called(&version, Some(capabilities), |call| {
             engine.spec_run(call, &specification, project.as_deref(), plans)
         })?;
@@ -424,9 +434,25 @@ fn run_status(handle: Robj) -> List {
     reply(|engine| Ok(r!(engine.status(run_of(&handle)?, None)?)))
 }
 
+/// A run's output: a data frame, or for a streamed run its Arrow C stream
+/// (#3697), which produces the output as it is read; `NULL` for a failed
+/// run.
 #[extendr]
 fn run_output(handle: Robj) -> List {
-    reply(|engine| table(engine.output(run_of(&handle)?, None)?))
+    reply(|engine| {
+        let handle = run_of(&handle)?;
+        let output = engine.output(handle, None)?;
+        if engine.is_stream(handle)? {
+            return output.map_or_else(
+                || Ok(NULL.into_robj()),
+                |output| {
+                    let stream = crate::public_table::stream(&output)?;
+                    Ok(crate::arrow_stream::stream_object(stream)?)
+                },
+            );
+        }
+        table(output)
+    })
 }
 
 #[extendr]

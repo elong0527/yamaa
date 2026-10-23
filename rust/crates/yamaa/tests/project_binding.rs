@@ -88,14 +88,16 @@ fn issues(table: &Table) -> Vec<Issue> {
 }
 
 /// `project_binding_missing` at `path`, with the context `context` writes
-/// as canonical JSON.
+/// as canonical JSON, whose `binding` the message names.
 fn missing(path: &str, context: &str) -> Issue {
+    let context = yamaa_adapters::json_wire::decode(context).unwrap();
+    let binding = context["binding"].as_str().expect("a binding").to_owned();
     Issue {
         condition: "project_binding_missing".into(),
         rule: Some("CT-13".into()),
         paths: vec![path.into()],
-        message: format!("{path} needs a project file, and none is given"),
-        context: yamaa_adapters::json_wire::decode(context).unwrap(),
+        message: format!("the {binding} at {path} needs a project file, and none is given"),
+        context,
     }
 }
 

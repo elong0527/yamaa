@@ -15,12 +15,14 @@ yamaa: pub mod resolver
 yamaa: pub mod scalar
 yamaa: pub mod schema
 yamaa: pub mod selftest
+yamaa: pub mod stream
 yamaa: pub mod table
 yamaa: pub mod text
 yamaa::Action: pub use yamaa::text::Action
 yamaa::Argument: pub use yamaa::functions::Argument
 yamaa::Array: pub use yamaa::table::Array
 yamaa::BatchArgument: pub use yamaa::functions::BatchArgument
+yamaa::Batches: pub use yamaa::stream::Batches
 yamaa::CallError: pub use yamaa::functions::CallError
 yamaa::CancellationToken: pub use yamaa::cancel::CancellationToken
 yamaa::Check: pub use yamaa::api::Check
@@ -93,6 +95,7 @@ yamaa::ResolverRequest: pub use yamaa::resolver::ResolverRequest
 yamaa::ResourceKind: pub use yamaa::resolver::ResourceKind
 yamaa::ResourceResolver: pub use yamaa::resolver::ResourceResolver
 yamaa::Run: pub use yamaa::api::Run
+yamaa::RunGuard: pub use yamaa::stream::RunGuard
 yamaa::SECTIONS: pub use yamaa::api::SECTIONS
 yamaa::SELFTEST_COLUMNS: pub use yamaa::selftest::SELFTEST_COLUMNS
 yamaa::SEVERITIES: pub use yamaa::diagnostic::SEVERITIES
@@ -107,6 +110,8 @@ yamaa::Severity: pub use yamaa::diagnostic::Severity
 yamaa::Signature: pub use yamaa::functions::Signature
 yamaa::SourceSpan: pub use yamaa::diagnostic::SourceSpan
 yamaa::Status: pub use yamaa::api::Status
+yamaa::StreamProgress: pub use yamaa::stream::StreamProgress
+yamaa::Streamed: pub use yamaa::stream::Streamed
 yamaa::StringArray: pub use yamaa::table::StringArray
 yamaa::StringViewArray: pub use yamaa::table::StringViewArray
 yamaa::Submission: pub use yamaa::api::Submission
@@ -134,6 +139,7 @@ yamaa::api::Engine::spec_check: pub fn spec_check(&self, specification: &str, pr
 yamaa::api::Engine::spec_resolve: pub fn spec_resolve(&self, specification: &str, project: Option<&str>) -> Result<ContextValue, Failure>
 yamaa::api::Engine::spec_run: pub fn spec_run(&self, specification: &str, project: Option<&str>, token: &CancellationToken) -> Result<Run, Error>
 yamaa::api::Engine::spec_run_reusing: pub fn spec_run_reusing(&self, specification: &str, project: Option<&str>, plans: &Plans, token: &CancellationToken) -> Result<Run, Error>
+yamaa::api::Engine::spec_stream: pub fn spec_stream(&self, specification: &str, project: Option<&str>, plans: &Plans, token: &CancellationToken) -> Result<Streamed, Error>
 yamaa::api::Failure: impl Failure
 yamaa::api::Failure: impl std::error::Error for Failure
 yamaa::api::Failure: impl std::fmt::Display for Failure
@@ -282,6 +288,7 @@ yamaa::error::Error::Host: Host(FunctionError)
 yamaa::error::Error::Internal: Internal { code: &'static str }
 yamaa::error::Error::Rejected: Rejected(Report)
 yamaa::error::Error::Resolver: Resolver(ResolverFailure)
+yamaa::error::Error::Stream: Stream { code: &'static str }
 yamaa::error::Error::Table: Table(TableError)
 yamaa::error::Error::Unavailable: Unavailable { feature: &'static str }
 yamaa::error::FunctionError: impl FunctionError
@@ -582,6 +589,28 @@ yamaa::selftest::SelfTestCase::case: pub case: &'static str
 yamaa::selftest::SelfTestCase::message: pub message: Option<String>
 yamaa::selftest::SelfTestCase::status: pub status: Status
 yamaa::selftest::selftest: pub fn selftest(host: Host, host_version: Option<&str>) -> SelfTest
+yamaa::stream::Batches: impl Batches
+yamaa::stream::Batches: impl Drop for Batches
+yamaa::stream::Batches: impl Iterator for Batches
+yamaa::stream::Batches: pub struct Batches
+yamaa::stream::Batches::into_stream: pub fn into_stream(self) -> FFI_ArrowArrayStream
+yamaa::stream::Batches::schema: pub fn schema(&self) -> SchemaRef
+yamaa::stream::RunGuard: impl Deref for RunGuard<'_>
+yamaa::stream::RunGuard: impl DerefMut for RunGuard<'_>
+yamaa::stream::RunGuard: pub struct RunGuard<'a>
+yamaa::stream::StreamProgress: pub enum StreamProgress [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
+yamaa::stream::StreamProgress::Cancelled: Cancelled
+yamaa::stream::StreamProgress::Ended: Ended
+yamaa::stream::StreamProgress::Reading: Reading
+yamaa::stream::StreamProgress::Unread: Unread
+yamaa::stream::Streamed: impl Streamed
+yamaa::stream::Streamed: pub struct Streamed
+yamaa::stream::Streamed::progress: pub fn progress(&self) -> StreamProgress
+yamaa::stream::Streamed::reader: pub fn reader(&self) -> Batches
+yamaa::stream::Streamed::run: pub fn run(&self) -> Result<RunGuard<'_>, Error>
+yamaa::stream::Streamed::schema: pub fn schema(&self) -> Option<&SchemaRef>
+yamaa::stream::Streamed::subject: pub fn subject(&self) -> &str
+yamaa::stream::Streamed::table: pub fn table(&self) -> Result<Table, Error>
 yamaa::table::Array: pub use arrow_array::Array
 yamaa::table::DataType: pub use arrow_schema::DataType
 yamaa::table::Date32Array: pub use arrow_array::Date32Array

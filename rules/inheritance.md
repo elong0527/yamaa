@@ -1,23 +1,24 @@
 # Inheritance
 
-A specification may inherit from a chain of parent layers. Composition turns
-the entry file and its layers into one resolved specification before
-validation and execution.
+A specification may inherit from a chain of parent layers, and each layer may
+include reusable fragments. Composition turns the entry file and its layers
+into one resolved specification before validation and execution.
 
 ## Layers
 
 <a id="layer-1"></a>
 
-### LAYER-1. A specification is its entry file composed with the chain of parents it reaches
+### LAYER-1. A specification is its entry file composed with the chain of parents and the fragments it reaches
 
 The file requested for validation or execution is the entry file. The entry
-file and every file reached by following `parent` from it are layers; each
-contributes the root fields and keyed declarations it writes, and composition
-produces one resolved specification. An entry file without a `parent` is a
-composition of one layer and is resolved, pruned and validated on the same
-terms.
+file, every file reached by following `parent` from it and every fragment a
+layer lists under `include` are layers; each contributes the root fields and
+keyed declarations it writes, and composition produces one resolved
+specification. An entry file that names no parent and includes no fragment
+is a composition of one layer and is resolved, pruned and validated on the
+same terms.
 
-Evidence: `schema-inheritance`, `schema-inherited-output`.
+Evidence: `schema-inheritance`, `schema-inherited-output`, `schema-inheritance-include`.
 
 A field is present when its mapping key is written, including when its value
 is null, the missing value. Absence inherits, and a written value replaces or
@@ -31,13 +32,14 @@ resolves once.
 
 <a id="layer-2"></a>
 
-### LAYER-2. A parent is one local YAML file resolved from the layer that names it
+### LAYER-2. A parent or a fragment is one local YAML file resolved from the layer that names it
 
-`parent` is an optional single path naming the layer this layer inherits from.
-A relative path resolves from the directory of the layer that declares it, and
+`parent` is an optional single path naming the layer this layer inherits from,
+and `include` an optional list of paths naming the fragments it includes. A
+relative path resolves from the directory of the layer that declares it, and
 an absolute local path is allowed. A URL or URI, including `file://`, is not a
-parent path. Two spellings that reach the same file, after symbolic links are
-resolved, are one layer.
+parent or fragment path. Two spellings that reach the same file, after
+symbolic links are resolved, are one layer.
 
 Fails: `invalid_parent_path`, `parent_not_found`.
 Evidence: `negative-remote-parent`, `schema-inheritance-project-root`, `rust/crates/yamaa-adapters/tests/host_resources.rs::a_malformed_parent_spelling_is_refused_as_written_on_every_route`, `rust/crates/yamaa-adapters/tests/host_resources.rs::a_linked_parent_is_refused_at_parent_on_every_route`, `rust/crates/yamaa-adapters/tests/file_diagnostic_origins.rs::an_empty_parent_fails_schema_admission_before_it_is_resolved`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::an_empty_parent_fails_schema_admission_in_its_layer`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_list_of_parents_carries_the_one_parent_hint`.
@@ -53,7 +55,8 @@ so YAML null is not a parent: it fails as `invalid_field_type`
 ([LAYER-9](#layer-9)), and a layer without a parent omits the field. Nor is a
 list: a layer names at most one parent, so a list written at `parent` fails as
 `invalid_field_type` at `parent`, and its context adds a `hint` to write the
-layers as a chain, one `parent` per file. An undeclared `parents` key fails as
+layers as a chain, one `parent` per file, and a fragment that several files
+share under `include`. An undeclared `parents` key fails as
 `unknown_field` ([SCHEMA-13](reference/schema-language.md#schema-13)) with the
 same hint.
 
@@ -71,32 +74,62 @@ its way, fails with `resource_path_symlink` at `parent`, naming the path as
 written. The only symbolic links resolved before two spellings are compared
 are those of the caller-selected directories that FILE-8 exempts.
 
+An `include` entry is a declared path like an input's: its spelling is judged
+when its layer is admitted, so a URI fails as `resource_path_uri_scheme` and a
+`\`, an empty segment or a trailing separator as
+`resource_path_not_normalized`, each at `include[i]`
+([FILE-5](reference/files.md#file-5)). A fragment that is missing, is not a
+regular file or is reached through a symbolic link fails as
+`resource_path_missing`, `resource_path_not_regular_file` or
+`resource_path_symlink` at `include[i]`, naming the path as written
+([FILE-7](reference/files.md#file-7), [FILE-8](reference/files.md#file-8)).
+An empty list includes nothing.
+
 <a id="layer-3"></a>
 
-### LAYER-3. Layers form one chain contributed from its root ancestor to the entry, later layers taking precedence
+### LAYER-3. Layers contribute from the root ancestor to the entry, each after its fragments, later layers taking precedence
 
 Starting at the entry file, each layer's `parent` names the next layer up the
 chain, which ends at a layer without a parent. Layers contribute from that
-root ancestor down to the entry file, and a later contribution takes
-precedence over an earlier one. Reaching a layer that is already on the chain
-is a cycle.
+root ancestor down to the entry file, each just after the fragments its
+`include` lists, in list order, and a later contribution takes precedence over
+an earlier one. Reaching a layer that is still being composed is a cycle, and
+an `include` entry that reaches any other layer already reached fails.
 
-Fails: `inheritance_cycle`.
-Evidence: `schema-inheritance`, `negative-cyclic-parent`.
+Fails: `inheritance_cycle`, `duplicate_layer`.
+Evidence: `schema-inheritance`, `negative-cyclic-parent`, `schema-inheritance-include`, `negative-include-cycle`, `negative-include-twice`, `rust/crates/yamaa-core/tests/preparation_dictionary_preparation.rs::fragments_contribute_after_the_parent_chain_and_before_their_layer`, `rust/crates/yamaa-core/tests/preparation_dictionary_preparation.rs::an_include_that_reaches_a_layer_still_composing_is_a_cycle`, `rust/crates/yamaa-core/tests/preparation_dictionary_preparation.rs::an_include_that_reaches_a_layer_already_composed_repeats_it`.
 
 For a study entry whose parent is a compound layer whose parent is an
 organization layer, the contribution order is
-`organization -> compound -> study`. A difference between two layers is
-resolved by this order, not by a conflict error. A layer is admitted under
-[LAYER-4](#layer-4) before its parent is read, and at most 8192 parent links
-are followed. `parent` is consumed by the traversal and is absent from the
-resolved specification. A cycle reports the complete canonical path of the
-cycle, from the layer reached twice back to itself, and whether the chain
-returned to the entry file or to another layer on it.
+`organization -> compound -> study`. When the compound layer includes
+`duration.yaml` and the study includes `severity.yaml` and then
+`period.yaml`, it is
+`organization -> duration -> compound -> severity -> period -> study`: at
+every layer its parent chain, then its fragments left to right, then its own
+fields. A difference between two layers is resolved by this order, not by a
+conflict error.
+
+A layer is admitted under [LAYER-4](#layer-4) before its parent or its
+fragments are read. The chain is followed to its root first, and the
+fragments are then read in contribution order, each admitted before the next
+is read. At most 8192 links are followed, counting each `parent` and each
+`include` entry. `parent` and `include` are consumed by the traversal and are
+absent from the resolved specification.
+
+A cycle is a `parent` that reaches a layer already on the chain, or an
+`include` entry that reaches the layer that lists it or a layer below it on
+the chain. It reports the complete canonical path of the cycle, from the layer
+reached twice back to itself, at the `parent` or `include[i]` that closes it,
+and whether the chain returned to the entry file or to another layer on it.
+An `include` entry that reaches any other layer already reached, such as the
+layer's own parent or a fragment that another layer, or an earlier entry of
+the same list, includes, fails as `duplicate_layer` at that `include[i]`,
+naming the path as written and the layer it reaches. A file contributes once
+or not at all.
 
 <a id="layer-4"></a>
 
-### LAYER-4. Every layer is a valid fragment of the language version it declares
+### LAYER-4. Every layer is a valid partial specification of the language version it declares
 
 Each layer must be a non-empty mapping that declares `yamaa` and
 `type: spec` ([SCHEMA-2](reference/schema-language.md#schema-2)), and is
@@ -104,10 +137,11 @@ admitted against the language version it declares; the resolved specification
 records the newest version any layer declares. A layer need not be complete:
 requiredness is checked on the resolved specification, but unknown fields and
 invalid values fail in the layer that writes them. Two members of one keyed
-collection in one layer must not share an identifier.
+collection in one layer must not share an identifier. A fragment declares
+neither `parent` nor `include`.
 
-Fails: `unsupported_language_version`, `unexpected_file_type`, `duplicate_identifier`.
-Evidence: `negative-version-mismatch`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::each_layer_is_admitted_at_its_own_version_and_the_chain_needs_the_newest`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_parent_naming_an_unread_version_or_another_type_fails_at_parent`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_layer_is_a_fragment_and_a_single_layer_is_complete`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_schema_version_root_is_refused_as_language_0_5_wherever_it_is_read`, `rust/crates/yamaa-adapters/tests/declaration_layer_composition.rs::a_keyed_list_member_carries_its_identity_in_the_layer_that_writes_it`.
+Fails: `unsupported_language_version`, `unexpected_file_type`, `duplicate_identifier`, `prohibited_construct`.
+Evidence: `negative-version-mismatch`, `negative-include-parent`, `rust/crates/yamaa-core/tests/preparation_dictionary_preparation.rs::a_fragment_declares_neither_parent_nor_include`, `rust/crates/yamaa-core/tests/preparation_dictionary_preparation.rs::a_fragment_with_an_unread_header_fails_at_the_include_entry_naming_it`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::each_layer_is_admitted_at_its_own_version_and_the_chain_needs_the_newest`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_parent_naming_an_unread_version_or_another_type_fails_at_parent`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_layer_is_a_fragment_and_a_single_layer_is_complete`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_schema_version_root_is_refused_as_language_0_5_wherever_it_is_read`, `rust/crates/yamaa-adapters/tests/declaration_layer_composition.rs::a_keyed_list_member_carries_its_identity_in_the_layer_that_writes_it`.
 
 Requiredness is deferred for every root field and at every depth inside a
 member of `input`, `intermediates`, `columns`, `rows` and `windows`. An entry
@@ -120,12 +154,16 @@ it fails as `missing_required_field` under
 ([SPEC-9](specification.md#spec-9)), so it is complete where it is written. A
 layer whose version the engine does not read fails before composition,
 reporting the file and its version, at the
-entry's `yamaa` or at the `parent` naming the layer. A layer that declares a
-type other than `spec` fails as `unexpected_file_type`, at the entry's `type`
-or at that `parent`. Layers may declare different versions, each admitted at
-its own, and a `clear:` path is checked against the version the resolved
-specification records. Inheritance never migrates versions. A malformed
-fragment fails under
+entry's `yamaa` or at the `parent` or `include[i]` naming the layer. A layer
+that declares a type other than `spec` fails as `unexpected_file_type`, at the
+entry's `type` or at that `parent` or `include[i]`. A fragment composes on the
+layers before it, so a fragment that declares `parent` or `include` fails as
+`prohibited_construct` at that field of the fragment, its context naming the
+construct, the fragment and the entry, before anything it names is read.
+Layers may declare different versions, each admitted at its own, and a
+`clear:` path is checked against the version the resolved specification
+records. Inheritance never migrates versions. A malformed
+layer fails under
 [Schema language](reference/schema-language.md) at its contributing file and
 field. [Schema language](reference/schema-language.md) shorthand is expanded
 in every supplied non-null field before composition, so equivalent spellings
@@ -153,6 +191,7 @@ Evidence: `schema-inherited-output`, `schema-inherited-input`.
 | `yamaa` | the newest version any layer declares ([LAYER-4](#layer-4)) |
 | `type` | `spec` in every layer |
 | `parent` | traversal instruction; never contributed |
+| `include` | traversal instruction; never contributed |
 | `clear` | applied before the layer's own fields; never contributed ([LAYER-9](#layer-9)) |
 | `input` | by dataset identifier |
 | `intermediates` | by `id` |
@@ -305,16 +344,20 @@ names an entry of a mapping derivation written bare.
 
 Each layer's clears apply to the value it inherits before its own fields
 compose, so clearing a mapping and writing it in one layer replaces the mapping
-instead of merging with it. A cleared field with a schema default takes the
-default again under [LAYER-7](#layer-7), and a value that came from a default
-is not inherited. A path that names a value the layer does not inherit, a
-required field, the identity field of a keyed member, `yamaa`, `type`, a keyed
-member itself or a registry keyword without its owning field fails as
-`invalid_clear`, and so does a path outside the notation or a path written
-beside one of its prefixes in the same list. A finding about a clear is
+instead of merging with it. A fragment inherits what the layers before it
+compose: its parent chain's and those of the fragments listed before it. A
+fragment's clear may therefore name a value one layer that includes it
+inherits and another does not, and fails as `invalid_clear` there. A cleared
+field with a schema default takes the default again under
+[LAYER-7](#layer-7), and a value that came from a default is not inherited. A
+path that names a value the layer does not inherit, a required field, the
+identity field of a keyed member, `yamaa`, `type`, a keyed member itself or a
+registry keyword without its owning field fails as `invalid_clear`, and so
+does a path outside the notation or a path written beside one of its prefixes
+in the same list. A finding about a clear is
 reported at `clear[i]`, its context naming the field the path ends at.
-Composition consumes `clear` as it consumes `parent`, and the resolved
-specification holds neither ([LAYER-14](#layer-14)).
+Composition consumes `clear` as it consumes `parent` and `include`, and the
+resolved specification holds none of them ([LAYER-14](#layer-14)).
 
 A null a layer writes is a value of its field: a handler, flag value, mapping
 entry or function argument written as YAML null substitutes the missing value
@@ -337,14 +380,20 @@ path relative to the entry file, preserving the location it names.
 Fails: `parent_on_another_share`.
 Evidence: `schema-inheritance-project-root`, `rust/crates/yamaa-adapters/src/file_metadata.rs::rebase_respells_layers_on_the_entry_root_relative_to_the_entry`, `rust/crates/yamaa-adapters/src/file_metadata.rs::rebase_writes_a_location_on_another_root_whole_and_never_climbs_to_it`, `rust/crates/yamaa-adapters/src/file_metadata.rs::a_layer_on_another_share_is_refused_with_its_path_and_both_roots`, `rust/crates/yamaa-adapters/tests/host_resources.rs::a_parent_on_another_drive_reads_its_input_beside_itself`, `rust/crates/yamaa-adapters/tests/host_resources.rs::a_parent_on_another_share_is_refused_rather_than_read_from_the_entry_root`.
 
+A fragment is a declaring layer: a relative path it writes is interpreted
+beside the fragment, whichever layer includes it.
+
 If the platform cannot express that location relative to the entry file, the
 canonical absolute local path is written. A location beside a layer on a
 network share that the entry is not on has neither spelling
 ([FILE-4](reference/files.md#file-4)). Composition then fails with
 `parent_on_another_share`, reported at `parent` and naming that layer, the
-path it wrote, and the roots of the layer and the entry. An absolute
-contributed path is materialized exactly as written. A `parent` path is not
-materialized.
+path it wrote, and the roots of the layer and the entry. A fragment on such a
+share fails the same way, naming the fragment, the path it wrote and both
+roots; the finding keeps the spec path `parent`, since the rebase that refuses
+it does not know which `include` entry named the fragment. An absolute
+contributed path is materialized exactly as written. Neither a `parent` path
+nor an `include` entry is materialized.
 Rebasing states where a file is, not whether a run may read it:
 [File resolution](reference/files.md) accepts or rejects the rebased
 path at the location it names, and a missing file fails there without retrying
@@ -358,10 +407,10 @@ another spelling.
 
 After composition, the resolver keeps only declarations reachable from the
 semantic roots and removes the rest, whether or not the entry file declares a
-`parent`. The roots are the columns named by `output.columns`, `keys` or
-`output.order_by`, the columns dataset verifications read, every column or
-intermediate that carries its own verification, every row template, and the
-dataset `base` names.
+`parent` or includes a fragment. The roots are the columns named by
+`output.columns`, `keys` or `output.order_by`, the columns dataset
+verifications read, every column or intermediate that carries its own
+verification, every row template, and the dataset `base` names.
 
 Definitions do not make themselves live. From the roots the resolver follows
 every semantic reference recursively: variables in derivations and row
@@ -397,13 +446,13 @@ contributed `output` fails as `missing_required_field` at `output`
 
 ### LAYER-13. A layered specification's resolved columns follow dependency order with a stable tie-break
 
-When a specification declares a `parent`, each resolved column comes after
-every column its derivation reads, after pruning; when more than one column
-can come next, the one with the earliest contribution position comes first,
-which keeps an ancestor's independent columns before its descendants'. A
-specification without a `parent` keeps its declaration order, which
-[COLUMN-5](columns.md#column-5) requires to be a dependency order.
-`output.columns` is never reordered.
+When a specification declares a `parent` or includes a fragment, each
+resolved column comes after every column its derivation reads, after pruning;
+when more than one column can come next, the one with the earliest
+contribution position comes first, which keeps an ancestor's independent
+columns before its descendants'. A specification that does neither keeps its
+declaration order, which [COLUMN-5](columns.md#column-5) requires to be a
+dependency order. `output.columns` is never reordered.
 
 Evidence: `schema-inheritance`, `rust/crates/yamaa-core/tests/schema_references.rs::declared_order_and_unordered_input_are_kept`, `rust/crates/yamaa-core/tests/schema_references.rs::prunes_dead_sources_follows_count_and_stably_orders_without_changing_output`, `rust/crates/yamaa-core/src/specification/declared_keys.rs::ordering_reads_a_row_template_s_own_driver_without_a_join`.
 
@@ -424,15 +473,15 @@ through other columns, fails under the
 
 ### LAYER-14. The resolved specification is canonical
 
-The resolved specification contains no `parent` and no `clear`, uses the
-long form of every shorthand, holds only reachable keyed declarations,
-lists columns in the order of [LAYER-13](#layer-13), and keeps root and member
-fields in schema order. Conformance compares its YAML data tree, not its
-layout.
+The resolved specification contains no `parent`, no `include` and no
+`clear`, uses the long form of every shorthand, holds only reachable keyed
+declarations, lists columns in the order of [LAYER-13](#layer-13), and keeps
+root and member fields in schema order. Conformance compares its YAML data
+tree, not its layout.
 
 Evidence: `rust/crates/yamaa-adapters/tests/declaration_layer_composition.rs::a_clear_removes_what_the_layer_inherits_before_its_own_fields_compose`.
 
 A free-form mapping whose owning field was replaced whole keeps the order of
 the contribution that supplied it. Composition consumes a layer's `clear` as
-it consumes `parent` ([LAYER-9](#layer-9)), and `yamaa` records the newest
-version any layer declares.
+it consumes `parent` and `include` ([LAYER-9](#layer-9)), and `yamaa`
+records the newest version any layer declares, a fragment's included.

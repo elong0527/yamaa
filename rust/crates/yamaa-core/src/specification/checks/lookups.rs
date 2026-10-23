@@ -198,23 +198,29 @@ pub(in crate::specification) fn admission_findings(spec: &Spec) -> Vec<Preflight
                 render(spec, answer.meta),
                 format!("{path}.require_match"),
                 Owner::Intermediate(name),
+                dataset,
             )));
         }
         // A nearest selection chooses by distance, so neither an order nor a
         // position may choose beside it (LOOKUP-26): each field written
-        // beside it, then `nearest`, in specification order. A field so
-        // refused is not also unpaired.
+        // beside it, then `nearest`, in specification order, the first of
+        // them named as the construct. A field so refused is not also
+        // unpaired.
         if let Some(nearest) = &item.nearest {
-            let mut beside = ["order_by", "keep"]
+            let written = ["order_by", "keep"]
                 .into_iter()
                 .filter(|&field| item.written.contains(field))
-                .map(|field| format!("{path}.{field}"))
                 .collect::<Vec<_>>();
-            if !beside.is_empty() {
+            if let Some(&construct) = written.first() {
+                let mut beside = written
+                    .iter()
+                    .map(|field| format!("{path}.{field}"))
+                    .collect::<Vec<_>>();
                 beside.push(render(spec, nearest.meta));
                 findings.push(PreflightFinding::Scalar(lookup::nearest_beside_selection(
                     beside,
                     Owner::Intermediate(name),
+                    construct,
                 )));
             }
             continue;

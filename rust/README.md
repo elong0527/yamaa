@@ -342,8 +342,8 @@ pub fn selftest(host: Host, host_version: Option<&str>) -> SelfTest;
   `ContextValue` tree: the internal `ResolvedArtifact` (above) is its
   implementation and wire format, and no public type stands for it (#2725).
 - The hosts' lazy objects keep a `Plans` holder each (#2821), so `Plans`
-  stays public: it is the one way a host, which depends on the facade alone,
-  reuses what a run compiled (#3030 D72). `Engine::spec_run_reusing` and
+  stays public: an embedder using the facade reuses what a run compiled through
+  this holder (#3030 D72). `Engine::spec_run_reusing` and
   `Engine::project_run_reusing` first resolve the request's paths as
   compilation does: absolute against the current working directory, with each
   parent directory canonical. They run the plan kept for those identities when
@@ -561,8 +561,9 @@ git/path is the distribution route.
 Every adapters or core module the two host crates used before they moved onto
 the facade (24 adapters modules and 11 core modules, counted from the host
 sources on 2026-10-16, less the removed producer-route modules) maps to a facade
-item or is marked internal. The host crates now depend only on the facade and
-use none of these modules directly; the facade itself uses 29 adapters modules
+item or is marked internal. The host crates reach the facade through the
+engine's C ABI, depending on `yamaa-boundary` and `yamaa-engine`; they use none
+of these modules directly. The facade itself uses 29 adapters modules
 and 17 core modules, counted from `crates/yamaa/src` after the producer route
 was removed. Any module not listed here is internal by default.
 

@@ -76,3 +76,12 @@ pub(super) fn run<T>(_py: Python<'_>, run: impl FnOnce(&State) -> PyResult<T>) -
         None => result,
     }
 }
+
+/// A retained stream's probe polls the current native call when there is one,
+/// and otherwise the interpreter (an external Arrow consumer may be pulling).
+pub(super) fn stream_cancelled() -> bool {
+    match ACTIVE.with(|active| active.borrow().clone()) {
+        Some(state) => cancelled(&state),
+        None => Python::attach(|py| py.check_signals().is_err()),
+    }
+}

@@ -67,7 +67,7 @@ pub(super) fn admit(
             result.push(finding(
                 C::SubmissionKeyMandatory,
                 format!("{path}.mandatory"),
-                &[("column", s(name))],
+                &[("column", s(name)), ("value", V::Bool(false))],
             ));
         }
         let mandatory = resolve_mandatory(key.is_some(), declared, declared_core, tabulation);
@@ -81,7 +81,11 @@ pub(super) fn admit(
                 result.push(finding(
                     C::SubmissionKeyMandatory,
                     format!("{entry_path}.mandatory"),
-                    &[("column", s(name)), ("entry", s(&entry.id.name))],
+                    &[
+                        ("column", s(name)),
+                        ("entry", s(&entry.id.name)),
+                        ("value", V::Bool(false)),
+                    ],
                 ));
             }
             let entry_core = core(&entry.metadata);

@@ -257,7 +257,7 @@ mod declaration {
                     {"phase":"validation", "condition":"invalid_field_type", "rule":"SCHEMA-12",
                         "spec_paths":["count"], "context":{"expected":"int", "actual":"bool"}},
                     {"phase":"validation", "condition":"unknown_field", "rule":"SCHEMA-13",
-                        "spec_paths":["extra"], "context":{"field":"extra", "class":"root_class"}}
+                        "spec_paths":["extra"], "context":{"field":"extra", "class":"root_class", "identifier":"extra"}}
                 ]})
             );
         }

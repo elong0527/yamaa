@@ -93,7 +93,16 @@ impl Define {
         result
     }
     fn refuse(&mut self, failure: Failure) {
-        self.issues = crate::file_application::collect(issues(&failure));
+        // A publication failure names the file of the section it stopped at.
+        let written = match &failure {
+            Failure::TargetAdmission { index, .. } | Failure::Publication { index, .. } => self
+                .application
+                .artifacts()
+                .nth(*index)
+                .map_or("", |(written, _, _)| written),
+            _ => "",
+        };
+        self.issues = crate::file_application::collect(issues(&failure, written));
         self.failure = Some(failure);
     }
     pub fn issues(&self) -> &[Diagnostic] {
@@ -177,6 +186,7 @@ impl Define {
             Cause::Stage(error) | Cause::Commit(error) => Failure::Publication { index, error },
             Cause::Unwind(_) => Failure::Diagnostic(vec![define::publication_diagnostic(
                 index,
+                written(index),
                 define::PublicationFailure::Publication,
                 "publication unwound".into(),
             )]),
@@ -559,7 +569,9 @@ fn resource(path: &str, written: &str, error: file_resources::Error) -> Failure 
         error,
     }
 }
-fn issues(failure: &Failure) -> Vec<Diagnostic> {
+/// The issues of `failure`; `written` is the file a publication failure
+/// stopped at, as the section writes it.
+fn issues(failure: &Failure, written: &str) -> Vec<Diagnostic> {
     match failure {
         Failure::Project(error) => project_application::failure(error),
         // Submission findings record no geometry of their own.
@@ -602,6 +614,7 @@ fn issues(failure: &Failure) -> Vec<Diagnostic> {
         }
         Failure::TargetAdmission { index, error } => vec![define::publication_diagnostic(
             *index,
+            written,
             define::PublicationFailure::TargetAdmission(
                 crate::file_application::publication_fault(error),
             ),
@@ -609,6 +622,7 @@ fn issues(failure: &Failure) -> Vec<Diagnostic> {
         )],
         Failure::Publication { index, error } => vec![define::publication_diagnostic(
             *index,
+            written,
             define::PublicationFailure::Publication,
             error.message(),
         )],

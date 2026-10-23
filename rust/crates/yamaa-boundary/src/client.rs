@@ -17,9 +17,10 @@
 //! soundness rests on the contract of [`crate::abi`]: the table an accepted
 //! negotiation returns is static, an entry writes its `out` on done and its
 //! `refusal` on a refusal, everything it hands out stays valid until its one
-//! release, and the engine calls a call's callbacks only on the calling
-//! thread, while the call runs, with the context the client gave it, which
-//! the host's callbacks object outlives.
+//! release. Ordinary calls borrow their callbacks only while the call runs.
+//! Streamed calls take an owned, thread-safe callback context, kept through
+//! the run and readers: their probe may run on a consuming thread, and project
+//! functions run only on the originating thread.
 use std::any::Any;
 use std::ffi::{c_int, c_void};
 use std::marker::PhantomData;
@@ -389,6 +390,22 @@ pub struct Call<'a> {
 }
 
 impl<'a> Call<'a> {
+    /// Own callbacks for a streamed run, which can keep them after its initial
+    /// call returns. They may be released on any thread. This call is consumed
+    /// by `Engine::spec_stream` and cannot be reused.
+    pub fn with_owned<H: Callbacks + Send + Sync + 'static>(
+        self,
+        host: H,
+        functions: bool,
+    ) -> StreamCall<'a> {
+        let mut record = self.with(&host, functions).record;
+        record.context = root(host);
+        StreamCall {
+            record,
+            borrowed: PhantomData,
+        }
+    }
+
     /// A call from `language`'s host on its runtime, with no callbacks.
     pub fn new(language: Language, runtime_name: &'a str, runtime_version: &'a str) -> Self {
         let host = match language {
@@ -443,6 +460,21 @@ impl<'a> Call<'a> {
         record.integer_digits = functions.then_some(integer_digits::<H> as abi::Query);
         record.compare_locked = functions.then_some(compare_locked::<H> as abi::CompareLocked);
         self
+    }
+}
+
+/// One owned callback context for a streamed call. An unused call releases it.
+pub struct StreamCall<'a> {
+    record: abi::Call,
+    borrowed: PhantomData<&'a ()>,
+}
+
+impl Drop for StreamCall<'_> {
+    fn drop(&mut self) {
+        if let Some(release) = self.record.context.release.take() {
+            // SAFETY: this call still owns its context when it was not sent.
+            unsafe { release(self.record.context.pointer) };
+        }
     }
 }
 
@@ -627,6 +659,40 @@ impl Engine {
             (self.0.spec_run)(&call.record, spec, project, plans, out, refusal)
         });
         self.handle(handle)
+    }
+
+    /// Start a streamed specification run, transferring its owned callbacks.
+    pub fn spec_stream(
+        self,
+        mut call: StreamCall<'_>,
+        spec: &str,
+        project: Option<&str>,
+        plans: Handle,
+    ) -> Result<Owned, Refused> {
+        let record = call.record;
+        call.record.context = abi::Root::NONE;
+        // SAFETY: the texts and record are valid for the call; its context is
+        // owned and the engine takes it on every outcome, including refusal.
+        let handle = answer(self, |out, refusal| unsafe {
+            (self.0.spec_stream)(
+                &record,
+                Str::of(spec),
+                Str::optional(project),
+                plans,
+                out,
+                refusal,
+            )
+        });
+        self.handle(handle)
+    }
+
+    /// Whether a run or table holds a streamed run's output.
+    pub fn is_stream(self, handle: Handle) -> Result<bool, Refused> {
+        // SAFETY: the destinations are fresh, and the engine validates handles.
+        answer(self, |out, refusal| unsafe {
+            (self.0.is_stream)(handle, out, refusal)
+        })
+        .map(|value| value != 0)
     }
 
     /// Run a project's section, or all of it, with `plans` as
@@ -1263,8 +1329,8 @@ fn root<O: 'static>(object: O) -> abi::Root {
 ///
 /// # Safety
 ///
-/// `context` is the pointer to the host a [`Call::with`] gave, which
-/// outlives the call.
+/// `context` is the pointer to the host a [`Call::with`] borrowed for the
+/// call, or a [`Call::with_owned`] transferred for the streamed run.
 unsafe fn host<'a, H>(context: *mut c_void) -> &'a H {
     // SAFETY: the caller's contract.
     unsafe { &*context.cast::<H>() }

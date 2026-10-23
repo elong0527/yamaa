@@ -77,6 +77,12 @@ impl Finding {
             .insert("detail".into(), crate::json::Value::String(detail.into()));
         self
     }
+    /// Name one more fact beside `detail`, under the key the specification
+    /// run records for the same cause, so a message can name it (P-MSG-1).
+    pub fn with(mut self, key: &str, value: impl Into<crate::json::Value>) -> Self {
+        self.context.insert(key.into(), value.into());
+        self
+    }
     fn refused(path: &str, refusal: crate::diagnostic::Diagnostic) -> Self {
         Self {
             code: refusal.code,
@@ -511,11 +517,10 @@ fn references(
     for reference in references {
         let id = reference_id(reference);
         if !known.contains(id) {
-            findings.push(Finding::cause(
-                ConditionCode::SubmissionUnknownDocument,
-                path,
-                id,
-            ));
+            findings.push(
+                Finding::cause(ConditionCode::SubmissionUnknownDocument, path, id)
+                    .with("document", id),
+            );
         }
     }
 }
@@ -558,13 +563,21 @@ fn copy_failure(
         .iter()
         .find_map(|&expr| origin::copies_expr(tree, expr, predecessor, reads).err())
 }
+/// SUB-2: a `metadata` key that names a governed field, at the root or, for
+/// `column`, at that column, naming the key, its level and the column as the
+/// specification run does.
 fn reserved_metadata(
     document: &Document,
     node: usize,
-    governed: &[spec::FieldName],
+    column: Option<&str>,
     path: &str,
     findings: &mut Vec<Finding>,
 ) {
+    let governed = if column.is_some() {
+        spec::COLUMN_METADATA_FIELDS
+    } else {
+        spec::DATASET_METADATA_FIELDS
+    };
     if let Some(N::Mapping(fields)) = document
         .field(node, "metadata")
         .and_then(|n| document.nodes().get(n))
@@ -572,11 +585,17 @@ fn reserved_metadata(
         for &(key, _) in fields {
             if let N::Text(key) = &document.nodes()[key] {
                 if governed.iter().any(|field| field.name() == key) {
-                    findings.push(Finding::cause(
+                    let mut finding = Finding::cause(
                         ConditionCode::SubmissionReservedMetadata,
                         &format!("{path}.metadata.{key}"),
                         key,
-                    ));
+                    )
+                    .with("key", key.as_str())
+                    .with("level", if column.is_some() { "column" } else { "root" });
+                    if let Some(column) = column {
+                        finding = finding.with("column", column);
+                    }
+                    findings.push(finding);
                 }
             }
         }
@@ -620,6 +639,11 @@ fn label_finding(
             .insert(key.into(), crate::json::Value::String(value.into()));
     }
     finding
+}
+/// A canonical integer the document declares, as the number it spells.
+fn integer(text: &str) -> crate::json::Value {
+    text.parse::<crate::json::Number>()
+        .map_or_else(|_| crate::json::Value::String(text.into()), Into::into)
 }
 /// A redundant declaration: the path declares a fact `stated_by` already states.
 fn redundant(code: ConditionCode, path: &str, detail: &str, stated_by: &str) -> Finding {
@@ -702,27 +726,28 @@ impl ColumnAdmission<'_> {
         } = *self;
         let name = &column.name.value;
         let Some(metadata) = &column.submission else {
-            findings.push(Finding::cause(
-                ConditionCode::SubmissionMetadataMissing,
-                column_path,
-                name,
-            ));
+            findings.push(
+                Finding::cause(ConditionCode::SubmissionMetadataMissing, column_path, name)
+                    .with("field", "submission"),
+            );
             return None;
         };
         if metadata.origins.is_empty() {
-            findings.push(Finding::cause(
-                ConditionCode::SubmissionOriginMissing,
-                column_path,
-                name,
-            ));
+            findings.push(
+                Finding::cause(ConditionCode::SubmissionOriginMissing, column_path, name)
+                    .with("column", name.as_str()),
+            );
             return None;
         }
         if column.label.is_none() {
-            findings.push(Finding::cause(
-                ConditionCode::SubmissionMetadataMissing,
-                column_path,
-                "label",
-            ));
+            findings.push(
+                Finding::cause(
+                    ConditionCode::SubmissionMetadataMissing,
+                    column_path,
+                    "label",
+                )
+                .with("field", "label"),
+            );
         }
         // A name and label a regulator's transport cannot carry fail under
         // Submission, and under xpt whatever the context (DEFINE-22, XPT-5).
@@ -754,18 +779,26 @@ impl ColumnAdmission<'_> {
                 && core == Some(Core::Req)
                 && metadata.mandatory.as_ref().is_some_and(|m| !m.value))
         {
-            findings.push(Finding::cause(
-                ConditionCode::SubmissionCoreMandatory,
-                column_path,
-                name,
-            ));
+            findings.push(
+                Finding::cause(ConditionCode::SubmissionCoreMandatory, column_path, name)
+                    .with("column", name.as_str()),
+            );
         }
-        if section.family == Submission::Adam && metadata.role.is_some() {
-            findings.push(Finding::cause(
-                ConditionCode::SubmissionAdamField,
-                &format!("{column_path}.role"),
-                name,
-            ));
+        if let Some(role) = metadata
+            .role
+            .as_ref()
+            .filter(|_| section.family == Submission::Adam)
+        {
+            findings.push(
+                Finding::cause(
+                    ConditionCode::SubmissionAdamField,
+                    &format!("{column_path}.role"),
+                    name,
+                )
+                .with("column", name.as_str())
+                .with("value", role.value.as_str())
+                .with("model", model.name()),
+            );
         }
         // Each origin is admitted on its own, at its own position,
         // `origins[<i>]` (P-ORIGIN-1).
@@ -793,11 +826,10 @@ impl ColumnAdmission<'_> {
             .any(|declared| declared.kind.value == OriginType::Derived)
             && metadata.method.is_none()
         {
-            findings.push(Finding::cause(
-                ConditionCode::SubmissionMethodMissing,
-                column_path,
-                name,
-            ));
+            findings.push(
+                Finding::cause(ConditionCode::SubmissionMethodMissing, column_path, name)
+                    .with("column", name.as_str()),
+            );
         }
         if let Some(spec::Method::Class(class)) = &metadata.method {
             references(
@@ -821,11 +853,12 @@ impl ColumnAdmission<'_> {
             .as_ref()
             .map_or(column_type.family_data_type(adam), |d| d.value);
         if !column_type.admits_family_data_type(data_type, adam) {
-            findings.push(Finding::cause(
-                ConditionCode::SubmissionDataType,
-                column_path,
-                name,
-            ));
+            findings.push(
+                Finding::cause(ConditionCode::SubmissionDataType, column_path, name)
+                    .with("column", name.as_str())
+                    .with("declared_type", column_type.name())
+                    .with("data_type", data_type.name()),
+            );
         }
         // SUB-27: an `sdtm` or `send` dataset carries its date and time text
         // in a `str` column, never in a `datetime` one.
@@ -851,20 +884,21 @@ impl ColumnAdmission<'_> {
         }
         let display_format = match column_type.numeric_date_format(adam) {
             Some(fixed) => {
-                if metadata
+                if let Some(declared) = metadata
                     .display_format
                     .as_ref()
-                    .is_some_and(|declared| declared.value != fixed)
+                    .filter(|declared| declared.value != fixed)
                 {
-                    let mut finding = Finding::cause(
-                        ConditionCode::SubmissionDisplayFormatConflict,
-                        &format!("{column_path}.display_format"),
-                        fixed,
+                    findings.push(
+                        Finding::cause(
+                            ConditionCode::SubmissionDisplayFormatConflict,
+                            &format!("{column_path}.display_format"),
+                            fixed,
+                        )
+                        .with("column", name.as_str())
+                        .with("value", declared.value.as_str())
+                        .with("permitted", fixed),
                     );
-                    finding
-                        .context
-                        .insert("column".into(), crate::json::Value::String(name.clone()));
-                    findings.push(finding);
                 }
                 Some(fixed.to_string())
             }
@@ -942,11 +976,13 @@ impl ColumnAdmission<'_> {
         let source = declared.source.as_ref().map(|s| s.value);
         // D65: a specification takes no `Not Available` origin under SDTM.
         if !kind.admits_source(model, source) {
-            findings.push(Finding::cause(
-                ConditionCode::SubmissionOriginSource,
-                at,
-                name,
-            ));
+            let mut finding = Finding::cause(ConditionCode::SubmissionOriginSource, at, name)
+                .with("column", name)
+                .with("origin_type", kind.name());
+            if let Some(source) = source {
+                finding = finding.with("origin_source", source.name());
+            }
+            findings.push(finding.with("model", model.name()));
         }
         let description = declared.description.as_ref().map(|d| d.value.as_str());
         let predecessor = description
@@ -957,23 +993,23 @@ impl ColumnAdmission<'_> {
             OriginType::Other | OriginType::Predecessor | OriginType::NotAvailable
         ) && description.is_none()
         {
-            findings.push(Finding::cause(
-                ConditionCode::SubmissionOriginDescription,
-                at,
-                name,
-            ));
+            findings.push(
+                Finding::cause(ConditionCode::SubmissionOriginDescription, at, name)
+                    .with("column", name)
+                    .with("origin_type", kind.name()),
+            );
         } else if kind == OriginType::Predecessor && predecessor.is_none() {
             // SUB-16: a Predecessor description names `<dataset>.<column>`.
-            let mut finding = Finding::cause(
-                ConditionCode::SubmissionOriginDescription,
-                &format!("{at}.description"),
-                name,
+            findings.push(
+                Finding::cause(
+                    ConditionCode::SubmissionOriginDescription,
+                    &format!("{at}.description"),
+                    name,
+                )
+                .with("column", name)
+                .with("origin_type", kind.name())
+                .with("reason", "predecessor_form"),
             );
-            finding.context.insert(
-                "reason".into(),
-                crate::json::Value::String("predecessor_form".into()),
-            );
-            findings.push(finding);
         }
         // SUB-19 and SUB-20: the derivations refute the declared type, or are
         // not the copy a Predecessor claims. A Predecessor that is not the
@@ -996,7 +1032,7 @@ impl ColumnAdmission<'_> {
                 Level::Column => ConditionCode::SubmissionOriginRefuted,
                 Level::Value => ConditionCode::SubmissionValueOriginRefuted,
             };
-            let mut finding = Finding::cause(code, column_path, name);
+            let mut finding = Finding::cause(code, column_path, name).with("column", name);
             let text = |value: &str| crate::json::Value::String(value.into());
             finding
                 .context
@@ -1086,18 +1122,29 @@ impl ColumnAdmission<'_> {
         // SUB-7: a date or datetime column never declares a length; under
         // `adam` it travels as an eight-byte SAS numeric date (SUB-25).
         let column_type = column.column_type.value;
+        // Each finding names the column, and the field it is about, as the
+        // specification run does (SUB-7, SUB-8).
+        let length_finding = |code, field: &str| {
+            let detail = if field == "length" { name } else { field };
+            let finding = Finding::cause(code, column_path, detail)
+                .with("column", name)
+                .with("field", field);
+            if field == "length" {
+                finding.with("data_type", data_type.name())
+            } else {
+                finding
+            }
+        };
         if column_type.temporal() {
             if metadata.length.is_some() {
-                findings.push(Finding::cause(
+                findings.push(length_finding(
                     ConditionCode::SubmissionLengthNotApplicable,
-                    column_path,
-                    name,
+                    "length",
                 ));
             }
             if metadata.significant_digits.is_some() {
-                findings.push(Finding::cause(
+                findings.push(length_finding(
                     ConditionCode::SubmissionLengthNotApplicable,
-                    column_path,
                     "significant_digits",
                 ));
             }
@@ -1121,17 +1168,15 @@ impl ColumnAdmission<'_> {
             DataType::Text | DataType::Integer | DataType::Float
         );
         if needs_length && length.is_none() {
-            findings.push(Finding::cause(
+            findings.push(length_finding(
                 ConditionCode::SubmissionLengthMissing,
-                column_path,
-                name,
+                "length",
             ));
         }
         if !needs_length && metadata.length.is_some() {
-            findings.push(Finding::cause(
+            findings.push(length_finding(
                 ConditionCode::SubmissionLengthNotApplicable,
-                column_path,
-                name,
+                "length",
             ));
         }
         if length
@@ -1142,31 +1187,31 @@ impl ColumnAdmission<'_> {
                 .as_ref()
                 .is_some_and(|v| v.value.starts_with('-'))
         {
-            findings.push(Finding::cause(
-                ConditionCode::SubmissionLengthInvalid,
-                column_path,
-                name,
-            ));
+            findings.push(
+                Finding::cause(ConditionCode::SubmissionLengthInvalid, column_path, name)
+                    .with("column", name),
+            );
         }
-        if metadata
-            .length
-            .as_ref()
-            .is_some_and(|n| maxima.iter().any(|max| max != &n.value))
-        {
-            findings.push(Finding::cause(
-                ConditionCode::SubmissionLengthConflict,
-                column_path,
-                name,
-            ));
+        if let Some((declared, max)) = metadata.length.as_ref().and_then(|declared| {
+            maxima
+                .iter()
+                .find(|max| **max != declared.value)
+                .map(|max| (declared, max))
+        }) {
+            findings.push(
+                Finding::cause(ConditionCode::SubmissionLengthConflict, column_path, name)
+                    .with("column", name)
+                    .with("length", integer(&declared.value))
+                    .with("max_length", integer(max)),
+            );
         }
         if (data_type == DataType::Float) != metadata.significant_digits.is_some() {
-            findings.push(Finding::cause(
+            findings.push(length_finding(
                 if data_type == DataType::Float {
                     ConditionCode::SubmissionLengthMissing
                 } else {
                     ConditionCode::SubmissionLengthNotApplicable
                 },
-                column_path,
                 "significant_digits",
             ));
         }
@@ -1206,10 +1251,28 @@ impl ColumnAdmission<'_> {
                 Level::Value => Vec::new(),
             };
             for binding in self.catalogue.bind(&list.value, kind, !allowed.is_empty()) {
-                let code = match binding {
-                    ct::BindingFinding::UnknownCodelist => ConditionCode::CodelistUnknownBinding,
-                    ct::BindingFinding::TypeMismatch { .. } => {
-                        ConditionCode::CodelistBindingTypeMismatch
+                // Each binding finding names the column and the codelist, and
+                // a type mismatch both types, as the specification run does
+                // (CT-1, CT-8).
+                let finding = |code| {
+                    Finding::cause(code, &codelist_path, &list.value)
+                        .with("column", column.name.value.as_str())
+                        .with("codelist", list.value.as_str())
+                };
+                let finding = match binding {
+                    ct::BindingFinding::UnknownCodelist => {
+                        finding(ConditionCode::CodelistUnknownBinding)
+                    }
+                    ct::BindingFinding::TypeMismatch { expected, actual } => {
+                        finding(ConditionCode::CodelistBindingTypeMismatch)
+                            .with(
+                                "codelist_data_type",
+                                crate::project_codelist_binding::codelist_data_type(expected),
+                            )
+                            .with(
+                                "column_type",
+                                crate::project_codelist_binding::column_type(actual),
+                            )
                     }
                     ct::BindingFinding::RedundantAllowedValues => {
                         for path in &allowed {
@@ -1223,7 +1286,7 @@ impl ColumnAdmission<'_> {
                         continue;
                     }
                 };
-                findings.push(Finding::cause(code, &codelist_path, &list.value));
+                findings.push(finding);
             }
         }
     }
@@ -1244,11 +1307,15 @@ fn key_column_mandatory(
         .as_ref()
         .and_then(|metadata| metadata.mandatory.as_ref());
     if keys.contains(name) && declared.is_some_and(|mandatory| !mandatory.value) {
-        findings.push(Finding::cause(
-            ConditionCode::SubmissionKeyMandatory,
-            &format!("{path}.columns.{name}.submission.mandatory"),
-            name,
-        ));
+        findings.push(
+            Finding::cause(
+                ConditionCode::SubmissionKeyMandatory,
+                &format!("{path}.columns.{name}.submission.mandatory"),
+                name,
+            )
+            .with("column", name.as_str())
+            .with("value", false),
+        );
     }
 }
 
@@ -1308,15 +1375,20 @@ fn compose_values(
                     ConditionCode::SubmissionValueDuplicateId,
                     format!("{}.id", values::path(name, id)),
                     id.to_owned(),
-                    vec![("entry", text(id))],
+                    vec![("entry", text(id)), ("identifier", text(id))],
                 ),
                 values::Finding::Where {
                     id,
                     column,
                     ref fault,
                 } => {
-                    let mut context = vec![("entry", text(id)), ("reason", text(fault.reason()))];
-                    context.extend(column.map(|column| ("where_column", text(column))));
+                    // A clause that names no column has no where column (SUB-12).
+                    let where_column = column.map_or(crate::json::Value::Null, text);
+                    let mut context = vec![
+                        ("entry", text(id)),
+                        ("reason", text(fault.reason())),
+                        ("where_column", where_column),
+                    ];
                     // The refused where values, in declared order.
                     context.extend(fault.values().map(|refused| {
                         let refused = refused.iter().map(|value| text(value)).collect();
@@ -1393,11 +1465,14 @@ fn compose_values(
             if admission.keys.contains(name)
                 && entry.metadata.mandatory.as_ref().is_some_and(|m| !m.value)
             {
-                findings.push(Finding::cause(
-                    ConditionCode::SubmissionKeyMandatory,
-                    &format!("{entry_path}.mandatory"),
-                    name,
-                ));
+                findings.push(
+                    Finding::cause(
+                        ConditionCode::SubmissionKeyMandatory,
+                        &format!("{entry_path}.mandatory"),
+                        name,
+                    )
+                    .with("value", false),
+                );
             }
             // An entry without origins of its own answers with the column's,
             // which the column's own refutation already covers (SUB-13).
@@ -1668,21 +1743,14 @@ fn compose_datasets(
             findings.push(finding);
             continue;
         }
-        reserved_metadata(
-            doc,
-            doc.root(),
-            spec::DATASET_METADATA_FIELDS,
-            &path,
-            findings,
-        );
+        reserved_metadata(doc, doc.root(), None, &path, findings);
         let reads = Reads::of_spec(input.tree);
         let id = text(doc, doc.root(), "domain").unwrap_or_default();
         if !ids.insert(id.clone()) || known.contains(id.as_str()) {
-            findings.push(Finding::cause(
-                ConditionCode::SubmissionDuplicateIdentifier,
-                &path,
-                &id,
-            ));
+            findings.push(
+                Finding::cause(ConditionCode::SubmissionDuplicateIdentifier, &path, &id)
+                    .with("identifier", id.as_str()),
+            );
         }
         if !sources.insert(input.source) || !artifacts.insert(input.artifact) {
             findings.push(Finding::cause(
@@ -1706,6 +1774,15 @@ fn compose_datasets(
                 finding
                     .context
                     .insert("dataset".into(), crate::json::Value::String(id.clone()));
+                // The artifact the decimals would round, as `output.path`
+                // writes it (CSV-6).
+                let written = doc
+                    .field(doc.root(), "output")
+                    .and_then(|output| text(doc, output, "path"));
+                finding.context.insert(
+                    "path".into(),
+                    written.map_or(crate::json::Value::Null, crate::json::Value::String),
+                );
                 if let Some(written) = section.specs.get(index) {
                     finding.context.insert(
                         "specification".into(),
@@ -1725,28 +1802,29 @@ fn compose_datasets(
         let declarations = match spec::decode(doc, doc.root()) {
             Ok(value) => value,
             Err(_) => {
-                findings.push(Finding::cause(
-                    ConditionCode::SubmissionMetadataMissing,
-                    &path,
-                    "invalid closed submission declarations",
-                ));
+                findings.push(
+                    Finding::cause(
+                        ConditionCode::SubmissionMetadataMissing,
+                        &path,
+                        "invalid closed submission declarations",
+                    )
+                    .with("field", "submission"),
+                );
                 continue;
             }
         };
         let Some(dataset) = declarations.dataset() else {
-            findings.push(Finding::cause(
-                ConditionCode::SubmissionMetadataMissing,
-                &path,
-                &id,
-            ));
+            findings.push(
+                Finding::cause(ConditionCode::SubmissionMetadataMissing, &path, &id)
+                    .with("field", "submission"),
+            );
             continue;
         };
         let Some(columns) = declarations.columns() else {
-            findings.push(Finding::cause(
-                ConditionCode::SubmissionMetadataMissing,
-                &path,
-                "columns",
-            ));
+            findings.push(
+                Finding::cause(ConditionCode::SubmissionMetadataMissing, &path, "columns")
+                    .with("field", "columns"),
+            );
             continue;
         };
         let standard = bound_standard(
@@ -1771,35 +1849,55 @@ fn compose_datasets(
             }
         }
         if dataset.reference_data.value && dataset.repeating.value {
-            findings.push(Finding::cause(
-                ConditionCode::SubmissionReferenceRepeating,
-                &format!("{path}.submission"),
-                &id,
-            ));
+            findings.push(
+                Finding::cause(
+                    ConditionCode::SubmissionReferenceRepeating,
+                    &format!("{path}.submission"),
+                    &id,
+                )
+                .with("dataset", id.as_str()),
+            );
         }
-        if section.family == Submission::Adam && dataset.domain.is_some() {
-            findings.push(Finding::cause(
-                ConditionCode::SubmissionAdamField,
-                &format!("{path}.submission.domain"),
-                &id,
-            ));
+        let model = section_model(section.family).name();
+        if let Some(domain) = dataset
+            .domain
+            .as_ref()
+            .filter(|_| section.family == Submission::Adam)
+        {
+            findings.push(
+                Finding::cause(
+                    ConditionCode::SubmissionAdamField,
+                    &format!("{path}.submission.domain"),
+                    &id,
+                )
+                .with("value", domain.value.as_str())
+                .with("model", model),
+            );
         }
         // The domain build reads the family group from the class alone, so the
         // class must belong to the family this document binds the dataset to.
         let tabulation = dataset.class.value.tabulation();
         if tabulation == (section.family == Submission::Adam) {
-            findings.push(Finding::cause(
-                ConditionCode::SubmissionClassFamily,
-                &format!("{path}.submission.class"),
-                dataset.class.value.name(),
-            ));
+            let class = dataset.class.value.name();
+            findings.push(
+                Finding::cause(
+                    ConditionCode::SubmissionClassFamily,
+                    &format!("{path}.submission.class"),
+                    class,
+                )
+                .with("value", class)
+                .with("model", model),
+            );
         }
         if dataset.has_no_data.value && dataset.comment.is_none() {
-            findings.push(Finding::cause(
-                ConditionCode::SubmissionNoDataComment,
-                &format!("{path}.submission.comment"),
-                &id,
-            ));
+            findings.push(
+                Finding::cause(
+                    ConditionCode::SubmissionNoDataComment,
+                    &format!("{path}.submission.comment"),
+                    &id,
+                )
+                .with("field", "comment"),
+            );
         }
         comment_references(
             findings,
@@ -1813,21 +1911,27 @@ fn compose_datasets(
         let mut names = BTreeSet::new();
         for column in &columns.value {
             if !names.insert(&column.name.value) {
-                findings.push(Finding::cause(
-                    ConditionCode::SubmissionDuplicateIdentifier,
-                    &format!("{path}.columns"),
-                    &column.name.value,
-                ));
+                findings.push(
+                    Finding::cause(
+                        ConditionCode::SubmissionDuplicateIdentifier,
+                        &format!("{path}.columns"),
+                        &column.name.value,
+                    )
+                    .with("identifier", column.name.value.as_str()),
+                );
             }
         }
         let mut ordered = BTreeSet::new();
         for name in &output_columns {
             if !ordered.insert(name) {
-                findings.push(Finding::cause(
-                    ConditionCode::SubmissionDuplicateIdentifier,
-                    &format!("{path}.output.columns"),
-                    name,
-                ));
+                findings.push(
+                    Finding::cause(
+                        ConditionCode::SubmissionDuplicateIdentifier,
+                        &format!("{path}.output.columns"),
+                        name,
+                    )
+                    .with("identifier", name.as_str()),
+                );
             }
         }
         // OUTPUT-2: a key that is not an output column fails as checking or
@@ -1856,16 +1960,19 @@ fn compose_datasets(
             reserved_metadata(
                 doc,
                 column.node,
-                spec::COLUMN_METADATA_FIELDS,
+                Some(&column.name.value),
                 &format!("{path}.columns.{}", column.name.value),
                 findings,
             );
             if column.submission.is_some() && !output_columns.contains(&column.name.value) {
-                findings.push(Finding::cause(
-                    ConditionCode::SubmissionColumnNotOutput,
-                    &format!("{path}.columns.{}.submission", column.name.value),
-                    &column.name.value,
-                ));
+                findings.push(
+                    Finding::cause(
+                        ConditionCode::SubmissionColumnNotOutput,
+                        &format!("{path}.columns.{}.submission", column.name.value),
+                        &column.name.value,
+                    )
+                    .with("column", column.name.value.as_str()),
+                );
             }
         }
         let admission = ColumnAdmission {
@@ -1884,11 +1991,10 @@ fn compose_datasets(
         for name in &output_columns {
             let column_path = format!("{path}.columns.{name}.submission");
             let Some(column) = columns.value.iter().find(|c| &c.name.value == name) else {
-                findings.push(Finding::cause(
-                    ConditionCode::SubmissionMetadataMissing,
-                    &column_path,
-                    name,
-                ));
+                findings.push(
+                    Finding::cause(ConditionCode::SubmissionMetadataMissing, &column_path, name)
+                        .with("field", "submission"),
+                );
                 continue;
             };
             key_column_mandatory(column, admission.keys, &path, findings);
@@ -2003,6 +2109,7 @@ impl<'a> Required<'a> {
         let family = family_name(section.family);
         let missing = |path: String, field: &str| {
             Finding::cause(ConditionCode::DefineRequiredDeclaration, &path, field)
+                .with("field", field)
         };
         let standards = (!section.standards.is_empty()).then_some(section.standards.as_slice());
         let define = section.define.as_ref();
@@ -2069,48 +2176,63 @@ pub fn compose(
         Finding::cause(code, &format!("{prefix}.{suffix}"), detail)
     };
     if inputs.len() != section.specs.len() {
-        findings.push(cause(
-            ConditionCode::SubmissionMetadataMissing,
-            "specs",
-            "incomplete captured dataset set",
-        ));
+        findings.push(
+            cause(
+                ConditionCode::SubmissionMetadataMissing,
+                "specs",
+                "incomplete captured dataset set",
+            )
+            .with("field", "specs"),
+        );
     }
     // Every guide a section lists belongs to its model under a name of its
     // own (DEFINE-6, D16).
     section_standards(section.family, guides, &mut findings);
     if !define.text.to_ascii_lowercase().ends_with(".xml") {
-        findings.push(cause(
-            ConditionCode::SubmissionDefineExtension,
-            "define",
-            "expected .xml extension",
-        ));
+        findings.push(
+            cause(
+                ConditionCode::SubmissionDefineExtension,
+                "define",
+                "expected .xml extension",
+            )
+            .with("value", define.text.as_str()),
+        );
     } else if section.transport.is_some() && define.text.rsplit('/').next() != Some("define.xml") {
         // DEFINE-2: the transport files sit beside a document named define.xml.
-        findings.push(cause(
-            ConditionCode::SubmissionDefineName,
-            "define",
-            "a transport requires the document file name define.xml",
-        ));
+        findings.push(
+            cause(
+                ConditionCode::SubmissionDefineName,
+                "define",
+                "a transport requires the document file name define.xml",
+            )
+            .with("value", define.text.as_str()),
+        );
     }
     let source_version = match source_version(section, installed) {
         Some(version) => version.into(),
         None => {
-            findings.push(cause(
-                ConditionCode::SubmissionSourceVersion,
-                "source_system_version",
-                "empty generator version",
-            ));
+            findings.push(
+                cause(
+                    ConditionCode::SubmissionSourceVersion,
+                    "source_system_version",
+                    "empty generator version",
+                )
+                .with("section", family),
+            );
             String::new()
         }
     };
     let mut known = BTreeSet::new();
     for document in &section.documents {
         if !known.insert(document.id.name.as_str()) {
-            findings.push(cause(
-                ConditionCode::SubmissionDuplicateIdentifier,
-                "documents",
-                &document.id.name,
-            ));
+            findings.push(
+                cause(
+                    ConditionCode::SubmissionDuplicateIdentifier,
+                    "documents",
+                    &document.id.name,
+                )
+                .with("identifier", document.id.name.as_str()),
+            );
         }
     }
     let acrfs: Vec<_> = section
@@ -2119,11 +2241,19 @@ pub fn compose(
         .filter(|d| d.kind == ast::DocumentKind::AnnotatedCrf)
         .collect();
     if acrfs.len() > 1 {
-        findings.push(cause(
-            ConditionCode::SubmissionAnnotatedCrfMultiplicity,
-            "documents",
-            "multiple annotated CRFs",
-        ));
+        // The annotated case report forms, in declaration order (DEFINE-14).
+        let declared = acrfs
+            .iter()
+            .map(|document| crate::json::Value::String(document.id.name.clone()))
+            .collect::<Vec<_>>();
+        findings.push(
+            cause(
+                ConditionCode::SubmissionAnnotatedCrfMultiplicity,
+                "documents",
+                "multiple annotated CRFs",
+            )
+            .with("value", declared),
+        );
     }
     let mut bound = BTreeSet::new();
     let datasets = compose_datasets(
@@ -2167,11 +2297,14 @@ pub fn compose(
                         && prior.version == ct.version.text => {}
                 // DEFINE-10: another standard under the same identifier is
                 // refused, never numbered.
-                Some(_) => findings.push(Finding::cause(
-                    ConditionCode::SubmissionDuplicateIdentifier,
-                    &format!("codelists[{index}].standard.publishing_set"),
-                    &format!("STD.{id}"),
-                )),
+                Some(_) => findings.push(
+                    Finding::cause(
+                        ConditionCode::SubmissionDuplicateIdentifier,
+                        &format!("codelists[{index}].standard.publishing_set"),
+                        &format!("STD.{id}"),
+                    )
+                    .with("identifier", format!("STD.{id}")),
+                ),
                 None => standards.push(Standard {
                     id: id.clone(),
                     name: ct.name.text.clone(),
@@ -2198,11 +2331,14 @@ pub fn compose(
                     list.alias.is_none() || items.iter().any(|i| !i.extended && i.alias.is_none())
                 })
             {
-                findings.push(Finding::cause(
-                    ConditionCode::SubmissionCdiscAliasMissing,
-                    &format!("codelists.{}", list.id.name),
-                    "alias",
-                ));
+                findings.push(
+                    Finding::cause(
+                        ConditionCode::SubmissionCdiscAliasMissing,
+                        &format!("codelists.{}", list.id.name),
+                        "alias",
+                    )
+                    .with("field", "alias"),
+                );
             }
             codelists.push(Codelist {
                 declaration: list.clone(),

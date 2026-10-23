@@ -1,6 +1,6 @@
 //! `partial_restatement`: a layer that restates a mapping it inherits and
-//! leaves out entries that then come back from its parent (LAYER-6, LAYER-8,
-//! LAYER-9).
+//! leaves out entries that then come back from its parent or from a fragment
+//! it includes (LAYER-6, LAYER-8, LAYER-9).
 //!
 //! A layer that writes an inherited member merges with it: classes field by
 //! field and mappings key by key, so an entry the layer leaves out keeps its
@@ -14,10 +14,10 @@
 //! author's, so no fix is offered.
 //!
 //! It is the one finding that reads more than the file it reports: the
-//! layers the specification inherits, followed from the file through the
-//! local file resolver and admitted as composition admits them (LAYER-1 to
-//! LAYER-4), each normalized at the version it declares, and composed by the
-//! engine's own composition, root ancestor first. A file whose chain cannot
+//! layers the specification inherits and includes, followed from the file
+//! through the local file resolver and admitted as composition admits them
+//! (LAYER-1 to LAYER-4), each normalized at the version it declares, and
+//! composed by the engine's own composition in contribution order. A file whose chain cannot
 //! be followed, admitted or composed is not read for it: validation reports
 //! why.
 
@@ -65,16 +65,24 @@ const MEMBER_FIELDS: [(&str, &[&str]); 2] = [
 ];
 
 /// Every `partial_restatement` in `document`, the specification read from
-/// `file`; none for a file that declares no `parent`.
+/// `file`; none for a file that declares neither `parent` nor `include`.
 pub(super) fn check(document: &Document, file: &Path) -> Vec<Departure> {
     restatements(document, file).unwrap_or_default()
 }
 
 fn restatements(document: &Document, file: &Path) -> Option<Vec<Departure>> {
     let entry = &document.decoded.as_ref()?.document;
-    if !yamaa_core::language::declares_header(entry)
-        || document.member(document.root, "parent").is_none()
-    {
+    // What the layer composes on, as its message names it.
+    let from = match (
+        document.member(document.root, "parent").is_some(),
+        document.member(document.root, "include").is_some(),
+    ) {
+        (true, false) => "the parent",
+        (false, true) => "an included fragment",
+        (true, true) => "the parent or an included fragment",
+        (false, false) => return None,
+    };
+    if !yamaa_core::language::declares_header(entry) {
         return None;
     }
     let entry = entry.clone();
@@ -98,16 +106,17 @@ fn restatements(document: &Document, file: &Path) -> Option<Vec<Departure>> {
             start.line,
             start.column,
             path,
-            message(site, path, &back),
+            message(site, path, &back, from),
         ));
     }
     Some(found)
 }
 
 /// The layers of the specification `file` holds, whose own text decodes to
-/// `entry`: root ancestor first and the entry last, each admitted and
-/// normalized at the version it declares and reduced to the collections
-/// composed here, with the view of the version the chain needs (P-VER-1).
+/// `entry`: in contribution order, its fragments included, and the entry
+/// last, each admitted and normalized at the version it declares and reduced
+/// to the collections composed here, with the view of the version the chain
+/// needs (P-VER-1).
 fn layers(file: &Path, entry: Values) -> Option<(SchemaStructure, Vec<NormalizedDocument>)> {
     let (mut resources, name) = crate::file_configuration::resources(file.to_str()?).ok()?;
     let source = Resolver::inspect(
@@ -404,7 +413,7 @@ fn prose(items: &[String]) -> String {
 /// that drop them. A named window is a keyed member, which `clear` never
 /// names, so each left-out setting is cleared by its own path (LAYER-8,
 /// LAYER-9).
-fn message(site: Site<'_>, path: &str, back: &[String]) -> String {
+fn message(site: Site<'_>, path: &str, back: &[String], from: &str) -> String {
     let quoted = |text: &str| format!("`{text}`");
     let names = prose(&back.iter().map(|key| quoted(key)).collect::<Vec<_>>());
     let (verb, pronoun) = if back.len() == 1 {
@@ -424,5 +433,5 @@ fn message(site: Site<'_>, path: &str, back: &[String]) -> String {
             format!("list `{path}` in `clear` to replace the mapping")
         }
     };
-    format!("{names} {verb} back from the parent; {clear}, or write only what this layer changes")
+    format!("{names} {verb} back from {from}; {clear}, or write only what this layer changes")
 }

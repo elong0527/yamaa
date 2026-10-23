@@ -926,7 +926,7 @@ mod file {
                         yamaa_adapters::json!({
                             "phase": "validation", "condition": "missing_required_field",
                             "rule": "DEFINE-28", "spec_paths": [field],
-                            "context": {"detail": detail}
+                            "context": {"detail": detail, "field": detail}
                         })
                     })
                     .collect();

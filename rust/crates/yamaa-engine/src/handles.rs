@@ -20,23 +20,25 @@ pub(crate) static CENSUS: Census = Census::new();
 pub(crate) enum Value {
     Check(Mutex<yamaa::Check>),
     Run(Mutex<yamaa::Run>),
+    Streamed(Arc<yamaa::Streamed>),
     ProjectRun(Mutex<yamaa::ProjectRun>),
     Submission(Mutex<yamaa::Submission>),
     SelfTest(yamaa::SelfTest),
     Plans(yamaa::Plans),
     Table(yamaa::Table),
+    StreamTable(Arc<yamaa::Streamed>),
 }
 
 impl Value {
     pub(crate) fn kind(&self) -> HandleKind {
         match self {
             Value::Check(_) => HandleKind::Check,
-            Value::Run(_) => HandleKind::Run,
+            Value::Run(_) | Value::Streamed(_) => HandleKind::Run,
             Value::ProjectRun(_) => HandleKind::ProjectRun,
             Value::Submission(_) => HandleKind::Submission,
             Value::SelfTest(_) => HandleKind::SelfTest,
             Value::Plans(_) => HandleKind::Plans,
-            Value::Table(_) => HandleKind::Table,
+            Value::Table(_) | Value::StreamTable(_) => HandleKind::Table,
         }
     }
 }

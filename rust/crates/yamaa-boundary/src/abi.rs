@@ -177,8 +177,11 @@ pub const HOST_R: u32 = 2;
 
 /// The options of one call: the host, its runtime and its callbacks. An
 /// entry that takes a call takes its `context`, whatever it answers, and
-/// releases it once when it no longer needs the callbacks, at the latest as
-/// it returns. A callback left null is one the host does not offer: without
+/// releases it once when it no longer needs the callbacks. Except for
+/// `spec_stream`, this is at the latest as it returns. A streamed call keeps
+/// an owned context through its run and readers; its probe may run on a reader's
+/// thread and must guard access to its interpreter. Project functions run only
+/// on the thread that started the run. A callback left null is one the host does not offer: without
 /// `call_batch` the engine calls `invoke` row by row, without `is_interrupt`
 /// a failure of kind [`ERROR_INTERRUPTED`] is the host's interrupt, and
 /// without the lock callbacks the engine refuses to verify a declared lock.
@@ -733,6 +736,12 @@ pub struct Engine {
     /// The issues table of no issues, a table handle, which a host attaches
     /// to a refusal of its own.
     pub no_issues: unsafe extern "C" fn(out: *mut Handle, refusal: *mut Refusal) -> Status,
+    /// Start a streamed run. Unlike `spec_run`, this entry retains the call's
+    /// callbacks and context until the run and all its readers are released.
+    /// The context must therefore be owned, with a release callback.
+    pub spec_stream: OnRun,
+    /// Whether a run or table holds a streamed run's output (1 or 0).
+    pub is_stream: OnHandle<u32>,
 }
 
 /// The Arrow C data interface's schema.

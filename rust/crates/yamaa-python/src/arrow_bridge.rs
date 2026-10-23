@@ -32,6 +32,12 @@ use yamaa_boundary::client::{self, Owned, Refused};
 /// `to_pandas()` convert it with PyArrow, Polars or pandas, which they import
 /// only when called, and any library that reads the Arrow PyCapsule stream
 /// interface reads it directly.
+///
+/// The output of a run with `stream=True` is produced as it is read: a
+/// library that reads its Arrow stream drives the run, one batch per pull,
+/// and every other member reads the output whole, running the run whole if
+/// nobody has started to read it. Once its stream has been read, the output
+/// is not kept, and reading it again raises `RuntimeError`.
 #[pyclass(frozen, module = "yamaa", name = "Table")]
 pub struct Table {
     table: Owned,
@@ -66,9 +72,11 @@ fn refused(refusal: Refused) -> PyErr {
 impl Table {
     /// The number of rows.
     #[getter]
-    fn num_rows(&self) -> PyResult<usize> {
-        let rows = self.table.engine().rows(self.table.handle());
-        Ok(rows.map_err(refused)? as usize)
+    fn num_rows(&self, py: Python<'_>) -> PyResult<usize> {
+        crate::interrupt::run(py, |_| {
+            let rows = self.table.engine().rows(self.table.handle());
+            Ok(rows.map_err(refused)? as usize)
+        })
     }
 
     /// The column names, in order.
@@ -79,18 +87,21 @@ impl Table {
     }
 
     /// The number of rows.
-    fn __len__(&self) -> PyResult<usize> {
-        self.num_rows()
+    fn __len__(&self, py: Python<'_>) -> PyResult<usize> {
+        self.num_rows(py)
     }
 
     /// The table's preview, the same text in every host (#3030 D167).
-    fn __repr__(&self) -> PyResult<String> {
-        let preview = self.table.engine().preview(self.table.handle());
-        preview.map_err(refused)
+    fn __repr__(&self, py: Python<'_>) -> PyResult<String> {
+        crate::interrupt::run(py, |_| {
+            let preview = self.table.engine().preview(self.table.handle());
+            preview.map_err(refused)
+        })
     }
 
     /// A fresh Arrow C stream over the held buffers, as a PyCapsule named
-    /// `arrow_array_stream`. A requested schema is refused.
+    /// `arrow_array_stream`; for a streamed run's output, a stream that
+    /// produces it as it is read. A requested schema is refused.
     #[pyo3(signature=(requested_schema=None))]
     // `PyCapsule::new` builds on the PyO3 0.27.2 floor; 0.29 renamed it
     // `new_with_value`, with the same pointer and drop behaviour.
@@ -116,6 +127,8 @@ impl Table {
     /// A value is a str, int, float, datetime.date, naive datetime.datetime
     /// or list, and a missing value is None. Imports nothing.
     fn to_pylist<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
+        // Materialize first: to_pylist keeps the output available for repeated reads.
+        self.num_rows(py)?;
         let reader = ArrowArrayStreamReader::try_new(self.stream()?)
             .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
         let names = reader
@@ -145,12 +158,16 @@ impl Table {
 
     /// The table as a `pyarrow.Table`, with the columns' Arrow types.
     fn to_arrow<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
-        import(slf.py(), "pyarrow", "to_arrow()")?.call_method1("table", (slf,))
+        let pyarrow = import(slf.py(), "pyarrow", "to_arrow()")?;
+        slf.get().num_rows(slf.py())?;
+        pyarrow.call_method1("table", (slf,))
     }
 
     /// The table as a `polars.DataFrame`.
     fn to_polars<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
-        import(slf.py(), "polars", "to_polars()")?.call_method1("DataFrame", (slf,))
+        let polars = import(slf.py(), "polars", "to_polars()")?;
+        slf.get().num_rows(slf.py())?;
+        polars.call_method1("DataFrame", (slf,))
     }
 
     /// The table as a `pandas.DataFrame` whose columns keep their Arrow types
@@ -160,6 +177,7 @@ impl Table {
         let py = slf.py();
         let pandas = import(py, "pandas", "to_pandas()")?;
         let pyarrow = import(py, "pyarrow", "to_pandas()")?;
+        slf.get().num_rows(py)?;
         let options = PyDict::new(py);
         options.set_item("types_mapper", pandas.getattr("ArrowDtype")?)?;
         pyarrow

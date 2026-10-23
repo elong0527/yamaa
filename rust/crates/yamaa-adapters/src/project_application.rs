@@ -396,6 +396,9 @@ fn inheritance_issues<'a>(
                     G::Unavailable { .. }
                     | G::InvalidParent { .. }
                     | G::Cycle { .. }
+                    | G::Repeated { .. }
+                    | G::Fragment { .. }
+                    | G::Included { .. }
                     | G::Header { .. },
                 ) => true,
                 V::Traversal(G::Layer {

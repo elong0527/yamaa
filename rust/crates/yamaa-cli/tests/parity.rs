@@ -20,6 +20,10 @@
 //!   columns (`public-contract.report_columns`). The failed run of
 //!   `public-contract`, assembled as both hosts assemble it, saves only its
 //!   report, whose bytes are compared with `failed_report_csv`.
+//! - **Fragments.** Each check case of `include-fragments` prints every issue
+//!   row that both hosts return for it, and `resolve` prints the layers, the
+//!   `parent` and `include` resources, the resolved columns and the origins
+//!   that both hosts read from the resolved facts.
 //! - **Lint.** The `lint` family's partial restatement, a layer and the
 //!   parent it reads, is linted with and without `--fix`; each finding the
 //!   document prints is compared with the case's rows, all six lint columns,
@@ -408,6 +412,109 @@ fn each_project_parity_case_prints_the_issue_rows_both_hosts_return() {
                 "{name}: {operation}"
             );
         }
+    }
+}
+
+/// `include-fragments`: each check case of the study prints every issue row
+/// that both hosts return for it, and `resolve` prints the facts both hosts
+/// compare: the layers in contribution order, the `parent` and `include`
+/// resources, the resolved columns, the layer each named value comes from and
+/// the fields the resolved specification never holds (LAYER-1 to LAYER-4,
+/// LAYER-14).
+#[test]
+fn the_include_fragments_study_prints_the_rows_and_facts_both_hosts_return() {
+    let truth = family("include-fragments");
+    let directory = Scratch::new("parity-include");
+    for (file, contents) in truth["files"].as_object().unwrap() {
+        directory.write(file, contents.as_str().unwrap());
+    }
+    let stand_ins = [("{root}", directory.spelled(""))];
+    for case in truth["checks"].as_array().unwrap() {
+        let name = text(case, "name");
+        let document = document(&directory, &["check", text(case, "path")], name);
+        assert_eq!(
+            printed_rows(&document, name),
+            truth_rows(&case["issues"], &directory, &stand_ins),
+            "{name}"
+        );
+    }
+    let resolve = &truth["resolve"];
+    let output = yamaa_in(
+        &directory,
+        &["--format", "json", "resolve", text(resolve, "path")],
+    );
+    assert_eq!(output.status.code(), Some(0), "resolve succeeds");
+    let facts: Value = serde_json::from_slice(&output.stdout).unwrap();
+    let entry = &facts["entries"][0];
+    let located = |name: &Value| Value::String(directory.spelled(name.as_str().unwrap()));
+    assert_eq!(
+        entry["layers"],
+        Value::Array(
+            resolve["layers"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(located)
+                .collect()
+        ),
+        "the layers in contribution order"
+    );
+    let layered = entry["resources"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|resource| {
+            matches!(
+                resource["role"].as_str(),
+                Some("parent_specification" | "included_specification")
+            )
+        })
+        .map(|resource| {
+            serde_json::json!({
+                "spec_path": resource["spec_path"],
+                "role": resource["role"],
+                "declaring_source": resource["declaring_source"],
+                "written": resource["written"],
+                "location": resource["location"]["path"],
+            })
+        })
+        .collect::<Vec<_>>();
+    let expected = resolve["resources"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|resource| {
+            let mut resource = resource.clone();
+            resource["declaring_source"] = located(&resource["declaring_source"]);
+            resource["location"] = located(&resource["location"]);
+            resource
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(layered, expected, "the parent and include resources");
+    let specification = &entry["specification"];
+    assert_eq!(
+        specification["columns"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|column| column["name"].clone())
+            .collect::<Vec<_>>(),
+        resolve["columns"].as_array().unwrap().clone(),
+        "the resolved columns"
+    );
+    for (pointer, name) in resolve["declaring_sources"].as_object().unwrap() {
+        assert_eq!(
+            entry["origins"][pointer]["declaring_source"],
+            located(name),
+            "the layer {pointer} comes from"
+        );
+    }
+    for field in resolve["absent_fields"].as_array().unwrap() {
+        let field = field.as_str().unwrap();
+        assert!(
+            specification.get(field).is_none(),
+            "the resolved specification holds no {field}"
+        );
     }
 }
 
