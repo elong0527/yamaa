@@ -171,12 +171,12 @@ headings that group cards. A card is written as:
 ```markdown
 <a id="layer-3"></a>
 
-### LAYER-3. Layers form one chain contributed from its root ancestor to the entry, later layers taking precedence
+### LAYER-3. Layers contribute from the root ancestor to the entry, each after its fragments, later layers taking precedence
 
 Starting at the entry file, each layer's `parent` names the next layer up the
 chain, which ends at a layer without a parent. ...
 
-Fails: `inheritance_cycle`.
+Fails: `inheritance_cycle`, `duplicate_layer`.
 Evidence: `schema-inheritance`.
 
 For a study entry whose parent is a compound layer whose parent is an ...
@@ -214,6 +214,10 @@ One term per concept across all rules, schema comments, and messages:
   table, never data.
 - **row template** -- one `rows` entry, building a group of output rows. Bare
   `template` means a string template (text operations).
+- **fragment** -- a specification file that an `include` entry names
+  ([LAYER-3](inheritance.md#layer-3)); it declares neither `parent` nor
+  `include`. A layer that is not complete on its own is a partial
+  specification, never a fragment.
 - **record** -- input side (a file or input dataset row). **row** -- output side
   (an output record under construction or built).
 - **column** -- dataset level. **field** -- file and schema level (ingestion and
