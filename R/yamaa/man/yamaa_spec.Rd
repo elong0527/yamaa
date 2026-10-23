@@ -66,8 +66,8 @@ An object with three methods:
     and arrow read, one batch per pull; the first pull builds the run. The
     other fields give the run once its stream has ended, and run it whole
     when nothing has read the output, whose stream then reads the dataset it
-    keeps. Releasing the stream before its end cancels the run, which then
-    saves nothing.}
+    keeps. Releasing the stream before its last batch cancels the run, which
+    then saves nothing.}
 }
 A failure raises a condition of class \code{yamaa_error} whose \code{issues}
 data frame says why; for a refused \code{$save()}, its \code{paths} lists

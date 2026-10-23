@@ -222,10 +222,12 @@ so an integer column with a missing value keeps its exact integers.
 ## Read an output as a stream
 
 `run(stream = TRUE)` in R and `run(stream=True)` in Python build a dataset as
-its output is read, so a large output is never held whole as a table. The call
-reads no study data and runs no project code. The output is an Arrow stream: in
-Python a `yamaa.Table`, which a library that reads the Arrow PyCapsule stream
-interface pulls batch by batch, such as
+its output is read. The output's whole Arrow table, and the Arrow IPC copy that
+a run without `stream` keeps beside it, are never built; the run still holds
+the accepted rows that each batch is built from. The call reads no study data
+and runs no project code. The output is an Arrow stream: in Python a
+`yamaa.Table`, which a library that reads the Arrow PyCapsule stream interface
+pulls batch by batch, such as
 `pyarrow.RecordBatchReader.from_stream(run.output)` or
 `polars.DataFrame(run.output)`; in R an Arrow C stream, an external pointer of
 class `nanoarrow_array_stream`, which nanoarrow and arrow read, such as
@@ -248,14 +250,14 @@ output read it whole in the same way.
 
 A stream is read once. Reading it again, or asking for the result while a
 reader has not reached its end, raises `RuntimeError` in Python and signals
-`yamaa_error` in R. Stopping before the end, by dropping the reader or with
-Ctrl+C, cancels the run: nothing more is built, and the run has no result, so
-it saves nothing, and asking for its result reports `cannot read <dataset>:
-operation cancelled`. Through another library's reader, Ctrl+C, or a project
-function's `KeyboardInterrupt` in Python and interrupt in R, ends the stream
-with that library's error. A run whose project functions run in the host is
-built only on the thread that called `run()`; read on another thread, its
-stream fails with `host_thread`.
+`yamaa_error` in R. Stopping before the last batch, by dropping the reader or
+with Ctrl+C, cancels the run: nothing more is built, and the run has no
+result, so it saves nothing, and asking for its result reports `cannot read
+<dataset>: operation cancelled`. Through another library's reader, Ctrl+C, or
+a project function's `KeyboardInterrupt` in Python and interrupt in R, ends
+the stream with that library's error. A run whose project functions run in
+the host is built only on the thread that called `run()`; read on another
+thread, its stream fails with `host_thread`.
 
 === "R"
 

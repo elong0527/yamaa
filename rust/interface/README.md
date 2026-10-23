@@ -520,7 +520,7 @@ these shapes:
 | --- | --- |
 | Python export | `Table.__arrow_c_stream__()` creates a fresh named capsule owning a stream header shell and independent reader cursor. |
 | Stream schema/next batch | Each successful emitted schema/array has its own release callback. End of stream is an array with `release == NULL`, distinct from an empty batch. |
-| Streamed run output | The engine's export of the run's reader (`Batches::into_stream`): each `get_next` is one pull, which the first time builds the run and then builds one batch, and releasing a stream that started the run before its end cancels the run. Python's capsule and R's external pointer of class `nanoarrow_array_stream` own the header until a reader moves it; R's finalizer frees the header and releases an unmoved stream, calling no R or project code. |
+| Streamed run output | The engine's export of the run's reader (`Batches::into_stream`): each `get_next` is one pull, which the first time builds the run and then builds one batch, and releasing a stream that started the run before its last batch cancels the run. Python's capsule and R's external pointer of class `nanoarrow_array_stream` own the header until a reader moves it; R's finalizer frees the header and releases an unmoved stream, calling no R or project code. |
 
 The current owner invokes each non-null release callback once. Moving ownership
 sets the source release to null; a moved-from destructor frees only its own

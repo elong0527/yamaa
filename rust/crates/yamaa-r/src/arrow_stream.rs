@@ -20,6 +20,15 @@ pub(crate) fn stream_object(stream: FFI_ArrowArrayStream) -> std::result::Result
     // it while the finalizer is registered and extendr takes its own
     // protection, then Rf_unprotect balances the stack. Its address is the
     // boxed header, which `finalize` frees once, on the R thread.
+    //
+    // R_MakeExternalPtr and R_RegisterCFinalizerEx allocate, and an
+    // allocation R cannot make, when memory is exhausted, raises an R error
+    // whose longjmp would cross this frame and the binding's frames above it
+    // without running their destructors, leaking the box. Every allocation
+    // the binding makes through extendr has the same exposure, extendr's
+    // `ExternalPtr::new`, which the result handles use, included; containing
+    // it would need R_UnwindProtect with a cleanup that cannot stop the
+    // unwind from Rust.
     let mut object = unsafe {
         let pointer = Rf_protect(R_MakeExternalPtr(address.cast(), R_NilValue, R_NilValue));
         R_RegisterCFinalizerEx(pointer, Some(finalize), 1);
