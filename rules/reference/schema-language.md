@@ -77,7 +77,7 @@ with or without `yamaa` beside it: at its own `schema_version` when a call or
 the lint names it, and at the field that names it when a `parent`, a
 project's `functions`, `codelists` or section `specs`, or an input's `schema`
 reads it. A project file that declares it is refused before any file it
-names is read, so no environment file a 0.5 project links is read.
+names is read.
 
 A call that reads only the type a file declares, as the command line does
 before it chooses what to run, reads the 1.x header alone. There a file that

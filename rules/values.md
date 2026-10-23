@@ -325,8 +325,9 @@ widened under [VALUE-8](#value-8), so `9007199254740993` again returns
 `9007199254740992.0`. Only over two `int` arguments, or a `NULL` `y`, does it
 return `x` as an `int`.
 
-These types, applied to the declared types of the operands, give `compute` and
-`aggregate` their result type ([EXPR-14](expressions.md#expr-14)).
+These types, applied to the declared types of the operands, give text in an
+expression field and `aggregate` their result type
+([EXPR-14](expressions.md#expr-14)).
 
 ## Text
 
@@ -690,12 +691,11 @@ term has its own direction and placement:
 | `asc` | missing first | missing first | missing last |
 | `desc` | missing last | missing first | missing last |
 
-The same reading applies to every order term: a window's `order_by`, the
-`order_by` beside `keep` in a named lookup or a source selection,
-`output.order_by` and the `tie_break` of `baseline_flag`
-([WINDOW-9](windows.md#window-9)). In `[{variable: A, direction: desc}, B]` a
-missing `A` sorts after every present `A` and a missing `B` before every
-present `B`.
+The same reading applies to every order term: a window's `order_by`,
+`baseline_flag`'s included ([WINDOW-9](windows.md#window-9)), the `order_by`
+beside `keep` in a named lookup or a source selection, and `output.order_by`.
+In `[{variable: A, direction: desc}, B]` a missing `A` sorts after every
+present `A` and a missing `B` before every present `B`.
 
 Non-missing values use the order their type owns: exact numeric comparison
 under [VALUE-19](#value-19), including a mixed `int` and `float` pair without

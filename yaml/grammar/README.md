@@ -21,10 +21,13 @@ set and decision in its context, and expands the declared function arities,
 reducers, reserved words and comparison operators into independent acceptance
 boundaries in every context. Installed
 Python and R public suites put the same texts into real specification fields;
-later binding failures remain separate from grammar decisions. Empty expression
-fields fail public schema admission under SCHEMA-12 before reaching the parser.
-Each context is read by a field, so the installed suites and the typed core
-both replay every case.
+later binding failures remain separate from grammar decisions. An empty
+predicate or `aggregate.expr` fails public schema admission as
+`minimum_length` ([SCHEMA-12](../../rules/reference/schema-language.md#schema-12))
+before reaching the parser; empty text in an expression field reaches the
+parser and fails as `invalid_expression`
+([FORMULA-1](../../rules/formulas.md#formula-1)). Each context is read by a
+field, so the installed suites and the typed core both replay every case.
 
 Changing a grammar therefore starts here. A change that is not carried into
 every consumer fails validation rather than producing two runtimes that
