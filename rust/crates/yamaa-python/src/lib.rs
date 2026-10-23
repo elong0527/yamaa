@@ -11,7 +11,7 @@ mod interrupt;
 mod project_activation;
 #[pymodule]
 fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
-    module.add("_CORE_VERSION", yamaa::VERSION)?;
+    module.add("_CORE_VERSION", env!("CARGO_PKG_VERSION"))?;
     module.add_class::<arrow_bridge::Table>()?;
     module.add("_Error", module.py().get_type::<api_entry::_Error>())?;
     module.add_class::<api_entry::Check>()?;

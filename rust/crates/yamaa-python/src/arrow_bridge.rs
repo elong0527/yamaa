@@ -1,26 +1,27 @@
 //! `yamaa.Table`, the table that every Python call returns (#3030 D11, D43).
 //!
-//! It holds the facade's table and shares its immutable Arrow buffers through
-//! the Arrow PyCapsule stream interface, never through IPC serialization. Its
-//! counts, names and printed preview come from the facade, `to_pylist()`
-//! builds Python values here without importing anything, and `to_arrow()`,
-//! `to_polars()` and `to_pandas()` import their library only when called.
-//!
-//! The output of a run with `stream=True` is a table over the run's output
-//! stream (#3697): its Arrow stream produces the output as it is read, and
-//! its other members read the output whole.
+//! It holds an engine table handle and shares the table's immutable Arrow
+//! buffers through the Arrow PyCapsule stream interface, never through IPC
+//! serialization. Its counts, names and printed preview come from the
+//! engine, `to_pylist()` reads a fresh stream and builds Python values here
+//! without importing anything, and `to_arrow()`, `to_polars()` and
+//! `to_pandas()` import their library only when called.
+use arrow_array::ffi_stream::{ArrowArrayStreamReader, FFI_ArrowArrayStream};
+use arrow_array::RecordBatchReader;
+use arrow_array::{
+    Array, Date32Array, Float64Array, Int64Array, LargeStringArray, ListArray, StringArray,
+    StringViewArray, TimestampSecondArray,
+};
+use arrow_schema::{DataType, TimeUnit};
 use pyo3::{
-    exceptions::{PyModuleNotFoundError, PyNotImplementedError, PyTypeError, PyValueError},
+    exceptions::{
+        PyModuleNotFoundError, PyNotImplementedError, PyRuntimeError, PyTypeError, PyValueError,
+    },
     prelude::*,
     types::{PyCapsule, PyDate, PyDateTime, PyDict, PyList, PyModule, PyString},
     IntoPyObjectExt,
 };
-use std::sync::Arc;
-use yamaa::{
-    Array, DataType, Date32Array, Float64Array, Int64Array, LargeStringArray, ListArray,
-    StringArray, StringViewArray, TimeUnit, TimestampSecondArray,
-};
-use yamaa_boundary::{HandleKind, Live};
+use yamaa_boundary::client::{self, Owned, Refused};
 
 /// A table that yamaa returned: immutable columns of str, int, float, date,
 /// datetime or list values, any of which may be missing.
@@ -39,46 +40,31 @@ use yamaa_boundary::{HandleKind, Live};
 /// is not kept, and reading it again raises `RuntimeError`.
 #[pyclass(frozen, module = "yamaa", name = "Table")]
 pub struct Table {
-    held: Held,
-    _live: Live,
-}
-
-/// What a table holds: its batches, or a streamed run's output.
-enum Held {
-    Table(yamaa::Table),
-    Stream(Arc<yamaa::Streamed>),
-}
-
-impl From<&yamaa::Table> for Table {
-    fn from(table: &yamaa::Table) -> Self {
-        Self::held(Held::Table(table.clone()))
-    }
+    table: Owned,
 }
 
 impl Table {
-    /// The output of a streamed run (#3697).
-    pub(crate) fn stream(streamed: Arc<yamaa::Streamed>) -> Self {
-        Self::held(Held::Stream(streamed))
+    pub(crate) fn new(table: Owned) -> Self {
+        Self { table }
     }
 
-    fn held(held: Held) -> Self {
-        Self {
-            held,
-            _live: crate::interface::CENSUS.hold(HandleKind::Table),
-        }
+    /// A fresh stream over the table, with its own cursor.
+    fn stream(&self) -> PyResult<FFI_ArrowArrayStream> {
+        let stream = self.table.engine().export(self.table.handle());
+        let mut stream = stream.map_err(refused)?.into_raw();
+        // SAFETY: the engine's stream has the C stream interface's layout;
+        // `from_raw` moves it out and leaves the source released.
+        Ok(unsafe { FFI_ArrowArrayStream::from_raw((&raw mut stream).cast()) })
     }
+}
 
-    /// The whole table: the held one, or a streamed run's output read whole,
-    /// inside a native call that raises an interrupt again (D46).
-    fn whole(&self, py: Python<'_>) -> PyResult<yamaa::Table> {
-        match &self.held {
-            Held::Table(table) => Ok(table.clone()),
-            Held::Stream(streamed) => crate::interrupt::run(py, |_| {
-                streamed
-                    .table()
-                    .map_err(|error| crate::api_entry::refusal(streamed, &error))
-            }),
+/// A refusal of a table's entry, which only a boundary fault can give.
+fn refused(refusal: Refused) -> PyErr {
+    match refusal {
+        Refused::Engine { message, .. } | Refused::Boundary(message) => {
+            PyRuntimeError::new_err(message)
         }
+        Refused::Cancelled => PyRuntimeError::new_err("the call was cancelled"),
     }
 }
 
@@ -87,30 +73,30 @@ impl Table {
     /// The number of rows.
     #[getter]
     fn num_rows(&self, py: Python<'_>) -> PyResult<usize> {
-        Ok(self.whole(py)?.rows())
+        crate::interrupt::run(py, |_| {
+            let rows = self.table.engine().rows(self.table.handle());
+            Ok(rows.map_err(refused)? as usize)
+        })
     }
 
     /// The column names, in order.
     #[getter]
-    fn column_names(&self) -> Vec<String> {
-        let fields = match &self.held {
-            Held::Table(table) => table.columns(),
-            Held::Stream(streamed) => match streamed.schema() {
-                Some(schema) => schema.fields(),
-                None => return Vec::new(),
-            },
-        };
-        fields.iter().map(|field| field.name().clone()).collect()
+    fn column_names(&self) -> PyResult<Vec<String>> {
+        let columns = self.table.engine().columns(self.table.handle());
+        columns.map_err(refused)
     }
 
     /// The number of rows.
     fn __len__(&self, py: Python<'_>) -> PyResult<usize> {
-        Ok(self.whole(py)?.rows())
+        self.num_rows(py)
     }
 
     /// The table's preview, the same text in every host (#3030 D167).
     fn __repr__(&self, py: Python<'_>) -> PyResult<String> {
-        Ok(self.whole(py)?.preview())
+        crate::interrupt::run(py, |_| {
+            let preview = self.table.engine().preview(self.table.handle());
+            preview.map_err(refused)
+        })
     }
 
     /// A fresh Arrow C stream over the held buffers, as a PyCapsule named
@@ -134,25 +120,26 @@ impl Table {
         // value on capsule destruction. A consumer moves that header and clears
         // release; dropping the consumed capsule then only frees the shell.
         // Unconsumed capsules release their reader and buffers on destruction.
-        let stream = match &self.held {
-            Held::Table(table) => table.stream(),
-            Held::Stream(streamed) => streamed.reader().into_stream(),
-        };
-        PyCapsule::new(py, stream, Some(c"arrow_array_stream".into()))
+        PyCapsule::new(py, self.stream()?, Some(c"arrow_array_stream".into()))
     }
 
     /// The rows as a list of dicts, each keyed by the column names in order.
     /// A value is a str, int, float, datetime.date, naive datetime.datetime
     /// or list, and a missing value is None. Imports nothing.
     fn to_pylist<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
-        let table = self.whole(py)?;
-        let names = table
-            .columns()
+        // Materialize first: to_pylist keeps the output available for repeated reads.
+        self.num_rows(py)?;
+        let reader = ArrowArrayStreamReader::try_new(self.stream()?)
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+        let names = reader
+            .schema()
+            .fields()
             .iter()
             .map(|field| PyString::intern(py, field.name()))
             .collect::<Vec<_>>();
         let rows = PyList::empty(py);
-        for batch in table.batches() {
+        for batch in reader {
+            let batch = batch.map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
             let columns = batch
                 .columns()
                 .iter()
@@ -172,14 +159,14 @@ impl Table {
     /// The table as a `pyarrow.Table`, with the columns' Arrow types.
     fn to_arrow<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
         let pyarrow = import(slf.py(), "pyarrow", "to_arrow()")?;
-        slf.get().whole(slf.py())?;
+        slf.get().num_rows(slf.py())?;
         pyarrow.call_method1("table", (slf,))
     }
 
     /// The table as a `polars.DataFrame`.
     fn to_polars<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
         let polars = import(slf.py(), "polars", "to_polars()")?;
-        slf.get().whole(slf.py())?;
+        slf.get().num_rows(slf.py())?;
         polars.call_method1("DataFrame", (slf,))
     }
 
@@ -190,7 +177,7 @@ impl Table {
         let py = slf.py();
         let pandas = import(py, "pandas", "to_pandas()")?;
         let pyarrow = import(py, "pyarrow", "to_pandas()")?;
-        slf.get().whole(py)?;
+        slf.get().num_rows(py)?;
         let options = PyDict::new(py);
         options.set_item("types_mapper", pandas.getattr("ArrowDtype")?)?;
         pyarrow
@@ -261,35 +248,26 @@ fn values<'py>(py: Python<'py>, array: &dyn Array) -> PyResult<Vec<Bound<'py, Py
             value.into_bound_py_any(py)
         }),
         DataType::Date32 => each(py, cast::<Date32Array>(array)?.iter(), |days| {
-            let date = yamaa::Date::from_epoch_days(i64::from(days)).ok_or_else(|| {
+            let (year, month, day) = client::civil_date(i64::from(days)).ok_or_else(|| {
                 PyValueError::new_err(format!(
                     "the date {days} days after 1970-01-01 is outside the years 1 to 9999"
                 ))
             })?;
-            let (year, month, day) = date.fields();
-            Ok(PyDate::new(py, i32::from(year), month, day)?.into_any())
+            Ok(PyDate::new(py, year, month, day)?.into_any())
         }),
         DataType::Timestamp(TimeUnit::Second, None) => {
             each(py, cast::<TimestampSecondArray>(array)?.iter(), |seconds| {
-                let moment = yamaa::DateTime::from_epoch_seconds(seconds).ok_or_else(|| {
-                    PyValueError::new_err(format!(
-                        "the datetime {seconds} seconds after 1970-01-01T00:00:00 is \
-                         outside the years 1 to 9999"
-                    ))
-                })?;
-                let (year, month, day, hour, minute, second) = moment.fields();
-                Ok(PyDateTime::new(
-                    py,
-                    i32::from(year),
-                    month,
-                    day,
-                    hour,
-                    minute,
-                    second,
-                    0,
-                    None,
-                )?
-                .into_any())
+                let (year, month, day, hour, minute, second) = client::civil_datetime(seconds)
+                    .ok_or_else(|| {
+                        PyValueError::new_err(format!(
+                            "the datetime {seconds} seconds after 1970-01-01T00:00:00 is \
+                             outside the years 1 to 9999"
+                        ))
+                    })?;
+                Ok(
+                    PyDateTime::new(py, year, month, day, hour, minute, second, 0, None)?
+                        .into_any(),
+                )
             })
         }
         DataType::List(_) => {
