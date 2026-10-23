@@ -165,13 +165,75 @@ mod project {
 
         /// A build no host can run is refused at the first derivation, in
         /// authored order, that calls a project function the build runs
-        /// (#3030 D221): the columns' derivations in declaration order, then
-        /// the row templates', each named by its derivation however deep the
-        /// call sits in it. A column's derivation that every row template
-        /// replaces calls nothing the build runs.
+        /// (#3030 D221). Authored order is the order a formatted file writes
+        /// derivations in (yaml/v1): the intermediates', then the columns',
+        /// then the row templates', each in declaration order and named by
+        /// its derivation however deep the call sits in it. A column's
+        /// derivation that every row template replaces calls nothing the
+        /// build runs.
         #[test]
         fn the_first_calling_derivation_is_the_first_whose_call_the_build_runs() {
             let seven = || Tree::Scalar(N::Integer("7".into()));
+            // An intermediate whose derivation calls `id`, read by a column
+            // after a column that calls `id` too.
+            let intermediate = {
+                let column = |name, value| {
+                    Tree::map(vec![
+                        ("name", Tree::text(name)),
+                        ("type", Tree::text("int")),
+                        ("derivation", Tree::map(vec![("value", value)])),
+                    ])
+                };
+                Tree::map(vec![
+                    ("yamaa", Tree::text("1.0")),
+                    ("type", Tree::text("spec")),
+                    ("domain", Tree::text("TEST")),
+                    (
+                        "input",
+                        Tree::map(vec![
+                            ("SRC", Tree::map(vec![("path", Tree::text("input.csv"))])),
+                            ("DONOR", Tree::map(vec![("path", Tree::text("donor.csv"))])),
+                        ]),
+                    ),
+                    ("keys", Tree::List(vec![Tree::text("ID")])),
+                    ("base", Tree::text("SRC")),
+                    (
+                        "intermediates",
+                        Tree::List(vec![Tree::map(vec![
+                            ("id", Tree::text("P")),
+                            ("dataset", Tree::text("DONOR")),
+                            ("key", Tree::map(vec![("K", Tree::text("ID"))])),
+                            (
+                                "derivations",
+                                Tree::map(vec![("B", call("id", vec![("x", seven())]))]),
+                            ),
+                        ])]),
+                    ),
+                    (
+                        "columns",
+                        Tree::List(vec![
+                            column("ID", Tree::text("SRC.ID")),
+                            column("C", call("id", vec![("x", Tree::text("ID"))])),
+                            column("D", Tree::text("P.B")),
+                        ]),
+                    ),
+                    (
+                        "output",
+                        Tree::map(vec![
+                            ("path", Tree::text("output.csv")),
+                            (
+                                "columns",
+                                Tree::List(vec![
+                                    Tree::text("ID"),
+                                    Tree::text("C"),
+                                    Tree::text("D"),
+                                ]),
+                            ),
+                        ]),
+                    ),
+                ])
+                .document()
+            };
             let nested = Tree::map(vec![(
                 "case",
                 Tree::List(vec![
@@ -184,6 +246,12 @@ mod project {
             )]);
             let overridden = || ("A", "int", call("id", vec![("x", seven())]));
             let cases = [
+                (
+                    intermediate,
+                    // P-CLR-2 addresses an intermediate by its `id`.
+                    Some("intermediates.P.derivations.B"),
+                    "an intermediate's call before a column's",
+                ),
                 (
                     specification(vec![
                         ("A", "int", literal(0)),

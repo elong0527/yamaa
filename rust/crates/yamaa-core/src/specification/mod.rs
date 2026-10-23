@@ -1266,16 +1266,18 @@ impl PreparedSpecification {
     }
     /// The spec path of the first derivation, in authored order, that calls a
     /// project function the build runs: where a build no host can run is
-    /// refused (#3030 D221). Authored order is the order the engine admits
-    /// calls in and reports their findings in: the columns' derivations, then
-    /// the intermediates', then the row templates'. A column's derivation
-    /// that every row template replaces calls nothing the build runs.
+    /// refused (#3030 D221). Authored order is the order a formatted file
+    /// writes derivations in (yaml/v1): the intermediates', then the
+    /// columns', then the row templates', each in declaration order. A
+    /// column's derivation that every row template replaces calls nothing the
+    /// build runs.
     pub fn first_calling_derivation(&self) -> Option<&str> {
         self.project_calls
             .as_ref()?
             .calls()
             .iter()
-            .find(|call| call.slot().is_some())
+            .filter(|call| call.slot().is_some())
+            .min_by_key(|call| call.located.authored)
             .map(|call| call.located.derivation.as_str())
     }
     /// Bind only immutable source metadata. No cell reads or expression evaluation.

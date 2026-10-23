@@ -1011,6 +1011,7 @@ mod project {
                 vec![LocatedCall {
                     path: "columns.OUT.function".into(),
                     derivation: "columns.OUT".into(),
+                    authored: 0,
                     call: Call {
                         name: "id".into(),
                         name_node: 1,
@@ -1570,6 +1571,7 @@ mod project {
             LocatedCall {
                 path: format!("columns.{name}.function"),
                 derivation: format!("columns.{name}"),
+                authored: 0,
                 call: Call {
                     name: name.into(),
                     name_node: 5,
