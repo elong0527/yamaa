@@ -14,10 +14,11 @@ PLATFORMS = ("ubuntu-24.04", "macos-15", "windows-2025")
 PYTHON_PLATFORMS = (*PLATFORMS, "ubuntu-24.04-arm")
 PYTHONS = ("3.12", "3.13", "3.14", "3.15")
 FORMS = ("wheel", "source")
-R_PLATFORMS = PLATFORMS
-# Linux aarch64 has no native-r lane yet, so the complete reports of its Python
-# lanes are compared beside the R reports of Linux x86_64.
-R_EVIDENCE = {"ubuntu-24.04-arm": "ubuntu-24.04"}
+# The R source package is installed and qualified with R-release on every
+# platform that a wheel is built for, Linux aarch64 included (#3030 D49), so
+# the complete reports of each Python lane are compared beside R reports of
+# its own platform (D240 on #3673).
+R_PLATFORMS = PYTHON_PLATFORMS
 # Each Linux wheel is also installed and qualified on glibc 2.28, the oldest
 # glibc that its manylinux_2_28 tag admits.
 GLIBC_PLATFORMS = ("ubuntu-24.04", "ubuntu-24.04-arm")
@@ -26,13 +27,15 @@ BUILD_PYTHON = "3.14"
 # source lane, on every platform, installs those same archives.
 SOURCE_PLATFORM = "ubuntu-24.04"
 # CRAN's incoming checks of that R source archive: R CMD check --as-cran with
-# these R versions on each R platform, with the workspace's minimum Rust, and
-# in these R-hub containers, which carry CRAN's check configurations: gcc16
-# with its distribution's Rust, and clang-asan, whose R compiles packages with
-# AddressSanitizer and UndefinedBehaviorSanitizer, as CRAN's additional checks
-# do, with the minimum Rust from its standalone installer. Pin the oldest
-# admitted R patch so the declared floor is qualified, not only the last patch
-# of that series.
+# these R versions on each of these platforms, with the workspace's minimum
+# Rust, and in these R-hub containers, which carry CRAN's check
+# configurations: gcc16 with its distribution's Rust, and clang-asan, whose R
+# compiles packages with AddressSanitizer and UndefinedBehaviorSanitizer, as
+# CRAN's additional checks do, with the minimum Rust from its standalone
+# installer. Pin the oldest admitted R patch so the declared floor is
+# qualified, not only the last patch of that series. Linux aarch64 stays at
+# R-release alone (#3030 D198), in its native-r lane.
+CRAN_PLATFORMS = PLATFORMS
 CRAN_R_VERSIONS = ("devel", "release", "4.2.0")
 CRAN_CONTAINERS = ("gcc16", "clang-asan")
 # The same check with none of the package's suggested packages installed,
@@ -72,6 +75,10 @@ OFFLINE_TOOLCHAIN_HOSTS = ("python", "r")
 # runs its selftest: on Linux in a container without a network, from the
 # pinned manylinux_2_28 image of the runner's architecture, with that image's
 # CPython; on macOS and Windows behind a proxy that refuses every connection.
+# The selftest proves that offline installation, and the lane ends with it:
+# the conformance corpus runs on the same wheel in the qualify lanes, with
+# every supported CPython, and in the glibc lanes, which install it while the
+# network is up (D240 on #3673).
 OFFLINE_WHEEL_PLATFORMS = PYTHON_PLATFORMS
 OFFLINE_WHEEL_PYTHONS = (PYTHONS[0], PYTHONS[-1])
 # R-release and R-oldrel, the two R series that CRAN builds binary packages
@@ -138,7 +145,7 @@ def coverage():
         },
         "glibc": {"os": list(GLIBC_PLATFORMS)},
         "r": {"os": list(R_PLATFORMS)},
-        "cran": {"os": list(R_PLATFORMS), "r": list(CRAN_R_VERSIONS)},
+        "cran": {"os": list(CRAN_PLATFORMS), "r": list(CRAN_R_VERSIONS)},
         "cran_container": {"platform": list(CRAN_CONTAINERS)},
         "cran_no_suggests": {
             "os": list(CRAN_NO_SUGGESTS_PLATFORMS),
@@ -174,24 +181,29 @@ def coverage():
 def compare_cohorts(coverage, root, revision):
     """Compare the complete reports of every installed host with their truth.
 
-    Each Python lane is compared beside the R source installation of its
-    platform. Each R binary installation is compared beside the wheel lane of
+    Each Python lane is compared beside the R source installation of its own
+    platform, and a platform with Python lanes and no native-r lane is
+    refused. Each R binary installation is compared beside the wheel lane of
     its platform with the build Python: on Windows the binary links through
     Rtools' GNU toolchain, where the wheel uses MSVC. Each command-line
     archive's saved outputs join the comparison of that wheel lane, beside
     its R reports.
     """
     matrix = coverage["qualify"]
+    r_platforms = coverage["r"]["os"]
+    unpaired = {row["os"] for row in matrix["include"]} - set(r_platforms)
+    if unpaired:
+        raise ValueError(
+            "no native-r lane runs on the platform of Python lanes: "
+            + ", ".join(sorted(unpaired))
+        )
     binaries = list(
         itertools.product(coverage["r_binary"]["os"], coverage["r_binary"]["r"])
     )
     targets = {lane["os"]: lane["target"] for lane in coverage["cli"]["include"]}
     # The pinned download action flattens a single match, including a pattern.
     python_artifacts = len(matrix["include"])
-    r_artifacts = len(
-        {R_EVIDENCE.get(row["os"], row["os"]) for row in matrix["include"]}
-        & set(R_PLATFORMS)
-    )
+    r_artifacts = len(r_platforms)
     cli_artifacts = len(targets)
     downloaded = Path("cohort-input")
 
@@ -210,20 +222,14 @@ def compare_cohorts(coverage, root, revision):
             / form
         )
         output = Path("public-cohort") / platform / version / form
-        beside = []
-        r_platform = R_EVIDENCE.get(platform, platform)
-        if r_platform in R_PLATFORMS:
-            r_directory = evidence(f"native-r-qualification-{r_platform}", r_artifacts)
-            beside = [
-                "--r-evidence",
-                str(r_directory / "r-source"),
+        r_directory = evidence(f"native-r-qualification-{platform}", r_artifacts)
+        beside = ["--r-evidence", str(r_directory / "r-source")]
+        if (version, form) == (BUILD_PYTHON, "wheel") and platform in targets:
+            target = targets.pop(platform)
+            beside += [
+                "--cli-evidence",
+                str(evidence(f"public-conformance-cli-{target}", cli_artifacts)),
             ]
-            if (version, form) == (BUILD_PYTHON, "wheel") and platform in targets:
-                target = targets.pop(platform)
-                beside += [
-                    "--cli-evidence",
-                    str(evidence(f"public-conformance-cli-{target}", cli_artifacts)),
-                ]
         comparisons.append((python_evidence, beside, output))
     if targets:
         raise ValueError(
