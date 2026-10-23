@@ -360,12 +360,13 @@ a pruned declaration is discarded with it. A failure is reported under the rule
 that owns it, naming the entry specification and the contributing file and
 field of each implicated value.
 
-Fails: `missing_required_field`.
+Evidence: `rust/crates/yamaa-adapters/tests/declaration_layer_composition.rs::a_resolved_specification_to_which_no_layer_contributes_output_fails_at_output`.
 
 A declaration left out of `output.columns` remains as an internal column when a
 derivation or verification uses it. A resolved specification to which no layer
-contributed `output` fails as `missing_required_field` at `output`; an entry
-file that omits `output` is not itself an error.
+contributed `output` fails as `missing_required_field` at `output`
+([SCHEMA-13](reference/schema-language.md#schema-13)); an entry file that omits
+`output` is not itself an error.
 
 <a id="layer-13"></a>
 

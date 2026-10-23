@@ -808,8 +808,8 @@ mod declaration {
         const PROJECT: &str = "yamaa: \"1.0\"\ntype: project\nfunctions: [functions/id.yaml]\nenvironments:\n  python: {lock: uv.lock}\n  r: {lock: renv.lock}\ncodelists: [ct.yaml]\n";
         const FUNCTION: &str = "yamaa: \"1.0\"\ntype: function\nname: id\ndescription: Integer identity.\nparams: [{name: x, type: int, accepts_missing: true}]\nreturns: int\nmay_return_missing: true\nimplementations: {python: program.id, r: program::id}\ntests:\n  - {id: normal, covers: [normal, boundary], args: {x: 7}, result: 7}\n  - {id: missing, covers: ['accepted-missing:x', nullable-output], args: {x: null}, result: null}\n";
         const CODELISTS: &str = "yamaa: \"1.0\"\ntype: codelists\ncodelists: [{id: SEX, name: Sex, items: [{value: F}, {value: M}]}]\n";
-        /// A 0.5 specification calling the project's function, which a 1.0
-        /// project supplies as it supplies a 1.0 specification.
+        /// A 1.0 specification calling the project's function, which the 1.0
+        /// project supplies.
         const DOMAIN: &str = "yamaa: '1.0'\ntype: spec\ndomain: TEST\ninput: {SRC: {path: input.csv, types: {ID: int}}}\nkeys: [ID]\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {function: {name: id, args: {x: SRC.ID}}}}\noutput: {path: output.csv, columns: [ID, VALUE]}\n";
 
         /// The shipped project schemas, which read 1.x files.
@@ -820,7 +820,7 @@ mod declaration {
         }
 
         /// A 1.0 project with one function file, a lock for each host and a
-        /// codelist file, and a 0.5 specification in `entry/` that calls the
+        /// codelist file, and a 1.0 specification in `entry/` that calls the
         /// function.
         struct Study(crate::support::Scratch);
         impl Study {

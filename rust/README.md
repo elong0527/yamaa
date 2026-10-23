@@ -143,9 +143,8 @@ Version 1 serializes as compact UTF-8 JSON with these envelope fields:
 The entry contains `language_version`, the version its resolved specification
 records in `yamaa` (the newest any of its layers declares), its complete
 composed normalized `specification`, `layers` in composition postorder,
-`origins`, `mapping_order` and `resources`; a 0.5 entry records its
-`schema_version` instead. A linked producing specification is a
-`producer_schema` resource of the entry, never an entry of its own.
+`origins`, `mapping_order` and `resources`. A linked producing specification
+is a `producer_schema` resource of the entry, never an entry of its own.
 Named mapping-dictionary references remain in the specification; preparation
 admits those resources as usual, and their declaring locations are recorded.
 The artifact carries no reusable executable code or activated environment.
