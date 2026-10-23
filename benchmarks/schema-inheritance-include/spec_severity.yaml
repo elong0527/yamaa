@@ -1,0 +1,14 @@
+yamaa: "1.0"
+type: spec
+
+columns:
+  - name: ASEVN
+    type: int
+    label: Analysis Severity/Intensity (N)
+    derivation:
+      mapping:
+        source: AE.AESEV
+        dict:
+          MILD: 1
+          MODERATE: 2
+          SEVERE: 3

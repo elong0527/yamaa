@@ -315,6 +315,7 @@ EXPECTED = {
         ),
     ],
     "new.spec.clear": [Field("root_class", "clear", "list[spec_path]")],
+    "new.spec.include": [Field("root_class", "include", "list[project_path]")],
     # A lint suppression comment and a profile chosen by the path's
     # extension: neither is a schema field.
     "new.any.suppression_comment": [],
@@ -670,16 +671,25 @@ class RenameTableTests(unittest.TestCase):
 
 
 def example_files():
-    """Each converted example file, its file type, and whether it is complete."""
+    """Each converted example file, its file type, and whether it is complete:
+    a layer that names a parent or fragments, or that another file names as
+    its parent or a fragment, is one layer of a composition."""
     paths = sorted(EXAMPLES.rglob("*.yaml"))
     documents = {path: support.load_yaml(path) for path in paths}
-    parents = {
-        (path.parent / document["parent"]).resolve()
+    named = {
+        (path.parent / layer).resolve()
         for path, document in documents.items()
-        if "parent" in document
+        for layer in [
+            *([document["parent"]] if "parent" in document else []),
+            *document.get("include", []),
+        ]
     }
     for path, document in documents.items():
-        complete = "parent" not in document and path.resolve() not in parents
+        complete = (
+            "parent" not in document
+            and "include" not in document
+            and path.resolve() not in named
+        )
         yield path, document, complete
 
 

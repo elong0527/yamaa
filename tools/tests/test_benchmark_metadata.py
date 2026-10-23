@@ -274,6 +274,24 @@ class BenchmarkMetadata(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "domain"):
             benchmark.specification_name(self.case / "lone.yaml")
 
+    def test_project_name_comes_from_a_layer_before_its_fragments_and_parent(self):
+        """A layer's own fields contribute after the fragments it includes,
+        the last listed last, and those after its parent chain (LAYER-3)."""
+        (self.case / "base.yaml").write_text("domain: BASE\n")
+        (self.case / "first.yaml").write_text("domain: FIRST\n")
+        (self.case / "second.yaml").write_text("keys: [ID]\n")
+        entry = self.case / "entry.yaml"
+        entry.write_text("parent: base.yaml\ninclude: [first.yaml, second.yaml]\n")
+        self.assertEqual(benchmark.specification_name(entry), "FIRST")
+        (self.case / "second.yaml").write_text("domain: SECOND\n")
+        self.assertEqual(benchmark.specification_name(entry), "SECOND")
+        entry.write_text(
+            "parent: base.yaml\ninclude: [first.yaml, second.yaml]\ndomain: OWN\n"
+        )
+        self.assertEqual(benchmark.specification_name(entry), "OWN")
+        entry.write_text("parent: base.yaml\ninclude: []\n")
+        self.assertEqual(benchmark.specification_name(entry), "BASE")
+
     def test_a_model_standard_is_the_model_the_last_entries_declare(self):
         """benchmark.yaml keeps `standard` (#3030 plan, question 9); where it
         names a model, the 1.0 entry specification declares that model."""

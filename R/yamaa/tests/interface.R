@@ -181,7 +181,7 @@ check_gate <- function() {
     list(run_observations = list(NULL, FALSE),
       spec_check = list(path, NULL, r_version),
       spec_summary = list(path),
-      spec_run = list(path, NULL, r_version, list(), NULL),
+      spec_run = list(path, NULL, r_version, list(), NULL, FALSE),
       spec_resolve = list(path, NULL, r_version),
       read_odm = list(charToRaw("missing.xml"), NULL, 10000, 268435456, 64),
       project_spec = list(path, charToRaw("TEST"), r_version),

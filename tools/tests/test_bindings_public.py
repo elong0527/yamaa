@@ -55,7 +55,7 @@ class RenderingTests(unittest.TestCase):
     def test_python_delegates_each_member_to_its_operation(self):
         text = self.public.render_python([])
         for expected in (
-            "return Run(_call(_native._spec_run, self._path, self._project, self._plans))",
+            "_call(_native._spec_run, self._path, self._project, self._plans, stream)",
             "return Spec(_call(_native._project_spec, self._path, name), self._path)",
             "return _call(self._native.output, self._name)",
             "        return _call(self._native.save)\n",
@@ -636,7 +636,9 @@ class ValidationTests(unittest.TestCase):
             # A result made from the wrong native type.
             (
                 "returns _Check, not Run",
-                lambda d: member(d, "Spec", "run").update(calls="spec_check"),
+                lambda d: member(d, "Spec", "run").update(
+                    calls="spec_check", args={}, keyword_only=[]
+                ),
             ),
             # Members of one handle class call one native class.
             (

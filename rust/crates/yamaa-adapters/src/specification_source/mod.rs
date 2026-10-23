@@ -249,8 +249,8 @@ pub fn link_metadata<'a>(
 }
 
 /// One prepared 1.x specification: its layers, composed and resolved, the
-/// tree its front end lowered, every raw parent snapshot and the dictionary
-/// files it reads (#3030 D76). Construction is private; structural admission
+/// tree its front end lowered, every raw snapshot of a parent or an included
+/// fragment, and the dictionary files it reads (#3030 D76). Construction is private; structural admission
 /// is never execution qualification.
 #[derive(Debug)]
 pub struct PreparedDocument {
@@ -316,7 +316,8 @@ pub(crate) fn prepare_versioned_within<P: Resolver>(
 }
 impl PreparedDocument {
     /// The identity of each file this document holds besides its entry: its
-    /// parent layers in first-capture order, then its dictionary files.
+    /// parent layers and included fragments in first-capture order, then its
+    /// dictionary files.
     pub(crate) fn held(&self) -> impl Iterator<Item = &str> {
         self.parents
             .iter()
@@ -325,9 +326,9 @@ impl PreparedDocument {
             .map(|source| source.identity.as_str())
     }
     /// The finding at the field that wrote `written` in the file `declaring`
-    /// names, when this document holds that occurrence: its `parent`, or a
-    /// dictionary path. Resolved identities never replace the authored field
-    /// or path.
+    /// names, when this document holds that occurrence: its `parent`, an
+    /// `include` entry, or a dictionary path. Resolved identities never
+    /// replace the authored field or path.
     pub(crate) fn resource_diagnostic(
         &self,
         declaring: &str,
@@ -347,6 +348,18 @@ impl PreparedDocument {
             if let Some(parent) = raw.field(raw.root(), "parent") {
                 if matches!(&raw.nodes()[parent], N::Text(path) if path == written) {
                     return Some(failure.field_diagnostic("parent", written));
+                }
+            }
+            if let Some(N::Sequence(entries)) = raw
+                .field(raw.root(), "include")
+                .map(|list| &raw.nodes()[list])
+            {
+                if let Some(index) = entries.iter().position(
+                    |&entry| matches!(&raw.nodes()[entry], N::Text(path) if path == written),
+                ) {
+                    return Some(yamaa_core::inheritance::included_diagnostic(
+                        failure, declaring, index, written,
+                    ));
                 }
             }
         }
@@ -487,7 +500,9 @@ impl PreparedDocument {
             }),
         }
     }
-    /// Raw parent snapshots remain in first-capture order, separately from postorder layers.
+    /// Raw snapshots of the layers besides the entry, its parents and then
+    /// its included fragments, remain in first-capture order, separately from
+    /// postorder layers.
     pub fn parents(&self) -> &[CapturedParent] {
         &self.parents
     }

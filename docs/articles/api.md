@@ -25,6 +25,7 @@ project functions.
 | One dataset of a project run | `runs[["ADSL"]]$output` | `runs["ADSL"].output` |
 | Run report | `run$report` | `run.report` |
 | A table in Polars or pandas | `run$output` is a data frame | `run.output.to_polars()`, `run.output.to_pandas()` |
+| Read an output as a stream | `spec$run(stream = TRUE)$output` | `spec.run(stream=True).output` |
 | define.xml and transport files | `project$submission("sdtm")$save()` | `project.submission("sdtm").save()` |
 | See the resolved specification | `spec$resolve()` | `spec.resolve()` |
 | Read ODM XML | `yamaa_read_odm(path)` | `yamaa.read_odm(path)` |
@@ -180,14 +181,15 @@ origins.
 
 ## Tables
 
-Every table that yamaa returns is a data frame in R. In Python it is a
-`yamaa.Table`, which needs no other package: printing it shows its column
-names and types and its first and last rows, `len()` and `num_rows` count its
-rows, `column_names` names its columns, and `to_pylist()` gives one dict per
-row. `to_polars()`, `to_pandas()` and `to_arrow()` convert it to the table
-library you use, which must be installed: Polars, pandas with PyArrow, or
-PyArrow. A library that reads the Arrow PyCapsule interface, such as
-`polars.DataFrame(table)` or `pyarrow.table(table)`, reads it directly.
+Every table that yamaa returns is a data frame in R, except the output of a
+run read as a stream ([Read an output as a stream](#read-an-output-as-a-stream)).
+In Python it is a `yamaa.Table`, which needs no other package: printing it
+shows its column names and types and its first and last rows, `len()` and
+`num_rows` count its rows, `column_names` names its columns, and `to_pylist()`
+gives one dict per row. `to_polars()`, `to_pandas()` and `to_arrow()` convert
+it to the table library you use, which must be installed: Polars, pandas with
+PyArrow, or PyArrow. A library that reads the Arrow PyCapsule interface, such
+as `polars.DataFrame(table)` or `pyarrow.table(table)`, reads it directly.
 
 | Column type | R | Python value | Arrow |
 |---|---|---|---|
@@ -217,6 +219,72 @@ so an integer column with a missing value keeps its exact integers.
     rows = dm.to_pylist()        # [{"STUDYID": "STUDY01", ...}, ...]
     frame = dm.to_polars()       # or dm.to_pandas(), dm.to_arrow()
     ```
+
+## Read an output as a stream
+
+`run(stream = TRUE)` in R and `run(stream=True)` in Python build a dataset as
+its output is read. The output's whole Arrow table, and the Arrow IPC copy that
+a run without `stream` keeps beside it, are never built; the run still holds
+the accepted rows that each batch is built from. The call reads no study data
+and runs no project code. The output is an Arrow stream: in Python a
+`yamaa.Table`, which a library that reads the Arrow PyCapsule stream interface
+pulls batch by batch, such as
+`pyarrow.RecordBatchReader.from_stream(run.output)` or
+`polars.DataFrame(run.output)`; in R an Arrow C stream, an external pointer of
+class `nanoarrow_array_stream`, which nanoarrow and arrow read, such as
+`arrow::RecordBatchReader$import_from_c(run$output)`.
+
+The first batch builds the run through every check and the declared order, so
+it exists only once the whole output is accepted. Each later batch, of at most
+65,536 rows, is made as it is read and not kept. The batches hold the values,
+order and column types of the table a run without `stream` returns, and the
+run's `save()` writes the same files.
+
+Once the stream has ended, `status`, `issues`, `report`, `save()` and printing
+give the run's result. A run that fails ends the stream with an error that
+names its first issue, and it then holds its issues and saves only its report
+file. Before anything reads the output, asking for the result runs the
+dataset whole, as a run without `stream` does, and the output is then the
+table it keeps, which can be read as often as you like. In Python, `len()`,
+`num_rows`, printing, `to_pylist()` and the `to_*()` conversions of the
+output read it whole in the same way.
+
+A stream is read once. Reading it again, or asking for the result while a
+reader has not reached its end, raises `RuntimeError` in Python and signals
+`yamaa_error` in R. Stopping before the last batch, by dropping the reader or
+with Ctrl+C, cancels the run: nothing more is built, and the run has no
+result, so it saves nothing, and asking for its result reports `cannot read
+<dataset>: operation cancelled`. Through another library's reader, Ctrl+C, or
+a project function's `KeyboardInterrupt` in Python and interrupt in R, ends
+the stream with that library's error. A run whose project functions run in
+the host is built only on the thread that called `run()`; read on another
+thread, its stream fails with `host_thread`.
+
+=== "R"
+
+    ```r
+    run <- yamaa_spec("adam/adlb.yaml")$run(stream = TRUE)
+    reader <- arrow::RecordBatchReader$import_from_c(run$output)
+    while (!is.null(batch <- reader$read_next_batch())) {
+      # write or summarize the batch
+    }
+    run$status
+    run$save()
+    ```
+
+=== "Python"
+
+    ```python
+    import pyarrow as pa
+
+    run = yamaa.spec("adam/adlb.yaml").run(stream=True)
+    for batch in pa.RecordBatchReader.from_stream(run.output):
+        ...                      # write or summarize the batch
+    run.status
+    run.save()
+    ```
+
+The command line saves whole runs; it has no streaming flag.
 
 ## Check a specification without data
 
@@ -651,7 +719,9 @@ call returns no result and keeps nothing it built. Python raises the
 interrupted R code does. A save writes every file it planned or none: one
 stopped this way writes nothing and leaves the result unsaved, so you can
 call `save()` again. A project function that raises `KeyboardInterrupt` or
-`SystemExit` in Python ends the whole call the same way.
+`SystemExit` in Python ends the whole call the same way. A run read as a
+stream also stops before each batch
+([Read an output as a stream](#read-an-output-as-a-stream)).
 
 ## Read ODM XML
 
@@ -839,7 +909,8 @@ itself, as Samba does with its default `follow symlinks = yes`, shows the
 link's target instead, and that target is read like any other file.
 
 A parent specification's relative input and output paths resolve beside the
-parent, even when it sits on another drive than the specification you pass. A
+parent, and an included fragment's beside the fragment, even when it sits on
+another drive than the specification you pass. A
 parent on a network share that the specification you pass is not on cannot
 declare relative input or output paths, because a path in YAML cannot name a
 share: such a parent is refused with `parent_on_another_share`, naming the

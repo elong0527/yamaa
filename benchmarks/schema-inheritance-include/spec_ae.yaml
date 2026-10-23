@@ -1,0 +1,31 @@
+yamaa: "1.0"
+type: spec
+input:
+  AE:
+    path: input/ae.csv
+    types:
+      AESEQ: int
+      AESTDTC: date
+      AEENDTC: date
+base: AE
+
+columns:
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: AE.USUBJID
+
+  - name: AESEQ
+    type: int
+    label: Sequence Number
+    derivation: AE.AESEQ
+
+  - name: ASTDT
+    type: date
+    label: Analysis Start Date
+    derivation: AE.AESTDTC
+
+  - name: AENDT
+    type: date
+    label: Analysis End Date
+    derivation: AE.AEENDTC

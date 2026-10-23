@@ -266,6 +266,10 @@ class PublicContract(unittest.TestCase):
         self.assertIsNone(submission["section"].default)
         self.assertIsNone(submission["created"].default)
         self.assertEqual(submission["created"].kind, inspect.Parameter.KEYWORD_ONLY)
+        stream = inspect.signature(spec.run).parameters["stream"]
+        self.assertEqual(
+            (stream.default, stream.kind), (False, inspect.Parameter.KEYWORD_ONLY)
+        )
 
         members = TRUTH["members"]
         self.assertEqual(public_names(spec), members["spec"])

@@ -27,6 +27,7 @@ use crate::engine::{Build, Engine, Request};
 use crate::error::Error;
 use crate::outcome::{fails, DefineBuild, Member, Outcome, Work};
 use crate::plan::Plan;
+use crate::stream::Streamed;
 use crate::table::Table;
 use crate::text::{self, Action, Head, MemberLine, Summary};
 
@@ -229,7 +230,7 @@ impl Run {
             kind: "run",
             subject: self.build.subject(),
             status: self.status(),
-            size: Some(text::output_size(self.output())),
+            size: Some(text::output_size(self.build.dimensions())),
         };
         text::summary(head, &[], &self.build.report().diagnostics)
     }
@@ -595,6 +596,79 @@ impl Engine {
         }
     }
 
+    /// [`Engine::spec_run_reusing`] with its output read as a stream (#3697):
+    /// a [`Streamed`] run, which reads no study data and calls no project
+    /// function until its output is read or its result asked for. The call
+    /// compiles the specification, or reuses the plan `plans` keeps, as
+    /// [`Engine::spec_run_reusing`] does; a refused compilation's run has
+    /// already ended, with its issues and no output. The run polls `token`
+    /// from then on: at every checkpoint of its schedule, and before each
+    /// batch. See [`crate::stream`] for how its output is produced and how
+    /// it ends.
+    ///
+    /// # Example
+    ///
+    /// The output of a specification served from memory, read as a stream,
+    /// then saved. Lanes without the `yaml` feature get a run that ended
+    /// with issues.
+    ///
+    /// ```
+    /// use std::sync::Arc;
+    ///
+    /// use yamaa::{CancellationToken, Engine, EngineOptions, HostLanguage, MemoryResolver, Plans};
+    ///
+    /// let resolver = Arc::new(MemoryResolver::new());
+    /// resolver.insert("/", "spec.yaml", "spec:1", Arc::from(
+    ///     &b"yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: out.csv, columns: [ID, NAME]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: NAME, type: str, derivation: SRC.NAME}\n"[..],
+    /// ));
+    /// resolver.insert("/spec.yaml", "input.csv", "input:1", Arc::from(&b"ID,NAME\n1,alpha\n2,beta\n"[..]));
+    /// let engine = Engine::new(
+    ///     EngineOptions::new(HostLanguage::Python, "doctest".into(), "0".into())
+    ///         .with_resolver(resolver.clone()),
+    /// );
+    /// let token = CancellationToken::new();
+    /// let streamed = engine.spec_stream("spec.yaml", None, &Plans::new(), &token).unwrap();
+    /// if cfg!(feature = "yaml") {
+    ///     // Nothing is read until the first pull.
+    ///     assert!(resolver.published("memory:/out.csv").is_none());
+    ///     let rows: usize = streamed.reader().map(|batch| batch.unwrap().num_rows()).sum();
+    ///     assert_eq!(rows, 2);
+    ///     let mut run = streamed.run().unwrap();
+    ///     assert_eq!(run.summary().to_string(), "yamaa run of TEST: succeeded, 2 rows x 2 columns, 0 issues");
+    ///     assert_eq!(run.save(&token).unwrap(), ["memory:/out.csv"]);
+    /// } else {
+    ///     assert!(streamed.schema().is_none());
+    ///     assert!(!streamed.run().unwrap().diagnostics().is_empty());
+    /// }
+    /// ```
+    pub fn spec_stream(
+        &self,
+        specification: &str,
+        project: Option<&str>,
+        plans: &Plans,
+        token: &CancellationToken,
+    ) -> Result<Streamed, Error> {
+        if token.is_cancelled() {
+            return Err(Error::Cancelled);
+        }
+        let request = request(specification, project);
+        let identity = crate::internal::request_identity(self.shared(), &request);
+        // As a run reusing `plans` keeps only this specification's plan.
+        plans.retain(|kept| identity.as_ref() == Some(kept));
+        let measurements = Arc::new(yamaa_adapters::application_measurements::Measurements::new());
+        let (plan, compiled) = self.plan_reusing(plans, &request, identity.as_ref(), &measurements);
+        if compiled {
+            self.keep(plans, &request, identity, &plan);
+        }
+        Ok(Streamed::new(
+            self,
+            plan,
+            specification,
+            measurements,
+            token,
+        ))
+    }
+
     /// The specification after its layers are composed, as one structured
     /// tree: the normalized model, each field's origin and each resource.
     pub fn spec_resolve(
@@ -738,7 +812,7 @@ impl ProjectRun {
             .map(|(name, run)| MemberLine {
                 name: name.to_owned(),
                 status: run.status(),
-                size: text::output_size(run.output()),
+                size: text::output_size(run.build.dimensions()),
                 issues: run.build.report().len(),
             })
             .collect::<Vec<_>>();

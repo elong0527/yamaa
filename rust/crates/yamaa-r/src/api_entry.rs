@@ -196,15 +196,40 @@ macro_rules! registry {
     };
 }
 
-registry!(
-    RUNS,
-    RunHandle,
-    store,
-    run,
-    yamaa::Run,
-    "run",
-    HandleKind::Run
-);
+/// A run built whole, or a streamed run (#3697), whose result is known once
+/// its output's stream ends.
+enum RunHeld {
+    Built(Box<yamaa::Run>),
+    Streamed(yamaa::Streamed),
+}
+
+registry!(RUNS, RunHandle, store, run, RunHeld, "run", HandleKind::Run);
+
+/// A streamed run's refusal of a reader or of its result: D39's text of
+/// reading the run, such as `cannot read DM: operation cancelled`, with no
+/// issues, as the binding's other boundary refusals.
+fn stream_refusal(streamed: &yamaa::Streamed, error: &Error) -> Refusal {
+    Refusal::Message(Failure::from_error(Action::Read(streamed.subject()), error).message)
+}
+
+/// Read the run's result with `read`. A streamed run nobody started to read
+/// runs whole first, polling the native call's interrupts; one whose stream
+/// has not ended, or that was cancelled, refuses.
+fn read_run<T>(
+    handle: &Robj,
+    read: impl FnOnce(&yamaa::Run) -> std::result::Result<T, Refusal>,
+) -> std::result::Result<T, Refusal> {
+    let held = run(handle)?;
+    let held = held.try_borrow().map_err(|_| "run handle in use")?;
+    match &*held {
+        RunHeld::Built(run) => read(run),
+        RunHeld::Streamed(streamed) => read(
+            &*streamed
+                .run()
+                .map_err(|error| stream_refusal(streamed, &error))?,
+        ),
+    }
+}
 registry!(
     CHECKS,
     CheckHandle,
@@ -344,6 +369,8 @@ fn held_plans(plans: &Robj) -> std::result::Result<Option<Rc<RefCell<yamaa::Plan
     plans_of(plans).map(Some)
 }
 
+/// A run of one specification: built now, or with `stream` built as its
+/// output is read (#3697), polling a token of its own from then on.
 #[extendr]
 fn spec_run(
     specification: Raw,
@@ -351,20 +378,36 @@ fn spec_run(
     version: Raw,
     capabilities: List,
     plans: Robj,
+    stream: bool,
 ) -> List {
     reply(|| {
         let project = optional_text(&project)?;
         let engine = engine(&version, Some(capabilities))?;
         let specification = text(&specification)?;
+        let held = held_plans(&plans)?;
+        if stream {
+            let once = yamaa::Plans::new();
+            let borrowed = held.as_ref().map(|plans| plans.borrow());
+            let streamed = engine
+                .spec_stream(
+                    &specification,
+                    project.as_deref(),
+                    borrowed.as_deref().unwrap_or(&once),
+                    &crate::interrupt::stream_token(),
+                )
+                .map_err(|error| from_error(Action::Read(&specification), &error))?;
+            drop(borrowed);
+            return store(RunHeld::Streamed(streamed));
+        }
         let token = crate::interrupt::token();
-        let run = match held_plans(&plans)? {
+        let run = match held {
             Some(plans) => {
                 engine.spec_run_reusing(&specification, project.as_deref(), &plans.borrow(), &token)
             }
             None => engine.spec_run(&specification, project.as_deref(), &token),
         }
         .map_err(|error| from_error(Action::Read(&specification), &error))?;
-        store(run)
+        store(RunHeld::Built(Box::new(run)))
     })
 }
 
@@ -454,70 +497,84 @@ fn conditions() -> List {
 
 #[extendr]
 fn run_status(handle: Robj) -> List {
-    reply(|| {
-        let run = run(&handle)?;
-        let run = run.try_borrow().map_err(|_| "run handle in use")?;
-        Ok(r!(run.status().as_str()))
-    })
+    reply(|| read_run(&handle, |run| Ok(r!(run.status().as_str()))))
 }
 
+/// A run's output: a data frame, or for a streamed run its Arrow C stream
+/// (#3697), which produces the output as it is read; `NULL` for a failed
+/// run.
 #[extendr]
 fn run_output(handle: Robj) -> List {
     reply(|| {
-        let run = run(&handle)?;
-        let run = run.try_borrow().map_err(|_| "run handle in use")?;
-        table(run.output())
+        let held = run(&handle)?;
+        let held = held.try_borrow().map_err(|_| "run handle in use")?;
+        let streamed = match &*held {
+            RunHeld::Built(run) => return table(run.output()),
+            RunHeld::Streamed(streamed) => streamed,
+        };
+        let refused = |error| stream_refusal(streamed, &error);
+        let failed = match streamed.progress() {
+            yamaa::StreamProgress::Cancelled => return Err(refused(Error::Cancelled)),
+            yamaa::StreamProgress::Ended => {
+                streamed.run().map_err(refused)?.status() == yamaa::Status::Failed
+            }
+            _ => false,
+        };
+        if failed {
+            return Ok(NULL.into_robj());
+        }
+        Ok(crate::arrow_stream::stream_object(
+            streamed.reader().into_stream(),
+        )?)
     })
 }
 
 #[extendr]
 fn run_issues(handle: Robj) -> List {
     reply(|| {
-        let run = run(&handle)?;
-        let run = run.try_borrow().map_err(|_| "run handle in use")?;
-        Ok(crate::public_table::frame(&run.issues())?)
+        read_run(&handle, |run| {
+            Ok(crate::public_table::frame(&run.issues())?)
+        })
     })
 }
 
 #[extendr]
 fn run_report(handle: Robj) -> List {
-    reply(|| {
-        let run = run(&handle)?;
-        let run = run.try_borrow().map_err(|_| "run handle in use")?;
-        table(run.report())
-    })
+    reply(|| read_run(&handle, |run| table(run.report())))
 }
 
 #[extendr]
 fn run_save(handle: Robj) -> List {
     reply(|| {
-        let run = run(&handle)?;
-        let mut run = run.try_borrow_mut().map_err(|_| "run handle in use")?;
-        let paths = run
-            .save(&crate::interrupt::token())
-            .map_err(Refusal::Failure)?;
+        let held = run(&handle)?;
+        let mut held = held.try_borrow_mut().map_err(|_| "run handle in use")?;
+        let token = crate::interrupt::token();
+        let paths = match &mut *held {
+            RunHeld::Built(run) => run.save(&token),
+            RunHeld::Streamed(streamed) => streamed
+                .run()
+                .map_err(|error| stream_refusal(streamed, &error))?
+                .save(&token),
+        }
+        .map_err(Refusal::Failure)?;
         Ok(Strings::from_values(paths).into_robj())
     })
 }
 
 #[extendr]
 fn run_summary(handle: Robj) -> List {
-    reply(|| {
-        let run = run(&handle)?;
-        let run = run.try_borrow().map_err(|_| "run handle in use")?;
-        Ok(summary_lines(&run.summary()))
-    })
+    reply(|| read_run(&handle, |run| Ok(summary_lines(&run.summary()))))
 }
 
 /// Private installed-run evidence for qualification suites.
 #[extendr]
 fn run_observations(handle: Robj, include_measurements: bool) -> List {
     reply(|| {
-        let run = run(&handle)?;
-        let run = run.try_borrow().map_err(|_| "run handle in use")?;
-        Ok(run
-            .observations(include_measurements)
-            .map_or_else(|| NULL.into_robj(), |value| r!(value.as_str())))
+        read_run(&handle, |run| {
+            Ok(run
+                .observations(include_measurements)
+                .map_or_else(|| NULL.into_robj(), |value| r!(value.as_str())))
+        })
     })
 }
 

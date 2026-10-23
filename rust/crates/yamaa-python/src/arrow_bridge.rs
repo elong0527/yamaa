@@ -5,12 +5,17 @@
 //! counts, names and printed preview come from the facade, `to_pylist()`
 //! builds Python values here without importing anything, and `to_arrow()`,
 //! `to_polars()` and `to_pandas()` import their library only when called.
+//!
+//! The output of a run with `stream=True` is a table over the run's output
+//! stream (#3697): its Arrow stream produces the output as it is read, and
+//! its other members read the output whole.
 use pyo3::{
     exceptions::{PyModuleNotFoundError, PyNotImplementedError, PyTypeError, PyValueError},
     prelude::*,
     types::{PyCapsule, PyDate, PyDateTime, PyDict, PyList, PyModule, PyString},
     IntoPyObjectExt,
 };
+use std::sync::Arc;
 use yamaa::{
     Array, DataType, Date32Array, Float64Array, Int64Array, LargeStringArray, ListArray,
     StringArray, StringViewArray, TimeUnit, TimestampSecondArray,
@@ -26,17 +31,53 @@ use yamaa_boundary::{HandleKind, Live};
 /// `to_pandas()` convert it with PyArrow, Polars or pandas, which they import
 /// only when called, and any library that reads the Arrow PyCapsule stream
 /// interface reads it directly.
+///
+/// The output of a run with `stream=True` is produced as it is read: a
+/// library that reads its Arrow stream drives the run, one batch per pull,
+/// and every other member reads the output whole, running the run whole if
+/// nobody has started to read it. Once its stream has been read, the output
+/// is not kept, and reading it again raises `RuntimeError`.
 #[pyclass(frozen, module = "yamaa", name = "Table")]
 pub struct Table {
-    table: yamaa::Table,
+    held: Held,
     _live: Live,
+}
+
+/// What a table holds: its batches, or a streamed run's output.
+enum Held {
+    Table(yamaa::Table),
+    Stream(Arc<yamaa::Streamed>),
 }
 
 impl From<&yamaa::Table> for Table {
     fn from(table: &yamaa::Table) -> Self {
+        Self::held(Held::Table(table.clone()))
+    }
+}
+
+impl Table {
+    /// The output of a streamed run (#3697).
+    pub(crate) fn stream(streamed: Arc<yamaa::Streamed>) -> Self {
+        Self::held(Held::Stream(streamed))
+    }
+
+    fn held(held: Held) -> Self {
         Self {
-            table: table.clone(),
+            held,
             _live: crate::interface::CENSUS.hold(HandleKind::Table),
+        }
+    }
+
+    /// The whole table: the held one, or a streamed run's output read whole,
+    /// inside a native call that raises an interrupt again (D46).
+    fn whole(&self, py: Python<'_>) -> PyResult<yamaa::Table> {
+        match &self.held {
+            Held::Table(table) => Ok(table.clone()),
+            Held::Stream(streamed) => crate::interrupt::run(py, |_| {
+                streamed
+                    .table()
+                    .map_err(|error| crate::api_entry::refusal(streamed, &error))
+            }),
         }
     }
 }
@@ -45,32 +86,36 @@ impl From<&yamaa::Table> for Table {
 impl Table {
     /// The number of rows.
     #[getter]
-    fn num_rows(&self) -> usize {
-        self.table.rows()
+    fn num_rows(&self, py: Python<'_>) -> PyResult<usize> {
+        Ok(self.whole(py)?.rows())
     }
 
     /// The column names, in order.
     #[getter]
     fn column_names(&self) -> Vec<String> {
-        self.table
-            .columns()
-            .iter()
-            .map(|field| field.name().clone())
-            .collect()
+        let fields = match &self.held {
+            Held::Table(table) => table.columns(),
+            Held::Stream(streamed) => match streamed.schema() {
+                Some(schema) => schema.fields(),
+                None => return Vec::new(),
+            },
+        };
+        fields.iter().map(|field| field.name().clone()).collect()
     }
 
     /// The number of rows.
-    fn __len__(&self) -> usize {
-        self.table.rows()
+    fn __len__(&self, py: Python<'_>) -> PyResult<usize> {
+        Ok(self.whole(py)?.rows())
     }
 
     /// The table's preview, the same text in every host (#3030 D167).
-    fn __repr__(&self) -> String {
-        self.table.preview()
+    fn __repr__(&self, py: Python<'_>) -> PyResult<String> {
+        Ok(self.whole(py)?.preview())
     }
 
     /// A fresh Arrow C stream over the held buffers, as a PyCapsule named
-    /// `arrow_array_stream`. A requested schema is refused.
+    /// `arrow_array_stream`; for a streamed run's output, a stream that
+    /// produces it as it is read. A requested schema is refused.
     #[pyo3(signature=(requested_schema=None))]
     // `PyCapsule::new` builds on the PyO3 0.27.2 floor; 0.29 renamed it
     // `new_with_value`, with the same pointer and drop behaviour.
@@ -89,21 +134,25 @@ impl Table {
         // value on capsule destruction. A consumer moves that header and clears
         // release; dropping the consumed capsule then only frees the shell.
         // Unconsumed capsules release their reader and buffers on destruction.
-        PyCapsule::new(py, self.table.stream(), Some(c"arrow_array_stream".into()))
+        let stream = match &self.held {
+            Held::Table(table) => table.stream(),
+            Held::Stream(streamed) => streamed.reader().into_stream(),
+        };
+        PyCapsule::new(py, stream, Some(c"arrow_array_stream".into()))
     }
 
     /// The rows as a list of dicts, each keyed by the column names in order.
     /// A value is a str, int, float, datetime.date, naive datetime.datetime
     /// or list, and a missing value is None. Imports nothing.
     fn to_pylist<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
-        let names = self
-            .table
+        let table = self.whole(py)?;
+        let names = table
             .columns()
             .iter()
             .map(|field| PyString::intern(py, field.name()))
             .collect::<Vec<_>>();
         let rows = PyList::empty(py);
-        for batch in self.table.batches() {
+        for batch in table.batches() {
             let columns = batch
                 .columns()
                 .iter()
@@ -122,12 +171,16 @@ impl Table {
 
     /// The table as a `pyarrow.Table`, with the columns' Arrow types.
     fn to_arrow<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
-        import(slf.py(), "pyarrow", "to_arrow()")?.call_method1("table", (slf,))
+        let pyarrow = import(slf.py(), "pyarrow", "to_arrow()")?;
+        slf.get().whole(slf.py())?;
+        pyarrow.call_method1("table", (slf,))
     }
 
     /// The table as a `polars.DataFrame`.
     fn to_polars<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
-        import(slf.py(), "polars", "to_polars()")?.call_method1("DataFrame", (slf,))
+        let polars = import(slf.py(), "polars", "to_polars()")?;
+        slf.get().whole(slf.py())?;
+        polars.call_method1("DataFrame", (slf,))
     }
 
     /// The table as a `pandas.DataFrame` whose columns keep their Arrow types
@@ -137,6 +190,7 @@ impl Table {
         let py = slf.py();
         let pandas = import(py, "pandas", "to_pandas()")?;
         let pyarrow = import(py, "pyarrow", "to_pandas()")?;
+        slf.get().whole(py)?;
         let options = PyDict::new(py);
         options.set_item("types_mapper", pandas.getattr("ArrowDtype")?)?;
         pyarrow

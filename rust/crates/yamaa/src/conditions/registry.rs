@@ -40,6 +40,7 @@ pub(super) const REGISTERED: &[(&str, &[&str], Option<&str>)] = &[
     ("duplicate_identifier", &["validation"], None),
     ("duplicate_intermediate_records", &["verification"], None),
     ("duplicate_key", &["output"], None),
+    ("duplicate_layer", &["validation"], None),
     ("duplicate_order_term", &["validation"], None),
     ("duplicate_specification_name", &["validation"], None),
     ("empty_string_present_unsupported", &["validation"], None),

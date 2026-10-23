@@ -40,7 +40,7 @@ impl fmt::Display for TableError {
 impl std::error::Error for TableError {}
 type Error = TableError;
 
-fn shape_error(error: yamaa_core::limits::LimitExceeded) -> Error {
+pub(crate) fn shape_error(error: yamaa_core::limits::LimitExceeded) -> Error {
     Error::Limit {
         resource: error.resource,
         limit: error.limit,
@@ -70,6 +70,20 @@ fn encode_table_projection<T: TableAccess<Error = std::convert::Infallible>>(
     Ok(output)
 }
 
+/// The records of each batch a table is rebuilt in: the batches of every
+/// engine table a host reads whole.
+pub(crate) const BATCH_ROWS: usize = 65_536;
+
+/// How many batches of `batch_rows` records hold `rows` records: one, empty,
+/// for a table with no record.
+pub(crate) fn batch_count(rows: usize, batch_rows: usize) -> usize {
+    if rows == 0 {
+        1
+    } else {
+        (rows - 1) / batch_rows + 1
+    }
+}
+
 /// Lazily rebuild accepted values into sanitized Arrow batches.
 /// No batch is exposed until the complete dataset has passed engine checks.
 pub(crate) struct DatasetBatches<'a, T = Dataset> {
@@ -92,12 +106,8 @@ pub(crate) fn table_batches<'a, T: TableAccess<Error = std::convert::Infallible>
     }) {
         return Err(Error::InvalidTable);
     }
-    let batch_rows = 65_536;
-    let batches = if table.row_count() == 0 {
-        1
-    } else {
-        (table.row_count() - 1) / batch_rows + 1
-    };
+    let batch_rows = BATCH_ROWS;
+    let batches = batch_count(table.row_count(), batch_rows);
     Ok(DatasetBatches {
         table,
         projection,
@@ -167,7 +177,7 @@ pub fn serialize_json(value: &impl Serialize) -> Result<String, Error> {
     serde_json::to_string(value).map_err(|_| Error::Internal)
 }
 
-fn batch_error(error: arrow_schema::ArrowError) -> Error {
+pub(crate) fn batch_error(error: arrow_schema::ArrowError) -> Error {
     match error {
         arrow_schema::ArrowError::CastError(message)
             if message == crate::arrow_table::UTF8_OFFSETS =>

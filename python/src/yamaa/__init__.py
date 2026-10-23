@@ -148,7 +148,7 @@ class Run:
 
     @property
     def output(self) -> Table | None:
-        """The output dataset, or None when the run failed."""
+        """The output dataset, or None when the run failed; with stream, read as it is produced."""
         return self._native.output()
 
     @property
@@ -289,9 +289,11 @@ class Spec(_Lazy):
         """The specification after its layers are composed."""
         return _call(_native._spec_resolve, self._path, self._project)
 
-    def run(self) -> Run:
-        """Build the dataset in memory."""
-        return Run(_call(_native._spec_run, self._path, self._project, self._plans))
+    def run(self, *, stream: bool = False) -> Run:
+        """Build the dataset in memory, or with stream as its output is read."""
+        return Run(
+            _call(_native._spec_run, self._path, self._project, self._plans, stream)
+        )
 
     def __repr__(self) -> str:
         return _native._spec_summary(self._path)

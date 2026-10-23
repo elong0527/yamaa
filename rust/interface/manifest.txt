@@ -279,6 +279,7 @@ public.types.tree: python dict; r named list
 public.types.json_text: python str, canonical JSON (RFC 8785); r character(1), canonical JSON (RFC 8785)
 public.types.table: python yamaa.Table; r data.frame
 public.types.optional_table: python yamaa.Table | None; r data.frame or NULL
+public.types.run_output: python yamaa.Table | None; with stream=True a yamaa.Table whose Arrow stream produces the output as it is read, once; r data.frame or NULL; with stream = TRUE an Arrow C stream that produces the output as it is read: an external pointer of class nanoarrow_array_stream, or NULL
 public.types.status: python str, one of values.status; r character(1), one of values.status
 public.types.file_type: python str, one of values.file_type; r character(1), one of values.file_type
 public.types.info: python dict, keys in records.info order; r named list, names in records.info order
@@ -319,7 +320,7 @@ public.classes.Check.issues: property; returns table; table issues
 public.classes.Check.summary: printing; python __repr__; r print, format
 public.classes.Run: python yamaa.Run; r yamaa_run
 public.classes.Run.status: property; returns status
-public.classes.Run.output: property; returns optional_table
+public.classes.Run.output: property; returns run_output
 public.classes.Run.issues: property; returns table; table issues
 public.classes.Run.report: property; returns optional_table; table report
 public.classes.Run.save: method; returns paths_written; raises refusal
@@ -352,6 +353,7 @@ public.classes.Spec: python yamaa.Spec; r yamaa_spec
 public.classes.Spec.check: method; returns Check; raises refusal
 public.classes.Spec.resolve: method; returns tree; raises refusal
 public.classes.Spec.run: method; returns Run; raises refusal
+public.classes.Spec.run.args[0]: stream: flag = false; keyword-only
 public.classes.Spec.summary: printing; python __repr__; r print, format
 public.classes.Project: python yamaa.Project; r yamaa_project
 public.classes.Project.spec: method; returns Spec; raises refusal

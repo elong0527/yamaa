@@ -309,24 +309,39 @@ def compare_define(case, staged, define):
 def layered_field(path, field):
     """The value of a root `field` in a specification's layers, or None.
 
-    Layers contribute from the root ancestor down to the entry file, a later
-    layer taking precedence (LAYER-3), so the layer nearest the entry that
-    writes the field supplies it.
+    At each layer its parent chain contributes first, then the fragments its
+    `include` lists, in order, then the layer itself, a later contribution
+    taking precedence (LAYER-3). So the layer supplies the field when it
+    writes it, then the last fragment it lists that writes it, then its
+    parent chain.
     """
     import yaml12
+
+    def read(layer):
+        try:
+            document = yaml12.parse_yaml(layer.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, ValueError) as error:
+            raise ValueError(f"{layer}: {error}") from error
+        require(isinstance(document, dict), f"{layer}: expected a mapping")
+        return document
 
     layer, chain = Path(path), set()
     while True:
         identity = layer.resolve()
         require(identity not in chain, f"{path}: cyclic parent at {layer}")
         chain.add(identity)
-        try:
-            document = yaml12.parse_yaml(layer.read_text(encoding="utf-8"))
-        except (OSError, UnicodeError, ValueError) as error:
-            raise ValueError(f"{layer}: {error}") from error
-        require(isinstance(document, dict), f"{layer}: expected a mapping")
+        document = read(layer)
         if field in document:
             return document[field]
+        include = document.get("include") or []
+        require(isinstance(include, list), f"{layer}: include must be a list of paths")
+        for written in reversed(include):
+            require(
+                isinstance(written, str) and written, f"{layer}: include lists paths"
+            )
+            fragment = read(layer.parent / written)
+            if field in fragment:
+                return fragment[field]
         parent = document.get("parent")
         if parent is None:
             return None

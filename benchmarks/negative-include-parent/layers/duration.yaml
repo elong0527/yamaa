@@ -1,0 +1,15 @@
+yamaa: "1.0"
+type: spec
+parent: ae.yaml
+
+columns:
+  - name: ADURN
+    type: int
+    label: Analysis Duration (N)
+    derivation:
+      diff:
+        type: date
+        start: ASTDT
+        end: AENDT
+        unit: day
+        closed: both

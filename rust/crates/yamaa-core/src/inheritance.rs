@@ -1,10 +1,13 @@
-//! Demand-driven inheritance traversal: each parent is located and captured
-//! through the resolver port and decoded through the decoder port.
+//! Demand-driven inheritance traversal: each parent and each included
+//! fragment is located and captured through the resolver port and decoded
+//! through the decoder port.
 use crate::decoder::Decoder;
 use crate::inheritance_capture::{CapturedParent, SourceFailure};
 use crate::language::{self, FileType, HeaderFault, LanguageVersion};
 use crate::resolver::{self, File, Name, Resolver};
+use crate::resource::ResourceFailure;
 use crate::schema::{Document, DocumentNode as N, NormalizationError, SchemaStructure};
+use std::collections::BTreeSet;
 
 /// The canonical identity is compared directly. Display spelling retains read-error context.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -22,6 +25,30 @@ pub enum SourceError<E> {
     Raised(E),
 }
 
+/// The field that names a layer a traversal reads.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Named {
+    /// The entry, which no layer names.
+    Entry,
+    /// The `parent` of the layer below it on the chain (LAYER-2).
+    Parent,
+    /// The `include` entry at this index of the layer that includes it
+    /// (LAYER-3).
+    Include(usize),
+}
+
+impl Named {
+    /// The spec path of the field that names the layer, in the layer that
+    /// writes it; the entry has none.
+    pub fn field(self) -> Option<String> {
+        match self {
+            Self::Entry => None,
+            Self::Parent => Some("parent".into()),
+            Self::Include(index) => Some(format!("include[{index}]")),
+        }
+    }
+}
+
 /// No partial contribution list escapes a traversal failure.
 #[derive(Debug, PartialEq)]
 pub enum Error<E> {
@@ -35,18 +62,48 @@ pub enum Error<E> {
         declaring: String,
         path: String,
     },
+    /// A `parent` or an `include` entry, the field `named`, reaches a layer
+    /// still being composed: `path` runs from that layer up through each
+    /// layer above it to the one whose field names it again (LAYER-3).
     Cycle {
         path: Vec<String>,
         returns_to_entry: bool,
+        named: Named,
+    },
+    /// The `include` entry at `index` of `declaring`, written `path`,
+    /// reaches `layer`, which the composition already reached through
+    /// another field (LAYER-3).
+    Repeated {
+        declaring: String,
+        index: usize,
+        path: String,
+        layer: String,
+    },
+    /// The layer `source`, which an `include` entry names, declares `field`,
+    /// `parent` or `include`, which a fragment does not (LAYER-4).
+    Fragment {
+        source: String,
+        entry: String,
+        field: &'static str,
+    },
+    /// The file the `include` entry at `index` of `declaring`, written
+    /// `path`, names could not be read: missing, not a regular file, a
+    /// symbolic link or changed (FILE-7, FILE-8, FILE-10).
+    Included {
+        declaring: String,
+        index: usize,
+        path: String,
+        failure: ResourceFailure,
     },
     /// A layer declares a header this traversal does not read: a version the
     /// engine does not read, 0.5 included, or a type other than `spec`
-    /// (SCHEMA-2, LAYER-4).
+    /// (SCHEMA-2, LAYER-4), reported at the entry's header or at the field
+    /// `named` that names the layer.
     Header {
         source: String,
         entry: String,
         mismatch: HeaderMismatch,
-        is_entry: bool,
+        named: Named,
     },
     Layer {
         source: String,
@@ -85,32 +142,60 @@ impl<E> Error<E> {
             Self::Cycle {
                 path,
                 returns_to_entry,
+                named,
             } => F::Cycle {
                 path,
                 returns_to_entry: *returns_to_entry,
+                named: *named,
             },
+            Self::Repeated {
+                declaring,
+                index,
+                path,
+                layer,
+            } => F::Repeated {
+                declaring,
+                index: *index,
+                path,
+                layer,
+            },
+            Self::Fragment {
+                source,
+                entry,
+                field,
+            } => F::Fragment {
+                source,
+                entry,
+                field,
+            },
+            Self::Included {
+                declaring,
+                index,
+                path,
+                failure,
+            } => return Ok(Some(included_diagnostic(*failure, declaring, *index, path))),
             Self::Header {
                 source,
                 entry,
                 mismatch: HeaderMismatch::Version { version, reads },
-                is_entry,
+                named,
             } => F::LanguageVersion {
                 source,
                 entry,
                 version,
                 reads,
-                is_entry: *is_entry,
+                named: *named,
             },
             Self::Header {
                 source,
                 entry,
                 mismatch: HeaderMismatch::FileType { file_type },
-                is_entry,
+                named,
             } => F::FileType {
                 source,
                 entry,
                 file_type,
-                is_entry: *is_entry,
+                named: *named,
             },
             _ => return Ok(None),
         }
@@ -119,11 +204,42 @@ impl<E> Error<E> {
     }
 }
 
-/// One admitted layer and the parent it names, if any.
+/// The finding for the fragment that the `include` entry at `index` of the
+/// layer `declaring` names, written `path`, which could not be read for
+/// `failure`: FILE-7's, FILE-8's or FILE-10's condition at that entry, its
+/// context naming the path as written and the layer that writes it, which
+/// locates the entry in that layer (P-ISSUE-1). A resource limit is the
+/// engine's refusal at the entry.
+pub fn included_diagnostic(
+    failure: ResourceFailure,
+    declaring: &str,
+    index: usize,
+    path: &str,
+) -> crate::diagnostic::Diagnostic {
+    let field = Named::Include(index).field().expect("an include entry");
+    let mut diagnostic = failure.field_diagnostic(&field, path);
+    if !matches!(failure, ResourceFailure::Boundary(_)) {
+        diagnostic.context.insert(
+            "source".into(),
+            crate::json::Value::String(declaring.into()),
+        );
+    }
+    diagnostic
+}
+
+/// What an admitted layer names, as written: its `parent`, if any, and its
+/// `include` entries in list order.
+#[derive(Debug, Default)]
+struct Links {
+    parent: Option<String>,
+    include: Vec<String>,
+}
+
+/// One admitted layer of the chain and what it names.
 struct Frame<L> {
     identity: String,
     layer: L,
-    parent: Option<String>,
+    links: Links,
 }
 
 /// URI syntax is rejected before granting filesystem authority. Drive-rooted paths stay local.
@@ -159,10 +275,16 @@ pub fn declares_parent(document: &Document) -> bool {
 
 /// The traversal error a refused header gives: a malformed header is a
 /// finding in the layer, as is the entry's `schema_version`; a version or type
-/// the traversal does not read, a parent's 0.5 included, names the layer and
-/// the entry.
-fn header_error<E>(fault: HeaderFault, entry: &str, source: Source, input: Document) -> Error<E> {
-    let is_entry = source.identity == entry;
+/// the traversal does not read, a parent's or a fragment's 0.5 included, names
+/// the layer, the entry and the field `named` that names the layer.
+fn header_error<E>(
+    fault: HeaderFault,
+    entry: &str,
+    source: Source,
+    input: Document,
+    named: Named,
+) -> Error<E> {
+    let is_entry = named == Named::Entry;
     let mismatch = match fault {
         HeaderFault::Legacy { reads } if !is_entry => HeaderMismatch::Version {
             version: language::LEGACY_LANGUAGE_VERSION.into(),
@@ -183,54 +305,108 @@ fn header_error<E>(fault: HeaderFault, entry: &str, source: Source, input: Docum
         source: source.identity,
         entry: entry.into(),
         mismatch,
-        is_entry,
+        named,
     }
 }
 
-/// Why a parent could not be read: the resolver's own failure, or its
+/// Why a layer could not be read: the resolver's own failure, or its
 /// decoding.
 type ReadFailure<R, D> = SourceFailure<<R as Resolver>::Error, <D as Decoder>::DocumentError>;
 
+/// Decode the captured `bytes` of the layer `source` locates, keep the layer
+/// in `layers` as captured and decoded, and return its document as written.
+fn decoded<R: Resolver, D: Decoder>(
+    decoder: &mut D,
+    layers: &mut Vec<CapturedParent<D::Raw>>,
+    source: &Source,
+    bytes: Vec<u8>,
+) -> Result<Document, Error<ReadFailure<R, D>>> {
+    let raw = decoder
+        .raw(&source.identity, &bytes)
+        .map_err(|error| Error::Host(SourceFailure::Admission(error)))?;
+    let input = D::raw_document(&raw).clone();
+    layers.push(CapturedParent::new(
+        crate::project_preparation::Source {
+            identity: source.identity.clone(),
+            bytes,
+        },
+        raw,
+    ));
+    Ok(input)
+}
+
+/// Why the request `name` for the fragment the `include` entry at `index` of
+/// `declaring` names, written `path`, failed: a missing file, one that is not
+/// a regular file, a symbolic link or a changed file is a finding at that
+/// entry (FILE-7, FILE-8, FILE-10); any other failure stays the resolver's.
+fn included<R: Resolver, X>(
+    resolver: &R,
+    name: Name<'_>,
+    error: R::Error,
+    declaring: &str,
+    index: usize,
+    path: &str,
+) -> Error<SourceFailure<R::Error, X>> {
+    match resolver
+        .failure(name, &error)
+        .and_then(resolver::Failure::resource)
+    {
+        Some(failure) => Error::Included {
+            declaring: declaring.into(),
+            index,
+            path: path.into(),
+            failure,
+        },
+        None => Error::Host(SourceFailure::Host(error)),
+    }
+}
+
 /// Follow each layer's single parent from the entry, admitting each layer
-/// before reading its parent, and return the chain in contribution order:
-/// the root ancestor first and the entry last. Reaching a layer already on
-/// the chain is a cycle. A parent is located as written, then captured and
-/// decoded, and kept in `parents`. `admit` admits one layer, given the entry
-/// identity, the layer's source and its document, and returns the layer with
-/// the parent it names.
+/// before reading its parent, then read each layer's included fragments, and
+/// return every layer in contribution order: at each layer, its parent chain,
+/// then its fragments in list order, then the layer itself, so the root
+/// ancestor's fragments come first and the entry last (LAYER-3). The chain is
+/// followed to its root before any fragment is read; the fragments are read
+/// in contribution order, each admitted before the next is read. Every
+/// `parent` and `include` entry counts as one link followed.
+///
+/// A `parent` that reaches a layer already on the chain is a cycle, and so is
+/// an `include` entry that reaches the layer that writes it or a layer below
+/// it on the chain. An `include` entry that reaches any other layer the
+/// composition already reached repeats it. A layer is located as written,
+/// then captured and decoded, and kept in `layers`: the parents from the
+/// entry up, then the fragments in contribution order. `admit` admits one
+/// layer, given the entry identity, the layer's source, its document and the
+/// field that names it, and returns the layer with what it names.
 fn walk<L, R: Resolver, D: Decoder>(
     entry: Source,
     entry_document: Document,
     resolver: &mut R,
     decoder: &mut D,
-    parents: &mut Vec<CapturedParent<D::Raw>>,
-    mut admit: impl FnMut(
-        &str,
-        Source,
-        Document,
-    ) -> Result<(L, Option<String>), Error<ReadFailure<R, D>>>,
+    layers: &mut Vec<CapturedParent<D::Raw>>,
+    mut admit: impl FnMut(&str, Source, Document, Named) -> Result<(L, Links), Error<ReadFailure<R, D>>>,
 ) -> Result<Vec<L>, Error<ReadFailure<R, D>>> {
     if entry.identity.is_empty() || entry.display_path.is_empty() {
         return Err(Error::InvalidIdentity);
     }
     let entry_identity = entry.identity.clone();
-    let mut frame = |source: Source, input: Document| {
+    let mut frame = |source: Source, input: Document, named: Named| {
         let identity = source.identity.clone();
-        admit(&entry_identity, source, input).map(|(layer, parent)| Frame {
+        admit(&entry_identity, source, input, named).map(|(layer, links)| Frame {
             identity,
             layer,
-            parent,
+            links,
         })
     };
-    let mut chain = vec![frame(entry, entry_document)?];
-    let mut parent_occurrences = 0;
+    let mut chain = vec![frame(entry, entry_document, Named::Entry)?];
+    let mut followed = 0;
     loop {
         let frame_ref = chain.last_mut().expect("chain holds the entry");
-        let Some(written) = frame_ref.parent.take() else {
+        let Some(written) = frame_ref.links.parent.take() else {
             break;
         };
-        parent_occurrences += 1;
-        crate::limits::Limits::parent_occurrences(parent_occurrences)?;
+        followed += 1;
+        crate::limits::Limits::parent_occurrences(followed)?;
         let declaring = frame_ref.identity.clone();
         if !is_local_parent(&written) {
             return Err(Error::InvalidParent {
@@ -268,6 +444,7 @@ fn walk<L, R: Resolver, D: Decoder>(
             return Err(Error::Cycle {
                 path,
                 returns_to_entry,
+                named: Named::Parent,
             });
         }
         let name = Name::Located {
@@ -286,20 +463,80 @@ fn walk<L, R: Resolver, D: Decoder>(
                 SourceError::Raised(error) => return Err(Error::Host(SourceFailure::Host(error))),
             },
         };
-        let raw = decoder
-            .raw(&source.identity, &bytes)
-            .map_err(|error| Error::Host(SourceFailure::Admission(error)))?;
-        let input = D::raw_document(&raw).clone();
-        parents.push(CapturedParent::new(
-            crate::project_preparation::Source {
-                identity: source.identity.clone(),
-                bytes,
-            },
-            raw,
-        ));
-        chain.push(frame(source, input)?);
+        let input = decoded::<R, D>(decoder, layers, &source, bytes)?;
+        chain.push(frame(source, input, Named::Parent)?);
     }
-    Ok(chain.into_iter().rev().map(|frame| frame.layer).collect())
+    // Every layer the composition has reached: the chain, then each fragment
+    // as it is read.
+    let mut reached = chain
+        .iter()
+        .map(|frame| frame.identity.clone())
+        .collect::<BTreeSet<_>>();
+    let mut contributed = Vec::with_capacity(chain.len());
+    // The root ancestor first: the chain keeps only the layers below the one
+    // whose fragments are read.
+    while let Some(Frame {
+        identity: declaring,
+        layer,
+        links,
+    }) = chain.pop()
+    {
+        for (index, written) in links.include.into_iter().enumerate() {
+            followed += 1;
+            crate::limits::Limits::parent_occurrences(followed)?;
+            let name = Name::Written {
+                file: File::Resource,
+                declaring: &declaring,
+                written: &written,
+            };
+            let source = match resolver.inspect(name) {
+                Ok(source) => source,
+                Err(error) => {
+                    return Err(included(resolver, name, error, &declaring, index, &written))
+                }
+            };
+            if source.identity.is_empty() || source.display_path.is_empty() {
+                return Err(Error::InvalidIdentity);
+            }
+            let below = chain.iter().position(|f| f.identity == source.identity);
+            if below.is_some() || source.identity == declaring {
+                let mut path = Vec::new();
+                for frame in &chain[below.unwrap_or(chain.len())..] {
+                    path.push(frame.identity.clone());
+                }
+                path.push(declaring.clone());
+                let returns_to_entry = source.identity == entry_identity;
+                path.push(source.identity);
+                return Err(Error::Cycle {
+                    path,
+                    returns_to_entry,
+                    named: Named::Include(index),
+                });
+            }
+            if !reached.insert(source.identity.clone()) {
+                return Err(Error::Repeated {
+                    declaring,
+                    index,
+                    path: written,
+                    layer: source.identity,
+                });
+            }
+            let name = Name::Located {
+                file: File::Resource,
+                source: &source,
+            };
+            let bytes = match resolver.capture(name) {
+                Ok(captured) => resolver::bytes(captured),
+                Err(error) => {
+                    return Err(included(resolver, name, error, &declaring, index, &written))
+                }
+            };
+            let input = decoded::<R, D>(decoder, layers, &source, bytes)?;
+            contributed.push(frame(source, input, Named::Include(index))?.layer);
+        }
+        contributed.push(layer);
+    }
+    Ok(contributed)
 }
 
 /// One admitted 1.x specification layer: its source, its document as written
@@ -311,33 +548,37 @@ pub struct VersionedLayer {
     pub version: LanguageVersion,
 }
 
-/// The layers of a 1.x specification in contribution order, the root ancestor
-/// first and the entry last, and the version the chain needs: the newest any
-/// layer declares (P-VER-1).
+/// The layers of a 1.x specification in contribution order, the entry last,
+/// and the version the chain needs: the newest any layer declares (P-VER-1).
+/// At each layer of the chain come its parent chain, then the fragments it
+/// includes, then the layer itself (LAYER-3).
 #[derive(Debug, PartialEq)]
 pub struct VersionedChain {
     pub layers: Vec<VersionedLayer>,
     pub version: LanguageVersion,
 }
 
-/// A traversed 1.x chain and each parent layer it read, held as captured and
-/// decoded, in the order it read them: from the entry up.
+/// A traversed 1.x chain and each layer it read besides the entry, held as
+/// captured and decoded, in the order it read them: the parents from the
+/// entry up, then the included fragments in contribution order.
 #[derive(Debug)]
 pub struct Traversal<R> {
     pub chain: VersionedChain,
     pub parents: Vec<CapturedParent<R>>,
 }
 
-/// Follow a 1.x specification's parents from the entry, admitting each
-/// layer against the view of `schema`, the 1.0 specification closure, at the
-/// version that layer declares (LAYER-4, P-VER-1). `reads` is the newest
-/// version the engine reads. Every layer declares `type: spec`; a layer that
-/// declares a version the engine does not read, or another type, fails before
-/// its parent is read, at the entry's header or at the `parent` naming it.
-/// A layer that declares `schema_version` is written in language version
-/// 0.5, which the engine does not read: it fails the same way, naming 0.5.
-/// Composition is not part of this traversal. Each parent is located and
-/// captured through `resolver` and decoded through `decoder`.
+/// Follow a 1.x specification's parents from the entry, then read the
+/// fragments each layer includes, admitting each layer against the view of
+/// `schema`, the 1.0 specification closure, at the version that layer
+/// declares (LAYER-3, LAYER-4, P-VER-1). `reads` is the newest version the
+/// engine reads. Every layer declares `type: spec`; a layer that declares a
+/// version the engine does not read, or another type, fails before what it
+/// names is read, at the entry's header or at the `parent` or `include` entry
+/// naming it. A layer that declares `schema_version` is written in language
+/// version 0.5, which the engine does not read: it fails the same way, naming
+/// 0.5. A fragment declares neither `parent` nor `include`. Composition is not
+/// part of this traversal. Each layer is located and captured through
+/// `resolver` and decoded through `decoder`.
 pub fn traverse_versioned<R: Resolver, D: Decoder>(
     schema: &SchemaStructure,
     reads: LanguageVersion,
@@ -353,7 +594,7 @@ pub fn traverse_versioned<R: Resolver, D: Decoder>(
         resolver,
         decoder,
         &mut parents,
-        |entry, source, input| admit_versioned(schema, reads, entry, source, input),
+        |entry, source, input, named| admit_versioned(schema, reads, entry, source, input, named),
     )?;
     let version = layers
         .iter()
@@ -372,11 +613,26 @@ fn admit_versioned<E>(
     entry: &str,
     source: Source,
     input: Document,
-) -> Result<(VersionedLayer, Option<String>), Error<E>> {
+    named: Named,
+) -> Result<(VersionedLayer, Links), Error<E>> {
     let header = match language::read_header(&input, Some(reads), FileType::Spec) {
         Ok(header) => header,
-        Err(fault) => return Err(header_error(fault, entry, source, input)),
+        Err(fault) => return Err(header_error(fault, entry, source, input, named)),
     };
+    // A fragment composes on the layer that includes it, so it names no
+    // layer of its own (LAYER-4).
+    if matches!(named, Named::Include(_)) {
+        if let Some(field) = ["parent", "include"]
+            .into_iter()
+            .find(|field| input.field(input.root(), field).is_some())
+        {
+            return Err(Error::Fragment {
+                source: source.identity,
+                entry: entry.into(),
+                field,
+            });
+        }
+    }
     let findings = schema.at_version(header.version).validate_layer(&input);
     let error = match findings {
         Ok(findings) if findings.is_empty() => None,
@@ -391,13 +647,25 @@ fn admit_versioned<E>(
             error,
         });
     }
-    // The admitted layer writes `parent` only as a nonempty path.
-    let parent = match input
-        .field(input.root(), "parent")
-        .map(|node| &input.nodes()[node])
-    {
+    // The admitted layer writes `parent` only as a nonempty path, and
+    // `include` only as a list of them.
+    let root = input.root();
+    let parent = match input.field(root, "parent").map(|node| &input.nodes()[node]) {
         Some(N::Text(parent)) => Some(parent.clone()),
         _ => None,
+    };
+    let include = match input
+        .field(root, "include")
+        .map(|node| &input.nodes()[node])
+    {
+        Some(N::Sequence(items)) => items
+            .iter()
+            .filter_map(|&item| match &input.nodes()[item] {
+                N::Text(path) => Some(path.clone()),
+                _ => None,
+            })
+            .collect(),
+        _ => Vec::new(),
     };
     Ok((
         VersionedLayer {
@@ -405,7 +673,7 @@ fn admit_versioned<E>(
             document: input,
             version: header.version,
         },
-        parent,
+        Links { parent, include },
     ))
 }
 

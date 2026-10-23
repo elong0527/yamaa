@@ -29,8 +29,8 @@
   .Call(wrap__plans, handle)
 }
 
-.native_spec_run <- function(specification, project, version, capabilities, plans) {
-  .Call(wrap__spec_run, specification, project, version, capabilities, plans)
+.native_spec_run <- function(specification, project, version, capabilities, plans, stream) {
+  .Call(wrap__spec_run, specification, project, version, capabilities, plans, stream)
 }
 
 .native_spec_resolve <- function(specification, project, version) {
