@@ -130,10 +130,16 @@ enum State {
     /// A reader started the stream; its first pull builds the run.
     Taken(Box<Pending>),
     /// The run was accepted; its batches are being read.
-    Producing { run: Run, batches: PublicBatches },
+    Producing {
+        run: Run,
+        batches: PublicBatches,
+    },
     /// The run has a result: its stream ended when `streamed`, or it ran
     /// whole.
-    Ended { run: Run, streamed: bool },
+    Ended {
+        run: Run,
+        streamed: bool,
+    },
     Cancelled,
 }
 
@@ -316,9 +322,9 @@ impl Streamed {
         match &*state {
             State::Ended { .. } => Ok(RunGuard { state }),
             State::Cancelled => Err(Error::Cancelled),
-            State::Unread(_) | State::Taken(_) | State::Producing { .. } => {
-                Err(Error::Stream { code: "stream_open" })
-            }
+            State::Unread(_) | State::Taken(_) | State::Producing { .. } => Err(Error::Stream {
+                code: "stream_open",
+            }),
         }
     }
 
@@ -485,7 +491,8 @@ impl Batches {
                 }
             }
         }
-        let State::Producing { run, mut batches } = std::mem::replace(&mut *state, State::Cancelled)
+        let State::Producing { run, mut batches } =
+            std::mem::replace(&mut *state, State::Cancelled)
         else {
             // Only this reader's own release cancels the stream it started.
             self.mode = Mode::Done;

@@ -347,8 +347,8 @@ impl<T: TableAccess<Error = Infallible>> PublicBatches<T> {
             .map_err(ipc_table::batch_error)?
             .project(&self.projection)
             .map_err(|_| Error::InvalidTable)?;
-        let snapshot =
-            ArrowTable::try_new(self.logical.clone(), vec![batch]).map_err(|_| Error::InvalidTable)?;
+        let snapshot = ArrowTable::try_new(self.logical.clone(), vec![batch])
+            .map_err(|_| Error::InvalidTable)?;
         PublicTable::from_snapshot(&snapshot)?
             .batches
             .pop()

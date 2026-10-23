@@ -203,15 +203,7 @@ enum RunHeld {
     Streamed(yamaa::Streamed),
 }
 
-registry!(
-    RUNS,
-    RunHandle,
-    store,
-    run,
-    RunHeld,
-    "run",
-    HandleKind::Run
-);
+registry!(RUNS, RunHandle, store, run, RunHeld, "run", HandleKind::Run);
 
 /// A streamed run's refusal of a reader or of its result: D39's text of
 /// reading the run, such as `cannot read DM: operation cancelled`, with no
@@ -231,9 +223,11 @@ fn read_run<T>(
     let held = held.try_borrow().map_err(|_| "run handle in use")?;
     match &*held {
         RunHeld::Built(run) => read(run),
-        RunHeld::Streamed(streamed) => {
-            read(&*streamed.run().map_err(|error| stream_refusal(streamed, &error))?)
-        }
+        RunHeld::Streamed(streamed) => read(
+            &*streamed
+                .run()
+                .map_err(|error| stream_refusal(streamed, &error))?,
+        ),
     }
 }
 registry!(
@@ -530,7 +524,11 @@ fn run_output(handle: Robj) -> List {
 
 #[extendr]
 fn run_issues(handle: Robj) -> List {
-    reply(|| read_run(&handle, |run| Ok(crate::public_table::frame(&run.issues())?)))
+    reply(|| {
+        read_run(&handle, |run| {
+            Ok(crate::public_table::frame(&run.issues())?)
+        })
+    })
 }
 
 #[extendr]

@@ -317,8 +317,8 @@ impl Engine {
         plan: &Plan,
     ) {
         if let Some(identity) = identity {
-            let stable =
-                crate::internal::request_identity(&self.shared, request).as_ref() == Some(&identity);
+            let stable = crate::internal::request_identity(&self.shared, request).as_ref()
+                == Some(&identity);
             plans.replace(identity, stable.then_some(plan));
         }
     }

@@ -163,7 +163,6 @@ fn a_consumer_that_stops_pulling_stops_production() {
     );
 }
 
-
 /// Streamed batches hold the whole table's values in its order, under its
 /// schema: three-record batches over 65,541 records are 21,845 of three,
 /// then the one record that ends the whole table's first batch, then three
@@ -180,7 +179,10 @@ fn streamed_batches_hold_the_whole_table_and_never_cross_its_batches() {
     let mut expected = vec![3; 21_845];
     expected.extend([1, 3, 2]);
     assert_eq!(
-        batches.iter().map(RecordBatch::num_rows).collect::<Vec<_>>(),
+        batches
+            .iter()
+            .map(RecordBatch::num_rows)
+            .collect::<Vec<_>>(),
         expected,
         "the batch sizes"
     );
@@ -226,10 +228,19 @@ fn a_table_the_whole_view_refuses_is_refused_before_any_batch() {
     };
     for (label, source, projection, expected) in [
         ("text beyond the offsets", &long, vec![0], utf8),
-        ("a projection outside", &short, vec![2], TableError::InvalidTable),
+        (
+            "a projection outside",
+            &short,
+            vec![2],
+            TableError::InvalidTable,
+        ),
     ] {
         let streamed = PublicBatches::new(source, projection.clone(), rows(2)).map(|_| ());
-        assert_eq!(source.reads().iter().sum::<usize>(), 0, "{label}: no ID read");
+        assert_eq!(
+            source.reads().iter().sum::<usize>(),
+            0,
+            "{label}: no ID read"
+        );
         let whole = PublicTable::from_table(&source, &projection).map(|_| ());
         assert_eq!((whole, streamed), (Err(expected), Err(expected)), "{label}");
     }
