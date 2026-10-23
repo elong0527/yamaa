@@ -1,6 +1,7 @@
 //! Project preparation using the same approved native roots and snapshots as
 //! a specification alone. Project metadata capture grants no runtime authority.
 use crate::{
+    document::Closures,
     file_preparation::{self, FileSpecification},
     file_resources::{Error as ResourceError, Resources},
     project_source,
@@ -17,17 +18,16 @@ pub enum Error {
 }
 
 /// Prepare `specification` with the project file `environment` from
-/// `resources`. The project schemas are retained capabilities; public entry
-/// points use the shipped project closures.
+/// `resources`. The closures are retained capabilities; public entry points
+/// use the shipped 1.0 closures.
 pub fn prepare(
     mut resources: Resources,
     specification: &str,
     environment: &str,
     host: Language,
-    project_schemas: project_source::ProjectSchemas,
+    closures: Closures,
 ) -> Result<FileSpecification, Error> {
-    let mut environment =
-        capture_environment(&mut resources, environment, Some(host), project_schemas)?;
+    let mut environment = capture_environment(&mut resources, environment, Some(host), closures)?;
     let document = file_preparation::prepare_document(&mut resources, specification)
         .map_err(Error::Document)?;
     crate::file_inventory::prepare(
@@ -50,26 +50,22 @@ pub fn prepare(
 }
 
 /// Capture the original project file and the metadata it declares through the
-/// same approved reader: for a 0.5 project, the environment file it links for
-/// the host and that file's lock and functions; for a 1.0 project, the host's
-/// lock and every function file it lists (D8); and the codelist files of
-/// either. An engine that claims no host language (`host` is none) reads no
-/// environment file and no lock. Static workflow preparation reuses this
-/// transfer without introducing a second capture, any activation or any
-/// study read.
+/// same approved reader: the host's lock, every function file it lists and
+/// its codelist files (D8). An engine that claims no host language (`host`
+/// is none) reads no lock. Static workflow preparation reuses this transfer
+/// without introducing a second capture, any activation or any study read.
 ///
-/// `schemas` decide whether a 1.0 project is read
-/// ([`project_source::ProjectSchemas::versioned`]): public calls pass the
-/// shipped schemas, which read 1.0 files (#3030 D76).
+/// Public calls pass the shipped `closures`, which read 1.0 files (#3030
+/// D76).
 pub(crate) fn capture_environment(
     resources: &mut Resources,
     written: &str,
     host: Option<Language>,
-    schemas: project_source::ProjectSchemas,
+    closures: Closures,
 ) -> Result<project_source::OwnedEnvironment, Error> {
     let prepared = match yamaa_core::build::prepare_environment(
         resources,
-        &mut crate::decoder::Decoder::<std::convert::Infallible>::with_schemas(schemas),
+        &mut crate::decoder::Decoder::<std::convert::Infallible>::with_closures(closures),
         written,
         host,
     ) {

@@ -71,10 +71,13 @@ pub(super) fn check(document: &Document, file: &Path) -> Vec<Departure> {
 }
 
 fn restatements(document: &Document, file: &Path) -> Option<Vec<Departure>> {
-    if !document.versioned || document.member(document.root, "parent").is_none() {
+    let entry = &document.decoded.as_ref()?.document;
+    if !yamaa_core::language::declares_header(entry)
+        || document.member(document.root, "parent").is_none()
+    {
         return None;
     }
-    let entry = document.decoded.as_ref()?.document.clone();
+    let entry = entry.clone();
     let (view, layers) = layers(file, entry)?;
     let (own, ancestors) = layers.split_last()?;
     let inherited = view.compose_versioned_layers(ancestors).ok()?.document;

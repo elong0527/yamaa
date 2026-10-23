@@ -1,28 +1,41 @@
 #![cfg(feature = "yaml")]
 //! Declaration contracts: schema capture, schema declaration fixture, schema
-//! diagnostic projection, shipped schema, static declarations, string
-//! template syntax fixture, structural documents and validator R
-//! declarations.
+//! diagnostic projection, the shipped schema route, static declarations,
+//! string template syntax fixture and validator R declarations.
 mod declaration {
     mod schema_capture {
+        use std::sync::Arc;
         use yamaa_adapters::json;
         use yamaa_adapters::{
+            document::{self, Closures},
             specification_diagnostics::{capture_failure, Rejection},
             specification_source::{CapturedSchema, Error, Source},
             yaml_decode::SourcePosition,
         };
         use yamaa_core::json::Value;
+        use yamaa_core::language::{FileType, LANGUAGE_VERSION};
         use yamaa_core::schema::{
             BundleError, BundleIssue, BundleIssueKind, DocumentNode as N, NormalizationError,
             SchemaSource,
         };
         const SHARED:&str="version: '1.0'\nincludes: []\nshared:\n  - id: {type: str, required: true}\n  - label: {type: str, default: untitled}\n";
-        const ROOT:&str="version: '1.0'\nincludes: [schema_s.yaml]\nroot_class:\n  - fields_from: shared\n  - schema_version: {type: str}\n";
+        const ROOT:&str="version: '1.0'\nincludes: [schema_s.yaml]\nroot_class:\n  - yamaa: {type: str}\n  - type: {type: str}\n  - fields_from: shared\n";
         fn source(identity: &str, bytes: &str) -> Source {
             Source {
                 identity: identity.into(),
                 bytes: bytes.as_bytes().to_vec(),
             }
+        }
+        /// Admit `raw`, a 1.x document declaring `type: spec`, against
+        /// `schema` as the closure of its type.
+        fn admit(
+            schema: &Arc<CapturedSchema>,
+            raw: Source,
+        ) -> Result<document::AdmittedDocument, Error> {
+            let closures = Closures::shipped()
+                .unwrap()
+                .with(FileType::Spec, Arc::clone(schema));
+            document::decode(raw, FileType::Spec, Some(LANGUAGE_VERSION), &closures)?.admit()
         }
         fn closure() -> Vec<Source> {
             vec![source("schema_s.yaml", SHARED), source("r", ROOT)]
@@ -53,7 +66,7 @@ mod declaration {
                     assert_eq!(schema.sources()[i].bytes.as_ptr(), bytes[i]);
                     assert_eq!(schema.sources()[i].identity.as_ptr(), identities[i]);
                 }
-                let descriptor = schema.structure().root_class().fields[1].descriptor;
+                let descriptor = schema.structure().root_class().fields[3].descriptor;
                 let field = &schema.structure().descriptors()[descriptor];
                 assert_eq!((field.module, field.path.as_str()), (0, "root_class.label"));
                 let node = field.descriptor.default_node().unwrap();
@@ -71,9 +84,9 @@ mod declaration {
                     schema.structure().modules()[0].document.nodes()[node],
                     N::Text("untitled".into())
                 );
-                let raw = source("domain.yaml", "schema_version: '1.0'\nid: ID01\n");
+                let raw = source("domain.yaml", "yamaa: '1.0'\ntype: spec\nid: ID01\n");
                 let raw_pointer = raw.bytes.as_ptr();
-                let prepared = schema.prepare_structural(raw).unwrap();
+                let prepared = admit(&schema, raw).unwrap();
                 assert_eq!(prepared.source().bytes.as_ptr(), raw_pointer);
                 let d = &prepared.normalized().document;
                 let label = d.field(d.root(), "label").unwrap();
@@ -188,9 +201,9 @@ mod declaration {
                     yamaa_core::application_issue::Fault::SchemaBundle,
                 ))
             );
-            let schema=CapturedSchema::admit(vec![source("r","version: '1.0'\nincludes: []\nroot_class:\n  - schema_version: {type: str}\n  - value: {type: int, default: invalid}\n")],0).unwrap();
+            let schema=CapturedSchema::admit(vec![source("r","version: '1.0'\nincludes: []\nroot_class:\n  - yamaa: {type: str}\n  - type: {type: str}\n  - value: {type: int, default: invalid}\n")],0).unwrap();
             assert!(matches!(
-                schema.prepare_structural(source("root.yaml", "schema_version: '1.0'\n")),
+                admit(&schema, source("root.yaml", "yamaa: '1.0'\ntype: spec\n")),
                 Err(Error::Normalize(NormalizationError::Defaults(_)))
             ));
         }
@@ -199,8 +212,7 @@ mod declaration {
         fn fixed_yaml_file_size_boundary_precedes_physical_decoding() {
             use yamaa_adapters::yaml_decode::DecodeFailure;
             use yamaa_core::limits::{LimitExceeded, Limits};
-            let prefix =
-                "version: '1.0'\nincludes: []\nroot_class: [{schema_version: {type: str}}]\n#";
+            let prefix = "version: '1.0'\nincludes: []\nroot_class: [{name: {type: str}}]\n#";
             for size in [
                 Limits::SPEC_BYTES - 1,
                 Limits::SPEC_BYTES,
@@ -271,20 +283,11 @@ mod declaration {
         }
 
         #[test]
-        fn declared_document_version_is_a_custom_field_without_a_shipped_version_gate() {
-            let schema = "version: '1.0'\nroot_class:\n  - schema_version: {type: str, required: true}\n  - name: {type: str, required: true}\n";
-            assert_eq!(
-                fixture::observe(schema, "schema_version: custom\nname: kept\n"),
-                json!({"issues": []})
-            );
-        }
-
-        #[test]
-        fn named_environment_class_uses_the_complete_authored_include_closure() {
+        fn a_named_root_class_uses_the_complete_authored_include_closure() {
             let sources = vec![
         (
-            "schema_environment.yaml".into(),
-            "version: '1.0'\nincludes: [schema_shared.yaml]\nenvironment_class:\n  - schema_version: {type: str, required: true}\n  - language: {type: str, values: [python, r]}\n  - lock: {type: project_path}\n".into(),
+            "schema_entry.yaml".into(),
+            "version: '1.0'\nincludes: [schema_shared.yaml]\nentry_class:\n  - language: {type: str, values: [python, r]}\n  - lock: {type: project_path}\n".into(),
         ),
         (
             "schema_shared.yaml".into(),
@@ -293,8 +296,8 @@ mod declaration {
     ];
             let observed = fixture::observe_input(
                 fixture::SchemaInput::Modules(sources),
-                "schema_version: '1.0'\nlanguage: false\nlock: owned.lock\n",
-                Some("environment_class"),
+                "language: false\nlock: owned.lock\n",
+                Some("entry_class"),
             );
             assert_eq!(
                 observed,
@@ -305,12 +308,15 @@ mod declaration {
         }
     }
     mod schema_diagnostic_projection {
+        use std::sync::Arc;
         use yamaa_adapters::json;
         use yamaa_adapters::{
+            document::{self, Closures},
             specification_diagnostics::capture_failure,
             specification_source::{CapturedSchema, Error, Source},
         };
         use yamaa_core::json::Value;
+        use yamaa_core::language::{FileType, LANGUAGE_VERSION};
 
         const BIG: &str = "922337203685477580812345678901234567890";
         fn source(identity: &str, text: &str) -> Source {
@@ -319,17 +325,26 @@ mod declaration {
                 bytes: text.as_bytes().to_vec(),
             }
         }
+        /// The refusal of `raw`, a 1.x document declaring `type: spec`,
+        /// admitted against `schema` as the closure of its type.
+        fn refused(schema: &Arc<CapturedSchema>, raw: Source) -> Error {
+            let closures = Closures::shipped()
+                .unwrap()
+                .with(FileType::Spec, Arc::clone(schema));
+            document::decode(raw, FileType::Spec, Some(LANGUAGE_VERSION), &closures)
+                .unwrap()
+                .admit()
+                .unwrap_err()
+        }
 
         #[test]
         fn captured_structural_projection_preserves_complete_ordered_constraint_outcome_and_authority(
         ) {
             let schema = CapturedSchema::admit_root(vec![source("schema.yaml", &format!(
-        "version: '1.0'\npayload:\n  - schema_version: {{type: str}}\n  - alpha: {{type: str, values: [z, a, z], pattern: '^OK$', min_length: {BIG}}}\n  - items: {{type: 'list[int]', size: {BIG}}}\n"))],
+        "version: '1.0'\npayload:\n  - yamaa: {{type: str}}\n  - type: {{type: str}}\n  - alpha: {{type: str, values: [z, a, z], pattern: '^OK$', min_length: {BIG}}}\n  - items: {{type: 'list[int]', size: {BIG}}}\n"))],
         0, "payload").unwrap();
-            let raw = "schema_version: '1.0'\nalpha: \"bad\\\"\\n\\u03BB\"\nitems: [1]\n";
-            let error = schema
-                .prepare_structural(source("held/entry.yaml", raw))
-                .unwrap_err();
+            let raw = "yamaa: '1.0'\ntype: spec\nalpha: \"bad\\\"\\n\\u03BB\"\nitems: [1]\n";
+            let error = refused(&schema, source("held/entry.yaml", raw));
             drop(schema);
             let Error::Findings(captured) = &error else {
                 panic!("held semantic report: {:?}", capture_failure(&error))
@@ -360,16 +375,14 @@ mod declaration {
         #[test]
         fn large_ordered_findings_retain_complete_values_and_original_authority() {
             let schema = CapturedSchema::admit_root(vec![source("schema.yaml",
-        "version: '1.0'\npayload:\n  - schema_version: {type: str}\n  - first: {type: str, values: [OK]}\n  - last: {type: str, values: [OK]}\n")],
+        "version: '1.0'\npayload:\n  - yamaa: {type: str}\n  - type: {type: str}\n  - first: {type: str, values: [OK]}\n  - last: {type: str, values: [OK]}\n")],
         0, "payload").unwrap();
             let raw = format!(
-                "schema_version: '1.0'\nfirst: '{}'\nlast: '{}'\n",
+                "yamaa: '1.0'\ntype: spec\nfirst: '{}'\nlast: '{}'\n",
                 "x".repeat(1_400_000),
                 "y".repeat(1_400_000)
             );
-            let error = schema
-                .prepare_structural(source("held/entry.yaml", &raw))
-                .unwrap_err();
+            let error = refused(&schema, source("held/entry.yaml", &raw));
             let Error::Findings(captured) = &error else {
                 panic!(
                     "both language findings remain held: {:?}",
@@ -393,11 +406,8 @@ mod declaration {
         }
     }
     mod shipped_schema {
-        //! Shipped schema identity and raw preparation without host schema interpretation.
-        use yamaa_adapters::{
-            shipped_schema,
-            specification_source::{Error, Source},
-        };
+        //! The shipped 1.0 specification route, before any host effect.
+        use yamaa_adapters::{shipped_schema, specification_source::Source};
         use yamaa_core::inheritance::Source as Identity;
         use yamaa_core::resolver::{Captured, Failure, Name, Resolver};
 
@@ -421,72 +431,6 @@ mod declaration {
             ) -> Result<String, Self::Error> {
                 panic!("entry rejection or standalone preparation must not rebase a parent")
             }
-        }
-        fn source(text: &str) -> Source {
-            Source {
-                identity: "arbitrary/location/domain.yaml".into(),
-                bytes: text.as_bytes().to_vec(),
-            }
-        }
-
-        #[test]
-        fn shipped_project_and_environment_roots_retain_their_separate_authoritative_closures() {
-            let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../yaml");
-            let schemas = shipped_schema::capture_project().unwrap();
-            let environment = shipped_schema::capture_environment().unwrap();
-            for (schema, class, entry) in [
-                (&schemas.project, "project_class", "schema_project.yaml"),
-                (
-                    &schemas.environment,
-                    "environment_class",
-                    "schema_environment.yaml",
-                ),
-                (&environment, "environment_class", "schema_environment.yaml"),
-            ] {
-                assert_eq!(schema.structure().version(), "1.0");
-                assert_eq!(schema.structure().root_class().name, class);
-                assert_eq!(
-                    schema
-                        .sources()
-                        .iter()
-                        .map(|s| s.identity.as_str())
-                        .collect::<Vec<_>>(),
-                    [entry, "schema_shared.yaml"]
-                );
-                for module in schema.sources() {
-                    assert_eq!(
-                        module.bytes,
-                        std::fs::read(root.join(&module.identity)).unwrap()
-                    );
-                }
-            }
-            // Codelist sources belong to the project root, function definitions to
-            // the environment root; neither root closes over the other's classes.
-            let malformed = || source("[unclosed");
-            assert!(matches!(
-                schemas
-                    .project
-                    .prepare_named_class(malformed(), "codelist_source_class"),
-                Err(Error::Decode { .. })
-            ));
-            assert!(matches!(
-                schemas
-                    .environment
-                    .prepare_named_class(malformed(), "function_definition_class"),
-                Err(Error::Decode { .. })
-            ));
-            assert!(matches!(
-                schemas
-                    .project
-                    .prepare_named_class(malformed(), "function_definition_class"),
-                Err(Error::UnknownClass(_))
-            ));
-            assert!(matches!(
-                schemas
-                    .environment
-                    .prepare_named_class(malformed(), "codelist_source_class"),
-                Err(Error::UnknownClass(_))
-            ));
         }
 
         #[test]
@@ -544,33 +488,6 @@ mod declaration {
                 count += 1;
             }
             assert_eq!(count, 8);
-        }
-
-        #[test]
-        fn shipped_project_version_override_reaches_the_same_lowered_section() {
-            use yamaa_core::front_end::v0_5::project::project;
-            let schema = shipped_schema::capture_project().unwrap().project;
-            for (family, guide) in [("sdtm", "SDTMIG"), ("adam", "ADaMIG"), ("send", "SENDIG")] {
-                for version in [None, Some("1.0")] {
-                    let mut text = format!(
-                "schema_version: '1.0'\nenvironments: {{python: python/environment.yaml}}\nstudy: {{id: Study, name: Study, description: Study, protocol_name: Protocol}}\n{family}:\n  standard: {{name: {guide}, version: '1.0', status: Final}}\n  specs: [absent.yaml]\n  define: absent/define.xml\n"
-            );
-                    if let Some(version) = version {
-                        text.push_str(&format!("  source_system_version: '{version}'\n"));
-                    }
-                    let captured = schema.prepare_structural(source(&text)).unwrap();
-                    let lowered = project(&captured.normalized().document, None).unwrap();
-                    drop(captured);
-                    let section = &lowered.submission.as_ref().unwrap().sections[0];
-                    assert_eq!(
-                        section
-                            .source_system_version
-                            .as_ref()
-                            .map(|version| version.text.as_str()),
-                        version
-                    );
-                }
-            }
         }
     }
     mod static_declarations {
@@ -676,916 +593,6 @@ mod declaration {
             );
         }
     }
-    mod structural_documents {
-        use crate::support::project_schemas::{
-            candidate_environment_modules as environment_modules,
-            candidate_project_modules as project_modules,
-        };
-        use std::sync::Arc;
-        use yamaa_adapters::{
-            specification_source::{CapturedSchema, Error, Source},
-            yaml_decode::decode_yaml,
-        };
-        use yamaa_core::schema::{DocumentNode as N, SchemaContext as C, SchemaDiagnostic};
-
-        #[derive(Debug, PartialEq, Eq)]
-        enum LogicalTree {
-            Null,
-            Boolean(bool),
-            Integer(String),
-            Float(u64),
-            Text(String),
-            Sequence(Vec<Self>),
-            Mapping(Vec<(Self, Self)>),
-        }
-        fn logical_tree(document: &yamaa_core::schema::Document, node: usize) -> LogicalTree {
-            match &document.nodes()[node] {
-                N::Null => LogicalTree::Null,
-                N::Boolean(value) => LogicalTree::Boolean(*value),
-                N::Integer(value) => LogicalTree::Integer(value.clone()),
-                N::Float(value) => LogicalTree::Float(value.to_bits()),
-                N::Text(value) => LogicalTree::Text(value.clone()),
-                N::Sequence(items) => LogicalTree::Sequence(
-                    items.iter().map(|&id| logical_tree(document, id)).collect(),
-                ),
-                N::Mapping(items) => LogicalTree::Mapping(
-                    items
-                        .iter()
-                        .map(|&(key, value)| {
-                            (logical_tree(document, key), logical_tree(document, value))
-                        })
-                        .collect(),
-                ),
-            }
-        }
-
-        fn source(name: &str, content: &str) -> Source {
-            Source {
-                identity: name.into(),
-                bytes: content.as_bytes().to_vec(),
-            }
-        }
-        fn environment_schema() -> Arc<CapturedSchema> {
-            CapturedSchema::admit_root(environment_modules(), 0, "environment_class").unwrap()
-        }
-        fn project_schema() -> Arc<CapturedSchema> {
-            CapturedSchema::admit_root(project_modules(), 0, "project_class").unwrap()
-        }
-        fn finding(
-            path: &str,
-            condition: &'static str,
-            field: &str,
-            class: &str,
-        ) -> SchemaDiagnostic {
-            SchemaDiagnostic {
-                path: path.into(),
-                code: match condition {
-                    "unknown_field" => yamaa_core::diagnostic::ConditionCode::SchemaUnknownField,
-                    _ => panic!("unexpected test cause"),
-                },
-                context: vec![
-                    ("field", C::Text(field.into())),
-                    ("class", C::Text(class.into())),
-                ],
-            }
-        }
-        fn captured_findings(schema: &Arc<CapturedSchema>, text: &str) -> Vec<SchemaDiagnostic> {
-            let Err(Error::Findings(result)) =
-                schema.prepare_structural(source("spec/root.yaml", text))
-            else {
-                panic!("expected complete structural findings");
-            };
-            assert_eq!(result.source().bytes, text.as_bytes());
-            assert!(result.document().is_some());
-            result.findings().to_vec()
-        }
-
-        #[test]
-        fn structural_environment_owns_schema_source_raw_tree_and_explicit_defaults() {
-            let mut original = environment_modules();
-            let retained = original.iter().map(|s| s.bytes.clone()).collect::<Vec<_>>();
-            let schema =
-                CapturedSchema::admit_root(original.clone(), 0, "environment_class").unwrap();
-            for source in &mut original {
-                source.bytes.clear();
-                source.identity.clear();
-            }
-            for (module, bytes) in schema.sources().iter().zip(retained) {
-                assert_eq!(module.bytes, bytes);
-            }
-            let text="schema_version: '1.0'\nlock: ../uv.lock\nfunctions:\n  bmi:\n    function: projectbmi.bmi\n    description: Body mass index.\n    params: [{name: weight, type: float}]\n    returns: float\n    tests:\n      - {id: normal, covers: [normal], args: {weight: 70.0}, result: 70.0}\n";
-            let captured = schema
-                .prepare_structural(source("spec/environment.yaml", text))
-                .unwrap();
-            assert!(Arc::ptr_eq(captured.schema(), &schema));
-            assert_eq!(captured.source().identity, "spec/environment.yaml");
-            assert_eq!(captured.source().bytes, text.as_bytes());
-            let raw = decode_yaml(text.as_bytes()).unwrap();
-            assert_eq!(captured.raw().document, raw.document);
-            assert_eq!(captured.raw().locations, raw.locations);
-            let expected="schema_version: '1.0'\nlock: ../uv.lock\nfunctions:\n  bmi:\n    function: projectbmi.bmi\n    description: Body mass index.\n    params: [{name: weight, type: float, required: true, accepts_missing: false}]\n    returns: float\n    may_return_missing: false\n    comparison_decimals: 4\n    tests:\n      - {id: normal, covers: [normal], args: {weight: 70.0}, result: 70.0}\n";
-            let expected = decode_yaml(expected.as_bytes()).unwrap().document;
-            let actual = &captured.normalized().document;
-            assert_eq!(
-                logical_tree(actual, actual.root()),
-                logical_tree(&expected, expected.root())
-            );
-            assert_eq!(captured.normalized().origins.len(), expected.nodes().len());
-        }
-
-        #[test]
-        fn structural_project_owns_schema_source_raw_tree_and_explicit_defaults() {
-            let mut original = project_modules();
-            let retained = original.iter().map(|s| s.bytes.clone()).collect::<Vec<_>>();
-            let schema = CapturedSchema::admit_root(original.clone(), 0, "project_class").unwrap();
-            for source in &mut original {
-                source.bytes.clear();
-                source.identity.clear();
-            }
-            for (module, bytes) in schema.sources().iter().zip(retained) {
-                assert_eq!(module.bytes, bytes);
-            }
-            let text="schema_version: '1.0'\nenvironments: {python: python/environment.yaml, r: r/environment.yaml}\ncodelists:\n  - ../ct.yaml\n  - codelists: [{id: SEX, name: Sex, items: [{value: F}]}]\nadam: {specs: [adam/adsl.yaml]}\n";
-            let captured = schema
-                .prepare_structural(source("spec/project.yaml", text))
-                .unwrap();
-            assert!(Arc::ptr_eq(captured.schema(), &schema));
-            assert_eq!(captured.source().identity, "spec/project.yaml");
-            assert_eq!(captured.source().bytes, text.as_bytes());
-            let raw = decode_yaml(text.as_bytes()).unwrap();
-            assert_eq!(captured.raw().document, raw.document);
-            assert_eq!(captured.raw().locations, raw.locations);
-            let expected="schema_version: '1.0'\nenvironments: {python: python/environment.yaml, r: r/environment.yaml}\ncodelists:\n  - ../ct.yaml\n  - codelists: [{id: SEX, name: Sex, data_type: text, extensible: false, items: [{value: F, extended: false}]}]\nadam: {specs: [adam/adsl.yaml], context: Submission, xml_lang: en}\n";
-            let expected = decode_yaml(expected.as_bytes()).unwrap().document;
-            let actual = &captured.normalized().document;
-            assert_eq!(
-                logical_tree(actual, actual.root()),
-                logical_tree(&expected, expected.root())
-            );
-            assert_eq!(captured.normalized().origins.len(), expected.nodes().len());
-        }
-
-        #[test]
-        fn environment_and_project_roots_do_not_create_a_specification_or_require_domain_data() {
-            for schema in [environment_schema(), project_schema()] {
-                let captured = schema
-                    .prepare_structural(source("root.yaml", "schema_version: '1.0'\n"))
-                    .unwrap();
-                let document = &captured.normalized().document;
-                assert_eq!(
-                    document.nodes()[document.root()].kind(),
-                    yamaa_core::schema::DocumentKind::Mapping
-                );
-                assert_eq!(document.field(document.root(), "domain"), None);
-                assert_eq!(document.field(document.root(), "input"), None);
-                assert_eq!(document.field(document.root(), "output"), None);
-            }
-        }
-
-        #[test]
-        fn environment_parent_language_and_retired_runtime_fields_are_complete_schema_findings() {
-            let schema = environment_schema();
-            // The project key states the language; the environment file declares none.
-            let findings = captured_findings(
-        &schema,
-        "schema_version: '1.0'\nparent: base.yaml\nlanguage: python\nruntime: {language: python}\nversion: old\n",
-    );
-            assert_eq!(
-                findings[0],
-                finding("parent", "unknown_field", "parent", "environment_class")
-            );
-            assert_eq!(findings.len(), 4);
-            for (finding, field) in findings[1..].iter().zip(["language", "runtime", "version"]) {
-                assert_eq!(finding.path, field);
-                assert_eq!(finding.definition().condition, "unknown_field");
-                assert_eq!(finding.definition().rule, Some("SCHEMA-13"));
-                assert_eq!(
-                    finding.context,
-                    vec![
-                        ("field", C::Text(field.into())),
-                        ("class", C::Text("environment_class".into())),
-                    ]
-                );
-            }
-        }
-
-        #[test]
-        fn project_and_environment_roots_refuse_each_others_fields() {
-            let environment = captured_findings(
-                &environment_schema(),
-                "schema_version: '1.0'\nlock: ../renv.lock\ncodelists: [../ct.yaml]\nstudy: {id: STUDY01, name: STUDY01, description: Study, protocol_name: Study-01}\nadam: {specs: [adam/adsl.yaml]}\n",
-            );
-            assert_eq!(
-                environment,
-                ["codelists", "study", "adam"].map(|field| finding(
-                    field,
-                    "unknown_field",
-                    field,
-                    "environment_class"
-                ))
-            );
-            let project = captured_findings(
-                &project_schema(),
-                "schema_version: '1.0'\nlanguage: r\nlock: renv.lock\nfunctions: {bmi: functions/bmi.yaml}\n",
-            );
-            assert_eq!(
-                project,
-                ["language", "lock", "functions"].map(|field| finding(
-                    field,
-                    "unknown_field",
-                    field,
-                    "project_class"
-                ))
-            );
-        }
-
-        #[test]
-        fn environment_and_project_roots_keep_closed_independent_shapes() {
-            let text =
-                "schema_version: '1.0'\nlock: ../renv.lock\nfunctions: {bmi: functions/bmi.yaml}\n";
-            let result = environment_schema()
-                .prepare_structural(source("spec/environment.yaml", text))
-                .unwrap();
-            let doc = &result.normalized().document;
-            assert_eq!(
-                doc.nodes()[doc.field(doc.root(), "lock").unwrap()],
-                N::Text("../renv.lock".into())
-            );
-            assert_eq!(result.source().bytes, text.as_bytes());
-            let project = project_schema();
-            let text="schema_version: '1.0'\nenvironments: {python: python/environment.yaml, r: r/environment.yaml}\ncodelists: [../ct.yaml]\nstudy: {id: STUDY01, name: STUDY01, description: Study, protocol_name: Study-01}\nadam:\n  standard: {name: ADaMIG, version: '1.3', status: Final}\n  specs: [adam/adsl.yaml]\n  define: ../data/adam/define.xml\n  documents: [{id: adrg, kind: supplemental, link: adrg.pdf, title: Review guide}]\n  datasets: json\nsdtm: {specs: [sdtm/dm.yaml]}\n";
-            let result = project
-                .prepare_structural(source("spec/project.yaml", text))
-                .unwrap();
-            let doc = &result.normalized().document;
-            let environments = doc.field(doc.root(), "environments").unwrap();
-            assert_eq!(
-                doc.nodes()[doc.field(environments, "r").unwrap()],
-                N::Text("r/environment.yaml".into())
-            );
-            let adam = doc.field(doc.root(), "adam").unwrap();
-            assert_eq!(
-                doc.nodes()[doc.field(adam, "datasets").unwrap()],
-                N::Text("json".into())
-            );
-            assert_eq!(
-                doc.nodes()[doc.field(adam, "context").unwrap()],
-                N::Text("Submission".into())
-            );
-            assert_eq!(
-                doc.nodes()[doc.field(adam, "xml_lang").unwrap()],
-                N::Text("en".into())
-            );
-            // A section needs only specs; the dataset format has no default.
-            let sdtm = doc.field(doc.root(), "sdtm").unwrap();
-            for absent in ["standard", "define", "datasets"] {
-                assert_eq!(doc.field(sdtm, absent), None);
-            }
-            assert_eq!(
-                doc.nodes()[doc.field(sdtm, "context").unwrap()],
-                N::Text("Submission".into())
-            );
-            assert_eq!(result.source().bytes, text.as_bytes());
-            // The retired dataset flag is unknown; the dataset format is closed.
-            assert_eq!(
-                captured_findings(
-                    &project,
-                    "schema_version: '1.0'\nadam: {specs: [adam/adsl.yaml], dataset_json: true}\n"
-                ),
-                [finding(
-                    "adam.dataset_json",
-                    "unknown_field",
-                    "dataset_json",
-                    "submission_section_class"
-                )]
-            );
-            assert_eq!(
-                captured_findings(
-                    &project,
-                    "schema_version: '1.0'\nadam: {specs: [adam/adsl.yaml], datasets: xpt}\n"
-                )
-                .iter()
-                .map(|finding| (finding.path.as_str(), finding.definition().condition))
-                .collect::<Vec<_>>(),
-                [("adam.datasets", "value_not_permitted")]
-            );
-        }
-
-        #[test]
-        fn structural_capture_keeps_invalid_yaml_and_fixed_size_refusals_distinct() {
-            let schema = environment_schema();
-            assert!(matches!(
-                schema.prepare_structural(source("environment.yaml", "schema_version: [unclosed")),
-                Err(Error::Decode {
-                    error: yamaa_adapters::yaml_decode::DecodeFailure::InvalidYaml { .. },
-                    ..
-                })
-            ));
-            let bytes = "x".repeat(yamaa_core::limits::Limits::SPEC_BYTES + 1);
-            assert!(
-                matches!(schema.prepare_structural(source("environment.yaml", &bytes)),
-        Err(Error::Decode { error: yamaa_adapters::yaml_decode::DecodeFailure::Limit(error), .. })
-        if error.resource == "spec_bytes" && error.limit == yamaa_core::limits::Limits::SPEC_BYTES
-            && error.actual == Some(bytes.len()))
-            );
-        }
-
-        #[test]
-        fn named_root_selection_and_absent_classes_fail_closed() {
-            for (modules, other) in [
-                (environment_modules(), "project_class"),
-                (project_modules(), "environment_class"),
-            ] {
-                for class in ["missing_class", other] {
-                    assert!(matches!(
-                        CapturedSchema::admit_root(modules.clone(), 0, class),
-                        Err(Error::Bundle(_))
-                    ));
-                }
-                assert!(matches!(
-                    CapturedSchema::admit(modules, 0),
-                    Err(Error::Bundle(_))
-                ));
-            }
-        }
-
-        #[test]
-        fn standalone_function_and_codelist_classes_keep_schema_version_in_schema_only() {
-            for (modules, class, text, expected) in [
-        (environment_modules(), "function_definition_class", "function: project.constant\ndescription: Constant.\nparams: []\nreturns: int\ntests: []\n", "function: project.constant\ndescription: Constant.\nparams: []\nreturns: int\nmay_return_missing: false\ncomparison_decimals: 4\ntests: []\n"),
-        (project_modules(), "codelist_source_class", "codelists: [{id: SEX, name: Sex, items: [{value: F}]}]\n", "codelists: [{id: SEX, name: Sex, data_type: text, extensible: false, items: [{value: F, extended: false}]}]\n"),
-    ] {
-        let schema=CapturedSchema::admit_root(modules, 0, class).unwrap();
-        let captured=schema.prepare_class(source("independent.yaml", text)).unwrap();
-        assert_eq!(captured.source().bytes, text.as_bytes());
-        let actual=&captured.normalized().document;
-        let expected=decode_yaml(expected.as_bytes()).unwrap().document;
-        assert_eq!(logical_tree(actual, actual.root()), logical_tree(&expected, expected.root()));
-        assert_eq!(actual.field(actual.root(), "schema_version"), None);
-        assert!(captured.normalized().origins.iter().any(|origin| matches!(origin.source, yamaa_core::schema::SchemaSource::Default {..})));
-    }
-        }
-
-        #[test]
-        fn named_classes_reuse_their_root_capture_without_fabricated_versions() {
-            for (schema, root, class, text, expected) in [
-        (environment_schema(), "environment_class", "function_definition_class", "function: project.constant\ndescription: Constant.\nparams: []\nreturns: int\ntests: []\n", "function: project.constant\ndescription: Constant.\nparams: []\nreturns: int\nmay_return_missing: false\ncomparison_decimals: 4\ntests: []\n"),
-        (project_schema(), "project_class", "codelist_source_class", "codelists: [{id: SEX, name: Sex, items: [{value: F}]}]\n", "codelists: [{id: SEX, name: Sex, data_type: text, extensible: false, items: [{value: F, extended: false}]}]\n"),
-    ] {
-        let result = schema.prepare_named_class(source("independent.yaml", text), class).unwrap();
-        assert!(Arc::ptr_eq(result.schema(), &schema));
-        assert_eq!(result.class_name(), class);
-        assert_eq!(result.source().bytes, text.as_bytes());
-        assert_eq!(result.schema().structure().root_class().name, root);
-        let actual = &result.normalized().document;
-        let expected = decode_yaml(expected.as_bytes()).unwrap().document;
-        assert_eq!(logical_tree(actual, actual.root()), logical_tree(&expected, expected.root()));
-        assert!(actual.field(actual.root(), "schema_version").is_none());
-    }
-        }
-
-        #[test]
-        fn named_class_selection_is_closed_and_cannot_bypass_version_admission() {
-            let malformed = || source("independent.yaml", "[unclosed");
-            for (schema, root, own, other) in [
-                (
-                    environment_schema(),
-                    "environment_class",
-                    "function_definition_class",
-                    "codelist_source_class",
-                ),
-                (
-                    project_schema(),
-                    "project_class",
-                    "codelist_source_class",
-                    "function_definition_class",
-                ),
-            ] {
-                for class in ["missing_class", "str", "", other] {
-                    assert!(
-                        matches!(schema.prepare_named_class(malformed(), class), Err(Error::UnknownClass(name)) if name == class)
-                    );
-                }
-                assert!(matches!(
-                    schema.prepare_named_class(malformed(), root),
-                    Err(Error::VersionedRootRequired)
-                ));
-                assert!(matches!(
-                    schema.prepare_named_class(malformed(), own),
-                    Err(Error::Decode { .. })
-                ));
-            }
-        }
-
-        #[test]
-        fn class_admission_cannot_bypass_versioned_roots_or_open_function_fields() {
-            assert!(matches!(
-                environment_schema()
-                    .prepare_class(source("environment.yaml", "lock: ../uv.lock\n")),
-                Err(Error::VersionedRootRequired)
-            ));
-            assert!(matches!(
-                project_schema().prepare_class(source(
-                    "project.yaml",
-                    "environments: {python: environment.yaml}\n"
-                )),
-                Err(Error::VersionedRootRequired)
-            ));
-            let function =
-                CapturedSchema::admit_root(environment_modules(), 0, "function_definition_class")
-                    .unwrap();
-            let text="schema_version: '1.0'\nfunction: program.constant\ndescription: Constant.\nparams: []\nreturns: int\ntests: []\ncontract_version: '1'\nbinding: {call: program.constant}\n";
-            let Err(Error::Findings(result)) =
-                function.prepare_class(source("function.yaml", text))
-            else {
-                panic!("retired fields must fail");
-            };
-            assert_eq!(result.source().bytes, text.as_bytes());
-            assert_eq!(
-                result
-                    .findings()
-                    .iter()
-                    .map(|f| f.path.as_str())
-                    .collect::<Vec<_>>(),
-                vec![
-                    "<normalization>.schema_version",
-                    "<normalization>.contract_version",
-                    "<normalization>.binding"
-                ]
-            );
-        }
-
-        #[test]
-        fn captured_function_lowers_directly_to_an_admitted_versionless_core_plan() {
-            use crate::support::roots::{Case, Definition, Parameter};
-            use yamaa_core::{
-                front_end::v0_5::project::function,
-                project_function::{Function, Language},
-                temporal::{Date, Precision},
-                value::{ColumnType, Value, ValueType},
-            };
-            let schema =
-                CapturedSchema::admit_root(environment_modules(), 0, "function_definition_class")
-                    .unwrap();
-            let text="function: project.identity\ndescription: Return the date.\nparams: [{name: x, type: date}]\nreturns: date\ntests:\n  - {id: leap-day, covers: [normal, boundary], args: {x: {date: '2024-02-29'}}, result: {date: '2024-02-29'}}\n  - {id: missing-x, covers: [short-circuit-missing:x], args: {x: null}, result: null}\n";
-            let captured = schema
-                .prepare_class(source("functions/identity.yaml", text))
-                .unwrap();
-            let document = &captured.normalized().document;
-            let decoded = function(document, None, "identity", Language::Python).unwrap();
-            let date = Value::Date(Date::new(2024, 2, 29, Precision::Day).unwrap());
-            assert_eq!(
-                Definition::of(&decoded),
-                Definition {
-                    name: "identity".into(),
-                    function: "project.identity".into(),
-                    description: "Return the date.".into(),
-                    params: vec![Parameter {
-                        name: "x".into(),
-                        kind: ValueType::Date,
-                        required: true,
-                        default: None,
-                        accepts_missing: false
-                    }],
-                    returns: ColumnType::Date,
-                    may_return_missing: false,
-                    comparison_decimals: 4,
-                    tests: vec![
-                        Case {
-                            id: "leap-day".into(),
-                            covers: vec!["normal".into(), "boundary".into()],
-                            args: vec![("x".into(), date.clone())],
-                            result: date
-                        },
-                        Case {
-                            id: "missing-x".into(),
-                            covers: vec!["short-circuit-missing:x".into()],
-                            args: vec![("x".into(), Value::Missing)],
-                            result: Value::Missing
-                        },
-                    ],
-                }
-            );
-            let function = Function::admit(Language::Python, decoded).unwrap();
-            let plan = function.invocation_plan().unwrap();
-            assert_eq!(plan.identity().name, "identity");
-            assert_eq!(plan.identity().call, "project.identity");
-            assert_eq!(plan.signature().parameters()[0].host_name, "x");
-            assert_eq!(captured.source().bytes, text.as_bytes());
-        }
-
-        #[test]
-        fn scalar_lowering_keeps_exact_int_float_boolean_nul_and_temporal_defaults() {
-            use yamaa_core::{
-                front_end::v0_5::project::function,
-                project_function::Language,
-                temporal::{Date, DateTime, Precision},
-                value::Value,
-            };
-            let schema =
-                CapturedSchema::admit_root(environment_modules(), 0, "function_definition_class")
-                    .unwrap();
-            let text="function: project.identity\ndescription: Exact defaults.\nparams:\n  - {name: integer, type: int, required: false, default: -9223372036854775808}\n  - {name: float, type: float, required: false, default: -0.0}\n  - {name: boolean, type: bool, required: false, default: false}\n  - {name: text, type: str, required: false, default: \"a\\0b\\u96ea\"}\n  - {name: date, type: date, required: false, default: {date: '2024-02-29'}}\n  - {name: datetime, type: datetime, required: false, default: {datetime: '2024-02-29T08:30'}}\n  - {name: missing, type: str, required: false, default: null, accepts_missing: true}\nreturns: str\ntests: []\n";
-            let captured = schema.prepare_class(source("function.yaml", text)).unwrap();
-            let doc = &captured.normalized().document;
-            let decoded = function(doc, None, "defaults", Language::Python).unwrap();
-            let date = Date::new(2024, 2, 29, Precision::Day).unwrap();
-            assert_eq!(
-                decoded
-                    .params
-                    .iter()
-                    .map(|p| p.default.clone())
-                    .collect::<Vec<_>>(),
-                vec![
-                    Some(Value::Int(i64::MIN)),
-                    Some(Value::float(-0.0)),
-                    Some(Value::Bool(false)),
-                    Some(Value::Str("a\0b\u{96ea}".into())),
-                    Some(Value::Date(date)),
-                    Some(Value::DateTime(
-                        DateTime::new(date, 8, 30, 0, Precision::Second).unwrap()
-                    )),
-                    Some(Value::Missing),
-                ]
-            );
-            let Some(Value::Float(float)) = decoded.params[1].default else {
-                panic!("float type must remain exact");
-            };
-            assert_eq!(float.get().to_bits(), 0x8000_0000_0000_0000);
-        }
-
-        #[test]
-        fn every_invalid_scalar_retains_its_node_without_exposing_a_partial_model() {
-            use yamaa_core::{
-                front_end::v0_5::project::function, project_function::Language,
-                project_function_document::Kind,
-            };
-            let schema =
-                CapturedSchema::admit_root(environment_modules(), 0, "function_definition_class")
-                    .unwrap();
-            let text="function: project.identity\ndescription: Invalid leaves.\nparams: [{name: x, type: int, required: false, default: 9223372036854775808}]\nreturns: date\ntests:\n  - {id: invalid, covers: [normal, boundary], args: {x: -9223372036854775809}, result: {date: '2023-02-29'}}\n  - {id: invalid-time, covers: [boundary], args: {x: 1}, result: {datetime: '2024-01-01T08:30Z'}}\n";
-            let captured = schema.prepare_class(source("function.yaml", text)).unwrap();
-            let doc = &captured.normalized().document;
-            let errors = function(doc, None, "invalid", Language::Python).unwrap_err();
-            assert_eq!(
-                errors
-                    .iter()
-                    .map(|f| (f.path.as_str(), f.kind))
-                    .collect::<Vec<_>>(),
-                vec![
-                    ("params[0].default", Kind::IntegerRange),
-                    ("tests[0].args.x", Kind::IntegerRange),
-                    ("tests[0].result", Kind::InvalidDate),
-                    ("tests[1].result", Kind::InvalidDateTime),
-                ]
-            );
-            assert_eq!(
-                doc.nodes()[errors[0].node],
-                N::Integer("9223372036854775808".into())
-            );
-            assert_eq!(
-                doc.nodes()[errors[1].node],
-                N::Integer("-9223372036854775809".into())
-            );
-            // Each finding keeps the text a diagnostic reports.
-            assert_eq!(
-                errors
-                    .iter()
-                    .map(|f| f.value.as_deref())
-                    .collect::<Vec<_>>(),
-                [
-                    Some("9223372036854775808"),
-                    Some("-9223372036854775809"),
-                    Some("2023-02-29"),
-                    Some("2024-01-01T08:30Z")
-                ]
-            );
-            assert_eq!(captured.source().bytes, text.as_bytes());
-        }
-
-        #[test]
-        fn codelist_source_lowers_directly_with_source_standard_and_unread_external_href() {
-            use crate::support::roots::{
-                Codelist, CodelistType, External, Item, Source as TerminologySource, Standard,
-            };
-            use yamaa_core::{
-                front_end::v0_5::project::codelists, project_terminology::Catalogue, value::Value,
-            };
-            let schema =
-                CapturedSchema::admit_root(project_modules(), 0, "codelist_source_class").unwrap();
-            let text="standard: {name: CDISC/NCI, publishing_set: SDTM, version: '2023-12-15'}\ncodelists:\n  - {id: SEX, name: Sex, items: [{value: F, decode: Female, rank: 1}, {value: M, decode: Male, rank: 2}]}\n  - {id: DICT, name: Dictionary, external: {dictionary: MedDRA, version: '27.0', href: '../unread/dictionary'}}\n";
-            let captured = schema.prepare_class(source("ct.yaml", text)).unwrap();
-            let doc = &captured.normalized().document;
-            let source = codelists(doc, None).unwrap();
-            let expected = TerminologySource {
-                standard: Some(Standard {
-                    name: "CDISC/NCI".into(),
-                    publishing_set: "SDTM".into(),
-                    version: "2023-12-15".into(),
-                }),
-                codelists: vec![
-                    Codelist {
-                        id: "SEX".into(),
-                        name: "Sex".into(),
-                        data_type: CodelistType::Text,
-                        extensible: false,
-                        alias: None,
-                        format_name: None,
-                        items: Some(vec![
-                            Item {
-                                value: Value::Str("F".into()),
-                                decode: Some("Female".into()),
-                                rank: Some(1),
-                                alias: None,
-                                extended: false,
-                            },
-                            Item {
-                                value: Value::Str("M".into()),
-                                decode: Some("Male".into()),
-                                rank: Some(2),
-                                alias: None,
-                                extended: false,
-                            },
-                        ]),
-                        external: None,
-                    },
-                    Codelist {
-                        id: "DICT".into(),
-                        name: "Dictionary".into(),
-                        data_type: CodelistType::Text,
-                        extensible: false,
-                        alias: None,
-                        format_name: None,
-                        items: None,
-                        external: Some(External {
-                            dictionary: "MedDRA".into(),
-                            version: "27.0".into(),
-                            href: Some("../unread/dictionary".into()),
-                        }),
-                    },
-                ],
-            };
-            assert_eq!(TerminologySource::of(&source), expected);
-            assert!(Catalogue::admit(vec![source]).is_ok());
-            assert_eq!(captured.source().bytes, text.as_bytes());
-        }
-
-        #[test]
-        fn source_lowering_retains_every_wide_value_and_rank_failure() {
-            use yamaa_core::{
-                front_end::v0_5::project::codelists, project_function_document::Kind,
-            };
-            let schema =
-                CapturedSchema::admit_root(project_modules(), 0, "codelist_source_class").unwrap();
-            let text="codelists:\n  - {id: BIG, name: Big, data_type: integer, items: [{value: 9223372036854775808, rank: -9223372036854775809}, {value: -9223372036854775809}]}\n";
-            let captured = schema.prepare_class(source("ct.yaml", text)).unwrap();
-            let doc = &captured.normalized().document;
-            let errors = codelists(doc, None).unwrap_err();
-            assert_eq!(
-                errors
-                    .iter()
-                    .map(|finding| (finding.path.as_str(), finding.kind))
-                    .collect::<Vec<_>>(),
-                vec![
-                    ("codelists[0].items[0].value", Kind::IntegerRange),
-                    ("codelists[0].items[0].rank", Kind::IntegerRange),
-                    ("codelists[0].items[1].value", Kind::IntegerRange),
-                ]
-            );
-        }
-
-        #[test]
-        fn environment_lowering_keeps_the_lock_and_inline_or_path_function_order() {
-            use yamaa_core::{
-                ast::FunctionSource, front_end::v0_5::project::environment,
-                project_function::Language,
-            };
-            let mut root =
-                project_root("schema_version: '1.0'\nenvironments: {python: environment.yaml}\n");
-            let schema = environment_schema();
-            let text="schema_version: '1.0'\nlock: ../uv.lock\nfunctions:\n  first: functions/first.yaml\n  second: {function: project.constant, description: Constant, params: [], returns: int, tests: []}\n";
-            let captured = schema
-                .prepare_structural(source("environment.yaml", text))
-                .unwrap();
-            let document = &captured.normalized().document;
-            environment(document, None, Language::Python, &mut root).unwrap();
-            let linked = root.environment(Language::Python).unwrap();
-            assert_eq!(linked.file.as_ref().unwrap().text, "environment.yaml");
-            assert_eq!(linked.lock.as_ref().unwrap().text, "../uv.lock");
-            let functions = root.functions.as_ref().unwrap();
-            assert_eq!(
-                functions
-                    .iter()
-                    .map(|f| f.key.as_ref().unwrap().name.as_str())
-                    .collect::<Vec<_>>(),
-                ["first", "second"]
-            );
-            let FunctionSource::File(path) = &functions[0].source else {
-                panic!("function file")
-            };
-            assert_eq!(path.text, "functions/first.yaml");
-            let FunctionSource::Inline(def) = &functions[1].source else {
-                panic!("inline definition")
-            };
-            assert_eq!(def.name.name, "second");
-            assert_eq!(
-                def.implementation(Language::Python).unwrap().callable.text,
-                "project.constant"
-            );
-            assert_eq!(def.comparison_decimals, 4);
-            // The environment file's paths keep its own spelling.
-            assert_eq!(
-                root.paths.render(linked.lock.as_ref().unwrap().meta.path),
-                "lock"
-            );
-            assert_eq!(
-                root.paths.render(functions[1].meta.path),
-                "functions.second"
-            );
-            assert_eq!(captured.source().bytes, text.as_bytes());
-        }
-        /// A project file, lowered with the shipped project schema.
-        fn project_root(text: &str) -> yamaa_core::ast::Project {
-            let captured = project_schema()
-                .prepare_structural(source("project.yaml", text))
-                .unwrap();
-            yamaa_core::front_end::v0_5::project::project(&captured.normalized().document, None)
-                .unwrap()
-        }
-
-        #[test]
-        fn project_lowering_keeps_environment_links_codelist_order_and_submission_metadata() {
-            use yamaa_core::{
-                ast::CodelistSource, front_end::v0_5::project::project, project_function::Language,
-            };
-            let schema = project_schema();
-            let text="schema_version: '1.0'\nenvironments: {python: python/environment.yaml, r: r/environment.yaml}\ncodelists:\n  - ../terminology.yaml\n  - standard: {name: CDISC/NCI, publishing_set: SDTM, version: '2024-03-29'}\n    codelists: [{id: EXTERNAL, name: External, external: {dictionary: Dict, version: '1', href: '../not-read.xml'}}]\nstudy: {id: Study01, name: Study, description: Study, protocol_name: Protocol}\nadam: {standard: {name: ADaMIG, version: '1.3', status: Final}, specs: [adam/adsl.yaml], define: ../data/adam/define.xml, documents: [{id: adrg, kind: supplemental, link: 'docs/adrg.pdf', title: Guide}]}\n";
-            let captured = schema
-                .prepare_structural(source("project.yaml", text))
-                .unwrap();
-            let document = &captured.normalized().document;
-            let result = project(document, None).unwrap();
-            let file = |language| {
-                result
-                    .environment(language)
-                    .and_then(|environment| environment.file.as_ref())
-                    .map(|file| file.text.as_str())
-            };
-            assert_eq!(file(Language::Python), Some("python/environment.yaml"));
-            assert_eq!(file(Language::R), Some("r/environment.yaml"));
-            assert_eq!(result.codelists.len(), 2);
-            let CodelistSource::File(path) = &result.codelists[0].source else {
-                panic!("codelist file")
-            };
-            assert_eq!(path.text, "../terminology.yaml");
-            let CodelistSource::Inline(ct) = &result.codelists[1].source else {
-                panic!("inline source")
-            };
-            assert_eq!(ct.standard.as_ref().unwrap().version.text, "2024-03-29");
-            assert_eq!(
-                ct.codelists[0]
-                    .external
-                    .as_ref()
-                    .unwrap()
-                    .href
-                    .as_ref()
-                    .unwrap()
-                    .text,
-                "../not-read.xml"
-            );
-            assert_eq!(
-                result
-                    .codelists
-                    .iter()
-                    .map(|codelist| result.paths.render(codelist.meta.path))
-                    .collect::<Vec<_>>(),
-                ["codelists[0]", "codelists[1]"]
-            );
-            // The study and sections lower beside, for submission composition.
-            let declarations = result.submission.as_ref().unwrap();
-            assert_eq!(declarations.study.as_ref().unwrap().id.name, "Study01");
-            assert_eq!(declarations.sections[0].specs[0].text, "adam/adsl.yaml");
-            assert_eq!(captured.source().bytes, text.as_bytes());
-        }
-
-        #[test]
-        fn environment_and_project_lowering_preserve_absent_versus_present_empty_sources() {
-            use yamaa_core::{
-                front_end::v0_5::project::{environment, project},
-                project_function::Language,
-            };
-            let schema = environment_schema();
-            for (text, present) in [
-                ("schema_version: '1.0'\n", false),
-                ("schema_version: '1.0'\nfunctions: {}\n", true),
-            ] {
-                let captured = schema
-                    .prepare_structural(source("environment.yaml", text))
-                    .unwrap();
-                let document = &captured.normalized().document;
-                let mut root = project_root(
-                    "schema_version: '1.0'\nenvironments: {python: environment.yaml}\n",
-                );
-                environment(document, None, Language::Python, &mut root).unwrap();
-                assert_eq!(root.functions.is_some(), present);
-                assert!(root.functions.iter().flatten().next().is_none());
-                assert!(root.environment(Language::Python).unwrap().lock.is_none());
-            }
-            let schema = project_schema();
-            for text in [
-                "schema_version: '1.0'\n",
-                "schema_version: '1.0'\nenvironments: {}\ncodelists: []\n",
-            ] {
-                let captured = schema
-                    .prepare_structural(source("project.yaml", text))
-                    .unwrap();
-                let document = &captured.normalized().document;
-                let result = project(document, None).unwrap();
-                assert!(result.environments.is_empty());
-                assert!(result.codelists.is_empty());
-                assert!(result.functions.is_none());
-            }
-        }
-
-        #[test]
-        fn environment_and_project_lowering_collect_every_independent_inline_scalar_failure() {
-            use yamaa_core::json::Value as JsonValue;
-            use yamaa_core::{
-                front_end::v0_5::project as lower, project_function::Language,
-                project_function_document::Kind,
-            };
-            let wide =
-                || JsonValue::Number("9223372036854775808".parse().expect("canonical integer"));
-            let text="schema_version: '1.0'\nfunctions:\n  first: {function: project.a, description: A, params: [], returns: int, tests: [{id: wide, covers: [normal], args: {}, result: 9223372036854775808}]}\n  second: {function: project.b, description: B, params: [], returns: date, tests: [{id: bad-date, covers: [normal], args: {}, result: {date: '2024-02-30'}}]}\n";
-            let environment = environment_schema()
-                .prepare_structural(source("environment.yaml", text))
-                .unwrap();
-            let text="schema_version: '1.0'\ncodelists: [{codelists: [{id: WIDE, name: Wide, data_type: integer, items: [{value: 9223372036854775808, rank: 9223372036854775808}]}]}]\n";
-            let project = project_schema()
-                .prepare_structural(source("project.yaml", text))
-                .unwrap();
-            let environment_document = &environment.normalized().document;
-            let project_document_arena = &project.normalized().document;
-            for (document, findings, expected, values) in [
-                (
-                    environment_document,
-                    lower::environment(
-                        environment_document,
-                        None,
-                        Language::Python,
-                        &mut project_root(
-                            "schema_version: '1.0'\nenvironments: {python: environment.yaml}\n",
-                        ),
-                    )
-                    .unwrap_err(),
-                    vec![
-                        ("functions.first.tests[0].result", Kind::IntegerRange),
-                        ("functions.second.tests[0].result", Kind::InvalidDate),
-                    ],
-                    vec![wide(), JsonValue::String("2024-02-30".into())],
-                ),
-                (
-                    project_document_arena,
-                    lower::project(project_document_arena, None).unwrap_err(),
-                    vec![
-                        (
-                            "codelists[0].codelists[0].items[0].value",
-                            Kind::IntegerRange,
-                        ),
-                        (
-                            "codelists[0].codelists[0].items[0].rank",
-                            Kind::IntegerRange,
-                        ),
-                    ],
-                    vec![wide(), wide()],
-                ),
-            ] {
-                assert_eq!(
-                    findings
-                        .iter()
-                        .map(|f| (f.path.as_str(), f.kind))
-                        .collect::<Vec<_>>(),
-                    expected
-                );
-                assert!(findings.iter().all(|f| f.node < document.nodes().len()));
-                let projected =
-                    yamaa_core::project_environment_diagnostics::scalar_diagnostics(&findings)
-                        .unwrap();
-                assert_eq!(projected.len(), expected.len());
-                for (finding, value) in projected.iter().zip(values) {
-                    assert_eq!(
-                        (
-                            finding.definition().phase,
-                            finding.definition().condition,
-                            finding.definition().rule
-                        ),
-                        ("validation", "project_environment_invalid", Some("FUNC-2"))
-                    );
-                    assert_eq!(finding.context["value"], value);
-                }
-            }
-        }
-    }
     mod validator_r_declarations {
         //! Original R authoring declarations remain typed witnesses when R is absent.
         //! This proves metadata admission only. The mandatory installed R replay owns
@@ -1593,8 +600,9 @@ mod declaration {
         use crate::support::Edit as _;
         use std::{convert::Infallible, path::PathBuf};
         use yamaa_adapters::{
+            document::Closures,
             project_source::{self, Kind},
-            shipped_schema, specification_check,
+            specification_check,
             specification_run::PreparedRun,
             specification_source::Source,
         };
@@ -1687,7 +695,7 @@ mod declaration {
                 held: vec![],
             };
             let environment = project_source::prepare(
-                shipped_schema::capture_project().unwrap(),
+                Closures::shipped().unwrap(),
                 Source {
                     identity: port.project.clone(),
                     bytes: std::fs::read(case.join("project.yaml")).unwrap(),
@@ -1697,12 +705,10 @@ mod declaration {
             )
             .unwrap()
             .into_owned();
-            // The project's one function file and its R lock; no environment
-            // file exists in 1.0.
+            // The project's one function file and its R lock.
             assert_eq!((port.functions, port.locks), (1, 1));
             assert_eq!(environment.environment().host(), Some(Language::R));
             assert_eq!(environment.environment().language(), Some(Language::R));
-            assert!(environment.environment_file().is_none());
             let document = crate::support::specification_run::prepare(
                 &std::fs::read(case.join("spec.yaml")).unwrap(),
             );

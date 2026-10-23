@@ -51,7 +51,7 @@ fn shared_metadata_decoder_fake_retains_source_and_document_and_moves_nonclone_e
     let log = EventLog::default();
     let mut decoder = ScriptedMetadataDecoder::new(log.clone());
     let source = metadata::Source {
-        identity: "environment.yaml".into(),
+        identity: "project.yaml".into(),
         bytes: b"{}".to_vec(),
     };
     let bytes = source.bytes.as_ptr();
@@ -59,11 +59,11 @@ fn shared_metadata_decoder_fake_retains_source_and_document_and_moves_nonclone_e
     let nodes = document.nodes().as_ptr();
     decoder.steps.push_back(MetadataDecodeStep {
         source: source.clone(),
-        target: metadata::DecodeTarget::Environment,
+        target: metadata::DecodeTarget::Project,
         outcome: Ok(document),
     });
     let retained = decoder
-        .admitted(source, metadata::DecodeTarget::Environment)
+        .admitted(source, metadata::DecodeTarget::Project)
         .unwrap();
     assert_eq!(retained.source.bytes.as_ptr(), bytes);
     assert_eq!(retained.document.nodes().as_ptr(), nodes);
@@ -71,11 +71,11 @@ fn shared_metadata_decoder_fake_retains_source_and_document_and_moves_nonclone_e
     let address = error.0.as_ptr();
     decoder.steps.push_back(MetadataDecodeStep {
         source: retained.source.clone(),
-        target: metadata::DecodeTarget::Function,
+        target: metadata::DecodeTarget::FunctionFile,
         outcome: Err(error),
     });
     let error = decoder
-        .admitted(retained.source, metadata::DecodeTarget::Function)
+        .admitted(retained.source, metadata::DecodeTarget::FunctionFile)
         .unwrap_err();
     assert_eq!(error.0.as_ptr(), address);
     assert!(decoder.steps.is_empty());

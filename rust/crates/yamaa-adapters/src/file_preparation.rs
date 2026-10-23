@@ -210,10 +210,10 @@ impl FileSpecification {
     }
     /// Verify every held metadata snapshot at run start, before activation or
     /// any study read: the entry, its layers, dictionaries and linked
-    /// producing specifications and, with a project, the project file, the
-    /// environment file it links, and the lock, function definitions and
-    /// codelists they declare. A changed or missing file refuses the run
-    /// naming its declaration; see [`crate::file_application::verify_held`].
+    /// producing specifications and, with a project, the project file and
+    /// the lock, function files and codelist files it declares. A changed or
+    /// missing file refuses the run naming its declaration; see
+    /// [`crate::file_application::verify_held`].
     pub fn verify_metadata(&self) -> Result<(), crate::file_application::Failure> {
         use crate::changed_metadata as changed;
         let captured = self.run.captured_environment();
@@ -232,7 +232,6 @@ impl FileSpecification {
                     host: self.run.environment().host(),
                     root,
                     project,
-                    environment_file: captured.environment_file(),
                     lock: captured.lock(),
                     captures: captured.captures(),
                 }),

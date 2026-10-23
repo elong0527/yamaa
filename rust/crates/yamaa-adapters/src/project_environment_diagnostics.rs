@@ -8,17 +8,15 @@ use crate::{
 };
 use yamaa_core::{
     application_issue::Fault,
-    ast::Surface,
     diagnostic::Diagnostic,
-    language::{self, FileType, HeaderFault, LanguageVersion, ReferenceFault},
+    language::{self, FileType, HeaderFault, ReferenceFault},
     project_environment_diagnostics::{self as core, projection},
-    schema::DocumentNode as N,
 };
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Error {
     ResourceLimit(crate::resource_diagnostics::Refusal),
-    /// A file a 1.0 project names failed to be read for a host reason no
+    /// A file a project names failed to be read for a host reason no
     /// condition classifies: the whole preparation is refused with the opaque
     /// resource refusal of this code, as any file a run reads is (FILE-11).
     Resource(Fault),
@@ -36,70 +34,31 @@ fn projection_error(error: projection::Error) -> Error {
         projection::Error::InvalidOrigin => Error::InvalidOrigin,
     }
 }
-/// The surface a held project file is written in: its own header says
-/// (SCHEMA-2).
-fn surface(document: &CapturedDocument) -> Surface {
-    let document = &document.normalized().document;
-    if !language::declares_header(document) {
-        return Surface::V0_5;
-    }
-    let minor = document
-        .field(document.root(), "yamaa")
-        .and_then(|node| match &document.nodes()[node] {
-            N::Text(text) => LanguageVersion::parse(text),
-            _ => None,
-        })
-        .map_or(0, LanguageVersion::minor);
-    Surface::V1 { minor }
-}
 /// Report failed inline scalars of the held project file, preserving full
 /// paths.
 pub fn scalar_root(
     root_document: &CapturedDocument,
     findings: &[yamaa_core::project_function_document::Finding],
 ) -> Result<Vec<Diagnostic>, Error> {
-    let report =
-        projection::admit_root_scalars(identity(root_document), surface(root_document), findings)
-            .map_err(projection_error)?;
+    let report = projection::admit_root_scalars(identity(root_document), findings)
+        .map_err(projection_error)?;
     report.diagnostics().map_err(projection_error)
 }
 /// The projection origin of one captured dependency. A lock carries no document.
-fn origin(origin: &Origin) -> Option<projection::Origin<'_>> {
+fn origin(origin: &Origin) -> Option<projection::Origin> {
     match origin {
-        Origin::Environment(language) => Some(projection::Origin::Environment(language.key())),
-        Origin::Function(name) => Some(projection::Origin::Function(name)),
         Origin::FunctionFile(index) => Some(projection::Origin::FunctionFile(*index)),
         Origin::Codelist(index) => Some(projection::Origin::Codelist(*index)),
         Origin::Lock => None,
     }
 }
-fn versioned<E>(rejected: &RejectedEnvironment<E>) -> bool {
-    matches!(rejected.project.header.surface, Surface::V1 { .. })
-}
-/// In 0.5, codelist sources share the project schema, and the environment
-/// file and its function files share the environment schema. In 1.0 each
-/// listed file is admitted against the closure of its own type.
-fn same_schema<E>(
-    rejected: &RejectedEnvironment<E>,
-    origin: &Origin,
-    schema: &CapturedSchema,
-) -> bool {
+/// Each listed file is admitted against the closure of its own type.
+fn same_schema(origin: &Origin, schema: &CapturedSchema) -> bool {
     let root_class =
         |file_type: FileType| schema.structure().root_class().name == file_type.root_class();
     match origin {
-        Origin::Codelist(_) if versioned(rejected) => root_class(FileType::Codelists),
-        Origin::FunctionFile(_) => versioned(rejected) && root_class(FileType::Function),
-        Origin::Codelist(_) => std::ptr::eq(schema, rejected.root.schema().as_ref()),
-        Origin::Function(_) => rejected
-            .environment_file
-            .as_ref()
-            .is_some_and(|environment| std::ptr::eq(schema, environment.schema().as_ref())),
-        // A failed environment file has no retained sibling to compare, so its
-        // captured schema must at least be an environment root.
-        Origin::Environment(_) => {
-            schema.structure().root_class().name == "environment_class"
-                && rejected.environment_file.is_none()
-        }
+        Origin::Codelist(_) => root_class(FileType::Codelists),
+        Origin::FunctionFile(_) => root_class(FileType::Function),
         Origin::Lock => false,
     }
 }
@@ -110,7 +69,7 @@ pub fn scalar_sources<E>(rejected: &RejectedEnvironment<E>) -> Result<Vec<Diagno
         let CaptureFailure::Scalar { document, .. } = &source.error else {
             continue;
         };
-        if !same_schema(rejected, &source.origin, document.schema()) {
+        if !same_schema(&source.origin, document.schema()) {
             return Err(Error::InvalidOrigin);
         }
     }
@@ -168,7 +127,7 @@ pub fn schema_sources<E>(rejected: &RejectedEnvironment<E>) -> Result<Vec<Diagno
         let CaptureFailure::Structural(SourceError::Findings(captured)) = &source.error else {
             continue;
         };
-        if !same_schema(rejected, &source.origin, captured.schema()) {
+        if !same_schema(&source.origin, captured.schema()) {
             return Err(Error::InvalidOrigin);
         }
         let declaration = metadata_path(&source.origin, rejected)?;
@@ -181,18 +140,14 @@ pub fn schema_sources<E>(rejected: &RejectedEnvironment<E>) -> Result<Vec<Diagno
     }
     Ok(issues)
 }
-/// The field that declares a captured file: in 0.5 the lock and function
-/// files are declared by the environment file, and in 1.0 every file by the
-/// project file (D8). Only a host language reads a lock.
+/// The field of the project file that declares a captured file (D8). Only a
+/// host language reads a lock.
 fn metadata_path<E>(origin: &Origin, rejected: &RejectedEnvironment<E>) -> Result<String, Error> {
     Ok(match origin {
-        Origin::Environment(language) => format!("environments.{}", language.key()),
-        Origin::Lock if versioned(rejected) => {
+        Origin::Lock => {
             let host = rejected.host.ok_or(Error::InvalidOrigin)?;
             format!("environments.{}.lock", host.key())
         }
-        Origin::Lock => "lock".into(),
-        Origin::Function(name) => format!("functions.{name}"),
         Origin::FunctionFile(index) => format!("functions[{index}]"),
         Origin::Codelist(index) => format!("codelists[{index}]"),
     })
@@ -251,49 +206,6 @@ fn source_limit(error: &SourceError) -> Option<yamaa_core::limits::LimitExceeded
         actual: None,
     })
 }
-fn read_issue(
-    error: &crate::file_resources::Error,
-    entry: &str,
-    written: &str,
-    declaration: &str,
-) -> Result<Diagnostic, Error> {
-    use crate::file_resources::Error as E;
-    let cause = match error {
-        E::Host(_) => "host_resource_failure",
-        E::Missing => "missing",
-        E::Unreadable => "unreadable",
-        E::NotRegularFile => "not_regular_file",
-        E::InvalidRoot => "invalid_root",
-        E::InvalidBase => "invalid_base",
-        E::InvalidPath | E::WrittenForm(_) => "invalid_path",
-        E::OutsideRoots => "outside_roots",
-        E::Symlink => "symbolic_link",
-        E::Changed => "content_changed",
-        E::Limit(bound) => return Err(resource_limit(*bound, declaration)),
-    };
-    Ok(environment_issue(cause, entry, written, declaration))
-}
-/// A 0.5 project's file that cannot be read for `cause`: the project
-/// environment is invalid at the field that names it.
-fn environment_issue(cause: &str, entry: &str, written: &str, declaration: &str) -> Diagnostic {
-    let mut diagnostic = Diagnostic {
-        code: yamaa_core::diagnostic::ConditionCode::ProjectEnvironmentInvalid,
-        spec_paths: vec![declaration.into()],
-        context: Default::default(),
-        source_span: None,
-        operand_route: None,
-    };
-    for (key, value) in [
-        ("entry", entry),
-        ("path", written),
-        ("environment_path", declaration),
-        ("cause", cause),
-    ] {
-        diagnostic.context.insert(key.into(), value.into());
-    }
-    diagnostic
-}
-
 fn decode_issues(
     error: &SourceError,
     entry: &str,
@@ -337,10 +249,9 @@ pub(crate) fn root_limit(error: &SourceError) -> Option<Error> {
 /// Native metadata failures retain the authored dependency path and declaration.
 /// A fixed resource boundary refuses the whole projection beside its original owner.
 ///
-/// In 0.5 a file that cannot be read fails as the project environment does.
-/// A file a 1.0 project names fails as any declared file a run reads (FUNC-2,
-/// FILE-11), and a listed file whose header the engine does not read is
-/// refused at the field that lists it (SCHEMA-2).
+/// A file a project names that cannot be read fails as any declared file a
+/// run reads (FUNC-2, FILE-11), and a listed file whose header the engine
+/// does not read is refused at the field that lists it (SCHEMA-2).
 pub(crate) fn capture_sources(
     rejected: &RejectedEnvironment<crate::file_resources::Error>,
 ) -> Result<Vec<Diagnostic>, Error> {
@@ -355,13 +266,8 @@ pub(crate) fn capture_sources(
         let entry = &rejected.root.source().identity;
         let declaration = metadata_path(&source.origin, rejected)?;
         match &source.error {
-            CaptureFailure::Port(error) | CaptureFailure::Interrupted(error)
-                if versioned(rejected) =>
-            {
-                rows.push(declared_read_issue(&source.written, error, &declaration)?);
-            }
             CaptureFailure::Port(error) | CaptureFailure::Interrupted(error) => {
-                rows.push(read_issue(error, entry, &source.written, &declaration)?);
+                rows.push(declared_read_issue(&source.written, error, &declaration)?);
             }
             CaptureFailure::Structural(SourceError::Reference(refused)) => {
                 rows.push(reference_issue(rejected, &declaration, refused)?);
@@ -371,27 +277,21 @@ pub(crate) fn capture_sources(
             }
             CaptureFailure::Limit(bound) => return Err(resource_limit(*bound, &declaration)),
             // A lock that is no packaging lock fails as the project's function
-            // files do in 1.0 (FUNC-3), and as an invalid environment in 0.5.
-            CaptureFailure::Lock if versioned(rejected) => {
+            // files do (FUNC-3).
+            CaptureFailure::Lock => {
                 rows.push(core::invalid_packaging_lock(
                     rejected.host.ok_or(Error::InvalidOrigin)?,
                     entry,
                     &source.written,
                 ));
             }
-            CaptureFailure::Lock => rows.push(environment_issue(
-                "invalid_packaging_lock",
-                entry,
-                &source.written,
-                &declaration,
-            )),
             CaptureFailure::Scalar { .. } => unreachable!("handled scalar finding"),
         }
     }
     Ok(rows)
 }
 
-/// A file a 1.0 project names, at `declaration`, that cannot be read: one of
+/// A file a project names, at `declaration`, that cannot be read: one of
 /// FILE-11's conditions at that field with the path as written, as a schema
 /// link or a changed held file reports it; a bound keeps its resource refusal,
 /// and any other host failure refuses the whole preparation with the opaque
@@ -413,18 +313,15 @@ fn declared_read_issue(
     }
 }
 
-/// A file a 1.0 project lists at `declaration` whose header declares a
-/// version the engine does not read, or another type: refused at that field,
-/// naming the file as `source`, as the project's referencing field reports the
-/// file it names (SCHEMA-2).
+/// A file a project lists at `declaration` whose header declares a version
+/// the engine does not read, or another type: refused at that field, naming
+/// the file as `source`, as the project's referencing field reports the file
+/// it names (SCHEMA-2).
 fn reference_issue<E>(
     rejected: &RejectedEnvironment<E>,
     declaration: &str,
     refused: &RefusedHeader,
 ) -> Result<Diagnostic, Error> {
-    if !versioned(rejected) {
-        return Err(Error::InvalidOrigin);
-    }
     let reference = language::references(&rejected.root.raw().document, FileType::Project)
         .into_iter()
         .find(|reference| reference.field == declaration)
@@ -449,9 +346,7 @@ pub fn admission<E>(rejected: &RejectedEnvironment<E>) -> Result<Vec<Diagnostic>
         return Ok(vec![]);
     };
     for capture in &rejected.captures {
-        if matches!(capture.origin, Origin::Lock | Origin::Environment(_))
-            || !same_schema(rejected, &capture.origin, capture.document.schema())
-        {
+        if !same_schema(&capture.origin, capture.document.schema()) {
             return Err(Error::InvalidOrigin);
         }
     }
@@ -465,7 +360,6 @@ pub fn admission<E>(rejected: &RejectedEnvironment<E>) -> Result<Vec<Diagnostic>
         projection::Admission {
             project: &rejected.project,
             root: identity(&rejected.root),
-            environment: rejected.environment_file.as_ref().map(identity),
             draft: &rejected.draft,
             function_origins: &rejected.origins.functions,
             function_files: &rejected.origins.function_files,
@@ -520,10 +414,11 @@ mod tests {
     #[test]
     fn retained_structural_and_preparation_limits_refuse_the_complete_metadata_projection() {
         let project_source::Failure::Rejected(mut rejected) = project_source::prepare(
-            crate::shipped_schema::capture_project().unwrap(),
+            crate::document::Closures::shipped().unwrap(),
             Source {
                 identity: "held/project.yaml".into(),
-                bytes: b"schema_version: '1.0'\ncodelists: [missing.yaml, ct.yaml]\n".to_vec(),
+                bytes: b"yamaa: '1.0'\ntype: project\ncodelists: [missing.yaml, ct.yaml]\n"
+                    .to_vec(),
             },
             Language::Python,
             &mut Missing,

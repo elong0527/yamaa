@@ -33,7 +33,7 @@ pub fn prepare(
         &entry,
         &environment,
         host,
-        crate::shipped_schema::capture_project().map_err(Error::Schema)?,
+        crate::document::Closures::shipped().map_err(Error::Schema)?,
     )
     .map_err(Error::Project)
 }

@@ -5,7 +5,7 @@ mod file {
     mod diagnostic_origins {
         //! Native index paths resolve only through the exact held composed member IDs.
         use std::fs;
-        use yamaa_adapters::{file_resources::Resources, file_workflow, shipped_schema};
+        use yamaa_adapters::{file_resources::Resources, file_workflow};
         use yamaa_core::project_function::Language;
 
         struct Study(crate::support::Scratch);
@@ -44,7 +44,7 @@ mod file {
                 "spec.yaml",
                 None,
                 Some(Language::Python),
-                shipped_schema::capture_project().unwrap(),
+                yamaa_adapters::document::Closures::shipped().unwrap(),
             )
             .unwrap();
             let prepared = &owner;
@@ -1017,7 +1017,6 @@ mod file {
             host_resources::{Failure, MemoryResolver, Operation, Reply, Request, Resolver},
             project_application,
             resolved_artifact::model::{Location, ResourceRole},
-            shipped_schema,
         };
         use yamaa_core::{
             project_function::Language, specification::PrepareError, value::ColumnType,
@@ -1055,7 +1054,7 @@ mod file {
                 "root.yaml",
                 None,
                 Some(Language::Python),
-                shipped_schema::capture_project().unwrap(),
+                yamaa_adapters::document::Closures::shipped().unwrap(),
             )
         }
         fn plain(

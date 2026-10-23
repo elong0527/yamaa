@@ -21,14 +21,6 @@ unreachable:
     (LAYER-10, FILE-4); only Windows hosts have shares, which no portable case
     can stage, so the adapters' resolver tests reach it
     (rust/crates/yamaa-adapters/tests/host_resources.rs)
-  project_environment_invalid: >-
-    only the 0.5 path raises it, until P2-13 removes that path: a 1.0 project
-    reports a listed file it cannot admit with function_file_invalid or
-    FILE-11's conditions (FUNC-2, FUNC-3, #3030 D107)
-  project_environment_missing: >-
-    only the 0.5 path raises it, until P2-13 removes that path: a 1.0 host
-    without an environments entry calls its functions without a lock
-    (PROJECT-2), the cause #3030 D188 kept
   publication_failed: >-
     only a host file system failure while a save stages or replaces a file
     raises it (OUTPUT-8): a target the walk cannot reach fails with FILE-7's

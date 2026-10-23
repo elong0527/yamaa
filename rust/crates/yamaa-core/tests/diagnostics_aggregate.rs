@@ -653,7 +653,7 @@ mod diagnostics {
                 let function = support::function("id");
                 let definitions = [DefinitionSource {
                     function: &function,
-                    path: "functions.id",
+                    path: "functions[0]",
                 }];
                 let failure = [BindingFailure {
                     function: 0,
@@ -673,7 +673,7 @@ mod diagnostics {
                 let definition = function.definition();
                 let definitions = [DefinitionSource {
                     function: &function,
-                    path: "functions.id",
+                    path: "functions[0]",
                 }];
                 let class = "Exception".repeat(2048);
                 let message = "exact\0\u{e9}\u{1f642}".repeat(2048);
@@ -750,8 +750,8 @@ mod diagnostics {
                         projection::binding_diagnostics(&definitions, &binding, &[Some(host)])
                             .unwrap(),
                         [Diagnostic {
-                            code: ConditionCode::ProjectEnvironmentInvalid,
-                            spec_path: "functions.id.function".into(),
+                            code: ConditionCode::FunctionFileInvalid,
+                            spec_path: "functions[0].implementations.python".into(),
                             context: diagnostic.context.clone(),
                         }]
                     );
@@ -760,7 +760,7 @@ mod diagnostics {
                             .unwrap(),
                         [Diagnostic {
                             code: ConditionCode::FunctionConformanceFailed,
-                            spec_path: "functions.id.tests[0]".into(),
+                            spec_path: "functions[0].tests[0]".into(),
                             context: [
                                 ("function", Fact::Text("id")),
                                 ("call", Fact::Text("project.id")),
@@ -802,7 +802,7 @@ mod diagnostics {
                 let function = support::function("id");
                 let definitions = [DefinitionSource {
                     function: &function,
-                    path: "functions.id",
+                    path: "functions[0]",
                 }];
                 let actual = Value::Int(8);
                 let expected = &function.definition().tests[0].result;
@@ -846,7 +846,7 @@ mod diagnostics {
                 };
                 let definitions = [DefinitionSource {
                     function: &function,
-                    path: "functions.id",
+                    path: "functions[0]",
                 }];
                 let failures: [TestFailure<()>; 1] = [TestFailure::Invocation {
                     function: 0,

@@ -55,7 +55,6 @@ on:
       - 'rust/crates/yamaa-core/src/schema_capture.rs'
       - 'rust/crates/yamaa-core/src/specification/**'
       - 'rust/crates/yamaa-core/src/specification_run.rs'
-      - 'rust/crates/yamaa-core/src/structural_preparation.rs'
       - 'rust/crates/yamaa-core/src/table.rs'
       - 'rust/crates/yamaa-core/src/temporal.rs'
       - 'rust/crates/yamaa-core/src/typed_csv.rs'

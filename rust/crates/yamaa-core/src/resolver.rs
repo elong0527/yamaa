@@ -26,8 +26,7 @@ pub enum File {
     /// A file a layer names for its content: a mapping dictionary, or the
     /// producer a `schema` link names.
     Resource,
-    /// A file a project names: its environment file, lock, function or
-    /// codelist file.
+    /// A file a project names: its lock, a function file or a codelist file.
     Project(crate::project_preparation::Kind),
 }
 

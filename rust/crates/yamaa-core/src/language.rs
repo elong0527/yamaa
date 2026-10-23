@@ -6,9 +6,7 @@
 //! the 1.0 closure. The engine reads language version 1.0
 //! ([`LANGUAGE_VERSION`], #3030 D76). A root that declares `schema_version`
 //! is written in language version 0.5, which the engine does not read: every
-//! reader refuses it as `unsupported_language_version`, naming 0.5. Only a
-//! 0.5 project file is still read, by the 0.5 project route, until that route
-//! goes (P2-13d).
+//! reader refuses it as `unsupported_language_version`, naming 0.5.
 use crate::diagnostic::{ConditionCode, Context, Diagnostic};
 use crate::json::Value as JsonValue;
 use crate::schema::{Document, DocumentNode as N, SchemaContext as C, SchemaDiagnostic};
@@ -291,6 +289,26 @@ impl HeaderFault {
 /// The language a document that declares `schema_version` is written in: the
 /// language at the `yamaa-v0.5.0` tag, which declares no type.
 pub const LEGACY_LANGUAGE_VERSION: &str = "0.5";
+
+/// The refusal of a document that declares `schema_version`, at its own
+/// `schema_version`, by an engine whose newest version is `reads`: the
+/// finding of [`HeaderFault::Legacy`], for a reader that holds no schema
+/// closure, such as the lint (SCHEMA-2).
+pub fn legacy_refusal(reads: LanguageVersion) -> Diagnostic {
+    let mut context = Context::new();
+    version_context(
+        &mut context,
+        LEGACY_LANGUAGE_VERSION,
+        &language_versions(Some(reads)),
+    );
+    Diagnostic {
+        code: ConditionCode::HeaderLanguageVersion,
+        spec_paths: vec!["schema_version".into()],
+        context,
+        source_span: None,
+        operand_route: None,
+    }
+}
 
 /// The type a document's root declares in `type`, when that is text naming
 /// one of the four file types.

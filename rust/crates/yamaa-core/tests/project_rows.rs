@@ -149,14 +149,13 @@ mod project {
             ast,
             project_environment::{
                 validate, Draft, Environment, ExecutionEnvironment, Finding, LockKind,
-                LockReference, Undeclared,
+                LockReference,
             },
             project_function::Language,
             value::{ColumnType, Value},
         };
         fn draft() -> Draft {
             Draft {
-                surface: yamaa_core::ast::Surface::V0_5,
                 language: None,
                 lock: None,
                 functions: None,
@@ -186,44 +185,38 @@ mod project {
             for host in [Language::Python, Language::R] {
                 let admitted = Environment::admit(Some(host), draft()).unwrap();
                 assert_eq!(admitted.draft(), &draft());
-                // The supplied project names no environment file for this host.
                 let execution = admitted.into_execution();
                 assert_eq!(execution.language(), None);
-                assert_eq!(execution.undeclared(), Some(Undeclared::Language(host)));
+                assert!(!execution.functions_present() && execution.lock().is_none());
                 // A build without any project has no environment to name.
                 let plain = ExecutionEnvironment::without_project(Some(host));
                 assert_eq!(plain.host(), Some(host));
                 assert_eq!(plain.language(), None);
-                assert_eq!(plain.undeclared(), None);
                 assert!(!plain.functions_present() && plain.lock().is_none());
                 assert!(plain.catalogue().sources().is_empty());
             }
-            // An engine that claims no host language reads no environment file,
-            // so a 0.5 project declares no function for it (#3030 section 2.10).
+            // An engine that claims no host language reads no lock (#3030
+            // section 2.10).
             let neutral = Environment::admit(None, draft()).unwrap().into_execution();
             assert_eq!(neutral.host(), None);
             assert_eq!(neutral.language(), None);
-            assert_eq!(neutral.undeclared(), Some(Undeclared::NoHostLanguage));
-            let mut d = draft();
-            d.surface = yamaa_core::ast::Surface::V1 { minor: 0 };
-            let neutral = Environment::admit(None, d).unwrap().into_execution();
-            assert_eq!(neutral.undeclared(), None);
+            assert!(neutral.lock().is_none());
         }
         #[test]
         fn present_functions_even_empty_need_no_lock() {
             let mut d = draft();
             d.language = Some(Language::Python);
             d.functions = Some(vec![]);
-            assert!(validate(Some(Language::Python), &d).is_empty());
+            assert!(validate(&d).is_empty());
             d.functions = Some(vec![definition()]);
             let execution = Environment::admit(Some(Language::Python), d)
                 .unwrap()
                 .into_execution();
-            assert_eq!(execution.undeclared(), None);
+            assert!(execution.functions_present());
             assert!(execution.lock().is_none());
         }
         #[test]
-        fn captured_lock_kind_must_match_the_linked_environment_language() {
+        fn captured_lock_kind_must_match_the_host_language() {
             for (language, kind, actual) in [
                 (Language::Python, LockKind::Uv, LockKind::Renv),
                 (Language::R, LockKind::Renv, LockKind::Uv),
@@ -235,11 +228,11 @@ mod project {
                     kind: actual,
                 });
                 assert_eq!(
-                    validate(Some(language), &d),
+                    validate(&d),
                     vec![Finding::LockKindMismatch { language, actual }]
                 );
                 d.lock.as_mut().unwrap().kind = kind;
-                assert!(validate(Some(language), &d).is_empty());
+                assert!(validate(&d).is_empty());
             }
         }
         #[test]
@@ -248,7 +241,7 @@ mod project {
             d.language = Some(Language::Python);
             d.functions = Some(vec![definition(), definition()]);
             assert_eq!(
-                validate(Some(Language::Python), &d),
+                validate(&d),
                 vec![Finding::DuplicateFunction { function: 1 }]
             );
             d.lock = Some(LockReference {
@@ -268,7 +261,6 @@ mod project {
                 .into_execution();
             assert_eq!(empty.host(), Some(Language::R));
             assert_eq!(empty.language(), None);
-            assert_eq!(empty.undeclared(), Some(Undeclared::Language(Language::R)));
             assert!(!empty.functions_present());
             assert!(empty.functions().is_empty());
             assert!(empty.lock().is_none());
@@ -306,7 +298,6 @@ mod project {
                 original_cases
             );
             assert_eq!(execution.functions()[0].language(), Some(Language::Python));
-            assert_eq!(execution.undeclared(), None);
             assert!(execution.catalogue().sources().is_empty());
         }
 
@@ -356,14 +347,10 @@ mod project {
         };
         #[test]
         fn every_lock_and_terminology_cause_has_independent_normative_paths_and_mapping() {
-            assert_eq!(support::reached().len(), 7);
+            assert_eq!(support::reached().len(), 6);
             let draft = support::draft();
-            let projected = diagnostics(
-                &draft,
-                &project_environment::validate(Some(Language::Python), &draft),
-            )
-            .unwrap();
-            // The linked language has no finding of its own; only codelists fail.
+            let projected = diagnostics(&draft, &project_environment::validate(&draft)).unwrap();
+            // The host language has no finding of its own; only codelists fail.
             assert_eq!(projected.len(), 16);
             assert!(projected
                 .iter()
@@ -395,7 +382,6 @@ mod project {
         }
         fn draft() -> Draft {
             Draft {
-                surface: yamaa_core::ast::Surface::V0_5,
                 language: Some(Language::Python),
                 lock: Some(LockReference {
                     written: "uv.lock".into(),
@@ -428,76 +414,79 @@ mod project {
         }
         #[test]
         fn every_function_field_route_preserves_authored_indices_and_exact_scalar_kinds() {
+            // Each finding is at the function file's own path to the field it
+            // concerns, which starts at the file's root (FUNC-2).
             let cases = [
-                (F::InvalidName, "functions.id", "invalid_function_name"),
+                (F::InvalidName, "name", "invalid_function_name"),
                 (
-                    F::InvalidCallable,
-                    "functions.id.function",
+                    F::MissingImplementation,
+                    "implementations",
+                    "missing_implementation",
+                ),
+                (
+                    F::InvalidImplementation(Language::R),
+                    "implementations.r",
                     "invalid_callable",
                 ),
-                (
-                    F::EmptyDescription,
-                    "functions.id.description",
-                    "empty_description",
-                ),
+                (F::EmptyDescription, "description", "empty_description"),
                 (
                     F::NegativeComparisonDecimals,
-                    "functions.id.comparison_decimals",
+                    "comparison_decimals",
                     "negative_comparison_decimals",
                 ),
                 (
                     F::InvalidParameterName { parameter: 0 },
-                    "functions.id.params[0].name",
+                    "params[0].name",
                     "invalid_parameter_name",
                 ),
                 (
                     F::DuplicateParameter { parameter: 0 },
-                    "functions.id.params[0].name",
+                    "params[0].name",
                     "duplicate_parameter",
                 ),
                 (
                     F::RequiredDefault { parameter: 0 },
-                    "functions.id.params[0].default",
+                    "params[0].default",
                     "required_parameter_default",
                 ),
                 (
                     F::MissingDefault { parameter: 0 },
-                    "functions.id.params[0].default",
+                    "params[0].default",
                     "missing_parameter_default",
                 ),
                 (
                     F::InvalidDefault { parameter: 0 },
-                    "functions.id.params[0].default",
+                    "params[0].default",
                     "invalid_parameter_default",
                 ),
                 (
                     F::InvalidCaseId { case: 0 },
-                    "functions.id.tests[0].id",
+                    "tests[0].id",
                     "invalid_case_id",
                 ),
                 (
                     F::DuplicateCaseId { case: 0 },
-                    "functions.id.tests[0].id",
+                    "tests[0].id",
                     "duplicate_case_id",
                 ),
                 (
                     F::EmptyCoverage { case: 0 },
-                    "functions.id.tests[0].covers",
+                    "tests[0].covers",
                     "empty_coverage",
                 ),
                 (
                     F::DuplicateCoverage { case: 0, tag: 0 },
-                    "functions.id.tests[0].covers[0]",
+                    "tests[0].covers[0]",
                     "duplicate_coverage",
                 ),
                 (
                     F::InvalidCoverage { case: 0, tag: 0 },
-                    "functions.id.tests[0].covers[0]",
+                    "tests[0].covers[0]",
                     "invalid_coverage",
                 ),
                 (
                     F::UnsupportedEvidence { case: 0, tag: 0 },
-                    "functions.id.tests[0].covers[0]",
+                    "tests[0].covers[0]",
                     "unsupported_coverage_evidence",
                 ),
                 (
@@ -505,7 +494,7 @@ mod project {
                         case: 0,
                         argument: 0,
                     },
-                    "functions.id.tests[0].args.x",
+                    "tests[0].args.x",
                     "duplicate_case_argument",
                 ),
                 (
@@ -513,7 +502,7 @@ mod project {
                         case: 0,
                         argument: 0,
                     },
-                    "functions.id.tests[0].args.x",
+                    "tests[0].args.x",
                     "unknown_case_argument",
                 ),
                 (
@@ -521,7 +510,7 @@ mod project {
                         case: 0,
                         parameter: 0,
                     },
-                    "functions.id.tests[0].args.x",
+                    "tests[0].args.x",
                     "missing_required_case_argument",
                 ),
                 (
@@ -529,17 +518,17 @@ mod project {
                         case: 0,
                         argument: 0,
                     },
-                    "functions.id.tests[0].args.x",
+                    "tests[0].args.x",
                     "invalid_case_argument_type",
                 ),
                 (
                     F::InvalidResult { case: 0 },
-                    "functions.id.tests[0].result",
+                    "tests[0].result",
                     "invalid_case_result",
                 ),
                 (
                     F::MissingObligation("boundary".into()),
-                    "functions.id.tests",
+                    "tests",
                     "missing_coverage_obligation",
                 ),
             ];
@@ -557,7 +546,7 @@ mod project {
                 let d = &result[0];
                 assert_eq!(
                     (d.definition().condition, d.definition().rule),
-                    ("project_environment_invalid", Some("FUNC-2"))
+                    ("function_file_invalid", Some("FUNC-2"))
                 );
                 assert_eq!(d.spec_paths, [path]);
                 assert_eq!(d.context["reason"], JsonValue::String(reason.into()));
@@ -578,19 +567,19 @@ mod project {
             let findings = vec![
                 Finding::Function {
                     function: 0,
-                    finding: F::InvalidCallable,
+                    finding: F::MissingImplementation,
                 };
                 600
             ];
             let actual = diagnostics(&draft, &findings).unwrap();
             let expected = Diagnostic {
-                code: ConditionCode::ProjectEnvironmentInvalid,
-                spec_paths: vec![format!("functions.{name}.function")],
+                code: ConditionCode::FunctionFileInvalid,
+                spec_paths: vec!["implementations".into()],
                 context: [
                     ("function".into(), JsonValue::String(name)),
                     (
                         "reason".into(),
-                        JsonValue::String("invalid_callable".into()),
+                        JsonValue::String("missing_implementation".into()),
                     ),
                 ]
                 .into(),
@@ -625,7 +614,7 @@ mod project {
         }
 
         #[test]
-        fn retained_admission_reports_the_captured_lock_syntax_against_the_linked_language() {
+        fn retained_admission_reports_the_captured_lock_syntax_against_the_host_language() {
             use yamaa_core::project_environment::Environment;
             // Empty present functions and an absent environment need no finding.
             let mut d = draft();
@@ -643,11 +632,10 @@ mod project {
             let rejection = Environment::admit_retained(Some(Language::R), d).unwrap_err();
             let projected = diagnostics(&rejection.draft, &rejection.error).unwrap();
             assert_eq!(projected.len(), 1);
-            assert_eq!(projected[0].spec_paths, ["lock"]);
-            assert_eq!(
-                projected[0].definition().condition,
-                "project_environment_invalid"
-            );
+            // The lock is held by the project file's `environments.<host>.lock`
+            // (FUNC-3).
+            assert_eq!(projected[0].spec_paths, ["environments.r.lock"]);
+            assert_eq!(projected[0].definition().condition, "function_file_invalid");
             assert_eq!(projected[0].context.len(), 3);
             assert_eq!(
                 projected[0].context["actual_lock_kind"],
@@ -665,13 +653,11 @@ mod project {
     }
     mod project_environment_projection {
         use crate::support::project_environment as support;
-        use crate::support::roots::{
-            meta, named, text as written, Case, Definition, Parameter, Source,
-        };
+        use crate::support::roots::{meta, text as written, Case, Definition, Parameter, Source};
         use std::collections::BTreeMap;
         use yamaa_core::json::Value as CV;
         use yamaa_core::{
-            ast::{self, CodelistDeclaration, CodelistSource, FunctionDeclaration, FunctionSource},
+            ast::{self, CodelistDeclaration, CodelistSource, FunctionDeclaration},
             diagnostic::{ConditionCode as C, Diagnostic},
             project_environment::{self, Draft, Finding, LockKind, LockReference},
             project_environment_diagnostics::{
@@ -682,49 +668,28 @@ mod project {
             project_function_document::{Finding as SF, Kind},
             value::{ColumnType, Value, ValueType},
         };
-        /// The caller-supplied project file and the environment file it links.
+        /// The caller-supplied project file.
         const PROJECT: &str = "held/project.yaml";
-        const ENVIRONMENT: &str = "held/environment.yaml";
-        /// A project root that links a Python environment file and declares
-        /// inline or external codelists. When that environment file lowered,
-        /// `functions` are the inline or external functions it declares.
-        fn project_root(codelists: &[bool], functions: Option<&[(&str, bool)]>) -> ast::Project {
-            let inline = |name: &str| Definition {
-                name: name.into(),
-                function: "project.id".into(),
-                description: "Inline".into(),
-                params: vec![],
-                returns: ColumnType::Int,
-                may_return_missing: false,
-                comparison_decimals: 4,
-                tests: vec![],
-            };
+        /// A project root that holds the Python lock and declares inline or
+        /// external codelists and, when `functions` is given, lists that many
+        /// function files (D8).
+        fn project_root(codelists: &[bool], functions: Option<usize>) -> ast::Project {
             ast::Project {
                 header: ast::Header {
-                    surface: ast::Surface::V0_5,
                     version: written("1.0"),
                     meta: meta(),
                 },
-                functions: functions.map(|functions| {
-                    functions
-                        .iter()
-                        .map(|&(name, external)| FunctionDeclaration {
-                            key: Some(named(name)),
-                            source: if external {
-                                FunctionSource::File(written("function.yaml"))
-                            } else {
-                                FunctionSource::Inline(Box::new(
-                                    inline(name).root(Language::Python),
-                                ))
-                            },
+                functions: functions.map(|count| {
+                    (0..count)
+                        .map(|index| FunctionDeclaration {
+                            file: written(&format!("functions/f{index}.yaml")),
                             meta: meta(),
                         })
                         .collect()
                 }),
                 environments: vec![ast::HostEnvironment {
                     language: Language::Python,
-                    file: Some(written("environment.yaml")),
-                    lock: None,
+                    lock: Some(written("uv.lock")),
                     meta: meta(),
                 }],
                 codelists: codelists
@@ -749,6 +714,14 @@ mod project {
                 meta: meta(),
             }
         }
+        /// The function file the project lists at `functions[index]`, as
+        /// captured under `identity`.
+        fn listed(index: usize, identity: &str) -> Capture<'_> {
+            Capture {
+                origin: Origin::FunctionFile(index),
+                identity,
+            }
+        }
         /// A scalar a captured file writes out of range.
         fn wide(path: &str, value: &str) -> SF {
             SF {
@@ -760,6 +733,15 @@ mod project {
         }
         fn text(value: &str) -> CV {
             CV::String(value.into())
+        }
+        /// The context of a literal outside the `int` range (VALUE-5).
+        fn overflow(actual: &str) -> [(&'static str, CV); 3] {
+            let number = |text: &str| CV::Number(text.parse().expect("canonical integer"));
+            [
+                ("actual", number(actual)),
+                ("minimum", number("-9223372036854775808")),
+                ("maximum", number("9223372036854775807")),
+            ]
         }
 
         #[test]
@@ -779,40 +761,29 @@ mod project {
                     })
                     .collect(),
             );
-            let project = project_root(
-                &[],
-                Some(
-                    &names
-                        .iter()
-                        .map(|name| (name.as_str(), true))
-                        .collect::<Vec<_>>(),
-                ),
-            );
+            let project = project_root(&[], Some(names.len()));
             let identities = (0..names.len())
                 .map(|index| format!("held/function_{index}.yaml"))
                 .collect::<Vec<_>>();
-            let captures = names
+            let files = (0..names.len()).collect::<Vec<_>>();
+            let captures = identities
                 .iter()
-                .zip(&identities)
-                .map(|(name, identity)| Capture {
-                    origin: Origin::Function(name),
-                    identity,
-                })
+                .enumerate()
+                .map(|(index, identity)| listed(index, identity))
                 .collect::<Vec<_>>();
             let findings = (0..names.len())
                 .map(|function| Finding::Function {
                     function,
-                    finding: F::InvalidCallable,
+                    finding: F::MissingImplementation,
                 })
                 .collect::<Vec<_>>();
             let report = p::admit_admission(
                 Admission {
                     project: &project,
                     root: PROJECT,
-                    environment: Some(ENVIRONMENT),
                     draft: &draft,
                     function_origins: &names,
-                    function_files: &[],
+                    function_files: &files,
                     codelist_origins: &[],
                     captures: captures.iter().copied(),
                 },
@@ -822,16 +793,17 @@ mod project {
             let want = names
                 .iter()
                 .zip(&identities)
-                .map(|(name, identity)| {
+                .enumerate()
+                .map(|(index, (name, identity))| {
                     expected(
-                        C::ProjectEnvironmentInvalid,
-                        "function",
+                        C::FunctionFileInvalid,
+                        "implementations",
                         &[
                             ("function", text(name)),
-                            ("reason", text("invalid_callable")),
+                            ("reason", text("missing_implementation")),
                         ],
                         identity,
-                        &format!("functions.{name}"),
+                        &format!("functions[{index}]"),
                     )
                 })
                 .collect::<Vec<_>>();
@@ -847,19 +819,19 @@ mod project {
                 }),
             )
             .unwrap();
-            let want = names
+            let want = identities
                 .iter()
-                .zip(&identities)
-                .map(|(name, identity)| {
+                .enumerate()
+                .map(|(index, identity)| {
                     expected(
-                        C::ProjectEnvironmentInvalid,
+                        C::FunctionFileInvalid,
                         "result",
                         &[
                             ("reason", text("integer_out_of_range")),
                             ("value", CV::Number("9223372036854775808".parse().unwrap())),
                         ],
                         identity,
-                        &format!("functions.{name}"),
+                        &format!("functions[{index}]"),
                     )
                 })
                 .collect::<Vec<_>>();
@@ -891,7 +863,6 @@ mod project {
         }
         fn draft() -> Draft {
             Draft {
-                surface: yamaa_core::ast::Surface::V0_5,
                 language: Some(Language::Python),
                 lock: Some(LockReference {
                     written: "uv.lock".into(),
@@ -924,16 +895,15 @@ mod project {
         }
         #[test]
         fn independent_complete_sixteen_record_project_report_preserves_every_field_and_order() {
-            assert_eq!(support::reached().len(), 7);
+            assert_eq!(support::reached().len(), 6);
             let draft = support::draft();
-            let project = project_root(&[false], Some(&[]));
-            let findings = project_environment::validate(Some(Language::Python), &draft);
+            let project = project_root(&[false], Some(0));
+            let findings = project_environment::validate(&draft);
             let origins = [0];
             let result = p::admit_admission(
                 Admission {
                     project: &project,
                     root: PROJECT,
-                    environment: Some(ENVIRONMENT),
                     draft: &draft,
                     function_origins: &[],
                     function_files: &[],
@@ -1023,10 +993,21 @@ mod project {
             assert_eq!(result.len(), 16);
         }
         #[test]
-        fn every_function_route_has_complete_independent_inline_and_external_context() {
+        fn every_function_route_has_complete_independent_context_in_its_function_file() {
             let cases = [
-                (F::InvalidName, "", "invalid_function_name", vec![]),
-                (F::InvalidCallable, "function", "invalid_callable", vec![]),
+                (F::InvalidName, "name", "invalid_function_name", vec![]),
+                (
+                    F::MissingImplementation,
+                    "implementations",
+                    "missing_implementation",
+                    vec![],
+                ),
+                (
+                    F::InvalidImplementation(Language::R),
+                    "implementations.r",
+                    "invalid_callable",
+                    vec![("language", text("r"))],
+                ),
                 (
                     F::EmptyDescription,
                     "description",
@@ -1166,75 +1147,57 @@ mod project {
                     vec![("obligation", text("boundary"))],
                 ),
             ];
-            for external in [false, true] {
-                let draft = draft();
-                let project = project_root(&[], Some(&[("id", external)]));
-                let names = ["id".into()];
-                let captures = if external {
-                    vec![Capture {
-                        origin: Origin::Function("id"),
-                        identity: "held/function.yaml",
-                    }]
-                } else {
-                    vec![]
-                };
-                let findings = cases
-                    .iter()
-                    .map(|(finding, ..)| Finding::Function {
-                        function: 0,
-                        finding: finding.clone(),
-                    })
-                    .collect::<Vec<_>>();
-                let result = p::admit_admission(
-                    Admission {
-                        project: &project,
-                        root: PROJECT,
-                        environment: Some(ENVIRONMENT),
-                        draft: &draft,
-                        function_origins: &names,
-                        function_files: &[],
-                        codelist_origins: &[],
-                        captures: captures.into_iter(),
-                    },
-                    &findings,
-                )
-                .unwrap()
-                .diagnostics()
-                .unwrap();
-                let want = cases
-                    .iter()
-                    .map(|(_, suffix, reason, context)| {
-                        // The environment file authors every function name; an
-                        // external function file holds the remaining fields.
-                        let (path, source) = if suffix.is_empty() {
-                            ("functions.id".into(), ENVIRONMENT)
-                        } else if external {
-                            ((*suffix).into(), "held/function.yaml")
-                        } else {
-                            (format!("functions.id.{suffix}"), ENVIRONMENT)
-                        };
-                        let mut fields = vec![("function", text("id")), ("reason", text(reason))];
-                        fields.extend(context.iter().cloned());
-                        expected(
-                            C::ProjectEnvironmentInvalid,
-                            &path,
-                            &fields,
-                            source,
-                            "functions.id",
-                        )
-                    })
-                    .collect::<Vec<_>>();
-                assert_eq!(result, want);
-                for d in result {
-                    assert_eq!(
-                        (
-                            d.definition().phase,
-                            d.definition().condition,
-                            d.definition().rule
-                        ),
-                        ("validation", "project_environment_invalid", Some("FUNC-2"))
-                    );
-                }
+            let draft = draft();
+            let project = project_root(&[], Some(1));
+            let names = ["id".into()];
+            let findings = cases
+                .iter()
+                .map(|(finding, ..)| Finding::Function {
+                    function: 0,
+                    finding: finding.clone(),
+                })
+                .collect::<Vec<_>>();
+            let result = p::admit_admission(
+                Admission {
+                    project: &project,
+                    root: PROJECT,
+                    draft: &draft,
+                    function_origins: &names,
+                    function_files: &[0],
+                    codelist_origins: &[],
+                    captures: [listed(0, "held/function.yaml")].into_iter(),
+                },
+                &findings,
+            )
+            .unwrap()
+            .diagnostics()
+            .unwrap();
+            // The function file holds its definition alone, so each path starts
+            // at that file's root; the project lists it at `functions[0]`.
+            let want = cases
+                .iter()
+                .map(|(_, path, reason, context)| {
+                    let mut fields = vec![("function", text("id")), ("reason", text(reason))];
+                    fields.extend(context.iter().cloned());
+                    expected(
+                        C::FunctionFileInvalid,
+                        path,
+                        &fields,
+                        "held/function.yaml",
+                        "functions[0]",
+                    )
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(result, want);
+            for d in result {
+                assert_eq!(
+                    (
+                        d.definition().phase,
+                        d.definition().condition,
+                        d.definition().rule
+                    ),
+                    ("validation", "function_file_invalid", Some("FUNC-2"))
+                );
             }
         }
         #[test]
@@ -1242,12 +1205,12 @@ mod project {
             let mut draft = draft();
             let name = "f".repeat(16_384);
             draft.functions.as_mut().unwrap()[0].name.name = name.clone();
-            let project = project_root(&[], Some(&[(&name, false)]));
+            let project = project_root(&[], Some(1));
             let names = [name.clone()];
             let findings = vec![
                 Finding::Function {
                     function: 0,
-                    finding: F::InvalidCallable,
+                    finding: F::MissingImplementation,
                 };
                 600
             ];
@@ -1255,26 +1218,25 @@ mod project {
                 Admission {
                     project: &project,
                     root: PROJECT,
-                    environment: Some(ENVIRONMENT),
                     draft: &draft,
                     function_origins: &names,
-                    function_files: &[],
+                    function_files: &[0],
                     codelist_origins: &[],
-                    captures: std::iter::empty(),
+                    captures: [listed(0, "held/function.yaml")].into_iter(),
                 },
                 &findings,
             )
             .unwrap();
             let actual = report.diagnostics().unwrap();
             let expected = expected(
-                C::ProjectEnvironmentInvalid,
-                &format!("functions.{name}.function"),
+                C::FunctionFileInvalid,
+                "implementations",
                 &[
                     ("function", text(&name)),
-                    ("reason", text("invalid_callable")),
+                    ("reason", text("missing_implementation")),
                 ],
-                ENVIRONMENT,
-                &format!("functions.{name}"),
+                "held/function.yaml",
+                "functions[0]",
             );
             assert_eq!(actual.len(), findings.len());
             assert!(actual.iter().all(|diagnostic| diagnostic == &expected));
@@ -1282,43 +1244,37 @@ mod project {
         #[test]
         fn malformed_origin_relationships_and_wrong_held_declarations_refuse_explicitly() {
             let draft = draft();
-            let inline = project_root(&[], Some(&[("id", false)]));
-            let external = project_root(&[], Some(&[("id", true)]));
-            // No environment file lowered, so no function is declared.
-            let unlinked = project_root(&[], None);
+            let one = project_root(&[], Some(1));
+            // A project that lists no function file declares no function.
+            let unlisted = project_root(&[], None);
             let names = ["id".into()];
             let wrong_names = ["other".into()];
             let findings = [Finding::LockKindMismatch {
                 language: Language::Python,
                 actual: LockKind::Renv,
             }];
-            let capture = Capture {
-                origin: Origin::Function("id"),
-                identity: "held/function.yaml",
-            };
-            // The linked environment file is held beside the captures.
-            let linked = Capture {
-                origin: Origin::Environment("python"),
-                identity: ENVIRONMENT,
-            };
-            for (project, environment, origins, captures) in [
-                (&inline, Some(ENVIRONMENT), &wrong_names, vec![]),
-                (&inline, Some(ENVIRONMENT), &names, vec![capture]),
-                (&external, Some(ENVIRONMENT), &names, vec![]),
-                (&external, Some(ENVIRONMENT), &names, vec![capture, capture]),
-                (&inline, Some(ENVIRONMENT), &names, vec![linked]),
-                // Functions are declared only by a linked environment file.
-                (&unlinked, None, &names, vec![]),
+            let capture = listed(0, "held/function.yaml");
+            let unknown = listed(1, "held/unknown.yaml");
+            for (project, origins, files, captures) in [
+                // The admitted name is not the one the held file declares.
+                (&one, &wrong_names, &[0][..], vec![capture]),
+                // An admitted definition names no file it was read from.
+                (&one, &names, &[][..], vec![capture]),
+                // A listed file whose definition was admitted is not held.
+                (&one, &names, &[0][..], vec![]),
+                (&one, &names, &[0][..], vec![capture, capture]),
+                // A held file the project does not list.
+                (&one, &names, &[0][..], vec![capture, unknown]),
+                (&unlisted, &names, &[0][..], vec![capture]),
             ] {
                 assert!(matches!(
                     p::admit_admission(
                         Admission {
                             project,
                             root: PROJECT,
-                            environment,
                             draft: &draft,
                             function_origins: origins,
-                            function_files: &[],
+                            function_files: files,
                             codelist_origins: &[],
                             captures: captures.into_iter()
                         },
@@ -1327,26 +1283,6 @@ mod project {
                     Err(Error::InvalidOrigin)
                 ));
             }
-            // The lock is declared by the linked environment file, so a lock
-            // finding cannot be reported without it.
-            let mut lock_only = draft.clone();
-            lock_only.functions = None;
-            assert!(matches!(
-                p::admit_admission(
-                    Admission {
-                        project: &unlinked,
-                        root: PROJECT,
-                        environment: None,
-                        draft: &lock_only,
-                        function_origins: &[],
-                        function_files: &[],
-                        codelist_origins: &[],
-                        captures: std::iter::empty()
-                    },
-                    &findings
-                ),
-                Err(Error::InvalidOrigin)
-            ));
             // A scalar finding that kept no written value has nothing to report.
             let scalar = [SF {
                 path: "result".into(),
@@ -1355,18 +1291,18 @@ mod project {
                 value: None,
             }];
             assert!(matches!(
-                p::admit_root_scalars(PROJECT, yamaa_core::ast::Surface::V0_5, &scalar),
+                p::admit_root_scalars(PROJECT, &scalar),
                 Err(Error::Core(
                     project_environment_diagnostics::Error::UnavailableShape
                 ))
             ));
         }
         #[test]
-        fn lock_findings_name_the_linked_environment_file_that_writes_the_lock() {
+        fn lock_findings_name_the_project_file_that_holds_the_lock() {
             let mut draft = draft();
             draft.functions = None;
             draft.lock.as_mut().unwrap().kind = LockKind::Renv;
-            let findings = project_environment::validate(Some(Language::Python), &draft);
+            let findings = project_environment::validate(&draft);
             assert_eq!(
                 findings,
                 [Finding::LockKindMismatch {
@@ -1374,12 +1310,11 @@ mod project {
                     actual: LockKind::Renv
                 }]
             );
-            let project = project_root(&[], Some(&[]));
+            let project = project_root(&[], None);
             let result = p::admit_admission(
                 Admission {
                     project: &project,
                     root: PROJECT,
-                    environment: Some(ENVIRONMENT),
                     draft: &draft,
                     function_origins: &[],
                     function_files: &[],
@@ -1391,105 +1326,74 @@ mod project {
             .unwrap()
             .diagnostics()
             .unwrap();
+            // The project file holds the host's lock at
+            // `environments.<host>.lock` (FUNC-3).
             assert_eq!(
                 result,
                 [expected(
-                    C::ProjectEnvironmentInvalid,
-                    "lock",
+                    C::FunctionFileInvalid,
+                    "environments.python.lock",
                     &[
                         ("reason", text("lock_kind_mismatch")),
                         ("language", text("python")),
                         ("actual_lock_kind", text("renv")),
                     ],
-                    ENVIRONMENT,
-                    "lock",
+                    PROJECT,
+                    "environments.python.lock",
                 )]
             );
         }
         #[test]
         fn root_wide_scalars_are_one_admitted_complete_report() {
+            // An inline codelist source's integer outside the `int` range fails
+            // as any runtime literal does (VALUE-5).
             let wide_value = "123456789012345678901234567890";
             let findings = [wide("codelists[0].codelists[0].items[0].value", wide_value)];
-            let report =
-                p::admit_root_scalars(PROJECT, yamaa_core::ast::Surface::V0_5, &findings).unwrap();
+            let report = p::admit_root_scalars(PROJECT, &findings).unwrap();
             assert_eq!(
                 report.diagnostics().unwrap(),
                 [expected(
-                    C::ProjectEnvironmentInvalid,
+                    C::LiteralIntegerOverflow,
                     "codelists[0].codelists[0].items[0].value",
-                    &[
-                        ("reason", text("integer_out_of_range")),
-                        (
-                            "value",
-                            CV::Number((wide_value).parse().expect("canonical integer"))
-                        )
-                    ],
+                    &overflow(wide_value),
                     PROJECT,
                     "$"
                 )]
             );
         }
         #[test]
-        fn environment_file_scalar_failures_report_against_the_project_link() {
-            // The failed environment file never lowered into the project.
-            let project = project_root(&[], None);
-            let findings = [wide("functions.inline.result", "9223372036854775808")];
+        fn function_file_scalar_failures_report_against_the_project_listing() {
             let value = (
                 "value",
                 CV::Number(("9223372036854775808").parse().expect("canonical integer")),
             );
-            let source = |key| ScalarSource {
-                capture: Capture {
-                    origin: Origin::Environment(key),
-                    identity: ENVIRONMENT,
-                },
-                findings: &findings,
-            };
-            let result = p::admit_scalar_sources(&project, PROJECT, [source("python")].into_iter())
-                .unwrap()
-                .diagnostics()
-                .unwrap();
-            assert_eq!(
-                result,
-                [expected(
-                    C::ProjectEnvironmentInvalid,
-                    "functions.inline.result",
-                    &[("reason", text("integer_out_of_range")), value.clone()],
-                    ENVIRONMENT,
-                    "environments.python"
-                )]
-            );
-            // Only an `environments` key the project writes names that file.
-            assert!(matches!(
-                p::admit_scalar_sources(&project, PROJECT, [source("r")].into_iter()),
-                Err(Error::InvalidOrigin)
-            ));
-            // A failed function file is declared by the linked environment file.
-            let linked = project_root(&[], Some(&[("first", true)]));
             let function_findings = [wide("tests[0].result", "9223372036854775808")];
             let function_source = ScalarSource {
-                capture: Capture {
-                    origin: Origin::Function("first"),
-                    identity: "held/first.yaml",
-                },
+                capture: listed(0, "held/first.yaml"),
                 findings: &function_findings,
             };
+            // Only a project that lists the file declares it.
             assert!(matches!(
-                p::admit_scalar_sources(&project, PROJECT, [function_source].into_iter()),
+                p::admit_scalar_sources(
+                    &project_root(&[], None),
+                    PROJECT,
+                    [function_source].into_iter()
+                ),
                 Err(Error::InvalidOrigin)
             ));
-            let result = p::admit_scalar_sources(&linked, PROJECT, [function_source].into_iter())
+            let listing = project_root(&[], Some(1));
+            let result = p::admit_scalar_sources(&listing, PROJECT, [function_source].into_iter())
                 .unwrap()
                 .diagnostics()
                 .unwrap();
             assert_eq!(
                 result,
                 [expected(
-                    C::ProjectEnvironmentInvalid,
+                    C::FunctionFileInvalid,
                     "tests[0].result",
                     &[("reason", text("integer_out_of_range")), value],
                     "held/first.yaml",
-                    "functions.first"
+                    "functions[0]"
                 )]
             );
         }
@@ -1513,7 +1417,9 @@ mod project {
                     findings: &findings,
                 },
             ];
-            // Codelist files are declared by the project, not the environment.
+            // Codelist files are declared by the project, and an integer
+            // outside the `int` range fails as any runtime literal does
+            // (VALUE-5).
             let result = p::admit_scalar_sources(&project, PROJECT, sources.iter().copied())
                 .unwrap()
                 .diagnostics()
@@ -1522,32 +1428,16 @@ mod project {
                 result,
                 [
                     expected(
-                        C::ProjectEnvironmentInvalid,
+                        C::LiteralIntegerOverflow,
                         "items[0].value",
-                        &[
-                            ("reason", text("integer_out_of_range")),
-                            (
-                                "value",
-                                CV::Number(
-                                    ("9223372036854775808").parse().expect("canonical integer")
-                                )
-                            )
-                        ],
+                        &overflow("9223372036854775808"),
                         "held/first.yaml",
                         "codelists[1]"
                     ),
                     expected(
-                        C::ProjectEnvironmentInvalid,
+                        C::LiteralIntegerOverflow,
                         "items[0].value",
-                        &[
-                            ("reason", text("integer_out_of_range")),
-                            (
-                                "value",
-                                CV::Number(
-                                    ("9223372036854775808").parse().expect("canonical integer")
-                                )
-                            )
-                        ],
+                        &overflow("9223372036854775808"),
                         "held/second.yaml",
                         "codelists[2]"
                     )
@@ -1570,27 +1460,23 @@ mod project {
                 }
             }
             let draft = draft();
-            let project = project_root(&[], Some(&[("id", true)]));
+            let project = project_root(&[], Some(1));
             let names = ["id".into()];
             let findings = [Finding::Function {
                 function: 0,
-                finding: F::InvalidCallable,
+                finding: F::MissingImplementation,
             }];
             let calls = Rc::new(Cell::new(0));
             let report = p::admit_admission(
                 Admission {
                     project: &project,
                     root: PROJECT,
-                    environment: Some(ENVIRONMENT),
                     draft: &draft,
                     function_origins: &names,
-                    function_files: &[],
+                    function_files: &[0],
                     codelist_origins: &[],
                     captures: Once {
-                        capture: Some(Capture {
-                            origin: Origin::Function("id"),
-                            identity: "held/function.yaml",
-                        }),
+                        capture: Some(listed(0, "held/function.yaml")),
                         calls: Rc::clone(&calls),
                     },
                 },
@@ -1604,19 +1490,19 @@ mod project {
             assert_eq!(
                 first,
                 [expected(
-                    C::ProjectEnvironmentInvalid,
-                    "function",
+                    C::FunctionFileInvalid,
+                    "implementations",
                     &[
                         ("function", text("id")),
-                        ("reason", text("invalid_callable"))
+                        ("reason", text("missing_implementation"))
                     ],
                     "held/function.yaml",
-                    "functions.id"
+                    "functions[0]"
                 )]
             );
         }
         #[test]
-        fn two_hundred_inline_functions_keep_all_six_hundred_independent_findings_in_order() {
+        fn two_hundred_function_files_keep_all_six_hundred_independent_findings_in_order() {
             let mut draft = draft();
             let template = draft.functions.take().unwrap().remove(0);
             let names = (0..200)
@@ -1636,56 +1522,54 @@ mod project {
                     })
                     .collect(),
             );
-            let project = project_root(
-                &[],
-                Some(
-                    &names
-                        .iter()
-                        .map(|name| (name.as_str(), false))
-                        .collect::<Vec<_>>(),
-                ),
-            );
-            let findings = project_environment::validate(Some(Language::Python), &draft);
+            let project = project_root(&[], Some(names.len()));
+            let identities = (0..names.len())
+                .map(|index| format!("held/function_{index}.yaml"))
+                .collect::<Vec<_>>();
+            let files = (0..names.len()).collect::<Vec<_>>();
+            let findings = project_environment::validate(&draft);
             assert_eq!(findings.len(), 600);
             let report = p::admit_admission(
                 Admission {
                     project: &project,
                     root: PROJECT,
-                    environment: Some(ENVIRONMENT),
                     draft: &draft,
                     function_origins: &names,
-                    function_files: &[],
+                    function_files: &files,
                     codelist_origins: &[],
-                    captures: std::iter::empty(),
+                    captures: identities
+                        .iter()
+                        .enumerate()
+                        .map(|(index, identity)| listed(index, identity)),
                 },
                 &findings,
             )
             .unwrap();
             let mut want = vec![];
-            for name in &names {
-                let declaration = format!("functions.{name}");
+            for (index, (name, identity)) in names.iter().zip(&identities).enumerate() {
+                let declaration = format!("functions[{index}]");
                 want.push(expected(
-                    C::ProjectEnvironmentInvalid,
-                    &format!("{declaration}.tests[0].result"),
+                    C::FunctionFileInvalid,
+                    "tests[0].result",
                     &[
                         ("function", text(name)),
                         ("case", text("ordinary")),
                         ("reason", text("invalid_case_result")),
                         ("value", CV::Bool(true)),
                     ],
-                    ENVIRONMENT,
+                    identity,
                     &declaration,
                 ));
                 for obligation in ["boundary", "normal"] {
                     want.push(expected(
-                        C::ProjectEnvironmentInvalid,
-                        &format!("{declaration}.tests"),
+                        C::FunctionFileInvalid,
+                        "tests",
                         &[
                             ("function", text(name)),
                             ("reason", text("missing_coverage_obligation")),
                             ("obligation", text(obligation)),
                         ],
-                        ENVIRONMENT,
+                        identity,
                         &declaration,
                     ));
                 }
@@ -1806,10 +1690,7 @@ mod project {
         #[test]
         fn complete_definitions_are_owned_and_versionless() {
             for def in [integer(), nullable_float()] {
-                assert_eq!(
-                    validate(Some(Language::Python), &def.clone().root(Language::Python)),
-                    vec![]
-                );
+                assert_eq!(validate(&def.clone().root(Language::Python)), vec![]);
                 let expected = def.clone();
                 let admitted =
                     Function::admit(Language::Python, def.root(Language::Python)).unwrap();
@@ -1825,7 +1706,7 @@ mod project {
             let mut def = nullable_float();
             def.tests.clear();
             assert_eq!(
-                validate(Some(Language::Python), &def.clone().root(Language::Python)),
+                validate(&def.clone().root(Language::Python)),
                 vec![
                     Finding::MissingObligation("accepted-missing:choice".into()),
                     Finding::MissingObligation("boolean-false:choice".into()),
@@ -1861,7 +1742,7 @@ mod project {
                 ],
                 Value::Missing,
             )];
-            let f = validate(Some(Language::Python), &def.clone().root(Language::Python));
+            let f = validate(&def.clone().root(Language::Python));
             assert_eq!(
                 &f[..4],
                 &[
@@ -1913,7 +1794,7 @@ mod project {
                 def.params[0].required = false;
                 def.params[0].default = default;
                 def.params[0].accepts_missing = accepting;
-                let f = validate(Some(Language::Python), &def.clone().root(Language::Python));
+                let f = validate(&def.clone().root(Language::Python));
                 assert_eq!(
                     f.iter()
                         .find(|x| matches!(
@@ -1927,7 +1808,7 @@ mod project {
             let mut def = integer();
             def.params[0].default = Some(Value::Int(9));
             assert_eq!(
-                validate(Some(Language::Python), &def.clone().root(Language::Python))[0],
+                validate(&def.clone().root(Language::Python))[0],
                 Finding::RequiredDefault { parameter: 0 }
             );
         }
@@ -1948,7 +1829,7 @@ mod project {
                 Value::Missing,
             )];
             assert_eq!(
-                &validate(Some(Language::Python), &def.clone().root(Language::Python))[..5],
+                &validate(&def.clone().root(Language::Python))[..5],
                 &[
                     Finding::UnsupportedEvidence { case: 0, tag: 0 },
                     Finding::UnsupportedEvidence { case: 0, tag: 1 },
@@ -1959,7 +1840,7 @@ mod project {
             );
             let mut def = integer();
             def.tests[2].result = Value::Int(0);
-            let f = validate(Some(Language::Python), &def.clone().root(Language::Python));
+            let f = validate(&def.clone().root(Language::Python));
             assert!(f.contains(&Finding::InvalidResult { case: 2 }));
             assert!(f.contains(&Finding::UnsupportedEvidence { case: 2, tag: 0 }));
             assert!(f.contains(&Finding::MissingObligation(
@@ -1979,7 +1860,7 @@ mod project {
             def.tests[1].id = "ordinary".into();
             def.tests[2].id = "Bad_ID".into();
             def.tests[2].covers.clear();
-            let f = validate(Some(Language::Python), &def.clone().root(Language::Python));
+            let f = validate(&def.clone().root(Language::Python));
             assert_eq!(
                 &f[..6],
                 &[
@@ -2008,8 +1889,8 @@ mod project {
                 let mut def = integer();
                 def.function = call.into();
                 assert!(
-                    validate(Some(Language::Python), &def.clone().root(Language::Python))
-                        .contains(&Finding::InvalidCallable),
+                    validate(&def.clone().root(Language::Python))
+                        .contains(&Finding::InvalidImplementation(Language::Python)),
                     "{call}"
                 );
             }
@@ -2024,8 +1905,8 @@ mod project {
                 let mut def = integer();
                 def.function = call.into();
                 assert!(
-                    validate(Some(Language::R), &def.clone().root(Language::R))
-                        .contains(&Finding::InvalidCallable),
+                    validate(&def.clone().root(Language::R))
+                        .contains(&Finding::InvalidImplementation(Language::R)),
                     "{call}"
                 );
             }
@@ -2038,7 +1919,7 @@ mod project {
             ] {
                 let mut def = integer();
                 def.params[0].name = name.into();
-                assert!(validate(Some(language), &def.clone().root(language))
+                assert!(validate(&def.clone().root(language))
                     .contains(&Finding::InvalidParameterName { parameter: 0 }));
             }
         }
@@ -2053,12 +1934,12 @@ mod project {
             def.params.push(def.params[0].clone());
             def.tests[0].args.clear();
             def.tests[0].result = Value::Bool(true);
-            let f = validate(Some(Language::Python), &def.clone().root(Language::Python));
+            let f = validate(&def.clone().root(Language::Python));
             assert_eq!(
                 &f[..8],
                 &[
                     Finding::InvalidName,
-                    Finding::InvalidCallable,
+                    Finding::InvalidImplementation(Language::Python),
                     Finding::EmptyDescription,
                     Finding::NegativeComparisonDecimals,
                     Finding::DuplicateParameter { parameter: 1 },
@@ -2081,10 +1962,8 @@ mod project {
             ] {
                 let mut def = integer();
                 def.tests[0].result = value;
-                assert!(
-                    validate(Some(Language::Python), &def.clone().root(Language::Python))
-                        .contains(&Finding::InvalidResult { case: 0 })
-                );
+                assert!(validate(&def.clone().root(Language::Python))
+                    .contains(&Finding::InvalidResult { case: 0 }));
             }
         }
 

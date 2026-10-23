@@ -2,7 +2,6 @@
 //! File contracts: file project, file publication and file resources.
 mod file {
     mod file_project {
-        use crate::support::project_schemas as schemas;
         use crate::support::Edit as _;
         use std::fs;
         use yamaa_adapters::{
@@ -50,30 +49,6 @@ mod file {
                 study.write("entry/domain.yaml", DOMAIN);
                 study
             }
-            /// The same study under a 0.5 project, for the tests of environment
-            /// files, which stay until the 0.5 project route goes (P2-13d): the
-            /// project declares its codelists beside itself and links the
-            /// Python environment file, whose lock and function paths resolve
-            /// from env/.
-            fn legacy() -> Self {
-                let study = Self::empty();
-                study.write(
-                    "project.yaml",
-                    "schema_version: '1.0'\nenvironments: {python: env/environment.yaml}\ncodelists: [ct.yaml]\n",
-                );
-                study.write(
-                    "env/environment.yaml",
-                    "schema_version: '1.0'\nlock: ../uv.lock\nfunctions: {id: id.yaml}\n",
-                );
-                study.write("uv.lock", "version = 1\npackage = []\n");
-                study.write("env/id.yaml", "function: program.id\ndescription: Integer identity.\nparams: [{name: x, type: int, accepts_missing: true}]\nreturns: int\nmay_return_missing: true\ntests:\n  - {id: normal, covers: [normal, boundary], args: {x: 7}, result: 7}\n  - {id: missing, covers: ['accepted-missing:x', nullable-output], args: {x: null}, result: null}\n");
-                study.write(
-                    "ct.yaml",
-                    "codelists: [{id: SEX, name: Sex, items: [{value: F}, {value: M}]}]\n",
-                );
-                study.write("entry/domain.yaml", DOMAIN);
-                study
-            }
             fn text(&self, name: &str) -> String {
                 self.0.join(name).to_str().unwrap().into()
             }
@@ -94,7 +69,7 @@ mod file {
                     "domain.yaml",
                     "../project.yaml",
                     Language::Python,
-                    schemas::project_schemas(),
+                    yamaa_adapters::document::Closures::shipped().unwrap(),
                 )
             }
         }
@@ -618,7 +593,7 @@ mod file {
                 "domain.yaml",
                 "../project.yaml",
                 Language::Python,
-                schemas::project_schemas(),
+                yamaa_adapters::document::Closures::shipped().unwrap(),
             )
             .unwrap();
             let mut run_scope = project.run_scope(None);
@@ -658,138 +633,6 @@ mod file {
             assert_eq!(
                 retained.captured_environment().lock().unwrap().source.bytes,
                 b"version = 1\npackage = []\n"
-            );
-        }
-
-        #[test]
-        fn each_host_opens_only_the_environment_file_its_own_project_key_names() {
-            use yamaa_adapters::{file_workflow, project_application::preparation_issues};
-            let study = Study::legacy();
-            // The R entry names a file that is not YAML. Python preparation never
-            // opens it, and R preparation never opens the Python environment file,
-            // its lock or its function.
-            fs::create_dir(study.0.join("r")).unwrap();
-            study.write("r/environment.yaml", "[");
-            study.write(
-                "project.yaml",
-                "schema_version: '1.0'\nenvironments: {python: env/environment.yaml, r: r/environment.yaml}\ncodelists: [ct.yaml]\n",
-            );
-            let project = study.prepare(&study.text(""), &[]).unwrap();
-            // Project, Python environment, lock, function, codelist and entry.
-            assert_eq!(project.capture_reads(), 6);
-            assert!(project.run().check_diagnostics().is_empty());
-            assert_eq!(
-                project
-                    .run()
-                    .captured_environment()
-                    .environment_file()
-                    .unwrap()
-                    .source()
-                    .identity,
-                study.identity("env/environment.yaml")
-            );
-
-            let Err(file_workflow::SelectionError::Preparation(error)) =
-                file_workflow::select_with_resources(
-                    Resources::new(&study.text(""), &study.text("entry"), &[]).unwrap(),
-                    "domain.yaml",
-                    "../project.yaml",
-                    Language::R,
-                    schemas::project_schemas(),
-                )
-            else {
-                panic!("the R host opens and rejects only its own entry")
-            };
-            let file_workflow::Error::Environment(owner) = &error else {
-                panic!("original environment owner")
-            };
-            let Error::Environment(EnvironmentFailure::Rejected(rejected)) = owner.error() else {
-                panic!("retained source failure: {:?}", owner.error())
-            };
-            assert_eq!(rejected.sources.len(), 1);
-            assert_eq!(rejected.sources[0].origin, Origin::Environment(Language::R));
-            assert_eq!(rejected.sources[0].written, "r/environment.yaml");
-            assert!(rejected.environment_file.is_none());
-            assert!(rejected.lock.is_none());
-            // The project, the R environment file and the project's codelist only;
-            // the entry is never read after the environment rejection.
-            assert_eq!(
-                owner
-                    .captured_sources()
-                    .map(|(path, _)| path)
-                    .collect::<Vec<_>>(),
-                ["project.yaml", "r/environment.yaml", "ct.yaml"].map(|name| study.identity(name))
-            );
-            let rows = preparation_issues(&error).unwrap();
-            assert_eq!(rows.len(), 1);
-            assert_eq!(rows[0].condition(), "invalid_yaml");
-            let context = yamaa_core::json::Value::Object(rows[0].context.clone());
-            assert_eq!(context["entry"], study.identity("project.yaml"));
-            assert_eq!(context["path"], "r/environment.yaml");
-            assert_eq!(context["environment_path"], "environments.r");
-        }
-
-        #[test]
-        fn environment_file_paths_resolve_beside_it_and_project_paths_beside_the_project() {
-            use yamaa_adapters::project_application;
-            let study = Study::legacy();
-            // The environment file in env/ writes its lock and function beside
-            // itself; the project writes its codelist beside itself. Each decoy
-            // sits beside the other declaring file and fails preparation if read.
-            study.write(
-                "env/environment.yaml",
-                "schema_version: '1.0'\nlock: uv.lock\nfunctions: {id: id.yaml}\n",
-            );
-            study.write("env/uv.lock", "version = 1\npackage = []\n");
-            study.write("uv.lock", "not a packaging lock");
-            study.write("id.yaml", "[");
-            study.write("env/ct.yaml", "[");
-            let entry = study.text("entry/domain.yaml");
-            let path = study.text("project.yaml");
-            let project = project_application::prepare(&entry, &path, Language::Python).unwrap();
-            assert_eq!(project.capture_reads(), 6);
-            let captured = project.run().captured_environment();
-            assert_eq!(
-                captured.root().source().identity,
-                study.identity("project.yaml")
-            );
-            assert_eq!(
-                captured.environment_file().unwrap().source().identity,
-                study.identity("env/environment.yaml")
-            );
-            assert_eq!(
-                captured.lock().unwrap().source.identity,
-                study.identity("env/uv.lock")
-            );
-            assert_eq!(
-                captured
-                    .captures()
-                    .iter()
-                    .map(|capture| (
-                        capture.origin.clone(),
-                        capture.document.source().identity.clone()
-                    ))
-                    .collect::<Vec<_>>(),
-                [
-                    (Origin::Function("id".into()), study.identity("env/id.yaml")),
-                    (Origin::Codelist(0), study.identity("ct.yaml")),
-                ]
-            );
-            // No fallback: without env/uv.lock, a valid lock beside the project is
-            // still not the lock the environment file declares.
-            fs::remove_file(study.0.join("env/uv.lock")).unwrap();
-            study.write("uv.lock", "version = 1\npackage = []\n");
-            let rows = project_application::check(&entry, &path, Language::Python);
-            assert_eq!(rows.len(), 1);
-            assert_eq!(rows[0].condition(), "project_environment_invalid");
-            assert_eq!(rows[0].rule(), Some("FUNC-2"));
-            assert_eq!(rows[0].spec_paths, ["lock"]);
-            assert_eq!(
-                yamaa_core::json::Value::Object(rows[0].context.clone()),
-                yamaa_adapters::json!({
-                    "entry": study.identity("project.yaml"), "path": "uv.lock",
-                    "environment_path": "lock", "cause": "missing",
-                })
             );
         }
 

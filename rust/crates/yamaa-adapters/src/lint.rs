@@ -99,6 +99,9 @@ pub enum Error {
         file: String,
         failure: DecodeFailure,
     },
+    /// The file declares `schema_version`: it is written in language version
+    /// 0.5, which the engine does not read (SCHEMA-2).
+    Language { file: String },
     /// A fixed file could not be replaced.
     Write {
         file: String,
@@ -111,16 +114,18 @@ impl Error {
     pub fn file(&self) -> Option<&str> {
         match self {
             Self::Unavailable => None,
-            Self::Read { file, .. } | Self::Source { file, .. } | Self::Write { file, .. } => {
-                Some(file)
-            }
+            Self::Read { file, .. }
+            | Self::Source { file, .. }
+            | Self::Language { file }
+            | Self::Write { file, .. } => Some(file),
         }
     }
 
     /// The registered findings that say why: a resource refusal for a file
     /// that cannot be read, the source finding for text that cannot be
-    /// admitted, and the publication refusal for a file that cannot be
-    /// replaced.
+    /// admitted, `unsupported_language_version` at `schema_version`, naming
+    /// 0.5, for a file written for 0.5, and the publication refusal for a
+    /// file that cannot be replaced.
     pub fn diagnostics(&self) -> Vec<Diagnostic> {
         use yamaa_core::application_issue::{rejected, resource_rejected};
         match self {
@@ -129,6 +134,9 @@ impl Error {
                 vec![crate::file_application::caller_read_failure(file, error)]
             }
             Self::Source { file, failure } => source_diagnostics(file, failure),
+            Self::Language { .. } => vec![yamaa_core::language::legacy_refusal(
+                yamaa_core::language::LANGUAGE_VERSION,
+            )],
             Self::Write { error, .. } => {
                 if let crate::file_publication::Error::Limit(limit) = error {
                     return vec![resource_rejected(
@@ -225,10 +233,12 @@ fn write_code(error: &crate::file_publication::Error) -> Fault {
 
 /// Lint every file `paths` names, in argument order; a directory names the
 /// yamaa files beneath it in sorted path order, leaving out hidden
-/// directories and any `.yaml` file whose root neither declares the 1.x header
-/// with a `type` naming a file type nor holds `schema_version` and only 0.5
-/// root fields, and refuses when it cannot be listed or such a file cannot be
-/// read. With `fix`, apply the proved fixes first.
+/// directories and any `.yaml` file whose root does not declare the 1.x
+/// header with a `type` naming a file type, and refuses when it cannot be
+/// listed or such a file cannot be read. A named file that declares
+/// `schema_version`, written for 0.5, is refused as
+/// `unsupported_language_version`, naming 0.5 (SCHEMA-2). With `fix`, apply
+/// the proved fixes first.
 pub fn lint(paths: &[String], fix: bool) -> Result<Vec<Linted>, Error> {
     #[cfg(feature = "yaml")]
     {

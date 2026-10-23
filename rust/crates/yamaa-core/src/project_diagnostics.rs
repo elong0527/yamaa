@@ -238,23 +238,15 @@ pub fn binding_diagnostics<'a, 'e, E>(
             ]
             .into();
             host_context(&mut context, host.expect("preflighted ordinary facts"));
-            // A 0.5 definition's callable is its `function`; a 1.0 function
-            // file names the host's under `implementations` (FUNC-8).
-            let (code, field) = if source.function.definition().header.is_some() {
-                let language = source
-                    .function
-                    .language()
-                    .expect("preflighted host language");
-                (
-                    ConditionCode::FunctionFileInvalid,
-                    format!("implementations.{}", language.key()),
-                )
-            } else {
-                (ConditionCode::ProjectEnvironmentInvalid, "function".into())
-            };
+            // A function file names the host's callable under
+            // `implementations` (FUNC-8).
+            let language = source
+                .function
+                .language()
+                .expect("preflighted host language");
             Diagnostic {
-                code,
-                spec_path: format!("{}.{field}", source.path),
+                code: ConditionCode::FunctionFileInvalid,
+                spec_path: format!("{}.implementations.{}", source.path, language.key()),
                 context,
             }
         })

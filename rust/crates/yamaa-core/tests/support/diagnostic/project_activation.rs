@@ -104,36 +104,15 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         assert!(std::ptr::eq(name.as_ptr(), failure.identity.name.as_ptr()));
         reached.insert(rendered(&diagnostic));
     }
+    // A function file names the host's callable under `implementations`,
+    // and a callable that cannot be bound fails as its file does (FUNC-2).
     let function = support::function("id");
     let definitions = [DefinitionSource {
         function: &function,
-        path: "functions.id",
+        path: "functions[0]",
     }];
     let binding = projection::binding_diagnostics(
         &definitions,
-        &[BindingFailure {
-            function: 0,
-            error: &payload,
-        }],
-        &[host],
-    )
-    .unwrap();
-    assert_eq!(binding[0].code, ConditionCode::ProjectEnvironmentInvalid);
-    assert_eq!(binding[0].spec_path, "functions.id.function");
-    reached.insert(rendered(&binding[0]));
-    // A 1.0 function file names the host's callable under `implementations`,
-    // and a callable that cannot be bound fails as its file does (FUNC-2).
-    let file = yamaa_core::project_function::Function::admit(
-        yamaa_core::project_function::Language::Python,
-        support::definition("id")
-            .file(&[(yamaa_core::project_function::Language::Python, "project.id")]),
-    )
-    .unwrap();
-    let binding = projection::binding_diagnostics(
-        &[DefinitionSource {
-            function: &file,
-            path: "functions[0]",
-        }],
         &[BindingFailure {
             function: 0,
             error: &payload,
@@ -154,7 +133,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     let diagnostic = projection::test_diagnostics(&definitions, &failures, &[None])
         .unwrap()
         .remove(0);
-    assert_eq!(diagnostic.spec_path, "functions.id.tests[0]");
+    assert_eq!(diagnostic.spec_path, "functions[0].tests[0]");
     assert_eq!(
         diagnostic.context["reason"],
         Fact::Text("the case produced a different result")

@@ -261,12 +261,10 @@ pub(crate) fn validate_activation<E>(
     Ok(())
 }
 
-/// Place each activation finding in the file that holds its definition: a
-/// definition file or 1.0 function file holds its definition alone, so a
-/// finding's path starts at that file's root, and an inline 0.5 definition is
-/// held by the environment file at `functions.<name>`. Each finding names
-/// that file as `source`, the project file as `entry` and the declaration as
-/// `environment_path` (FUNC-2, D8).
+/// Place each activation finding in the function file that holds its
+/// definition alone, so a finding's path starts at that file's root. Each
+/// finding names that file as `source`, the project file as `entry` and the
+/// project's `functions[i]` that lists it as `environment_path` (FUNC-2, D8).
 pub(crate) fn activation_origins(
     run: &PreparedRun,
     paths: &[String],
@@ -301,22 +299,20 @@ pub(crate) fn activation_origins(
             .ok_or(report::Error::InvalidObservation)?;
         let origin = captured
             .function_origin(index)
-            .filter(|origin| origin.declaration.to_string() == *declaration)
+            .filter(|origin| origin.declaration() == *declaration)
             .ok_or(report::Error::InvalidObservation)?;
-        metadata.push((origin.source, declaration, origin.external));
+        metadata.push((origin.source, declaration));
     }
     issues
         .into_iter()
         .zip(metadata)
-        .map(|(mut finding, (source, declaration, external))| {
-            if external {
-                for path in &mut finding.spec_paths {
-                    let suffix = path
-                        .strip_prefix(declaration.as_str())
-                        .and_then(|suffix| suffix.strip_prefix('.'))
-                        .ok_or(report::Error::InvalidObservation)?;
-                    *path = suffix.to_owned();
-                }
+        .map(|(mut finding, (source, declaration))| {
+            for path in &mut finding.spec_paths {
+                let suffix = path
+                    .strip_prefix(declaration.as_str())
+                    .and_then(|suffix| suffix.strip_prefix('.'))
+                    .ok_or(report::Error::InvalidObservation)?;
+                *path = suffix.to_owned();
             }
             for (key, value) in [
                 ("source", source),
@@ -357,9 +353,8 @@ pub(crate) fn activation_failure<'a, C, E>(
     let BoundaryFailure::Activation(failure) = boundary else {
         return Err(Refusal::Boundary(boundary));
     };
-    // Each called function's declaration, which its findings' paths start
-    // with: `functions.<name>` in a 0.5 environment file, and `functions[i]`
-    // in a 1.0 project file.
+    // Each called function's declaration, `functions[i]` in the project
+    // file, which its findings' paths start with.
     let paths = run
         .compiled()
         .called_functions()
@@ -367,7 +362,7 @@ pub(crate) fn activation_failure<'a, C, E>(
         .map(|&index| {
             run.captured_environment()
                 .function_origin(index)
-                .map(|origin| origin.declaration.to_string())
+                .map(|origin| origin.declaration())
         })
         .collect::<Option<Vec<_>>>();
     let issues = match failure {

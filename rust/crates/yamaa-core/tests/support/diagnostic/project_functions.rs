@@ -80,62 +80,16 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         }
         reached.insert(rendered(&diagnostic));
     }
-    // A supplied 0.5 project that names no environment file for the host
-    // reports each call against that absent environment rather than the
-    // function name. Only a 0.5 project links environment files, so the cause
-    // stays until #3448 deletes them (D8).
-    let undeclared = Environment::admit(
-        Some(Language::R),
-        Draft {
-            surface: yamaa_core::ast::Surface::V0_5,
-            language: None,
-            lock: None,
-            functions: None,
-            codelists: vec![],
-        },
-    )
-    .unwrap()
-    .into_execution();
     let spec = specification(vec![(
         "VALUE",
         "int",
         call("id", vec![("x", Tree::Scalar(N::Integer("7".into())))]),
     )]);
-    let Err(PrepareError::Invalid(findings)) = prepare_in(&spec, &undeclared) else {
-        panic!("undeclared environment cause")
-    };
-    assert_eq!(findings.len(), 1);
-    let diagnostic = findings[0].diagnostic();
-    assert_eq!(
-        (
-            diagnostic.definition().phase,
-            diagnostic.definition().condition,
-            diagnostic.definition().rule
-        ),
-        ("validation", "project_environment_missing", Some("FUNC-1"))
-    );
-    assert_eq!(
-        diagnostic.spec_paths,
-        ["columns.VALUE.derivation.function.name"]
-    );
-    assert_eq!(
-        diagnostic.context,
-        [
-            ("function".into(), JsonValue::String("id".into())),
-            ("language".into(), JsonValue::String("r".into())),
-            ("cause".into(), JsonValue::String("undeclared".into())),
-        ]
-        .into()
-    );
-    assert_eq!(diagnostic.source_span, None);
-    assert_eq!(diagnostic.operand_route, None);
-    reached.insert(rendered(&diagnostic));
-    // A 1.0 function file that names no callable for the host language is
+    // A function file that names no callable for the host language is
     // admitted, and each call of it fails before any data is read (FUNC-1).
     let unimplemented = Environment::admit(
         Some(Language::Python),
         Draft {
-            surface: yamaa_core::ast::Surface::V1 { minor: 0 },
             language: Some(Language::Python),
             lock: None,
             functions: Some(vec![definition("id").file(&[(Language::R, "project::id")])]),
@@ -174,56 +128,13 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         .into()
     );
     reached.insert(rendered(&diagnostic));
-    // An engine that claims no host language reads no 0.5 environment file,
-    // so it knows no function a 0.5 project declares: each call is refused as
-    // unsupported before any data is read (#3030 section 2.10, D110). The 0.5
-    // project stays until #3448 deletes environment files (D8).
-    let neutral = Environment::admit(
-        None,
-        Draft {
-            surface: yamaa_core::ast::Surface::V0_5,
-            language: None,
-            lock: None,
-            functions: None,
-            codelists: vec![],
-        },
-    )
-    .unwrap()
-    .into_execution();
-    let Err(PrepareError::Invalid(findings)) = prepare_in(&spec, &neutral) else {
-        panic!("no host language cause")
-    };
-    assert_eq!(findings.len(), 1);
-    let diagnostic = findings[0].diagnostic();
-    assert_eq!(
-        (
-            diagnostic.definition().phase,
-            diagnostic.definition().condition,
-            diagnostic.definition().rule
-        ),
-        ("planning", "unsupported_operation", None)
-    );
-    assert_eq!(
-        diagnostic.spec_paths,
-        ["columns.VALUE.derivation.function.name"]
-    );
-    assert_eq!(
-        diagnostic.context,
-        [
-            ("function".into(), JsonValue::String("id".into())),
-            ("operation".into(), JsonValue::String("environment".into())),
-        ]
-        .into()
-    );
-    reached.insert(rendered(&diagnostic));
-    // A 1.0 project's function files are language-neutral and read by every
+    // A project's function files are language-neutral and read by every
     // engine, so one that claims no host language compiles a call of any of
     // them and misses no implementation (FUNC-1); a run of the call is refused
     // instead (D110).
     let neutral = Environment::admit(
         None,
         Draft {
-            surface: yamaa_core::ast::Surface::V1 { minor: 0 },
             language: None,
             lock: None,
             functions: Some(vec![definition("id").file(&[(Language::R, "project::id")])]),

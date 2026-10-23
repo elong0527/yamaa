@@ -1118,11 +1118,8 @@ mod schema {
                 })
                 .collect();
             let section = &declared.sections[0];
-            let required = submission_composition::Required::admit(
-                declared.study.as_ref(),
-                section,
-                project.header.surface,
-            )?;
+            let required =
+                submission_composition::Required::admit(declared.study.as_ref(), section)?;
             submission_composition::compose(
                 required,
                 &Catalogue::admit(vec![]).unwrap(),
@@ -1175,14 +1172,14 @@ mod schema {
         }
     }
     mod submission_document {
-        //! The study and sections a 0.5 project lowers into its root
-        //! (`front_end::v0_5::project::sections`): complete declarations lower to the
+        //! The study and sections a project lowers into its root
+        //! (`front_end::v1::project::sections`): complete declarations lower to the
         //! tree, and every closed-shape refusal keeps its exact document nodes.
         use yamaa_core::{
             ast,
             front_end::{
                 lowering::sections::{self, Cause},
-                v0_5::project::{project as lower_project, sections},
+                v1::project::{project as lower_project, sections},
             },
             project_environment::Submission,
             schema::{Document, DocumentNode as N},
@@ -1202,9 +1199,21 @@ mod schema {
                     N::Null,
                     N::Text("environments".into()),
                     N::Mapping(vec![]),
-                    N::Mapping(vec![(0, 1), (2, 3), (4, 5), (6, 7), (8, 9)]),
+                    N::Text("yamaa".into()),
+                    N::Text("1.0".into()),
+                    N::Text("type".into()),
+                    N::Text("project".into()),
+                    N::Mapping(vec![
+                        (10, 11),
+                        (12, 13),
+                        (0, 1),
+                        (2, 3),
+                        (4, 5),
+                        (6, 7),
+                        (8, 9),
+                    ]),
                 ],
-                10,
+                14,
             )
             .unwrap()
         }
@@ -1280,17 +1289,30 @@ mod schema {
             fn guide(&mut self, name: &str) -> usize {
                 self.text_map(&[("name", name), ("version", "3.4"), ("status", "Final")])
             }
+            /// A section's `standards`, listing the one guide `guide`.
+            fn standards(&mut self, guide: usize) -> usize {
+                self.node(N::Sequence(vec![guide]))
+            }
             fn section(&mut self, guide: &str) -> usize {
                 let guide = self.guide(guide);
+                let standards = self.standards(guide);
                 let one = self.text("specs/dm.yaml");
                 let two = self.text("specs/ae.yaml");
                 let specs = self.node(N::Sequence(vec![one, two]));
                 let define = self.text("results/define.xml");
                 self.map(vec![
-                    ("standard", guide),
+                    ("standards", standards),
                     ("specs", specs),
                     ("define", define),
                 ])
+            }
+            /// A project root holding `fields` under the header of a 1.0
+            /// project, which lowering the whole project reads.
+            fn project(&mut self, mut fields: Vec<(&str, usize)>) -> usize {
+                let version = self.text("1.0");
+                let kind = self.text("project");
+                fields.splice(0..0, [("yamaa", version), ("type", kind)]);
+                self.map(fields)
             }
             fn finish(self, root: usize) -> Document {
                 Document::new(self.0, root).unwrap()
@@ -1326,7 +1348,7 @@ mod schema {
             })
             .collect();
             let docs = a.node(N::Sequence(docs));
-            let datasets = a.text("json");
+            let transport = a.text("dataset_json");
             let context = a.text("Other");
             let xml_lang = a.text("fr-CA");
             let file = a.text("FILE.analysis-1");
@@ -1337,13 +1359,14 @@ mod schema {
             ]);
             let originator = a.text("Independent sponsor");
             let style = a.text("styles/define.xsl");
+            let standards = a.standards(guide);
             let adam = a.map(vec![
                 ("documents", docs),
                 ("originator", originator),
-                ("standard", guide),
+                ("standards", standards),
                 ("specs", specs),
                 ("define", define),
-                ("datasets", datasets),
+                ("transport", transport),
                 ("context", context),
                 ("xml_lang", xml_lang),
                 ("file_oid", file),
@@ -1351,9 +1374,10 @@ mod schema {
                 ("stylesheet", style),
             ]);
             // Other project domains are left to their own admission.
-            let python = a.text("python/environment.yaml");
+            let lock = a.text("python/uv.lock");
+            let python = a.map(vec![("lock", lock)]);
             let environments = a.map(vec![("python", python)]);
-            let root = a.map(vec![
+            let root = a.project(vec![
                 ("send", send),
                 ("environments", environments),
                 ("study", study),
@@ -1390,7 +1414,7 @@ mod schema {
             assert_eq!(standard.name.text, "SENDIG-DART");
             assert_eq!(standard.version.text, "3.4");
             assert_eq!(standard.status, ast::GuideStatus::Final);
-            assert_eq!(path(&project, standard.name.meta), "send.standard.name");
+            assert_eq!(path(&project, standard.name.meta), "send.standards[0].name");
             assert_eq!(
                 send.specs
                     .iter()
@@ -1463,8 +1487,8 @@ mod schema {
             assert_eq!(owned.sections[2].standards[0].name.text, "SDTMIG-AP");
             // The rest of the project lowers beside the declarations.
             assert_eq!(
-                project.environments[0].file.as_ref().unwrap().text,
-                "python/environment.yaml"
+                project.environments[0].lock.as_ref().unwrap().text,
+                "python/uv.lock"
             );
         }
         #[test]
@@ -1494,7 +1518,8 @@ mod schema {
         #[test]
         fn absent_declarations_and_explicit_default_values_lower_alike() {
             let mut a = Arena::default();
-            let r = a.text("r/environment.yaml");
+            let lock = a.text("r/renv.lock");
+            let r = a.map(vec![("lock", lock)]);
             let environments = a.map(vec![("r", r)]);
             let root = a.map(vec![("environments", environments)]);
             let input = a.finish(root);
@@ -1503,18 +1528,19 @@ mod schema {
             assert!(owned.sections.is_empty());
             let mut a = Arena::default();
             let guide = a.guide("SDTMIG");
+            let standards = a.standards(guide);
             let specs = a.node(N::Sequence(vec![]));
             let define = a.text("define.xml");
             let documents = a.node(N::Sequence(vec![]));
-            let datasets = a.text("json");
+            let transport = a.text("dataset_json");
             let context = a.text("Submission");
             let lang = a.text("en");
             let section = a.map(vec![
-                ("standard", guide),
+                ("standards", standards),
                 ("specs", specs),
                 ("define", define),
                 ("documents", documents),
-                ("datasets", datasets),
+                ("transport", transport),
                 ("context", context),
                 ("xml_lang", lang),
             ]);
@@ -1536,6 +1562,7 @@ mod schema {
                 ("protocol_name", "P"),
             ]);
             let guide = a.text_map(&[("name", "UNKNOWN"), ("version", ""), ("status", "final")]);
+            let standards = a.standards(guide);
             let spec = a.node(N::Integer("99".into()));
             let specs = a.node(N::Sequence(vec![spec]));
             let define = a.node(N::Null);
@@ -1546,7 +1573,7 @@ mod schema {
                 ("title", ""),
             ]);
             let documents = a.node(N::Sequence(vec![doc]));
-            let datasets = a.text("parquet");
+            let transport = a.text("parquet");
             let context = a.text("submission");
             let language = a.text("e-123456789");
             let file = a.text("");
@@ -1555,11 +1582,11 @@ mod schema {
             let style = a.text("/absolute.xsl");
             let unknown = a.text("1.0");
             let section = a.map(vec![
-                ("standard", guide),
+                ("standards", standards),
                 ("specs", specs),
                 ("define", define),
                 ("documents", documents),
-                ("datasets", datasets),
+                ("transport", transport),
                 ("context", context),
                 ("xml_lang", language),
                 ("file_oid", file),
@@ -1617,10 +1644,10 @@ mod schema {
                     Step::Field(F::Link)
                 ]
             );
-            // `datasets` is a closed choice whose only container is `json`.
+            // `transport` is a closed choice of `dataset_json` and `xpt`.
             assert_eq!(
                 findings[12].path.steps().collect::<Vec<_>>(),
-                [Step::Field(F::Adam), Step::Field(F::Datasets)]
+                [Step::Field(F::Adam), Step::Field(F::Transport)]
             );
             assert_eq!(findings[12].rule(), None);
             assert_eq!(
@@ -1665,10 +1692,10 @@ mod schema {
             let specs = a.node(N::Sequence(vec![]));
             let mut fields = vec![("specs", specs)];
             for key in [
-                "standard",
+                "standards",
                 "define",
                 "documents",
-                "datasets",
+                "transport",
                 "context",
                 "xml_lang",
                 "file_oid",
@@ -1688,7 +1715,7 @@ mod schema {
             assert_eq!(
                 findings.iter().map(|f| f.kind).collect::<Vec<_>>(),
                 [
-                    Kind::ExpectedMapping,
+                    Kind::ExpectedSequence,
                     Kind::ExpectedText,
                     Kind::ExpectedSequence,
                     Kind::ExpectedText,
@@ -1809,11 +1836,12 @@ mod schema {
         fn present_metadata_description_is_optional_and_draft_status_is_retained() {
             let mut a = Arena::default();
             let guide = a.text_map(&[("name", "ADaMIG"), ("version", "1.3"), ("status", "Draft")]);
+            let standards = a.standards(guide);
             let specs = a.node(N::Sequence(vec![]));
             let define = a.text("define.xml");
             let metadata = a.text_map(&[("id", "MDV"), ("name", "Metadata")]);
             let section = a.map(vec![
-                ("standard", guide),
+                ("standards", standards),
                 ("specs", specs),
                 ("define", define),
                 ("metadata_version", metadata),
@@ -1835,10 +1863,11 @@ mod schema {
         fn default_text_and_empty_root_remain_owned_without_authored_values() {
             let mut a = Arena::default();
             let guide = a.guide("SDTMIG");
+            let standards = a.standards(guide);
             let specs = a.node(N::Sequence(vec![]));
             let define = a.text("d.xml");
             let section = a.map(vec![
-                ("standard", guide),
+                ("standards", standards),
                 ("specs", specs),
                 ("define", define),
             ]);
@@ -1879,8 +1908,7 @@ mod schema {
                 assert_eq!(s.context, ast::DefineContext::Submission);
                 assert_eq!(s.xml_lang.text, "en");
                 // Only Define-XML composition requires the study, guide and target.
-                let Err(findings) = Required::admit(owned.study.as_ref(), s, ast::Surface::V0_5)
-                else {
+                let Err(findings) = Required::admit(owned.study.as_ref(), s) else {
                     panic!("composition requires the define declarations")
                 };
                 assert_eq!(
@@ -1890,7 +1918,7 @@ mod schema {
                         .collect::<Vec<_>>(),
                     [
                         "study".to_string(),
-                        format!("{name}.standard"),
+                        format!("{name}.standards"),
                         format!("{name}.define")
                     ]
                 );
@@ -1936,6 +1964,7 @@ mod schema {
                 ("adam", F::Adam, "ADaMIG"),
             ] {
                 let guide = a.guide(guide);
+                let standards = a.standards(guide);
                 let spec = a.text("specifications/domain.yaml");
                 let specs = a.node(N::Sequence(vec![spec]));
                 let define = a.text("results/define.xml");
@@ -1956,7 +1985,7 @@ mod schema {
                 let sequence = a.node(N::Sequence(vec![first, null, scalar, last]));
                 let section = a.map(vec![
                     ("documents", sequence),
-                    ("standard", guide),
+                    ("standards", standards),
                     ("specs", specs),
                     ("define", define),
                 ]);
@@ -2071,7 +2100,7 @@ mod schema {
                 let version = a.text("1.0");
                 fields.push((key, version));
                 let section = a.node(N::Mapping(fields));
-                let root = a.map(vec![(family, section)]);
+                let root = a.project(vec![(family, section)]);
                 let input = a.finish(root);
                 let project = lower_project(&input, None).unwrap();
                 drop(input);
@@ -2449,11 +2478,8 @@ mod schema {
             let project = v1::project::project(&project(), None).unwrap();
             let declared = project.submission.unwrap();
             let section = &declared.sections[0];
-            let required = submission_composition::Required::admit(
-                declared.study.as_ref(),
-                section,
-                project.header.surface,
-            )?;
+            let required =
+                submission_composition::Required::admit(declared.study.as_ref(), section)?;
             let tree = v1::spec::lower(document, None).into_spec();
             submission_composition::compose(
                 required,

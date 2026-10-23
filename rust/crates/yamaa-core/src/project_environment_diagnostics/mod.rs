@@ -1,15 +1,12 @@
 //! Project admission findings retain their typed input and authored field paths.
 //! Resource exhaustion and host failures remain outside semantic vocabulary.
 //!
-//! A finding in a 0.5 environment file or one of its definitions fails as
-//! `project_environment_invalid`, at the environment file's path to it
-//! (`functions.<name>...`, `lock`). One in a 1.0 function file fails as
-//! `function_file_invalid` at the function file's own path to it, the lock
-//! at the project's `environments.<host>.lock`, with the same reasons and
-//! context (FUNC-2, FUNC-3; P-FN-2).
+//! A finding in a function file fails as `function_file_invalid` at the
+//! function file's own path to it, and one in the lock at the project's
+//! `environments.<host>.lock` (FUNC-2, FUNC-3; P-FN-2).
 use crate::json::Value as JsonValue;
 use crate::{
-    ast::{self, Surface},
+    ast,
     diagnostic::{ConditionCode as C, Diagnostic},
     project_environment::{Draft, Finding, LockKind},
     project_function::{Finding as F, Language},
@@ -28,21 +25,10 @@ pub enum Error {
     UnavailableShape,
 }
 
-/// Project scalar failures with the written text each finding keeps. Integer
-/// values outside runtime i64 keep their exact mathematical decimal text.
-/// A normalized-shape contradiction has no fabricated language condition.
-pub fn scalar_diagnostics(
-    findings: &[crate::project_function_document::Finding],
-) -> Result<Vec<Diagnostic>, Error> {
-    let mut project = Owned;
-    findings
-        .iter()
-        .map(|finding| scalar_diagnostic(finding, C::ProjectEnvironmentInvalid, &mut project))
-        .collect()
-}
-
-/// The scalar failures of a 1.0 function file, each at its own path in that
-/// file (FUNC-2).
+/// The scalar failures of a function file, each at its own path in that file
+/// (FUNC-2), with the written text each finding keeps. Integer values outside
+/// runtime i64 keep their exact mathematical decimal text. A normalized-shape
+/// contradiction has no fabricated language condition.
 pub fn function_file_scalar_diagnostics(
     findings: &[crate::project_function_document::Finding],
 ) -> Result<Vec<Diagnostic>, Error> {
@@ -164,22 +150,13 @@ fn function(draft: &Draft, index: usize) -> Result<&ast::Function, Error> {
         .and_then(|f| f.get(index))
         .ok_or(Error::InvalidIndex)
 }
-/// Start a definition's diagnostic: at the environment file's
-/// `functions.<name>` for a 0.5 definition, and at the root of a 1.0 function
-/// file, whose paths start without a separator. The flag says whether the
-/// path has begun.
-fn definition_start<'a, B: Project<'a>>(
-    definition: &'a ast::Function,
-    project: &mut B,
-) -> Result<(B::Output, bool), Error> {
-    if definition.header.is_some() {
-        return Ok((project.start(C::FunctionFileInvalid, "")?, false));
-    }
-    let mut d = project.start(C::ProjectEnvironmentInvalid, "functions.")?;
-    project.append(&mut d, &definition.name.name)?;
-    Ok((d, true))
+/// Start a definition's diagnostic at the root of its function file, whose
+/// paths start without a separator. The flag says whether the path has
+/// begun.
+fn definition_start<'a, B: Project<'a>>(project: &mut B) -> Result<(B::Output, bool), Error> {
+    Ok((project.start(C::FunctionFileInvalid, "")?, false))
 }
-/// Append a field to a definition's path; the first field of a 1.0 function
+/// Append a field to a definition's path; the first field of a function
 /// file's path drops its separator.
 fn segment<'a, B: Project<'a>>(
     project: &mut B,
@@ -198,25 +175,26 @@ fn segment<'a, B: Project<'a>>(
     *begun = true;
     project.append(d, text)
 }
-/// The field of a 1.0 function file that names a host language's callable.
+/// The field of a function file that names a host language's callable.
 fn implementation_field(language: Language) -> &'static str {
     match language {
         Language::Python => ".implementations.python",
         Language::R => ".implementations.r",
     }
 }
-/// The field of a 1.0 project file that holds a host language's lock.
+/// The field of a project file that holds a host language's lock.
 pub fn lock_field(language: Language) -> &'static str {
     match language {
         Language::Python => "environments.python.lock",
         Language::R => "environments.r.lock",
     }
 }
-/// The lock a 1.0 project holds for `host`, written `written`, when its
-/// captured bytes are no packaging lock of either host language: it fails as
-/// the project's function files do, at the field that holds it (FUNC-3), with
-/// the context of the 0.5 record it replaces and the project file, which holds
-/// that field, as `source`.
+/// The lock a project holds for `host`, written `written`, when its captured
+/// bytes are no packaging lock of either host language: it fails as the
+/// project's function files do, at the field that holds it (FUNC-3), naming
+/// the project file, which holds that field, as `source` and `entry`, the
+/// lock as written as `path`, the field as `environment_path` and its
+/// `cause`.
 pub fn invalid_packaging_lock(host: Language, project: &str, written: &str) -> Diagnostic {
     let field = lock_field(host);
     let text = |value: &str| JsonValue::String(value.into());
@@ -240,12 +218,10 @@ fn function_diagnostic<'a, B: Project<'a>>(
     finding: &'a F,
     project: &mut B,
 ) -> Result<B::Output, Error> {
-    let (mut d, mut begun) = definition_start(definition, project)?;
+    let (mut d, mut begun) = definition_start(project)?;
     project.context(&mut d, "function", &definition.name.name)?;
-    let file = definition.header.is_some();
     let (reason, field) = match finding {
-        F::InvalidName => ("invalid_function_name", if file { ".name" } else { "" }),
-        F::InvalidCallable => ("invalid_callable", ".function"),
+        F::InvalidName => ("invalid_function_name", ".name"),
         F::MissingImplementation => ("missing_implementation", ".implementations"),
         F::InvalidImplementation(language) => {
             project.context(&mut d, "language", language.key())?;
@@ -445,12 +421,7 @@ fn finding_diagnostic<'a, B: Project<'a>>(
             language: declared,
             actual,
         } => {
-            let mut d = match draft.surface {
-                Surface::V0_5 => project.start(C::ProjectEnvironmentInvalid, "lock")?,
-                Surface::V1 { .. } => {
-                    project.start(C::FunctionFileInvalid, lock_field(*declared))?
-                }
-            };
+            let mut d = project.start(C::FunctionFileInvalid, lock_field(*declared))?;
             project.context(&mut d, "reason", "lock_kind_mismatch")?;
             project.context(&mut d, "language", declared.key())?;
             project.context(&mut d, "actual_lock_kind", lock(*actual))?;
@@ -458,11 +429,9 @@ fn finding_diagnostic<'a, B: Project<'a>>(
         }
         Finding::DuplicateFunction { function: index } => {
             let definition = function(draft, *index)?;
-            // A 1.0 name is declared by the second file that writes it.
-            let (mut d, mut begun) = definition_start(definition, project)?;
-            if definition.header.is_some() {
-                segment(project, &mut d, &mut begun, "name")?;
-            }
+            // A name is declared by the second file that writes it.
+            let (mut d, mut begun) = definition_start(project)?;
+            segment(project, &mut d, &mut begun, "name")?;
             project.context(&mut d, "function", &definition.name.name)?;
             project.context(&mut d, "reason", "duplicate_function")?;
             Ok(d)

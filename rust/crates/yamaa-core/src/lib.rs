@@ -133,8 +133,6 @@ pub mod function_invocation;
 pub mod host_function_registry;
 pub mod host_functions;
 
-pub mod structural_preparation;
-
 pub mod inheritance_outcome;
 
 pub mod file_preparation;

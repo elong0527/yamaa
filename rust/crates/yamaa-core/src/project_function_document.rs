@@ -1,6 +1,6 @@
 //! Read the scalars of a structurally normalized document: the reader the
-//! project front ends ([`crate::front_end::v0_5::project`],
-//! [`crate::front_end::v1::project`]) and project call decoding share. A value
+//! project front end ([`crate::front_end::v1::project`]) and project call
+//! decoding share. A value
 //! the engine cannot run with, or a node whose shape the schema should have
 //! refused, is a finding at its authored path.
 use crate::{

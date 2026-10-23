@@ -128,9 +128,7 @@ vocabulary! {
         TableLimit => "table_limit",
         TargetChanged => "target_changed",
         Transport => "transport",
-        UnknownClass => "unknown_class",
         ValidationPolicy => "validation_policy",
-        VersionedRootRequired => "versioned_root_required",
         YamlAdmission => "yaml_admission",
         YamlDecode => "yaml_decode",
         YamlReaderUnavailable => "yaml_reader_unavailable",
@@ -139,8 +137,8 @@ vocabulary! {
 
 /// Format classified installed-package disagreement. Packaging tools supply the
 /// facts; this owns the stable normative issue identity without comparing versions.
-/// `field` declares the lock: `lock` in a 0.5 environment file, and
-/// `environments.<host>.lock` in a 1.0 project file (FUNC-3).
+/// `field` declares the lock: `environments.<host>.lock` in the project file
+/// (FUNC-3).
 pub fn lock_mismatch(field: &str, context: crate::diagnostic::Context) -> Diagnostic {
     Diagnostic {
         code: ConditionCode::ProjectLockMismatch,
