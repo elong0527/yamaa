@@ -227,7 +227,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             vec![
                 (
                     "reason",
-                    "a derive step reads only keep-declared named intermediates",
+                    "a derive step reads only named intermediates that declare a selection (keep or nearest)",
                 ),
                 ("intermediate", "CAP"),
             ],

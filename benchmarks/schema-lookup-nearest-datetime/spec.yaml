@@ -1,0 +1,70 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADEG
+keys: [STUDYID, USUBJID, EGSEQ]
+input:
+  EG: {path: input/eg.csv, types: {EGSEQ: int, EGDTC: datetime}}
+  PC:
+    path: input/pc.csv
+    types: {PCSEQ: int, PCDTM: datetime, PCSTRESN: float}
+base: EG
+
+output:
+  path: adeg.csv
+  columns: [STUDYID, USUBJID, EGSEQ, ADTM, PCSEQ, PCDTM, PCCONC]
+
+intermediates:
+  # The subject's sample nearest in time to the ECG, before or after it.
+  # Of two samples equally far from the ECG the earlier is read, and of two
+  # taken at the same time the one stored first, whatever their sequence
+  # numbers.
+  - id: NEAREST
+    dataset: PC
+    key: [STUDYID, USUBJID]
+    nearest: {source: PCDTM, to: EG.EGDTC, unit: hour}
+    columns: [PCSEQ, PCDTM, PCSTRESN]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: EG.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: EG.USUBJID
+
+  - name: EGSEQ
+    type: int
+    label: Sequence Number
+    derivation: EG.EGSEQ
+
+  - name: ADTM
+    type: datetime
+    label: Analysis Date/Time
+    derivation: EG.EGDTC
+
+  - name: PCSEQ
+    type: int
+    label: Sequence Number of the Nearest Sample
+    derivation: NEAREST.PCSEQ
+
+  - name: PCDTM
+    type: datetime
+    label: Date/Time of the Nearest Sample
+    derivation: NEAREST.PCDTM
+
+  - name: PCCONC
+    type: float
+    label: Concentration of the Nearest Sample
+    derivation: NEAREST.PCSTRESN
+
+verifications:
+  - row_count:
+      min: 3
+      max: 3
+  - all_or_none:
+      id: nearest-sample-columns-travel-together
+      columns: [PCSEQ, PCDTM, PCCONC]

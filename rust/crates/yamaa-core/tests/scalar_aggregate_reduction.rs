@@ -551,7 +551,7 @@ mod scalar {
             expression: &str,
             resolver: &mut RecordingResolver,
         ) -> Result<Result<Number, Box<EvaluationError<Infallible>>>, Failure> {
-            match compile(expression, Context::Compute, SPEC_PATH) {
+            match compile(expression, Context::Derivation, SPEC_PATH) {
                 Ok(plan) => Ok(plan.evaluate_number(resolver).inspect_err(|failure| {
                     let span = failure.source_span.expect("a formula failure has a span");
                     assert!(span.start < span.end);
@@ -619,7 +619,7 @@ mod scalar {
         /// Cover every nonnumeric runtime type without silently converting a numeric string.
         #[test]
         fn identifiers_reject_every_nonnumeric_type() {
-            let plan = compile("+A", Context::Compute, SPEC_PATH).unwrap();
+            let plan = compile("+A", Context::Derivation, SPEC_PATH).unwrap();
             for value in [
                 Value::Str("42".into()),
                 Value::Bool(true),
@@ -675,7 +675,7 @@ mod scalar {
                 }),
                 trace: Vec::new(),
             };
-            let failure = compile("L + (A * B)", Context::Compute, SPEC_PATH)
+            let failure = compile("L + (A * B)", Context::Derivation, SPEC_PATH)
                 .unwrap()
                 .evaluate_number(&mut resolver)
                 .unwrap_err();
@@ -709,7 +709,7 @@ mod scalar {
                     Ok(Selection::Present(Value::Int(self.0)))
                 }
             }
-            let plan = compile("A + A", Context::Compute, SPEC_PATH).unwrap();
+            let plan = compile("A + A", Context::Derivation, SPEC_PATH).unwrap();
             let mut resolver = CountingResolver(0);
             assert_eq!(plan.evaluate_number(&mut resolver), Ok(Number::Int(3)));
             assert_eq!(plan.evaluate_number(&mut resolver), Ok(Number::Int(7)));

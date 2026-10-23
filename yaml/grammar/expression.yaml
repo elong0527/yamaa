@@ -9,9 +9,9 @@
 #
 # Each case names the context it is written in. A context decides the root
 # and the constructs and functions a text may use, so the same text can be
-# admitted in one context and refused in another. Text in an expression field
-# is read in the `derivation` context. The `compute` context, the numeric part
-# of `derivation`, is read in no field; the typed core replays its cases.
+# admitted in one context and refused in another. A field typed `predicate`
+# is read in the `predicate` context, `aggregate.expr` in the `aggregate`
+# context, and text in an expression field in the `derivation` context.
 #
 # `grammar/README.md` states the file format and the shape notation.
 schema_version: "1.0"
@@ -19,7 +19,7 @@ contract: expression
 contract_version: "1.1.0"
 rule: formulas
 start: expression
-contexts: [predicate, compute, aggregate, derivation]
+contexts: [predicate, aggregate, derivation]
 productions:
   - name: expression
     definition: |-
@@ -498,14 +498,14 @@ cases:
     identifiers: [AVAL]
     shape: (= (id AVAL) (int -3))
   - id: a-sign-before-a-number-is-the-numbers-own
-    context: compute
+    context: derivation
     covers: [literal, unary]
     text: "A + -1"
     parse: accept
     identifiers: [A]
     shape: (+ (id A) (int -1))
   - id: the-least-int-is-a-signed-literal
-    context: compute
+    context: derivation
     covers: [literal, unary]
     text: "A + -9223372036854775808"
     parse: accept
@@ -518,7 +518,7 @@ cases:
     parse: reject
     condition: integer_overflow
   - id: a-literal-outside-the-int-range-is-refused-in-a-formula
-    context: compute
+    context: derivation
     covers: [literal, rejection]
     text: "9223372036854775808 * 0"
     parse: reject
@@ -544,7 +544,7 @@ cases:
     parse: reject
     condition: invalid_expression
   - id: a-leading-decimal-point-is-outside-the-grammar
-    context: compute
+    context: derivation
     covers: [literal, rejection]
     text: "A + .5"
     parse: reject
@@ -596,162 +596,147 @@ cases:
     text: "ADT >= DATE '2025-02-30'"
     parse: reject
     condition: invalid_expression
-  - id: null-is-a-literal-in-a-formula
-    context: compute
-    covers: [null-literal, literal]
-    text: "NULL"
-    parse: accept
-    identifiers: []
-    shape: "null"
   # Arithmetic: precedence, association and signs.
   - id: multiplication-binds-tighter-than-addition
-    context: compute
+    context: derivation
     covers: [arithmetic, precedence]
     text: "A + B * C"
     parse: accept
     identifiers: [A, B, C]
     shape: (+ (id A) (* (id B) (id C)))
   - id: division-binds-tighter-than-subtraction
-    context: compute
+    context: derivation
     covers: [arithmetic, precedence]
     text: "A - B / C"
     parse: accept
     identifiers: [A, B, C]
     shape: (- (id A) (/ (id B) (id C)))
   - id: repeated-subtraction-associates-from-the-left
-    context: compute
+    context: derivation
     covers: [arithmetic, precedence]
     text: "A - B - C"
     parse: accept
     identifiers: [A, B, C]
     shape: (- (- (id A) (id B)) (id C))
   - id: repeated-division-associates-from-the-left
-    context: compute
+    context: derivation
     covers: [arithmetic, precedence]
     text: "A / B / C"
     parse: accept
     identifiers: [A, B, C]
     shape: (/ (/ (id A) (id B)) (id C))
   - id: parentheses-override-arithmetic-precedence
-    context: compute
+    context: derivation
     covers: [arithmetic, grouping]
     text: "(A + B) * C"
     parse: accept
     identifiers: [A, B, C]
     shape: (* (+ (id A) (id B)) (id C))
   - id: a-unary-sign-binds-only-its-primary
-    context: compute
+    context: derivation
     covers: [unary, precedence]
     text: "-A * B"
     parse: accept
     identifiers: [A, B]
     shape: (* (neg (id A)) (id B))
   - id: a-leading-plus-is-a-unary-sign
-    context: compute
+    context: derivation
     covers: [unary]
     text: "+A + B"
     parse: accept
     identifiers: [A, B]
     shape: (+ (pos (id A)) (id B))
   - id: a-unary-sign-applies-to-a-group
-    context: compute
+    context: derivation
     covers: [unary, grouping]
     text: "-(A + B)"
     parse: accept
     identifiers: [A, B]
     shape: (neg (+ (id A) (id B)))
   - id: a-doubled-sign-is-outside-the-grammar
-    context: compute
+    context: derivation
     covers: [unary, rejection]
     text: "--A"
     parse: reject
     condition: invalid_expression
   - id: identifiers-are-case-sensitive-in-a-formula
-    context: compute
+    context: derivation
     covers: [identifier, keyword-case]
     text: "aval + AVAL"
     parse: accept
     identifiers: [AVAL, aval]
     shape: (+ (id aval) (id AVAL))
   - id: a-qualified-identifier-reads-a-record-lookup-field
-    context: compute
+    context: derivation
     covers: [identifier]
     text: "LB.LBSTRESN * 2"
     parse: accept
     identifiers: [LB.LBSTRESN]
     shape: (* (id LB.LBSTRESN) (int 2))
   - id: a-three-part-identifier-is-outside-a-formula
-    context: compute
+    context: derivation
     covers: [identifier, rejection]
     text: "A.B.C + 1"
     parse: reject
     condition: invalid_expression
   - id: a-word-of-a-construct-outside-the-grammar-is-a-name
-    context: compute
+    context: derivation
     covers: [identifier, reserved]
     text: "CASE + END"
     parse: accept
     identifiers: [CASE, END]
     shape: (+ (id CASE) (id END))
   - id: an-integer-literal-in-a-formula
-    context: compute
+    context: derivation
     covers: [literal]
     text: "A + 42"
     parse: accept
     identifiers: [A]
     shape: (+ (id A) (int 42))
   - id: a-fraction-makes-a-formula-literal-float
-    context: compute
+    context: derivation
     covers: [literal]
     text: "A * 0.0167"
     parse: accept
     identifiers: [A]
     shape: (* (id A) (float 0.0167))
   - id: an-exponent-makes-a-formula-literal-float
-    context: compute
+    context: derivation
     covers: [literal]
     text: "A * 1E-3"
     parse: accept
     identifiers: [A]
     shape: (* (id A) (float 1E-3))
   - id: a-trailing-decimal-point-is-outside-a-formula
-    context: compute
+    context: derivation
     covers: [literal, rejection]
     text: "A + 5."
     parse: reject
     condition: invalid_expression
   # Functions.
-  - id: the-bmi-formula-parses
-    context: compute
-    covers: [call, arithmetic]
-    text: "WEIGHTKG / POWER(HEIGHTCM / 100, 2)"
-    parse: accept
-    identifiers: [HEIGHTCM, WEIGHTKG]
-    shape: (/ (id WEIGHTKG) (call POWER (/ (id HEIGHTCM) (int 100))
-      (int 2)))
   - id: function-names-are-case-insensitive
-    context: compute
+    context: derivation
     covers: [call, keyword-case]
     text: "power(2, 3)"
     parse: accept
     identifiers: []
     shape: (call POWER (int 2) (int 3))
   - id: null-is-an-argument-rather-than-a-name
-    context: compute
+    context: derivation
     covers: [call, null-literal]
     text: "NULLIF(A, NULL)"
     parse: accept
     identifiers: [A]
     shape: (call NULLIF (id A) null)
   - id: null-is-case-insensitive
-    context: compute
+    context: derivation
     covers: [null-literal, keyword-case]
     text: "NULLIF(null, 0)"
     parse: accept
     identifiers: []
     shape: (call NULLIF null (int 0))
   - id: every-numeric-function-parses
-    context: compute
+    context: derivation
     covers: [call, vocabulary]
     text: "ABS(A) + CEIL(A) + FLOOR(A) + TRUNC(A) + SQRT(A) + EXP(A)
       + LN(A) + MOD(A, 2) + POWER(A, 2) + NULLIF(A, 1)"
@@ -762,154 +747,129 @@ cases:
       (call EXP (id A))) (call LN (id A))) (call MOD (id A) (int 2)))
       (call POWER (id A) (int 2))) (call NULLIF (id A) (int 1)))
   - id: average-daily-dose-guards-its-division
-    context: compute
+    context: derivation
     covers: [call, arithmetic]
     text: "CUMDOSE / NULLIF(TRTDURD, 0)"
     parse: accept
     identifiers: [CUMDOSE, TRTDURD]
     shape: (/ (id CUMDOSE) (call NULLIF (id TRTDURD) (int 0)))
   - id: rounding-with-ties-away-from-zero-is-not-in-the-vocabulary
-    context: compute
+    context: derivation
     covers: [vocabulary, rejection]
     text: "ROUND_HALF_AWAY_FROM_ZERO(A, 1)"
     parse: reject
     condition: prohibited_function
   - id: rounding-is-not-in-the-vocabulary
-    context: compute
+    context: derivation
     covers: [vocabulary, rejection]
     text: "ROUND(A, 2)"
     parse: reject
     condition: prohibited_function
   - id: log-is-not-in-the-vocabulary
-    context: compute
+    context: derivation
     covers: [vocabulary, rejection]
     text: "LOG(A)"
     parse: reject
     condition: prohibited_function
   - id: greatest-is-not-in-the-vocabulary
-    context: compute
+    context: derivation
     covers: [vocabulary, rejection]
     text: "GREATEST(A, B)"
     parse: reject
     condition: prohibited_function
   - id: least-is-not-in-the-vocabulary
-    context: compute
+    context: derivation
     covers: [vocabulary, rejection]
     text: "LEAST(A, B)"
     parse: reject
     condition: prohibited_function
   - id: coalesce-is-not-in-the-vocabulary
-    context: compute
+    context: derivation
     covers: [vocabulary, rejection]
     text: "COALESCE(A, B, 0)"
     parse: reject
     condition: prohibited_function
   - id: abs-takes-exactly-one-argument
-    context: compute
+    context: derivation
     covers: [vocabulary, rejection]
     text: "ABS(A, B)"
     parse: reject
     condition: prohibited_function
   - id: abs-requires-an-argument
-    context: compute
+    context: derivation
     covers: [vocabulary, rejection]
     text: "ABS()"
     parse: reject
     condition: prohibited_function
   - id: nullif-takes-exactly-two-arguments
-    context: compute
+    context: derivation
     covers: [vocabulary, rejection]
     text: "NULLIF(A, B, C)"
     parse: reject
     condition: prohibited_function
-  # Compute: a numeric root over the current row.
+  # Expression fields: any value over the current row. A name or a literal
+  # may stand alone, quoted text and temporal literals are values, and
+  # comparisons, Boolean logic and reductions are refused.
   - id: a-reduction-is-refused-in-a-formula
-    context: compute
+    context: derivation
     covers: [reduction, context, rejection]
     text: "SUM(A)"
     parse: reject
     condition: prohibited_function
-  - id: a-record-count-is-refused-in-a-formula
-    context: compute
-    covers: [star, context, rejection]
-    text: "COUNT(EX.*)"
-    parse: reject
-    condition: prohibited_function
   - id: str-contains-is-refused-in-a-formula
-    context: compute
+    context: derivation
     covers: [call, context, rejection]
     text: "str_contains(A, B)"
     parse: reject
     condition: prohibited_function
   - id: a-comparison-is-not-a-formula
-    context: compute
+    context: derivation
     covers: [context, rejection]
     text: "A > B"
     parse: reject
     condition: prohibited_construct
   - id: a-boolean-operator-is-not-a-formula
-    context: compute
+    context: derivation
     covers: [context, rejection]
     text: "A AND B"
     parse: reject
     condition: prohibited_construct
   - id: a-truth-literal-is-not-a-formula-operand
-    context: compute
+    context: derivation
     covers: [context, literal, rejection]
     text: "A + TRUE"
     parse: reject
     condition: prohibited_construct
-  - id: a-string-literal-is-not-a-formula-operand
-    context: compute
-    covers: [context, literal, rejection]
-    text: "A + 'text'"
-    parse: reject
-    condition: prohibited_construct
-  - id: a-temporal-literal-is-not-a-formula-operand
-    context: compute
-    covers: [context, temporal, rejection]
-    text: "DATE '2025-06-01'"
-    parse: reject
-    condition: prohibited_construct
   - id: a-conditional-is-outside-the-grammar
-    context: compute
+    context: derivation
     covers: [rejection]
     text: "CASE WHEN A THEN 1 ELSE 2 END"
     parse: reject
     condition: invalid_expression
   - id: a-window-is-outside-the-grammar
-    context: compute
+    context: derivation
     covers: [rejection]
     text: "A OVER B"
     parse: reject
     condition: invalid_expression
-  - id: an-empty-formula-is-rejected
-    context: compute
-    covers: [rejection]
-    text: ""
-    parse: reject
-    condition: invalid_expression
   - id: an-unclosed-group-is-rejected
-    context: compute
+    context: derivation
     covers: [grouping, rejection]
     text: "(A + B"
     parse: reject
     condition: invalid_expression
   - id: a-trailing-token-is-rejected
-    context: compute
+    context: derivation
     covers: [rejection]
     text: "A B"
     parse: reject
     condition: invalid_expression
   - id: an-unexpected-character-is-rejected
-    context: compute
+    context: derivation
     covers: [rejection]
     text: "A # B"
     parse: reject
     condition: invalid_expression
-  # Expression fields: any value over the current row. A name or a literal
-  # may stand alone, quoted text and temporal literals are values, and
-  # comparisons, Boolean logic and reductions are refused.
   - id: a-name-alone-in-an-expression-field-is-a-reference
     context: derivation
     covers: [identifier, context]
@@ -1275,6 +1235,12 @@ cases:
     context: aggregate
     covers: [context, literal, rejection]
     text: "SUM(A) + 'text'"
+    parse: reject
+    condition: prohibited_construct
+  - id: a-temporal-literal-is-not-an-aggregate-operand
+    context: aggregate
+    covers: [context, temporal, rejection]
+    text: "DATE '2025-06-01'"
     parse: reject
     condition: prohibited_construct
   - id: a-conditional-over-reductions-is-outside-the-grammar

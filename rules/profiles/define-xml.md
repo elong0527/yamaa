@@ -189,8 +189,8 @@ column in its `output.columns` must declare both `label` and
 `root.submission`, or an output column with no `label` or no
 `column.submission`, fails.
 
-Fails: `submission_metadata_missing`, `value_not_permitted`.
-Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionMetadataMissing`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionKeyNotOutput`, `rust/crates/yamaa-adapters/tests/submission_service.rs::missing_study_is_the_real_typed_owner_before_any_metadata_verification`, `rust/crates/yamaa/tests/language_header.rs::missing_submission_metadata_is_reported_at_the_listing_or_the_column_submission`.
+Fails: `submission_metadata_missing`.
+Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionMetadataMissing`, `rust/crates/yamaa-adapters/tests/submission_service.rs::missing_study_is_the_real_typed_owner_before_any_metadata_verification`, `rust/crates/yamaa/tests/language_header.rs::missing_submission_metadata_is_reported_at_the_listing_or_the_column_submission`.
 
 A document reports on the whole artifact, so a column with nothing to report is
 a gap in the document, not an omitted row. A specification without
@@ -202,8 +202,11 @@ without `column.submission` fails at that column's `submission`,
 `label` in `detail`; a column that lacks both fails once, for its
 `submission`.
 
-A specification whose `keys` names a column its `output.columns` leaves out
-fails composition with `value_not_permitted` at `<section>.specs[<n>].keys`.
+A key that is not an output column fails under
+[OUTPUT-2](../output.md#output-2), as checking the specification reports it:
+`internal_column_in_keys` for a declared column and `undeclared_column` for a
+name no column declares, at the key under its listing,
+`<section>.specs[<n>].keys[<i>]`, naming the column in `column`.
 
 <a id="define-8"></a>
 

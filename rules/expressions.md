@@ -171,12 +171,12 @@ written as expression-field text, or a YAML number, Boolean or null.
 ### EXPR-5. An expression field reads a bare name as a reference and quoted text as a literal
 
 A `derivation`, a `derivations` entry, `then`, `otherwise`, a handled
-wrapper's `value`, a key match value and a function argument are expression
-fields: each holds one expression of the closed grammar
-([FORMULA-1](formulas.md#formula-1)), in which a bare name is a reference,
-quoted text such as `'DM'` is a literal, and a YAML number, Boolean or null
-is a literal. A forgotten quote therefore fails validation as an unknown
-name. A value field holds a constant, and its bare text is text.
+wrapper's `value`, a key match value, a nearest selection's `to` and a
+function argument are expression fields: each holds one expression of the
+closed grammar ([FORMULA-1](formulas.md#formula-1)), in which a bare name is a
+reference, quoted text such as `'DM'` is a literal, and a YAML number,
+Boolean or null is a literal. A forgotten quote therefore fails validation as
+an unknown name. A value field holds a constant, and its bare text is text.
 
 Fails: `unknown_field`, `redundant_long_form`.
 Evidence: `rust/crates/yamaa-adapters/tests/declaration_v1_lowering.rs::text_holding_one_literal_lowers_to_it_and_other_text_to_a_formula`, `schema-shorthand`, `schema-expressions`, `rust/crates/yamaa-core/tests/schema_validation.rs::bare_derivation_strings_are_source_references_never_calls`, `rust/crates/yamaa-core/tests/schema_validation.rs::registry_and_bare_derivation_diagnostics_preserve_paths_and_context`.

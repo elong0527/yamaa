@@ -118,7 +118,7 @@ mod execution {
             handler: Option<Value>,
         ) -> NumericDerivation {
             NumericDerivation::new(
-                compile(expression, Context::Compute, EXPRESSION).unwrap(),
+                compile(expression, Context::Derivation, EXPRESSION).unwrap(),
                 target,
                 COLUMN,
                 handler.map(|value| LiteralHandler {
@@ -251,7 +251,7 @@ mod execution {
         fn accounting_retains_zero_declarations_and_prior_firings_on_failure() {
             let good = derivation("A", ColumnType::Int, Some(Value::Int(7)));
             let bad = NumericDerivation::new(
-                compile("A", Context::Compute, EXPRESSION).unwrap(),
+                compile("A", Context::Derivation, EXPRESSION).unwrap(),
                 ColumnType::Int,
                 "columns.B",
                 Some(LiteralHandler {
@@ -343,7 +343,7 @@ mod execution {
             let next = NumericDerivation::new(
                 compile(
                     "A + 1",
-                    Context::Compute,
+                    Context::Derivation,
                     "columns.B.derivation.value.compute",
                 )
                 .unwrap(),

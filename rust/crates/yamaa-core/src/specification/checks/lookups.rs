@@ -62,7 +62,7 @@ pub(in crate::specification) fn driver_prohibited(
         .absent
         .as_ref()
         .map(|answer| spec.paths.segment(answer.meta.path));
-    let mut fields = ["key", "between", "order_by", "keep"]
+    let mut fields = ["key", "between", "order_by", "keep", "nearest"]
         .into_iter()
         .filter(|&field| item.written.contains(field))
         .collect::<Vec<_>>();
@@ -89,6 +89,7 @@ fn rename_only(spec: &Spec, item: &ast::Intermediate) -> bool {
         "filter",
         "order_by",
         "keep",
+        "nearest",
         "columns",
         "derivations",
         "verifications",
@@ -106,7 +107,8 @@ fn rename_only(spec: &Spec, item: &ast::Intermediate) -> bool {
 
 /// Declaration failures that precede source access and key-type binding:
 /// identifier collisions, the dataset read, empty and repeated keys, a
-/// rename-only lookup, two absence policies, and an unpaired selection.
+/// rename-only lookup, two absence policies, an order or a position beside
+/// a nearest selection, and an unpaired selection.
 pub(in crate::specification) fn admission_findings(spec: &Spec) -> Vec<PreflightFinding> {
     let mut findings = Vec::new();
     let mut identifiers = BTreeMap::<&str, String>::new();
@@ -197,6 +199,25 @@ pub(in crate::specification) fn admission_findings(spec: &Spec) -> Vec<Preflight
                 format!("{path}.require_match"),
                 Owner::Intermediate(name),
             )));
+        }
+        // A nearest selection chooses by distance, so neither an order nor a
+        // position may choose beside it (LOOKUP-26): each field written
+        // beside it, then `nearest`, in specification order. A field so
+        // refused is not also unpaired.
+        if let Some(nearest) = &item.nearest {
+            let mut beside = ["order_by", "keep"]
+                .into_iter()
+                .filter(|&field| item.written.contains(field))
+                .map(|field| format!("{path}.{field}"))
+                .collect::<Vec<_>>();
+            if !beside.is_empty() {
+                beside.push(render(spec, nearest.meta));
+                findings.push(PreflightFinding::Scalar(lookup::nearest_beside_selection(
+                    beside,
+                    Owner::Intermediate(name),
+                )));
+            }
+            continue;
         }
         // A written `order_by` needs a `keep`, even when it has no term; an
         // `order_by` with no term orders nothing, so a `keep` beside it has

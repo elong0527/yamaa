@@ -97,6 +97,11 @@ pub enum Owner {
     Range {
         intermediate: usize,
     },
+    /// The current-row value an intermediate's nearest selection measures
+    /// to (LOOKUP-26).
+    Nearest {
+        intermediate: usize,
+    },
     Order(Ordered),
     /// An intermediate's derivation.
     Binding {
@@ -234,9 +239,9 @@ impl Spec {
     /// Every expression root in declaration order: column defaults, the
     /// column checks' predicates, the root filter, each row template's
     /// groups, filter and overrides, each intermediate's key values, range,
-    /// filter, order and bindings, the dataset checks' predicates and the
-    /// output order. Every expression of the arena is reachable from exactly
-    /// one root.
+    /// filter, order, nearest reference and bindings, the dataset checks'
+    /// predicates and the output order. Every expression of the arena is
+    /// reachable from exactly one root.
     pub fn sites(&self) -> Vec<Site> {
         let mut sites = Vec::new();
         let mut push = |root, owner, scope| sites.push(Site { root, owner, scope });
@@ -307,6 +312,15 @@ impl Spec {
                     term.variable,
                     Owner::Order(Ordered::Intermediate(index)),
                     donor,
+                );
+            }
+            if let Some(nearest) = &item.nearest {
+                push(
+                    nearest.to,
+                    Owner::Nearest {
+                        intermediate: index,
+                    },
+                    Scope::Row,
                 );
             }
             for (binding, declared) in item.bindings.iter().enumerate() {

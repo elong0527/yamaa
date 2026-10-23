@@ -2,7 +2,8 @@
 //! One lookup model (LOOKUP-25): an implicit join, a named intermediate and a
 //! qualified aggregate match their keys and range (LOOKUP-9), narrow the
 //! matched records by their filter (LOOKUP-8), and select or reduce the
-//! candidates in stored record order (LOOKUP-10).
+//! candidates in stored record order (LOOKUP-10), a named intermediate by
+//! distance too (LOOKUP-26).
 use crate::support::Edit as _;
 use std::fs;
 use yamaa_adapters::file_application;
@@ -1326,4 +1327,509 @@ fn check_admits_a_row_template_range_value_against_the_rows_that_read_it() {
             "{specification}"
         );
     }
+}
+
+/// ECGs and plasma samples for the nearest selection (LOOKUP-26). S-1's
+/// first ECG lies an hour from a sample before it and an hour from one after
+/// it, and its second ECG has no time. S-2's first sample has no time, and its
+/// other two were taken at one time, the later sequence number stored first.
+const EG: &str = "STUDYID,USUBJID,EGSEQ,EGDTC\n\
+    S,S-1,1,2025-01-10T08:00\n\
+    S,S-1,2,\n\
+    S,S-2,1,2025-01-10T09:30\n";
+const PC: &str = "STUDYID,USUBJID,PCSEQ,PCDTM,PCDTC\n\
+    S,S-1,1,2025-01-10T07:00,2025-01-10T07:00\n\
+    S,S-1,2,2025-01-10T09:00,2025-01-10T09:00\n\
+    S,S-1,3,2025-01-10T12:00,2025-01-10T12:00\n\
+    S,S-2,1,,2025-01\n\
+    S,S-2,3,2025-01-10T10:00,2025-01-10T10:00\n\
+    S,S-2,2,2025-01-10T10:00,2025-01-10T10:00\n";
+
+/// Each ECG reads the sample `NEAR` selects, its intermediate written as
+/// `selection` (LOOKUP-26).
+fn nearest_ecgs(selection: &str) -> String {
+    format!(
+        "yamaa: \"1.0\"\n\
+         type: spec\n\
+         domain: OUT\n\
+         keys: [STUDYID, USUBJID, EGSEQ]\n\
+         input:\n\
+         \x20 EG: {{path: eg.csv, types: {{EGSEQ: int, EGDTC: datetime}}}}\n\
+         \x20 PC: {{path: pc.csv, types: {{PCSEQ: int, PCDTM: datetime}}}}\n\
+         base: EG\n\
+         output: {{path: out.csv, columns: [STUDYID, USUBJID, EGSEQ, PCSEQ]}}\n\
+         intermediates:\n\
+         \x20 - id: NEAR\n\
+         \x20   dataset: PC\n\
+         \x20   key: [STUDYID, USUBJID]\n\
+         {selection}\
+         columns:\n\
+         \x20 - {{name: STUDYID, type: str, derivation: EG.STUDYID}}\n\
+         \x20 - {{name: USUBJID, type: str, derivation: EG.USUBJID}}\n\
+         \x20 - {{name: EGSEQ, type: int, derivation: EG.EGSEQ}}\n\
+         \x20 - {{name: ADTM, type: datetime, derivation: EG.EGDTC}}\n\
+         \x20 - {{name: PCSEQ, type: int, derivation: NEAR.PCSEQ}}\n"
+    )
+}
+
+/// The nearest sample to the ECG's time, measured in `unit`.
+fn nearest_in(unit: &str) -> String {
+    format!("    nearest: {{source: PCDTM, to: EG.EGDTC, unit: {unit}}}\n")
+}
+
+/// LOOKUP-26: of S-1's two samples an hour from its first ECG, the earlier
+/// is read; S-2's sample without a time is never read, and of its two
+/// samples at one time the one stored first. Every elapsed unit measures the
+/// same distances, so each chooses the same samples. An ECG without a time
+/// seeks no sample and answers absence; each ECG whose sample was chosen
+/// among several counts one multiple match.
+#[test]
+fn a_nearest_selection_takes_the_earlier_source_then_the_earlier_record_on_a_tie() {
+    for unit in ["second", "minute", "hour", "day"] {
+        let fixture = Fixture::new(
+            &nearest_ecgs(&nearest_in(unit)),
+            &[("eg.csv", EG), ("pc.csv", PC)],
+        );
+        assert_eq!(agreeing(&fixture), Vec::<Value>::new(), "{unit}");
+        let (csv, counts) = fixture.saved();
+        assert_eq!(
+            csv, "STUDYID,USUBJID,EGSEQ,PCSEQ\nS,S-1,1,1\nS,S-1,2,\nS,S-2,1,3\n",
+            "{unit}"
+        );
+        for (path, count) in [
+            ("columns.PCSEQ.derivation.source.multiple_matches", 2),
+            ("columns.PCSEQ.derivation.source.absent", 1),
+        ] {
+            assert!(
+                counts.contains(&(path.into(), count)),
+                "{unit}: {path} {counts:?}"
+            );
+        }
+    }
+}
+
+/// LOOKUP-26 with TIME-4's calendar units: from a reference on 1 March 2025,
+/// samples 12 and 8 days after it and one 9 days before it are 12, 8 and 9
+/// days away, and each is one whole week away, so the earliest is read.
+#[test]
+fn a_calendar_unit_counts_whole_units_so_samples_within_one_unit_tie() {
+    let reference = "STUDYID,USUBJID,EGSEQ,EGDTC\nS,S-1,1,2025-03-01\n";
+    let samples = "STUDYID,USUBJID,PCSEQ,PCDTM\n\
+        S,S-1,1,2025-03-13\n\
+        S,S-1,2,2025-03-09\n\
+        S,S-1,3,2025-02-20\n";
+    for (unit, nearest) in [("day", 2), ("week", 3)] {
+        let specification = nearest_ecgs(&nearest_in(unit))
+            .edit("EGDTC: datetime", "EGDTC: date")
+            .edit("PCDTM: datetime", "PCDTM: date")
+            .edit(
+                "type: datetime, derivation: EG.EGDTC",
+                "type: date, derivation: EG.EGDTC",
+            );
+        let fixture = Fixture::new(
+            &specification,
+            &[("eg.csv", reference), ("pc.csv", samples)],
+        );
+        let (csv, _) = fixture.saved();
+        assert_eq!(
+            csv,
+            format!("STUDYID,USUBJID,EGSEQ,PCSEQ\nS,S-1,1,{nearest}\n"),
+            "{unit}"
+        );
+    }
+}
+
+/// LOOKUP-26: `to` is read as a key's match value is, so it may be a
+/// temporal literal, the same for every ECG, or an expression over the
+/// current row. At 11:00 on 10 January the noon sample is nearest for S-1
+/// and the 10:00 samples for S-2. A date source against the date of each
+/// ECG puts every sample of the day at no distance, so the earliest stored
+/// sample with a date is read, and an ECG without a time still seeks none.
+#[test]
+fn the_reference_may_be_a_literal_or_an_expression_over_the_current_row() {
+    for (selection, expected) in [
+        (
+            "    nearest: {source: PCDTM, to: \"DATETIME '2025-01-10T11:00'\", unit: hour}\n",
+            "STUDYID,USUBJID,EGSEQ,PCSEQ\nS,S-1,1,3\nS,S-1,2,3\nS,S-2,1,3\n",
+        ),
+        (
+            "    nearest:\n\
+             \x20     source: PCDT\n\
+             \x20     to: {to_date: {source: EG.EGDTC}}\n\
+             \x20     unit: day\n\
+             \x20   derivations:\n\
+             \x20     PCDT: {to_date: {source: PCDTM}}\n",
+            "STUDYID,USUBJID,EGSEQ,PCSEQ\nS,S-1,1,1\nS,S-1,2,\nS,S-2,1,3\n",
+        ),
+    ] {
+        let fixture = Fixture::new(&nearest_ecgs(selection), &[("eg.csv", EG), ("pc.csv", PC)]);
+        assert_eq!(agreeing(&fixture), Vec::<Value>::new(), "{selection}");
+        let (csv, _) = fixture.saved();
+        assert_eq!(csv, expected, "{selection}");
+    }
+}
+
+/// LOOKUP-26 and LOOKUP-24: an ECG without a time seeks no sample, so a
+/// selection that requires a match fails at that ECG, naming the subject it
+/// sought.
+#[test]
+fn a_required_nearest_match_fails_an_ecg_without_a_reference() {
+    let fixture = Fixture::new(
+        &nearest_ecgs(&format!(
+            "{}    require_match: true\n",
+            nearest_in("minute")
+        )),
+        &[("eg.csv", EG), ("pc.csv", PC)],
+    );
+    let failure = fixture.failure();
+    assert_eq!(failure["rule"], "LOOKUP-24");
+    assert_eq!(
+        finding(&failure),
+        yamaa_adapters::json!({
+            "phase": "join",
+            "condition": "unmatched_key",
+            "spec_paths": ["intermediates.NEAR"],
+            "context": {
+                "intermediate": "NEAR",
+                "dataset": "PC",
+                "key": ["STUDYID", "USUBJID"],
+                "intermediate_key": {"STUDYID": "S", "USUBJID": "S-1"},
+                "keys": [{"STUDYID": "S", "USUBJID": "S-1", "EGSEQ": 2}],
+            },
+        })
+    );
+}
+
+/// A spec over subjects or ECG groups whose PCSEQ reads `NEAR`, measured to
+/// the ECG's time (LOOKUP-26): built from `DM` when `rows` is empty, and
+/// otherwise by the row templates `rows` writes.
+fn nearest_subjects(base: &str, rows: &str) -> String {
+    let derivation = |value: &str| match rows {
+        "" => format!(", derivation: {value}"),
+        _ => String::new(),
+    };
+    format!(
+        "yamaa: \"1.0\"\n\
+         type: spec\n\
+         domain: OUT\n\
+         keys: [STUDYID, USUBJID]\n\
+         input:\n\
+         \x20 DM: dm.csv\n\
+         \x20 EG: {{path: eg.csv, types: {{EGSEQ: int, EGDTC: datetime}}}}\n\
+         \x20 PC: {{path: pc.csv, types: {{PCSEQ: int, PCDTM: datetime}}}}\n\
+         {base}\
+         output: {{path: out.csv, columns: [STUDYID, USUBJID, PCSEQ]}}\n\
+         intermediates:\n\
+         \x20 - id: NEAR\n\
+         \x20   dataset: PC\n\
+         \x20   key: [STUDYID, USUBJID]\n\
+         \x20   nearest: {{source: PCDTM, to: EG.EGDTC, unit: minute}}\n\
+         columns:\n\
+         \x20 - {{name: STUDYID, type: str{}}}\n\
+         \x20 - {{name: USUBJID, type: str{}}}\n\
+         \x20 - {{name: PCSEQ, type: int{}}}\n\
+         {rows}",
+        derivation("DM.STUDYID"),
+        derivation("DM.USUBJID"),
+        derivation("NEAR.PCSEQ"),
+    )
+}
+
+/// LOOKUP-26's refusals, which `check` reports wherever the run does: an
+/// order and a position beside the nearest selection, at each field and
+/// then `nearest`, before any input is read; a source of collected date text,
+/// which stays `str`; a unit a datetime does not count in (TIME-4); a
+/// reference of another type, a date beside a datetime; a reference that
+/// reads no value of the current row, and one that reads the record of an
+/// input that does not build the reading rows (LOOKUP-5); and, in grouped
+/// construction, a reference that reads a driver field outside the group
+/// keys (ROW-5). A selection that binds nothing leaves every read of its
+/// lookup unknown.
+#[test]
+fn nearest_refusals_fail_validation_in_check_and_the_run_alike() {
+    let unread = yamaa_adapters::json!({
+        "phase": "validation",
+        "condition": "unknown_field",
+        "spec_paths": ["columns.PCSEQ.derivation.source"],
+        "context": {"identifier": "NEAR.PCSEQ"},
+    });
+    let refused = |condition: &str, path: &str, context: Value| {
+        yamaa_adapters::json!({
+            "phase": "validation",
+            "condition": condition,
+            "spec_paths": [path],
+            "context": context,
+        })
+    };
+    let grouped = "rows:\n\
+        \x20 - id: subjects\n\
+        \x20   dataset: EG\n\
+        \x20   group_by: [EG.STUDYID, EG.USUBJID]\n\
+        \x20   derivations:\n\
+        \x20     STUDYID: EG.STUDYID\n\
+        \x20     USUBJID: EG.USUBJID\n\
+        \x20     PCSEQ: NEAR.PCSEQ\n";
+    for (specification, expected) in [
+        (
+            nearest_ecgs(&format!(
+                "{}    order_by: [PC.PCSEQ]\n    keep: first\n",
+                nearest_in("hour")
+            )),
+            vec![yamaa_adapters::json!({
+                "phase": "validation",
+                "condition": "prohibited_construct",
+                "spec_paths": [
+                    "intermediates.NEAR.order_by",
+                    "intermediates.NEAR.keep",
+                    "intermediates.NEAR.nearest",
+                ],
+                "context": {"intermediate": "NEAR"},
+            })],
+        ),
+        (
+            nearest_ecgs("    nearest: {source: PCDTC, to: EG.EGDTC, unit: hour}\n"),
+            vec![
+                refused(
+                    "incompatible_input_type",
+                    "intermediates.NEAR.nearest.source",
+                    yamaa_adapters::json!({
+                        "intermediate": "NEAR",
+                        "identifier": "PCDTC",
+                        "actual": "str",
+                        "permitted": ["date", "datetime"],
+                    }),
+                ),
+                unread.clone(),
+            ],
+        ),
+        (
+            nearest_ecgs(&nearest_in("week")),
+            vec![
+                refused(
+                    "value_not_permitted",
+                    "intermediates.NEAR.nearest.unit",
+                    yamaa_adapters::json!({
+                        "value": "week",
+                        "permitted": ["second", "minute", "hour", "day"],
+                    }),
+                ),
+                unread.clone(),
+            ],
+        ),
+        (
+            nearest_ecgs("    nearest: {source: PCDTM, to: \"DATE '2025-01-10'\", unit: hour}\n"),
+            vec![
+                refused(
+                    "incompatible_input_type",
+                    "intermediates.NEAR.nearest.to",
+                    yamaa_adapters::json!({
+                        "intermediate": "NEAR",
+                        "expected": "datetime",
+                        "actual": "date",
+                    }),
+                ),
+                unread.clone(),
+            ],
+        ),
+        (
+            nearest_ecgs("    nearest: {source: PCDTM, to: EGDTM, unit: hour}\n"),
+            vec![
+                refused(
+                    "unknown_field",
+                    "intermediates.NEAR.nearest.to",
+                    yamaa_adapters::json!({"intermediate": "NEAR", "identifier": "EGDTM"}),
+                ),
+                unread.clone(),
+            ],
+        ),
+        // The ECG's time is a field of an ECG record, which is no value of a
+        // row that a subject builds.
+        (
+            nearest_subjects("base: DM\n", ""),
+            vec![refused(
+                "unknown_field",
+                "intermediates.NEAR.nearest.to",
+                yamaa_adapters::json!({"intermediate": "NEAR", "identifier": "EG.EGDTC"}),
+            )],
+        ),
+        // A row that a subject's ECGs build together has no one ECG time.
+        (
+            nearest_subjects("", grouped),
+            vec![refused(
+                "ungrouped_driver_field",
+                "intermediates.NEAR.nearest.to",
+                yamaa_adapters::json!({
+                    "intermediate": "NEAR",
+                    "identifier": "EG.EGDTC",
+                    "row": "subjects",
+                    "dataset": "EG",
+                }),
+            )],
+        ),
+    ] {
+        let fixture = Fixture::new(
+            &specification,
+            &[
+                ("dm.csv", "STUDYID,USUBJID\nS,S-1\nS,S-2\n"),
+                ("eg.csv", EG),
+                ("pc.csv", PC),
+            ],
+        );
+        assert_eq!(agreeing(&fixture), expected, "{specification}");
+    }
+}
+
+/// LOOKUP-26: a source the relation does not have is unknown at
+/// `nearest.source`. Whether a field of a delimited input exists is decided
+/// only when its records are read, so this is the run's finding.
+#[test]
+fn a_nearest_source_the_relation_does_not_have_is_unknown() {
+    let fixture = Fixture::new(
+        &nearest_ecgs("    nearest: {source: PCTIME, to: EG.EGDTC, unit: hour}\n"),
+        &[("eg.csv", EG), ("pc.csv", PC)],
+    );
+    let failure = fixture.failure();
+    assert_eq!(failure["rule"], "LOOKUP-26");
+    assert_eq!(
+        finding(&failure),
+        yamaa_adapters::json!({
+            "phase": "validation",
+            "condition": "unknown_field",
+            "spec_paths": ["intermediates.NEAR.nearest.source"],
+            "context": {"intermediate": "NEAR", "identifier": "PCTIME"},
+        })
+    );
+}
+
+/// LOOKUP-26 and LOOKUP-16: another intermediate's derivation runs the
+/// nearest selection for its donor record, `to` reading that record as a
+/// key value does, so each subject's first ECG takes its nearest sample.
+#[test]
+fn another_intermediate_reads_a_nearest_selection_for_its_donor_record() {
+    let specification = "yamaa: \"1.0\"\n\
+        type: spec\n\
+        domain: OUT\n\
+        keys: [STUDYID, USUBJID]\n\
+        input:\n\
+        \x20 DM: dm.csv\n\
+        \x20 EG: {path: eg.csv, types: {EGSEQ: int, EGDTC: datetime}}\n\
+        \x20 PC: {path: pc.csv, types: {PCSEQ: int, PCDTM: datetime}}\n\
+        base: DM\n\
+        output: {path: out.csv, columns: [STUDYID, USUBJID, PCSEQ]}\n\
+        intermediates:\n\
+        \x20 - id: NEAR\n\
+        \x20   dataset: PC\n\
+        \x20   key: [STUDYID, USUBJID]\n\
+        \x20   nearest: {source: PCDTM, to: EG.EGDTC, unit: minute}\n\
+        \x20 - id: FIRST\n\
+        \x20   dataset: EG\n\
+        \x20   key: [STUDYID, USUBJID]\n\
+        \x20   order_by: [EG.EGSEQ]\n\
+        \x20   keep: first\n\
+        \x20   derivations:\n\
+        \x20     NEARSEQ: NEAR.PCSEQ\n\
+        columns:\n\
+        \x20 - {name: STUDYID, type: str, derivation: DM.STUDYID}\n\
+        \x20 - {name: USUBJID, type: str, derivation: DM.USUBJID}\n\
+        \x20 - {name: PCSEQ, type: int, derivation: FIRST.NEARSEQ}\n";
+    let fixture = Fixture::new(
+        specification,
+        &[
+            ("dm.csv", "STUDYID,USUBJID\nS,S-1\nS,S-2\n"),
+            ("eg.csv", EG),
+            ("pc.csv", PC),
+        ],
+    );
+    assert_eq!(agreeing(&fixture), Vec::<Value>::new());
+    let (csv, _) = fixture.saved();
+    assert_eq!(csv, "STUDYID,USUBJID,PCSEQ\nS,S-1,1\nS,S-2,3\n");
+}
+
+/// LOOKUP-22: an aggregate's derivation may read a nearest selection, which
+/// gives each row at most one record, as it may one that declares `keep`:
+/// every sample of the subject sees the ECG's nearest sample.
+#[test]
+fn an_aggregate_derivation_may_read_a_nearest_selection() {
+    let specification = nearest_ecgs(&nearest_in("minute"))
+        .edit(
+            "columns: [STUDYID, USUBJID, EGSEQ, PCSEQ]",
+            "columns: [STUDYID, USUBJID, EGSEQ, NEARMAX]",
+        )
+        .edit(
+            "  - {name: PCSEQ, type: int, derivation: NEAR.PCSEQ}\n",
+            "  - name: NEARMAX\n\
+             \x20   type: int\n\
+             \x20   derivation:\n\
+             \x20     aggregate:\n\
+             \x20       key: [STUDYID, USUBJID]\n\
+             \x20       derivations:\n\
+             \x20         OWN: {type: int, derivation: PC.PCSEQ}\n\
+             \x20         SEQ: {type: int, derivation: NEAR.PCSEQ}\n\
+             \x20       expr: \"MAX(SEQ)\"\n",
+        );
+    let fixture = Fixture::new(&specification, &[("eg.csv", EG), ("pc.csv", PC)]);
+    assert_eq!(agreeing(&fixture), Vec::<Value>::new());
+    let (csv, _) = fixture.saved();
+    assert_eq!(
+        csv,
+        "STUDYID,USUBJID,EGSEQ,NEARMAX\nS,S-1,1,1\nS,S-1,2,\nS,S-2,1,3\n"
+    );
+}
+
+/// LOOKUP-26 and LOOKUP-7: a nearest selection over `SELF` measures the
+/// completed rows of the earlier template, and the column it measures from
+/// stays a column of those rows though the artifact leaves it out. From the
+/// 8 January target, the visits 7, 1 and 12 days away give the second.
+#[test]
+fn a_nearest_selection_over_self_measures_the_completed_rows() {
+    let specification = "yamaa: \"1.0\"\n\
+        type: spec\n\
+        domain: OUT\n\
+        keys: [STUDYID, USUBJID, SEQ]\n\
+        input:\n\
+        \x20 VS: {path: vs.csv, types: {VSSEQ: int, VSDT: date}}\n\
+        output: {path: out.csv, columns: [STUDYID, USUBJID, SEQ, NEARSEQ]}\n\
+        intermediates:\n\
+        \x20 - id: COVER\n\
+        \x20   dataset: SELF\n\
+        \x20   key: [STUDYID, USUBJID]\n\
+        \x20   nearest: {source: ADT, to: TARGET, unit: day}\n\
+        columns:\n\
+        \x20 - {name: STUDYID, type: str}\n\
+        \x20 - {name: USUBJID, type: str}\n\
+        \x20 - {name: SEQ, type: int}\n\
+        \x20 - {name: ADT, type: date}\n\
+        \x20 - {name: TARGET, type: date}\n\
+        \x20 - {name: NEARSEQ, type: int}\n\
+        rows:\n\
+        \x20 - id: collected\n\
+        \x20   dataset: VS\n\
+        \x20   derivations:\n\
+        \x20     STUDYID: VS.STUDYID\n\
+        \x20     USUBJID: VS.USUBJID\n\
+        \x20     SEQ: VS.VSSEQ\n\
+        \x20     ADT: VS.VSDT\n\
+        \x20     TARGET: \"NULL\"\n\
+        \x20     NEARSEQ: \"NULL\"\n\
+        \x20 - id: expected\n\
+        \x20   dataset: VS\n\
+        \x20   group_by: [VS.STUDYID, VS.USUBJID]\n\
+        \x20   derivations:\n\
+        \x20     STUDYID: VS.STUDYID\n\
+        \x20     USUBJID: VS.USUBJID\n\
+        \x20     SEQ: 99\n\
+        \x20     ADT: \"NULL\"\n\
+        \x20     TARGET: \"DATE '2025-01-08'\"\n\
+        \x20     NEARSEQ: COVER.SEQ\n";
+    let visits = "STUDYID,USUBJID,VSSEQ,VSDT\n\
+        S,S-1,1,2025-01-01\n\
+        S,S-1,2,2025-01-09\n\
+        S,S-1,3,2025-01-20\n";
+    let fixture = Fixture::new(specification, &[("vs.csv", visits)]);
+    assert_eq!(agreeing(&fixture), Vec::<Value>::new());
+    let (csv, _) = fixture.saved();
+    assert_eq!(
+        csv,
+        "STUDYID,USUBJID,SEQ,NEARSEQ\nS,S-1,1,\nS,S-1,2,\nS,S-1,3,\nS,S-1,99,2\n"
+    );
 }

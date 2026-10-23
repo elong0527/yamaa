@@ -29,7 +29,7 @@ Evidence: `schema-lookup-source-range`, `schema-lookup-filters`, `schema-aggrega
 | Match keys | The input's `key` ([LOOKUP-1](#lookup-1)) | `key` ([LOOKUP-3](#lookup-3)) | `key`, or the input's `key` ([LOOKUP-5](#lookup-5)) |
 | Match range | `between` on a structured `source:` | `between` | `between` |
 | Narrow | `filter` on a structured `source:`, over the donor record | `filter`, which may also read the current row's driver | `filter`, over the donor record |
-| Select | `order_by` and `keep` | `order_by` and `keep` | The reduction of `expr` over every candidate ([LOOKUP-18](#lookup-18)) |
+| Select | `order_by` and `keep` | `order_by` and `keep`, or `nearest` ([LOOKUP-26](#lookup-26)) | The reduction of `expr` over every candidate ([LOOKUP-18](#lookup-18)) |
 | Answer absence | `absent`, missing by default, or `require_match` | `absent`, missing by default, or `require_match` | Missing, uncounted ([FORMULA-24](formulas.md#formula-24)) |
 
 A step a lookup does not declare keeps every record: without `between` every
@@ -265,9 +265,108 @@ handling ([COLUMN-14](columns.md#column-14)).
 The `order_by` terms sort under [VALUE-22](values.md#value-22) and name fields
 of the lookup's relation, in the scopes of [LOOKUP-8](#lookup-8). A lookup
 whose key is verified unique at `error` severity needs neither `order_by` nor
-`keep`, and one whose uniqueness check only warns declares both
-([LOOKUP-17](#lookup-17)). An aggregate reduces its candidates in stored order
-([FORMULA-19](formulas.md#formula-19)).
+`keep`, and one whose uniqueness check only warns declares both, or
+`nearest` ([LOOKUP-17](#lookup-17)). An aggregate reduces its candidates in stored order
+([FORMULA-19](formulas.md#formula-19)). A named intermediate may select by
+distance instead, with `nearest` ([LOOKUP-26](#lookup-26)).
+
+<a id="lookup-26"></a>
+
+### LOOKUP-26. A named intermediate's nearest selection chooses the candidate whose date or datetime lies nearest the current row's reference
+
+`nearest` selects one candidate of a named intermediate by distance, in place
+of `order_by` and `keep`. A candidate's distance is the absolute difference
+between its `source`, a `date` or `datetime` field of the lookup's relation,
+and `to`, the current row's reference of the same type, counted in `unit` as
+`diff` counts it ([TIME-4](temporal.md#time-4)). The nearest candidate is
+chosen, a tie going to the earlier `source` and then to the earlier stored
+record; a candidate whose distance is missing is never chosen.
+
+Fails: `prohibited_construct`, `incompatible_input_type`, `unknown_field`.
+Evidence: `schema-lookup-nearest-datetime`, `schema-lookup-nearest-date`, `schema-lookup-nearest-missing`, `negative-lookup-nearest-keep`, `rust/crates/yamaa-adapters/tests/execution_lookup_model.rs`, `rust/crates/yamaa-core/tests/support/diagnostic/preflight.rs`, `rust/crates/yamaa-core/tests/support/diagnostic/binding.rs`.
+
+`nearest` declares `source`, `to` and `unit`, each required. It is the
+select step of a named intermediate ([LOOKUP-25](#lookup-25)) and replaces
+the ordered selection of [LOOKUP-10](#lookup-10): an `order_by` or a `keep`
+written beside it, an `order_by` with no term included, fails validation
+before any input is read as `prohibited_construct`, naming each of them and
+then `nearest`, in that order, with the intermediate's id as `intermediate`.
+A row driver declares no selection ([ROW-2](rows.md#row-2)), and a
+structured `source:` binding has no `nearest`.
+
+`source` names a field of the lookup's relation, written bare: a stored field
+or a name the intermediate derives ([LOOKUP-15](#lookup-15)). A name the
+relation does not have fails as `unknown_field` at `nearest.source`, naming
+it as `identifier`. Its type, declared or its derivation's result type
+([EXPR-14](expressions.md#expr-14)), must be `date` or `datetime`; another,
+such as that of collected date text, which stays `str`
+([INPUT-5](inputs.md#input-5)), fails as `incompatible_input_type` at
+`nearest.source`, reporting it as `actual` and `permitted` as `date` and
+`datetime`. Complete collected text first with `impute` among the
+intermediate's `derivations` ([TIME-8](temporal.md#time-8)), whose rules say
+where a partial date lies.
+
+`to` is a value of the current row, read as a key's match value is
+([LOOKUP-5](#lookup-5), [LOOKUP-6](#lookup-6)): an output column, a field of
+the record of the row's driver, an expression over them, or a literal such as
+`DATE '2024-03-10'` or `DATETIME '2024-03-10T08:00'`
+([FORMULA-3](formulas.md#formula-3)). It never reads a lookup: derive such a
+value into a column first. A field it reads names the driver of every row
+that reads the intermediate, or fails as `unknown_field` at `nearest.to`, and
+in grouped construction a group key, or fails as `ungrouped_driver_field`
+there, as a match value does ([LOOKUP-2](#lookup-2), [LOOKUP-5](#lookup-5)).
+It is read with the match values, before any record is read, and a missing
+`to` seeks no record, so absence is answered ([LOOKUP-24](#lookup-24)). Its
+result type must be the type of `source`; another, a `date` beside a
+`datetime` included, fails as `incompatible_input_type` at `nearest.to`,
+reporting `expected` and `actual`, before any record is read, or, for a type
+decided per value, when the value is read.
+
+`unit` is a unit `diff` counts the source's type in: `day`, `week`, `month`
+or `year` for a `date`, and `second`, `minute`, `hour` or `day` for a
+`datetime`; another fails as `value_not_permitted` at `nearest.unit`
+([TIME-4](temporal.md#time-4)). A distance in a calendar unit counts whole
+units, so candidates eight and twelve days from the reference tie at one
+week; a distance in an elapsed unit is exact, so every elapsed unit chooses
+the same candidate. Collected precision takes no part
+([VALUE-21](values.md#value-21)): a value `impute` completed counts as the
+day or moment it names. A `date` and a `datetime` never compare
+([VALUE-18](values.md#value-18)), so one side is converted explicitly, as
+`to: {to_date: {source: EG.EGDTC}}` measures a `date` source against the date
+of a `datetime`.
+
+Of the candidates that survive the filter ([LOOKUP-8](#lookup-8)), those with
+a distance compete. The smallest distance is chosen; of equal distances, the
+earlier `source`, so a candidate before the reference is chosen over one as
+far after it; and of equal sources, the earlier stored record. A candidate
+whose `source` is missing has no distance, and when no candidate has one,
+absence is answered, or `require_match` fails the read as `unmatched_key`
+([LOOKUP-24](#lookup-24)). A selection among several candidates with a
+distance counts one `multiple_matches` handling at the read's path, as `keep`
+does ([LOOKUP-14](#lookup-14)).
+
+```yaml
+intermediates:
+  - id: NEAREST
+    dataset: PC
+    key: [STUDYID, USUBJID]
+    nearest: {source: PCDTM, to: EG.EGDTC, unit: hour}
+    columns: [PCSEQ, PCDTM, PCSTRESN]
+    derivations:
+      PCDTM: {impute: {type: datetime, source: PCDTC, time: first}}
+```
+
+Each electrocardiogram reads the subject's sample nearest to it in time. The
+chain of [LOOKUP-15](#lookup-15), a distance derived with `diff` and `ABS`
+and an ordered selection over it, can state the same choice with a tie-break
+of its own. Every column reading the intermediate shares the selection
+([LOOKUP-12](#lookup-12)), and its `unique` checks may warn, a repeated
+combination reported and every read still taking the nearest candidate
+([LOOKUP-17](#lookup-17)). Another intermediate's derivation that reads it
+runs the selection for its donor record, `to` reading that record as a key
+value does ([LOOKUP-16](#lookup-16)), and a project function argument or an
+aggregate's derivation may read it, as either may read an intermediate that
+declares `keep` ([LOOKUP-22](#lookup-22)).
 
 <a id="lookup-24"></a>
 
@@ -371,7 +470,8 @@ Evidence: `negative-lookup-unmatched-key`, `rust/crates/yamaa-adapters/tests/fix
 
 Neither failure renames the other's fields. Handler accounting follows
 [COLUMN-14](columns.md#column-14), whose counts are `handler` rows of the run
-report: a `keep` that chose among surviving records counts one
+report: a `keep` that chose among surviving records, or a `nearest` that
+chose among several with a distance ([LOOKUP-26](#lookup-26)), counts one
 `multiple_matches` handling, and an absence that a named intermediate answers,
 declared or by default, or a record an implicit join does not find counts one
 `absent` handling at the read's path ([LOOKUP-24](#lookup-24)). An
@@ -874,8 +974,9 @@ every context that reads the intermediate: when a row reading it is built from
 another input's record, the read names no value of that row and fails as
 `unknown_field` at the derivation, once. A project function that a derivation
 calls is invoked once per donor record, so an argument that reads a named
-intermediate reads only one that declares `keep` ([LOOKUP-22](#lookup-22));
-an argument may read the donor record's own fields as any operand does.
+intermediate reads only one that declares `keep` or `nearest`
+([LOOKUP-22](#lookup-22)); an argument may read the donor record's own fields
+as any operand does.
 
 Derivations that read only donor records are computed once per record for
 each build of the donor records; [COLUMN-14](columns.md#column-14) lists when
@@ -939,7 +1040,10 @@ intermediates:
 The `filter` drops every `SRC` record whose distance is missing. When the
 current input record's reference is missing, every distance is missing, no
 candidate survives, and the read answers absence: missing, since `PICK`
-declares no `absent` ([LOOKUP-24](#lookup-24)).
+declares no `absent` ([LOOKUP-24](#lookup-24)). Between two dates or two
+datetimes, a `nearest` selection ([LOOKUP-26](#lookup-26)) states this choice
+in one field, with a tie rule of its own; the distance derivations below state
+one with any tie rule.
 
 `ABS(DAY - BASE.REF)` is the number of days between two days only on a
 numbering without a gap. A study day (`--DY`, `ADY`) has no day 0
@@ -1109,7 +1213,7 @@ dependency and never changes the number of donor records. Any operand may read
 an intermediate without `keep`, which fails as `multiple_matches` when it
 matches several records for a donor record ([LOOKUP-10](#lookup-10)), except a
 project function argument, which may read only an intermediate that declares
-`keep` ([LOOKUP-22](#lookup-22)).
+`keep` or `nearest` ([LOOKUP-22](#lookup-22)).
 
 The other intermediate must read an `input` dataset. A `SELF` intermediate has
 no completed rows while donor records are augmented, and reading one fails as
@@ -1147,20 +1251,20 @@ window ranks the records of each subject and test on it.
 
 <a id="lookup-17"></a>
 
-### LOOKUP-17. An intermediate's unique verification asserts that no donor column combination repeats, warning instead only where keep and order_by choose
+### LOOKUP-17. An intermediate's unique verification asserts that no donor column combination repeats, warning instead only where a selection chooses
 
 An intermediate may declare `verifications:`, a list of `unique` checks, each
 asserting that its non-empty column combination is unique across the
 intermediate's source-only filtered donor records with `derivations:`
 computed. Input-backed checks run before any row is built, and `SELF` checks
 run after each completed template. A repeated combination fails the run,
-except under `severity: warning`, which only an intermediate declaring `keep`
-and `order_by` may declare: the repeated combinations are reported and the
-selection chooses. A lookup whose key is verified unique at `error` needs
-neither `keep` nor `order_by`.
+except under `severity: warning`, which only an intermediate selecting by
+`keep` and `order_by`, or `nearest`, may declare: the repeated combinations
+are reported and the selection chooses. A lookup whose key is verified unique
+at `error` needs no selection.
 
 Fails: `duplicate_intermediate_records`, `unknown_field`, `correlated_filter_with_unique_verification`, `correlated_derivation_with_unique_verification`, `value_not_permitted`.
-Evidence: `schema-lookup-intermediate-unique`, `negative-lookup-duplicate-intermediate`, `schema-lookup-intermediate-unique-warning`, `negative-lookup-unique-warning-unordered`, `rust/crates/yamaa-core/tests/support/diagnostic/front_end.rs`.
+Evidence: `schema-lookup-intermediate-unique`, `negative-lookup-duplicate-intermediate`, `schema-lookup-intermediate-unique-warning`, `negative-lookup-unique-warning-unordered`, `rust/crates/yamaa-core/tests/support/diagnostic/front_end.rs`, `rust/crates/yamaa-adapters/tests/scalar_language.rs::a_warning_unique_beside_a_nearest_selection_reports_and_reads_take_the_nearest`.
 
 ```yaml
 - id: DS_EOS
@@ -1182,13 +1286,13 @@ multiple surviving matches without a selection rule.
 
 `severity` is `error` or `warning`, defaulting to `error`, as for a column or
 dataset verification ([CHECK-2](verification.md#check-2)). On an intermediate
-that does not declare both `keep` and `order_by`, `severity: warning` fails
-validation before any input is read, as `value_not_permitted` at the check's
+that declares neither `keep` with `order_by` nor `nearest`, `severity: warning`
+fails validation before any input is read, as `value_not_permitted` at the check's
 `severity`, with context `intermediate` (its id), `value` (`warning`) and
 `permitted` (`[error]`). A violated `warning` check fails nothing and changes
 no donor record. The run continues as [CHECK-2](verification.md#check-2)
 describes, and every read of the intermediate selects one candidate by its
-`keep` and `order_by` ([LOOKUP-10](#lookup-10)).
+selection ([LOOKUP-10](#lookup-10), [LOOKUP-26](#lookup-26)).
 
 ```yaml
 - id: LAST_EX
@@ -1343,17 +1447,17 @@ and filter name, and naming two relations is an error. A reducer
 expression that mixes a bound variable with a qualified identifier is an error
 under [LOOKUP-18](#lookup-18). Qualifiers naming declared named intermediates
 do not count as relations for this rule. An entry may read a named
-intermediate that declares `keep`: with `keep` the intermediate selects
-exactly one record per row ([LOOKUP-10](#lookup-10)), and the read is a
-row-scoped value, not another reduced relation. The entry still evaluates
-once per record of the aggregate's one relation, and each record sees the same
-intermediate value for its row. An entry that reads a named intermediate
-without `keep` is an error.
+intermediate that declares `keep` or `nearest`: either selects at most one
+record per row ([LOOKUP-10](#lookup-10), [LOOKUP-26](#lookup-26)), and the
+read is a row-scoped value, not another reduced relation. The entry still
+evaluates once per record of the aggregate's one relation, and each record
+sees the same intermediate value for its row. An entry that reads a named
+intermediate with neither is an error.
 
 A project function called in an intermediate derivation
 ([LOOKUP-15](#lookup-15)) is invoked once per donor record, so its arguments
 follow the same rule: an argument may read a named intermediate that declares
-`keep`, and an argument that reads one without `keep` fails as
+`keep` or `nearest`, and an argument that reads one with neither fails as
 `invalid_derive_step` at that argument, naming the function, the argument and
 the intermediate.
 

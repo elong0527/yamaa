@@ -82,8 +82,9 @@ pub(in crate::specification) fn findings(
 
 /// Where the text verbs are checked, each position with whether a bare name
 /// it reads is left to binding: every column default, row override,
-/// intermediate key value and intermediate derivation, and below each the
-/// case results, aggregate key values and aggregate `derive` bindings.
+/// intermediate key value, nearest reference and intermediate derivation,
+/// and below each the case results, aggregate key values and aggregate
+/// `derive` bindings.
 fn text_sites(spec: &Spec) -> Vec<(ExprId, bool)> {
     let rows = has_rows(spec);
     let mut roots = Vec::new();
@@ -98,9 +99,7 @@ fn text_sites(spec: &Spec) -> Vec<(ExprId, bool)> {
         }
     }
     for item in &spec.intermediates {
-        if let Some(JoinKey::Pairs { pairs, .. }) = &item.key {
-            roots.extend(pairs.iter().map(|&(_, value)| (value, rows)));
-        }
+        roots.extend(item.match_values().map(|value| (value, rows)));
         for binding in &item.bindings {
             roots.push((binding.derivation.expr, true));
         }

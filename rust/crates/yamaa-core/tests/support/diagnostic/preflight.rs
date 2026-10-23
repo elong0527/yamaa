@@ -1184,6 +1184,58 @@ pub(crate) fn intermediate_reached() -> BTreeSet<ConditionCode> {
         };
         reached.extend(check(fields, expected));
     }
+    // A nearest selection replaces the ordered one (LOOKUP-26): an order or
+    // a position written beside it is refused before any input is read,
+    // naming each of them and then `nearest`, and neither is also unpaired.
+    for (beside, paths) in [
+        (
+            vec![("keep", Tree::text("first"))],
+            vec!["intermediates.P.keep", "intermediates.P.nearest"],
+        ),
+        (
+            vec![
+                ("order_by", Tree::List(vec![Tree::text("SECOND.ID")])),
+                ("keep", Tree::text("first")),
+            ],
+            vec![
+                "intermediates.P.order_by",
+                "intermediates.P.keep",
+                "intermediates.P.nearest",
+            ],
+        ),
+    ] {
+        let mut fields = base(
+            "TEST",
+            inputs(),
+            vec![column("ID", Some(source()))],
+            vec![Tree::text("ID")],
+        );
+        fields.push(("base", Tree::text("SRC")));
+        let mut declaration = vec![
+            ("id", Tree::text("P")),
+            ("dataset", Tree::text("SECOND")),
+            ("key", Tree::List(vec![Tree::text("ID")])),
+        ];
+        declaration.extend(beside);
+        declaration.push((
+            "nearest",
+            Tree::map(vec![
+                ("source", Tree::text("DAY")),
+                ("to", Tree::text("ID")),
+                ("unit", Tree::text("day")),
+            ]),
+        ));
+        fields.push(("intermediates", Tree::List(vec![Tree::map(declaration)])));
+        reached.extend(check(
+            fields,
+            vec![(
+                "prohibited_construct",
+                Some("LOOKUP-26"),
+                paths,
+                vec![("intermediate", text("P"))],
+            )],
+        ));
+    }
     reached
 }
 

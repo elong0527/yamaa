@@ -753,6 +753,7 @@ fn unused_slot_placeholder(
         }],
         filter: None,
         selection: None,
+        nearest: None,
         range: None,
         columns: None,
         no_match: Some(Value::Missing),
@@ -764,9 +765,9 @@ fn unused_slot_placeholder(
 }
 
 /// The first key value of `item`, a lookup that a range value reads for the
-/// donor record, that reads no field of that record (LOOKUP-16): a field of
-/// another input's record, or an output column or contextual name the donor
-/// record does not store.
+/// donor record, or its nearest reference, that reads no field of that
+/// record (LOOKUP-16, LOOKUP-26): a field of another input's record, or an
+/// output column or contextual name the donor record does not store.
 #[allow(clippy::too_many_arguments)]
 fn chained_key(
     item: &Intermediate,
@@ -777,7 +778,8 @@ fn chained_key(
     donor_field: &dyn Fn(&str) -> Option<usize>,
     outer: &TableSchema,
 ) -> Option<String> {
-    item.keys.iter().find_map(|key| {
+    let reference = item.nearest.iter().map(|nearest| &nearest.reference);
+    item.keys.iter().chain(reference).find_map(|key| {
         if let crate::dataset::MatchValue::Contextual(declaration) = &key.value {
             let name = declaration.identifier();
             let local = name
@@ -1007,7 +1009,11 @@ fn rebase(
                 .map(&current_field)
                 .collect::<Result<Vec<_>, _>>()?;
         }
-        for key in &mut item.keys {
+        // The reference of a nearest selection reads the donor record as a
+        // key's match value does (LOOKUP-26), after the keys.
+        let reference = item.nearest.as_mut().map(|nearest| &mut nearest.reference);
+        let keys = item.keys.iter_mut().map(|key| (key, false));
+        for (key, reference) in keys.chain(reference.map(|key| (key, true))) {
             if matches!(
                 key.value,
                 crate::dataset::MatchValue::Expression(_)
@@ -1015,10 +1021,13 @@ fn rebase(
                         crate::dataset::ContextualMatch::Expression { .. }
                     )
             ) {
-                let field = &donor_schema.columns()[key.source_column].name;
-                let declaration = named
-                    .match_declaration(&item.identifier, field)
-                    .ok_or(BindError::Internal)?;
+                let declaration = if reference {
+                    named.reference_declaration(&item.identifier)
+                } else {
+                    let field = &donor_schema.columns()[key.source_column].name;
+                    named.match_declaration(&item.identifier, field)
+                }
+                .ok_or(BindError::Internal)?;
                 let bound = declaration.bind_deferred(
                     &key.path,
                     &item.identifier,
@@ -1161,7 +1170,7 @@ mod inference_tests {
         let expression = "NULLIF(INT_COL, FLOAT_COL)";
         let compiled = crate::expression::compile(
             expression,
-            crate::expression::Context::Compute,
+            crate::expression::Context::Derivation,
             "donor.compute",
         )
         .unwrap();

@@ -40,6 +40,7 @@ struct Declaration {
     filter: Option<Result<CompiledExpression, CompileError>>,
     order: Vec<(String, bool, bool)>,
     keep: Option<Keep>,
+    nearest: Option<NearestDeclaration>,
     no_match: Option<Value>,
     require_match: bool,
     range: Option<lookup_range::Declaration>,
@@ -51,6 +52,28 @@ struct Declaration {
     /// as a lookup is refused there (LOOKUP-3, ROW-2).
     key_required: Option<String>,
 }
+impl Declaration {
+    /// Whether the intermediate selects one record of several: by `keep`,
+    /// or by `nearest` (LOOKUP-10, LOOKUP-26).
+    fn selects(&self) -> bool {
+        self.keep.is_some() || self.nearest.is_some()
+    }
+}
+
+/// A nearest selection as written (LOOKUP-26).
+#[derive(Debug)]
+struct NearestDeclaration {
+    /// `intermediates.<id>.nearest`.
+    path: String,
+    /// The donor field, written bare.
+    source: String,
+    /// The `to` field's path, at which its findings are reported.
+    to_path: String,
+    /// The current-row value, read as a key match value is (LOOKUP-5).
+    to: match_values::Declaration,
+    unit: Option<ast::TimeUnit>,
+}
+
 #[derive(Debug, Default)]
 pub(super) struct Declarations(std::sync::Arc<Vec<Declaration>>, Option<String>);
 type ResolveRef<'a> = &'a (dyn Fn(&str, &str, &mut Vec<BindFinding>) -> Option<usize> + 'a);
@@ -226,6 +249,110 @@ fn finish_item(
         }
     }
     Ok((filter, order_by, columns, range, unique))
+}
+
+/// Bind a nearest selection (LOOKUP-26): its `source`, a `date` or
+/// `datetime` field of the lookup's relation; its `unit`, one that type
+/// counts in (TIME-4); and its `to`, of the source's type and read as a key
+/// match value is. The first finding refuses the selection.
+#[allow(clippy::too_many_arguments)]
+fn bind_nearest(
+    declaration: &NearestDeclaration,
+    intermediate: &str,
+    schema: &TableSchema,
+    donor_kind: &dyn Fn(usize) -> Option<ColumnType>,
+    admits: &dyn Fn(usize) -> bool,
+    catalog: &Catalog,
+    contextual: bool,
+    context: match_values::Context<'_>,
+    findings: &mut Vec<BindFinding>,
+) -> Result<Option<crate::dataset::Nearest>, BindError> {
+    use crate::diagnostic::lookup::{self, Owner};
+    use crate::result_type::ResultType;
+    let owner = Owner::Intermediate(intermediate);
+    let refuse = |diagnostic: crate::diagnostic::Diagnostic,
+                  findings: &mut Vec<BindFinding>|
+     -> Result<Option<crate::dataset::Nearest>, BindError> {
+        findings.push(BindFinding::Lookup(LookupFinding::from_diagnostic(
+            diagnostic,
+        )));
+        Ok(None)
+    };
+    let source_path = format!("{}.source", declaration.path);
+    let Some(source) = schema
+        .columns()
+        .iter()
+        .position(|column| column.name == declaration.source)
+        .filter(|&column| admits(column))
+    else {
+        return refuse(
+            lookup::nearest_source_reference(&source_path, owner, &declaration.source),
+            findings,
+        );
+    };
+    let (kind, temporal) = match donor_kind(source) {
+        Some(kind @ ColumnType::Date) => (kind, ast::TemporalType::Date),
+        Some(kind @ ColumnType::DateTime) => (kind, ast::TemporalType::DateTime),
+        other => {
+            return refuse(
+                lookup::nearest_source_type(
+                    &source_path,
+                    owner,
+                    &declaration.source,
+                    ResultType::declared(other),
+                ),
+                findings,
+            )
+        }
+    };
+    let unit = declaration.unit.ok_or(BindError::Internal)?;
+    let difference = match crate::scalar_verb::difference(temporal, unit, &declaration.path) {
+        Ok(difference) => difference,
+        Err(diagnostic) => return refuse(diagnostic, findings),
+    };
+    let expected = ResultType::column(kind);
+    let actual = declaration.to.result_type(context.tree, catalog)?;
+    if !actual.comparable(expected) {
+        return refuse(
+            lookup::nearest_reference_type(&declaration.to_path, owner, expected, actual),
+            findings,
+        );
+    }
+    let to = &declaration.to;
+    let Some(value) = (if contextual {
+        to.bind_deferred(
+            &declaration.to_path,
+            intermediate,
+            catalog,
+            findings,
+            context,
+        )?
+    } else {
+        to.bind(
+            &declaration.to_path,
+            intermediate,
+            catalog,
+            findings,
+            context,
+        )?
+    }) else {
+        return Ok(None);
+    };
+    let difference = crate::dataset::Temporal::new(
+        difference,
+        vec![declaration.source.clone(), "to".into()],
+        declaration.path.clone(),
+    )
+    .map_err(|_| BindError::Internal)?;
+    Ok(Some(crate::dataset::Nearest {
+        source,
+        reference: IntermediateKey {
+            source_column: source,
+            path: declaration.to_path.clone(),
+            value,
+        },
+        difference,
+    }))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -441,6 +568,36 @@ fn bind_one(
             None => failed = true,
         }
     }
+    // The reference a nearest selection measures to is read with the match
+    // values, after them (LOOKUP-26).
+    let nearest = match &item.nearest {
+        Some(declaration) => {
+            let nearest = bind_nearest(
+                declaration,
+                &item.name,
+                schema,
+                &donor_kind,
+                &admits,
+                &catalog,
+                contextual_reader,
+                match_values::Context {
+                    output,
+                    driver: &sources[driver].name,
+                    row: None,
+                    phase: crate::reference_scope::Phase::Row { group_by: None },
+                    project,
+                    tree,
+                    named,
+                    secondary,
+                    intermediates: result,
+                },
+                findings,
+            )?;
+            failed |= nearest.is_none();
+            nearest
+        }
+        None => None,
+    };
     let (filter, order_by, columns, range, unique) = finish_item(
         item,
         source_name,
@@ -487,6 +644,7 @@ fn bind_one(
         keys: pairs,
         filter,
         selection: item.keep.map(|keep| SourceSelection { order_by, keep }),
+        nearest,
         no_match: item.no_match.clone(),
         require_match: item.require_match,
         unique,
@@ -560,10 +718,12 @@ impl Declarations {
             self_relations::Relation::SelfRows => None,
         }
     }
+    /// Whether `name` selects one record for each row: it declares `keep`
+    /// or `nearest` (LOOKUP-22).
     pub(super) fn kept(&self, name: &str) -> bool {
         self.0
             .iter()
-            .any(|item| item.name == name && item.keep.is_some())
+            .any(|item| item.name == name && item.selects())
     }
     /// Where a read of the row driver at `index` as a keyed lookup is
     /// refused: its `key`, which it does not declare (LOOKUP-3, ROW-2).
@@ -660,6 +820,12 @@ impl Declarations {
             .find(|(name, _)| name == field)
             .map(|(_, declaration)| declaration)
     }
+    /// The `to` of the intermediate `name`'s nearest selection, a match
+    /// value as a key's is (LOOKUP-26).
+    pub(super) fn reference_declaration(&self, name: &str) -> Option<&match_values::Declaration> {
+        let item = self.0.iter().find(|item| item.name == name)?;
+        item.nearest.as_ref().map(|nearest| &nearest.to)
+    }
     /// The intermediates a derivation may classify as named: all of them,
     /// or inside an intermediate's own derivations those derived before it.
     fn earlier(&self) -> &[Declaration] {
@@ -679,12 +845,12 @@ impl Declarations {
     pub(super) fn earlier_contains(&self, name: &str) -> bool {
         self.earlier().iter().any(|item| item.name == name)
     }
-    /// Whether `name` is a `keep`-declared intermediate derived before the
-    /// reading one.
+    /// Whether `name` is an intermediate derived before the reading one that
+    /// selects one record: it declares `keep` or `nearest` (LOOKUP-22).
     pub(super) fn earlier_kept(&self, name: &str) -> bool {
         self.earlier()
             .iter()
-            .any(|item| item.name == name && item.keep.is_some())
+            .any(|item| item.name == name && item.selects())
     }
     fn unique_checks(
         spec: &ast::Spec,
@@ -877,6 +1043,34 @@ impl Declarations {
                 .iter()
                 .map(|term| tree_order_term(spec, term))
                 .collect::<Result<Vec<_>, _>>()?;
+            // A nearest selection's `to` is admitted as a key's match value
+            // is, at its own field (LOOKUP-26, LOOKUP-5).
+            let nearest = match &item.nearest {
+                Some(nearest) => {
+                    let to_path = checks::render(spec, nearest.to_field);
+                    match_values::admit(
+                        spec,
+                        nearest.to_field,
+                        nearest.to,
+                        &to_path,
+                        project,
+                        extra,
+                    )?;
+                    Some(NearestDeclaration {
+                        path: checks::render(spec, nearest.meta),
+                        source: nearest.source.name.clone(),
+                        to: match_values::Declaration::from_tree(
+                            spec,
+                            nearest.to_field,
+                            nearest.to,
+                            calls,
+                        )?,
+                        to_path,
+                        unit: nearest.unit,
+                    })
+                }
+                None => None,
+            };
             let no_match = checks::handler(spec, item.absent.as_ref())?;
             let unique = Self::unique_checks(spec, item)?;
             let driver_prohibited = checks::lookups::driver_prohibited(spec, item)
@@ -903,6 +1097,7 @@ impl Declarations {
                     filter_text,
                     order,
                     keep,
+                    nearest,
                     no_match,
                     require_match: item.require_match,
                     range,

@@ -4,7 +4,8 @@ use super::*;
 
 /// The value sites through which the intermediate at `index` matches on
 /// output column `column`: each `between` value followed into a further
-/// intermediate, then the value that reads the column.
+/// intermediate, then the value that reads the column, a key's match value
+/// or the reference of a nearest selection (LOOKUP-26).
 fn match_sites(
     index: usize,
     column: usize,
@@ -16,7 +17,8 @@ fn match_sites(
         return None;
     }
     let item = items.get(index).and_then(Option::as_ref)?;
-    if let Some(key) = item.keys.iter().find(|key| {
+    let reference = item.nearest.iter().map(|nearest| &nearest.reference);
+    if let Some(key) = item.keys.iter().chain(reference).find(|key| {
         key.value
             .reads()
             .any(|read| matches!(read, MatchRead::Output { column: read, .. } if *read == column))
@@ -154,7 +156,10 @@ pub(super) fn bind(
     let before = findings.len();
     // A phase refusal that this site already reported still refuses the read.
     let mut phase_refused = false;
-    for key in &item.keys {
+    // The reference of a nearest selection is read as a key's match value
+    // is (LOOKUP-26).
+    let reference = item.nearest.iter().map(|nearest| &nearest.reference);
+    for key in item.keys.iter().chain(reference) {
         if let crate::dataset::MatchValue::Contextual(declaration) = &key.value {
             findings.push(missing_dependency(declaration.identifier(), &key.path));
             continue;

@@ -29,6 +29,35 @@ fn unit_name(unit: ast::TimeUnit) -> &'static str {
     }
 }
 
+/// What `diff` counts from one value of `kind` to another in `unit`, the
+/// end only for dates (TIME-4), or the refusal of a unit `kind` does not
+/// count in, at `<path>.unit`, as `diff`'s own. A nearest selection measures
+/// its distances so (LOOKUP-26).
+pub(crate) fn difference(
+    kind: ast::TemporalType,
+    unit: ast::TimeUnit,
+    path: &str,
+) -> Result<TemporalKind, Diagnostic> {
+    let name = unit_name(unit);
+    let refusal = |permitted| Temporal::unit_diagnostic(path, name, permitted);
+    match kind {
+        ast::TemporalType::DateTime => elapsed_unit(name)
+            .map(|unit| TemporalKind::DateTimeDifference { unit })
+            .ok_or_else(|| refusal(ELAPSED_UNITS)),
+        ast::TemporalType::Date => match unit {
+            ast::TimeUnit::Day => Ok(CalendarUnit::Day),
+            ast::TimeUnit::Week => Ok(CalendarUnit::Week),
+            ast::TimeUnit::Month => Ok(CalendarUnit::Month),
+            ast::TimeUnit::Year => Ok(CalendarUnit::Year),
+            _ => Err(refusal(CALENDAR_UNITS)),
+        }
+        .map(|unit| TemporalKind::Difference {
+            unit,
+            bounds: DateBounds::Exclusive,
+        }),
+    }
+}
+
 /// The endpoints a `diff` counts; `left` belongs to `cut` alone.
 fn date_bounds(closed: ast::Closed) -> Result<DateBounds, Refusal> {
     match closed {

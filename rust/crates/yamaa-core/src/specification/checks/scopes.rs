@@ -362,8 +362,10 @@ impl Scopes<'_> {
         }
     }
 
-    /// Each key value of the lookup at `index`, at the path binding cites
-    /// it, with the names it reads. Inferred keys read output columns.
+    /// Each key value of the lookup at `index`, then the reference of its
+    /// nearest selection, which is read as a key value is (LOOKUP-26), at the
+    /// path binding cites it, with the names it reads. Inferred keys read
+    /// output columns.
     fn keys(&self, index: usize) -> Vec<(String, Vec<&str>)> {
         let spec = self.spec;
         let item = &spec.intermediates[index];
@@ -378,19 +380,22 @@ impl Scopes<'_> {
             _ => Vec::new(),
         };
         let at = render(spec, item.meta);
+        let named = &self.prepared.intermediates;
+        let reference = item.nearest.as_ref().and_then(|nearest| {
+            let value = named.reference_declaration(&item.id.name)?;
+            Some((render(spec, nearest.to_field), value.references().collect()))
+        });
         fields
             .into_iter()
             .filter_map(|field| {
-                let value = self
-                    .prepared
-                    .intermediates
-                    .match_declaration(&item.id.name, field)?;
+                let value = named.match_declaration(&item.id.name, field)?;
                 let path = match value {
                     match_values::Declaration::Variable(_) => format!("{at}.key"),
                     _ => format!("{at}.key.{field}"),
                 };
                 Some((path, value.references().collect()))
             })
+            .chain(reference)
             .collect()
     }
 

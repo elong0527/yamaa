@@ -284,8 +284,9 @@ impl Topology<'_> {
         }
         Ok(())
     }
-    /// A relation reads the current row through its keys and correlated
-    /// operands; an output aggregate also scans every candidate.
+    /// A relation reads the current row through its keys, the reference of
+    /// its nearest selection and its correlated operands; an output
+    /// aggregate also scans every candidate.
     fn relation(
         &self,
         step: Step,
@@ -294,7 +295,7 @@ impl Topology<'_> {
         visiting: &mut Vec<RelationId>,
     ) -> Result<(), ResolutionError> {
         let node = self.plan.relation(relation);
-        for key in &node.keys {
+        for key in node.keys.iter().chain(&node.nearest) {
             match &key.value {
                 KeyValue::Read(read) | KeyValue::Padded(read) => {
                     self.read(step, *read, scope, visiting)?

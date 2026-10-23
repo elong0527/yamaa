@@ -1,5 +1,6 @@
 //! Static operand types: the type facts a site checks against its names before
-//! any value is read, and the result type `compute` and `aggregate` declare.
+//! any value is read, and the result type expression-field text and
+//! `aggregate` declare.
 
 use super::bind::{children, AggregateResult, CompiledExpression, ReductionOperand};
 use super::evaluate::Step;
@@ -13,8 +14,8 @@ use crate::value::{comparable_types, ValueType};
 /// A static type fault, found from the site's declared types alone.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TypeFinding {
-    /// An operand of arithmetic, of a numeric function or of a numeric root
-    /// that is not numeric, named by its written text.
+    /// An operand of arithmetic or of a numeric function that is not
+    /// numeric, named by its written text.
     NumericOperand { source: String, actual: ValueType },
     /// Two comparison operands whose types are not mutually comparable.
     IncompatiblePair {
@@ -67,10 +68,11 @@ fn promote(left: ResultType, right: ResultType) -> ResultType {
 }
 
 impl CompiledExpression {
-    /// The result type of `compute` and `aggregate` (EXPR-14) from the types
-    /// `lookup` gives each name: VALUE-10 for operators and functions and
-    /// FORMULA-23 for reductions. `/` and the real-valued functions are
-    /// `float`, and `NULLIF` is a `float` when either argument is.
+    /// The result type of expression-field text and of `aggregate` (EXPR-14)
+    /// from the types `lookup` gives each name: VALUE-10 for operators and
+    /// functions and FORMULA-23 for reductions. `/` and the real-valued
+    /// functions are `float`, and `NULLIF` is a `float` when either argument
+    /// is.
     pub fn result_type(&self, lookup: impl Fn(&str) -> ResultType) -> ResultType {
         self.infer(self.syntax.root(), &lookup)
     }
@@ -171,11 +173,6 @@ impl CompiledExpression {
     ) -> Vec<TypeFinding> {
         let mut findings = Vec::new();
         match self.context {
-            Context::Compute => {
-                for name in self.identifiers() {
-                    self.numeric_name(name, &kind, &mut findings);
-                }
-            }
             Context::Aggregate => {
                 // An expression that is not one bare reduction is numeric, so
                 // each reduction and grouping column its arithmetic reads must
@@ -478,15 +475,10 @@ mod tests {
 
     #[test]
     fn an_expression_field_types_only_the_operands_of_its_arithmetic() {
-        // A name or a literal written alone keeps its own type, where the
-        // root of `compute.expr` must be numeric.
+        // A name or a literal written alone keeps its own type.
         for text in ["A", "(A)", "'DM'", "DATE '2025-06-01'", "NULL", "N"] {
             assert_eq!(findings(text, Context::Derivation), Vec::new(), "{text}");
         }
-        assert_eq!(
-            findings("A", Context::Compute),
-            [numeric_operand("A", ValueType::Str)]
-        );
         // Every operand of arithmetic or of a numeric function is numeric,
         // and each one is reported once, in written order.
         assert_eq!(

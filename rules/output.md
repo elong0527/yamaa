@@ -39,7 +39,7 @@ list, an unknown or internal column, or a repeated column, and reports the
 invalid name when there is one.
 
 Fails: `duplicate_identifier`, `internal_column_in_keys`, `invalid_field_type`, `undeclared_column`.
-Evidence: `negative-keys-internal`, `rust/crates/yamaa-adapters/tests/fixtures/output_declarations.tsv::internal-key`, `rust/crates/yamaa-adapters/tests/fixtures/preflight.tsv::declaration-order`.
+Evidence: `negative-keys-internal`, `rust/crates/yamaa-adapters/tests/fixtures/output_declarations.tsv::internal-key`, `rust/crates/yamaa-adapters/tests/fixtures/preflight.tsv::declaration-order`, `rust/tests/host-fixtures/cases.json::a_key_that_is_not_an_output_column`.
 
 An empty list fails as `invalid_field_type`, an unknown column as
 `undeclared_column`, an internal column as `internal_column_in_keys` and a

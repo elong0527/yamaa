@@ -519,8 +519,8 @@ class TestClosedGrammarContracts(unittest.TestCase):
                 temp_dir,
                 **{
                     "yaml/grammar/expression.yaml": (
-                        "contexts: [predicate, compute, aggregate, derivation]\n",
-                        "contexts: [predicate, compute, aggregate]\n",
+                        "contexts: [predicate, aggregate, derivation]\n",
+                        "contexts: [predicate, aggregate]\n",
                     )
                 },
             )

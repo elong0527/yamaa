@@ -260,7 +260,7 @@ fn derive(
                     &[
                         (
                             "reason",
-                            "a derive step reads only keep-declared named intermediates",
+                            "a derive step reads only named intermediates that declare a selection (keep or nearest)",
                         ),
                         ("intermediate", qualifier),
                     ],
@@ -505,14 +505,14 @@ fn validate_header<'a>(
                     .iter()
                     .flatten()
                     .find(|item| item.identifier == *qualifier);
-                if item.is_none_or(|item| item.selection.is_none()) {
+                if item.is_none_or(|item| item.selection.is_none() && item.nearest.is_none()) {
                     findings.push(BindFinding::AggregateDiagnostic(diagnostic(
                         crate::diagnostic::ConditionCode::AggregateDeriveIntermediate,
                         &format!("{}.derive", declaration.path),
                         &[
                             (
                                 "reason",
-                                "a derive step reads only keep-declared named intermediates",
+                                "a derive step reads only named intermediates that declare a selection (keep or nearest)",
                             ),
                             ("intermediate", qualifier),
                         ],

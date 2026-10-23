@@ -27,7 +27,7 @@ fn sample(id: &str, x: f64, y: f64) {
         ("LN", y, 0.0, "LN(A)"),
         ("POWER", y, x / 100.0, "POWER(A, B)"),
     ] {
-        let plan = compile(source, Context::Compute, "assessment").unwrap();
+        let plan = compile(source, Context::Derivation, "assessment").unwrap();
         let result = match plan.evaluate_number(&mut Inputs(a, b)).unwrap() {
             Number::Float(value) => value.get(),
             Number::Missing => f64::NAN,

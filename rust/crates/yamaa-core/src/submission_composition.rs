@@ -57,6 +57,19 @@ impl Finding {
     pub fn unsupported(path: &str, operation: &str) -> Self {
         Self::refused(path, issue::unsupported(operation, None))
     }
+    /// A listed specification's own refusal, with its condition and context,
+    /// at its spec path under `listing` (`sdtm.specs[0]`).
+    fn listed(listing: &str, refusal: crate::diagnostic::Diagnostic) -> Self {
+        let path = match refusal.spec_paths.first() {
+            Some(path) => format!("{listing}.{path}"),
+            None => listing.into(),
+        };
+        Self {
+            code: refusal.code,
+            path,
+            context: refusal.context,
+        }
+    }
     /// Retain display detail without using it to classify the failure.
     pub fn with_detail(mut self, detail: impl Into<String>) -> Self {
         self.context
@@ -1819,14 +1832,26 @@ fn compose_datasets(
                 ));
             }
         }
-        for key in &keys {
-            if !output_columns.contains(key) {
-                findings.push(Finding::cause(
-                    ConditionCode::SubmissionKeyNotOutput,
-                    &format!("{path}.keys"),
-                    "key omitted from submission output",
-                ));
+        // OUTPUT-2: a key that is not an output column fails as checking or
+        // running the specification refuses it, at the key under its listing.
+        for (position, key) in keys.iter().enumerate() {
+            if output_columns.contains(key) {
+                continue;
             }
+            let refusal = if columns.value.iter().any(|column| &column.name.value == key) {
+                crate::specification::OutputFinding::InternalKey {
+                    position,
+                    name: key.clone(),
+                }
+                .diagnostic()
+            } else {
+                crate::specification::PreflightFinding::UndeclaredKey {
+                    position,
+                    column: key.clone(),
+                }
+                .diagnostic()
+            };
+            findings.push(Finding::listed(&path, refusal));
         }
         let mut selected = Vec::new();
         for column in &columns.value {
