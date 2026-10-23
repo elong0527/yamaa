@@ -1149,12 +1149,39 @@ fn an_engine_without_functions_runs_every_build_that_calls_no_project_function()
     assert_eq!(calls.status(), Status::Failed);
     assert!(calls.output().is_none());
     assert!(calls.report().is_none());
+    // An engine that claims Python but was given no functions runs through
+    // the empty port, so the refusal names the first derivation that calls
+    // one (D221), located at its `derivation` key: line 7, column 42, after
+    // `  - {name: W, type: int, label: Doubled, ` (P-ISSUE-1).
     let found = rows(&calls.issues());
-    assert_eq!(found.len(), 1, "{found:?}");
-    assert_eq!(found[0].condition, "unsupported_operation");
+    let [row] = found.as_slice() else {
+        panic!("one issue: {found:?}")
+    };
     assert_eq!(
-        found[0].context.get("operation"),
-        Some(&text("environment"))
+        (
+            row.phase.as_str(),
+            row.condition.as_str(),
+            row.rule.as_deref(),
+            row.spec_paths.as_slice(),
+            &row.context,
+        ),
+        (
+            "planning",
+            "unsupported_operation",
+            None,
+            ["columns.W.derivation".to_owned()].as_slice(),
+            &yamaa_adapters::json!({"operation": "environment"}),
+        ),
+        "the refused run of an engine without functions"
+    );
+    let location = calls.diagnostics()[0].location.clone().unwrap();
+    assert_eq!(
+        (
+            location.file,
+            location.position.map(|at| (at.line, at.column))
+        ),
+        (study.path("one.yaml"), Some((7, 42))),
+        "the refusal's location"
     );
     // An engine that claims no host language reads no 0.5 environment file,
     // so it knows no function the project declares and refuses the call while
