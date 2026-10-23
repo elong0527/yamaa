@@ -227,3 +227,93 @@ impl<P: HostFunctions> HostFunctions for Activation<'_, '_, P> {
         self.observed(|port| port.call_batch(handle, rows, arguments))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::cell::RefCell;
+
+    /// The events an operation emits, in order.
+    #[derive(Default)]
+    struct Recorded(RefCell<Vec<Event>>);
+    impl Observer for Recorded {
+        fn observe(&self, event: Event) {
+            self.0.borrow_mut().push(event);
+        }
+    }
+
+    /// A port that answers each batch whole with its `x` values, or raises.
+    struct Batches {
+        raise: bool,
+    }
+    impl HostFunctions for Batches {
+        type Handle = ();
+        type Error = ();
+        fn verify_lock(
+            &mut self,
+            _: Language,
+            _: Lock<'_>,
+            _: &[ProjectFunctionIdentity],
+        ) -> Result<(), ()> {
+            unreachable!("a batch verifies no lock")
+        }
+        fn bind(&mut self, _: &ProjectFunctionIdentity, _: &LogicalSignature) -> Result<(), ()> {
+            unreachable!("a batch is given its handle")
+        }
+        fn invoke(&mut self, _: &(), _: &[Argument<'_>]) -> Result<Value, HostError<()>> {
+            unreachable!("this port answers a batch whole")
+        }
+        fn call_batch(
+            &mut self,
+            _: &(),
+            _: usize,
+            arguments: &[BatchArgument],
+        ) -> Result<Vec<Value>, HostError<()>> {
+            if self.raise {
+                return Err(HostError::Raised(()));
+            }
+            Ok(arguments[0].values.clone())
+        }
+    }
+
+    /// An activation's scope observes one call and one return per batch,
+    /// with the batch's outcome, however many rows the batch holds.
+    #[test]
+    fn an_observed_batch_is_one_call_and_one_return() {
+        let rows = vec![Value::Int(1), Value::Int(2), Value::Int(3)];
+        let arguments = [BatchArgument {
+            name: "x".into(),
+            values: rows.clone(),
+        }];
+        for (raise, expected, outcome, label) in [
+            (false, Ok(rows), Outcome::Succeeded, "a batch answered"),
+            (
+                true,
+                Err(HostError::Raised(())),
+                Outcome::Failed,
+                "a batch raised",
+            ),
+        ] {
+            let recorded = Recorded::default();
+            let mut port = Batches { raise };
+            let returned =
+                Scope::new(&recorded)
+                    .activation(&mut port)
+                    .call_batch(&(), 3, &arguments);
+            assert_eq!(returned, expected, "{label}");
+            assert_eq!(
+                *recorded.0.borrow(),
+                [
+                    Event::FunctionCall {
+                        stage: CallStage::Activation
+                    },
+                    Event::FunctionReturn {
+                        stage: CallStage::Activation,
+                        outcome
+                    },
+                ],
+                "{label}"
+            );
+        }
+    }
+}

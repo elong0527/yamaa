@@ -518,3 +518,120 @@ pub(crate) fn unchanged(compiled: &Compiled) -> bool {
     };
     prepared.verify_metadata().is_ok()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Mutex;
+    use yamaa_core::function_invocation::HostError;
+    use yamaa_core::value::Value;
+
+    /// Project functions answering a batch whole: each `x` plus one, missing
+    /// for missing, and a rejected representation for an `x` of 0. They
+    /// record each batch they are given.
+    #[derive(Default)]
+    struct Vectorized {
+        batches: Mutex<Vec<(usize, Vec<BatchArgument>)>>,
+    }
+
+    impl ProjectFunctions for Vectorized {
+        fn verify_lock(
+            &self,
+            _: &LockContext<'_>,
+            _: &[FunctionIdentity],
+        ) -> Result<(), FunctionError> {
+            unreachable!("a batch verifies no lock")
+        }
+
+        fn bind(
+            &self,
+            _: &FunctionIdentity,
+            _: &Signature,
+        ) -> Result<FunctionHandle, FunctionError> {
+            unreachable!("a batch is given its handle")
+        }
+
+        fn invoke(&self, _: &FunctionHandle, _: &[Argument<'_>]) -> Result<Scalar, CallError> {
+            unreachable!("these functions answer a batch whole")
+        }
+
+        fn call_batch(
+            &self,
+            _: &FunctionHandle,
+            rows: usize,
+            arguments: &[BatchArgument],
+        ) -> Result<Vec<Scalar>, CallError> {
+            self.batches
+                .lock()
+                .unwrap()
+                .push((rows, arguments.to_vec()));
+            arguments[0]
+                .values
+                .iter()
+                .map(|value| match value {
+                    Scalar::Int(0) => Err(CallError::InvalidResult(FunctionError::Rejected {
+                        reason: "zero".into(),
+                        returned: None,
+                    })),
+                    Scalar::Int(x) => Ok(Scalar::Int(x + 1)),
+                    _ => Ok(Scalar::Missing),
+                })
+                .collect()
+        }
+    }
+
+    /// The port forwards a batch to the embedder's own `call_batch` whole,
+    /// converting each value both ways, and a rejected representation stays
+    /// distinct from a raised failure.
+    #[test]
+    fn a_batch_reaches_the_embedder_s_call_batch_whole() {
+        let functions = Vectorized::default();
+        let mut port: &dyn ProjectFunctions = &functions;
+        let handle = FunctionHandle::new(());
+        let batch = |values| {
+            [yamaa_core::function_batch::BatchArgument {
+                name: "x".into(),
+                values,
+            }]
+        };
+        let returned = HostFunctions::call_batch(
+            &mut port,
+            &handle,
+            2,
+            &batch(vec![Value::Int(1), Value::Missing]),
+        );
+        assert_eq!(
+            returned.ok(),
+            Some(vec![Value::Int(2), Value::Missing]),
+            "an answered batch"
+        );
+        let rejected =
+            HostFunctions::call_batch(&mut port, &handle, 1, &batch(vec![Value::Int(0)]));
+        assert!(
+            matches!(
+                rejected,
+                Err(HostError::InvalidResult(FunctionError::Rejected { ref reason, returned: None }))
+                    if reason == "zero"
+            ),
+            "a rejected batch: {rejected:?}"
+        );
+        let batches = functions.batches.lock().unwrap();
+        let given = batches
+            .iter()
+            .map(|(rows, arguments)| {
+                let [argument] = arguments.as_slice() else {
+                    panic!("one argument: {arguments:?}")
+                };
+                (*rows, argument.name.as_str(), argument.values.clone())
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            given,
+            [
+                (2, "x", vec![Scalar::Int(1), Scalar::Missing]),
+                (1, "x", vec![Scalar::Int(0)]),
+            ],
+            "the batches the embedder was given"
+        );
+    }
+}
