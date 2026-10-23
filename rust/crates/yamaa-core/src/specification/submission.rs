@@ -6,10 +6,10 @@
 use super::*;
 use crate::json::Value as V;
 use crate::{
-    ast::{self, ColumnCheckKind, Constant, Literal, ModelKind, SubmissionMetadata},
+    ast::{self, ColumnCheckKind, Constant, Literal, SubmissionMetadata},
+    cdisc_vocabulary::{Core, DatasetClass, ModelKind, OriginSource, OriginType},
     dataset::{Check, InventoryScope, RowScope, Verification, WhereClause},
     diagnostic::{ConditionCode as C, Diagnostic},
-    specification_submission_document::{Core, DatasetClass, OriginSource, OriginType},
     submission_origin::{self as origin, Reads},
     submission_values as values,
     value::Value,
@@ -261,14 +261,22 @@ fn admit_counts(
         result.push(finding(
             C::SubmissionLengthMissing,
             path,
-            &[("column", s(name)), ("data_type", s(resolved))],
+            &[
+                ("column", s(name)),
+                ("data_type", s(resolved)),
+                ("field", s("length")),
+            ],
         ));
     }
     if !length_type && effective.length.is_some() && maxima.is_empty() {
         result.push(finding(
             C::SubmissionLengthNotApplicable,
             path,
-            &[("column", s(name)), ("data_type", s(resolved))],
+            &[
+                ("column", s(name)),
+                ("data_type", s(resolved)),
+                ("field", s("length")),
+            ],
         ));
     }
     if resolved == "float" && effective.digits.is_none() {
@@ -296,7 +304,7 @@ fn admit_dataset_model(
     model: ModelKind,
     result: &mut Vec<PreflightFinding>,
 ) {
-    if model == ModelKind::Adam {
+    if model == ModelKind::ADaM {
         if let Some(domain) = &dataset.domain {
             result.push(finding(
                 C::SubmissionAdamField,
@@ -305,7 +313,7 @@ fn admit_dataset_model(
             ));
         }
     }
-    if DatasetClass::tabulation_name(&dataset.class.text) == (model == ModelKind::Adam) {
+    if DatasetClass::tabulation_name(&dataset.class.text) == (model == ModelKind::ADaM) {
         result.push(finding(
             C::SubmissionClassFamily,
             &spec.cite(dataset.class.meta),
@@ -361,8 +369,8 @@ fn admit_column_model(
             ));
         }
     }
-    let required = effective_core.is_some_and(|core| core.text == Core::Required.name());
-    if model != ModelKind::Adam
+    let required = effective_core.is_some_and(|core| core.text == Core::Req.name());
+    if model != ModelKind::ADaM
         && required
         && effective_mandatory == Some(false)
         && (own.core.is_some() || own.mandatory.is_some())
@@ -383,7 +391,7 @@ fn admit_column_model(
             ]),
         ));
     }
-    if model == ModelKind::Adam {
+    if model == ModelKind::ADaM {
         if let Some(role) = &own.role {
             result.push(finding(
                 C::SubmissionAdamField,
@@ -400,7 +408,7 @@ fn admit_column_model(
             && !crate::specification_submission_document::admits_model_data_type_names(
                 kind,
                 &declared.text,
-                model == ModelKind::Adam,
+                model == ModelKind::ADaM,
             )
         {
             result.push(finding(
@@ -416,7 +424,7 @@ fn admit_column_model(
     }
     let fixed = crate::specification_submission_document::numeric_date_format_name(
         kind,
-        model == ModelKind::Adam,
+        model == ModelKind::ADaM,
     );
     if let (Some(fixed), Some(declared)) = (fixed, &own.display_format) {
         if declared.text != fixed {
@@ -714,6 +722,7 @@ pub(super) fn admit(
                 C::SubmissionReferenceRepeating,
                 &spec.cite(dataset.meta),
                 &[
+                    ("dataset", s(&spec.domain.name)),
                     ("reference_data", V::Bool(true)),
                     ("repeating", V::Bool(true)),
                 ],
@@ -750,7 +759,7 @@ pub(super) fn admit(
             // ADaM's `core` never derives `mandatory`, so a dataset whose
             // metadata a document can compose declares it (SUB-10), as it
             // declares `core`.
-            if spec.submission.is_some() && model == ModelKind::Adam && metadata.mandatory.is_none()
+            if spec.submission.is_some() && model == ModelKind::ADaM && metadata.mandatory.is_none()
             {
                 result.push(finding(
                     C::SubmissionCoreMandatory,
@@ -942,7 +951,7 @@ fn reject_datetime_columns(
     else {
         return;
     };
-    if !crate::specification_submission_document::DatasetClass::tabulation_name(class) {
+    if !DatasetClass::tabulation_name(class) {
         return;
     }
     for column in &spec.columns {

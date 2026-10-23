@@ -39,7 +39,7 @@ list, an unknown or internal column, or a repeated column, and reports the
 invalid name when there is one.
 
 Fails: `duplicate_identifier`, `internal_column_in_keys`, `invalid_field_type`, `undeclared_column`.
-Evidence: `negative-keys-internal`, `rust/crates/yamaa-adapters/tests/fixtures/output_declarations.tsv::internal-key`, `rust/crates/yamaa-adapters/tests/fixtures/preflight.tsv::declaration-order`.
+Evidence: `negative-keys-internal`, `rust/crates/yamaa-adapters/tests/fixtures/output_declarations.tsv::internal-key`, `rust/crates/yamaa-adapters/tests/fixtures/preflight.tsv::declaration-order`, `rust/tests/host-fixtures/cases.json::a_key_that_is_not_an_output_column`.
 
 An empty list fails as `invalid_field_type`, an unknown column as
 `undeclared_column`, an internal column as `internal_column_in_keys` and a
@@ -59,16 +59,14 @@ offending rows.
 Fails: `duplicate_key`, `missing_key`.
 Evidence: `negative-output-duplicate`, `negative-output-missing-key`.
 
-Key order is significant to [Lookup and joins](lookup.md), which
-joins on the output keys a right side also carries; those applicable keys are
-used for enrichment and do not change the identity asserted here. The keys
-state this identity once: a `not_missing` on a key column or a `unique` over
-exactly the keys repeats it and fails validation
-([CHECK-5](verification.md#check-5), [CHECK-10](verification.md#check-10)). A
-specification without `rows` emits one row per key combination under
-[ROW-8](rows.md#row-8), so a duplicate key can come only from
-row templates emitting one combination more than once, under
-[ROW-7](rows.md#row-7).
+A lookup matches on the `key` its input or named intermediate declares
+([LOOKUP-5](lookup.md#lookup-5)), never on these keys. The keys state this
+identity once: a `not_missing` on a key column or a `unique` over exactly the
+keys repeats it and fails validation ([CHECK-5](verification.md#check-5),
+[CHECK-10](verification.md#check-10)). A specification without `rows` emits
+one row per key combination under [ROW-8](rows.md#row-8), so a duplicate key
+can come only from row templates emitting one combination more than once,
+under [ROW-7](rows.md#row-7).
 
 Sponsor variables that may be missing can still define the presentation order
 and a separate uniqueness check. Declare a non-missing row identity in `keys`,
@@ -160,9 +158,10 @@ value.
 
 Evidence: `schema-parquet`.
 
-The values are those of [Values](values.md),
-[Values](values.md) and [Values](values.md),
-under the names [SPEC-2](specification.md#spec-2) admits. The `parquet`
+The values are the text ([VALUE-11](values.md#value-11)), numbers
+([VALUE-5](values.md#value-5)) and dates and datetimes
+([VALUE-13](values.md#value-13)) of [Values](values.md), under the names
+[SPEC-2](specification.md#spec-2) admits. The `parquet`
 profile carries its own types: an artifact read by another specification needs
 no declaration to be understood. The `csv` profile's bytes are fixed exactly.
 

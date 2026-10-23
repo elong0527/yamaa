@@ -470,8 +470,8 @@ fn missing_labels(document: &Document, value: &Data) -> Vec<Departure> {
     let Some(output) = value.get("output").filter(|output| output.map().is_some()) else {
         return found;
     };
-    if value.get("parent").is_some_and(|parent| !parent.is_null()) {
-        // A child layer inherits labels; only a standalone file owns them.
+    if document.layered() {
+        // A layer inherits labels; only a standalone file owns them.
         return found;
     }
     let Some(output_columns) = output.get("columns").and_then(Data::list) else {
@@ -815,11 +815,12 @@ fn reads_joined(value: &Data, dataset: &str) -> bool {
 /// intermediate over the input reads its records by its own `key`, and when
 /// every row comes from the input, a qualified read of it reads the driver.
 /// Validation admits such a key, so a shared parent layer can declare it for
-/// its children; a file that declares `parent` is not read, since its
-/// columns may come from a layer it inherits.
+/// its children; a layer that declares `parent` or `include`, or that another
+/// linted file includes, is not read, since its columns may come from a layer
+/// it composes on.
 fn unused_input_keys(document: &Document, value: &Data) -> Vec<Departure> {
     let mut found = Vec::new();
-    if value.get("parent").is_some_and(|parent| !parent.is_null()) {
+    if document.layered() {
         return found;
     }
     let Some(inputs) = value.get("input").and_then(Data::map) else {

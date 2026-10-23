@@ -858,8 +858,9 @@ mod preparation {
         }
     }
     mod inheritance {
-        //! A 1.x specification's parents are followed by `traverse_versioned`
-        //! (LAYER-2, LAYER-3).
+        //! A 1.x specification's parents are followed, and the fragments its
+        //! layers include are read, by `traverse_versioned` (LAYER-2 to
+        //! LAYER-4).
         use std::collections::BTreeMap;
         use yamaa_core::decoder;
         use yamaa_core::inheritance::*;
@@ -900,6 +901,7 @@ mod preparation {
                                 field("yamaa", text("str")),
                                 field("type", text("str")),
                                 field("parent", text("str")),
+                                field("include", text("list[str]")),
                                 field("label", text("str")),
                             ]),
                         ),
@@ -922,6 +924,16 @@ mod preparation {
             fields.extend(more);
             document(V::map(fields))
         }
+        /// A 1.x layer naming `parent` when given and including `include`.
+        fn including(parent: Option<&str>, include: &[&str]) -> Document {
+            layer_with(
+                parent,
+                vec![(
+                    "include",
+                    V::List(include.iter().map(|path| text(path)).collect()),
+                )],
+            )
+        }
         fn source(identity: &str) -> Source {
             Source {
                 identity: identity.into(),
@@ -942,19 +954,31 @@ mod preparation {
                 self.documents.insert(name.into(), layer(parent));
                 self
             }
+            /// The layer `name`, holding `document`.
+            fn holding(mut self, name: &str, document: Document) -> Self {
+                self.documents.insert(name.into(), document);
+                self
+            }
         }
         impl Resolver for Port {
             type Error = Host;
             fn inspect(&mut self, name: Name<'_>) -> Result<Located, Host> {
-                let Name::Written {
-                    file: File::Parent,
-                    declaring,
-                    written,
-                } = name
-                else {
-                    panic!("unexpected inspection {name:?}")
+                // A parent is named as a parent, and a fragment as a file a
+                // layer reads for its content.
+                let (verb, declaring, written) = match name {
+                    Name::Written {
+                        file: File::Parent,
+                        declaring,
+                        written,
+                    } => ("resolve", declaring, written),
+                    Name::Written {
+                        file: File::Resource,
+                        declaring,
+                        written,
+                    } => ("include", declaring, written),
+                    _ => panic!("unexpected inspection {name:?}"),
                 };
-                self.calls.push(format!("resolve:{declaring}:{written}"));
+                self.calls.push(format!("{verb}:{declaring}:{written}"));
                 if self.unavailable == Some(written) {
                     return Err(MISSING);
                 }
@@ -973,7 +997,7 @@ mod preparation {
             }
             fn capture(&mut self, name: Name<'_>) -> Result<Captured, Host> {
                 let Name::Located {
-                    file: File::Parent,
+                    file: File::Parent | File::Resource,
                     source,
                 } = name
                 else {
@@ -1081,7 +1105,8 @@ mod preparation {
                     error,
                     Error::Cycle {
                         path: names.into_iter().map(str::to_owned).collect(),
-                        returns_to_entry: target == "entry"
+                        returns_to_entry: target == "entry",
+                        named: Named::Parent,
                     }
                 );
                 assert_eq!(
@@ -1329,7 +1354,8 @@ mod preparation {
             for path in [vec![], vec!["one".into()], vec!["a".into(), "b".into()]] {
                 assert!(Error::<()>::Cycle {
                     path,
-                    returns_to_entry: true
+                    returns_to_entry: true,
+                    named: Named::Parent,
                 }
                 .diagnostic()
                 .is_err());
@@ -1358,6 +1384,7 @@ mod preparation {
             let cycle = Error::<()>::Cycle {
                 path: vec!["entry".into(), "base".into(), "entry".into()],
                 returns_to_entry: true,
+                named: Named::Parent,
             };
             assert_eq!(
                 cycle.diagnostic().unwrap().unwrap().context["cycle"],
@@ -1403,6 +1430,309 @@ mod preparation {
                     );
                 }
             }
+        }
+
+        /// The identities of `layers`, in contribution order.
+        fn identities(layers: &[VersionedLayer]) -> Vec<&str> {
+            layers.iter().map(|l| l.source.identity.as_str()).collect()
+        }
+
+        #[test]
+        fn fragments_contribute_after_the_parent_chain_and_before_their_layer() {
+            // entry -> a -> root, where a includes g and the entry includes
+            // f1 then f2: at each layer its parent chain, then its fragments
+            // in list order, then the layer itself (LAYER-3). The chain is
+            // followed to its root before any fragment is read.
+            let mut port = Port::default()
+                .holding("a", including(Some("root"), &["g"]))
+                .with("root", None)
+                .with("g", None)
+                .with("f1", None)
+                .with("f2", None);
+            let layers = run(including(Some("a"), &["f1", "f2"]), &mut port).unwrap();
+            assert_eq!(identities(&layers), ["root", "g", "a", "f1", "f2", "entry"]);
+            assert_eq!(
+                port.calls,
+                [
+                    "resolve:entry:a",
+                    "read:a",
+                    "resolve:a:root",
+                    "read:root",
+                    "include:a:g",
+                    "read:g",
+                    "include:entry:f1",
+                    "read:f1",
+                    "include:entry:f2",
+                    "read:f2",
+                ]
+            );
+            // A layer without a parent composes its fragments before itself.
+            let mut port = Port::default().with("f", None);
+            let layers = run(including(None, &["f"]), &mut port).unwrap();
+            assert_eq!(identities(&layers), ["f", "entry"]);
+        }
+
+        /// A study of layers that the port holds, by name: an entry
+        /// document and the layers it reaches.
+        struct Study {
+            label: &'static str,
+            entry: Document,
+            layers: Vec<(&'static str, Document)>,
+        }
+        impl Study {
+            /// A port that holds the study's layers, each alias naming the
+            /// layer it reaches.
+            fn port(&self, aliases: &[(&str, &str)]) -> Port {
+                let mut port = Port::default();
+                for (name, document) in &self.layers {
+                    port = port.holding(name, document.clone());
+                }
+                for (alias, target) in aliases {
+                    port.aliases.insert((*alias).into(), (*target).into());
+                }
+                port
+            }
+        }
+
+        #[test]
+        fn an_include_that_reaches_a_layer_still_composing_is_a_cycle() {
+            // Each study, the cycle its include entry `include[0]` closes,
+            // whether it returns to the entry, and the calls made: the layer
+            // reached again is never read again.
+            let cases = [
+                (
+                    Study {
+                        label: "the entry includes itself",
+                        entry: including(None, &["self"]),
+                        layers: vec![],
+                    },
+                    vec!["entry", "entry"],
+                    true,
+                    vec!["include:entry:self"],
+                ),
+                (
+                    Study {
+                        label: "a parent includes the entry",
+                        entry: layer(Some("a")),
+                        layers: vec![("a", including(None, &["back"]))],
+                    },
+                    vec!["entry", "a", "entry"],
+                    true,
+                    vec!["resolve:entry:a", "read:a", "include:a:back"],
+                ),
+                (
+                    Study {
+                        label: "the root includes the layer below it",
+                        entry: layer(Some("a")),
+                        layers: vec![("a", layer(Some("b"))), ("b", including(None, &["down"]))],
+                    },
+                    vec!["a", "b", "a"],
+                    false,
+                    vec![
+                        "resolve:entry:a",
+                        "read:a",
+                        "resolve:a:b",
+                        "read:b",
+                        "include:b:down",
+                    ],
+                ),
+            ];
+            for (study, cycle, returns_to_entry, calls) in cases {
+                let label = study.label;
+                let mut port = study.port(&[("self", "entry"), ("back", "entry"), ("down", "a")]);
+                let error = run(study.entry, &mut port).unwrap_err();
+                assert_eq!(
+                    error,
+                    Error::Cycle {
+                        path: cycle.iter().map(|s| s.to_string()).collect(),
+                        returns_to_entry,
+                        named: Named::Include(0),
+                    },
+                    "{label}"
+                );
+                assert_eq!(port.calls, calls, "{label}");
+                check(
+                    &error,
+                    "inheritance_cycle",
+                    "LAYER-3",
+                    "include[0]",
+                    &[
+                        ("source", cycle[cycle.len() - 2]),
+                        (
+                            "reason",
+                            if returns_to_entry {
+                                "parent_chain_returns_to_entry"
+                            } else {
+                                "parent_chain_returns_to_active_layer"
+                            },
+                        ),
+                    ],
+                );
+            }
+        }
+
+        #[test]
+        fn an_include_that_reaches_a_layer_already_composed_repeats_it() {
+            // Each study, the layer whose include entry repeats a layer, the
+            // entry's index, the path as written and the layer reached.
+            let cases = [
+                (
+                    Study {
+                        label: "one list names a fragment twice",
+                        entry: including(None, &["f", "again"]),
+                        layers: vec![("f", layer(None))],
+                    },
+                    "entry",
+                    1,
+                    "again",
+                    "f",
+                ),
+                (
+                    Study {
+                        label: "the entry includes its parent",
+                        entry: including(Some("a"), &["a"]),
+                        layers: vec![("a", layer(None))],
+                    },
+                    "entry",
+                    0,
+                    "a",
+                    "a",
+                ),
+                (
+                    Study {
+                        label: "a parent and the entry include one fragment",
+                        entry: including(Some("a"), &["again"]),
+                        layers: vec![("a", including(None, &["f"])), ("f", layer(None))],
+                    },
+                    "entry",
+                    0,
+                    "again",
+                    "f",
+                ),
+            ];
+            for (study, declaring, index, path, reached) in cases {
+                let label = study.label;
+                let mut port = study.port(&[("again", "f")]);
+                let error = run(study.entry, &mut port).unwrap_err();
+                assert_eq!(
+                    error,
+                    Error::Repeated {
+                        declaring: declaring.into(),
+                        index,
+                        path: path.into(),
+                        layer: reached.into(),
+                    },
+                    "{label}"
+                );
+                // The repeated file is located, never read again.
+                assert_eq!(
+                    port.calls.last().map(String::as_str),
+                    Some(format!("include:{declaring}:{path}").as_str()),
+                    "{label}"
+                );
+                check(
+                    &error,
+                    "duplicate_layer",
+                    "LAYER-3",
+                    &format!("include[{index}]"),
+                    &[("source", declaring), ("path", path), ("layer", reached)],
+                );
+            }
+        }
+
+        #[test]
+        fn a_fragment_declares_neither_parent_nor_include() {
+            for (field, fragment) in [
+                ("parent", layer(Some("x"))),
+                ("include", including(None, &["x"])),
+            ] {
+                let mut port = Port::default().holding("f", fragment);
+                let error = run(including(None, &["f"]), &mut port).unwrap_err();
+                assert_eq!(
+                    error,
+                    Error::Fragment {
+                        source: "f".into(),
+                        entry: "entry".into(),
+                        field,
+                    },
+                    "{field}"
+                );
+                // What the fragment names is never read.
+                assert_eq!(port.calls, ["include:entry:f", "read:f"], "{field}");
+                check(
+                    &error,
+                    "prohibited_construct",
+                    "LAYER-4",
+                    field,
+                    &[("construct", field), ("source", "f"), ("entry", "entry")],
+                );
+            }
+        }
+
+        #[test]
+        fn an_include_that_reaches_no_file_fails_at_its_entry() {
+            let mut port = Port::default().with("a", None);
+            let error = run(including(Some("a"), &["gone"]), &mut port).unwrap_err();
+            assert_eq!(
+                error,
+                Error::Included {
+                    declaring: "entry".into(),
+                    index: 0,
+                    path: "gone".into(),
+                    failure: ResourceFailure::Missing,
+                }
+            );
+            // The layer that writes the entry is named, so the finding is
+            // located there whichever layers also include (P-ISSUE-1).
+            check(
+                &error,
+                "resource_path_missing",
+                "FILE-7",
+                "include[0]",
+                &[("path", "gone"), ("source", "entry")],
+            );
+            // A failure the port does not classify stays its own.
+            let mut port = Port {
+                raised: Some("raise"),
+                ..Port::default()
+            };
+            assert_eq!(
+                run(including(None, &["raise"]), &mut port).unwrap_err(),
+                Error::Host(SourceFailure::Host(("opaque", 73)))
+            );
+        }
+
+        #[test]
+        fn a_fragment_with_an_unread_header_fails_at_the_include_entry_naming_it() {
+            let fragment = document(V::map(vec![
+                ("yamaa", text("1.0")),
+                ("type", text("project")),
+            ]));
+            let mut port = Port::default().with("first", None).holding("f", fragment);
+            let error = run(including(None, &["first", "f"]), &mut port).unwrap_err();
+            assert_eq!(
+                error,
+                Error::Header {
+                    source: "f".into(),
+                    entry: "entry".into(),
+                    mismatch: HeaderMismatch::FileType {
+                        file_type: "project".into()
+                    },
+                    named: Named::Include(1),
+                }
+            );
+            check(
+                &error,
+                "unexpected_file_type",
+                "LAYER-4",
+                "include[1]",
+                &[
+                    ("source", "f"),
+                    ("entry", "entry"),
+                    ("type", "project"),
+                    ("expected", "spec"),
+                ],
+            );
         }
     }
     mod inheritance_capture {

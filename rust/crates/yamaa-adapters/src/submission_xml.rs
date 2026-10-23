@@ -7,6 +7,7 @@ use std::collections::BTreeSet;
 use yamaa_core::{
     application_issue::{Fault, Step},
     ast,
+    cdisc_vocabulary::{PublishingSet, StandardName},
     define_diagnostics::{xml_invalid, xml_whitespace},
     diagnostic::ConditionCode,
     limits::Limits,
@@ -138,21 +139,23 @@ impl Element {
         references: &mut Vec<String>,
         oid_references: &mut Vec<String>,
     ) -> Result<(), Finding> {
-        let invalid = |facet| xml_invalid(&self.path, facet);
+        // Each refusal names the attribute value that breaks the schema.
+        let invalid = |facet, value: &str| xml_invalid(&self.path, facet, text(value));
         for (name, value) in &self.attributes {
             match *name {
-                "Name" | "Role" if value.is_empty() => return Err(invalid("nonempty name")),
+                "Name" | "Role" if value.is_empty() => return Err(invalid("nonempty name", value)),
                 "OID" | "ID" => {
                     if !identities.insert(value.clone()) {
                         return Err(Finding::cause(
                             ConditionCode::SubmissionDuplicateIdentifier,
                             &self.path,
                             value,
-                        ));
+                        )
+                        .with("identifier", value.as_str()));
                     }
                     if *name == "ID" {
                         if !ncname(value) {
-                            return Err(invalid("leaf ID NCName"));
+                            return Err(invalid("leaf ID NCName", value));
                         }
                         leaves.insert(value.clone());
                     }
@@ -163,7 +166,7 @@ impl Element {
                 | "def:CommentOID" | "ValueListOID" | "WhereClauseOID" => {
                     oid_references.push(value.clone())
                 }
-                "xml:lang" if !language(value) => return Err(invalid("xml:lang language")),
+                "xml:lang" if !language(value) => return Err(invalid("xml:lang language", value)),
                 _ => {}
             }
         }
@@ -186,18 +189,27 @@ fn ncname(value: &str) -> bool {
     let mut chars = value.chars();
     chars.next().is_some_and(start) && chars.all(|c| start(c) || matches!(c, '-' | '.' | '0'..='9' | '\u{b7}' | '\u{300}'..='\u{36f}' | '\u{203f}'..='\u{2040}'))
 }
+/// A finding's text value.
+fn text(value: &str) -> yamaa_core::json::Value {
+    yamaa_core::json::Value::String(value.into())
+}
 fn escape(value: &str, path: &str, attribute: bool) -> Result<String, Finding> {
-    if value
+    if let Some(character) = value
         .chars()
-        .any(|c| c == '\r' || c == '\t' || attribute && c == '\n')
+        .find(|&c| c == '\r' || c == '\t' || attribute && c == '\n')
     {
-        return Err(xml_whitespace(path));
+        return Err(xml_whitespace(path, character));
     }
-    if value
+    // The forbidden character, named by its code point.
+    if let Some(character) = value
         .chars()
-        .any(|c| c < '\u{20}' && c != '\n' || c == '\u{fffe}' || c == '\u{ffff}')
+        .find(|&c| c < '\u{20}' && c != '\n' || c == '\u{fffe}' || c == '\u{ffff}')
     {
-        return Err(xml_invalid(path, "forbidden XML character"));
+        return Err(xml_invalid(
+            path,
+            "forbidden XML character",
+            text(&format!("U+{:04X}", u32::from(character))),
+        ));
     }
     let mut out = value
         .replace('&', "&amp;")
@@ -460,13 +472,7 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
         .optional("Originator", section.originator.as_ref().map(|v| &v.text))
         .attr("SourceSystem", "yamaa")
         .attr("SourceSystemVersion", study.source_version())
-        .attr(
-            "def:Context",
-            match section.context {
-                ast::DefineContext::Submission => "Submission",
-                ast::DefineContext::Other => "Other",
-            },
-        );
+        .attr("def:Context", section.context.name());
     let declared = study.study();
     let mut root = Element::new("Study", "study").attr("OID", format!("STDY.{}", declared.id.name));
     let mut globals = Element::new("GlobalVariables", "study");
@@ -689,24 +695,26 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
         &mut references,
         &mut oid_references,
     )?;
-    if oid_references
+    if let Some(reference) = oid_references
         .iter()
-        .any(|reference| !identities.contains(reference))
+        .find(|reference| !identities.contains(*reference))
     {
         return Err(xml_invalid(
             "metadata_version",
             "unresolved generated metadata reference",
+            text(reference),
         ));
     }
-    if references
+    if let Some(reference) = references
         .iter()
-        .any(|reference| !leaves.contains(reference))
+        .find(|reference| !leaves.contains(*reference))
     {
         return Err(Finding::cause(
             ConditionCode::SubmissionUnknownDocument,
             "documents",
             "unresolved generated leaf reference",
-        ));
+        )
+        .with("document", reference.as_str()));
     }
     let mut out = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n".to_string();
     if let Some(stylesheet) = &section.stylesheet {
@@ -721,33 +729,39 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
 fn validate_profile(study: &Study) -> Result<(), Finding> {
     let created = study.created();
     if created.len() != 19 || created.parse::<yamaa_core::temporal::DateTime>().is_err() {
-        return Err(xml_invalid("created", "CreationDateTime"));
+        return Err(xml_invalid("created", "CreationDateTime", text(created)));
     }
     // Complete scalar facets for this closed generated element profile. The
     // immutable writer fixes element order/cardinality and generated references;
     // independent installed tests validate bytes with the unchanged official XSD.
     for standard in study.standards() {
-        if !ast::STANDARD_NAMES.contains(&standard.name.as_str()) {
-            return Err(xml_invalid("standards", "StandardName enumeration"));
+        if StandardName::from_name(&standard.name).is_none() {
+            return Err(xml_invalid(
+                "standards",
+                "StandardName enumeration",
+                text(&standard.name),
+            ));
         }
-        if standard.publishing_set.as_ref().is_some_and(|set| {
-            !matches!(
-                set.as_str(),
-                "ADaM" | "CDASH" | "DEFINE-XML" | "SDTM" | "SEND"
-            )
-        }) {
+        if let Some(set) = standard
+            .publishing_set
+            .as_ref()
+            .filter(|set| PublishingSet::from_name(set).is_none())
+        {
             return Err(xml_invalid(
                 "standards",
                 "StandardPublishingSet enumeration",
+                text(set),
             ));
         }
     }
     for list in study.codelists() {
         let declaration = &list.declaration;
+        // A codelist with an empty item list names that list.
         if declaration.items.as_ref().is_some_and(Vec::is_empty) {
             return Err(xml_invalid(
                 &format!("codelists.{}", declaration.id.name),
                 "CodeList requires an item or dictionary",
+                yamaa_core::json::Value::Array(Vec::new()),
             ));
         }
         if let Some(format) = declaration.format_name.as_ref().map(|t| &t.text) {
@@ -761,6 +775,7 @@ fn validate_profile(study: &Study) -> Result<(), Finding> {
                 return Err(xml_invalid(
                     &format!("codelists.{}.format_name", declaration.id.name),
                     "SASFormatName facet",
+                    text(format),
                 ));
             }
         }

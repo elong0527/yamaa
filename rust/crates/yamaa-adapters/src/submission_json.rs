@@ -7,10 +7,10 @@
 use std::io::{self, Write};
 use yamaa_core::{
     application_issue::{Fault, Step},
+    cdisc_vocabulary::DataType,
     diagnostic::ConditionCode,
     limits::{LimitExceeded, Limits},
     project_environment::Submission,
-    specification_submission_document::DataType,
     submission_composition::{Dataset, Finding, Study},
     table::{TableAccess, ValueRef},
 };
@@ -199,11 +199,12 @@ impl Writer<'_> {
             ValueRef::Float(value) => self.text(&yamaa_core::conversion::float_text(value)),
             ValueRef::Date(value) => self.string(&value.to_string()),
             ValueRef::DateTime(value) => self.string(&value.to_string()),
-            ValueRef::Bool(_) => Err(Finding::cause(
+            ValueRef::Bool(value) => Err(Finding::cause(
                 ConditionCode::SubmissionJsonInvalid,
                 "dataset_json",
                 "schema_violation: boolean cell",
-            )),
+            )
+            .with("value", value)),
         }
     }
 }
@@ -286,12 +287,14 @@ pub fn render<T: TableAccess>(
                 if column > 0 {
                     writer.text(", ")?;
                 }
+                // A cell the held table cannot give has no value to name.
                 writer.cell(table.cell(row, column).map_err(|_| {
                     Finding::cause(
                         ConditionCode::SubmissionJsonInvalid,
                         &document.path,
                         "held table access",
                     )
+                    .with("value", yamaa_core::json::Value::Null)
                 })?)?;
             }
             writer.text("]")?;

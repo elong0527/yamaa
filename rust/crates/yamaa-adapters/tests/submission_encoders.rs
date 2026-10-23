@@ -203,7 +203,12 @@ mod submission_encoders {
                 detail(&finding),
                 &JsonValue::String("forbidden XML whitespace".into())
             );
-            assert_eq!(finding.context.len(), 1);
+            // The label writes a tab, which the finding names.
+            assert_eq!(
+                finding.context["whitespace"],
+                JsonValue::String("tab".into())
+            );
+            assert_eq!(finding.context.len(), 2);
         }
 
         /// DEFINE-25: a creation time outside the schema's whole-second civil

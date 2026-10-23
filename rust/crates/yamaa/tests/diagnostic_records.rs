@@ -79,11 +79,11 @@ fn unknown_source_column_arrives_as_a_typed_record() {
         assert_eq!(diagnostic.rule.as_deref(), Some("NAME-3"));
         // Ordered spec-path segments, not a joined string.
         assert_eq!(diagnostic.spec_path, ["columns.VALUE.derivation.source"]);
-        // The message renders the registry's template; a condition shared
-        // by causes with different context names the spec path.
+        // The message renders the registry's template, which names the
+        // identifier every cause of the condition records.
         assert_eq!(
             diagnostic.message,
-            "there is an unknown field or reference at columns.VALUE.derivation.source"
+            "SRC.MISSING is not a known field or reference at columns.VALUE.derivation.source"
         );
         // Structured context, never a formatted string.
         assert_eq!(
@@ -152,7 +152,8 @@ fn integer_tokens_beyond_sixty_four_bits_stay_exact_numbers() {
         assert_eq!(diagnostic.code, "integer_overflow");
         assert_eq!(
             diagnostic.message,
-            "an int value is outside the range -9223372036854775808 to 9223372036854775807"
+            "340282366920938463463374607431768211456 is outside the int range \
+             -9223372036854775808 to 9223372036854775807"
         );
         assert_eq!(
             diagnostic.context.get("actual"),

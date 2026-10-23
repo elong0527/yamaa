@@ -133,7 +133,9 @@ def validate_examples_csv(root: Path):
                 continue
             if not isinstance(document, dict):
                 continue
-            inherited |= document.get("parent") is not None
+            inherited |= any(
+                document.get(field) is not None for field in ("parent", "include")
+            )
             output = document.get("output")
             if not isinstance(output, dict):
                 continue
@@ -163,7 +165,8 @@ def validate_examples_csv(root: Path):
                         f"ERROR: {label}:{number}: expected {len(header)} fields, got {len(row)}"
                     )
             if inherited:
-                # Resolving a parent chain is a language operation owned by the Rust suite.
+                # Composing a parent chain or fragments is a language operation
+                # owned by the Rust suite.
                 continue
             if path.name not in declarations:
                 errors.append(

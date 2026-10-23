@@ -75,6 +75,12 @@ class CdiscVocabularyTests(unittest.TestCase):
                 "role": ("column_role", None),
                 "core_designation": ("core_designation", None),
                 "submission_data_type": ("define_data_type", None),
+                "method_type": ("method_type", None),
+                "page_reference_type": (
+                    "page_reference_class.type",
+                    "PDFPageType",
+                ),
+                "context": ("submission_section_class.context", "ODMContext"),
                 "comparator": ("where_comparison_class.comparator", None),
             },
         )
@@ -105,6 +111,24 @@ class CdiscVocabularyTests(unittest.TestCase):
         # The schema still spells the published list.
         self.assertEqual(
             sum("dataset_class_name lists" in error for error in errors), 1, errors
+        )
+
+    def test_an_enumeration_is_compared_by_its_values_alone(self):
+        # The bundled Define-XML schema lists each enumeration
+        # alphabetically, and the file keeps the order of the schema in
+        # yaml/, so only the schema in yaml/ reports a reordered list.
+        document = self.vocabulary()
+        document["vocabularies"]["standard_status"]["values"].reverse()
+        self.write(document)
+        self.assertEqual(
+            OWNER.check(self.root),
+            [
+                "ERROR: yaml/schema_project.yaml: "
+                "implementation_guide_class.status lists ['Draft', 'Final', "
+                "'Provisional'], but "
+                "yaml/vocabulary/cdisc.yaml.vocabularies.standard_status lists "
+                "['Provisional', 'Final', 'Draft']"
+            ],
         )
 
     def test_a_schema_type_that_drifts_from_the_file_is_reported(self):
@@ -162,6 +186,9 @@ class CdiscVocabularyTests(unittest.TestCase):
             "role": metadata,
             "core_designation": metadata,
             "submission_data_type": metadata,
+            "method_type": metadata,
+            "page_reference_type": metadata,
+            "context": "yaml/schema_project.yaml",
             "comparator": metadata,
         }
         pristine = self.vocabulary()
@@ -285,7 +312,7 @@ class CdiscVocabularyTests(unittest.TestCase):
             ],
         )
 
-    def test_the_file_version_is_the_1_0_schema_version(self):
+    def test_the_file_version_is_the_version_of_the_1_0_schema(self):
         document = self.vocabulary()
         document["version"] = "1.1"
         self.write(document)

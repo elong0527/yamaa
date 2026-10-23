@@ -117,6 +117,7 @@ class CdiscTablesTests(unittest.TestCase):
             "| `SDTM` | `SDTMIG`, `SDTMIG-AP`, `SDTMIG-MD` |",
             "| `SDTM` | `SDTMIG`, `SDTMIG-AP`, `SDTMIG-MX` |",
         )
+        self.replace("| `int` | `integer` | none |", "| `int` | `int64` | none |")
         self.replace("| `Protocol` | `Sponsor` |", "| `Protocol` | `Patient` |")
         self.replace("| `URI` | `URI` |", "| `Uri` | `URI` |", JSON_CARDS)
         self.assertEqual(
@@ -126,6 +127,8 @@ class CdiscTablesTests(unittest.TestCase):
                 f"`SDTMIG-MX`, which {SPELLED}.standard_name does not",
                 f"{self.at('| Model |', 'SUB-3')}: Standard names does not list "
                 f"`SDTMIG-MD`, which {SPELLED}.standard_name lists",
+                f"{self.at('`int64`', 'SUB-6')}: Default lists `int64`, which "
+                f"{SPELLED}.submission_data_type does not",
                 f"{self.at('`Patient`', 'SUB-15')}: Admitted sources for `SDTM` "
                 f"lists `Patient`, which {SPELLED}.origin_source does not",
                 f"{self.at('| `Uri` |', 'JSON-10', JSON_CARDS)}: Submission data "

@@ -12,7 +12,12 @@
           "condition": "integer_overflow",
           "context": {
             "position": 14,
-            "predicate": "FALSE AND V = 9223372036854775808"
+            "predicate": "FALSE AND V = 9223372036854775808",
+            "expr": "FALSE AND V = 9223372036854775808",
+            "value": "9223372036854775808",
+            "actual": 9223372036854775808,
+            "minimum": -9223372036854775808,
+            "maximum": 9223372036854775807
           },
           "phase": "validation",
           "rule": "VALUE-5",
@@ -32,7 +37,12 @@
               "condition": "integer_overflow",
               "context": {
                 "position": 14,
-                "predicate": "FALSE AND V = 9223372036854775808"
+                "predicate": "FALSE AND V = 9223372036854775808",
+                "expr": "FALSE AND V = 9223372036854775808",
+                "value": "9223372036854775808",
+                "actual": 9223372036854775808,
+                "minimum": -9223372036854775808,
+                "maximum": 9223372036854775807
               },
               "phase": "validation",
               "rule": "VALUE-5",
@@ -105,7 +115,12 @@
           "condition": "integer_overflow",
           "context": {
             "position": 12,
-            "predicate": "TRUE OR V = -9223372036854775809"
+            "predicate": "TRUE OR V = -9223372036854775809",
+            "expr": "TRUE OR V = -9223372036854775809",
+            "value": "-9223372036854775809",
+            "actual": -9223372036854775809,
+            "minimum": -9223372036854775808,
+            "maximum": 9223372036854775807
           },
           "phase": "validation",
           "rule": "VALUE-5",
@@ -125,7 +140,12 @@
               "condition": "integer_overflow",
               "context": {
                 "position": 12,
-                "predicate": "TRUE OR V = -9223372036854775809"
+                "predicate": "TRUE OR V = -9223372036854775809",
+                "expr": "TRUE OR V = -9223372036854775809",
+                "value": "-9223372036854775809",
+                "actual": -9223372036854775809,
+                "minimum": -9223372036854775808,
+                "maximum": 9223372036854775807
               },
               "phase": "validation",
               "rule": "VALUE-5",

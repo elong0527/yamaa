@@ -472,12 +472,16 @@ build's ordered publication path and reports operational refusal separately from
 attempting to save a failed build.
 
 Calls are synchronous. Python callbacks require the originating interpreter and
-GIL; R callbacks execute only on the originating R thread. A `Send + Sync`
-resource trait does not permit running an R closure on a worker. Do not hold
-a mutable result borrow across a reentrant host call. Reentry to the same busy
-owner refuses; unrelated owned results remain usable. Generated glue must root
-callbacks for all native uses and contain exceptions/conditions before Rust
-resumes. Finalizers do not invoke project code or start publication.
+GIL; R callbacks execute only on the originating R thread. A streamed run's
+`get_next` may come from another library on any thread: a run that can call
+project functions is built only on the thread that started it, and a pull on
+another thread fails with `host_thread` instead of calling the interpreter. A
+`Send + Sync` resource trait does not permit running an R closure on a
+worker. Do not hold a mutable result borrow across a reentrant host call.
+Reentry to the same busy owner refuses; unrelated owned results remain
+usable. Generated glue must root callbacks for all native uses and contain
+exceptions/conditions before Rust resumes. Finalizers do not invoke project
+code or start publication.
 
 Cancellation is control flow, distinct from a semantic finding. Retain the
 original Python interrupt/SystemExit or R interrupt for the current native
@@ -507,14 +511,16 @@ leave the engine: Python returns each output, issues and report table as a
 `yamaa.Table`, whose `to_arrow()`, `to_polars()` and `to_pandas()` read it
 through this stream with PyArrow >=23.0.1, Polars >=1.35.2 or pandas
 >=2.3.3, and whose `to_pylist()` reads it in Rust,
-while the R binding copies each table into plain R vectors in Rust, so no Arrow
-stream crosses the R boundary. No host passes a table into the engine. The
-generated declarations must preserve these shapes:
+while the R binding copies each table into plain R vectors in Rust, so the only
+Arrow stream that crosses the R boundary is a streamed run's output (#3697). No
+host passes a table into the engine. The generated declarations must preserve
+these shapes:
 
 | Transfer | Ownership transition |
 | --- | --- |
 | Python export | `Table.__arrow_c_stream__()` creates a fresh named capsule owning a stream header shell and independent reader cursor. |
 | Stream schema/next batch | Each successful emitted schema/array has its own release callback. End of stream is an array with `release == NULL`, distinct from an empty batch. |
+| Streamed run output | The engine's export of the run's reader (`Batches::into_stream`): each `get_next` is one pull, which the first time builds the run and then builds one batch, and releasing a stream that started the run before its last batch cancels the run. Python's capsule and R's external pointer of class `nanoarrow_array_stream` own the header until a reader moves it; R's finalizer frees the header and releases an unmoved stream, calling no R or project code. |
 
 The current owner invokes each non-null release callback once. Moving ownership
 sets the source release to null; a moved-from destructor frees only its own

@@ -16,7 +16,8 @@
       ],
       "rule": "LOOKUP-8",
       "context": {
-        "identifier": "ARM"
+        "identifier": "ARM",
+        "construct": "filter"
       }
     }
   ],
@@ -35,7 +36,8 @@
           ],
           "rule": "LOOKUP-8",
           "context": {
-            "identifier": "ARM"
+            "identifier": "ARM",
+            "construct": "filter"
           }
         }
       ],

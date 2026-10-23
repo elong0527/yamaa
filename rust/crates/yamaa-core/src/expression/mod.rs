@@ -1,5 +1,5 @@
-//! The one closed expression language of fields typed `predicate`,
-//! `compute.expr` and `aggregate.expr`, and of text in an expression field.
+//! The one closed expression language of fields typed `predicate` and
+//! `aggregate.expr`, and of text in an expression field.
 //!
 //! One lexer and parser ([`parse`]) read the grammar of
 //! `yaml/grammar/expression.yaml` into one arena. The binder ([`compile`])
@@ -7,7 +7,7 @@
 //! functions the context admits, the root, reductions and literal policy, and
 //! compiles each regular-expression literal. Static operand types are checked
 //! against the site's names by [`CompiledExpression::type_findings`], the
-//! result type of `compute` and `aggregate` is
+//! result type of expression-field text and of `aggregate` is
 //! [`CompiledExpression::result_type`], and one evaluator runs every context.
 
 mod bind;
@@ -30,13 +30,12 @@ use crate::temporal::TemporalError;
 pub enum Context {
     /// A field typed `predicate`: a Boolean root with three-valued logic.
     Predicate,
-    /// `compute.expr`: a numeric root over the current row.
-    Compute,
     /// `aggregate.expr`: a numeric root, or a bare reduction, over a relation.
     Aggregate,
     /// Text in an expression field, such as a `derivation`: any value as
-    /// root over the current row. It admits what `Compute` admits, plus
-    /// quoted text and temporal literals (FORMULA-27).
+    /// root over the current row. It admits numbers, quoted text, temporal
+    /// literals, `NULL`, names, arithmetic and the numeric functions
+    /// (FORMULA-27).
     Derivation,
 }
 
@@ -183,8 +182,8 @@ pub enum Failure {
     InvalidRegex { byte: usize, reason: &'static str },
     /// A `str_contains` pattern that is not a string literal (FORMULA-8).
     PatternNotLiteral,
-    /// An integer literal outside the signed 64-bit range.
-    IntegerOverflow,
+    /// An integer literal outside the signed 64-bit range, as written.
+    IntegerOverflow { literal: String },
     /// A construct the context refuses.
     ProhibitedConstruct { construct: Construct },
     /// A function or reducer the context does not admit, or another arity.

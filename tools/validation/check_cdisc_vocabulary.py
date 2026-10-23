@@ -2,15 +2,17 @@
 
 ``yaml/vocabulary/cdisc.yaml`` holds the models, dataset classes and
 subclasses, standard names and statuses, publishing sets, origin types and
-sources, column roles, core designations, submission data types and where
-comparators that a specification and a project file are read against (#3030
-P-VOC-1). This check keeps the file the one source of those lists:
+sources, column roles, core designations, submission data types, method
+types, page reference types, document contexts and where comparators that a
+specification and a project file are read against (#3030 P-VOC-1). This check
+keeps the file the one source of those lists:
 
 - each vocabulary lists unique values, each with the language version that
   admitted it, none newer than the file's ``version``;
-- a vocabulary that names a Define-XML ``enumeration`` equals that simple type
-  of the Define-XML schema bundled with the engine, whose release and
-  terminology package the file's ``source`` names;
+- a vocabulary that names a Define-XML ``enumeration`` holds exactly the
+  values of that simple type of the Define-XML schema bundled with the
+  engine, whose release and terminology package the file's ``source`` names.
+  That schema lists its values alphabetically, so the order is the file's;
 - the schema in ``yaml/`` spells each vocabulary as the named ``type`` or the
   class ``field`` it names, with exactly its values in its order, and each of
   its modules declares the file's ``version``.
@@ -172,7 +174,7 @@ def enumeration_errors(document, enumerations, release):
                 f"ERROR: {label}.enumeration: {ENUMERATIONS} has no simple type "
                 f"{enumeration}"
             )
-        elif values(vocabulary) != published:
+        elif sorted(values(vocabulary)) != sorted(published):
             errors.append(
                 f"ERROR: {label}: values differ from {enumeration} in "
                 f"{ENUMERATIONS}: {published}"

@@ -239,6 +239,10 @@ local({
     case <- copy_case(name)
     result <- run_spec(file.path(case,"spec.yaml"));actual <- result$issues
     expected <- failures[failures$case==name,];check_handlers(result,handlers,name)
+    # `{entry}` stands for the specification's absolute path as the engine
+    # resolves it, with forward slashes.
+    resolved <- normalizePath(file.path(case,"spec.yaml"),winslash="/",mustWork=TRUE)
+    expected$context <- gsub("{entry}",resolved,expected$context,fixed=TRUE)
     expect_identical(as.list(actual[c("phase","condition","rule","spec_paths","context")]),
       list(phase=expected$phase,condition=expected$condition,rule=expected$rule,
         spec_paths=lapply(expected$spec_path,identity),context=expected$context),

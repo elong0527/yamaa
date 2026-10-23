@@ -102,7 +102,6 @@ pub(crate) fn inheritance_dependencies(
                 },
         } => {
             let field = match context {
-                Context::Compute => "numeric",
                 Context::Aggregate => "aggregate",
                 Context::Predicate => "predicate",
                 Context::Derivation => "derivation",

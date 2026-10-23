@@ -264,6 +264,10 @@ class PublicContract(unittest.TestCase):
         self.assertIsNone(submission["section"].default)
         self.assertIsNone(submission["created"].default)
         self.assertEqual(submission["created"].kind, inspect.Parameter.KEYWORD_ONLY)
+        stream = inspect.signature(spec.run).parameters["stream"]
+        self.assertEqual(
+            (stream.default, stream.kind), (False, inspect.Parameter.KEYWORD_ONLY)
+        )
 
         members = TRUTH["members"]
         self.assertEqual(public_names(spec), members["spec"])
@@ -937,7 +941,8 @@ class PublicContract(unittest.TestCase):
 
     def test_issue_rows_keep_exact_wide_integers_and_recorded_geometry(self):
         # A literal beyond every 64-bit range is refused before study access;
-        # its context carries the signed 64-bit bounds and the exact literal.
+        # its context carries the signed 64-bit bounds and the exact literal,
+        # as a number and as its text.
         self.spec.write_text(
             'yamaa: "1.0"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\n'
             "columns:\n  - {name: ID, type: str, derivation: SRC.ID}\n"
@@ -957,9 +962,17 @@ class PublicContract(unittest.TestCase):
         )
         context = json.loads(row["context"])
         self.assertEqual(
-            context, {"minimum": -(2**63), "maximum": 2**63 - 1, "actual": 2**64}
+            context,
+            {
+                "minimum": -(2**63),
+                "maximum": 2**63 - 1,
+                "actual": 2**64,
+                "value": str(2**64),
+            },
         )
-        self.assertTrue(all(type(value) is int for value in context.values()))
+        self.assertTrue(
+            all(type(context[key]) is int for key in ("minimum", "maximum", "actual"))
+        )
         # A definition finding records no geometry: None, not an empty list.
         self.assertIsNone(row["source_span"])
         self.assertIsNone(row["operand_route"])

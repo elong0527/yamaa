@@ -387,12 +387,6 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             22,
         ),
         (
-            SubmissionKeyNotOutput,
-            "value_not_permitted",
-            "DEFINE-7",
-            23,
-        ),
-        (
             SubmissionColumnNotOutput,
             "submission_not_output_column",
             "SUB-1",
@@ -523,7 +517,6 @@ pub fn reached() -> BTreeSet<ConditionCode> {
                 *spec.at(&["submission", "label"]) =
                     Tree::text("An independent dataset label beyond forty characters");
             }
-            23 => *spec.at(&["keys"]) = Tree::list(vec![Tree::text("MISSING")]),
             24 => *spec.at(&["output", "columns"]) = Tree::list(vec![]),
             25 => *spec.at(&["submission", "class"]) = Tree::text("BASIC DATA STRUCTURE"),
             // Composition reads the canonical class of the `unique` shorthand.
@@ -639,6 +632,44 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             }
             assert_eq!(finding.context.len(), 5, "{:?}", finding.context);
         }
+    }
+    // OUTPUT-2: composition refuses a key that is not an output column as
+    // checking the specification does, at the key under its listing and
+    // naming the column: a declared column that `output.columns` leaves out
+    // as `internal_column_in_keys`, a name no column declares as
+    // `undeclared_column`. The internal column declares no submission
+    // metadata, which SUB-1 would refuse on a column that is not an output.
+    for (key, declared, condition, label) in [
+        (
+            "INTERNAL",
+            true,
+            "internal_column_in_keys",
+            "an internal key",
+        ),
+        ("MISSING", false, "undeclared_column", "an undeclared key"),
+    ] {
+        let mut spec = specification();
+        if declared {
+            let mut internal = column(key);
+            internal.remove(&["submission"]);
+            let Tree::List(columns) = spec.at(&["columns"]) else {
+                unreachable!("columns are a list")
+            };
+            columns.push(internal);
+        }
+        *spec.at(&["keys"]) = Tree::list(vec![Tree::text("VALUE"), Tree::text(key)]);
+        let findings = one(project(), spec, &empty).unwrap_err();
+        let [finding] = findings.as_slice() else {
+            panic!("{label} fails once: {findings:?}")
+        };
+        reached.insert(super::expect(
+            &super::Record::record(finding),
+            "validation",
+            condition,
+            Some("OUTPUT-2"),
+            &["sdtm.specs[0].keys[1]"],
+            vec![("column", super::text(key))],
+        ));
     }
     // A `not_missing` check that restates a column's resolved `mandatory` is
     // refused when the specification is prepared, before composition: a key
@@ -964,14 +995,17 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     // The Define-XML encoder in yamaa-adapters raises DEFINE-24 and DEFINE-25
     // through these constructors, and the adapters' encoder tests reach both
     // from authored text (`tests/submission_encoders.rs`).
-    let finding = define_diagnostics::xml_whitespace("datasets.D0.columns.VALUE.label");
+    let finding = define_diagnostics::xml_whitespace("datasets.D0.columns.VALUE.label", '\t');
     assert_eq!(finding.path, "datasets.D0.columns.VALUE.label");
     assert_eq!(
         finding.context,
-        [(
-            "detail".into(),
-            JsonValue::String("forbidden XML whitespace".into())
-        )]
+        [
+            (
+                "detail".into(),
+                JsonValue::String("forbidden XML whitespace".into())
+            ),
+            ("whitespace".into(), JsonValue::String("tab".into())),
+        ]
         .into()
     );
     reached_finding(
@@ -982,14 +1016,24 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         "untransportable_text",
         "DEFINE-24",
     );
-    let finding = define_diagnostics::xml_invalid("created", "CreationDateTime");
+    let finding = define_diagnostics::xml_invalid(
+        "created",
+        "CreationDateTime",
+        JsonValue::String("2026-09-30T00:00:00.1".into()),
+    );
     assert_eq!(finding.path, "created");
     assert_eq!(
         finding.context,
-        [(
-            "detail".into(),
-            JsonValue::String("schema_violation: CreationDateTime".into())
-        )]
+        [
+            (
+                "detail".into(),
+                JsonValue::String("schema_violation: CreationDateTime".into())
+            ),
+            (
+                "value".into(),
+                JsonValue::String("2026-09-30T00:00:00.1".into())
+            ),
+        ]
         .into()
     );
     reached_finding(
@@ -1075,9 +1119,11 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     assert_eq!(
         findings,
         [
-            Finding::cause(DefineRequiredDeclaration, "study", "study"),
-            Finding::cause(DefineRequiredDeclaration, "sdtm.standards", "standards"),
-            Finding::cause(DefineRequiredDeclaration, "sdtm.define", "define"),
+            Finding::cause(DefineRequiredDeclaration, "study", "study").with("field", "study"),
+            Finding::cause(DefineRequiredDeclaration, "sdtm.standards", "standards")
+                .with("field", "standards"),
+            Finding::cause(DefineRequiredDeclaration, "sdtm.define", "define")
+                .with("field", "define"),
         ]
     );
     reached_finding(
@@ -1101,6 +1147,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     assert!(define_diagnostics::admit_relation(
         TargetRelation::Independent,
         "sdtm.specs[0]",
+        "dm.csv",
         "held paths"
     )
     .is_ok());
@@ -1121,16 +1168,20 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         let finding = define_diagnostics::admit_relation(
             relation,
             "sdtm.specs[0]",
+            "dm.csv",
             "A and B name one retained target",
         )
         .unwrap_err();
         assert_eq!(finding.path, "sdtm.specs[0]");
         assert_eq!(
             finding.context,
-            [(
-                "detail".into(),
-                JsonValue::String("A and B name one retained target".into())
-            )]
+            [
+                (
+                    "detail".into(),
+                    JsonValue::String("A and B name one retained target".into())
+                ),
+                ("path".into(), JsonValue::String("dm.csv".into())),
+            ]
             .into()
         );
         reached_finding(

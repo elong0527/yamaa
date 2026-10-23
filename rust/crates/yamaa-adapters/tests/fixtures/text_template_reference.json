@@ -2074,7 +2074,8 @@
         "rule": "VALUE-11",
         "context": {
           "code_point": "U+D83D",
-          "offset": 3
+          "offset": 3,
+          "path": "{entry}"
         }
       }
     ]

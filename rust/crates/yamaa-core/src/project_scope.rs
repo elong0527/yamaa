@@ -123,22 +123,22 @@ pub fn producer_not_completed(dataset: &str, producer: &str) -> Diagnostic {
 }
 
 /// A project run that built no specification has nothing to save, so saving
-/// it fails.
+/// it fails, naming the operation whose result it is.
 pub fn run_nothing_to_save() -> Diagnostic {
     finding(
         ConditionCode::ProjectRunNothingToSave,
         Vec::new(),
-        Vec::new(),
+        vec![("operation", text("run"))],
     )
 }
 
 /// A project submission that composed no section has nothing to save, so
-/// saving it fails.
+/// saving it fails, naming the operation whose result it is.
 pub fn submission_nothing_to_save() -> Diagnostic {
     finding(
         ConditionCode::ProjectSubmissionNothingToSave,
         Vec::new(),
-        Vec::new(),
+        vec![("operation", text("submission"))],
     )
 }
 

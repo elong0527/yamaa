@@ -37,7 +37,7 @@ fn check(
     code: ConditionCode,
     condition: &str,
     path: &str,
-    context: (&str, &str),
+    context: &[(&str, &str)],
 ) {
     assert_eq!(finding.code, code);
     let definition = finding.definition();
@@ -46,7 +46,11 @@ fn check(
         ("validation", condition, Some("SPEC-9"))
     );
     assert_eq!(finding.path, path);
-    assert_eq!(finding.context, [(context.0, C::Text(context.1.into()))]);
+    let context: Vec<_> = context
+        .iter()
+        .map(|&(key, value)| (key, C::Text(value.into())))
+        .collect();
+    assert_eq!(finding.context, context);
     reached.insert(rendered(finding));
 }
 
@@ -91,7 +95,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         ConditionCode::CopyDuplicateIdentifier,
         "duplicate_identifier",
         "columns[1].copy.columns[1]",
-        ("identifier", "AGE"),
+        &[("identifier", "AGE")],
     );
     // A dataset that names no input, or an input without a `schema` link.
     let layer = |input: Tree| {
@@ -112,7 +116,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         ConditionCode::CopyUnknownDataset,
         "unknown_field",
         "columns[0].copy.dataset",
-        ("identifier", "SRC"),
+        &[("identifier", "SRC")],
     );
     let unlinked = layer(Tree::map(vec![(
         "SRC",
@@ -128,7 +132,8 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         ConditionCode::CopyUnlinkedInput,
         "prohibited_construct",
         "columns[0].copy.dataset",
-        ("dataset", "SRC"),
+        // The copy entry is the construct the unlinked input refuses.
+        &[("dataset", "SRC"), ("construct", "copy")],
     );
     // A listed name that is not one of the producer's output columns.
     let linked = layer(Tree::map(vec![(
@@ -149,7 +154,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         ConditionCode::CopyUnknownColumn,
         "unknown_field",
         "columns[0].copy.columns[1]",
-        ("identifier", "SRC.BMI"),
+        &[("identifier", "SRC.BMI")],
     );
     // A producer whose copies lead back to a specification being resolved.
     let cycle = producer_cycle("SRC", &["/adae.yaml", "/adsl.yaml", "/adae.yaml"]);

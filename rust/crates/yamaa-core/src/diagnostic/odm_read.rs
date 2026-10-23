@@ -61,11 +61,19 @@ impl OdmReadFinding<'_> {
             // A host read failure is no fact about the document (D107).
             return rejected(Step::Ingest, Fault::ResourceUnreadable);
         };
-        if let Error::Option { option, minimum } = self.refusal {
+        if let Error::Option {
+            option,
+            minimum,
+            value,
+        } = self.refusal
+        {
             return Diagnostic {
                 code,
                 spec_paths: vec![(*option).into()],
-                context: Context::from([("minimum".into(), V::from(*minimum))]),
+                context: Context::from([
+                    ("minimum".into(), V::from(*minimum)),
+                    ("value".into(), V::from(*value)),
+                ]),
                 source_span: None,
                 operand_route: None,
             };

@@ -1,0 +1,9 @@
+yamaa: "1.0"
+type: spec
+parent: layers/ae.yaml
+domain: ADAE
+keys: [USUBJID]
+
+output:
+  path: adae.csv
+  columns: [USUBJID, ASTDT]

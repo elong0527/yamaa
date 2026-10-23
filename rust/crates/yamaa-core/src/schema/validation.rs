@@ -196,7 +196,7 @@ pub(super) fn one_parent_hint() -> (&'static str, SchemaContext) {
     (
         "hint",
         SchemaContext::Text(
-            "write at most one parent per file; replace parents: [organization.yaml, compound.yaml] with parent: compound.yaml in the entry and parent: organization.yaml in compound.yaml; organization.yaml has no parent".into(),
+            "write at most one parent per file; replace parents: [organization.yaml, compound.yaml] with parent: compound.yaml in the entry and parent: organization.yaml in compound.yaml; organization.yaml has no parent; a fragment that several files share goes under include and names no parent".into(),
         ),
     )
 }
@@ -206,9 +206,11 @@ pub(super) fn unknown_field_context(
     field: &str,
     class: &str,
 ) -> Vec<(&'static str, SchemaContext)> {
+    // The unknown field is the identifier the document writes there.
     let mut context = vec![
         ("field", SchemaContext::Text(field.into())),
         ("class", SchemaContext::Text(class.into())),
+        ("identifier", SchemaContext::Text(field.into())),
     ];
     if class == "root_class" && field == "parents" {
         context.push(one_parent_hint());

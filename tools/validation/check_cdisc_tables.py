@@ -4,10 +4,11 @@ Rule cards hold tables whose cells list values of the closed CDISC
 vocabularies in ``yaml/vocabulary/cdisc.yaml`` (#3030 P-VOC-1). The per-model
 tables of SUB-3, SUB-10 and SUB-15 list each model's implementation guides,
 each class group's dataset classes and models, and the origin type and source
-pairs ``SDTM`` admits. SUB-9 lists the column roles, SUB-26 the form of each
-date or time data type, and JSON-10 the Dataset-JSON type of each submission
-data type. The cards are written by hand, so this check keeps each table on
-the file:
+pairs ``SDTM`` admits. SUB-6 lists the submission data type each declared
+type defaults to, SUB-9 the column roles, SUB-26 the form of each date or
+time data type, and JSON-10 the Dataset-JSON type of each submission data
+type. The cards are written by hand, so this check keeps each table on the
+file:
 
 - a cell lists values as code spans separated by commas, and each value a
   cell lists is a value of the vocabulary its column names;
@@ -77,6 +78,14 @@ TABLES = (
             Column("model"),
             Column("standard_name", unplaced=("BIMO", "CDISC/NCI")),
         ),
+    ),
+    # The submission data type each declared type defaults to; a cell that
+    # adds the model's `integer` is prose. A sentence after the table lists
+    # the types a `str` column also admits, which check_cdisc_copies reads.
+    Table(
+        "SUB-6",
+        ("Declared type", "Default", "Also admits"),
+        (None, Column("submission_data_type", places=False), None),
     ),
     # What a column of each role is.
     Table("SUB-9", ("Role", "The column"), (Column("role"), None)),

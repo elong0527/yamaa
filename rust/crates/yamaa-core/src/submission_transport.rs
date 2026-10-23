@@ -4,7 +4,8 @@
 use crate::json::Value as JsonValue;
 use crate::{
     application_issue::{Fault, Step},
-    ast::{DefineContext, Transport},
+    ast::Transport,
+    cdisc_vocabulary::{DataType, DefineContext},
     diagnostic::ConditionCode,
     limits::Limits,
     project_environment::Submission,
@@ -183,7 +184,7 @@ pub fn admit<T: TableAccess>(study: &Study, dataset: &Dataset, table: &T) -> Res
             let value = table
                 .cell(row, column)
                 .map_err(|_| artifact_mismatch(dataset, "held artifact access"))?;
-            if matches!(value, ValueRef::Bool(_)) {
+            if let ValueRef::Bool(cell) = value {
                 return Err(if xpt {
                     artifact_mismatch(dataset, "held artifact boolean cell")
                 } else {
@@ -192,6 +193,7 @@ pub fn admit<T: TableAccess>(study: &Study, dataset: &Dataset, table: &T) -> Res
                         "dataset_json",
                         "schema_violation: boolean cell",
                     )
+                    .with("value", cell)
                 });
             }
         }
@@ -344,11 +346,11 @@ pub fn measure<T: TableAccess>(study: &mut Study, tables: &[Option<&T>]) -> Resu
             }
             let length = groups[&(scope, column.declaration.name.value.clone())].max(1);
             column.transport_length = Some(length);
-            if column.data_type == spec::DataType::Text {
+            if column.data_type == DataType::Text {
                 column.length = Some(length.to_string());
             }
             for (value, longest) in column.values.iter_mut().zip(&values[index][position]) {
-                if value.column.data_type == spec::DataType::Text {
+                if value.column.data_type == DataType::Text {
                     value.column.length = Some((*longest).max(1).to_string());
                 }
             }

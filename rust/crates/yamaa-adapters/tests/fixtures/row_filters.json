@@ -3269,7 +3269,8 @@
           "condition": "invalid_expression",
           "context": {
             "position": 4,
-            "predicate": "ID >"
+            "predicate": "ID >",
+            "expr": "ID >"
           },
           "phase": "validation",
           "rule": "FORMULA-1",
@@ -3289,7 +3290,8 @@
               "condition": "invalid_expression",
               "context": {
                 "position": 4,
-                "predicate": "ID >"
+                "predicate": "ID >",
+                "expr": "ID >"
               },
               "phase": "validation",
               "rule": "FORMULA-1",

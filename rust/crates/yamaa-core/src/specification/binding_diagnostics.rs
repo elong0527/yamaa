@@ -183,7 +183,7 @@ impl BindFinding {
                 error: CompileError::Invalid { failure, .. },
             } => {
                 return Some(vec![failure.diagnostic(
-                    Field::Compute,
+                    Field::Derivation,
                     path,
                     expression,
                     0,

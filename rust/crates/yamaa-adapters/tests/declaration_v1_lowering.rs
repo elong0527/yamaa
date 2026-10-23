@@ -11,9 +11,8 @@ use std::fs;
 use std::path::Path;
 use yamaa_adapters::document::{self, Closures, PreparedSpecification, SpecificationError};
 use yamaa_adapters::specification_source::{Error, Source};
-use yamaa_core::ast::{
-    Comparator, ExprId, ExprKind, JoinKey, KeyDecl, Literal, ModelKind, Profile, Spec,
-};
+use yamaa_core::ast::{Comparator, ExprId, ExprKind, JoinKey, KeyDecl, Literal, Profile, Spec};
+use yamaa_core::cdisc_vocabulary::ModelKind;
 use yamaa_core::diagnostic::ConditionCode;
 use yamaa_core::expression::Context;
 use yamaa_core::inheritance::Source as GraphSource;
@@ -246,7 +245,7 @@ fn model_keys_and_profiles_lower_as_declared() {
     assert_eq!(spec.header.version.text, "1.0");
     assert_eq!(
         spec.model.as_ref().map(|model| model.kind),
-        Some(ModelKind::Adam)
+        Some(ModelKind::ADaM)
     );
     let input = |name: &str| spec.inputs.iter().find(|i| i.name.name == name).unwrap();
     assert_eq!(input("SRC").key, KeyDecl::Undeclared);
@@ -392,10 +391,11 @@ fn a_declared_baseline_order_starts_with_the_date_ascending() {
             "columns.ABLFL.derivation.baseline_flag.window.order_by[1]",
         ]
     );
-    // Any other first term fails, at that term.
-    for (order, variable, direction) in [
-        ("[ATM, ADT]", "ATM", "asc"),
-        ("[{variable: ADT, direction: desc}]", "ADT", "desc"),
+    // Any other first term fails, at that term, naming the refused value:
+    // a variable other than the date, or the date's descending direction.
+    for (order, variable, direction, value) in [
+        ("[ATM, ADT]", "ATM", "asc", "ATM"),
+        ("[{variable: ADT, direction: desc}]", "ADT", "desc", "desc"),
     ] {
         let study = Study::new(&[("spec.yaml", &baseline(order))]);
         let Err(SpecificationError::Entry(Error::Findings(captured))) =
@@ -421,6 +421,7 @@ fn a_declared_baseline_order_starts_with_the_date_ascending() {
                 ("variable", C::Text(variable.into())),
                 ("direction", C::Text(direction.into())),
                 ("date", C::Text("ADT".into())),
+                ("value", C::Text(value.into())),
             ]
         );
     }

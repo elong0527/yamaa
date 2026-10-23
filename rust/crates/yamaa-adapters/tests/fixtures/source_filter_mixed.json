@@ -25,7 +25,8 @@
             "columns.VALUE.derivation.case[0].then.source.filter"
           ],
           "context": {
-            "identifier": "SRC.ID"
+            "identifier": "SRC.ID",
+            "construct": "filter"
           }
         }
       ],
@@ -38,7 +39,8 @@
             "columns.VALUE.derivation.case[0].then.source.filter"
           ],
           "context": {
-            "identifier": "SRC.ID"
+            "identifier": "SRC.ID",
+            "construct": "filter"
           }
         }
       ]

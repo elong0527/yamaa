@@ -606,9 +606,9 @@ the row when the specification declares one.
 
 A construction is a row template, or the construction from column derivations
 of a specification without row templates. A construction cannot produce a row
-an entry selects when it derives a where column as a bare `literal` the
-column's term does not select: one outside its values, a missing literal
-included, or under `NE` and `NOTIN` one among them. Every row it produces is
+an entry selects when it derives a where column as a literal the column's
+term does not select: one outside its values, a missing literal included, or
+under `NE` and `NOTIN` one among them. Every row it produces is
 selected when it derives every where column as a literal its term selects,
 which under `NE` and `NOTIN` a missing literal is. Each of
 an entry's own origins is refuted against the column's derivation in every
@@ -780,13 +780,13 @@ Evidence: `sdtm-dm-metadata`, `sdtm-lb-metadata`, `rust/crates/yamaa-adapters/te
 | Derivation | Admitted `origin.type` | Refuted |
 |---|---|---|
 | a bare read: a `source`, an `odm` read or an `ONLY` pivot, directly or through a plain lookup | every type | none |
-| a bare `literal` | `Assigned`, `Protocol`, `Collected`, `Other`, `Not Available` | `Derived`, `Predecessor` |
+| a literal | `Assigned`, `Protocol`, `Collected`, `Other`, `Not Available` | `Derived`, `Predecessor` |
 | a recode: `mapping`, `case`, `first_available`, `str_case`, `str_pad`, `str_replace`, `str_extract`, `str_template`, `to_date` or `dtc`, reading only as the paragraphs below state | `Collected`, `Derived`, `Assigned`, `Other`, `Not Available` | `Protocol`, `Predecessor` |
 | anything else | `Derived`, `Assigned`, `Other`, `Not Available` | `Collected`, `Protocol`, `Predecessor` |
 
 An `ONLY` pivot is an `aggregate` whose `expr` is exactly `ONLY(<variable>)`,
 with no arithmetic around or inside the reduction, and which declares no
-`derive` binding. It turns long records, such as one ODM record per collected
+`derivations`. It turns long records, such as one ODM record per collected
 item, into the one value its group or relation holds
 ([FORMULA-18](../formulas.md#formula-18)): its `filter`, `key` and `between`
 choose the record, and the value is the variable as stored. A plain lookup is
@@ -805,14 +805,15 @@ reads, is qualified by a dataset `input` declares or by a plain lookup of one,
 or is an `odm` read. A recode that reads otherwise, through another named
 intermediate or, in a `case`, from an output column, is anything else.
 
-Anything else computes its value: arithmetic and rounding (`compute`,
-`round_half_away_from_zero`), every aggregation but an `ONLY` pivot, windows,
-temporal computation (the date and datetime operations other than `to_date`
-and `dtc`), `flag`, `cut`, `greatest` and `least`, `function`, and every read
-through a named intermediate that is not a plain lookup: one that declares
-`derivations`, whose fields it computes, or one over `SELF`, the completed
-output rows. Each type it refutes asserts the value arrived as it stands, and
-the specification shows it did not.
+Anything else computes its value: arithmetic and rounding (text in an
+expression field that computes, and `round_half_away_from_zero`), every
+aggregation but an `ONLY` pivot, windows, temporal computation (the date and
+datetime operations other than `to_date` and `dtc`), `flag`, `cut`,
+`greatest` and `least`, `function`, and every read through a named
+intermediate that is not a plain lookup: one that declares `derivations`,
+whose fields it computes, or one over `SELF`, the completed output rows. Each
+type it refutes asserts the value arrived as it stands, and the specification
+shows it did not.
 
 The graph cannot tell an investigator-recorded value from a vendor-transmitted
 or protocol-fixed value, and it refutes only what the derivation proves. An
@@ -820,8 +821,8 @@ SDTM recode of collected terminology (`SEX` from `Male` to `M` through
 `mapping`), a case normalization (`str_case`) and an ISO 8601 assembly of
 collected date parts (`dtc`, `str_template` or `to_date`) admit `Collected`. A value
 printed on the case report form, such as a unit or a test name, is written as
-a bare `literal` and admits `Collected`; a bare `literal` reads no input, so it
-refutes `Derived`. A vendor- or EDC-computed value read as stored, such as an
+a literal and admits `Collected`; a literal reads no input, so it refutes
+`Derived`. A vendor- or EDC-computed value read as stored, such as an
 eGFR or a BMI, is a bare `source` and admits `Derived`, with the method
 [SUB-18](#sub-18) requires. A laboratory result pivoted with `ONLY` from long
 ODM records admits `Collected`, as the same result read from a wide record

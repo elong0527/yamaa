@@ -389,7 +389,8 @@ pub enum ProducerFailure<E> {
 }
 
 /// A 1.x specification prepared with the files it was read from: the entry
-/// as captured and decoded, and each parent layer in first-capture order.
+/// as captured and decoded, and each parent layer and included fragment in
+/// first-capture order.
 #[derive(Debug)]
 pub struct PreparedSources {
     pub specification: PreparedSpecification,
@@ -439,10 +440,11 @@ impl VersionedDocument {
     }
 
     /// Prepare a 1.x specification. Its layers are followed from this entry,
-    /// each admitted at the version it declares before its parent is read,
-    /// and every layer must declare `type: spec` (LAYER-4); the chain needs
-    /// the newest version a layer declares (P-VER-1). A specification of one
-    /// layer must also be complete at its version.
+    /// each admitted at the version it declares before its parent or its
+    /// fragments are read, and every layer must declare `type: spec`
+    /// (LAYER-3, LAYER-4); the chain needs the newest version a layer
+    /// declares (P-VER-1). A specification of one layer must also be complete
+    /// at its version.
     pub fn prepare_specification<P: Resolver>(
         self,
         display_path: String,
@@ -453,7 +455,8 @@ impl VersionedDocument {
     }
 
     /// [`VersionedDocument::prepare_specification`], keeping the entry as
-    /// captured and decoded and each parent layer the traversal read.
+    /// captured and decoded and each parent layer and fragment the traversal
+    /// read.
     pub fn prepare_sources<P: Resolver>(
         self,
         display_path: String,
@@ -594,7 +597,7 @@ impl VersionedDocument {
 }
 
 /// Where `layer` was decoded: `raw`, the entry read as `source`, or the
-/// parent of `parents` read under its identity.
+/// parent or fragment of `parents` read under its identity.
 pub(crate) fn layer_locations<'a>(
     source: &Source,
     raw: &'a DecodedYaml,

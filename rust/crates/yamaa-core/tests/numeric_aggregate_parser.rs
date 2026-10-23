@@ -155,7 +155,13 @@ mod numeric {
             }
             let long = format!("SUM({})", "9".repeat(5000));
             for text in ["SUM(0009223372036854775808)", long.as_str()] {
-                assert_eq!(failure(text), (4, 4, Failure::IntegerOverflow), "{text}");
+                // The literal as written, between the parentheses.
+                let literal = text[4..text.len() - 1].to_string();
+                assert_eq!(
+                    failure(text),
+                    (4, 4, Failure::IntegerOverflow { literal }),
+                    "{text}"
+                );
             }
             assert_eq!(failure("SUM(9223372036854775808").2, Failure::Syntax);
         }
@@ -220,7 +226,7 @@ mod numeric {
 
         fn numeric(text: &str, bindings: Vec<Binding>) -> Result<BoundNumeric, BindingError> {
             BoundNumeric::new(
-                compile(text, Context::Compute, "columns.RESULT").unwrap(),
+                compile(text, Context::Derivation, "columns.RESULT").unwrap(),
                 bindings,
             )
         }
@@ -309,11 +315,11 @@ mod numeric {
             assert!(matches!(
                 compile(
                     "A + A + 9223372036854775808",
-                    Context::Compute,
+                    Context::Derivation,
                     "columns.RESULT"
                 ),
                 Err(CompileError::Invalid {
-                    failure: Failure::IntegerOverflow,
+                    failure: Failure::IntegerOverflow { .. },
                     ..
                 })
             ));
@@ -386,7 +392,7 @@ mod numeric {
 
         /// Compile a test expression through the public source-to-plan entry point.
         fn compute(text: &str) -> CompiledExpression {
-            compile(text, Context::Compute, PATH).unwrap()
+            compile(text, Context::Derivation, PATH).unwrap()
         }
 
         /// Record calls while changing A's value so plan reuse cannot hide memoization.
@@ -417,7 +423,7 @@ mod numeric {
             {
                 let fields: Vec<_> = row.split('\t').collect();
                 assert_eq!(fields.len(), 3);
-                let actual = match compile(fields[1], Context::Compute, PATH) {
+                let actual = match compile(fields[1], Context::Derivation, PATH) {
                     Ok(plan) => {
                         let mut reads = Reads::default();
                         let actual = match plan.evaluate_number(&mut reads).unwrap() {
@@ -459,15 +465,20 @@ mod numeric {
             ] {
                 let Err(CompileError::Invalid {
                     position, failure, ..
-                }) = compile(&text, Context::Compute, PATH)
+                }) = compile(&text, Context::Derivation, PATH)
                 else {
                     panic!("an overflowing literal must be refused: {text}")
                 };
-                assert_eq!(failure, Failure::IntegerOverflow);
+                assert_eq!(
+                    failure,
+                    Failure::IntegerOverflow {
+                        literal: digits.clone()
+                    }
+                );
                 assert!(text[position.byte..].starts_with(&digits));
             }
             let Err(CompileError::Invalid { failure, .. }) =
-                compile(&format!("{digits} +"), Context::Compute, PATH)
+                compile(&format!("{digits} +"), Context::Derivation, PATH)
             else {
                 panic!("an incomplete text must be refused")
             };
@@ -518,7 +529,7 @@ mod numeric {
         fn prohibited_functions_are_rejected_before_resolution() {
             for text in ["SQRT(A) + ROUND(B)", "A + ROUND(B)"] {
                 assert!(matches!(
-                    compile(text, Context::Compute, "spec"),
+                    compile(text, Context::Derivation, "spec"),
                     Err(CompileError::Invalid {
                         failure: Failure::ProhibitedFunction { .. },
                         ..
@@ -551,7 +562,7 @@ mod numeric {
                     "use the round_half_away_from_zero operation",
                 ),
             ] {
-                for field in [Context::Compute, Context::Aggregate, Context::Predicate] {
+                for field in [Context::Derivation, Context::Aggregate, Context::Predicate] {
                     let expression = if field == Context::Predicate {
                         format!("{call} > 0")
                     } else {
@@ -585,12 +596,12 @@ mod numeric {
             for expression in ["mystery(A)", "ABS(A, B)", "SUM(A)"] {
                 let Err(CompileError::Invalid {
                     position, failure, ..
-                }) = compile(expression, Context::Compute, "columns.V.derivation")
+                }) = compile(expression, Context::Derivation, "columns.V.derivation")
                 else {
                     panic!("invalid call must still fail: {expression}")
                 };
                 let finding = failure.diagnostic(
-                    Context::Compute,
+                    Context::Derivation,
                     "columns.V.derivation",
                     expression,
                     position.character,
@@ -676,7 +687,7 @@ mod numeric {
         use yamaa_core::limits::Limits;
 
         fn compute(text: &str) -> Result<CompiledExpression, CompileError> {
-            compile(text, Context::Compute, "columns.RESULT.derivation")
+            compile(text, Context::Derivation, "columns.RESULT.derivation")
         }
 
         /// Read language findings independently of their human-readable formatting.
@@ -753,7 +764,7 @@ mod numeric {
                 }
             );
             assert_eq!(kind, Failure::Syntax);
-            // Boolean logic is grammatical; the compute context refuses it.
+            // Boolean logic is grammatical; an expression field refuses it.
             let (position, kind) = failure("\u{2003}A aNd B");
             assert_eq!(
                 position,
@@ -847,7 +858,9 @@ mod numeric {
                             byte: 0,
                             character: 0
                         },
-                        Failure::IntegerOverflow
+                        Failure::IntegerOverflow {
+                            literal: text.into()
+                        }
                     )
                 );
             }
@@ -1072,7 +1085,7 @@ mod numeric {
         use yamaa_core::value::{Selection, Value};
 
         fn compute(text: &str) -> CompiledExpression {
-            compile(text, Context::Compute, "spec").unwrap()
+            compile(text, Context::Derivation, "spec").unwrap()
         }
 
         /// Record each resolution to verify compiler preflight and failure ordering.
@@ -1685,8 +1698,9 @@ mod numeric {
         }
 
         /// Arithmetic in a comparison operand has the numeric semantics of
-        /// `compute`: an int stays exact, missing propagates to unknown, and a
-        /// non-numeric or absent name or an arithmetic fault fails at its node.
+        /// expression-field text: an int stays exact, missing propagates to
+        /// unknown, and a non-numeric or absent name or an arithmetic fault
+        /// fails at its node.
         #[test]
         fn arithmetic_operands_have_numeric_semantics() {
             let plan = predicate("ALT > 3 * ULN", "columns.F.flag.condition");
@@ -1772,9 +1786,10 @@ mod numeric {
                     ..
                 })
             ));
-            for text in [
-                "FALSE AND X = 9223372036854775808",
-                "X = -9223372036854775809",
+            // A sign belongs to the literal it is written on.
+            for (text, literal) in [
+                ("FALSE AND X = 9223372036854775808", "9223372036854775808"),
+                ("X = -9223372036854775809", "-9223372036854775809"),
             ] {
                 let Err(CompileError::Invalid {
                     failure, position, ..
@@ -1782,7 +1797,13 @@ mod numeric {
                 else {
                     panic!("expected literal rejection")
                 };
-                assert_eq!(failure, Failure::IntegerOverflow);
+                assert_eq!(
+                    failure,
+                    Failure::IntegerOverflow {
+                        literal: literal.into()
+                    },
+                    "{text}"
+                );
                 assert_eq!(
                     position.character,
                     text.find("9223372036854775808")
@@ -1819,12 +1840,19 @@ mod numeric {
             ] {
                 predicate(expression).unwrap();
             }
-            for expression in [
-                "X = 9223372036854775808",
-                "X = -9223372036854775809",
-                "FALSE AND X IN (1, +9223372036854775808)",
-                "'\u{1f600}' = -9223372036854775809",
-                "X BETWEEN 0 AND 9999999999999999999999999999999",
+            // Each literal as written, its sign included.
+            for (expression, literal) in [
+                ("X = 9223372036854775808", "9223372036854775808"),
+                ("X = -9223372036854775809", "-9223372036854775809"),
+                (
+                    "FALSE AND X IN (1, +9223372036854775808)",
+                    "+9223372036854775808",
+                ),
+                ("'\u{1f600}' = -9223372036854775809", "-9223372036854775809"),
+                (
+                    "X BETWEEN 0 AND 9999999999999999999999999999999",
+                    "9999999999999999999999999999999",
+                ),
             ] {
                 let Err(CompileError::Invalid {
                     failure, position, ..
@@ -1832,7 +1860,13 @@ mod numeric {
                 else {
                     panic!("overflowing literal admitted: {expression}")
                 };
-                assert_eq!(failure, Failure::IntegerOverflow);
+                assert_eq!(
+                    failure,
+                    Failure::IntegerOverflow {
+                        literal: literal.into()
+                    },
+                    "{expression}"
+                );
                 let suffix = &expression[position.byte..];
                 assert!(
                     suffix.starts_with("9223372036854775808")

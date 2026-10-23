@@ -1,13 +1,14 @@
-//! Private typed compute observations for independent differential fixtures.
+//! Private typed observations of numeric text, read as text in an expression
+//! field, for independent differential fixtures.
 use super::syntax_spans as spans;
 use yamaa_adapters::json;
-use yamaa_core::expression::{CompiledExpression, Context, NodeKind};
+use yamaa_core::expression::{CompiledExpression, Context, NodeKind, TemporalKind};
 use yamaa_core::json::Value;
 use yamaa_core::numeric::{BinaryOperator, UnaryOperator};
 
 pub fn observe_with_spans(expression: &str) -> Value {
     let mut outcome = observe(expression);
-    match spans::compiled(Context::Compute, expression) {
+    match spans::compiled(Context::Derivation, expression) {
         Ok(compiled) => annotate(
             &compiled,
             compiled.syntax().root(),
@@ -63,7 +64,7 @@ pub(super) fn annotate(compiled: &CompiledExpression, id: usize, value: &mut Val
 }
 
 pub fn observe(expression: &str) -> Value {
-    let outcome = match spans::compiled(Context::Compute, expression) {
+    let outcome = match spans::compiled(Context::Derivation, expression) {
         Ok(compiled) => json!({"status":"parsed", "ast": ast(&compiled, compiled.syntax().root()),
                 "identifiers":compiled.identifiers().collect::<Vec<_>>() }),
         Err(error) => spans::refusal(&error, false),
@@ -82,6 +83,11 @@ pub(super) fn ast(compiled: &CompiledExpression, id: usize) -> Value {
             json!({"kind":"number","type":if *fractional {"float"} else {"int"},"value":text})
         }
         NodeKind::Null => json!({"kind":"null"}),
+        // An expression field admits quoted text and temporal literals.
+        NodeKind::String(text) => json!({"kind":"string","value":text}),
+        NodeKind::Temporal { kind, value } => {
+            json!({"kind":"temporal","type":match kind {TemporalKind::Date=>"date",TemporalKind::DateTime=>"datetime"},"value":value})
+        }
         NodeKind::Identifier => json!({"kind":"identifier","name":written}),
         NodeKind::Star => json!({"kind":"star","dataset":&written[..written.len()-2]}),
         NodeKind::Unary { operator, operand } => {
@@ -103,6 +109,6 @@ pub(super) fn ast(compiled: &CompiledExpression, id: usize) -> Value {
             json!({"kind":"reduction","name":reducer.name(),"argument":ast(compiled,*operand),"text":written})
         }
         NodeKind::Group(operand) => ast(compiled, *operand),
-        other => unreachable!("a numeric context admits no {other:?}"),
+        other => unreachable!("an expression field or an aggregate admits no {other:?}"),
     }
 }

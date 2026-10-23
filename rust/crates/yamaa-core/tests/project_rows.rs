@@ -735,10 +735,13 @@ mod project {
             CV::String(value.into())
         }
         /// The context of a literal outside the `int` range (VALUE-5).
-        fn overflow(actual: &str) -> [(&'static str, CV); 3] {
+        /// A scalar literal outside int's range: its value as a number and as
+        /// written, and the range (VALUE-5).
+        fn overflow(actual: &str) -> [(&'static str, CV); 4] {
             let number = |text: &str| CV::Number(text.parse().expect("canonical integer"));
             [
                 ("actual", number(actual)),
+                ("value", CV::String(actual.into())),
                 ("minimum", number("-9223372036854775808")),
                 ("maximum", number("9223372036854775807")),
             ]
@@ -920,10 +923,15 @@ mod project {
             for list in 0..2 {
                 let base = format!("codelists[0].codelists[{list}]");
                 if list == 1 {
+                    // The repeated identifier: the id, then the name.
                     want.push(expected(
                         C::CodelistDuplicateIdentifier,
                         &format!("{base}.id"),
-                        &[("codelist", text("SEX")), ("field", text("id"))],
+                        &[
+                            ("codelist", text("SEX")),
+                            ("field", text("id")),
+                            ("identifier", text("SEX")),
+                        ],
                         PROJECT,
                         "codelists[0]",
                     ));
@@ -934,6 +942,7 @@ mod project {
                             ("codelist", text("SEX")),
                             ("field", text("name")),
                             ("name", text("Sex")),
+                            ("identifier", text("Sex")),
                         ],
                         PROJECT,
                         "codelists[0]",

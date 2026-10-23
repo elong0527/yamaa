@@ -718,6 +718,7 @@ mod declaration {
                     vec![
                         ("field", C::Text("added".into())),
                         ("class", C::Text("column_class".into())),
+                        ("identifier", C::Text("added".into())),
                         ("since", C::Text("1.1".into())),
                     ]
                 )]
@@ -1008,7 +1009,7 @@ mod declaration {
             let study = Study::new();
             study.write("base.yaml", BASE);
             let entry = study.path("spec.yaml");
-            let hint = "write at most one parent per file; replace parents: [organization.yaml, compound.yaml] with parent: compound.yaml in the entry and parent: organization.yaml in compound.yaml; organization.yaml has no parent";
+            let hint = "write at most one parent per file; replace parents: [organization.yaml, compound.yaml] with parent: compound.yaml in the entry and parent: organization.yaml in compound.yaml; organization.yaml has no parent; a fragment that several files share goes under include and names no parent";
             for (written, condition, rule, path, context) in [
                 (
                     "parent: [base.yaml, fragment.yaml]",
@@ -1022,7 +1023,7 @@ mod declaration {
                     "unknown_field",
                     "SCHEMA-13",
                     "parents",
-                    json!({"field": "parents", "class": "root_class", "hint": hint, "source": entry, "entry": entry}),
+                    json!({"field": "parents", "class": "root_class", "identifier": "parents", "hint": hint, "source": entry, "entry": entry}),
                 ),
             ] {
                 study.write("spec.yaml", &CHILD.edit("parent: base.yaml", written));

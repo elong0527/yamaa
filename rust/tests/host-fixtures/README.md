@@ -50,11 +50,13 @@ the held bytes.
 | info | The engine information's fields in order, the host vocabulary, and a shipped build's language versions and features |
 | printing | A study's files, and the status and printed lines of each result: a check, a failed check, a project check, a run, a failed run, a project run and each of its members, a submission, and a lazy specification and project; `{path}` stands for the path the test gave and `{root}` for its study directory, with forward slashes |
 | issue-locations | One case for each rule of P-ISSUE-1 (`docs/design/interface-1.0/api.md`, "Issue locations"): the files a case writes, its call, and its first issue's condition, first spec path, file, line and column, counted by hand in those files |
-| project-parity | Project cases with their complete expected issue rows: the files a case writes, its call (a project check, a member of a project run, a specification the project names, or a submission) and every issue row; rows and files that depend on the host language are given by language, `{root}` stands for the case's directory and `{version}` for the installed yamaa version |
+| include-fragments | One study whose entries compose a parent chain and an `include` list (LAYER-1 to LAYER-4): the files it writes, each check case's entry and complete issue rows, and the resolve case's layers, `parent` and `include` resources, resolved columns, the layer of each named value and the fields the resolved specification never holds; `{root}` stands for the study's directory |
+| project-parity | Project cases with their complete expected issue rows: the files a case writes, its call (a project check, a member of a project run, a specification the project names, or a submission) and every issue row, or under `calls` each of several calls on those files with its rows; rows and files that depend on the host language are given by language, `{root}` stands for the case's directory and `{version}` for the installed yamaa version |
 | compact-yaml | A specification with a block and a flow input, the block, compact, flow and explicit-key verification forms with their one output and saved CSV, failed row-count bounds, malformed closers, and raw NULs with their `invalid_yaml` context (#2196, #3125) |
 | longitudinal-capacity | The 50,000-row, 100-column profile: its column names, its value rule (the row index for the key, then an offset plus the row and column index modulo a prime), the size its CSV must exceed, and its source and output formats |
 | column-ceilings | The 1,024 admitted and 1,025 refused widths of each boundary, the compiler-limit and parent-occurrence issue rows, the repaired capacity's remaining error, the inheritance depth that builds and the wide inherited cases' rows by column index modulo 3 |
 | interface | The generated request, each crafted request with its authored outcome (the accepted record or the refusal envelope), the message template of each reason and the gate's refusal, where `{version}` stands for the boundary version, `{next_version}` for the version after it and `{core_version}` for the installed engine's release; the census kinds; and the lifetime study's specification, input, project and output rows |
+| streaming | A study of every column type: its specification, whose output orders the records by descending ID, its input, the output rows in that order and the exact CSV its save writes; a 70,000-record study with its value rule (the ID counts from 1, and the name is the prefix and the ID) and the batches the engine's 65,536-record batches give it; the class of the stream object R returns; and D39's text of a cancelled streamed run and of its `stream_taken` and `host_thread` refusals |
 
 `plan-reuse` is the repeated-run truth for #2821. A spec object's first
 `run()` compiles and later runs reuse the plan, so study A, then B, then A on
@@ -107,7 +109,14 @@ whose `unlinked_producer` and `producer_not_completed` findings name the
 listed specification they belong to and the document they come from
 (PROJECT-7), the run of a specification the project names, and a
 submission, whose `duplicate_dataset_entry` refuses a section that lists two
-specifications of one saved artifact (DEFINE-5). A case whose files or rows
+specifications of one saved artifact (DEFINE-5). A case that makes several
+calls on the same files lists each call with its rows under `calls`:
+`a_key_that_is_not_an_output_column` checks the project, runs the
+specification it names and composes its submission, and each reports the
+key that `output.columns` leaves out as `internal_column_in_keys` under
+OUTPUT-2, naming the column at the same written key, at `keys[2]` in the
+specification's own calls and at `sdtm.specs[0].keys[2]` in the
+submission's. A case whose files or rows
 depend on the host language gives them by language: a function file that
 implements only the other host refuses the call with the running host's
 language (FUNC-1), and each host verifies only its own lock (FUNC-3). The
@@ -118,6 +127,25 @@ resolved, with forward slashes, and `{version}` for the installed yamaa
 version. The rows were written from those cards, the message templates of
 `yaml/conditions.yaml` and the issue locations of P-ISSUE-1 before the
 engine ran.
+
+`include-fragments` pairs the installed Python and R fragment suites, and the
+command line's parity test reads it too. Its study writes one template, two
+fragments and an entry that names the template as its parent and lists both
+fragments, beside the files of five refusals: a fragment that names a parent
+(`prohibited_construct` at that fragment's `parent`, LAYER-4), a template
+that includes the entry (`inheritance_cycle` at the template's `include[0]`),
+a fragment that the template and the entry both include (`duplicate_layer` at
+the entry's `include[0]`, LAYER-3), and an `include` entry that names no file
+(`resource_path_missing`, FILE-7), written once in the entry and once in a
+template under an entry that includes a fragment of its own, so that the
+finding's `source`, the layer that writes the entry, locates it in the
+template. The rows were written from those cards,
+the message templates of `yaml/conditions.yaml` and the issue locations of
+P-ISSUE-1 before the engine ran. The resolve case's layers follow LAYER-3's
+contribution order, the template, then the fragments in list order, then the
+entry, and its columns LAYER-13's: the template's, then the duration that
+reads two of them, then the severity, each after what it reads and otherwise
+by contribution position.
 
 `read-odm` pairs the installed Python and R `read_odm` suites. Its documents
 are the reader suite's own `odm13.xml` and `odm20.xml`, staged from
@@ -179,7 +207,7 @@ vocabulary.
 
 `interface` pairs the installed Python and R interface and handle lifetime
 suites, and `yamaa-boundary`'s handshake and census families and
-`yamaa-engine`'s lifetime and negotiation families read it too. Its
+`yamaa-engine`'s lifetime, negotiation and client families read it too. Its
 outcomes were written from the check order of `rust/interface/README.md`
 ("Version and feature handshake") before the engine ran: a request for another
 version is a mismatch whatever else it holds, a malformed version field leaves

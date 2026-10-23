@@ -446,7 +446,7 @@ output: {{path: output.csv, columns: [I, S]}}
                     json!({"phase":"validation","condition":"missing_derivation","spec_paths":["columns.PCHG.derivation"],"rule":"SPEC-4","context":{"column":"PCHG"}}),
                     json!({"phase":"validation","condition":"duplicate_identifier","spec_paths":["input.LB","domain"],"rule":"NAME-2","context":{"identifier":"LB"}}),
                     json!({"phase":"validation","condition":"undeclared_column","spec_paths":["keys[3]"],"rule":"OUTPUT-2","context":{"column":"BOGUS"}}),
-                    json!({"phase":"validation","condition":"driver_unavailable","spec_paths":["base"],"rule":"ROW-8","context":{"dataset":"BAD"}}),
+                    json!({"phase":"validation","condition":"driver_unavailable","spec_paths":["base"],"rule":"ROW-8","context":{"dataset":"BAD","row":null}}),
                 ]
             );
         }
@@ -845,7 +845,7 @@ output: {{path: output.csv, columns: [I, S]}}
             assert_eq!(
                 spec_findings(&error, Some(run.source())).unwrap(),
                 vec![
-                    json!({"phase":"validation","condition":"unknown_field","rule":"INPUT-6","spec_paths":["input.LB.types.ZZ"],"context":{"dataset":"LB","field":"ZZ"}})
+                    json!({"phase":"validation","condition":"unknown_field","rule":"INPUT-6","spec_paths":["input.LB.types.ZZ"],"context":{"dataset":"LB","field":"ZZ","identifier":"ZZ"}})
                 ]
             );
         }
@@ -1271,9 +1271,16 @@ output: {{path: output.csv, columns: [I, S]}}
                         assert_eq!(record["failure"]["context"]["verification_id"], "a'b");
                         assert_eq!(record["failure"]["log_context"]["verification_id"], "a'b");
                     }
+                    // An unknown column and a repeated id also name the identifier.
+                    let mut context = json!({"reason": reason});
+                    match condition {
+                        "unknown_field" => context["identifier"] = json!("ABSENT"),
+                        "duplicate_identifier" => context["identifier"] = json!("a'b"),
+                        _ => {}
+                    }
                     assert_eq!(
                         actual["diagnostics"],
-                        json!([{"phase":"validation","condition":condition,"rule":rule,"spec_paths":[format!("verifications[1].{suffix}")],"context":{"reason":reason}}])
+                        json!([{"phase":"validation","condition":condition,"rule":rule,"spec_paths":[format!("verifications[1].{suffix}")],"context":context}])
                     );
                 }
             }
@@ -1332,13 +1339,13 @@ output: {{path: output.csv, columns: [I, S]}}
                     "[]",
                     "invalid_field_type",
                     "ROW-4",
-                    json!({"row":"total","group_by":[]}),
+                    json!({"row":"total","group_by":[],"expected":"at least one driver variable, each once"}),
                 ),
                 (
                     "[LB.STUDYID, LB.STUDYID]",
                     "invalid_field_type",
                     "ROW-4",
-                    json!({"row":"total","group_by":["LB.STUDYID","LB.STUDYID"]}),
+                    json!({"row":"total","group_by":["LB.STUDYID","LB.STUDYID"],"expected":"at least one driver variable, each once"}),
                 ),
                 (
                     "[STUDYID]",
@@ -1558,7 +1565,7 @@ output: {{path: output.csv, columns: [I, S]}}
             assert_eq!(
                 spec_findings(&error, None).unwrap(),
                 vec![
-                    json!({"phase":"validation","condition":"duplicate_derivation","rule":"SPEC-6","spec_paths":["columns.AVAL.derivation"],"context":{"column":"AVAL","rows":["collected","total"],"not_row_local":"aggregate"}})
+                    json!({"phase":"validation","condition":"duplicate_derivation","rule":"SPEC-6","spec_paths":["columns.AVAL.derivation"],"context":{"column":"AVAL","identifier":"AVAL","rows":["collected","total"],"not_row_local":"aggregate"}})
                 ]
             );
             // Missing coverage is reported in declared column order, then the
@@ -1579,7 +1586,7 @@ output: {{path: output.csv, columns: [I, S]}}
                 spec_findings(&error, None).unwrap(),
                 vec![
                     json!({"phase":"validation","condition":"missing_derivation","rule":"SPEC-5","spec_paths":["columns.PARAM.derivation"],"context":{"column":"PARAM","rows":["collected"]}}),
-                    json!({"phase":"validation","condition":"conflicting_row_construction","rule":"ROW-9","spec_paths":["filter","rows"],"context":{}}),
+                    json!({"phase":"validation","condition":"conflicting_row_construction","rule":"ROW-9","spec_paths":["filter","rows"],"context":{"rows":["collected","total"]}}),
                 ]
             );
         }

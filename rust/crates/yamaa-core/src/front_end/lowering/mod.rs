@@ -21,10 +21,11 @@ use crate::ast::{
     Binding, Column, ColumnCheck, ColumnCheckKind, ColumnOrigin, ColumnSubmission, Comment,
     Comparator, Constant, DatasetCheck, DatasetCheckKind, DatasetSubmission, Derivation,
     DocumentRef, EmptyString, Expr, ExprId, ExprKind, FileRef, FormalExpression, Header, Input,
-    InputSource, Intermediate, KeyDecl, Literal, Meta, Method, Model, ModelKind, Named, Origin,
-    Output, PageRef, PathBase, Paths, Profile, RowCount, Rows, Segment, Severity, Span, Spec,
+    InputSource, Intermediate, KeyDecl, Literal, Meta, Method, Model, Named, Origin, Output,
+    PageRef, PathBase, Paths, Profile, RowCount, Rows, Segment, Severity, Span, Spec,
     SubmissionMetadata, Template, Text, UniqueCheck, ValueLevel, WhereClause, Written,
 };
+use crate::cdisc_vocabulary::ModelKind;
 use crate::schema::{Document, DocumentNode as N};
 use crate::value::ColumnType;
 
@@ -301,12 +302,7 @@ impl<'d> Lower<'d> {
         };
         // `model` (P-MODEL-1).
         let model = self.field(root, "model").and_then(|node| {
-            let kind = match self.text(node)? {
-                "SDTM" => ModelKind::Sdtm,
-                "SEND" => ModelKind::Send,
-                "ADaM" => ModelKind::Adam,
-                _ => return None,
-            };
+            let kind = ModelKind::from_name(self.text(node)?)?;
             Some(Model {
                 kind,
                 meta: self.field_meta(meta, "model", node),
@@ -343,7 +339,7 @@ impl<'d> Lower<'d> {
             exprs: Vec::new(),
             paths: Paths::new(),
             files: Vec::new(),
-            written: self.written(root, &["parent"]),
+            written: self.written(root, &["parent", "include"]),
             meta,
         }
     }
@@ -937,11 +933,7 @@ impl<'d> Lower<'d> {
                         let (comparator, list, list_meta) = match self.field(values, "values") {
                             Some(list) => match self.text_of(values, "comparator") {
                                 Some(written) => (
-                                    if written == "NE" {
-                                        Comparator::Ne
-                                    } else {
-                                        Comparator::NotIn
-                                    },
+                                    Comparator::written_as(written),
                                     list,
                                     self.field_meta(meta, "values", list),
                                 ),

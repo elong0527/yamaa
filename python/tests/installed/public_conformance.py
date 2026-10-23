@@ -92,14 +92,19 @@ def read_yaml(path):
 
 
 def domain_of(path):
-    """The `domain` a project names a listed specification by: that of the
-    layer nearest `path` that writes one, following each `parent`."""
+    """The `domain` a project names a listed specification by: the one the
+    composition gives, a layer's own before the fragments it includes, the
+    last listed first, and those before its parent chain (LAYER-3)."""
     seen = set()
     while path.resolve() not in seen:
         seen.add(path.resolve())
         document = read_yaml(path)
         if "domain" in document:
             return document["domain"]
+        for written in reversed(document.get("include") or []):
+            fragment = read_yaml(path.parent / written)
+            if "domain" in fragment:
+                return fragment["domain"]
         path = path.parent / document["parent"]
     raise ValueError(f"{path}: cyclic parent")
 

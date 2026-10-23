@@ -931,6 +931,7 @@
                 "intermediates.LOOK.filter"
               ],
               "context": {
+                "actual": "int",
                 "left_type": "str",
                 "right_type": "int"
               }
@@ -977,6 +978,7 @@
                 "intermediates.LOOK.filter"
               ],
               "context": {
+                "actual": "int",
                 "left_type": "str",
                 "right_type": "int"
               }
@@ -1082,6 +1084,7 @@
                 "intermediates.LOOK.filter"
               ],
               "context": {
+                "actual": "int",
                 "left_type": "str",
                 "right_type": "int"
               }
@@ -1792,6 +1795,7 @@
                 "verifications[0].row_count.filter"
               ],
               "context": {
+                "actual": "int",
                 "left_type": "str",
                 "right_type": "int"
               }
@@ -1871,6 +1875,7 @@
                 "verifications[0].row_count.filter"
               ],
               "context": {
+                "actual": "int",
                 "left_type": "str",
                 "right_type": "int"
               }
@@ -4084,6 +4089,7 @@
                 "intermediates.LOOK.filter"
               ],
               "context": {
+                "actual": "str",
                 "left_type": "int",
                 "right_type": "str"
               }
@@ -4138,6 +4144,7 @@
                 "intermediates.LOOK.filter"
               ],
               "context": {
+                "actual": "str",
                 "left_type": "int",
                 "right_type": "str"
               }
@@ -4152,6 +4159,7 @@
                 "intermediates.LOOK.filter"
               ],
               "context": {
+                "actual": "str",
                 "left_type": "int",
                 "right_type": "str"
               }
@@ -4384,7 +4392,8 @@
                 "datasets.DM.columns.DOMAIN.label"
               ],
               "context": {
-                "detail": "forbidden XML whitespace"
+                "detail": "forbidden XML whitespace",
+                "whitespace": "tab"
               }
             }
           ],
@@ -4438,7 +4447,8 @@
                 "sdtm.documents[0].title"
               ],
               "context": {
-                "detail": "forbidden XML whitespace"
+                "detail": "forbidden XML whitespace",
+                "whitespace": "tab"
               }
             }
           ],
@@ -4468,7 +4478,8 @@
                 "datasets.DM.columns.DOMAIN.label"
               ],
               "context": {
-                "detail": "forbidden XML whitespace"
+                "detail": "forbidden XML whitespace",
+                "whitespace": "tab"
               }
             }
           ],
@@ -4502,7 +4513,8 @@
                 "datasets.DM.columns.DOMAIN.label"
               ],
               "context": {
-                "detail": "forbidden XML whitespace"
+                "detail": "forbidden XML whitespace",
+                "whitespace": "tab"
               }
             }
           ],
@@ -4543,7 +4555,7 @@
         "file": "project.yaml",
         "line": 54,
         "column": 5,
-        "message": "sdtm.specs[1] would write a transport file that another writer also writes",
+        "message": "sdtm.specs[1] names dm.json, which another writer of the submission also writes",
         "context_names": "dm.json",
         "source_span": null,
         "operand_route": null
@@ -4645,7 +4657,9 @@
         ],
         "spec.check": [],
         "spec.resolve": [],
-        "spec.run": [],
+        "spec.run": [
+          "stream"
+        ],
         "project.spec": [
           "name"
         ],
@@ -4703,8 +4717,8 @@
         "refused_submission_save": "cannot save {path}, section sdtm: {path} does not exist [resource_path_missing, FILE-7]",
         "no_member_built": "cannot select ADSL: the project has no specification named ADSL [unknown_specification_name, PROJECT-6]",
         "unknown_member": "cannot select ADSL: the project has no specification named ADSL [unknown_specification_name, PROJECT-6]",
-        "empty_project_run_save": "cannot save {path}, section sdtm: there is nothing to save [nothing_to_save, PROJECT-12]",
-        "empty_submission_save": "cannot save {path}: there is nothing to save [nothing_to_save, PROJECT-13]"
+        "empty_project_run_save": "cannot save {path}, section sdtm: the project run has nothing to save [nothing_to_save, PROJECT-12]",
+        "empty_submission_save": "cannot save {path}: the project submission has nothing to save [nothing_to_save, PROJECT-13]"
       },
       "nothing_to_save_issues": {
         "empty_project_run_save": {
@@ -4716,8 +4730,8 @@
           "file": null,
           "line": null,
           "column": null,
-          "message": "there is nothing to save",
-          "context": "{}",
+          "message": "the project run has nothing to save",
+          "context": "{\"operation\":\"run\"}",
           "source_span": null,
           "operand_route": null
         },
@@ -4730,8 +4744,8 @@
           "file": null,
           "line": null,
           "column": null,
-          "message": "there is nothing to save",
-          "context": "{}",
+          "message": "the project submission has nothing to save",
+          "context": "{\"operation\":\"submission\"}",
           "source_span": null,
           "operand_route": null
         }
@@ -4937,8 +4951,8 @@
               "file": "spec.yaml",
               "line": 8,
               "column": 26,
-              "message": "an int value is outside the range -9223372036854775808 to 9223372036854775807",
-              "context": "{\"actual\":18446744073709551616,\"maximum\":9223372036854775807,\"minimum\":-9223372036854775808}",
+              "message": "18446744073709551616 is outside the int range -9223372036854775808 to 9223372036854775807",
+              "context": "{\"actual\":18446744073709551616,\"maximum\":9223372036854775807,\"minimum\":-9223372036854775808,\"value\":\"18446744073709551616\"}",
               "source_span": null,
               "operand_route": null
             }
@@ -5019,7 +5033,7 @@
               "file": "spec.yaml",
               "line": 9,
               "column": 39,
-              "message": "columns.V.derivation.aggregate has a value of the wrong type or form",
+              "message": "columns.V.derivation.aggregate has a value of the wrong type or form (expected at least one match pair)",
               "context": "{\"dataset\":\"SRC\",\"expected\":\"at least one match pair\"}",
               "source_span": null,
               "operand_route": null
@@ -5043,7 +5057,7 @@
               "file": "spec.yaml",
               "line": 9,
               "column": 39,
-              "message": "columns.V.derivation.aggregate has a value of the wrong type or form",
+              "message": "columns.V.derivation.aggregate has a value of the wrong type or form (expected at least one match pair)",
               "context": "{\"dataset\":\"SRC\",\"expected\":\"at least one match pair\"}",
               "source_span": null,
               "operand_route": null
@@ -5067,7 +5081,7 @@
               "file": "spec.yaml",
               "line": 9,
               "column": 71,
-              "message": "columns.V.derivation.aggregate.between has a value of the wrong type or form",
+              "message": "columns.V.derivation.aggregate.between has a value of the wrong type or form (expected at least one of lower, upper)",
               "context": "{\"expected\":\"at least one of lower, upper\"}",
               "source_span": null,
               "operand_route": null
@@ -5393,7 +5407,7 @@
               "file": "spec.yaml",
               "line": 8,
               "column": 5,
-              "message": "columns[1].name lacks a field it requires",
+              "message": "columns[1].name lacks the field name, which it requires",
               "context": "{\"class\":\"column_class\",\"entry\":\"{entry}\",\"field\":\"name\",\"source\":\"{entry}\"}",
               "source_span": null,
               "operand_route": null
@@ -5638,9 +5652,10 @@
             "spec_paths": [
               "max_xml_depth"
             ],
-            "message": "max_xml_depth has a value that is not permitted",
+            "message": "max_xml_depth has the value 7, which is not permitted",
             "context": {
-              "minimum": 8
+              "minimum": 8,
+              "value": 7
             }
           }
         },
@@ -6218,6 +6233,26 @@
           }
         },
         {
+          "name": "an_overriding_value_in_an_included_fragment",
+          "files": {
+            "parent.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: ADSL\nkeys: [USUBJID]\ninput: {DM: {path: dm.csv, types: {AGE: int, ZERO: int}}}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: DM.USUBJID}\n  - name: RATIO\n    type: float\n    label: Ratio\n    derivation: AGE / ZERO\n  - {name: AGE, type: int, label: Age, derivation: DM.AGE}\n  - {name: ZERO, type: int, label: Zero, derivation: DM.ZERO}\noutput: {path: adsl.csv, columns: [USUBJID, RATIO, AGE, ZERO]}\n",
+            "fragment.yaml": "yamaa: \"1.0\"\ntype: spec\ncolumns:\n  - name: RATIO\n    derivation: AGE / (ZERO * 3)\n",
+            "child.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: parent.yaml\ninclude: [fragment.yaml]\ncolumns:\n  - name: RATIO\n    label: Age Ratio\n",
+            "dm.csv": "USUBJID,AGE,ZERO\nS1,30,0\n"
+          },
+          "call": {
+            "operation": "run",
+            "path": "child.yaml"
+          },
+          "issue": {
+            "condition": "division_by_zero",
+            "spec_path": "columns.RATIO.derivation",
+            "file": "fragment.yaml",
+            "line": 5,
+            "column": 5
+          }
+        },
+        {
           "name": "a_1_0_shorthand_overrides_a_structured_parent",
           "files": {
             "parent.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: IT\nkeys: [ID]\ninput: {RAW: raw.csv}\noutput: {path: out.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: Identifier, derivation: RAW.ID}\n  - name: V\n    type: str\n    label: Value\n    derivation:\n      source:\n        variable: RAW.OLD\n        filter: RAW.ID IS NOT NULL\n",
@@ -6397,6 +6432,192 @@
           }
         }
       ]
+    },
+    "include-fragments": {
+      "files": {
+        "ae.csv": "USUBJID,AESEQ,AESEV,AESTDTC,AEENDTC\nS1,1,MILD,2026-01-05,2026-01-07\n",
+        "ae.yaml": "yamaa: \"1.0\"\ntype: spec\ninput:\n  AE: {path: ae.csv, types: {AESEQ: int, AESTDTC: date, AEENDTC: date}}\nbase: AE\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: AE.USUBJID}\n  - {name: AESEQ, type: int, label: Sequence, derivation: AE.AESEQ}\n  - {name: ASTDT, type: date, label: Start, derivation: AE.AESTDTC}\n  - {name: AENDT, type: date, label: End, derivation: AE.AEENDTC}\n",
+        "duration.yaml": "yamaa: \"1.0\"\ntype: spec\ncolumns:\n  - name: ADURN\n    type: int\n    label: Duration\n    derivation: {diff: {type: date, start: ASTDT, end: AENDT, unit: day, closed: both}}\n",
+        "severity.yaml": "yamaa: \"1.0\"\ntype: spec\ncolumns:\n  - name: ASEVN\n    type: int\n    label: Severity\n    derivation: {mapping: {source: AE.AESEV, dict: {MILD: 1, MODERATE: 2, SEVERE: 3}}}\n",
+        "adae.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: ae.yaml\ninclude: [duration.yaml, severity.yaml]\ndomain: ADAE\nkeys: [USUBJID, AESEQ]\noutput: {path: adae.csv, columns: [USUBJID, AESEQ, ADURN, ASEVN]}\n",
+        "named-parent.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: ae.yaml\ncolumns:\n  - {name: AFLAG, type: str, label: Flag, derivation: \"'Y'\"}\n",
+        "own-template.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: ae.yaml\ninclude: [named-parent.yaml]\ndomain: ADAE\nkeys: [USUBJID, AESEQ]\noutput: {path: adae.csv, columns: [USUBJID, AESEQ, AFLAG]}\n",
+        "cyclic-template.yaml": "yamaa: \"1.0\"\ntype: spec\ninclude: [cyclic.yaml]\n",
+        "cyclic.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: cyclic-template.yaml\ndomain: ADAE\nkeys: [USUBJID]\noutput: {path: adae.csv, columns: [USUBJID]}\n",
+        "twice-template.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: ae.yaml\ninclude: [duration.yaml]\n",
+        "twice.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: twice-template.yaml\ninclude: [duration.yaml]\ndomain: ADAE\nkeys: [USUBJID, AESEQ]\noutput: {path: adae.csv, columns: [USUBJID, AESEQ, ADURN]}\n",
+        "absent-template.yaml": "yamaa: \"1.0\"\ntype: spec\ninclude: [absent.yaml]\n",
+        "below-absent.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: absent-template.yaml\ninclude: [duration.yaml]\ndomain: ADAE\nkeys: [USUBJID]\noutput: {path: adae.csv, columns: [USUBJID]}\n",
+        "missing.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: ae.yaml\ninclude: [absent.yaml]\ndomain: ADAE\nkeys: [USUBJID, AESEQ]\noutput: {path: adae.csv, columns: [USUBJID, AESEQ]}\n"
+      },
+      "checks": [
+        {
+          "name": "a_parent_chain_and_its_fragments_check_clean",
+          "path": "adae.yaml",
+          "issues": []
+        },
+        {
+          "name": "a_fragment_that_names_a_parent_is_refused_at_that_parent",
+          "path": "own-template.yaml",
+          "issues": [
+            {
+              "severity": "error",
+              "phase": "validation",
+              "condition": "prohibited_construct",
+              "rule": "LAYER-4",
+              "spec_paths": [
+                "parent"
+              ],
+              "file": "named-parent.yaml",
+              "line": 3,
+              "column": 1,
+              "message": "a parent construct is written where its field does not admit it",
+              "context": "{\"construct\":\"parent\",\"entry\":\"{root}/own-template.yaml\",\"source\":\"{root}/named-parent.yaml\"}",
+              "source_span": null,
+              "operand_route": null
+            }
+          ]
+        },
+        {
+          "name": "an_include_back_to_the_entry_is_a_cycle",
+          "path": "cyclic.yaml",
+          "issues": [
+            {
+              "severity": "error",
+              "phase": "validation",
+              "condition": "inheritance_cycle",
+              "rule": "LAYER-3",
+              "spec_paths": [
+                "include[0]"
+              ],
+              "file": "cyclic-template.yaml",
+              "line": 3,
+              "column": 11,
+              "message": "the layers form a cycle: {root}/cyclic.yaml, {root}/cyclic-template.yaml, {root}/cyclic.yaml",
+              "context": "{\"cycle\":[\"{root}/cyclic.yaml\",\"{root}/cyclic-template.yaml\",\"{root}/cyclic.yaml\"],\"reason\":\"parent_chain_returns_to_entry\",\"source\":\"{root}/cyclic-template.yaml\"}",
+              "source_span": null,
+              "operand_route": null
+            }
+          ]
+        },
+        {
+          "name": "a_fragment_reached_twice_is_refused_at_its_second_include",
+          "path": "twice.yaml",
+          "issues": [
+            {
+              "severity": "error",
+              "phase": "validation",
+              "condition": "duplicate_layer",
+              "rule": "LAYER-3",
+              "spec_paths": [
+                "include[0]"
+              ],
+              "file": "twice.yaml",
+              "line": 4,
+              "column": 11,
+              "message": "include duration.yaml names a layer the specification already composes",
+              "context": "{\"layer\":\"{root}/duration.yaml\",\"path\":\"duration.yaml\",\"source\":\"{root}/twice.yaml\"}",
+              "source_span": null,
+              "operand_route": null
+            }
+          ]
+        },
+        {
+          "name": "a_fragment_that_is_not_there_is_refused_at_its_include",
+          "path": "missing.yaml",
+          "issues": [
+            {
+              "severity": "error",
+              "phase": "validation",
+              "condition": "resource_path_missing",
+              "rule": "FILE-7",
+              "spec_paths": [
+                "include[0]"
+              ],
+              "file": "missing.yaml",
+              "line": 4,
+              "column": 11,
+              "message": "absent.yaml does not exist",
+              "context": "{\"path\":\"absent.yaml\",\"source\":\"{root}/missing.yaml\"}",
+              "source_span": null,
+              "operand_route": null
+            }
+          ]
+        },
+        {
+          "name": "a_template_s_missing_fragment_is_refused_in_the_template",
+          "path": "below-absent.yaml",
+          "issues": [
+            {
+              "severity": "error",
+              "phase": "validation",
+              "condition": "resource_path_missing",
+              "rule": "FILE-7",
+              "spec_paths": [
+                "include[0]"
+              ],
+              "file": "absent-template.yaml",
+              "line": 3,
+              "column": 11,
+              "message": "absent.yaml does not exist",
+              "context": "{\"path\":\"absent.yaml\",\"source\":\"{root}/absent-template.yaml\"}",
+              "source_span": null,
+              "operand_route": null
+            }
+          ]
+        }
+      ],
+      "resolve": {
+        "path": "adae.yaml",
+        "layers": [
+          "ae.yaml",
+          "duration.yaml",
+          "severity.yaml",
+          "adae.yaml"
+        ],
+        "resources": [
+          {
+            "spec_path": "include[0]",
+            "role": "included_specification",
+            "declaring_source": "adae.yaml",
+            "written": "duration.yaml",
+            "location": "duration.yaml"
+          },
+          {
+            "spec_path": "include[1]",
+            "role": "included_specification",
+            "declaring_source": "adae.yaml",
+            "written": "severity.yaml",
+            "location": "severity.yaml"
+          },
+          {
+            "spec_path": "parent",
+            "role": "parent_specification",
+            "declaring_source": "adae.yaml",
+            "written": "ae.yaml",
+            "location": "ae.yaml"
+          }
+        ],
+        "columns": [
+          "USUBJID",
+          "AESEQ",
+          "ASTDT",
+          "AENDT",
+          "ADURN",
+          "ASEVN"
+        ],
+        "declaring_sources": {
+          "/columns/0/label": "ae.yaml",
+          "/columns/4/label": "duration.yaml",
+          "/columns/5/label": "severity.yaml",
+          "/domain": "adae.yaml"
+        },
+        "absent_fields": [
+          "parent",
+          "include",
+          "clear"
+        ]
+      }
     },
     "project-parity": {
       "cases": [
@@ -6652,6 +6873,91 @@
               "context": "{\"path\":\"codelists.yaml\"}",
               "source_span": null,
               "operand_route": null
+            }
+          ]
+        },
+        {
+          "name": "a_key_that_is_not_an_output_column",
+          "files": {
+            "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy:\n  id: PAR01\n  name: PAR01\n  description: Example study submitting its demographics\n  protocol_name: PAR-01\nsdtm:\n  specs:\n    - dm.yaml\n  standards:\n    - {name: SDTMIG, version: \"3.4\", status: Final}\n  define: define.xml\n",
+            "dm.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: DM\nkeys: [STUDYID, USUBJID, SUBJID]\ninput: {RAW: raw.csv}\noutput: {path: dm.csv, columns: [DOMAIN, STUDYID, USUBJID]}\ncolumns:\n  - {name: DOMAIN, type: str, label: Domain Abbreviation, derivation: \"'DM'\", submission: {core: Req, role: Identifier, length: 2, origins: [{type: Assigned, source: Sponsor}]}}\n  - {name: STUDYID, type: str, label: Study Identifier, derivation: RAW.STUDYID, submission: {core: Req, role: Identifier, length: 5, origins: [{type: Protocol, source: Sponsor}]}}\n  - {name: USUBJID, type: str, label: Unique Subject Identifier, derivation: RAW.USUBJID, submission: {core: Req, role: Identifier, length: 9, origins: [{type: Assigned, source: Sponsor}]}}\n  - {name: SUBJID, type: str, label: Subject Identifier for the Study, derivation: RAW.SUBJID}\nsubmission: {label: Demographics, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false}\n",
+            "raw.csv": "STUDYID,USUBJID,SUBJID\nPAR01,PAR01-941,941\nPAR01,PAR01-942,942\n"
+          },
+          "calls": [
+            {
+              "call": {
+                "operation": "project_check",
+                "path": "project.yaml"
+              },
+              "issues": [
+                {
+                  "severity": "error",
+                  "phase": "validation",
+                  "condition": "internal_column_in_keys",
+                  "rule": "OUTPUT-2",
+                  "spec_paths": [
+                    "keys[2]"
+                  ],
+                  "file": "dm.yaml",
+                  "line": 5,
+                  "column": 26,
+                  "message": "keys names SUBJID, which is not an output column",
+                  "context": "{\"column\":\"SUBJID\",\"entry\":\"{root}/dm.yaml\",\"source\":\"{root}/dm.yaml\"}",
+                  "source_span": null,
+                  "operand_route": null
+                }
+              ]
+            },
+            {
+              "call": {
+                "operation": "spec_run",
+                "path": "project.yaml",
+                "name": "DM"
+              },
+              "issues": [
+                {
+                  "severity": "error",
+                  "phase": "validation",
+                  "condition": "internal_column_in_keys",
+                  "rule": "OUTPUT-2",
+                  "spec_paths": [
+                    "keys[2]"
+                  ],
+                  "file": "dm.yaml",
+                  "line": 5,
+                  "column": 26,
+                  "message": "keys names SUBJID, which is not an output column",
+                  "context": "{\"column\":\"SUBJID\"}",
+                  "source_span": null,
+                  "operand_route": null
+                }
+              ]
+            },
+            {
+              "call": {
+                "operation": "submission",
+                "path": "project.yaml",
+                "section": "sdtm",
+                "created": "2026-09-11T00:00:00"
+              },
+              "issues": [
+                {
+                  "severity": "error",
+                  "phase": "validation",
+                  "condition": "internal_column_in_keys",
+                  "rule": "OUTPUT-2",
+                  "spec_paths": [
+                    "sdtm.specs[0].keys[2]"
+                  ],
+                  "file": "dm.yaml",
+                  "line": 5,
+                  "column": 26,
+                  "message": "keys names SUBJID, which is not an output column",
+                  "context": "{\"column\":\"SUBJID\"}",
+                  "source_span": null,
+                  "operand_route": null
+                }
+              ]
             }
           ]
         }
@@ -7103,6 +7409,28 @@
         "rows": [{"ID": 1, "NAME": "alpha"}, {"ID": 2, "NAME": "beta"}],
         "function_study_csv": "ID,RESULT\n01,1.5\n"
       }
+    },
+    "streaming": {
+      "specification_yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int, V: float, D: date, T: datetime}}}\noutput: {path: output.csv, columns: [ID, NAME, V, D, T], order_by: [{variable: ID, direction: desc}]}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: SRC.ID}\n  - {name: NAME, type: str, label: Name, derivation: SRC.NAME}\n  - {name: V, type: float, label: Value, derivation: SRC.V}\n  - {name: D, type: date, label: Day, derivation: SRC.D}\n  - {name: T, type: datetime, label: Time, derivation: SRC.T}\n",
+      "input_csv": "ID,NAME,V,D,T\n1,alpha,1.5,2024-01-01,2024-01-01T08:30:00\n2,beta,,2024-02-29,\n3,gamma,2.25,,2024-03-01T00:00:00\n4,,-0.5,2023-12-31,2023-12-31T23:59:59\n5,epsilon,10,2024-03-01,2024-03-01T12:00:05\n",
+      "rows": [
+        {"ID": 5, "NAME": "epsilon", "V": 10, "D": "2024-03-01", "T": "2024-03-01T12:00:05"},
+        {"ID": 4, "NAME": null, "V": -0.5, "D": "2023-12-31", "T": "2023-12-31T23:59:59"},
+        {"ID": 3, "NAME": "gamma", "V": 2.25, "D": null, "T": "2024-03-01T00:00:00"},
+        {"ID": 2, "NAME": "beta", "V": null, "D": "2024-02-29", "T": null},
+        {"ID": 1, "NAME": "alpha", "V": 1.5, "D": "2024-01-01", "T": "2024-01-01T08:30:00"}
+      ],
+      "output_csv": "ID,NAME,V,D,T\n5,epsilon,10,2024-03-01,2024-03-01T12:00:05\n4,,-0.5,2023-12-31,2023-12-31T23:59:59\n3,gamma,2.25,,2024-03-01T00:00:00\n2,beta,,2024-02-29,\n1,alpha,1.5,2024-01-01,2024-01-01T08:30:00\n",
+      "large": {
+        "specification_yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int}}}\noutput: {path: output.csv, columns: [ID, NAME]}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: SRC.ID}\n  - {name: NAME, type: str, label: Name, derivation: SRC.NAME}\n",
+        "records": 70000,
+        "name_prefix": "n",
+        "batches": [65536, 4464]
+      },
+      "stream_class": "nanoarrow_array_stream",
+      "cancelled": "cannot read TEST: operation cancelled",
+      "stream_taken": "cannot read TEST: the run's output stream has already been read [stream_taken]",
+      "host_thread": "cannot read TEST: a run that can call project functions is built only on the thread that started it [host_thread]"
     }
   }
 }

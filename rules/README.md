@@ -103,11 +103,6 @@ Language rules live in `rules/*.md`, format and file-handling rules in
 `rules/reference/`, and the submission, project-file and project-function
 profiles in `rules/profiles/`.
 
-A file that declares `schema_version`, written in language version 0.5, is
-refused wherever the engine or the lint reads it
-([SCHEMA-2](reference/schema-language.md#schema-2)); the rules of 0.5 stay at
-the `yamaa-v0.5.0` tag.
-
 | File | Prefix | Covers |
 | --- | --- | --- |
 | [Specification structure](specification.md) | SPEC | Declare root fields, unique identifiers, column derivation coverage, internal and copied columns, and ASCII source. |
@@ -149,13 +144,19 @@ is informative. Closed grammars are defined in
 `yaml/conditions.yaml` registers every condition an implementation may raise
 with the phases that may raise it and the message its issues carry. The
 tables of [SUB-3](profiles/submission.md#sub-3),
+[SUB-6](profiles/submission.md#sub-6),
 [SUB-9](profiles/submission.md#sub-9),
 [SUB-10](profiles/submission.md#sub-10),
 [SUB-15](profiles/submission.md#sub-15),
 [SUB-26](profiles/submission.md#sub-26) and
-[JSON-10](profiles/dataset-json.md#json-10) list values of the closed CDISC
-vocabularies, which `yaml/vocabulary/cdisc.yaml` holds, and a repository
-check keeps them to that file.
+[JSON-10](profiles/dataset-json.md#json-10), and the lists of
+[SUB-6](profiles/submission.md#sub-6),
+[SUB-10](profiles/submission.md#sub-10),
+[SUB-14](profiles/submission.md#sub-14),
+[CT-2](profiles/terminology.md#ct-2) and
+[DEFINE-6](profiles/define-xml.md#define-6), list values of the closed CDISC
+vocabularies, which `yaml/vocabulary/cdisc.yaml` holds, and repository
+checks keep them to that file.
 
 ## Rule cards
 
@@ -165,12 +166,12 @@ headings that group cards. A card is written as:
 ```markdown
 <a id="layer-3"></a>
 
-### LAYER-3. Layers form one chain contributed from its root ancestor to the entry, later layers taking precedence
+### LAYER-3. Layers contribute from the root ancestor to the entry, each after its fragments, later layers taking precedence
 
 Starting at the entry file, each layer's `parent` names the next layer up the
 chain, which ends at a layer without a parent. ...
 
-Fails: `inheritance_cycle`.
+Fails: `inheritance_cycle`, `duplicate_layer`.
 Evidence: `schema-inheritance`.
 
 For a study entry whose parent is a compound layer whose parent is an ...
@@ -208,6 +209,10 @@ One term per concept across all rules, schema comments, and messages:
   table, never data.
 - **row template** -- one `rows` entry, building a group of output rows. Bare
   `template` means a string template (text operations).
+- **fragment** -- a specification file that an `include` entry names
+  ([LAYER-3](inheritance.md#layer-3)); it declares neither `parent` nor
+  `include`. A layer that is not complete on its own is a partial
+  specification, never a fragment.
 - **record** -- input side (a file or input dataset row). **row** -- output side
   (an output record under construction or built).
 - **column** -- dataset level. **field** -- file and schema level (ingestion and
@@ -232,7 +237,7 @@ values, so one name never covers two treatments:
 | `condition` | Each of `TRUE`, `FALSE`, and `UNKNOWN` has its own result (`flag`). |
 
 `expr` holds an expression in a closed text grammar that produces a value
-(`compute`, `aggregate`), never a predicate. `then` and `otherwise` hold
+(`aggregate`), never a predicate. `then` and `otherwise` hold
 values (`case`), never predicates.
 
 ## Changing a rule

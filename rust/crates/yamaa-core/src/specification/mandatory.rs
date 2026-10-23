@@ -6,9 +6,10 @@ use super::*;
 use crate::json::Value as V;
 use crate::{
     ast::{self, ColumnCheckKind, SubmissionMetadata},
+    cdisc_vocabulary::{Core, DatasetClass},
     dataset::{Check, RowScope, Verification, WhereClause},
     diagnostic::{ConditionCode as C, Diagnostic},
-    specification_submission_document::{resolve_mandatory, Core, DatasetClass},
+    specification_submission_document::resolve_mandatory,
     submission_values as values,
 };
 
@@ -66,7 +67,7 @@ pub(super) fn admit(
             result.push(finding(
                 C::SubmissionKeyMandatory,
                 format!("{path}.mandatory"),
-                &[("column", s(name))],
+                &[("column", s(name)), ("value", V::Bool(false))],
             ));
         }
         let mandatory = resolve_mandatory(key.is_some(), declared, declared_core, tabulation);
@@ -80,7 +81,11 @@ pub(super) fn admit(
                 result.push(finding(
                     C::SubmissionKeyMandatory,
                     format!("{entry_path}.mandatory"),
-                    &[("column", s(name)), ("entry", s(&entry.id.name))],
+                    &[
+                        ("column", s(name)),
+                        ("entry", s(&entry.id.name)),
+                        ("value", V::Bool(false)),
+                    ],
                 ));
             }
             let entry_core = core(&entry.metadata);

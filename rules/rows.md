@@ -53,7 +53,7 @@ An exposed derived field has a column type when it is typed, or when its
 expression's result type under [EXPR-14](expressions.md#expr-14) is one
 column type; a `source` reading another intermediate's column under
 [LOOKUP-16](lookup.md#lookup-16) has that column's type. A `case` selecting an
-`int` or a `str` and a Boolean `literal` have none, and an exposed derived
+`int` or a `str` and a Boolean literal have none, and an exposed derived
 field without one fails row-driver validation as
 `unknown_intermediate_driver_type`.
 
@@ -204,8 +204,9 @@ A specification with absent or empty `rows` and no default input dataset fails
 validation with `driver_unavailable` at `base`. The default is root `base`, or
 the single declared dataset when `base` is omitted. An explicit `base` must
 name a declared input dataset even when `rows` is present; an undeclared `base`
-fails with the same condition and path, naming the written dataset. An
-unavailable implicit default records a missing `row` in its context.
+fails with the same condition and path, naming the written dataset. Both
+record a missing `row` in their context, and an unavailable implicit default
+also a missing `dataset`.
 
 <a id="row-9"></a>
 

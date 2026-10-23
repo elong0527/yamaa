@@ -300,6 +300,10 @@ public:
     json_text: {python: "str, canonical JSON (RFC 8785)", r: "character(1), canonical JSON (RFC 8785)"}
     table: {python: yamaa.Table, r: data.frame}
     optional_table: {python: "yamaa.Table | None", r: data.frame or NULL}
+    # A run's output, which a streamed run produces as it is read (#3697).
+    run_output:
+      python: "yamaa.Table | None; with stream=True a yamaa.Table whose Arrow stream produces the output as it is read, once"
+      r: "data.frame or NULL; with stream = TRUE an Arrow C stream that produces the output as it is read: an external pointer of class nanoarrow_array_stream, or NULL"
     status: {python: "str, one of values.status", r: "character(1), one of values.status"}
     file_type: {python: "str, one of values.file_type", r: "character(1), one of values.file_type"}
     info: {python: "dict, keys in records.info order", r: "named list, names in records.info order"}
@@ -418,9 +422,9 @@ public:
           doc: "`succeeded` when the run built its output with no issue, and `failed` otherwise."
         - name: output
           kind: property
-          returns: optional_table
+          returns: run_output
           calls: run_output
-          doc: The output dataset, or None when the run failed.
+          doc: The output dataset, or None when the run failed; with stream, read as it is produced.
         - name: issues
           kind: property
           returns: table
@@ -560,7 +564,15 @@ public:
           raises: refusal
           calls: spec_resolve
           doc: The specification after its layers are composed.
-        - {name: run, kind: method, returns: Run, raises: refusal, calls: spec_run, doc: Build the dataset in memory.}
+        # #3697: with stream, nothing is read until the output is.
+        - name: run
+          kind: method
+          args: {stream: flag = false}
+          keyword_only: [stream]
+          returns: Run
+          raises: refusal
+          calls: spec_run
+          doc: Build the dataset in memory, or with stream as its output is read.
         - {name: summary, kind: printing, python: __repr__, r: [print, format], calls: spec_summary}
     Project:
       python: yamaa.Project
@@ -978,7 +990,11 @@ python:
     - kind: function
       name: _spec_run
       rust: api_entry::_spec_run
-      args: {specification: text, project: "optional<text> = None", plans: "optional<_Plans> = None"}
+      args:
+        specification: text
+        project: "optional<text> = None"
+        plans: "optional<_Plans> = None"
+        stream: "bool = false"
       returns: _Run
     - kind: function
       name: _spec_resolve
@@ -1077,7 +1093,7 @@ r:
         - {name: spec_summary, args: {specification: raw}, returns: r_reply}
         - {name: plans, args: {handle: robj}, returns: r_reply}
         - name: spec_run
-          args: {specification: raw, project: robj, version: raw, capabilities: r_list, plans: robj}
+          args: {specification: raw, project: robj, version: raw, capabilities: r_list, plans: robj, stream: bool}
           returns: r_reply
         - {name: spec_resolve, args: {specification: raw, project: robj, version: raw}, returns: r_reply}
         - name: read_odm

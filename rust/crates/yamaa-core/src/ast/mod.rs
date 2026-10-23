@@ -27,14 +27,14 @@ pub use expr::{
 pub use path::{PathId, Paths, Segment};
 pub use project::{
     Codelist, CodelistDeclaration, CodelistItem, CodelistSource, CodelistType, Codelists,
-    DefineContext, DocumentKind, ExternalDictionary, Function, FunctionDeclaration, FunctionTest,
-    GuideStatus, HostEnvironment, Implementation, ImplementationGuide, MetadataVersion, Parameter,
-    Project, Section, Study, SubmissionDeclarations, SubmissionRefused, SupportingDocument,
-    TerminologyStandard, Transport, STANDARD_NAMES,
+    DocumentKind, ExternalDictionary, Function, FunctionDeclaration, FunctionTest, HostEnvironment,
+    Implementation, ImplementationGuide, MetadataVersion, Parameter, Project, Section, Study,
+    SubmissionDeclarations, SubmissionRefused, SupportingDocument, TerminologyStandard, Transport,
 };
 pub use traversal::{Children, Filtered, Ordered, Owner, Read, Role, Scope, Site, Step};
 pub use types::{result_type, Table, TypeEnv};
 
+use crate::cdisc_vocabulary::{ModelKind, WhereComparator};
 use crate::value::ColumnType;
 
 /// Where a node is, in the spec and in its file.
@@ -142,24 +142,6 @@ pub struct Header {
 pub struct Model {
     pub kind: ModelKind,
     pub meta: Meta,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ModelKind {
-    Sdtm,
-    Send,
-    Adam,
-}
-
-impl ModelKind {
-    /// The model as `model` writes it.
-    pub fn name(self) -> &'static str {
-        match self {
-            Self::Sdtm => "SDTM",
-            Self::Send => "SEND",
-            Self::Adam => "ADaM",
-        }
-    }
 }
 
 /// One resolved specification: composed, pruned and admitted.
@@ -600,13 +582,21 @@ impl Comparator {
             Self::NotIn => count >= 2,
         }
     }
+    /// The comparison a written `comparator` states: `NE`, or else `NOTIN`,
+    /// the one other spelling admission leaves.
+    pub fn written_as(spelling: &str) -> Self {
+        match WhereComparator::from_name(spelling) {
+            Some(WhereComparator::Ne) => Self::Ne,
+            Some(WhereComparator::Notin) | None => Self::NotIn,
+        }
+    }
     /// The spelling a written comparator has (`NE` or `NOTIN`), or none for
     /// a bare list.
     pub fn written(self) -> Option<&'static str> {
         match self {
             Self::In => None,
-            Self::Ne => Some("NE"),
-            Self::NotIn => Some("NOTIN"),
+            Self::Ne => Some(WhereComparator::Ne.name()),
+            Self::NotIn => Some(WhereComparator::Notin.name()),
         }
     }
 }

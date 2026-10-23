@@ -1,0 +1,7 @@
+phase: validation
+condition: prohibited_construct
+spec_paths:
+  - parent
+rule: LAYER-4
+context:
+  construct: parent
