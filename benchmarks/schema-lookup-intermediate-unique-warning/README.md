@@ -22,7 +22,7 @@ appears more often is reported, and the latest of its records is read.
 The run report (`adsl-checks.csv`) has one row per item the run handled, each
 naming the dataset (`ARTIFACT`), the kind of item (`KIND`), where the spec
 states it (`SPEC_PATH`) and the item's name (`NAME`, identifying an input,
-row driver, handler, column, or check): the run and its outcome
+row source, reported event, column, or check): the run and its outcome
 (`OUTCOME`), the input datasets read, the subjects built, then the two counts
 of the exposure read: the subjects for which the latest record was chosen
 among several, and those for which no record was found. Each count names

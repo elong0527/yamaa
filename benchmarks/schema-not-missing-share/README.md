@@ -26,8 +26,8 @@ seriousness flag (`AESER`), a death flag (`AESDTH`) and start and end dates
 The run report (`ae-checks.csv`) has one row per item the run handled, each
 naming the dataset (`ARTIFACT`), the kind of item (`KIND`), where the spec
 states it (`SPEC_PATH`) and the item's name (`NAME`, identifying an input,
-row driver, handler, column, or check): the run and its outcome (`OUTCOME`),
-the events read and built, each output column with its missing
+row source, reported event, column, or check): the run and its outcome
+(`OUTCOME`), the events read and built, each output column with its missing
 values and longest text, then one row per check in column order. A check row
 carries its label (`ID`), the column it covers (`TARGET`), the rule it
 applies (`RULE`), its `SEVERITY`, and how many events failed out of every
