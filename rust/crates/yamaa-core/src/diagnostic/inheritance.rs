@@ -1,6 +1,7 @@
 //! Pure inheritance traversal and composition causes with original
 //! declaring-file provenance.
 use super::{ConditionCode as C, Diagnostic, ProjectionError};
+use crate::inheritance::Named;
 use crate::json::Value as JsonValue;
 
 /// Borrow facts retained by the traversal or the composition. This grants no
@@ -26,26 +27,47 @@ pub enum InheritanceFinding<'a> {
         parent_root: &'a str,
         entry_root: &'a str,
     },
+    /// The field `named`, a `parent` or an `include` entry of the layer
+    /// before the last in `path`, reaches a layer still being composed
+    /// (LAYER-3).
     Cycle {
         path: &'a [String],
         returns_to_entry: bool,
+        named: Named,
+    },
+    /// The `include` entry at `index` of `declaring`, written `path`, reaches
+    /// `layer`, which the composition already reached (LAYER-3).
+    Repeated {
+        declaring: &'a str,
+        index: usize,
+        path: &'a str,
+        layer: &'a str,
+    },
+    /// The fragment `source` declares `field`, `parent` or `include`, which a
+    /// layer an `include` entry names does not (LAYER-4): reported at that
+    /// field of the fragment.
+    Fragment {
+        source: &'a str,
+        entry: &'a str,
+        field: &'a str,
     },
     /// A layer declares a language version the engine does not read (SCHEMA-2,
-    /// LAYER-4): reported at the entry's `yamaa`, or at the `parent` naming it.
+    /// LAYER-4): reported at the entry's `yamaa`, or at the `parent` or
+    /// `include` entry naming it.
     LanguageVersion {
         source: &'a str,
         entry: &'a str,
         version: &'a str,
         reads: &'a [String],
-        is_entry: bool,
+        named: Named,
     },
     /// A layer declares a type other than `spec` (SCHEMA-2, LAYER-4): reported
-    /// at the entry's `type`, or at the `parent` naming it.
+    /// at the entry's `type`, or at the `parent` or `include` entry naming it.
     FileType {
         source: &'a str,
         entry: &'a str,
         file_type: &'a str,
-        is_entry: bool,
+        named: Named,
     },
 }
 
@@ -58,17 +80,18 @@ impl InheritanceFinding<'_> {
     /// context. A contradictory closed-loop carrier has no semantic projection.
     pub fn diagnostic(self) -> Result<Diagnostic, ProjectionError> {
         let mut context = super::Context::new();
+        let parent = || String::from("parent");
         let (code, path) = match self {
             Self::InvalidParent { declaring, path } => {
                 context.insert("reason".into(), text("remote_reference"));
                 context.insert("source".into(), text(declaring));
                 context.insert("parent".into(), text(path));
-                (C::InheritanceInvalidParent, "parent")
+                (C::InheritanceInvalidParent, parent())
             }
             Self::ParentUnavailable { declaring, path } => {
                 context.insert("path".into(), text(path));
                 context.insert("source".into(), text(declaring));
-                (C::InheritanceParentUnavailable, "parent")
+                (C::InheritanceParentUnavailable, parent())
             }
             Self::ParentOnAnotherShare {
                 source,
@@ -80,12 +103,16 @@ impl InheritanceFinding<'_> {
                 context.insert("path".into(), text(path));
                 context.insert("parent_root".into(), text(parent_root));
                 context.insert("entry_root".into(), text(entry_root));
-                (C::InheritanceParentOnAnotherShare, "parent")
+                (C::InheritanceParentOnAnotherShare, parent())
             }
             Self::Cycle {
                 path,
                 returns_to_entry,
+                named,
             } => {
+                let Some(field) = named.field() else {
+                    return Err(ProjectionError::InvalidContext);
+                };
                 if path.len() < 2 || path.first() != path.last() {
                     return Err(ProjectionError::InvalidContext);
                 }
@@ -102,29 +129,50 @@ impl InheritanceFinding<'_> {
                     JsonValue::Array(path.iter().map(|s| text(s)).collect()),
                 );
                 context.insert("source".into(), text(&path[path.len() - 2]));
-                (C::InheritanceCycle, "parent")
+                (C::InheritanceCycle, field)
+            }
+            Self::Repeated {
+                declaring,
+                index,
+                path,
+                layer,
+            } => {
+                context.insert("layer".into(), text(layer));
+                context.insert("path".into(), text(path));
+                context.insert("source".into(), text(declaring));
+                let field = Named::Include(index).field().expect("an include entry");
+                (C::InheritanceRepeatedLayer, field)
+            }
+            Self::Fragment {
+                source,
+                entry,
+                field,
+            } => {
+                context.insert("construct".into(), text(field));
+                context.insert("entry".into(), text(entry));
+                context.insert("source".into(), text(source));
+                (C::InheritanceFragmentField, field.into())
             }
             Self::LanguageVersion {
                 source,
                 entry,
                 version,
                 reads,
-                is_entry,
+                named,
             } => {
                 context.insert("source".into(), text(source));
                 context.insert("entry".into(), text(entry));
                 crate::language::version_context(&mut context, version, reads);
-                if is_entry {
-                    (C::HeaderLanguageVersion, "yamaa")
-                } else {
-                    (C::InheritanceParentLanguageVersion, "parent")
+                match named.field() {
+                    None => (C::HeaderLanguageVersion, "yamaa".into()),
+                    Some(field) => (C::InheritanceParentLanguageVersion, field),
                 }
             }
             Self::FileType {
                 source,
                 entry,
                 file_type,
-                is_entry,
+                named,
             } => {
                 context.insert("source".into(), text(source));
                 context.insert("entry".into(), text(entry));
@@ -133,16 +181,15 @@ impl InheritanceFinding<'_> {
                     file_type,
                     crate::language::FileType::Spec,
                 );
-                if is_entry {
-                    (C::HeaderFileType, "type")
-                } else {
-                    (C::InheritanceParentFileType, "parent")
+                match named.field() {
+                    None => (C::HeaderFileType, "type".into()),
+                    Some(field) => (C::InheritanceParentFileType, field),
                 }
             }
         };
         Ok(Diagnostic {
             code,
-            spec_paths: vec![path.into()],
+            spec_paths: vec![path],
             context,
             source_span: None,
             operand_route: None,

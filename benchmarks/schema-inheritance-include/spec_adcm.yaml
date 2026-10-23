@@ -1,0 +1,12 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+parent: spec_cm.yaml
+include:
+  - spec_duration.yaml
+domain: ADCM
+keys: [USUBJID, CMSEQ]
+
+output:
+  path: adcm.csv
+  columns: [USUBJID, CMSEQ, ASTDT, AENDT, ADURN]

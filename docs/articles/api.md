@@ -805,7 +805,8 @@ itself, as Samba does with its default `follow symlinks = yes`, shows the
 link's target instead, and that target is read like any other file.
 
 A parent specification's relative input and output paths resolve beside the
-parent, even when it sits on another drive than the specification you pass. A
+parent, and an included fragment's beside the fragment, even when it sits on
+another drive than the specification you pass. A
 parent on a network share that the specification you pass is not on cannot
 declare relative input or output paths, because a path in YAML cannot name a
 share: such a parent is refused with `parent_on_another_share`, naming the

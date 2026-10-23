@@ -33,6 +33,7 @@ pub enum ResourceRole {
     Report,
     MappingDictionary,
     ParentSpecification,
+    IncludedSpecification,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

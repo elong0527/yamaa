@@ -231,6 +231,22 @@ pub fn versioned(
                 written,
             )?);
         }
+        if let Some(N::Sequence(entries)) = raw
+            .field(raw.root(), "include")
+            .map(|node| &raw.nodes()[node])
+        {
+            for (index, &entry) in entries.iter().enumerate() {
+                if let N::Text(written) = &raw.nodes()[entry] {
+                    result.resources.push(resource(
+                        format!("include[{index}]"),
+                        ResourceRole::IncludedSpecification,
+                        RelativeTo::Declaring,
+                        &layer.source.identity,
+                        written,
+                    )?);
+                }
+            }
+        }
     }
     result.resources.sort_by(|left, right| {
         (&left.spec_path, &left.declaring_source).cmp(&(&right.spec_path, &right.declaring_source))

@@ -69,15 +69,16 @@ fn join(lines: &[String], newline: &str) -> String {
     text
 }
 
-/// Apply every proved fix to `text`. A result that a second pass would change
-/// again, or a 1.x file whose result gives a validation finding the file as
-/// written did not, is refused, leaving `text` as written.
-pub(super) fn fix_text(text: &str) -> String {
-    let result = fix_once(text);
+/// Apply every proved fix to `text`, a fragment that a linted specification
+/// or a layer it inherits includes when `included`. A result that a second pass would change again, or a 1.x
+/// file whose result gives a validation finding the file as written did not,
+/// is refused, leaving `text` as written.
+pub(super) fn fix_text(text: &str, included: bool) -> String {
+    let result = fix_once(text, included);
     if result == text {
         return result;
     }
-    if fix_once(&result) != result {
+    if fix_once(&result, included) != result {
         return text.to_owned();
     }
     // A removed default can leave a long form that only its rewrite in a
@@ -90,13 +91,14 @@ pub(super) fn fix_text(text: &str) -> String {
     result
 }
 
-fn fix_once(text: &str) -> String {
+fn fix_once(text: &str, included: bool) -> String {
     let mut text = text.to_owned();
     let mut refused = HashSet::new();
     for _ in 0..MAX_EDITS {
-        let Ok(document) = Document::parse(text.as_bytes()) else {
+        let Ok(mut document) = Document::parse(text.as_bytes()) else {
             return text;
         };
+        document.included = included;
         let kept = suppressed(&document, check(&document));
         let mut applied = false;
         for (key, edit) in edits(&document, &kept) {

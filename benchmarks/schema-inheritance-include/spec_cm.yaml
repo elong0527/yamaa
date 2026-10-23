@@ -1,0 +1,31 @@
+yamaa: "1.0"
+type: spec
+input:
+  CM:
+    path: input/cm.csv
+    types:
+      CMSEQ: int
+      CMSTDTC: date
+      CMENDTC: date
+base: CM
+
+columns:
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: CM.USUBJID
+
+  - name: CMSEQ
+    type: int
+    label: Sequence Number
+    derivation: CM.CMSEQ
+
+  - name: ASTDT
+    type: date
+    label: Analysis Start Date
+    derivation: CM.CMSTDTC
+
+  - name: AENDT
+    type: date
+    label: Analysis End Date
+    derivation: CM.CMENDTC

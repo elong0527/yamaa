@@ -5,8 +5,8 @@
 //! each path its `clear` lists removes the value the layer inherits there;
 //! the layer's fields then compose as a 0.5 layer's do (LAYER-5, LAYER-6),
 //! except that YAML null is the missing value and composes as the value it
-//! is, never removing anything (P-NULL-1). `parent` and `clear` are consumed
-//! and never contributed.
+//! is, never removing anything (P-NULL-1). `parent`, `include` and `clear`
+//! are consumed and never contributed.
 
 use super::{
     document::scalar_keys_equal,
