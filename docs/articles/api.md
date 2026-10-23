@@ -890,10 +890,11 @@ and the depth of element nesting
 The command line runs no project function. It reads no project's
 `environments` entry, so it checks no lock, and a run of a specification
 that calls a project function fails before it reads any input, with
-`unsupported_operation` at the first derivation that calls one: run that
-specification from R or Python. Every other build runs as it does in R and
-Python, and `check` checks every specification, since it runs no project
-code.
+`unsupported_operation` at the first derivation that calls one, in the
+order a formatted file writes them (the intermediates', then the columns',
+then the row templates'): run that specification from R or Python. Every
+other build runs as it does in R and Python, and `check` checks every
+specification, since it runs no project code.
 
 ```sh
 yamaa check project.yaml

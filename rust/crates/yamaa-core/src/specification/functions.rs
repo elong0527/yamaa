@@ -181,6 +181,8 @@ struct Request {
     call: ExprId,
     path: String,
     derivation: String,
+    /// The call's position in authored order ([`LocatedCall::authored`]).
+    authored: usize,
     contextual: bool,
 }
 
@@ -218,17 +220,20 @@ fn requests(spec: &ast::Spec) -> (Vec<Request>, BTreeMap<ExprId, Vec<usize>>, Ve
         |owner| matches!(owner, Owner::Binding { .. }),
         |owner| matches!(owner, Owner::Override { .. }),
     ];
-    for pass in passes {
-        for site in sites.iter().filter(|site| pass(&site.owner)) {
+    let mut counts = [0usize; 3];
+    for (pass, owns) in passes.into_iter().enumerate() {
+        for site in sites.iter().filter(|site| owns(&site.owner)) {
             let derivation = derivation_path(spec, site);
             let mut indices = Vec::new();
             spec.walk(site.root, site.scope, |at, scope| {
                 if matches!(spec.expr(at).kind, ExprKind::Call { .. }) {
                     indices.push(requests.len());
+                    counts[pass] += 1;
                     requests.push(Request {
                         call: at,
                         path: checks::path(spec, at),
                         derivation: derivation.clone(),
+                        authored: 0,
                         contextual: scope != Scope::Row,
                     });
                 }
@@ -239,6 +244,17 @@ fn requests(spec: &ast::Spec) -> (Vec<Request>, BTreeMap<ExprId, Vec<usize>>, Ve
             }
             by_site.insert(site.root, indices);
         }
+    }
+    // A formatted file writes the intermediates before the columns and the
+    // row templates after them (yaml/v1): the intermediates' calls come
+    // first in authored order, each pass keeping its own order (D221).
+    let [columns, intermediates, _] = counts;
+    for (index, request) in requests.iter_mut().enumerate() {
+        request.authored = match index {
+            index if index < columns => intermediates + index,
+            index if index < columns + intermediates => index - columns,
+            index => index,
+        };
     }
     (requests, by_site, bindings)
 }
@@ -382,6 +398,7 @@ pub(super) fn prepare(
                     calls.push(LocatedCall {
                         path: path.clone(),
                         derivation: requests[request].derivation.clone(),
+                        authored: requests[request].authored,
                         call: decoded,
                     });
                 }
