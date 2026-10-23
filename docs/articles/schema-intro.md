@@ -75,9 +75,10 @@ an `include` entry and an input's `schema` name specifications, and a
 project's `functions`, `codelists` and section `specs` name function,
 codelists and specification files. A named file of another type fails there
 as `unexpected_file_type`, and one of a version the engine does not read as
-`unsupported_language_version`. Each layer of a specification is checked at
-the version it declares, and the composed specification needs the newest
-version any layer declares ([LAYER-4](../../rules/inheritance.md#layer-4)).
+`unsupported_language_version`. Each layer of a specification, a fragment
+included, is checked at the version it declares, and the composed
+specification needs the newest version any layer declares
+([LAYER-4](../../rules/inheritance.md#layer-4)).
 
 ## Field kinds
 
@@ -184,11 +185,15 @@ output:
 ```
 
 A fragment declares neither `parent` nor `include`, so it composes on
-whichever layer includes it, and a relative path it writes stays relative to
-the fragment ([LAYER-10](../../rules/inheritance.md#layer-10)). A file
-reached twice in one composition fails as `duplicate_layer` rather than
-contributing twice. The duration fragment derives one column from two that
-the template declares:
+whichever layer includes it; one that does fails as `prohibited_construct`
+([LAYER-4](../../rules/inheritance.md#layer-4)). A relative path a fragment
+writes stays relative to the fragment
+([LAYER-10](../../rules/inheritance.md#layer-10)). A file contributes once or
+not at all: an `include` entry that reaches a file the composition already
+holds fails as `duplicate_layer`, and one that reaches the layer listing it,
+or a layer below that one on the chain, as `inheritance_cycle`
+([LAYER-3](../../rules/inheritance.md#layer-3)). The duration fragment
+derives one column from two that the template declares:
 
 ```yaml
 yamaa: "1.0"
