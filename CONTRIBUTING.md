@@ -548,12 +548,16 @@ source package built with it, minimal format builds, Python 3.15 and minimum
 Python saved artifact readers on each `release/**` push and on dispatch. CI's R job checks minimum R saved
 artifact readers on those same release events. The `R-CMD-check` workflow
 checks macOS, Windows and R-devel packages on release pushes and dispatch.
-Dependency graphs and advisories, native qualification, Harbor and coverage
-run on dispatch (native qualification also on a
-`qualification/issue-*` push, and dependency graphs and advisories also
-weekly on main). Dispatch any of them on a branch with
-`gh workflow run <workflow> --ref <branch>` to check a change that needs them
-before merging.
+Dependency graphs and advisories, Harbor and coverage run on dispatch
+(dependency graphs and advisories also weekly on main). Dispatch any of them
+on a branch with `gh workflow run <workflow> --ref <branch>` to check a change
+that needs them before merging. Native qualification, described below, runs
+only in the regular CI/CD on main: weekly, and at the candidate and release
+cuts (D233 on #3673). Never dispatch it on a pull request's branch or push
+that branch as `qualification/issue-*`; no pull request waits for a native
+run. A pull request that changes packaging, paths, file handling,
+`cfg`-gated code or a workflow says so in its body: the next native run on
+main is its native evidence.
 
 The `Fuzz` workflow fuzzes the readers that parse untrusted input under
 AddressSanitizer, with UndefinedBehaviorSanitizer for the C they compile. A PR

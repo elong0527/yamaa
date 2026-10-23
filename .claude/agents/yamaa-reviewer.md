@@ -11,7 +11,9 @@ issue's "Done when", then the full diff (`git diff origin/main...HEAD`).
 
 Report, most severe first, only what you verified by reading the code:
 
-1. A "Done when" line the diff does not meet, with the file and line.
+1. A "Done when" line the diff does not meet, with the file and line. A
+   line that asks for a native run on the branch is met by the next native
+   run on main (D233), so it is not a finding.
 2. A hard-rule violation: an edited `benchmarks/**/input/` or
    `benchmarks/**/expected/` file, a digest or hash introduced, a
    compatibility alias kept beside its replacement, the project name written

@@ -13,10 +13,15 @@ full before starting.
 Rules that bind this lane in particular.
 
 - Native qualification (`.github/workflows/native.yml`) is the evidence a
-  release tag names. A change to packaging, paths, file handling,
-  `cfg`-gated code or a workflow gets one native run on its branch before
-  merge: `gh workflow run native.yml --ref <branch>`. Record run ids on
-  the issue, never in committed files.
+  release tag names. It runs only in the regular CI/CD on main: weekly,
+  and at the candidate and release cuts (D233). Never dispatch it on a
+  pull request's branch or push the branch as `qualification/issue-*`,
+  never wait for a native run before opening or finishing a pull request,
+  and never reproduce its jobs on the build host. A change to packaging,
+  paths, file handling, `cfg`-gated code or a workflow says so in its pull
+  request body: the next native run on main is its native evidence, also
+  for a "Done when" line that asks for a native run on the branch. Record
+  run ids on the issue, never in committed files.
 - Never weaken a check to get green: no guard exception, no skipped lane,
   no accepted warning. Fix the cause or report it.
 - The asset set is declared once in `tools/ci/release_assets.py`; the
@@ -30,8 +35,8 @@ Rules that bind this lane in particular.
   commands to the orchestrator.
 
 Work in a worktree from `origin/main` with its own Cargo target behind the
-machine's sccache, make one
-validated push with the explicit refspec, open the pull request ready for
-review with its native run linked, get CI green on the exact head, answer
-reviews, and stop. Report the pull request, the native run, each "Done
-when" line with its evidence, and anything left for the owner.
+machine's sccache, make one validated push with the explicit refspec, open
+the pull request ready for review, get CI green on the exact head, answer
+reviews, and stop. Report the pull request, whether the next native run on
+main is its native evidence, each "Done when" line with its evidence, and
+anything left for the owner.
