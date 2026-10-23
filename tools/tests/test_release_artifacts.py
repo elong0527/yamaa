@@ -899,8 +899,8 @@ class DownloadedPackages(unittest.TestCase):
         self.assertEqual(len(self.select()), len(ASSETS))
 
     def test_the_conformance_archive_carries_the_committed_files(self):
-        """The grammars, the evaluation set and the license as the checkout
-        holds them: an edited file fails the whole selection."""
+        """The grammars with their README, the evaluation set and the license
+        as the checkout holds them: an edited file fails the whole selection."""
         [asset] = [asset for asset in ASSETS if asset.kind == "conformance"]
         path = self.directory / asset.artifact / example_name(asset, IDENTITY)
         original = path.read_bytes()

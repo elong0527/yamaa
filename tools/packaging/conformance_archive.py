@@ -3,9 +3,9 @@
 The conformance archive (#3690) is yamaa-<version>-conformance.zip, where the
 version is the release's in its Cargo spelling, as its tag and title give it,
 so a candidate's reads 1.0.0-rc.1. It holds one directory of the same name,
-and in it the closed grammars and the evaluation set of the expression
-language, each at its path in the repository, beside the project license:
-FILES below. Each member is the checkout's file, byte for byte, with Unix
+and in it the closed grammars with the README that states their file format
+and shape notation, and the evaluation set of the expression language, each
+at its path in the repository, beside the project license: FILES below. Each member is the checkout's file, byte for byte, with Unix
 mode 0644, so another implementation can check itself against the grammars'
 vectors and the evaluation cases of the release that it names.
 
@@ -28,10 +28,12 @@ from tools.packaging import release_identity
 from tools.packaging.cli_archive import UNIX, add
 from tools.paths import ROOT
 
-# The files of the archive, at their paths in the repository: the two closed
-# grammars (yaml/grammar/README.md), the evaluation set of the expression
-# language, and the project license that covers them.
+# The files of the archive, at their paths in the repository: the README that
+# states the grammars' file format and shape notation, the two closed
+# grammars, the evaluation set of the expression language, and the project
+# license that covers them.
 FILES = (
+    "yaml/grammar/README.md",
     "yaml/grammar/expression.yaml",
     "yaml/grammar/string-template.yaml",
     "yaml/conformance/expressions.yaml",

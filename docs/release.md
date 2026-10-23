@@ -682,9 +682,10 @@ the notices with mode 0644, unchanged.
 The conformance archive's name gives the release's version in the same
 Cargo spelling, which its tag and title use. It holds one directory of the
 same name, with the closed grammars, `yaml/grammar/expression.yaml` and
-`yaml/grammar/string-template.yaml`, the evaluation set of the expression
-language, `yaml/conformance/expressions.yaml`, and the project license,
-`LICENSE`, each at its path in the repository (#3690). Another
+`yaml/grammar/string-template.yaml`, the README that states their file format
+and shape notation, `yaml/grammar/README.md`, the evaluation set of the
+expression language, `yaml/conformance/expressions.yaml`, and the project
+license, `LICENSE`, each at its path in the repository (#3690). Another
 implementation can check itself against the grammars' vectors and the
 evaluation cases of the release that it names. The selector requires
 exactly those files, each with Unix mode 0644 and the bytes of its copy in
