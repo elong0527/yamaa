@@ -1,19 +1,23 @@
 //! Handle and buffer lifetime across the engine's C ABI (#3702; the design on
 //! #2870, section 7, the lifetime rows): each released handle leaves the
 //! census, an exported stream outlives its run, a released or other kind of
-//! handle refuses and releasing twice does nothing, a busy result refuses a
-//! reentrant call, every stream and buffer is released exactly once, also
-//! after a failed conversion, a cancelled call makes no handle and releases
-//! every root once, and a panic is contained. Each expectation comes from
-//! those rows, the condition registry and the shared truth's lifetime study.
+//! handle refuses and releasing twice does nothing, an entry with nowhere to
+//! write its value refuses and still takes its call's context, a busy result
+//! refuses a reentrant call, every stream and buffer is released exactly
+//! once, also after a failed conversion, a cancelled call makes no handle and
+//! releases every root once, and a panic is contained. Each expectation comes
+//! from those rows, the module documentation of `yamaa_boundary::abi`, the
+//! condition registry and the shared truth's lifetime study.
 use std::cell::RefCell;
+use std::mem::MaybeUninit;
 
 use serde_json::json;
 use yamaa_boundary::abi::{self, Str};
 
 use crate::support::{
     answer, call, census, conditions, engine, export, family, function_study, lifetime_study,
-    reader, records, release, save, serial, spec_run, status, table, Answer, Host, Invoked,
+    reader, records, release, save, serial, spec_run, status, table, text, texts, Answer, Host,
+    Invoked,
 };
 
 /// The roots of a host whose call binds nothing: its context, once.
@@ -181,6 +185,64 @@ fn releasing_twice_is_harmless() {
             before
         ),
         "a run released, its stale handle released twice more and 0 released"
+    );
+}
+
+#[test]
+fn a_null_destination_is_a_boundary_refusal_that_takes_the_context() {
+    let _serial = serial();
+    let study = lifetime_study("destination");
+    let spec = study.spelled("spec.yaml");
+    let (spec_run, before) = (engine().spec_run, census());
+    let (refused, silent) = (Host::new(), Host::new());
+    let (null, mut refusal) = (std::ptr::null_mut(), MaybeUninit::<abi::Refusal>::uninit());
+    // SAFETY: the arguments are valid for the call, and `out` is null.
+    let written = unsafe {
+        spec_run(
+            &refused.call(),
+            Str::of(&spec),
+            Str::NONE,
+            0,
+            null,
+            refusal.as_mut_ptr(),
+        )
+    };
+    // SAFETY: the entry wrote its refusal.
+    let refusal = unsafe { refusal.assume_init() };
+    let written = (
+        written,
+        text(refusal.message),
+        refusal.issues,
+        texts(refusal.paths),
+    );
+    // SAFETY: as above, and `refusal` is null too.
+    let unwritten = unsafe {
+        spec_run(
+            &silent.call(),
+            Str::of(&spec),
+            Str::NONE,
+            0,
+            null,
+            null.cast(),
+        )
+    };
+    let reason = "the entry's destination is null".to_owned();
+    assert_eq!(
+        (
+            written,
+            unwritten,
+            refused.roots(),
+            silent.roots(),
+            census()
+        ),
+        (
+            (abi::BOUNDARY, reason, 0, Vec::new()),
+            abi::BOUNDARY,
+            CONTEXT_ONLY,
+            CONTEXT_ONLY,
+            before,
+        ),
+        "a run with nowhere to write its handle, with a refusal to write and with none"
     );
 }
 

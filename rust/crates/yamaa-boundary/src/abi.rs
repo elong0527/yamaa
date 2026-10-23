@@ -19,10 +19,13 @@
 //! returns a [`Status`]: on [`DONE`] it has written its value to `out`; on
 //! [`REFUSED`] and [`BOUNDARY`] it has written `refusal`; on [`CANCELLED`] it
 //! has written neither, and the host raises the interrupt it kept (D46,
-//! D186). An entry writes `out` and `refusal` without reading them, and one
-//! given a null `out` or `refusal` answers [`BOUNDARY`] at once and reads
-//! nothing else. Every entry contains a panic, which it answers as
-//! [`BOUNDARY`]; nothing unwinds across the ABI.
+//! D186). An entry writes `out` and `refusal` without reading them, except
+//! [`Engine::export`], whose `out` holds a released stream. An entry given a
+//! null `out` answers [`BOUNDARY`] and writes why into `refusal`; one given a
+//! null `refusal` answers [`BOUNDARY`] and writes nothing; neither does
+//! anything else, and an entry that takes a call takes its context either
+//! way. Every entry contains a panic, which it answers as [`BOUNDARY`];
+//! nothing unwinds across the ABI.
 //!
 //! # Memory
 //!
