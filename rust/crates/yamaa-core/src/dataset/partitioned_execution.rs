@@ -78,6 +78,7 @@ fn record(path: &str, code: ConditionCode, counts: (usize, usize, usize)) -> Che
         inventory: None,
         row_count: None,
         entries: None,
+        denominator: None,
     }
 }
 fn identity(position: usize, key: i64) -> RowIdentity {
