@@ -13,10 +13,10 @@ use yamaa_core::{
     value::Value,
 };
 
-/// The host-functions port's empty double: like the empty port it keeps no
-/// project functions, so a build that calls one is refused before entering
-/// it, and a specification that selects none verifies no lock, binds
-/// nothing and calls nothing. A run that enters it fails the test.
+/// The host-functions port's empty double. Like the empty port it keeps no
+/// project functions: a build that calls one gets D110's refusal before
+/// anything enters the port, and a specification that calls none never asks
+/// it anything, so its other methods are never reached.
 pub struct NoFunctions;
 
 impl HostFunctions for NoFunctions {
