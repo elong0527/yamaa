@@ -2,6 +2,7 @@
 use super::rendered;
 pub(crate) use std::collections::BTreeSet;
 pub(crate) use yamaa_core::diagnostic::{ConditionCode, InheritanceFinding as F};
+pub(crate) use yamaa_core::inheritance::Named;
 pub(crate) use yamaa_core::json::Value as JsonValue;
 
 pub fn reached() -> BTreeSet<ConditionCode> {
@@ -53,6 +54,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             F::Cycle {
                 path: &cycle,
                 returns_to_entry: true,
+                named: Named::Parent,
             },
             "inheritance_cycle",
             "LAYER-3",
@@ -60,6 +62,52 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             vec![
                 ("reason", "parent_chain_returns_to_entry"),
                 ("source", "base"),
+            ],
+        ),
+        // An include entry that closes the cycle is the field reported.
+        (
+            F::Cycle {
+                path: &cycle,
+                returns_to_entry: true,
+                named: Named::Include(2),
+            },
+            "inheritance_cycle",
+            "LAYER-3",
+            "include[2]",
+            vec![
+                ("reason", "parent_chain_returns_to_entry"),
+                ("source", "base"),
+            ],
+        ),
+        (
+            F::Repeated {
+                declaring: "child",
+                index: 1,
+                path: "shared/duration.yaml",
+                layer: "/study/shared/duration.yaml",
+            },
+            "duplicate_layer",
+            "LAYER-3",
+            "include[1]",
+            vec![
+                ("source", "child"),
+                ("path", "shared/duration.yaml"),
+                ("layer", "/study/shared/duration.yaml"),
+            ],
+        ),
+        (
+            F::Fragment {
+                source: "fragment",
+                entry: "entry",
+                field: "parent",
+            },
+            "prohibited_construct",
+            "LAYER-4",
+            "parent",
+            vec![
+                ("construct", "parent"),
+                ("source", "fragment"),
+                ("entry", "entry"),
             ],
         ),
     ] {

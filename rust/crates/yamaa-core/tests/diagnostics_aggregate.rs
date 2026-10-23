@@ -306,7 +306,8 @@ mod diagnostics {
                     assert_eq!(
                         F::Cycle {
                             path: &path,
-                            returns_to_entry: true
+                            returns_to_entry: true,
+                            named: Named::Parent,
                         }
                         .diagnostic(),
                         Err(yamaa_core::diagnostic::ProjectionError::InvalidContext)
@@ -316,6 +317,7 @@ mod diagnostics {
                 let diagnostic = F::Cycle {
                     path: &path,
                     returns_to_entry: true,
+                    named: Named::Parent,
                 }
                 .diagnostic()
                 .unwrap();

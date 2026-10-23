@@ -4,6 +4,7 @@ use super::rendered;
 use crate::support::document::Tree as T;
 use std::collections::BTreeSet;
 use yamaa_core::diagnostic::{ConditionCode, Diagnostic, InheritanceFinding as F};
+use yamaa_core::inheritance::Named;
 use yamaa_core::json::Value as JsonValue;
 use yamaa_core::language::{
     read_declared_header, read_header, FileType, LanguageVersion, PathBase, Reference,
@@ -263,7 +264,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         entry: "entry",
         version: "1.3",
         reads: &reads,
-        is_entry: false,
+        named: Named::Parent,
     }
     .diagnostic()
     .unwrap();
@@ -284,7 +285,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         source: "base",
         entry: "entry",
         file_type: "project",
-        is_entry: false,
+        named: Named::Parent,
     }
     .diagnostic()
     .unwrap();
@@ -309,7 +310,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
                 entry: "entry",
                 version: "1.3",
                 reads: &reads,
-                is_entry: true,
+                named: Named::Entry,
             },
             "yamaa",
             "unsupported_language_version",
@@ -319,7 +320,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
                 source: "entry",
                 entry: "entry",
                 file_type: "project",
-                is_entry: true,
+                named: Named::Entry,
             },
             "type",
             "unexpected_file_type",
