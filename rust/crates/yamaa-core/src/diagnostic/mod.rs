@@ -356,6 +356,7 @@ conditions! {
     ExpressionInvalid => ("validation", "invalid_expression", Some("FORMULA-1")),
     ExpressionInvalidEscape => ("validation", "invalid_expression", Some("FORMULA-7")),
     ExpressionInvalidRegex => ("validation", "invalid_expression", Some("FORMULA-8")),
+    ExpressionPatternNotLiteral => ("validation", "invalid_expression", Some("FORMULA-8")),
     ExpressionProhibitedConstruct => ("validation", "prohibited_construct", Some("FORMULA-27")),
     ExpressionProhibitedFunction => ("validation", "prohibited_function", Some("FORMULA-13")),
     ExpressionNestedReduction => ("validation", "nested_reduction", Some("FORMULA-21")),

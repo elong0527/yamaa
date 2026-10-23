@@ -32,6 +32,7 @@ impl Failure {
             Self::Syntax | Self::InvalidTemporal { .. } => C::ExpressionInvalid,
             Self::InvalidEscape => C::ExpressionInvalidEscape,
             Self::InvalidRegex { .. } => C::ExpressionInvalidRegex,
+            Self::PatternNotLiteral => C::ExpressionPatternNotLiteral,
             Self::IntegerOverflow => C::LiteralIntegerOverflow,
             Self::ProhibitedConstruct { .. } => C::ExpressionProhibitedConstruct,
             Self::ProhibitedFunction { .. } => C::ExpressionProhibitedFunction,
@@ -86,6 +87,7 @@ impl Failure {
             | Self::InvalidTemporal { .. }
             | Self::InvalidEscape
             | Self::InvalidRegex { .. }
+            | Self::PatternNotLiteral
             | Self::IntegerOverflow => {}
         }
     }
