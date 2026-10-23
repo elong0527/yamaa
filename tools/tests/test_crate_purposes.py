@@ -242,10 +242,13 @@ class DeclaredTest(unittest.TestCase):
     def test_the_engine_manifests_name_their_scoped_dependencies(self):
         dependencies = purposes.unconditional()
         self.assertEqual(sorted(dependencies), sorted(engine_bundle.ENGINE))
-        # Arrow, serde_json and toml left the core, and the facade's public
-        # table stays Arrow (#3030 section 2.9).
+        # Arrow, serde_json and toml left the core, and Arrow left the
+        # always-on adapters and facade: it comes with their arrow and parquet
+        # features, while the adapters keep serde_json and toml (#3030 section
+        # 2.9, #3696).
         self.assertEqual(dependencies["yamaa-core"], set())
-        self.assertLessEqual({"arrow-array", "arrow-schema"}, dependencies["yamaa"])
+        self.assertEqual(dependencies["yamaa"], set())
+        self.assertEqual(dependencies["yamaa-adapters"], {"serde_json", "toml"})
         for names in dependencies.values():
             self.assertTrue(all(map(purposes.scoped, names)), names)
 

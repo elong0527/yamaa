@@ -19,15 +19,15 @@ yamaa: pub mod table
 yamaa: pub mod text
 yamaa::Action: pub use yamaa::text::Action
 yamaa::Argument: pub use yamaa::functions::Argument
-yamaa::Array: pub use yamaa::table::Array
+yamaa::Array: pub use yamaa::table::Array [cfg(feature = "arrow")]
 yamaa::BatchArgument: pub use yamaa::functions::BatchArgument
 yamaa::CallError: pub use yamaa::functions::CallError
 yamaa::CancellationToken: pub use yamaa::cancel::CancellationToken
 yamaa::Check: pub use yamaa::api::Check
 yamaa::ColumnType: pub use yamaa::functions::ColumnType
 yamaa::ContextValue: pub use yamaa::diagnostic::ContextValue
-yamaa::DataType: pub use yamaa::table::DataType
-yamaa::Date32Array: pub use yamaa::table::Date32Array
+yamaa::DataType: pub use yamaa::table::DataType [cfg(feature = "arrow")]
+yamaa::Date32Array: pub use yamaa::table::Date32Array [cfg(feature = "arrow")]
 yamaa::Date: pub use yamaa::scalar::Date
 yamaa::DateTime: pub use yamaa::scalar::DateTime
 yamaa::Diagnostic: pub use yamaa::diagnostic::Diagnostic
@@ -37,13 +37,13 @@ yamaa::Engine: pub use yamaa::engine::Engine
 yamaa::EngineOptions: pub use yamaa::engine::EngineOptions
 yamaa::Error: pub use yamaa::error::Error
 yamaa::FEATURES: pub use yamaa::info::FEATURES
-yamaa::FFI_ArrowArrayStream: pub use yamaa::table::FFI_ArrowArrayStream
+yamaa::FFI_ArrowArrayStream: pub use yamaa::table::FFI_ArrowArrayStream [cfg(feature = "arrow")]
 yamaa::FILE_TYPES: pub use yamaa::file_type::FILE_TYPES
 yamaa::Failure: pub use yamaa::api::Failure
-yamaa::Field: pub use yamaa::table::Field
-yamaa::Fields: pub use yamaa::table::Fields
+yamaa::Field: pub use yamaa::table::Field [cfg(feature = "arrow")]
+yamaa::Fields: pub use yamaa::table::Fields [cfg(feature = "arrow")]
 yamaa::FileType: pub use yamaa::file_type::FileType
-yamaa::Float64Array: pub use yamaa::table::Float64Array
+yamaa::Float64Array: pub use yamaa::table::Float64Array [cfg(feature = "arrow")]
 yamaa::FunctionError: pub use yamaa::error::FunctionError
 yamaa::FunctionHandle: pub use yamaa::functions::FunctionHandle
 yamaa::FunctionIdentity: pub use yamaa::functions::FunctionIdentity
@@ -56,13 +56,13 @@ yamaa::Info: pub use yamaa::info::Info
 yamaa::InputFrame: pub use yamaa::table::InputFrame
 yamaa::InstalledDistributions: pub use yamaa::functions::InstalledDistributions
 yamaa::InstalledVersion: pub use yamaa::functions::InstalledVersion
-yamaa::Int64Array: pub use yamaa::table::Int64Array
+yamaa::Int64Array: pub use yamaa::table::Int64Array [cfg(feature = "arrow")]
 yamaa::LINT_COLUMNS: pub use yamaa::lint::LINT_COLUMNS
 yamaa::LINT_FINDINGS: pub use yamaa::lint::LINT_FINDINGS
-yamaa::LargeStringArray: pub use yamaa::table::LargeStringArray
+yamaa::LargeStringArray: pub use yamaa::table::LargeStringArray [cfg(feature = "arrow")]
 yamaa::Lint: pub use yamaa::lint::Lint
 yamaa::LintFinding: pub use yamaa::lint::LintFinding
-yamaa::ListArray: pub use yamaa::table::ListArray
+yamaa::ListArray: pub use yamaa::table::ListArray [cfg(feature = "arrow")]
 yamaa::Location: pub use yamaa::diagnostic::Location
 yamaa::LockContext: pub use yamaa::functions::LockContext
 yamaa::LockFinding: pub use yamaa::error::LockFinding
@@ -82,7 +82,7 @@ yamaa::ProjectRun: pub use yamaa::api::ProjectRun
 yamaa::REPORT_COLUMNS: pub use yamaa::diagnostic::REPORT_COLUMNS
 yamaa::REPORT_KINDS: pub use yamaa::diagnostic::REPORT_KINDS
 yamaa::REPORT_OUTCOMES: pub use yamaa::diagnostic::REPORT_OUTCOMES
-yamaa::RecordBatch: pub use yamaa::table::RecordBatch
+yamaa::RecordBatch: pub use yamaa::table::RecordBatch [cfg(feature = "arrow")]
 yamaa::RenvLock: pub use yamaa::functions::RenvLock
 yamaa::Report: pub use yamaa::diagnostic::Report
 yamaa::ResolverFailure: pub use yamaa::error::ResolverFailure
@@ -100,21 +100,21 @@ yamaa::STATUSES: pub use yamaa::api::STATUSES
 yamaa::Scalar: pub use yamaa::scalar::Scalar
 yamaa::ScalarDecodeError: pub use yamaa::scalar::ScalarDecodeError
 yamaa::ScalarRef: pub use yamaa::scalar::ScalarRef
-yamaa::SchemaRef: pub use yamaa::table::SchemaRef
+yamaa::SchemaRef: pub use yamaa::table::SchemaRef [cfg(feature = "arrow")]
 yamaa::SelfTest: pub use yamaa::selftest::SelfTest
 yamaa::SelfTestCase: pub use yamaa::selftest::SelfTestCase
 yamaa::Severity: pub use yamaa::diagnostic::Severity
 yamaa::Signature: pub use yamaa::functions::Signature
 yamaa::SourceSpan: pub use yamaa::diagnostic::SourceSpan
 yamaa::Status: pub use yamaa::api::Status
-yamaa::StringArray: pub use yamaa::table::StringArray
-yamaa::StringViewArray: pub use yamaa::table::StringViewArray
+yamaa::StringArray: pub use yamaa::table::StringArray [cfg(feature = "arrow")]
+yamaa::StringViewArray: pub use yamaa::table::StringViewArray [cfg(feature = "arrow")]
 yamaa::Submission: pub use yamaa::api::Submission
 yamaa::Summary: pub use yamaa::text::Summary
 yamaa::Table: pub use yamaa::table::Table
 yamaa::TableError: pub use yamaa::error::TableError
-yamaa::TimeUnit: pub use yamaa::table::TimeUnit
-yamaa::TimestampSecondArray: pub use yamaa::table::TimestampSecondArray
+yamaa::TimeUnit: pub use yamaa::table::TimeUnit [cfg(feature = "arrow")]
+yamaa::TimestampSecondArray: pub use yamaa::table::TimestampSecondArray [cfg(feature = "arrow")]
 yamaa::VERSION: pub const VERSION: &str
 yamaa::api::Check: impl Check
 yamaa::api::Check: pub struct Check
@@ -582,36 +582,35 @@ yamaa::selftest::SelfTestCase::case: pub case: &'static str
 yamaa::selftest::SelfTestCase::message: pub message: Option<String>
 yamaa::selftest::SelfTestCase::status: pub status: Status
 yamaa::selftest::selftest: pub fn selftest(host: Host, host_version: Option<&str>) -> SelfTest
-yamaa::table::Array: pub use arrow_array::Array
-yamaa::table::DataType: pub use arrow_schema::DataType
-yamaa::table::Date32Array: pub use arrow_array::Date32Array
+yamaa::table::Array: pub use arrow_array::Array [cfg(feature = "arrow")]
+yamaa::table::DataType: pub use arrow_schema::DataType [cfg(feature = "arrow")]
+yamaa::table::Date32Array: pub use arrow_array::Date32Array [cfg(feature = "arrow")]
 yamaa::table::Engine: impl Engine
 yamaa::table::Engine::save_table: pub fn save_table(&self, table: &Table, out: &str) -> Result<Vec<String>, Failure>
-yamaa::table::FFI_ArrowArrayStream: pub use arrow_array::ffi_stream::FFI_ArrowArrayStream
-yamaa::table::Field: pub use arrow_schema::Field
-yamaa::table::Fields: pub use arrow_schema::Fields
-yamaa::table::Float64Array: pub use arrow_array::Float64Array
+yamaa::table::FFI_ArrowArrayStream: pub use arrow_array::ffi_stream::FFI_ArrowArrayStream [cfg(feature = "arrow")]
+yamaa::table::Field: pub use arrow_schema::Field [cfg(feature = "arrow")]
+yamaa::table::Fields: pub use arrow_schema::Fields [cfg(feature = "arrow")]
+yamaa::table::Float64Array: pub use arrow_array::Float64Array [cfg(feature = "arrow")]
 yamaa::table::InputFrame: impl InputFrame
 yamaa::table::InputFrame: pub struct InputFrame [derive(Clone, Debug)] [non_exhaustive]
-yamaa::table::InputFrame::import: pub fn import(stream: FFI_ArrowArrayStream) -> Result<Self, TableError>
-yamaa::table::Int64Array: pub use arrow_array::Int64Array
-yamaa::table::LargeStringArray: pub use arrow_array::LargeStringArray
-yamaa::table::ListArray: pub use arrow_array::ListArray
-yamaa::table::RecordBatch: pub use arrow_array::RecordBatch
-yamaa::table::SchemaRef: pub use arrow_schema::SchemaRef
-yamaa::table::StringArray: pub use arrow_array::StringArray
-yamaa::table::StringViewArray: pub use arrow_array::StringViewArray
+yamaa::table::InputFrame::import: pub fn import(stream: FFI_ArrowArrayStream) -> Result<Self, TableError> [cfg(feature = "arrow")]
+yamaa::table::Int64Array: pub use arrow_array::Int64Array [cfg(feature = "arrow")]
+yamaa::table::LargeStringArray: pub use arrow_array::LargeStringArray [cfg(feature = "arrow")]
+yamaa::table::ListArray: pub use arrow_array::ListArray [cfg(feature = "arrow")]
+yamaa::table::RecordBatch: pub use arrow_array::RecordBatch [cfg(feature = "arrow")]
+yamaa::table::SchemaRef: pub use arrow_schema::SchemaRef [cfg(feature = "arrow")]
+yamaa::table::StringArray: pub use arrow_array::StringArray [cfg(feature = "arrow")]
+yamaa::table::StringViewArray: pub use arrow_array::StringViewArray [cfg(feature = "arrow")]
 yamaa::table::Table: impl Table
 yamaa::table::Table: pub struct Table [derive(Clone, Debug)] [non_exhaustive]
-yamaa::table::Table::batches: pub fn batches(&self) -> &[RecordBatch]
-yamaa::table::Table::columns: pub fn columns(&self) -> &Fields
-yamaa::table::Table::ipc: pub fn ipc(&self) -> Result<Vec<u8>, TableError>
+yamaa::table::Table::batches: pub fn batches(&self) -> &[RecordBatch] [cfg(feature = "arrow")]
+yamaa::table::Table::columns: pub fn columns(&self) -> &Fields [cfg(feature = "arrow")]
 yamaa::table::Table::preview: pub fn preview(&self) -> String
 yamaa::table::Table::rows: pub fn rows(&self) -> usize
-yamaa::table::Table::schema: pub fn schema(&self) -> &SchemaRef
-yamaa::table::Table::stream: pub fn stream(&self) -> FFI_ArrowArrayStream
-yamaa::table::TimeUnit: pub use arrow_schema::TimeUnit
-yamaa::table::TimestampSecondArray: pub use arrow_array::TimestampSecondArray
+yamaa::table::Table::schema: pub fn schema(&self) -> &SchemaRef [cfg(feature = "arrow")]
+yamaa::table::Table::stream: pub fn stream(&self) -> FFI_ArrowArrayStream [cfg(feature = "arrow")]
+yamaa::table::TimeUnit: pub use arrow_schema::TimeUnit [cfg(feature = "arrow")]
+yamaa::table::TimestampSecondArray: pub use arrow_array::TimestampSecondArray [cfg(feature = "arrow")]
 yamaa::text::Action: impl fmt::Display for Action<'_>
 yamaa::text::Action: pub enum Action<'a> [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
 yamaa::text::Action::Lint: Lint(&'a str)
