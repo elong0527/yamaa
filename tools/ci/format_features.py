@@ -11,6 +11,14 @@ FORMATS = {
     "none": [],
     "yaml-parquet": ["yaml", "parquet"],
 }
+# The Arrow crates of the table hand-off, which the arrow feature selects and
+# Parquet needs too, and the encoding of the Arrow schema that a Parquet file
+# embeds, which only Parquet reads (#3696).
+ARROW = ("arrow-array", "arrow-buffer", "arrow-data", "arrow-schema")
+ARROW_SCHEMA = ("arrow-ipc", "flatbuffers")
+# The default features without Parquet: a graph that keeps the Arrow table
+# hand-off and leaves out the embedded-schema encoding.
+WITHOUT_PARQUET = ["yaml", "readstat", "odm", "arrow"]
 
 
 def cargo(*args, capture=False):
@@ -27,18 +35,23 @@ def packages(tree):
     return {line.split()[0] for line in tree.splitlines() if line.strip()}
 
 
-def qualify(selection, enabled):
-    print(f"Checking {selection}", flush=True)
+def selected(enabled):
+    """The facade's feature options for `enabled`, without the defaults."""
     features = ["--no-default-features"]
     if enabled:
         features += ["--features", ",".join(enabled)]
-    tree = packages(
+    return features
+
+
+def graph(enabled):
+    """The packages of the facade's Cargo graph with `enabled` features."""
+    return packages(
         cargo(
             "tree",
             "--locked",
             "-p",
             "yamaa",
-            *features,
+            *selected(enabled),
             "--prefix",
             "none",
             "--format",
@@ -46,6 +59,33 @@ def qualify(selection, enabled):
             capture=True,
         )
     )
+
+
+def check_arrow(selection, tree, enabled):
+    """Arrow comes with the arrow or parquet feature, and its IPC encoding
+    and flatbuffers with parquet alone."""
+    for package in ARROW:
+        if (package in tree) != bool({"arrow", "parquet"}.intersection(enabled)):
+            raise RuntimeError(f"unexpected {package} dependency for {selection}")
+    for package in ARROW_SCHEMA:
+        if (package in tree) != ("parquet" in enabled):
+            raise RuntimeError(f"unexpected {package} dependency for {selection}")
+
+
+def qualify_without_parquet():
+    """The default features less Parquet keep the Arrow table hand-off without
+    its IPC encoding, and the facade compiles with them."""
+    print("Checking default-without-parquet", flush=True)
+    check_arrow("default-without-parquet", graph(WITHOUT_PARQUET), WITHOUT_PARQUET)
+    cargo("check", "--locked", "-p", "yamaa", *selected(WITHOUT_PARQUET))
+    print("default-without-parquet: Cargo graph and facade build passed", flush=True)
+
+
+def qualify(selection, enabled):
+    print(f"Checking {selection}", flush=True)
+    features = selected(enabled)
+    tree = graph(enabled)
+    check_arrow(selection, tree, enabled)
     for package, feature in [
         ("yamaa-saphyr-parser", "yaml"),
         ("parquet", "parquet"),
@@ -123,6 +163,7 @@ def main():
         raise RuntimeError("semantic core depends on a physical reader")
     for selection, enabled in FORMATS.items():
         qualify(selection, enabled)
+    qualify_without_parquet()
 
 
 if __name__ == "__main__":

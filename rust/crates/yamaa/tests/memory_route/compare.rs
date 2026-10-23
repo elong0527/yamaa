@@ -753,10 +753,10 @@ fn parquet_cells(bytes: &[u8]) -> Result<(Columns, Cells), String> {
                 ValueRef::Int(value) => CellValue::Int(value),
                 ValueRef::Float(value) => CellValue::Float(value.get()),
                 ValueRef::Date(date) => {
-                    CellValue::Date(i64::from(yamaa_adapters::arrow_temporal::date_days(date)))
+                    CellValue::Date(i64::from(yamaa_adapters::epoch::date_days(date)))
                 }
                 ValueRef::DateTime(datetime) => {
-                    CellValue::DateTime(yamaa_adapters::arrow_temporal::datetime_seconds(datetime))
+                    CellValue::DateTime(yamaa_adapters::epoch::datetime_seconds(datetime))
                 }
                 ValueRef::Bool(_) => return Err("a Parquet column holds booleans".to_owned()),
             });

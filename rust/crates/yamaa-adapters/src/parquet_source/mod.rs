@@ -41,8 +41,8 @@ mod type_name;
 mod wire;
 
 #[cfg(feature = "parquet")]
-use crate::arrow_table::UTF8_OFFSETS;
-use crate::arrow_table::{ArrowTable, TableError};
+use crate::column_table::UTF8_OFFSETS;
+use crate::column_table::{ColumnTable, TableError};
 
 /// Typed adapter failures; the consuming frontend supplies diagnostic location.
 #[derive(Debug)]
@@ -154,14 +154,14 @@ impl From<reader::Error> for Error {
 /// resulting snapshot owns its values independently of `content`. Empty strings
 /// remain present here; input declarations apply missing-string policy later.
 #[cfg(feature = "parquet")]
-pub fn parse(content: &[u8]) -> Result<ArrowTable, Error> {
+pub fn parse(content: &[u8]) -> Result<ColumnTable, Error> {
     convert(reader::read(content)?)
 }
 
 /// Admit the fixed ODM schema before decoding values, then expose its eleven
 /// canonical text fields. Physical vendor chunks are validated and discarded.
 #[cfg(feature = "parquet")]
-pub fn parse_odm(content: &[u8]) -> Result<ArrowTable, Error> {
+pub fn parse_odm(content: &[u8]) -> Result<ColumnTable, Error> {
     convert(reader::read_odm(content)?)
 }
 
@@ -199,7 +199,7 @@ pub fn signature(content: &[u8]) -> Result<Vec<ColumnSignature>, Error> {
 }
 
 #[cfg(feature = "parquet")]
-fn convert(decoded: reader::Decoded) -> Result<ArrowTable, Error> {
+fn convert(decoded: reader::Decoded) -> Result<ColumnTable, Error> {
     table::convert(decoded).map_err(|error| match error {
         table::Error::Invalid => Error::Malformed,
         table::Error::Representation => Error::Representation {
@@ -308,11 +308,11 @@ mod tests {
 
 /// Omitted codecs report a capability failure before inspecting source bytes.
 #[cfg(not(feature = "parquet"))]
-pub fn parse(_: &[u8]) -> Result<ArrowTable, Error> {
+pub fn parse(_: &[u8]) -> Result<ColumnTable, Error> {
     Err(Error::ReaderUnavailable)
 }
 #[cfg(not(feature = "parquet"))]
-pub fn parse_odm(_: &[u8]) -> Result<ArrowTable, Error> {
+pub fn parse_odm(_: &[u8]) -> Result<ColumnTable, Error> {
     Err(Error::ReaderUnavailable)
 }
 #[cfg(not(feature = "parquet"))]

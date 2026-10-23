@@ -8,7 +8,6 @@ use yamaa_core::{
 pub mod aggregate_syntax;
 pub mod benchmarks;
 pub mod inheritance;
-pub mod ipc_snapshot;
 pub mod issues;
 pub mod numeric_syntax;
 pub mod odm_declaration;
@@ -27,6 +26,7 @@ pub mod scratch;
 pub mod string_template_syntax;
 pub mod study;
 pub mod syntax_spans;
+pub mod table_snapshot;
 pub mod xport;
 
 /// Construct an ordered schema independently of plan compilation.

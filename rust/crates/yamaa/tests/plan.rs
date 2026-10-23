@@ -90,7 +90,7 @@ fn runs_through_one_holder_from_several_threads_are_independent() {
     let resolver = resolver(Some(STUDY_A));
     let engine = engine(&resolver);
     let plans = Plans::new();
-    let expected = run(&engine, &plans).output().unwrap().ipc().unwrap();
+    let expected = run(&engine, &plans).output().unwrap().batches().to_vec();
     std::thread::scope(|threads| {
         let runs = (0..8)
             .map(|_| threads.spawn(|| run(&engine, &plans)))
@@ -98,7 +98,7 @@ fn runs_through_one_holder_from_several_threads_are_independent() {
         for handle in runs {
             let run = handle.join().unwrap();
             assert_eq!(plan_of(&run), "reused");
-            assert_eq!(run.output().unwrap().ipc().unwrap(), expected);
+            assert_eq!(run.output().unwrap().batches(), expected);
         }
     });
 }

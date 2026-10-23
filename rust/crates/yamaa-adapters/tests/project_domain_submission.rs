@@ -1226,7 +1226,7 @@ mod project {
                 // selection check, the entry's warning that it matches a row
                 // (SUB-13) and one check row per bound codelist; a successful
                 // run adds its three columns.
-                assert_eq!(run.report_table().rows(), if fail { 8 } else { 11 });
+                assert_eq!(run.run_report().rows(), if fail { 8 } else { 11 });
                 assert!(!study.0.join("checks.csv").exists());
                 let saved = run.save();
                 assert_eq!(saved.is_ok(), !fail);
@@ -1321,10 +1321,7 @@ mod project {
                 // The run, its input, two row templates and three columns,
                 // then the two value-level checks and one shared length check
                 // or one check per bound.
-                assert_eq!(
-                    run.report_table().rows(),
-                    if length == "3" { 10 } else { 11 }
-                );
+                assert_eq!(run.run_report().rows(), if length == "3" { 10 } else { 11 });
                 assert!(run.save().unwrap());
                 assert_eq!(
                     fs::read_to_string(study.0.join("output.csv")).unwrap(),
@@ -1614,7 +1611,7 @@ mod project {
             let mut run = domain(&study, &quiet, input);
             assert!(run.issues().is_empty(), "{:?}", run.issues());
             assert_eq!(
-                violated_checks(run.report_table()),
+                violated_checks(run.run_report()),
                 [
                     (
                         "columns.RESULT.submission.value_level.URINE".to_owned(),

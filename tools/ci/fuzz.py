@@ -71,8 +71,10 @@ SHARED = (
 )
 # The source decode that both host routes call for held bytes.
 SOURCE_DECODE = (
-    "rust/crates/yamaa-adapters/src/arrow_table.rs",
+    "rust/crates/yamaa-adapters/src/column_table.rs",
+    "rust/crates/yamaa-adapters/src/columns.rs",
     "rust/crates/yamaa-adapters/src/decoder.rs",
+    "rust/crates/yamaa-adapters/src/epoch.rs",
     "rust/crates/yamaa-adapters/src/source_ordinal.rs",
     "rust/crates/yamaa-adapters/src/specification_run.rs",
     "rust/crates/yamaa-core/src/odm_source.rs",
@@ -80,15 +82,14 @@ SOURCE_DECODE = (
 SAS = (
     *SOURCE_DECODE,
     "rust/crates/yamaa-adapters/build.rs",
-    "rust/crates/yamaa-adapters/src/arrow_temporal.rs",
-    "rust/crates/yamaa-adapters/src/ipc_table.rs",
     "rust/crates/yamaa-adapters/src/sas_source.rs",
     "rust/crates/yamaa-adapters/src/sas_source/",
     "rust/crates/yamaa-adapters/vendor/readstat/",
 )
 CSV = (
+    "rust/crates/yamaa-adapters/src/column_table.rs",
+    "rust/crates/yamaa-adapters/src/columns.rs",
     "rust/crates/yamaa-adapters/src/csv_source.rs",
-    "rust/crates/yamaa-adapters/src/ipc_table.rs",
     "rust/crates/yamaa-adapters/src/typed_csv.rs",
     "rust/crates/yamaa-core/src/conversion.rs",
     "rust/crates/yamaa-core/src/csv_source.rs",
@@ -129,7 +130,6 @@ TARGETS = {
         ("*.xml",),
         (
             *SOURCE_DECODE,
-            "rust/crates/yamaa-adapters/src/ipc_table.rs",
             "rust/crates/yamaa-adapters/src/odm_xml/",
             "rust/crates/yamaa-adapters/src/public_table.rs",
             "rust/crates/yamaa-core/src/odm_items.rs",

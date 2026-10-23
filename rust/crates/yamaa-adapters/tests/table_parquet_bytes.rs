@@ -25,7 +25,7 @@ use bytes::Bytes;
 use parquet::file::{reader::FileReader, serialized_reader::SerializedFileReader};
 use std::convert::Infallible;
 use yamaa_adapters::{
-    arrow_temporal::{date_from_days, datetime_from_seconds},
+    epoch::{date_from_days, datetime_from_seconds},
     parquet_artifact::render,
 };
 use yamaa_core::{

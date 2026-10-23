@@ -62,8 +62,9 @@ mod source;
 mod xml;
 
 use crate::{
-    arrow_table::ArrowTable, host_resources::Resolver, ipc_table::TableError,
-    public_table::PublicTable,
+    column_table::ColumnTable,
+    host_resources::Resolver,
+    public_table::{PublicTable, TableError},
 };
 use std::{path::Path, sync::Arc};
 use yamaa_core::{diagnostic::Diagnostic, odm_items::Options};
@@ -145,7 +146,7 @@ pub fn read_with_resolver(
 /// The bytes are the document itself: nothing is sniffed, so an archive is
 /// read as XML and refused as such (INPUT-1, ODM-1).
 #[cfg(feature = "odm")]
-pub fn read_input(bytes: &[u8]) -> Result<ArrowTable, Error> {
+pub fn read_input(bytes: &[u8]) -> Result<ColumnTable, Error> {
     source::read_input(bytes)
 }
 
@@ -226,6 +227,6 @@ pub fn read_with_resolver(
 /// A specification's `.xml` input is unavailable when the `odm` feature is
 /// disabled, as every other format a build does not compile.
 #[cfg(not(feature = "odm"))]
-pub fn read_input(_bytes: &[u8]) -> Result<ArrowTable, Error> {
+pub fn read_input(_bytes: &[u8]) -> Result<ColumnTable, Error> {
     Err(Error::Unavailable)
 }

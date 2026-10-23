@@ -183,7 +183,7 @@ fn table(
     match result {
         Ok(table) => Ok(Table::from_adapter(&table)),
         Err(odm_xml::Error::Unavailable) => Err(Error::Unavailable { feature: "odm" }),
-        Err(odm_xml::Error::Table(error)) => Err(Error::Table(TableError::from_ipc(error))),
+        Err(odm_xml::Error::Table(error)) => Err(Error::Table(TableError::from_public(error))),
         Err(error) => {
             let issues = error.issue(source).into_iter().collect::<Vec<_>>();
             Err(Error::Rejected(Report::from_issues(&issues)))

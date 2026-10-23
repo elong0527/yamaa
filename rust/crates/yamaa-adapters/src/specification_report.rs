@@ -518,13 +518,13 @@ pub enum HostView {
 /// The host view an accepted result holds.
 #[derive(Debug)]
 enum View {
-    /// The table and its IPC encoding.
-    Table(crate::public_table::PublicTable, Vec<u8>),
+    /// The output table.
+    Table(crate::public_table::PublicTable),
     /// Nothing built: the batches are built as they are read.
     Deferred,
 }
 
-/// An owned build result; obtaining it never calls a publisher. Table bytes are
+/// An owned build result; obtaining it never calls a publisher. Its table is
 /// the admitted output projection, while private report artifacts are prospective.
 /// Every result holds its verified run report.
 #[derive(Debug)]
@@ -535,17 +535,10 @@ pub struct BuildResult {
     report: crate::run_report::HeldReport,
 }
 impl BuildResult {
-    /// The IPC encoding of the accepted output's table, which only a build
-    /// with the [`HostView::Table`] view holds.
-    pub fn output(&self) -> Option<&[u8]> {
+    /// The accepted output table, held only by a whole-table build.
+    pub fn output(&self) -> Option<&crate::public_table::PublicTable> {
         match &self.view {
-            Some(View::Table(_, bytes)) => Some(bytes),
-            _ => None,
-        }
-    }
-    pub(crate) fn output_table(&self) -> Option<&crate::public_table::PublicTable> {
-        match &self.view {
-            Some(View::Table(table, _)) => Some(table),
+            Some(View::Table(table)) => Some(table),
             _ => None,
         }
     }
@@ -564,11 +557,8 @@ impl BuildResult {
     pub fn issues(&self) -> &[Diagnostic] {
         &self.issues
     }
-    /// The run report's owned Arrow IPC view.
-    pub fn run_report(&self) -> &[u8] {
-        self.report.ipc()
-    }
-    pub(crate) fn report_table(&self) -> &crate::public_table::PublicTable {
+    /// The run report table, which every result holds.
+    pub fn run_report(&self) -> &crate::public_table::PublicTable {
         self.report.table()
     }
     /// Whether the specification declares a report file for publication.
@@ -752,16 +742,16 @@ pub(crate) fn prepare_result(
             match view {
                 HostView::Table => {
                     crate::public_table::PublicTable::from_table(dataset, &artifact.projection)
-                        .and_then(|table| table.ipc().map(|bytes| View::Table(table, bytes)))
+                        .map(View::Table)
                 }
                 // Built batch by batch as it is read, after the same checks.
                 HostView::Deferred => {
-                    crate::public_table::PublicBatches::check(dataset, &artifact.projection)
+                    crate::public_table::check_table(dataset, &artifact.projection)
                         .map(|_| View::Deferred)
                 }
             }
             .map_err(|e| match e {
-                crate::ipc_table::TableError::Limit {
+                crate::public_table::TableError::Limit {
                     resource,
                     limit,
                     required,

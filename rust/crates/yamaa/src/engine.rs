@@ -344,6 +344,7 @@ impl Engine {
 
     /// The engine's shared configuration, owned, for a run that outlives
     /// the call that started it.
+    #[cfg(feature = "arrow")]
     pub(crate) fn shared_owned(&self) -> Arc<EngineShared> {
         Arc::clone(&self.shared)
     }
@@ -458,8 +459,8 @@ impl Build {
         self.report = Report::located(&self.issues(), &self.locator);
         (self.output, self.run_report) = match self.domain() {
             Some(domain) => (
-                domain.output_table().map(Table::from_adapter),
-                Some(Table::from_adapter(domain.report_table())),
+                domain.output().map(Table::from_adapter),
+                Some(Table::from_adapter(domain.run_report())),
             ),
             None => (None, None),
         };
@@ -473,12 +474,14 @@ impl Build {
 
     /// The accepted output's columns among the accepted dataset's, which the
     /// batches of a stream of it project.
+    #[cfg(feature = "arrow")]
     pub(crate) fn projection(&self) -> Option<&[usize]> {
         self.domain()?.projection()
     }
 
     /// Record that the accepted output, of `rows` rows and `columns`
     /// columns, is read as a stream instead of a table.
+    #[cfg(feature = "arrow")]
     pub(crate) fn streamed(&mut self, rows: usize, columns: usize) {
         self.streamed = Some((rows, columns));
     }
@@ -487,7 +490,7 @@ impl Build {
     /// as a stream; none when the build has no output.
     pub(crate) fn dimensions(&self) -> Option<(usize, usize)> {
         match &self.output {
-            Some(table) => Some((table.rows(), table.columns().len())),
+            Some(table) => Some((table.rows(), table.public().width())),
             None => self.streamed.filter(|_| self.accepted()),
         }
     }

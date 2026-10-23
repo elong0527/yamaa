@@ -410,6 +410,7 @@ pub(crate) fn run(
 /// [`run`], building no output table. An accepted output's rows come back
 /// with the build, to be handed out at most `rows` records at a time, and
 /// the build records the output's size.
+#[cfg(feature = "arrow")]
 pub(crate) fn run_streamed(
     shared: &EngineShared,
     specification: &str,
@@ -430,7 +431,10 @@ pub(crate) fn run_streamed(
 }
 
 /// The accepted rows of a streamed run, handed out batch by batch.
+#[cfg(feature = "arrow")]
 pub(crate) type PublicBatches = yamaa_adapters::public_table::PublicBatches;
+#[cfg(not(feature = "arrow"))]
+type PublicBatches = ();
 
 /// [`run`], or with `rows` [`run_streamed`].
 fn run_with(
@@ -480,13 +484,22 @@ fn run_with(
         Ok(built) => built,
         Err(never) => match never {},
     };
-    let mut build = Build::new(result, failures, measurements, shared, locator);
+    let build = Build::new(result, failures, measurements, shared, locator);
+    #[cfg(feature = "arrow")]
+    let mut build = build;
+    #[cfg(feature = "arrow")]
     let batches = rows.zip(dataset).and_then(|(rows, dataset)| {
         let projection = build.projection()?.to_vec();
         // The build checked that every batch can be built, as a table build
         // checks its table.
         PublicBatches::new(dataset, projection, rows).ok()
     });
+    #[cfg(not(feature = "arrow"))]
+    let batches = {
+        let _ = (rows, dataset);
+        None
+    };
+    #[cfg(feature = "arrow")]
     if let Some(batches) = &batches {
         build.streamed(batches.rows(), batches.schema().fields().len());
     }

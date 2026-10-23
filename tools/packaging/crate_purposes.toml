@@ -61,12 +61,12 @@ alloc-no-stdlib = "transitive dependency of brotli: its allocator interface"
 alloc-stdlib = "transitive dependency of brotli: the standard library allocator behind that interface"
 android_system_properties = "not compiled: iana-time-zone's time zone lookup on Android"
 arraydeque = "transitive dependency of yamaa-saphyr-parser: the fixed-capacity buffer of its scanner"
-arrow-array = "Arrow arrays: the tables of yamaa-adapters and the Rust facade, and the Arrow C streams through which the engine hands tables to both bindings"
-arrow-buffer = "Arrow buffers that table columns are built from (yamaa-adapters)"
+arrow-array = "Arrow arrays: the Arrow form of tables at the hosts' edge (the arrow feature of yamaa-adapters and the Rust facade), which the engine hands to both bindings through Arrow C streams; parquet uses it too"
+arrow-buffer = "Arrow buffers that the Arrow form of a table is built from (the arrow feature of yamaa-adapters); arrow-array and parquet use it too"
 arrow-cast = "transitive dependency of parquet: conversions between Parquet and Arrow types"
 arrow-data = "transitive dependency of arrow-array: the data layout of every Arrow array"
-arrow-ipc = "Arrow IPC streams of tables, and the Arrow schema embedded in Parquet files (yamaa-adapters)"
-arrow-schema = "Arrow schemas and data types of those tables (yamaa-adapters, the Rust facade and both bindings)"
+arrow-ipc = "reads the Arrow schema embedded in Parquet files (the parquet feature of yamaa-adapters); parquet uses it too"
+arrow-schema = "Arrow schemas and data types: the Arrow form of tables (the arrow feature of yamaa-adapters and the Rust facade), the streams read by both bindings, and the schema embedded in Parquet files (the parquet feature)"
 arrow-select = "transitive dependency of parquet and arrow-cast: Arrow selection kernels"
 atoi = "transitive dependency of arrow-cast: integer parsing"
 autocfg = "build script: compiler feature probes of num-traits, and of memoffset in the Python binding"
@@ -91,7 +91,7 @@ extendr-api = "the R binding's interface to R (yamaa-r)"
 extendr-ffi = "transitive dependency of extendr-api: raw bindings to R's C API"
 extendr-macros = "procedural macro: the #[extendr] attributes of the R binding"
 find-msvc-tools = "build script: finds the MSVC tools for cc on Windows"
-flatbuffers = "bounds the FlatBuffers-encoded Arrow schema in Parquet metadata before it is converted (yamaa-adapters); arrow-ipc depends on it too"
+flatbuffers = "bounds the FlatBuffers-encoded Arrow schema in Parquet metadata before it is converted (the parquet feature of yamaa-adapters); arrow-ipc depends on it too"
 flate2 = "gzip codec for Parquet pages (the parquet feature) and gzip TAR input (the odm feature)"
 futures-core = "not compiled: transitive dependency of futures-util (wasm32 only)"
 futures-task = "not compiled: transitive dependency of futures-util (wasm32 only)"
@@ -230,36 +230,6 @@ zstd-sys = "transitive dependency of zstd-safe: builds and links the zstd C libr
 # the adapters that use it, removes its reason.
 
 [unconditional.yamaa-adapters]
-arrow-array = """\
-  every table on the always-on path is Arrow arrays: the snapshots behind the \
-  core's table port (arrow_table.rs), CSV text tables (csv_source.rs), the \
-  text columns of the empty-string convention (specification_run.rs), the \
-  generated ordinal field (source_ordinal.rs), batch function arguments \
-  (arrow_batch.rs), the batches rebuilt from checked tables (ipc_table.rs) and \
-  the public tables that the hosts take through the Arrow C stream of \
-  arrow-array's ffi feature (public_table.rs, arrow_bridge.rs), which the ODM \
-  reader returns even without the odm feature (odm_xml/)"""
-arrow-buffer = """\
-  the validity bitmaps of those tables: the temporal columns of admitted \
-  snapshots (arrow_table.rs) and the text columns whose values the \
-  empty-string convention marks missing (specification_run.rs)"""
-arrow-ipc = """\
-  each build holds the Arrow IPC streams of its output table and its run \
-  report, which arrow-ipc's StreamWriter writes (public_table.rs, for \
-  specification_report.rs and run_report.rs; ipc_table.rs), and the facade's \
-  Table::ipc and Build::run_report_bytes return such streams; only tests read \
-  one back, and the parquet feature also reads the Arrow schema that a \
-  Parquet file embeds with it (parquet_source/metadata.rs, storage_api.rs)"""
-arrow-schema = """\
-  the schemas, fields and data types of those tables (arrow_table.rs, \
-  public_table.rs, source_ordinal.rs), and ArrowError, which building their \
-  arrays returns (arrow_batch.rs, ipc_table.rs, specification_run.rs)"""
-flatbuffers = """\
-  unconditional only as declared: no always-on code uses it. Its one use, \
-  bounding the verification of the Arrow schema that a Parquet file embeds \
-  (parquet_source/metadata.rs), compiles only with the parquet feature, so the \
-  edge can move behind that feature; arrow-ipc depends on it, so the crate \
-  stays in every host's graph while arrow-ipc is unconditional"""
 serde_json = """\
   JSON on the always-on path: the wire form of the core's JSON values \
   (json_wire.rs), through which R renv.lock files are read (project_lock.rs), \
@@ -269,15 +239,3 @@ serde_json = """\
 toml = """\
   projects need no feature, and capturing a project's lock file classifies it \
   (file_metadata.rs), reading a uv.lock as TOML (project_lock.rs)"""
-
-[unconditional.yamaa]
-arrow-array = """\
-  the facade's public table is Arrow: yamaa::table re-exports RecordBatch, the \
-  array types and FFI_ArrowArrayStream, Table::batches returns record batches \
-  and Table::stream exports the Arrow C stream (table.rs); the Python binding \
-  hands that stream to Python as a PyCapsule, and the R binding copies the \
-  batches' columns into R vectors"""
-arrow-schema = """\
-  the facade's public table schema: yamaa::table re-exports SchemaRef, \
-  DataType, Field, Fields and TimeUnit, and Table::schema returns the table's \
-  Arrow schema (table.rs)"""
