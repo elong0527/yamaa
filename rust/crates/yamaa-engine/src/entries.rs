@@ -153,7 +153,11 @@ impl CallArgs {
             abi::HOST_NONE => None,
             abi::HOST_PYTHON => Some(HostLanguage::Python),
             abi::HOST_R => Some(HostLanguage::R),
-            other => return Err(boundary(format!("the call names host {other}, which is none"))),
+            other => {
+                return Err(boundary(format!(
+                    "the call names host {other}, which is none"
+                )))
+            }
         };
         // SAFETY: the caller's contract.
         let (name, version) = unsafe {
@@ -187,7 +191,9 @@ impl CallArgs {
     /// call that claims no host language (D123).
     fn host(&self) -> (yamaa::Host, Option<&str>) {
         match self.language {
-            Some(HostLanguage::Python) => (yamaa::Host::Python, Some(self.runtime_version.as_str())),
+            Some(HostLanguage::Python) => {
+                (yamaa::Host::Python, Some(self.runtime_version.as_str()))
+            }
             Some(HostLanguage::R) => (yamaa::Host::R, Some(self.runtime_version.as_str())),
             _ => (yamaa::Host::Cli, None),
         }
@@ -323,7 +329,9 @@ fn tree(value: ContextValue) -> Answer<abi::Nodes> {
         let mut children: Vec<(Str, &ContextValue)> = Vec::new();
         match value {
             ContextValue::Null => {}
-            ContextValue::Bool(value) => (node.kind, node.int) = (abi::NODE_BOOL, i64::from(*value)),
+            ContextValue::Bool(value) => {
+                (node.kind, node.int) = (abi::NODE_BOOL, i64::from(*value))
+            }
             ContextValue::Int(value) => (node.kind, node.int) = (abi::NODE_INT, *value),
             ContextValue::Uint(value) => match i64::try_from(*value) {
                 Ok(value) => (node.kind, node.int) = (abi::NODE_INT, value),
@@ -333,7 +341,9 @@ fn tree(value: ContextValue) -> Answer<abi::Nodes> {
                     (node.kind, node.text) = (abi::NODE_NUMBER, spelling);
                 }
             },
-            ContextValue::Wide(spelling) => (node.kind, node.text) = (abi::NODE_NUMBER, Str::of(spelling)),
+            ContextValue::Wide(spelling) => {
+                (node.kind, node.text) = (abi::NODE_NUMBER, Str::of(spelling))
+            }
             ContextValue::Float(value) => (node.kind, node.float) = (abi::NODE_FLOAT, *value),
             ContextValue::Text(text) => (node.kind, node.text) = (abi::NODE_TEXT, Str::of(text)),
             ContextValue::List(items) => {
@@ -342,7 +352,10 @@ fn tree(value: ContextValue) -> Answer<abi::Nodes> {
             }
             ContextValue::Map(entries) => {
                 node.kind = abi::NODE_MAP;
-                children = entries.iter().map(|(key, item)| (Str::of(key), item)).collect();
+                children = entries
+                    .iter()
+                    .map(|(key, item)| (Str::of(key), item))
+                    .collect();
             }
             _ => return Err(boundary("the resolved value holds a kind no node has")),
         }
@@ -363,8 +376,16 @@ fn tree(value: ContextValue) -> Answer<abi::Nodes> {
 
 /// The engine information as one record, borrowing it.
 fn information(info: yamaa::Info) -> abi::Info {
-    let language_versions: Vec<Str> = info.language_versions.iter().map(|text| Str::of(text)).collect();
-    let features: Vec<Str> = info.features.iter().map(|feature| Str::of(feature)).collect();
+    let language_versions: Vec<Str> = info
+        .language_versions
+        .iter()
+        .map(|text| Str::of(text))
+        .collect();
+    let features: Vec<Str> = info
+        .features
+        .iter()
+        .map(|feature| Str::of(feature))
+        .collect();
     let record = abi::InfoRecord {
         version: Str::of(info.version),
         language_versions: language_versions.as_ptr(),
@@ -393,7 +414,8 @@ unsafe fn guard<T>(out: *mut T, refusal: *mut Refusal, body: impl FnOnce() -> An
     if out.is_null() || refusal.is_null() {
         return abi::BOUNDARY;
     }
-    let answer = catch_unwind(AssertUnwindSafe(body)).unwrap_or_else(|panic| Err(contained(&*panic)));
+    let answer =
+        catch_unwind(AssertUnwindSafe(body)).unwrap_or_else(|panic| Err(contained(&*panic)));
     match answer {
         Ok(value) => {
             // SAFETY: the caller's contract.
@@ -498,7 +520,10 @@ fn view<T>(
     let held = held(handle)?;
     let kind = held.value.kind();
     if member.is_some() && kind != HandleKind::ProjectRun {
-        return Err(boundary(format!("a {} handle has no members", kind.as_str())));
+        return Err(boundary(format!(
+            "a {} handle has no members",
+            kind.as_str()
+        )));
     }
     match &held.value {
         Value::Check(check) => read(View::Check(&*locked(check, kind)?)),
@@ -719,7 +744,8 @@ unsafe extern "C" fn read_odm(
                 .with_max_expanded_bytes(options.max_expanded_bytes)
                 .with_max_xml_depth(limit(options.max_xml_depth));
             // SAFETY: the entry's contract.
-            if let Some(member) = unsafe { optional(options.archive_member, "the archive member") }? {
+            if let Some(member) = unsafe { optional(options.archive_member, "the archive member") }?
+            {
                 read = read.with_archive_member(member);
             }
         }
@@ -754,7 +780,11 @@ unsafe extern "C" fn lint(
     unsafe { guard(out, refusal, body) }
 }
 
-unsafe extern "C" fn selftest(call: *const Call, out: *mut Handle, refusal: *mut Refusal) -> Status {
+unsafe extern "C" fn selftest(
+    call: *const Call,
+    out: *mut Handle,
+    refusal: *mut Refusal,
+) -> Status {
     let body = || {
         // SAFETY: the entry's contract.
         let call = unsafe { CallArgs::read(call) }?;
@@ -806,8 +836,12 @@ unsafe extern "C" fn project_spec(
         // SAFETY: the entry's contract.
         let call = unsafe { CallArgs::read(call) }?;
         // SAFETY: the entry's contract.
-        let (project, name) =
-            unsafe { (required(project, "the project")?, required(name, "the name")?) };
+        let (project, name) = unsafe {
+            (
+                required(project, "the project")?,
+                required(name, "the name")?,
+            )
+        };
         Ok(text(call.engine().project_spec(project, name)?))
     };
     // SAFETY: the entry's contract.
@@ -892,14 +926,16 @@ unsafe extern "C" fn status(
         // SAFETY: the entry's contract.
         let member = unsafe { optional(member, "the member") }?;
         view(result, member, "status", |view| {
-            Ok(text(match view {
-                View::Check(check) => check.status(),
-                View::Run(run) => run.status(),
-                View::ProjectRun(runs) => runs.status(),
-                View::Submission(submission) => submission.status(),
-                View::SelfTest(selftest) => selftest.status(),
-            }
-            .as_str()))
+            Ok(text(
+                match view {
+                    View::Check(check) => check.status(),
+                    View::Run(run) => run.status(),
+                    View::ProjectRun(runs) => runs.status(),
+                    View::Submission(submission) => submission.status(),
+                    View::SelfTest(selftest) => selftest.status(),
+                }
+                .as_str(),
+            ))
         })
     };
     // SAFETY: the entry's contract.
@@ -1085,10 +1121,18 @@ unsafe extern "C" fn selftest_info(
 
 unsafe extern "C" fn rows(handle: Handle, out: *mut u64, refusal: *mut Refusal) -> Status {
     // SAFETY: the entry's contract.
-    unsafe { guard(out, refusal, || table(handle, "rows", |table| table.rows() as u64)) }
+    unsafe {
+        guard(out, refusal, || {
+            table(handle, "rows", |table| table.rows() as u64)
+        })
+    }
 }
 
-unsafe extern "C" fn columns(handle: Handle, out: *mut abi::Texts, refusal: *mut Refusal) -> Status {
+unsafe extern "C" fn columns(
+    handle: Handle,
+    out: *mut abi::Texts,
+    refusal: *mut Refusal,
+) -> Status {
     let body = || {
         table(handle, "columns", |table| {
             texts(table.columns().iter().map(|field| field.name().as_str()))
@@ -1100,7 +1144,11 @@ unsafe extern "C" fn columns(handle: Handle, out: *mut abi::Texts, refusal: *mut
 
 unsafe extern "C" fn preview(handle: Handle, out: *mut abi::Text, refusal: *mut Refusal) -> Status {
     // SAFETY: the entry's contract.
-    unsafe { guard(out, refusal, || table(handle, "preview", |table| text(table.preview()))) }
+    unsafe {
+        guard(out, refusal, || {
+            table(handle, "preview", |table| text(table.preview()))
+        })
+    }
 }
 
 unsafe extern "C" fn export(
@@ -1236,17 +1284,32 @@ unsafe extern "C" fn stream_release(stream: *mut ArrowArrayStream) {
 
 /// A schema or array a stream emits, whose release the export wraps.
 trait Emitted: Sized {
-    fn parts(&mut self) -> (&mut Option<unsafe extern "C" fn(*mut Self)>, &mut *mut c_void);
+    fn parts(
+        &mut self,
+    ) -> (
+        &mut Option<unsafe extern "C" fn(*mut Self)>,
+        &mut *mut c_void,
+    );
 }
 
 impl Emitted for ArrowSchema {
-    fn parts(&mut self) -> (&mut Option<unsafe extern "C" fn(*mut Self)>, &mut *mut c_void) {
+    fn parts(
+        &mut self,
+    ) -> (
+        &mut Option<unsafe extern "C" fn(*mut Self)>,
+        &mut *mut c_void,
+    ) {
         (&mut self.release, &mut self.private_data)
     }
 }
 
 impl Emitted for ArrowArray {
-    fn parts(&mut self) -> (&mut Option<unsafe extern "C" fn(*mut Self)>, &mut *mut c_void) {
+    fn parts(
+        &mut self,
+    ) -> (
+        &mut Option<unsafe extern "C" fn(*mut Self)>,
+        &mut *mut c_void,
+    ) {
         (&mut self.release, &mut self.private_data)
     }
 }

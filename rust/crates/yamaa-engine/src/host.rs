@@ -260,7 +260,9 @@ unsafe fn rows(reply: &Reply, width: usize) -> Result<Vec<Vec<Option<String>>>, 
                         return Ok(None);
                     }
                     // SAFETY: the caller's contract.
-                    unsafe { text(*item) }.map(Some).ok_or(FunctionError::Protocol)
+                    unsafe { text(*item) }
+                        .map(Some)
+                        .ok_or(FunctionError::Protocol)
                 })
                 .collect()
         })
@@ -296,7 +298,12 @@ fn scalar_record(value: ScalarRef<'_>) -> Result<abi::Scalar, CallError> {
         ScalarRef::Int(value) => (abi::SCALAR_INT, value, 0.0, Str::NONE),
         ScalarRef::Float(value) => (abi::SCALAR_FLOAT, 0, value, Str::NONE),
         ScalarRef::Bool(value) => (abi::SCALAR_BOOL, i64::from(value), 0.0, Str::NONE),
-        ScalarRef::Date(date) => (abi::SCALAR_DATE, i64::from(date.epoch_days()), 0.0, Str::NONE),
+        ScalarRef::Date(date) => (
+            abi::SCALAR_DATE,
+            i64::from(date.epoch_days()),
+            0.0,
+            Str::NONE,
+        ),
         ScalarRef::DateTime(moment) => {
             (abi::SCALAR_DATETIME, moment.epoch_seconds(), 0.0, Str::NONE)
         }
@@ -401,7 +408,13 @@ impl Port {
         self.0.answer(
             // SAFETY: see the module documentation.
             |context, reply| unsafe {
-                invoke(context, function, arguments.as_ptr(), arguments.len(), reply)
+                invoke(
+                    context,
+                    function,
+                    arguments.as_ptr(),
+                    arguments.len(),
+                    reply,
+                )
             },
             // SAFETY: the host filled the reply.
             |status, reply| unsafe { called(status, reply, |reply| scalar(&reply.scalar)) },
