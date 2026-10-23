@@ -90,10 +90,12 @@ mod relations {
 
         /// Arithmetic over a reduction or a grouping column whose value is not
         /// a number fails under FORMULA-23 when it is evaluated, as the static
-        /// check refuses it wherever the declared types already show it.
+        /// check refuses it wherever the declared types already show it. The
+        /// diagnostic locates the operand that failed: its byte extent in the
+        /// text and its route from the root, the left or right operand of `+`.
         #[test]
         fn arithmetic_over_a_text_reduction_or_grouping_column_fails_under_formula_23() {
-            use yamaa_core::{diagnostic::Definition, json::Value as Json};
+            use yamaa_core::{diagnostic::Definition, expression::SourceSpan, json::Value as Json};
             struct Group;
             impl ExpressionResolver for Group {
                 type Error = std::convert::Infallible;
@@ -102,9 +104,21 @@ mod relations {
                     Ok(Selection::Present(Value::Str("a".into())))
                 }
             }
-            for (expression, reductions, source) in [
-                ("MIN(EX.TEXT) + 1", Value::Str("a".into()), "MIN(EX.TEXT)"),
-                ("SUM(EX.DOSE) + KEY", Value::Int(1), "KEY"),
+            for (expression, reductions, source, span, route) in [
+                (
+                    "MIN(EX.TEXT) + 1",
+                    Value::Str("a".into()),
+                    "MIN(EX.TEXT)",
+                    SourceSpan { start: 0, end: 12 },
+                    "left",
+                ),
+                (
+                    "SUM(EX.DOSE) + KEY",
+                    Value::Int(1),
+                    "KEY",
+                    SourceSpan { start: 15, end: 18 },
+                    "right",
+                ),
             ] {
                 let plan = compile_aggregate(expression, "columns.X.aggregate").unwrap();
                 let error = plan
@@ -116,6 +130,8 @@ mod relations {
                         diagnostic.definition(),
                         diagnostic.spec_paths,
                         diagnostic.context,
+                        diagnostic.source_span,
+                        diagnostic.operand_route,
                     ),
                     (
                         Definition {
@@ -131,6 +147,8 @@ mod relations {
                             ("actual".into(), Json::String("str".into())),
                         ]
                         .into(),
+                        Some(span),
+                        Some(vec![route.to_string()]),
                     ),
                     "{expression}"
                 );
