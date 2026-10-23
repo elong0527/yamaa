@@ -158,7 +158,7 @@ When the `end` date precedes `start`, the result is the negation of the count
 with the operands exchanged, so no calendar unit rounds toward negative
 infinity. A missing `start` or `end` yields a missing result, so no guarding
 predicate is needed. Which endpoints a day count of dates includes is declared
-by `bounds` ([TIME-5](#time-5)).
+by `closed` ([TIME-5](#time-5)).
 
 Datetimes are zone-free civil values ([VALUE-14](values.md#value-14)): there
 is no timezone or daylight-saving adjustment, and a day is 86400 seconds. The
@@ -493,8 +493,8 @@ signed integer range, so an `int` column fails to convert it as
 `conversion_failed` ([VALUE-7](values.md#value-7)). Text whose result is not
 finite is invalid.
 
-Invalid text returns the literal `invalid` handler, and
-`invalid: {literal: null}` gives missing; without the handler, the condition
+Invalid text returns the value the `invalid` handler declares, and
+`invalid: null` gives missing; without the handler, the condition
 `invalid_duration_text` is fatal in the `impute` phase. A declared handler is
 counted only when reached.
 

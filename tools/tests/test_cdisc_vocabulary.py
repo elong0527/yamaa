@@ -312,7 +312,7 @@ class CdiscVocabularyTests(unittest.TestCase):
             ],
         )
 
-    def test_the_file_version_is_the_1_0_schema_version(self):
+    def test_the_file_version_is_the_version_of_the_1_0_schema(self):
         document = self.vocabulary()
         document["version"] = "1.1"
         self.write(document)

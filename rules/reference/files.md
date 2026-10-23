@@ -257,16 +257,17 @@ the run; the replacement is not read. Content identity is over bytes: a
 modification time, inode number or size is not the identity.
 
 Fails: `resource_path_content_changed`.
-Evidence: `rust/crates/yamaa-adapters/tests/file_diagnostic_origins.rs::changed_source_retains_original_snapshot_and_ingest_issue_and_refuses_both_saves`, `rust/crates/yamaa-adapters/tests/file_diagnostic_origins.rs::already_captured_changed_metadata_keeps_original_snapshot_and_native_failure`, `rust/crates/yamaa-adapters/src/file_resources.rs::reused_numeric_identity_without_a_current_physical_witness_is_a_fresh_capture`, `rust/crates/yamaa-adapters/tests/submission_service.rs::a_file_changed_before_verification_fails_at_its_field_before_any_target`, `rust/crates/yamaa-adapters/tests/file_diagnostic_origins.rs::a_file_changed_before_the_entry_is_verified_fails_at_its_field`.
+Evidence: `rust/crates/yamaa-adapters/tests/file_diagnostic_origins.rs::changed_source_retains_original_snapshot_and_ingest_issue_and_refuses_both_saves`, `rust/crates/yamaa-adapters/tests/file_diagnostic_origins.rs::already_captured_changed_metadata_keeps_original_snapshot_and_native_failure`, `rust/crates/yamaa-adapters/src/file_resources.rs::reused_numeric_identity_without_a_current_physical_witness_is_a_fresh_capture`, `rust/crates/yamaa-adapters/tests/submission_service.rs::a_file_changed_before_verification_fails_at_its_field_before_any_target`, `rust/crates/yamaa-adapters/tests/file_diagnostic_origins.rs::a_file_changed_before_the_entry_is_verified_fails_at_its_field`, `rust/crates/yamaa/tests/plan_reuse.rs::a_changed_specification_compiles_again_and_runs_the_change`.
 
-An implementation may validate once and run many times. Each such run, before
-it activates a project function or reads an input record, verifies every file
-the validation read: the specification, its layers, dictionaries and linked
-producing specifications, and the project file with the function files, lock
-and codelists it declares. A file that changed fails that run with
-`resource_path_content_changed`, naming the field that declared it and the
-path as written. The run neither reads the replacement nor validates it in its
-place.
+Before a run activates a project function or reads an input record, it
+verifies every file its validation read: the specification, its layers,
+dictionaries and linked producing specifications, and the project file with
+the function files, lock and codelists it declares. A file that changed fails
+the run with `resource_path_content_changed`, naming the field that declared
+it and the path as written. The run neither reads the replacement nor
+validates it in its place. A later run of the same host object reuses what an
+earlier run validated only while every one of those files is unchanged, and
+validates again otherwise.
 
 ## Path failures
 
