@@ -202,18 +202,11 @@ without `column.submission` fails at that column's `submission`,
 `label` in `detail`; a column that lacks both fails once, for its
 `submission`.
 
-The specification's `output.columns` and `keys` fail under
-[OUTPUT-1](../output.md#output-1) and [OUTPUT-2](../output.md#output-2), as
-checking the specification reports them, at the entry under its listing. An
-output column that repeats an earlier entry fails with `duplicate_identifier`,
-and one that no column declares with `undeclared_column`, at
-`<section>.specs[<n>].output.columns[<i>]`, naming the column in `column`;
-neither has metadata for this rule to check. An empty `keys` fails with
-`invalid_field_type` at `<section>.specs[<n>].keys`. A key fails at
-`<section>.specs[<n>].keys[<i>]`: with `duplicate_identifier` when an
-earlier key names it, naming it in `identifier`; with `undeclared_column`
-when no column declares it; and with `internal_column_in_keys` when
-`output.columns` leaves it out, these two naming it in `column`.
+The specification's `output.columns` and `keys` are validated under
+[OUTPUT-1](../output.md#output-1) and [OUTPUT-2](../output.md#output-2).
+A composed submission reports those findings at the corresponding entry under
+its specification listing. Output columns rejected by OUTPUT-1 have no
+metadata for this rule to check.
 
 <a id="define-8"></a>
 
