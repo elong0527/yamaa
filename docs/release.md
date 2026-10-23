@@ -304,7 +304,9 @@ starts at 1.0.0 (#3030 D1).
   flags, exit statuses and `--format json` keys.
 - The Rust facade: the public items of the `yamaa` crate, as
   `rust/crates/yamaa/public-api.txt` lists them. The internal crates
-  `yamaa-core` and `yamaa-adapters` are not covered.
+  `yamaa-core`, `yamaa-adapters`, `yamaa-boundary` and `yamaa-engine` are
+  not covered, nor are the native modules (`yamaa._native` and the R
+  package's registered routines) and the engine's C ABI, which are internal.
 - Saved artifacts: the bytes each profile writes (CSV, Parquet, SAS Transport
   version 5, Dataset-JSON 1.1, Define-XML 2.1 and the run report) for an
   admitted project and its inputs, on every supported platform. The Parquet
