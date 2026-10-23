@@ -4,8 +4,8 @@
 subject's disposition record, reporting a subject with several records
 instead of stopping the run.
 
-**Input:** demographics records with disposition records carrying category
-(`DSCAT`), decoded term (`DSDECOD`), and start date (`DSSTDTC`).
+**Input:** demographics records with disposition records carrying the
+disposition category, decoded term, and start date.
 
 **Variables:**
 

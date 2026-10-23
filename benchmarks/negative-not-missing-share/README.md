@@ -11,10 +11,9 @@ one.
 - `WEIGHTBL` would be the subject's weight in kilograms at baseline, copied
   from the collected records, and missing where none was collected.
 
-**Note:** more than a quarter of the subjects lack a baseline weight, so
-the check on the completed dataset fails and no artifact is accepted. The
-failure names every subject without a weight and how many subjects were
-checked, so the share is known exactly.
+**Note:** when the share of subjects without a baseline weight exceeds the
+accepted limit, no artifact is accepted. The failure names every affected
+subject and how many subjects were checked, so the share is known exactly.
 
 ## How to fix
 
@@ -24,8 +23,10 @@ rerun. When the study accepts a larger share of missing weights, state the
 share it accepts:
 
 ```yaml
-verifications:
-  - not_missing: {max_fraction: 0.5}
+columns:
+  - name: WEIGHTBL
+    verifications:
+      - not_missing: {max_fraction: 0.5}
 ```
 
 To keep the limit and still build the dataset, report the excess instead of

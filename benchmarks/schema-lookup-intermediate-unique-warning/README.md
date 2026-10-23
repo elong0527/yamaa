@@ -12,7 +12,8 @@ and end date.
 
 - `TRTEDT` is the end date of the subject's exposure record that starts
   last, the later sequence number breaking a tie; a subject with one record
-  takes that record's end date.
+  takes that record's end date. It is blank when the subject has no
+  exposure record or the selected record has no end date.
 
 **Lookups:** `LAST_EX` names each subject's latest exposure record. The
 subject is expected to appear once in the exposure records; one that
@@ -20,8 +21,9 @@ appears more often is reported, and the latest of its records is read.
 
 The run report (`adsl-checks.csv`) has one row per item the run handled, each
 naming the dataset (`ARTIFACT`), the kind of item (`KIND`), where the spec
-states it (`SPEC_PATH`) and its subject (`NAME`): the run and its outcome
-(`OUTCOME`), the two datasets read, the subjects built, then the two counts
+states it (`SPEC_PATH`) and the item's name (`NAME`, identifying an input,
+row driver, handler, column, or check): the run and its outcome
+(`OUTCOME`), the input datasets read, the subjects built, then the two counts
 of the exposure read: the subjects for which the latest record was chosen
 among several, and those for which no record was found. Each count names
 the column it feeds (`TARGET`) and the rule its answer stands in for
