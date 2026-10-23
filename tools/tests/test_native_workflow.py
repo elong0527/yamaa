@@ -837,21 +837,40 @@ class NativeWorkflowContract(unittest.TestCase):
         return commands
 
     def test_every_python_lane_is_compared_beside_r_reports_of_its_os(self):
-        # Linux aarch64 has no native-r lane yet; its lanes use Linux x86_64's.
+        # Every platform that a wheel is built for, Linux aarch64 included
+        # (#3030 D49), has a native-r lane of its own, and each Python lane
+        # reads the reports that it uploads (D240 on #3673).
         lanes = self.coverage["qualify"]["include"]
         commands = self.cohort_commands()
         self.assertEqual(len(commands), len(lanes) + len(self.r_binary_lanes()))
         for lane, command in zip(lanes, commands[: len(lanes)], strict=True):
-            r_platform = native.R_EVIDENCE.get(lane["os"], lane["os"])
+            artifact = f"native-r-qualification-{lane['os']}"
+            job = self.jobs.get(f"native-r ({lane['os']})", {"uploads": []})
             with self.subTest(lane=lane):
-                self.assertIn(r_platform, native.R_PLATFORMS)
-                evidence = command[command.index("--r-evidence") + 1]
                 self.assertEqual(
-                    Path(evidence),
-                    Path("cohort-input")
-                    / f"native-r-qualification-{r_platform}"
-                    / "r-source",
+                    {
+                        "R evidence": Path(command[command.index("--r-evidence") + 1]),
+                        "uploaded by the native-r job of its OS": artifact
+                        in job["uploads"],
+                    },
+                    {
+                        "R evidence": Path("cohort-input") / artifact / "r-source",
+                        "uploaded by the native-r job of its OS": True,
+                    },
                 )
+
+    def test_a_python_platform_without_a_native_r_lane_is_refused(self):
+        # A Python lane is compared beside R reports of its own platform, never
+        # beside another platform's or none.
+        coverage = native.coverage()
+        coverage["r"]["os"].remove("ubuntu-24.04-arm")
+        with (
+            patch.object(native.subprocess, "run"),
+            self.assertRaisesRegex(
+                ValueError, "the platform of Python lanes: ubuntu-24.04-arm$"
+            ),
+        ):
+            native.compare_cohorts(coverage, ROOT, "a" * 40)
 
     def r_binary_lanes(self):
         """List each R binary lane's platform and R version."""
@@ -1710,7 +1729,6 @@ class NativeWorkflowContract(unittest.TestCase):
         )
         for platform, target in self.cli_lanes():
             command = joined[Path("cohort-input") / f"public-conformance-cli-{target}"]
-            r_platform = native.R_EVIDENCE.get(platform, platform)
             with self.subTest(platform=platform, target=target):
                 self.assertEqual(
                     Path(command[command.index("--python-evidence") + 1]),
@@ -1721,7 +1739,7 @@ class NativeWorkflowContract(unittest.TestCase):
                 self.assertEqual(
                     Path(command[command.index("--r-evidence") + 1]),
                     Path("cohort-input")
-                    / f"native-r-qualification-{r_platform}"
+                    / f"native-r-qualification-{platform}"
                     / "r-source",
                 )
         cohort = self.jobs["public-cohort-complete-runs"]["job"]

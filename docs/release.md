@@ -38,13 +38,15 @@ package for that platform. `tools.validation.check_supported_platforms`, which
   UndefinedBehaviorSanitizer, with R-devel in R-hub's `clang-asan`
   container. The separate R-CMD-check workflow also checks the latest R 4.2
   patch on Linux.
-- On Linux aarch64, native qualification uses R-release alone. With the
-  network disabled, it builds and installs the R source package that a
-  release publishes and runs the conformance corpus with it: its
-  `native-offline-source` job, with the pinned Rust, and its
-  `native-offline-toolchain` job, with the minimum Rust installed from its
-  standalone installer. No `R CMD check --as-cran` runs on aarch64, and no
-  lane there uses R 4.2.
+- On Linux aarch64, native qualification uses R-release alone. Its
+  `native-r` job installs the R source package that a release publishes,
+  runs the conformance corpus and the installed R suites with it, and passes
+  `R CMD check --as-cran` with R 4.6.1, as on the other platforms. With the
+  network disabled, it also builds and installs that package and runs the
+  conformance corpus with it: its `native-offline-source` job, with the
+  pinned Rust, and its `native-offline-toolchain` job, with the minimum Rust
+  installed from its standalone installer. CRAN's incoming checks, the
+  `native-cran` jobs, do not run on aarch64, and no lane there uses R 4.2.
 - The R binary packages are for R-release and R-oldrel, as CRAN builds them
   (#3030 D48). Each is built for one R series and works only with R of that
   series, and the macOS binaries need macOS 11 or later, the first macOS for
