@@ -22,7 +22,7 @@ pub enum Error {
     Resolver(ResolverFailure),
     /// A caller-supplied project function failed.
     Host(FunctionError),
-    /// Arrow/IPC representation failed.
+    /// A table could not be built or imported.
     Table(TableError),
     /// A format feature is not compiled in.
     Unavailable { feature: &'static str },
@@ -434,7 +434,8 @@ impl LockSyntaxError {
     }
 }
 
-/// An Arrow/IPC representation failure, carrying its stable code and message.
+/// A table that could not be built or imported, carrying its stable code and
+/// message.
 #[non_exhaustive]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TableError {
@@ -453,14 +454,13 @@ impl TableError {
         &self.message
     }
 
-    pub(crate) fn from_ipc(error: yamaa_adapters::ipc_table::TableError) -> Self {
-        use yamaa_adapters::ipc_table::TableError as Ipc;
+    pub(crate) fn from_public(error: yamaa_adapters::public_table::TableError) -> Self {
+        use yamaa_adapters::public_table::TableError as Public;
         let code = match error {
-            Ipc::Limit { .. } => "limit",
-            Ipc::Representation { .. } => "representation",
-            Ipc::InvalidTable => "invalid_table",
-            Ipc::OutputIo => "output_io",
-            Ipc::Internal => "internal",
+            Public::Limit { .. } => "limit",
+            Public::Representation { .. } => "representation",
+            Public::InvalidTable => "invalid_table",
+            Public::Internal => "internal",
         };
         Self {
             code,
@@ -468,16 +468,15 @@ impl TableError {
         }
     }
 
-    pub(crate) fn from_table(error: yamaa_adapters::arrow_table::TableError) -> Self {
-        use yamaa_adapters::arrow_table::TableError as Table;
+    #[cfg(feature = "arrow")]
+    pub(crate) fn from_table(error: yamaa_adapters::column_table::TableError) -> Self {
+        use yamaa_adapters::column_table::TableError as Table;
         let code = match error {
             Table::Limit { .. } => "limit",
             Table::SchemaMismatch { .. } => "schema_mismatch",
             Table::ArrayType { .. } => "array_type",
-            Table::TemporalChildType { .. }
-            | Table::TemporalMissingChild { .. }
-            | Table::TemporalPrecision { .. }
-            | Table::TemporalRange { .. } => "temporal",
+            Table::TemporalRange { .. } => "temporal",
+            Table::Representation { .. } => "representation",
             Table::Arrow(_) => "arrow",
         };
         Self {
@@ -618,10 +617,10 @@ mod tests {
 
     #[test]
     fn table_errors_carry_stable_codes() {
-        use yamaa_adapters::ipc_table::TableError as Ipc;
+        use yamaa_adapters::public_table::TableError as Public;
         for (error, code) in [
             (
-                Ipc::Limit {
+                Public::Limit {
                     resource: "table_rows",
                     limit: 1,
                     required: None,
@@ -629,48 +628,58 @@ mod tests {
                 "limit",
             ),
             (
-                Ipc::Representation {
+                Public::Representation {
                     representation: "text",
                 },
                 "representation",
             ),
-            (Ipc::InvalidTable, "invalid_table"),
-            (Ipc::OutputIo, "output_io"),
-            (Ipc::Internal, "internal"),
+            (Public::InvalidTable, "invalid_table"),
+            (Public::Internal, "internal"),
         ] {
-            let converted = TableError::from_ipc(error);
+            let converted = TableError::from_public(error);
             assert_eq!(converted.code(), code);
             assert!(!converted.message().is_empty());
         }
     }
 
     #[test]
-    fn table_temporal_errors_carry_the_temporal_code() {
-        use yamaa_adapters::arrow_table::TableError as Table;
-        for error in [
-            Table::TemporalChildType {
-                batch: 0,
-                column: 0,
-                row: 0,
-            },
-            Table::TemporalMissingChild {
-                batch: 0,
-                column: 0,
-                row: 0,
-            },
-            Table::TemporalPrecision {
-                batch: 0,
-                column: 0,
-                row: 0,
-            },
-            Table::TemporalRange {
-                batch: 0,
-                column: 0,
-                row: 0,
-            },
+    #[cfg(feature = "arrow")]
+    fn table_import_errors_carry_stable_codes() {
+        use yamaa_adapters::column_table::TableError as Table;
+        for (error, code) in [
+            (
+                Table::Limit {
+                    resource: "table_rows",
+                    limit: 1,
+                    required: None,
+                },
+                "limit",
+            ),
+            (Table::SchemaMismatch { batch: 0 }, "schema_mismatch"),
+            (
+                Table::ArrayType {
+                    batch: 0,
+                    column: 1,
+                },
+                "array_type",
+            ),
+            (
+                Table::TemporalRange {
+                    batch: 0,
+                    column: 0,
+                    row: 0,
+                },
+                "temporal",
+            ),
+            (
+                Table::Representation {
+                    representation: "text",
+                },
+                "representation",
+            ),
         ] {
             let converted = TableError::from_table(error);
-            assert_eq!(converted.code(), "temporal");
+            assert_eq!(converted.code(), code);
             assert!(!converted.message().is_empty());
         }
     }

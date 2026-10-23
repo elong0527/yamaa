@@ -503,31 +503,26 @@ impl PreparedOutput {
     }
 }
 
-/// An owned build result; obtaining it never calls a publisher. Table bytes are
+/// An owned build result; obtaining it never calls a publisher. Its table is
 /// the admitted output projection, while private report artifacts are prospective.
 /// Every result holds its verified run report.
 #[derive(Debug)]
 pub struct BuildResult {
     prepared: PreparedOutput,
-    table: Option<(crate::public_table::PublicTable, Vec<u8>)>,
+    table: Option<crate::public_table::PublicTable>,
     issues: Vec<Diagnostic>,
     report: crate::run_report::HeldReport,
 }
 impl BuildResult {
-    pub fn output(&self) -> Option<&[u8]> {
-        self.table.as_ref().map(|(_, bytes)| bytes.as_slice())
-    }
-    pub(crate) fn output_table(&self) -> Option<&crate::public_table::PublicTable> {
-        self.table.as_ref().map(|(table, _)| table)
+    /// The output table, which only an accepted output has.
+    pub fn output(&self) -> Option<&crate::public_table::PublicTable> {
+        self.table.as_ref()
     }
     pub fn issues(&self) -> &[Diagnostic] {
         &self.issues
     }
-    /// The run report's owned Arrow IPC view.
-    pub fn run_report(&self) -> &[u8] {
-        self.report.ipc()
-    }
-    pub(crate) fn report_table(&self) -> &crate::public_table::PublicTable {
+    /// The run report table, which every result holds.
+    pub fn run_report(&self) -> &crate::public_table::PublicTable {
         self.report.table()
     }
     /// Whether the specification declares a report file for publication.
@@ -697,9 +692,8 @@ pub(crate) fn prepare_result(
                 &execution.ok_or(Error::InvalidObservation)?.dataset,
                 &artifact.projection,
             )
-            .and_then(|table| table.ipc().map(|bytes| (table, bytes)))
             .map_err(|e| match e {
-                crate::ipc_table::TableError::Limit {
+                crate::public_table::TableError::Limit {
                     resource,
                     limit,
                     required,

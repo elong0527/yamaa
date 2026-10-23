@@ -670,7 +670,7 @@ rows:
                     assert_eq!(report["artifacts"], yamaa_adapters::json!([]));
                     if let Some(expected) = case.get("table") {
                         assert_eq!(
-                            table(result.output_table().unwrap()),
+                            table(result.output().unwrap()),
                             *expected,
                             "{name}: typed output"
                         );

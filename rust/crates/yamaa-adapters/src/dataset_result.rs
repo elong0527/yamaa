@@ -2,7 +2,6 @@
 use crate::{
     callback::{BoundaryError, CallbackError},
     execution_diagnostics as diagnostics,
-    ipc_table::{encode_dataset, TableError},
 };
 use std::fmt;
 use yamaa_core::diagnostic::Diagnostic;
@@ -21,7 +20,6 @@ pub enum DatasetError {
     UnsupportedOutcome,
     Function(BoundaryError),
     FunctionBinding,
-    Table(TableError),
     Internal,
 }
 impl DatasetError {
@@ -29,9 +27,7 @@ impl DatasetError {
     pub fn is_internal(self) -> bool {
         matches!(
             self,
-            Self::Internal
-                | Self::Table(TableError::Internal)
-                | Self::Function(BoundaryError::Internal | BoundaryError::Interrupted)
+            Self::Internal | Self::Function(BoundaryError::Internal | BoundaryError::Interrupted)
         )
     }
 }
@@ -46,7 +42,6 @@ impl fmt::Display for DatasetError {
             Self::FunctionBinding => {
                 "dataset callback bindings do not match the admitted signatures"
             }
-            Self::Table(error) => return error.fmt(f),
             Self::Internal => "internal execution result failure",
         })
     }
@@ -54,10 +49,10 @@ impl fmt::Display for DatasetError {
 impl std::error::Error for DatasetError {}
 type Error = DatasetError;
 
-/// The checked table of one execution from held bytes, present only for
+/// The checked dataset of one execution from held bytes, present only for
 /// success, with its typed outcome and handler evidence.
 pub struct DatasetResponse {
-    pub table: Option<Vec<u8>>,
+    pub table: Option<dataset::Dataset>,
     pub outcome: Outcome,
     /// Every handler path the attempt registered, in registration order.
     pub handler_counts: Vec<HandlerCount>,
@@ -312,15 +307,12 @@ pub fn outcome<E>(attempt: &dataset::ExecutionAttempt<E>) -> Result<Outcome, Err
     response(attempt).map(|response| response.outcome)
 }
 
-/// Classify an execution from held bytes and encode its checked table.
+/// Classify an execution from held bytes and keep its checked dataset.
 pub(crate) fn specification_response(
     attempt: dataset::ExecutionAttempt<CallbackError>,
 ) -> Result<DatasetResponse, Error> {
     let outcome = self::outcome(&attempt)?;
-    let table = match &attempt.result {
-        Ok(result) => Some(encode_dataset(&result.dataset).map_err(Error::Table)?),
-        Err(_) => None,
-    };
+    let table = attempt.result.ok().map(|result| result.dataset);
     Ok(DatasetResponse {
         table,
         outcome,

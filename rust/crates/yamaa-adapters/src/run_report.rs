@@ -23,18 +23,14 @@ pub(crate) struct HeldFile {
     observation: Value,
 }
 
-/// The verified report every run builds, its owned host view and, when the
+/// The verified report every run builds, its table and, when the
 /// specification declares `output.report`, its rendered file.
 #[derive(Debug)]
 pub(crate) struct HeldReport {
     file: Option<HeldFile>,
-    ipc: Vec<u8>,
     table: PublicTable,
 }
 impl HeldReport {
-    pub(crate) fn ipc(&self) -> &[u8] {
-        &self.ipc
-    }
     pub(crate) fn table(&self) -> &PublicTable {
         &self.table
     }
@@ -533,14 +529,9 @@ pub(crate) fn prepare(
         .map(|path| rendered(path, &table))
         .transpose()?;
     let projection = (0..table.schema().columns().len()).collect::<Vec<_>>();
-    let public =
+    let table =
         PublicTable::from_table(&table, &projection).map_err(|_| Error::InvalidObservation)?;
-    let ipc = public.ipc().map_err(|_| Error::InvalidObservation)?;
-    Ok(HeldReport {
-        file,
-        ipc,
-        table: public,
-    })
+    Ok(HeldReport { file, table })
 }
 
 /// What a saved report file records (PROJECT-15), decoded under the profile

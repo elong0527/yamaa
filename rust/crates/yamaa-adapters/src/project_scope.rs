@@ -674,16 +674,8 @@ impl Plan {
 /// columns; no report gives the columns without rows.
 pub fn stack_reports(reports: &[&PublicTable]) -> Result<PublicTable, Vec<Diagnostic>> {
     let refused = || crate::file_application::rejected(issue::Step::Report, Fault::ReportStack);
-    let Some(first) = reports.first() else {
+    if reports.is_empty() {
         return crate::run_report::empty_table().map_err(|_| refused());
-    };
-    let schema = Arc::clone(first.schema());
-    if reports.iter().any(|report| report.schema() != &schema) {
-        return Err(refused());
     }
-    let batches = reports
-        .iter()
-        .flat_map(|report| report.batches().iter().cloned())
-        .collect();
-    PublicTable::from_batches(schema, batches).map_err(|_| refused())
+    PublicTable::stack(reports).map_err(|_| refused())
 }

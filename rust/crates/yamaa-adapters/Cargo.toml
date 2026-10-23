@@ -9,15 +9,19 @@ publish.workspace = true
 autotests = false
 
 [features]
-default = ["yaml", "parquet", "readstat", "odm"]
+default = ["yaml", "parquet", "readstat", "odm", "arrow"]
 # Document syntax admission; owned core documents do not require this parser.
 yaml = ["dep:yamaa-saphyr-parser", "dep:num-bigint"]
 # Source and artifact codecs share one edge, including native Zstd compression.
-parquet = ["dep:parquet", "dep:bytes", "dep:base64", "dep:brotli", "dep:flate2", "dep:lz4_flex", "dep:zstd", "dep:snap"]
+# The reader reads the Arrow schema a file embeds, so it needs Arrow too.
+parquet = ["arrow", "dep:parquet", "dep:arrow-ipc", "dep:flatbuffers", "dep:bytes", "dep:base64", "dep:brotli", "dep:flate2", "dep:lz4_flex", "dep:zstd", "dep:snap"]
 # SAS binary input only; disabling this feature omits the bundled ReadStat build.
 readstat = ["dep:cc"]
 # ODM XML clinical items from plain XML or plain/gzip TAR input; pure Rust.
 odm = ["dep:quick-xml", "dep:flate2"]
+# The Arrow form of tables: a public table's record batches and their C
+# stream, and the import of a host frame's C stream. No physical reader.
+arrow = ["dep:arrow-array", "dep:arrow-schema", "dep:arrow-buffer"]
 
 [dependencies]
 yamaa-core = { path = "../yamaa-core" }
@@ -35,12 +39,15 @@ yamaa-saphyr-parser = { version = "=0.2.1", path = "../../vendor/saphyr-parser",
 num-bigint = { version = "0.4.8", default-features = false, optional = true }
 
 # Arrow and Parquet 55.2.0 are the newest releases that build with Rust 1.82;
-# 56 needs 1.84 and 57 needs 1.85.
-arrow-array = { version = "=55.2.0", default-features = false, features = ["ffi"] }
-arrow-schema = { version = "=55.2.0", default-features = false }
-arrow-buffer = { version = "=55.2.0", default-features = false }
-arrow-ipc = { version = "=55.2.0", default-features = false }
-flatbuffers = { version = "=25.12.19", default-features = false }
+# 56 needs 1.84 and 57 needs 1.85. The engine's own tables are columnar
+# (column_table.rs); Arrow is their form at the hosts' edge (the arrow
+# feature), and arrow-ipc and flatbuffers read the Arrow schema that a Parquet
+# file embeds (the parquet feature).
+arrow-array = { version = "=55.2.0", default-features = false, features = ["ffi"], optional = true }
+arrow-schema = { version = "=55.2.0", default-features = false, optional = true }
+arrow-buffer = { version = "=55.2.0", default-features = false, optional = true }
+arrow-ipc = { version = "=55.2.0", default-features = false, optional = true }
+flatbuffers = { version = "=25.12.19", default-features = false, optional = true }
 # Parquet 55 has one `flate2` feature, and it selects flate2's zlib-rs
 # backend, which flate2 prefers to the rust_backend (miniz_oxide) named below.
 parquet = { version = "=55.2.0", default-features = false, features = ["arrow", "snap", "brotli", "flate2", "lz4", "zstd"], optional = true }

@@ -451,87 +451,66 @@ impl Report {
     /// like `operand_route`, missing when the failure site recorded no
     /// geometry.
     pub fn table(&self) -> Table {
-        use arrow_array::builder::{Int64Builder, ListBuilder, StringBuilder};
-        use arrow_array::ArrayRef;
-        use arrow_schema::{DataType, Field, Schema};
-        use std::sync::Arc;
+        use yamaa_adapters::public_table::{List, PublicColumn, PublicTable};
 
         let int = |value: usize| i64::try_from(value).unwrap_or(i64::MAX);
-        let mut severity = StringBuilder::new();
-        let mut phase = StringBuilder::new();
-        let mut condition = StringBuilder::new();
-        let mut rule = StringBuilder::new();
-        let mut spec_paths = ListBuilder::new(StringBuilder::new());
-        let mut file = StringBuilder::new();
-        let mut line = Int64Builder::new();
-        let mut column = Int64Builder::new();
-        let mut message = StringBuilder::new();
-        let mut context = StringBuilder::new();
-        let mut source_span = ListBuilder::new(Int64Builder::new());
-        let mut operand_route = ListBuilder::new(StringBuilder::new());
-        for diagnostic in &self.diagnostics {
-            severity.append_value(diagnostic.severity.as_str());
-            phase.append_value(&diagnostic.phase);
-            condition.append_value(&diagnostic.code);
-            rule.append_option(diagnostic.rule.as_deref());
-            for path in &diagnostic.spec_path {
-                spec_paths.values().append_value(path);
-            }
-            spec_paths.append(true);
-            let location = diagnostic.location.as_ref();
-            let position = location.and_then(|location| location.position);
-            file.append_option(location.map(|location| location.file.as_str()));
-            line.append_option(position.map(|at| int(at.line)));
-            column.append_option(position.map(|at| int(at.column)));
-            message.append_value(&diagnostic.message);
-            context.append_value(diagnostic.context.to_json());
-            match diagnostic.source_span {
-                Some(span) => {
-                    source_span.values().append_value(int(span.start));
-                    source_span.values().append_value(int(span.end));
-                    source_span.append(true);
-                }
-                None => source_span.append(false),
-            }
-            match &diagnostic.operand_route {
-                Some(route) => {
-                    for step in route {
-                        operand_route.values().append_value(step);
-                    }
-                    operand_route.append(true);
-                }
-                None => operand_route.append(false),
-            }
-        }
-        let list = |item: DataType| DataType::List(Arc::new(Field::new("item", item, true)));
-        let columns: [(DataType, ArrayRef); ISSUE_COLUMNS.len()] = [
-            (DataType::Utf8, Arc::new(severity.finish())),
-            (DataType::Utf8, Arc::new(phase.finish())),
-            (DataType::Utf8, Arc::new(condition.finish())),
-            (DataType::Utf8, Arc::new(rule.finish())),
-            (list(DataType::Utf8), Arc::new(spec_paths.finish())),
-            (DataType::Utf8, Arc::new(file.finish())),
-            (DataType::Int64, Arc::new(line.finish())),
-            (DataType::Int64, Arc::new(column.finish())),
-            (DataType::Utf8, Arc::new(message.finish())),
-            (DataType::Utf8, Arc::new(context.finish())),
-            (list(DataType::Int64), Arc::new(source_span.finish())),
-            (list(DataType::Utf8), Arc::new(operand_route.finish())),
+        let diagnostics = &self.diagnostics;
+        let text = |cell: fn(&Diagnostic) -> Option<&str>| {
+            PublicColumn::Str(diagnostics.iter().map(cell).collect())
+        };
+        let position = |diagnostic: &Diagnostic| {
+            diagnostic
+                .location
+                .as_ref()
+                .and_then(|location| location.position)
+        };
+        let lists = |list: List| PublicColumn::List(Box::new(list));
+        let columns: [PublicColumn; ISSUE_COLUMNS.len()] = [
+            text(|diagnostic| Some(diagnostic.severity.as_str())),
+            text(|diagnostic| Some(&diagnostic.phase)),
+            text(|diagnostic| Some(&diagnostic.code)),
+            text(|diagnostic| diagnostic.rule.as_deref()),
+            lists(List::text(diagnostics.iter().map(|diagnostic| {
+                Some(diagnostic.spec_path.iter().map(String::as_str).collect())
+            }))),
+            text(|diagnostic| {
+                diagnostic
+                    .location
+                    .as_ref()
+                    .map(|location| location.file.as_str())
+            }),
+            PublicColumn::Int(
+                diagnostics
+                    .iter()
+                    .map(|diagnostic| position(diagnostic).map(|at| int(at.line)))
+                    .collect(),
+            ),
+            PublicColumn::Int(
+                diagnostics
+                    .iter()
+                    .map(|diagnostic| position(diagnostic).map(|at| int(at.column)))
+                    .collect(),
+            ),
+            text(|diagnostic| Some(&diagnostic.message)),
+            text(|diagnostic| Some(diagnostic.context.to_json())),
+            lists(List::int(diagnostics.iter().map(|diagnostic| {
+                diagnostic
+                    .source_span
+                    .map(|span| vec![int(span.start), int(span.end)])
+            }))),
+            lists(List::text(diagnostics.iter().map(|diagnostic| {
+                diagnostic
+                    .operand_route
+                    .as_ref()
+                    .map(|route| route.iter().map(String::as_str).collect())
+            }))),
         ];
-        let (types, arrays): (Vec<_>, Vec<_>) = columns.into_iter().unzip();
-        let schema = Arc::new(Schema::new(
-            ISSUE_COLUMNS
-                .into_iter()
-                .zip(types)
-                .map(|(name, kind)| Field::new(name, kind, true))
-                .collect::<Vec<_>>(),
-        ));
-        let batch = arrow_array::RecordBatch::try_new(schema.clone(), arrays)
-            .expect("the builders produce exactly the declared issue columns");
-        Table::from_public(
-            yamaa_adapters::public_table::PublicTable::from_batches(schema, vec![batch])
-                .expect("the batch was built against this schema"),
-        )
+        let columns = ISSUE_COLUMNS
+            .into_iter()
+            .map(str::to_owned)
+            .zip(columns)
+            .collect();
+        Table::from_public(PublicTable::new(columns).expect("the issue columns form one table"))
     }
 }
 
@@ -678,6 +657,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "arrow")]
     fn issues_table_keeps_every_field_and_absent_geometry() {
         use arrow_array::{Array, Int64Array, ListArray, StringArray};
         let mut located = issue();

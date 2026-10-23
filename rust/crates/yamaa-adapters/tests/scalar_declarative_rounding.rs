@@ -169,7 +169,7 @@ mod scalar {
         }
 
         fn assert_expected(result: &file_application::Domain) {
-            let table = result.output_table().unwrap();
+            let table = result.output().unwrap();
             let mut lines = EXPECTED.lines();
             let names = lines.next().unwrap().split(',').collect::<Vec<_>>();
             let rows = lines
@@ -356,7 +356,7 @@ mod scalar {
                 )
                 .unwrap();
                 assert_eq!(
-                    result.output_table().unwrap().rows(),
+                    result.output().unwrap().rows(),
                     expected.iter().filter(|&&byte| byte == b'\n').count() - 1,
                     "{name}"
                 );
@@ -696,7 +696,7 @@ mod scalar {
                 assert!(!study.0.join("result.csv").exists(), "{name}");
                 if let Some(csv) = truth["csv"].as_str() {
                     let result = success.as_mut().unwrap();
-                    assert!(result.output_table().is_some());
+                    assert!(result.output().is_some());
                     assert_eq!(
                         result.observations()["handler_counts"],
                         truth["handler_counts"],
@@ -710,7 +710,7 @@ mod scalar {
                     );
                 } else {
                     if let Some(result) = success.as_mut() {
-                        assert!(result.output_table().is_none(), "{name}");
+                        assert!(result.output().is_none(), "{name}");
                         assert!(result.save().is_err(), "{name}");
                     }
                     assert!(!study.0.join("result.csv").exists(), "{name}");

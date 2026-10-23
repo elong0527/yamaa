@@ -692,7 +692,7 @@ rows:
             assert!(result.issues().is_empty());
             assert!(result.output().is_some());
             // One run, input and base row, two column rows and three check rows.
-            assert_eq!(result.report_table().rows(), 8);
+            assert_eq!(result.run_report().rows(), 8);
             assert_eq!(
                 result.observations()["artifacts"],
                 yamaa_adapters::json!([])
@@ -745,7 +745,7 @@ rows:
             let mut result = study.build(&raw.edit("severity: warning", "severity: error"));
             assert!(result.output().is_none());
             // The run, its input and base rows, then the two column checks it reached.
-            assert_eq!(result.report_table().rows(), 5);
+            assert_eq!(result.run_report().rows(), 5);
             assert_eq!(result.issues().len(), 1);
             assert_eq!(result.issues()[0].condition(), "range_failed");
             for name in ["adsl.csv", "adsl-checks.csv"] {
@@ -804,7 +804,7 @@ rows:
             let mut undeclared = study.build(raw);
             assert!(undeclared.issues().is_empty());
             // A run, an input, a base and a column row; no handler or check.
-            assert_eq!(undeclared.report_table().rows(), 4);
+            assert_eq!(undeclared.run_report().rows(), 4);
             assert!(undeclared.save().unwrap());
             assert_eq!(
                 undeclared.observations()["artifacts"]
@@ -1656,7 +1656,7 @@ columns:
             assert_eq!(artifact["profile"], "parquet");
             assert_eq!(artifact["row_count"], 8);
             assert_eq!(artifact["content"], "");
-            let table = result.report_table();
+            let table = result.run_report();
             for column in [10, 11] {
                 assert_eq!(
                     table.columns()[column].data_type(),

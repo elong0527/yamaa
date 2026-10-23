@@ -1,3 +1,4 @@
+#![cfg(feature = "arrow")]
 //! Independently authored C Data/Stream values and ownership controls.
 use arrow_array::{
     new_empty_array, Array, ArrayRef, Date32Array, Float64Array, Int64Array, LargeStringArray,
@@ -14,9 +15,11 @@ use std::{
 };
 use yamaa_adapters::{
     arrow_bridge::{self, ArrowArrayStreamReader, FFI_ArrowArrayStream},
+    column_table::{Column as Values, ColumnTable, TableError},
     public_table::PublicTable,
 };
 use yamaa_core::{
+    limits::Limits,
     table::{Column, TableAccess, TableSchema, ValueRef},
     temporal::{Date, DateTime, Precision},
     value::ColumnType,
@@ -98,26 +101,20 @@ fn truth() -> RecordBatch {
     RecordBatch::try_new(Arc::new(Schema::new(fields)), arrays).unwrap()
 }
 
+/// A one-column frame of `array`, through a C stream.
+fn imported(name: &str, array: ArrayRef) -> Result<ColumnTable, TableError> {
+    let schema = Arc::new(Schema::new(vec![Field::new(
+        name,
+        array.data_type().clone(),
+        true,
+    )]));
+    let batch = RecordBatch::try_new(schema.clone(), vec![array]).unwrap();
+    arrow_bridge::import_public_stream(arrow_bridge::export_stream(schema, vec![batch]))
+}
+
 #[test]
-fn all_logical_values_nulls_slices_and_empty_chunks_share_the_original_buffers() {
+fn all_logical_values_nulls_slices_and_empty_chunks_import_in_record_order() {
     let original = truth();
-    let pointers = |batch: &RecordBatch| {
-        batch
-            .columns()
-            .iter()
-            .map(|array| {
-                let data = array.to_data();
-                (
-                    data.buffers()
-                        .iter()
-                        .map(|buffer| buffer.as_ptr())
-                        .collect::<Vec<_>>(),
-                    data.nulls().map(|nulls| nulls.buffer().as_ptr()),
-                )
-            })
-            .collect::<Vec<_>>()
-    };
-    let all_pointers = pointers(&original);
     let chunks = vec![
         original.slice(0, 0),
         original.slice(0, 2),
@@ -125,21 +122,12 @@ fn all_logical_values_nulls_slices_and_empty_chunks_share_the_original_buffers()
         original.slice(2, 2),
         original.slice(4, 0),
     ];
-    let integer_pointer = original.column(1).to_data().buffers()[0].as_ptr();
-    let text_pointer = original.column(0).to_data().buffers()[1].as_ptr();
     let (source, dropped) = stream(original.schema(), chunks.into_iter().map(Ok).collect());
     drop(original);
     let table = arrow_bridge::import_public_stream(source).unwrap();
+    // The import released the stream and owns copies of its values.
     assert_eq!(dropped.load(Ordering::SeqCst), 1);
     assert_eq!(table.row_count(), 4);
-    assert_eq!(
-        table
-            .batches()
-            .iter()
-            .map(RecordBatch::num_rows)
-            .collect::<Vec<_>>(),
-        [0, 2, 0, 2, 0]
-    );
     assert_eq!(table.cell(0, 0).unwrap(), ValueRef::Str("a\0\u{1f980}"));
     assert_eq!(table.cell(2, 0).unwrap(), ValueRef::Str(""));
     assert_eq!(table.cell(3, 0).unwrap(), ValueRef::Str("\u{03b2}"));
@@ -164,81 +152,69 @@ fn all_logical_values_nulls_slices_and_empty_chunks_share_the_original_buffers()
         panic!()
     };
     assert_eq!(value.to_string(), "0001-01-01");
+    assert_eq!(value.collected_precision(), Precision::Day);
     let ValueRef::DateTime(value) = table.cell(3, 4).unwrap() else {
         panic!()
     };
     assert_eq!(value.to_string(), "9999-12-31T23:59:59");
-    let public = PublicTable::from_snapshot(&table).unwrap();
+    assert_eq!(value.collected_precision(), Precision::Second);
+}
+
+#[test]
+fn every_export_shares_the_tables_arrow_buffers_and_outlives_its_reader() {
+    let table = arrow_bridge::import_public_stream(arrow_bridge::export_stream(
+        truth().schema(),
+        vec![truth()],
+    ))
+    .unwrap();
+    let public = PublicTable::from_table(&table, &[0, 1, 2, 3, 4]).unwrap();
     drop(table);
+    let pointers = |batch: &RecordBatch| {
+        batch
+            .columns()
+            .iter()
+            .map(|array| {
+                let data = array.to_data();
+                (
+                    data.buffers()
+                        .iter()
+                        .map(|buffer| buffer.as_ptr())
+                        .collect::<Vec<_>>(),
+                    data.nulls().map(|nulls| nulls.buffer().as_ptr()),
+                )
+            })
+            .collect::<Vec<_>>()
+    };
+    let held = pointers(&public.batches()[0]);
     for _ in 0..100 {
         let mut reader = ArrowArrayStreamReader::try_new(public.stream()).unwrap();
-        let _empty = reader.next().unwrap().unwrap();
         let first = reader.next().unwrap().unwrap();
         // Releasing the reader early leaves imported C Data arrays alive.
         drop(reader);
-        assert_eq!(pointers(&first), all_pointers);
-        assert_eq!(
-            first.column(1).to_data().buffers()[0].as_ptr(),
-            integer_pointer
-        );
-        assert_eq!(
-            first.column(0).to_data().buffers()[1].as_ptr(),
-            text_pointer
-        );
-        assert_eq!(
-            first
-                .column(3)
-                .as_any()
-                .downcast_ref::<Date32Array>()
-                .unwrap()
-                .value(0),
-            -719_162
-        );
-        assert!(first.column(3).is_null(1));
+        assert_eq!(pointers(&first), held);
+        assert_eq!(first, truth());
     }
 }
 
 #[test]
-fn large_and_view_utf8_share_payloads_across_foreign_stream_import_and_export() {
+fn large_and_view_utf8_import_their_values() {
     let text = "a\0\u{1f980} long UTF-8 payload that cannot fit in an inline string view";
     for array in [
         Arc::new(LargeStringArray::from(vec![Some(text), None, Some("")])) as ArrayRef,
         Arc::new(StringViewArray::from(vec![Some(text), None, Some("")])) as ArrayRef,
     ] {
-        let pointer = if let Some(array) = array.as_any().downcast_ref::<LargeStringArray>() {
-            array.value(0).as_ptr()
-        } else {
-            array
-                .as_any()
-                .downcast_ref::<StringViewArray>()
-                .unwrap()
-                .value(0)
-                .as_ptr()
-        };
-        let schema = Arc::new(Schema::new(vec![Field::new(
-            "S",
-            array.data_type().clone(),
-            true,
-        )]));
-        let batch = RecordBatch::try_new(schema.clone(), vec![array]).unwrap();
-        let table =
-            arrow_bridge::import_public_stream(arrow_bridge::export_stream(schema, vec![batch]))
-                .unwrap();
-        let ValueRef::Str(value) = table.cell(0, 0).unwrap() else {
-            panic!()
-        };
-        assert_eq!(value, text);
-        assert_eq!(value.as_ptr(), pointer);
-        assert_eq!(table.cell(1, 0).unwrap(), ValueRef::Missing);
-        assert_eq!(table.cell(2, 0).unwrap(), ValueRef::Str(""));
-        let public = PublicTable::from_snapshot(&table).unwrap();
-        let imported = arrow_bridge::import_public_stream(public.stream()).unwrap();
-        drop(table);
-        drop(public);
-        let ValueRef::Str(value) = imported.cell(0, 0).unwrap() else {
-            panic!()
-        };
-        assert_eq!(value.as_ptr(), pointer);
+        let kind = array.data_type().clone();
+        let table = imported("S", array).unwrap();
+        assert_eq!(table.cell(0, 0).unwrap(), ValueRef::Str(text), "{kind}");
+        assert_eq!(table.cell(1, 0).unwrap(), ValueRef::Missing, "{kind}");
+        assert_eq!(table.cell(2, 0).unwrap(), ValueRef::Str(""), "{kind}");
+        // Public tables carry text as Utf8, whatever layout a frame used.
+        let public = PublicTable::from_table(&table, &[0]).unwrap();
+        let expected = StringArray::from(vec![Some(text), None, Some("")]);
+        assert_eq!(
+            public.batches()[0].column(0).as_ref(),
+            &expected as &dyn Array
+        );
     }
 }
 
@@ -282,17 +258,69 @@ fn incapable_physical_types_are_refused_and_release_the_input() {
         DataType::Boolean,
         DataType::Timestamp(TimeUnit::Millisecond, None),
         DataType::Timestamp(TimeUnit::Second, Some("UTC".into())),
+        DataType::Struct(vec![Field::new("value", DataType::Date32, false)].into()),
     ] {
         let schema = Arc::new(Schema::new(vec![Field::new("X", kind.clone(), true)]));
         let batch = RecordBatch::try_new(schema.clone(), vec![new_empty_array(&kind)]).unwrap();
         let (source, dropped) = stream(schema, vec![Ok(batch)]);
-        assert!(arrow_bridge::import_public_stream(source).is_err());
+        assert!(
+            matches!(
+                arrow_bridge::import_public_stream(source),
+                Err(TableError::ArrayType {
+                    batch: 0,
+                    column: 0
+                })
+            ),
+            "{kind}"
+        );
         assert_eq!(dropped.load(Ordering::SeqCst), 1);
     }
 }
 
+/// A visible date or datetime outside the years 1 to 9999 is refused at its
+/// batch, column and row; a null masks whatever its slot holds.
 #[test]
-fn nonfinite_missingness_and_empty_schema_are_explicit() {
+fn visible_temporal_values_outside_the_calendar_are_refused_and_nulls_mask_payloads() {
+    for (array, row) in [
+        (
+            Arc::new(Date32Array::from(vec![0, i32::MIN])) as ArrayRef,
+            1,
+        ),
+        (Arc::new(Date32Array::from(vec![2_932_897, 0])), 0),
+        (Arc::new(TimestampSecondArray::from(vec![0, i64::MAX])), 1),
+        (
+            Arc::new(TimestampSecondArray::from(vec![-62_135_596_801, 0])),
+            0,
+        ),
+    ] {
+        let kind = array.data_type().clone();
+        let schema = Arc::new(Schema::new(vec![Field::new("D", kind.clone(), true)]));
+        let valid = RecordBatch::try_new(schema.clone(), vec![array.slice(0, 0)]).unwrap();
+        let batch = RecordBatch::try_new(schema.clone(), vec![array]).unwrap();
+        let error = arrow_bridge::import_public_stream(arrow_bridge::export_stream(
+            schema,
+            vec![valid, batch],
+        ))
+        .err();
+        assert!(
+            matches!(
+                error,
+                Some(TableError::TemporalRange { batch: 1, column: 0, row: found }) if found == row
+            ),
+            "{kind}: {error:?}"
+        );
+    }
+    let masked = Date32Array::new(vec![i32::MIN, 0].into(), Some(vec![false, true].into()));
+    let table = imported("D", Arc::new(masked)).unwrap();
+    assert_eq!(table.cell(0, 0).unwrap(), ValueRef::Missing);
+    let ValueRef::Date(value) = table.cell(1, 0).unwrap() else {
+        panic!("a date")
+    };
+    assert_eq!(value.fields(), (1970, 1, 1));
+}
+
+#[test]
+fn nonfinite_missingness_empty_schema_and_the_row_limit_are_explicit() {
     let values = Arc::new(Float64Array::from(vec![
         Some(f64::NAN),
         Some(f64::INFINITY),
@@ -300,11 +328,7 @@ fn nonfinite_missingness_and_empty_schema_are_explicit() {
         Some(-0.0),
         None,
     ]));
-    let schema = Arc::new(Schema::new(vec![Field::new("F", DataType::Float64, true)]));
-    let batch = RecordBatch::try_new(schema.clone(), vec![values]).unwrap();
-    let table =
-        arrow_bridge::import_public_stream(arrow_bridge::export_stream(schema, vec![batch]))
-            .unwrap();
+    let table = imported("F", values).unwrap();
     for row in [0, 1, 2, 4] {
         assert_eq!(table.cell(row, 0).unwrap(), ValueRef::Missing);
     }
@@ -312,18 +336,27 @@ fn nonfinite_missingness_and_empty_schema_are_explicit() {
         panic!()
     };
     assert_eq!(value.get().to_bits(), (-0.0f64).to_bits());
-    let schema = Arc::new(Schema::empty());
-    let batch = RecordBatch::try_new_with_options(
-        schema.clone(),
-        Vec::new(),
-        &RecordBatchOptions::new().with_row_count(Some(3)),
-    )
-    .unwrap();
-    let table =
+    let records = |rows| {
+        let schema = Arc::new(Schema::empty());
+        let batch = RecordBatch::try_new_with_options(
+            schema.clone(),
+            Vec::new(),
+            &RecordBatchOptions::new().with_row_count(Some(rows)),
+        )
+        .unwrap();
         arrow_bridge::import_public_stream(arrow_bridge::export_stream(schema, vec![batch]))
-            .unwrap();
+    };
+    let table = records(3).unwrap();
     assert_eq!(table.row_count(), 3);
     assert_eq!(table.schema().columns().len(), 0);
+    assert!(matches!(
+        records(Limits::TABLE_ROWS + 1),
+        Err(TableError::Limit {
+            resource: "table_rows",
+            limit: Limits::TABLE_ROWS,
+            required: Some(_),
+        })
+    ));
 }
 
 #[test]
@@ -341,16 +374,16 @@ fn public_temporals_preserve_existing_epoch_view_without_mutating_collected_prec
     .unwrap();
     let date = Date::new(2024, 2, 29, Precision::Year).unwrap();
     let datetime = DateTime::new(date, 12, 34, 56, Precision::Day).unwrap();
-    let batch = RecordBatch::try_new(
-        yamaa_adapters::arrow_table::physical_schema(&logical),
+    let table = ColumnTable::new(
+        logical,
         vec![
-            Arc::new(yamaa_adapters::arrow_table::date_array(&[Some(date), None]).unwrap()),
-            Arc::new(yamaa_adapters::arrow_table::datetime_array(&[Some(datetime), None]).unwrap()),
+            Values::Date(vec![Some(date), None]),
+            Values::DateTime(vec![Some(datetime), None]),
         ],
+        2,
     )
     .unwrap();
-    let table = yamaa_adapters::arrow_table::ArrowTable::try_new(logical, vec![batch]).unwrap();
-    let public = PublicTable::from_snapshot(&table).unwrap();
+    let public = PublicTable::from_table(&table, &[0, 1]).unwrap();
     assert_eq!(public.schema().field(0).data_type(), &DataType::Date32);
     assert_eq!(
         public.schema().field(1).data_type(),

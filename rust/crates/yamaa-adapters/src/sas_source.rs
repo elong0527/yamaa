@@ -1,6 +1,6 @@
 //! Read-only SAS binary input, enabled by the default `readstat` feature.
 #[cfg(not(feature = "readstat"))]
-use crate::arrow_table::ArrowTable;
+use crate::column_table::ColumnTable;
 use yamaa_core::diagnostic::SourceFinding;
 #[cfg(not(feature = "readstat"))]
 use yamaa_core::specification::SourceDeclaration;
@@ -49,7 +49,7 @@ pub use native::parse;
 
 /// SAS binary input is unavailable when the `readstat` feature is disabled.
 #[cfg(not(feature = "readstat"))]
-pub fn parse(_bytes: &[u8], _source: &SourceDeclaration) -> Result<ArrowTable, Error> {
+pub fn parse(_bytes: &[u8], _source: &SourceDeclaration) -> Result<ColumnTable, Error> {
     Err(Error::Unavailable)
 }
 

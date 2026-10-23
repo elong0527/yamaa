@@ -5,10 +5,11 @@
 mod windows_file;
 
 pub mod application_measurements;
-pub mod arrow_batch;
+#[cfg(feature = "arrow")]
 pub mod arrow_bridge;
-pub mod arrow_table;
-pub mod arrow_temporal;
+pub mod column_table;
+pub mod columns;
+pub mod epoch;
 pub mod file_define;
 pub mod json_wire;
 pub mod public_table;
@@ -105,7 +106,6 @@ mod file_inventory;
 pub mod callback;
 pub mod dataset_result;
 mod execution_diagnostics;
-pub mod ipc_table;
 mod report_scalar;
 mod schema_outcomes;
 mod yaml_diagnostics;

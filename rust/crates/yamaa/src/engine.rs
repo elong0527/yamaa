@@ -428,8 +428,8 @@ impl Build {
         self.report = Report::located(&self.issues(), &self.locator);
         (self.output, self.run_report) = match self.domain() {
             Some(domain) => (
-                domain.output_table().map(Table::from_adapter),
-                Some(Table::from_adapter(domain.report_table())),
+                domain.output().map(Table::from_adapter),
+                Some(Table::from_adapter(domain.run_report())),
             ),
             None => (None, None),
         };

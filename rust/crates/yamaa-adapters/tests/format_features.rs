@@ -4,7 +4,7 @@
 mod scratch;
 
 use yamaa_adapters::{
-    arrow_table::ArrowTable, parquet_artifact, parquet_source, sas_source, yaml_decode,
+    column_table::ColumnTable, parquet_artifact, parquet_source, sas_source, yaml_decode,
 };
 use yamaa_core::{
     decoder::Decoder as _,
@@ -40,7 +40,7 @@ fn assert_fault(
     assert_eq!(issue.context["code"].as_str(), Some(code), "{issue:?}");
 }
 
-fn csv_table() -> ArrowTable {
+fn csv_table() -> ColumnTable {
     let table = yamaa_adapters::typed_csv::parse(b"ID,TEXT\n1,alpha\n2,beta\n", &[]).unwrap();
     assert_eq!(table.row_count(), 2);
     assert_eq!(table.cell(1, 1).unwrap(), ValueRef::Str("beta"));
@@ -48,23 +48,19 @@ fn csv_table() -> ArrowTable {
 }
 
 #[test]
-fn csv_and_arrow_remain_available_without_physical_readers() {
+fn csv_and_public_tables_remain_available_without_physical_readers() {
     let table = csv_table();
     assert_eq!(
         yamaa_adapters::csv_artifact::render(&table, &[0, 1], None).unwrap(),
         b"ID,TEXT\n1,alpha\n2,beta\n"
     );
-    // The public Arrow table and its IPC stream need no physical reader.
-    let public = yamaa_adapters::public_table::PublicTable::from_snapshot(&table).unwrap();
-    let bytes = public.ipc().unwrap();
-    let restored = arrow_ipc::reader::StreamReader::try_new(bytes.as_slice(), None)
-        .unwrap()
-        .next()
-        .unwrap()
-        .unwrap();
-    let text = restored.column(1).as_any();
-    let text = text.downcast_ref::<arrow_array::StringArray>().unwrap();
-    assert_eq!(text.value(0), "alpha");
+    // The public table a host receives needs no physical reader.
+    let public = yamaa_adapters::public_table::PublicTable::from_table(&table, &[0, 1]).unwrap();
+    let text = [Some("alpha"), Some("beta")].into_iter().collect();
+    assert_eq!(
+        public.column(1),
+        &yamaa_adapters::public_table::PublicColumn::Str(text)
+    );
 }
 
 #[test]

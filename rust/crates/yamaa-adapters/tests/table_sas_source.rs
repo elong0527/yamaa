@@ -35,7 +35,7 @@ mod table {
             ValueRef::Float(yamaa_core::value::FiniteFloat::new(value).unwrap())
         }
         /// Every cell of a decoded table, row by row.
-        fn cells(table: &yamaa_adapters::arrow_table::ArrowTable) -> Vec<Vec<ValueRef<'_>>> {
+        fn cells(table: &yamaa_adapters::column_table::ColumnTable) -> Vec<Vec<ValueRef<'_>>> {
             (0..table.row_count())
                 .map(|row| {
                     (0..table.schema().columns().len())
@@ -45,7 +45,7 @@ mod table {
                 .collect()
         }
         /// A file built at test time, read as `built.sas7bdat`.
-        fn read_built(bytes: &[u8]) -> Result<yamaa_adapters::arrow_table::ArrowTable, Error> {
+        fn read_built(bytes: &[u8]) -> Result<yamaa_adapters::column_table::ColumnTable, Error> {
             sas_source::parse(bytes, &declaration("built.sas7bdat"))
         }
         #[test]
@@ -578,7 +578,7 @@ mod table {
         }
         /// Every cell equals the independent pandas CSV truth for `records`.
         fn assert_compressed_truth(
-            table: &yamaa_adapters::arrow_table::ArrowTable,
+            table: &yamaa_adapters::column_table::ColumnTable,
             names: &[String],
             records: &[Vec<Option<String>>],
         ) {
@@ -2096,18 +2096,20 @@ mod table {
             }
             error
         }
+        #[cfg(feature = "arrow")]
         fn opaque() -> Error {
             Error::ParquetSource(parquet::Error::Table(
-                yamaa_adapters::arrow_table::TableError::Arrow(
+                yamaa_adapters::column_table::TableError::Arrow(
                     arrow_schema::ArrowError::ComputeError(
                         "original opaque codec allocation".into(),
                     ),
                 ),
             ))
         }
+        #[cfg(feature = "arrow")]
         fn opaque_text(error: &Error) -> &str {
             let Error::ParquetSource(parquet::Error::Table(
-                yamaa_adapters::arrow_table::TableError::Arrow(
+                yamaa_adapters::column_table::TableError::Arrow(
                     arrow_schema::ArrowError::ComputeError(text),
                 ),
             )) = error
@@ -2149,6 +2151,7 @@ mod table {
         }
 
         #[test]
+        #[cfg(feature = "arrow")]
         fn late_opaque_after_wide_nested_report_keeps_original_allocation_and_precedence() {
             let mut children = wide(50_000);
             let original = opaque();
@@ -2176,6 +2179,7 @@ mod table {
         }
 
         #[test]
+        #[cfg(feature = "arrow")]
         fn reached_opaque_barrier_stops_before_later_deep_and_oversized_semantic_facts() {
             let original = opaque();
             let pointer = opaque_text(&original).as_ptr();
@@ -2206,6 +2210,7 @@ mod table {
         }
 
         #[test]
+        #[cfg(feature = "arrow")]
         fn deep_borrowed_reports_keep_full_facts_and_later_opaque_errors_preserve_precedence() {
             let leaf = Error::ParquetSource(parquet::Error::Unsupported {
                 field: "F".into(),

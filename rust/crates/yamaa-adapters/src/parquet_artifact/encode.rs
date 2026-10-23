@@ -1,5 +1,5 @@
 use super::Error;
-use crate::arrow_temporal::{date_days, datetime_seconds};
+use crate::epoch::{date_days, datetime_seconds};
 use parquet::{
     basic::{Compression, LogicalType, Repetition, Type as Physical},
     data_type::{ByteArray, ByteArrayType, DataType, DoubleType, Int32Type, Int64Type},

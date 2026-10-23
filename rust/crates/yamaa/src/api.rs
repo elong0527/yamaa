@@ -1258,24 +1258,16 @@ mod plan_tests {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::table::{Array, StringArray};
 
     /// The text cells of one column of an issues table, in row order.
     fn cells(table: &Table, column: &str) -> Vec<Option<String>> {
-        table
-            .batches()
-            .iter()
-            .flat_map(|batch| {
-                let column = batch
-                    .column_by_name(column)
-                    .unwrap()
-                    .as_any()
-                    .downcast_ref::<StringArray>()
-                    .unwrap();
-                (0..column.len())
-                    .map(|row| (!column.is_null(row)).then(|| column.value(row).to_owned()))
-                    .collect::<Vec<_>>()
-            })
+        let public = table.public();
+        let index = public.names().position(|name| name == column).unwrap();
+        let yamaa_adapters::public_table::PublicColumn::Str(values) = public.column(index) else {
+            panic!("{column} is a text column")
+        };
+        (0..values.len())
+            .map(|row| values.get(row).map(str::to_owned))
             .collect()
     }
 

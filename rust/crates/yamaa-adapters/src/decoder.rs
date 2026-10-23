@@ -6,7 +6,7 @@
 //! remain infallible; the error type is only the engine's shared callback
 //! boundary. This grants no host access or activation authority.
 use crate::{
-    arrow_table::ArrowTable,
+    column_table::ColumnTable,
     document::Closures,
     specification_run::Error,
     specification_source::{self, CapturedDocument, Source},
@@ -21,14 +21,14 @@ use yamaa_core::{
 };
 
 pub struct Snapshot<E> {
-    table: ArrowTable,
+    table: ColumnTable,
     error: PhantomData<fn() -> E>,
 }
 impl<E> Snapshot<E> {
-    pub fn table(&self) -> &ArrowTable {
+    pub fn table(&self) -> &ColumnTable {
         &self.table
     }
-    pub fn into_table(self) -> ArrowTable {
+    pub fn into_table(self) -> ColumnTable {
         self.table
     }
 }
@@ -113,7 +113,7 @@ impl<E> yamaa_core::decoder::Decoder for Decoder<E> {
         interpretation: yamaa_core::specification::SourceInterpretation,
         contract: Option<&yamaa_core::producer_contract::Contract>,
     ) -> Option<Result<Self::Table, Error>> {
-        table.downcast_ref::<ArrowTable>().map(|table| {
+        table.downcast_ref::<ColumnTable>().map(|table| {
             crate::specification_run::decode_frame(source, table.clone(), interpretation, contract)
                 .map(|table| Snapshot {
                     table,

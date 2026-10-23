@@ -81,11 +81,10 @@ class FuzzTargets(unittest.TestCase):
                 ["sas7bdat", "xport"],
             ),
             (["rust/crates/yamaa-core/src/typed_csv.rs"], ["csv", "dataset_json"]),
-            # The SAS reader builds its table through the shared batch writer,
-            # and the ODM reader reports that module's table errors.
+            # Every reader builds its table in the shared column storage.
             (
-                ["rust/crates/yamaa-adapters/src/ipc_table.rs"],
-                ["csv", "dataset_json", "odm_xml", "sas7bdat", "xport"],
+                ["rust/crates/yamaa-adapters/src/columns.rs"],
+                ["csv", "dataset_json", "odm_xml", "parquet", "sas7bdat", "xport"],
             ),
             (["rust/crates/yamaa-adapters/src/parquet_source/reader.rs"], ["parquet"]),
             (["rust/crates/yamaa-adapters/src/odm_xml/archive.rs"], ["odm_xml"]),

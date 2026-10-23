@@ -208,36 +208,22 @@ impl SelfTest {
     /// The selftest table with the [`SELFTEST_COLUMNS`], one row per case:
     /// the case, its status and its message, missing when it passed.
     pub fn table(&self) -> Table {
-        use arrow_array::builder::StringBuilder;
-        use arrow_schema::{DataType, Field, Schema};
+        use yamaa_adapters::public_table::{PublicColumn, PublicTable};
 
-        let mut case = StringBuilder::new();
-        let mut status = StringBuilder::new();
-        let mut message = StringBuilder::new();
-        for item in &self.cases {
-            case.append_value(item.case);
-            status.append_value(item.status.as_str());
-            message.append_option(item.message.as_deref());
-        }
-        let schema = Arc::new(Schema::new(
-            SELFTEST_COLUMNS
-                .into_iter()
-                .map(|name| Field::new(name, DataType::Utf8, true))
-                .collect::<Vec<_>>(),
-        ));
-        let batch = arrow_array::RecordBatch::try_new(
-            schema.clone(),
-            vec![
-                Arc::new(case.finish()),
-                Arc::new(status.finish()),
-                Arc::new(message.finish()),
-            ],
-        )
-        .expect("the builders produce exactly the declared selftest columns");
-        Table::from_public(
-            yamaa_adapters::public_table::PublicTable::from_batches(schema, vec![batch])
-                .expect("the batch was built against this schema"),
-        )
+        let text = |cell: fn(&SelfTestCase) -> Option<&str>| {
+            PublicColumn::Str(self.cases.iter().map(cell).collect())
+        };
+        let columns = [
+            text(|item| Some(item.case)),
+            text(|item| Some(item.status.as_str())),
+            text(|item| item.message.as_deref()),
+        ];
+        let columns = SELFTEST_COLUMNS
+            .into_iter()
+            .map(str::to_owned)
+            .zip(columns)
+            .collect();
+        Table::from_public(PublicTable::new(columns).expect("the selftest columns form one table"))
     }
 
     /// The printed text (D37, P-PRINT-1): `yamaa selftest: <status>, <p> of
@@ -482,12 +468,12 @@ fn compare_parquet(name: &str, saved: &[u8], expected: &[u8]) -> Result<(), Stri
 /// and the same values in the same rows, a float by its bits, so that `-0.0`
 /// differs from `0.0` as it does for the conformance runners.
 fn same_values(
-    saved: &yamaa_adapters::arrow_table::ArrowTable,
-    expected: &yamaa_adapters::arrow_table::ArrowTable,
+    saved: &yamaa_adapters::column_table::ColumnTable,
+    expected: &yamaa_adapters::column_table::ColumnTable,
 ) -> bool {
     use yamaa_core::table::TableAccess;
 
-    let columns = |table: &yamaa_adapters::arrow_table::ArrowTable| {
+    let columns = |table: &yamaa_adapters::column_table::ColumnTable| {
         table
             .schema()
             .columns()
@@ -1248,6 +1234,7 @@ mod tests {
     /// The table has the selftest columns, one row per case, with a missing
     /// message for a case that passed.
     #[test]
+    #[cfg(feature = "arrow")]
     fn the_table_has_one_row_per_case() {
         use arrow_array::{Array, StringArray};
 

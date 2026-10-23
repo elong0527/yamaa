@@ -148,56 +148,33 @@ impl Lint {
     /// The lint table (P-LINT-2) with the [`LINT_COLUMNS`], one row per
     /// finding that remains.
     pub fn table(&self) -> Table {
-        use arrow_array::builder::{Int64Builder, StringBuilder};
-        use arrow_schema::{DataType, Field, Schema};
-        use std::sync::Arc;
+        use yamaa_adapters::public_table::{PublicColumn, PublicTable};
 
-        let int = |value: usize| i64::try_from(value).unwrap_or(i64::MAX);
-        let mut file = StringBuilder::new();
-        let mut line = Int64Builder::new();
-        let mut column = Int64Builder::new();
-        let mut finding = StringBuilder::new();
-        let mut spec_path = StringBuilder::new();
-        let mut message = StringBuilder::new();
-        for item in &self.findings {
-            file.append_value(&item.file);
-            line.append_value(int(item.line));
-            column.append_value(int(item.column));
-            finding.append_value(item.finding);
-            spec_path.append_value(&item.spec_path);
-            message.append_value(&item.message);
-        }
-        let types = [
-            DataType::Utf8,
-            DataType::Int64,
-            DataType::Int64,
-            DataType::Utf8,
-            DataType::Utf8,
-            DataType::Utf8,
+        let int = |cell: fn(&LintFinding) -> usize| {
+            PublicColumn::Int(
+                self.findings
+                    .iter()
+                    .map(|item| Some(i64::try_from(cell(item)).unwrap_or(i64::MAX)))
+                    .collect(),
+            )
+        };
+        let text = |cell: fn(&LintFinding) -> &str| {
+            PublicColumn::Str(self.findings.iter().map(|item| Some(cell(item))).collect())
+        };
+        let columns = [
+            text(|item| &item.file),
+            int(|item| item.line),
+            int(|item| item.column),
+            text(|item| item.finding),
+            text(|item| &item.spec_path),
+            text(|item| &item.message),
         ];
-        let schema = Arc::new(Schema::new(
-            LINT_COLUMNS
-                .into_iter()
-                .zip(types)
-                .map(|(name, kind)| Field::new(name, kind, true))
-                .collect::<Vec<_>>(),
-        ));
-        let batch = arrow_array::RecordBatch::try_new(
-            schema.clone(),
-            vec![
-                Arc::new(file.finish()),
-                Arc::new(line.finish()),
-                Arc::new(column.finish()),
-                Arc::new(finding.finish()),
-                Arc::new(spec_path.finish()),
-                Arc::new(message.finish()),
-            ],
-        )
-        .expect("the builders produce exactly the declared lint columns");
-        Table::from_public(
-            yamaa_adapters::public_table::PublicTable::from_batches(schema, vec![batch])
-                .expect("the batch was built against this schema"),
-        )
+        let columns = LINT_COLUMNS
+            .into_iter()
+            .map(str::to_owned)
+            .zip(columns)
+            .collect();
+        Table::from_public(PublicTable::new(columns).expect("the lint columns form one table"))
     }
 
     fn from_adapter(files: Vec<yamaa_adapters::lint::Linted>, fix: bool) -> Self {

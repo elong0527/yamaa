@@ -243,50 +243,51 @@ fn scan(text: &str) -> Result<Scanned, Error> {
     Ok(records)
 }
 
-/// Profile failures and Arrow/resource failures remain distinct to the compiler.
+/// Profile failures and table failures remain distinct to the compiler.
 #[derive(Debug)]
 pub enum TextTableError {
     Csv(Error),
-    Table(crate::arrow_table::TableError),
+    Table(crate::column_table::TableError),
 }
 
-/// Decode the undeclared-type CSV case into an owned canonical Arrow snapshot.
-/// Declared types, producer schemas and ordinals require their separate admission;
-/// callers must not silently route those declarations through this text-only helper.
-pub fn parse_text_table(content: &[u8]) -> Result<crate::arrow_table::ArrowTable, TextTableError> {
-    use crate::arrow_table::{physical_schema, ArrowTable, TableError};
-    use arrow_array::{ArrayRef, RecordBatch};
-    use std::sync::Arc;
+/// Decode the undeclared-type CSV case into an owned text table, each column
+/// fitting Arrow Utf8 offsets as a whole. Declared types, producer schemas
+/// and ordinals require their separate admission; callers must not silently
+/// route those declarations through this text-only helper.
+pub fn parse_text_table(
+    content: &[u8],
+) -> Result<crate::column_table::ColumnTable, TextTableError> {
+    use crate::column_table::{fits_utf8_offsets, Column, ColumnTable, TableError, UTF8_OFFSETS};
     use yamaa_core::{
-        table::{Column, TableSchema},
+        table::{Column as Declared, TableSchema},
         value::ColumnType,
     };
 
     let parsed = parse(content).map_err(TextTableError::Csv)?;
-    let columns = parsed.names.len();
+    let width = parsed.names.len();
     let schema = TableSchema::new(
         parsed
             .names
             .into_iter()
-            .map(|name| Column {
+            .map(|name| Declared {
                 name,
                 kind: ColumnType::Str,
             })
             .collect(),
     )
     .expect("CSV admission established nonempty unique header names");
-    let arrays: Vec<ArrayRef> = (0..columns)
+    let columns = (0..width)
         .map(|column| {
-            crate::arrow_table::string_array(
-                parsed.records.iter().map(|row| row[column].as_deref()),
-            )
-            .map(|array| Arc::new(array) as ArrayRef)
-            .map_err(|error| TextTableError::Table(TableError::Arrow(error)))
+            let values = || parsed.records.iter().map(|row| row[column].as_deref());
+            if !fits_utf8_offsets(values().flatten().map(str::len)) {
+                return Err(TextTableError::Table(TableError::Representation {
+                    representation: UTF8_OFFSETS,
+                }));
+            }
+            Ok(Column::Str(values().collect()))
         })
         .collect::<Result<_, _>>()?;
-    let batch = RecordBatch::try_new(physical_schema(&schema), arrays)
-        .map_err(|error| TextTableError::Table(TableError::Arrow(error)))?;
-    ArrowTable::try_new(schema, vec![batch]).map_err(TextTableError::Table)
+    ColumnTable::new(schema, columns, parsed.records.len()).map_err(TextTableError::Table)
 }
 
 #[cfg(test)]

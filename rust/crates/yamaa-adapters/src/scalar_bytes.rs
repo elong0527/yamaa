@@ -42,12 +42,12 @@ pub fn decode(tag: i32, bytes: &[u8]) -> Result<Value, &'static str> {
             }
             if tag == 5 {
                 Value::Date(
-                    crate::arrow_temporal::date_from_days(epoch as i64, Precision::Day)
+                    crate::epoch::date_from_days(epoch as i64, Precision::Day)
                         .ok_or("invalid temporal scalar")?,
                 )
             } else {
                 Value::DateTime(
-                    crate::arrow_temporal::datetime_from_seconds(epoch as i64, Precision::Second)
+                    crate::epoch::datetime_from_seconds(epoch as i64, Precision::Second)
                         .ok_or("invalid temporal scalar")?,
                 )
             }
@@ -65,13 +65,11 @@ pub fn encode(value: Value) -> ScalarBytes {
         Value::Bool(b) => (4, vec![u8::from(b)]),
         Value::Date(d) => (
             5,
-            f64::from(crate::arrow_temporal::date_days(d))
-                .to_le_bytes()
-                .to_vec(),
+            f64::from(crate::epoch::date_days(d)).to_le_bytes().to_vec(),
         ),
         Value::DateTime(d) => (
             6,
-            (crate::arrow_temporal::datetime_seconds(d) as f64)
+            (crate::epoch::datetime_seconds(d) as f64)
                 .to_le_bytes()
                 .to_vec(),
         ),

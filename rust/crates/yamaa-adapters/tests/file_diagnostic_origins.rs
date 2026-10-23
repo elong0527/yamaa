@@ -312,7 +312,7 @@ mod file {
             )
             .unwrap();
             let mut result = study.build();
-            let before = result.output().unwrap().to_vec();
+            let before = result.output().unwrap().clone();
             let observations = result.observations();
             assert_eq!(observations["artifacts"], yamaa_adapters::json!([]));
             assert!(result.issues().is_empty());
@@ -330,7 +330,7 @@ mod file {
                 yamaa_adapters::json_wire::encode_object(&result.issues()[0].context),
                 "{\"path\":\"absent/output.csv\"}"
             );
-            assert_eq!(result.output().unwrap(), before);
+            assert_eq!(result.output().unwrap(), &before);
             fs::create_dir(study.0.join("absent")).unwrap();
             for _ in 0..2 {
                 assert!(result.save().unwrap());
@@ -765,11 +765,7 @@ mod file {
         #[test]
         fn row_shape_boundaries_are_per_template_and_preserve_authored_preflight_precedence() {
             use yamaa_adapters::json;
-            use yamaa_core::{
-                limits::Limits,
-                table::{TableAccess, ValueRef},
-                value::ColumnType,
-            };
+            use yamaa_core::limits::Limits;
             let study = Study::new();
             let spec = study.text("spec.yaml");
             let project_file = study.project();
@@ -890,14 +886,11 @@ mod file {
             )
             .unwrap();
             assert!(result.issues().is_empty());
-            let table = crate::support::ipc_snapshot::decode(result.output().unwrap());
-            assert_eq!(
-                table.schema(),
-                &crate::support::table_schema(&[("ID", ColumnType::Int)])
-            );
-            assert_eq!(table.row_count(), 2);
-            assert_eq!(table.cell(0, 0).unwrap(), ValueRef::Int(1));
-            assert_eq!(table.cell(1, 0).unwrap(), ValueRef::Int(2));
+            let table = result.output().unwrap();
+            assert_eq!(table.names().collect::<Vec<_>>(), ["ID"]);
+            let values = [Some(1), Some(2)].into_iter().collect();
+            let expected = yamaa_adapters::public_table::PublicColumn::Int(values);
+            assert_eq!(table.column(0), &expected);
             assert_eq!(result.files(), [("output.csv", b"ID\n1\n2\n".as_slice())]);
         }
 
@@ -1606,7 +1599,7 @@ mod file {
         }
     }
     mod file_preparation {
-        use crate::support::ipc_snapshot;
+        use crate::support::table_snapshot;
         use crate::support::Edit as _;
         use std::{fs, path::PathBuf};
         use yamaa_adapters::json;
@@ -2001,12 +1994,8 @@ mod file {
             fs::write(study.0.join("entry/dict.yaml"), b"A: changed\n").unwrap();
             let response = prepared.run().execute_csv(b"ID,CODE\n1,A\n").unwrap();
             assert!(response.table.is_some());
-            let outcome: Value = yamaa_adapters::json_wire::decode(&ipc_snapshot::table_snapshot(
-                response.table.as_ref().unwrap(),
-            ))
-            .unwrap();
             assert_eq!(
-                outcome["rows"],
+                table_snapshot::rows(response.table.as_ref().unwrap()),
                 json!([[{"int":"1"},{"str":"answer"},{"str":"answer"}]])
             );
             assert_eq!(prepared.capture_reads(), 2);
@@ -2031,12 +2020,8 @@ mod file {
             assert_eq!(dictionary.bytes, b"A: declared-parent\n");
             assert!(dictionary.identity.ends_with("/parent/dict.yaml"));
             let response = prepared.run().execute_csv(b"ID,CODE\n1,A\n").unwrap();
-            let outcome: Value = yamaa_adapters::json_wire::decode(&ipc_snapshot::table_snapshot(
-                response.table.as_ref().unwrap(),
-            ))
-            .unwrap();
             assert_eq!(
-                outcome["rows"],
+                table_snapshot::rows(response.table.as_ref().unwrap()),
                 json!([[{"int":"1"},{"str":"declared-parent"},{"str":"declared-parent"}]])
             );
             assert!(!study.0.join("parent/input.csv").exists());

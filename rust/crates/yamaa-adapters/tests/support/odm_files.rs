@@ -1,9 +1,8 @@
 //! ODM test inputs written at test time: TAR archives with ustar, GNU and
 //! PAX headers, gzip streams, and readers for the result table. No binary
 //! fixture is committed.
-use arrow_array::{Array, Int64Array, StringArray};
 use std::io::Write;
-use yamaa_adapters::public_table::PublicTable;
+use yamaa_adapters::public_table::{PublicColumn, PublicTable};
 
 /// Compress bytes as one gzip member.
 pub fn gzip(bytes: &[u8]) -> Vec<u8> {
@@ -181,22 +180,18 @@ impl Tar {
     }
 }
 
-/// Every value of a text column across batches.
+/// The column of `table` named `name`.
+fn named<'a>(table: &'a PublicTable, name: &str) -> &'a PublicColumn {
+    table.column(table.names().position(|column| column == name).unwrap())
+}
+
+/// Every value of a text column.
 pub fn column(table: &PublicTable, name: &str) -> Vec<Option<String>> {
-    let index = table.schema().index_of(name).unwrap();
-    table
-        .batches()
-        .iter()
-        .flat_map(|batch| {
-            let values = batch
-                .column(index)
-                .as_any()
-                .downcast_ref::<StringArray>()
-                .unwrap();
-            (0..values.len())
-                .map(|row| (!values.is_null(row)).then(|| values.value(row).to_owned()))
-                .collect::<Vec<_>>()
-        })
+    let PublicColumn::Str(values) = named(table, name) else {
+        panic!("{name} is a text column")
+    };
+    (0..values.len())
+        .map(|row| values.get(row).map(str::to_owned))
         .collect()
 }
 
@@ -205,20 +200,12 @@ pub fn cell(table: &PublicTable, name: &str, row: usize) -> Option<String> {
     column(table, name).swap_remove(row)
 }
 
-/// Every `SourceOrdinal` across batches.
+/// Every `SourceOrdinal`.
 pub fn ordinals(table: &PublicTable) -> Vec<i64> {
-    let index = table.schema().index_of("SourceOrdinal").unwrap();
-    table
-        .batches()
-        .iter()
-        .flat_map(|batch| {
-            batch
-                .column(index)
-                .as_any()
-                .downcast_ref::<Int64Array>()
-                .unwrap()
-                .values()
-                .to_vec()
-        })
+    let PublicColumn::Int(values) = named(table, "SourceOrdinal") else {
+        panic!("SourceOrdinal is an integer column")
+    };
+    (0..values.len())
+        .map(|row| values.get(row).unwrap())
         .collect()
 }

@@ -226,10 +226,12 @@ pub(crate) fn arrow_schema(
     }
 }
 
+#[cfg(feature = "arrow")]
 pub(crate) use stream::StreamReader;
 
 /// Reviewed C stream consumer: the producer contract is the one
 /// `arrow_bridge` already documents for foreign streams.
+#[cfg(feature = "arrow")]
 #[allow(unsafe_code)]
 mod stream {
     use arrow_array::{

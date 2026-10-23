@@ -31,10 +31,8 @@ use yamaa_core::temporal::Precision;
 
 use crate::api::Status;
 use crate::diagnostic::{Diagnostic, Location};
-use crate::table::{
-    Array, DataType, Date32Array, Float64Array, Int64Array, LargeStringArray, ListArray,
-    RecordBatch, StringArray, StringViewArray, Table, TimeUnit, TimestampSecondArray,
-};
+use crate::table::Table;
+use yamaa_adapters::public_table::PublicColumn;
 
 /// A result's printed text (D37, P-PRINT-1), one line per field, in print
 /// order. Its [`Display`](fmt::Display) form joins the lines with LF and adds
@@ -231,7 +229,7 @@ pub(crate) fn output_size(output: Option<&Table>) -> String {
         Some(table) => format!(
             "{} x {}",
             count(table.rows(), "row", "rows"),
-            count(table.columns().len(), "column", "columns")
+            count(table.public().width(), "column", "columns")
         ),
         None => "no output".to_owned(),
     }
@@ -375,11 +373,11 @@ const ELIDED: &str = "...";
 /// ([`Table::preview`]).
 pub(crate) fn preview(table: &Table) -> String {
     let header = format!("yamaa.Table: {}", output_size(Some(table)));
-    let fields = table.columns();
-    if fields.is_empty() {
+    let table = table.public();
+    if table.width() == 0 {
         return header;
     }
-    let shown = fields.len().min(PREVIEW_COLUMNS);
+    let shown = table.width().min(PREVIEW_COLUMNS);
     let rows = table.rows();
     let (head, tail) = if rows > PREVIEW_ROWS {
         (PREVIEW_ROWS / 2, rows - PREVIEW_ROWS / 2)
@@ -389,28 +387,21 @@ pub(crate) fn preview(table: &Table) -> String {
     // The cells of each line below the header; `None` is the `...` line.
     let mut grid = vec![
         Some(
-            fields
-                .iter()
-                .take(shown)
-                .map(|field| cell(field.name()))
+            (0..shown)
+                .map(|column| cell(table.name(column)))
                 .collect::<Vec<_>>(),
         ),
         Some(
-            fields
-                .iter()
-                .take(shown)
-                .map(|field| cell(&type_name(field.data_type())))
+            (0..shown)
+                .map(|column| cell(&table.column(column).type_name()))
                 .collect(),
         ),
     ];
     let values = |range: Range<usize>| {
-        rows_of(table.batches(), range).map(|(batch, row)| {
+        range.map(|row| {
             Some(
-                batch
-                    .columns()
-                    .iter()
-                    .take(shown)
-                    .map(|array| cell(&value(array.as_ref(), row)))
+                (0..shown)
+                    .map(|column| cell(&value(table.column(column), row)))
                     .collect(),
             )
         })
@@ -431,23 +422,10 @@ pub(crate) fn preview(table: &Table) -> String {
         .collect::<Vec<_>>();
     let mut lines = vec![header];
     lines.extend(grid.iter().map(|cells| match cells {
-        Some(cells) => laid_out(cells, &widths, fields.len() > shown),
+        Some(cells) => laid_out(cells, &widths, table.width() > shown),
         None => ELIDED.to_owned(),
     }));
     lines.join("\n")
-}
-
-/// The batch, and the row within it, of each table row in `range`, in order.
-fn rows_of(
-    batches: &[RecordBatch],
-    range: Range<usize>,
-) -> impl Iterator<Item = (&RecordBatch, usize)> {
-    let mut first = 0;
-    batches.iter().flat_map(move |batch| {
-        let start = first;
-        first += batch.num_rows();
-        (range.start.max(start)..range.end.min(first)).map(move |row| (batch, row - start))
-    })
 }
 
 /// One line of a preview: each cell padded to its column's width, the
@@ -489,93 +467,50 @@ fn cell(text: &str) -> String {
     out
 }
 
-/// The language name of a column's type: `str`, `int`, `float`, `date`,
-/// `datetime`, or `list<T>` for a list of `T`, and `?` for a type no engine
-/// table has. A column may hold missing values whatever its type, so no name
-/// says `optional`.
-fn type_name(kind: &DataType) -> String {
-    match kind {
-        DataType::Utf8 | DataType::LargeUtf8 | DataType::Utf8View => "str".to_owned(),
-        DataType::Int64 => "int".to_owned(),
-        DataType::Float64 => "float".to_owned(),
-        DataType::Date32 => "date".to_owned(),
-        DataType::Timestamp(TimeUnit::Second, None) => "datetime".to_owned(),
-        DataType::List(item) => format!("list<{}>", type_name(item.data_type())),
-        _ => "?".to_owned(),
-    }
-}
-
-/// The text of the value at `row` of `array`: `null` when it is missing, a
+/// The text of the value at `row` of `column`: `null` when it is missing, a
 /// float in VALUE-8's canonical text (a nonfinite float is missing, as at the
 /// scalar boundary), a date or datetime in VALUE-17's, and a list as its
-/// items' texts joined by `, ` in brackets. A value the preview cannot print,
-/// of a type no engine table has, prints `?`.
-fn value(array: &dyn Array, row: usize) -> Cow<'_, str> {
-    if array.is_null(row) {
+/// items' texts joined by `, ` in brackets. A date or datetime outside the
+/// years 1 to 9999, which no engine table holds, prints `?`.
+fn value(column: &PublicColumn, row: usize) -> Cow<'_, str> {
+    if column.is_missing(row) {
         return Cow::Borrowed("null");
     }
-    let any = array.as_any();
-    let text = match array.data_type() {
-        DataType::Utf8 => any
-            .downcast_ref::<StringArray>()
-            .map(|values| Cow::Borrowed(values.value(row))),
-        DataType::LargeUtf8 => any
-            .downcast_ref::<LargeStringArray>()
-            .map(|values| Cow::Borrowed(values.value(row))),
-        DataType::Utf8View => any
-            .downcast_ref::<StringViewArray>()
-            .map(|values| Cow::Borrowed(values.value(row))),
-        DataType::Int64 => any
-            .downcast_ref::<Int64Array>()
-            .map(|values| Cow::Owned(values.value(row).to_string())),
-        DataType::Float64 => any.downcast_ref::<Float64Array>().map(|values| {
-            yamaa_core::value::FiniteFloat::new(values.value(row))
-                .map_or(Cow::Borrowed("null"), |value| {
-                    Cow::Owned(yamaa_core::conversion::float_text(value))
-                })
-        }),
-        DataType::Date32 => any
-            .downcast_ref::<Date32Array>()
-            .and_then(|values| {
-                yamaa_adapters::arrow_temporal::date_from_days(
-                    i64::from(values.value(row)),
-                    Precision::Day,
-                )
+    let text = match column {
+        PublicColumn::Str(values) => values.get(row).map(Cow::Borrowed),
+        PublicColumn::Int(values) => values.get(row).map(|value| Cow::Owned(value.to_string())),
+        PublicColumn::Float(values) => values.get(row).map(|value| {
+            yamaa_core::value::FiniteFloat::new(value).map_or(Cow::Borrowed("null"), |value| {
+                Cow::Owned(yamaa_core::conversion::float_text(value))
             })
+        }),
+        PublicColumn::Date(values) => values
+            .get(row)
+            .and_then(|days| yamaa_adapters::epoch::date_from_days(i64::from(days), Precision::Day))
             .map(|date| Cow::Owned(date.to_string())),
-        DataType::Timestamp(TimeUnit::Second, None) => any
-            .downcast_ref::<TimestampSecondArray>()
-            .and_then(|values| {
-                yamaa_adapters::arrow_temporal::datetime_from_seconds(
-                    values.value(row),
-                    Precision::Second,
-                )
+        PublicColumn::DateTime(values) => values
+            .get(row)
+            .and_then(|seconds| {
+                yamaa_adapters::epoch::datetime_from_seconds(seconds, Precision::Second)
             })
             .map(|datetime| Cow::Owned(datetime.to_string())),
-        DataType::List(_) => any.downcast_ref::<ListArray>().map(|lists| {
-            let items = lists.value(row);
-            let texts = (0..items.len())
-                .map(|item| value(items.as_ref(), item))
+        PublicColumn::List(lists) => lists.get(row).map(|items| {
+            let texts = items
+                .map(|item| value(lists.items(), item))
                 .collect::<Vec<_>>();
             Cow::Owned(format!("[{}]", texts.join(", ")))
         }),
-        _ => None,
     };
     text.unwrap_or(Cow::Borrowed("?"))
 }
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
-    use arrow_array::builder::{Int64Builder, ListBuilder, StringBuilder};
-    use arrow_array::{ArrayRef, BooleanArray, RecordBatchOptions};
-    use arrow_schema::Schema;
-    use yamaa_adapters::public_table::PublicTable;
+    use yamaa_adapters::columns::{Text, Values};
+    use yamaa_adapters::public_table::{List, PublicTable};
 
     use super::*;
     use crate::diagnostic::Position;
-    use crate::table::Field;
 
     #[test]
     fn printable_ascii_passes_and_everything_else_is_escaped() {
@@ -901,46 +836,46 @@ mod tests {
     }
 
     /// A table of these columns in one batch.
-    fn table(columns: Vec<(&str, ArrayRef)>) -> Table {
-        let schema = Arc::new(Schema::new(
-            columns
-                .iter()
-                .map(|(name, array)| Field::new(*name, array.data_type().clone(), true))
-                .collect::<Vec<_>>(),
-        ));
-        let arrays = columns.into_iter().map(|(_, array)| array).collect();
-        let batch = RecordBatch::try_new(schema.clone(), arrays).unwrap();
-        Table::from_public(PublicTable::from_batches(schema, vec![batch]).unwrap())
+    fn table(columns: Vec<(&str, PublicColumn)>) -> Table {
+        let columns = columns
+            .into_iter()
+            .map(|(name, column)| (name.to_owned(), column))
+            .collect();
+        Table::from_public(PublicTable::new(columns).unwrap())
     }
 
     /// A table of `columns` integer columns named `A`, `B` and so on, each
     /// holding the row numbers from 1, in batches of these sizes.
-    fn numbered(columns: u8, batches: &[i64]) -> Table {
-        let schema = Arc::new(Schema::new(
-            (0..columns)
-                .map(|index| {
-                    let name = char::from(b'A' + index).to_string();
-                    Field::new(name, DataType::Int64, true)
-                })
-                .collect::<Vec<_>>(),
-        ));
-        let mut first = 1;
-        let batches = batches
-            .iter()
-            .map(|&rows| {
-                let numbers: ArrayRef = Arc::new(Int64Array::from_iter_values(first..first + rows));
-                first += rows;
-                RecordBatch::try_new(schema.clone(), vec![numbers; usize::from(columns)]).unwrap()
+    fn numbered(columns: u8, batches: &[usize]) -> Table {
+        let rows = batches.iter().sum::<usize>() as i64;
+        let columns = (0..columns)
+            .map(|index| {
+                let name = char::from(b'A' + index).to_string();
+                (name, PublicColumn::Int((1..=rows).map(Some).collect()))
             })
             .collect();
-        Table::from_public(PublicTable::from_batches(schema, batches).unwrap())
+        Table::from_public(PublicTable::chunked(columns, batches.to_vec()).unwrap())
     }
 
-    /// The text of every value of `array`.
-    fn texts(array: &ArrayRef) -> Vec<String> {
-        (0..array.len())
-            .map(|row| value(array.as_ref(), row).into_owned())
+    /// The text of every value of `column`.
+    fn texts(column: &PublicColumn) -> Vec<String> {
+        (0..column.len())
+            .map(|row| value(column, row).into_owned())
             .collect()
+    }
+
+    /// A list column of text items, `None` for a missing item or list.
+    fn text_lists(lists: &[Option<&[Option<&str>]>]) -> PublicColumn {
+        let mut column = List::new(PublicColumn::Str(Text::default()));
+        for list in lists {
+            if let (Some(items), PublicColumn::Str(text)) = (list, column.items_mut()) {
+                for item in *items {
+                    text.push(*item);
+                }
+            }
+            column.close(list.is_some());
+        }
+        PublicColumn::List(Box::new(column))
     }
 
     #[test]
@@ -968,44 +903,41 @@ mod tests {
 
     #[test]
     fn a_column_type_prints_its_language_name() {
-        let list = |item| DataType::List(Arc::new(Field::new("item", item, true)));
-        for (kind, name) in [
-            (DataType::Utf8, "str"),
-            (DataType::LargeUtf8, "str"),
-            (DataType::Utf8View, "str"),
-            (DataType::Int64, "int"),
-            (DataType::Float64, "float"),
-            (DataType::Date32, "date"),
-            (DataType::Timestamp(TimeUnit::Second, None), "datetime"),
-            (list(DataType::Utf8), "list<str>"),
-            (list(DataType::Int64), "list<int>"),
-            (list(list(DataType::Date32)), "list<list<date>>"),
-            // Types no engine table has.
-            (DataType::Boolean, "?"),
-            (DataType::Timestamp(TimeUnit::Millisecond, None), "?"),
+        let list = |items| PublicColumn::List(Box::new(List::new(items)));
+        for (column, name) in [
+            (PublicColumn::Str(Text::default()), "str"),
+            (PublicColumn::Int(Values::default()), "int"),
+            (PublicColumn::Float(Values::default()), "float"),
+            (PublicColumn::Date(Values::default()), "date"),
+            (PublicColumn::DateTime(Values::default()), "datetime"),
+            (list(PublicColumn::Str(Text::default())), "list<str>"),
+            (list(PublicColumn::Int(Values::default())), "list<int>"),
             (
-                DataType::Timestamp(TimeUnit::Second, Some("UTC".into())),
-                "?",
+                list(list(PublicColumn::Date(Values::default()))),
+                "list<list<date>>",
             ),
-            (list(DataType::Boolean), "list<?>"),
         ] {
-            assert_eq!(type_name(&kind), name, "{kind:?}");
+            assert_eq!(column.type_name(), name, "{column:?}");
         }
     }
 
     #[test]
     fn a_value_prints_in_its_canonical_text() {
-        let floats: ArrayRef = Arc::new(Float64Array::from(vec![
-            Some(1.5),
-            Some(180.0),
-            Some(-0.0),
-            Some(0.1 + 0.2),
-            Some(1e21),
-            Some(1e-7),
-            Some(f64::NAN),
-            Some(f64::NEG_INFINITY),
-            None,
-        ]));
+        let floats = PublicColumn::Float(
+            [
+                Some(1.5),
+                Some(180.0),
+                Some(-0.0),
+                Some(0.1 + 0.2),
+                Some(1e21),
+                Some(1e-7),
+                Some(f64::NAN),
+                Some(f64::NEG_INFINITY),
+                None,
+            ]
+            .into_iter()
+            .collect(),
+        );
         assert_eq!(
             texts(&floats),
             [
@@ -1020,15 +952,19 @@ mod tests {
                 "null"
             ]
         );
-        let dates: ArrayRef = Arc::new(Date32Array::from(vec![
-            Some(0),
-            Some(-1),
-            Some(-719_162),
-            Some(2_932_896),
-            Some(2_932_897),
-            Some(i32::MIN),
-            None,
-        ]));
+        let dates = PublicColumn::Date(
+            [
+                Some(0),
+                Some(-1),
+                Some(-719_162),
+                Some(2_932_896),
+                Some(2_932_897),
+                Some(i32::MIN),
+                None,
+            ]
+            .into_iter()
+            .collect(),
+        );
         assert_eq!(
             texts(&dates),
             [
@@ -1041,13 +977,11 @@ mod tests {
                 "null"
             ]
         );
-        let datetimes: ArrayRef = Arc::new(TimestampSecondArray::from(vec![
-            Some(0),
-            Some(-1),
-            Some(1_700_000_000),
-            Some(i64::MAX),
-            None,
-        ]));
+        let datetimes = PublicColumn::DateTime(
+            [Some(0), Some(-1), Some(1_700_000_000), Some(i64::MAX), None]
+                .into_iter()
+                .collect(),
+        );
         assert_eq!(
             texts(&datetimes),
             [
@@ -1058,36 +992,17 @@ mod tests {
                 "null"
             ]
         );
-        let integers: ArrayRef = Arc::new(Int64Array::from(vec![Some(-5), Some(i64::MAX), None]));
+        let integers = PublicColumn::Int([Some(-5), Some(i64::MAX), None].into_iter().collect());
         assert_eq!(texts(&integers), ["-5", "9223372036854775807", "null"]);
-        // Each string type a host stream may carry.
-        let strings: [ArrayRef; 3] = [
-            Arc::new(StringArray::from(vec![Some("a b"), Some(""), None])),
-            Arc::new(LargeStringArray::from(vec![Some("a b"), Some(""), None])),
-            Arc::new(StringViewArray::from(vec![Some("a b"), Some(""), None])),
-        ];
-        for strings in &strings {
-            assert_eq!(texts(strings), ["a b", "", "null"]);
-        }
-        let flags: ArrayRef = Arc::new(BooleanArray::from(vec![Some(true), None]));
-        assert_eq!(texts(&flags), ["?", "null"]);
+        let strings = PublicColumn::Str([Some("a b"), Some(""), None].into_iter().collect());
+        assert_eq!(texts(&strings), ["a b", "", "null"]);
     }
 
     #[test]
     fn a_list_prints_its_items_in_brackets() {
-        let mut paths = ListBuilder::new(StringBuilder::new());
-        paths.values().append_value("columns.AGE");
-        paths.values().append_null();
-        paths.append(true);
-        paths.append(true);
-        paths.append(false);
-        let paths: ArrayRef = Arc::new(paths.finish());
+        let paths = text_lists(&[Some(&[Some("columns.AGE"), None]), Some(&[]), None]);
         assert_eq!(texts(&paths), ["[columns.AGE, null]", "[]", "null"]);
-        let mut span = ListBuilder::new(Int64Builder::new());
-        span.values().append_value(3);
-        span.values().append_value(9);
-        span.append(true);
-        let span: ArrayRef = Arc::new(span.finish());
+        let span = PublicColumn::List(Box::new(List::int([Some(vec![3, 9])])));
         assert_eq!(texts(&span), ["[3, 9]"]);
     }
 
@@ -1136,27 +1051,16 @@ int  int  int  int  int  int  int  int  ...
     /// never ends a line, even after an empty string.
     #[test]
     fn names_are_cells_and_no_line_ends_in_a_space() {
-        let mut paths = ListBuilder::new(StringBuilder::new());
-        for row in [
-            &["columns.AGE"][..],
-            &[],
-            &["columns.AGEU", "output.columns"],
-        ] {
-            for path in row {
-                paths.values().append_value(path);
-            }
-            paths.append(true);
-        }
+        let paths = List::text([
+            Some(vec!["columns.AGE"]),
+            Some(vec![]),
+            Some(vec!["columns.AGEU", "output.columns"]),
+        ]);
+        let text = |values: [&str; 3]| PublicColumn::Str(values.map(Some).into_iter().collect());
         let printed = preview(&table(vec![
-            (
-                "SUBJECT_IDENTIFIER_FOR_THE_STUDY",
-                Arc::new(StringArray::from(vec!["01", "02", "03"])),
-            ),
-            ("spec_paths", Arc::new(paths.finish())),
-            (
-                "NOTE",
-                Arc::new(StringArray::from(vec!["x", "", "caf\u{e9}"])),
-            ),
+            ("SUBJECT_IDENTIFIER_FOR_THE_STUDY", text(["01", "02", "03"])),
+            ("spec_paths", PublicColumn::List(Box::new(paths))),
+            ("NOTE", text(["x", "", "caf\u{e9}"])),
         ]));
         assert_eq!(
             printed,
@@ -1172,14 +1076,9 @@ str                   list<str>             str
 
     #[test]
     fn a_table_without_columns_prints_its_header_alone() {
-        let schema = Arc::new(Schema::empty());
-        let options = RecordBatchOptions::new().with_row_count(Some(3));
-        let batch =
-            RecordBatch::try_new_with_options(schema.clone(), Vec::new(), &options).unwrap();
-        let rows =
-            Table::from_public(PublicTable::from_batches(schema.clone(), vec![batch]).unwrap());
+        let rows = Table::from_public(PublicTable::chunked(Vec::new(), vec![3]).unwrap());
         assert_eq!(preview(&rows), "yamaa.Table: 3 rows x 0 columns");
-        let empty = Table::from_public(PublicTable::from_batches(schema, Vec::new()).unwrap());
+        let empty = Table::from_public(PublicTable::chunked(Vec::new(), Vec::new()).unwrap());
         assert_eq!(preview(&empty), "yamaa.Table: 0 rows x 0 columns");
     }
 

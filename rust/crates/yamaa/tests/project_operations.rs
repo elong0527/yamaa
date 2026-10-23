@@ -1041,12 +1041,12 @@ fn a_specification_runs_alike_alone_and_in_a_project_run_with_computed_statuses(
     // report and evidence.
     let member = runs.get("DM").unwrap();
     assert_eq!(
-        member.output().unwrap().ipc().unwrap(),
-        alone.output().unwrap().ipc().unwrap()
+        member.output().unwrap().batches(),
+        alone.output().unwrap().batches()
     );
     assert_eq!(
-        member.report().unwrap().ipc().unwrap(),
-        alone.report().unwrap().ipc().unwrap()
+        member.report().unwrap().batches(),
+        alone.report().unwrap().batches()
     );
     assert_eq!(member.observations(false), alone.observations(false));
     // A failed input fails the run but not the check, which reads no data.
@@ -1116,12 +1116,12 @@ fn an_engine_without_functions_runs_every_build_that_calls_no_project_function()
         assert_eq!(run.issues().rows(), 0);
         assert_eq!(run.status(), Status::Succeeded);
     }
-    let output = |run: &yamaa::Run| run.output().unwrap().ipc().unwrap();
+    let output = |run: &yamaa::Run| run.output().unwrap().batches().to_vec();
     assert_eq!(output(&member), output(&alone));
     assert_eq!(output(&member), output(&hosted));
     assert_eq!(
-        member.report().unwrap().ipc().unwrap(),
-        hosted.report().unwrap().ipc().unwrap()
+        member.report().unwrap().batches(),
+        hosted.report().unwrap().batches()
     );
     let runs = bare.project_run(&project, None, &token).unwrap();
     assert_eq!(runs.status(), Status::Succeeded);
