@@ -188,7 +188,7 @@ fn known_date_choices_reject_incompatible_filter_types_in_check_and_build() {
         assert_eq!(checked[0].spec_paths, ["intermediates.EXP.filter"]);
         assert_eq!(
             yamaa_core::json::Value::Object(checked[0].context.clone()),
-            yamaa_adapters::json!({"left_type":"date","right_type":"str"})
+            yamaa_adapters::json!({"actual":"str","left_type":"date","right_type":"str"})
         );
         study.input();
         let result = crate::support::study::domain(
@@ -290,7 +290,7 @@ fn unknown_choices_report_the_actual_integer_when_date_sources_are_missing() {
         assert_issues(
             &issues,
             &[
-                yamaa_adapters::json!({"phase":"validation","condition":"incompatible_input_type","rule":"FORMULA-5","spec_paths":["intermediates.EXP.filter"],"context":{"left_type":"int","right_type":"date"},"operand_route":[]}),
+                yamaa_adapters::json!({"phase":"validation","condition":"incompatible_input_type","rule":"FORMULA-5","spec_paths":["intermediates.EXP.filter"],"context":{"actual":"date","left_type":"int","right_type":"date"},"operand_route":[]}),
             ],
             expression,
         );
@@ -618,7 +618,7 @@ fn unknown_numeric_operands_do_not_invent_an_integer_result_kind() {
     assert_issues(
         &issues,
         &[
-            yamaa_adapters::json!({"phase":"validation","condition":"incompatible_input_type","rule":"FORMULA-5","spec_paths":["intermediates.EXP.filter"],"context":{"left_type":"float","right_type":"str"},"operand_route":[]}),
+            yamaa_adapters::json!({"phase":"validation","condition":"incompatible_input_type","rule":"FORMULA-5","spec_paths":["intermediates.EXP.filter"],"context":{"actual":"str","left_type":"float","right_type":"str"},"operand_route":[]}),
         ],
         "a filter that compares a float with text",
     );

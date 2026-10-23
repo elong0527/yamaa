@@ -184,7 +184,7 @@ pub fn admit<T: TableAccess>(study: &Study, dataset: &Dataset, table: &T) -> Res
             let value = table
                 .cell(row, column)
                 .map_err(|_| artifact_mismatch(dataset, "held artifact access"))?;
-            if matches!(value, ValueRef::Bool(_)) {
+            if let ValueRef::Bool(cell) = value {
                 return Err(if xpt {
                     artifact_mismatch(dataset, "held artifact boolean cell")
                 } else {
@@ -193,6 +193,7 @@ pub fn admit<T: TableAccess>(study: &Study, dataset: &Dataset, table: &T) -> Res
                         "dataset_json",
                         "schema_violation: boolean cell",
                     )
+                    .with("value", cell)
                 });
             }
         }

@@ -60,6 +60,8 @@ impl WindowFinding {
         self.diagnostic_code().definition()
     }
     /// Retain the authored failure without consulting a host or source table.
+    /// A repeated group variable also names the form `group_by` takes
+    /// (WINDOW-3).
     pub fn diagnostic(&self) -> crate::diagnostic::Diagnostic {
         use crate::diagnostic::Diagnostic;
         use crate::json::Value as JsonValue;
@@ -76,10 +78,15 @@ impl WindowFinding {
                 crate::value::Value::Str(identifier.clone()),
             ),
         };
+        let mut context: crate::diagnostic::Context =
+            [(name.into(), JsonValue::from(value))].into();
+        if let Self::RepeatedGroup { .. } = self {
+            context.insert("expected".into(), JsonValue::from("each variable once"));
+        }
         Diagnostic {
             code: self.diagnostic_code(),
             spec_paths: vec![path.clone()],
-            context: [(name.into(), JsonValue::from(value))].into(),
+            context,
             source_span: None,
             operand_route: None,
         }

@@ -204,8 +204,9 @@ A specification with absent or empty `rows` and no default input dataset fails
 validation with `driver_unavailable` at `base`. The default is root `base`, or
 the single declared dataset when `base` is omitted. An explicit `base` must
 name a declared input dataset even when `rows` is present; an undeclared `base`
-fails with the same condition and path, naming the written dataset. An
-unavailable implicit default records a missing `row` in its context.
+fails with the same condition and path, naming the written dataset. Both
+record a missing `row` in their context, and an unavailable implicit default
+also a missing `dataset`.
 
 <a id="row-9"></a>
 

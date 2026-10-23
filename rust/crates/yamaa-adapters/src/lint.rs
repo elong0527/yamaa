@@ -200,6 +200,7 @@ fn source_diagnostics(file: &str, failure: &DecodeFailure) -> Vec<Diagnostic> {
                             Value::String(format!("U+{:04X}", issue.code_point)),
                         ),
                         ("offset", Value::from(issue.offset)),
+                        ("path", Value::String(file.into())),
                     ],
                 )
             })

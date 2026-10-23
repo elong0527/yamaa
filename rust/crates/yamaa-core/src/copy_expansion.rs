@@ -224,7 +224,10 @@ impl<'a> Copies<'a> {
             Some(Input { link: None, .. }) => vec![finding(
                 entry.dataset_path(),
                 ConditionCode::CopyUnlinkedInput,
-                vec![("dataset", C::Text(entry.dataset.into()))],
+                vec![
+                    ("dataset", C::Text(entry.dataset.into())),
+                    ("construct", C::Text("copy".into())),
+                ],
             )],
             Some(_) => Vec::new(),
         })

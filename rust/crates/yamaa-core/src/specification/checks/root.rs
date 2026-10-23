@@ -201,7 +201,12 @@ pub(in crate::specification) fn findings(spec: &Spec) -> Vec<PreflightFinding> {
         }
     }
     if !rows.is_empty() && spec.rows.filter.is_some() {
-        findings.push(PreflightFinding::ConflictingRowConstruction);
+        findings.push(PreflightFinding::ConflictingRowConstruction {
+            rows: rows
+                .iter()
+                .map(|template| template.id.name.clone())
+                .collect(),
+        });
     }
     for (index, template) in rows.iter().enumerate() {
         let identity = template.id.name.as_str();

@@ -696,7 +696,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             "duplicate_identifier",
             "OUTPUT-1",
             entry_path,
-            vec![("column", "VALUE")],
+            vec![("column", "VALUE"), ("identifier", "VALUE")],
             "a repeated output column",
         ),
     ] {
@@ -1048,14 +1048,17 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     // The Define-XML encoder in yamaa-adapters raises DEFINE-24 and DEFINE-25
     // through these constructors, and the adapters' encoder tests reach both
     // from authored text (`tests/submission_encoders.rs`).
-    let finding = define_diagnostics::xml_whitespace("datasets.D0.columns.VALUE.label");
+    let finding = define_diagnostics::xml_whitespace("datasets.D0.columns.VALUE.label", '\t');
     assert_eq!(finding.path, "datasets.D0.columns.VALUE.label");
     assert_eq!(
         finding.context,
-        [(
-            "detail".into(),
-            JsonValue::String("forbidden XML whitespace".into())
-        )]
+        [
+            (
+                "detail".into(),
+                JsonValue::String("forbidden XML whitespace".into())
+            ),
+            ("whitespace".into(), JsonValue::String("tab".into())),
+        ]
         .into()
     );
     reached_finding(
@@ -1066,14 +1069,24 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         "untransportable_text",
         "DEFINE-24",
     );
-    let finding = define_diagnostics::xml_invalid("created", "CreationDateTime");
+    let finding = define_diagnostics::xml_invalid(
+        "created",
+        "CreationDateTime",
+        JsonValue::String("2026-09-30T00:00:00.1".into()),
+    );
     assert_eq!(finding.path, "created");
     assert_eq!(
         finding.context,
-        [(
-            "detail".into(),
-            JsonValue::String("schema_violation: CreationDateTime".into())
-        )]
+        [
+            (
+                "detail".into(),
+                JsonValue::String("schema_violation: CreationDateTime".into())
+            ),
+            (
+                "value".into(),
+                JsonValue::String("2026-09-30T00:00:00.1".into())
+            ),
+        ]
         .into()
     );
     reached_finding(
@@ -1159,9 +1172,11 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     assert_eq!(
         findings,
         [
-            Finding::cause(DefineRequiredDeclaration, "study", "study"),
-            Finding::cause(DefineRequiredDeclaration, "sdtm.standards", "standards"),
-            Finding::cause(DefineRequiredDeclaration, "sdtm.define", "define"),
+            Finding::cause(DefineRequiredDeclaration, "study", "study").with("field", "study"),
+            Finding::cause(DefineRequiredDeclaration, "sdtm.standards", "standards")
+                .with("field", "standards"),
+            Finding::cause(DefineRequiredDeclaration, "sdtm.define", "define")
+                .with("field", "define"),
         ]
     );
     reached_finding(
@@ -1185,6 +1200,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     assert!(define_diagnostics::admit_relation(
         TargetRelation::Independent,
         "sdtm.specs[0]",
+        "dm.csv",
         "held paths"
     )
     .is_ok());
@@ -1205,16 +1221,20 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         let finding = define_diagnostics::admit_relation(
             relation,
             "sdtm.specs[0]",
+            "dm.csv",
             "A and B name one retained target",
         )
         .unwrap_err();
         assert_eq!(finding.path, "sdtm.specs[0]");
         assert_eq!(
             finding.context,
-            [(
-                "detail".into(),
-                JsonValue::String("A and B name one retained target".into())
-            )]
+            [
+                (
+                    "detail".into(),
+                    JsonValue::String("A and B name one retained target".into())
+                ),
+                ("path".into(), JsonValue::String("dm.csv".into())),
+            ]
             .into()
         );
         reached_finding(
