@@ -141,14 +141,18 @@ unsafe fn text(text: Str) -> Option<String> {
     std::str::from_utf8(bytes).ok().map(str::to_owned)
 }
 
-/// The bytes `text` borrows, or `None` for no text.
+/// The bytes `text` borrows, or `None` for no text or a length no slice can
+/// have.
 ///
 /// # Safety
 ///
 /// As [`text`].
 unsafe fn bytes<'a>(text: Str) -> Option<&'a [u8]> {
+    if text.ptr.is_null() || text.len > isize::MAX as usize {
+        return None;
+    }
     // SAFETY: the caller's contract.
-    (!text.ptr.is_null()).then(|| unsafe { std::slice::from_raw_parts(text.ptr, text.len) })
+    Some(unsafe { std::slice::from_raw_parts(text.ptr, text.len) })
 }
 
 /// A host failure as the facade's function error, which takes its payload.
@@ -252,7 +256,7 @@ unsafe fn scalar(record: &abi::Scalar) -> Result<yamaa::Scalar, FunctionError> {
 }
 
 /// A bound function: the host's callable, kept until the build drops it.
-struct Bound(Option<Root>);
+struct Bound(Root);
 
 /// The host-functions port over a host's callbacks. It calls a function
 /// once per row, as the facade's port does by default, and refuses to
@@ -279,17 +283,23 @@ impl ProjectFunctions for Port {
             .iter()
             .map(|parameter| Str::of(&parameter.name))
             .collect();
+        let returns = match signature.returns {
+            ColumnType::Str => abi::COLUMN_STR,
+            ColumnType::Int => abi::COLUMN_INT,
+            ColumnType::Float => abi::COLUMN_FLOAT,
+            ColumnType::Date => abi::COLUMN_DATE,
+            ColumnType::DateTime => abi::COLUMN_DATETIME,
+            // The facade's column type is non-exhaustive; a type the ABI
+            // does not name cannot cross it.
+            _ => {
+                let code = "function_boundary";
+                return Err(FunctionError::Internal { code });
+            }
+        };
         let signature = abi::Signature {
             parameters: parameters.as_ptr(),
             parameters_len: parameters.len(),
-            returns: match signature.returns {
-                ColumnType::Str => abi::COLUMN_STR,
-                ColumnType::Int => abi::COLUMN_INT,
-                ColumnType::Float => abi::COLUMN_FLOAT,
-                ColumnType::Date => abi::COLUMN_DATE,
-                // The facade's column type is non-exhaustive; datetime is last.
-                _ => abi::COLUMN_DATETIME,
-            },
+            returns,
             may_return_missing: u32::from(signature.may_return_missing),
         };
         let identity = abi::Identity {
@@ -300,7 +310,11 @@ impl ProjectFunctions for Port {
             // SAFETY: see the module documentation.
             |context, reply| unsafe { bind(context, &identity, &signature, reply) },
             |status, reply| match status {
-                abi::ANSWERED => Ok(FunctionHandle::new(Bound(Root::take(&mut reply.function)))),
+                // An answer binds an object; a null one is outside the
+                // protocol, so no call ever passes the host a null function.
+                abi::ANSWERED => Root::take(&mut reply.function)
+                    .map(|function| FunctionHandle::new(Bound(function)))
+                    .ok_or(FunctionError::Protocol),
                 // SAFETY: the host filled the reply.
                 abi::RAISED => Err(unsafe { failure(&mut reply.error) }),
                 _ => Err(FunctionError::Protocol),
@@ -316,7 +330,7 @@ impl ProjectFunctions for Port {
         let invoke = self.0.callbacks.invoke;
         let invoke = invoke.ok_or(CallError::Raised(FunctionError::Protocol))?;
         let function = handle
-            .with::<Bound, _>(|bound| bound.0.as_ref().map_or(std::ptr::null_mut(), Root::pointer))
+            .with::<Bound, _>(|bound| bound.0.pointer())
             .ok_or(CallError::Raised(FunctionError::Protocol))?;
         let arguments = arguments
             .iter()

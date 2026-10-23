@@ -126,9 +126,11 @@ impl CallArgs {
             return Err(boundary("the call is missing"));
         }
         let mut record = MaybeUninit::<Call>::zeroed();
-        // SAFETY: the caller's contract. Whole fields only are copied, since
-        // every field of a call ends on a multiple of the pointer's
-        // alignment, and each is valid all zeros or as the caller wrote it.
+        // SAFETY: the caller's contract. The copy stops at a multiple of the
+        // pointer's alignment, so it copies whole fields only: `size` and
+        // `host` fill the first such span together, and every later field
+        // begins and ends on one. Each field is valid all zeros or as the
+        // caller wrote it.
         let mut record = unsafe {
             let size = ((*call).size as usize).min(size_of::<Call>());
             let length = size / align_of::<usize>() * align_of::<usize>();
@@ -378,20 +380,27 @@ fn information(info: yamaa::Info) -> abi::Info {
 // -- answering ------------------------------------------------------------------
 
 /// Run an entry's `body`, containing a panic, and write what it answers:
-/// its value into `out`, or its refusal.
+/// its value into `out`, or its refusal. An entry with nowhere to write its
+/// value answers a boundary refusal, written when `refusal` is not null, and
+/// one with nowhere to write a refusal answers [`abi::BOUNDARY`] alone;
+/// either way its body does not run, and what the body holds drops, a call's
+/// context included.
 ///
 /// # Safety
 ///
 /// `out` and `refusal` are null or valid for writes.
 unsafe fn guard<T>(out: *mut T, refusal: *mut Refusal, body: impl FnOnce() -> Answer<T>) -> Status {
-    if out.is_null() || refusal.is_null() {
+    if refusal.is_null() {
         return abi::BOUNDARY;
     }
-    let answer =
-        catch_unwind(AssertUnwindSafe(body)).unwrap_or_else(|panic| Err(contained(&*panic)));
+    let answer = if out.is_null() {
+        Err(boundary("the entry's destination is null"))
+    } else {
+        catch_unwind(AssertUnwindSafe(body)).unwrap_or_else(|panic| Err(contained(&*panic)))
+    };
     let (status, record) = match answer {
         Ok(value) => {
-            // SAFETY: the caller's contract.
+            // SAFETY: the caller's contract; `out` is not null.
             unsafe { out.write(value) };
             return abi::DONE;
         }
@@ -413,7 +422,7 @@ unsafe fn guard<T>(out: *mut T, refusal: *mut Refusal, body: impl FnOnce() -> An
             },
         ),
     };
-    // SAFETY: the caller's contract.
+    // SAFETY: the caller's contract; `refusal` is not null.
     unsafe { refusal.write(record) };
     status
 }
@@ -429,20 +438,47 @@ fn contained(panic: &(dyn Any + Send)) -> Fault {
 }
 
 /// Define entries that answer their value into a last `out` argument and a
-/// refusal into `refusal`, whose body runs inside [`guard`]. A body reads its
-/// arguments under the entry's contract, which the module documentation
-/// states.
+/// refusal into `refusal`, whose body runs inside [`guard`]. An entry whose
+/// first argument is a call reads it before anything else, so that it takes
+/// the call's context whatever it answers, and its body receives what it
+/// read. A body reads its other arguments in unsafe blocks of its own.
 macro_rules! entries {
-    ($(fn $name:ident($($argument:ident: $type:ty),*) -> $out:ty $body:block)*) => {$(
+    () => {};
+    (fn $name:ident($call:ident: *const Call $(, $argument:ident: $type:ty)*) -> $out:ty
+        $body:block $($rest:tt)*) => {
+        unsafe extern "C" fn $name(
+            $call: *const Call,
+            $($argument: $type,)*
+            out: *mut $out,
+            refusal: *mut Refusal,
+        ) -> Status {
+            // SAFETY: the entry's contract: the call is null or holds at
+            // least its size.
+            let read = AssertUnwindSafe(|| unsafe { CallArgs::read($call) });
+            let $call = catch_unwind(read).unwrap_or_else(|panic| Err(contained(&*panic)));
+            let body = move || {
+                let $call = $call?;
+                $body
+            };
+            // SAFETY: the entry's contract: `out` and `refusal` are null or
+            // valid for writes.
+            unsafe { guard(out, refusal, body) }
+        }
+        entries! { $($rest)* }
+    };
+    (fn $name:ident($($argument:ident: $type:ty),*) -> $out:ty $body:block $($rest:tt)*) => {
         unsafe extern "C" fn $name(
             $($argument: $type,)*
             out: *mut $out,
             refusal: *mut Refusal,
         ) -> Status {
-            // SAFETY: the entry's contract, for every argument the body reads.
-            unsafe { guard(out, refusal, || $body) }
+            let body = move || $body;
+            // SAFETY: the entry's contract: `out` and `refusal` are null or
+            // valid for writes.
+            unsafe { guard(out, refusal, body) }
         }
-    )*};
+        entries! { $($rest)* }
+    };
 }
 
 // -- handles --------------------------------------------------------------------
@@ -552,9 +588,10 @@ fn run<T>(
 
 entries! {
     fn spec_check(call: *const Call, specification: Str, project: Str) -> Handle {
-        let call = CallArgs::read(call)?;
-        let specification = required(specification, "the specification")?;
-        let project = optional(project, "the project")?;
+        // SAFETY: the entry's contract: its texts are valid for the call.
+        let specification = unsafe { required(specification, "the specification") }?;
+        // SAFETY: as above.
+        let project = unsafe { optional(project, "the project") }?;
         let check = call.cancellable(|token| {
             call.engine()
                 .spec_check(specification, project, token)
@@ -564,8 +601,8 @@ entries! {
     }
 
     fn project_check(call: *const Call, project: Str) -> Handle {
-        let call = CallArgs::read(call)?;
-        let project = required(project, "the project")?;
+        // SAFETY: the entry's contract: its text is valid for the call.
+        let project = unsafe { required(project, "the project") }?;
         let check = call.cancellable(|token| {
             call.engine()
                 .project_check(project, token)
@@ -575,9 +612,10 @@ entries! {
     }
 
     fn spec_run(call: *const Call, specification: Str, project: Str, plans: Handle) -> Handle {
-        let call = CallArgs::read(call)?;
-        let specification = required(specification, "the specification")?;
-        let project = optional(project, "the project")?;
+        // SAFETY: the entry's contract: its texts are valid for the call.
+        let specification = unsafe { required(specification, "the specification") }?;
+        // SAFETY: as above.
+        let project = unsafe { optional(project, "the project") }?;
         let built = run(plans, "spec_run", |plans| {
             call.cancellable(|token| {
                 let engine = call.engine();
@@ -592,9 +630,10 @@ entries! {
     }
 
     fn project_run(call: *const Call, project: Str, section: Str, plans: Handle) -> Handle {
-        let call = CallArgs::read(call)?;
-        let project = required(project, "the project")?;
-        let section = optional(section, "the section")?;
+        // SAFETY: the entry's contract: its texts are valid for the call.
+        let project = unsafe { required(project, "the project") }?;
+        // SAFETY: as above.
+        let section = unsafe { optional(section, "the section") }?;
         let built = run(plans, "project_run", |plans| {
             call.cancellable(|token| {
                 let engine = call.engine();
@@ -610,10 +649,12 @@ entries! {
     }
 
     fn project_submission(call: *const Call, project: Str, section: Str, created: Str) -> Handle {
-        let call = CallArgs::read(call)?;
-        let project = required(project, "the project")?;
-        let section = optional(section, "the section")?;
-        let created = optional(created, "the creation time")?;
+        // SAFETY: the entry's contract: its texts are valid for the call.
+        let project = unsafe { required(project, "the project") }?;
+        // SAFETY: as above.
+        let section = unsafe { optional(section, "the section") }?;
+        // SAFETY: as above.
+        let created = unsafe { optional(created, "the creation time") }?;
         let submission = call.cancellable(|token| {
             call.engine()
                 .project_submission(project, section, created, yamaa::VERSION, token)
@@ -623,16 +664,19 @@ entries! {
     }
 
     fn read_odm(call: *const Call, source: Str, options: *const abi::OdmOptions) -> Handle {
-        let call = CallArgs::read(call)?;
-        let source = required(source, "the source")?;
+        // SAFETY: the entry's contract: its text is valid for the call.
+        let source = unsafe { required(source, "the source") }?;
         let mut read = yamaa::OdmOptions::new();
-        if let Some(options) = options.as_ref() {
+        // SAFETY: the entry's contract: the options are null or valid for the
+        // call.
+        if let Some(options) = unsafe { options.as_ref() } {
             let limit = |value: u64| usize::try_from(value).unwrap_or(usize::MAX);
             read = read
                 .with_max_archive_members(limit(options.max_archive_members))
                 .with_max_expanded_bytes(options.max_expanded_bytes)
                 .with_max_xml_depth(limit(options.max_xml_depth));
-            if let Some(member) = optional(options.archive_member, "the archive member")? {
+            // SAFETY: as above, for the options' text.
+            if let Some(member) = unsafe { optional(options.archive_member, "the member") }? {
                 read = read.with_archive_member(member);
             }
         }
@@ -644,15 +688,17 @@ entries! {
     }
 
     fn lint(paths: *const Str, paths_len: usize, fix: u32) -> Handle {
-        let paths = list(paths, paths_len, "the paths")?
+        // SAFETY: the entry's contract: the list and its texts are valid for
+        // the call.
+        let paths = unsafe { list(paths, paths_len, "the paths") }?
             .iter()
-            .map(|path| required(*path, "a path").map(str::to_owned))
+            // SAFETY: as above, for each text.
+            .map(|path| unsafe { required(*path, "a path") }.map(str::to_owned))
             .collect::<Answer<Vec<_>>>()?;
         insert(Value::Table(yamaa::lint(&paths, fix != 0)?.table()))
     }
 
     fn selftest(call: *const Call) -> Handle {
-        let call = CallArgs::read(call)?;
         let (host, version) = call.host();
         insert(Value::SelfTest(yamaa::selftest(host, version)))
     }
@@ -662,43 +708,54 @@ entries! {
     }
 
     fn spec_resolve(call: *const Call, specification: Str, project: Str) -> abi::Nodes {
-        let call = CallArgs::read(call)?;
-        let specification = required(specification, "the specification")?;
-        tree(call.engine().spec_resolve(specification, optional(project, "the project")?)?)
+        // SAFETY: the entry's contract: its texts are valid for the call.
+        let specification = unsafe { required(specification, "the specification") }?;
+        // SAFETY: as above.
+        let project = unsafe { optional(project, "the project") }?;
+        tree(call.engine().spec_resolve(specification, project)?)
     }
 
     fn project_spec(call: *const Call, project: Str, name: Str) -> abi::Text {
-        let call = CallArgs::read(call)?;
-        let project = required(project, "the project")?;
-        Ok(text(call.engine().project_spec(project, required(name, "the name")?)?))
+        // SAFETY: the entry's contract: its texts are valid for the call.
+        let project = unsafe { required(project, "the project") }?;
+        // SAFETY: as above.
+        let name = unsafe { required(name, "the name") }?;
+        Ok(text(call.engine().project_spec(project, name)?))
     }
 
     fn project_names(call: *const Call, project: Str) -> abi::Texts {
-        let call = CallArgs::read(call)?;
-        Ok(texts(call.engine().project_names(required(project, "the project")?)?))
+        // SAFETY: the entry's contract: its text is valid for the call.
+        let project = unsafe { required(project, "the project") }?;
+        Ok(texts(call.engine().project_names(project)?))
     }
 
     fn spec_summary(specification: Str) -> abi::Texts {
-        let specification = required(specification, "the specification")?;
+        // SAFETY: the entry's contract: its text is valid for the call.
+        let specification = unsafe { required(specification, "the specification") }?;
         Ok(texts(yamaa::Summary::spec(specification).lines()))
     }
 
     fn project_summary(project: Str) -> abi::Texts {
-        Ok(texts(yamaa::Summary::project(required(project, "the project")?).lines()))
+        // SAFETY: the entry's contract: its text is valid for the call.
+        let project = unsafe { required(project, "the project") }?;
+        Ok(texts(yamaa::Summary::project(project).lines()))
     }
 
     fn schema(file_type: Str) -> abi::Text {
-        Ok(text(yamaa::schema(required(file_type, "the file type")?)?))
+        // SAFETY: the entry's contract: its text is valid for the call.
+        let file_type = unsafe { required(file_type, "the file type") }?;
+        Ok(text(yamaa::schema(file_type)?))
     }
 
     fn info(call: *const Call) -> abi::Info {
-        let call = CallArgs::read(call)?;
         let (host, version) = call.host();
         Ok(information(yamaa::info(host, version)))
     }
 
     fn status(result: Handle, member: Str) -> abi::Text {
-        view(result, optional(member, "the member")?, "status", |view| {
+        // SAFETY: the entry's contract: its text is valid for the call.
+        let member = unsafe { optional(member, "the member") }?;
+        view(result, member, "status", |view| {
             let status = match view {
                 View::Check(check) => check.status(),
                 View::Run(run) => run.status(),
@@ -711,7 +768,9 @@ entries! {
     }
 
     fn issues(result: Handle, member: Str) -> Handle {
-        let issues = view(result, optional(member, "the member")?, "issues", |view| match view {
+        // SAFETY: the entry's contract: its text is valid for the call.
+        let member = unsafe { optional(member, "the member") }?;
+        let issues = view(result, member, "issues", |view| match view {
             View::Check(check) => Ok(check.issues()),
             View::Run(run) => Ok(run.issues()),
             View::ProjectRun(runs) => Ok(runs.issues()),
@@ -722,7 +781,9 @@ entries! {
     }
 
     fn summary(result: Handle, member: Str) -> abi::Texts {
-        view(result, optional(member, "the member")?, "summary", |view| {
+        // SAFETY: the entry's contract: its text is valid for the call.
+        let member = unsafe { optional(member, "the member") }?;
+        view(result, member, "summary", |view| {
             let summary = match view {
                 View::Check(check) => check.summary(),
                 View::Run(run) => run.summary(),
@@ -735,14 +796,18 @@ entries! {
     }
 
     fn output(result: Handle, member: Str) -> Handle {
-        view(result, optional(member, "the member")?, "output", |view| match view {
+        // SAFETY: the entry's contract: its text is valid for the call.
+        let member = unsafe { optional(member, "the member") }?;
+        view(result, member, "output", |view| match view {
             View::Run(run) => handed_table(run.output()),
             other => Err(another("output", other.kind())),
         })
     }
 
     fn report(result: Handle, member: Str) -> Handle {
-        view(result, optional(member, "the member")?, "report", |view| match view {
+        // SAFETY: the entry's contract: its text is valid for the call.
+        let member = unsafe { optional(member, "the member") }?;
+        view(result, member, "report", |view| match view {
             View::Run(run) => handed_table(run.report()),
             View::ProjectRun(runs) => handed_table(Some(&runs.report())),
             other => Err(another("report", other.kind())),
@@ -750,7 +815,6 @@ entries! {
     }
 
     fn save(call: *const Call, result: Handle) -> abi::Texts {
-        let call = CallArgs::read(call)?;
         let held = held(result)?;
         let kind = held.value.kind();
         let paths = call.cancellable(|token| {
@@ -823,16 +887,17 @@ unsafe extern "C" fn export(
     refusal: *mut Refusal,
 ) -> Status {
     // SAFETY: the entry's contract: `out` is null or holds a stream, which
-    // the export never overwrites while it is live.
-    unsafe {
-        let live = out.as_ref().is_some_and(|stream| stream.release.is_some());
-        guard(out, refusal, || {
-            if live {
-                return Err(boundary("the stream's destination holds a live stream"));
-            }
-            table(handle, "export", |table| exported(table.stream()))
-        })
-    }
+    // the export reads so as never to overwrite a live one.
+    let live = unsafe { out.as_ref() }.is_some_and(|stream| stream.release.is_some());
+    let body = move || {
+        if live {
+            return Err(boundary("the stream's destination holds a live stream"));
+        }
+        table(handle, "export", |table| exported(table.stream()))
+    };
+    // SAFETY: the entry's contract: `out` and `refusal` are null or valid
+    // for writes.
+    unsafe { guard(out, refusal, body) }
 }
 
 unsafe extern "C" fn release(handle: Handle) -> Status {
