@@ -28,6 +28,7 @@ mod yaml_source;
 
 pub mod csv_artifact;
 pub mod csv_source;
+pub mod decoder;
 pub mod odm_xml;
 pub mod parquet_artifact;
 pub mod parquet_source;
@@ -83,8 +84,6 @@ mod python_packaging;
 
 pub mod project_environment_diagnostics;
 
-pub mod project_source_decoder;
-
 pub mod project_attempt;
 pub mod project_report;
 
@@ -105,7 +104,6 @@ mod file_inventory;
 
 pub mod callback;
 pub mod dataset_result;
-mod dataset_snapshot;
 mod execution_diagnostics;
 pub mod ipc_table;
 mod report_scalar;

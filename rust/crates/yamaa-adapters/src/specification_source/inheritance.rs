@@ -1,4 +1,4 @@
-//! Physical inheritance decoding for retained engine preparation.
+//! What a specification keeps of the parents its preparation read, and why it fails to prepare.
 use super::*;
 use yamaa_core::inheritance_capture as application;
 
@@ -18,18 +18,4 @@ pub enum InheritanceError<E> {
         entry: String,
         error: Box<crate::document::SpecificationError<E>>,
     },
-}
-pub(super) struct Decoder;
-impl application::InheritanceDecodePort for Decoder {
-    type Raw = DecodedYaml;
-    type Error = Error;
-    fn decode(&mut self, identity: &str, bytes: &[u8]) -> Result<DecodedYaml, Error> {
-        decode_yaml(bytes).map_err(|error| Error::Decode {
-            identity: identity.into(),
-            error,
-        })
-    }
-    fn document(raw: &DecodedYaml) -> &yamaa_core::schema::Document {
-        &raw.document
-    }
 }

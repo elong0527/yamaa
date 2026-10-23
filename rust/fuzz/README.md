@@ -15,7 +15,7 @@ point the hosts use, and that entry point applies the fixed `Limits` itself.
 | `odm_xml` | An ODM XML file, or a plain or gzip TAR archive holding one | The ODM XML reader that `read_odm` calls in both hosts, with its default options; then the shared source decode of a specification's `.xml` input, which reads the bytes as XML alone, as an ordinary and an ODM input. |
 
 The shared source decode is the one both host routes call for held input bytes
-(`project_source_decoder::Decoder`). The engine writes Dataset-JSON but reads
+(`decoder::Decoder`). The engine writes Dataset-JSON but reads
 none, so the `dataset_json` target fuzzes the path where untrusted bytes reach
 that writer. The ODM XML reader takes a path, so the `odm_xml` target writes
 each input to one scratch file in the system's temporary directory first.

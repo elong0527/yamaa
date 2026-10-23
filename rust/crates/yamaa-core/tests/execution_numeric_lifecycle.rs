@@ -528,8 +528,9 @@ mod execution {
         #[test]
         fn all_inputs_inspect_then_capture_decode_in_authored_order_and_move_opaque_failure_once() {
             use std::sync::Arc;
+            use yamaa_core::decoder;
             use yamaa_core::resolver::{self, Captured, Located, Name, Resolver};
-            use yamaa_core::specification_run::{self as run, PortError, RunError, SourceDecoder};
+            use yamaa_core::specification_run::{self as run, PortError, RunError};
             type IoTrace = Rc<RefCell<Vec<String>>>;
             struct Port {
                 trace: IoTrace,
@@ -576,13 +577,14 @@ mod execution {
                 trace: IoTrace,
                 fail: Option<Failure>,
             }
-            impl SourceDecoder for Decoder {
+            impl decoder::Decoder for Decoder {
+                crate::support::ports::no_documents!();
                 fn continue_after(&self, _error: &Self::Error) -> bool {
                     false
                 }
                 type Error = Failure;
                 type Table = Table;
-                fn decode(
+                fn table(
                     &mut self,
                     source: &SourceDeclaration,
                     bytes: &[u8],

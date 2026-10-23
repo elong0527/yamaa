@@ -6,9 +6,10 @@ mod execution {
         use yamaa_core::json::Value as V;
         use yamaa_core::{
             application_observer::{Noop, Scope},
+            decoder,
             function_invocation::NoFunctions,
             resolver::{Captured, Failure, Located, Name, Resolver},
-            specification_run::{self as run, CapturedAttempt, PortError, RunError, SourceDecoder},
+            specification_run::{self as run, CapturedAttempt, PortError, RunError},
         };
         use yamaa_core::{
             diagnostic::{source_diagnostics, ConditionCode as C, Diagnostic},
@@ -129,7 +130,8 @@ mod execution {
             pending: Vec<Option<Opaque>>,
             next: usize,
         }
-        impl SourceDecoder for Decoder {
+        impl decoder::Decoder for Decoder {
+            crate::support::ports::no_documents!();
             type Error = Opaque;
             type Table = NoTable;
             fn continue_after(&self, error: &Opaque) -> bool {
@@ -138,7 +140,7 @@ mod execution {
                     .push(format!("classify:{}", error.name));
                 error.cause.is_some()
             }
-            fn decode(
+            fn table(
                 &mut self,
                 source: &SourceDeclaration,
                 bytes: &[u8],

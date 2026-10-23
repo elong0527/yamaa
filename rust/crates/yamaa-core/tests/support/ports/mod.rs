@@ -15,11 +15,106 @@ use yamaa_core::{
     value::Value,
 };
 
-use yamaa_core::{function_invocation, project_preparation as metadata, specification_run as run};
+use yamaa_core::{function_invocation, project_preparation as metadata};
 
 mod scripted;
 #[allow(unused_imports)]
 pub use scripted::*;
+
+/// What a test decoder never decodes: no document, project file, table or
+/// failure of it exists.
+#[derive(Debug, PartialEq)]
+pub enum Never {}
+impl TableAccess for Never {
+    type Error = Never;
+    fn schema(&self) -> &TableSchema {
+        match *self {}
+    }
+    fn row_count(&self) -> usize {
+        match *self {}
+    }
+    fn cell(&self, _: usize, _: usize) -> Result<ValueRef<'_>, CellError<Never>> {
+        match *self {}
+    }
+}
+
+/// The decoder port's raw document half for a test decoder that decodes no
+/// parent layer or dictionary file: such a request panics, as a scripted port
+/// does on an unexpected request.
+macro_rules! no_raw {
+    () => {
+        type Raw = $crate::support::ports::Never;
+        fn raw(&mut self, identity: &str, _: &[u8]) -> Result<Self::Raw, Self::DocumentError> {
+            panic!("unexpected document decode of {identity}")
+        }
+        fn raw_document(raw: &Self::Raw) -> &yamaa_core::schema::Document {
+            match *raw {}
+        }
+    };
+}
+pub(crate) use no_raw;
+
+/// The decoder port's project half for a test decoder that reads no file a
+/// project names and no lock: such a request panics.
+macro_rules! no_project_files {
+    () => {
+        type Admitted = $crate::support::ports::Never;
+        fn admitted(
+            &mut self,
+            source: yamaa_core::project_preparation::Source,
+            _: yamaa_core::project_preparation::DecodeTarget,
+        ) -> Result<Self::Admitted, Self::DocumentError> {
+            panic!("unexpected project file decode of {}", source.identity)
+        }
+        fn admitted_document(admitted: &Self::Admitted) -> &yamaa_core::schema::Document {
+            match *admitted {}
+        }
+        fn admitted_source(admitted: &Self::Admitted) -> &yamaa_core::project_preparation::Source {
+            match *admitted {}
+        }
+        fn lock(
+            &mut self,
+            source: &yamaa_core::project_preparation::Source,
+        ) -> Option<yamaa_core::project_environment::LockKind> {
+            panic!("unexpected lock read of {}", source.identity)
+        }
+    };
+}
+pub(crate) use no_project_files;
+
+/// Both document halves of the decoder port for a test decoder that decodes
+/// only tables.
+macro_rules! no_documents {
+    () => {
+        type DocumentError = $crate::support::ports::Never;
+        $crate::support::ports::no_raw!();
+        $crate::support::ports::no_project_files!();
+    };
+}
+pub(crate) use no_documents;
+
+/// The decoder port's table half for a test decoder that decodes only
+/// documents: a table request panics, as a scripted port does on an
+/// unexpected request.
+macro_rules! no_tables {
+    () => {
+        type Error = $crate::support::ports::Never;
+        type Table = $crate::support::ports::Never;
+        fn table(
+            &mut self,
+            source: &yamaa_core::specification::SourceDeclaration,
+            _: &[u8],
+            _: yamaa_core::specification::SourceInterpretation,
+            _: Option<&yamaa_core::producer_contract::Contract>,
+        ) -> Result<Self::Table, Self::Error> {
+            panic!("unexpected table decode of {}", source.name)
+        }
+        fn continue_after(&self, error: &Self::Error) -> bool {
+            match *error {}
+        }
+    };
+}
+pub(crate) use no_tables;
 
 /// Ordered observations shared by independently owned fake ports.
 #[derive(Clone, Debug)]

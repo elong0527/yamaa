@@ -46,7 +46,7 @@ fn shared_metadata_capture_fake_consumes_owned_outcomes_once_and_logs_before_fai
 
 #[test]
 fn shared_metadata_decoder_fake_retains_source_and_document_and_moves_nonclone_errors() {
-    use metadata::ProjectDecodePort;
+    use yamaa_core::decoder::Decoder as _;
     use yamaa_core::schema::{Document, DocumentNode};
     let log = EventLog::default();
     let mut decoder = ScriptedMetadataDecoder::new(log.clone());
@@ -63,7 +63,7 @@ fn shared_metadata_decoder_fake_retains_source_and_document_and_moves_nonclone_e
         outcome: Ok(document),
     });
     let retained = decoder
-        .decode(source, metadata::DecodeTarget::Environment)
+        .admitted(source, metadata::DecodeTarget::Environment)
         .unwrap();
     assert_eq!(retained.source.bytes.as_ptr(), bytes);
     assert_eq!(retained.document.nodes().as_ptr(), nodes);
@@ -75,7 +75,7 @@ fn shared_metadata_decoder_fake_retains_source_and_document_and_moves_nonclone_e
         outcome: Err(error),
     });
     let error = decoder
-        .decode(retained.source, metadata::DecodeTarget::Function)
+        .admitted(retained.source, metadata::DecodeTarget::Function)
         .unwrap_err();
     assert_eq!(error.0.as_ptr(), address);
     assert!(decoder.steps.is_empty());
