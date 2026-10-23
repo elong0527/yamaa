@@ -1392,10 +1392,12 @@ dependencies = [
 name = "yamaa-python"
 version = "1.0.0-rc.1"
 dependencies = [
+ "arrow-array",
+ "arrow-schema",
  "pyo3",
  "pyo3-build-config",
- "yamaa",
  "yamaa-boundary",
+ "yamaa-engine",
 ]
 
 [[package]]

@@ -6,9 +6,10 @@ use std::{
     rc::Rc,
     sync::{Arc, Mutex, PoisonError},
 };
-use yamaa::CancellationToken;
 
-type State = Arc<Mutex<Option<PyErr>>>;
+/// The interrupt one call kept, if any.
+pub(super) type State = Arc<Mutex<Option<PyErr>>>;
+
 thread_local! {
     static ACTIVE: RefCell<Option<State>> = const { RefCell::new(None) };
 }
@@ -40,37 +41,35 @@ pub(super) fn remember(py: Python<'_>, error: &PyErr) {
     }
 }
 
-/// Install the call's probe, run the engine, then raise the original interrupt
-/// in preference to cancellation's payload-free facade error.
-pub(super) fn run<T>(
-    _py: Python<'_>,
-    run: impl FnOnce(&CancellationToken) -> PyResult<T>,
-) -> PyResult<T> {
-    let state = Arc::new(Mutex::new(None));
+/// Whether the call `state` belongs to is cancelled: an interrupt it kept,
+/// or a signal pending now, which it keeps. The engine asks this probe at
+/// its cancellation points and once more as the call returns.
+pub(super) fn cancelled(state: &State) -> bool {
+    if state
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .is_some()
+    {
+        return true;
+    }
+    Python::attach(|py| match py.check_signals() {
+        Ok(()) => false,
+        Err(error) => {
+            keep(state, error);
+            true
+        }
+    })
+}
+
+/// Run a call with its interrupt state, then raise the original interrupt
+/// in preference to whatever the call answered.
+pub(super) fn run<T>(_py: Python<'_>, run: impl FnOnce(&State) -> PyResult<T>) -> PyResult<T> {
+    let state: State = Arc::new(Mutex::new(None));
     let _scope = Scope {
         previous: ACTIVE.with(|active| active.replace(Some(Arc::clone(&state)))),
         _thread: std::marker::PhantomData,
     };
-    let polled = Arc::clone(&state);
-    let token = CancellationToken::with_probe(move || {
-        if polled
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .is_some()
-        {
-            return true;
-        }
-        Python::attach(|py| match py.check_signals() {
-            Ok(()) => false,
-            Err(error) => {
-                keep(&polled, error);
-                true
-            }
-        })
-    });
-    let result = run(&token);
-    // Also deliver a signal first observed as the engine returns.
-    let _ = token.is_cancelled();
+    let result = run(&state);
     let error = state.lock().unwrap_or_else(PoisonError::into_inner).take();
     match error {
         Some(error) => Err(error),

@@ -1,45 +1,44 @@
 //! The interface handshake of the Python binding, the gate that every native
-//! function passes, and the census of the binding's live handles
+//! function passes, and the census of the engine's live handles
 //! (`rust/interface/README.md`, "Version and feature handshake").
 //!
 //! The generated `yamaa/__init__.py` calls `_interface_handshake` right after
-//! importing this module, before any other native call. Until a negotiation
-//! is accepted, every other module function refuses with a `RuntimeError`;
-//! a result handle only comes from such a function, so its methods need no
-//! gate of their own.
+//! importing this module, before any other native call. The binding sends
+//! the request to the engine it links, and until a negotiation is accepted
+//! every other module function refuses with a `RuntimeError`; a result
+//! handle only comes from such a function, so its methods need no gate of
+//! their own.
 use pyo3::{
     exceptions::PyRuntimeError,
     prelude::*,
     types::{PyBool, PyDict, PyInt, PyList, PyString, PyTuple},
 };
-use yamaa_boundary::{Census, EngineFacts, Gate, Outcome, Value, DEPTH};
+use yamaa_boundary::client::{Engine, Gate};
+use yamaa_boundary::{Outcome, Value, DEPTH};
 
-/// The gate, which the first accepted handshake opens.
+/// The gate, which the first accepted handshake opens with the engine's
+/// table.
 static GATE: Gate = Gate::new();
 
-/// The binding's live native handles, by kind.
-pub(crate) static CENSUS: Census = Census::new();
-
-/// Refuse a native call until the interface handshake succeeds, with the
-/// binding's ordinary boundary refusal, as a busy handle is refused.
-pub(crate) fn gate() -> PyResult<()> {
+/// The engine, once the interface handshake succeeded; before, the binding's
+/// ordinary boundary refusal, as a busy handle is refused.
+pub(crate) fn gate() -> PyResult<Engine> {
     GATE.pass()
         .map_err(|closed| PyRuntimeError::new_err(closed.to_string()))
 }
 
-/// Answer an interface request: the accepted record, or the refusal
-/// envelope. The first acceptance opens the gate; a later call answers its
-/// request and changes nothing.
+/// Answer an interface request through the engine: the accepted record, or
+/// the refusal envelope. The first acceptance opens the gate; a later call
+/// answers its request and changes nothing.
 #[pyfunction]
 pub fn _interface_handshake<'py>(
     py: Python<'py>,
     request: &Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyDict>> {
-    // The engine information names no host version, which nothing here reads.
-    let info = yamaa::info(yamaa::Host::Python, None);
-    let engine = EngineFacts::new(&info.features, yamaa::VERSION, &info.language_versions);
+    // SAFETY: the binding links the engine, whose negotiation entry this is.
+    let outcome = unsafe { GATE.negotiate(&value(request, 0), yamaa_engine::negotiate) };
     let record = PyDict::new(py);
-    match GATE.negotiate(&value(request, 0), &engine) {
+    match outcome {
         Outcome::Accepted(accepted) => {
             record.set_item("accepted", true)?;
             record.set_item("version", accepted.version)?;
@@ -59,13 +58,13 @@ pub fn _interface_handshake<'py>(
     Ok(record)
 }
 
-/// The live native handles by kind, in the census's order: the private
+/// The engine's live handles by kind, in the census's order: the private
 /// accessor of the handle lifetime suites.
 #[pyfunction]
 pub fn _live_handles(py: Python<'_>) -> PyResult<Bound<'_, PyDict>> {
-    gate()?;
+    let census = gate()?.census();
     let counts = PyDict::new(py);
-    for (kind, count) in CENSUS.counts() {
+    for (kind, count) in census.handles {
         counts.set_item(kind.as_str(), count)?;
     }
     Ok(counts)
