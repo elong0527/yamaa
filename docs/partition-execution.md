@@ -255,8 +255,10 @@ such a run. The consumer's pull drives it:
   table could be built, so it fails exactly when the whole-table build fails,
   and keeps only the accepted rows the batches are built from.
 - **The token** is polled at every checkpoint of the schedule and before each
-  batch, and releasing the reader before the end of a stream it started
-  cancels the run.
+  batch. Releasing the reader that started the stream before its last batch
+  cancels the run; a reader released after the last batch leaves the run its
+  result. A batch that cannot be built ends the stream and leaves the run no
+  result.
 - **The host's thread.** When the run can call its host's project functions,
   only the thread that started it builds it; a pull on another thread fails
   with `host_thread` (the engine boundary design of #2870, section 3.6).

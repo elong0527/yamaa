@@ -105,10 +105,7 @@ impl Run {
 /// A streamed run's output: its stream, read through a table, or, once the
 /// run ran whole, the table it keeps; none for a failed run.
 fn streamed_output(streamed: &Arc<yamaa::Streamed>) -> PyResult<Option<Table>> {
-    let progress = streamed
-        .progress()
-        .map_err(|error| refusal(streamed, &error))?;
-    match progress {
+    match streamed.progress() {
         yamaa::StreamProgress::Cancelled => Err(refusal(streamed, &Error::Cancelled)),
         yamaa::StreamProgress::Ended => {
             let run = streamed.run().map_err(|error| refusal(streamed, &error))?;

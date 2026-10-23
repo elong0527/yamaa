@@ -10,15 +10,15 @@
 //! engine as one batch.
 use std::num::NonZeroUsize;
 use std::sync::{
-    atomic::{AtomicUsize, Ordering},
-    Arc,
+    atomic::{AtomicBool, AtomicUsize, Ordering},
+    Arc, Mutex, OnceLock, Weak,
 };
 
 use arrow_array::ffi_stream::ArrowArrayStreamReader;
 use arrow_array::{Array, Int64Array, RecordBatchReader, StringArray};
 use yamaa::{
     CancellationToken, Engine, EngineOptions, Error, HostLanguage, MemoryResolver, Partitions,
-    Plans, RecordBatch, StreamProgress,
+    Plans, RecordBatch, StreamProgress, Streamed,
 };
 
 use crate::support::NoFunctions;
@@ -139,11 +139,7 @@ fn streamed_batches_hold_the_whole_table_output_in_its_order() {
             assert_eq!(batch, &whole_rows, "{label}, rows from {start}");
             start += batch.num_rows();
         }
-        assert_eq!(
-            streamed.progress().unwrap(),
-            StreamProgress::Ended,
-            "{label}"
-        );
+        assert_eq!(streamed.progress(), StreamProgress::Ended, "{label}");
         let mut run = streamed.run().unwrap();
         assert!(
             run.output().is_none(),
@@ -180,7 +176,7 @@ fn a_streamed_run_reads_its_input_at_its_first_pull() {
     let streamed = engine(resolver.clone(), None)
         .spec_stream("spec.yaml", None, &Plans::new(), &CancellationToken::new())
         .unwrap();
-    assert_eq!(streamed.progress().unwrap(), StreamProgress::Unread);
+    assert_eq!(streamed.progress(), StreamProgress::Unread);
     insert_input(&resolver);
     let rows: usize = streamed
         .reader()
@@ -222,7 +218,7 @@ fn a_consumer_that_stops_pulling_stops_production() {
     assert_eq!(polls.swap(0, Ordering::SeqCst), first, "the first batch");
     drop(reader);
     assert_eq!(polls.load(Ordering::SeqCst), 0, "nothing after the release");
-    assert_eq!(streamed.progress().unwrap(), StreamProgress::Cancelled);
+    assert_eq!(streamed.progress(), StreamProgress::Cancelled);
     assert!(matches!(streamed.run(), Err(Error::Cancelled)));
 }
 
@@ -253,7 +249,7 @@ fn a_started_stream_belongs_to_its_reader_until_it_ends() {
         .unwrap();
     let mut first = streamed.reader();
     first.next().unwrap().unwrap();
-    assert_eq!(streamed.progress().unwrap(), StreamProgress::Reading);
+    assert_eq!(streamed.progress(), StreamProgress::Reading);
     let mut second = streamed.reader();
     assert!(
         matches!(
@@ -317,7 +313,7 @@ fn a_run_that_can_call_its_host_is_built_only_on_its_own_thread() {
             );
         });
     });
-    assert_eq!(streamed.progress().unwrap(), StreamProgress::Unread);
+    assert_eq!(streamed.progress(), StreamProgress::Unread);
     assert_eq!(streamed.reader().count(), 1, "on its own thread");
     let free = engine(resolver(true), None)
         .spec_stream("spec.yaml", None, &Plans::new(), &token)
@@ -360,5 +356,101 @@ fn a_reader_exported_as_a_c_stream_pulls_as_the_reader_does() {
     assert_eq!(
         stream.next().unwrap().unwrap_err().to_string(),
         "C Data interface error: External error: cannot read TEST: operation cancelled"
+    );
+}
+
+/// A reader released after it handed out the last batch, before its
+/// end-of-stream pull, has read the whole output: the run keeps its result
+/// and saves.
+#[test]
+fn a_reader_released_after_the_last_batch_leaves_the_run_its_result() {
+    let token = CancellationToken::new();
+    let resolver = resolver(true);
+    let streamed = engine(resolver.clone(), Some(2))
+        .spec_stream("spec.yaml", None, &Plans::new(), &token)
+        .unwrap();
+    let mut reader = streamed.reader();
+    let rows = (0..3)
+        .map(|_| reader.next().unwrap().unwrap().num_rows())
+        .collect::<Vec<_>>();
+    drop(reader);
+    let progress = streamed.progress();
+    let mut run = streamed.run().unwrap();
+    assert_eq!(
+        (rows, progress, run.status(), run.save(&token).unwrap()),
+        (
+            vec![2, 2, 1],
+            StreamProgress::Ended,
+            yamaa::Status::Succeeded,
+            vec!["memory:/out.csv".to_owned()],
+        )
+    );
+    assert!(resolver.published("memory:/out.csv").is_some());
+}
+
+/// A panic while a C stream pulls, here in the token's probe before the
+/// second batch, ends the stream with the `stream_panic` code instead of
+/// unwinding into the C caller, and leaves the run with no result.
+#[test]
+fn a_panic_while_a_c_stream_pulls_ends_the_stream() {
+    let armed = Arc::new(AtomicBool::new(false));
+    let trigger = Arc::clone(&armed);
+    let token = CancellationToken::with_probe(move || {
+        assert!(!trigger.load(Ordering::SeqCst), "a probe that panics");
+        false
+    });
+    let streamed = engine(resolver(true), Some(2))
+        .spec_stream("spec.yaml", None, &Plans::new(), &token)
+        .unwrap();
+    let mut stream = ArrowArrayStreamReader::try_new(streamed.reader().into_stream()).unwrap();
+    let first = stream.next().unwrap().unwrap().num_rows();
+    armed.store(true, Ordering::SeqCst);
+    let error = stream.next().unwrap().unwrap_err().to_string();
+    let ended = stream.next().is_none();
+    drop(stream);
+    assert_eq!(
+        (first, error.as_str(), ended, streamed.progress()),
+        (
+            2,
+            "C Data interface error: External error: cannot read TEST: internal failure: stream_panic",
+            true,
+            StreamProgress::Cancelled,
+        )
+    );
+    assert!(matches!(streamed.run(), Err(Error::Cancelled)));
+}
+
+/// Where a run stands is read without its lock: polled from inside the
+/// run's own pulls, which hold the lock, it stands reading, while its
+/// result, which needs the lock, refuses as busy.
+#[test]
+fn progress_is_read_without_waiting_for_a_pull() {
+    let cell: Arc<OnceLock<Weak<Streamed>>> = Arc::new(OnceLock::new());
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let (watched, record) = (Arc::clone(&cell), Arc::clone(&seen));
+    let token = CancellationToken::with_probe(move || {
+        if let Some(streamed) = watched.get().and_then(Weak::upgrade) {
+            let busy = matches!(streamed.run(), Err(Error::Stream { code: "busy" }));
+            record.lock().unwrap().push((streamed.progress(), busy));
+        }
+        false
+    });
+    let streamed = Arc::new(
+        engine(resolver(true), Some(2))
+            .spec_stream("spec.yaml", None, &Plans::new(), &token)
+            .unwrap(),
+    );
+    cell.set(Arc::downgrade(&streamed)).unwrap();
+    let rows: usize = streamed
+        .reader()
+        .map(|batch| batch.unwrap().num_rows())
+        .sum();
+    let seen = seen.lock().unwrap().clone();
+    assert_eq!(rows, 5);
+    assert!(!seen.is_empty(), "the pulls poll the token");
+    assert!(
+        seen.iter()
+            .all(|polled| *polled == (StreamProgress::Reading, true)),
+        "every poll during a pull: {seen:?}"
     );
 }

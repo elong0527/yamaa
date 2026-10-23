@@ -187,6 +187,26 @@ class Streaming(unittest.TestCase):
             (LARGE["batches"][0], [TRUTH["cancelled"]] * 3, False),
         )
 
+    def test_a_reader_released_after_the_last_batch_leaves_the_run_its_result(self):
+        root = self.large()
+        run = yamaa.spec(root / "spec.yaml").run(stream=True)
+        reader = pa.RecordBatchReader.from_stream(run.output)
+        rows = [reader.read_next_batch().num_rows for _ in LARGE["batches"]]
+        del reader
+        gc.collect()
+        saved = [Path(path).name for path in run.save()]
+        # The specification copies both columns in input order, so its CSV
+        # writes the input's text again (CSV-2, CSV-3, VALUE-8).
+        self.assertEqual(
+            (rows, run.status, saved, (root / "output.csv").read_bytes()),
+            (
+                LARGE["batches"],
+                "succeeded",
+                ["output.csv"],
+                (root / "input.csv").read_bytes(),
+            ),
+        )
+
     def test_an_interrupt_before_the_first_pull_or_between_batches_cancels_the_run(
         self,
     ):
