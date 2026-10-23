@@ -152,8 +152,8 @@ impl Partitions {
     }
 }
 
-/// `len` items split into consecutive runs of equal keys, in order; no
-/// items are one empty run, so a unit over nothing still runs once.
+/// `len` items split into consecutive runs of equal keys, in order. No
+/// items make one empty run, so a unit over nothing still runs once.
 fn runs(len: usize, key: impl Fn(usize) -> Option<usize>) -> Vec<Range<usize>> {
     let mut runs: Vec<Range<usize>> = Vec::new();
     let mut previous = None;
@@ -250,9 +250,7 @@ impl<E> Run<'_, '_, E> {
         }
         Ok(())
     }
-}
 
-impl<E> Run<'_, '_, E> {
     /// A divided template's driver records grouped by `fields`, as
     /// `table_grouping::partition` groups the whole input: each partition's
     /// records grouped, then the partitions' key groups merged. Admission,
@@ -341,7 +339,6 @@ impl ResolvedPlan {
     /// A successful or failed attempt equals the whole-table attempt on the
     /// same input: the same dataset, failure, handler counts, verifications
     /// and template rows. A cancelled one keeps nothing.
-    #[allow(clippy::too_many_arguments)]
     pub fn execute_partitioned<E>(
         &self,
         partitions: &[&dyn TableAccess<Error = E>],
@@ -383,12 +380,14 @@ impl ResolvedPlan {
         };
         let rows = table.row_count();
         let size = partitioning.rows.get();
-        let ranges: Vec<RowRange<'_, T>> = (0..rows)
+        // An empty table is one empty partition, so admission still checks
+        // its schema.
+        let ranges: Vec<RowRange<'_, T>> = (0..rows.max(1))
             .step_by(size)
             .map(|start| RowRange {
                 table,
                 start,
-                rows: size.min(rows - start),
+                rows: size.min(rows.saturating_sub(start)),
             })
             .collect();
         let parts: Vec<&dyn TableAccess<Error = T::Error>> = ranges

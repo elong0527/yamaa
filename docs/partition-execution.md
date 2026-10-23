@@ -1,9 +1,10 @@
 # Partitioned execution design
 
 This is the execution inventory and whole-table equivalence contract for
-[#2683](https://github.com/elong0527/yamaa/issues/2683). It guides the later
-partitioned and streaming executors; it does not add either executor or change
-language behavior. Existing language requirements remain authoritative.
+[#2683](https://github.com/elong0527/yamaa/issues/2683), and the partitioned
+executor built on it (#3697), with its end states. Streaming follows on the
+same seams. Neither changes language behavior; existing language requirements
+remain authoritative.
 
 Here a **data partition** is a physical subset of an immutable source snapshot,
 with original source coordinates retained. In the current engine,
@@ -52,9 +53,9 @@ At the adapter boundary, the same accepted dataset must produce the same saved
 artifact bytes under the same writer configuration. A failed attempt exposes no
 accepted output. Cancellation is a distinct control-flow outcome; partitioning
 must not convert it into a semantic diagnostic or publish provisional output.
-The checkpoint and cleanup implementations follow in
-[#2684-#2688](https://github.com/elong0527/yamaa/issues/2684); this document
-does not supply them. Comparing successful rows alone does not prove equivalence.
+[The partitioned executor](#the-partitioned-executor) states where it polls
+and what it discards. Comparing successful rows alone does not prove
+equivalence.
 
 ## Classification
 
@@ -186,7 +187,66 @@ These are implementation seams for subsequent work, not new callable APIs.
 7. **Adapter result and Save:** core returns one `ExecutionAttempt`; adapters
    retain success/failure evidence and publish held bytes only through explicit
    Save. Streaming batches must stay provisional until all preceding barriers
-   succeed. Publication/cancellation cleanup belongs to the follow-up contract.
+   succeed. [The end states](#end-states) fix what a cancelled or failed run
+   and save leave behind.
+
+## The partitioned executor
+
+`ResolvedPlan::execute_partitioned` runs a plan over the partitions of its
+driver input, consecutive physical subsets of one snapshot in order, and the
+facade's `EngineOptions::with_partitions` divides each build's driver input
+into partitions of a given number of records (#3697). It is an engine mode
+with no host surface.
+
+- **One input.** The run reads the partitions as one table, so every record
+  keeps its coordinate in the whole input, and reads, failures and row
+  identities name it as the whole-table run does. Admission checks the
+  complete input and every partition's schema once, before any record is
+  read.
+- **Units, one partition at a time.** The schedule's units run in their
+  order. A unit whose steps are all `Safe` or `CombineStep`, and whose rows
+  come from the driver input, runs over each partition's rows in turn, each
+  as a unit of its own: in batch, replayed row by row after a failure. So
+  the first failure is the whole-table run's: the earliest failing step, then
+  the earliest row in base-record order. Rows of a template driven by a
+  secondary input or a named intermediate belong to no partition.
+- **Combine state.** Only the state this inventory marks combinable crosses
+  partitions: the candidate rows the output is built from; the handler counts
+  (`columnar/handlers.rs`), added up partition after partition; the key
+  groups of group templates and the key grain (`columnar/group.rs`,
+  `table_grouping::Key`), formed per partition and merged; and the check
+  records (`columnar/checks.rs`), which each check builds at its checkpoint
+  over every partition's candidates in candidate order.
+- **Global steps.** `ResolvedPlan::whole_table_step` names the first step
+  the schedule marks `Global` whose evaluation reads a window, an aggregate,
+  a named or joined relation, `SELF` rows or a project function. Without the
+  whole-table fallback, such a plan fails at admission with
+  `ExecutionError::PartitionGlobal`, which the facade reports as
+  `engine_rejected` with `step: execute` and `code: partition_global` at that
+  step's spec path. With the fallback, those steps run over the whole input.
+  The run's own reconciliation points are not refused, because it holds the
+  state they need: admission, intermediate verification, `SELF` publication,
+  the final order and the declaration checks.
+- **Cancellation.** The token is polled at every checkpoint of the schedule,
+  between the partitions of each divided unit, and before each batch of
+  project-function calls. A cancelled run keeps nothing any partition built.
+
+### End states
+
+The cancel-or-fail by phase matrix is #3697's accepted contract. It derives
+from D46, D74 and D186, OUTPUT-8, OUTPUT-10, PROJECT-12 and the staged commit
+of `save()`.
+
+| Phase | Cancel | Fail |
+| --- | --- | --- |
+| Before start, through admission | `Error::Cancelled`; no result, nothing staged or published | A failed result with no output, such as the `partition_global` refusal; its save writes only the report file |
+| Mid-partition, through output keys and verification | `Error::Cancelled`; every partition's partial state is dropped; nothing staged or published | The whole-table run's first failure, handler counts and retained records; no output; its save writes only the report file |
+| Mid-stream (streaming, step 4) | Abandoning the stream or a token found between batches ends production; no batch is retained; nothing published | A batch that cannot be produced ends the stream with the run's issue |
+| During publication | Polled once, after every file is staged and before the first commit (D74): every staged file removed, nothing published | Before the first commit: nothing published, staged files removed. During the commit: earlier files stay replaced whole, later staged files removed, `Failure.paths` lists the files written |
+
+In every cell a cancellation is `Error::Cancelled` with no result and no issue
+(D186), and a failure is an issue of the run's result, which names its phase;
+no target ever holds part of a file (OUTPUT-8).
 
 ## Proof obligations for a future executor
 
@@ -203,3 +263,8 @@ invocations, fail and interrupt, and assert no accepted/published partial output
 Existing benchmark input and expected data remain unchanged correctness oracles.
 New execution strategies require these equivalence controls in addition to the
 existing suites; this inventory alone does not establish an implementation.
+The partitioned executor's controls are `yamaa-core`'s
+`dataset/partitioned_execution.rs` and the facade's `partitioned_corpus.rs`,
+which runs every single-specification benchmark over one-record partitions
+against its expected files, and `end_states.rs`, one test per cell of the end
+states.

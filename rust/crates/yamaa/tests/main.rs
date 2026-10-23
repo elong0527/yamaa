@@ -22,6 +22,7 @@ mod lint;
 mod memory;
 mod memory_route;
 mod odm_input;
+mod partitioned_corpus;
 mod plan;
 mod plan_reuse;
 mod printed_text;
