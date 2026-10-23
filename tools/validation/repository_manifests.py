@@ -144,14 +144,80 @@ def message_errors(template) -> list[str]:
     return errors
 
 
-def validate_condition_registry(root: Path, registry):
+SNAKE_CASE = re.compile(r"[a-z][a-z0-9]*(?:_[a-z0-9]+)*")
+# A release, as `retired_in` names the one that retired a condition.
+RELEASE = re.compile(r"(?:0|[1-9][0-9]*)(?:\.(?:0|[1-9][0-9]*)){2}")
+
+
+def retired_conditions(registry) -> dict:
+    """Each retired condition of a readable registry, with its entry."""
+    retired = registry.get("retired") if isinstance(registry, dict) else None
+    return retired if isinstance(retired, dict) else {}
+
+
+def retired_errors(label: str, registry, conditions: dict) -> list[str]:
+    """Why the registry's `retired` section is malformed: each entry names a
+    condition no longer registered and the release that retired it."""
+    retired = registry.get("retired", {})
+    if not isinstance(retired, dict):
+        return [f"ERROR: {label}.retired: expected a mapping"]
+    errors = []
+    names = list(retired)
+    if all(isinstance(name, str) for name in names) and names != sorted(names):
+        errors.append(f"ERROR: {label}.retired: expected sorted keys")
+    for condition, entry in retired.items():
+        path = f"{label}.retired.{condition}"
+        if not (isinstance(condition, str) and SNAKE_CASE.fullmatch(condition)):
+            errors.append(f"ERROR: {path}: expected a snake-case name")
+        elif condition in conditions:
+            errors.append(f"ERROR: {path}: a registered condition is not retired")
+        if not isinstance(entry, dict):
+            errors.append(f"ERROR: {path}: expected a mapping")
+            continue
+        for field in sorted(set(entry) - {"retired_in"}, key=str):
+            errors.append(f"ERROR: {path}.{field}: unknown field")
+        release = entry.get("retired_in")
+        if not (isinstance(release, str) and RELEASE.fullmatch(release)):
+            errors.append(
+                f"ERROR: {path}.retired_in: expected the release that retired it, "
+                "such as '1.0.0'"
+            )
+    return errors
+
+
+def renamed_from_errors(label: str, conditions: dict, retired: dict) -> list[str]:
+    """Why a registration's `renamed_from` is malformed: the former name is a
+    snake-case name that no condition still has or retired with, and that
+    only one condition had."""
+    errors = []
+    former = {}
+    for condition, registration in conditions.items():
+        if not isinstance(registration, dict) or "renamed_from" not in registration:
+            continue
+        path = f"{label}.conditions.{condition}.renamed_from"
+        name = registration["renamed_from"]
+        if not (isinstance(name, str) and SNAKE_CASE.fullmatch(name)):
+            errors.append(f"ERROR: {path}: expected a snake-case name")
+        elif name in conditions or name in retired:
+            errors.append(f"ERROR: {path}: {name} is still a condition of the registry")
+        elif name in former:
+            errors.append(f"ERROR: {path}: {former[name]} was renamed from {name} too")
+        else:
+            former[name] = condition
+    return errors
+
+
+def registry_errors(registry) -> list[str]:
+    """Why the condition registry's own form is wrong: its sections, each
+    registration's name, phases, message and former name, and each retired
+    condition."""
     errors = []
     label = "yaml/conditions.yaml"
     if not isinstance(registry, dict):
         return [f"ERROR: {label}: expected a mapping"]
     if registry.get("version") != "1.0":
         errors.append(f"ERROR: {label}.version: expected '1.0'")
-    for field in sorted(set(registry) - {"version", "conditions"}):
+    for field in sorted(set(registry) - {"version", "conditions", "retired"}):
         errors.append(f"ERROR: {label}.{field}: unknown field")
     conditions = registry.get("conditions")
     if not isinstance(conditions, dict):
@@ -162,18 +228,18 @@ def validate_condition_registry(root: Path, registry):
         isinstance(condition, str) for condition in condition_names
     ) and condition_names != sorted(condition_names):
         errors.append(f"ERROR: {label}.conditions: expected sorted keys")
+    errors.extend(retired_errors(label, registry, conditions))
+    retired = retired_conditions(registry)
+    errors.extend(renamed_from_errors(label, conditions, retired))
 
     for condition, registration in conditions.items():
         path = f"{label}.conditions.{condition}"
-        if not (
-            isinstance(condition, str)
-            and re.fullmatch(r"[a-z][a-z0-9]*(?:_[a-z0-9]+)*", condition)
-        ):
+        if not (isinstance(condition, str) and SNAKE_CASE.fullmatch(condition)):
             errors.append(f"ERROR: {path}: expected a snake-case name")
         if not isinstance(registration, dict):
             errors.append(f"ERROR: {path}: expected a mapping")
             continue
-        for field in sorted(set(registration) - {"phases", "message"}):
+        for field in sorted(set(registration) - {"phases", "message", "renamed_from"}):
             errors.append(f"ERROR: {path}.{field}: unknown field")
         for problem in message_errors(registration.get("message")):
             errors.append(f"ERROR: {path}.message: {problem}")
@@ -182,14 +248,21 @@ def validate_condition_registry(root: Path, registry):
             isinstance(phases, list)
             and phases
             and all(
-                isinstance(phase, str)
-                and re.fullmatch(r"[a-z][a-z0-9]*(?:_[a-z0-9]+)*", phase)
+                isinstance(phase, str) and SNAKE_CASE.fullmatch(phase)
                 for phase in phases
             )
             and phases == sorted(set(phases))
         ):
             errors.append(f"ERROR: {path}.phases: expected unique sorted phases")
+    return errors
 
+
+def validate_condition_registry(root: Path, registry):
+    errors = registry_errors(registry)
+    conditions = registry.get("conditions") if isinstance(registry, dict) else None
+    if not isinstance(conditions, dict):
+        return errors
+    retired = retired_conditions(registry)
     examples_dir = root / "benchmarks"
     if not examples_dir.is_dir():
         return errors
@@ -209,8 +282,12 @@ def validate_condition_registry(root: Path, registry):
         registration = conditions.get(condition)
         if registration is None:
             errors.append(
-                f"ERROR: {fixture_label}.condition: unregistered condition "
-                f"{condition!r}"
+                f"ERROR: {fixture_label}.condition: "
+                + (
+                    f"condition {condition!r} is retired"
+                    if condition in retired
+                    else f"unregistered condition {condition!r}"
+                )
             )
             continue
         if (

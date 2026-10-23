@@ -85,6 +85,7 @@ __all__ = [
     "Error",
     "Table",
     "__version__",
+    "conditions",
     "info",
     "lint",
     "project",
@@ -394,6 +395,11 @@ def lint(paths, fix: bool = False) -> Table:
 def schema(file_type: str) -> str:
     """The JSON Schema of a file type, spec, project, codelists or function, as canonical JSON text."""
     return _call(_native._schema, file_type)
+
+
+def conditions() -> Table:
+    """Every condition the engine may report or a release retired, with its severity, phases, rules, message template and history."""
+    return _native._conditions()
 
 
 def info() -> dict:

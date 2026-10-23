@@ -335,6 +335,14 @@ pub fn _schema(py: Python<'_>, file_type: &str) -> PyResult<String> {
     yamaa::schema(file_type).map_err(|failure| raise(py, failure))
 }
 
+/// The condition catalogue (#3700): every condition the engine may report,
+/// and every condition a release retired, as a table.
+#[pyfunction]
+pub fn _conditions() -> PyResult<Table> {
+    gate()?;
+    Ok(Table::from(&yamaa::conditions().table()))
+}
+
 /// The installation self-test (#3030 D28, D119): the facade's result, whose
 /// status, cases, engine information and printed report the public class
 /// returns as they are.

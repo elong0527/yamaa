@@ -204,6 +204,7 @@ CALLS = {
     "_read_odm": ["missing.xml"],
     "_lint": [["missing.yaml"]],
     "_schema": ["spec"],
+    "_conditions": [],
     "_info": [],
     "_selftest": [],
     "_live_handles": [],

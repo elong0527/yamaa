@@ -8,9 +8,10 @@ separate disposition record; the vocabulary and the core registry are the only
 sources. These are static ownership checks, not a claim that every registered
 condition has executable release coverage.
 Condition and rule literals outside the canonical registry, the generated
-shipped schema, the generated message table and private unit tests are
-refused; within the lint module, a literal its closed list of findings names
-is a finding. A rule is a card ID, read from the shared rules model.
+shipped schema, the generated message and catalogue tables and private unit
+tests are refused; within the lint module, a literal its closed list of
+findings names is a finding. A rule is a card ID, read from the shared rules
+model.
 A condition written as a literal must also name a registered condition: the
 value of a `condition` field, key or binding, in Rust or in JSON text, outside
 the items that compile only for tests. Matching registered names alone would
@@ -49,6 +50,10 @@ REGISTRY = Path("rust/crates/yamaa-core/src/diagnostic/mod.rs")
 SHIPPED_SCHEMA = Path("rust/crates/yamaa-adapters/src/shipped_schema/data.rs")
 # Generated from yaml/conditions.yaml beside the core registry (P-MSG-1).
 MESSAGE_TABLE = Path("rust/crates/yamaa-core/src/diagnostic/message_templates.rs")
+# Generated from yaml/conditions.yaml for the facade's catalogue (#3700).
+CATALOGUE_TABLE = Path("rust/crates/yamaa/src/conditions/registry.rs")
+# The registry and the generated sources that hold its literals.
+REGISTRY_SOURCES = (REGISTRY, SHIPPED_SCHEMA, MESSAGE_TABLE, CATALOGUE_TABLE)
 PRIVATE_TEST_MODULE = Path(
     "rust/crates/yamaa-adapters/src/file_define/publication_failure_tests.rs"
 )
@@ -1431,11 +1436,7 @@ def violations(root: Path) -> list[str]:
                     errors.append(f"{relative}:{number}: undefined rule {identifier}")
             if lint_source(Path(relative)):
                 literals = [name for name in literals if name not in findings]
-            if (
-                Path(relative) in (REGISTRY, SHIPPED_SCHEMA, MESSAGE_TABLE)
-                or test_only
-                or not literals
-            ):
+            if Path(relative) in REGISTRY_SOURCES or test_only or not literals:
                 continue
             errors.append(
                 f"{relative}:{number}: new diagnostic literal site "
@@ -1451,11 +1452,7 @@ def violations(root: Path) -> list[str]:
                 source, crate_root=path in crate_roots, wire_names=wire_names
             ):
                 errors.append(f"{relative}:{number}: JSON text decoded outside a codec")
-        if (
-            Path(relative) in (REGISTRY, SHIPPED_SCHEMA, MESSAGE_TABLE)
-            or test_only
-            or path in json_tests
-        ):
+        if Path(relative) in REGISTRY_SOURCES or test_only or path in json_tests:
             continue
         # A registered literal is already a new site above; an unregistered
         # one names a condition that no registry, card or host knows.
