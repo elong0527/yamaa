@@ -199,7 +199,7 @@ macro_rules! registry {
 /// A run built whole, or a streamed run (#3697), whose result is known once
 /// its output's stream ends.
 enum RunHeld {
-    Built(yamaa::Run),
+    Built(Box<yamaa::Run>),
     Streamed(yamaa::Streamed),
 }
 
@@ -407,7 +407,7 @@ fn spec_run(
             None => engine.spec_run(&specification, project.as_deref(), &token),
         }
         .map_err(|error| from_error(Action::Read(&specification), &error))?;
-        store(RunHeld::Built(run))
+        store(RunHeld::Built(Box::new(run)))
     })
 }
 

@@ -4657,7 +4657,9 @@
         ],
         "spec.check": [],
         "spec.resolve": [],
-        "spec.run": [],
+        "spec.run": [
+          "stream"
+        ],
         "project.spec": [
           "name"
         ],
