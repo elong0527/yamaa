@@ -289,6 +289,13 @@ def required_jobs(coverage):
                 "Check the R source package as CRAN does",
                 "Confirm that the build used the minimum Rust",
             )
+    # The same check with the PDF and HTML manuals built and validated.
+    for platform in coverage["cran_manual"]["os"]:
+        for version in coverage["cran_manual"]["r"]:
+            jobs[f"native-cran ({platform}, R {version}, manual)"] = (
+                "Check the R source package as CRAN does",
+                "Confirm that the build used the minimum Rust",
+            )
     for platform in coverage["cran_container"]["platform"]:
         jobs[f"native-cran ({platform})"] = ("Check the R source package as CRAN does",)
     # Each source archive that a release publishes, built and installed with

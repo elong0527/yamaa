@@ -145,8 +145,10 @@ release and R-devel, and validate Windows and macOS as well as Linux. Native
 qualification's `native-cran` jobs do so on every run, for the tarball that a
 release publishes: with R-devel, R-release and R 4.2.0 on all three platforms
 and Rust 1.82, with R-devel on Linux and none of the suggested packages, as
-CRAN's noSuggests check runs, in R-hub's Fedora `gcc16` container with
-Fedora's Rust, and in R-hub's `clang-asan` container with Rust 1.82. There
+CRAN's noSuggests check runs, with R-devel on Linux and the PDF and HTML
+manuals, which CRAN's incoming checks build and validate, in R-hub's Fedora
+`gcc16` container with Fedora's Rust, and in R-hub's `clang-asan` container
+with Rust 1.82. There
 the package's C, the bundled ReadStat and zstd sources included, is compiled
 with AddressSanitizer and UndefinedBehaviorSanitizer, as in CRAN's
 additional checks, and any sanitizer report fails the check.

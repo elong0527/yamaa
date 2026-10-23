@@ -724,6 +724,11 @@ class NativeWorkflowContract(unittest.TestCase):
             for platform in self.coverage["cran_no_suggests"]["os"]
             for version in self.coverage["cran_no_suggests"]["r"]
         ]
+        jobs += [
+            f"native-cran ({platform}, R {version}, manual)"
+            for platform in self.coverage["cran_manual"]["os"]
+            for version in self.coverage["cran_manual"]["r"]
+        ]
         self.assertEqual(set(self.coverage["cran"]["r"]), {"devel", "release", "4.2.0"})
         for job in jobs:
             with self.subTest(job=job):
@@ -777,6 +782,48 @@ class NativeWorkflowContract(unittest.TestCase):
                 for step in steps:
                     self.assertNotIn("setup-r-dependencies", step.get("uses", ""))
                     self.assertNotRegex(step.get("run", ""), r"install\.packages|pak::")
+
+    def test_only_the_manual_lane_builds_and_validates_the_manuals(self):
+        # CRAN's incoming checks build the PDF manual and validate the HTML
+        # manual. One lane installs what they need before its check: pdflatex
+        # with the LaTeX packages that R's Rd.sty loads, the Times fonts and
+        # Inconsolata, which R's default manual fonts require, and HTML Tidy.
+        # It runs check_r.py --manual, which fails unless R reports both
+        # manual checks OK. Every other CRAN lane leaves the manuals out.
+        packages = [
+            "texlive-latex-base",
+            "texlive-latex-recommended",
+            "texlive-fonts-recommended",
+            "texlive-fonts-extra",
+            "tidy",
+        ]
+        lanes = {
+            f"native-cran ({platform}, R {version}, manual)"
+            for platform in self.coverage["cran_manual"]["os"]
+            for version in self.coverage["cran_manual"]["r"]
+        }
+        self.assertEqual(lanes, {"native-cran (ubuntu-24.04, R devel, manual)"})
+        for job in [name for name in self.jobs if name.startswith("native-cran ")]:
+            steps = self.jobs[job]["definitions"]
+            names = [step.get("name") for step in steps]
+            check = names.index("Check the R source package as CRAN does")
+            installed = [
+                package
+                for step in steps[:check]
+                for package in packages
+                if package in step.get("run", "").split()
+            ]
+            with self.subTest(job=job):
+                self.assertEqual(
+                    {
+                        "manual": "--manual" in steps[check]["run"].split(),
+                        "installed before the check": installed,
+                    },
+                    {
+                        "manual": job in lanes,
+                        "installed before the check": packages if job in lanes else [],
+                    },
+                )
 
     def cohort_commands(self):
         """List the comparisons that the cohort job runs, without running them."""
