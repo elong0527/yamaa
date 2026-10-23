@@ -36,6 +36,7 @@ impl PreflightFinding {
                         "actual",
                         V::Number((value.clone()).parse().expect("canonical integer")),
                     ),
+                    ("value", text(value)),
                     ("minimum", V::from(i64::MIN)),
                     ("maximum", V::from(i64::MAX)),
                 ]),
@@ -72,6 +73,7 @@ impl PreflightFinding {
                 vec![format!("columns.{column}.derivation")],
                 context([
                     ("column", text(column)),
+                    ("identifier", text(column)),
                     ("rows", texts(rows)),
                     ("not_row_local", text(not_row_local)),
                 ]),
@@ -81,11 +83,12 @@ impl PreflightFinding {
                 vec![format!("columns.{column}.derivation")],
                 context([("column", text(column)), ("rows", texts(rows))]),
             ),
-            Self::ConflictingRowConstruction => (
+            Self::ConflictingRowConstruction { rows } => (
                 C::PreflightConflictingRowConstruction,
                 vec!["filter".into(), "rows".into()],
-                Context::new(),
+                context([("rows", texts(rows))]),
             ),
+            // ROW-4: a non-empty list, without repeats, of driver variables.
             Self::InvalidGroup {
                 row_path,
                 row,
@@ -93,7 +96,11 @@ impl PreflightFinding {
             } => (
                 C::PreflightInvalidGroup,
                 vec![format!("{row_path}.group_by")],
-                context([("row", text(row)), ("group_by", texts(groups))]),
+                context([
+                    ("row", text(row)),
+                    ("group_by", texts(groups)),
+                    ("expected", text("at least one driver variable, each once")),
+                ]),
             ),
             Self::GroupReference {
                 row_path,
@@ -128,13 +135,12 @@ impl PreflightFinding {
                 vec![format!("keys[{position}]")],
                 context([("column", text(column))]),
             ),
+            // The driver a specification names, null when it names none, and
+            // no row template, as a row template's driver is reported.
             Self::DriverUnavailable { dataset } => (
                 C::PreflightDriverUnavailable,
                 vec!["base".into()],
-                match dataset {
-                    Some(dataset) => context([("dataset", text(dataset))]),
-                    None => context([("row", V::Null)]),
-                },
+                context([("dataset", optional_text(dataset)), ("row", V::Null)]),
             ),
             Self::DomainInputCollision { domain } => (
                 C::PreflightDomainInputCollision,

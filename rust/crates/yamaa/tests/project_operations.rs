@@ -487,6 +487,8 @@ fn a_user_interrupt_cancels_the_project_run() {
 }
 
 /// The one issue of a save that had nothing to write, under `rule`.
+/// The one issue of a save with nothing to write, which names the operation
+/// whose result it is: `run` under PROJECT-12, `submission` under PROJECT-13.
 fn assert_nothing_to_save(issues: &Table, rule: &str) {
     let issues = rows(issues);
     assert_eq!(issues.len(), 1, "{issues:?}");
@@ -494,9 +496,14 @@ fn assert_nothing_to_save(issues: &Table, rule: &str) {
     assert_eq!(issues[0].condition, "nothing_to_save");
     assert_eq!(issues[0].rule.as_deref(), Some(rule));
     assert!(issues[0].spec_paths.is_empty());
+    let operation = if rule == "PROJECT-12" {
+        "run"
+    } else {
+        "submission"
+    };
     assert_eq!(
-        issues[0].context.as_object().map(|context| context.len()),
-        Some(0)
+        issues[0].context,
+        yamaa_adapters::json_wire::decode(&format!("{{\"operation\":\"{operation}\"}}")).unwrap()
     );
 }
 
@@ -518,7 +525,7 @@ fn a_save_that_would_write_nothing_fails() {
     assert_eq!(
         failure.message,
         format!(
-            "cannot save {}, section send: there is nothing to save \
+            "cannot save {}, section send: the project run has nothing to save \
              [nothing_to_save, PROJECT-12]",
             study.project()
         )
@@ -534,7 +541,8 @@ fn a_save_that_would_write_nothing_fails() {
     assert_eq!(
         failure.message,
         format!(
-            "cannot save {}: there is nothing to save [nothing_to_save, PROJECT-13]",
+            "cannot save {}: the project submission has nothing to save \
+             [nothing_to_save, PROJECT-13]",
             study.project()
         )
     );
@@ -1382,9 +1390,10 @@ fn a_submission_without_a_section_composes_each_section_that_names_define_in_ord
     // D39: the call names the submission; ADaM's issue says what it lacks.
     assert_eq!(failure.message, save_refusal(&study.project(), &failure));
     assert!(
-        failure
-            .message
-            .contains(": adam.standards lacks a field it requires [missing_required_field, "),
+        failure.message.contains(
+            ": adam.standards lacks the field standards, which it requires \
+                 [missing_required_field, "
+        ),
         "{}",
         failure.message
     );

@@ -1723,7 +1723,8 @@
         {
           "condition": "unknown_field",
           "context": {
-            "reason": "unknown column 'NO'"
+            "reason": "unknown column 'NO'",
+            "identifier": "NO"
           },
           "phase": "validation",
           "rule": "CHECK-4",
@@ -1742,7 +1743,8 @@
             {
               "condition": "unknown_field",
               "context": {
-                "reason": "unknown column 'NO'"
+                "reason": "unknown column 'NO'",
+                "identifier": "NO"
               },
               "phase": "validation",
               "rule": "CHECK-4",
@@ -1876,7 +1878,8 @@
         {
           "condition": "duplicate_identifier",
           "context": {
-            "reason": "verification id 'prefix' repeats verifications[0].row_count"
+            "reason": "verification id 'prefix' repeats verifications[0].row_count",
+            "identifier": "prefix"
           },
           "phase": "validation",
           "rule": "CHECK-3",
@@ -1895,7 +1898,8 @@
             {
               "condition": "duplicate_identifier",
               "context": {
-                "reason": "verification id 'prefix' repeats verifications[0].row_count"
+                "reason": "verification id 'prefix' repeats verifications[0].row_count",
+                "identifier": "prefix"
               },
               "phase": "validation",
               "rule": "CHECK-3",

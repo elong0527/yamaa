@@ -260,11 +260,15 @@ mod tests {
         let unknown = record(
             ConditionCode::SchemaUnknownField,
             &["columns.X.extra", "columns.Y"],
-            &[("field", text("extra")), ("class", text("column_class"))],
+            &[
+                ("field", text("extra")),
+                ("class", text("column_class")),
+                ("identifier", text("extra")),
+            ],
         );
         assert_eq!(
             unknown.message(),
-            "there is an unknown field or reference at columns.X.extra"
+            "extra is not a known field or reference at columns.X.extra"
         );
     }
 
@@ -354,7 +358,11 @@ mod tests {
             gap.message(),
             "column A reads null, which is declared after it"
         );
-        let pathless = record(ConditionCode::SchemaUnknownField, &[], &[]);
+        let pathless = record(
+            ConditionCode::SchemaUnknownField,
+            &[],
+            &[("identifier", text("extra"))],
+        );
         assert_eq!(pathless.checked_message().unwrap_err().key, "spec_path");
     }
 }

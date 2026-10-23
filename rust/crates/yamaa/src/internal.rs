@@ -14,6 +14,8 @@ use std::convert::Infallible;
 use std::sync::Arc;
 
 use yamaa_adapters::application_measurements::Measurements;
+use yamaa_adapters::file_application::Domain;
+use yamaa_adapters::specification_report::HostView;
 use yamaa_core::host_functions::{Empty, HostFunctions, Lock};
 
 use crate::cancel::CancellationToken;
@@ -392,6 +394,58 @@ pub(crate) fn run(
     measurements: &Arc<Measurements>,
     token: &CancellationToken,
 ) -> Build {
+    run_with(
+        shared,
+        specification,
+        compiled,
+        held,
+        measurements,
+        token,
+        None,
+    )
+    .0
+}
+
+/// One run of a compiled request whose output is read as a stream (#3697):
+/// [`run`], building no output table. An accepted output's rows come back
+/// with the build, to be handed out at most `rows` records at a time, and
+/// the build records the output's size.
+#[cfg(feature = "arrow")]
+pub(crate) fn run_streamed(
+    shared: &EngineShared,
+    specification: &str,
+    compiled: &Compiled,
+    measurements: &Arc<Measurements>,
+    token: &CancellationToken,
+    rows: std::num::NonZeroUsize,
+) -> (Build, Option<PublicBatches>) {
+    run_with(
+        shared,
+        specification,
+        compiled,
+        None,
+        measurements,
+        token,
+        Some(rows),
+    )
+}
+
+/// The accepted rows of a streamed run, handed out batch by batch.
+#[cfg(feature = "arrow")]
+pub(crate) type PublicBatches = yamaa_adapters::public_table::PublicBatches;
+#[cfg(not(feature = "arrow"))]
+type PublicBatches = ();
+
+/// [`run`], or with `rows` [`run_streamed`].
+fn run_with(
+    shared: &EngineShared,
+    specification: &str,
+    compiled: &Compiled,
+    held: Option<Arc<yamaa_adapters::file_resources::HeldArtifacts>>,
+    measurements: &Arc<Measurements>,
+    token: &CancellationToken,
+    rows: Option<std::num::NonZeroUsize>,
+) -> (Build, Option<PublicBatches>) {
     let cancelled = || token.is_cancelled();
     let scope = yamaa_core::application_observer::Scope::new(&**measurements)
         .cancellable(&cancelled)
@@ -402,30 +456,63 @@ pub(crate) fn run(
         Compiled::Ready(prepared, _) => prepared,
         Compiled::Refused { issues, .. } => {
             yamaa_core::domain_entry::finish(scope);
-            return Build::new(
+            let build = Build::new(
                 Err(issues.clone()),
                 Vec::new(),
                 measurements,
                 shared,
                 locator,
             );
+            return (build, None);
         }
     };
+    let view = match rows {
+        Some(_) => HostView::Deferred,
+        None => HostView::Table,
+    };
     let built = yamaa_core::domain_entry::run(scope, || {
-        Ok::<_, Infallible>(run_member(shared, specification, prepared, held, scope))
+        Ok::<_, Infallible>(run_member(
+            shared,
+            specification,
+            prepared,
+            held,
+            scope,
+            view,
+        ))
     });
-    let (result, failures) = match built {
+    let (result, failures, dataset) = match built {
         Ok(built) => built,
         Err(never) => match never {},
     };
-    Build::new(result, failures, measurements, shared, locator)
+    let build = Build::new(result, failures, measurements, shared, locator);
+    #[cfg(feature = "arrow")]
+    let mut build = build;
+    #[cfg(feature = "arrow")]
+    let batches = rows.zip(dataset).and_then(|(rows, dataset)| {
+        let projection = build.projection()?.to_vec();
+        // The build checked that every batch can be built, as a table build
+        // checks its table.
+        PublicBatches::new(dataset, projection, rows).ok()
+    });
+    #[cfg(not(feature = "arrow"))]
+    let batches = {
+        let _ = (rows, dataset);
+        None
+    };
+    #[cfg(feature = "arrow")]
+    if let Some(batches) = &batches {
+        build.streamed(batches.rows(), batches.schema().fields().len());
+    }
+    (build, batches)
 }
 
 /// What one run of a member yields: its result, or the findings that explain
-/// why it has none; and, with a project, the host failures the run retained.
+/// why it has none; with a project, the host failures the run retained; and,
+/// for a run whose output is read as a stream, its accepted dataset.
 type Ran = (
     Result<Box<yamaa_adapters::file_application::Domain>, Vec<yamaa_core::diagnostic::Diagnostic>>,
     Vec<FunctionError>,
+    Option<yamaa_core::dataset::Dataset>,
 );
 
 /// One run of a prepared member through the engine's host-functions port:
@@ -441,30 +528,39 @@ fn run_member(
     prepared: &yamaa_adapters::file_preparation::FileSpecification,
     held: Option<Arc<yamaa_adapters::file_resources::HeldArtifacts>>,
     scope: yamaa_core::application_observer::Scope<'_>,
+    view: HostView,
 ) -> Ran {
     let mut run_scope = prepared.run_scope(None);
     if let Some(held) = held {
         run_scope.hold(held);
     }
     let identity = shared.identity("domain", specification);
+    // A streamed run moves its accepted dataset out of the attempt, once the
+    // attempt's host failures are read.
+    let streamed = |accepted: bool| view == HostView::Deferred && accepted;
     let Some(mut functions) = shared.functions.as_deref() else {
-        let (_, result) = yamaa_adapters::file_application::run(
+        let (mut attempt, result) = yamaa_adapters::file_application::run_with_view(
             prepared,
             &mut run_scope,
             &mut Empty::<FunctionError>::new(),
             classify,
             identity,
             scope,
+            view,
         );
-        return (result.map(Box::new), Vec::new());
+        let dataset = streamed(result.as_ref().is_ok_and(Domain::accepted))
+            .then(|| yamaa_adapters::file_application::take_dataset(&mut attempt))
+            .flatten();
+        return (result.map(Box::new), Vec::new(), dataset);
     };
-    let (attempt, result) = yamaa_adapters::file_application::run(
+    let (mut attempt, result) = yamaa_adapters::file_application::run_with_view(
         prepared,
         &mut run_scope,
         &mut functions,
         classify,
         identity,
         scope,
+        view,
     );
     // A member with a project reports the host failures it retained.
     let mut failures = Vec::new();
@@ -473,7 +569,10 @@ fn run_member(
             failures.push(failure.clone());
         });
     }
-    (result.map(Box::new), failures)
+    let dataset = streamed(result.as_ref().is_ok_and(Domain::accepted))
+        .then(|| yamaa_adapters::file_application::take_dataset(&mut attempt))
+        .flatten();
+    (result.map(Box::new), failures, dataset)
 }
 
 /// The specification and project identities a request compiles to, resolved

@@ -1,7 +1,7 @@
 //! Project operation findings: names, sections, unlinked producers, blocked
 //! consumers, run-scope cycles, saves with nothing to write and stale
 //! artifacts, each with its independently authored mapping.
-use super::Record;
+use super::{text, Record};
 use std::collections::BTreeSet;
 use yamaa_core::{
     diagnostic::{ConditionCode, Diagnostic},
@@ -119,14 +119,14 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         &[("cycle", texts(&["/a.yaml", "/b.yaml", "/a.yaml"]))],
     ));
     // Saving a run or a submission that built nothing is refused at output,
-    // each under its own card.
+    // each under its own card, naming the operation whose result it is.
     reached.insert(check_at(
         &project_scope::run_nothing_to_save(),
         "output",
         "nothing_to_save",
         "PROJECT-12",
         &[],
-        &[],
+        &[("operation", text("run"))],
     ));
     reached.insert(check_at(
         &project_scope::submission_nothing_to_save(),
@@ -134,7 +134,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         "nothing_to_save",
         "PROJECT-13",
         &[],
-        &[],
+        &[("operation", text("submission"))],
     ));
     // A run report that records another artifact than the one a section
     // composes: reported at the listing's report, naming the dataset, the

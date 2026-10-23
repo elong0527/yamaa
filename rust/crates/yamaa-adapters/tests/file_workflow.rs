@@ -194,7 +194,7 @@ mod file {
                 let name = format!("extra_{index:05}");
                 assert_eq!(
                     yamaa_adapters::report_storage::diagnostic_value(issue),
-                    yamaa_adapters::json!({"phase": "validation", "condition": "unknown_field", "rule": "SCHEMA-13", "spec_paths": vec![name.clone()], "context": {"class":"root_class", "field":name, "source": root, "entry": root}}),
+                    yamaa_adapters::json!({"phase": "validation", "condition": "unknown_field", "rule": "SCHEMA-13", "spec_paths": vec![name.clone()], "context": {"class":"root_class", "field":name, "identifier":name, "source": root, "entry": root}}),
                     "root field {index} keeps its complete finding in authored order"
                 );
             }

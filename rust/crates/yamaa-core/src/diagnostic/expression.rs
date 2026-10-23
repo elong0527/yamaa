@@ -1,6 +1,7 @@
 //! Expression findings: the parser's and binder's, static types and evaluation.
-//! Each keeps the original spelling; a predicate field names its text under
-//! `predicate` with the character position, and any other field under `expr`.
+//! Each keeps the original spelling: a field's text is its `expr`, and a
+//! predicate field also names it under `predicate`, with the character
+//! position.
 use super::{ConditionCode as C, Context, Diagnostic, ProjectionError};
 use crate::expression::{
     Condition, Context as Field, ErrorKind, EvaluationError, Failure, Step, TemporalKind,
@@ -26,6 +27,20 @@ fn type_name(kind: ValueType) -> &'static str {
     }
 }
 
+/// A written integer literal's value: its sign without `+`, and its digits
+/// without leading zeros.
+fn canonical_integer(literal: &str) -> String {
+    let (sign, digits) = match literal.as_bytes().first() {
+        Some(b'-') => ("-", &literal[1..]),
+        Some(b'+') => ("", &literal[1..]),
+        _ => ("", literal),
+    };
+    match digits.trim_start_matches('0') {
+        "" => "0".into(),
+        digits => format!("{sign}{digits}"),
+    }
+}
+
 impl Failure {
     pub fn diagnostic_code(&self) -> C {
         match self {
@@ -33,7 +48,7 @@ impl Failure {
             Self::InvalidEscape => C::ExpressionInvalidEscape,
             Self::InvalidRegex { .. } => C::ExpressionInvalidRegex,
             Self::PatternNotLiteral => C::ExpressionPatternNotLiteral,
-            Self::IntegerOverflow => C::LiteralIntegerOverflow,
+            Self::IntegerOverflow { .. } => C::LiteralIntegerOverflow,
             Self::ProhibitedConstruct { .. } => C::ExpressionProhibitedConstruct,
             Self::ProhibitedFunction { .. } => C::ExpressionProhibitedFunction,
             Self::NestedReduction { .. } => C::ExpressionNestedReduction,
@@ -83,12 +98,21 @@ impl Failure {
                 context.insert("outer".into(), text(outer.name()));
                 context.insert("inner".into(), text(inner.name()));
             }
+            // The literal and the range it leaves, as a specification's
+            // scalar literal reports them (VALUE-5).
+            Self::IntegerOverflow { literal } => {
+                if let Ok(number) = canonical_integer(literal).parse::<crate::json::Number>() {
+                    context.insert("actual".into(), V::Number(number));
+                }
+                context.insert("value".into(), text(literal));
+                context.insert("minimum".into(), V::from(i64::MIN));
+                context.insert("maximum".into(), V::from(i64::MAX));
+            }
             Self::Syntax
             | Self::InvalidTemporal { .. }
             | Self::InvalidEscape
             | Self::InvalidRegex { .. }
-            | Self::PatternNotLiteral
-            | Self::IntegerOverflow => {}
+            | Self::PatternNotLiteral => {}
         }
     }
     /// A specification finding: the field's text, a predicate's character
@@ -101,14 +125,10 @@ impl Failure {
         position: usize,
     ) -> Diagnostic {
         let mut context = Context::new();
-        match field {
-            Field::Predicate => {
-                context.insert("predicate".into(), text(expression));
-                context.insert("position".into(), V::from(position));
-            }
-            Field::Aggregate | Field::Derivation => {
-                context.insert("expr".into(), text(expression));
-            }
+        context.insert("expr".into(), text(expression));
+        if field == Field::Predicate {
+            context.insert("predicate".into(), text(expression));
+            context.insert("position".into(), V::from(position));
         }
         self.facts(&mut context);
         Diagnostic {
@@ -217,15 +237,21 @@ impl Condition {
         };
         match self {
             Self::UnknownField { identifier } => insert("identifier", text(identifier)),
+            // The right operand's type is the one the comparison does not
+            // accept beside the left one's (FORMULA-5).
             Self::IncompatiblePair { left, right } => {
                 insert("left_type", text(type_name(*left)));
                 insert("right_type", text(type_name(*right)));
+                insert("actual", text(type_name(*right)));
             }
             Self::ExpectedText { actual } | Self::ContainsExpectedText { actual } => {
                 insert("expected", text("str"));
                 insert("actual", text(type_name(*actual)));
             }
-            Self::DanglingEscape => insert("reason", text("LIKE pattern has a dangling escape")),
+            Self::DanglingEscape => {
+                insert("expr", text(expression));
+                insert("reason", text("LIKE pattern has a dangling escape"));
+            }
             Self::NumericUnknownField { identifier } => {
                 insert("expr", text(expression));
                 insert("identifier", text(identifier));

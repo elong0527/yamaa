@@ -801,7 +801,7 @@ mod file {
                     assert_issues(
                         &issues,
                         &[
-                            json!({"phase":"validation","condition":"invalid_field_type","rule":"ROW-4","spec_paths":["rows.r.group_by"],"context":{"row":"r","group_by":vec!["ID"; Limits::KEYS]}}),
+                            json!({"phase":"validation","condition":"invalid_field_type","rule":"ROW-4","spec_paths":["rows.r.group_by"],"context":{"row":"r","group_by":vec!["ID"; Limits::KEYS],"expected":"at least one driver variable, each once"}}),
                         ],
                         "a group_by at the key limit, on both routes",
                     );

@@ -48,6 +48,11 @@ impl LookupFinding {
             .context
             .insert(key.into(), JsonValue::String(value.into()));
     }
+    /// A key the cause records on every path, null where the site has no
+    /// value for it.
+    pub(super) fn null(&mut self, key: &str) {
+        self.0.context.insert(key.into(), JsonValue::Null);
+    }
     pub(super) fn texts(&mut self, key: &str, values: &[&str]) {
         self.0.context.insert(
             key.into(),

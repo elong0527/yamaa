@@ -9,10 +9,16 @@
 //! table builds once, on first use, for the hosts that take Arrow.
 use crate::columns::{Text, Validity, Values};
 use crate::epoch::{date_days, datetime_seconds};
+#[cfg(feature = "arrow")]
+use arrow_array::RecordBatch;
+#[cfg(feature = "arrow")]
+use arrow_schema::{DataType, Field, Schema, SchemaRef};
+#[cfg(feature = "arrow")]
+use std::num::NonZeroUsize;
 use std::{convert::Infallible, fmt, ops::Range, sync::Arc};
 use yamaa_core::{
     limits::Limits,
-    table::{TableAccess, ValueRef},
+    table::{TableAccess, TableSchema, ValueRef},
     value::ColumnType,
 };
 
@@ -363,15 +369,8 @@ impl PublicTable {
         table: &T,
         projection: &[usize],
     ) -> Result<Self, TableError> {
-        let declared = table.schema().columns();
-        let selected = projection
-            .iter()
-            .map(|&index| declared.get(index).cloned().ok_or(TableError::InvalidTable))
-            .collect::<Result<Vec<_>, _>>()?;
-        yamaa_core::table::TableSchema::new(selected.clone())
-            .map_err(|_| TableError::InvalidTable)?;
+        let selected = check_table(table, projection)?.columns().to_vec();
         let rows = table.row_count();
-        Limits::table(rows, declared.len()).map_err(limit)?;
         let chunks = if rows == 0 {
             vec![0]
         } else {
@@ -379,31 +378,23 @@ impl PublicTable {
             chunks.push(rows - chunks.len() * BATCH_ROWS);
             chunks
         };
+        Self::from_rows(table, projection, selected, 0..rows, chunks)
+    }
+
+    /// Build only the requested rows after whole-table admission.
+    fn from_rows<T: TableAccess<Error = Infallible>>(
+        table: &T,
+        projection: &[usize],
+        selected: Vec<yamaa_core::table::Column>,
+        rows: Range<usize>,
+        chunks: Vec<usize>,
+    ) -> Result<Self, TableError> {
         let cell = |row, column| table.cell(row, column).expect("validated coordinate");
-        // Each batch's text in every column of the table, projected or not,
-        // fits Utf8 offsets, as when every column was built per batch.
-        let mut start = 0;
-        for &length in &chunks {
-            for (column, field) in declared.iter().enumerate() {
-                if field.kind == ColumnType::Str {
-                    let bytes = (start..start + length).map(|row| match cell(row, column) {
-                        ValueRef::Str(text) => text.len(),
-                        _ => 0,
-                    });
-                    if !crate::column_table::fits_utf8_offsets(bytes) {
-                        return Err(TableError::Representation {
-                            representation: crate::column_table::UTF8_OFFSETS,
-                        });
-                    }
-                }
-            }
-            start += length;
-        }
         let columns = selected
             .into_iter()
             .zip(projection)
             .map(|(field, &index)| {
-                let cells = (0..rows).map(|row| cell(row, index));
+                let cells = rows.clone().map(|row| cell(row, index));
                 let column = match field.kind {
                     ColumnType::Str => PublicColumn::Str(
                         cells
@@ -558,6 +549,205 @@ impl PublicTable {
         crate::arrow_bridge::export_stream(self.schema().clone(), self.batches().to_vec())
     }
 }
+
+/// The public Arrow type of a column of the language's type `kind` in a
+/// table the engine built: text is `Utf8`, as every batch it builds holds it.
+#[cfg(feature = "arrow")]
+fn public_type(kind: ColumnType) -> DataType {
+    match kind {
+        ColumnType::Str => DataType::Utf8,
+        ColumnType::Int => DataType::Int64,
+        ColumnType::Float => DataType::Float64,
+        ColumnType::Date => DataType::Date32,
+        ColumnType::DateTime => DataType::Timestamp(arrow_schema::TimeUnit::Second, None),
+    }
+}
+
+/// The public schema of a table the engine built with the logical
+/// `columns`: what [`PublicTable::from_table`] gives it.
+#[cfg(feature = "arrow")]
+fn public_schema(columns: &[yamaa_core::table::Column]) -> SchemaRef {
+    Arc::new(Schema::new(
+        columns
+            .iter()
+            .map(|column| Field::new(&column.name, public_type(column.kind), true))
+            .collect::<Vec<_>>(),
+    ))
+}
+
+/// The public schema of the output `compiled` builds, known before its run:
+/// the schema of the table its run's host view holds, and of every batch a
+/// stream of it hands out (#3697). None when a projected column is not one
+/// the specification declares.
+#[cfg(feature = "arrow")]
+pub fn output_schema(
+    compiled: &yamaa_core::specification::PreparedSpecification,
+) -> Option<SchemaRef> {
+    let columns = compiled
+        .projection()
+        .iter()
+        .map(|name| {
+            compiled
+                .output()
+                .columns()
+                .iter()
+                .find(|column| &column.name == name)
+                .cloned()
+        })
+        .collect::<Option<Vec<_>>>()?;
+    Some(public_schema(&columns))
+}
+
+/// The columns `projection` names of `table`, as the host view's logical
+/// schema; a position outside the table, or a repeated name, is refused.
+fn projected<T: TableAccess>(table: &T, projection: &[usize]) -> Result<TableSchema, TableError> {
+    TableSchema::new(
+        projection
+            .iter()
+            .map(|&index| {
+                table
+                    .schema()
+                    .columns()
+                    .get(index)
+                    .cloned()
+                    .ok_or(TableError::InvalidTable)
+            })
+            .collect::<Result<Vec<_>, _>>()?,
+    )
+    .map_err(|_| TableError::InvalidTable)
+}
+
+/// Admission shared by whole-table and deferred output, before any batch
+/// is handed to a host.
+pub(crate) fn check_table<T: TableAccess<Error = Infallible>>(
+    table: &T,
+    projection: &[usize],
+) -> Result<TableSchema, TableError> {
+    let logical = projected(table, projection)?;
+    let columns = table.schema().columns();
+    yamaa_core::limits::Limits::table(table.row_count(), columns.len()).map_err(limit)?;
+    for (column, field) in columns.iter().enumerate() {
+        if field.kind != ColumnType::Str {
+            continue;
+        }
+        for start in (0..table.row_count()).step_by(BATCH_ROWS) {
+            let end = table.row_count().min(start + BATCH_ROWS);
+            let lengths = (start..end).filter_map(|row| match table.cell(row, column) {
+                Ok(ValueRef::Str(text)) => Some(text.len()),
+                _ => None,
+            });
+            if !crate::column_table::fits_utf8_offsets(lengths) {
+                return Err(TableError::Representation {
+                    representation: crate::column_table::UTF8_OFFSETS,
+                });
+            }
+        }
+    }
+    Ok(logical)
+}
+
+/// The rows of an accepted output handed out as public batches, one built per
+/// pull (#3697): a run whose output is read as a stream holds its accepted
+/// rows here instead of a [`PublicTable`]. Nothing is built ahead of a pull,
+/// and nothing built is kept.
+///
+/// The batches hold the values, in the order and with the types,
+/// [`PublicTable::from_table`] gives the same table and projection, under the
+/// schema [`PublicBatches::schema`] gives before any batch is built. Each
+/// holds at most `rows` records, and none crosses the boundary between two
+/// of the whole table's batches, so a stream of batches can always be built
+/// when the whole table can.
+#[cfg(feature = "arrow")]
+pub struct PublicBatches<T = yamaa_core::dataset::Dataset> {
+    table: T,
+    projection: Vec<usize>,
+    logical: TableSchema,
+    schema: SchemaRef,
+    rows: usize,
+    start: usize,
+    done: bool,
+}
+
+#[cfg(feature = "arrow")]
+impl<T: TableAccess<Error = Infallible>> PublicBatches<T> {
+    /// The batches of `table`'s columns `projection`, at most `rows` records
+    /// each. `table` is refused here, before any batch is built, exactly when
+    /// [`PublicTable::from_table`] refuses it (see [`PublicBatches::check`]).
+    pub fn new(table: T, projection: Vec<usize>, rows: NonZeroUsize) -> Result<Self, TableError> {
+        let logical = Self::check(&table, &projection)?;
+        Ok(Self {
+            schema: public_schema(logical.columns()),
+            logical,
+            projection,
+            table,
+            rows: rows.get().min(BATCH_ROWS),
+            start: 0,
+            done: false,
+        })
+    }
+
+    /// Whether [`PublicTable::from_table`] can build the host view of
+    /// `table`'s columns `projection`, checked without building it: the
+    /// projection and the table's geometry, then the one refusal that depends
+    /// on the values, a batch whose text in one column exceeds Arrow `Utf8`'s
+    /// 32-bit offsets. The whole table is rebuilt in batches of 65,536
+    /// records, every column of each, so each such batch of each text column
+    /// is measured. Returns the projection's logical schema.
+    pub fn check(table: &T, projection: &[usize]) -> Result<TableSchema, TableError> {
+        check_table(table, projection)
+    }
+
+    /// The public schema of every batch, known before any is built.
+    pub fn schema(&self) -> &SchemaRef {
+        &self.schema
+    }
+
+    /// The records all the batches hold.
+    pub fn rows(&self) -> usize {
+        self.table.row_count()
+    }
+
+    /// Whether every batch has been built, so the next pull ends.
+    pub fn ended(&self) -> bool {
+        self.done
+    }
+
+    /// Build the public batch of rows `start..start + rows`.
+    fn build(&self, start: usize, rows: usize) -> Result<RecordBatch, TableError> {
+        let table = PublicTable::from_rows(
+            &self.table,
+            &self.projection,
+            self.logical.columns().to_vec(),
+            start..start + rows,
+            vec![rows],
+        )?;
+        table.batches().first().cloned().ok_or(TableError::Internal)
+    }
+}
+
+#[cfg(feature = "arrow")]
+impl<T: TableAccess<Error = Infallible>> Iterator for PublicBatches<T> {
+    type Item = Result<RecordBatch, TableError>;
+
+    /// Build the next batch, or end. A table with no record has one empty
+    /// batch, as the whole table does; a batch that cannot be built ends the
+    /// batches.
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.done {
+            return None;
+        }
+        let total = self.table.row_count();
+        let boundary = (self.start / BATCH_ROWS + 1) * BATCH_ROWS;
+        let end = total.min(self.start + self.rows).min(boundary);
+        let batch = self.build(self.start, end - self.start);
+        self.start = end;
+        self.done = batch.is_err() || end >= total;
+        Some(batch)
+    }
+}
+
+#[cfg(feature = "arrow")]
+impl<T: TableAccess<Error = Infallible>> std::iter::FusedIterator for PublicBatches<T> {}
 
 #[cfg(test)]
 mod tests {

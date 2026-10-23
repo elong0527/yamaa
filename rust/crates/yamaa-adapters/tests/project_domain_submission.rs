@@ -619,7 +619,7 @@ mod project {
                     "value_not_permitted",
                     "SUB-10",
                     "columns.ID.submission.mandatory",
-                    r#"{"column": "ID"}"#,
+                    r#"{"column": "ID", "value": false}"#,
                 ),
                 // ADaM has no role and no domain (SUB-9, SUB-5).
                 (
@@ -1750,7 +1750,7 @@ mod project {
                     "value_not_permitted",
                     "SUB-10",
                     "columns.ID.submission.mandatory",
-                    "{\"column\":\"ID\"}",
+                    "{\"column\":\"ID\",\"value\":false}",
                 ),
             ] {
                 let study = Study::new();

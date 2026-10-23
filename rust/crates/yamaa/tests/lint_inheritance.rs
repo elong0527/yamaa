@@ -304,6 +304,52 @@ fn an_entry_from_a_grandparent_comes_back_through_the_parent() {
     );
 }
 
+/// A fragment a layer includes composes before the layer's own fields, so an
+/// entry the fragment supplies comes back too, and the message names what the
+/// layer composes on (LAYER-3).
+#[test]
+fn an_entry_from_an_included_fragment_comes_back_through_the_include() {
+    let restated = "\nrows:\n  - id: scores\n    derivations:\n      USUBJID: SC.USUBJID\n      \
+                    VISIT: SC.VISIT\n      AVAL: SC.SCORE\n";
+    let directory = Scratch::new("lint-restatement-include");
+    directory.write("base.yaml", PARENT);
+    directory.write(
+        "fragment.yaml",
+        "yamaa: \"1.0\"\ntype: spec\n\nrows:\n  - id: scores\n    derivations:\n      \
+         FLAG: \"'Y'\"\n",
+    );
+    let message = |from: &str| {
+        format!(
+            "`NOTE` and `FLAG` come back from {from}; list `rows.scores.derivations` in \
+             `clear` to replace the mapping, or write only what this layer changes"
+        )
+    };
+    for (label, header, line, from) in [
+        (
+            "a parent and a fragment",
+            "parent: base.yaml\ninclude: [fragment.yaml]\n",
+            8,
+            "the parent or an included fragment",
+        ),
+        (
+            "a fragment alone",
+            "include: [base.yaml, fragment.yaml]\n",
+            7,
+            "an included fragment",
+        ),
+    ] {
+        directory.write(
+            "child.yaml",
+            format!("yamaa: \"1.0\"\ntype: spec\n{header}{restated}"),
+        );
+        assert_eq!(
+            rows(&directory, "child.yaml", false),
+            [row(line, 5, "rows.scores.derivations", &message(from))],
+            "{label}"
+        );
+    }
+}
+
 /// Either meaning may be the author's, so `fix` leaves the file as written
 /// and the finding remains; a suppression with a reason covers it.
 #[test]

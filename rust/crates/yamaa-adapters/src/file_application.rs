@@ -3,7 +3,7 @@
 use crate::report_storage::StoredReport;
 use crate::{
     file_preparation::{self, FileSpecification},
-    specification_report::{self, BuildResult, Identity},
+    specification_report::{self, BuildResult, HostView, Identity},
     specification_run::{Attempt, BoundaryFailure},
 };
 use std::any::Any;
@@ -300,7 +300,7 @@ impl Domain {
     ) -> Self {
         let fields = [
             ("report", result.report_file()),
-            ("path", result.output().is_some()),
+            ("path", result.accepted()),
         ];
         let targets = fields
             .into_iter()
@@ -322,6 +322,16 @@ impl Domain {
     /// The output table, which only an accepted output has.
     pub fn output(&self) -> Option<&crate::public_table::PublicTable> {
         self.result.output()
+    }
+    /// Whether the build accepted its primary output: built as a table, or
+    /// deferred to be read as a stream (#3697).
+    pub fn accepted(&self) -> bool {
+        self.result.accepted()
+    }
+    /// The accepted output's columns, as positions among the accepted
+    /// dataset's, which a deferred build's batches project.
+    pub fn projection(&self) -> Option<&[usize]> {
+        self.result.projection()
     }
     /// The run report table; every build holds one.
     pub fn run_report(&self) -> &crate::public_table::PublicTable {
@@ -365,7 +375,7 @@ impl Domain {
         &self,
         report_only: bool,
     ) -> Result<Option<(Vec<crate::publication::File<'_>>, Admitted)>, Failure> {
-        let diagnostic = report_only || self.result.output().is_none();
+        let diagnostic = report_only || !self.result.accepted();
         if diagnostic && !self.result.report_file() {
             return Ok(None);
         }
@@ -511,7 +521,7 @@ impl Domain {
         if !self.result.report_file() {
             return Err(FailedBuild);
         }
-        let failed = self.result.output().is_none();
+        let failed = !self.result.accepted();
         match self.save_with(true, |_| Ok(())) {
             // A failed build reports its failure after the report was written.
             Err(FailedBuild) if failed => Ok(self.publication_issues.is_empty()),
@@ -525,7 +535,7 @@ impl Domain {
         report_only: bool,
         before: impl FnMut(usize) -> Result<(), crate::file_publication::Error>,
     ) -> Result<bool, FailedBuild> {
-        let failed = self.result.output().is_none();
+        let failed = !self.result.accepted();
         let fail = || if failed { Err(FailedBuild) } else { Ok(false) };
         let (staged, admitted) = match self.plan(report_only) {
             Ok(None) => return fail(),
@@ -583,6 +593,32 @@ pub fn run<A: HostFunctions>(
     Attempt<crate::file_resources::Error, A::Error>,
     Result<Domain, Failure>,
 ) {
+    run_with_view(
+        prepared,
+        run,
+        functions,
+        classify,
+        identity,
+        scope,
+        HostView::Table,
+    )
+}
+
+/// [`run`] with the host view `view` (#3697). A [`HostView::Deferred`]
+/// result builds no output table; its accepted rows stay in the attempt, from
+/// which [`take_dataset`] moves them to be read as a stream.
+pub fn run_with_view<A: HostFunctions>(
+    prepared: &FileSpecification,
+    run: &mut crate::file_resources::RunScope,
+    functions: &mut A,
+    classify: impl Fn(&A::Error) -> Classification,
+    identity: Identity<'_>,
+    scope: Scope<'_>,
+    view: HostView,
+) -> (
+    Attempt<crate::file_resources::Error, A::Error>,
+    Result<Domain, Failure>,
+) {
     let attempt = prepared.build(run, functions, scope);
     if let Err(BoundaryFailure::Activation(
         yamaa_core::project_activation::Failure::FunctionLanguageMismatch {
@@ -598,7 +634,7 @@ pub fn run<A: HostFunctions>(
         return (attempt, Err(failure));
     }
     scope.phase(yamaa_core::application_observer::Phase::Output);
-    let converted = result(prepared, run, &attempt, classify, identity);
+    let converted = result(prepared, run, &attempt, classify, identity, view);
     scope.exit(
         yamaa_core::application_observer::Phase::Output,
         if converted.is_ok() {
@@ -617,6 +653,7 @@ fn result<E>(
     attempt: &Attempt<crate::file_resources::Error, E>,
     classify: impl Fn(&E) -> Classification,
     identity: Identity<'_>,
+    view: HostView,
 ) -> Result<Domain, Failure> {
     use crate::project_report::Classified;
     let mut held = Vec::new();
@@ -639,9 +676,31 @@ fn result<E>(
             Classification::Opaque => None,
         })
         .collect::<Vec<_>>();
-    let result = specification_report::build_result(prepared.run(), attempt, identity, &facts)
-        .map_err(|refusal| refusal.issues())?;
+    let result =
+        specification_report::build_result_with(prepared.run(), attempt, identity, &facts, view)
+            .map_err(|refusal| refusal.issues())?;
     Ok(Domain::new(result, prepared, run))
+}
+
+/// Move the accepted dataset out of `attempt`, for a deferred build whose
+/// output is read as a stream (#3697); none when the attempt accepted no
+/// dataset. The attempt then holds no execution result, so read whatever
+/// else it holds, such as its host failures, first.
+pub fn take_dataset<C, E>(attempt: &mut Attempt<C, E>) -> Option<yamaa_core::dataset::Dataset> {
+    let result = std::mem::replace(
+        &mut attempt.dataset.result,
+        Err(yamaa_core::specification_run::PortError::Incomplete),
+    );
+    match result {
+        Ok(yamaa_core::dataset::ExecutionAttempt {
+            result: Ok(execution),
+            ..
+        }) => Some(execution.dataset),
+        other => {
+            attempt.dataset.result = other;
+            None
+        }
+    }
 }
 
 /// Prepare one request through `resolver`, or the local file resolver, for

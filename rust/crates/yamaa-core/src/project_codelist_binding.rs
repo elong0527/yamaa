@@ -68,23 +68,11 @@ impl Finding {
         let code = match &self.cause {
             Cause::Unknown => C::CodelistUnknownBinding,
             Cause::TypeMismatch { expected, actual } => {
-                fn kind(kind: ColumnType) -> &'static str {
-                    match kind {
-                        ColumnType::Str => "str",
-                        ColumnType::Int => "int",
-                        ColumnType::Float => "float",
-                        ColumnType::Date => "date",
-                        ColumnType::DateTime => "datetime",
-                    }
-                }
-                let datatype = match expected {
-                    ColumnType::Str => "text",
-                    ColumnType::Int => "integer",
-                    ColumnType::Float => "float",
-                    _ => unreachable!("catalogue admits only text and numeric types"),
-                };
-                context.insert("codelist_data_type".into(), V::String(datatype.into()));
-                context.insert("column_type".into(), V::String(kind(*actual).into()));
+                context.insert(
+                    "codelist_data_type".into(),
+                    V::String(codelist_data_type(*expected).into()),
+                );
+                context.insert("column_type".into(), V::String(column_type(*actual).into()));
                 C::CodelistBindingTypeMismatch
             }
             Cause::Redundant { verification } => {
@@ -102,6 +90,25 @@ impl Finding {
             source_span: None,
             operand_route: None,
         }
+    }
+}
+/// The column type a codelist binding names, as a column declares it.
+pub(crate) fn column_type(kind: ColumnType) -> &'static str {
+    match kind {
+        ColumnType::Str => "str",
+        ColumnType::Int => "int",
+        ColumnType::Float => "float",
+        ColumnType::Date => "date",
+        ColumnType::DateTime => "datetime",
+    }
+}
+/// The data type of a codelist the catalogue admits: text or numeric only.
+pub(crate) fn codelist_data_type(kind: ColumnType) -> &'static str {
+    match kind {
+        ColumnType::Str => "text",
+        ColumnType::Int => "integer",
+        ColumnType::Float => "float",
+        _ => unreachable!("catalogue admits only text and numeric types"),
     }
 }
 #[derive(Debug)]

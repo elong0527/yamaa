@@ -1396,6 +1396,8 @@ rows:
             .unwrap();
             expected["spec_paths"] = yamaa_adapters::json!([path]);
             expected["context"]["actual"] = yamaa_adapters::json_wire::decode(actual).unwrap();
+            // The literal's canonical text, which the message names.
+            expected["context"]["value"] = yamaa_core::json::Value::String(actual.into());
             let specification = fixture.specification();
             for runtime in ["python", "r"] {
                 let request = || Request {

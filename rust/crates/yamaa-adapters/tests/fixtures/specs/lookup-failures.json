@@ -13,7 +13,8 @@
         ],
         "context": {
           "position": 10,
-          "predicate": "AE.AEOUT ="
+          "predicate": "AE.AEOUT =",
+          "expr": "AE.AEOUT ="
         }
       }
     ],
@@ -118,7 +119,8 @@
         ],
         "context": {
           "left_type": "str",
-          "right_type": "int"
+          "right_type": "int",
+          "actual": "int"
         },
         "operand_route": []
       }

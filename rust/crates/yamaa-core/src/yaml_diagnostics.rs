@@ -2,7 +2,7 @@
 //! Parsing, physical capture and resource refusal remain on the source boundary.
 use crate::{
     diagnostic::ConditionCode,
-    project_diagnostics::{Context, Diagnostic, Fact},
+    project_diagnostics::{Diagnostic, Fact},
 };
 use std::vec;
 
@@ -28,24 +28,21 @@ pub enum Failure<'a> {
 }
 /// Source admission already bounds the complete ordered decoder findings and
 /// authored paths. This projection adds no stricter quota or parser policy;
-/// the edge that renders a finding owns its serialization.
-pub fn diagnostics<'a>(failure: Failure<'a>, identity: Option<&'a str>) -> Vec<Diagnostic<'a>> {
+/// the edge that renders a finding owns its serialization. `identity` is the
+/// file as the caller names it, which a finding about its text names as
+/// `path`.
+pub fn diagnostics<'a>(failure: Failure<'a>, identity: &'a str) -> Vec<Diagnostic<'a>> {
     match failure {
-        Failure::NonAscii { line, column } => {
-            let mut context: Context<'a> = [
+        Failure::NonAscii { line, column } => vec![Diagnostic {
+            code: ConditionCode::SourceNonAscii,
+            spec_path: "$".into(),
+            context: [
                 ("line", Fact::Unsigned(line)),
                 ("column", Fact::Unsigned(column)),
+                ("path", Fact::Text(identity)),
             ]
-            .into();
-            if let Some(identity) = identity {
-                context.insert("path", Fact::Text(identity));
-            }
-            vec![Diagnostic {
-                code: ConditionCode::SourceNonAscii,
-                spec_path: "$".into(),
-                context,
-            }]
-        }
+            .into(),
+        }],
         Failure::InvalidYaml {
             line,
             column,
@@ -71,6 +68,7 @@ pub fn diagnostics<'a>(failure: Failure<'a>, identity: Option<&'a str>) -> Vec<D
                         Fact::OwnedText(format!("U+{:04X}", issue.code_point)),
                     ),
                     ("offset", Fact::Unsigned(issue.offset)),
+                    ("path", Fact::Text(identity)),
                 ]
                 .into(),
             })

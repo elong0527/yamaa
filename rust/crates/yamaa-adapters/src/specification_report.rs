@@ -503,20 +503,56 @@ impl PreparedOutput {
     }
 }
 
+/// How a build hands its accepted output to its host (#3697).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HostView {
+    /// The whole table, built with the result.
+    Table,
+    /// No table: a run whose output is read as a stream builds each batch
+    /// as it is read, from the accepted rows (`PublicBatches`). The build
+    /// checks that the whole table could be built, so it fails exactly when
+    /// a [`HostView::Table`] build fails.
+    Deferred,
+}
+
+/// The host view an accepted result holds.
+#[derive(Debug)]
+enum View {
+    /// The output table.
+    Table(crate::public_table::PublicTable),
+    /// Nothing built: the batches are built as they are read.
+    Deferred,
+}
+
 /// An owned build result; obtaining it never calls a publisher. Its table is
 /// the admitted output projection, while private report artifacts are prospective.
 /// Every result holds its verified run report.
 #[derive(Debug)]
 pub struct BuildResult {
     prepared: PreparedOutput,
-    table: Option<crate::public_table::PublicTable>,
+    view: Option<View>,
     issues: Vec<Diagnostic>,
     report: crate::run_report::HeldReport,
 }
 impl BuildResult {
-    /// The output table, which only an accepted output has.
+    /// The accepted output table, held only by a whole-table build.
     pub fn output(&self) -> Option<&crate::public_table::PublicTable> {
-        self.table.as_ref()
+        match &self.view {
+            Some(View::Table(table)) => Some(table),
+            _ => None,
+        }
+    }
+    /// Whether the build accepted its primary output, whatever its view.
+    pub fn accepted(&self) -> bool {
+        self.view.is_some()
+    }
+    /// The positions of the output's columns among the accepted dataset's,
+    /// for a build that accepted its output.
+    pub(crate) fn projection(&self) -> Option<&[usize]> {
+        self.view.as_ref()?;
+        self.prepared
+            .artifact()
+            .map(|artifact| artifact.projection.as_slice())
     }
     pub fn issues(&self) -> &[Diagnostic] {
         &self.issues
@@ -531,7 +567,7 @@ impl BuildResult {
     }
     /// The accepted primary artifact's serialized bytes, shared, not copied.
     pub(crate) fn artifact(&self) -> Option<std::sync::Arc<[u8]>> {
-        self.output()?;
+        self.view.as_ref()?;
         self.prepared
             .artifact()
             .map(|artifact| std::sync::Arc::clone(&artifact.bytes))
@@ -544,7 +580,7 @@ impl BuildResult {
         if let Some(file) = self.report.file() {
             items.push(file);
         }
-        if self.output().is_some() {
+        if self.accepted() {
             if let Some(artifact) = self.prepared.artifact() {
                 items.push((
                     artifact.path.as_str(),
@@ -650,6 +686,19 @@ pub fn build_result<'a, C, E>(
     id: Identity<'_>,
     facts: &[Classified<'a, E>],
 ) -> Result<BuildResult, Refusal<'a, E>> {
+    build_result_with(run, attempt, id, facts, HostView::Table)
+}
+
+/// [`build_result`] with the host view `view`: a [`HostView::Deferred`]
+/// result builds no table, and its report, issues and status are the
+/// [`HostView::Table`] result's.
+pub fn build_result_with<'a, C, E>(
+    run: &PreparedRun,
+    attempt: &'a Attempt<C, E>,
+    id: Identity<'_>,
+    facts: &[Classified<'a, E>],
+    view: HostView,
+) -> Result<BuildResult, Refusal<'a, E>> {
     let supplied = crate::project_report::supplied(attempt, facts)?;
     let activation = crate::project_report::activation_evidence(run, attempt)?;
     let mut report = match &attempt.boundary {
@@ -670,7 +719,7 @@ pub fn build_result<'a, C, E>(
             .as_ref()
             .map_or(&[], |dataset| dataset.template_rows.as_slice()),
     );
-    Ok(prepare_result(run, execution, id, report, &facts)?)
+    Ok(prepare_result(run, execution, id, report, &facts, view)?)
 }
 
 pub(crate) fn prepare_result(
@@ -679,6 +728,7 @@ pub(crate) fn prepare_result(
     id: Identity<'_>,
     observations: StoredReport,
     facts: &crate::run_report::RunFacts,
+    view: HostView,
 ) -> Result<BuildResult, Error> {
     let fallback = observations.clone();
     // Every run reports, so a failed output preparation becomes a failed run
@@ -688,10 +738,18 @@ pub(crate) fn prepare_result(
     let table = prepared
         .artifact()
         .map(|artifact| {
-            crate::public_table::PublicTable::from_table(
-                &execution.ok_or(Error::InvalidObservation)?.dataset,
-                &artifact.projection,
-            )
+            let dataset = &execution.ok_or(Error::InvalidObservation)?.dataset;
+            match view {
+                HostView::Table => {
+                    crate::public_table::PublicTable::from_table(dataset, &artifact.projection)
+                        .map(View::Table)
+                }
+                // Built batch by batch as it is read, after the same checks.
+                HostView::Deferred => {
+                    crate::public_table::check_table(dataset, &artifact.projection)
+                        .map(|_| View::Deferred)
+                }
+            }
             .map_err(|e| match e {
                 crate::public_table::TableError::Limit {
                     resource,
@@ -743,7 +801,7 @@ pub(crate) fn prepare_result(
     }
     Ok(BuildResult {
         prepared,
-        table,
+        view: table,
         issues: crate::file_application::collect(issues),
         report,
     })

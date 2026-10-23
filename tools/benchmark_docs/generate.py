@@ -108,11 +108,15 @@ def benchmark_has_spec(benchmark):
 
 
 def linked_specs(spec):
-    """Return the files a spec names as its parent or as input producers."""
+    """Return the files a spec names as its parent, as the fragments it
+    includes, or as input producers."""
     if not isinstance(spec, dict):
         return []
     parent = spec.get("parent")
     linked = [parent] if isinstance(parent, str) and parent else []
+    include = spec.get("include")
+    if isinstance(include, list):
+        linked.extend(path for path in include if isinstance(path, str) and path)
     inputs = spec.get("input", {})
     if isinstance(inputs, dict):
         linked.extend(

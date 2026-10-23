@@ -39,7 +39,7 @@ conditions:
     message: "the artifact {artifact} of {dataset} is outside the directory of {define}"
   artifact_path_collision:
     phases: [validation]
-    message: "{spec_path} would write a file that another output also writes"
+    message: "{spec_path} would write {path}, which another output also writes"
   assert_failed:
     phases: [verification]
     message: "the assert predicate is not TRUE in {failure_count} of the rows"
@@ -60,23 +60,23 @@ conditions:
     message: "codelist {codelist} has an item list or item value its declaration does not admit"
   codelist_type_mismatch:
     phases: [validation]
-    message: "{spec_path} binds a codelist whose data type the column's type does not admit"
+    message: "column {column} binds codelist {codelist}, whose data type {codelist_data_type} its type {column_type} does not admit"
   conflicting_absence_policy:
     phases: [validation]
-    message: "the lookup at {spec_path} declares an answer for absence together with require_match: true"
+    message: "the lookup of {dataset} declares an answer for absence together with require_match: true"
   # SUB-14 (D69)
   conflicting_origins:
     phases: [validation]
     message: "column {column} declares a {origin_type} origin that conflicts with another of its origins"
   conflicting_row_construction:
     phases: [validation]
-    message: "a root filter cannot be declared together with rows"
+    message: "a root filter cannot be declared together with the rows {rows}"
   conversion_failed:
     phases: [convert, validation]
-    message: "{spec_path} gives a value that does not convert to its declared type, or leaves the range of its type"
+    message: "{spec_path} gives a value that does not convert to {to}, or that leaves the range of {to}"
   core_mandatory_conflict:
     phases: [validation]
-    message: "the core designation at {spec_path} does not fit its model or its mandatory setting"
+    message: "the core designation of column {column} does not fit its model or its mandatory setting"
   correlated_derivation_with_unique_verification:
     phases: [validation]
     message: "intermediate {intermediate} declares verifications, so its derivations cannot read the current input record"
@@ -88,10 +88,10 @@ conditions:
     message: "column {column} holds a value that is not ISO 8601 {data_type} text in {failure_count} of the rows"
   decimals_not_applicable:
     phases: [validation]
-    message: "output.decimals applies only to a csv artifact that no transport file reads"
+    message: "output.decimals of {path} applies only to a csv artifact that no transport file reads"
   declared_length_conflict:
     phases: [validation]
-    message: "the length at {spec_path} and the column's max_length verification state different bounds"
+    message: "column {column} declares length {length}, but its max_length verification states {max_length}"
   dependency_cycle:
     phases: [validation]
     message: "{cycle} form a dependency cycle"
@@ -100,25 +100,29 @@ conditions:
     message: "{expr} divides by zero"
   driver_unavailable:
     phases: [validation]
-    message: "{spec_path} names no available driver dataset"
+    message: "the driver dataset {dataset} named at {spec_path} is not available"
   duplicate_dataset_entry:
     phases: [validation]
     message: "the section lists dataset {detail} or its artifact more than once"
   duplicate_define_identifier:
     phases: [validation]
-    message: "{spec_path} repeats an identifier already used in its identifier space"
+    message: "{spec_path} repeats the identifier {identifier}, already used in its identifier space"
   duplicate_derivation:
     phases: [validation]
-    message: "{spec_path} conflicts with another derivation or field of the same name"
+    message: "{identifier} conflicts with another derivation or field of the same name"
   duplicate_identifier:
     phases: [validation]
-    message: "{spec_path} repeats an identifier declared earlier"
+    message: "{spec_path} repeats the identifier {identifier}, declared earlier"
   duplicate_intermediate_records:
     phases: [verification]
     message: "the unique verification of intermediate {intermediate} finds {columns} repeated in {dataset}"
   duplicate_key:
     phases: [output]
     message: "the output keys repeat in {duplicate_count} of the rows"
+  # LAYER-3
+  duplicate_layer:
+    phases: [validation]
+    message: "include {path} names a layer the specification already composes"
   duplicate_order_term:
     phases: [validation]
     message: "output.order_by names column {column} more than once"
@@ -146,7 +150,7 @@ conditions:
     message: "function {function} fails its test case {case}: {reason}"
   function_file_invalid:
     phases: [validation]
-    message: "a function file or lock cannot be admitted"
+    message: "a function file or lock cannot be admitted ({reason})"
   function_implementation_missing:
     phases: [validation]
     message: "project function {function} has no implementation for {language}"
@@ -158,13 +162,13 @@ conditions:
     message: "the sources {sources} have types {types}, which cannot be compared"
   incompatible_input_type:
     phases: [validation]
-    message: "{spec_path} reads a value of a type it does not accept"
+    message: "{spec_path} reads a value of type {actual}, which it does not accept"
   inheritance_cycle:
     phases: [validation]
-    message: "the parent chain forms a cycle: {cycle}"
+    message: "the layers form a cycle: {cycle}"
   integer_overflow:
     phases: [derivation, validation]
-    message: "an int value is outside the range -9223372036854775808 to 9223372036854775807"
+    message: "{value} is outside the int range -9223372036854775808 to 9223372036854775807"
   internal_column_in_keys:
     phases: [validation]
     message: "keys names {column}, which is not an output column"
@@ -192,13 +196,13 @@ conditions:
     message: "the derive step is invalid: {reason}"
   invalid_duration_text:
     phases: [impute]
-    message: "{spec_path} reads text that is not an ISO 8601 duration"
+    message: "{spec_path} reads '{value}' from {source}, which is not an ISO 8601 duration"
   invalid_expression:
     phases: [validation]
-    message: "the expression does not follow the expression grammar"
+    message: "{expr} does not follow the expression grammar"
   invalid_field_type:
     phases: [validation]
-    message: "{spec_path} has a value of the wrong type or form"
+    message: "{spec_path} has a value of the wrong type or form (expected {expected})"
   invalid_function_argument:
     phases: [derivation, validation]
     message: "project function {function} receives an argument it does not accept"
@@ -234,7 +238,7 @@ conditions:
     message: "the string template is invalid ({reason})"
   invalid_text:
     phases: [ingest, validation]
-    message: "the text is not valid Unicode"
+    message: "{path} holds text that is not valid Unicode"
   invalid_yaml:
     phases: [validation]
     message: "the file is not valid YAML: {reason}"
@@ -252,7 +256,7 @@ conditions:
     message: "column {column} holds a value that does not match its pattern in {failure_count} of the rows"
   method_missing:
     phases: [validation]
-    message: "the Derived origin at {spec_path} declares no method"
+    message: "column {column} declares a Derived origin but no method"
   minimum_length:
     phases: [validation]
     message: "the value is shorter than the minimum length {minimum}"
@@ -270,7 +274,7 @@ conditions:
     message: "the warning verifications {warnings} need output.report, which is not declared"
   missing_required_field:
     phases: [validation]
-    message: "{spec_path} lacks a field it requires"
+    message: "{spec_path} lacks the field {field}, which it requires"
   missing_value_required:
     phases: [validation]
     message: "a flag that declares false_value {false_value} must also declare missing"
@@ -295,14 +299,14 @@ conditions:
     message: "the lookup of {dataset} has no applicable key ({hint})"
   non_ascii_source:
     phases: [validation]
-    message: "the file holds a character outside ASCII"
+    message: "{path} holds a character outside ASCII"
   not_missing_failed:
     phases: [verification]
     message: "column {column} is missing in {failure_count} of the rows"
   # PROJECT-12 and PROJECT-13
   nothing_to_save:
     phases: [output]
-    message: "there is nothing to save"
+    message: "the project {operation} has nothing to save"
   odm_not_unique:
     phases: [derivation, row_construction]
     message: "the ODM item {item} has {records} records in one scope"
@@ -323,19 +327,19 @@ conditions:
     message: "the ordinal field {field} of input {dataset} collides with a stored field"
   origin_contradicts_derivation:
     phases: [validation]
-    message: "the origin at {spec_path} contradicts the column's derivation"
+    message: "an origin of column {column} contradicts the column's derivation"
   origin_description_missing:
     phases: [validation]
-    message: "the origin at {spec_path} lacks the description its type requires"
+    message: "the {origin_type} origin of column {column} lacks the description its type requires"
   origin_document_missing:
     phases: [validation]
     message: "the collected origin of column {detail} lacks its annotated case report form reference"
   origin_missing:
     phases: [validation]
-    message: "{spec_path} declares no origin"
+    message: "column {column} declares no origin"
   origin_source_not_admitted:
     phases: [validation]
-    message: "the origin type and source at {spec_path} are not an admitted pair"
+    message: "the {origin_type} origin of column {column} has a source the {model} model does not admit"
   parent_not_found:
     phases: [validation]
     message: "parent {path} does not exist"
@@ -354,7 +358,7 @@ conditions:
     message: "column {detail} is labelled '{label}', but its predecessor {predecessor} is labelled '{predecessor_label}'"
   producer_contract_mismatch:
     phases: [validation]
-    message: "{spec_path} reads an artifact that does not match its producing specification's output"
+    message: "the artifact of {dataset} does not match its producing specification's output"
   # PROJECT-11
   producer_not_completed:
     phases: [validation]
@@ -365,17 +369,17 @@ conditions:
     message: "the producer links form a cycle: {cycle}"
   prohibited_construct:
     phases: [validation]
-    message: "a construct is written where its field does not admit it"
+    message: "a {construct} construct is written where its field does not admit it"
   prohibited_function:
     phases: [validation]
     message: "function {function} is not allowed here"
   # CT-13
   project_binding_missing:
     phases: [validation]
-    message: "{spec_path} needs a project file, and none is given"
+    message: "the {binding} at {spec_path} needs a project file, and none is given"
   publication_failed:
     phases: [output]
-    message: "the file of {spec_path} could not be published"
+    message: "{path} could not be published"
   qualified_identifier:
     phases: [validation]
     message: "{expr} reads the qualified name {identifier}, which is not visible there"
@@ -393,7 +397,7 @@ conditions:
     message: "the long form of {field} only restates its shorthand {shorthand}"
   reference_data_repeating_conflict:
     phases: [validation]
-    message: "{spec_path} declares both reference_data and repeating"
+    message: "dataset {dataset} declares both reference_data and repeating"
   refuted_value_origin:
     phases: [validation]
     message: "the {origin_type} origin of value-level entry {entry} of column {column} contradicts its derivation"
@@ -405,7 +409,7 @@ conditions:
     message: "intermediate {intermediate} only renames {dataset} and adds nothing"
   reserved_metadata_key:
     phases: [validation]
-    message: "{spec_path} uses a key reserved for a governed field"
+    message: "metadata key {key} is reserved for a governed field"
   resource_path_content_changed:
     phases: [ingest]
     message: "{path} changed while it was being read"
@@ -426,7 +430,7 @@ conditions:
     message: "{path} is a URI, not a file path"
   row_count_failed:
     phases: [verification]
-    message: "the row count is outside the bounds of {spec_path}"
+    message: "the row count is outside the bounds of {spec_path} in {failure_count} of the counted groups"
   runtime_artifact_mismatch:
     phases: [validation]
     message: "the installed package {package} does not match the lock"
@@ -523,7 +527,7 @@ conditions:
     message: "{path} is not a SAS dataset the engine can read ({cause})"
   source_system_incomplete:
     phases: [validation]
-    message: "the source system version is empty"
+    message: "the source system version of section {section} is empty"
   source_text_after_quote:
     phases: [ingest]
     message: "record {record} of {path} has text after a closing quote"
@@ -540,22 +544,22 @@ conditions:
     message: "{value} is outside the {model} model of section {section}"
   submission_data_type_not_admitted:
     phases: [validation]
-    message: "{spec_path} declares a data type its column cannot be submitted as"
+    message: "column {column} of type {declared_type} cannot be submitted as data type {data_type}"
   submission_length_invalid:
     phases: [validation]
-    message: "{spec_path} declares a length or significant_digits that is not a positive integer"
+    message: "column {column} declares a length or significant_digits that is not a positive integer"
   submission_length_missing:
     phases: [validation]
-    message: "{spec_path} lacks the length or significant_digits its data type needs"
+    message: "column {column} lacks the {field} its data type needs"
   submission_length_not_applicable:
     phases: [validation]
-    message: "{spec_path} declares a length or significant_digits that its data type does not take"
+    message: "column {column} declares {field}, which its data type does not take"
   submission_metadata_missing:
     phases: [validation]
-    message: "{spec_path} lacks submission metadata that define.xml needs"
+    message: "{spec_path} lacks the {field} metadata that define.xml needs"
   submission_not_output_column:
     phases: [validation]
-    message: "{spec_path} gives submission metadata for a column that is not an output column"
+    message: "column {column} has submission metadata but is not an output column"
   transport_dataset_empty:
     phases: [output]
     message: "dataset {dataset} has no rows and does not declare has_no_data"
@@ -564,7 +568,7 @@ conditions:
     message: "label '{label}' of {dataset} cannot be transported: {detail}"
   transport_path_collision:
     phases: [validation]
-    message: "{spec_path} would write a transport file that another writer also writes"
+    message: "{spec_path} names {path}, which another writer of the submission also writes"
   transport_text_invalid:
     phases: [output]
     message: "column {column} of {dataset} holds a value the transport cannot carry: {detail}"
@@ -586,17 +590,17 @@ conditions:
     message: "the extension of {path} is not one of {permitted}"
   unknown_codelist:
     phases: [validation]
-    message: "{spec_path} names no declared codelist"
+    message: "column {column} binds codelist {codelist}, which is not declared"
   # LOOKUP-22
   unknown_derive_variable:
     phases: [validation]
     message: "{variable} is not a derive binding of the aggregate"
   unknown_document:
     phases: [validation]
-    message: "{spec_path} names no declared document"
+    message: "{spec_path} names the document {document}, which is not declared"
   unknown_field:
     phases: [validation]
-    message: "there is an unknown field or reference at {spec_path}"
+    message: "{identifier} is not a known field or reference at {spec_path}"
   unknown_intermediate_driver_type:
     phases: [validation]
     message: "intermediate {intermediate} drives rows but exposes fields without a known type: {columns}"
@@ -652,7 +656,7 @@ conditions:
     message: "{operation} is not supported by this engine"
   untransportable_text:
     phases: [validation]
-    message: "{spec_path} holds whitespace that define.xml cannot carry"
+    message: "{spec_path} holds a {whitespace} character, which define.xml cannot carry there"
   value_level_multiple_matches:
     phases: [verification]
     message: "several value-level entries of column {column} select the same row in {failure_count} of the rows"
@@ -667,7 +671,7 @@ conditions:
     message: "the where clause of value-level entry {entry} of column {column} is invalid ({reason})"
   value_not_permitted:
     phases: [validation]
-    message: "{spec_path} has a value that is not permitted"
+    message: "{spec_path} has the value {value}, which is not permitted"
   window_order_by_required:
     phases: [validation]
     message: "{operation} needs a window order_by"
@@ -685,4 +689,4 @@ conditions:
     message: "column {column} of {dataset} holds {value}, which an XPT file cannot carry: {detail}"
   zero_offset:
     phases: [validation]
-    message: "row_value needs a nonzero offset"
+    message: "row_value takes a nonzero offset, not {offset}"

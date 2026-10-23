@@ -131,7 +131,7 @@ fn actual_changed_define_resource_keeps_authored_cause_path_and_snapshot() {
     let error = resources.capture("dm.csv").unwrap_err();
     assert_eq!(error, file_resources::Error::Changed);
     let error = resources.capture("dm.csv").unwrap_err();
-    let findings = issues(&resource("datasets.DM.artifact", "dm.csv", error));
+    let findings = issues(&resource("datasets.DM.artifact", "dm.csv", error), "");
     assert_eq!(findings.len(), 1);
     let finding = &findings[0];
     assert_eq!(finding.phase(), "ingest");
@@ -230,7 +230,7 @@ fn changed_define_metadata_uses_original_project_environment_spec_parent_and_dic
             "dict.yaml" => ("columns.ID.derivation.mapping.dict", "dict.yaml"),
             _ => unreachable!(),
         };
-        let findings = issues(&failure);
+        let findings = issues(&failure, "");
         assert_eq!(findings.len(), 1);
         assert_eq!(findings[0].phase(), "ingest");
         assert_eq!(findings[0].condition(), "resource_path_content_changed");

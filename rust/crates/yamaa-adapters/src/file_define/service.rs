@@ -101,13 +101,14 @@ fn published_csv_failure(
         .diagnostic()]),
     }
 }
-/// A published artifact the Parquet profile does not read.
-fn published_parquet_failure(written: &str) -> Failure {
+/// A published artifact of `dataset` the Parquet profile does not read.
+fn published_parquet_failure(dataset: &str, written: &str) -> Failure {
     Failure::Metadata(vec![Finding::cause(
         ConditionCode::ProducerContractMismatch,
         written,
         "published Parquet profile",
-    )])
+    )
+    .with("dataset", dataset)])
 }
 /// A published artifact whose extension selects no dataset profile.
 fn published_format_failure(written: &str) -> Failure {
@@ -130,7 +131,8 @@ fn published_typed_csv_failure(
             ConditionCode::ProducerContractMismatch,
             written,
             "published CSV contract",
-        ),
+        )
+        .with("dataset", dataset),
     )
 }
 /// One published artifact held for a transport, as its profile decoded it.
@@ -302,7 +304,8 @@ impl Application {
                 ConditionCode::SubmissionMetadataMissing,
                 standard,
                 "invalid closed project submission declarations",
-            )])
+            )
+            .with("field", "submission")])
         })?;
         // The caller selected a section the project declares. A project file
         // that no longer declares it when read here is refused as any
@@ -348,7 +351,8 @@ impl Application {
                     ConditionCode::SubmissionMetadataMissing,
                     &path,
                     "output.path origin",
-                )])
+                )
+                .with("field", "output.path")])
             })?;
             let artifact = reads.location(
                 &format!("{path}.output.path"),
@@ -360,6 +364,7 @@ impl Application {
                     yamaa_core::define_diagnostics::admit_relation(
                         yamaa_core::define_diagnostics::TargetRelation::ArtifactCollision,
                         &path,
+                        origin.written,
                         "published dataset overlaps Define target",
                     )
                     .unwrap_err(),
@@ -368,7 +373,7 @@ impl Application {
             for (name, input) in &view.inputs {
                 let input_path = format!("{path}.input.{name}.path");
                 let location = reads.location(&input_path, input.base_source, input.written)?;
-                inputs.push((input_path, location));
+                inputs.push((input_path, location, input.written.to_string()));
             }
             let document_root = view.document.root();
             let id = composition::text(view.document, document_root, "domain").unwrap_or_default();
@@ -387,6 +392,7 @@ impl Application {
                             yamaa_core::define_diagnostics::admit_relation(
                                 yamaa_core::define_diagnostics::TargetRelation::TransportCollision,
                                 &path,
+                                &target_written,
                                 &format!("{target} and {conflict} name one publication target"),
                             )
                             .unwrap_err(),
@@ -420,7 +426,7 @@ impl Application {
         }
         // The selected output set is admitted before any published artifact
         // read: no published artifact or declared input is a written target.
-        for artifact in &locations {
+        for (artifact, (_, artifact_written)) in locations.iter().zip(&outputs) {
             if written
                 .iter()
                 .any(|target| reads.same_location(target, artifact))
@@ -429,10 +435,11 @@ impl Application {
                     ConditionCode::DefineArtifactCollision,
                     standard,
                     "published dataset overlaps Define targets",
-                )]));
+                )
+                .with("path", artifact_written.as_str())]));
             }
         }
-        for (input_path, input) in &inputs {
+        for (input_path, input, input_written) in &inputs {
             if let Some(target) = written
                 .iter()
                 .find(|target| reads.same_location(target, input))
@@ -441,6 +448,7 @@ impl Application {
                     yamaa_core::define_diagnostics::admit_relation(
                         yamaa_core::define_diagnostics::TargetRelation::TransportCollision,
                         input_path,
+                        input_written,
                         &format!("declared input {input} is the written target {target}"),
                     )
                     .unwrap_err(),
@@ -610,11 +618,14 @@ impl Application {
                 let row = guard.input(&recorded, name).map_err(stale)?;
                 let Some((_, origin)) = view.inputs.iter().find(|(declared, _)| *declared == name)
                 else {
-                    return Err(stale(Finding::cause(
-                        ConditionCode::SubmissionMetadataMissing,
-                        &listing,
-                        "input path origin",
-                    )));
+                    return Err(stale(
+                        Finding::cause(
+                            ConditionCode::SubmissionMetadataMissing,
+                            &listing,
+                            "input path origin",
+                        )
+                        .with("field", format!("input.{name}.path")),
+                    ));
                 };
                 let bytes = reads.capture_published(
                     &format!("{listing}.input.{name}.path"),
@@ -663,7 +674,7 @@ impl Application {
         } else if lower.ends_with(".parquet") {
             crate::parquet_source::parse(&bytes)
                 .map(|table| table.row_count())
-                .map_err(|_| published_parquet_failure(written))
+                .map_err(|_| published_parquet_failure(dataset.id(), written))
         } else {
             Err(published_format_failure(written))
         }
@@ -699,7 +710,7 @@ impl Application {
             Ok(Held::Csv(table))
         } else if lower.ends_with(".parquet") {
             let table = crate::parquet_source::parse(&bytes)
-                .map_err(|_| published_parquet_failure(written))?;
+                .map_err(|_| published_parquet_failure(dataset.id(), written))?;
             Limits::table(table.row_count(), table.schema().columns().len())
                 .map_err(|error| published_boundary_failure(error, dataset.id(), written))?;
             Ok(Held::Parquet(table))

@@ -64,6 +64,8 @@ pub mod resolver;
 pub mod scalar;
 pub mod schema;
 pub mod selftest;
+#[cfg(feature = "arrow")]
+pub mod stream;
 pub mod table;
 pub mod text;
 
@@ -98,6 +100,8 @@ pub use resolver::{
 pub use scalar::{Date, DateTime, EncodedScalar, Scalar, ScalarDecodeError, ScalarRef};
 pub use schema::schema;
 pub use selftest::{selftest, SelfTest, SelfTestCase, SELFTEST_COLUMNS};
+#[cfg(feature = "arrow")]
+pub use stream::{Batches, RunGuard, StreamProgress, Streamed};
 #[cfg(feature = "arrow")]
 pub use table::{
     Array, DataType, Date32Array, FFI_ArrowArrayStream, Field, Fields, Float64Array, Int64Array,

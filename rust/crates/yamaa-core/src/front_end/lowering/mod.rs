@@ -339,7 +339,7 @@ impl<'d> Lower<'d> {
             exprs: Vec::new(),
             paths: Paths::new(),
             files: Vec::new(),
-            written: self.written(root, &["parent"]),
+            written: self.written(root, &["parent", "include"]),
             meta,
         }
     }

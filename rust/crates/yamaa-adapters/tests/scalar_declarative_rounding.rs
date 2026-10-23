@@ -2260,11 +2260,24 @@ columns:
                             }
                         }
                     }
-                    Err(issues) => assert_eq!(
-                        issues.iter().map(issue_json).collect::<Vec<_>>(),
-                        value["findings"].as_array().cloned().unwrap_or_default(),
-                        "{name}"
-                    ),
+                    Err(issues) => {
+                        // A finding about the file's text names the file the
+                        // case wrote, which the reference writes as `{entry}`.
+                        let written = fixture.0.join("spec.yaml").to_str().unwrap().to_owned();
+                        let mut findings =
+                            value["findings"].as_array().cloned().unwrap_or_default();
+                        for finding in &mut findings {
+                            if finding["context"]["path"] == "{entry}" {
+                                finding["context"]["path"] =
+                                    yamaa_core::json::Value::String(written.clone());
+                            }
+                        }
+                        assert_eq!(
+                            issues.iter().map(issue_json).collect::<Vec<_>>(),
+                            findings,
+                            "{name}"
+                        )
+                    }
                 }
             }
         }

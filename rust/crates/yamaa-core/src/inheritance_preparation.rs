@@ -347,8 +347,9 @@ pub fn prepare_versioned<R: Resolver>(
         .iter()
         .map(|&node| composed_shorthand[node])
         .collect::<Vec<_>>();
-    // A specification without a `parent` keeps its declaration order, which
-    // must be a dependency order (COLUMN-5, D33).
+    // A specification that names no parent and includes no fragment is one
+    // layer, which keeps its declaration order; that order must be a
+    // dependency order (COLUMN-5, LAYER-13, D33).
     let order = if chain.layers.len() > 1 {
         Order::Dependencies
     } else {

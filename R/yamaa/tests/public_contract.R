@@ -160,7 +160,8 @@ qualify_signatures <- function() {
   stopifnot("read_odm's archive member defaults to NULL" = is.null(options$archive_member),
     "a project run's section defaults to NULL" = is.null(formals(project$run)$section),
     "a submission's section defaults to NULL" = is.null(formals(project$submission)$section),
-    "a submission's creation time defaults to NULL" = is.null(formals(project$submission)$created))
+    "a submission's creation time defaults to NULL" = is.null(formals(project$submission)$created),
+    "a specification's run does not stream by default" = identical(formals(spec$run)$stream, FALSE))
   for (name in names(limits)) {
     expect_identical(options[[name]], as.numeric(limits[[name]]), paste("read_odm's default", name))
   }
@@ -771,7 +772,8 @@ qualify_issue_geometry <- function() {
   on.exit(unlink(root, recursive = TRUE))
   path <- function(name) file.path(root, name)
   # A literal beyond every 64-bit range is refused before study access; the
-  # context text keeps the signed 64-bit bounds and the exact literal.
+  # context text keeps the signed 64-bit bounds and the exact literal, as a
+  # number and as its text.
   writeLines(c('yamaa: "1.0"', "type: spec", "domain: TEST", "keys: [ID]", "input: {SRC: input.csv}",
     "columns:", "  - {name: ID, type: str, derivation: SRC.ID}",
     "  - {name: N, type: int, derivation: 18446744073709551616}",
@@ -781,7 +783,7 @@ qualify_issue_geometry <- function() {
     "operand_route")]),
     list(phase = "validation", condition = "integer_overflow", rule = "VALUE-5",
       spec_paths = list("columns.N.derivation"),
-      context = '{"actual":18446744073709551616,"maximum":9223372036854775807,"minimum":-9223372036854775808}',
+      context = '{"actual":18446744073709551616,"maximum":9223372036854775807,"minimum":-9223372036854775808,"value":"18446744073709551616"}',
       source_span = list(NULL), operand_route = list(NULL)),
     "a literal beyond 64 bits keeps its exact digits and has no geometry")
   # A division by zero fails at one node of the expression: the span

@@ -1580,7 +1580,8 @@
             "rows": [
               "fixed"
             ],
-            "not_row_local": "aggregate"
+            "not_row_local": "aggregate",
+            "identifier": "AVAL"
           }
         }
       ]

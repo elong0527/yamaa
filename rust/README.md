@@ -51,7 +51,7 @@ other configuration.
 | `parquet` | Parquet source and artifact encoding, schema metadata, and Brotli, Gzip, LZ4, Snappy and Zstd codecs. Zstd builds native C through `zstd-sys` and `cc`. |
 | `readstat` | Bundled read-only C backend and direct `cc` build dependency for `.sas7bdat` and `.xpt` input. |
 | `odm` | The `quick-xml` tokenizer and the pure-Rust Gzip codec; reads CDISC ODM 1.3 and 2.0 XML clinical items from plain XML or plain/Gzip TAR files into the fixed clinical-item table, for `read_odm` and for a specification's `.xml` inputs. |
-| `arrow` | Not a format: the Arrow form of tables at the hosts' edge. The facade's re-exported Arrow types, `Table::columns`, `schema`, `batches` and `stream`, and `InputFrame::import`, through `arrow-array` and `arrow-schema`. `parquet` builds the adapter's Arrow code too. |
+| `arrow` | Not a format: the Arrow form of tables at the hosts' edge. The facade's re-exported Arrow types, `Table::columns`, `schema`, `batches` and `stream`, and `InputFrame::import`, plus `Engine::spec_stream` and its streamed-run types, through `arrow-array` and `arrow-schema`. `parquet` builds the adapter's Arrow code too. |
 | No optional features | The CSV route and the engine's own tables remain; a table has its rows and its preview, and `save_table` writes it. No YAML parser, Parquet codec, ODM XML reader, ReadStat, native compression build or Arrow crate is selected. |
 
 The engine's own tables are columnar (`column_table.rs` over `columns.rs`):
@@ -99,7 +99,7 @@ profile when adapting the boundary.
 
 The Python bridge uses Arrow-rs 55.2.0 C Data/Stream callbacks and PyArrow
 >=23.0.1. The R binding instead copies each table into plain R vectors in Rust,
-so no Arrow stream crosses the R boundary. A table builds its Arrow form once,
+while a streamed run exports an Arrow C stream through nanoarrow. A table builds its Arrow form once,
 on first use, from the engine's columns. An exported stream owns a reader with
 an independent cursor and shared immutable references to that form's arrays.
 Each emitted C Data array owns its own buffer references. Dropping the build, stream or exporter cannot

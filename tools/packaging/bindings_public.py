@@ -59,6 +59,7 @@ _PY_ANNOTATION = {
     # A table is the native yamaa.Table that the native call returns.
     "table": "Table",
     "optional_table": "Table | None",
+    "run_output": "Table | None",
     "status": "str",
     "file_type": "str",
     "info": "dict",

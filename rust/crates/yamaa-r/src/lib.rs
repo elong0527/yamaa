@@ -1,6 +1,7 @@
 //! R composition roots and lossless public result conversion.
 use extendr_api::prelude::*;
 mod api_entry;
+mod arrow_stream;
 mod context_values;
 mod function_callback;
 mod handle;

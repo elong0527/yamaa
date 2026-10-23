@@ -1031,7 +1031,7 @@ columns:
                     "condition": "incompatible_input_type",
                     "rule": "FORMULA-5",
                     "spec_paths": ["intermediates.LOOK.filter"],
-                    "context": {"left_type": "int", "right_type": "str"},
+                    "context": {"actual": "str", "left_type": "int", "right_type": "str"},
                 }])
                 .as_array()
                 .unwrap()
@@ -1064,7 +1064,7 @@ columns:
         result.issues().iter().map(issue_json).collect::<Vec<_>>(),
         yamaa_adapters::json!([{
             "phase": "validation", "condition": "incompatible_input_type", "rule": "FORMULA-5",
-            "spec_paths": ["intermediates.LOOK.filter"], "context": {"left_type": "int", "right_type": "str"},
+            "spec_paths": ["intermediates.LOOK.filter"], "context": {"actual": "str", "left_type": "int", "right_type": "str"},
         }]).as_array().unwrap().as_slice()
     );
             assert!(result.output().is_none());
@@ -1130,7 +1130,7 @@ columns:
                     assert!(fixture.check().is_empty(), "check without data: {variant}");
                     continue;
                 }
-                let expected = yamaa_adapters::json!([{"phase":"validation","condition":"incompatible_input_type","rule":"FORMULA-5","spec_paths":["intermediates.LOOK.filter"],"context":{"left_type":"int","right_type":"str"}}]);
+                let expected = yamaa_adapters::json!([{"phase":"validation","condition":"incompatible_input_type","rule":"FORMULA-5","spec_paths":["intermediates.LOOK.filter"],"context":{"actual":"str","left_type":"int","right_type":"str"}}]);
                 assert_eq!(
                     result.issues().iter().map(issue_json).collect::<Vec<_>>(),
                     expected.as_array().unwrap().as_slice(),

@@ -27,6 +27,10 @@ root_class:
         type: path
         required: false
         description: Local specification layer this one inherits from, resolved before validation and execution (LAYER-2).
+    - include:
+        type: "list[project_path]"
+        required: false
+        description: Local specification fragments composed after the parent chain and before this layer's own fields, in list order, each relative to this layer (LAYER-3).
     - clear:
         type: "list[spec_path]"
         required: false

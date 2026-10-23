@@ -61,6 +61,26 @@ fn defer(path: impl Into<String>, code: ConditionCode, reason: impl Into<String>
 fn deferred(diagnostic: Diagnostic) -> Stop {
     DeclarationFinding::Diagnostic(diagnostic).into()
 }
+/// A deferred declaration finding that also names the identifier it is
+/// about, so its condition's message can name it (P-MSG-1).
+fn defer_named(
+    path: impl Into<String>,
+    code: ConditionCode,
+    reason: impl Into<String>,
+    identifier: &str,
+) -> Stop {
+    deferred(Diagnostic {
+        code,
+        spec_paths: vec![path.into()],
+        context: [
+            ("reason".into(), JsonValue::String(reason.into())),
+            ("identifier".into(), JsonValue::String(identifier.into())),
+        ]
+        .into(),
+        source_span: None,
+        operand_route: None,
+    })
+}
 
 /// What a verification predicate reads besides the output columns: a
 /// dataset check also reads the fields of named intermediates, and a
@@ -182,13 +202,14 @@ fn admit_identity(
         ));
     }
     if let Some(previous) = ids.get(&id.text) {
-        return Err(defer(
+        return Err(defer_named(
             path,
             ConditionCode::VerificationIdentifierRepeated,
             format!(
                 "verification id {} repeats {previous}",
                 crate::schema::quoted_diagnostic_text(&id.text)
             ),
+            &id.text,
         ));
     }
     ids.insert(id.text.clone(), path.into());
@@ -255,13 +276,14 @@ fn named_column(
         .iter()
         .position(|column| column.name == named.name)
         .ok_or_else(|| {
-            defer(
+            defer_named(
                 format!("{path}.{field}"),
                 ConditionCode::VerificationDeclaredColumnUnknown,
                 format!(
                     "unknown column {}",
                     crate::schema::quoted_diagnostic_text(&named.name)
                 ),
+                &named.name,
             )
         })
 }

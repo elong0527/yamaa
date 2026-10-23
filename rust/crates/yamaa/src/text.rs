@@ -223,13 +223,14 @@ fn member_lines(members: &[MemberLine]) -> Vec<String> {
         .collect()
 }
 
-/// The size of a run: `<r> rows x <c> columns`, or `no output`.
-pub(crate) fn output_size(output: Option<&Table>) -> String {
+/// The size of a run from its output's rows and columns: `<r> rows x <c>
+/// columns`, or `no output`.
+pub(crate) fn output_size(output: Option<(usize, usize)>) -> String {
     match output {
-        Some(table) => format!(
+        Some((rows, columns)) => format!(
             "{} x {}",
-            count(table.rows(), "row", "rows"),
-            count(table.public().width(), "column", "columns")
+            count(rows, "row", "rows"),
+            count(columns, "column", "columns")
         ),
         None => "no output".to_owned(),
     }
@@ -372,7 +373,10 @@ const ELIDED: &str = "...";
 /// when the table has columns, its name row, its type row and its value rows
 /// ([`Table::preview`]).
 pub(crate) fn preview(table: &Table) -> String {
-    let header = format!("yamaa.Table: {}", output_size(Some(table)));
+    let header = format!(
+        "yamaa.Table: {}",
+        output_size(Some((table.rows(), table.public().width())))
+    );
     let table = table.public();
     if table.width() == 0 {
         return header;

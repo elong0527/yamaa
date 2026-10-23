@@ -171,13 +171,17 @@ impl Temporal {
         }
     }
     /// A field the declared `type` requires but the operation omits, or one
-    /// the declared `type` does not take.
+    /// the declared `type` does not take, which is the identifier written.
     pub(crate) fn type_field_diagnostic(
         required: bool,
         path: &str,
         field: &str,
         target: &str,
     ) -> Diagnostic {
+        let mut context = vec![("field", field), ("type", target)];
+        if !required {
+            context.push(("identifier", field));
+        }
         Diagnostic {
             code: if required {
                 ConditionCode::TemporalFieldRequired
@@ -185,7 +189,7 @@ impl Temporal {
                 ConditionCode::TemporalFieldNotPermitted
             },
             spec_paths: vec![format!("{path}.{field}")],
-            context: [("field", field), ("type", target)]
+            context: context
                 .into_iter()
                 .map(|(key, value)| (key.into(), JsonValue::String(value.into())))
                 .collect(),
