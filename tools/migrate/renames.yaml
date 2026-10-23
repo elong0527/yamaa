@@ -7347,8 +7347,8 @@ entries:
   decision: decided (D210)
   reason: 'An addition to the approved table under D27 (D206, D210). Optional, `error` by default, as on a
     dataset unique (CHECK-2); `warning` is permitted only on an intermediate that declares keep and order_by,
-    and fails as value_not_permitted elsewhere (LOOKUP-17). No 0.5 file declares it, so the converter wrote
-    none.'
+    or nearest (#3693), and fails as value_not_permitted elsewhere (LOOKUP-17). No 0.5 file declares it, so
+    the converter wrote none.'
   field_kind: value
   convert: {action: none}
 - id: new.spec.intermediate.nearest

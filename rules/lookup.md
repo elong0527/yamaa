@@ -265,8 +265,8 @@ handling ([COLUMN-14](columns.md#column-14)).
 The `order_by` terms sort under [VALUE-22](values.md#value-22) and name fields
 of the lookup's relation, in the scopes of [LOOKUP-8](#lookup-8). A lookup
 whose key is verified unique at `error` severity needs neither `order_by` nor
-`keep`, and one whose uniqueness check only warns declares both
-([LOOKUP-17](#lookup-17)). An aggregate reduces its candidates in stored order
+`keep`, and one whose uniqueness check only warns declares both, or
+`nearest` ([LOOKUP-17](#lookup-17)). An aggregate reduces its candidates in stored order
 ([FORMULA-19](formulas.md#formula-19)). A named intermediate may select by
 distance instead, with `nearest` ([LOOKUP-26](#lookup-26)).
 
@@ -357,7 +357,9 @@ Each electrocardiogram reads the subject's sample nearest to it in time. The
 chain of [LOOKUP-15](#lookup-15), a distance derived with `diff` and `ABS`
 and an ordered selection over it, can state the same choice with a tie-break
 of its own. Every column reading the intermediate shares the selection
-([LOOKUP-12](#lookup-12)). Another intermediate's derivation that reads it
+([LOOKUP-12](#lookup-12)), and its `unique` checks may warn, a repeated
+combination reported and every read still taking the nearest candidate
+([LOOKUP-17](#lookup-17)). Another intermediate's derivation that reads it
 runs the selection for its donor record, `to` reading that record as a key
 value does ([LOOKUP-16](#lookup-16)), and a project function argument or an
 aggregate's derivation may read it, as either may read an intermediate that
@@ -1245,20 +1247,20 @@ window ranks the records of each subject and test on it.
 
 <a id="lookup-17"></a>
 
-### LOOKUP-17. An intermediate's unique verification asserts that no donor column combination repeats, warning instead only where keep and order_by choose
+### LOOKUP-17. An intermediate's unique verification asserts that no donor column combination repeats, warning instead only where a selection chooses
 
 An intermediate may declare `verifications:`, a list of `unique` checks, each
 asserting that its non-empty column combination is unique across the
 intermediate's source-only filtered donor records with `derivations:`
 computed. Input-backed checks run before any row is built, and `SELF` checks
 run after each completed template. A repeated combination fails the run,
-except under `severity: warning`, which only an intermediate declaring `keep`
-and `order_by` may declare: the repeated combinations are reported and the
-selection chooses. A lookup whose key is verified unique at `error` needs
-neither `keep` nor `order_by`.
+except under `severity: warning`, which only an intermediate selecting by
+`keep` and `order_by`, or `nearest`, may declare: the repeated combinations
+are reported and the selection chooses. A lookup whose key is verified unique
+at `error` needs no selection.
 
 Fails: `duplicate_intermediate_records`, `unknown_field`, `correlated_filter_with_unique_verification`, `correlated_derivation_with_unique_verification`, `value_not_permitted`.
-Evidence: `schema-lookup-intermediate-unique`, `negative-lookup-duplicate-intermediate`, `schema-lookup-intermediate-unique-warning`, `negative-lookup-unique-warning-unordered`, `rust/crates/yamaa-core/tests/support/diagnostic/front_end.rs`.
+Evidence: `schema-lookup-intermediate-unique`, `negative-lookup-duplicate-intermediate`, `schema-lookup-intermediate-unique-warning`, `negative-lookup-unique-warning-unordered`, `rust/crates/yamaa-core/tests/support/diagnostic/front_end.rs`, `rust/crates/yamaa-adapters/tests/scalar_language.rs::a_warning_unique_beside_a_nearest_selection_reports_and_reads_take_the_nearest`.
 
 ```yaml
 - id: DS_EOS
@@ -1280,13 +1282,13 @@ multiple surviving matches without a selection rule.
 
 `severity` is `error` or `warning`, defaulting to `error`, as for a column or
 dataset verification ([CHECK-2](verification.md#check-2)). On an intermediate
-that does not declare both `keep` and `order_by`, `severity: warning` fails
-validation before any input is read, as `value_not_permitted` at the check's
+that declares neither `keep` with `order_by` nor `nearest`, `severity: warning`
+fails validation before any input is read, as `value_not_permitted` at the check's
 `severity`, with context `intermediate` (its id), `value` (`warning`) and
 `permitted` (`[error]`). A violated `warning` check fails nothing and changes
 no donor record. The run continues as [CHECK-2](verification.md#check-2)
 describes, and every read of the intermediate selects one candidate by its
-`keep` and `order_by` ([LOOKUP-10](#lookup-10)).
+selection ([LOOKUP-10](#lookup-10), [LOOKUP-26](#lookup-26)).
 
 ```yaml
 - id: LAST_EX

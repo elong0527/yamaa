@@ -185,10 +185,11 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             ("class", C::Text("intermediate_class".into())),
         ],
     );
-    // An intermediate's `unique` warns only where `keep` and `order_by`
-    // choose the record every read takes (LOOKUP-17, D210): one without
-    // either, with `keep` alone or with an `order_by` of no term fails at its
-    // `severity`, and one beside both, or at `error`, does not.
+    // An intermediate's `unique` warns only where a selection chooses the
+    // record every read takes (LOOKUP-17, D210): one without either, with
+    // `keep` alone or with an `order_by` of no term fails at its `severity`,
+    // and one beside both, beside `nearest` (LOOKUP-26), or at `error`, does
+    // not.
     let checked = |selection: Vec<(&str, T)>, severity: &str| {
         let mut fields = vec![
             ("id", T::text("LAST")),
@@ -233,8 +234,19 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             ],
         );
     }
+    let nearest = || {
+        (
+            "nearest",
+            T::map(vec![
+                ("source", T::text("DAY")),
+                ("to", T::text("ID")),
+                ("unit", T::text("day")),
+            ]),
+        )
+    };
     for (selection, severity) in [
         (vec![order(), ("keep", T::text("last"))], "warning"),
+        (vec![nearest()], "warning"),
         (Vec::new(), "error"),
     ] {
         let lowered = front_end::lower(&checked(selection, severity), None);

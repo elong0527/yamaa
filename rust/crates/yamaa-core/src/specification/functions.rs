@@ -633,7 +633,7 @@ pub(super) fn donor_keep_findings(
                     ("intermediate".into(), text(intermediate)),
                     (
                         "reason".into(),
-                        text("a donor function argument reads only keep-declared named intermediates"),
+                        text("a donor function argument reads only named intermediates that declare a selection (keep or nearest)"),
                     ),
                 ]
                 .into(),
