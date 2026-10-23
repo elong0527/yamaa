@@ -12,9 +12,10 @@ also writes [manifest.txt](manifest.txt), the normalized inventory of the
 frozen sections. `make check-repository` and the `native-rust` job of the
 native qualification lane compare the generated files with this definition
 ([#2693](https://github.com/elong0527/yamaa/issues/2693)). Both hosts run
-the version and feature handshake below before any other native call, and both
-installed suites test it
-([#2692](https://github.com/elong0527/yamaa/issues/2692)). An engine that loads separately from the host packages, behind a C
+the version and feature handshake below before any other native call, and the
+boundary compatibility and lifetime tests of
+[#2692](https://github.com/elong0527/yamaa/issues/2692) run in both installed
+suites. An engine that loads separately from the host packages, behind a C
 ABI, is later work of [#2870](https://github.com/elong0527/yamaa/issues/2870).
 
 ## Boundary choice and source ownership
@@ -209,7 +210,8 @@ declares as a property.
 
 The `python` and `r` sections inventory the complete current registration lists,
 including class methods, the private qualification accessor `observations`, the
-one native exception, version metadata, the ODM reader and the handshake. The `python` section
+one native exception, version metadata, the ODM reader, the handshake and the
+private census of live handles. The `python` section
 holds only `module`, `registration` and `exports`, and the generator refuses any
 other key. There is no issue-record declaration: the Rust facade builds the
 twelve-column issues table of #3030 D28 once, and every issues view crosses the
@@ -217,7 +219,8 @@ boundary as a table like any output or report. Python returns it as the
 native `Table`, and the R binding converts it natively into a data.frame.
 `context_object` is the owned tree `spec_resolve` returns, a `dict[str, object]`
 of text, booleans, exact integers, floats, `None`, lists and nested objects.
-`handshake_record` is the handshake's accepted record or refusal envelope.
+`handshake_record` is the handshake's accepted record or refusal envelope, and
+`handle_census` the live native handles by kind.
 `r_reply` describes the existing `{value, error}` list, whose error carries a
 message and the issues table. The definition does not treat a Rust `Result`,
 `Vec`, `String`, enum or trait as a C-layout type.
@@ -357,7 +360,14 @@ extendr's own routines that describe each module and write its R wrappers,
 are exempt. The generator checks that every registered native function
 reaches the gate, so a new export cannot skip it.
 
-The `handshake` section and its two errors stay outside the frozen manifest. The boundary version and the identifiers are internal: any release
+Each binding counts its live native handles by kind (`check`, `run`,
+`project_run`, `submission`, `selftest`, `plans` and `table`, which only
+Python hands out) in a census that the private accessors
+`_native._live_handles()` and `.native_live_handles()` read for the handle
+lifetime suites.
+
+The `handshake` section, its two errors and the census stay outside the frozen
+manifest. The boundary version and the identifiers are internal: any release
 may change them with a new boundary version, which a change that an older side
 would misread needs, while an additive operation can take a new optional
 identifier, and an identifier is never reused with another meaning. The
@@ -535,13 +545,16 @@ adapters rather than promise zero copies for those conversions.
 
 Generation compares this definition with both actual registration surfaces.
 The installed interface suites of both hosts test every row of the outcome
-table, the check order and the gate, and the Rust handshake family of
-`yamaa-boundary` tests the negotiation. The Arrow pointer, release,
-early-release, failed-conversion and repeated-import/export controls of
-[#2646](https://github.com/elong0527/yamaa/pull/2646) and the
-interrupt-identity controls of both hosts cover the ownership rules above. A
-separately loaded engine behind a C ABI
-([#2870](https://github.com/elong0527/yamaa/issues/2870)) adds its own loading
-and lifetime tests. Diagnostic full-registry and cross-host payload parity
-remain owned by [#2677](https://github.com/elong0527/yamaa/issues/2677). No test
-may derive benchmark expected values from the implementation.
+table, the check order and the gate, the Rust handshake family of
+`yamaa-boundary` tests the negotiation, and the handle lifetime suites test
+that dropping a result releases its handle, that an exported table outlives
+its result, and that a refused conversion or a cancelled run or save leaves no
+handle. They reuse the existing Arrow pointer, release, early-release,
+failed-conversion and repeated-import/export controls of
+[#2646](https://github.com/elong0527/yamaa/pull/2646), which gain the census,
+and the interrupt-identity controls of both hosts. A separately loaded engine
+behind a C ABI ([#2870](https://github.com/elong0527/yamaa/issues/2870)) adds
+its own loading and lifetime tests. Diagnostic full-registry and cross-host
+payload parity remain owned by
+[#2677](https://github.com/elong0527/yamaa/issues/2677). No test may derive
+benchmark expected values from the implementation.

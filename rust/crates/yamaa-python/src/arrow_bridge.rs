@@ -15,6 +15,7 @@ use yamaa::{
     Array, DataType, Date32Array, Float64Array, Int64Array, LargeStringArray, ListArray,
     StringArray, StringViewArray, TimeUnit, TimestampSecondArray,
 };
+use yamaa_boundary::{HandleKind, Live};
 
 /// A table that yamaa returned: immutable columns of str, int, float, date,
 /// datetime or list values, any of which may be missing.
@@ -28,12 +29,14 @@ use yamaa::{
 #[pyclass(frozen, module = "yamaa", name = "Table")]
 pub struct Table {
     table: yamaa::Table,
+    _live: Live,
 }
 
 impl From<&yamaa::Table> for Table {
     fn from(table: &yamaa::Table) -> Self {
         Self {
             table: table.clone(),
+            _live: crate::interface::CENSUS.hold(HandleKind::Table),
         }
     }
 }

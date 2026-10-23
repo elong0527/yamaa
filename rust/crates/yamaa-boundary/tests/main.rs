@@ -6,6 +6,7 @@
 
 mod support;
 
+mod census;
 mod handshake;
 
 /// A file under `tests/` that is neither a module here nor its own `[[test]]`

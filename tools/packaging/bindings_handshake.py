@@ -38,6 +38,7 @@ _KEYS = {
     "r",
     "python_error",
     "r_error",
+    "census",
     "required_features",
     "optional_features",
     "messages",
@@ -102,11 +103,13 @@ def validate(definition):
         for group in definition["r"]["groups"]
         for function in group["functions"]
     }
+    census = handshake["census"]
+    if not isinstance(census, dict) or set(census) != {"python", "r"}:
+        raise ValueError("the handshake census must name a python and an r export")
     for host, exports in (("python", python), ("r", r)):
-        if handshake[host] not in exports:
-            raise ValueError(
-                f"the handshake names {handshake[host]}, no {host} function"
-            )
+        for name in (handshake[host], census[host]):
+            if name not in exports:
+                raise ValueError(f"the handshake names {name}, no {host} function")
     if not re.fullmatch(r"[A-Z][A-Za-z]*Error", str(handshake["python_error"])):
         raise ValueError("the handshake's python_error must be a Python error class")
     if not _IDENTIFIER.fullmatch(str(handshake["r_error"])):

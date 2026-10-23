@@ -4,9 +4,10 @@
 use pyo3::{exceptions::PyException, prelude::*, types::PyDict};
 use std::sync::{Arc, Mutex};
 use yamaa::{Action, Engine, EngineOptions, Error, Failure, HostLanguage};
+use yamaa_boundary::{HandleKind, Live};
 
 use crate::arrow_bridge::Table;
-use crate::interface::gate;
+use crate::interface::{gate, CENSUS};
 
 pyo3::create_exception!(yamaa, _Error, PyException);
 
@@ -47,12 +48,14 @@ fn poisoned() -> PyErr {
 #[pyclass(frozen, module = "yamaa._native", name = "_Run")]
 pub struct Run {
     pub(crate) inner: Arc<Mutex<yamaa::Run>>,
+    _live: Live,
 }
 
 impl Run {
     pub(crate) fn new(run: yamaa::Run) -> Self {
         Self {
             inner: Arc::new(Mutex::new(run)),
+            _live: CENSUS.hold(HandleKind::Run),
         }
     }
 }
@@ -104,12 +107,14 @@ fn check_poisoned() -> PyErr {
 #[pyclass(frozen, module = "yamaa._native", name = "_Check")]
 pub struct Check {
     inner: Mutex<yamaa::Check>,
+    _live: Live,
 }
 
 impl Check {
     fn new(check: yamaa::Check) -> Self {
         Self {
             inner: Mutex::new(check),
+            _live: CENSUS.hold(HandleKind::Check),
         }
     }
 }
@@ -162,6 +167,7 @@ pub fn _project_summary(project: &str) -> PyResult<String> {
 #[pyclass(frozen, module = "yamaa._native", name = "_Plans")]
 pub struct Plans {
     inner: yamaa::Plans,
+    _live: Live,
 }
 
 /// An empty holder for one lazy object. Creating it reads nothing.
@@ -170,6 +176,7 @@ pub fn _plans() -> PyResult<Plans> {
     gate()?;
     Ok(Plans {
         inner: yamaa::Plans::new(),
+        _live: CENSUS.hold(HandleKind::Plans),
     })
 }
 
@@ -256,6 +263,7 @@ pub fn _schema(py: Python<'_>, file_type: &str) -> PyResult<String> {
 #[pyclass(frozen, module = "yamaa._native", name = "_SelfTest")]
 pub struct SelfTest {
     inner: yamaa::SelfTest,
+    _live: Live,
 }
 
 #[pymethods]
@@ -319,6 +327,7 @@ pub fn _selftest(py: Python<'_>) -> PyResult<SelfTest> {
     gate()?;
     Ok(SelfTest {
         inner: yamaa::selftest(yamaa::Host::Python, Some(&python_version(py))),
+        _live: CENSUS.hold(HandleKind::SelfTest),
     })
 }
 
@@ -329,6 +338,7 @@ fn project_poisoned() -> PyErr {
 #[pyclass(frozen, module = "yamaa._native", name = "_ProjectRun")]
 pub struct ProjectRun {
     inner: Arc<Mutex<yamaa::ProjectRun>>,
+    _live: Live,
 }
 
 #[pymethods]
@@ -398,6 +408,7 @@ impl ProjectRun {
 #[pyclass(frozen, module = "yamaa._native", name = "_Submission")]
 pub struct Submission {
     inner: Arc<Mutex<yamaa::Submission>>,
+    _live: Live,
 }
 
 #[pymethods]
@@ -475,6 +486,7 @@ pub fn _project_run(
         .map_err(|error| raise_error(py, Action::Select(section.unwrap_or_default()), error))?;
         Ok(ProjectRun {
             inner: Arc::new(Mutex::new(runs)),
+            _live: CENSUS.hold(HandleKind::ProjectRun),
         })
     })
 }
@@ -494,6 +506,7 @@ pub fn _project_submission(
             .map_err(|error| raise_error(py, Action::Select(section.unwrap_or_default()), error))?;
         Ok(Submission {
             inner: Arc::new(Mutex::new(submission)),
+            _live: CENSUS.hold(HandleKind::Submission),
         })
     })
 }

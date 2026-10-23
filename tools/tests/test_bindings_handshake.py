@@ -65,6 +65,11 @@ class HandshakeTests(unittest.TestCase):
             ("boundary.version", section(lambda h: h.update(version="records.x"))),
             ("no python function", section(lambda h: h.update(python="_absent"))),
             ("no r function", section(lambda h: h.update(r="absent"))),
+            ("census must name", section(lambda h: h["census"].pop("r"))),
+            (
+                "_absent, no python",
+                section(lambda h: h["census"].update(python="_absent")),
+            ),
             ("python_error", section(lambda h: h.update(python_error="Interface"))),
             ("no identifier", section(lambda h: h["required_features"].append("x"))),
             (

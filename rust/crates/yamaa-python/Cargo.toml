@@ -23,7 +23,7 @@ extension-module = ["pyo3/extension-module"]
 
 [dependencies]
 yamaa = { path = "../yamaa" }
-# The interface handshake and the gate.
+# The interface handshake, the gate and the handle census.
 yamaa-boundary = { path = "../yamaa-boundary" }
 # PyO3 0.28 needs Rust 1.83; the workspace builds from 1.82.
 pyo3 = { version = ">=0.27.2, <0.28", features = ["abi3-py312"] }
