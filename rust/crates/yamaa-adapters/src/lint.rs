@@ -9,8 +9,9 @@
 //! its file type's schema, as validation reads it. A 1.x specification that
 //! declares `parent` or `include` is compared with the layers it inherits,
 //! read through the same resolver, for `partial_restatement` alone. A
-//! specification that declares either, or that another file of the call
-//! includes, is a layer: a value it writes may replace one it inherits.
+//! specification that declares either, or that a specification of the call
+//! includes, itself or through the parent chain it inherits, is a layer: a
+//! value it writes may replace one it inherits.
 //!
 //! [`lint`] returns each file's findings in file order, then by line, column
 //! and finding. With `fix`, a file is rewritten only when the edited text

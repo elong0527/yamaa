@@ -260,9 +260,10 @@ fails, such as `unmapped`, declares an answer when it is `null`, a flag's
 ([LOOKUP-24](../../rules/lookup.md#lookup-24)); none is reported. A layer is
 not read for restated defaults, since a value it writes may replace one it
 inherits. A layer is a file that declares `parent` or `include`, or a fragment
-that another file of the same check includes, which composes on whatever
-includes it. Check a fragment together with the files that include it, so
-that `fix` keeps the values it writes.
+that a checked specification includes, itself or through the parent chain it
+inherits, since a fragment composes on whatever includes it. Check a fragment
+together with the specifications that use it, so that `fix` keeps the values
+it writes.
 
 **`clear:` removes an inherited value.** A layer that removes a value it
 inherits lists its spec path in `clear`; null never clears
@@ -372,8 +373,8 @@ the implicit join then uses it.
 **`missing_label`.** Every output column declares `label:`. A column named in
 `output.columns` and declared in the same file without a non-empty `label` is
 reported at its `columns` entry. A column not declared in the same file, and
-any layer, a file with a `parent` or an `include` or a fragment another file
-of the check includes, is never reported: the label may come from an
+any layer, a file with a `parent` or an `include` or a fragment a checked
+specification includes, is never reported: the label may come from an
 inherited layer. Labels carry the reader-facing description a submission
 document is generated from.
 
@@ -386,7 +387,7 @@ the input reads its records by its own `key`, and when every row is built from
 the input, each qualified read of it reads the driver. Validation admits such a
 key, so a shared parent layer may declare it for the layers that inherit it and
 suppress the finding there; a layer, a file that declares `parent` or
-`include` or a fragment another file of the check includes, is not read, since
+`include` or a fragment a checked specification includes, is not read, since
 its columns may come from the layers it composes on.
 
 ```yaml

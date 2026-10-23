@@ -69,8 +69,8 @@ fn join(lines: &[String], newline: &str) -> String {
     text
 }
 
-/// Apply every proved fix to `text`, a fragment another linted file includes
-/// when `included`. A result that a second pass would change again, or a 1.x
+/// Apply every proved fix to `text`, a fragment that a linted specification
+/// or a layer it inherits includes when `included`. A result that a second pass would change again, or a 1.x
 /// file whose result gives a validation finding the file as written did not,
 /// is refused, leaving `text` as written.
 pub(super) fn fix_text(text: &str, included: bool) -> String {

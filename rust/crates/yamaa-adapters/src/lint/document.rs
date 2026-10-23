@@ -87,9 +87,9 @@ pub(super) struct Document {
     /// The values document admission decoded, which the schema findings
     /// read; none for the directory scan's structure alone.
     pub decoded: Option<DecodedYaml>,
-    /// Another specification of the same lint call names this file in
-    /// `include`: it is a fragment, which composes on the layers before it
-    /// (LAYER-3).
+    /// A specification of the same lint call, or a layer of the parent chain
+    /// it inherits, names this file in `include`: it is a fragment, which
+    /// composes on the layers before it (LAYER-3).
     pub included: bool,
 }
 
@@ -427,8 +427,8 @@ impl Document {
 
     /// Whether the file is a layer that composes on others, so a value it
     /// writes may replace one it inherits: it declares `parent` or `include`,
-    /// or another file of the call includes it (LAYER-3). A null `parent`
-    /// names no parent.
+    /// or a specification of the call includes it, itself or through a parent
+    /// layer (LAYER-3). A null `parent` names no parent.
     pub(super) fn layered(&self) -> bool {
         use yamaa_core::schema::DocumentNode as N;
         let declares = |field| match &self.decoded {

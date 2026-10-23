@@ -5,6 +5,7 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use yamaa_core::language::FileType;
+use yamaa_core::limits::Limits;
 
 use super::checks::{check, sort, suppressed};
 use super::document::{Document, Value};
@@ -14,7 +15,7 @@ use crate::yaml_decode::DecodeFailure;
 /// The findings that remain in `text` once suppressions apply, one-based.
 /// With `file`, the path `text` was read from, a specification is also
 /// compared with the layers it inherits. `included` reads `text` as a
-/// fragment another linted file includes.
+/// fragment that a linted specification, or a layer it inherits, includes.
 pub(super) fn findings(
     text: &[u8],
     file: Option<&Path>,
@@ -112,34 +113,60 @@ fn canonical(path: &Path) -> Option<PathBuf> {
     crate::canonical_path::canonicalize(path).ok()
 }
 
-/// The files the call's 1.x specifications name in `include`, each resolved
-/// from the file that lists it: the fragments, read as layers that compose on
-/// whatever includes them (LAYER-3).
+/// The fragments the call's 1.x specifications compose: the files that each
+/// specification, or any layer of the parent chain it inherits, names in
+/// `include`, each resolved from the layer that lists it. They are read as
+/// layers that compose on whatever includes them (LAYER-3). The chain is
+/// followed through files the call may not name, as composition follows it,
+/// up to the link limit, and stops at a layer that cannot be read; the layers
+/// it reads are only scanned for `parent` and `include`.
 fn fragments(sources: &[(File, Document)]) -> BTreeSet<PathBuf> {
-    use yamaa_core::schema::DocumentNode as N;
+    use yamaa_core::schema::{Document as Values, DocumentNode as N};
+    let text = |values: &Values, node: usize| match &values.nodes()[node] {
+        N::Text(text) => Some(text.clone()),
+        _ => None,
+    };
     let mut fragments = BTreeSet::new();
     for (file, document) in sources {
         let Some(values) = document
             .decoded
             .as_ref()
-            .map(|decoded| &decoded.document)
-            .filter(|values| yamaa_core::language::declares_header(values))
+            .map(|decoded| decoded.document.clone())
+            .filter(yamaa_core::language::declares_header)
         else {
             continue;
         };
-        let Some(N::Sequence(entries)) = values
-            .field(values.root(), "include")
-            .map(|list| &values.nodes()[list])
-        else {
-            continue;
-        };
-        let Some(directory) = file.path.parent() else {
-            continue;
-        };
-        for &entry in entries {
-            if let N::Text(written) = &values.nodes()[entry] {
-                fragments.extend(canonical(&directory.join(written)));
+        let (mut layer, mut values) = (file.path.clone(), values);
+        let mut chain = BTreeSet::new();
+        while let Some(directory) = layer.parent().map(Path::to_path_buf) {
+            let root = values.root();
+            if let Some(N::Sequence(entries)) = values
+                .field(root, "include")
+                .map(|list| &values.nodes()[list])
+            {
+                for &entry in entries {
+                    if let Some(written) = text(&values, entry) {
+                        fragments.extend(canonical(&directory.join(written)));
+                    }
+                }
             }
+            let Some(parent) = values
+                .field(root, "parent")
+                .and_then(|node| text(&values, node))
+                .and_then(|written| canonical(&directory.join(written)))
+            else {
+                break;
+            };
+            if !chain.insert(parent.clone()) || chain.len() > Limits::PARENT_OCCURRENCES {
+                break;
+            }
+            let Some(decoded) = std::fs::read(&parent)
+                .ok()
+                .and_then(|bytes| crate::yaml_decode::decode_yaml(&bytes).ok())
+            else {
+                break;
+            };
+            (layer, values) = (parent, decoded.document);
         }
     }
     fragments

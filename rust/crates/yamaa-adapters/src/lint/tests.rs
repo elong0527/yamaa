@@ -2380,9 +2380,10 @@ mod files {
     #[test]
     fn a_fragment_linted_with_a_file_that_includes_it_is_a_layer() {
         // A fragment's value may replace one of the layers it composes on, so
-        // a call that also lints a file including it reads the fragment as a
-        // layer: its restated default is not reported and no fix removes it
-        // (LAYER-3). Linted alone, the same file is read as standalone.
+        // a call that also lints a specification whose composition includes
+        // it reads the fragment as a layer: its restated default is not
+        // reported and no fix removes it (LAYER-3). Linted alone, the same
+        // file is read as standalone.
         let directory = Directory::new("fragments");
         let fragment_text = "yamaa: \"1.0\"\ntype: spec\ninput:\n  AE: {path: ae.csv, \
                              types: {AESEQ: int}, empty_string: missing}\n";
@@ -2410,6 +2411,26 @@ mod files {
                 (display(&directory.0.join("adae.yaml")), 0, false),
                 (display(&fragment), 0, false),
             ]
+        );
+        assert_eq!(std::fs::read_to_string(&fragment).unwrap(), fragment_text);
+        // A fragment that the parent of a linted specification includes is a
+        // layer too, though the call names neither the parent nor any other
+        // file that includes it: the parent chain is followed.
+        directory.write(
+            "templates/template.yaml",
+            "yamaa: \"1.0\"\ntype: spec\ninclude: [../shared/fragment.yaml]\n",
+        );
+        let entry = directory.write(
+            "adcm.yaml",
+            "yamaa: \"1.0\"\ntype: spec\nparent: templates/template.yaml\n",
+        );
+        let through = lint(&[text(&entry), text(&fragment)], true).unwrap();
+        assert_eq!(
+            through
+                .iter()
+                .map(|file| (file.file.clone(), file.findings.len(), file.fixed))
+                .collect::<Vec<_>>(),
+            [(display(&entry), 0, false), (display(&fragment), 0, false)]
         );
         assert_eq!(std::fs::read_to_string(&fragment).unwrap(), fragment_text);
     }
