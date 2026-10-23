@@ -10,9 +10,8 @@
 # Each case names the context it is written in. A context decides the root
 # and the constructs and functions a text may use, so the same text can be
 # admitted in one context and refused in another. Text in an expression field
-# is read in the `derivation` context. The `compute` context reads the
-# numeric formula of a file that declares `schema_version`, until Phase 2 of
-# #3030 removes it.
+# is read in the `derivation` context. The `compute` context, the numeric part
+# of `derivation`, is read in no field; the typed core replays its cases.
 #
 # `grammar/README.md` states the file format and the shape notation.
 schema_version: "1.0"

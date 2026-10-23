@@ -209,8 +209,7 @@ rule, grammar, or fixture:
   path-policy tests may exercise parent-directory segments and temporary
   absolute local paths as positive cases. URI schemes, symbolic links,
   non-regular resources and missing files remain negative cases. A
-  project file, like the retired `yamaa-project.yaml`, does not change
-  document resource locations.
+  project file does not change document resource locations.
 - Write every fixture under the source profile its extension selects. CSV
   fixtures follow the [CSV profile](../rules/reference/csv.md): UTF-8, with a
   byte-order mark only where the input declares one, comma-separated
