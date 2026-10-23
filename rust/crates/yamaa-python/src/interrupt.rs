@@ -70,6 +70,9 @@ pub(super) fn run<T>(_py: Python<'_>, run: impl FnOnce(&State) -> PyResult<T>) -
         _thread: std::marker::PhantomData,
     };
     let result = run(&state);
+    // Streamed accessors do not pass through the engine's cancellable call
+    // wrapper. Also deliver a signal first observed as any native call returns.
+    let _ = cancelled(&state);
     let error = state.lock().unwrap_or_else(PoisonError::into_inner).take();
     match error {
         Some(error) => Err(error),
