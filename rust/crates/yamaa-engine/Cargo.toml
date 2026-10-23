@@ -43,19 +43,24 @@ path = "tests/main.rs"
 # The loading tests' fixture engines (tests/abi_loading.rs), each a library
 # that cargo test builds beside the test binary: an engine of the next
 # boundary version, a library without the negotiation entry, and engines
-# without plan_reuse and without format_parquet.
+# without plan_reuse and without format_parquet. Each names its path, so the
+# source bundles, which stage no examples, still read this manifest.
 [[example]]
 name = "fixture_next_version"
+path = "examples/fixture_next_version.rs"
 crate-type = ["cdylib"]
 
 [[example]]
 name = "fixture_no_entry"
+path = "examples/fixture_no_entry.rs"
 crate-type = ["cdylib"]
 
 [[example]]
 name = "fixture_no_plan_reuse"
+path = "examples/fixture_no_plan_reuse.rs"
 crate-type = ["cdylib"]
 
 [[example]]
 name = "fixture_no_format_parquet"
+path = "examples/fixture_no_format_parquet.rs"
 crate-type = ["cdylib"]
