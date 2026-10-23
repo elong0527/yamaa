@@ -963,6 +963,15 @@ impl Engine {
         self.handle(handle)
     }
 
+    /// The release's complete condition catalogue, including retired entries.
+    pub fn conditions(self) -> Result<Owned, Refused> {
+        // SAFETY: the destinations are fresh and valid for the call.
+        let handle = answer(self, |out, refusal| unsafe {
+            (self.0.conditions)(out, refusal)
+        });
+        self.handle(handle)
+    }
+
     /// Give a handle back; a released handle, or 0, does nothing.
     pub fn release(self, handle: Handle) {
         // SAFETY: any handle may be given back.

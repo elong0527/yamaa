@@ -42,10 +42,11 @@ The modules they include, directly or through another module:
 | [`schema_terminology.yaml`](../../yaml/schema_terminology.yaml) | Codelist sources, codelists and their items | `schema_project.yaml`, `schema_codelists.yaml` |
 
 `yaml/` also holds [`conditions.yaml`](../../yaml/conditions.yaml), which
-registers every condition an implementation may raise with the phases that
-may raise it, the closed grammars in [`grammar/`](../../yaml/grammar/README.md)
-and the closed CDISC vocabularies in
-[`vocabulary/cdisc.yaml`](../../yaml/vocabulary/cdisc.yaml).
+records every registered condition's phases, message template and former
+name, and every condition a release retired: the catalogue that
+`conditions()` returns. It also holds the closed grammars in
+[`grammar/`](../../yaml/grammar/README.md) and the closed CDISC vocabularies
+in [`vocabulary/cdisc.yaml`](../../yaml/vocabulary/cdisc.yaml).
 
 ## Reading a schema file
 

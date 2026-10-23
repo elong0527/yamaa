@@ -742,6 +742,8 @@ pub struct Engine {
     pub spec_stream: OnRun,
     /// Whether a run or table holds a streamed run's output (1 or 0).
     pub is_stream: OnHandle<u32>,
+    /// The release's condition catalogue as a table handle.
+    pub conditions: unsafe extern "C" fn(out: *mut Handle, refusal: *mut Refusal) -> Status,
 }
 
 /// The Arrow C data interface's schema.

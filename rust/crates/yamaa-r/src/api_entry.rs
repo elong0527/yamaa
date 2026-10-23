@@ -429,6 +429,13 @@ fn schema(file_type: Raw) -> List {
     reply(|engine| Ok(r!(engine.schema(&text(&file_type)?)?)))
 }
 
+/// The condition catalogue (#3700) as a data frame: every condition the
+/// engine may report, and every condition a release retired.
+#[extendr]
+fn conditions() -> List {
+    reply(|engine| table(Some(engine.conditions()?)))
+}
+
 #[extendr]
 fn run_status(handle: Robj) -> List {
     reply(|engine| Ok(r!(engine.status(run_of(&handle)?, None)?)))

@@ -55,11 +55,12 @@ thread_local! {
 }
 
 /// The probe of a streamed run (#3697), which outlives its initial call.
-/// On the R thread it polls as the native call that is running
-/// does, keeping the interrupt for that call to signal again; with no native
+/// The caller must be on the R thread that started the run. On that thread,
+/// it polls as the active native call does, keeping the interrupt for that
+/// call to signal again; with no native
 /// call running, as when another package pulls the run's Arrow stream, it
 /// checks for an interrupt itself, at most every 20 ms, and the interrupt
-/// ends the stream as cancelled. On any other thread it never touches R.
+/// ends the stream as cancelled. `Host::cancelled` enforces this precondition.
 pub(super) fn stream_cancelled() -> bool {
     if let Some(state) = ACTIVE.with(|active| active.borrow().clone()) {
         return poll_state(&state, false);
@@ -73,8 +74,9 @@ pub(super) fn stream_cancelled() -> bool {
     }
     STREAM_CHECKED.with(|checked| checked.set(Some(Instant::now())));
     let classes = Strings::from_values(["interrupt", "error"]);
-    // SAFETY: this runs on the R thread that started the run, checked
-    // above. `classes` stays protected for the call. The body owns no
+    // SAFETY: `Host::cancelled` checks that this runs on the R thread that
+    // started the run before calling this function. `classes` stays protected
+    // for the call. The body owns no
     // Rust values, and R_tryCatch catches its interrupt or error jump
     // before returning; the condition it returns is compared with NULL
     // and dropped, with no R allocation in between.

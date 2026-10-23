@@ -292,6 +292,13 @@ pub fn _schema(py: Python<'_>, file_type: &str) -> PyResult<String> {
     plain(py, |engine, _| engine.schema(file_type))
 }
 
+/// The condition catalogue (#3700): every condition the engine may report,
+/// and every condition a release retired, as a table.
+#[pyfunction]
+pub fn _conditions(py: Python<'_>) -> PyResult<Table> {
+    plain(py, |engine, _| engine.conditions()).map(Table::new)
+}
+
 /// The installation self-test (#3030 D28, D119): the engine's result, whose
 /// status, cases, engine information and printed report the public class
 /// returns as they are.
