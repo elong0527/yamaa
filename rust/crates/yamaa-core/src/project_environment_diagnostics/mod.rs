@@ -207,6 +207,7 @@ pub fn invalid_packaging_lock(host: Language, project: &str, written: &str) -> D
             ("path".into(), text(written)),
             ("environment_path".into(), text(field)),
             ("cause".into(), text("invalid_packaging_lock")),
+            ("reason".into(), text("invalid_packaging_lock")),
         ]
         .into(),
         source_span: None,
@@ -354,14 +355,17 @@ fn terminology_diagnostic<'a, B: Project<'a>>(
     project.index(&mut d, finding.codelist)?;
     project.context(&mut d, "codelist", &list.id.name)?;
     match finding.fault {
+        // The repeated identifier: the codelist's id, or its name (CT-1).
         Fault::DuplicateId => {
             project.append(&mut d, ".id")?;
             project.context(&mut d, "field", "id")?;
+            project.context(&mut d, "identifier", &list.id.name)?;
         }
         Fault::DuplicateName => {
             project.append(&mut d, ".name")?;
             project.context(&mut d, "field", "name")?;
             project.context(&mut d, "name", &list.name.text)?;
+            project.context(&mut d, "identifier", &list.name.text)?;
         }
         // A text codelist's format name without `$`, or a numeric one's with it.
         Fault::FormatNamePrefix => {

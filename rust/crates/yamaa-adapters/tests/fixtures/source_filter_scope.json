@@ -22,7 +22,8 @@
             "columns.VALUE.derivation.case[0].then.source.filter"
           ],
           "context": {
-            "identifier": "SRC.ID"
+            "identifier": "SRC.ID",
+            "construct": "filter"
           }
         }
       ],
@@ -35,7 +36,8 @@
             "columns.VALUE.derivation.case[0].then.source.filter"
           ],
           "context": {
-            "identifier": "SRC.ID"
+            "identifier": "SRC.ID",
+            "construct": "filter"
           }
         }
       ],
@@ -58,7 +60,8 @@
             "columns.VALUE.derivation.first_available.sources[0].filter"
           ],
           "context": {
-            "identifier": "SRC.ID"
+            "identifier": "SRC.ID",
+            "construct": "filter"
           }
         }
       ],
@@ -71,7 +74,8 @@
             "columns.VALUE.derivation.first_available.sources[0].filter"
           ],
           "context": {
-            "identifier": "SRC.ID"
+            "identifier": "SRC.ID",
+            "construct": "filter"
           }
         }
       ],
@@ -94,7 +98,8 @@
             "rows.grouped.derivations.VALUE.case[0].then.source.filter"
           ],
           "context": {
-            "identifier": "SRC.ID"
+            "identifier": "SRC.ID",
+            "construct": "filter"
           }
         }
       ],
@@ -107,7 +112,8 @@
             "rows.grouped.derivations.VALUE.case[0].then.source.filter"
           ],
           "context": {
-            "identifier": "SRC.ID"
+            "identifier": "SRC.ID",
+            "construct": "filter"
           }
         }
       ],
@@ -130,7 +136,8 @@
             "columns.VALUE.derivation.source.filter"
           ],
           "context": {
-            "identifier": "SRC.ID"
+            "identifier": "SRC.ID",
+            "construct": "filter"
           }
         }
       ],
@@ -143,7 +150,8 @@
             "columns.VALUE.derivation.source.filter"
           ],
           "context": {
-            "identifier": "SRC.ID"
+            "identifier": "SRC.ID",
+            "construct": "filter"
           }
         }
       ],
@@ -166,7 +174,8 @@
             "columns.VALUE.derivation.source.filter"
           ],
           "context": {
-            "identifier": "SRC.ID"
+            "identifier": "SRC.ID",
+            "construct": "filter"
           }
         },
         {
@@ -177,7 +186,8 @@
             "columns.VALUE.derivation.source.filter"
           ],
           "context": {
-            "identifier": "SRC.ID"
+            "identifier": "SRC.ID",
+            "construct": "filter"
           }
         }
       ],
@@ -190,7 +200,8 @@
             "columns.VALUE.derivation.source.filter"
           ],
           "context": {
-            "identifier": "SRC.ID"
+            "identifier": "SRC.ID",
+            "construct": "filter"
           }
         },
         {
@@ -201,7 +212,8 @@
             "columns.VALUE.derivation.source.filter"
           ],
           "context": {
-            "identifier": "SRC.ID"
+            "identifier": "SRC.ID",
+            "construct": "filter"
           }
         }
       ],
@@ -276,7 +288,8 @@
             "columns.VALUE.derivation.case[0].then.source.filter"
           ],
           "context": {
-            "identifier": "SRC.ID"
+            "identifier": "SRC.ID",
+            "construct": "filter"
           }
         }
       ],

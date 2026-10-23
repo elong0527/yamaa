@@ -219,9 +219,16 @@ pub(super) fn admit_reads<'a>(
         let mut finding =
             LookupFinding::new(path, crate::diagnostic::ConditionCode::GroupedRowReference);
         finding.text("identifier", identifier);
-        if let Some((row, dataset)) = row {
-            finding.text("row", row);
-            finding.text("dataset", dataset);
+        // The reading row template and its driver, null without one.
+        match row {
+            Some((row, dataset)) => {
+                finding.text("row", row);
+                finding.text("dataset", dataset);
+            }
+            None => {
+                finding.null("row");
+                finding.null("dataset");
+            }
         }
         finding.text("intermediate", intermediate);
         BindFinding::Lookup(finding)

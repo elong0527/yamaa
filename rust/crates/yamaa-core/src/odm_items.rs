@@ -112,18 +112,21 @@ impl Options {
             return Err(Error::Option {
                 option: "max_expanded_bytes",
                 minimum: 1,
+                value: self.max_expanded_bytes,
             });
         }
         if self.max_archive_members < 1 {
             return Err(Error::Option {
                 option: "max_archive_members",
                 minimum: 1,
+                value: self.max_archive_members as u64,
             });
         }
         if self.max_xml_depth < Self::MIN_XML_DEPTH {
             return Err(Error::Option {
                 option: "max_xml_depth",
                 minimum: Self::MIN_XML_DEPTH as u64,
+                value: self.max_xml_depth as u64,
             });
         }
         Ok(())
@@ -149,8 +152,13 @@ impl Default for Options {
 /// refusal.
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum Error {
+    /// An option below its minimum; `value` is the option as given.
     #[error("{option} must be at least {minimum}")]
-    Option { option: &'static str, minimum: u64 },
+    Option {
+        option: &'static str,
+        minimum: u64,
+        value: u64,
+    },
     /// The host failed to read the opened source; `reason` is its text.
     #[error("cannot read ODM source: {reason}")]
     Io { reason: String },
@@ -485,7 +493,8 @@ mod tests {
             error,
             Error::Option {
                 option: "max_expanded_bytes",
-                minimum: 1
+                minimum: 1,
+                value: 0,
             }
         );
         assert_eq!(error.to_string(), "max_expanded_bytes must be at least 1");

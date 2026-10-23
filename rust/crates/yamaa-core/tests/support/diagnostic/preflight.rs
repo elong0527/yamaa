@@ -79,7 +79,7 @@ pub(crate) fn output_reached() -> BTreeSet<ConditionCode> {
             "duplicate_identifier",
             "OUTPUT-1",
             "output.columns[1]",
-            vec![("column", text("ABSENT"))],
+            vec![("column", text("ABSENT")), ("identifier", text("ABSENT"))],
         ),
         (
             "internal_column_in_keys",
@@ -362,6 +362,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
                         "actual",
                         V::Number(("9223372036854775808").parse().expect("canonical integer")),
                     ),
+                    ("value", text("9223372036854775808")),
                     ("minimum", V::from(-9223372036854775808_i64)),
                     ("maximum", V::from(9223372036854775807_i64)),
                 ],
@@ -602,7 +603,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
                 "driver_unavailable",
                 Some("ROW-8"),
                 vec!["base"],
-                vec![("dataset", text("ABSENT"))],
+                vec![("dataset", text("ABSENT")), ("row", V::Null)],
             ),
         ],
     );
@@ -614,11 +615,12 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             vec![column("ID", Some(source()))],
             vec![Tree::text("ID")],
         ),
+        // No driver is named: the dataset is null, as no row template is.
         vec![(
             "driver_unavailable",
             Some("ROW-8"),
             vec!["base"],
-            vec![("row", V::Null)],
+            vec![("dataset", V::Null), ("row", V::Null)],
         )],
     ));
     let aggregate = Tree::map(vec![(
@@ -686,6 +688,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
                 vec!["columns.X.derivation"],
                 vec![
                     ("column", text("X")),
+                    ("identifier", text("X")),
                     ("rows", texts(&["first", "second", "third"])),
                     ("not_row_local", text("aggregate")),
                 ],
@@ -694,7 +697,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
                 "conflicting_row_construction",
                 Some("ROW-9"),
                 vec!["filter", "rows"],
-                vec![],
+                vec![("rows", texts(&["first", "second", "third"]))],
             ),
             (
                 "driver_unavailable",
@@ -706,7 +709,11 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
                 "invalid_field_type",
                 Some("ROW-4"),
                 vec!["rows.first.group_by"],
-                vec![("row", text("first")), ("group_by", texts(&[]))],
+                vec![
+                    ("row", text("first")),
+                    ("group_by", texts(&[])),
+                    ("expected", text("at least one driver variable, each once")),
+                ],
             ),
             (
                 "unknown_field",
@@ -753,6 +760,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             vec![
                 ("row", text("duplicates")),
                 ("group_by", texts(&["SRC.ID", "SRC.ID"])),
+                ("expected", text("at least one driver variable, each once")),
             ],
         )],
     ));
@@ -916,13 +924,21 @@ pub(crate) fn temporal_reached() -> BTreeSet<ConditionCode> {
             "TIME-1",
             "unknown_field",
             "columns.SHIFT.derivation.shift.amount",
-            vec![("field", text("amount")), ("type", text("date"))],
+            vec![
+                ("field", text("amount")),
+                ("type", text("date")),
+                ("identifier", text("amount")),
+            ],
         ),
         (
             "TIME-1",
             "unknown_field",
             "columns.SHIFT.derivation.shift.unit",
-            vec![("field", text("unit")), ("type", text("date"))],
+            vec![
+                ("field", text("unit")),
+                ("type", text("date")),
+                ("identifier", text("unit")),
+            ],
         ),
         // Temporal operations are read before the imputation operations.
         (
@@ -935,7 +951,11 @@ pub(crate) fn temporal_reached() -> BTreeSet<ConditionCode> {
             "TIME-1",
             "unknown_field",
             "columns.IMPUTED.derivation.impute.time",
-            vec![("field", text("time")), ("type", text("date"))],
+            vec![
+                ("field", text("time")),
+                ("type", text("date")),
+                ("identifier", text("time")),
+            ],
         ),
     ];
     assert_eq!(findings.len(), expected.len(), "{findings:?}");
@@ -1163,7 +1183,7 @@ pub(crate) fn intermediate_reached() -> BTreeSet<ConditionCode> {
                 "conflicting_absence_policy",
                 Some("LOOKUP-24"),
                 vec!["intermediates.P.absent", "intermediates.P.require_match"],
-                vec![("intermediate", text("P"))],
+                vec![("intermediate", text("P")), ("dataset", text("SECOND"))],
             )]
         } else {
             let (declared, missing) = if variant == 1 {
@@ -1186,11 +1206,13 @@ pub(crate) fn intermediate_reached() -> BTreeSet<ConditionCode> {
     }
     // A nearest selection replaces the ordered one (LOOKUP-26): an order or
     // a position written beside it is refused before any input is read,
-    // naming each of them and then `nearest`, and neither is also unpaired.
-    for (beside, paths) in [
+    // naming each of them and then `nearest`, the first of them as the
+    // construct, and neither is also unpaired.
+    for (beside, paths, construct) in [
         (
             vec![("keep", Tree::text("first"))],
             vec!["intermediates.P.keep", "intermediates.P.nearest"],
+            "keep",
         ),
         (
             vec![
@@ -1202,6 +1224,7 @@ pub(crate) fn intermediate_reached() -> BTreeSet<ConditionCode> {
                 "intermediates.P.keep",
                 "intermediates.P.nearest",
             ],
+            "order_by",
         ),
     ] {
         let mut fields = base(
@@ -1232,7 +1255,7 @@ pub(crate) fn intermediate_reached() -> BTreeSet<ConditionCode> {
                 "prohibited_construct",
                 Some("LOOKUP-26"),
                 paths,
-                vec![("intermediate", text("P"))],
+                vec![("intermediate", text("P")), ("construct", text(construct))],
             )],
         ));
     }

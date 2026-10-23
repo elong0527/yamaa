@@ -1583,7 +1583,7 @@ fn nearest_refusals_fail_validation_in_check_and_the_run_alike() {
                     "intermediates.NEAR.keep",
                     "intermediates.NEAR.nearest",
                 ],
-                "context": {"intermediate": "NEAR"},
+                "context": {"intermediate": "NEAR", "construct": "order_by"},
             })],
         ),
         (

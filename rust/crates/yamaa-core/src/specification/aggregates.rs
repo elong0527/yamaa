@@ -243,12 +243,19 @@ fn derive(
                     intermediate_names.push(relation.into());
                 }
             } else if !bindings.iter().any(|binding| binding.name == reference) {
+                let mut finding = LookupFinding::new(
+                    &binding_path,
+                    crate::diagnostic::ConditionCode::AggregateDeriveVariable,
+                );
+                finding.text("variable", &reference);
+                finding.text("binding", name);
+                // The binding's expression, when its value is one.
+                match &spec.expr(value).kind {
+                    ExprKind::Formula(formula) => finding.text("expr", &formula.text.text),
+                    _ => finding.null("expr"),
+                }
                 return Err(PrepareError::Invalid(vec![PreflightFinding::Scalar(
-                    diagnostic(
-                        crate::diagnostic::ConditionCode::AggregateDeriveVariable,
-                        &binding_path,
-                        &[("variable", &reference), ("binding", name)],
-                    ),
+                    finding.diagnostic(),
                 )]));
             }
         }
@@ -492,11 +499,15 @@ fn validate_header<'a>(
         let before_derive = findings.len();
         for name in compiled.identifiers() {
             if !name.contains('.') && !derive.iter().any(|binding| binding.name == name) {
-                findings.push(BindFinding::AggregateDiagnostic(diagnostic(
-                    crate::diagnostic::ConditionCode::AggregateDeriveVariable,
+                // The aggregate's own expression reads it, so no binding does.
+                let mut finding = LookupFinding::new(
                     &declaration.expression_path,
-                    &[("variable", name), ("expr", &declaration.expression)],
-                )));
+                    crate::diagnostic::ConditionCode::AggregateDeriveVariable,
+                );
+                finding.text("variable", name);
+                finding.text("expr", &declaration.expression);
+                finding.null("binding");
+                findings.push(BindFinding::AggregateDiagnostic(finding.diagnostic()));
             }
         }
         for binding in derive {

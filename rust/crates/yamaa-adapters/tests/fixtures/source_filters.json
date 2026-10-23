@@ -1147,7 +1147,8 @@
           "condition": "invalid_expression",
           "context": {
             "position": 7,
-            "predicate": "SRC.F ="
+            "predicate": "SRC.F =",
+            "expr": "SRC.F ="
           },
           "phase": "validation",
           "rule": "FORMULA-1",
@@ -1167,7 +1168,8 @@
               "condition": "invalid_expression",
               "context": {
                 "position": 7,
-                "predicate": "SRC.F ="
+                "predicate": "SRC.F =",
+                "expr": "SRC.F ="
               },
               "phase": "validation",
               "rule": "FORMULA-1",
@@ -1315,7 +1317,8 @@
         {
           "condition": "prohibited_construct",
           "context": {
-            "identifier": "ID"
+            "identifier": "ID",
+            "construct": "filter"
           },
           "phase": "validation",
           "rule": "LOOKUP-8",
@@ -1334,7 +1337,8 @@
             {
               "condition": "prohibited_construct",
               "context": {
-                "identifier": "ID"
+                "identifier": "ID",
+                "construct": "filter"
               },
               "phase": "validation",
               "rule": "LOOKUP-8",
@@ -1482,7 +1486,8 @@
         {
           "condition": "prohibited_construct",
           "context": {
-            "identifier": "ID"
+            "identifier": "ID",
+            "construct": "filter"
           },
           "phase": "validation",
           "rule": "LOOKUP-8",
@@ -1501,7 +1506,8 @@
             {
               "condition": "prohibited_construct",
               "context": {
-                "identifier": "ID"
+                "identifier": "ID",
+                "construct": "filter"
               },
               "phase": "validation",
               "rule": "LOOKUP-8",

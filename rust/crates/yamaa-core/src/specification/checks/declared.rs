@@ -1555,9 +1555,11 @@ impl Checks<'_> {
                         .iter()
                         .any(|binding| binding.name.name == *name)
             }) {
+                // The aggregate's own expression reads it, so no binding does.
                 let mut finding = LookupFinding::new(&at, C::AggregateDeriveVariable);
                 finding.text("variable", name);
                 finding.text("expr", expression);
+                finding.null("binding");
                 findings.push(BindFinding::AggregateDiagnostic(finding.diagnostic()));
             }
             if row {
@@ -1820,6 +1822,7 @@ impl Checks<'_> {
                 format!("{path}.absent"),
                 format!("{path}.require_match"),
                 owner,
+                source_expressions::source_dataset(variable),
             ));
         }
         // A declared grouped key is already one scalar in both row and column
@@ -1842,7 +1845,7 @@ impl Checks<'_> {
                 findings.push(BindFinding::Source(source_expressions::SourceFinding::new(
                     C::SourceFilterSingleValue,
                     &render(spec, formula.text.meta),
-                    &[("identifier", variable)],
+                    &[("identifier", variable), ("construct", "filter")],
                 )));
                 return Ok(true);
             }
@@ -1934,7 +1937,7 @@ impl Checks<'_> {
                 findings.push(BindFinding::Source(source_expressions::SourceFinding::new(
                     C::SourceFilterSingleValue,
                     &render(spec, formula.text.meta),
-                    &[("identifier", variable)],
+                    &[("identifier", variable), ("construct", "filter")],
                 )));
             }
             (None, _) => {}
@@ -4222,7 +4225,7 @@ pub(super) fn join_options(spec: &Spec, e: ExprId, findings: &mut Vec<BindFindin
             findings.push(BindFinding::Source(source_expressions::SourceFinding::new(
                 code,
                 &format!("{at}.{field}"),
-                &[("identifier", variable)],
+                &[("identifier", variable), ("construct", field)],
             )));
         }
     }

@@ -167,14 +167,24 @@ pub(crate) fn predicate_reached(
     assert_eq!(d.definition().condition, "integer_overflow");
     assert_eq!(d.definition().rule, Some("VALUE-5"));
     assert_eq!(d.spec_paths, ["filter"]);
+    // The predicate's text, the literal's position, the literal as written
+    // and as a number, and the range it leaves (VALUE-5).
     assert_eq!(
         d.context,
         [
+            ("expr".into(), V::String(expression.into())),
             ("predicate".into(), V::String(expression.into())),
             (
                 "position".into(),
                 V::Number(("4").parse().expect("canonical integer"))
             ),
+            ("value".into(), V::String("9223372036854775808".into())),
+            (
+                "actual".into(),
+                V::Number(("9223372036854775808").parse().expect("integer"))
+            ),
+            ("minimum".into(), V::from(i64::MIN)),
+            ("maximum".into(), V::from(i64::MAX)),
         ]
         .into()
     );

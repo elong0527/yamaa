@@ -231,7 +231,7 @@ mod diagnostics {
             use crate::support::diagnostic::grammar::*;
             #[test]
 
-            fn arithmetic_is_a_comparison_operand_and_refusals_keep_two_fields() {
+            fn arithmetic_is_a_comparison_operand_and_refusals_keep_their_text_and_position() {
                 use yamaa_core::json::Value as V;
                 // Arithmetic in a comparison operand is admitted, with its names.
                 for (text, names) in [
@@ -247,7 +247,8 @@ mod diagnostics {
                     .unwrap();
                     assert_eq!(compiled.identifiers().collect::<Vec<_>>(), names, "{text}");
                 }
-                // A refused predicate reports its text and position, and nothing else.
+                // A refused predicate reports its text, as the expression and as
+                // the predicate, and its position, and nothing else.
                 for (text, position) in [("AGE >> 65", 5), ("A >", 3)] {
                     let Err(CompileError::Invalid {
                         position: actual,
@@ -264,6 +265,7 @@ mod diagnostics {
                     assert_eq!(
                         d.context,
                         [
+                            ("expr".into(), V::String(text.into())),
                             ("predicate".into(), V::String(text.into())),
                             ("position".into(), V::from(position)),
                         ]
@@ -479,6 +481,7 @@ mod diagnostics {
                     assert_eq!(
                         finding.context,
                         [
+                            ("expr".into(), text(expression)),
                             ("predicate".into(), text(expression)),
                             ("position".into(), V::from(character)),
                         ]
@@ -525,6 +528,7 @@ mod diagnostics {
                 assert_eq!(
                     projected.context,
                     [
+                        ("expr".into(), text(&huge)),
                         ("predicate".into(), text(&huge)),
                         ("position".into(), V::from(usize::MAX)),
                     ]
@@ -612,9 +616,14 @@ mod diagnostics {
                 error.route = vec![Route::Left; 65_536];
                 let projected = error.diagnostic().unwrap();
                 assert_eq!(projected.operand_route, Some(vec!["Left".into(); 65_536]));
+                // The dangling escape names the predicate it is written in.
                 assert_eq!(
                     projected.context,
-                    [("reason".into(), text("LIKE pattern has a dangling escape"))].into()
+                    [
+                        ("expr".into(), text("unchanged")),
+                        ("reason".into(), text("LIKE pattern has a dangling escape")),
+                    ]
+                    .into()
                 );
                 error.route = vec![];
                 let identifier = "\0".repeat(1_400_000);
@@ -754,7 +763,15 @@ mod diagnostics {
                         [Diagnostic {
                             code: ConditionCode::FunctionFileInvalid,
                             spec_path: "functions[0].implementations.python".into(),
-                            context: diagnostic.context.clone(),
+                            // The same host facts, and the callable named
+                            // invalid (FUNC-2) unless the host gave a reason.
+                            context: {
+                                let mut context = diagnostic.context.clone();
+                                context
+                                    .entry("reason")
+                                    .or_insert(Fact::Text("invalid_callable"));
+                                context
+                            },
                         }]
                     );
                     assert_eq!(
@@ -1190,7 +1207,11 @@ mod diagnostics {
                     assert_eq!(findings[0].path, "codelists[2].standard.publishing_set");
                     assert_eq!(
                         findings[0].context,
-                        [("detail".into(), JsonValue::String("STD.CT_SDTM".into()))].into()
+                        [
+                            ("detail".into(), JsonValue::String("STD.CT_SDTM".into())),
+                            ("identifier".into(), JsonValue::String("STD.CT_SDTM".into())),
+                        ]
+                        .into()
                     );
                 }
             }
@@ -1399,19 +1420,17 @@ mod diagnostics {
                         column: 2,
                         reason: &reason,
                     },
-                    Some(&identity),
+                    &identity,
                 );
                 let Fact::Text(held) = result[0].context["reason"] else {
                     panic!("borrowed reason")
                 };
                 assert!(std::ptr::eq(held.as_ptr(), reason.as_ptr()));
-                let result = diagnostics(Failure::NonAscii { line: 1, column: 2 }, Some(&identity));
+                let result = diagnostics(Failure::NonAscii { line: 1, column: 2 }, &identity);
                 let Fact::Text(held) = result[0].context["path"] else {
                     panic!("borrowed source identity")
                 };
                 assert!(std::ptr::eq(held.as_ptr(), identity.as_ptr()));
-                let result = diagnostics(Failure::NonAscii { line: 1, column: 2 }, None);
-                assert_eq!(result[0].context.len(), 2);
                 let issues = [
                     UnicodeIssue {
                         path: "$.first".into(),
@@ -1424,7 +1443,14 @@ mod diagnostics {
                         offset: usize::MAX,
                     },
                 ];
-                let result = diagnostics(Failure::InvalidText(&issues), Some(&identity));
+                let result = diagnostics(Failure::InvalidText(&issues), &identity);
+                // Every invalid scalar names the file it is read from, borrowed.
+                for diagnostic in &result {
+                    let Fact::Text(held) = diagnostic.context["path"] else {
+                        panic!("borrowed source identity")
+                    };
+                    assert!(std::ptr::eq(held.as_ptr(), identity.as_ptr()));
+                }
                 assert_eq!(
                     result
                         .iter()

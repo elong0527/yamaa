@@ -256,6 +256,7 @@ pub fn function_file_reached() -> BTreeSet<ConditionCode> {
             ("path", "r/renv.lock"),
             ("environment_path", "environments.r.lock"),
             ("cause", "invalid_packaging_lock"),
+            ("reason", "invalid_packaging_lock"),
         ]
         .into_iter()
         .map(|(key, value)| (key.into(), JsonValue::String(value.into())))

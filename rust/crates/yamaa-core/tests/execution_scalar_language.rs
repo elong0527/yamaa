@@ -297,7 +297,11 @@ mod execution {
                     expected(
                         C::SourceTypeUnknownField,
                         "input.SRC.types.MISSING",
-                        vec![("dataset", text("SRC")), ("field", text("MISSING"))]
+                        vec![
+                            ("dataset", text("SRC")),
+                            ("field", text("MISSING")),
+                            ("identifier", text("MISSING")),
+                        ]
                     ),
                     expected(
                         C::SourceTypeFieldParse,

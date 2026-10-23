@@ -976,6 +976,7 @@ mod project {
                     yamaa_adapters::json!({"phase": "validation", "condition": "integer_overflow",
                     "rule": "VALUE-5", "spec_paths": ["codelists[0].codelists[0].items[0].value"],
                     "context": {"actual": number("123456789012345678901234567890"),
+                        "value": "123456789012345678901234567890",
                         "minimum": number("-9223372036854775808"),
                         "maximum": number("9223372036854775807"),
                         "source": PROJECT, "entry": PROJECT, "environment_path": "$"}})
@@ -1015,6 +1016,7 @@ mod project {
                     yamaa_adapters::json!({"phase": "validation", "condition": "integer_overflow",
                         "rule": "VALUE-5", "spec_paths": ["codelists[0].items[0].value"],
                         "context": {"actual": number(wide),
+                            "value": wide,
                             "minimum": number("-9223372036854775808"),
                             "maximum": number("9223372036854775807"),
                             "source": "held/ct.yaml", "entry": PROJECT,

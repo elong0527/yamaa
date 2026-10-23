@@ -348,7 +348,7 @@ fn every_refusal_names_its_call() {
     let failure = send.save(&CancellationToken::new()).unwrap_err();
     assert_eq!(
         failure.message,
-        format!("cannot save {project}, section send: there is nothing to save [nothing_to_save, PROJECT-12]")
+        format!("cannot save {project}, section send: the project run has nothing to save [nothing_to_save, PROJECT-12]")
     );
     let mut submission = engine
         .project_submission(&project, None, None, "0.4.0", &token)
@@ -360,7 +360,7 @@ fn every_refusal_names_its_call() {
     let failure = submission.save(&CancellationToken::new()).unwrap_err();
     assert_eq!(
         failure.message,
-        format!("cannot save {project}: there is nothing to save [nothing_to_save, PROJECT-13]")
+        format!("cannot save {project}: the project submission has nothing to save [nothing_to_save, PROJECT-13]")
     );
     // An unknown section refuses the call; a host names the section.
     let Err(error @ Error::Rejected(_)) = engine.project_run(&project, Some("sdtn"), &token) else {

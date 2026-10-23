@@ -709,7 +709,8 @@
         "rule": "FORMULA-5",
         "context": {
           "left_type": "int",
-          "right_type": "str"
+          "right_type": "str",
+          "actual": "str"
         }
       }
     ]

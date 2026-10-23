@@ -955,9 +955,18 @@ mod schema {
 
         #[test]
         fn row_filter_carrier_findings_remain_normative_including_dead_branches() {
-            for (filter, position) in [
-                ("FALSE AND ID = 9223372036854775808", "15"),
-                ("TRUE OR ID = -9223372036854775809", "13"),
+            // Each literal is its number token, the sign written on it included.
+            for (filter, position, literal) in [
+                (
+                    "FALSE AND ID = 9223372036854775808",
+                    15,
+                    "9223372036854775808",
+                ),
+                (
+                    "TRUE OR ID = -9223372036854775809",
+                    13,
+                    "-9223372036854775809",
+                ),
             ] {
                 let rows = Tree::List(vec![Tree::map(vec![
                     ("id", Tree::text("first")),
@@ -994,14 +1003,10 @@ mod schema {
                 assert_eq!(diagnostic.spec_paths, ["rows.first.filter"]);
                 assert_eq!(diagnostic.definition().phase, "validation");
                 assert_eq!(diagnostic.definition().rule, Some("VALUE-5"));
-                assert_eq!(diagnostic.context.len(), 2);
                 assert_eq!(
-                    diagnostic.context["predicate"],
-                    yamaa_core::json::Value::String(filter.into())
-                );
-                assert_eq!(
-                    diagnostic.context["position"],
-                    yamaa_core::json::Value::Number((position).parse().expect("canonical integer"))
+                    diagnostic.context,
+                    literal_overflow(filter, position, literal),
+                    "{filter}"
                 );
             }
         }
@@ -1130,15 +1135,34 @@ mod schema {
                 diagnostic.spec_paths,
                 ["columns.VALUE.derivation.source.filter"]
             );
-            assert_eq!(diagnostic.context.len(), 2);
             assert_eq!(
-                diagnostic.context["predicate"],
-                yamaa_core::json::Value::String("SRC.ID = 9223372036854775808".into())
+                diagnostic.context,
+                literal_overflow("SRC.ID = 9223372036854775808", 9, "9223372036854775808")
             );
-            assert_eq!(
-                diagnostic.context["position"],
-                yamaa_core::json::Value::Number(("9").parse().expect("canonical integer"))
-            );
+        }
+
+        /// A predicate literal outside int's range (VALUE-5): the predicate's
+        /// text, as its expression and its predicate, the literal's character
+        /// position, the literal as written and as a number, and the range.
+        fn literal_overflow(
+            predicate: &str,
+            position: usize,
+            literal: &str,
+        ) -> yamaa_core::diagnostic::Context {
+            use yamaa_core::json::Value as V;
+            [
+                ("expr".into(), V::String(predicate.into())),
+                ("predicate".into(), V::String(predicate.into())),
+                ("position".into(), V::from(position)),
+                ("value".into(), V::String(literal.into())),
+                (
+                    "actual".into(),
+                    V::Number(literal.parse().expect("integer")),
+                ),
+                ("minimum".into(), V::from(i64::MIN)),
+                ("maximum".into(), V::from(i64::MAX)),
+            ]
+            .into()
         }
 
         #[test]

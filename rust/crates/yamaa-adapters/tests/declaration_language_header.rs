@@ -718,6 +718,7 @@ mod declaration {
                     vec![
                         ("field", C::Text("added".into())),
                         ("class", C::Text("column_class".into())),
+                        ("identifier", C::Text("added".into())),
                         ("since", C::Text("1.1".into())),
                     ]
                 )]
@@ -1022,7 +1023,7 @@ mod declaration {
                     "unknown_field",
                     "SCHEMA-13",
                     "parents",
-                    json!({"field": "parents", "class": "root_class", "hint": hint, "source": entry, "entry": entry}),
+                    json!({"field": "parents", "class": "root_class", "identifier": "parents", "hint": hint, "source": entry, "entry": entry}),
                 ),
             ] {
                 study.write("spec.yaml", &CHILD.edit("parent: base.yaml", written));
