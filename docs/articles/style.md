@@ -58,7 +58,10 @@ hidden directories are left out. Rows follow the files, then line, column and
 finding. A file that cannot be read or parsed, or a directory that cannot be
 listed, refuses the call with the issue that says why, and nothing is
 written. Field orders follow the 1.0 schemas. A directory skips a file that
-declares `schema_version`.
+declares `schema_version`; a file the call names that declares it was written
+for language version 0.5, and refuses the call as
+`unsupported_language_version`, naming version `0.5`
+([SCHEMA-2](../../rules/reference/schema-language.md#schema-2)).
 
 ## The findings
 
