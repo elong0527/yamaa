@@ -130,19 +130,44 @@ impl Host {
         let offered = self.callbacks.bind.is_some() && self.callbacks.invoke.is_some();
         offered.then(|| Arc::new(Port(Arc::clone(self))) as Arc<dyn ProjectFunctions>)
     }
+
+    /// Ask one of the queries with `texts`, and read an answered reply.
+    fn query<T>(
+        &self,
+        query: Option<abi::Query>,
+        texts: &[Str],
+        read: impl FnOnce(&Reply) -> Result<T, FunctionError>,
+    ) -> Result<T, FunctionError> {
+        let query = query.ok_or(FunctionError::Protocol)?;
+        self.answer(
+            // SAFETY: see the module documentation.
+            |context, reply| unsafe { query(context, texts.as_ptr(), texts.len(), reply) },
+            // SAFETY: the host filled the reply.
+            |status, reply| match status {
+                abi::ANSWERED => read(reply),
+                abi::RAISED => Err(unsafe { failure(&mut reply.error) }),
+                _ => Err(FunctionError::Protocol),
+            },
+        )
+    }
 }
 
-/// A bound function: the host's callable, kept until the build drops it.
-struct Bound(Option<Root>);
-
-/// The host-functions port over a host's callbacks.
-struct Port(Arc<Host>);
+/// `text` as UTF-8, or `None` when it is no text or not UTF-8.
+///
+/// # Safety
+///
+/// A non-null `text.ptr` points at `text.len` readable bytes.
+unsafe fn text(text: Str) -> Option<String> {
+    // SAFETY: the caller's contract.
+    let bytes = unsafe { bytes(text) }?;
+    std::str::from_utf8(bytes).ok().map(str::to_owned)
+}
 
 /// The bytes `text` borrows, or `None` for no text.
 ///
 /// # Safety
 ///
-/// A non-null `text.ptr` points at `text.len` readable bytes.
+/// As [`text`].
 unsafe fn bytes<'a>(text: Str) -> Option<&'a [u8]> {
     // SAFETY: the caller's contract.
     (!text.ptr.is_null()).then(|| unsafe { std::slice::from_raw_parts(text.ptr, text.len) })
@@ -162,50 +187,26 @@ unsafe fn items<'a, T>(items: *const T, len: usize) -> &'a [T] {
     }
 }
 
-/// `text` as UTF-8, or `None` when it is no text or not UTF-8.
-///
-/// # Safety
-///
-/// As [`bytes`].
-unsafe fn text(text: Str) -> Option<String> {
-    // SAFETY: the caller's contract.
-    let bytes = unsafe { bytes(text) }?;
-    std::str::from_utf8(bytes).ok().map(str::to_owned)
-}
-
-/// `text` for a message, with any invalid UTF-8 replaced.
-///
-/// # Safety
-///
-/// As [`bytes`].
-unsafe fn lossy(text: Str) -> String {
-    // SAFETY: the caller's contract.
-    unsafe { bytes(text) }.map_or_else(String::new, |bytes| {
-        String::from_utf8_lossy(bytes).into_owned()
-    })
-}
-
 /// A host failure as the facade's function error, which takes its payload.
 ///
 /// # Safety
 ///
-/// The error's texts are valid, as [`bytes`] asks.
+/// The error's texts are valid, as [`text`] asks.
 unsafe fn failure(error: &mut abi::HostError) -> FunctionError {
     let payload = Root::take(&mut error.payload).map(HostPayload::new);
     // SAFETY: the caller's contract.
-    let (class, message) = unsafe { (lossy(error.class), lossy(error.message)) };
+    let lossy = |text: Str| unsafe { bytes(text) }.map(|b| String::from_utf8_lossy(b).into_owned());
+    let message = lossy(error.message).unwrap_or_default();
     match error.kind {
         abi::ERROR_EXCEPTION => FunctionError::Exception {
-            class,
+            class: lossy(error.class).unwrap_or_default(),
             message,
             payload,
         },
         abi::ERROR_INTERRUPTED => FunctionError::Interrupted { payload },
         abi::ERROR_REJECTED => FunctionError::Rejected {
             reason: message,
-            // SAFETY: the caller's contract.
-            returned: unsafe { bytes(error.returned) }
-                .map(|bytes| String::from_utf8_lossy(bytes).into_owned()),
+            returned: lossy(error.returned),
         },
         abi::ERROR_REPRESENTATION => FunctionError::Representation { message, payload },
         abi::ERROR_SDK_BOUNDARY => FunctionError::SdkBoundary { payload },
@@ -221,60 +222,42 @@ unsafe fn failure(error: &mut abi::HostError) -> FunctionError {
     }
 }
 
-/// The answer of a query: `read` of an answered reply, the host's failure,
-/// or a protocol fault.
+/// The texts of an answered reply, `width` to a row, each present or not.
 ///
 /// # Safety
 ///
-/// The reply was filled by the host as the ABI states.
-unsafe fn queried<T>(
-    status: c_int,
-    reply: &mut Reply,
-    read: impl FnOnce(&mut Reply) -> Result<T, FunctionError>,
-) -> Result<T, FunctionError> {
-    match status {
-        abi::ANSWERED => read(reply),
-        // SAFETY: the caller's contract.
-        abi::RAISED => Err(unsafe { failure(&mut reply.error) }),
-        _ => Err(FunctionError::Protocol),
-    }
-}
-
-/// The texts of an answered reply, `width` to a row.
-///
-/// # Safety
-///
-/// As [`queried`].
+/// The reply's texts are valid, as [`text`] asks.
 unsafe fn rows(reply: &Reply, width: usize) -> Result<Vec<Vec<Option<String>>>, FunctionError> {
     // SAFETY: the caller's contract.
     let texts = unsafe { items(reply.texts, reply.texts_len) };
     if texts.len() % width != 0 {
         return Err(FunctionError::Protocol);
     }
+    let present = |item: &Str| {
+        if item.ptr.is_null() {
+            return Ok(None);
+        }
+        // SAFETY: the caller's contract.
+        unsafe { text(*item) }
+            .map(Some)
+            .ok_or(FunctionError::Protocol)
+    };
     texts
         .chunks(width)
-        .map(|row| {
-            row.iter()
-                .map(|item| {
-                    if item.ptr.is_null() {
-                        return Ok(None);
-                    }
-                    // SAFETY: the caller's contract.
-                    unsafe { text(*item) }
-                        .map(Some)
-                        .ok_or(FunctionError::Protocol)
-                })
-                .collect()
-        })
+        .map(|row| row.iter().map(present).collect())
         .collect()
 }
 
-/// Pairs of required texts, grouped by their first item in order.
-fn grouped(rows: Vec<Vec<Option<String>>>) -> Result<BTreeMap<String, Vec<String>>, FunctionError> {
+/// An answered reply's pairs of texts, grouped by their first in order.
+///
+/// # Safety
+///
+/// As [`rows`].
+unsafe fn pairs(reply: &Reply) -> Result<BTreeMap<String, Vec<String>>, FunctionError> {
     let mut grouped = BTreeMap::<String, Vec<String>>::new();
-    for row in rows {
-        let [Some(key), Some(value)]: [Option<String>; 2] =
-            row.try_into().map_err(|_| FunctionError::Protocol)?
+    // SAFETY: the caller's contract.
+    for row in unsafe { rows(reply, 2) }? {
+        let [Some(key), Some(value)] = <[Option<String>; 2]>::try_from(row).unwrap_or_default()
         else {
             return Err(FunctionError::Protocol);
         };
@@ -304,14 +287,11 @@ fn scalar_record(value: ScalarRef<'_>) -> Result<abi::Scalar, CallError> {
             0.0,
             Str::NONE,
         ),
-        ScalarRef::DateTime(moment) => {
-            (abi::SCALAR_DATETIME, moment.epoch_seconds(), 0.0, Str::NONE)
-        }
+        ScalarRef::DateTime(time) => (abi::SCALAR_DATETIME, time.epoch_seconds(), 0.0, Str::NONE),
         // The facade's scalar is non-exhaustive; no other kind exists.
         _ => {
-            return Err(CallError::Raised(FunctionError::Internal {
-                code: "function_boundary",
-            }))
+            let code = "function_boundary";
+            return Err(CallError::Raised(FunctionError::Internal { code }));
         }
     };
     Ok(abi::Scalar {
@@ -322,12 +302,13 @@ fn scalar_record(value: ScalarRef<'_>) -> Result<abi::Scalar, CallError> {
     })
 }
 
-/// A result the host answered, as the facade's scalar.
+/// A scalar the host answered, as the facade's.
 ///
 /// # Safety
 ///
-/// The record's text is valid, as [`bytes`] asks.
+/// The record's text is valid, as [`text`] asks.
 unsafe fn scalar(record: &abi::Scalar) -> Result<yamaa::Scalar, FunctionError> {
+    let outside = |kind| rejected(&format!("a returned {kind} is outside the years 1 to 9999"));
     Ok(match record.kind {
         abi::SCALAR_MISSING => yamaa::Scalar::Missing,
         // SAFETY: the caller's contract.
@@ -337,55 +318,24 @@ unsafe fn scalar(record: &abi::Scalar) -> Result<yamaa::Scalar, FunctionError> {
         ),
         abi::SCALAR_INT => yamaa::Scalar::Int(record.int),
         abi::SCALAR_FLOAT => yamaa::Scalar::float(record.float),
-        abi::SCALAR_BOOL => match record.int {
-            0 => yamaa::Scalar::Bool(false),
-            1 => yamaa::Scalar::Bool(true),
-            _ => return Err(FunctionError::Protocol),
-        },
+        abi::SCALAR_BOOL if record.int == 0 || record.int == 1 => {
+            yamaa::Scalar::Bool(record.int == 1)
+        }
         abi::SCALAR_DATE => yamaa::Scalar::Date(
-            yamaa::Date::from_epoch_days(record.int)
-                .ok_or_else(|| rejected("a returned date is outside the years 1 to 9999"))?,
+            yamaa::Date::from_epoch_days(record.int).ok_or_else(|| outside("date"))?,
         ),
         abi::SCALAR_DATETIME => yamaa::Scalar::DateTime(
-            yamaa::DateTime::from_epoch_seconds(record.int)
-                .ok_or_else(|| rejected("a returned datetime is outside the years 1 to 9999"))?,
+            yamaa::DateTime::from_epoch_seconds(record.int).ok_or_else(|| outside("datetime"))?,
         ),
         _ => return Err(FunctionError::Protocol),
     })
 }
 
-/// How the host answered a call of a project function.
-///
-/// # Safety
-///
-/// As [`queried`].
-unsafe fn called<T>(
-    status: c_int,
-    reply: &mut Reply,
-    read: impl FnOnce(&Reply) -> Result<T, FunctionError>,
-) -> Result<T, CallError> {
-    match status {
-        abi::ANSWERED => read(reply).map_err(CallError::InvalidResult),
-        // SAFETY: the caller's contract.
-        abi::RAISED => Err(CallError::Raised(unsafe { failure(&mut reply.error) })),
-        // SAFETY: the caller's contract.
-        abi::INVALID => Err(CallError::InvalidResult(unsafe {
-            failure(&mut reply.error)
-        })),
-        _ => Err(CallError::Raised(FunctionError::Protocol)),
-    }
-}
+/// A bound function: the host's callable, kept until the build drops it.
+struct Bound(Option<Root>);
 
-fn column(returns: ColumnType) -> u32 {
-    match returns {
-        ColumnType::Str => abi::COLUMN_STR,
-        ColumnType::Int => abi::COLUMN_INT,
-        ColumnType::Float => abi::COLUMN_FLOAT,
-        ColumnType::Date => abi::COLUMN_DATE,
-        // The facade's column type is non-exhaustive; datetime is the last.
-        _ => abi::COLUMN_DATETIME,
-    }
-}
+/// The host-functions port over a host's callbacks.
+struct Port(Arc<Host>);
 
 impl Port {
     fn function(handle: &FunctionHandle) -> Result<*mut c_void, CallError> {
@@ -394,31 +344,99 @@ impl Port {
             .ok_or(CallError::Raised(FunctionError::Protocol))
     }
 
-    /// Call the bound `function` once with `arguments`.
+    /// Call the bound `function` once with `arguments`, or once for `rows`
+    /// rows of `batch` when the host calls in batches.
     fn call(
         &self,
         function: *mut c_void,
         arguments: &[abi::Argument],
-    ) -> Result<yamaa::Scalar, CallError> {
-        let invoke = self
-            .0
-            .callbacks
-            .invoke
-            .ok_or(CallError::Raised(FunctionError::Protocol))?;
+        batch: Option<(usize, &[abi::BatchArgument])>,
+    ) -> Result<Vec<yamaa::Scalar>, CallError> {
+        let (invoke, call_batch) = (self.0.callbacks.invoke, self.0.callbacks.call_batch);
         self.0.answer(
             // SAFETY: see the module documentation.
             |context, reply| unsafe {
-                invoke(
-                    context,
-                    function,
-                    arguments.as_ptr(),
-                    arguments.len(),
-                    reply,
-                )
+                match (batch, invoke, call_batch) {
+                    (Some((rows, batch)), _, Some(call_batch)) => {
+                        call_batch(context, function, rows, batch.as_ptr(), batch.len(), reply)
+                    }
+                    (None, Some(invoke), _) => invoke(
+                        context,
+                        function,
+                        arguments.as_ptr(),
+                        arguments.len(),
+                        reply,
+                    ),
+                    _ => c_int::MAX,
+                }
             },
             // SAFETY: the host filled the reply.
-            |status, reply| unsafe { called(status, reply, |reply| scalar(&reply.scalar)) },
+            |status, reply| unsafe {
+                let results = || match batch {
+                    Some(_) => items(reply.scalars, reply.scalars_len)
+                        .iter()
+                        .map(|record| scalar(record))
+                        .collect(),
+                    None => scalar(&reply.scalar).map(|result| vec![result]),
+                };
+                match status {
+                    abi::ANSWERED => results().map_err(CallError::InvalidResult),
+                    abi::RAISED => Err(CallError::Raised(failure(&mut reply.error))),
+                    abi::INVALID => Err(CallError::InvalidResult(failure(&mut reply.error))),
+                    _ => Err(CallError::Raised(FunctionError::Protocol)),
+                }
+            },
         )
+    }
+
+    /// Verify an renv lock: the engine decodes it, and the host compares
+    /// the locked versions with the installed ones, as R does today.
+    fn compare_locked(
+        &self,
+        lock: &[u8],
+        functions: &[FunctionIdentity],
+    ) -> Result<(), FunctionError> {
+        let compare = self.0.callbacks.compare_locked;
+        let compare = compare.ok_or(FunctionError::Protocol)?;
+        let locked = yamaa::decode_renv_lock(lock).map_err(FunctionError::LockSyntax)?;
+        let packages: Vec<Str> = locked
+            .packages
+            .iter()
+            .flat_map(|(name, version)| [Str::of(name), Str::of(version)])
+            .collect();
+        let calls: Vec<Str> = functions.iter().map(|f| Str::of(&f.call)).collect();
+        let findings = self.0.answer(
+            // SAFETY: see the module documentation.
+            |context, reply| unsafe {
+                let (p, c) = (packages.as_ptr(), calls.as_ptr());
+                compare(context, p, packages.len(), c, calls.len(), reply)
+            },
+            // SAFETY: the host filled the reply.
+            |status, reply| unsafe {
+                match status {
+                    abi::ANSWERED => rows(reply, 4),
+                    abi::RAISED => Err(failure(&mut reply.error)),
+                    _ => Err(FunctionError::Protocol),
+                }
+            },
+        )?;
+        let findings = findings
+            .into_iter()
+            .map(|row| match <[Option<String>; 4]>::try_from(row) {
+                Ok([Some(package), Some(reason), expected, actual]) => Ok(LockFinding::new(
+                    package,
+                    LockReason::parse(&reason).ok_or(FunctionError::Protocol)?,
+                    expected.into_iter().collect(),
+                    actual,
+                )),
+                _ => Err(FunctionError::Protocol),
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        if findings.is_empty() {
+            Ok(())
+        } else {
+            Err(FunctionError::Lock(findings))
+        }
     }
 }
 
@@ -451,7 +469,14 @@ impl ProjectFunctions for Port {
         let signature = abi::Signature {
             parameters: parameters.as_ptr(),
             parameters_len: parameters.len(),
-            returns: column(signature.returns),
+            returns: match signature.returns {
+                ColumnType::Str => abi::COLUMN_STR,
+                ColumnType::Int => abi::COLUMN_INT,
+                ColumnType::Float => abi::COLUMN_FLOAT,
+                ColumnType::Date => abi::COLUMN_DATE,
+                // The facade's column type is non-exhaustive; datetime is last.
+                _ => abi::COLUMN_DATETIME,
+            },
             may_return_missing: u32::from(signature.may_return_missing),
         };
         let identity = abi::Identity {
@@ -462,10 +487,10 @@ impl ProjectFunctions for Port {
             // SAFETY: see the module documentation.
             |context, reply| unsafe { bind(context, &identity, &signature, reply) },
             // SAFETY: the host filled the reply.
-            |status, reply| unsafe {
-                queried(status, reply, |reply| {
-                    Ok(FunctionHandle::new(Bound(Root::take(&mut reply.function))))
-                })
+            |status, reply| match status {
+                abi::ANSWERED => Ok(FunctionHandle::new(Bound(Root::take(&mut reply.function)))),
+                abi::RAISED => Err(unsafe { failure(&mut reply.error) }),
+                _ => Err(FunctionError::Protocol),
             },
         )
     }
@@ -475,11 +500,12 @@ impl ProjectFunctions for Port {
             return matches!(error, FunctionError::Interrupted { .. });
         };
         let kept = |payload: &Option<HostPayload>| {
-            payload
+            let pointer = payload
                 .as_ref()
-                .and_then(|payload| payload.with::<Root, _>(Root::pointer))
-                .unwrap_or(std::ptr::null_mut())
+                .and_then(|kept| kept.with::<Root, _>(Root::pointer));
+            pointer.unwrap_or(std::ptr::null_mut())
         };
+        let none = std::ptr::null_mut();
         let (kind, payload) = match error {
             FunctionError::Exception { payload, .. } => (abi::ERROR_EXCEPTION, kept(payload)),
             FunctionError::Interrupted { payload } => (abi::ERROR_INTERRUPTED, kept(payload)),
@@ -487,11 +513,11 @@ impl ProjectFunctions for Port {
                 (abi::ERROR_REPRESENTATION, kept(payload))
             }
             FunctionError::SdkBoundary { payload } => (abi::ERROR_SDK_BOUNDARY, kept(payload)),
-            FunctionError::Rejected { .. } => (abi::ERROR_REJECTED, std::ptr::null_mut()),
-            FunctionError::Internal { .. } => (abi::ERROR_INTERNAL, std::ptr::null_mut()),
-            FunctionError::MissingBinding(_) => (abi::ERROR_MISSING_BINDING, std::ptr::null_mut()),
-            FunctionError::Protocol => (abi::ERROR_PROTOCOL, std::ptr::null_mut()),
-            _ => (0, std::ptr::null_mut()),
+            FunctionError::Rejected { .. } => (abi::ERROR_REJECTED, none),
+            FunctionError::Internal { .. } => (abi::ERROR_INTERNAL, none),
+            FunctionError::MissingBinding(_) => (abi::ERROR_MISSING_BINDING, none),
+            FunctionError::Protocol => (abi::ERROR_PROTOCOL, none),
+            _ => (0, none),
         };
         // SAFETY: see the module documentation.
         unsafe { classify(self.0.context(), kind, payload) == 1 }
@@ -505,13 +531,18 @@ impl ProjectFunctions for Port {
         let arguments = arguments
             .iter()
             .map(|argument| {
+                let value = scalar_record(argument.value)?;
                 Ok(abi::Argument {
                     name: Str::of(argument.name),
-                    value: scalar_record(argument.value)?,
+                    value,
                 })
             })
             .collect::<Result<Vec<_>, CallError>>()?;
-        self.call(Port::function(handle)?, &arguments)
+        let results = self.call(Port::function(handle)?, &arguments, None)?;
+        results
+            .into_iter()
+            .next()
+            .ok_or(CallError::Raised(FunctionError::Protocol))
     }
 
     fn call_batch(
@@ -521,40 +552,34 @@ impl ProjectFunctions for Port {
         arguments: &[BatchArgument],
     ) -> Result<Vec<yamaa::Scalar>, CallError> {
         let function = Port::function(handle)?;
-        let Some(call_batch) = self.0.callbacks.call_batch else {
+        let values = arguments
+            .iter()
+            .map(|argument| {
+                let values = argument.values.iter().map(ScalarRef::from_owned);
+                values.map(scalar_record).collect::<Result<Vec<_>, _>>()
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        if self.0.callbacks.call_batch.is_none() {
             // Without the host's batch call, one call per row, as the
             // facade's port does by default.
             return (0..rows)
                 .map(|row| {
-                    let arguments = arguments
+                    let arguments: Vec<abi::Argument> = arguments
                         .iter()
-                        .map(|argument| {
-                            let value = argument.values.get(row).ok_or(CallError::Raised(
-                                FunctionError::Internal {
-                                    code: "function_boundary",
-                                },
-                            ))?;
-                            Ok(abi::Argument {
-                                name: Str::of(&argument.name),
-                                value: scalar_record(ScalarRef::from_owned(value))?,
-                            })
+                        .zip(&values)
+                        .filter_map(|(argument, values)| {
+                            let value = *values.get(row)?;
+                            let name = Str::of(&argument.name);
+                            Some(abi::Argument { name, value })
                         })
-                        .collect::<Result<Vec<_>, CallError>>()?;
-                    self.call(function, &arguments)
+                        .collect();
+                    let results = self.call(function, &arguments, None)?;
+                    let first = results.into_iter().next();
+                    first.ok_or(CallError::Raised(FunctionError::Protocol))
                 })
                 .collect();
-        };
-        let values = arguments
-            .iter()
-            .map(|argument| {
-                argument
-                    .values
-                    .iter()
-                    .map(|value| scalar_record(ScalarRef::from_owned(value)))
-                    .collect::<Result<Vec<_>, _>>()
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        let arguments: Vec<abi::BatchArgument> = arguments
+        }
+        let batch: Vec<abi::BatchArgument> = arguments
             .iter()
             .zip(&values)
             .map(|(argument, values)| abi::BatchArgument {
@@ -563,86 +588,7 @@ impl ProjectFunctions for Port {
                 values_len: values.len(),
             })
             .collect();
-        self.0.answer(
-            // SAFETY: see the module documentation.
-            |context, reply| unsafe {
-                call_batch(
-                    context,
-                    function,
-                    rows,
-                    arguments.as_ptr(),
-                    arguments.len(),
-                    reply,
-                )
-            },
-            // SAFETY: the host filled the reply.
-            |status, reply| unsafe {
-                called(status, reply, |reply| {
-                    items(reply.scalars, reply.scalars_len)
-                        .iter()
-                        .map(|record| scalar(record))
-                        .collect()
-                })
-            },
-        )
-    }
-}
-
-impl Port {
-    /// Verify an renv lock: the engine decodes it, and the host compares
-    /// the locked versions with the installed ones, as R does today.
-    fn compare_locked(
-        &self,
-        lock: &[u8],
-        functions: &[FunctionIdentity],
-    ) -> Result<(), FunctionError> {
-        let compare = self
-            .0
-            .callbacks
-            .compare_locked
-            .ok_or(FunctionError::Protocol)?;
-        let locked = yamaa::decode_renv_lock(lock).map_err(FunctionError::LockSyntax)?;
-        let packages: Vec<Str> = locked
-            .packages
-            .iter()
-            .flat_map(|(name, version)| [Str::of(name), Str::of(version)])
-            .collect();
-        let calls: Vec<Str> = functions
-            .iter()
-            .map(|function| Str::of(&function.call))
-            .collect();
-        let findings = self.0.answer(
-            // SAFETY: see the module documentation.
-            |context, reply| unsafe {
-                compare(
-                    context,
-                    packages.as_ptr(),
-                    packages.len(),
-                    calls.as_ptr(),
-                    calls.len(),
-                    reply,
-                )
-            },
-            // SAFETY: the host filled the reply.
-            |status, reply| unsafe { queried(status, reply, |reply| rows(reply, 4)) },
-        )?;
-        let findings = findings
-            .into_iter()
-            .map(|row| match <[Option<String>; 4]>::try_from(row) {
-                Ok([Some(package), Some(reason), expected, actual]) => Ok(LockFinding::new(
-                    package,
-                    LockReason::parse(&reason).ok_or(FunctionError::Protocol)?,
-                    expected.into_iter().collect(),
-                    actual,
-                )),
-                _ => Err(FunctionError::Protocol),
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        if findings.is_empty() {
-            Ok(())
-        } else {
-            Err(FunctionError::Lock(findings))
-        }
+        self.call(function, &[], Some((rows, &batch)))
     }
 }
 
@@ -650,95 +596,70 @@ impl Port {
 /// queries; the engine reads the uv lock and compares (D172).
 struct Installed<'a>(&'a Host);
 
-impl Installed<'_> {
-    fn query<Q: Copy>(&self, query: Option<Q>) -> Result<Q, FunctionError> {
-        query.ok_or(FunctionError::Protocol)
-    }
-}
-
 impl InstalledDistributions for Installed<'_> {
     fn providers(
         &self,
         modules: &[String],
     ) -> Result<BTreeMap<String, Vec<String>>, FunctionError> {
-        let providers = self.query(self.0.callbacks.providers)?;
         let modules: Vec<Str> = modules.iter().map(|module| Str::of(module)).collect();
-        let rows = self.0.answer(
-            // SAFETY: see the module documentation.
-            |context, reply| unsafe { providers(context, modules.as_ptr(), modules.len(), reply) },
-            // SAFETY: the host filled the reply.
-            |status, reply| unsafe { queried(status, reply, |reply| rows(reply, 2)) },
-        )?;
-        grouped(rows)
+        // SAFETY: the host filled the reply.
+        let read = |reply: &Reply| unsafe { pairs(reply) };
+        self.0.query(self.0.callbacks.providers, &modules, read)
     }
 
     fn standard_library(&self, module: &str) -> Result<bool, FunctionError> {
-        let standard_library = self.query(self.0.callbacks.standard_library)?;
-        self.0.answer(
-            // SAFETY: see the module documentation.
-            |context, reply| unsafe { standard_library(context, Str::of(module), reply) },
-            // SAFETY: the host filled the reply.
-            |status, reply| unsafe {
-                queried(status, reply, |reply| match scalar(&reply.scalar)? {
-                    yamaa::Scalar::Bool(answer) => Ok(answer),
-                    _ => Err(FunctionError::Protocol),
-                })
-            },
-        )
+        let callback = self.0.callbacks.standard_library;
+        // SAFETY: the host filled the reply.
+        self.0.query(callback, &[Str::of(module)], |reply| unsafe {
+            match scalar(&reply.scalar)? {
+                yamaa::Scalar::Bool(answer) => Ok(answer),
+                _ => Err(FunctionError::Protocol),
+            }
+        })
     }
 
     fn version(&self, distribution: &str) -> Result<InstalledVersion, FunctionError> {
-        let version = self.query(self.0.callbacks.distribution_version)?;
-        self.0.answer(
-            // SAFETY: see the module documentation.
-            |context, reply| unsafe { version(context, Str::of(distribution), reply) },
-            // SAFETY: the host filled the reply.
-            |status, reply| unsafe {
-                queried(status, reply, |reply| match reply.scalar.kind {
+        let callback = self.0.callbacks.distribution_version;
+        // SAFETY: the host filled the reply.
+        self.0
+            .query(callback, &[Str::of(distribution)], |reply| unsafe {
+                match reply.scalar.kind {
                     abi::SCALAR_MISSING => Ok(InstalledVersion::Missing),
                     abi::SCALAR_TEXT => text(reply.scalar.text)
                         .map(InstalledVersion::Version)
                         .ok_or(FunctionError::Protocol),
                     _ => Ok(InstalledVersion::Unreadable),
-                })
-            },
-        )
+                }
+            })
     }
 
     fn environment(&self) -> Result<BTreeMap<String, String>, FunctionError> {
-        let environment = self.query(self.0.callbacks.environment)?;
-        let rows = self.0.answer(
-            // SAFETY: see the module documentation.
-            |context, reply| unsafe { environment(context, reply) },
-            // SAFETY: the host filled the reply.
-            |status, reply| unsafe { queried(status, reply, |reply| rows(reply, 2)) },
-        )?;
-        let mut values = BTreeMap::new();
-        for (name, mut found) in grouped(rows)? {
-            match (found.pop(), found.is_empty()) {
-                (Some(value), true) => values.insert(name, value),
-                _ => return Err(FunctionError::Protocol),
-            };
-        }
-        Ok(values)
+        // SAFETY: the host filled the reply.
+        let read = |reply: &Reply| unsafe { pairs(reply) };
+        let grouped = self.0.query(self.0.callbacks.environment, &[], read)?;
+        grouped
+            .into_iter()
+            .map(
+                |(name, mut values)| match (values.pop(), values.is_empty()) {
+                    (Some(value), true) => Ok((name, value)),
+                    _ => Err(FunctionError::Protocol),
+                },
+            )
+            .collect()
     }
 
     fn integer_digits(&self) -> Result<Option<usize>, FunctionError> {
-        let integer_digits = self.query(self.0.callbacks.integer_digits)?;
-        self.0.answer(
-            // SAFETY: see the module documentation.
-            |context, reply| unsafe { integer_digits(context, reply) },
-            // SAFETY: the host filled the reply.
-            |status, reply| unsafe {
-                queried(status, reply, |reply| match scalar(&reply.scalar)? {
+        // SAFETY: the host filled the reply.
+        self.0
+            .query(self.0.callbacks.integer_digits, &[], |reply| unsafe {
+                match scalar(&reply.scalar)? {
                     // Zero turns the limit off.
                     yamaa::Scalar::Int(0) => Ok(None),
                     yamaa::Scalar::Int(digits) => usize::try_from(digits)
                         .map(Some)
                         .map_err(|_| FunctionError::Protocol),
                     _ => Err(FunctionError::Protocol),
-                })
-            },
-        )
+                }
+            })
     }
 }
