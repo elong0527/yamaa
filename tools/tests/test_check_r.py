@@ -350,10 +350,14 @@ class FailingTestsTests(FakeCheckTests):
 
 
 # Reports in the forms that the sanitizers document: UndefinedBehaviorSanitizer
-# names the source location and carries on; AddressSanitizer stops the program.
-UBSAN_REPORT = """\
+# names the source location and carries on, and with print_summary=0 prints no
+# summary line; AddressSanitizer stops the program.
+UBSAN_LINE = """\
 readstat_sas7bdat_read.c:512:23: runtime error: signed integer overflow: \
 2147483647 + 1 cannot be represented in type 'int'
+"""
+UBSAN_REPORT = f"""\
+{UBSAN_LINE}\
 SUMMARY: UndefinedBehaviorSanitizer: undefined-behavior readstat_sas7bdat_read.c:512:23
 """
 ASAN_REPORT = """\
@@ -370,9 +374,14 @@ class SanitizerReportsTests(FakeCheckTests):
     def test_a_report_fails_a_check_that_r_passed(self):
         # R passes a test, an example or an installation that
         # UndefinedBehaviorSanitizer reported on, since the program carried on.
-        for output in ("00install.out", "yamaa-Ex.Rout", "tests/lint.Rout"):
-            with self.subTest(output=output):
-                text = f"> library(yamaa)\n{UBSAN_REPORT}> q()\n"
+        for output, report in (
+            ("00install.out", UBSAN_REPORT),
+            ("yamaa-Ex.Rout", UBSAN_REPORT),
+            ("tests/lint.Rout", UBSAN_REPORT),
+            ("tests/lint.Rout", UBSAN_LINE),
+        ):
+            with self.subTest(output=output, summary=report == UBSAN_REPORT):
+                text = f"> library(yamaa)\n{report}> q()\n"
                 _, printed, failure = self.run_check(
                     0, {output: text, "tests/schema.Rout": "schema passed\n"}
                 )

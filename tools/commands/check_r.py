@@ -87,10 +87,14 @@ CRAN_SETTINGS = {
     "_R_CHECK_EXAMPLE_TIMING_CPU_TO_ELAPSED_THRESHOLD_": "2.5",
     "_R_CHECK_TEST_TIMING_CPU_TO_ELAPSED_THRESHOLD_": "2.5",
 }
-# What a sanitizer prints with each report, as R-hub's sanitizer containers
-# search for it. AddressSanitizer stops the program, so R fails the test or
-# the installation; UndefinedBehaviorSanitizer reports and carries on.
-SANITIZER_REPORT = re.compile(r"AddressSanitizer|UndefinedBehaviorSanitizer")
+# What a sanitizer prints with each report. AddressSanitizer names itself and
+# stops the program, so R fails the test or the installation.
+# UndefinedBehaviorSanitizer reports and carries on: each report starts with
+# "<location>: runtime error: ", and ends with the summary that names it,
+# which R-hub's sanitizer containers search for, unless print_summary=0.
+SANITIZER_REPORT = re.compile(
+    r"AddressSanitizer|UndefinedBehaviorSanitizer|: runtime error: "
+)
 # The outputs of a check, below its yamaa.Rcheck, that hold what the package's
 # compiled code prints: the installation, which loads the package, the
 # examples and each test file.
