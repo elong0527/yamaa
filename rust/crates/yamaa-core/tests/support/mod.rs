@@ -12,6 +12,21 @@ pub mod project_environment;
 pub mod roots;
 pub mod specification;
 
+/// A CSV text table, authored: the header's names and each record's fields,
+/// `None` for an empty one, as the adapters' parser admits a source.
+pub fn text_table(
+    names: &[&str],
+    records: &[&[Option<&str>]],
+) -> yamaa_core::csv_source::CsvSource {
+    yamaa_core::csv_source::CsvSource {
+        names: names.iter().map(|name| (*name).into()).collect(),
+        records: records
+            .iter()
+            .map(|record| record.iter().map(|field| field.map(String::from)).collect())
+            .collect(),
+    }
+}
+
 /// Construct an ordered schema independently of plan compilation.
 pub fn table_schema(columns: &[(&str, ColumnType)]) -> TableSchema {
     TableSchema::new(

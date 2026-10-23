@@ -195,7 +195,7 @@ unless the input declares `byte_order_mark: true`: then the source must begin
 with one mark, which is skipped.
 
 Fails: `invalid_text`, `source_byte_order_mark`, `value_not_permitted`.
-Evidence: `negative-source-bad-encoding`, `schema-source-byte-order-mark`, `negative-source-undeclared-byte-order-mark`, `negative-source-missing-byte-order-mark`, `negative-source-byte-order-mark-parquet`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::defects_have_exact_priority_and_coordinates`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::a_declared_mark_is_skipped_once_and_any_other_mark_fails`, `rust/crates/yamaa-adapters/tests/fixtures/csv_profile_diagnostics.json::bom`, `rust/crates/yamaa/tests/csv_byte_order_mark.rs`.
+Evidence: `negative-source-bad-encoding`, `schema-source-byte-order-mark`, `negative-source-undeclared-byte-order-mark`, `negative-source-missing-byte-order-mark`, `negative-source-byte-order-mark-parquet`, `rust/crates/yamaa-adapters/tests/table_csv_source.rs::defects_have_exact_priority_and_coordinates`, `rust/crates/yamaa-adapters/tests/table_csv_source.rs::a_declared_mark_is_skipped_once_and_any_other_mark_fails`, `rust/crates/yamaa-adapters/tests/fixtures/csv_profile_diagnostics.json::bom`, `rust/crates/yamaa/tests/csv_byte_order_mark.rs`.
 
 Ill-formed encoded bytes fail with [Values](../values.md)'s
 `invalid_text`, reporting the record and field the reader had reached.
@@ -233,7 +233,7 @@ optionally preceded by `U+000D`, and the final record may omit its terminator.
 else, including inside a quoted field, it fails rather than joining the value.
 
 Fails: `source_carriage_return`.
-Evidence: `adam-advs-windows`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::retired_python_admitted_terminators_and_header_only_schema_are_exact`, `rust/crates/yamaa-adapters/tests/fixtures/csv_profile_diagnostics.json::quoted-cr`, `negative-source-carriage-return`.
+Evidence: `adam-advs-windows`, `rust/crates/yamaa-adapters/tests/table_csv_source.rs::retired_python_admitted_terminators_and_header_only_schema_are_exact`, `rust/crates/yamaa-adapters/tests/fixtures/csv_profile_diagnostics.json::quoted-cr`, `negative-source-carriage-return`.
 
 A writer controls its bytes and emits one spelling, while a reader receives a
 study file as stored. The admitted spellings are a record terminated by
@@ -255,7 +255,7 @@ characters of the value. A closing quote is followed only by a delimiter or a
 terminator.
 
 Fails: `source_quote_unterminated`, `source_quote_in_bare_field`, `source_text_after_quote`.
-Evidence: `negative-source-unterminated-quote`, `adam-adsl-investigator-comment`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::retired_python_nonconforming_csv_has_exact_coordinates`, `negative-source-quote-in-bare-field`, `negative-source-text-after-quote`.
+Evidence: `negative-source-unterminated-quote`, `adam-adsl-investigator-comment`, `rust/crates/yamaa-adapters/tests/table_csv_source.rs::retired_python_nonconforming_csv_has_exact_coordinates`, `negative-source-quote-in-bare-field`, `negative-source-text-after-quote`.
 
 Nothing is trimmed. A space beside a delimiter is a character of the field,
 and a reader that removes it changes a collected value. A quoted field with no
@@ -293,7 +293,7 @@ transport detail the reader does not report:
 [Inputs](../inputs.md) gives an empty field one meaning
 and never sees an empty string.
 
-Evidence: `adam-adsl-investigator-comment`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::retired_python_quoted_and_bare_empty_records_keep_order`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::collected_text_and_missing_remain_lossless`.
+Evidence: `adam-adsl-investigator-comment`, `rust/crates/yamaa-adapters/tests/table_csv_source.rs::retired_python_quoted_and_bare_empty_records_keep_order`, `rust/crates/yamaa-adapters/tests/table_csv_source.rs::collected_text_and_missing_remain_lossless`.
 
 <a id="csv-15"></a>
 
@@ -306,7 +306,7 @@ no header synthesis or renaming, and no missing-value sentinel. A reader does
 not repair a rejected file by skipping a mark, trimming a field, padding a
 record, renaming a duplicate name or normalizing a terminator inside a value.
 
-Evidence: `negative-source-na-age`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::retired_python_missing_looking_text_is_never_inferred_as_missing`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::discarded_ragged_rows_preserve_complete_syntax_and_header_priority`.
+Evidence: `negative-source-na-age`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::retired_python_missing_looking_text_is_never_inferred_as_missing`, `rust/crates/yamaa-adapters/tests/table_csv_source.rs::discarded_ragged_rows_preserve_complete_syntax_and_header_priority`.
 
 [Inputs](../inputs.md) fixes what a stored field means,
 including that no text spells absence.
@@ -322,7 +322,7 @@ message carries no host path. Each condition rejects what the table below
 lists.
 
 Fails: `source_profile_unknown`, `source_byte_order_mark`, `source_header_absent`, `source_field_name_empty`, `source_field_name_duplicate`, `source_record_width`, `source_quote_unterminated`, `source_quote_in_bare_field`, `source_text_after_quote`, `source_carriage_return`.
-Evidence: `negative-source-unterminated-quote`, `negative-source-unnamed-field`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::every_csv_cause_retains_the_complete_independent_context`, `negative-source-carriage-return`, `negative-source-quote-in-bare-field`, `negative-source-text-after-quote`, `negative-source-empty-file`.
+Evidence: `negative-source-unterminated-quote`, `negative-source-unnamed-field`, `rust/crates/yamaa-adapters/tests/table_csv_source.rs::every_csv_cause_retains_the_complete_independent_context`, `negative-source-carriage-return`, `negative-source-quote-in-bare-field`, `negative-source-text-after-quote`, `negative-source-empty-file`.
 
 | Condition | Rejects |
 |---|---|

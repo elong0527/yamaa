@@ -43,8 +43,7 @@ pinned libm policy. `make check-repository` holds both rules of #3030 section
 crate keeps those edges, and a scan of core's sources, outside test-only items,
 refuses the standard library's file, IO, network, process, environment, OS and
 path modules and its clock, decoding bytes as text, and the XML, SAS transport
-and Parquet marks of a format. A core file that still holds such code is listed
-with the issue that moves it, and its entry goes with the move.
+and Parquet marks of a format, with no exception.
 
 The [shared host interface](rust/interface/README.md) owns the binding-generation
 design, declaration input, version negotiation and lifetime contract. Public

@@ -661,7 +661,7 @@ impl Application {
         let bytes = Self::artifact_bytes(reads, dataset, declaring, written)?;
         let lower = written.to_ascii_lowercase();
         if lower.ends_with(".csv") {
-            yamaa_core::csv_source::parse(&bytes)
+            crate::csv_source::parse(&bytes)
                 .map(|source| source.records.len())
                 .map_err(|error| published_csv_failure(&error, dataset.id(), written))
         } else if lower.ends_with(".parquet") {
@@ -693,7 +693,7 @@ impl Application {
                     )
                 })
                 .collect();
-            let source = yamaa_core::csv_source::parse(&bytes)
+            let source = crate::csv_source::parse(&bytes)
                 .map_err(|error| published_csv_failure(&error, dataset.id(), written))?;
             submission_transport::admit_fields(dataset, source.names.iter().map(String::as_str))
                 .map_err(|finding| Failure::Metadata(vec![finding]))?;

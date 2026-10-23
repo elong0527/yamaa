@@ -7,7 +7,6 @@ import tempfile
 import textwrap
 import unittest
 from pathlib import Path
-from unittest import mock
 
 from tools.paths import ROOT
 from tools.tests.support import write
@@ -22,7 +21,6 @@ MEMBERS = {
     "yamaa-cli": ("yamaa",),
 }
 CORE = "rust/crates/yamaa-core"
-PARSER = f"{CORE}/src/csv_source.rs"
 
 
 def manifest(name, dependencies, extra=""):
@@ -57,8 +55,8 @@ class ArchitectureTests(unittest.TestCase):
         path = self.root / relative
         path.write_text(path.read_text(encoding="utf-8") + text, encoding="utf-8")
 
-    def errors(self, exceptions=None):
-        return architecture.check(self.root, {} if exceptions is None else exceptions)
+    def errors(self):
+        return architecture.check(self.root)
 
     def test_the_repository_passes(self):
         self.assertEqual(architecture.check(ROOT), [])
@@ -329,36 +327,6 @@ class ArchitectureTests(unittest.TestCase):
             ],
         )
 
-    def test_an_exception_admits_its_file_until_the_file_no_longer_matches(self):
-        exceptions = {PARSER: "#1 moves the parser"}
-        self.write(
-            PARSER,
-            "pub fn parse(b: &[u8]) -> Option<&str> {\n"
-            "    std::str::from_utf8(b).ok()\n}\n",
-        )
-        self.assertEqual(self.errors(exceptions), [])
-        self.assertEqual(
-            self.errors(),
-            [f"{PARSER}:2: format code in core: from_utf8 decodes bytes as text"],
-        )
-        self.write(PARSER, "pub fn parse() {}\n")
-        self.assertEqual(
-            self.errors(exceptions),
-            [
-                f"{architecture.SELF}: EXCEPTIONS names {PARSER} (#1 moves the "
-                "parser), which holds no file or format code any more; remove its "
-                "entry"
-            ],
-        )
-        (self.root / PARSER).unlink()
-        self.assertEqual(
-            self.errors(exceptions),
-            [
-                f"{architecture.SELF}: EXCEPTIONS names {PARSER} (#1 moves the "
-                "parser), which does not exist; remove its entry"
-            ],
-        )
-
     def test_core_without_sources_fails(self):
         for path in (self.root / CORE / "src").iterdir():
             path.unlink()
@@ -368,12 +336,9 @@ class ArchitectureTests(unittest.TestCase):
 
     def test_the_command_line_passes_and_fails_with_a_hint(self):
         output = io.StringIO()
-        with (
-            mock.patch.object(architecture, "EXCEPTIONS", {}),
-            contextlib.redirect_stdout(output),
-        ):
+        with contextlib.redirect_stdout(output):
             self.assertEqual(architecture.main(["--root", str(self.root)]), 0)
-            self.assertIn("outside no exception.", output.getvalue())
+            self.assertIn("core holds no file or format code.", output.getvalue())
             self.write(f"{CORE}/src/value.rs", "use std::fs;\n")
             self.assertEqual(architecture.main(["--root", str(self.root)]), 1)
         lines = output.getvalue().splitlines()

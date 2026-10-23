@@ -8,9 +8,11 @@
 use libfuzzer_sys::fuzz_target;
 use serde::Deserialize;
 use serde_json::value::RawValue;
-use yamaa_adapters::submission_json::{DatasetJsonColumn, DatasetJsonDocument};
-use yamaa_core::{
+use yamaa_adapters::{
     csv_source,
+    submission_json::{DatasetJsonColumn, DatasetJsonDocument},
+};
+use yamaa_core::{
     table::{TableAccess, ValueRef},
     typed_csv::{PreparedTypes, TypedRows},
     value::ColumnType,

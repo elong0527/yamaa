@@ -246,7 +246,7 @@ missing-value sentinel: `NA`, `NULL`, `.`, `unknown` and every other spelling
 are ordinary string values. What missing is, and how each operation treats
 it, is [VALUE-25](values.md#value-25).
 
-Evidence: `negative-source-na-age`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::collected_text_and_missing_remain_lossless`.
+Evidence: `negative-source-na-age`, `rust/crates/yamaa-adapters/tests/table_csv_source.rs::collected_text_and_missing_remain_lossless`.
 
 An empty field holds no text to parse. In a delimited source, no collected
 empty value is distinct from a missing one. A typed container supplies missing

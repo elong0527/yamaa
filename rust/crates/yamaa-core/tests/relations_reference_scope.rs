@@ -1692,7 +1692,10 @@ mod relations {
             );
             let other = yamaa_core::typed_csv::PreparedTypes::new(&[])
                 .unwrap()
-                .convert(yamaa_core::csv_source::parse(b"ARTIFACT,KIND\nout.csv,run\n").unwrap())
+                .convert(crate::support::text_table(
+                    &["ARTIFACT", "KIND"],
+                    &[&[Some("out.csv"), Some("run")]],
+                ))
                 .unwrap();
             assert_eq!(run_report::recorded(&other, details), None);
         }
