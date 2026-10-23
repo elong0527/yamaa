@@ -191,6 +191,7 @@ impl Condition {
             Self::DanglingEscape => C::PredicateDanglingEscape,
             Self::NumericUnknownField { .. } => C::NumericUnknownField,
             Self::NumericInput { .. } => C::NumericInputType,
+            Self::AggregateOperand { .. } => C::AggregateNumericOperand,
             Self::Arithmetic(kind) => kind.diagnostic_code(),
         }
     }
@@ -229,7 +230,11 @@ impl Condition {
                 insert("expr", text(expression));
                 insert("identifier", text(identifier));
             }
-            Self::NumericInput { identifier, actual } => {
+            Self::NumericInput { identifier, actual }
+            | Self::AggregateOperand {
+                operand: identifier,
+                actual,
+            } => {
                 insert("expr", text(expression));
                 insert("source", text(identifier));
                 insert("expected", text("numeric"));
@@ -302,6 +307,13 @@ impl TypeFinding {
             Self::NumericOperand { source, actual } => (
                 Condition::NumericInput {
                     identifier: source.clone(),
+                    actual: *actual,
+                },
+                None,
+            ),
+            Self::AggregateOperand { source, actual } => (
+                Condition::AggregateOperand {
+                    operand: source.clone(),
                     actual: *actual,
                 },
                 None,

@@ -364,6 +364,7 @@ conditions! {
     AggregateRowMultipleRecords => ("row_construction", "aggregate_multiple_records", Some("FORMULA-20")),
     AggregateIdentifierNotGrouped => ("validation", "aggregate_identifier_not_grouped", Some("FORMULA-22")),
     AggregateIncomparableSources => ("validation", "incomparable_sources", Some("FORMULA-23")),
+    AggregateNumericOperand => ("validation", "incompatible_input_type", Some("FORMULA-23")),
     AggregateOutputGroups => ("validation", "invalid_aggregate_context", Some("LOOKUP-19")),
     AggregateOwnGroupKeys => ("validation", "invalid_aggregate_context", Some("LOOKUP-5")),
     AggregateMixedRelations => ("validation", "mixed_relations", Some("LOOKUP-18")),
