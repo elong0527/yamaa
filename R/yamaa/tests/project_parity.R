@@ -1,8 +1,9 @@
 # Project-run and project-function issue parity through the public R API.
 # Each case of the shared project-parity truth writes its files, makes one
 # call and compares every issue row it returns with the authored rows, all
-# twelve columns of D28 (#3030): a listed specification's issues in a project
-# run, the run of a specification the project names, or a submission. A case
+# twelve columns of D28 (#3030): the issues of a project check, a listed
+# specification's issues in a project run, the run of a specification the
+# project names, or a submission. A case
 # whose files or rows depend on the host language names them under
 # host_files and under issues by language. {root} stands for the directory
 # the case is written in, normalized with forward slashes, and {version} for
@@ -25,6 +26,7 @@ host <- "r"
 issues_of <- function(call, root) {
   path <- file.path(root, call$path)
   switch(call$operation,
+    project_check = yamaa_project(path)$check()$issues,
     project_run = yamaa_project(path)$run(call$section)[[call$member]]$issues,
     spec_run = yamaa_project(path)$spec(call$name)$run()$issues,
     submission = yamaa_project(path)$submission(call$section, created = call$created)$issues,
