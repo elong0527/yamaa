@@ -15,7 +15,7 @@ mod diagnostics {
         };
 
         fn compile_numeric(text: &str, path: &str) -> Result<CompiledExpression, CompileError> {
-            compile(text, Context::Compute, path)
+            compile(text, Context::Derivation, path)
         }
 
         struct Bindings;
@@ -910,7 +910,7 @@ mod diagnostics {
                 panic!("an overflowing literal is refused")
             };
             let literal = failure.diagnostic(
-                Context::Compute,
+                Context::Derivation,
                 "columns.Y",
                 "9223372036854775808",
                 position.character,

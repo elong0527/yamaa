@@ -28,27 +28,27 @@ pub(crate) fn check(
     )
 }
 /// One syntax condition, one refused-construct cause and one refused-function
-/// cause serve compute and aggregate alike.
+/// cause serve an expression field and aggregate alike.
 pub(crate) fn reached() -> BTreeSet<ConditionCode> {
     let path = "columns.VALUE.derivation.expr";
     let mut reached = BTreeSet::new();
     for (field, expression, condition, rule, extra) in [
         (
-            Field::Compute,
+            Field::Derivation,
             "1 +",
             "invalid_expression",
             "FORMULA-1",
             vec![],
         ),
         (
-            Field::Compute,
+            Field::Derivation,
             "1 < 2",
             "prohibited_construct",
             "FORMULA-27",
             vec![("construct", text("comparison"))],
         ),
         (
-            Field::Compute,
+            Field::Derivation,
             "abs(1, 2)",
             "prohibited_function",
             "FORMULA-13",

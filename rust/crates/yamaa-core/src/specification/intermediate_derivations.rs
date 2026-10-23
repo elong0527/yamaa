@@ -1161,7 +1161,7 @@ mod inference_tests {
         let expression = "NULLIF(INT_COL, FLOAT_COL)";
         let compiled = crate::expression::compile(
             expression,
-            crate::expression::Context::Compute,
+            crate::expression::Context::Derivation,
             "donor.compute",
         )
         .unwrap();

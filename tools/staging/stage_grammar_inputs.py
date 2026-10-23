@@ -20,12 +20,10 @@ CONTRACTS = {
     "expression": "formulas",
     "string-template": "text",
 }
-CONTEXTS = ("predicate", "compute", "aggregate", "derivation")
-# The contexts a public specification field reads: a predicate field, an
-# aggregate's text and an expression field, which holds the derivation
-# context's text (FORMULA-27). The engine reads only 1.0 specifications, so
-# no public field reads the `compute` context; the typed core replay reads it.
-PUBLIC_CONTEXTS = ("predicate", "aggregate", "derivation")
+# The contexts of the expression grammar, in its order, each read by a public
+# specification field: a predicate field, an aggregate's text and an
+# expression field, which holds the derivation context's text (FORMULA-27).
+CONTEXTS = ("predicate", "aggregate", "derivation")
 
 
 def documents(root=REPOSITORY):
@@ -37,22 +35,14 @@ def documents(root=REPOSITORY):
         yield contract, document
 
 
-def public(case):
-    """Whether a public specification field reads the case's context."""
-    return "context" not in case or case["context"] in PUBLIC_CONTEXTS
-
-
 def cases(root=REPOSITORY):
-    """Yield every authored case, then the expression vocabulary boundaries,
-    that a public specification field reads."""
+    """Yield every authored case, then the expression vocabulary boundaries."""
     docs = dict(documents(root))
     for contract, document in docs.items():
         for case in document["cases"]:
-            if public(case):
-                yield contract, case
+            yield contract, case
     for case in expansions(docs["expression"]):
-        if public(case):
-            yield "expression", case
+        yield "expression", case
 
 
 def expansions(document):
@@ -102,7 +92,7 @@ def expansions(document):
         truth = word in {"TRUE", "FALSE"}
         case("predicate", f"{word.lower()} = 1", literal, "invalid_expression")
         case("predicate", f"D.{word} = 1", True, "")
-        for context in ("compute", "aggregate", "derivation"):
+        for context in ("aggregate", "derivation"):
             case(
                 context,
                 f"1 + {word.lower()}",
@@ -113,7 +103,7 @@ def expansions(document):
     production = next(p for p in document["productions"] if p["name"] == "compare")
     for operator in re.findall(r'"([^"]*)"', production["definition"]):
         case("predicate", f"A {operator} 1", True, "")
-        for context in ("compute", "aggregate", "derivation"):
+        for context in ("aggregate", "derivation"):
             case(context, f"A {operator} 1", False, "prohibited_construct")
     for name, declaration in document["vocabulary"]["reducer"].items():
         star = "star" in declaration["argument"]
@@ -130,8 +120,7 @@ def expansions(document):
                 not syntax and argument != "SUM(A)",
                 condition("nested_reduction"),
             )
-            for context in ("compute", "derivation"):
-                case(context, text, False, condition("prohibited_function"))
+            case("derivation", text, False, condition("prohibited_function"))
             case("predicate", f"{text} = 1", False, condition("prohibited_function"))
     return expanded
 
