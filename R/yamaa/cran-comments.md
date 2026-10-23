@@ -5,32 +5,48 @@ a shared Rust engine, which the package compiles at installation.
 
 ## Test environments
 
-To be completed from the checks of the 1.0.0 candidate that is submitted:
-`R CMD check --as-cran` on Linux, macOS and Windows with R 4.2.0, R-release and
-R-devel, with R-devel on Linux without the suggested packages
-(`_R_CHECK_DEPENDS_ONLY_=true`), win-builder (R-release, R-devel and R-oldrel)
-and the macOS builder.
+`R CMD check --as-cran` on the package's source tarball, with the settings of
+CRAN's incoming checks, two Cargo jobs and every network connection refused,
+without the remote checks and the PDF and HTML manuals. Cargo and rustc are
+1.82.0, the declared minimum, unless another version is named.
+
+- Ubuntu 24.04 x86_64: R-devel (2026-10-22 r90748), R 4.6.1 and R 4.2.0, and
+  R-devel without the suggested packages (`_R_CHECK_DEPENDS_ONLY_=true`).
+- macOS 15 arm64: R-devel (2026-10-23 r90750), R 4.6.1 and R 4.2.0.
+- Windows Server 2025 x64: R-devel (2026-10-22 r90748 ucrt), R 4.6.1 and
+  R 4.2.0.
+- R-hub's `gcc16` container, CRAN's r-devel-linux-x86_64-fedora-gcc
+  configuration: R-devel (2026-10-21 r90732) built with GCC 16.2 on Fedora
+  44, with Fedora's Cargo and rustc 1.99.0.
+- R-hub's `clang-asan` container, the clang-ASAN configuration of CRAN's
+  additional checks: R-devel (2026-10-21 r90732) built with clang 23.1 and
+  libc++ on Ubuntu 26.04, which compiles the package's C, the bundled
+  ReadStat and zstd sources included, with AddressSanitizer and
+  UndefinedBehaviorSanitizer.
+
 The package is also installed with the network disabled on Linux x86_64 and
-aarch64, macOS and Windows.
+aarch64, macOS and Windows. win-builder (R-devel, R-release and R-oldrel)
+and the macOS builder run when the maintainer prepares the submission.
 
 ## R CMD check results
 
-0 errors | 0 warnings | 1 note with R 4.6.1 and R-devel; R 4.2 also notes
-the installed size. The notes, and why they remain:
+0 errors | 0 warnings | 1 note in each environment above with R-devel and
+R 4.6.1; R 4.2.0 also notes the installed size. The notes, and why they
+remain:
 
 - `checking CRAN incoming feasibility ... NOTE`: a new submission, and the
-  size of the tarball, about 11.7 MB. About 9.7 MB of it is
+  size of the tarball, about 11.0 MB. About 8.8 MB of it is
   `src/rust/vendor.tar.xz`, the Rust crates that the package compiles, which
   CRAN's guidance for packages that use Rust asks to be bundled rather than
   downloaded. The Repository Policy allows a modestly increased size limit to
   be requested for such bundled sources; we request a limit of 15 MB.
-- `checking installed package size ... NOTE` (R 4.2; R 4.6.1 and R-devel
-  report it as INFO): 24 to 28 MB on Linux, by Rust release, almost all of it
-  the shared object. The shared object, 23 to 27 MB, links the Rust engine
-  statically: most of it is machine code, and the symbols and the debug
-  information of the Rust standard library are kept, as the policy asks. The
-  inputs that the package's tests read are in `tests/`, which R does not
-  install.
+- `checking installed package size ... NOTE` (R 4.2.0; R 4.6.1 and R-devel
+  report it as INFO): 25.2 MB on Linux, 20.4 MB on macOS and 17.7 MB on
+  Windows, almost all of it the shared object (24.8, 20.0 and 17.3 MB), which
+  links the Rust engine statically: most of it is machine code, and the
+  symbols and the debug information of the Rust standard library are kept, as
+  the policy asks. The inputs that the package's tests read are in `tests/`,
+  which R does not install.
 
 ## Rust
 
@@ -77,11 +93,13 @@ The package follows "Using Rust in CRAN packages":
   it declares and the license that yamaa relies on.
 - The `Copyright` field names `inst/LICENSE-THIRD-PARTY.txt`, which
   reproduces the license, copyright and NOTICE texts of the third-party
-  crates that the package links, and the licensing of the Rust standard
-  library, from the notice that the Rust project ships with its toolchain.
-  The other bundled crates, such as procedural macros and the crates of other
-  platforms, are not linked; their license files stay in
-  `src/rust/vendor.tar.xz`, as `cargo vendor` wrote them.
+  crates that the package links on any of its supported platforms, and the
+  licensing of the Rust standard library, from the notice that the Rust
+  project ships with its toolchain. The other bundled crates are not linked:
+  the procedural macros and the crates that build scripts use, whose license
+  files stay in `src/rust/vendor.tar.xz` as `cargo vendor` wrote them, and
+  the crates that no supported platform compiles, bundled as their manifests
+  alone.
 - `inst/COMPONENTS.tsv` lists every bundled component, the ReadStat and zstd
   C sources included, with its version, license, source and purpose.
   `configure` appends one row to the copy that R installs, for the Rust
