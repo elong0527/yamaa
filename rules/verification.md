@@ -53,7 +53,7 @@ configurable but must not change pass or fail. Every evaluated check, a
 An intermediate's `unique` declares `severity` only where
 [LOOKUP-17](lookup.md#lookup-17) allows it. A violated `warning` there changes
 no row either, and every read of the intermediate still selects one record by
-its `keep` and `order_by`.
+its selection, `keep` and `order_by` or `nearest`.
 
 <a id="check-3"></a>
 

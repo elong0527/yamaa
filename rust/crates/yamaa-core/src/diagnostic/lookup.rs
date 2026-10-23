@@ -161,6 +161,61 @@ pub(crate) fn selection_unpaired(
     finding(C::LookupSelectionUnpaired, vec![path.into()], context)
 }
 
+/// `order_by` or `keep` beside a nearest selection, which replaces them
+/// (LOOKUP-26): each field written, then `nearest`, in specification order.
+pub(crate) fn nearest_beside_selection(paths: Vec<String>, owner: Owner<'_>) -> Diagnostic {
+    let mut context = Context::new();
+    owner.add(&mut context);
+    finding(C::LookupNearestSelection, paths, context)
+}
+
+/// A nearest selection's `source` that names no field of the lookup's
+/// relation (LOOKUP-26).
+pub(crate) fn nearest_source_reference(
+    path: &str,
+    owner: Owner<'_>,
+    identifier: &str,
+) -> Diagnostic {
+    let mut context: Context = [("identifier".into(), text(identifier))].into();
+    owner.add(&mut context);
+    finding(C::LookupNearestSourceReference, vec![path.into()], context)
+}
+
+/// A nearest selection's `source` whose type is neither `date` nor
+/// `datetime` (LOOKUP-26).
+pub(crate) fn nearest_source_type(
+    path: &str,
+    owner: Owner<'_>,
+    identifier: &str,
+    actual: ResultType,
+) -> Diagnostic {
+    let mut context: Context = [
+        ("identifier".into(), text(identifier)),
+        ("actual".into(), text(&actual.name())),
+        ("permitted".into(), texts(&["date", "datetime"])),
+    ]
+    .into();
+    owner.add(&mut context);
+    finding(C::LookupNearestSourceType, vec![path.into()], context)
+}
+
+/// A nearest selection's `to` whose type is not its `source`'s, before any
+/// record is read or when a value decided per value is read (LOOKUP-26).
+pub(crate) fn nearest_reference_type(
+    path: &str,
+    owner: Owner<'_>,
+    expected: ResultType,
+    actual: ResultType,
+) -> Diagnostic {
+    let mut context: Context = [
+        ("expected".into(), text(&expected.name())),
+        ("actual".into(), text(&actual.name())),
+    ]
+    .into();
+    owner.add(&mut context);
+    finding(C::LookupNearestReferenceType, vec![path.into()], context)
+}
+
 /// `require_match: true` beside a declared absence value (LOOKUP-24).
 pub(crate) fn absence_conflict(
     answer: String,

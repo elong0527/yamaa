@@ -232,9 +232,10 @@ impl<'a> Phases<'a> {
 
     /// The columns the lookup at `index` matches the current row on
     /// (LOOKUP-25): the current-row values its key pairs with donor columns,
-    /// the output keys when it declares no key, and its range value,
-    /// followed into the lookup that value reads. A lookup already followed
-    /// is not followed again; binding reports such a cycle.
+    /// the output keys when it declares no key, the reference of its nearest
+    /// selection, and its range value, followed into the lookup that value
+    /// reads. A lookup already followed is not followed again; binding
+    /// reports such a cycle.
     fn matches(&self, index: usize, followed: &mut Vec<usize>, out: &mut Vec<usize>) {
         if followed.contains(&index) {
             return;
@@ -249,16 +250,7 @@ impl<'a> Phases<'a> {
                         .filter_map(|column| self.output(&column.name)),
                 );
             }
-            Some(JoinKey::Pairs { pairs, .. }) => {
-                for &(_, value) in pairs {
-                    out.extend(
-                        self.row_reads(value)
-                            .into_iter()
-                            .filter_map(|name| self.output(name)),
-                    );
-                }
-            }
-            Some(JoinKey::FromInput) => {}
+            Some(JoinKey::Pairs { .. }) | Some(JoinKey::FromInput) => {}
             None => {
                 out.extend(
                     self.spec
@@ -267,6 +259,15 @@ impl<'a> Phases<'a> {
                         .filter_map(|key| self.output(&key.name)),
                 );
             }
+        }
+        // The key pairs' match values and a nearest selection's reference,
+        // which is read as a match value is (LOOKUP-26).
+        for value in item.match_values() {
+            out.extend(
+                self.row_reads(value)
+                    .into_iter()
+                    .filter_map(|name| self.output(name)),
+            );
         }
         if let Some(between) = &item.between {
             if let ExprKind::Ref(name) = &self.spec.expr(between.value).kind {
@@ -349,8 +350,9 @@ impl<'a> Phases<'a> {
     }
 
     /// The output columns the SELF lookups read from completed rows: their
-    /// keys, order, filter, derivations, range bounds, selected columns and
-    /// unique checks, and the fields any derivation reads through one.
+    /// keys, order, filter, derivations, range bounds, selected columns,
+    /// nearest source and unique checks, and the fields any derivation reads
+    /// through one.
     fn donor_fields(&self) -> BTreeSet<usize> {
         let spec = self.spec;
         let mut fields = BTreeSet::new();
@@ -395,6 +397,7 @@ impl<'a> Phases<'a> {
             item.columns
                 .iter()
                 .flatten()
+                .chain(item.nearest.iter().map(|nearest| &nearest.source))
                 .chain(item.checks.iter().flat_map(|check| &check.columns))
                 .for_each(|column| register(&column.name));
         }

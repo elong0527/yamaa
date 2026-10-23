@@ -189,10 +189,10 @@ impl<'a> DonorReads<'a> {
     /// (`intermediate_derivations::rebase`): a field of another input's
     /// record than the donor's in its correlated filter, its range value or a
     /// derivation's current fields; then, for a lookup a range value reads
-    /// (not `direct`), one in its key values. A range value read through
-    /// another lookup gives that lookup's first such read. A bare range value
-    /// is a field of the donor record, which only its records decide
-    /// (LOOKUP-16).
+    /// (not `direct`), one in its key values or nearest reference. A range
+    /// value read through another lookup gives that lookup's first such
+    /// read. A bare range value is a field of the donor record, which only
+    /// its records decide (LOOKUP-16).
     fn unavailable(&self, index: usize, direct: bool, followed: &mut Vec<usize>) -> Option<String> {
         if followed.contains(&index) {
             return None;
@@ -271,14 +271,17 @@ impl<'a> DonorReads<'a> {
             }
             _ => Vec::new(),
         };
-        fields.into_iter().find_map(|field| {
-            self.prepared
-                .intermediates
-                .match_declaration(&item.id.name, field)?
-                .references()
-                .find(|reference| foreign(reference))
-                .map(String::from)
-        })
+        let named = &self.prepared.intermediates;
+        fields
+            .into_iter()
+            .filter_map(|field| named.match_declaration(&item.id.name, field))
+            .chain(named.reference_declaration(&item.id.name))
+            .find_map(|value| {
+                value
+                    .references()
+                    .find(|reference| foreign(reference))
+                    .map(String::from)
+            })
     }
 
     /// The read at `path` of the lookup at `index`, which a lookup's
@@ -288,11 +291,12 @@ impl<'a> DonorReads<'a> {
     /// `intermediate_derivations::donor_scope_findings`); a lookup over
     /// `SELF` completes after the lookups (LOOKUP-16); then each key value
     /// that reads another record than the donor's is no value there
-    /// (LOOKUP-16); then a 1.0 row driver, which declares no key, is no keyed
-    /// lookup (LOOKUP-3). True when the read binds: each key value reads the
-    /// donor's record, or is a key column of a lookup over the donor's own
-    /// input, which that input stores. Any other bare name, which the donor
-    /// record may store, and an expression leave it undecided.
+    /// (LOOKUP-16), as is its nearest reference; then a 1.0 row driver, which
+    /// declares no key, is no keyed lookup (LOOKUP-3). True when the read
+    /// binds: each key value and the nearest reference reads the donor's
+    /// record, or a key value is a key column of a lookup over the donor's
+    /// own input, which that input stores. Any other bare name, which the
+    /// donor record may store, and an expression leave it undecided.
     fn lookup_read(
         &self,
         index: usize,
@@ -320,8 +324,9 @@ impl<'a> DonorReads<'a> {
             findings.push(self.refusal(C::IntermediateDerivationSelfPhase, path, name));
             return false;
         }
+        let named = &self.prepared.intermediates;
         let fields = match &item.key {
-            Some(JoinKey::Columns { .. }) if item.dataset.name == self.relation => return true,
+            Some(JoinKey::Columns { .. }) if item.dataset.name == self.relation => Vec::new(),
             Some(JoinKey::Columns { columns, .. }) => columns
                 .iter()
                 .map(|column| column.name.as_str())
@@ -339,14 +344,17 @@ impl<'a> DonorReads<'a> {
                 return false;
             }
         };
+        let mut values = fields
+            .into_iter()
+            .map(|field| named.match_declaration(&item.id.name, field))
+            .collect::<Vec<_>>();
+        // A nearest selection's reference is read as a key value is
+        // (LOOKUP-26).
+        values.extend(named.reference_declaration(&item.id.name).map(Some));
         let mut decided = true;
         let mut refused = false;
-        for field in fields {
-            let Some(value) = self
-                .prepared
-                .intermediates
-                .match_declaration(&item.id.name, field)
-            else {
+        for value in values {
+            let Some(value) = value else {
                 decided = false;
                 continue;
             };

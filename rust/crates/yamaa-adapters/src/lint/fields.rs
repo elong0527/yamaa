@@ -34,7 +34,7 @@ static OUTPUT_CLASS: Class = Class {
 
 #[rustfmt::skip]
 static INTERMEDIATE_CLASS: Class = Class {
-    fields: &["id", "dataset", "key", "between", "filter", "order_by", "keep", "columns", "absent", "require_match", "derivations", "verifications"],
+    fields: &["id", "dataset", "key", "between", "filter", "order_by", "keep", "nearest", "columns", "absent", "require_match", "derivations", "verifications"],
     members: &[],
 };
 
