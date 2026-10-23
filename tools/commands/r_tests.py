@@ -12,7 +12,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from tools.commands import loaded
+from tools.commands import check_r, loaded
 from tools.commands.check_r import check
 from tools.packaging.check_cargo_lock import check_bundle_archive
 from tools.paths import ROOT
@@ -115,7 +115,10 @@ def test_configure():
 
 def check_install(archive, environment, work):
     """Check a fresh archive, including the shared engine-build assertion."""
-    check(archive, work, environment)
+    expected = check_r.EXPECTED_NOTES
+    if loaded.loaded():
+        expected = expected | loaded.R_CHECK_NOTES
+    check(archive, work, environment, expected=expected)
     if os.environ.get("YAMAA_R_CARGO_TARGET_DIR"):
         (log,) = work.glob("*.Rcheck/00install.out")
         check_shared_build(log.read_text(encoding="utf-8"))

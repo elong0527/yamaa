@@ -173,6 +173,21 @@ R_ENGINE = {
 }
 
 
+# What R CMD check reports of a package in the loaded mode beyond the notes
+# that R/yamaa/cran-comments.md explains: the engine library beside yamaa's
+# own library registers no R routines, since R never loads it, the loader
+# does. No shipped package carries it.
+R_CHECK_NOTES = {
+    "compiled code": (
+        r"File .yamaa/libs/(?:[^/]+/)?(?:libyamaa_engine\.so|yamaa_engine\.dll).:",
+        r"Found no calls to: .R_registerRoutines., .R_useDynamicSymbols.",
+        r"It is good practice to register native routines and to disable symbol",
+        r"search\.",
+        r"See .Writing portable packages. in the .Writing R Extensions. manual\.",
+    ),
+}
+
+
 def patch_r_package(package):
     """Make the staged R package at `package` build its binding in the
     loaded mode and install the engine library beside it."""

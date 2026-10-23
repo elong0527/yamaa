@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from tools.commands import loaded
+from tools.commands import check_r, loaded
 from tools.paths import ROOT
 
 R_SOURCE = ROOT / "R/yamaa/src"
@@ -94,3 +94,57 @@ class StagedRPackage(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LoadedPackageCheck(unittest.TestCase):
+    # R CMD check's note on a library in libs/ that registers no routines,
+    # as it prints it for the engine library.
+    LOG = (
+        "* checking compiled code ... NOTE\n"
+        "File ‘yamaa/{library}’:\n"
+        "  Found no calls to: ‘R_registerRoutines’, ‘R_useDynamicSymbols’\n"
+        "\n"
+        "It is good practice to register native routines and to disable symbol\n"
+        "search.\n"
+        "\n"
+        "See ‘Writing portable packages’ in the ‘Writing R Extensions’ manual.\n"
+        "* checking examples ... OK\n"
+        "* DONE\n"
+        "\n"
+        "Status: 1 NOTE\n"
+    )
+
+    def test_only_the_loaded_mode_accepts_the_engine_library_note(self):
+        loaded_notes = check_r.EXPECTED_NOTES | loaded.R_CHECK_NOTES
+        cases = [
+            ("libs/libyamaa_engine.so", loaded_notes, []),
+            ("libs/x64/yamaa_engine.dll", loaded_notes, []),
+            (
+                "libs/yamaa.so",
+                loaded_notes,
+                ["NOTE: checking compiled code: File ‘yamaa/libs/yamaa.so’:"],
+            ),
+            (
+                "libs/libyamaa_engine.so",
+                check_r.EXPECTED_NOTES,
+                [
+                    "NOTE: checking compiled code",
+                    "    File ‘yamaa/libs/libyamaa_engine.so’:",
+                    "    Found no calls to: ‘R_registerRoutines’, "
+                    "‘R_useDynamicSymbols’",
+                    "    It is good practice to register native routines and to "
+                    "disable symbol",
+                    "    search.",
+                    "    See ‘Writing portable packages’ in the "
+                    "‘Writing R Extensions’ manual.",
+                ],
+            ),
+        ]
+        for library, expected, problems in cases:
+            with self.subTest(library=library, loaded=expected is loaded_notes):
+                self.assertEqual(
+                    check_r.unexpected(
+                        self.LOG.format(library=library), expected=expected
+                    ),
+                    problems,
+                )

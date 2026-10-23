@@ -1249,8 +1249,9 @@ owns decoding behavior.
   and the native qualification lane. Both hosts run the version and feature
   handshake of `yamaa-boundary` before any other native call (#3679), and
   reach the engine they link only through its client, over the engine's
-  internal C ABI (D225 on #3030, #3702); an engine that loads separately
-  from the host packages, for tests only, is later work (#3702).
+  internal C ABI (D225 on #3030, #3702). An engine loaded at runtime from
+  beside the binding's module is a test-only mode, which a repository check
+  refuses in every shipped build (#3702).
 - The `yamaa` facade crate is the only supported Rust surface; every other
   crate is internal and may change in any release, as the
   [stability contract](#stability-contract) says.

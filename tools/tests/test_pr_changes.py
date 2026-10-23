@@ -20,6 +20,7 @@ def selection(repository="full", **enabled):
         "equivalence_python": False,
         "equivalence_r": False,
         "workflow_lint": False,
+        "loaded": False,
     } | enabled
 
 
@@ -69,16 +70,11 @@ class AffectedLanes(unittest.TestCase):
     def test_engine_and_shared_or_unknown_inputs_qualify_both_hosts(self):
         for path in (
             "rust/crates/yamaa-core/src/expression/mod.rs",
-            "rust/Cargo.lock",
             "rust/rust-toolchain.toml",
             "benchmarks/example/expected/table.csv",
             "yaml/schema_spec.yaml",
             "tools/packaging/check_cargo_lock.py",
             "tools/staging/stage_r_package.py",
-            "tools/commands/equivalence.py",
-            "tools/ci/pr_changes.py",
-            "python/pyproject.toml",
-            "python/uv.lock",
             "Makefile",
             ".cargo/config.toml",
             "new-build-input/settings.toml",
@@ -87,6 +83,30 @@ class AffectedLanes(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertEqual(pr_changes.select([path]), FULL)
 
+    def test_boundary_inputs_also_run_the_loaded_mode(self):
+        for path, lanes in (
+            ("rust/crates/yamaa-boundary/src/loader.rs", FULL),
+            ("rust/crates/yamaa-engine/examples/fixture_no_entry.rs", FULL),
+            ("rust/crates/yamaa-python/src/interface.rs", FULL),
+            ("rust/crates/yamaa-r/src/interface.rs", FULL),
+            ("rust/interface/README.md", FULL),
+            ("rust/Cargo.lock", FULL),
+            ("rust/tests/host-fixtures/cases.json", FULL),
+            ("tools/commands/loaded.py", FULL),
+            ("tools/commands/equivalence.py", FULL),
+            ("tools/ci/pr_changes.py", FULL),
+            ("python/pyproject.toml", FULL),
+            ("python/uv.lock", FULL),
+            ("R/yamaa/src/Makevars.in", selection(r=True, equivalence_r=True)),
+            ("R/yamaa/tests/interface.R", selection(r=True, equivalence_r=True)),
+            (
+                "python/tests/installed/installed_interface.py",
+                selection(python=True, equivalence_python=True),
+            ),
+        ):
+            with self.subTest(path=path):
+                self.assertEqual(pr_changes.select([path]), lanes | {"loaded": True})
+
     def test_workflow_lint_is_selected_for_any_github_change(self):
         self.assertEqual(
             pr_changes.select([".github/workflows/native.yml"]),
@@ -94,7 +114,7 @@ class AffectedLanes(unittest.TestCase):
         )
         self.assertEqual(
             pr_changes.select([".github/workflows/ci.yml"]),
-            FULL | {"workflow_lint": True},
+            FULL | {"workflow_lint": True, "loaded": True},
         )
 
     def test_mixed_changes_take_the_union_and_empty_diffs_run_every_lane(self):
@@ -104,20 +124,21 @@ class AffectedLanes(unittest.TestCase):
             ),
             selection(python=True, r=True, equivalence_r=True),
         )
-        self.assertEqual(pr_changes.select([]), FULL)
+        self.assertEqual(pr_changes.select([]), FULL | {"loaded": True})
 
     def test_schedules_keep_development_checks_and_dispatch_qualifies_both_hosts(self):
         development = FULL | {
             "equivalence_python": False,
             "equivalence_r": False,
             "workflow_lint": True,
+            "loaded": False,
         }
         for event in ("push", "schedule"):
             with self.subTest(event=event):
                 self.assertEqual(pr_changes.decision(event), development)
         self.assertEqual(
             pr_changes.decision("workflow_dispatch"),
-            FULL | {"workflow_lint": True},
+            FULL | {"workflow_lint": True, "loaded": True},
         )
 
     def test_an_unknown_event_cannot_silently_skip_qualification(self):

@@ -15,23 +15,67 @@ native qualification lane compare the generated files with this definition
 the version and feature handshake below before any other native call, and the
 boundary compatibility and lifetime tests of
 [#2692](https://github.com/elong0527/yamaa/issues/2692) run in both installed
-suites. Both bindings link the engine's C ABI, `rust/crates/yamaa-engine`
-over the types of `yamaa-boundary`'s `abi` module, and reach it only through
-`yamaa-boundary`'s client, never through the facade; an engine that loads
-separately from the host packages, for tests only, is later work of
-[#3702](https://github.com/elong0527/yamaa/issues/3702).
+suites. Both bindings reach the engine only through its C ABI and
+`yamaa-boundary`'s client, never through the facade: linked into each shipped
+package, or loaded at runtime in a test-only mode (below).
 
-## Boundary choice and source ownership
+## The boundary
 
-Choose Rust-level generated host glue. Each host package builds the shared
-engine, adapters and its binding crate together with the selected toolchain and
-lock. Rust values never cross between independently built shared libraries.
-There is no stable Rust binary layout promise. The binding crate calls the
-engine through its C ABI, with a handle table, C record layouts and a callback
-ABI, which the binding links into the same library; the generated host
-declarations need none of it. The
-existing Arrow C Data/Stream interface remains the standard C ABI for tables.
-Its ownership contract below applies to both generated host boundaries.
+Each binding's generated Rust glue registers its host's functions with PyO3
+or extendr and reaches the engine through one C ABI: the function table,
+handle table, records and callbacks that `yamaa-boundary`'s `abi` module
+declares and `rust/crates/yamaa-engine` implements over the facade. The
+binding calls it only through `yamaa-boundary`'s client, whose gate holds the
+table that the first accepted negotiation returns. Rust values never cross
+the ABI, which has no stable Rust layout to promise: handles are a slot and
+its generation, texts and lists are borrowed or released by the side that
+made them, and every entry and callback contains a panic. The existing Arrow
+C Data/Stream interface remains the standard C ABI for tables. Its ownership
+contract below applies to both hosts. The ABI is internal: any release may
+change it with a new boundary version, and the negotiation entry's signature,
+the request's header, the outcome's fixed part, the table's header and the
+check order stay the same in every boundary version, so that any two yamaa
+builds refuse each other cleanly.
+
+The engine reaches a binding in one of two link modes, which run the same
+table through the same client:
+
+- **Linked, which every shipped package uses.** Each host package builds the
+  engine, the adapters and its binding crate together with the selected
+  toolchain and lock, and the binding calls `yamaa_engine::negotiate` as a
+  Rust function. Neither the wheel's module nor the R package's library
+  exports a new symbol, so the Python and R packages in one process, through
+  reticulate or rpy2, cannot clash.
+- **Loaded, for tests alone.** A binding built with its `dynamic-engine`
+  feature links no engine. At its handshake it loads the engine library from
+  beside its own module file, `libyamaa_engine.so` on Linux and macOS and
+  `yamaa_engine.dll` on Windows, and looks up the one symbol that every
+  boundary version keeps, `yamaa_engine_negotiate`. The loader computes the
+  library's absolute path from the module's own location (`dladdr`, or
+  `GetModuleHandleExW` with `GetModuleFileNameW`), never searches `PATH`,
+  `LD_LIBRARY_PATH`, `DYLD_*` or the current directory, opens it with
+  `RTLD_NOW | RTLD_LOCAL` or with `LoadLibraryExW` and
+  `LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS`,
+  takes the entry only from the file it asked for, and never unloads it. A
+  module beside which no engine library loads, or whose library exports no
+  entry, refuses the handshake as `missing_interface`. The engine library is
+  `yamaa-engine` built as a library with its own `dynamic-engine` feature,
+  with each host's toolchain: MSVC beside the wheel's module, and Rtools' GNU
+  target beside the R package's on Windows. `YAMAA_ENGINE=loaded` selects
+  this mode for `make setup`, `make test-python`, `make test-r` and the host
+  checks (`tools/commands/loaded.py`), which CI's `loaded` lane runs on
+  Linux for a change to the boundary, and native qualification on Windows x64
+  and macOS arm64. A repository check refuses the feature in
+  `pyproject.toml`, the R build files, the release workflows and the staging
+  tools (`tools/validation/check_loaded_mode.py`), so no shipped package
+  carries a loader.
+
+Four fixture engines, `rust/crates/yamaa-engine/examples/`, answer the
+generated request as engines of other builds would: one of the next boundary
+version, a library without `yamaa_engine_negotiate`, an engine without
+`plan_reuse` and one without `format_parquet`. The shared truth's
+`interface` family gives each its authored outcome, which the loading tests
+and, in the loaded mode, both installed interface suites check.
 
 The IDL owns export names, ordered arguments, defaults, host projections, Rust
 implementation paths, feature names and semantic pairings. The adjacent document
@@ -286,8 +330,8 @@ handle. The generated `yamaa/__init__.py` imports `_native` and calls
 the package, and the generated `.onLoad` of the R package calls the
 `interface_handshake` routine. Both send the request that the `handshake`
 section declares, with the version `yamaa_boundary::BOUNDARY_VERSION`, and the
-binding answers through `rust/crates/yamaa-boundary`. Negotiation reads
-nothing, calls nothing and publishes nothing.
+binding forwards it to the engine through `yamaa-boundary`'s client.
+Negotiation reads nothing, calls nothing and publishes nothing.
 
 | | Contents |
 | --- | --- |
@@ -331,7 +375,7 @@ request.
 | --- | --- |
 | The exact version, every required identifier supported | Accepted, enabling the required identifiers and the supported optional ones |
 | Another version: a newer layer over an older native side, or an older layer over a newer one | `version_mismatch`, with both versions |
-| No handshake on the native side: a native module without `_interface_handshake` or `interface_handshake` | `missing_interface`, with `supported_version` null |
+| No handshake on the native side: a native module without `_interface_handshake` or `interface_handshake`, or in the loaded mode no engine library beside the module, or one without `yamaa_engine_negotiate` | `missing_interface`, with `supported_version` null |
 | A required identifier unknown or unavailable | `missing_feature`, naming each in request order |
 | An optional identifier unknown or unavailable | Accepted; it stays disabled, and the record lists the supported and enabled sets |
 | An identifier twice, a zero, negative or oversized version, or a field of the wrong type | `malformed_request` |
@@ -346,8 +390,9 @@ one, so `library(yamaa)` refuses the load with the message alone, and the
 typed condition reaches only direct callers of `.interface_negotiate()`. The
 message is the template of the reason, declared in the `handshake` section and
 filled from the envelope, so a mismatch names both versions in both hosts.
-Only a generated layer gives `missing_interface`, since no native side could.
-The messages are not frozen.
+A generated layer gives `missing_interface` for a native module without the
+handshake, and in the loaded mode the binding gives it for an engine library
+that does not load or exports no entry. The messages are not frozen.
 
 The first accepted negotiation opens the binding's gate, which stays open for
 the life of the process; a replaced native module starts closed, and a later
@@ -563,9 +608,14 @@ handle. They reuse the existing Arrow pointer, release, early-release,
 failed-conversion and repeated-import/export controls of
 [#2646](https://github.com/elong0527/yamaa/pull/2646), which gain the census,
 and the interrupt-identity controls of both hosts. The engine's C ABI has
-its Rust lifetime tests in `rust/crates/yamaa-engine/tests/`, and the engine
-loaded separately ([#3702](https://github.com/elong0527/yamaa/issues/3702))
-adds its own loading tests. Diagnostic full-registry and cross-host
+its Rust lifetime tests in `rust/crates/yamaa-engine/tests/`, where
+`abi_loading.rs` loads each fixture engine through the loader, compares its
+outcome with the shared truth and proves that the loader never reads the
+current directory; in the loaded mode, the whole installed Python suite and
+the R package check run with the engine loaded at runtime, and both interface
+suites load each fixture engine beside a copy of the native module
+([#3702](https://github.com/elong0527/yamaa/issues/3702)). Diagnostic
+full-registry and cross-host
 payload parity remain owned by
 [#2677](https://github.com/elong0527/yamaa/issues/2677). No test may derive
 benchmark expected values from the implementation.
