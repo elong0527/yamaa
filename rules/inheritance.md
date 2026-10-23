@@ -141,7 +141,7 @@ collection in one layer must not share an identifier. A fragment declares
 neither `parent` nor `include`.
 
 Fails: `unsupported_language_version`, `unexpected_file_type`, `duplicate_identifier`, `prohibited_construct`.
-Evidence: `negative-version-mismatch`, `negative-include-parent`, `rust/crates/yamaa-core/tests/preparation_dictionary_preparation.rs::a_fragment_declares_neither_parent_nor_include`, `rust/crates/yamaa-core/tests/preparation_dictionary_preparation.rs::a_fragment_with_an_unread_header_fails_at_the_include_entry_naming_it`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::each_layer_is_admitted_at_its_own_version_and_the_chain_needs_the_newest`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_parent_naming_an_unread_version_or_another_type_fails_at_parent`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_layer_is_a_fragment_and_a_single_layer_is_complete`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_schema_version_root_is_refused_as_language_0_5_wherever_it_is_read`, `rust/crates/yamaa-adapters/tests/declaration_layer_composition.rs::a_keyed_list_member_carries_its_identity_in_the_layer_that_writes_it`.
+Evidence: `negative-version-mismatch`, `negative-include-parent`, `rust/crates/yamaa-core/tests/preparation_dictionary_preparation.rs::a_fragment_declares_neither_parent_nor_include`, `rust/crates/yamaa-core/tests/preparation_dictionary_preparation.rs::a_fragment_with_an_unread_header_fails_at_the_include_entry_naming_it`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::each_layer_is_admitted_at_its_own_version_and_the_chain_needs_the_newest`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_parent_naming_an_unread_version_or_another_type_fails_at_parent`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_layer_is_a_fragment_and_a_single_layer_is_complete`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_schema_version_root_is_refused_as_language_0_5_wherever_it_is_read`, `rust/crates/yamaa-adapters/tests/declaration_layer_composition.rs::a_keyed_list_member_carries_its_identity_in_the_layer_that_writes_it`, `rust/tests/host-fixtures/cases.json::a_grandparent_of_another_type_at_the_parent_that_names_it`, `rust/tests/host-fixtures/cases.json::a_fragment_of_another_type_at_the_ancestor_that_includes_it`.
 
 Requiredness is deferred for every root field and at every depth inside a
 member of `input`, `intermediates`, `columns`, `rows` and `windows`. An entry
@@ -156,7 +156,9 @@ layer whose version the engine does not read fails before composition,
 reporting the file and its version, at the
 entry's `yamaa` or at the `parent` or `include[i]` naming the layer. A layer
 that declares a type other than `spec` fails as `unexpected_file_type`, at the
-entry's `type` or at that `parent` or `include[i]`. A fragment composes on the
+entry's `type` or at that `parent` or `include[i]`. At a `parent` or
+`include[i]`, either finding also names the layer that writes that field,
+which may be a layer above the entry. A fragment composes on the
 layers before it, so a fragment that declares `parent` or `include` fails as
 `prohibited_construct` at that field of the fragment, its context naming the
 construct, the fragment and the entry, before anything it names is read.
