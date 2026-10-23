@@ -360,11 +360,13 @@ A [schema language](../rules/reference/schema-language.md) shorthand is the
 only spelling of the value its long form would merely restate, and it expands
 to its canonical class before the operation is prepared. A failure inside a
 written shorthand names the operation or the field of that class the operation
-reports: a bare string derivation fails at `derivation.source`, a lone
-aggregate formula at `aggregate` and a lone flag condition at
-`flag.condition`. Normalization never invents a location outside the expanded
-class, and a written long form that only restates its shorthand fails at its
-own path as `redundant_long_form`.
+reports: a fault in the text of a lone aggregate formula fails at
+`aggregate.expr`, and one in a lone flag condition at `flag.condition`. A
+derivation written as a reference fails at `derivation.source`, the path of
+the `source` binding it keeps, and any other text at `derivation` itself
+([EXPR-5](../rules/expressions.md#expr-5)). Normalization never invents a
+location outside the expanded class, and a written long form that only
+restates its shorthand fails at its own path as `redundant_long_form`.
 
 The primary condition and specification paths of a negative case stay solely
 in the independent `expected/error.yaml`; `benchmark.yaml` carries no
@@ -482,8 +484,10 @@ An expression enters the vocabulary when a benchmark needs it, a negative
 benchmark fixes its failure behavior, and R and Python can implement it the same
 way. Sponsor-specific algorithms stay behind `function`.
 
-Prefer one closed grammar to an entry per operator: `compute` states the whole
-numeric grammar once rather than registering `add`, `subtract`, and `divide`.
+Prefer one closed grammar to an entry per operator: the expression grammar
+([FORMULA-1](../rules/formulas.md#formula-1)) states arithmetic once, as text
+in an expression field, rather than registering `add`, `subtract`, and
+`divide`.
 
 Prefer widening an existing entry to adding a new one -- but the test is the
 kind of value, not the saving in YAML. Widen when the new behavior returns the

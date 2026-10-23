@@ -135,7 +135,7 @@ fn check_tree(label: &str, spec: &Spec, failures: &mut Vec<String>) {
 
 /// The root fields a spec path can start with; other paths name the project.
 const SPEC_ROOTS: [&str; 12] = [
-    "schema_version",
+    "yamaa",
     "domain",
     "keys",
     "input",

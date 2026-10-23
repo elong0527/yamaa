@@ -103,11 +103,6 @@ Language rules live in `rules/*.md`, format and file-handling rules in
 `rules/reference/`, and the submission, project-file and project-function
 profiles in `rules/profiles/`.
 
-A file that declares `schema_version`, written in language version 0.5, is
-refused wherever the engine or the lint reads it
-([SCHEMA-2](reference/schema-language.md#schema-2)); the rules of 0.5 stay at
-the `yamaa-v0.5.0` tag.
-
 | File | Prefix | Covers |
 | --- | --- | --- |
 | [Specification structure](specification.md) | SPEC | Declare root fields, unique identifiers, column derivation coverage, internal and copied columns, and ASCII source. |
@@ -242,7 +237,7 @@ values, so one name never covers two treatments:
 | `condition` | Each of `TRUE`, `FALSE`, and `UNKNOWN` has its own result (`flag`). |
 
 `expr` holds an expression in a closed text grammar that produces a value
-(`compute`, `aggregate`), never a predicate. `then` and `otherwise` hold
+(`aggregate`), never a predicate. `then` and `otherwise` hold
 values (`case`), never predicates.
 
 ## Changing a rule

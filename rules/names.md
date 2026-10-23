@@ -108,7 +108,7 @@ with an aggregate expression, as [Expressions](expressions.md) and
 The current row template of a column-level derivation is the one that built
 the row. A derivation that completes the rows of row templates over several
 drivers therefore reads, on each row, the driver record that built that row,
-and joins any other input dataset on the output keys it carries
+and joins any other input dataset on that input's declared `key`
 ([LOOKUP-1](lookup.md#lookup-1)): the same qualified name reads a record on
 the rows its driver built and joins on the rows another driver built. A
 derivation holding a qualified aggregate ([LOOKUP-18](lookup.md#lookup-18))

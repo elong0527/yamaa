@@ -53,7 +53,7 @@ An exposed derived field has a column type when it is typed, or when its
 expression's result type under [EXPR-14](expressions.md#expr-14) is one
 column type; a `source` reading another intermediate's column under
 [LOOKUP-16](lookup.md#lookup-16) has that column's type. A `case` selecting an
-`int` or a `str` and a Boolean `literal` have none, and an exposed derived
+`int` or a `str` and a Boolean literal have none, and an exposed derived
 field without one fails row-driver validation as
 `unknown_intermediate_driver_type`.
 
