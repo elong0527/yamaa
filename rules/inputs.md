@@ -305,10 +305,10 @@ input:
 
 `schema` is a `project_path` resolved like `dataset_class.path`, so
 [File resolution](reference/files.md) confines both. The referenced
-document is validated against the same `root_class` in `schema.yaml`; there is
-no second source-schema class or field-description language. A document named
-by `schema` that does not validate as a complete yamaa specification, whose
-`output.columns` do not form a valid output contract under
+document is validated against the same `root_class` in `schema_spec.yaml`;
+there is no second source-schema class or field-description language. A
+document named by `schema` that does not validate as a complete yamaa
+specification, whose `output.columns` do not form a valid output contract under
 [INPUT-11](#input-11), or that is the consuming specification itself fails
 with `invalid_producer_contract`. A missing producing specification fails like
 any missing file, at `input.<dataset>.schema`.

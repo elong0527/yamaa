@@ -112,7 +112,7 @@ lookup is read: in a row template, that template's driver
 template the read can evaluate on: the templates that leave the column to
 column derivation. A row template's `filter` reads its lookups for that
 template's rows, and a dataset verification for the rows of every template. A
-named intermediate is also read through an aggregate's `derive` binding and
+named intermediate is also read through an aggregate's `derivations` and
 through the range value of another lookup. A value naming nothing the current
 row holds, such as a bare name that no column takes or a field of another
 input or of the lookup's own relation, fails as `unknown_field` at
@@ -586,8 +586,9 @@ derivation are not available then. A named intermediate states the same match
 with declared `key` pairs, and its match values have the same availability:
 input-record fields or columns of the same row template. The join binds one
 value per row, and later derivations in the same row template read that value
-through the bound column. A `compute` during row construction still names no
-qualified cross-dataset identifier ([FORMULA-9](formulas.md#formula-9)).
+through the bound column. Text in an expression field during row construction
+still names no qualified cross-dataset identifier
+([FORMULA-9](formulas.md#formula-9)).
 
 In grouped row construction every declared key column must be a group key of
 the row template ([ROW-4](rows.md#row-4)). A key the group does not
@@ -1260,10 +1261,10 @@ never changes the row count.
 A single expression naming two datasets, or mixing a qualified identifier with
 an unqualified one, fails. A reduction is not a join: an expression combining
 two dataset relations first binds each relation to a column and then combines
-the results with `compute`, which admits a qualified identifier only for a
-record selected by a named intermediate and still rejects an arbitrary
-dataset-qualified identifier ([FORMULA-9](formulas.md#formula-9)). Every join
-remains under these lookup rules.
+the results in an expression field's text, which admits a qualified identifier
+only for a record selected by a named intermediate and still rejects an
+arbitrary dataset-qualified identifier ([FORMULA-9](formulas.md#formula-9)).
+Every join remains under these lookup rules.
 
 A qualified name in an aggregate expression reaches a field of its relation,
 never an ODM item by its `ItemOID`, and a qualified name that names an ODM item
@@ -1272,8 +1273,9 @@ with [`odm`](names.md#name-7) first.
 
 The context decides what `group_by` ([LOOKUP-19](#lookup-19)), `key`
 ([LOOKUP-5](#lookup-5)), `between` ([LOOKUP-9](#lookup-9)), `filter`
-([LOOKUP-8](#lookup-8)) and `derive` ([LOOKUP-22](#lookup-22)) range over;
-`expr` is the reducer expression of [FORMULA-17](formulas.md#formula-17).
+([LOOKUP-8](#lookup-8)) and `derivations` ([LOOKUP-22](#lookup-22)) range
+over; `expr` is the reducer expression of
+[FORMULA-17](formulas.md#formula-17).
 
 <a id="lookup-19"></a>
 

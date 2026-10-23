@@ -585,7 +585,7 @@ collected date text ([TIME-7](temporal.md#time-7)) `2025-01` sorts before
 `2025-01-08` and `2025-01-08` before `2025-01-08T06:00`: the least text need
 not be the earliest date, and completing it afterwards can leave the result
 missing. A reduction that means the earliest or latest date completes each
-record first, with an aggregate derive binding
+record first, with an entry of the aggregate's `derivations`
 ([LOOKUP-22](lookup.md#lookup-22)) of type `date` or `datetime` whose
 derivation is `impute` ([TIME-8](temporal.md#time-8)), and reduces the bound
 values, which compare chronologically under
@@ -705,8 +705,8 @@ implementation-defined order. Their string order is that of
 No implicit conversion happens inside the grammar.
 [Values](values.md) converts the completed derivation
 result, as it does for every other expression. These types, over the declared
-types of the relation's fields and derive bindings, give `aggregate` its
-result type ([EXPR-14](expressions.md#expr-14)).
+types of the relation's fields and of the aggregate's `derivations`, give
+`aggregate` its result type ([EXPR-14](expressions.md#expr-14)).
 
 <a id="formula-24"></a>
 
