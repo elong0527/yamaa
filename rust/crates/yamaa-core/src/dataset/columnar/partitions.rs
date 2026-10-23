@@ -210,7 +210,7 @@ impl<E> Run<'_, '_, E> {
         record: impl Fn(usize) -> Option<usize>,
     ) -> Vec<Range<usize>> {
         if !divided {
-            return vec![0..len];
+            return std::iter::once(0..len).collect();
         }
         runs(len, |item| {
             record(item).and_then(|record| self.partition_of(record))
@@ -227,7 +227,7 @@ impl<E> Run<'_, '_, E> {
         rows: &[usize],
     ) -> Vec<Range<usize>> {
         if !divided {
-            return vec![0..rows.len()];
+            return std::iter::once(0..rows.len()).collect();
         }
         let templates: Vec<TemplateId> = self.plan.region_templates(RegionId::DATASET).collect();
         runs(rows.len(), |item| {
@@ -417,6 +417,9 @@ mod tests {
             runs(keys.len(), |item| keys[item]),
             [0..2, 2..3, 3..5, 5..6]
         );
-        assert_eq!(runs(0, |_| Some(0)), [0..0]);
+        assert_eq!(
+            runs(0, |_| Some(0)),
+            std::iter::once(0..0).collect::<Vec<_>>()
+        );
     }
 }
