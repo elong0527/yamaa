@@ -4,7 +4,7 @@
     feature = "readstat",
     feature = "odm"
 ))]
-//! Partitioned runs reproduce the benchmark corpus (#3697): the whole-table
+//! Partitioned and streamed runs reproduce the benchmark corpus (#3697): the whole-table
 //! results each benchmark states, independently authored, in `expected/`.
 //!
 //! Every benchmark with one specification and no project runs on an engine
@@ -19,12 +19,19 @@
 //! guarantee (PARQUET-4), so it equals the whole-table run's file instead,
 //! which the hosts' conformance checks compare with the expected file's
 //! content.
+//!
+//! Each benchmark is also read as a stream on the same engine (#3697, step
+//! 4), whose batches then hold one record each: a positive benchmark's
+//! batches hold its run's output table, record for record, under the schema
+//! the stream gave before its first pull, and a negative benchmark's stream
+//! ends at its first pull with its run's issues. Either way the streamed
+//! run's issues are its run's.
 use std::collections::BTreeMap;
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 
 use crate::support::scratch::Scratch;
-use yamaa::{CancellationToken, Engine, EngineOptions, HostLanguage, Partitions};
+use yamaa::{CancellationToken, Engine, EngineOptions, Error, HostLanguage, Partitions, Plans};
 
 /// Benchmarks that must divide, read from their specifications: each
 /// derives only from its input's own records (source reads, mappings, date
@@ -221,8 +228,41 @@ fn problems(case: &Path, outcome: Outcome) -> Vec<String> {
     problems
 }
 
+/// What differs between `run` and the same specification read as a stream
+/// on an engine with one-record partitions.
+fn stream_problems(run: &yamaa::Run, streamed: yamaa::Streamed) -> Vec<String> {
+    let mut problems = Vec::new();
+    match run.output() {
+        Some(table) => {
+            if streamed.schema() != Some(table.schema()) {
+                problems.push("the stream's schema differs from the output's".into());
+            }
+            let rows = table
+                .batches()
+                .iter()
+                .flat_map(|batch| (0..batch.num_rows()).map(|row| batch.slice(row, 1)))
+                .collect::<Vec<_>>();
+            match streamed.reader().collect::<Result<Vec<_>, _>>() {
+                Ok(batches) if batches == rows => {}
+                Ok(_) => problems.push("streamed records differ from the output's".into()),
+                Err(error) => problems.push(format!("stream ended with {error}")),
+            }
+        }
+        None => match streamed.reader().next() {
+            Some(Err(Error::Rejected(report))) if report.diagnostics == run.diagnostics() => {}
+            other => problems.push(format!("stream did not end with the issues: {other:?}")),
+        },
+    }
+    match streamed.run() {
+        Ok(streamed) if streamed.diagnostics() == run.diagnostics() => {}
+        Ok(_) => problems.push("the streamed run's issues differ".into()),
+        Err(error) => problems.push(format!("no streamed run: {error}")),
+    }
+    problems
+}
+
 #[test]
-fn partitioned_runs_reproduce_every_single_specification_benchmark() {
+fn partitioned_and_streamed_runs_reproduce_every_single_specification_benchmark() {
     let token = CancellationToken::new();
     let one = Partitions::new(NonZeroUsize::MIN);
     let mut mismatched = BTreeMap::new();
@@ -243,13 +283,23 @@ fn partitioned_runs_reproduce_every_single_specification_benchmark() {
                     .to_json()
                     .contains(r#""code":"partition_global""#)
         });
+        let partitions = if refused {
+            one.with_whole_table_fallback()
+        } else {
+            one
+        };
         if refused {
-            run = engine(Some(one.with_whole_table_fallback()))
+            run = engine(Some(partitions))
                 .spec_run(spec, None, &token)
                 .unwrap();
         } else {
             divided.push(name.clone());
         }
+        // Read as a stream before the run's save writes its files.
+        let streamed = engine(Some(partitions))
+            .spec_stream(spec, None, &Plans::new(), &token)
+            .unwrap();
+        let streaming = stream_problems(&run, streamed);
         // A negative benchmark states its first issue's phase, condition,
         // paths and rule; every issue, context included, is the whole-table
         // run's, over the same staged files.
@@ -262,6 +312,7 @@ fn partitioned_runs_reproduce_every_single_specification_benchmark() {
         };
         let mut problems = problems(&case, outcome(run));
         problems.extend(issues);
+        problems.extend(streaming);
         if !problems.is_empty() {
             mismatched.insert(name, problems);
         }
