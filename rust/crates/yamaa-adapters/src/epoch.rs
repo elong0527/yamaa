@@ -1,5 +1,6 @@
-//! Civil/epoch conversion for the precision-bearing Arrow representation and
-//! the facade's epoch day and second accessors.
+//! Civil fields to and from epoch days and seconds: the public form of a
+//! date and a datetime, Parquet's and SAS's stored temporals, and the
+//! facade's epoch day and second accessors.
 
 use yamaa_core::temporal::{Date, DateTime, Precision};
 
@@ -13,7 +14,7 @@ fn before_year(year: i64) -> i64 {
     365 * previous + previous / 4 - previous / 100 + previous / 400
 }
 
-/// Convert already validated civil fields to an exact Arrow Date32 day.
+/// Convert already validated civil fields to an exact epoch day.
 pub fn date_days(date: Date) -> i32 {
     let (year, month, day) = date.fields();
     let mut ordinal = before_year(i64::from(year));

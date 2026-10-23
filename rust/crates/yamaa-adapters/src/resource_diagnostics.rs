@@ -76,13 +76,6 @@ fn source_path(
 pub(crate) fn source(error: &Error, source: &SourceDeclaration) -> Option<Refusal> {
     let (resource, limit, actual) = match error {
         Error::ResourceLimit(refusal) => return Some(refusal.clone()),
-        Error::Execution(crate::dataset_result::DatasetError::Table(
-            crate::ipc_table::TableError::Limit {
-                resource,
-                limit,
-                required,
-            },
-        )) => return Some(Refusal::new(resource, *limit, *required, Vec::new())),
         Error::ParquetSource(crate::parquet_source::Error::ResourceLimit {
             resource,
             limit,
@@ -98,20 +91,20 @@ pub(crate) fn source(error: &Error, source: &SourceDeclaration) -> Option<Refusa
             limit,
             actual,
         })) => (*resource, *limit, *actual),
-        Error::Source(TextTableError::Table(crate::arrow_table::TableError::Limit {
+        Error::Source(TextTableError::Table(crate::column_table::TableError::Limit {
             resource,
             limit,
             required,
         }))
         | Error::TypedSource(crate::typed_csv::Error::Table(
-            crate::arrow_table::TableError::Limit {
+            crate::column_table::TableError::Limit {
                 resource,
                 limit,
                 required,
             },
         ))
         | Error::ParquetSource(crate::parquet_source::Error::Table(
-            crate::arrow_table::TableError::Limit {
+            crate::column_table::TableError::Limit {
                 resource,
                 limit,
                 required,
@@ -348,7 +341,7 @@ mod tests {
             ("table_cells", 640_000_000, 640_000_001),
         ] {
             let error = Error::Source(TextTableError::Table(
-                crate::arrow_table::TableError::Limit {
+                crate::column_table::TableError::Limit {
                     resource,
                     limit,
                     required: Some(actual),

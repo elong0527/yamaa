@@ -17,7 +17,12 @@
 //!
 //! The facade forwards the `yaml`, `parquet`, `readstat` and `odm` format
 //! features to `yamaa-adapters`, all on by default, and builds with any
-//! combination of them. With no format feature, CSV and Arrow routes remain.
+//! combination of them. With no format feature, the CSV route remains. The
+//! `arrow` feature, also on by default, is not a format: it gives a table its
+//! Arrow form and admits host frames, through the Arrow types this crate
+//! re-exports, `Table::batches` and `Table::stream` among them, and
+//! `InputFrame::import`. A build without it links no Arrow crate unless
+//! `parquet` brings Arrow for its own reader.
 //! A capability a build omits fails the same way it does in adapters: the
 //! stable codes (`yaml_reader_unavailable`, `parquet_reader_unavailable`,
 //! `sas_reader_unavailable`, `odm_reader_unavailable`,
@@ -60,6 +65,7 @@ pub mod resolver;
 pub mod scalar;
 pub mod schema;
 pub mod selftest;
+#[cfg(feature = "arrow")]
 pub mod stream;
 pub mod table;
 pub mod text;
@@ -96,12 +102,15 @@ pub use resolver::{
 pub use scalar::{Date, DateTime, EncodedScalar, Scalar, ScalarDecodeError, ScalarRef};
 pub use schema::schema;
 pub use selftest::{selftest, SelfTest, SelfTestCase, SELFTEST_COLUMNS};
+#[cfg(feature = "arrow")]
 pub use stream::{Batches, RunGuard, StreamProgress, Streamed};
+#[cfg(feature = "arrow")]
 pub use table::{
-    Array, DataType, Date32Array, FFI_ArrowArrayStream, Field, Fields, Float64Array, InputFrame,
-    Int64Array, LargeStringArray, ListArray, RecordBatch, SchemaRef, StringArray, StringViewArray,
-    Table, TimeUnit, TimestampSecondArray,
+    Array, DataType, Date32Array, FFI_ArrowArrayStream, Field, Fields, Float64Array, Int64Array,
+    LargeStringArray, ListArray, RecordBatch, SchemaRef, StringArray, StringViewArray, TimeUnit,
+    TimestampSecondArray,
 };
+pub use table::{InputFrame, Table};
 pub use text::{Action, Summary};
 
 /// Version of the shared core compiled into a native installation.

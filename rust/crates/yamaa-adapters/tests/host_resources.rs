@@ -2,12 +2,11 @@
 //! resources, frame freshness, staged output that an interruption or abort
 //! leaves behind, and parent files on another drive, on another share, linked
 //! or malformed.
-use arrow_array::{Float64Array, RecordBatch};
 use std::sync::Arc;
 #[cfg(feature = "yaml")]
 use yamaa_adapters::host_resources::{Operation, Reply, Request, Resolver};
 use yamaa_adapters::{
-    arrow_table::{self, ArrowTable},
+    column_table::{self, ColumnTable},
     file_resources::{Error, Resources},
     host_resources::{Failure, MemoryResolver},
 };
@@ -64,7 +63,11 @@ fn absent_and_cancelled_resources_remain_explicit_without_captures() {
     assert_eq!(resources.capture_reads(), 0);
 }
 
-fn frame(float: f64, date_precision: Precision, timestamp_precision: Precision) -> Arc<ArrowTable> {
+fn frame(
+    float: f64,
+    date_precision: Precision,
+    timestamp_precision: Precision,
+) -> Arc<ColumnTable> {
     let date = Date::new(2026, 1, 1, date_precision).unwrap();
     let timestamp = DateTime::new(date, 0, 0, 0, timestamp_precision).unwrap();
     let logical = TableSchema::new(vec![
@@ -82,16 +85,12 @@ fn frame(float: f64, date_precision: Precision, timestamp_precision: Precision) 
         },
     ])
     .unwrap();
-    let batch = RecordBatch::try_new(
-        arrow_table::physical_schema(&logical),
-        vec![
-            Arc::new(Float64Array::from(vec![float])),
-            Arc::new(arrow_table::date_array(&[Some(date)]).unwrap()),
-            Arc::new(arrow_table::datetime_array(&[Some(timestamp)]).unwrap()),
-        ],
-    )
-    .unwrap();
-    Arc::new(ArrowTable::try_new(logical, vec![batch]).unwrap())
+    let columns = vec![
+        column_table::Column::floats([Some(float)]),
+        column_table::Column::Date(vec![Some(date)]),
+        column_table::Column::DateTime(vec![Some(timestamp)]),
+    ];
+    Arc::new(ColumnTable::new(logical, columns, 1).unwrap())
 }
 
 #[test]

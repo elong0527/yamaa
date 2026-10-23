@@ -1,13 +1,14 @@
-//! Facade-owned result tables over shared immutable Arrow buffers.
+//! Facade-owned result tables and their Arrow form.
 //!
-//! [`Table`] is the facade form of the public table: owned Arrow record
-//! batches with their schema, plus `columns()`, `rows()`, `ipc()` and
-//! `stream()`. Stream export follows the Arrow host-handoff ownership rules:
-//! each export owns an independent cursor with shared immutable buffer
-//! references. The Arrow type of each public column type is committed:
-//! strings are `Utf8`, integers `Int64`, floats `Float64`, dates `Date32`
-//! (days) and zone-free datetimes `TimestampSecond`. No specification column
-//! ever surfaces as an Arrow `Boolean`.
+//! [`Table`] is the facade form of the public table: its rows, its printed
+//! preview, and its Arrow form, built once on first use: `columns()`,
+//! `schema()`, `batches()` and `stream()`. Stream export follows the Arrow
+//! host-handoff ownership rules: each export owns an independent cursor with
+//! shared immutable buffer references. The Arrow type of each public column
+//! type is committed: strings are `Utf8`, integers `Int64`, floats
+//! `Float64`, dates `Date32` (days) and zone-free datetimes
+//! `TimestampSecond`. No specification column ever surfaces as an Arrow
+//! `Boolean`.
 //!
 //! Host frames cross into the engine only as opaque [`InputFrame`] handles;
 //! hosts never decode engine tables except through [`Table`].
@@ -19,17 +20,22 @@ use std::sync::Arc;
 
 use crate::api::Failure;
 use crate::engine::Engine;
+#[cfg(feature = "arrow")]
 use crate::error::TableError;
 use crate::text::Action;
 
+#[cfg(feature = "arrow")]
 pub use arrow_array::ffi_stream::FFI_ArrowArrayStream;
+#[cfg(feature = "arrow")]
 pub use arrow_array::{
     Array, Date32Array, Float64Array, Int64Array, LargeStringArray, ListArray, RecordBatch,
     StringArray, StringViewArray, TimestampSecondArray,
 };
+#[cfg(feature = "arrow")]
 pub use arrow_schema::{DataType, Field, Fields, SchemaRef, TimeUnit};
 
-/// An owned immutable result table with shared Arrow buffers.
+/// An owned immutable result table, cheap to clone: clones share its columns
+/// and its Arrow form.
 #[non_exhaustive]
 #[derive(Clone, Debug)]
 pub struct Table {
@@ -52,16 +58,19 @@ impl Table {
     }
 
     /// Borrow the public Arrow fields in declaration order.
+    #[cfg(feature = "arrow")]
     pub fn columns(&self) -> &Fields {
         self.inner.columns()
     }
 
     /// Borrow the public Arrow schema.
+    #[cfg(feature = "arrow")]
     pub fn schema(&self) -> &SchemaRef {
         self.inner.schema()
     }
 
     /// Borrow the owned record batches in record order.
+    #[cfg(feature = "arrow")]
     pub fn batches(&self) -> &[RecordBatch] {
         self.inner.batches()
     }
@@ -71,12 +80,8 @@ impl Table {
         self.inner.rows()
     }
 
-    /// Encode a copied IPC stream; host views use the C stream bridge.
-    pub fn ipc(&self) -> Result<Vec<u8>, TableError> {
-        self.inner.ipc().map_err(TableError::from_ipc)
-    }
-
     /// Export one stream with an independent cursor and shared buffers.
+    #[cfg(feature = "arrow")]
     pub fn stream(&self) -> FFI_ArrowArrayStream {
         self.inner.stream()
     }
@@ -195,13 +200,15 @@ impl Engine {
 #[non_exhaustive]
 #[derive(Clone, Debug)]
 pub struct InputFrame {
-    inner: Arc<yamaa_adapters::arrow_table::ArrowTable>,
+    inner: Arc<yamaa_adapters::column_table::ColumnTable>,
 }
 
 impl InputFrame {
-    /// Consume a standard host stream into the engine's validated snapshot.
-    /// Primitive and UTF-8 buffers are shared; other physical types require
+    /// Consume a standard host stream into the engine's own columns, copying
+    /// its values: UTF-8 (including large and view arrays), `Int64`, `Float64`,
+    /// `Date32` and zone-free `TimestampSecond`. Other physical types require
     /// an explicit preserving conversion by the caller before exporting.
+    #[cfg(feature = "arrow")]
     pub fn import(stream: FFI_ArrowArrayStream) -> Result<Self, TableError> {
         let table = yamaa_adapters::arrow_bridge::import_public_stream(stream)
             .map_err(TableError::from_table)?;
@@ -210,16 +217,18 @@ impl InputFrame {
         })
     }
 
-    pub(crate) fn into_adapter(self) -> Arc<yamaa_adapters::arrow_table::ArrowTable> {
+    pub(crate) fn into_adapter(self) -> Arc<yamaa_adapters::column_table::ColumnTable> {
         self.inner
     }
 
-    pub(crate) fn from_adapter_table(table: Arc<yamaa_adapters::arrow_table::ArrowTable>) -> Self {
+    pub(crate) fn from_adapter_table(
+        table: Arc<yamaa_adapters::column_table::ColumnTable>,
+    ) -> Self {
         Self { inner: table }
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "arrow"))]
 mod tests {
     use super::*;
 

@@ -1492,7 +1492,7 @@ columns:
         }
 
         fn float_column(result: &file_application::Domain, name: &str) -> Vec<Option<f64>> {
-            let table = result.output_table().unwrap();
+            let table = result.output().unwrap();
             let column = table
                 .columns()
                 .iter()

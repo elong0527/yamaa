@@ -624,7 +624,7 @@ impl Batches {
             Some(Err(error)) => {
                 self.mode = Mode::Done;
                 drop(run);
-                let error = Error::Table(TableError::from_ipc(error));
+                let error = Error::Table(TableError::from_public(error));
                 *state = State::Failed(error.clone());
                 Some(Err(error))
             }

@@ -121,13 +121,13 @@ impl Date {
 
     /// Return whole days since 1970-01-01, negative before it.
     pub fn epoch_days(self) -> i32 {
-        yamaa_adapters::arrow_temporal::date_days(self.inner)
+        yamaa_adapters::epoch::date_days(self.inner)
     }
 
     /// The date `days` whole days after 1970-01-01, when it lies within
     /// the civil years 1 to 9999.
     pub fn from_epoch_days(days: i64) -> Option<Self> {
-        yamaa_adapters::arrow_temporal::date_from_days(days, yamaa_core::temporal::Precision::Day)
+        yamaa_adapters::epoch::date_from_days(days, yamaa_core::temporal::Precision::Day)
             .map(Self::from_core)
     }
 
@@ -171,13 +171,13 @@ impl DateTime {
     /// Return whole seconds since 1970-01-01T00:00:00, counting the civil
     /// fields as zone-free time; negative before it.
     pub fn epoch_seconds(self) -> i64 {
-        yamaa_adapters::arrow_temporal::datetime_seconds(self.inner)
+        yamaa_adapters::epoch::datetime_seconds(self.inner)
     }
 
     /// The datetime `seconds` whole seconds after 1970-01-01T00:00:00, when
     /// it lies within the civil years 1 to 9999.
     pub fn from_epoch_seconds(seconds: i64) -> Option<Self> {
-        yamaa_adapters::arrow_temporal::datetime_from_seconds(
+        yamaa_adapters::epoch::datetime_from_seconds(
             seconds,
             yamaa_core::temporal::Precision::Second,
         )

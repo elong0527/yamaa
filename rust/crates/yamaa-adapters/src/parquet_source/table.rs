@@ -1,14 +1,13 @@
-//! Convert admitted storage arrays into the engine's precision-bearing snapshot.
+//! Convert admitted storage arrays into the engine's precision-bearing table.
 use super::reader::Decoded;
 use crate::{
-    arrow_table::{date_array, datetime_array, physical_schema, ArrowTable, TableError},
-    arrow_temporal::{date_from_days, datetime_from_seconds},
+    column_table::{Column, ColumnTable, TableError},
+    epoch::{date_from_days, datetime_from_seconds},
 };
 use arrow_array::{
-    Array, ArrayRef, Date32Array, LargeStringArray, RecordBatch, StringArray,
+    Array, Date32Array, Float64Array, Int64Array, LargeStringArray, StringArray,
     TimestampMicrosecondArray,
 };
-use std::sync::Arc;
 use yamaa_core::{temporal::Precision, value::ColumnType};
 
 #[derive(Debug)]
@@ -18,8 +17,10 @@ pub(super) enum Error {
     Table(TableError),
 }
 
-/// Preserve canonical scalar values at the decoded table boundary.
-pub(super) fn convert(decoded: Decoded) -> Result<ArrowTable, Error> {
+/// Preserve canonical scalar values at the decoded table boundary: a date
+/// keeps day and a datetime second precision, and text keeps the empty
+/// string apart from a missing value.
+pub(super) fn convert(decoded: Decoded) -> Result<ColumnTable, Error> {
     let columns = decoded.schema.columns().len();
     let mut rows = 0usize;
     for batch in &decoded.batches {
@@ -33,8 +34,8 @@ pub(super) fn convert(decoded: Decoded) -> Result<ArrowTable, Error> {
         })?;
         for array in batch.columns() {
             if let Some(strings) = array.as_any().downcast_ref::<LargeStringArray>() {
-                // The canonical representation uses signed 32-bit offsets.
-                if !crate::arrow_table::fits_utf8_offsets(
+                // Each decoded text column fits Arrow Utf8's offsets.
+                if !crate::column_table::fits_utf8_offsets(
                     strings.iter().flatten().map(|text| text.len()),
                 ) {
                     return Err(Error::Representation);
@@ -42,73 +43,91 @@ pub(super) fn convert(decoded: Decoded) -> Result<ArrowTable, Error> {
             }
         }
     }
-    let physical = physical_schema(&decoded.schema);
-    let mut batches = Vec::with_capacity(decoded.batches.len());
-    for batch in decoded.batches {
-        let mut arrays: Vec<ArrayRef> = Vec::with_capacity(columns);
-        for (field, array) in decoded.schema.columns().iter().zip(batch.columns()) {
-            let converted: ArrayRef = match field.kind {
-                ColumnType::Str => {
-                    if array.as_any().is::<StringArray>() {
-                        array.clone()
+    let mut values = decoded
+        .schema
+        .columns()
+        .iter()
+        .map(|field| Column::empty(field.kind))
+        .collect::<Vec<_>>();
+    for batch in &decoded.batches {
+        for ((field, array), column) in decoded
+            .schema
+            .columns()
+            .iter()
+            .zip(batch.columns())
+            .zip(&mut values)
+        {
+            fn cast<T: 'static>(array: &dyn Array) -> Result<&T, Error> {
+                array.as_any().downcast_ref::<T>().ok_or(Error::Invalid)
+            }
+            let array = array.as_ref();
+            let present = |row| !array.is_null(row);
+            match (field.kind, column) {
+                (ColumnType::Str, Column::Str(text)) => {
+                    if let Some(strings) = array.as_any().downcast_ref::<StringArray>() {
+                        for row in 0..array.len() {
+                            text.push(present(row).then(|| strings.value(row)));
+                        }
                     } else {
-                        let strings = array
-                            .as_any()
-                            .downcast_ref::<LargeStringArray>()
-                            .ok_or(Error::Invalid)?;
-                        Arc::new(StringArray::from_iter(strings.iter()))
+                        let strings = cast::<LargeStringArray>(array)?;
+                        for row in 0..array.len() {
+                            text.push(present(row).then(|| strings.value(row)));
+                        }
                     }
                 }
-                ColumnType::Date => {
-                    let dates = array
-                        .as_any()
-                        .downcast_ref::<Date32Array>()
-                        .ok_or(Error::Invalid)?;
-                    let values = dates
-                        .iter()
-                        .map(|v| {
-                            v.map(|day| {
-                                date_from_days(i64::from(day), Precision::Day).ok_or(Error::Invalid)
-                            })
-                            .transpose()
-                        })
-                        .collect::<Result<Vec<_>, _>>()?;
-                    Arc::new(date_array(&values).map_err(|_| Error::Invalid)?)
+                (ColumnType::Int, Column::Int(integers)) => {
+                    let array = cast::<Int64Array>(array)?;
+                    for row in 0..array.len() {
+                        integers.push(present(row).then(|| array.value(row)));
+                    }
                 }
-                ColumnType::DateTime => {
-                    let dates = array
-                        .as_any()
-                        .downcast_ref::<TimestampMicrosecondArray>()
-                        .ok_or(Error::Invalid)?;
-                    let values = dates
-                        .iter()
-                        .map(|v| {
-                            v.map(|micros| {
-                                if micros % 1_000_000 != 0 {
-                                    return Err(Error::Invalid);
-                                }
+                (ColumnType::Float, Column::Float(floats)) => {
+                    let array = cast::<Float64Array>(array)?;
+                    for row in 0..array.len() {
+                        floats.push(present(row).then(|| array.value(row)));
+                    }
+                }
+                (ColumnType::Date, Column::Date(dates)) => {
+                    let days = cast::<Date32Array>(array)?;
+                    for row in 0..array.len() {
+                        dates.push(if present(row) {
+                            let day = i64::from(days.value(row));
+                            Some(date_from_days(day, Precision::Day).ok_or(Error::Invalid)?)
+                        } else {
+                            None
+                        });
+                    }
+                }
+                (ColumnType::DateTime, Column::DateTime(datetimes)) => {
+                    let micros = cast::<TimestampMicrosecondArray>(array)?;
+                    for row in 0..array.len() {
+                        datetimes.push(if present(row) {
+                            let micros = micros.value(row);
+                            if micros % 1_000_000 != 0 {
+                                return Err(Error::Invalid);
+                            }
+                            Some(
                                 datetime_from_seconds(micros / 1_000_000, Precision::Second)
-                                    .ok_or(Error::Invalid)
-                            })
-                            .transpose()
-                        })
-                        .collect::<Result<Vec<_>, _>>()?;
-                    Arc::new(datetime_array(&values).map_err(|_| Error::Invalid)?)
+                                    .ok_or(Error::Invalid)?,
+                            )
+                        } else {
+                            None
+                        });
+                    }
                 }
-                ColumnType::Int | ColumnType::Float => array.clone(),
-            };
-            arrays.push(converted);
+                _ => return Err(Error::Invalid),
+            }
         }
-        batches.push(RecordBatch::try_new(physical.clone(), arrays).map_err(|_| Error::Invalid)?);
     }
-    ArrowTable::try_new(decoded.schema, batches).map_err(Error::Table)
+    ColumnTable::new(decoded.schema, values, rows).map_err(Error::Table)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use arrow_array::{Float64Array, Int64Array};
+    use arrow_array::{ArrayRef, RecordBatch};
     use arrow_schema::{Field, Schema, TimeUnit};
+    use std::sync::Arc;
     use yamaa_core::table::{Column, TableAccess, TableSchema, ValueRef};
 
     fn source() -> Decoded {

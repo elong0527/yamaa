@@ -1039,7 +1039,7 @@ mod table {
             };
             use std::sync::Arc;
             use yamaa_adapters::{
-                arrow_table::ArrowTable,
+                column_table::ColumnTable,
                 parquet_source::{parse, Error},
             };
             use yamaa_core::{
@@ -1091,7 +1091,7 @@ mod table {
             }
 
             /// Every field reads as `int` and holds the values written.
-            fn assert_int_cells(table: &ArrowTable, columns: &[Vec<Option<i64>>]) {
+            fn assert_int_cells(table: &ColumnTable, columns: &[Vec<Option<i64>>]) {
                 let kinds: Vec<_> = table.schema().columns().iter().map(|c| c.kind).collect();
                 assert_eq!(kinds, vec![ColumnType::Int; columns.len()]);
                 for (index, values) in columns.iter().enumerate() {

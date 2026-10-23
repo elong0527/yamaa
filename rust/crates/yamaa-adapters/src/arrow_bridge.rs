@@ -1,20 +1,157 @@
-//! Standard Arrow C Stream ownership shared by both installed hosts.
+//! Arrow at the hosts' edge: a public table's Arrow form and its C Stream
+//! export, and the import of a host frame's C Stream into a column table.
 //!
-//! A stream owns its reader. Every emitted C Data array owns independent Arc
-//! references to its immutable buffers; releasing the stream never invalidates
-//! already imported arrays. Arrow-rs callbacks clear release on move/release,
-//! and dropping either an unconsumed or a moved-from header is safe. Foreign
-//! streams must satisfy the Arrow C Data/Stream producer contract.
-use crate::arrow_table::{self, ArrowTable, TableError};
+//! A public table builds its Arrow form once; every export shares that
+//! form's immutable buffers. A stream owns its reader, and every emitted C
+//! Data array owns independent Arc references to its buffers, so releasing
+//! the stream never invalidates already imported arrays. Arrow-rs callbacks
+//! clear release on move/release, and dropping either an unconsumed or a
+//! moved-from header is safe. An import copies the frame's values into the
+//! engine's own columns and releases the stream. Foreign streams must
+//! satisfy the Arrow C Data/Stream producer contract.
+use crate::column_table::{limit, Column, ColumnTable, TableError};
+use crate::columns::{Text, Validity};
+use crate::epoch::{date_from_days, datetime_from_seconds};
+use crate::public_table::{PublicColumn, PublicTable};
 use crate::storage_api::StreamReader;
 pub use arrow_array::ffi_stream::{ArrowArrayStreamReader, FFI_ArrowArrayStream};
 use arrow_array::{
-    Array, ArrayRef, Date32Array, RecordBatch, RecordBatchIterator, RecordBatchOptions,
-    StructArray, TimestampSecondArray, UInt8Array,
+    Array, ArrayRef, Date32Array, Float64Array, Int64Array, LargeStringArray, ListArray,
+    RecordBatch, RecordBatchIterator, RecordBatchOptions, StringArray, StringViewArray,
+    TimestampSecondArray,
 };
+use arrow_buffer::{Buffer, NullBuffer, OffsetBuffer, ScalarBuffer};
 use arrow_schema::{DataType, Field, Schema, SchemaRef, TimeUnit};
-use std::sync::Arc;
-use yamaa_core::{table::TableSchema, value::ColumnType};
+use std::{ops::Range, sync::Arc};
+use yamaa_core::{
+    limits::Limits,
+    table::{Column as Declared, TableSchema},
+    temporal::Precision,
+    value::ColumnType,
+};
+
+/// A public table's Arrow form: its schema and record batches.
+#[derive(Debug)]
+pub struct ArrowView {
+    schema: SchemaRef,
+    batches: Vec<RecordBatch>,
+}
+
+impl ArrowView {
+    /// Build `table`'s Arrow form: a nullable field for each column, and a
+    /// record batch for each of the table's batches. A missing value holds
+    /// no payload, and a batch without missing values has no validity
+    /// buffer.
+    pub(crate) fn of(table: &PublicTable) -> Self {
+        let schema = Arc::new(Schema::new(
+            (0..table.width())
+                .map(|index| Field::new(table.name(index), data_type(table.column(index)), true))
+                .collect::<Vec<_>>(),
+        ));
+        let mut start = 0;
+        let batches = table
+            .chunks()
+            .iter()
+            .map(|&rows| {
+                let range = start..start + rows;
+                start += rows;
+                let arrays = (0..table.width())
+                    .map(|index| array(table.column(index), range.clone()))
+                    .collect();
+                RecordBatch::try_new_with_options(
+                    Arc::clone(&schema),
+                    arrays,
+                    &RecordBatchOptions::new().with_row_count(Some(rows)),
+                )
+                .expect("a public table's columns form each of its batches")
+            })
+            .collect();
+        Self { schema, batches }
+    }
+
+    pub fn schema(&self) -> &SchemaRef {
+        &self.schema
+    }
+
+    pub fn batches(&self) -> &[RecordBatch] {
+        &self.batches
+    }
+}
+
+/// The Arrow type of a public column.
+fn data_type(column: &PublicColumn) -> DataType {
+    match column {
+        PublicColumn::Str(_) => DataType::Utf8,
+        PublicColumn::Int(_) => DataType::Int64,
+        PublicColumn::Float(_) => DataType::Float64,
+        PublicColumn::Date(_) => DataType::Date32,
+        PublicColumn::DateTime(_) => DataType::Timestamp(TimeUnit::Second, None),
+        PublicColumn::List(lists) => {
+            DataType::List(Arc::new(Field::new("item", data_type(lists.items()), true)))
+        }
+    }
+}
+
+/// The validity of `rows`, or none when no value there is missing.
+fn nulls(validity: &Validity, rows: Range<usize>) -> Option<NullBuffer> {
+    validity
+        .any_missing(rows.clone())
+        .then(|| NullBuffer::from(rows.map(|row| validity.get(row)).collect::<Vec<_>>()))
+}
+
+/// `offsets` rebased to start at zero, as Arrow's signed 32-bit offsets.
+fn rebased(offsets: &[usize]) -> OffsetBuffer<i32> {
+    let base = offsets[0];
+    OffsetBuffer::new(ScalarBuffer::from(
+        offsets
+            .iter()
+            .map(|&offset| {
+                i32::try_from(offset - base).expect("a public table's batch fits Utf8 offsets")
+            })
+            .collect::<Vec<_>>(),
+    ))
+}
+
+/// The Arrow array of `rows` of `column`.
+fn array(column: &PublicColumn, rows: Range<usize>) -> ArrayRef {
+    fn text(values: &Text, rows: Range<usize>) -> StringArray {
+        let offsets = &values.offsets()[rows.start..=rows.end];
+        let bytes = &values.arena().as_bytes()[offsets[0]..offsets[offsets.len() - 1]];
+        StringArray::new(
+            rebased(offsets),
+            Buffer::from_slice_ref(bytes),
+            nulls(values.validity(), rows),
+        )
+    }
+    match column {
+        PublicColumn::Str(values) => Arc::new(text(values, rows)),
+        PublicColumn::Int(values) => Arc::new(Int64Array::new(
+            values.payloads()[rows.clone()].to_vec().into(),
+            nulls(values.validity(), rows),
+        )),
+        PublicColumn::Float(values) => Arc::new(Float64Array::new(
+            values.payloads()[rows.clone()].to_vec().into(),
+            nulls(values.validity(), rows),
+        )),
+        PublicColumn::Date(values) => Arc::new(Date32Array::new(
+            values.payloads()[rows.clone()].to_vec().into(),
+            nulls(values.validity(), rows),
+        )),
+        PublicColumn::DateTime(values) => Arc::new(TimestampSecondArray::new(
+            values.payloads()[rows.clone()].to_vec().into(),
+            nulls(values.validity(), rows),
+        )),
+        PublicColumn::List(lists) => {
+            let offsets = &lists.offsets()[rows.start..=rows.end];
+            Arc::new(ListArray::new(
+                Arc::new(Field::new("item", data_type(lists.items()), true)),
+                rebased(offsets),
+                array(lists.items(), offsets[0]..offsets[offsets.len() - 1]),
+                nulls(lists.validity(), rows),
+            ))
+        }
+    }
+}
 
 pub fn export_stream(schema: SchemaRef, batches: Vec<RecordBatch>) -> FFI_ArrowArrayStream {
     FFI_ArrowArrayStream::new(Box::new(RecordBatchIterator::new(
@@ -23,39 +160,50 @@ pub fn export_stream(schema: SchemaRef, batches: Vec<RecordBatch>) -> FFI_ArrowA
     )))
 }
 
-/// Consume a standard stream into the engine's validated owned snapshot.
-/// Primitive and UTF-8 buffers are shared. Public temporal arrays gain a
-/// precision child (complete date/second); their value/validity buffers remain
-/// shared. No narrowing, timezone removal or fractional-second truncation occurs.
-pub fn import_stream(
-    stream: FFI_ArrowArrayStream,
-    logical: TableSchema,
-) -> Result<ArrowTable, TableError> {
+/// Consume a standard stream of public Arrow types into the engine's column
+/// table: UTF-8 (including large and view arrays) as text, `Int64`,
+/// `Float64`, `Date32` and zone-free `TimestampSecond`, a date with day and
+/// a datetime with second precision. Other types require an explicit
+/// preserving conversion by the caller before exporting. A nonfinite float
+/// is missing. The whole stream is read before its values are converted,
+/// and the stream is released before this returns.
+pub fn import_public_stream(stream: FFI_ArrowArrayStream) -> Result<ColumnTable, TableError> {
     let reader = StreamReader::try_new(stream).map_err(TableError::Arrow)?;
-    read_stream(reader, logical)
-}
-
-/// Infer only the public logical types; other physical types require an
-/// explicit preserving conversion by the caller before exporting.
-pub fn import_public_stream(stream: FFI_ArrowArrayStream) -> Result<ArrowTable, TableError> {
-    let reader = StreamReader::try_new(stream).map_err(TableError::Arrow)?;
-    let logical = public_schema(&reader.schema())?;
-    read_stream(reader, logical)
-}
-
-/// The engine's snapshot of public batches, such as a table the engine
-/// returned, typed as [`import_public_stream`] types a host's stream: a
-/// column of any other Arrow type fails as [`TableError::ArrayType`].
-pub fn import_public_batches(
-    schema: SchemaRef,
-    batches: Vec<RecordBatch>,
-) -> Result<ArrowTable, TableError> {
+    let schema = reader.schema();
     let logical = public_schema(&schema)?;
-    import_batches(logical, schema, batches)
+    let width = logical.columns().len();
+    Limits::columns(width).map_err(limit)?;
+    let mut rows = 0usize;
+    let mut batches = Vec::new();
+    for batch in reader {
+        let batch = batch.map_err(TableError::Arrow)?;
+        rows = rows
+            .checked_add(batch.num_rows())
+            .ok_or(TableError::Limit {
+                resource: "table_rows",
+                limit: Limits::TABLE_ROWS,
+                required: None,
+            })?;
+        Limits::table(rows, width).map_err(limit)?;
+        batches.push(batch);
+    }
+    let mut columns = logical
+        .columns()
+        .iter()
+        .map(|field| Column::empty(field.kind))
+        .collect::<Vec<_>>();
+    for (index, batch) in batches.into_iter().enumerate() {
+        if batch.schema() != schema {
+            return Err(TableError::SchemaMismatch { batch: index });
+        }
+        for (column, (values, array)) in columns.iter_mut().zip(batch.columns()).enumerate() {
+            append(values, array.as_ref(), index, column)?;
+        }
+    }
+    ColumnTable::new(logical, columns, rows)
 }
 
-/// The logical column type of each public Arrow field: text, `Int64`,
-/// `Float64`, `Date32` and zone-free `TimestampSecond`.
+/// The column type of each public Arrow field.
 fn public_schema(schema: &Schema) -> Result<TableSchema, TableError> {
     TableSchema::new(
         schema
@@ -71,7 +219,7 @@ fn public_schema(schema: &Schema) -> Result<TableSchema, TableError> {
                     DataType::Timestamp(TimeUnit::Second, None) => ColumnType::DateTime,
                     _ => return Err(TableError::ArrayType { batch: 0, column }),
                 };
-                Ok(yamaa_core::table::Column {
+                Ok(Declared {
                     name: field.name().clone(),
                     kind,
                 })
@@ -81,156 +229,81 @@ fn public_schema(schema: &Schema) -> Result<TableSchema, TableError> {
     .map_err(|_| TableError::SchemaMismatch { batch: 0 })
 }
 
-fn read_stream(mut reader: StreamReader, logical: TableSchema) -> Result<ArrowTable, TableError> {
-    let schema = reader.schema();
-    let mut batches = Vec::new();
-    let mut rows = 0usize;
-    yamaa_core::limits::Limits::columns(logical.columns().len()).map_err(limit)?;
-    for batch in &mut reader {
-        let batch = batch.map_err(TableError::Arrow)?;
-        rows = rows
-            .checked_add(batch.num_rows())
-            .ok_or(TableError::Limit {
-                resource: "table_rows",
-                limit: yamaa_core::limits::Limits::TABLE_ROWS,
-                required: None,
-            })?;
-        yamaa_core::limits::Limits::table(rows, logical.columns().len()).map_err(limit)?;
-        batches.push(batch);
+/// Append `array`, column `column` of batch `batch`, to `values`: a
+/// temporal value outside the years 1 to 9999 is refused.
+fn append(
+    values: &mut Column,
+    array: &dyn Array,
+    batch: usize,
+    column: usize,
+) -> Result<(), TableError> {
+    fn cast<T: 'static>(array: &dyn Array, batch: usize, column: usize) -> Result<&T, TableError> {
+        array
+            .as_any()
+            .downcast_ref::<T>()
+            .ok_or(TableError::ArrayType { batch, column })
     }
-    import_batches(logical, schema, batches)
-}
-
-fn limit(error: yamaa_core::limits::LimitExceeded) -> TableError {
-    TableError::Limit {
-        resource: error.resource,
-        limit: error.limit,
-        required: error.actual,
-    }
-}
-
-/// Safe Arrow-rs entry point used by host adapters after moving C ownership.
-pub fn import_batches(
-    logical: TableSchema,
-    schema: SchemaRef,
-    batches: Vec<RecordBatch>,
-) -> Result<ArrowTable, TableError> {
-    let mut rows = 0usize;
-    for batch in &batches {
-        rows = rows
-            .checked_add(batch.num_rows())
-            .ok_or(TableError::Limit {
-                resource: "table_rows",
-                limit: yamaa_core::limits::Limits::TABLE_ROWS,
-                required: None,
-            })?;
-    }
-    yamaa_core::limits::Limits::table(rows, logical.columns().len()).map_err(limit)?;
-    if schema.fields().len() != logical.columns().len()
-        || schema
-            .fields()
-            .iter()
-            .zip(logical.columns())
-            .any(|(field, column)| field.name() != &column.name)
-    {
-        return Err(TableError::SchemaMismatch { batch: 0 });
-    }
-    let canonical = arrow_table::physical_schema(&logical);
-    let fields = schema
-        .fields()
-        .iter()
-        .zip(logical.columns())
-        .enumerate()
-        .map(|(column, (field, declared))| {
-            let kind = match (declared.kind, field.data_type()) {
-                (ColumnType::Str, DataType::Utf8 | DataType::LargeUtf8 | DataType::Utf8View) => {
-                    field.data_type().clone()
+    let present = |row| !array.is_null(row);
+    match values {
+        Column::Str(text) => match array.data_type() {
+            DataType::Utf8 => {
+                let strings = cast::<StringArray>(array, batch, column)?;
+                for row in 0..array.len() {
+                    text.push(present(row).then(|| strings.value(row)));
                 }
-                (ColumnType::Int, DataType::Int64) => DataType::Int64,
-                (ColumnType::Float, DataType::Float64) => DataType::Float64,
-                (ColumnType::Date, DataType::Date32)
-                | (ColumnType::DateTime, DataType::Timestamp(TimeUnit::Second, None)) => {
-                    canonical.field(column).data_type().clone()
+            }
+            DataType::LargeUtf8 => {
+                let strings = cast::<LargeStringArray>(array, batch, column)?;
+                for row in 0..array.len() {
+                    text.push(present(row).then(|| strings.value(row)));
                 }
-                (ColumnType::Date | ColumnType::DateTime, DataType::Struct(_))
-                    if field.data_type() == canonical.field(column).data_type() =>
-                {
-                    field.data_type().clone()
+            }
+            _ => {
+                let strings = cast::<StringViewArray>(array, batch, column)?;
+                for row in 0..array.len() {
+                    text.push(present(row).then(|| strings.value(row)));
                 }
-                _ => return Err(TableError::ArrayType { batch: 0, column }),
-            };
-            Ok(Field::new(&declared.name, kind, true))
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    let physical = Arc::new(Schema::new(fields));
-    let mut converted = Vec::with_capacity(batches.len());
-    for (batch_index, batch) in batches.into_iter().enumerate() {
-        if batch.schema() != schema {
-            return Err(TableError::SchemaMismatch { batch: batch_index });
+            }
+        },
+        Column::Int(integers) => {
+            let array = cast::<Int64Array>(array, batch, column)?;
+            for row in 0..array.len() {
+                integers.push(present(row).then(|| array.value(row)));
+            }
         }
-        let arrays = logical
-            .columns()
-            .iter()
-            .zip(batch.columns())
-            .enumerate()
-            .map(|(column, (field, array))| {
-                let (values, precision): (ArrayRef, u8) = match (field.kind, array.data_type()) {
-                    (ColumnType::Date, DataType::Date32) => (
-                        Arc::new(Date32Array::new(
-                            array
-                                .as_any()
-                                .downcast_ref::<Date32Array>()
-                                .ok_or(TableError::ArrayType {
-                                    batch: batch_index,
-                                    column,
-                                })?
-                                .values()
-                                .clone(),
-                            None,
-                        )),
-                        2,
-                    ),
-                    (ColumnType::DateTime, DataType::Timestamp(TimeUnit::Second, None)) => (
-                        Arc::new(TimestampSecondArray::new(
-                            array
-                                .as_any()
-                                .downcast_ref::<TimestampSecondArray>()
-                                .ok_or(TableError::ArrayType {
-                                    batch: batch_index,
-                                    column,
-                                })?
-                                .values()
-                                .clone(),
-                            None,
-                        )),
-                        1,
-                    ),
-                    _ => return Ok(array.clone()),
-                };
-                let DataType::Struct(children) = physical.field(column).data_type() else {
-                    unreachable!()
-                };
-                Ok(Arc::new(
-                    StructArray::try_new(
-                        children.clone(),
-                        vec![
-                            values,
-                            Arc::new(UInt8Array::from(vec![precision; array.len()])),
-                        ],
-                        array.nulls().cloned(),
+        Column::Float(floats) => {
+            let array = cast::<Float64Array>(array, batch, column)?;
+            for row in 0..array.len() {
+                let value = array.value(row);
+                floats.push((present(row) && value.is_finite()).then_some(value));
+            }
+        }
+        Column::Date(dates) => {
+            let days = cast::<Date32Array>(array, batch, column)?;
+            for row in 0..array.len() {
+                dates.push(if present(row) {
+                    Some(
+                        date_from_days(i64::from(days.value(row)), Precision::Day)
+                            .ok_or(TableError::TemporalRange { batch, column, row })?,
                     )
-                    .map_err(TableError::Arrow)?,
-                ) as ArrayRef)
-            })
-            .collect::<Result<Vec<_>, TableError>>()?;
-        converted.push(
-            RecordBatch::try_new_with_options(
-                physical.clone(),
-                arrays,
-                &RecordBatchOptions::new().with_row_count(Some(batch.num_rows())),
-            )
-            .map_err(TableError::Arrow)?,
-        );
+                } else {
+                    None
+                });
+            }
+        }
+        Column::DateTime(datetimes) => {
+            let seconds = cast::<TimestampSecondArray>(array, batch, column)?;
+            for row in 0..array.len() {
+                datetimes.push(if present(row) {
+                    Some(
+                        datetime_from_seconds(seconds.value(row), Precision::Second)
+                            .ok_or(TableError::TemporalRange { batch, column, row })?,
+                    )
+                } else {
+                    None
+                });
+            }
+        }
     }
-    ArrowTable::try_new_with_schema(logical, converted, physical)
+    Ok(())
 }

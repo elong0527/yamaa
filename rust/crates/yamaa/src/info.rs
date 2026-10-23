@@ -12,9 +12,10 @@
 /// closed vocabulary of [`Info::host`].
 pub const HOSTS: [&str; 3] = ["python", "r", "cli"];
 
-/// The optional features as written, sorted, by their Cargo names: the
-/// closed vocabulary of [`Info::features`]. Every shipped package and binary
-/// compiles all four.
+/// The optional format features as written, sorted, by their Cargo names:
+/// the closed vocabulary of [`Info::features`]. Every shipped package and
+/// binary compiles all four. The `arrow` feature, the Arrow form of tables,
+/// reads no format and is not one of them.
 pub const FEATURES: [&str; 4] = ["odm", "parquet", "readstat", "yaml"];
 
 /// The host a caller runs in, as [`Info::host`] names it.
@@ -50,8 +51,8 @@ pub struct Info {
     /// Every `yamaa:` language version the engine reads, oldest first: `1.0`
     /// up to the newest it implements (SCHEMA-2).
     pub language_versions: Vec<String>,
-    /// The optional features compiled into the engine, sorted, by their
-    /// Cargo names: those of [`FEATURES`] that this build compiles.
+    /// The optional format features compiled into the engine, sorted, by
+    /// their Cargo names: those of [`FEATURES`] that this build compiles.
     pub features: Vec<&'static str>,
     /// The host that asked.
     pub host: Host,

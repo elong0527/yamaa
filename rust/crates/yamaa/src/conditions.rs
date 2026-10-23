@@ -135,52 +135,31 @@ impl Conditions {
     /// `renamed_from` and `retired_in` are missing where a condition has
     /// none.
     pub fn table(&self) -> Table {
-        use arrow_array::builder::{ListBuilder, StringBuilder};
-        use arrow_array::ArrayRef;
-        use arrow_schema::{DataType, Field, Schema};
-        use std::sync::Arc;
+        use yamaa_adapters::public_table::{List, PublicColumn, PublicTable};
 
-        let text = |cell: fn(&Condition) -> Option<&str>| -> ArrayRef {
-            let mut column = StringBuilder::new();
-            for entry in &self.entries {
-                column.append_option(cell(entry));
-            }
-            Arc::new(column.finish())
+        let text = |cell: fn(&Condition) -> Option<&str>| {
+            PublicColumn::Str(self.entries.iter().map(cell).collect())
         };
-        let texts = |cell: fn(&Condition) -> &[&str]| -> ArrayRef {
-            let mut column = ListBuilder::new(StringBuilder::new());
-            for entry in &self.entries {
-                for item in cell(entry) {
-                    column.values().append_value(item);
-                }
-                column.append(true);
-            }
-            Arc::new(column.finish())
+        let texts = |cell: fn(&Condition) -> &[&str]| {
+            PublicColumn::List(Box::new(List::text(
+                self.entries.iter().map(|entry| Some(cell(entry).to_vec())),
+            )))
         };
-        let list = DataType::List(Arc::new(Field::new("item", DataType::Utf8, true)));
-        let columns: [(DataType, ArrayRef); CONDITION_COLUMNS.len()] = [
-            (DataType::Utf8, text(|entry| Some(entry.condition))),
-            (DataType::Utf8, text(|entry| Some(entry.severity.as_str()))),
-            (list.clone(), texts(|entry| &entry.phases)),
-            (list, texts(|entry| &entry.rules)),
-            (DataType::Utf8, text(|entry| entry.message)),
-            (DataType::Utf8, text(|entry| entry.renamed_from)),
-            (DataType::Utf8, text(|entry| entry.retired_in)),
+        let columns: [PublicColumn; CONDITION_COLUMNS.len()] = [
+            text(|entry| Some(entry.condition)),
+            text(|entry| Some(entry.severity.as_str())),
+            texts(|entry| &entry.phases),
+            texts(|entry| &entry.rules),
+            text(|entry| entry.message),
+            text(|entry| entry.renamed_from),
+            text(|entry| entry.retired_in),
         ];
-        let (types, arrays): (Vec<_>, Vec<_>) = columns.into_iter().unzip();
-        let schema = Arc::new(Schema::new(
-            CONDITION_COLUMNS
-                .into_iter()
-                .zip(types)
-                .map(|(name, kind)| Field::new(name, kind, true))
-                .collect::<Vec<_>>(),
-        ));
-        let batch = arrow_array::RecordBatch::try_new(schema.clone(), arrays)
-            .expect("the builders produce exactly the declared catalogue columns");
-        Table::from_public(
-            yamaa_adapters::public_table::PublicTable::from_batches(schema, vec![batch])
-                .expect("the batch was built against this schema"),
-        )
+        let columns = CONDITION_COLUMNS
+            .into_iter()
+            .zip(columns)
+            .map(|(name, column)| (name.to_owned(), column))
+            .collect();
+        Table::from_public(PublicTable::new(columns).expect("the catalogue columns form one table"))
     }
 }
 

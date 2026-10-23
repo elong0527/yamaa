@@ -116,6 +116,7 @@ impl Plan {
     /// [`Plan::run_through`] runs it with no held artifacts: the build, and
     /// an accepted output's rows, handed out at most `rows` records at a
     /// time.
+    #[cfg(feature = "arrow")]
     pub(crate) fn stream_through(
         &self,
         shared: &EngineShared,
@@ -135,6 +136,7 @@ impl Plan {
 
     /// The public schema of the output this plan builds, known before it
     /// runs; none for a refused compilation.
+    #[cfg(feature = "arrow")]
     pub(crate) fn schema(&self) -> Option<arrow_schema::SchemaRef> {
         match &self.compiled.state {
             Compiled::Ready(prepared, _) => {
@@ -147,6 +149,7 @@ impl Plan {
     /// Whether a run of this plan can call its host: an engine with project
     /// functions runs a specification with a project, whose activation and
     /// derivations call them.
+    #[cfg(feature = "arrow")]
     pub(crate) fn calls_host(&self, shared: &EngineShared) -> bool {
         shared.functions.is_some()
             && matches!(&self.compiled.state, Compiled::Ready(prepared, _) if prepared.run().has_project())

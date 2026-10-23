@@ -631,7 +631,7 @@ S1,002,2024-06
         let fixture = original_derive_fixture(bindings, expression, input);
         let domain = fixture.run().unwrap_or_else(|issues| panic!("{issues:?}"));
         assert!(domain.issues().is_empty(), "{:?}", domain.issues());
-        let table = domain.output_table().unwrap();
+        let table = domain.output().unwrap();
         assert_eq!(table.rows(), 1);
         let batch = &table.batches()[0];
         assert_eq!(batch.column(0).as_any().downcast_ref::<arrow_array::StringArray>().unwrap().iter().collect::<Vec<_>>(), [Some("S1")]);

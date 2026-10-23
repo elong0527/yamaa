@@ -388,12 +388,10 @@ pub fn render<T: TableAccess>(document: &XptDocument, table: &T) -> Result<Vec<u
                 (_, ValueRef::Missing) => writer.bytes(&[b'.', 0, 0, 0, 0, 0, 0, 0])?,
                 (XptKind::Number, ValueRef::Int(value)) => writer.number(value as f64)?,
                 (XptKind::Number, ValueRef::Float(value)) => writer.number(value.get())?,
-                (XptKind::Date, ValueRef::Date(date)) => writer.number(
-                    (i64::from(crate::arrow_temporal::date_days(date)) + SAS_EPOCH_DAYS) as f64,
-                )?,
+                (XptKind::Date, ValueRef::Date(date)) => writer
+                    .number((i64::from(crate::epoch::date_days(date)) + SAS_EPOCH_DAYS) as f64)?,
                 (XptKind::DateTime, ValueRef::DateTime(moment)) => writer.number(
-                    (crate::arrow_temporal::datetime_seconds(moment) + SAS_EPOCH_DAYS * 86_400)
-                        as f64,
+                    (crate::epoch::datetime_seconds(moment) + SAS_EPOCH_DAYS * 86_400) as f64,
                 )?,
                 _ => return Err(writer.failure("held cell does not match its variable")),
             }

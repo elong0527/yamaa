@@ -5,13 +5,11 @@ use super::{
     xml::{Event, Tag, Xml},
     Error,
 };
-use crate::{arrow_table::physical_schema, ipc_table::TableError, public_table::PublicTable};
-use arrow_array::{
-    builder::{Int64Builder, StringBuilder},
-    ArrayRef, RecordBatch,
+use crate::{
+    columns::{Text, Values},
+    public_table::{PublicColumn, PublicTable},
 };
-use arrow_schema::SchemaRef;
-use std::{collections::HashMap, io::Read, sync::Arc};
+use std::{collections::HashMap, io::Read};
 use yamaa_core::{
     limits::Limits,
     odm_items::{
@@ -703,29 +701,15 @@ impl<'a> Projected<'a> {
     }
 }
 
-/// Rows appended in batches of the physical clinical-item schema.
+/// Rows appended in batches of the clinical-item schema.
+#[derive(Default)]
 struct Sink {
-    schema: SchemaRef,
-    text: Vec<StringBuilder>,
-    ordinals: Int64Builder,
+    text: [Text; SOURCE_ORDINAL],
+    ordinals: Values<i64>,
     bytes: [usize; SOURCE_ORDINAL],
     batch_rows: usize,
     rows: usize,
-    batches: Vec<RecordBatch>,
-}
-
-impl Default for Sink {
-    fn default() -> Self {
-        Self {
-            schema: physical_schema(&odm_items::schema()),
-            text: (0..SOURCE_ORDINAL).map(|_| StringBuilder::new()).collect(),
-            ordinals: Int64Builder::new(),
-            bytes: [0; SOURCE_ORDINAL],
-            batch_rows: 0,
-            rows: 0,
-            batches: Vec::new(),
-        }
-    }
+    chunks: Vec<usize>,
 }
 
 impl Sink {
@@ -743,42 +727,41 @@ impl Sink {
                 .into());
             }
             if self.bytes[column] + length > OFFSET_LIMIT {
-                self.flush()?;
+                self.flush();
                 break;
             }
         }
         for (column, value) in values.into_iter().enumerate() {
             self.bytes[column] += value.map_or(0, str::len);
-            self.text[column].append_option(value);
+            self.text[column].push(value);
         }
-        self.ordinals.append_value(ordinal);
+        self.ordinals.push(Some(ordinal));
         self.batch_rows += 1;
         self.rows += 1;
         if self.batch_rows == BATCH_ROWS {
-            self.flush()?;
+            self.flush();
         }
         Ok(())
     }
 
-    fn flush(&mut self) -> Result<(), Error> {
-        let mut arrays = self
-            .text
-            .iter_mut()
-            .map(|builder| Arc::new(builder.finish()) as ArrayRef)
-            .collect::<Vec<_>>();
-        arrays.push(Arc::new(self.ordinals.finish()));
-        let batch = RecordBatch::try_new(self.schema.clone(), arrays)
-            .map_err(|_| Error::Table(TableError::Internal))?;
-        self.batches.push(batch);
+    fn flush(&mut self) {
+        self.chunks.push(self.batch_rows);
         self.bytes = [0; SOURCE_ORDINAL];
         self.batch_rows = 0;
-        Ok(())
     }
 
     fn finish(mut self) -> Result<PublicTable, Error> {
-        if self.batch_rows > 0 || self.batches.is_empty() {
-            self.flush()?;
+        if self.batch_rows > 0 || self.chunks.is_empty() {
+            self.flush();
         }
-        PublicTable::from_batches(self.schema, self.batches).map_err(Error::Table)
+        let columns = self
+            .text
+            .into_iter()
+            .map(PublicColumn::Str)
+            .chain([PublicColumn::Int(self.ordinals)])
+            .zip(COLUMNS)
+            .map(|(column, name)| (name.to_owned(), column))
+            .collect();
+        PublicTable::chunked(columns, self.chunks).map_err(Error::Table)
     }
 }

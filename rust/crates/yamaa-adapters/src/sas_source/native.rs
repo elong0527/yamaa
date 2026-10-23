@@ -1,7 +1,7 @@
 //! Read-only SAS source decoding over the already captured immutable snapshot.
 //! ReadStat supplies physical values; authored types and strict text decoding are
 //! shared by both hosts. Display formats are never semantic type authorities.
-use crate::arrow_table::ArrowTable;
+use crate::column_table::ColumnTable;
 use std::{
     collections::BTreeSet,
     ffi::{c_char, c_int, c_void, CStr},
@@ -270,10 +270,10 @@ fn numeric(value: f64, kind: ColumnType) -> Option<Value> {
     match kind {
         ColumnType::Int => Some(Value::Int(integer)),
         ColumnType::Date => {
-            crate::arrow_temporal::date_from_days(integer.checked_sub(3653)?, Precision::Day)
+            crate::epoch::date_from_days(integer.checked_sub(3653)?, Precision::Day)
                 .map(Value::Date)
         }
-        ColumnType::DateTime => crate::arrow_temporal::datetime_from_seconds(
+        ColumnType::DateTime => crate::epoch::datetime_from_seconds(
             integer.checked_sub(315_619_200)?,
             Precision::Second,
         )
@@ -369,7 +369,7 @@ fn admit_xport(bytes: &[u8]) -> Result<(), Error> {
     Ok(())
 }
 
-pub fn parse(bytes: &[u8], source: &SourceDeclaration) -> Result<ArrowTable, Error> {
+pub fn parse(bytes: &[u8], source: &SourceDeclaration) -> Result<ColumnTable, Error> {
     if !matches!(
         source.encoding.as_deref(),
         Some("utf-8" | "windows-1252" | "iso-8859-1" | "ascii")
@@ -474,9 +474,7 @@ pub fn parse(bytes: &[u8], source: &SourceDeclaration) -> Result<ArrowTable, Err
         schema: TableSchema::new(context.columns).map_err(|_| Error::Invalid("header"))?,
         rows: context.rows,
     };
-    let batch = crate::ipc_table::sanitized_batch(&rows, 0, rows.row_count())
-        .map_err(|_| Error::Internal)?;
-    ArrowTable::try_new(rows.schema, vec![batch]).map_err(|_| Error::Internal)
+    ColumnTable::from_access(&rows).map_err(|_| Error::Internal)
 }
 
 #[cfg(test)]
