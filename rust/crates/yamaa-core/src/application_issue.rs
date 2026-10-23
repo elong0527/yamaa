@@ -193,10 +193,14 @@ pub fn rejected(step: Step, fault: Fault) -> Diagnostic {
 
 /// The refusal of a partitioned run without the whole-table fallback
 /// (#3697): the step at `path` needs the whole table. It is the engine's,
-/// at the spec path of the step it cannot divide.
+/// at the spec path of the step it cannot divide, or at none for a step
+/// with no authored path.
 pub fn partition_global(path: &str) -> Diagnostic {
     Diagnostic {
-        spec_paths: vec![path.into()],
+        spec_paths: (!path.is_empty())
+            .then(|| path.to_owned())
+            .into_iter()
+            .collect(),
         ..rejected(Step::Execute, Fault::PartitionGlobal)
     }
 }
