@@ -15,7 +15,12 @@ from datetime import datetime
 from pathlib import Path, PurePosixPath
 
 from tools.ci import native, release_assets
-from tools.packaging import check_package_notices, cli_archive, release_identity
+from tools.packaging import (
+    check_package_notices,
+    cli_archive,
+    conformance_archive,
+    release_identity,
+)
 from tools.packaging.check_shared_release_versions import violations
 from tools.paths import ROOT
 
@@ -267,6 +272,11 @@ def required_jobs(coverage):
     # The source platform builds the R source archive once; every R lane
     # installs it.
     jobs[f"native-r-dist ({native.SOURCE_PLATFORM})"] = ("Build R source package",)
+    # The source platform also builds the conformance archive once, with
+    # the writer that checks it against the checkout.
+    jobs[f"native-conformance ({native.SOURCE_PLATFORM})"] = (
+        "Build the conformance archive",
+    )
     for platform in coverage["r"]["os"]:
         jobs[f"native-r ({platform})"] = (
             "Install R outside checkout",
@@ -502,6 +512,12 @@ def archive_payloads(path):
 
 def check_package(asset, path, identity, root):
     """Check one release file's own name, version and notices."""
+    if asset.kind == "conformance":
+        # Exactly the committed grammars, evaluation set and project
+        # license, unchanged from the checkout. It is built from no crate,
+        # so it carries no package notices.
+        conformance_archive.check(path, root)
+        return
     payloads = archive_payloads(path)
     if asset.kind in release_assets.PYTHON_KINDS:
         metadata = [

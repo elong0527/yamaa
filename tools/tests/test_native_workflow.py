@@ -243,6 +243,40 @@ class NativeWorkflowContract(unittest.TestCase):
                     job not in sources,
                 )
 
+    def test_the_conformance_archive_is_written_into_the_directory_it_uploads(self):
+        # The writer checks the archive that it wrote against the checkout,
+        # and the job uploads that directory alone, so the artifact holds the
+        # one asset declared in it.
+        [asset] = [
+            asset
+            for asset in release_assets.declared(self.coverage)
+            if asset.kind == "conformance"
+        ]
+        steps = self.jobs[asset.producer]["definitions"]
+        [build] = [
+            step
+            for step in steps
+            if step.get("name") == "Build the conformance archive"
+        ]
+        [upload] = [
+            step
+            for step in steps
+            if step.get("uses", "").split("@")[0] == "actions/upload-artifact"
+        ]
+        self.assertEqual(
+            (
+                build["run"],
+                upload["with"]["path"],
+                steps.index(build) < steps.index(upload),
+            ),
+            (
+                "python -m tools.packaging.conformance_archive write "
+                '"${RUNNER_TEMP}/conformance"',
+                "${{ runner.temp }}/conformance",
+                True,
+            ),
+        )
+
     def test_each_linux_wheel_builds_in_its_manylinux_container(self):
         for lane in self.coverage["build"]["include"]:
             job = "native-dist ({os}, {python})".format(**lane)
