@@ -36,6 +36,7 @@ CHECKS = (
     "tools.validation.check_vocabulary_coverage",
     "tools.validation.check_cdisc_vocabulary",
     "tools.validation.check_cdisc_tables",
+    "tools.validation.check_cdisc_copies",
     "tools.rules.check",
     "tools.validation.check_documentation",
     "tools.validation.check_site_examples",
